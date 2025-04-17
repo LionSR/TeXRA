@@ -8,6 +8,7 @@ import OpenAI, {
   PermissionDeniedError,
 } from 'openai';
 import { ChatCompletionContentPart } from 'openai/resources/chat/completions';
+import { countTokens } from 'gpt-tokenizer';
 
 // Local imports - utilities
 import {
@@ -85,6 +86,44 @@ export class ModelHandlerOpenAI extends ModelHandler {
       // for deepseek models,  this and context window are not the same for openrouter models and the official api. so we need to set max_tokens manually if the official api is used
       this.logger.debug('Setting max_tokens to 8192 for DeepSeek models');
       kwargs.max_tokens = 8192;
+    }
+
+    // Calculate input tokens using the helper method
+    try {
+      const approximateInputTokens = this._calculateApproximateTokens(
+        messages,
+        systemPrompt,
+      );
+
+      this.logger.debug(
+        `Approximate token count of message: ${approximateInputTokens}`,
+      );
+
+      if (approximateInputTokens > this.config.contextWindow) {
+        const errorMsg = `Approximate token count of message exceeds context window: ${approximateInputTokens} > ${this.config.contextWindow}`;
+        this.logger.error(errorMsg);
+        throw new Error(errorMsg);
+      }
+
+      const maxOutputKey = this.isOReasoningModel
+        ? 'max_completion_tokens'
+        : 'max_tokens';
+      if (
+        this.config.contextWindow - approximateInputTokens <
+        kwargs[maxOutputKey]
+      ) {
+        const originalMaxTokens = kwargs[maxOutputKey];
+        kwargs[maxOutputKey] =
+          this.config.contextWindow - approximateInputTokens - 5000; // Add a small buffer
+        this.logger.warn(
+          `Approximate token count (${approximateInputTokens}) + max tokens (${originalMaxTokens}) exceeds context window (${this.config.contextWindow}). Reducing max tokens to ${kwargs[maxOutputKey]}.`,
+        );
+      }
+    } catch (err: any) {
+      this.logger.error(
+        `Token counting failed: ${err.message}. Proceeding without token adjustment.`,
+      );
+      // Decide if you want to throw here or let the API call potentially fail
     }
 
     if (useStreaming) {
@@ -703,5 +742,57 @@ export class ModelHandlerOpenAI extends ModelHandler {
     toolState?: ToolState,
   ): string | null {
     return null;
+  }
+
+  /**
+   * Calculates the approximate number of tokens for a given set of messages and system prompt
+   * using gpt-tokenizer. This is an estimation and might not perfectly match OpenAI's
+   * internal counting, especially for multi-modal content.
+   *
+   * @param messages The array of message objects.
+   * @param systemPrompt Optional system prompt string.
+   * @returns The approximate number of tokens.
+   * @throws Error if token calculation fails.
+   */
+  private _calculateApproximateTokens(
+    messages: any[],
+    systemPrompt?: string,
+  ): number {
+    // Note: This is a simplified token count. A more accurate count would
+    // need to replicate OpenAI's specific chat message formatting rules.
+    // https://github.com/openai/openai-cookbook/blob/main/examples/How_to_count_tokens_with_tiktoken.ipynb
+    try {
+      // Combine system prompt and messages for counting
+      // TODO: This might not be perfectly accurate for multi-modal or structured messages.
+      // gpt-tokenizer's countTokens might need a ChatMessage structure similar to Anthropic's.
+      // For now, concatenate text content.
+      let textToCount = systemPrompt ? `${systemPrompt}\n` : '';
+      messages.forEach((msg) => {
+        if (Array.isArray(msg.content)) {
+          msg.content.forEach((part: any) => {
+            if (part.type === 'text') {
+              textToCount += `${msg.role}: ${part.text}\n`;
+            }
+            // Basic handling for other types, might need refinement
+            else if (part.type === 'image_url') {
+              // Approximation: Count tokens for a placeholder text representation
+              textToCount += `${msg.role}: [Image]\n`;
+            } else if (part.type === 'input_audio') {
+              textToCount += `${msg.role}: [Audio]\n`;
+            }
+          });
+        } else if (typeof msg.content === 'string') {
+          textToCount += `${msg.role}: ${msg.content}\n`;
+        }
+      });
+      // Use the appropriate encoding based on the model, defaulting to cl100k_base
+      // Needs a mapping from model name to encoding or importing specific model tokenizers.
+      // Assuming cl100k_base for gpt-3.5/4 for now. Need to enhance this.
+      return countTokens(textToCount); // Assuming cl100k_base default
+    } catch (err: any) {
+      // Log the error and re-throw to indicate failure
+      this.logger.error(`Error counting tokens: ${err.message}`);
+      throw err;
+    }
   }
 }
