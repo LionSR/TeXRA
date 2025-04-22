@@ -112,20 +112,6 @@ const LATEX_SPACING_REPLACEMENTS: ReplacementCategory = {
     ' rho\\': '  \\rho\\',
 
     '\\sum\\limits_': '\\sum_',
-
-    // unicodes:
-    '$ μs': '$ $\\mu$s',
-    '$ μm': '$ $\\mu$m',
-    '$ μA': '$ $\\mu$A',
-    '$ μV': '$ $\\mu$V',
-    '$ μW': '$ $\\mu$W',
-    '$ μT': '$ $\\mu$T',
-    '$ μH': '$ $\\mu$H',
-    '$ μF': '$ $\\mu$F',
-
-    // unicodes:
-    '–': '-',
-    '‑': '-',
   },
 };
 
@@ -356,6 +342,54 @@ const CHARACTER_REPLACEMENTS: ReplacementCategory = {
   },
 };
 
+// Unicode character replacements
+const UNICODE_REPLACEMENTS: ReplacementCategory = {
+  name: 'unicode',
+  description: 'Fixes for Unicode characters that might cause issues in LaTeX',
+  isRegex: false,
+  patterns: {
+    // Dashes and hyphens
+    '–': '-', // en dash (U+2013) to hyphen (U+002D)
+    '‑': '-', // non-breaking hyphen (U+2011) to hyphen (U+002D)
+    '—': '-', // em dash (U+2014) to hyphen (U+002D)
+    '−': '-', // minus (U+2212) to hyphen (U+002D)
+
+    // Greek letters
+    '$ μs': '$ $\\mu$s', // micro (μ) to \mu
+    '$ μm': '$ $\\mu$m',
+    '$ μA': '$ $\\mu$A',
+    '$ μV': '$ $\\mu$V',
+    '$ μW': '$ $\\mu$W',
+    '$ μT': '$ $\\mu$T',
+    '$ μH': '$ $\\mu$H',
+    '$ μF': '$ $\\mu$F',
+    μ: '$\\mu$', // standalone micro symbol
+
+    // Quotes
+    '’': "'", // right single quote (U+2019) to ASCII single quote
+    '‘': "'", // left single quote (U+2018) to ASCII single quote
+    '”': '"', // right double quote (U+201D) to ASCII double quote
+    '“': '"', // left double quote (U+201C) to ASCII double quote
+
+    // Other common symbols
+    // '…': '\\ldots', // ellipsis (U+2026) to \ldots
+    // '×': '$\\times$', // multiplication (U+00D7) to \times
+    // '÷': '$\\div$', // division (U+00F7) to \div
+    // '≤': '$\\leq$', // less than or equal (U+2264) to \leq
+    // '≥': '$\\geq$', // greater than or equal (U+2265) to \geq
+    // '≠': '$\\neq$', // not equal (U+2260) to \neq
+    // '≈': '$\\approx$', // approximately equal (U+2248) to \approx
+    // '∞': '$\\infty$', // infinity (U+221E) to \infty
+    // '°': '$^{\\circ}$', // degree (U+00B0) to ^{\circ}
+    // '′': "'", // prime (U+2032) to ASCII single quote
+    // '″': '"', // double prime (U+2033) to ASCII double quote
+    // '√': '$\\sqrt{}$', // square root (U+221A) to \sqrt{}
+    // '∫': '$\\int$', // integral (U+222B) to \int
+    // '∑': '$\\sum$', // sum (U+2211) to \sum
+    // '∏': '$\\prod$', // product (U+220F) to \prod
+  },
+};
+
 // ===== XML/Structural Formatting =====
 
 // XML structure fixes specifically for output processing
@@ -571,8 +605,6 @@ const STYLE_REPLACEMENTS: ReplacementCategory = {
     // thermodynamical: 'thermodynamic', // problematic with thermodynamically
     conditon: 'condition',
     necessitates: 'requires',
-    // ' v': "'",
-    // '’': "'",
     Itô: 'Ito',
     k_BT: 'k_B T',
   },
@@ -1059,7 +1091,6 @@ const INLINE_MATH_REPLACEMENTS: ReplacementCategory = {
     '\\\\vspace\\{-?\\d+pt\\}': '', // Remove \vspace[Npt] commands with arbitrary integers
     '\\\\vspace\\{-?\\d+mm\\}': '', // Remove \vspace{Nmm} commands with arbitrary integers
     '\\\\vspace\\{-?\\d+ex\\}': '\n', // Remove \vspace{Nex} commands with arbitrary integers
-    // '“([a-zA-Z0-9_]+)”': '``$1''',
   },
 };
 
@@ -1072,6 +1103,7 @@ function getEnabledReplacements(): string[] {
     'equations',
     'sections',
     'characters',
+    'unicode',
   ]);
 }
 
@@ -1097,6 +1129,7 @@ export function getAllReplacements(): ReplacementCategory {
     EQUATION_REPLACEMENTS,
     SECTION_REPLACEMENTS,
     CHARACTER_REPLACEMENTS,
+    UNICODE_REPLACEMENTS,
     LATEX_SPACING_REPLACEMENTS,
     // XML/Structural Formatting
     LATEX_XML_REPLACEMENTS,
@@ -1135,6 +1168,7 @@ export function getReplacementsByCategory(
     sections: SECTION_REPLACEMENTS,
     tikz: TIKZ_REPLACEMENTS,
     characters: CHARACTER_REPLACEMENTS,
+    unicode: UNICODE_REPLACEMENTS,
     latex_xml: LATEX_XML_REPLACEMENTS,
     scratchpad_xml: SCRATCHPAD_XML_REPLACEMENTS,
     style: STYLE_REPLACEMENTS,
