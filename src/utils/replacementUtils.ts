@@ -925,6 +925,7 @@ const MAX_STYLE_REPLACEMENTS: ReplacementCategory = {
     '\\frac{d\\tbx': '\\frac{\\dd\\tbx',
     '\\frac{d\\bx': '\\frac{\\dd\\bx',
     '\\frac{d}{d\\tau}': '\\frac{\\dd}{\\dd\\tau}',
+    '\\frac{d}{d\\}': '\\frac{\\dd}{\\dd\\}',
     '{d t}': '{\\dd t}',
     '{dt}': '{\\dd t}',
     '{d x}': '{\\dd x}',
