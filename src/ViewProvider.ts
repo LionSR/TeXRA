@@ -4,6 +4,7 @@ import * as vscode from 'vscode';
 // Local imports - webview
 import { WebviewMessageHandler } from './webview/MessageHandler';
 import { WebviewContentProvider } from './webview/WebviewContentProvider';
+import { anyApiKeyExists } from './utils/secretUtils';
 
 export class TeXRAViewProvider implements vscode.WebviewViewProvider {
   private messageHandler: WebviewMessageHandler;
@@ -13,6 +14,8 @@ export class TeXRAViewProvider implements vscode.WebviewViewProvider {
 
   // Static flag to track if commands have been registered
   private static commandsRegistered = false;
+  // Static flag to track if API key notification has been shown
+  private static apiKeyNotificationShown = false;
 
   constructor(private readonly context: vscode.ExtensionContext) {
     this.messageHandler = new WebviewMessageHandler(context);
@@ -148,6 +151,9 @@ export class TeXRAViewProvider implements vscode.WebviewViewProvider {
     });
 
     this.setupInitialState(webviewView);
+
+    // Check if any API keys are set and display notification if needed
+    this.checkApiKeys();
   }
 
   private async setupInitialState(webviewView: vscode.WebviewView) {
@@ -192,6 +198,35 @@ export class TeXRAViewProvider implements vscode.WebviewViewProvider {
       } catch (error) {
         console.error('Error restoring state from context:', error);
       }
+    }
+  }
+
+  /**
+   * Check if any API keys exist and show a notification if none do
+   */
+  private async checkApiKeys() {
+    // Only show the notification once per session
+    if (TeXRAViewProvider.apiKeyNotificationShown) {
+      return;
+    }
+
+    try {
+      const exists = await anyApiKeyExists();
+      if (!exists) {
+        const setKey = 'Set API Key';
+        const result = await vscode.window.showInformationMessage(
+          'No API keys found. You need to set an API key to use TeXRA.',
+          setKey,
+        );
+
+        if (result === setKey) {
+          vscode.commands.executeCommand('texra.setApiKey');
+        }
+
+        TeXRAViewProvider.apiKeyNotificationShown = true;
+      }
+    } catch (error) {
+      console.error('Error checking API keys:', error);
     }
   }
 }

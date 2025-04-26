@@ -68,3 +68,22 @@ export async function getApiKey(provider: ApiProvider): Promise<string> {
 
   return envValue;
 }
+
+/**
+ * Check if any API key exists in secret storage
+ * @returns true if at least one API key exists, false otherwise
+ */
+export async function anyApiKeyExists(): Promise<boolean> {
+  if (!secretStorage) {
+    throw new Error('Secret storage not initialized');
+  }
+
+  for (const provider of API_PROVIDERS) {
+    const key = await getSecret(getApiKeySecretName(provider));
+    if (key) {
+      return true;
+    }
+  }
+
+  return false;
+}
