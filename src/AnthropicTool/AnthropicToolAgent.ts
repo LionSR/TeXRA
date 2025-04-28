@@ -181,7 +181,7 @@ export abstract class AnthropicToolAgent<
         `Error getting Anthropic API key: ${this.formatErrorMessage(err)}`,
       );
       throw new Error(
-        'Anthropic API key not found. Please set it using the "Set API Key" command.',
+        'Missing API key from Anthropic. Please set it using the "Set API Key" command.',
       );
     }
   }
