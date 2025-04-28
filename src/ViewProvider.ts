@@ -214,8 +214,9 @@ export class TeXRAViewProvider implements vscode.WebviewViewProvider {
       const exists = await anyApiKeyExists();
       if (!exists) {
         const setKey = 'Set API Key';
-        const result = await vscode.window.showInformationMessage(
-          'No API keys found. You need to set an API key to use TeXRA.',
+        const result = await vscode.window.showErrorMessage(
+          'No API keys found. TeXRA requires an API key to function properly.',
+          { modal: true },
           setKey,
         );
 
