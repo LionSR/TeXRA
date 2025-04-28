@@ -98,7 +98,7 @@ async function getApiKey(provider: 'openai' | 'anthropic'): Promise<string> {
     return await getSecretApiKey(provider as ApiProvider);
   } catch (err) {
     throw new Error(
-      `${provider.toUpperCase()} API key not found (error: ${err}). Please set it using the "Set API Key" command.`,
+      `Missing API key from ${provider.toUpperCase()}. Please set it using the "Set API Key" command.`,
     );
   }
 }
