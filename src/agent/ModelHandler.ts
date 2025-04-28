@@ -91,7 +91,7 @@ export abstract class ModelHandler {
         return await getSecretApiKey('openRouter');
       } catch (err) {
         throw new Error(
-          'Missing OpenRouter API key. Please set it using the "Set API Key" command.',
+          'Missing API key for OpenRouter. Please set it using the "Set API Key" command.',
         );
       }
     }
