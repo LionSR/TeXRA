@@ -4,6 +4,8 @@ import {
   setupEventListeners,
   applyGroupToggleStates,
 } from './modules/domHandlers.js';
+import { vscode } from './modules/vscodeApi.js';
+import { COMMANDS } from './modules/constants.js';
 
 // Initialize the state when the window loads
 initializeState();
@@ -18,4 +20,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Apply saved group toggle states to any groups already in the DOM
   applyGroupToggleStates();
+
+  // Notify extension that webview is initialized
+  vscode.postMessage({ command: COMMANDS.WEBVIEW_INITIALIZED });
 });
