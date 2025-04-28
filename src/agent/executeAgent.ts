@@ -256,7 +256,27 @@ async function executeAgentWithLogging<T extends AgentWithConfig>(
     }
   } catch (err) {
     const errorMsg = `Error executing agent ${agentName}: ${err instanceof Error ? err.message : String(err)}`;
-    vscode.window.showErrorMessage(errorMsg);
+
+    // Check if the error is related to missing API key
+    if (
+      errorMsg.includes('Missing API key') ||
+      errorMsg.includes('API key not found')
+    ) {
+      const setKey = 'Set API Key';
+      const result = await vscode.window.showErrorMessage(
+        errorMsg,
+        { modal: true },
+        setKey,
+      );
+
+      if (result === setKey) {
+        vscode.commands.executeCommand('texra.setApiKey');
+      }
+    } else {
+      // Show regular error message for other errors
+      vscode.window.showErrorMessage(errorMsg);
+    }
+
     // Create a temporary error group if no active group exists
     const errorGroupId = await logger.startGroup(`Error: ${agentName}`);
     logger.error(errorMsg, errorGroupId);
