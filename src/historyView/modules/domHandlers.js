@@ -176,7 +176,7 @@ function createHistoryItemElement(item) {
 
   // Add tool config section
   if (config.toolConfig) {
-    detailsHTML += renderToolConfig('Tool Config', config.toolConfig);
+    detailsHTML += renderToolConfig('<i class="codicon codicon-gear"></i> Config', config.toolConfig);
   }
 
   // Only create the collapsible section if there are details to show
