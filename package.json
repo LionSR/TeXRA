@@ -2,7 +2,7 @@
   "name": "texra",
   "displayName": "TeXRA",
   "description": "TeXRA: Your LLM-powered 24/7 LaTeX Research Assistant.",
-  "version": "0.29.6",
+  "version": "0.29.7",
   "publisher": "texra-ai",
   "engines": {
     "vscode": "^1.94.0"
@@ -192,7 +192,8 @@
               ".txt",
               ".tex",
               ".cls",
-              ".md"
+              ".md",
+              ".sty"
             ],
             "description": "File extensions to include when searching for auxiliary files",
             "editPresentation": "multilineText",
