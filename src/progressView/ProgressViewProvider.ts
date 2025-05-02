@@ -728,4 +728,12 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       `Cleanup complete. Updated ${updatedStreams} streams and ${updatedGroups} groups.`,
     );
   }
+
+  /**
+   * Checks if the progress view panel is currently visible
+   * @returns boolean indicating if the view is visible
+   */
+  public isViewVisible(): boolean {
+    return !!this._view && this._view.visible;
+  }
 }
