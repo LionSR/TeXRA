@@ -37,7 +37,7 @@ export function setDefaultState() {
   const autoExtractOptions = safeGetElementById('autoExtractOptions');
   if (autoExtractToggle && autoExtractOptions) {
     autoExtractToggle.innerHTML =
-      'Auto Extract ○<i class="codicon codicon-chevron-down"></i>';
+      '<i class="codicon codicon-wand"></i> ○<i class="codicon codicon-chevron-down"></i>';
     autoExtractOptions.style.display = 'none';
   }
 
@@ -80,7 +80,7 @@ export function restoreState() {
 
     if (autoExtractToggle && autoExtractOptions) {
       autoExtractToggle.classList.remove('active');
-      autoExtractToggle.innerHTML = `Auto Extract ${indicator}<i class="codicon codicon-chevron-down"></i>`;
+      autoExtractToggle.innerHTML = `<i class="codicon codicon-wand"></i> ${indicator}<i class="codicon codicon-chevron-down"></i>`;
       autoExtractOptions.style.display = 'none';
     }
 
@@ -93,7 +93,7 @@ export function restoreState() {
     const toolConfigIndicator = hasToolConfigChecked ? '●' : '○';
 
     if (toggleToolConfig && toolConfigOptions) {
-      toggleToolConfig.innerHTML = `Tool Config ${toolConfigIndicator}<i class="codicon codicon-chevron-down"></i>`;
+      toggleToolConfig.innerHTML = `<i class="codicon codicon-gear"></i> ${toolConfigIndicator}<i class="codicon codicon-chevron-down"></i>`;
       toolConfigOptions.style.display = 'none';
     }
 
