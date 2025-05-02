@@ -18,6 +18,7 @@ export enum ReasoningEffort {
 
 /** Base model capabilities configuration with all features disabled by default. */
 export const DEFAULT_MODEL_CAPABILITIES: ModelCapabilities = {
+  supportsFunctionCalling: true,
   supportsPromptCaching: false,
   supportsAutoPromptCaching: false,
   cacheDiscountFactor: 1.0,
@@ -46,6 +47,7 @@ export enum ModelProvider {
 
 /** Feature flags defining model's supported capabilities and behaviors. */
 export interface ModelCapabilities {
+  supportsFunctionCalling: boolean;
   supportsPromptCaching: boolean;
   supportsAutoPromptCaching: boolean;
   cacheDiscountFactor: number;

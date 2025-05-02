@@ -96,8 +96,8 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     outputPrice: 15.0,
     capabilities: {
       ...DEFAULT_MODEL_CAPABILITIES,
-      cacheDiscountFactor: 0.1,
       supportsPromptCaching: true,
+      cacheDiscountFactor: 0.1,
       supportsAssistantPrefill: true,
       supportsNativePdf: true,
       supportsTokenCounting: true,
@@ -511,6 +511,8 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     outputPrice: 5.0,
     capabilities: {
       ...DEFAULT_MODEL_CAPABILITIES,
+      supportsPromptCaching: false,
+      supportsAutoPromptCaching: false,
       supportsNativePdf: true,
       supportsVision: true,
       supportsReasoning: true,
