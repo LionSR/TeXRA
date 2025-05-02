@@ -46,6 +46,8 @@ export class WebviewMessageHandler {
         return this.handleExecute(message);
       case 'merge':
         return this.handleMerge(message);
+      case 'compare':
+        return this.handleCompare(message);
       // File selection cases
       case 'selectInputFile':
       case 'selectReferenceFile':
@@ -188,6 +190,15 @@ export class WebviewMessageHandler {
   }
 
   private async handleMerge(message: any) {
+    vscode.commands.executeCommand(
+      `texra.${message.command}`,
+      message.inputFile,
+      message.baseFile,
+      message.editedFile,
+    );
+  }
+
+  private async handleCompare(message: any) {
     vscode.commands.executeCommand(
       `texra.${message.command}`,
       message.inputFile,
