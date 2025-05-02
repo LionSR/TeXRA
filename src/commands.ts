@@ -24,6 +24,7 @@ import { registerWolframAlphaCommands } from './commands/wolframAlphaCommands';
 import { registerWolframScriptCommands } from './commands/wolframScriptCommands';
 import { registerHistoryCommands } from './commands/historyCommands';
 import { registerArXivCommands } from './commands/arXivCommands';
+import { registerCompareCommands } from './commands/compareCommands';
 
 import * as logger from './logger/logUtils';
 
@@ -59,6 +60,7 @@ export function registerCommands(context: vscode.ExtensionContext) {
     wolframScript: registerWolframScriptCommands(context),
     history: registerHistoryCommands(context),
     arXiv: registerArXivCommands(context),
+    compare: registerCompareCommands(context),
   };
 
   // Register webview provider
@@ -98,3 +100,4 @@ export { wolframAlphaCommands } from './commands/wolframAlphaCommands';
 export { wolframScriptCommands } from './commands/wolframScriptCommands';
 export { historyCommands } from './commands/historyCommands';
 export { arXivCommands } from './commands/arXivCommands';
+export { compareCommands } from './commands/compareCommands';
