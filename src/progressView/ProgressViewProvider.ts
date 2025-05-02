@@ -233,8 +233,9 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     // Clean up old view if it exists
     this._cleanupView();
 
-    // Set all running streams to stopped since they've lost contact
-    this._resetRunningStreamStatuses();
+    // Instead of automatically marking running tasks as errors, preserve their status
+    // We no longer need to reset running stream statuses - they'll be preserved from storage
+    // this._resetRunningStreamStatuses();
 
     this._view = webviewView;
 
@@ -625,51 +626,56 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     this.context.workspaceState.update(this._taskStateKey, taskStatesArray);
   }
 
-  private _resetRunningStreamStatuses() {
-    // Set all currently running streams to error since they will lose contact when webview reloads
+  /**
+   * Marks all running tasks as cancelled when extension is deactivated
+   * This is better than treating them as errors on webview reload
+   */
+  public markAllRunningTasksAsCancelled(): void {
+    // Use a specific status for cancellation to distinguish from normal stops
+    const STATUS_CANCELLED = STATUS.STOPPED; // Using 'stopped' status for cancelled tasks
+
+    // Log this operation
+    this.logger.debug(
+      'Marking all running tasks as cancelled due to extension deactivation',
+    );
+
+    // Update all running streams to cancelled status
     for (const [streamId, status] of this._streamStatus.entries()) {
-      let streamStatusChanged = false;
-
       if (status === STATUS.RUNNING) {
-        // Change running streams to ERROR (not stopped or ready)
-        this._streamStatus.set(streamId, STATUS.ERROR);
-        streamStatusChanged = true;
+        // Change status to cancelled
+        this._streamStatus.set(streamId, STATUS_CANCELLED);
 
-        // Also log to the general logger for debugging
-        this.logger.debug(
-          `Stream ${streamId} set to ERROR due to webview reload`,
-        );
-      }
-      // Leave streams in ERROR, STOPPED, or READY status unchanged
-
-      // Now update any running log groups within this stream
-      // TODO: This did not quite work i think.
-      const streamGroups = this._logGroups.get(streamId);
-      if (streamGroups) {
-        for (const [groupId, group] of streamGroups.entries()) {
-          if (group.status === STATUS.RUNNING) {
-            // Get the current time for the end time
-            const endTime = new Date().toISOString();
-
-            // Update the group properly using the updateLogGroup method
-            this.updateLogGroup(streamId, groupId, STATUS.ERROR, endTime);
-
-            this.logger.debug(
-              `Group ${groupId} in stream ${streamId} set to ERROR due to webview reload`,
-            );
-            streamStatusChanged = true;
-          }
-        }
-      }
-
-      // Log to the specific stream only if something changed
-      if (streamStatusChanged) {
+        // Add a log message to the stream
         this.addLogMessage(
           streamId,
-          `Stream or task status changed to ERROR due to webview reload. Previous tasks may have been interrupted.`,
-          'error',
+          `Task cancelled due to extension deactivation.`,
+          'warn',
+        );
+
+        this.logger.debug(
+          `Stream ${streamId} marked as cancelled during shutdown`,
         );
       }
     }
+
+    // Update all running log groups to cancelled too
+    for (const [streamId, groups] of this._logGroups.entries()) {
+      for (const [groupId, group] of groups.entries()) {
+        if (group.status === STATUS.RUNNING) {
+          // Get current time for the end time
+          const endTime = new Date().toISOString();
+
+          // Update group status to cancelled
+          this.updateLogGroup(streamId, groupId, STATUS_CANCELLED, endTime);
+
+          this.logger.debug(
+            `Group ${groupId} in stream ${streamId} marked as cancelled during shutdown`,
+          );
+        }
+      }
+    }
+
+    // Save the updated state to ensure persistence across restart
+    this._saveState();
   }
 }

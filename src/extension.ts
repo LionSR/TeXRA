@@ -127,4 +127,11 @@ export function activate(context: vscode.ExtensionContext) {
   );
 }
 
-export function deactivate() {}
+export function deactivate() {
+  // Get the ProgressViewProvider instance
+  const progressViewProvider = ProgressViewProvider.getInstance();
+  if (progressViewProvider) {
+    // Mark all running tasks as cancelled when extension deactivates
+    progressViewProvider.markAllRunningTasksAsCancelled();
+  }
+}
