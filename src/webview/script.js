@@ -56,6 +56,7 @@ document.addEventListener('DOMContentLoaded', function () {
   // Pack and Clean button handlers
   const packButton = document.getElementById('packButton');
   const cleanButton = document.getElementById('cleanButton');
+  const compareButton = document.getElementById('compareButton');
 
   if (packButton) {
     packButton.addEventListener('click', () => {
@@ -71,6 +72,26 @@ document.addEventListener('DOMContentLoaded', function () {
       const agent = document.getElementById('agent')?.value;
       if (agent) {
         vscode.postMessage({ command: 'cleanFiles', agent });
+      }
+    });
+  }
+
+  if (compareButton) {
+    compareButton.addEventListener('click', () => {
+      const baseFile = document.getElementById('baseFile')?.value;
+      const editedFile = document.getElementById('editedFile')?.value;
+
+      if (baseFile && editedFile) {
+        vscode.postMessage({
+          command: 'compare',
+          baseFile: baseFile,
+          editedFile: editedFile,
+        });
+      } else {
+        vscode.postMessage({
+          command: 'showInformationMessage',
+          text: 'Please select both base and edited files to compare',
+        });
       }
     });
   }
