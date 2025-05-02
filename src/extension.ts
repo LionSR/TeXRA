@@ -92,7 +92,13 @@ export function activate(context: vscode.ExtensionContext) {
 
   // Create the log view provider
   const progressViewProvider = new ProgressViewProvider(context);
+
+  // IMPORTANT: Register ProgressViewProvider with logger FIRST, before any other operations
+  // This ensures all logs generated during activation go to the ProgressView
   logger.setProgressViewProvider(progressViewProvider);
+
+  // Log activation message to ensure the logger is working correctly
+  logger.info('extension', 'TeXRA extension activated');
 
   // Clean up any tasks that were left in "running" state from previous session
   progressViewProvider.cleanupTasksAfterRestart();
@@ -112,6 +118,7 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.window.registerWebviewViewProvider(
       'texra.progressView',
       progressViewProvider,
+      { webviewOptions: { retainContextWhenHidden: true } }, // Keep the webview alive even when hidden
     ),
     // Removed duplicate mainViewProvider registration since it's handled in commands.ts
     vscode.window.registerTreeDataProvider(
