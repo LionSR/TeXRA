@@ -94,6 +94,9 @@ export function activate(context: vscode.ExtensionContext) {
   const progressViewProvider = new ProgressViewProvider(context);
   logger.setProgressViewProvider(progressViewProvider);
 
+  // Clean up any tasks that were left in "running" state from previous session
+  progressViewProvider.cleanupTasksAfterRestart();
+
   // Copy default agents
   copyDefaultAgents(context);
 
