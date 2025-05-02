@@ -6,6 +6,12 @@ import Transport from 'winston-transport';
 // Local imports - progressView
 import { ProgressViewProvider } from '../progressView/ProgressViewProvider';
 import { getConfig } from '../utils/configUtils';
+import {
+  shouldUseConsolidatedChannel,
+  getColorForLevel,
+  isAgentStream,
+  shouldExcludeFromProgressView,
+} from '../utils/loggerUtils';
 
 const { combine, timestamp } = winston.format;
 
@@ -44,11 +50,23 @@ function escapeHtml(text: string): string {
     .replace(/'/g, '&#039;');
 }
 
+// Main TeXRA output channel for non-agent logs
+let mainOutputChannel: vscode.OutputChannel | null = null;
+
+// Function to get or create the main output channel
+function getMainOutputChannel(): vscode.OutputChannel {
+  if (!mainOutputChannel) {
+    mainOutputChannel = vscode.window.createOutputChannel('TeXRA');
+  }
+  return mainOutputChannel;
+}
+
 // Create VSCode output channel transport
 class VSCodeTransport extends Transport {
   private channel: vscode.OutputChannel;
   private progressViewProvider?: ProgressViewProvider;
   private streamName: string;
+  private useConsolidatedChannel: boolean;
   private messageBuffer: {
     level: string;
     message: string;
@@ -61,12 +79,14 @@ class VSCodeTransport extends Transport {
   constructor(
     channel: vscode.OutputChannel,
     streamName: string,
+    useConsolidatedChannel: boolean,
     progressViewProvider?: ProgressViewProvider,
     opts?: Transport.TransportStreamOptions,
   ) {
     super(opts);
     this.channel = channel;
     this.streamName = streamName;
+    this.useConsolidatedChannel = useConsolidatedChannel;
     this.progressViewProvider = progressViewProvider;
   }
 
@@ -75,26 +95,39 @@ class VSCodeTransport extends Transport {
     // Use the provided groupId or fall back to the activeGroupId if available
     const groupId = info.groupId || this.activeGroupId;
 
-    const emoji = emojis[level as keyof typeof emojis];
+    const emoji = getColorForLevel(level);
 
     // Extract parts of the timestamp for display formatting
     // Full format is: YYYY-MM-DD HH:mm:ss.SSS
     const timeDisplay = timestamp.split(' ')[1]; // Just show the time part in the UI
-    // do not show milliseconds and the date
-    // const timeDisplay = timestamp.split(' ')[1].split('.')[0];
-    // this do not work because the sorting still depends on it.
 
-    // Plain format for output channel - no escaping needed
-    const formattedMessage = `${emoji} [${timestamp}] ${level.toUpperCase().padEnd(8)} ${message}`;
+    // For consolidated channel, include the source channel in the message
+    const channelPrefix = this.useConsolidatedChannel
+      ? `[${this.streamName}] `
+      : '';
 
-    // Always write to output channel (plain text)
-    this.channel.appendLine(formattedMessage);
+    // Plain format for output channel - no escaping needed but include better formatting
+    // const formattedMessage = `${emoji} [${timestamp}] ${level.toUpperCase().padEnd(7)} ${channelPrefix}${message}`;
+    const formattedMessage = `${emoji} [${timestamp}] ${channelPrefix}${message}`;
+
+    // Key behavior change: For agent streams, we ONLY write to their dedicated channel
+    // For non-agent streams, we write to the consolidated channel
+    // This prevents duplicate output in both places
+    if (this.useConsolidatedChannel || !isAgentStream(this.streamName)) {
+      this.channel.appendLine(formattedMessage);
+    }
 
     // Skip debug messages in ProgressView if verbose output is disabled
     if (
       level === 'debug' &&
       !getConfig<boolean>('logger.verboseOutput', false)
     ) {
+      callback();
+      return;
+    }
+
+    // Skip progress view updates for consolidated channels
+    if (this.useConsolidatedChannel) {
       callback();
       return;
     }
@@ -142,6 +175,11 @@ class VSCodeTransport extends Transport {
   replayBufferedMessages(progressViewProvider: ProgressViewProvider) {
     this.progressViewProvider = progressViewProvider;
 
+    // Skip replay for consolidated channels
+    if (this.useConsolidatedChannel) {
+      return;
+    }
+
     // First replay any groups
     for (const group of this.groups.values()) {
       this.progressViewProvider.addLogGroup(
@@ -184,6 +222,11 @@ class VSCodeTransport extends Transport {
 
     this.activeGroupId = groupId;
 
+    // Skip progress view updates for consolidated channels
+    if (this.useConsolidatedChannel) {
+      return groupId;
+    }
+
     // Log a message to mark the group start
     if (this.progressViewProvider) {
       this.progressViewProvider.addLogGroup(
@@ -211,6 +254,11 @@ class VSCodeTransport extends Transport {
     group.endTime = now.toISOString();
     group.status = status;
 
+    // Skip progress view updates for consolidated channels
+    if (this.useConsolidatedChannel) {
+      return;
+    }
+
     if (this.progressViewProvider) {
       this.progressViewProvider.updateLogGroup(
         this.streamName,
@@ -225,8 +273,6 @@ class VSCodeTransport extends Transport {
       const parentGroupId = group.parentGroupId;
       this.activeGroupId = parentGroupId;
     }
-
-    // when a group has been ended we should collapse it to make it readable.
   }
 
   // Get the active group ID
@@ -275,14 +321,24 @@ function createLoggerForChannel(channel: string): winston.Logger {
     return channelLoggers.get(channel)!;
   }
 
-  // Create output channel with the TeXRA prefix
-  const channelName = 'TeXRA ' + channel;
-  const outputChannel = vscode.window.createOutputChannel(channelName);
+  const useConsolidatedChannel = shouldUseConsolidatedChannel(channel);
+
+  let outputChannel: vscode.OutputChannel;
+
+  if (useConsolidatedChannel) {
+    // Use the main TeXRA output channel for non-agent channels
+    outputChannel = getMainOutputChannel();
+  } else {
+    // Create a separate channel with the TeXRA prefix for agent channels
+    const channelName = 'TeXRA ' + channel;
+    outputChannel = vscode.window.createOutputChannel(channelName);
+  }
 
   // Create transport
   const transport = new VSCodeTransport(
     outputChannel,
     channel,
+    useConsolidatedChannel,
     globalProgressViewProvider,
   );
   channelTransports.set(channel, transport);
