@@ -1,6 +1,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as https from 'https';
+// Import the identifiers-arxiv package
+import * as arxivIdentifiers from 'identifiers-arxiv';
 
 // Local imports - log
 import * as logger from '../logger/logUtils';
@@ -24,13 +26,10 @@ const CHANNEL = 'arXivUtils';
  * @returns True if the ID is valid, false otherwise
  */
 export function isValidArxivId(arxivId: string): boolean {
-  // Modern arXiv ID format (YYMM.number or YYMM.numberv1)
-  const modernPattern = /^\d{4}\.\d{4,5}(v\d+)?$/;
-  // Old arXiv ID format (category/YYMM.number or category/YYMM.numberv1)
-  // Updated to support variations like cond-mat/0009311
-  const oldPattern = /^[a-z-]+(\.[A-Z]{2})?\/\d{4,7}(v\d+)?$/;
-
-  return modernPattern.test(arxivId) || oldPattern.test(arxivId);
+  // Use the identifiers-arxiv package for better validation
+  // extract() returns an array of valid IDs, so if the result contains our ID, it's valid
+  const extractedIds = arxivIdentifiers.extract(arxivId);
+  return extractedIds.length > 0 && extractedIds.includes(arxivId);
 }
 
 /**
@@ -44,7 +43,7 @@ export function validateArxivId(arxivId: string): string | null {
   }
 
   if (!isValidArxivId(arxivId)) {
-    return 'Invalid arXiv ID format. Expected format: YYMM.NNNNN or category/YYMM.NNNNN';
+    return 'Invalid arXiv ID format. Please provide a valid arXiv ID like YYMM.NNNNN, YYMM.NNNNNvN, or category/YYMM.NNNNN';
   }
 
   return null;
