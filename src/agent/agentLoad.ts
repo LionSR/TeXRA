@@ -28,9 +28,7 @@ export async function loadYaml(absolutePath: string): Promise<object> {
     const yamlContent = Buffer.from(fileContent).toString('utf-8');
     const parsedYaml = yaml.parse(yamlContent);
 
-    vscode.window.showInformationMessage(
-      `Successfully loaded YAML from: ${absolutePath}`,
-    );
+    console.log(`Successfully loaded YAML from: ${absolutePath}`);
     return parsedYaml;
   } catch (err) {
     vscode.window.showErrorMessage(
