@@ -1,5 +1,6 @@
 // Standard library imports
 import * as path from 'path';
+import * as fs from 'fs/promises';
 
 // Third-party imports
 import * as vscode from 'vscode';
@@ -120,6 +121,79 @@ async function handleCompare(
   }
 }
 
+/**
+ * Handles accepting the content of the edited file and overwriting the base file
+ */
+async function handleAcceptEdited(
+  inputFile: string,
+  baseFile: string,
+  editedFile: string,
+) {
+  try {
+    const fileToUse = baseFile || inputFile;
+    if (!fileToUse || !editedFile) {
+      vscode.window.showErrorMessage(
+        'Both base file and edited file must be selected to accept changes',
+      );
+      return;
+    }
+
+    // Verify both files exist
+    if (!(await fileExists(fileToUse))) {
+      vscode.window.showErrorMessage(`Base file not found: ${fileToUse}`);
+      return;
+    }
+
+    if (!(await fileExists(editedFile))) {
+      vscode.window.showErrorMessage(`Edited file not found: ${editedFile}`);
+      return;
+    }
+
+    // Get full paths
+    const baseFilePath = getFullPathFromWorkspace(fileToUse);
+    const editedFilePath = getFullPathFromWorkspace(editedFile);
+
+    // Read content from edited file
+    const editedContent = await fs.readFile(editedFilePath, 'utf8');
+
+    // Confirm with user
+    const baseFileName = path.basename(fileToUse);
+    const editedFileName = path.basename(editedFile);
+
+    const answer = await vscode.window.showWarningMessage(
+      `This will overwrite '${baseFileName}' with content from '${editedFileName}'. Are you sure?`,
+      { modal: true },
+      'Yes',
+      'Cancel',
+    );
+
+    if (answer !== 'Yes') {
+      return;
+    }
+
+    // Write content to base file
+    await fs.writeFile(baseFilePath, editedContent);
+
+    vscode.window.showInformationMessage(
+      `Successfully replaced '${baseFileName}' with content from '${editedFileName}'`,
+    );
+
+    logger.info(
+      CHANNEL,
+      `Copied content from ${editedFileName} to ${baseFileName}`,
+    );
+  } catch (err) {
+    vscode.window.showErrorMessage(
+      `Error accepting changes: ${err instanceof Error ? err.message : String(err)}`,
+    );
+    logger.error(
+      CHANNEL,
+      `Error in handleAcceptEdited: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+}
+
 export const compareCommands = {
   handleCompare,
+  handleAcceptEdited,
 };

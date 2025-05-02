@@ -57,6 +57,7 @@ document.addEventListener('DOMContentLoaded', function () {
   const packButton = document.getElementById('packButton');
   const cleanButton = document.getElementById('cleanButton');
   const compareButton = document.getElementById('compareButton');
+  const acceptButton = document.getElementById('acceptButton');
 
   if (packButton) {
     packButton.addEventListener('click', () => {
@@ -91,6 +92,26 @@ document.addEventListener('DOMContentLoaded', function () {
         vscode.postMessage({
           command: 'showInformationMessage',
           text: 'Please select both base and edited files to compare',
+        });
+      }
+    });
+  }
+
+  if (acceptButton) {
+    acceptButton.addEventListener('click', () => {
+      const baseFile = document.getElementById('baseFile')?.value;
+      const editedFile = document.getElementById('editedFile')?.value;
+
+      if (baseFile && editedFile) {
+        vscode.postMessage({
+          command: 'acceptEdited',
+          baseFile: baseFile,
+          editedFile: editedFile,
+        });
+      } else {
+        vscode.postMessage({
+          command: 'showInformationMessage',
+          text: 'Please select both base and edited files to accept changes',
         });
       }
     });
