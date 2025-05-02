@@ -25,6 +25,7 @@ import { registerWolframScriptCommands } from './commands/wolframScriptCommands'
 import { registerHistoryCommands } from './commands/historyCommands';
 import { registerArXivCommands } from './commands/arXivCommands';
 import { registerCompareCommands } from './commands/compareCommands';
+import { registerProgressViewCommands } from './commands/progressViewCommands';
 
 import * as logger from './logger/logUtils';
 
@@ -61,6 +62,7 @@ export function registerCommands(context: vscode.ExtensionContext) {
     history: registerHistoryCommands(context),
     arXiv: registerArXivCommands(context),
     compare: registerCompareCommands(context),
+    progressView: registerProgressViewCommands(context),
   };
 
   // Register webview provider
