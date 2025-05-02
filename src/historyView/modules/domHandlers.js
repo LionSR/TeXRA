@@ -1,5 +1,10 @@
 import { vscode } from './vscodeApi.js';
 
+// Track search state
+let markInstance;
+let currentIndex = -1;
+let totalMatches = 0;
+
 /**
  * Render the list of history items
  */
@@ -41,6 +46,9 @@ export function renderHistoryItems(historyItems) {
 
   // Setup event listeners for the newly created elements
   setupItemEventListeners();
+
+  // Initialize mark.js on the container
+  markInstance = new Mark(historyContainer);
 }
 
 /**
@@ -300,5 +308,160 @@ function setupItemEventListeners() {
  * Set up global event listeners
  */
 export function setupEventListeners() {
-  // No global event listeners needed at this point
+  // Set up search functionality
+  const searchInput = document.getElementById('searchInput');
+  const prevMatchBtn = document.getElementById('prevMatch');
+  const nextMatchBtn = document.getElementById('nextMatch');
+
+  // Add input event listener for search
+  searchInput.addEventListener('input', (event) => {
+    const searchTerm = event.target.value.trim();
+
+    // Clear existing marks
+    markInstance.unmark({
+      done: () => {
+        if (searchTerm) {
+          // Reset state
+          currentIndex = -1;
+          totalMatches = 0;
+
+          // Expand all collapsible sections for better searching
+          expandAllCollapsibleSections();
+
+          // Perform search with mark.js
+          markInstance.mark(searchTerm, {
+            each: (element) => {
+              // Count total matches
+              totalMatches++;
+            },
+            done: () => {
+              // Update counts and navigate to first match if found
+              updateMatchCount(totalMatches, totalMatches > 0 ? 1 : 0);
+              if (totalMatches > 0) {
+                currentIndex = 0;
+                scrollToCurrentMatch();
+              }
+            },
+          });
+        } else {
+          // No search term, reset the counter
+          updateMatchCount(0, 0);
+        }
+      },
+    });
+  });
+
+  // Add click listeners for navigation buttons
+  prevMatchBtn.addEventListener('click', () => {
+    navigateToPrevMatch();
+  });
+
+  nextMatchBtn.addEventListener('click', () => {
+    navigateToNextMatch();
+  });
+
+  // Add key event listener for Enter key to navigate to next match
+  searchInput.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      if (event.shiftKey) {
+        navigateToPrevMatch();
+      } else {
+        navigateToNextMatch();
+      }
+    }
+  });
+}
+
+/**
+ * Navigate to the next match
+ */
+function navigateToNextMatch() {
+  if (totalMatches === 0) return;
+
+  // Remove current class from current match if it exists
+  const currentMatch = document.querySelector('mark.current-match');
+  if (currentMatch) {
+    currentMatch.classList.remove('current-match');
+  }
+
+  // Update index (with wrap-around)
+  currentIndex = (currentIndex + 1) % totalMatches;
+
+  // Update display and scroll to match
+  scrollToCurrentMatch();
+}
+
+/**
+ * Navigate to the previous match
+ */
+function navigateToPrevMatch() {
+  if (totalMatches === 0) return;
+
+  // Remove current class from current match if it exists
+  const currentMatch = document.querySelector('mark.current-match');
+  if (currentMatch) {
+    currentMatch.classList.remove('current-match');
+  }
+
+  // Update index (with wrap-around)
+  currentIndex = (currentIndex - 1 + totalMatches) % totalMatches;
+
+  // Update display and scroll to match
+  scrollToCurrentMatch();
+}
+
+/**
+ * Scroll to and highlight the current match
+ */
+function scrollToCurrentMatch() {
+  if (totalMatches === 0) return;
+
+  const marks = document.querySelectorAll('mark');
+  if (marks.length > currentIndex) {
+    // Add current class to this match
+    marks[currentIndex].classList.add('current-match');
+
+    // Scroll to the match
+    marks[currentIndex].scrollIntoView({
+      behavior: 'smooth',
+      block: 'center',
+    });
+
+    // Update count display
+    updateMatchCount(totalMatches, currentIndex + 1);
+  }
+}
+
+/**
+ * Update the match count display
+ */
+function updateMatchCount(total, current) {
+  const matchCountEl = document.getElementById('matchCount');
+  if (total === 0) {
+    matchCountEl.textContent = '';
+  } else {
+    matchCountEl.textContent = `${current}/${total}`;
+  }
+}
+
+/**
+ * Expand all collapsible sections
+ */
+function expandAllCollapsibleSections() {
+  document.querySelectorAll('.collapsible').forEach((section) => {
+    if (!section.classList.contains('expanded')) {
+      section.classList.add('expanded');
+
+      // Also update the corresponding toggle button
+      const itemId = section.id.replace('content-', '');
+      const toggleBtn = document.querySelector(
+        `.toggle-button[data-id="${itemId}"]`,
+      );
+
+      if (toggleBtn) {
+        toggleBtn.textContent = 'Show less';
+      }
+    }
+  });
 }
