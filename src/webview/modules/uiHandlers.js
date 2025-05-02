@@ -115,7 +115,7 @@ export function setupUIHandlers() {
     const indicator = hasAutoExtractChecked ? '●' : '○';
     const direction = isVisible ? 'up' : 'down';
 
-    autoExtractToggle.innerHTML = `Auto Extract ${indicator}<i class="codicon codicon-chevron-${direction}"></i>`;
+    autoExtractToggle.innerHTML = `<i class="codicon codicon-wand"></i> ${indicator}<i class="codicon codicon-chevron-${direction}"></i>`;
   }
 
   addEventListenerSafely('toggleAutoExtract', 'click', function () {
