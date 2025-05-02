@@ -8,6 +8,10 @@ import { TaskState } from '../logger/TaskState';
 import { AgentLogger } from '../logger/AgentLogger';
 import { getConfig } from '../utils/configUtils';
 import { objectToTaskState } from '../utils/configConversion';
+import {
+  shouldExcludeFromProgressView,
+  shouldPersistStream,
+} from '../utils/loggerUtils';
 // @ts-ignore - Import JavaScript module
 import { STATUS, COMMANDS } from './modules/constants.js';
 
@@ -37,34 +41,7 @@ interface LogGroup {
   parentGroupId?: string;
 }
 
-// Channels that should only be written to VSCode output channel
-const OUTPUT_CHANNEL_ONLY = new Set([
-  'Webview',
-  'TestCommands',
-  'fileSelectionCommands',
-  'arXivCommands',
-  'packCommands',
-  'cleanCommands',
-  'MessageHandler',
-  'AgentLoad',
-  'Housekeeping',
-  'LaTeXCommands',
-  'Utils',
-  'ProgressViewProvider',
-  'AgentHistoryViewProvider',
-  'ReplacementUtils',
-  'executeAgent',
-  'ImgUtils',
-  'stateRestoreCommand',
-  'TexLinterFixAgent',
-  'AnthropicToolAgent',
-  'TextEditorTool',
-  'XMLValidatorAgent',
-  'arXivUtils',
-]);
-
 // Channels that should not be persisted in workspace storage
-const NON_PERSISTENT_CHANNELS = new Set([...OUTPUT_CHANNEL_ONLY, 'ImgUtils']);
 
 export class ProgressViewProvider implements vscode.WebviewViewProvider {
   private static _instance: ProgressViewProvider | undefined;
@@ -144,10 +121,10 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       [key: string]: ColoredLogMessage[];
     }>(this._getWorkspaceKey());
     if (savedState) {
-      // Only load channels that are not in the blacklist
+      // Only load channels that should be persisted
       this._logStreams = new Map(
-        Object.entries(savedState).filter(
-          ([channel]) => !NON_PERSISTENT_CHANNELS.has(channel),
+        Object.entries(savedState).filter(([channel]) =>
+          shouldPersistStream(channel),
         ),
       );
     } else {
@@ -161,7 +138,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     if (savedGroups) {
       this._logGroups = new Map(
         Object.entries(savedGroups)
-          .filter(([channel]) => !NON_PERSISTENT_CHANNELS.has(channel))
+          .filter(([channel]) => shouldPersistStream(channel))
           .map(([streamId, groups]) => [
             streamId,
             new Map(Object.entries(groups)),
@@ -198,16 +175,16 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   }
 
   private _saveState() {
-    // Only save channels that are not in the blacklist
+    // Only save channels that should be persisted
     const persistentStreams = Array.from(this._logStreams.entries()).filter(
-      ([channel]) => !NON_PERSISTENT_CHANNELS.has(channel),
+      ([channel]) => shouldPersistStream(channel),
     );
     const stateObj = Object.fromEntries(persistentStreams);
     this.context.workspaceState.update(this._getWorkspaceKey(), stateObj);
 
     // Save groups
     const persistentGroups = Array.from(this._logGroups.entries())
-      .filter(([channel]) => !NON_PERSISTENT_CHANNELS.has(channel))
+      .filter(([channel]) => shouldPersistStream(channel))
       .map(([streamId, groups]) => [
         streamId,
         Object.fromEntries(groups.entries()),
@@ -343,13 +320,8 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     level: 'error' | 'warn' | 'info' | 'debug' = 'info',
     groupId?: string,
   ) {
-    // If message contains scratchpad content, log it for debugging
-    // if (message.includes('data-is-scratchpad="true"')) {
-    //   console.log('Scratchpad message before rendering:', message);
-    // }
-
-    // Skip if this stream should only be written to output channel
-    if (OUTPUT_CHANNEL_ONLY.has(stream)) {
+    // Skip if this stream should be excluded from the progress view
+    if (shouldExcludeFromProgressView(stream)) {
       return;
     }
 
@@ -363,10 +335,21 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
 
     // Create stream if it doesn't exist
     if (!this._logStreams.has(stream)) {
+      this.logger.debug(`Adding new stream to ProgressView: ${stream}`);
       this._logStreams.set(stream, []);
+
       // Set initial status to running for new streams
       if (!this._streamStatus.has(stream)) {
         this.updateStreamStatus(stream, STATUS.RUNNING);
+      }
+
+      // Auto-focus new agent streams - make this stream the active one
+      this.setActiveStream(stream);
+
+      // If the view exists, make sure the UI shows this as the active stream
+      if (this._view) {
+        this._view.show(true); // Show the panel and give it focus
+        this.logger.debug(`Auto-focused to new stream: ${stream}`);
       }
     }
 
@@ -403,8 +386,8 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     endTime?: string,
     parentGroupId?: string,
   ) {
-    // Skip if this stream should only be written to output channel
-    if (OUTPUT_CHANNEL_ONLY.has(stream)) {
+    // Skip if this stream should be excluded from the progress view
+    if (shouldExcludeFromProgressView(stream)) {
       return;
     }
 
@@ -447,8 +430,8 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     status: StatusType,
     endTime?: string,
   ) {
-    // Skip if this stream should only be written to output channel
-    if (OUTPUT_CHANNEL_ONLY.has(stream)) {
+    // Skip if this stream should be excluded from the progress view
+    if (shouldExcludeFromProgressView(stream)) {
       return;
     }
 
@@ -573,6 +556,11 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   }
 
   public updateStreamStatus(stream: string, status: StreamStatusType) {
+    // Don't track status for excluded streams
+    if (shouldExcludeFromProgressView(stream)) {
+      return;
+    }
+
     if (!this._logStreams.has(stream)) {
       return;
     }
