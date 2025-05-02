@@ -776,6 +776,12 @@
         "command": "texra.showAgentHistory",
         "title": "Show Agent Execution History",
         "category": "TeXRA"
+      },
+      {
+        "command": "texra.showProgressView",
+        "title": "Show Tasks",
+        "category": "TeXRA",
+        "icon": "$(eye)"
       }
     ],
     "viewsContainers": {
