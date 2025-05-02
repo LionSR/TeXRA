@@ -8,7 +8,11 @@ import * as vscode from 'vscode';
 import * as logger from '../logger/logUtils';
 
 // Local imports - utilities
-import { getWorkspacePath, fileExists } from '../utils/workspaceFileUtils';
+import {
+  getWorkspacePath,
+  getFullPathFromWorkspace,
+  fileExists,
+} from '../utils/workspaceFileUtils';
 
 const CHANNEL = 'CompareCommands';
 logger.initialize(CHANNEL);
@@ -39,14 +43,9 @@ async function handleCompare(
       return;
     }
 
-    const workspacePath = getWorkspacePath();
-    if (!workspacePath) {
-      throw new Error('No workspace path found');
-    }
-
     // Create URIs for both files
-    const baseUri = vscode.Uri.file(path.join(workspacePath, fileToUse));
-    const editedUri = vscode.Uri.file(path.join(workspacePath, editedFile));
+    const baseUri = vscode.Uri.file(getFullPathFromWorkspace(fileToUse));
+    const editedUri = vscode.Uri.file(getFullPathFromWorkspace(editedFile));
 
     // Verify both files exist
     if (!(await fileExists(fileToUse))) {
@@ -62,15 +61,49 @@ async function handleCompare(
     // Create title for the diff editor
     const baseFileName = path.basename(fileToUse);
     const editedFileName = path.basename(editedFile);
-    const title = `Compare: ${baseFileName} ↔ ${editedFileName}`;
+    const title = `Compare: ${editedFileName} ↔ ${baseFileName}`;
 
     // Open files in diff editor
     await vscode.commands.executeCommand(
       'vscode.diff',
-      baseUri, // right-hand side (original)
       editedUri, // left-hand side (modified)
+      baseUri, // right-hand side (original)
       title,
     );
+
+    // Wait a short time for the diff editor to fully open, then check word wrap setting
+    setTimeout(async () => {
+      try {
+        // Get current editor
+        const editor = vscode.window.activeTextEditor;
+        if (editor) {
+          // Check if word wrap is enabled through configuration for this editor
+          const editorConfig = vscode.workspace.getConfiguration(
+            'editor',
+            editor.document.uri,
+          );
+          const isWordWrapEnabled = editorConfig.get('wordWrap') === 'on';
+
+          // Only toggle if word wrap is not already on
+          if (!isWordWrapEnabled) {
+            await vscode.commands.executeCommand(
+              'editor.action.toggleWordWrap',
+            );
+            logger.debug(CHANNEL, 'Toggled word wrap on for diff editor');
+          } else {
+            logger.debug(
+              CHANNEL,
+              'Word wrap already enabled, no change needed',
+            );
+          }
+        }
+      } catch (err) {
+        logger.error(
+          CHANNEL,
+          `Error handling word wrap: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    }, 300);
 
     logger.info(
       CHANNEL,
