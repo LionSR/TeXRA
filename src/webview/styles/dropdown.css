@@ -29,19 +29,14 @@
   padding: 2px 6px;
   font-size: calc(var(--font-size) * 0.9);
   border-radius: var(--border-radius);
-  background: var(--vscode-button-secondaryBackground);
+  background: transparent;
   border: 1px solid var(--vscode-button-border);
-  transition: background-color 0.2s;
   pointer-events: auto;
   font-weight: normal;
 }
 
-.auto-toggle:hover {
-  background: var(--vscode-list-hoverBackground);
-}
-
 .auto-toggle i {
-  font-size: 0.8em;
+  font-size: calc(var(--font-size) * 0.8);
   color: var(--vscode-foreground);
   margin-left: 1px;
   pointer-events: none;
@@ -72,7 +67,7 @@
   border: 1px solid var(--vscode-menu-border);
   border-radius: var(--border-radius);
   box-shadow: var(--vscode-widget-shadow);
-  min-width: 200px;
+  min-width: 180px;
   display: none;
   font-size: calc(var(--font-size) * 0.9);
   padding: 4px;
@@ -81,7 +76,7 @@
 
 /* Dropdown options content */
 .dropdown-options-content {
-  font-size: calc(var(--font-size) * 0.9);
+  font-size: calc(var(--font-size) * 0.8);
   background: var(--vscode-menu-background);
   border: 1px solid var(--vscode-input-border);
   border-radius: var(--border-radius);
