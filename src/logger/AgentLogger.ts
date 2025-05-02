@@ -6,6 +6,7 @@ import * as logger from './logUtils';
 
 /**
  * Encapsulates logging functionality for agents with a dedicated channel.
+ * Uses the updated consolidated logger system.
  */
 export class AgentLogger {
   constructor(public channelId: string) {
