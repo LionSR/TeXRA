@@ -147,6 +147,34 @@ async function executeAgentWithLogging<T extends AgentWithConfig>(
       throw new Error(errorMsg);
     }
 
+    // Check if the progress view is visible, if not show a helpful message
+    if (!progressViewProvider.isViewVisible()) {
+      const inputFileName = path.basename(config.inputFile);
+      const outputInfo = config.outputFiles?.length
+        ? `to ${
+            config.outputFiles.length > 1
+              ? config.outputFiles.length + ' files'
+              : path.basename(config.outputFiles[0])
+          }`
+        : '';
+
+      vscode.window
+        .showInformationMessage(
+          `TeXRA Agent Started: "${agentName}" is processing ${inputFileName} with ${config.model} ${outputInfo}. View in ProgressBoard for progress.`,
+          {
+            modal: false,
+            detail:
+              'TeXRA agents run in the background and their progress can be tracked in the ProgressBoard.',
+          },
+          'Show ProgressBoard',
+        )
+        .then((selection) => {
+          if (selection === 'Show ProgressBoard') {
+            vscode.commands.executeCommand('texra.showProgressView');
+          }
+        });
+    }
+
     // Create a main task group for the entire execution
     const mainTaskGroupId = await logger.startGroup(
       `Task: ${agentName}@${config.model}`,
