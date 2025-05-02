@@ -5,11 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'none'; style-src ${cspSource} vscode-resource: 'unsafe-inline'; script-src 'nonce-${nonce}'; font-src ${cspSource} vscode-resource:;"
+      content="default-src 'none'; style-src ${cspSource} vscode-resource: 'unsafe-inline'; script-src 'nonce-${nonce}' https://cdnjs.cloudflare.com; font-src ${cspSource} vscode-resource:;"
     />
     <link rel="stylesheet" href="${commonStyleUri}" />
     <link rel="stylesheet" href="${styleUri}" />
     <title>TeXRA History</title>
+    <script
+      nonce="${nonce}"
+      src="https://cdnjs.cloudflare.com/ajax/libs/mark.js/8.11.1/mark.min.js"
+    ></script>
     <script type="importmap" nonce="${nonce}">
       {
         "imports": {
@@ -24,6 +28,32 @@
   <body>
     <div>
       <h2>Agent Execution History</h2>
+
+      <div id="searchContainer" class="search-container">
+        <input
+          type="text"
+          id="searchInput"
+          class="search-input"
+          placeholder="Search history items..."
+        />
+        <div class="search-controls">
+          <button
+            id="prevMatch"
+            class="button search-nav-btn"
+            title="Previous match"
+          >
+            ↑
+          </button>
+          <button
+            id="nextMatch"
+            class="button search-nav-btn"
+            title="Next match"
+          >
+            ↓
+          </button>
+          <span id="matchCount" class="match-count"></span>
+        </div>
+      </div>
 
       <div id="clearButtonContainer">
         <!-- Clear button will be added here if history items exist -->
