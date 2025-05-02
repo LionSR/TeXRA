@@ -127,6 +127,10 @@ const EQUATION_REPLACEMENTS: ReplacementCategory = {
     '\n\n\\begin{equation}': '\n\\begin{equation}',
     '\\end{equation}\n\n': '\\end{equation}\n',
 
+    '\n\n\\end{align}': '\n\\end{align}',
+    '\n\n\\end{aligned}': '\n\\end{aligned}',
+    '\n\n}\\end{align*}%DIFAUXCMD': '\n\\end{align*}%DIFAUXCMD',
+
     // Fix reference numbering
     'figure \\ref{': 'figure~\\ref{',
     'table \\ref{': 'table~\\ref{',
@@ -276,7 +280,7 @@ const EQUATION_REPLACEMENTS: ReplacementCategory = {
 
     // align problem
     '\\end{Galign}': '\\end{align}',
-    '\n\n\\end{align}': '\n\\end{align}',
+    // '\n\n\\end{align}': '\n\\end{align}',
 
     // latex ending separators
     '\n\\\nend{align}': '\n\\end{align}',
