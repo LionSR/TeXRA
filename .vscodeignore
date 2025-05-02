@@ -1,3 +1,7 @@
+.cursor
+.cursor/*
+.cursorignore
+.pre-commit-config.yaml
 .DS_Store
 .vscode/**
 .vscode-test/**
@@ -10,6 +14,8 @@ vsc-extension-quickstart.md
 **/tsconfig.json
 # **/.eslintrc.json
 # eslint.config.js
+eslint.config.mjs
+tsconfig.json
 **/*.map
 **/*.ts
 **/.vscode-test.*
@@ -20,7 +26,7 @@ prototypes/**
 
 !node_modules/@vscode/codicons/dist/**
 !node_modules/split.js/**
-
+.DS_Store
 resources/.DS_Store
 !resources/**
 !src/webview/*.js
