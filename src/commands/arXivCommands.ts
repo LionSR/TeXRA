@@ -45,6 +45,9 @@ export function registerArXivCommands(context: vscode.ExtensionContext) {
 
         const autoIndent = shouldAutoIndent === 'Yes';
 
+        // Initialize extractedPath with a definite assignment
+        let extractedPath = '';
+
         // Show progress
         await vscode.window.withProgress(
           {
@@ -63,30 +66,30 @@ export function registerArXivCommands(context: vscode.ExtensionContext) {
             };
 
             // Download and extract source
-            const extractedPath = await downloadArxivSource(
+            extractedPath = await downloadArxivSource(
               arxivId,
               progressCallback,
               autoIndent,
             );
-
-            // Show success message with a button to open the extracted folder
-            const openFolderAction = 'Open Folder';
-            const result = await vscode.window.showInformationMessage(
-              `arXiv source downloaded and extracted to ${path.basename(extractedPath)}${
-                autoIndent ? ' with LaTeX files indented' : ''
-              }`,
-              openFolderAction,
-            );
-
-            if (result === openFolderAction) {
-              // Open the extracted folder in Explorer
-              vscode.commands.executeCommand(
-                'revealFileInOS',
-                vscode.Uri.file(extractedPath),
-              );
-            }
           },
         );
+
+        // Show success message with a button to open the extracted folder AFTER the progress window completes
+        const openFolderAction = 'Open Folder';
+        const result = await vscode.window.showInformationMessage(
+          `arXiv source downloaded and extracted to ${path.basename(extractedPath)}${
+            autoIndent ? ' with LaTeX files indented' : ''
+          }`,
+          openFolderAction,
+        );
+
+        if (result === openFolderAction) {
+          // Open the extracted folder in Explorer
+          vscode.commands.executeCommand(
+            'revealFileInOS',
+            vscode.Uri.file(extractedPath),
+          );
+        }
       } catch (error) {
         if (error instanceof Error) {
           vscode.window.showErrorMessage(
