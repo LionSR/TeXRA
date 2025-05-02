@@ -628,54 +628,116 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
 
   /**
    * Marks all running tasks as cancelled when extension is deactivated
-   * This is better than treating them as errors on webview reload
    */
   public markAllRunningTasksAsCancelled(): void {
-    // Use a specific status for cancellation to distinguish from normal stops
-    const STATUS_CANCELLED = STATUS.STOPPED; // Using 'stopped' status for cancelled tasks
-
-    // Log this operation
-    this.logger.debug(
+    console.log(
       'Marking all running tasks as cancelled due to extension deactivation',
     );
 
-    // Update all running streams to cancelled status
-    for (const [streamId, status] of this._streamStatus.entries()) {
-      if (status === STATUS.RUNNING) {
-        // Change status to cancelled
-        this._streamStatus.set(streamId, STATUS_CANCELLED);
+    // Find all running streams
+    const runningStreams = Array.from(this._streamStatus.entries())
+      .filter(([_, status]) => status === STATUS.RUNNING)
+      .map(([streamId]) => streamId);
 
-        // Add a log message to the stream
-        this.addLogMessage(
-          streamId,
-          `Task cancelled due to extension deactivation.`,
-          'warn',
-        );
-
-        this.logger.debug(
-          `Stream ${streamId} marked as cancelled during shutdown`,
-        );
-      }
+    if (runningStreams.length === 0) {
+      console.log('No running tasks found to cancel');
+      return;
     }
 
-    // Update all running log groups to cancelled too
-    for (const [streamId, groups] of this._logGroups.entries()) {
-      for (const [groupId, group] of groups.entries()) {
-        if (group.status === STATUS.RUNNING) {
-          // Get current time for the end time
-          const endTime = new Date().toISOString();
+    // Set end time for all groups
+    const endTime = new Date().toISOString();
+    const STATUS_CANCELLED = STATUS.ERROR;
 
-          // Update group status to cancelled
+    // Update each running stream
+    for (const streamId of runningStreams) {
+      // Mark stream as cancelled
+      this._streamStatus.set(streamId, STATUS_CANCELLED);
+      this.addLogMessage(
+        streamId,
+        'Task cancelled due to extension deactivation.',
+        'warn',
+      );
+
+      // Update all active groups for this stream
+      const streamGroups = this._logGroups.get(streamId);
+      if (streamGroups) {
+        const activeGroups = Array.from(streamGroups.entries()).filter(
+          ([_, group]) => !group.endTime || group.status === STATUS.RUNNING,
+        );
+
+        for (const [groupId, group] of activeGroups) {
           this.updateLogGroup(streamId, groupId, STATUS_CANCELLED, endTime);
-
-          this.logger.debug(
-            `Group ${groupId} in stream ${streamId} marked as cancelled during shutdown`,
-          );
         }
       }
     }
 
-    // Save the updated state to ensure persistence across restart
+    // Save state
     this._saveState();
+    this.logger.debug(
+      `Cancellation complete. Updated ${runningStreams.length} running tasks.`,
+    );
+  }
+
+  /**
+   * Cleans up any tasks with inconsistent states after extension restart
+   */
+  public cleanupTasksAfterRestart(): void {
+    this.logger.debug(
+      'Checking for inconsistent task states after extension restart',
+    );
+
+    const STATUS_INTERRUPTED = STATUS.ERROR;
+    const endTime = new Date().toISOString();
+    let updatedStreams = 0;
+    let updatedGroups = 0;
+
+    // Check all streams for inconsistencies
+    for (const streamId of this._logStreams.keys()) {
+      let wasUpdated = false;
+
+      // Check if stream is running and mark as interrupted
+      if (this._streamStatus.get(streamId) === STATUS.RUNNING) {
+        this._streamStatus.set(streamId, STATUS_INTERRUPTED);
+        this.addLogMessage(
+          streamId,
+          'Task was interrupted due to extension restart.',
+          'warn',
+        );
+        wasUpdated = true;
+        updatedStreams++;
+      }
+
+      // Check for running groups that need to be marked as interrupted
+      const streamGroups = this._logGroups.get(streamId);
+      if (streamGroups) {
+        const activeGroups = Array.from(streamGroups.entries()).filter(
+          ([_, group]) => !group.endTime || group.status === STATUS.RUNNING,
+        );
+
+        if (activeGroups.length > 0) {
+          // Log inconsistent state if stream wasn't running but has running groups
+          if (!wasUpdated) {
+            this.addLogMessage(
+              streamId,
+              `Found inconsistent state: stream status is ${this._streamStatus.get(streamId)} but has running groups.`,
+              'warn',
+            );
+            updatedStreams++;
+          }
+
+          // Mark all active groups as interrupted
+          for (const [groupId, group] of activeGroups) {
+            this.updateLogGroup(streamId, groupId, STATUS_INTERRUPTED, endTime);
+            updatedGroups++;
+          }
+        }
+      }
+    }
+
+    // Save state
+    this._saveState();
+    this.logger.debug(
+      `Cleanup complete. Updated ${updatedStreams} streams and ${updatedGroups} groups.`,
+    );
   }
 }

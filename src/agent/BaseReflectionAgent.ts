@@ -216,7 +216,7 @@ export abstract class BaseReflectionAgent {
    */
   protected async getUserVars(): Promise<Record<string, any>> {
     // Build user variables incrementally with clear categories
-    this.logger.info(`Obtaining dynamic variables...`);
+    this.logger.debug(`Obtaining dynamic variables...`);
     const userVars: Record<string, any> = {};
     Object.assign(userVars, this.getBasicVars());
     Object.assign(userVars, await this.getFileVars());
