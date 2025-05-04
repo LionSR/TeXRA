@@ -110,9 +110,46 @@ Be specific about what you want! Vague instructions are like asking a genie for 
 
      ![LaTeX Diff Output](/images/latexdff-v1.png)
 
-     <div class="tip custom-block">
-       <p>Explore the examples in the <a href="/guide/latex-diff.html#embedded-pdf-examples">LaTeX Diff guide</a> to see more examples of how TeXRA visualizes changes. You can even interact with embedded diff PDFs there.</p>
-     </div>
+### Example Output
+
+<div class="quick-pdf-viewer">
+  <iframe src="/examples/draft_polish_r1_gemini25p_diff.pdf" title="Polish Agent Example" class="quick-pdf-frame"></iframe>
+  <a href="/examples/draft_polish_r1_gemini25p_diff.pdf" target="_blank" class="quick-pdf-link">Open full example</a>
+</div>
+
+For details on how LaTeX diff works, see the [LaTeX Diff guide](./latex-diff.md).
+
+<style>
+.quick-pdf-viewer {
+  position: relative;
+  width: 100%;
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 6px;
+  overflow: hidden;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+  margin: 1rem 0 1.5rem;
+}
+.quick-pdf-frame {
+  width: 100%;
+  height: 350px;
+  border: none;
+}
+.quick-pdf-link {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: rgba(0,0,0,0.6);
+  color: white;
+  padding: 5px 10px;
+  border-radius: 4px;
+  text-decoration: none;
+  font-size: 0.85rem;
+  z-index: 10;
+}
+.quick-pdf-link:hover {
+  background: var(--vp-c-brand);
+}
+</style>
 
 ## Common Quick Tasks
 
