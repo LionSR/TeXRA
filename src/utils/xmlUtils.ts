@@ -247,7 +247,7 @@ export function formatAndLogContent(
   // Log original content for debugging
   logger.debug(
     CHANNEL,
-    `Original ${contentType.toLowerCase()} content before formatting: ${content.substring(0, 200)}${content.length > 200 ? '...' : ''}`
+    `Original ${contentType.toLowerCase()} content before formatting: ${content.substring(0, 200)}${content.length > 200 ? '...' : ''}`,
   );
 
   // Format the content for improved rendering
