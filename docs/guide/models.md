@@ -108,11 +108,8 @@ The specific models available by default and their identifiers (`sonnet37`, `gpt
 "texra.models": [
   "sonnet37T",
   "sonnet37",
-  "sonnet35",
-  "opus",
   "o3-",
   "o1",
-  "o1-",
   "gpt45",
   "gpt4o",
   "gpt4ol",

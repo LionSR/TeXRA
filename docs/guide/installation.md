@@ -12,18 +12,21 @@ TeXRA is designed to work on all major operating systems with the following mini
 
 ## Installing the Extension
 
-### From VS Code Marketplace (Recommended)
+### From Extension Marketplaces
 
-The easiest way to install TeXRA is directly from the Visual Studio Code Marketplace:
+The easiest way to install TeXRA is directly from an extension marketplace:
 
-1.  Open VS Code.
+1.  Open VS Code or your VSCodium-compatible editor.
 2.  Go to the Extensions view (click the square icon in the Activity Bar or press `Ctrl+Shift+X`).
 3.  Search for "TeXRA".
 4.  Find the extension published by "texra-ai".
 5.  Click the "Install" button.
-6.  Reload VS Code if prompted.
+6.  Reload your editor if prompted.
 
-<a href="https://marketplace.visualstudio.com/items?itemName=texra-ai.texra" target="_blank" style="display: inline-block; background-color: #007ACC; color: white; padding: 8px 12px; text-decoration: none; border-radius: 4px; font-weight: bold; margin: 10px 0;">View on Marketplace</a>
+TeXRA is available on both the official VS Code Marketplace and the Open VSX Registry:
+
+<a href="https://marketplace.visualstudio.com/items?itemName=texra-ai.texra" target="_blank" style="display: inline-block; background-color: #007ACC; color: white; padding: 8px 12px; text-decoration: none; border-radius: 4px; font-weight: bold; margin: 10px 5px 10px 0;">View on VS Code Marketplace</a>
+<a href="https://open-vsx.org/extension/texra-ai/texra" target="_blank" style="display: inline-block; background-color: #4D5D99; color: white; padding: 8px 12px; text-decoration: none; border-radius: 4px; font-weight: bold; margin: 10px 0 10px 5px;">View on Open VSX</a>
 
 ### From VSIX File
 
@@ -165,13 +168,15 @@ TeXRA requires API keys to access language models. Here's how to set them up:
 4. Select the provider (OpenAI or Anthropic)
 5. Enter your API key when prompted
 
+Alternatively, you can access the extension settings (including API key setup) by clicking the gear icon (<i class="codicon codicon-gear"></i>) in the TeXRA webview panel.
+
 ![API Key Setup](/images/api-key-setup.png)
 
 ::: info Getting API Keys
 
 - **OpenAI API Key**: Available from [OpenAI API](https://platform.openai.com/api-keys)
 - **Anthropic API Key**: Available from [Anthropic Console](https://console.anthropic.com/)
-- **Google API Key**: Available from [Google AI Studio](...)
+- **Google API Key**: Available from [Google AI Studio](https://aistudio.google.com/app/apikey)
   :::
 
 ## Verifying Installation
@@ -185,49 +190,6 @@ To verify that TeXRA and all dependencies are correctly installed:
 5. Try a simple command like "Indent Current TeX" from the editor title menu
 
 If any component is missing, TeXRA will typically show an error message indicating what needs to be installed.
-
-## Optimizing Your Setup
-
-### Setting Up VS Code
-
-For optimal use with TeXRA:
-
-1. Move TeXRA to the secondary sidebar:
-
-   - Open VS Code's Command Palette (Ctrl+Shift+P or Cmd+Shift+P on macOS)
-   - Run "View: Toggle Secondary Side Bar Visibility" (or use Alt+Cmd+B on macOS)
-   - Drag the TeXRA view from the primary sidebar to the secondary sidebar
-
-2. Configure LaTeX Workshop (if installed):
-   - In VS Code settings, search for "Latex-workshop: Out Dir"
-   - Set to `%DIR%/build` to direct LaTeX output files to a build subdirectory
-   - Add `-pdf` and `-f` to latexmk command for better compatibility:
-
-```json
-"latex-workshop.latex.magic.args": [
-  "-synctex=1",
-  "-interaction=nonstopmode",
-  "-file-line-error",
-  "%DOC%",
-  "-pdf",
-  "-f"
-]
-```
-
-### Setting Up Cross-Computer Sync
-
-If you work across multiple computers:
-
-1. Use cloud storage (e.g., Dropbox) to sync key folders:
-
-   - **Diffs**: Stores difference files from LaTeX diff operations
-   - **History**: Tracks different versions of your documents
-
-2. Create symbolic links to maintain your local directory structure:
-   ```bash
-   ln -s /path/to/Dropbox/texra-papers/ProjectName/Diffs /path/to/local/ProjectName
-   ln -s /path/to/Dropbox/texra-papers/ProjectName/History /path/to/local/ProjectName
-   ```
 
 ## Troubleshooting Installation
 
