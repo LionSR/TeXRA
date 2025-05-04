@@ -134,14 +134,13 @@ export class ModelHandlerOpenAI extends ModelHandler {
         response = await stream.finalMessage();
 
         // in the future we can add: stream_options: {"include_usage": true} to get usage statistics
-
-        // in the future if we pass stream to outside, calling stream.controller.abort() will abort the stream; which will be very useful for our stop button
+        // in the future if we pass stream to outside (signal: controller.signal)), calling stream.controller.abort() will abort the stream; which will be very useful for our stop button (controller.abort();)
         // we should also make sure partial results can be returned in the presence of errors!
       } catch (err) {
         if (
           err instanceof NotFoundError ||
           err instanceof RateLimitError ||
-          PermissionDeniedError
+          err instanceof PermissionDeniedError
         ) {
           throw err;
         }
