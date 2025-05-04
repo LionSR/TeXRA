@@ -34,7 +34,7 @@ export function activate(context: vscode.ExtensionContext) {
 
   // Copy default agents
   copyDefaultAgents(context);
-  
+
   // Configure LaTeX settings if LaTeX Workshop is installed
   configureLatexSettings();
 
