@@ -25,24 +25,23 @@ TeXRA supports a range of common media types (configurable via `texra.files.incl
 TeXRA prioritizes native PDF processing for models that support it (like Anthropic/Gemini/OpenAI). If a model doesn't support native PDFs, TeXRA uses external tools (GraphicsMagick/ImageMagick and Ghostscript) as a fallback to convert PDF pages to images for analysis. See the [Installation Guide](./installation.md) for dependency details.
 :::
 
-## Automatic Extraction
+## Automatic Figure Extraction
 
-TeXRA can automatically detect and include figures referenced in your input LaTeX file(s), saving you from manually selecting them. This is controlled by the "Auto Extract" dropdown:
+TeXRA includes an "Auto-extract" feature to automatically identify and include figures from your input `.tex` document, reducing manual selection. This feature is accessible via the dropdown next to the Media label (<i class="codicon codicon-file-media"></i>) in the main file selection area:
 
-![Auto Extract Options Placeholder](/images/auto-extract-options.png) _(Placeholder: Add screenshot of Auto Extract dropdown)_
+1.  Click the Auto-extract toggle button (<i class="codicon codicon-wand"></i> ○<i class="codicon codicon-chevron-down"></i>) to reveal the options.
+2.  Select the types of figures to extract:
+    - **Figures** (<i class="codicon codicon-file-media"></i>): Extracts standard image files (`.png`, `.jpg`, `.pdf`, etc.) referenced via `\includegraphics`.
+    - **TikZ Figures** (<i class="codicon codicon-file-code"></i>): Extracts code within `tikzpicture` environments.
 
-- **Figures**:
-  - **If checked:** TeXRA scans your LaTeX source for `\includegraphics{...}` commands.
-  - It finds the referenced image files (e.g., `.png`, `.jpg`, `.pdf`).
-  - These files are automatically added to the "Media" list and made available to vision-capable AI models.
-  - This is useful for tasks like asking an agent to describe a figure or check consistency between text and figures.
-- **TikZ Figures**:
-  - **If checked:** TeXRA scans your LaTeX source for `\begin{tikzpicture}...\end{tikzpicture}` environments.
-  - It extracts the TikZ code, compiles it into a preview image (e.g., PNG), and adds the preview image to the "Media" list.
-  - This allows vision models to "see" the TikZ output.
-  - See the [TikZ Figures](./tikz-figures.md) guide for full details on TikZ handling.
+When enabled, TeXRA parses the input `.tex` file(s) before agent execution:
 
-## How Media is Used by Agents
+- Referenced image/PDF files are added to the Media Files list.
+- Detected `tikzpicture` code blocks are saved as separate `.tikz` files and added to the Media Files list.
+
+This ensures the agent receives all relevant visual context automatically.
+
+## Manually Selecting Figures
 
 When you provide media files (manually or via auto-extract):
 

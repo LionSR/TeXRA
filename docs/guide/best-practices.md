@@ -199,9 +199,10 @@ To sync TeXRA's `Diffs` and `History` directories across computers, use cloud st
 └── History/    <-- Synced
 ```
 
-Alternatively, if your project source files remain local (outside cloud storage), you can sync *only* the TeXRA outputs by creating symbolic links within your local project directory that point to the `Diffs` and `History` folders located within your cloud storage.
+Alternatively, if your project source files remain local (outside cloud storage), you can sync _only_ the TeXRA outputs by creating symbolic links within your local project directory that point to the `Diffs` and `History` folders located within your cloud storage.
 
 **macOS/Linux:**
+
 ```bash
 # In your local project directory:
 ln -s /path/to/CloudStorage/texra-papers/ProjectName/Diffs .
@@ -209,6 +210,7 @@ ln -s /path/to/CloudStorage/texra-papers/ProjectName/History .
 ```
 
 **Windows (Admin Cmd):**
+
 ```cmd
 :: In your local project directory:
 mklink /D Diffs C:\path\to\CloudStorage\texra-papers\ProjectName\Diffs
