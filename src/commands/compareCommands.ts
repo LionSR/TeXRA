@@ -62,13 +62,14 @@ async function handleCompare(
     // Create title for the diff editor
     const baseFileName = path.basename(fileToUse);
     const editedFileName = path.basename(editedFile);
-    const title = `Compare: ${editedFileName} ↔ ${baseFileName}`;
+    // const title = `Compare: ${editedFileName} ↔ ${baseFileName}`;
+    const title = `Compare: ${baseFileName} ↔ ${editedFileName}`;
 
     // Open files in diff editor
     await vscode.commands.executeCommand(
       'vscode.diff',
-      editedUri, // left-hand side (modified)
       baseUri, // right-hand side (original)
+      editedUri, // left-hand side (modified)
       title,
     );
 
