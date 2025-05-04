@@ -27,7 +27,7 @@ logger.initialize(CHANNEL);
 // Define the temporary directory path
 const TEMP_DIR = path.join(os.tmpdir(), 'texra-pdf-conversion');
 
-async function checkImageMagickInstalled(): Promise<boolean> {
+export async function checkImageMagickInstalled(): Promise<boolean> {
   try {
     await execAsync('gm version');
     return true;
