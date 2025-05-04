@@ -93,57 +93,59 @@ export async function configureLatexSettings() {
     const latexWorkshop = vscode.extensions.getExtension(
       'James-Yu.latex-workshop',
     );
-    
+
     if (latexWorkshop) {
       logger.info(
         'extension',
         'LaTeX Workshop extension detected, configuring settings',
       );
       const config = vscode.workspace.getConfiguration();
-      
+
       // Update LaTeX Workshop build settings
       await config.update(
         'latex-workshop.latex.external.build.args',
         ['--output-directory=build', '-f', '-pdf'],
         vscode.ConfigurationTarget.Global,
       );
-      
+
       await config.update(
         'latex-workshop.latex.outDir',
         '%DIR%/build/',
         vscode.ConfigurationTarget.Global,
       );
-      
+
       // Add nonstopmode magic arguments for LaTeX Workshop
       await config.update(
         'latex-workshop.latex.magic.args',
         [
-          "-synctex=1",
-          "-interaction=nonstopmode",
-          "-file-line-error",
-          "%DOC%",
-          "-pdf",
-          "-f"
+          '-synctex=1',
+          '-interaction=nonstopmode',
+          '-file-line-error',
+          '%DOC%',
+          '-pdf',
+          '-f',
         ],
         vscode.ConfigurationTarget.Global,
       );
-      
+
       // Configure word wrap for LaTeX files
       await config.update(
         '[latex]',
         { 'editor.wordWrap': 'on' },
         vscode.ConfigurationTarget.Global,
       );
-      
+
       // Also add word wrap for yaml files
       await config.update(
         '[yaml]',
         { 'editor.wordWrap': 'on' },
         vscode.ConfigurationTarget.Global,
       );
-      
+
       // Check if the workbench.auxiliaryActivityBar.location setting exists
-      const activityBarSetting = config.inspect('workbench.auxiliaryActivityBar.location');
+      const activityBarSetting = config.inspect(
+        'workbench.auxiliaryActivityBar.location',
+      );
       if (activityBarSetting) {
         // Setting exists, update it
         await config.update(
@@ -151,9 +153,12 @@ export async function configureLatexSettings() {
           'default',
           vscode.ConfigurationTarget.Global,
         );
-        logger.info('extension', 'Auxiliary activity bar location set to default');
+        logger.info(
+          'extension',
+          'Auxiliary activity bar location set to default',
+        );
       }
-      
+
       logger.info(
         'extension',
         'LaTeX Workshop settings configured successfully',
@@ -167,4 +172,4 @@ export async function configureLatexSettings() {
   } catch (err) {
     logger.error('extension', `Error configuring LaTeX settings: ${err}`);
   }
-} 
+}
