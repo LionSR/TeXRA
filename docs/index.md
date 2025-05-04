@@ -17,30 +17,50 @@ hero:
     - theme: alt
       text: View on GitHub
       link: https://github.com/texra-ai/texra-issues
-
-features:
-  - icon: 📝
-    title: Advanced AI Agents
-    details: Specialized AI agents for correcting, polishing, drawing, and transforming academic content with intelligent reflection capabilities.
-
-  - icon: 🧩
-    title: Seamless LaTeX Integration
-    details: Work directly with LaTeX documents, extract and compile TikZ figures, generate diffs, and merge changes intelligently.
-
-  - icon: 🔧
-    title: Powerful Tool Integration
-    details: Leverage external tools for document statistics, formatting, and visualization to enhance the AI's capabilities.
-
-  - icon: 🖼️
-    title: Multi-modal Support
-    details: Process text, images, and PDFs in a unified interface designed specifically for academic research workflows.
 ---
 
-<div class="custom-block info intro-block">
-  <p class="intro-text">
-    TeXRA brings the power of cutting-edge Large Language Models directly into your VS Code editor, helping with academic writing and research tasks.
-  </p>
-  <p class="tagline-emphasis">Stop copy-pasting, stay in your flow.</p>
+<div class="workflow-container">
+  <div class="workflow-steps">
+    <div class="workflow-step">
+      <div class="step-number">1</div>
+      <div class="step-content">
+        <h3>Select Content</h3>
+        <p>Choose your input files, references, figures, and specify output</p>
+        <div class="step-icon">📄</div>
+      </div>
+    </div>
+    <div class="workflow-arrow">→</div>
+    <div class="workflow-step">
+      <div class="step-number">2</div>
+      <div class="step-content">
+        <h3>Choose Agent/Model</h3>
+        <p>Select a specialized agent (correct, polish)</p>
+        <div class="step-icon">🤖</div>
+      </div>
+    </div>
+    <div class="workflow-arrow">→</div>
+    <div class="workflow-step">
+      <div class="step-number">3</div>
+      <div class="step-content">
+        <h3>Execute</h3>
+        <p>TeXRA handles the rest with powerful language models</p>
+        <div class="step-icon">⚡</div>
+      </div>
+    </div>
+    <div class="workflow-arrow">→</div>
+    <div class="workflow-step">
+      <div class="step-number">4</div>
+      <div class="step-content">
+        <h3>Review Changes</h3>
+        <div class="step-image">
+          <a href="/examples/draft_polish_r1_gemini25p_diff.pdf" target="_blank">
+            <img src="/images/latexdff-v1.png" alt="LaTeX Diff visualization" class="workflow-diff-image">
+            <div class="view-pdf">View full PDF example</div>
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
 
 ## Why TeXRA?
@@ -119,23 +139,6 @@ Installing TeXRA is simple. Follow our [Installation Guide](/guide/installation)
 </div>
 
 <style>
-.custom-block.info { /* Style for the top block */
-  margin: 2rem 0;
-  padding: 1.5rem;
-  border-radius: 8px;
-  border: 1px solid var(--vp-c-brand-soft);
-  background-color: var(--vp-c-brand-dimm);
-}
-.intro-block .intro-text {
-  font-size: 1.1rem; /* Slightly larger */
-  margin-bottom: 0.5rem; /* Space before tagline */
-}
-.intro-block .tagline-emphasis {
-  font-weight: 600;
-  color: var(--vp-c-brand-dark);
-  font-size: 1.05rem;
-  margin: 0;
-}
 .features-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
@@ -181,7 +184,7 @@ Installing TeXRA is simple. Follow our [Installation Guide](/guide/installation)
   display: inline-block;
   padding: 0.75rem 1.5rem;
   border-radius: 4px;
-  background-color: var(--vp-c-brand);
+  background-color: transparent;
   color: white;
   font-weight: 500;
   text-decoration: none;
@@ -198,5 +201,143 @@ Installing TeXRA is simple. Follow our [Installation Guide](/guide/installation)
 .cta-button-alt:hover {
   background-color: var(--vp-c-brand-soft);
   color: var(--vp-c-brand-dark); /* Ensure text color contrasts */
+}
+.workflow-container {
+  margin: 2.5rem auto;
+  max-width: 1100px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.workflow-intro {
+  text-align: center;
+  margin-bottom: 2.5rem;
+  width: 100%;
+}
+.workflow-intro h2 {
+  margin-bottom: 0.5rem;
+  font-size: 1.8rem;
+  background: linear-gradient(to right, var(--vp-c-brand), var(--vp-c-brand-dark));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.workflow-intro p {
+  font-size: 1.1rem;
+  color: var(--vp-c-text-2);
+  max-width: 640px;
+  margin: 0 auto;
+}
+.workflow-steps {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  width: 100%;
+  flex-wrap: wrap;
+}
+.workflow-step {
+  flex: 1;
+  min-width: 200px;
+  max-width: 220px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  margin-bottom: 1rem;
+  background-color: var(--vp-c-bg-soft);
+  padding: 1.25rem;
+  border-radius: 8px;
+  border: 1px solid var(--vp-c-divider);
+}
+.step-number {
+  font-size: 1.75rem;
+  font-weight: 600;
+  color: var(--vp-c-brand);
+  margin-bottom: 0.5rem;
+}
+.step-content {
+  margin-bottom: 1rem;
+  width: 100%;
+}
+.step-content h3 {
+  margin-top: 0;
+  margin-bottom: 0.5rem;
+  font-size: 1.1rem;
+}
+.step-content p {
+  margin: 0;
+  color: var(--vp-c-text-2);
+  font-size: 0.9rem;
+  line-height: 1.3;
+}
+.step-icon {
+  font-size: 2rem;
+  color: var(--vp-c-brand);
+  margin-top: 0.5rem;
+}
+.workflow-arrow {
+  font-size: 1.5rem;
+  color: var(--vp-c-brand);
+  display: flex;
+  align-items: center;
+}
+.step-image {
+  margin-top: 0.5rem;
+  max-width: 180px;
+  position: relative;
+}
+.workflow-diff-image {
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  border-radius: 4px;
+  border: 1px solid var(--vp-c-divider);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  transition: transform 0.2s;
+}
+.step-image a:hover .workflow-diff-image {
+  transform: translateY(-3px);
+}
+.view-pdf {
+  margin-top: 0.5rem;
+  color: var(--vp-c-brand);
+  font-size: 0.85rem;
+  text-align: center;
+  font-weight: 500;
+}
+@media (max-width: 960px) {
+  .workflow-steps {
+    gap: 1rem;
+    justify-content: center;
+  }
+  .workflow-step {
+    min-width: 160px;
+    max-width: 200px;
+  }
+  .workflow-arrow {
+    font-size: 1.25rem;
+  }
+}
+@media (max-width: 768px) {
+  .workflow-steps {
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .workflow-arrow {
+    transform: rotate(90deg);
+    margin: 0.25rem 0;
+  }
+  .workflow-step {
+    width: 100%;
+    max-width: 300px;
+    margin-bottom: 0.5rem;
+  }
+  .workflow-intro h2 {
+    font-size: 1.6rem;
+  }
+  .step-image {
+    max-width: 220px;
+  }
 }
 </style>
