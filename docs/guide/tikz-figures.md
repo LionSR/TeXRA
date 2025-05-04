@@ -34,7 +34,7 @@ TeXRA's `draw` agent is specifically designed to work with TikZ figures (think o
 3. **Fix errors** or issues in TikZ code.
 4. **Add annotations** or labels to diagrams.
 
-<!-- ![TikZ Figure Example](/images/tikz-figure-example.png) -->
+![TikZ Figure Example](/images/tikz-figure-example.png)
 
 ### Creating New Figures
 

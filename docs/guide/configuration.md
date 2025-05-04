@@ -323,10 +323,6 @@ Some TeXRA commands can be configured through their own settings:
 Configure TeXRA to work well with other extensions:
 
 ```json
-// LaTeX Workshop compatibility
-"latex-workshop.latex.outDir": "%DIR%/build",
-"texra.files.ignored.directories": ["build"],
-
 // Git extensions compatibility
 "git.enableSmartCommit": true,
 "texra.git.numberOfCommitsToShow": 20
