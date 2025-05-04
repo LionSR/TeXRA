@@ -142,6 +142,20 @@ export async function configureLatexSettings() {
         vscode.ConfigurationTarget.Global,
       );
 
+      // Configure explorer settings to not automatically reveal build directory
+      await config.update(
+        'explorer.autoRevealExclude',
+        { 'build/': true },
+        vscode.ConfigurationTarget.Global,
+      );
+
+      // Disable automatic revealing of files in explorer
+      await config.update(
+        'explorer.autoReveal',
+        false,
+        vscode.ConfigurationTarget.Global,
+      );
+
       // Check if the workbench.auxiliaryActivityBar.location setting exists
       const activityBarSetting = config.inspect(
         'workbench.auxiliaryActivityBar.location',
