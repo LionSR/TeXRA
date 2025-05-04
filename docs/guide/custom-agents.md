@@ -79,8 +79,8 @@ prompts:
 
   userPrefix: |
     # Provides introductory text, main context (input files, user instruction).
-    # Variables like {{ INPUT_CONTENT }}, {{ INSTRUCTION }}, {{ BIBLIOGRAPHY_CONTENT }} (from filePatternsContain) are substituted here.
-    [Define context, instructions, and input variables like {{ INPUT_CONTENT }}]
+    # Variables like `{{ INPUT_CONTENT }}`, `{{ INSTRUCTION }}`, `{{ BIBLIOGRAPHY_CONTENT }}` (from filePatternsContain) are substituted here.
+    [Define context, instructions, and input variables like `{{ INPUT_CONTENT }}`]
 
   userRequest: |
     # The prompt for the AI's first round of work (Round 0).
@@ -98,30 +98,30 @@ Prompts are processed using the Jinja2 templating engine, allowing you to insert
 
 **Common Variables:**
 
-- `{{ INSTRUCTION }}`: The text entered into the "Instruction" box in the UI.
-- `{{ INPUT_FILE }}`: The path of the primary input file.
-- `{{ INPUT_CONTENT }}`: The full text content of the primary input file.
-- `{{ REFERENCE_FILE }}`: Path of the primary reference file.
-- `{{ REFERENCE_CONTENT }}`: Content of the primary reference file.
-- `{{ AUXILIARY_FILE }}`: Path of the primary auxiliary file.
-- `{{ AUXILIARY_CONTENT }}`: Content of the primary auxiliary file.
-- `{{ EDITED_FILE }}`: Path of the edited file (used in `merge`).
-- `{{ EDITED_CONTENT }}`: Content of the edited file.
-- `{{ MEDIA_FILE }}`: Path of the primary media file.
+- &#123;&#123; INSTRUCTION &#125;&#125;: The text entered into the "Instruction" box in the UI.
+- &#123;&#123; INPUT_FILE &#125;&#125;: The path of the primary input file.
+- &#123;&#123; INPUT_CONTENT &#125;&#125;: The full text content of the primary input file.
+- &#123;&#123; REFERENCE_FILE &#125;&#125;: Path of the primary reference file.
+- &#123;&#123; REFERENCE_CONTENT &#125;&#125;: Content of the primary reference file.
+- &#123;&#123; AUXILIARY_FILE &#125;&#125;: Path of the primary auxiliary file.
+- &#123;&#123; AUXILIARY_CONTENT &#125;&#125;: Content of the primary auxiliary file.
+- &#123;&#123; EDITED_FILE &#125;&#125;: Path of the edited file (used in `merge`).
+- &#123;&#123; EDITED_CONTENT &#125;&#125;: Content of the edited file.
+- &#123;&#123; MEDIA_FILE &#125;&#125;: Path of the primary media file.
   _Note: Media content itself isn't directly inserted as text; it's handled separately for multimodal models. See [Working with Figures](./working-with-figures.md)._
 
 **Multiple File Variables:**
 
-- `{{ ALL_INPUTS }}`: XML string containing all selected input files (primary + multiple) wrapped in `<document name="...">...</document>` tags.
-- `{{ ALL_REFERENCES }}`: Similar XML string for all reference files.
-- `{{ ALL_AUXILIARYS }}`: Similar XML string for all auxiliary files.
-- `{{ LIST_OF_ALL_INPUTS }}`: Simple comma-separated string listing all input file paths.
-- `{{ LIST_OF_ALL_REFERENCES }}`: Similar comma-separated list for reference files.
-- `{{ LIST_OF_ALL_AUXILIARYS }}`: Similar comma-separated list for auxiliary files.
+- &#123;&#123; ALL_INPUTS &#125;&#125;: XML string containing all selected input files (primary + multiple) wrapped in `<document name="...">...</document>` tags.
+- &#123;&#123; ALL_REFERENCES &#125;&#125;: Similar XML string for all reference files.
+- &#123;&#123; ALL_AUXILIARYS &#125;&#125;: Similar XML string for all auxiliary files.
+- &#123;&#123; LIST_OF_ALL_INPUTS &#125;&#125;: Simple comma-separated string listing all input file paths.
+- &#123;&#123; LIST_OF_ALL_REFERENCES &#125;&#125;: Similar comma-separated list for reference files.
+- &#123;&#123; LIST_OF_ALL_AUXILIARYS &#125;&#125;: Similar comma-separated list for auxiliary files.
 
 **Multiple Output Variable:**
 
-- `{{ OUTPUT_FILES_ORDER }}`: Comma-separated string listing the output filenames specified in the UI. Crucial for agents generating multiple files. See [Handling Multiple Files](./multiple-output.md).
+- &#123;&#123; OUTPUT_FILES_ORDER &#125;&#125;: Comma-separated string listing the output filenames specified in the UI. Crucial for agents generating multiple files. See [Handling Multiple Files](./multiple-output.md).
 
 **Custom Variables (from `settings`):**
 
