@@ -91,7 +91,7 @@ Be specific about what you want! Vague instructions are like asking a genie for 
 
 ### Step 6: Execute the Agent
 
-1. Click the "Execute" button
+1. Click the "Execute" button (<i class="codicon codicon-play"></i>)
 2. The ProgressBoard panel (typically at the bottom) will show the progress. See the [ProgressBoard guide](./progress-board.md) for more details on interpreting the logs.
 3. Wait for the process to complete - this may take a few moments depending on the document size and model choice
 
