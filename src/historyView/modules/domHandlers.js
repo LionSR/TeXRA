@@ -185,7 +185,7 @@ function createHistoryItemElement(item) {
   // Add tool config section
   if (config.toolConfig) {
     detailsHTML += renderToolConfig(
-      '<i class="codicon codicon-gear"></i> Config',
+      '<i class="codicon codicon-tools"></i> Config',
       config.toolConfig,
     );
   }

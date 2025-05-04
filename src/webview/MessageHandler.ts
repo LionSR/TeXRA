@@ -127,6 +127,25 @@ export class WebviewMessageHandler {
       case 'showAgentHistory':
         this.handleShowAgentHistory();
         break;
+      case 'openSettings':
+        this.handleOpenSettings();
+        break;
+    }
+  }
+
+  /**
+   * Handle opening the extension settings
+   */
+  private async handleOpenSettings() {
+    try {
+      await vscode.commands.executeCommand(
+        'workbench.action.openSettings',
+        '@ext:texra-ai.texra',
+      );
+    } catch (error) {
+      vscode.window.showErrorMessage(
+        `Failed to open extension settings: ${error}`,
+      );
     }
   }
 
