@@ -93,7 +93,7 @@ export function restoreState() {
     const toolConfigIndicator = hasToolConfigChecked ? '●' : '○';
 
     if (toggleToolConfig && toolConfigOptions) {
-      toggleToolConfig.innerHTML = `<i class="codicon codicon-gear"></i> ${toolConfigIndicator}<i class="codicon codicon-chevron-down"></i>`;
+      toggleToolConfig.innerHTML = `<i class="codicon codicon-tools"></i> ${toolConfigIndicator}<i class="codicon codicon-chevron-down"></i>`;
       toolConfigOptions.style.display = 'none';
     }
 
