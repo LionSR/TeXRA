@@ -13,6 +13,7 @@ import {
   getBase64EncodedMedia,
   countPdfPages,
   processPdf2Png,
+  checkImageMagickInstalled,
 } from '../utils/imgUtils';
 import { getConfig } from '../utils/configUtils';
 import {
@@ -271,11 +272,27 @@ export abstract class ModelHandler {
       '.heic': 'image/heic',
       '.heif': 'image/heif',
       '.gif': 'image/gif',
-      '.pdf':
-        this.capabilities.supportsNativePdf &&
-        (await countPdfPages(mediaFile)) > 1
-          ? 'application/pdf'
-          : 'image/png', // Treat single-page PDF as PNG for vision; maybe this can be released now that openai supports native pdfs
+      '.pdf': await (async () => {
+        // Check if ImageMagick is installed
+        const isImageMagickInstalled = await checkImageMagickInstalled();
+        const pageCount = await countPdfPages(mediaFile);
+
+        // Use native PDF in these cases:
+        // 1. Multi-page PDF and model supports native PDFs, or
+        // 2. ImageMagick not installed but model supports native PDFs
+        if (
+          (pageCount > 1 || !isImageMagickInstalled) &&
+          this.capabilities.supportsNativePdf
+        ) {
+          this.logger.debug(
+            `Using native PDF for ${mediaFile}. ImageMagick installed: ${isImageMagickInstalled}, Page count: ${pageCount}`,
+          );
+          return 'application/pdf';
+        }
+
+        // Default to PNG conversion when ImageMagick is available
+        return 'image/png';
+      })(),
     };
 
     const audioMediaTypes: { [key: string]: string } = {
@@ -295,12 +312,33 @@ export abstract class ModelHandler {
       this.logger.debug(
         `Processing as image: ${mediaFile}, type: ${mediaType}`,
       );
-      if (ext === '.pdf' && mediaType === 'image/png') {
-        const pdfResult = await processPdf2Png(mediaFile);
-        if (pdfResult === null) {
-          throw new Error(`Failed to process PDF file as image: ${mediaFile}`);
+      if (ext === '.pdf') {
+        if (mediaType === 'image/png') {
+          // Only attempt conversion if we've determined PNG is appropriate
+          this.logger.debug(`Converting PDF to PNG: ${mediaFile}`);
+          const pdfResult = await processPdf2Png(mediaFile);
+
+          if (pdfResult === null) {
+            // If conversion fails but model supports native PDF, fall back to PDF
+            if (this.capabilities.supportsNativePdf) {
+              this.logger.info(
+                `PDF to PNG conversion failed. Falling back to native PDF for ${mediaFile}`,
+              );
+              mediaType = 'application/pdf';
+              mediaData = await getBase64EncodedMedia(mediaFile);
+            } else {
+              throw new Error(
+                `Failed to process PDF file as image: ${mediaFile}`,
+              );
+            }
+          } else {
+            mediaData = pdfResult;
+          }
+        } else {
+          // For application/pdf media type, use PDF directly
+          this.logger.debug(`Using native PDF: ${mediaFile}`);
+          mediaData = await getBase64EncodedMedia(mediaFile);
         }
-        mediaData = pdfResult;
       } else {
         mediaData = await getBase64EncodedMedia(mediaFile);
       }
