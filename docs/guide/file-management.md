@@ -41,7 +41,7 @@ Files containing visual or audio content, such as images, PDFs used as figures, 
 
 ## File Selection Interface
 
-The TeXRA interface provides a streamlined way to select and manage files:
+The TeXRA interface provides a streamlined way to select and manage files using distinct sections for each file category (Input <i class="codicon codicon-file-code"></i>, Reference <i class="codicon codicon-book"></i>, Auxiliary <i class="codicon codicon-file-add"></i>, Media <i class="codicon codicon-file-media"></i>):
 
 ![File Selection Interface](/images/file-selection.png)
 
@@ -49,10 +49,10 @@ The TeXRA interface provides a streamlined way to select and manage files:
 
 For each file category, you can select a single file using the dropdown menu. The interface provides several helpful options:
 
-- **Current Button**: Select the currently open file in VS Code
-- **Empty Button**: Clear the current selection
-- **Multiple Toggle**: Switch to multiple file selection mode
-- **Refresh Button** (icon): Update the file list
+- **Current Button** (<i class="codicon codicon-file-code"></i>): Select the currently open file in VS Code
+- **Empty Button** (<i class="codicon codicon-close"></i>): Clear the current selection
+- **Multiple Toggle** (▼): Switch to multiple file selection mode
+- **Refresh Button** (<i class="codicon codicon-refresh"></i> icon next to label): Update the file list
 
 ### Multiple File Selection
 
@@ -60,8 +60,8 @@ For projects requiring multiple files, enable the multiple file selection mode:
 
 1. Click the "▼" toggle next to the file category
 2. The multiple selection panel will expand
-3. Use the "+" button to add files
-4. Remove files with the "-" button
+3. Use the "Add" button (<i class="codicon codicon-add"></i>) to add files via a file picker
+4. Remove files with the "-" button next to each file
 5. Reorder files by dragging and dropping
 6. Clear the entire list using the "Empty List" button (<i class="codicon codicon-trash"></i>)
 
@@ -80,8 +80,8 @@ The "Add Opened Files" button (<i class="codicon codicon-folder-opened"></i>) av
 
 When using multiple input files, you may need to specify multiple output files:
 
-1. Enable the "Multiple Outputs" section
-2. Add output files corresponding to your input files
+1. Enable the "Multiple Outputs" section by clicking the toggle (▼)
+2. Add output files corresponding to your input files using the "Add" button (<i class="codicon codicon-add"></i>)
 3. Optionally set a custom output filename
 
 ## File Path Handling
@@ -137,15 +137,15 @@ When reflection is enabled, you may also see:
 For specific needs, you can override the default naming:
 
 1. Click the ">" toggle next to "Output Filename"
-2. Enter your custom filename (including extension)
+2. Enter your custom filename (including extension) in the revealed input field.
 
 ## File Management Commands
 
-TeXRA provides several commands for managing generated files:
+TeXRA provides several commands for managing generated files, accessible from the main interface or the ProgressBoard:
 
 ### Pack
 
-The "Pack" button organizes output files into a structured history folder:
+The "Pack" button (<i class="codicon codicon-archive"></i>) organizes output files into a structured history folder:
 
 1. Creates a timestamped directory in the "History" folder
 2. Moves all relevant output files and logs
@@ -155,7 +155,7 @@ This is useful for maintaining a clean workspace while preserving previous outpu
 
 ### Clean
 
-The "Clean" button removes output files for the selected agent and model:
+The "Clean" button (<i class="codicon codicon-trash"></i>) removes output files for the selected agent and model:
 
 1. Identifies all outputs for the current configuration
 2. Safely removes them from the workspace

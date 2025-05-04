@@ -197,7 +197,7 @@ If any component is missing, TeXRA will typically show an error message indicati
 
 1. **Extension Not Loading**:
 
-   - Check VS Code's minimum version requirement (1.96.2+)
+   - Check VS Code's minimum version requirement (1.94.2+)
    - Look for errors in the Output panel (select "TeXRA" in the dropdown)
    - Try reinstalling the extension
 
@@ -215,7 +215,7 @@ If any component is missing, TeXRA will typically show an error message indicati
 
 4. **API Key Issues**:
    - Verify API keys are entered correctly
-   - Check your subscription status and usage limits
+   - Check your usage limits
    - Ensure your network allows connections to API endpoints
 
 ### Getting Help

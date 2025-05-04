@@ -15,6 +15,9 @@ Ensuring clean, consistent, and valid LaTeX code.
 - **Formatting:** Tools like `latexindent` are used automatically after agent runs (and via command) to ensure consistent code style and readability. Configure `latexindent` options in [VS Code Settings](./configuration.md#latex-configuration).
 - **Comparison:** `latexdiff` is used to visualize changes between document versions, including automatic diff generation after agent runs. See the [LaTeX Diff guide](./latex-diff.md) for details on usage and configuration.
 
+**TeX Count Integration:**
+TeXRA can use `texcount` (often included with LaTeX) to provide document statistics (words, headers, math) to the AI agent. This is enabled via the "Attach TeX Count" (<i class="codicon codicon-symbol-numeric"></i>) checkbox in the Tool Configuration dropdown (see [Configuration Guide](./configuration.md#agent-execution-settings)). Ensure `texcount` is in your system's PATH.
+
 ### 2. Figure & Media Handling
 
 Processing visual elements for analysis and inclusion.
