@@ -32,23 +32,52 @@ Don't change the technical content or writing style.
 
 ### `polish`
 
-The `polish` agent enhances the writing style and clarity of your document while preserving technical content.
+The `polish` agent improves the writing quality of your document while preserving essential technical content and meaning. It focuses on:
 
-**Purpose:** Improve readability, flow, and overall writing quality.
+- Enhancing clarity and readability
+- Improving sentence structure and paragraph flow
+- Fixing grammatical issues and typos
+- Standardizing formatting and style
 
-**Best for:**
+This agent is ideal for refining drafts that are technically sound but need language improvements or polishing before submission.
 
-- Enhancing draft manuscripts
-- Making technical content more accessible
-- Improving the flow between sections
+#### Example Output
 
-**Example instruction:**
+<div class="agent-pdf-viewer">
+  <iframe src="/examples/draft_polish_r1_gemini25p_diff.pdf" title="Polish Agent Example" class="agent-pdf-frame"></iframe>
+  <a href="/examples/draft_polish_r1_gemini25p_diff.pdf" target="_blank" class="agent-pdf-link">View example</a>
+</div>
 
-```
-Improve the clarity and readability of this document. Make the language more concise
-and enhance the flow between paragraphs. Maintain all technical content and equations.
-Focus especially on the introduction and discussion sections.
-```
+<style>
+.agent-pdf-viewer {
+  position: relative;
+  width: 100%;
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 6px;
+  overflow: hidden;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  margin: 1rem 0;
+}
+.agent-pdf-frame {
+  width: 100%;
+  height: 350px;
+  border: none;
+}
+.agent-pdf-link {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: rgba(0,0,0,0.6);
+  color: white;
+  padding: 5px 10px;
+  border-radius: 4px;
+  text-decoration: none;
+  font-size: 0.85rem;
+}
+.agent-pdf-link:hover {
+  background: var(--vp-c-brand);
+}
+</style>
 
 ## Content Generation & Transformation Agents
 
