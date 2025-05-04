@@ -71,3 +71,65 @@ This basic flow, potentially with the reflection step, allows TeXRA agents to pe
 ::: warning Potential XML Issues
 Occasionally, LLMs might generate slightly malformed XML (e.g., missing closing tags), especially with very long or complex outputs. If TeXRA fails to extract content from an agent's output (`_r0_*.xml` or `_r1_*.xml` file), you might need to manually inspect the `.xml` file and correct any structural errors (like adding a missing `</document>` tag) before TeXRA can process it correctly. See the [Troubleshooting guide](../reference/troubleshooting.md#output-file-corruption) for more details.
 :::
+
+### Reflection
+
+After generating an initial output (Round 0), TeXRA agents with reflection enabled evaluate and refine their work (Round 1):
+
+<div class="reflection-pdf-viewer">
+  <iframe src="/examples/draft_polish_r1_gemini25p_diffr1r0.pdf" title="Reflection Example" class="reflection-pdf-frame"></iframe>
+  <a href="/examples/draft_polish_r1_gemini25p_diffr1r0.pdf" target="_blank" class="reflection-pdf-link">View full example</a>
+</div>
+
+<div class="reflection-legend">
+  <span class="del">Red strikethrough</span>: Round 0 content revised in Round 1
+  <span class="add">Blue underlined</span>: New/improved content added in Round 1
+</div>
+
+<style>
+.reflection-pdf-viewer {
+  position: relative;
+  width: 100%;
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 6px;
+  overflow: hidden;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  margin: 1rem 0;
+}
+.reflection-pdf-frame {
+  width: 100%;
+  height: 350px;
+  border: none;
+}
+.reflection-pdf-link {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: rgba(0,0,0,0.6);
+  color: white;
+  padding: 5px 10px;
+  border-radius: 4px;
+  text-decoration: none;
+  font-size: 0.85rem;
+}
+.reflection-pdf-link:hover {
+  background: var(--vp-c-brand);
+}
+.reflection-legend {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  font-size: 0.9rem;
+  margin-top: 0.5rem;
+}
+.reflection-legend .del {
+  color: var(--vp-c-red);
+  text-decoration: line-through;
+}
+.reflection-legend .add {
+  color: var(--vp-c-brand);
+  text-decoration: underline;
+}
+</style>
+
+### Tool Use
