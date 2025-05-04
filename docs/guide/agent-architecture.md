@@ -175,5 +175,3 @@ After generating an initial output (Round 0), TeXRA agents with reflection enabl
   margin-bottom: -1px;
 }
 </style>
-
-

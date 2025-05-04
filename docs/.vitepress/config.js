@@ -94,7 +94,7 @@ const baseConfig = {
           }
         }, 200);
       });
-      `
+      `,
     ],
   ],
   themeConfig: {
