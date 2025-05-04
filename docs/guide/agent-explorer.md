@@ -2,7 +2,7 @@
 
 The TeXRA extension includes a dedicated **Agent Explorer** view within the VS Code sidebar, typically located under the main TeXRA panel (identified by the logo icon). Think of it as your command center for browsing, inspecting, and managing the AI personalities (agent definition files) that power TeXRA's capabilities.
 
-<!-- ![TeX Agents View Placeholder](/images/agent-explorer-view.png) _(Placeholder: Add screenshot of the TeX Agents view)_ -->
+![TeX Agents View Placeholder](/images/agent-explorer-view.png)
 
 ## Structure
 

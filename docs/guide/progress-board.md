@@ -9,7 +9,7 @@ The ProgressBoard typically appears in the **Panel area** at the bottom of your 
 - **Automatic**: It often opens automatically when you execute an agent.
 - **Manual**: If it's closed, you can open it via the Command Palette (`Ctrl+Shift+P` or `Cmd+Shift+P`) by searching for `View: Show TeXRA ProgressBoard`.
 
-<!-- ![ProgressBoard Layout Placeholder](/images/progress-board-layout.png) _(Placeholder: Add screenshot showing the ProgressBoard panel)_ -->
+![ProgressBoard Layout Placeholder](/images/progress-board-layout.png)
 
 ## Layout Overview
 
