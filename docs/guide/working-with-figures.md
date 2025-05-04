@@ -6,7 +6,7 @@ TeXRA integrates seamlessly with visual and audio media, allowing AI agents to a
 
 The main TeXRA panel includes a dedicated "Media" section for managing relevant files:
 
-<!-- ![Media Section UI Placeholder](/images/media-section.png) _(Placeholder: Add screenshot of the Media section)_ -->
+![Media Section UI Placeholder](/images/media-section.png)
 
 - **Dropdown**: Select a primary media file (image, PDF, audio).
 - **Multiple Files Toggle (`▼`)**: Expand to select multiple media files. Useful when an agent needs to analyze several images or audio clips.

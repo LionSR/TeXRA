@@ -11,7 +11,7 @@ const baseConfig = {
       'link',
       {
         rel: 'stylesheet',
-        href: '/node_modules/@vscode/codicons/dist/codicon.css',
+        href: '/assets/fonts/codicon/codicon.css',
       },
     ],
   ],

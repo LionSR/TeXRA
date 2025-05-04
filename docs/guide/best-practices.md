@@ -177,6 +177,44 @@ Use comparison tools to evaluate changes:
 2. Review the [ProgressBoard log](./progress-board.md) to understand the AI's process.
 3. Compare multiple versions to select the best elements.
 
+## Workspace Optimization
+
+Customize your VS Code environment for a smoother TeXRA experience:
+
+### TeXRA View Placement
+
+For easier access, especially on wider screens, consider moving the TeXRA view to the secondary sidebar:
+
+1.  Ensure the secondary sidebar is visible: Open VS Code's Command Palette (Ctrl+Shift+P or Cmd+Shift+P on macOS) and run "View: Toggle Secondary Side Bar Visibility" (or use Alt+Cmd+B on macOS).
+2.  Drag the TeXRA icon from the primary sidebar (usually on the left) to the secondary sidebar (usually on the right).
+
+### Cross-Computer Sync for Outputs
+
+To sync TeXRA's `Diffs` and `History` directories across computers, use cloud storage (e.g., Dropbox, Google Drive). You can either store your entire project in the cloud directory, ensuring these output folders are included:
+
+```
+~/CloudStorage/texra-papers/ProjectName/
+├── ... (source files)
+├── Diffs/      <-- Synced
+└── History/    <-- Synced
+```
+
+Alternatively, if your project source files remain local (outside cloud storage), you can sync *only* the TeXRA outputs by creating symbolic links within your local project directory that point to the `Diffs` and `History` folders located within your cloud storage.
+
+**macOS/Linux:**
+```bash
+# In your local project directory:
+ln -s /path/to/CloudStorage/texra-papers/ProjectName/Diffs .
+ln -s /path/to/CloudStorage/texra-papers/ProjectName/History .
+```
+
+**Windows (Admin Cmd):**
+```cmd
+:: In your local project directory:
+mklink /D Diffs C:\path\to\CloudStorage\texra-papers\ProjectName\Diffs
+mklink /D History C:\path\to\CloudStorage\texra-papers\ProjectName\History
+```
+
 ## LaTeX-Specific Practices
 
 Working with LaTeX can sometimes feel like wrangling an octopus. These practices help keep things smooth:

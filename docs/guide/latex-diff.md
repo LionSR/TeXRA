@@ -48,9 +48,11 @@ Click the "latexdiff" button with the <i class="codicon codicon-diff-single"></i
 
 TeXRA will:
 
-1. Run the latexdiff tool on your selected files
-2. Generate a new LaTeX document with highlighted changes
-3. Open the diff document for review
+1. Run the `latexdiff` tool on your selected files.
+2. Generate a new LaTeX document (e.g., `original_diff.tex`) with highlighted changes.
+3. **Automatically open** this generated `.tex` diff file in your editor.
+4. If the [LaTeX Workshop](https://marketplace.visualstudio.com/items?itemName=James-Yu.latex-workshop) extension is installed, TeXRA will then automatically trigger its **build** command for the diff file.
+5. After a short delay (to allow compilation), it will trigger LaTeX Workshop's **view** command to show the compiled PDF diff.
 
 ### Step 3: Review Changes
 
@@ -78,6 +80,14 @@ The commit dropdown shows recent commits. Click the refresh icon to update the l
 ### Step 2: Generate the Diff
 
 Click the "latexdiff-vc" button to compare your file with its version at the selected commit.
+
+TeXRA will:
+
+1. Run the `latexdiff-vc` tool using the selected file and commit.
+2. Generate a new LaTeX document (e.g., `original_diff_rev[commit_hash].tex`) with highlighted changes.
+3. **Automatically open** this generated `.tex` diff file in your editor.
+4. If the [LaTeX Workshop](https://marketplace.visualstudio.com/items?itemName=James-Yu.latex-workshop) extension is installed, TeXRA will then automatically trigger its **build** command for the diff file.
+5. After a short delay (to allow compilation), it will trigger LaTeX Workshop's **view** command to show the compiled PDF diff.
 
 ### Step 3: Manage Diff Outputs
 
