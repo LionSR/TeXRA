@@ -193,13 +193,19 @@ TeXRA automatically detects appropriate input files based on:
 
 ### LaTeX Workshop Integration
 
-If you use the LaTeX Workshop extension, configure the output directory to avoid clutter:
+If you use the popular [LaTeX Workshop](https://marketplace.visualstudio.com/items?itemName=James-Yu.latex-workshop) extension, TeXRA attempts to automatically configure some settings upon its first activation to ensure smoother integration and cleaner project structures:
 
-```json
-"latex-workshop.latex.outDir": "%DIR%/build"
-```
+- **Output Directory**: Sets `latex-workshop.latex.outDir` to `%DIR%/build/`. This directs LaTeX compilation output (like `.aux`, `.log`, `.pdf` files) into a `build` subdirectory within your project, keeping your main directory tidy.
 
-This directs LaTeX compilation output to a separate directory.
+  ```json
+  "latex-workshop.latex.outDir": "%DIR%/build/"
+  ```
+
+- **Compilation Arguments**: Adds arguments like `-interaction=nonstopmode`, `-pdf`, and `-f` to `latex-workshop.latex.magic.args`. These help LaTeX compile more robustly, especially when run by TeXRA agents.
+
+- **Word Wrap**: Enables word wrap specifically for `.tex` files (`[latex].editor.wordWrap`) for better readability of long lines.
+
+These automatic configurations aim to provide a good default setup. You can always review and adjust these settings in your VS Code `settings.json` file if needed.
 
 ## Cross-Computer Syncing
 
