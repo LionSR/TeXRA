@@ -34,5 +34,4 @@ export const COMMANDS = {
   ADD_LOG_GROUP: 'addLogGroup',
   UPDATE_LOG_GROUP: 'updateLogGroup',
   UPDATE_STATUS: 'updateStatus',
-  WEBVIEW_INITIALIZED: 'webviewInitialized',
 };
