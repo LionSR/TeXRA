@@ -86,4 +86,145 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI {
     // Return the reasoning content (already a string for DeepSeek)
     return reasoningContent;
   }
+
+  /**
+   * Convert content array to a string for DeepSeek compatibility
+   * @param content The message content (array or string)
+   * @returns String representation of the content
+   */
+  private convertContentToString(content: any): string {
+    if (typeof content === 'string') {
+      return content;
+    }
+
+    if (Array.isArray(content)) {
+      return content
+        .filter((item) => item.type === 'text')
+        .map((item) => item.text)
+        .join('\n');
+    }
+
+    return '';
+  }
+
+  /**
+   * Preprocess messages array to ensure there are no consecutive user or assistant messages
+   * and that content is in string format for DeepSeek models
+   * @param messages Original messages array
+   * @returns Processed messages array with merged consecutive messages and string content
+   */
+  private preprocessMessages(messages: any[]): any[] {
+    if (!messages || messages.length <= 1) {
+      return messages;
+    }
+
+    // First, handle merging consecutive messages with the same role
+    const mergedMessages: any[] = [messages[0]];
+
+    for (let i = 1; i < messages.length; i++) {
+      const currentMessage = messages[i];
+      const previousMessage = mergedMessages[mergedMessages.length - 1];
+
+      // If current message has the same role as the previous one, merge them
+      if (currentMessage.role === previousMessage.role) {
+        this.logger.debug(
+          `Merging consecutive ${currentMessage.role} messages`,
+        );
+
+        // Handle content merging based on content type
+        if (
+          Array.isArray(previousMessage.content) &&
+          Array.isArray(currentMessage.content)
+        ) {
+          // If both have content arrays, concatenate them
+          previousMessage.content.push(...currentMessage.content);
+        } else if (Array.isArray(previousMessage.content)) {
+          // If previous has content array but current doesn't
+          if (typeof currentMessage.content === 'string') {
+            previousMessage.content.push({
+              type: 'text',
+              text: currentMessage.content,
+            });
+          }
+        } else if (Array.isArray(currentMessage.content)) {
+          // If current has content array but previous doesn't
+          if (typeof previousMessage.content === 'string') {
+            const textContent = previousMessage.content;
+            previousMessage.content = [
+              { type: 'text', text: textContent },
+              ...currentMessage.content,
+            ];
+          }
+        } else if (
+          typeof previousMessage.content === 'string' &&
+          typeof currentMessage.content === 'string'
+        ) {
+          // If both are strings, concatenate them with a newline
+          previousMessage.content =
+            previousMessage.content + '\n' + currentMessage.content;
+        }
+      } else {
+        // Different roles, add as a new message
+        mergedMessages.push(currentMessage);
+      }
+    }
+
+    // Now convert all content arrays to strings for DeepSeek compatibility
+    const processedMessages = mergedMessages.map((message) => {
+      // Clone the message to avoid modifying the original
+      const processedMessage = { ...message };
+
+      // Convert content to string if it's an array
+      if (Array.isArray(processedMessage.content)) {
+        processedMessage.content = this.convertContentToString(
+          processedMessage.content,
+        );
+        this.logger.debug(
+          `Converted content array to string for ${processedMessage.role} message`,
+        );
+      }
+
+      return processedMessage;
+    });
+
+    return processedMessages;
+  }
+
+  /**
+   * Override createResponse to preprocess messages for Deepseek models
+   */
+  async createResponse(
+    client: OpenAI,
+    messages: any[],
+    temperature: number,
+    systemPrompt?: string,
+    endTag?: string,
+  ): Promise<any> {
+    // Preprocess messages to merge consecutive messages and convert content to strings
+    const processedMessages = this.preprocessMessages(messages);
+
+    if (processedMessages.length !== messages.length) {
+      this.logger.info(
+        `Preprocessed message array from ${messages.length} to ${processedMessages.length} messages for Deepseek model compatibility`,
+      );
+    }
+
+    // Log the first few characters of each processed message for debugging
+    processedMessages.forEach((msg, index) => {
+      const contentPreview =
+        typeof msg.content === 'string'
+          ? msg.content.substring(0, 50)
+          : 'non-string content';
+      this.logger.debug(`Message ${index} (${msg.role}): ${contentPreview}...`);
+    });
+
+    // Call the parent implementation with the processed messages
+    return super.createResponse(
+      client,
+      processedMessages,
+      temperature,
+      systemPrompt,
+      endTag,
+    );
+  }
 }
