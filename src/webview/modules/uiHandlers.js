@@ -531,4 +531,11 @@ export function setupUIHandlers() {
       command: 'showAgentHistory',
     });
   });
+
+  // Add event listener for settings button
+  addEventListenerSafely('settingsButton', 'click', function () {
+    vscode.postMessage({
+      command: 'openSettings',
+    });
+  });
 }
