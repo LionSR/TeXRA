@@ -138,7 +138,6 @@ For details on how LaTeX diff works, see the [LaTeX Diff guide](./latex-diff.md)
   position: absolute;
   top: 10px;
   right: 10px;
-  background: rgba(0,0,0,0.6);
   color: white;
   padding: 5px 10px;
   border-radius: 4px;

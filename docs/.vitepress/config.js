@@ -14,6 +14,88 @@ const baseConfig = {
         href: '/assets/fonts/codicon/codicon.css',
       },
     ],
+    [
+      'script',
+      {},
+      `
+      // Execute when DOM is fully loaded
+      document.addEventListener('DOMContentLoaded', function() {
+        // Try to prevent scroll restoration
+        if ('scrollRestoration' in history) {
+          history.scrollRestoration = 'manual';
+        }
+
+        // Wait a bit to ensure the PDF tabs are ready
+        setTimeout(function() {
+          // PDF tab switcher - more robust implementation
+          function initPdfTabs() {
+            const pdfTabs = document.querySelectorAll('.pdf-tab');
+            const pdfFrame = document.getElementById('pdf-frame');
+            const pdfLink = document.getElementById('pdf-link');
+            
+            if (!pdfTabs.length || !pdfFrame || !pdfLink) return;
+            
+            pdfTabs.forEach(tab => {
+              // Remove any existing click listeners first
+              tab.replaceWith(tab.cloneNode(true));
+            });
+            
+            // Re-select tabs after cloning
+            const newTabs = document.querySelectorAll('.pdf-tab');
+            newTabs.forEach(tab => {
+              tab.addEventListener('click', function(e) {
+                // Prevent any default behavior
+                e.preventDefault();
+                e.stopPropagation();
+                
+                // Store current scroll position
+                const scrollPos = window.scrollY || document.documentElement.scrollTop;
+                
+                const pdfPath = this.getAttribute('data-pdf');
+                if (!pdfPath) return;
+                
+                // Update iframe source
+                pdfFrame.src = pdfPath;
+                // Update "Open in new tab" link
+                pdfLink.href = pdfPath;
+                
+                // Update active tab
+                newTabs.forEach(t => t.classList.remove('active'));
+                this.classList.add('active');
+                
+                // Restore scroll position
+                setTimeout(() => {
+                  window.scrollTo(0, scrollPos);
+                }, 0);
+                
+                // Debugging
+                console.log('Tab clicked:', pdfPath);
+                return false;
+              });
+            });
+          }
+          
+          // Initial setup
+          initPdfTabs();
+          
+          // Also initialize after a slight delay to handle any page reflows
+          setTimeout(initPdfTabs, 1000);
+          
+          // For single-page applications, re-init on URL changes
+          if (window.addEventListener) {
+            let lastUrl = location.href;
+            new MutationObserver(() => {
+              const url = location.href;
+              if (url !== lastUrl) {
+                lastUrl = url;
+                setTimeout(initPdfTabs, 500);
+              }
+            }).observe(document, {subtree: true, childList: true});
+          }
+        }, 200);
+      });
+      `
+    ],
   ],
   themeConfig: {
     logo: '/logo-128x128.svg',
