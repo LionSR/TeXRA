@@ -91,3 +91,18 @@ This instructs the LLM to generate the necessary XML structure that TeXRA's `Out
 - [Custom Agents](./custom-agents.md): Learn how to design prompts for agents handling multiple outputs.
 - [File Management](./file-management.md): Review the file selection UI in detail.
 - [Agent Architecture](./agent-architecture.md): Understand the overall agent execution flow.
+
+## Enabling Multiple Outputs
+
+To enable multiple output files, simply click the toggle icon (▼) next to the "Multiple Outputs" label in the main TeXRA interface file selection area. This will expand the section, allowing you to manage the output file list.
+
+## Managing Output Files
+
+Once expanded, you can manage the output files:
+
+1.  **Add Files**: Use the "Add" button (<i class="codicon codicon-add"></i>) to specify output filenames. You typically need one output file for each corresponding input file.
+2.  **Remove Files**: Click the "-" button next to a file to remove it.
+3.  **Reorder Files**: Drag and drop files to ensure the order matches the input file order.
+4.  **Clear List**: Use the "Empty List" button (<i class="codicon codicon-trash"></i>) to remove all specified output files.
+
+## Output Naming

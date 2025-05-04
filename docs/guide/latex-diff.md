@@ -17,7 +17,7 @@ Unlike standard text diff tools (which can look like hieroglyphics when comparin
 
 ## The LaTeXdiffs Section
 
-The LaTeX diff functionality is accessible through the "LaTeXdiffs" section in the TeXRA interface:
+The LaTeX diff functionality is accessible through the "LaTeXdiffs" section (<i class="codicon codicon-source-control"></i> LaTeXDiffs) in the TeXRA interface:
 
 <!-- ![LaTeXdiffs Section](/images/latexdiffs-section.png) -->
 
@@ -35,11 +35,11 @@ To compare two LaTeX files:
 
 ### Step 1: Select Files
 
-1. In the "Base File" dropdown, select the original version
-2. In the "Edited File" dropdown, select the modified version
+1. In the "Base File" dropdown (<i class="codicon codicon-file"></i> Base), select the original version
+2. In the "Edited File" dropdown (<i class="codicon codicon-edit"></i> Edited), select the modified version
 
 ::: tip
-The "Current" button allows you to quickly select the currently open file for either role. The "Empty" button (<i class="codicon codicon-close"></i>) clears the selection for that role.
+The "Current" button (<i class="codicon codicon-file-code"></i>) allows you to quickly select the currently open file for either role. The "Empty" button (<i class="codicon codicon-close"></i>) clears the selection for that role.
 :::
 
 ### Step 2: Generate the Diff
@@ -70,16 +70,16 @@ TeXRA also allows you to compare documents with previous Git versions:
 
 ### Step 1: Select Base File and Commit
 
-1. Select a base file (typically your current working file)
-2. Choose a Git commit from the "Commit" dropdown
+1. Select a base file (typically your current working file) using the "Base File" dropdown (<i class="codicon codicon-file"></i> Base).
+2. Choose a Git commit from the "Commit" dropdown (<i class="codicon codicon-git-commit"></i> Commit).
 
 ::: info
-The commit dropdown shows recent commits. Click the refresh icon to update the list.
+The commit dropdown shows recent commits. Click the refresh icon (<i class="codicon codicon-refresh"></i>) next to the label to update the list.
 :::
 
 ### Step 2: Generate the Diff
 
-Click the "latexdiff-vc" button to compare your file with its version at the selected commit.
+Click the "latexdiff-vc" button (<i class="codicon codicon-diff-single"></i> icon) to compare your file with its version at the selected commit.
 
 TeXRA will:
 
@@ -91,10 +91,10 @@ TeXRA will:
 
 ### Step 3: Manage Diff Outputs
 
-After generating a Git-based diff, you can:
+After generating a Git-based diff using the "latexdiff-vc" button, you can:
 
-- **Pack**: Archive the diff files using the "Pack" button
-- **Clean**: Remove the diff files using the "Clean" button
+- **Pack** (<i class="codicon codicon-archive"></i>): Archive the diff files using the "Pack" button in the Commit section.
+- **Clean** (<i class="codicon codicon-trash"></i>): Remove the diff files using the "Clean" button in the Commit section.
 
 ## Understanding Diff Output
 
@@ -227,7 +227,7 @@ The intelligent merge process:
 **Solutions**:
 
 - Verify the document is in a Git repository
-- Refresh the commit list using the refresh icon
+- Refresh the commit list using the refresh icon (<i class="codicon codicon-refresh"></i>)
 - Check Git installation and configuration
 
 **Problem**: Error when comparing with commit
