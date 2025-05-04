@@ -76,10 +76,29 @@ export async function getAgentPath(
     });
 
     if (builtInMatches.length === 0) {
+      const configureButton = 'Configure Custom Agents';
+      const errorMessage = `Agent "${agentName}" not found`;
+
+      vscode.window
+        .showErrorMessage(
+          `${errorMessage}. TeXRA couldn't find this agent in either the built-in or custom directories.`,
+          {
+            modal: true,
+            detail:
+              'You can configure a custom agents directory in the extension settings.',
+          },
+          configureButton,
+        )
+        .then((selection) => {
+          if (selection === configureButton) {
+            vscode.commands.executeCommand(
+              'workbench.action.openSettings',
+              '@ext:texra-ai.texra explorer.agentsDirectory',
+            );
+          }
+        });
+
       const errorMsg = `Could not find yaml file for agent: ${agentName}`;
-      vscode.window.showErrorMessage(
-        `${errorMsg} in either custom or built-in directories`,
-      );
       throw new Error(errorMsg);
     }
 

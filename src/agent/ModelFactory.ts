@@ -16,6 +16,11 @@ import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 
 // Local imports - utils
 import { getConfig } from '../utils/configUtils';
+import * as logger from '../logger/logUtils';
+
+// Initialize logger
+const CHANNEL = 'ModelFactory';
+logger.initialize(CHANNEL);
 
 /** Factory class for instantiating appropriate model handlers based on configuration. */
 export class ModelFactory {
@@ -49,9 +54,10 @@ export class ModelFactory {
       false,
     );
     if (config.provider === ModelProvider.GOOGLE && useNativeGoogleSDK) {
-      console.log(
+      logger.debug(
+        CHANNEL,
         'Using Native Google GenAI SDK Handler (ModelHandlerGoogleGenAI)',
-      ); // Log for clarity
+      );
       return new ModelHandlerGoogleGenAI(config);
     }
 
@@ -73,7 +79,7 @@ export class ModelFactory {
       throw new Error(`Unsupported model provider: ${config.provider}`);
     }
 
-    console.log(`Using Handler: ${HandlerClass.name}`);
+    logger.debug(CHANNEL, `Using Handler: ${HandlerClass.name}`);
     return new HandlerClass(config);
   }
 }
