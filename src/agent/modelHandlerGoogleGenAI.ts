@@ -39,18 +39,13 @@ import { getConfig } from '../utils/configUtils';
 // Local constant
 const K_SLICE = 200;
 
-// Internal type definitions
+// Internal type definition
 type InternalMessagePart = {
   type: 'text' | 'file_uri' | string;
   text?: string;
   uri?: string;
   mimeType?: string;
 };
-
-interface InternalMessage {
-  role: 'user' | 'assistant' | 'system';
-  content: InternalMessagePart[];
-}
 
 // Helper function
 function convertInternalPartsToGoogleParts(
@@ -75,7 +70,7 @@ function convertInternalPartsToGoogleParts(
 
 // Helper function
 function convertMessagesToGoogleContentHistory(
-  messages: InternalMessage[],
+  messages: any[],
   logger: any,
 ): Content[] {
   const history: Content[] = [];
@@ -148,7 +143,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
   /** Creates a chat completion response using Google's GenAI API with specified parameters and optional system prompt. */
   async createResponse(
     client: GoogleGenAI,
-    messages: InternalMessage[],
+    messages: any[],
     temperature: number,
     systemPrompt?: string,
     endTag?: string,
@@ -216,31 +211,21 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
       const result = await chat.sendMessage({ message: lastMessageParts });
 
       return result;
-    } catch (error) {
-      if (error instanceof Error) {
+    } catch (error: any) {
+      this.logger.error(
+        `Error during Google GenAI Chat API call: ${error?.message || error}`,
+      );
+      this.logger.error(error.message);
+      if (error.message?.includes('request.contents[0].parts')) {
         this.logger.error(
-          `Error during Google GenAI Chat API call: ${error.message}`,
-        );
-
-        if (error.message.includes('request.contents[0].parts')) {
-          this.logger.error(
-            'Potential issue with sendMessage parameter structure. Check conversion.',
-          );
-        }
-
-        if (error.message.includes('SAFETY')) {
-          this.logger.error(
-            `Safety block details: ${JSON.stringify(
-              (error as any).response?.promptFeedback,
-            )}`,
-          );
-        }
-      } else {
-        this.logger.error(
-          `Unknown error during Google GenAI Chat API call: ${String(error)}`,
+          'Potential issue with sendMessage parameter structure. Check conversion.',
         );
       }
-
+      if (error.message?.includes('SAFETY')) {
+        this.logger.error(
+          `Safety block details: ${JSON.stringify(error.response?.promptFeedback)}`,
+        );
+      }
       throw error;
     }
   }
@@ -251,7 +236,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
     userRequest: string,
     mediaFiles?: string[],
     systemPrompt?: string,
-  ): Promise<InternalMessage[]> {
+  ): Promise<any[]> {
     const client = await this.getClient();
     const userContentParts: InternalMessagePart[] = [
       { type: 'text', text: userPrefix },
@@ -309,7 +294,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
           });
         } catch (error) {
           this.logger.error(
-            `Failed to upload media file ${mediaFile} via native SDK: ${error instanceof Error ? error.message : String(error)}`,
+            `Failed to upload media file ${mediaFile} via native SDK: ${error}`,
           );
         }
       }
@@ -364,10 +349,10 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
 
   /** Creates a reflection message array for Google GenAI models, managing image content and message structure. */
   async createReflectionMessages(
-    messages: InternalMessage[],
+    messages: any[],
     userMessage: string,
     mediaFiles?: string[],
-  ): Promise<InternalMessage[]> {
+  ): Promise<any[]> {
     const client = await this.getClient();
     const reflectionParts: InternalMessagePart[] = [];
 
