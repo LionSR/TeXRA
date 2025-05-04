@@ -95,7 +95,7 @@ Be specific about what you want! Vague instructions are like asking a genie for 
 2. The ProgressBoard panel (typically at the bottom) will show the progress. See the [ProgressBoard guide](./progress-board.md) for more details on interpreting the logs.
 3. Wait for the process to complete - this may take a few moments depending on the document size and model choice
 
-<!-- ![Execution Progress](/images/execution-progress.png) -->
+![Execution Progress](/images/texra-progressboard.png)
 
 ### Step 7: Review Results
 
@@ -103,9 +103,16 @@ Be specific about what you want! Vague instructions are like asking a genie for 
 2. Review the changes made by the AI. Remember, it's smart, but hasn't passed its quals yet!
 3. You can compare the original and modified versions using:
    - **VS Code's Diff View**: Right-click on the original and output files in the Explorer and select "Compare Selected" for a side-by-side source code comparison.
-   - **TeXRA's LaTeXdiff feature**: Use the LaTeXdiffs section in the TeXRA panel for a compiled, visual comparison (see the [LaTeX Diff guide](./latex-diff.md)).
 
-<!-- ![Results Review](/images/results-review.png) -->
+     ![VS Code Compare View](/images/vscode-compare.png)
+
+   - **TeXRA's LaTeXdiff feature**: Use the LaTeXdiffs section in the TeXRA panel for a compiled, visual comparison. This creates a PDF with additions highlighted in blue and deletions in red:
+
+     ![LaTeX Diff Output](/images/latexdff-v1.png)
+
+     <div class="tip custom-block">
+       <p>Explore the examples in the <a href="/guide/latex-diff.html#embedded-pdf-examples">LaTeX Diff guide</a> to see more examples of how TeXRA visualizes changes. You can even interact with embedded diff PDFs there.</p>
+     </div>
 
 ## Common Quick Tasks
 
