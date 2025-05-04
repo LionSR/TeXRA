@@ -35,7 +35,7 @@ export function updateStreamTabs(streams, activeStream) {
         `<div class="tab-container ${stream === activeStream ? 'active' : ''}">
           <button class="tab" data-stream="${stream}">${stream}</button>
           <button class="tab-delete" data-stream="${stream}" title="Delete stream">
-            <i class="codicon codicon-trash"></i>
+            <i class="codicon codicon-close"></i>
           </button>
         </div>`,
     )
