@@ -102,6 +102,7 @@ Be specific about what you want! Vague instructions are like asking a genie for 
 1. When the agent completes, VS Code will open the generated output file (e.g., `yourfile_polish_r0_model.tex`).
 2. Review the changes made by the AI. Remember, it's smart, but hasn't passed its quals yet!
 3. You can compare the original and modified versions using:
+
    - **VS Code's Diff View**: Right-click on the original and output files in the Explorer and select "Compare Selected" for a side-by-side source code comparison.
 
      ![VS Code Compare View](/images/vscode-compare.png)
