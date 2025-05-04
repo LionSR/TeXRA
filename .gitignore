@@ -7,3 +7,4 @@ releases/
 .DS_Store
 .cursor
 .cursor/rules
+**/.claude/settings.local.json
