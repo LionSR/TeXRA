@@ -106,7 +106,7 @@ Be specific about what you want! Vague instructions are like asking a genie for 
    - **VS Code's Diff View**: Right-click on the original and output files in the Explorer and select "Compare Selected" for a side-by-side source code comparison.
 
      ![VS Code Compare View](/images/vscode-compare.png)
-     
+
      You can accept individual changes by clicking the arrow icons that appear between the two panels. The left arrow (<i class="codicon codicon-arrow-left"></i>) restores the original text, while the right arrow (<i class="codicon codicon-arrow-right"></i>) accepts the AI's changes. This makes it easy to cherry-pick which modifications you want to keep.
 
    - **TeXRA's LaTeXdiff feature**: Use the LaTeXdiffs section in the TeXRA panel for a compiled, visual comparison. This creates a PDF with additions highlighted in blue and deletions in red.
@@ -223,8 +223,6 @@ Here are some common tasks you can try with TeXRA:
 - **Agent**: `correct`
 - **Model**: `gemini25p` or `gpt41`
 - **Instruction**: "Fix grammatical errors and typos without changing the content or technical terminology."
-
-
 
 ### Converting a Paper to Slides
 
