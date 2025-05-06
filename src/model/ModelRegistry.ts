@@ -464,7 +464,7 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
   // ===== Google Gemini Models =====
   gemini25p: {
     name: 'gemini25p',
-    fullName: 'gemini-2.5-pro-preview',
+    fullName: 'gemini-2.5-pro-preview-05-06',
     openrouterFullName: 'google/gemini-2.5-pro-preview',
     provider: ModelProvider.GOOGLE,
     maxOutputTokens: 64000,
