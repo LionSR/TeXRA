@@ -582,6 +582,8 @@ const LATEX_XML_REPLACEMENTS: ReplacementCategory = {
 
     // ===== Code block handling =====
     // Handle LaTeX inside Markdown code blocks
+    '```latex\n\\documentclass{lecture}':
+      '<latex_document>\n\\documentclass{lecture}',
     '```latex\n\\documentclass[': '<latex_document>\n\\documentclass[',
     '<latex_document>\n```latex': '<latex_document>\n',
     'Here is the revised \\LaTeX document.\n\n```latex':
@@ -1193,7 +1195,7 @@ const TIKZ_REPLACEMENTS: ReplacementCategory = {
       '${indent}\\end{tikzpicture}\n${indent}};\n${indent}\\end{tikzpicture}',
     '}(\\s*)\\end{tikzpicture};': '};$1\\end{tikzpicture}',
     '}(\\s*)\\end{tikzpicture}\\DIFaddendFL ;':
-      '$1\\end{tikzpicture}};\DIFaddendFL',
+      '$1\\end{tikzpicture}};\\DIFaddendFL',
   },
 };
 
@@ -1224,6 +1226,20 @@ const INLINE_MATH_REPLACEMENTS: ReplacementCategory = {
   },
 };
 
+// Latexdiff markup fixes using regex
+const LATEXDIFF_MARKUP_REPLACEMENTS: ReplacementCategory = {
+  name: 'latexdiff_markup',
+  description: 'Fixes for redundant braces and whitespace in latexdiff markup',
+  isRegex: true,
+  flags: 'gs',
+  patterns: {
+    // Collapse redundant blank lines / spaces between a closing brace and \end{...}%DIFAUXCMD
+    // Matches: newline + spaces/tabs + newline + spaces/tabs + }\end{align*}%DIFAUXCMD
+    '\n[ \t]*\n[ \t]*\\}\\\\end\\{(align|aligned)(\\*?)\\}%DIFAUXCMD':
+      '\n\\end{$1$2}%DIFAUXCMD',
+  },
+};
+
 /**
  * Get enabled replacement categories from VS Code settings
  */
@@ -1249,6 +1265,7 @@ function getCustomReplacements(): { [key: string]: string } {
 
 /**
  * Get all non-regex replacements combined into a single category.
+ * These replacements are subject to user configuration via enabledReplacements.
  */
 export function getAllReplacements(): ReplacementCategory {
   const enabledCategories = getEnabledReplacements();
@@ -1257,6 +1274,7 @@ export function getAllReplacements(): ReplacementCategory {
   let allPatterns: { [key: string]: string } = {};
 
   // Add replacements from enabled categories
+  // Only include non-regex categories here
   const categories = [
     // LaTeX Content Formatting
     EQUATION_REPLACEMENTS,
@@ -1296,36 +1314,41 @@ export function getAllReplacements(): ReplacementCategory {
 export function getReplacementsByCategory(
   categoryName: string,
 ): ReplacementCategory | undefined {
-  const categories: { [key: string]: ReplacementCategory } = {
+  // Non-regex categories that depend on user settings
+  const stringCategories: { [key: string]: ReplacementCategory } = {
     equations: EQUATION_REPLACEMENTS,
     sections: SECTION_REPLACEMENTS,
-    tikz: TIKZ_REPLACEMENTS,
     characters: CHARACTER_REPLACEMENTS,
     unicode: UNICODE_REPLACEMENTS,
     latex_xml: LATEX_XML_REPLACEMENTS,
     scratchpad_xml: SCRATCHPAD_XML_REPLACEMENTS,
     style: STYLE_REPLACEMENTS,
-    inlineMath: INLINE_MATH_REPLACEMENTS,
     personal_style: PERSONAL_STYLE_REPLACEMENTS,
     latex_spacing: LATEX_SPACING_REPLACEMENTS,
     max_style: MAX_STYLE_REPLACEMENTS,
-    // Add environment structure replacements
-    environment_structure: ENVIRONMENT_STRUCTURE_REPLACEMENTS,
   };
 
-  return categories[categoryName];
+  // Regex categories that are always applied (environment_structure removed)
+  const regexCategories: { [key: string]: ReplacementCategory } = {
+    tikz: TIKZ_REPLACEMENTS,
+    inlineMath: INLINE_MATH_REPLACEMENTS,
+    latexdiff_markup: LATEXDIFF_MARKUP_REPLACEMENTS,
+    parentheses: PARENTHESES_REPLACEMENTS,
+  };
+
+  return stringCategories[categoryName] || regexCategories[categoryName];
 }
 
 /**
  * Get all regex replacement categories in order of application.
+ * These are always applied and not subject to user configuration.
  */
 export function getAllReplacementsRegex(): ReplacementCategory[] {
   return [
-    // Math Unicode replacements are now handled directly in applyReplacements
     INLINE_MATH_REPLACEMENTS,
     TIKZ_REPLACEMENTS,
     PARENTHESES_REPLACEMENTS,
-    ENVIRONMENT_STRUCTURE_REPLACEMENTS,
+    LATEXDIFF_MARKUP_REPLACEMENTS,
   ];
 }
 
@@ -1528,6 +1551,9 @@ export function applyReplacements(
     processMathUnicode?: boolean; // Whether to apply Unicode-to-LaTeX within math environments (defaults to true)
   },
 ): string {
+  // // By default, math-Unicode replacements are NOT applied.
+  // // To enable them, call applyReplacements(..., { processMathUnicode: true })
+  // if (options?.processMathUnicode === true) {
   // Apply Unicode replacements in math environments if requested
   if (options?.processMathUnicode !== false) {
     // Default to true if not specified
@@ -1563,24 +1589,3 @@ export function applyReplacements(
   }
   return text;
 }
-
-// ===== LLM Output Specific Fixes =====
-
-// Environment structure fixes
-const ENVIRONMENT_STRUCTURE_REPLACEMENTS: ReplacementCategory = {
-  name: 'environment_structure',
-  description: 'Fixes for LaTeX environment structure and nesting issues',
-  isRegex: true,
-  flags: 'g',
-  patterns: {
-    // ===== Unclosed document environment fix =====
-    // Ensures document environment is properly closed at end of file
-    '(\\\\begin\\{document\\}[\\s\\S]*)(\\\\end\\{document)([^\\}]*)$':
-      '$1\\\\end{document}',
-
-    // ===== Environment tag bracket completion =====
-    // Fixes environment tags with missing or incorrect closing brackets
-    '\\\\end\\{([a-zA-Z\\*]+)([^\\}]*)': '\\\\end{$1}',
-    '\\\\begin\\{([a-zA-Z\\*]+)([^\\}]*)': '\\\\begin{$1}',
-  },
-};
