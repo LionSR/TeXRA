@@ -242,7 +242,8 @@
             "default": [
               "command.tex",
               "commands.tex",
-              "preamble.tex"
+              "preamble.tex",
+              "yaml"
             ],
             "description": "Files to ignore when listing input, sample, and edited files, but not auxiliary files",
             "editPresentation": "multilineText",
@@ -265,7 +266,8 @@
               "grok",
               "deepseek",
               "llama",
-              "egg-info"
+              "egg-info",
+              "yaml"
             ],
             "description": "Additional keywords to ignore when listing auxiliary files, including model names",
             "editPresentation": "multilineText",
@@ -328,7 +330,8 @@
               "versions",
               "history",
               ".egg-info",
-              "venv"
+              "venv",
+              "yaml"
             ],
             "description": "Keywords to ignore when selecting files",
             "editPresentation": "multilineText",
@@ -380,8 +383,7 @@
                 "scratchpad_xml",
                 "style",
                 "personal_style",
-                "max_style",
-                "environment_structure"
+                "max_style"
               ]
             },
             "default": [
@@ -392,8 +394,7 @@
               "latex_xml",
               "unicode",
               "scratchpad_xml",
-              "style",
-              "environment_structure"
+              "style"
             ],
             "description": "List of enabled LaTeX replacement categories",
             "order": 5
