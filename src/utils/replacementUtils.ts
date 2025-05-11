@@ -1233,8 +1233,10 @@ function getEnabledReplacements(): string[] {
     'equations',
     'sections',
     'characters',
+    'latex_xml',
     'unicode',
-    'environment_structure',
+    'scratchpad_xml',
+    'style',
   ]);
 }
 
@@ -1319,6 +1321,7 @@ export function getReplacementsByCategory(
  */
 export function getAllReplacementsRegex(): ReplacementCategory[] {
   return [
+    // Math Unicode replacements are now handled directly in applyReplacements
     INLINE_MATH_REPLACEMENTS,
     TIKZ_REPLACEMENTS,
     PARENTHESES_REPLACEMENTS,
@@ -1326,15 +1329,211 @@ export function getAllReplacementsRegex(): ReplacementCategory[] {
   ];
 }
 
-// maybe i can even do this for strings<some length...
+/**
+ * Helper function to convert Unicode characters to LaTeX commands
+ * within math environments only
+ */
+function replaceMathUnicode(text: string): string {
+  // Map of Unicode characters to their LaTeX equivalents
+  const mathUnicodeMap: { [key: string]: string } = {
+    // Greek letters (alphabetical)
+    α: '\\alpha', // alpha
+    β: '\\beta', // beta
+    χ: '\\chi', // chi
+    δ: '\\delta', // delta
+    Δ: '\\Delta', // Delta
+    ε: '\\epsilon', // epsilon
+    η: '\\eta', // eta
+    γ: '\\gamma', // gamma
+    Γ: '\\Gamma', // Gamma
+    ι: '\\iota', // iota
+    κ: '\\kappa', // kappa
+    λ: '\\lambda', // lambda
+    Λ: '\\Lambda', // Lambda
+    μ: '\\mu', // mu
+    ν: '\\nu', // nu
+    ω: '\\omega', // omega
+    Ω: '\\Omega', // Omega
+    φ: '\\phi', // phi
+    Φ: '\\Phi', // Phi
+    π: '\\pi', // pi
+    Π: '\\Pi', // Pi
+    ψ: '\\psi', // psi
+    Ψ: '\\Psi', // Psi
+    ρ: '\\rho', // rho
+    σ: '\\sigma', // sigma
+    Σ: '\\Sigma', // Sigma
+    τ: '\\tau', // tau
+    θ: '\\theta', // theta
+    Θ: '\\Theta', // Theta
+    υ: '\\upsilon', // upsilon
+    Υ: '\\Upsilon', // Upsilon
+    ξ: '\\xi', // xi
+    Ξ: '\\Xi', // Xi
+    ζ: '\\zeta', // zeta
+
+    // Mathematical operators and symbols
+    '−': '-', // minus sign
+    '×': '\\times', // multiplication
+    '÷': '\\div', // division
+    '≤': '\\leq', // less than or equal
+    '≥': '\\geq', // greater than or equal
+    '≠': '\\neq', // not equal
+    '≈': '\\approx', // approximately equal
+    '≡': '\\equiv', // equivalent to
+    '≅': '\\cong', // congruent to
+    '∼': '\\sim', // similar to
+    '∝': '\\propto', // proportional to
+    '≺': '\\prec', // precedes
+    '≻': '\\succ', // succeeds
+    '⊂': '\\subset', // subset
+    '⊃': '\\supset', // superset
+    '⊆': '\\subseteq', // subset or equal
+    '⊇': '\\supseteq', // superset or equal
+    '∈': '\\in', // element of
+    '∉': '\\notin', // not element of
+    '∋': '\\ni', // contains as member
+    '∩': '\\cap', // intersection
+    '∪': '\\cup', // union
+    '∅': '\\emptyset', // empty set
+    '∞': '\\infty', // infinity
+    '∇': '\\nabla', // nabla
+    '∂': '\\partial', // partial derivative
+    '∫': '\\int', // integral
+    '∬': '\\iint', // double integral
+    '∭': '\\iiint', // triple integral
+    '∮': '\\oint', // contour integral
+    '∑': '\\sum', // summation
+    '∏': '\\prod', // product
+    // '√': '\\sqrt{}', // square root (with closed brace for safety)
+    // '∛': '\\sqrt[3]{}', // cube root
+    '∠': '\\angle', // angle
+    '⊥': '\\perp', // perpendicular
+    '∥': '\\parallel', // parallel
+    '∧': '\\wedge', // logical and
+    '∨': '\\vee', // logical or
+    '¬': '\\neg', // logical not
+    '⇒': '\\Rightarrow', // implies
+    '⇔': '\\Leftrightarrow', // if and only if
+    '↑': '\\uparrow', // up arrow
+    '↓': '\\downarrow', // down arrow
+    '←': '\\leftarrow', // left arrow
+    '→': '\\rightarrow', // right arrow
+    '↔': '\\leftrightarrow', // left-right arrow
+    '⟨': '\\langle', // left angle bracket
+    '⟩': '\\rangle', // right angle bracket
+    '…': '\\ldots', // horizontal ellipsis
+    '⋅': '\\cdot', // center dot
+    '⋮': '\\vdots', // vertical ellipsis
+    '⋯': '\\cdots', // center ellipsis
+    '⋱': '\\ddots', // diagonal ellipsis
+    '°': '^{\\circ}', // degree
+  };
+
+  // Environment patterns to search for
+  const mathEnvironments = [
+    { start: '\\begin{equation}', end: '\\end{equation}' },
+    { start: '\\begin{equation*}', end: '\\end{equation*}' },
+    { start: '\\begin{align}', end: '\\end{align}' },
+    { start: '\\begin{align*}', end: '\\end{align*}' },
+    { start: '\\begin{aligned}', end: '\\end{aligned}' },
+    { start: '\\begin{multline}', end: '\\end{multline}' },
+    { start: '\\begin{gather}', end: '\\end{gather}' },
+    { start: '\\begin{cases}', end: '\\end{cases}' },
+    { start: '\\[', end: '\\]' },
+    { start: '$$', end: '$$' },
+  ];
+
+  // Process each math environment
+  for (const env of mathEnvironments) {
+    let startIdx = 0;
+    // Continue searching for math environments from where we left off
+    while ((startIdx = text.indexOf(env.start, startIdx)) !== -1) {
+      const envStart = startIdx + env.start.length;
+      const envEnd = text.indexOf(env.end, envStart);
+
+      // If we can't find the end, skip this instance
+      if (envEnd === -1) {
+        startIdx += env.start.length;
+        continue;
+      }
+
+      // Extract the content of the math environment
+      const mathContent = text.substring(envStart, envEnd);
+
+      // Apply Unicode replacements within the math content
+      let replacedContent = mathContent;
+
+      // Replace Unicode characters with LaTeX commands
+      for (const [unicode, latex] of Object.entries(mathUnicodeMap)) {
+        replacedContent = replacedContent.replace(
+          new RegExp(unicode, 'g'),
+          latex,
+        );
+      }
+
+      // Replace HTML subscript tags with LaTeX subscript syntax
+      replacedContent = replacedContent.replace(/<sub>(.*?)<\/sub>/g, '_{$1}');
+
+      // Replace HTML superscript tags with LaTeX superscript syntax
+      replacedContent = replacedContent.replace(/<sup>(.*?)<\/sup>/g, '^{$1}');
+
+      // Replace the original math content with the processed one
+      if (replacedContent !== mathContent) {
+        text =
+          text.substring(0, envStart) +
+          replacedContent +
+          text.substring(envEnd);
+      }
+
+      // Move past this environment
+      startIdx = envStart + replacedContent.length;
+    }
+  }
+
+  // Also handle inline math with $ ... $
+  let inlineMathPattern = /\$(.*?)\$/g;
+  text = text.replace(inlineMathPattern, (match, p1) => {
+    let content = p1;
+
+    // Replace Unicode characters with LaTeX commands
+    for (const [unicode, latex] of Object.entries(mathUnicodeMap)) {
+      content = content.replace(new RegExp(unicode, 'g'), latex);
+    }
+
+    // Replace HTML subscript tags with LaTeX subscript syntax
+    content = content.replace(/<sub>(.*?)<\/sub>/g, '_{$1}');
+
+    // Replace HTML superscript tags with LaTeX superscript syntax
+    content = content.replace(/<sup>(.*?)<\/sup>/g, '^{$1}');
+
+    return '$' + content + '$';
+  });
+
+  return text;
+}
 
 /**
  * Apply replacements to text, handling both regex and non-regex patterns.
+ * @param text The text to process
+ * @param replacements The replacements to apply
+ * @param options Optional configuration options
+ * @param options.processMathUnicode Whether to apply Unicode-to-LaTeX within math environments (defaults to true)
+ * @returns The processed text
  */
 export function applyReplacements(
   text: string,
   replacements: ReplacementCategory | ReplacementCategory[],
+  options?: {
+    processMathUnicode?: boolean; // Whether to apply Unicode-to-LaTeX within math environments (defaults to true)
+  },
 ): string {
+  // Apply Unicode replacements in math environments if requested
+  if (options?.processMathUnicode !== false) {
+    // Default to true if not specified
+    text = replaceMathUnicode(text);
+  }
+
   // Convert single category to array for unified handling
   const replacementArray = Array.isArray(replacements)
     ? replacements
@@ -1382,5 +1581,6 @@ const ENVIRONMENT_STRUCTURE_REPLACEMENTS: ReplacementCategory = {
     // ===== Environment tag bracket completion =====
     // Fixes environment tags with missing or incorrect closing brackets
     '\\\\end\\{([a-zA-Z\\*]+)([^\\}]*)': '\\\\end{$1}',
+    '\\\\begin\\{([a-zA-Z\\*]+)([^\\}]*)': '\\\\begin{$1}',
   },
 };
