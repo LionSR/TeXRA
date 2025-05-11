@@ -128,17 +128,24 @@ export async function configureLatexSettings() {
         vscode.ConfigurationTarget.Global,
       );
 
+      // Configure LaTeX formatting
+      await config.update(
+        'latex-workshop.formatting.latex',
+        'latexindent',
+        vscode.ConfigurationTarget.Global,
+      );
+
       // Configure word wrap for LaTeX files
       await config.update(
         '[latex]',
-        { 'editor.wordWrap': 'on' },
+        { 'editor.wordWrap': 'on', 'files.autoSave': 'afterDelay' },
         vscode.ConfigurationTarget.Global,
       );
 
       // Also add word wrap for yaml files
       await config.update(
         '[yaml]',
-        { 'editor.wordWrap': 'on' },
+        { 'editor.wordWrap': 'on', 'files.autoSave': 'afterDelay' },
         vscode.ConfigurationTarget.Global,
       );
 
