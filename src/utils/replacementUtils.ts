@@ -157,12 +157,12 @@ const EQUATION_REPLACEMENTS: ReplacementCategory = {
 
     // ===== latexdiff compatibility fixes =====
     // Fix issues with latexdiff markup
-    '\n\n}\\end{align*}%DIFAUXCMD': '\n\\end{align*}%DIFAUXCMD',
-    '\n    \n}\\end{align*}%DIFAUXCMD': '\n\\end{align*}%DIFAUXCMD',
-    '\n\t\n}\\end{align*}%DIFAUXCMD': '\n\\end{align*}%DIFAUXCMD',
-    '\n\n}\\end{aligned*}%DIFAUXCMD': '\n\\end{aligned*}%DIFAUXCMD',
-    '\n    \n}\\end{aligned*}%DIFAUXCMD': '\n\\end{aligned*}%DIFAUXCMD',
-    '\n\t\n}\\end{aligned*}%DIFAUXCMD': '\n\\end{aligned*}%DIFAUXCMD',
+    '\n\n}\\end{align*}%DIFAUXCMD': '\n}\\end{align*}%DIFAUXCMD',
+    '\n    \n}\\end{align*}%DIFAUXCMD': '\n}\\end{align*}%DIFAUXCMD',
+    '\n\t\n}\\end{align*}%DIFAUXCMD': '\n}\\end{align*}%DIFAUXCMD',
+    '\n\n}\\end{aligned*}%DIFAUXCMD': '\n}\\end{aligned*}%DIFAUXCMD',
+    '\n    \n}\\end{aligned*}%DIFAUXCMD': '\n}\\end{aligned*}%DIFAUXCMD',
+    '\n\t\n}\\end{aligned*}%DIFAUXCMD': '\n}\\end{aligned*}%DIFAUXCMD',
 
     // ===== Reference formatting =====
     // Add non-breaking spaces between references and their numbers
@@ -506,7 +506,6 @@ const LATEX_XML_REPLACEMENTS: ReplacementCategory = {
 
     // ===== 3. XML-TO-LATEX CONVERSIONS =====
     // Special cases for minipage
-    patterns['</minipage>'] = '\\end{minipage}';
     patterns['\\minipage}'] = '\\end{minipage}';
     patterns['\\n\\minipage}'] = '\\n\\end{minipage}';
 
@@ -1158,6 +1157,7 @@ const PARENTHESES_REPLACEMENTS: ReplacementCategory = {
 // TikZ picture fixes
 // Using ECMAScript 2018 named capture groups (?<name>pattern)
 // Similar to Python's (?P<name>pattern)
+// { and } needs to be \\{ and \\}?
 const TIKZ_REPLACEMENTS: ReplacementCategory = {
   name: 'tikz',
   description: 'Fixes for TikZ picture formatting and structure',
@@ -1315,6 +1315,103 @@ export function getReplacementsByCategory(
   };
 
   return stringCategories[categoryName] || regexCategories[categoryName];
+}
+
+/**
+ * Applies LaTeX quotes formatting to a LaTeX document.
+ * Converts regular double quotes to LaTeX-style quotes (``'') for quoted text
+ * that is between 3 and 15 characters long, while avoiding:
+ * - Text within tikzpicture environments
+ * - Escaped quotes like those in Schr{\"o}dinger
+ * - Quotes within braces like in {\"o}
+ *
+ * @param text LaTeX document text
+ * @returns Text with quotes replaced
+ */
+function applyLatexQuotesFormatting(text: string): string {
+  logger.debug(CHANNEL, 'Starting LaTeX quotes formatting');
+
+  // Extract document content (everything between \begin{document} and \end{document})
+  const documentRegex = /\\begin\{document\}([\s\S]*?)\\end\{document\}/g;
+  let documentMatch: RegExpExecArray | null;
+  let processedText = text;
+  let documentCount = 0;
+  let totalReplacements = 0;
+
+  // Process each document block separately
+  while ((documentMatch = documentRegex.exec(text)) !== null) {
+    documentCount++;
+    const fullMatch = documentMatch[0];
+    const documentContent = documentMatch[1];
+    const startIndex = documentMatch.index;
+    const endIndex = startIndex + fullMatch.length;
+
+    // logger.debug(CHANNEL, `Processing document block #${documentCount}`);
+
+    // Store tikzpicture environments to avoid processing them
+    const tikzEnvironments: string[] = [];
+    const tikzRegex = /\\begin\{tikzpicture\}[\s\S]*?\\end\{tikzpicture\}/g;
+    let tikzCounter = 0;
+
+    // Replace tikzpicture environments with placeholders
+    const contentWithoutTikz = documentContent.replace(
+      tikzRegex,
+      (tikzMatchStr: string) => {
+        const placeholder = `__TIKZ_PLACEHOLDER_${tikzCounter++}__`;
+        tikzEnvironments.push(tikzMatchStr);
+        return placeholder;
+      },
+    );
+
+    logger.debug(CHANNEL, `Removed ${tikzCounter} tikzpicture environments`);
+
+    // Process quotes in the remaining content
+    let replacementCount = 0;
+    const processedContent = contentWithoutTikz.replace(
+      /(?<!\\"|\{)"([^"]{3,16})"(?!\})/g,
+      (_match, quotedText) => {
+        replacementCount++;
+        logger.debug(
+          CHANNEL,
+          `Converting quote: "${quotedText}" → \`\`${quotedText}''`,
+        );
+        return `\`\`${quotedText}''`;
+      },
+    );
+
+    logger.debug(
+      CHANNEL,
+      `Made ${replacementCount} quote replacements in document #${documentCount}`,
+    );
+    totalReplacements += replacementCount;
+
+    // Restore tikzpicture environments
+    let restoredContent = processedContent;
+    for (let i = 0; i < tikzEnvironments.length; i++) {
+      restoredContent = restoredContent.replace(
+        `__TIKZ_PLACEHOLDER_${i}__`,
+        tikzEnvironments[i],
+      );
+    }
+
+    // Replace the current document block with the processed one
+    const processedDocumentBlock = `\\begin{document}${restoredContent}\\end{document}`;
+    processedText =
+      processedText.substring(0, startIndex) +
+      processedDocumentBlock +
+      processedText.substring(endIndex);
+
+    // Update regex lastIndex to account for any changes in string length
+    const lengthDifference = processedDocumentBlock.length - fullMatch.length;
+    documentRegex.lastIndex += lengthDifference;
+  }
+
+  logger.debug(
+    CHANNEL,
+    `Finished LaTeX quotes formatting: processed ${documentCount} document blocks, made ${totalReplacements} replacements`,
+  );
+
+  return processedText;
 }
 
 /**
@@ -1565,5 +1662,9 @@ export function applyReplacements(
       }
     }
   }
+
+  // Apply LaTeX quotes formatting
+  text = applyLatexQuotesFormatting(text);
+
   return text;
 }
