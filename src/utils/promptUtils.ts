@@ -11,7 +11,7 @@ import * as logger from '../logger/logUtils';
 import { readFile, writeFile } from './workspaceFileUtils';
 import { getAgentFirstNameChunk } from '../housekeeping/utils';
 
-const CHANNEL = 'Utils';
+const CHANNEL = 'promptUtils';
 logger.initialize(CHANNEL);
 
 /**
