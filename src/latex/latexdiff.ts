@@ -15,6 +15,13 @@ import { executeCommand } from '../utils/execUtils';
 import { runLatexIndent } from './latexindent';
 import { checkToolInstalled } from './texTools';
 
+// Local imports - replacement utils
+import {
+  applyReplacements,
+  getAllReplacements,
+  getAllReplacementsRegex,
+} from '../utils/replacementUtils';
+
 const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);
 
@@ -137,6 +144,15 @@ async function processDiffFile(
         newContent += '\n';
       }
     }
+
+    // Apply standard replacements from the replacementUtils at the end of processing
+    // First apply normal replacements
+    newContent = applyReplacements(newContent, getAllReplacements()).trim();
+    // Then apply regex replacements (which include LATEXDIFF_MARKUP_REPLACEMENTS)
+    // newContent = applyReplacements(
+    //   newContent,
+    //   getAllReplacementsRegex(),
+    // ).trim();
 
     await writeFile(diffFileName, newContent);
     // logger.debug(channel, `Line breaks added to ${diffFileName}`);
