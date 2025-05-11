@@ -28,23 +28,31 @@ const LATEX_SPACING_REPLACEMENTS: ReplacementCategory = {
     'Fixes for LaTeX spacing, punctuation, and formatting [for O1 model]',
   isRegex: false,
   patterns: {
-    // Basic spacing fixes
-    ', \\;': ', ',
+    // ===== Basic spacing fixes =====
+    // Remove unnecessary spacing commands
     ' \\;': ' ',
+    ', \\;': ', ',
+    '\\;': ' ',
     ' \\; ': ' ',
+    '\\,\n': '\n',
+    '\\!\\!': '',
+
+    // Line breaks and indentation fixes
     ' \\,\\nn': ' \\nn',
+    '\n    \\\\': '\\\\',
+    ' nn\n': ' \\nn\n',
+
+    // Multiple space fixes
+    '.  ': '. ',
+
+    // ===== Comma spacing fixes =====
     ',\\,\\': ', ',
     ')\\,\\': ') \\',
     '}\\,\\': '} \\',
     '|\\,\\': '| \\',
     ' \\,\\': ' \\',
-    '\\,\n': '\n',
-    '\n    \\\\': '\\\\',
-    '\\!\\!': '',
-    '.  ': '. ',
-    ' nn\n': ' \\nn\n',
 
-    // Operator spacing
+    // ===== Operator spacing =====
     '\\;+\\;': '+',
     '\\;-\\;': '-',
     '\\;*\\;': '*',
@@ -54,7 +62,7 @@ const LATEX_SPACING_REPLACEMENTS: ReplacementCategory = {
     '-\\;': '-',
     '=\\;': '=',
 
-    // Align environment formatting
+    // ===== Align environment formatting =====
     '\n    \\nonumber\\\\': '\\nonumber\\\\',
     '\n    +': ' +',
     '\n    \n&=': '\n    &=',
@@ -67,50 +75,60 @@ const LATEX_SPACING_REPLACEMENTS: ReplacementCategory = {
     '\n    )': ')',
     '\n     &\n    \\times': '\n    & \\times',
 
-    // Specific context spacing
+    // ===== Complex math expression spacing =====
+    // Exponential expressions
     'e^{\\,i\\,': 'e^{i ',
     'e^{\\,': 'e^{',
     '-\\,i\\, ': '-i ',
     '-\\,i\\,': '-i',
     '\\,i\\,': ' i ',
+
+    // Negative sign handling
     '-\\,': '-',
     '\\,&': ' &',
     '{-\\,0}': '{0}',
     '{-\\,1}': '{1}',
 
+    // ===== Symbol separator handling =====
+    // Vertical bars and other delimiters
     ')\!\|': ') \|',
     '}\!\|': '} \|',
     ')\!\\': ') \\',
     '}\!\\': '} \\',
+
+    // Math operator spacing
     '\!\\cdot\!': ' \\cdot ',
     '\!\\ldots\!': ' \\ldots ',
     '\!\\cdots\!': ' \\cdots ',
     '\!\\vdots\!': ' \\vdots ',
     '\!\\ddots\!': ' \\ddots ',
 
-    // Skip commands
+    // ===== Vertical spacing commands =====
+    // Remove unnecessary skip commands
     '\\medskip\n': '',
     '\\smallskip\n': '',
     '\\bigskip\n': '',
 
-    // Punctuation in math mode
+    // ===== Math mode punctuation =====
+    // Move punctuation outside math mode
     '.$': '$.',
     // ',$': '$,', // this is problematic for eg. tikz figure xticklabels={$-\Sig$,0$,\Sig$},
     '$-\\,': '$-',
 
-    // Simplify delimiters
+    // ===== Delimiter simplification =====
     '\\left[\\dots\\right]': '[\\dots]',
 
-    //
+    // ===== Display style commands =====
     '\\displaystyle': '',
     '\\Longleftrightarrow': '\\LRa',
 
-    // for o1/o3 but at last:
+    // ===== O1/O3 model specific fixes =====
     '=    \\': '= \\',
     ' rho_': '  \\rho_',
     ' rho^': '  \\rho^',
     ' rho\\': '  \\rho\\',
 
+    // ===== Math limits formatting =====
     '\\sum\\limits_': '\\sum_',
   },
 };
@@ -121,17 +139,33 @@ const EQUATION_REPLACEMENTS: ReplacementCategory = {
   description: 'Fixes for LaTeX equation spacing and formatting',
   isRegex: false,
   patterns: {
-    // Environment spacing fixes
+    // ===== Environment spacing fixes =====
+    // Align environment spacing
     '\n\n\\begin{align}': '\n\\begin{align}',
     '\\end{align}\n\n': '\\end{align}\n',
     '\n\n\\begin{equation}': '\n\\begin{equation}',
     '\\end{equation}\n\n': '\\end{equation}\n',
 
+    // ===== Linebreak fixes within environments =====
+    // Remove extra newlines in align environments
     '\n\n\\end{align}': '\n\\end{align}',
+    '\n    \n\\end{align}': '\n\\end{align}',
+    '\n\t\n\\end{align}': '\n\\end{align}',
     '\n\n\\end{aligned}': '\n\\end{aligned}',
-    '\n\n}\\end{align*}%DIFAUXCMD': '\n\\end{align*}%DIFAUXCMD',
+    '\n    \n\\end{aligned}': '\n\\end{aligned}',
+    '\n\t\n\\end{aligned}': '\n\\end{aligned}',
 
-    // Fix reference numbering
+    // ===== latexdiff compatibility fixes =====
+    // Fix issues with latexdiff markup
+    '\n\n}\\end{align*}%DIFAUXCMD': '\n\\end{align*}%DIFAUXCMD',
+    '\n    \n}\\end{align*}%DIFAUXCMD': '\n\\end{align*}%DIFAUXCMD',
+    '\n\t\n}\\end{align*}%DIFAUXCMD': '\n\\end{align*}%DIFAUXCMD',
+    '\n\n}\\end{aligned*}%DIFAUXCMD': '\n\\end{aligned*}%DIFAUXCMD',
+    '\n    \n}\\end{aligned*}%DIFAUXCMD': '\n\\end{aligned*}%DIFAUXCMD',
+    '\n\t\n}\\end{aligned*}%DIFAUXCMD': '\n\\end{aligned*}%DIFAUXCMD',
+
+    // ===== Reference formatting =====
+    // Add non-breaking spaces between references and their numbers
     'figure \\ref{': 'figure~\\ref{',
     'table \\ref{': 'table~\\ref{',
     'equation \\ref{': 'equation~\\ref{',
@@ -143,7 +177,8 @@ const EQUATION_REPLACEMENTS: ReplacementCategory = {
     'Eq. \\ref{': 'Eq.~\\ref{',
     'Eqs. \\ref{': 'Eqs.~\\ref{',
 
-    // Fix incorrect math operator commands
+    // ===== Math operator command fixes =====
+    // Fix incorrect backslashes in math operators
     '\\\\cos': '\\cos',
     '\\\\sin': '\\sin',
     '\\\\tan': '\\tan',
@@ -156,6 +191,8 @@ const EQUATION_REPLACEMENTS: ReplacementCategory = {
     '\\\\sqrt': '\\sqrt',
     '\\\\pi': '\\pi',
     '\\\\bna': '\\bna',
+
+    // ===== Greek letter command fixes =====
     '\\\\alpha': '\\alpha',
     '\\\\beta': '\\beta',
     '\\\\gamma': '\\gamma',
@@ -174,12 +211,25 @@ const EQUATION_REPLACEMENTS: ReplacementCategory = {
     '\\\\\\rho': '\\rho',
     '\\\\rho': '\\rho',
     '\\\\\\delta': '\\delta',
+
+    // ===== LaTeX command fixes =====
+    // Fix common delimiter commands
     '\\\\left': '\\left',
     '\\\\right': '\\right',
     '\\\\left(': '\\left(',
     '\\\\right(': '\\right(',
     '\\\\left[': '\\left[',
     '\\\\right[': '\\right[',
+
+    // Fix line breaks in delimiters
+    '\\right\n)': '\\right)',
+    '\\right\n]': '\\right]',
+    '\\right\n}': '\\right}',
+    '\\left\n(': '\\left(',
+    '\\left\n[': '\\left[',
+    '\\left\n{': '\\left{',
+
+    // Fix fraction and other math commands
     '\\\\frac': '\\frac',
     '\\\\rho_': '\\rho_',
     '\\\\rho^': '\\rho^',
@@ -189,9 +239,22 @@ const EQUATION_REPLACEMENTS: ReplacementCategory = {
     '\\\\int_': '\\int_',
     '\\\\oint_': '\\oint_',
     '\\\\nabla': '\\nabla',
-    // alphabet
+
+    // ===== Symbol and dot fixes =====
+    '\\\\cdot': '\\cdot',
+    '\\\\dot': '\\dot',
+    '\\\\ldots': '\\ldots',
+    '\\\\cdots': '\\cdots',
+    '\\\\vdots': '\\vdots',
+    '\\\\ddots': '\\ddots',
+    '\\\\int': '\\int',
+    '\\\\oint': '\\oint',
+
+    // ===== Math variable naming fixes =====
+    // Fix variable notations with wrong backslashes
     '\\\\e^': 'e^',
-    // greek
+
+    // Greek letter notation fixes
     '\\a_': 'a_',
     '\\b_': 'b_',
     '\\c_': 'c_',
@@ -218,7 +281,8 @@ const EQUATION_REPLACEMENTS: ReplacementCategory = {
     '\\x_': 'x_',
     '\\y_': 'y_',
     '\\z_': 'z_',
-    // letters
+
+    // Letter with superscript fixes
     '\\a^': 'a^',
     '\\b^': 'b^',
     '\\c^': 'c^',
@@ -246,12 +310,11 @@ const EQUATION_REPLACEMENTS: ReplacementCategory = {
     '\\y^': 'y^',
     '\\z^': 'z^',
 
-    // text formatting
+    // ===== Text formatting fixes =====
     '\\\\mathbf': '\\mathbf',
     '\\\\mathbb': '\\mathbb',
     '\\\\mathcal': '\\mathcal',
     '\\\\mathscr': '\\mathscr',
-
     '\\\\bm': '\\bm',
     '\\\\text{': '\\text{',
     '\\\\tilde{': '\\tilde',
@@ -261,7 +324,19 @@ const EQUATION_REPLACEMENTS: ReplacementCategory = {
     '\\\\underline{': '\\underline',
     '\\\\overbrace{': '\\overbrace',
     '\\\\underbrace{': '\\underbrace',
-    // math mode
+    // Extra backslashes in commands
+    '\\\\sum': '\\sum',
+    '\\\\prod': '\\prod',
+    '\\\\lim': '\\lim',
+    '\\\\infty': '\\infty',
+    '\\\\rightarrow': '\\rightarrow',
+    '\\\\leftarrow': '\\leftarrow',
+    '\\\\Rightarrow': '\\Rightarrow',
+    '\\\\Leftarrow': '\\Leftarrow',
+    '\\\\exists': '\\exists',
+    '\\\\forall': '\\forall',
+
+    // ===== Math differential and operator fixes =====
     '\\e^{': 'e^{',
     '\\\\\\der': '\\der',
     '\\\\der': '\\der',
@@ -271,18 +346,18 @@ const EQUATION_REPLACEMENTS: ReplacementCategory = {
     '\\\\Lambda': '\\Lambda',
     '\\\\Sigma': '\\Sigma',
     '\\\\Omega': '\\Omega',
-    // labels
+
+    // ===== Label fixes =====
     ',    \\label{': ',\\label{',
     ',  \\label{': ',\\label{',
     ',        \\label{': ',\\label{',
     '\\\\label{': '\\label{',
     '\\\nlabel{': '\\label{',
 
-    // align problem
+    // ===== Environment name fixes =====
     '\\end{Galign}': '\\end{align}',
-    // '\n\n\\end{align}': '\n\\end{align}',
 
-    // latex ending separators
+    // ===== Environment end command fixes =====
     '\n\\\nend{align}': '\n\\end{align}',
     '\n\\\nend{equation}': '\n\\end{equation}',
     '\n\\\nend{itemize}': '\n\\end{itemize}',
@@ -290,25 +365,8 @@ const EQUATION_REPLACEMENTS: ReplacementCategory = {
     '\n\\\nend{figure}': '\n\\end{figure}',
     '\n\\\nend{tikzpicture}': '\n\\end{tikzpicture}',
     '\n\\\nend{document}': '\n\\end{document}',
-    //
-    '\\right\n)': '\\right)',
-    '\\right\n]': '\\right]',
-    '\\right\n}': '\\right}',
-    '\\left\n(': '\\left(',
-    '\\left\n[': '\\left[',
-    '\\left\n{': '\\left{',
-    '\\\\cdot': '\\cdot',
-    '\\\\dot': '\\dot',
-    '\\\\ldots': '\\ldots',
-    '\\\\cdots': '\\cdots',
-    '\\\\vdots': '\\vdots',
-    '\\\\ddots': '\\ddots',
-    '\\\\int': '\\int',
-    '\\\\oint': '\\oint',
 
-    // Unusal line/paragraph separators (Gemini problem)
-    '/[\u2028\u2029]/g': '\n',
-
+    // ===== Environment braces/brackets fixes =====
     '{\\align}': '{align}',
     '{\\equation}': '{equation}',
     '{\\itemize}': '{itemize}',
@@ -316,6 +374,9 @@ const EQUATION_REPLACEMENTS: ReplacementCategory = {
     '{\\figure}': '{figure}',
     '{\\tikzpicture}': '{tikzpicture}',
     '{\\document}': '{document}',
+
+    // Unusal line/paragraph separators (Gemini problem)
+    '/[\u2028\u2029]/g': '\n',
   },
 };
 
@@ -352,13 +413,15 @@ const UNICODE_REPLACEMENTS: ReplacementCategory = {
   description: 'Fixes for Unicode characters that might cause issues in LaTeX',
   isRegex: false,
   patterns: {
-    // Dashes and hyphens
+    // ===== Dash and hyphen replacements =====
+    // Convert Unicode dashes to ASCII hyphen
     '–': '-', // en dash (U+2013) to hyphen (U+002D)
     '‑': '-', // non-breaking hyphen (U+2011) to hyphen (U+002D)
     '—': '-', // em dash (U+2014) to hyphen (U+002D)
     '−': '-', // minus (U+2212) to hyphen (U+002D)
 
-    // Greek letters
+    // ===== Greek letter replacements =====
+    // Fix micro unit symbols with proper math mode
     '$ μs': '$ $\\mu$s', // micro (μ) to \mu
     '$ μm': '$ $\\mu$m',
     '$ μA': '$ $\\mu$A',
@@ -369,13 +432,15 @@ const UNICODE_REPLACEMENTS: ReplacementCategory = {
     '$ μF': '$ $\\mu$F',
     μ: '$\\mu$', // standalone micro symbol
 
-    // Quotes
+    // ===== Quote character replacements =====
+    // Convert Unicode quotes to ASCII quotes
     '’': "'", // right single quote (U+2019) to ASCII single quote
     '‘': "'", // left single quote (U+2018) to ASCII single quote
-    '”': '"', // right double quote (U+201D) to ASCII double quote
-    '“': '"', // left double quote (U+201C) to ASCII double quote
+    '”': "''", // right double quote (U+201D) to ASCII double quote
+    '“': '``', // left double quote (U+201C) to ASCII double quote
 
-    // Other common symbols
+    // ===== Other common Unicode symbol replacements =====
+    // Commented out as they might be too aggressive
     // '…': '\\ldots', // ellipsis (U+2026) to \ldots
     // '×': '$\\times$', // multiplication (U+00D7) to \times
     // '÷': '$\\div$', // division (U+00F7) to \div
@@ -402,10 +467,11 @@ const LATEX_XML_REPLACEMENTS: ReplacementCategory = {
   description: 'Fixes specific to XML output processing',
   isRegex: false,
   patterns: {
-    // random tag fixes
+    // ===== Random tag fixes =====
     '<ctrl96>': '',
-    // Basic tag fixes
     // \end{document> etc is a real mistake that need to be fixed!!! Do not change these
+    // ===== Basic tag ending fixes =====
+    // Fix missing/incorrect closing tags
     '\\end{document>': '\\end{document}',
     '\\end{figure>': '\\end{figure}',
     '\\end{tikzpicture>': '\\end{tikzpicture}',
@@ -418,6 +484,8 @@ const LATEX_XML_REPLACEMENTS: ReplacementCategory = {
     '\\end{align>': '\\end{align}',
     '\\end{section>': '\\end{section}',
     '\\end{subsection>': '\\end{subsection}',
+
+    // ===== XML to LaTeX tag conversion =====
     '\\end{revised_statement>': '</revised_statement>',
     '\\end{latex_document>': '</latex_document>\n',
     '\\enc{reflection>': '</reflection>',
@@ -435,7 +503,7 @@ const LATEX_XML_REPLACEMENTS: ReplacementCategory = {
     // '\\revised_statement>': '</revised_statement>',
     // '\\latex_document>': '</latex_document>',
 
-    // Gemini problems
+    // ===== Gemini-specific reference format problems =====
     'in~\\cref{': 'in \\cref{',
     'In~\\cref{': 'In \\cref{',
     'in~Sec': 'in Sec',
@@ -455,6 +523,7 @@ const LATEX_XML_REPLACEMENTS: ReplacementCategory = {
     'to~App': 'to App',
     '~(\\ref{': ' (\\ref{',
 
+    // ===== Minipage and figure environment fixes =====
     '</minipage>': '\\end{minipage}',
     '\\begin{figure*}}': '\\begin{figure*}',
     '\\begin{figure}}': '\\begin{figure}',
@@ -470,6 +539,8 @@ const LATEX_XML_REPLACEMENTS: ReplacementCategory = {
     '</itemize>': '\\end{itemize}',
     '<item>': '\\item',
     '</item>': '',
+
+    // ===== Math environment XML-LaTeX conversions =====
     '<align>': '\\begin{align}',
     '</align>': '\\end{align}',
     '<equation>': '\\begin{equation}',
@@ -489,14 +560,35 @@ const LATEX_XML_REPLACEMENTS: ReplacementCategory = {
     '<array>': '\\begin{array}',
     '</array>': '\\end{array}',
 
+    // ===== Gemini-specific environment fixes =====
+    '</equation}': '\\end{equation}',
+    '</align}': '\\end{align}',
+    '</figure}': '\\end{figure}',
+    '</tikzpicture}': '\\end{tikzpicture}',
+    '</itemize}': '\\end{itemize}',
+    '</enumerate}': '\\end{enumerate}',
+    '</revised_statement}': '</revised_statement>',
+    '</scope}': '\\end{scope}',
+    '</latex_document}': '</latex_document>',
+    '</response}': '\\end{response}',
+    '</referee}': '\\end{referee}',
+    '</response>': '\\end{response}',
+    '</referee>': '\\end{referee}',
+
+    // ===== LaTeX document conversions =====
     '\\begin{latex_document}': '<latex_document>',
     '\\end{latex_document}': '</latex_document>',
     // the following logic is tricky, we might have to use some regex to match the tags
+
+    // ===== Code block handling =====
+    // Handle LaTeX inside Markdown code blocks
     '```latex\n\\documentclass[': '<latex_document>\n\\documentclass[',
     '<latex_document>\n```latex': '<latex_document>\n',
     'Here is the revised \\LaTeX document.\n\n```latex':
       'Here is the revised \\LaTeX document.\n\n<latex_document>',
-    // Scratchpad and latex_document handling
+
+    // ===== Scratchpad and document nesting =====
+    // Fix scratchpad and latex_document tag handling
     '<scratchpad>\n<scratchpad>\n': '<scratchpad>\n',
     '<scratchpad>\n```latex\n': '<scratchpad>\n<latex_document>\n',
     '<scratchpad>```latex': '<scratchpad>\n<latex_document>',
@@ -504,10 +596,13 @@ const LATEX_XML_REPLACEMENTS: ReplacementCategory = {
     '</latex_document>\n```\n</latex_document>': '</latex_document>\n',
     '</latex_document>\n</latex_document>': '</latex_document>\n',
     '</latex_document>\n\n</latex_document>': '</latex_document>\n',
-    // ```latex
+
+    // Fix nesting of XML/LaTeX code blocks
     '```latex\n<latex_document>\n': '\n<latex_document>\n',
     '<latex_document>\n<latex_document>': '<latex_document>',
-    // Document nesting and structure
+
+    // ===== Document structure and nesting =====
+    // Fix document closing and nesting issues
     '\\end{document}\\n\\n\\<document name=':
       '\\end{document}\\n</document>\\n\\<document name=',
     '\\end{document}\\n\\<document name=':
@@ -525,28 +620,18 @@ const LATEX_XML_REPLACEMENTS: ReplacementCategory = {
 
     '<latex_document>\n```xml<latex_document>': '<latex_document>\n',
 
-    // Special cases
+    // ===== Special cases =====
+    // Fix document preamble and headers
     '{\\today}\\n\\n[Previous':
       '{\\today}\\n\\n\\begin{document}\\n\\makeheader[Previous', // Add document and header
-    // empty xml document tag
+
+    // ===== Empty attribute fixes =====
     '<document name="">': '<document name="unknown">',
-    // for Gemini:
+
+    // ===== XML version tag removal =====
     '<?xml version="1.0" encoding="UTF-8"?>': '',
-    // for Gemini:
-    '</equation}': '\\end{equation}',
-    '</align}': '\\end{align}',
-    '</figure}': '\\end{figure}',
-    '</tikzpicture}': '\\end{tikzpicture}',
-    '</itemize}': '\\end{itemize}',
-    '</enumerate}': '\\end{enumerate}',
-    '</revised_statement}': '</revised_statement>',
-    '</scope}': '\\end{scope}',
-    '</latex_document}': '</latex_document>',
-    '</response}': '\\end{response}',
-    '</referee}': '\\end{referee}',
-    '</response>': '\\end{response}',
-    '</referee>': '\\end{referee}',
-    // comments
+
+    // ===== LaTeX comment removal =====
     '% 1ST_UPDATED_LATEX_DOCUMENT HERE\n': '',
     '% 2ND_UPDATED_LATEX_DOCUMENT HERE\n': '',
     //
@@ -560,6 +645,10 @@ const LATEX_XML_REPLACEMENTS: ReplacementCategory = {
 
     '<xml:documents>': '<latex_documents>',
     '</xml:documents>': '</latex_documents>',
+
+    // Gemini XML problem:
+    '```xml\n': '',
+    '</xml>': '',
   },
 };
 
@@ -641,7 +730,8 @@ const PERSONAL_STYLE_REPLACEMENTS: ReplacementCategory = {
     'Personal writing style preferences for specific LaTeX commands and spacing',
   isRegex: false,
   patterns: {
-    // Spacing cleanup preferences
+    // ===== Spacing preferences =====
+    // Consistent spacing for math mode and delimiters
     '\\;': ' ',
     ' \\, d\\': '~ d\\',
     ' \\,|': ' |',
@@ -652,7 +742,8 @@ const PERSONAL_STYLE_REPLACEMENTS: ReplacementCategory = {
     '\\, \\,': ' \\,',
     // '\\,': ' ',
 
-    // Hyphenation preferences of physical review style
+    // ===== Hyphenation and compound term preferences =====
+    // Physical Review style compound term formatting
     nonnegative: 'non-negative',
     finitetime: 'finite-time',
     'one–step': 'one-step',
@@ -660,10 +751,13 @@ const PERSONAL_STYLE_REPLACEMENTS: ReplacementCategory = {
     'area law scaling': 'area-law scaling',
     'machine learning model': 'machine-learning model',
     'machine learning task': 'machine-learning task',
-    // UK vs US spelling
+
+    // ===== Spelling standardization =====
+    // Convert UK to US spelling
     analogue: 'analog',
 
-    // for passing chktex
+    // ===== Reference formatting =====
+    // Add non-breaking spaces for references (chktex compatibility)
     'Appendix \\ref{': 'Appendix~\\ref{',
     'Section \\ref{': 'Section~\\ref{',
     'Figure \\ref{': 'Figure~\\ref{',
@@ -672,7 +766,9 @@ const PERSONAL_STYLE_REPLACEMENTS: ReplacementCategory = {
     'Theorem \\ref{': 'Theorem~\\ref{',
     'Lemma \\ref{': 'Lemma~\\ref{',
     'Corollary \\ref{': 'Corollary~\\ref{',
-    //
+
+    // ===== Math operator standardization =====
+    // Preferred operator command forms
     '\\mathrm{tr}': '\\tr',
     '\\mathrm{Tr}': '\\Tr',
   },
@@ -1049,29 +1145,33 @@ const PARENTHESES_REPLACEMENTS: ReplacementCategory = {
   isRegex: true,
   flags: 'g',
   patterns: {
-    // Regular parentheses
+    // ===== Small delimiter normalization =====
+    // Convert \big* delimiters to regular parentheses when content is simple
     '\\\\big\\(([^\\n]*?)\\\\big\\)': '($1)',
     '\\\\big\\[([^\\n]*?)\\\\big\\]': '[$1]',
     '\\\\bigl\\(([^\\n]*?)\\\\bigr\\)': '($1)',
     '\\\\bigl\\[([^\\n]*?)\\\\bigr\\]': '[$1]',
 
-    // Big to \left \right
+    // ===== Medium delimiter standardization =====
+    // Convert \Big* delimiters to \left...\right format
     '\\\\Big\\(([^\\n]*?)\\\\Big\\)': '\\left($1\\right)',
     '\\\\Big\\[([^\\n]*?)\\\\Big\\]': '\\left[$1\\right]',
     '\\\\Big\\{([^\\n]*?)\\\\Big\\}': '\\left\\{$1\\right\\}',
 
-    // Big parentheses to \left \right
-
+    // ===== Bigl/Bigr delimiter standardization =====
+    // Convert \Bigl...\Bigr to \left...\right format
     '\\\\Bigl\\(([^\\n]*?)\\\\Bigr\\)': '\\left($1\\right)',
     '\\\\Bigl\\[([^\\n]*?)\\\\Bigr\\]': '\\left[$1\\right]',
     '\\\\Bigl\\\\{([^\\n]*?)\\\\Bigr\\\\}': '\\left\\{$1\\right\\}',
 
-    // Bigger parentheses
+    // ===== Large delimiter standardization =====
+    // Convert \biggl...\biggr to \left...\right format
     '\\\\biggl\\(([^\\n]*?)\\\\biggr\\)': '\\left($1\\right)',
     '\\\\biggl\\[([^\\n]*?)\\\\biggr\\]': '\\left[$1\\right]',
     '\\\\biggl\\\\{([^\\n]*?)\\\\biggr\\\\}': '\\left\\{$1\\right\\}',
 
-    // Biggest parentheses
+    // ===== Extra large delimiter standardization =====
+    // Convert \Biggl...\Biggr to \left...\right format
     '\\\\Biggl\\(([^\\n]*?)\\\\Biggr\\)': '\\left($1\\right)',
     '\\\\Biggl\\[([^\\n]*?)\\\\Biggr\\]': '\\left[$1\\right]',
     '\\\\Biggl\\\\{([^\\n]*?)\\\\Biggr\\\\}': '\\left\\{$1\\right\\}',
@@ -1104,18 +1204,23 @@ const INLINE_MATH_REPLACEMENTS: ReplacementCategory = {
   isRegex: true,
   flags: 'g',
   patterns: {
+    // ===== Convert \( \) to $ $ =====
     '\\\\\\(\\s*(.*?)\\s*\\\\\\)': '$$$1$',
-    '\\[-?\\d+pt\\]': '', // Remove [Npt] spacing commands with arbitrary integers
-    '\\[-?\\d+mm\\]': '', // Remove [Nmm] spacing commands with arbitrary integers
-    '\\[-?\\d+ex\\]': '', // Remove [Nex] spacing commands with arbitrary integers
-    '\\[0\\.-?\\d+mm\\]': '', // Remove [0.Nmm] spacing commands with arbitrary integers
-    '\\[0\\.-?\\d+ex\\]': '', // Remove [0.Nex] spacing commands with arbitrary integers
-    '\\\\hspace\\[-?\\d+pt\\]': '', // Remove \hspace[Npt] commands with arbitrary integers
-    '\\\\hspace\\{-?\\d+mm\\}': '', // Remove \hspace{Nmm} commands with arbitrary integers
-    '\\\\hspace\\{-?\\d+ex\\}': '', // Remove \hspace{Nex} commands with arbitrary integers
-    '\\\\vspace\\{-?\\d+pt\\}': '', // Remove \vspace[Npt] commands with arbitrary integers
-    '\\\\vspace\\{-?\\d+mm\\}': '', // Remove \vspace{Nmm} commands with arbitrary integers
-    '\\\\vspace\\{-?\\d+ex\\}': '\n', // Remove \vspace{Nex} commands with arbitrary integers
+
+    // ===== Remove spacing commands with arbitrary integers =====
+    '\\[-?\\d+pt\\]': '', // Remove [Npt] spacing commands
+    '\\[-?\\d+mm\\]': '', // Remove [Nmm] spacing commands
+    '\\[-?\\d+ex\\]': '', // Remove [Nex] spacing commands
+    '\\[0\\.-?\\d+mm\\]': '', // Remove [0.Nmm] spacing commands
+    '\\[0\\.-?\\d+ex\\]': '', // Remove [0.Nex] spacing commands
+
+    // ===== Remove horizontal and vertical spacing commands =====
+    '\\\\hspace\\[-?\\d+pt\\]': '', // Remove \hspace[Npt] commands
+    '\\\\hspace\\{-?\\d+mm\\}': '', // Remove \hspace{Nmm} commands
+    '\\\\hspace\\{-?\\d+ex\\}': '', // Remove \hspace{Nex} commands
+    '\\\\vspace\\{-?\\d+pt\\}': '', // Remove \vspace{Npt} commands
+    '\\\\vspace\\{-?\\d+mm\\}': '', // Remove \vspace{Nmm} commands
+    '\\\\vspace\\{-?\\d+ex\\}': '\n', // Replace \vspace{Nex} with newline
   },
 };
 
@@ -1129,6 +1234,7 @@ function getEnabledReplacements(): string[] {
     'sections',
     'characters',
     'unicode',
+    'environment_structure',
   ]);
 }
 
@@ -1201,6 +1307,8 @@ export function getReplacementsByCategory(
     personal_style: PERSONAL_STYLE_REPLACEMENTS,
     latex_spacing: LATEX_SPACING_REPLACEMENTS,
     max_style: MAX_STYLE_REPLACEMENTS,
+    // Add environment structure replacements
+    environment_structure: ENVIRONMENT_STRUCTURE_REPLACEMENTS,
   };
 
   return categories[categoryName];
@@ -1214,6 +1322,7 @@ export function getAllReplacementsRegex(): ReplacementCategory[] {
     INLINE_MATH_REPLACEMENTS,
     TIKZ_REPLACEMENTS,
     PARENTHESES_REPLACEMENTS,
+    ENVIRONMENT_STRUCTURE_REPLACEMENTS,
   ];
 }
 
@@ -1255,3 +1364,23 @@ export function applyReplacements(
   }
   return text;
 }
+
+// ===== LLM Output Specific Fixes =====
+
+// Environment structure fixes
+const ENVIRONMENT_STRUCTURE_REPLACEMENTS: ReplacementCategory = {
+  name: 'environment_structure',
+  description: 'Fixes for LaTeX environment structure and nesting issues',
+  isRegex: true,
+  flags: 'g',
+  patterns: {
+    // ===== Unclosed document environment fix =====
+    // Ensures document environment is properly closed at end of file
+    '(\\\\begin\\{document\\}[\\s\\S]*)(\\\\end\\{document)([^\\}]*)$':
+      '$1\\\\end{document}',
+
+    // ===== Environment tag bracket completion =====
+    // Fixes environment tags with missing or incorrect closing brackets
+    '\\\\end\\{([a-zA-Z\\*]+)([^\\}]*)': '\\\\end{$1}',
+  },
+};
