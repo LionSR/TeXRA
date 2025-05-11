@@ -9,7 +9,7 @@ import * as vscode from 'vscode';
 import * as logger from '../logger/logUtils';
 import { fileExistsAbsolute } from './absoluteFileUtils';
 
-const CHANNEL = 'Utils';
+const CHANNEL = 'workspaceFileUtils';
 logger.initialize(CHANNEL);
 
 export function getRelativePath(filePath: string): string {
