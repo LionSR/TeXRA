@@ -379,6 +379,7 @@
                 "sections",
                 "characters",
                 "latex_xml",
+                "latex_document",
                 "unicode",
                 "scratchpad_xml",
                 "style",
@@ -392,6 +393,7 @@
               "sections",
               "characters",
               "latex_xml",
+              "latex_document",
               "unicode",
               "scratchpad_xml",
               "style"
