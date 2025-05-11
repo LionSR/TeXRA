@@ -2,7 +2,7 @@
   "name": "texra",
   "displayName": "TeXRA",
   "description": "TeXRA: Your LLM-powered 24/7 LaTeX Research Assistant.",
-  "version": "0.30.3",
+  "version": "0.30.4",
   "publisher": "texra-ai",
   "engines": {
     "vscode": "^1.94.0"
@@ -369,6 +369,24 @@
             "description": "Include the workspace root directory in TEXINPUTS when compiling TikZ figures",
             "order": 4
           },
+          "texra.latex.mathMarkup": {
+            "type": "string",
+            "default": "coarse",
+            "enum": [
+              "off",
+              "whole",
+              "coarse",
+              "fine"
+            ],
+            "enumDescriptions": [
+              "Suppress markup for math environments. Deleted equations will not appear in diff file.",
+              "Differencing on the level of whole equations. Even trivial changes cause the whole equation to be marked changed.",
+              "Detect changes within equations with coarse granularity; changes in equation type appear as a change to the complete equation.",
+              "Detect small changes in equations and mark up at fine granularity."
+            ],
+            "description": "Determine granularity of markup in displayed math environments for latexdiff",
+            "order": 5
+          },
           "texra.latex.enabledReplacements": {
             "type": "array",
             "items": {
@@ -399,7 +417,7 @@
               "style"
             ],
             "description": "List of enabled LaTeX replacement categories",
-            "order": 5
+            "order": 6
           },
           "texra.latex.customReplacements": {
             "type": "object",
@@ -408,7 +426,36 @@
             "additionalProperties": {
               "type": "string"
             },
-            "order": 6
+            "order": 7
+          }
+        }
+      },
+      {
+        "title": "LaTeXdiff",
+        "properties": {
+          "texra.latexdiff.mathMarkup": {
+            "type": "string",
+            "default": "coarse",
+            "enum": [
+              "off",
+              "whole",
+              "coarse",
+              "fine"
+            ],
+            "enumDescriptions": [
+              "Suppress markup for math environments. Deleted equations will not appear in diff file.",
+              "Differencing on the level of whole equations. Even trivial changes cause the whole equation to be marked changed.",
+              "Detect changes within equations with coarse granularity; changes in equation type appear as a change to the complete equation.",
+              "Detect small changes in equations and mark up at fine granularity."
+            ],
+            "description": "Determine granularity of markup in displayed math environments for latexdiff",
+            "order": 1
+          },
+          "texra.latexdiff.pictureEnvironments": {
+            "type": "string",
+            "default": "(?:picture|tikzpicture|scope|DIFnomarkup)[\\w\\d*@]*",
+            "description": "Regular expression pattern for environments to be treated as pictures. These environments will be processed as a unit without internal differencing.",
+            "order": 2
           }
         }
       },
