@@ -10,6 +10,7 @@ import * as logger from '../logger/logUtils';
 // Local imports - utilities
 import { readFile, writeFile, fileExists } from '../utils/workspaceFileUtils';
 import { executeCommand } from '../utils/execUtils';
+import { getConfig } from '../utils/configUtils';
 
 // Local imports - latex utils
 import { runLatexIndent } from './latexindent';
@@ -314,15 +315,23 @@ export async function runLatexdiff(
 
     const outputPath = path.join(path.dirname(inputFile), diffFileName);
 
+    // Get latexdiff configurations
+    const mathMarkup = getConfig<string>('latexdiff.mathMarkup', 'coarse');
+    const pictureEnvs = getConfig<string>(
+      'latexdiff.pictureEnvironments',
+      '(?:picture|tikzpicture|scope|DIFnomarkup)[\\w\\d*@]*',
+    );
+
     const command = [
       'latexdiff',
       '--flatten',
       '--encoding=utf8',
       '-c',
-      '"PICTUREENV=(?:picture|tikzpicture|scope|DIFnomarkup)[\\w\\d*@]*"',
+      `"PICTUREENV=${pictureEnvs}"`,
       // '"PICTUREENV=(?:picture|scope|DIFnomarkup)[\\w\\d*@]*"',
       // '--math-markup=whole',
       // '"MATHENV=(?:tikzpicture)"',
+      `--math-markup=${mathMarkup}`,
       `"${inputFile}"`,
       `"${editedFile}"`,
     ];
@@ -384,14 +393,22 @@ export async function runLatexdiffvc(
       path.basename(diffFileName),
     );
 
+    // Get latexdiff configurations
+    const mathMarkup = getConfig<string>('latexdiff.mathMarkup', 'coarse');
+    const pictureEnvs = getConfig<string>(
+      'latexdiff.pictureEnvironments',
+      '(?:picture|tikzpicture|DIFnomarkup)[\\w\\d*@]*',
+    );
+
     const command = [
       'latexdiff-vc',
       '--encoding=utf8',
       '-c',
-      '"PICTUREENV=(?:picture|tikzpicture|DIFnomarkup)[\\w\\d*@]*"',
+      `"PICTUREENV=${pictureEnvs}"`,
       '--force',
       '--flatten',
       '--git',
+      `--math-markup=${mathMarkup}`,
       '-r',
       commitHash,
       `"${inputFile}"`,
