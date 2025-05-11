@@ -2,7 +2,7 @@
 import * as logger from '../logger/logUtils';
 import { AgentLogger } from '../logger/AgentLogger';
 
-const CHANNEL = 'Utils';
+const CHANNEL = 'xmlUtils';
 logger.initialize(CHANNEL);
 
 /**

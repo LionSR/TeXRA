@@ -10,7 +10,7 @@ import { getWorkspacePath } from './workspaceFileUtils';
 
 const execAsync = promisify(cp.exec);
 
-const CHANNEL = 'Utils';
+const CHANNEL = 'execUtils';
 logger.initialize(CHANNEL);
 
 const MAX_OUTPUT_LENGTH = 150;
