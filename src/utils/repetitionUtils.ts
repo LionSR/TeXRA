@@ -8,7 +8,7 @@ import * as difflib from 'difflib';
 // Local imports - log
 import * as logger from '../logger/logUtils';
 
-const CHANNEL = 'Utils';
+const CHANNEL = 'repetitionUtils';
 logger.initialize(CHANNEL);
 
 export interface RepetitionResult {
