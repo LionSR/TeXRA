@@ -86,7 +86,7 @@ async function processDiffFile(
       'g',
     );
 
-    // Replace labels inside star environments
+    // Step 1: Remove \\label{...} from all star environments
     processedContent = processedContent.replace(
       starEnvRegex,
       (match, envName, content) => {
@@ -149,10 +149,10 @@ async function processDiffFile(
     // First apply normal replacements
     newContent = applyReplacements(newContent, getAllReplacements()).trim();
     // Then apply regex replacements (which include LATEXDIFF_MARKUP_REPLACEMENTS)
-    // newContent = applyReplacements(
-    //   newContent,
-    //   getAllReplacementsRegex(),
-    // ).trim();
+    newContent = applyReplacements(
+      newContent,
+      getAllReplacementsRegex(),
+    ).trim();
 
     await writeFile(diffFileName, newContent);
     // logger.debug(channel, `Line breaks added to ${diffFileName}`);
