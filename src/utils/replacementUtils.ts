@@ -430,7 +430,7 @@ const UNICODE_REPLACEMENTS: ReplacementCategory = {
     '$ μT': '$ $\\mu$T',
     '$ μH': '$ $\\mu$H',
     '$ μF': '$ $\\mu$F',
-    μ: '$\\mu$', // standalone micro symbol
+    // μ: '$\\mu$', // standalone micro symbol
 
     // ===== Quote character replacements =====
     // Convert Unicode quotes to ASCII quotes
@@ -438,24 +438,6 @@ const UNICODE_REPLACEMENTS: ReplacementCategory = {
     '‘': "'", // left single quote (U+2018) to ASCII single quote
     '”': "''", // right double quote (U+201D) to ASCII double quote
     '“': '``', // left double quote (U+201C) to ASCII double quote
-
-    // ===== Other common Unicode symbol replacements =====
-    // Commented out as they might be too aggressive
-    // '…': '\\ldots', // ellipsis (U+2026) to \ldots
-    // '×': '$\\times$', // multiplication (U+00D7) to \times
-    // '÷': '$\\div$', // division (U+00F7) to \div
-    // '≤': '$\\leq$', // less than or equal (U+2264) to \leq
-    // '≥': '$\\geq$', // greater than or equal (U+2265) to \geq
-    // '≠': '$\\neq$', // not equal (U+2260) to \neq
-    // '≈': '$\\approx$', // approximately equal (U+2248) to \approx
-    // '∞': '$\\infty$', // infinity (U+221E) to \infty
-    // '°': '$^{\\circ}$', // degree (U+00B0) to ^{\circ}
-    // '′': "'", // prime (U+2032) to ASCII single quote
-    // '″': '"', // double prime (U+2033) to ASCII double quote
-    // '√': '$\\sqrt{}$', // square root (U+221A) to \sqrt{}
-    // '∫': '$\\int$', // integral (U+222B) to \int
-    // '∑': '$\\sum$', // sum (U+2211) to \sum
-    // '∏': '$\\prod$', // product (U+220F) to \prod
   },
 };
 
@@ -466,131 +448,119 @@ const LATEX_XML_REPLACEMENTS: ReplacementCategory = {
   name: 'latex_xml',
   description: 'Fixes specific to XML output processing',
   isRegex: false,
+  patterns: (() => {
+    // Lists of environment/tag names
+    const latexEnvironments = [
+      'document',
+      'figure',
+      'figure*',
+      'tikzpicture',
+      'scope',
+      'output',
+      'response',
+      'itemize',
+      'enumerate',
+      'equation',
+      'align',
+      'align*',
+      'aligned',
+      'aligned*',
+      'alignat',
+      'alignat*',
+      'gather',
+      'gather*',
+      'section',
+      'subsection',
+      'referee',
+      'array',
+      'equation*',
+      'minipage',
+    ];
+
+    // Pure XML tags that should not be treated as LaTeX environments
+    const pureXmlTags = [
+      'revised_statement',
+      'latex_document',
+      'scratchpad',
+      'idea',
+      'cover_letter',
+      'reflection',
+      'rebuttal_package',
+    ];
+
+    // Initialize patterns object
+    const patterns: { [key: string]: string } = {};
+
+    // ===== 1. LATEX TAG ENDING FIXES =====
+    // Fix LaTeX tags with incorrect XML-style ending (with '>')
+    latexEnvironments.forEach((env) => {
+      patterns[`\\end{${env}>}`] = `\\end{${env}}`;
+    });
+
+    // ===== 2. XML BRACE FIXES =====
+    // Fix XML tags with extra braces that remain as XML
+    pureXmlTags.forEach((tag) => {
+      patterns[`<${tag}}`] = `<${tag}>`;
+      patterns[`</${tag}}`] = `</${tag}>`;
+    });
+
+    // ===== 3. XML-TO-LATEX CONVERSIONS =====
+    // Special cases for minipage
+    patterns['</minipage>'] = '\\end{minipage}';
+    patterns['\\minipage}'] = '\\end{minipage}';
+    patterns['\\n\\minipage}'] = '\\n\\end{minipage}';
+
+    // Special case for item tag
+    patterns['<item>'] = '\\item';
+    patterns['</item>'] = '';
+
+    // Convert LaTeX environments when used as XML tags to LaTeX environments
+    latexEnvironments.forEach((env) => {
+      patterns[`<${env}>`] = `\\begin{${env}}`;
+      patterns[`</${env}>`] = `\\end{${env}}`;
+
+      // ===== 4. XML-TO-LATEX CONVERSIONS WITH BRACES =====
+      // Fix XML tags with extra braces that should be LaTeX environments
+      patterns[`<${env}}`] = `\\begin{${env}}`;
+      patterns[`</${env}}`] = `\\end{${env}}`;
+    });
+
+    // ===== 5. LaTeX-TO-XML TAG CONVERSIONS =====
+    // Convert LaTeX environments to XML tags for the pure XML tags
+    pureXmlTags.forEach((tag) => {
+      patterns[`\\begin{${tag}}`] = `<${tag}>`;
+      patterns[`\\end{${tag}}`] = `</${tag}>`;
+      // Also handle common error case with '>' at the end
+      patterns[`\\begin{${tag}>}`] = `<${tag}>`;
+      patterns[`\\end{${tag}>}`] = `</${tag}>`;
+    });
+
+    // ===== 6. LATEX BRACE FIXES =====
+    // Fix extra braces in LaTeX environment tags
+    patterns['\\begin{figure*}}'] = '\\begin{figure*}';
+    patterns['\\begin{figure}}'] = '\\begin{figure}';
+
+    return patterns;
+  })(),
+};
+
+// Document structure, code blocks, and cleanup replacements
+const LATEX_DOCUMENT_REPLACEMENTS: ReplacementCategory = {
+  name: 'latex_document',
+  description: 'Fixes for LaTeX document structure, code blocks, and cleanup',
+  isRegex: false,
   patterns: {
-    // ===== Random tag fixes =====
-    '<ctrl96>': '',
-    // \end{document> etc is a real mistake that need to be fixed!!! Do not change these
-    // ===== Basic tag ending fixes =====
-    // Fix missing/incorrect closing tags
-    '\\end{document>': '\\end{document}',
-    '\\end{figure>': '\\end{figure}',
-    '\\end{tikzpicture>': '\\end{tikzpicture}',
-    '\\end{scope>': '\\end{scope}',
-    '\\end{output>': '\\end{output}',
-    '\\end{response>': '\\end{response}',
-    '\\end{itemize>': '\\end{itemize}',
-    '\\end{enumerate>': '\\end{enumerate}',
-    '\\end{equation>': '\\end{equation}',
-    '\\end{align>': '\\end{align}',
-    '\\end{section>': '\\end{section}',
-    '\\end{subsection>': '\\end{subsection}',
-
-    // ===== XML to LaTeX tag conversion =====
-    '\\end{revised_statement>': '</revised_statement>',
-    '\\end{latex_document>': '</latex_document>\n',
-    '\\enc{reflection>': '</reflection>',
-    '\\end{scratchpad>': '</scratchpad>',
-    '\\end{referee>': '\\end{referee}',
-
-    // // \equation> etc
-    // '\\equation>': '\\end{equation}',
-    // '\\align>': '\\end{align}',
-    // '\\itemize>': '\\end{itemize}',
-    // '\\enumerate>': '\\end{enumerate}',
-    // '\\figure>': '\\end{figure}',
-    // '\\tikzpicture>': '\\end{tikzpicture}',
-    // '\\scope>': '\\end{scope}',
-    // '\\revised_statement>': '</revised_statement>',
-    // '\\latex_document>': '</latex_document>',
-
-    // ===== Gemini-specific reference format problems =====
-    'in~\\cref{': 'in \\cref{',
-    'In~\\cref{': 'In \\cref{',
-    'in~Sec': 'in Sec',
-    'In~Sec': 'In Sec',
-    'by~Eq': 'by Eq',
-    'by~Eqs': 'by Eqs',
-    'by~Eqs.': 'by Eqs.',
-    'see~Sec': 'see Sec',
-    'See~Sec': 'See Sec',
-    'from~Eq': 'from Eq',
-    'From~Eq': 'From Eq',
-    'from~Eqs': 'from Eqs',
-    'From~Eqs': 'From Eqs',
-    'from~Eqs.': 'from Eqs.',
-    'From~Eqs.': 'From Eqs.',
-    'cf.~Eq': 'cf. Eq',
-    'to~App': 'to App',
-    '~(\\ref{': ' (\\ref{',
-
-    // ===== Minipage and figure environment fixes =====
-    '</minipage>': '\\end{minipage}',
-    '\\begin{figure*}}': '\\begin{figure*}',
-    '\\begin{figure}}': '\\begin{figure}',
-    '\n\\minipage}': '\n\\end{minipage}',
-    '\\minipage}': '\\end{minipage}',
-    // LaTeX to XML conversions
-    '\\end{idea}': '</idea>',
-    '\\end{scratchpad}': '</scratchpad>',
-    '\\end\n': '\\end{document}\n',
-    '</figure>\n': '\\end{figure}\n',
-    '</enumerate>': '\\end{enumerate}',
-    '<itemize>': '\\begin{itemize}',
-    '</itemize>': '\\end{itemize}',
-    '<item>': '\\item',
-    '</item>': '',
-
-    // ===== Math environment XML-LaTeX conversions =====
-    '<align>': '\\begin{align}',
-    '</align>': '\\end{align}',
-    '<equation>': '\\begin{equation}',
-    '</equation>': '\\end{equation}',
-    '<tikzpicture>': '\\begin{tikzpicture}',
-    '</tikzpicture>': '\\end{tikzpicture}',
-    '<figure>': '\\begin{figure}',
-    '</figure>': '\\end{figure}',
-    '<section>': '\\begin{section}',
-    '</section>': '\\end{section}',
-    '<subsection>': '\\begin{subsection}',
-    '</subsection>': '\\end{subsection}',
-    '<aligned>': '\\begin{aligned}',
-    '</aligned>': '\\end{aligned}',
-    '<alignat>': '\\begin{alignat}',
-    '</alignat>': '\\end{alignat}',
-    '<array>': '\\begin{array}',
-    '</array>': '\\end{array}',
-
-    // ===== Gemini-specific environment fixes =====
-    '</equation}': '\\end{equation}',
-    '</align}': '\\end{align}',
-    '</figure}': '\\end{figure}',
-    '</tikzpicture}': '\\end{tikzpicture}',
-    '</itemize}': '\\end{itemize}',
-    '</enumerate}': '\\end{enumerate}',
-    '</revised_statement}': '</revised_statement>',
-    '</scope}': '\\end{scope}',
-    '</latex_document}': '</latex_document>',
-    '</response}': '\\end{response}',
-    '</referee}': '\\end{referee}',
-    '</response>': '\\end{response}',
-    '</referee>': '\\end{referee}',
-
-    // ===== LaTeX document conversions =====
-    '\\begin{latex_document}': '<latex_document>',
-    '\\end{latex_document}': '</latex_document>',
-    // the following logic is tricky, we might have to use some regex to match the tags
-
-    // ===== Code block handling =====
-    // Handle LaTeX inside Markdown code blocks
+    '\\end {': '\\end{',
+    '\\begin {': '\\begin{',
+    // ===== 7. CODE BLOCK AND DOCUMENT HANDLING =====
     '```latex\n\\documentclass{lecture}':
       '<latex_document>\n\\documentclass{lecture}',
     '```latex\n\\documentclass[': '<latex_document>\n\\documentclass[',
     '<latex_document>\n```latex': '<latex_document>\n',
     'Here is the revised \\LaTeX document.\n\n```latex':
       'Here is the revised \\LaTeX document.\n\n<latex_document>',
-
-    // ===== Scratchpad and document nesting =====
-    // Fix scratchpad and latex_document tag handling
+    '```latex\n<latex_document>\n': '\n<latex_document>\n',
+    '<latex_document>\n<latex_document>': '<latex_document>',
     '<scratchpad>\n<scratchpad>\n': '<scratchpad>\n',
     '<scratchpad>\n```latex\n': '<scratchpad>\n<latex_document>\n',
     '<scratchpad>```latex': '<scratchpad>\n<latex_document>',
@@ -599,12 +569,7 @@ const LATEX_XML_REPLACEMENTS: ReplacementCategory = {
     '</latex_document>\n</latex_document>': '</latex_document>\n',
     '</latex_document>\n\n</latex_document>': '</latex_document>\n',
 
-    // Fix nesting of XML/LaTeX code blocks
-    '```latex\n<latex_document>\n': '\n<latex_document>\n',
-    '<latex_document>\n<latex_document>': '<latex_document>',
-
-    // ===== Document structure and nesting =====
-    // Fix document closing and nesting issues
+    // ===== 9. DOCUMENT STRUCTURE FIXES =====
     '\\end{document}\\n\\n\\<document name=':
       '\\end{document}\\n</document>\\n\\<document name=',
     '\\end{document}\\n\\<document name=':
@@ -619,38 +584,27 @@ const LATEX_XML_REPLACEMENTS: ReplacementCategory = {
       '\\end{document}\\n</document>\\n<document name',
     '\\end{document}\\n</rebuttal_package>':
       '\\end{document}\\n</document>\\n</rebuttal_package>',
-
     '<latex_document>\n```xml<latex_document>': '<latex_document>\n',
-
-    // ===== Special cases =====
-    // Fix document preamble and headers
     '{\\today}\\n\\n[Previous':
-      '{\\today}\\n\\n\\begin{document}\\n\\makeheader[Previous', // Add document and header
+      '{\\today}\\n\\n\\begin{document}\\n\\makeheader[Previous',
 
-    // ===== Empty attribute fixes =====
+    // ===== 11. CLEANUP AND MISCELLANEOUS =====
+    '<ctrl96>': '',
     '<document name="">': '<document name="unknown">',
-
-    // ===== XML version tag removal =====
     '<?xml version="1.0" encoding="UTF-8"?>': '',
-
-    // ===== LaTeX comment removal =====
     '% 1ST_UPDATED_LATEX_DOCUMENT HERE\n': '',
     '% 2ND_UPDATED_LATEX_DOCUMENT HERE\n': '',
-    //
     '\\begin{<latex_document>\nalign': '\\begin{align',
     '\\begin{<latex_document>\nequation': '\\begin{equation',
     '\\begin{<latex_document>\nitemize': '\\begin{itemize',
     '\\begin{<latex_document>\nenumerate': '\\begin{enumerate}',
     '\\begin{<latex_document>\nfigure': '\\begin{figure}',
     '\\begin{<latex_document>\ntikzpicture': '\\begin{tikzpicture}',
-    // '\\\n<latex_document>': '\\',
-
     '<xml:documents>': '<latex_documents>',
     '</xml:documents>': '</latex_documents>',
-
-    // Gemini XML problem:
     '```xml\n': '',
     '</xml>': '',
+    '\\end\n': '\\end{document}\n',
   },
 };
 
@@ -773,6 +727,27 @@ const PERSONAL_STYLE_REPLACEMENTS: ReplacementCategory = {
     // Preferred operator command forms
     '\\mathrm{tr}': '\\tr',
     '\\mathrm{Tr}': '\\Tr',
+
+    // ===== Reference formatting =====
+    // Add non-breaking spaces for references (chktex compatibility)
+    'in~\\cref{': 'in \\cref{',
+    'In~\\cref{': 'In \\cref{',
+    'in~Sec': 'in Sec',
+    'In~Sec': 'In Sec',
+    'by~Eq': 'by Eq',
+    'by~Eqs': 'by Eqs',
+    'by~Eqs.': 'by Eqs.',
+    'see~Sec': 'see Sec',
+    'See~Sec': 'See Sec',
+    'from~Eq': 'from Eq',
+    'From~Eq': 'From Eq',
+    'from~Eqs': 'from Eqs',
+    'From~Eqs': 'From Eqs',
+    'from~Eqs.': 'from Eqs.',
+    'From~Eqs.': 'From Eqs.',
+    'cf.~Eq': 'cf. Eq',
+    'to~App': 'to App',
+    '~(\\ref{': ' (\\ref{',
   },
 };
 
@@ -1250,6 +1225,7 @@ function getEnabledReplacements(): string[] {
     'sections',
     'characters',
     'latex_xml',
+    'latex_document',
     'unicode',
     'scratchpad_xml',
     'style',
@@ -1284,6 +1260,7 @@ export function getAllReplacements(): ReplacementCategory {
     LATEX_SPACING_REPLACEMENTS,
     // XML/Structural Formatting
     LATEX_XML_REPLACEMENTS,
+    LATEX_DOCUMENT_REPLACEMENTS,
     SCRATCHPAD_XML_REPLACEMENTS,
     STYLE_REPLACEMENTS,
     // Personal Style
@@ -1321,6 +1298,7 @@ export function getReplacementsByCategory(
     characters: CHARACTER_REPLACEMENTS,
     unicode: UNICODE_REPLACEMENTS,
     latex_xml: LATEX_XML_REPLACEMENTS,
+    latex_document: LATEX_DOCUMENT_REPLACEMENTS,
     scratchpad_xml: SCRATCHPAD_XML_REPLACEMENTS,
     style: STYLE_REPLACEMENTS,
     personal_style: PERSONAL_STYLE_REPLACEMENTS,
