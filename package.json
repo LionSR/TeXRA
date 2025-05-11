@@ -84,7 +84,7 @@
           },
           "texra.model.useStreamingAnthropic": {
             "type": "boolean",
-            "default": false,
+            "default": true,
             "description": "Enable streaming for Anthropic models. Overrides the global useStreaming setting.",
             "scope": "resource"
           },
@@ -380,7 +380,8 @@
                 "scratchpad_xml",
                 "style",
                 "personal_style",
-                "max_style"
+                "max_style",
+                "environment_structure"
               ]
             },
             "default": [
@@ -391,7 +392,8 @@
               "latex_xml",
               "unicode",
               "scratchpad_xml",
-              "style"
+              "style",
+              "environment_structure"
             ],
             "description": "List of enabled LaTeX replacement categories",
             "order": 5
