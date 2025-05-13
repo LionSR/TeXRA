@@ -136,7 +136,7 @@ export const EQUATION_STYLE_REPLACEMENTS: ReplacementCategory = {
 
     // Fix Repeated Words (Common Typos)
     '\\b(the|and|or|of|in|to|a|for|that|this|with|by|on|as) \\1\\b': '$1',
-    '([Aa]ppendix|[Pp]roblem|[Ss]olution|[Cc]hapter|[Aa]lgorithm|[Ff]igure|[Tt]able|[Ss]ection|[Ee]quation|[Ll]emma|[Cc]orollary|[Pp]roposition|[Tt]heorem)~?\\s*\\ref':
+    '([Aa]ppendix|[Pp]roblem|[Ss]olution|[Cc]hapter|[Aa]lgorithm|[Ff]igure|[Tt]able|[Ss]ection|[Ee]quation|[Ll]emma|[Cc]orollary|[Pp]roposition|[Tt]heorem|[Ee]qns\\.|[Ee]q\\.)~?\\s*\\ref':
       '$1~\\ref',
 
     // Fix inconsistent blank lines after environments (universally preferred)
