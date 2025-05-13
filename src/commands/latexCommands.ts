@@ -10,7 +10,7 @@ import {
   applyReplacements,
   getAllReplacements,
   getAllReplacementsRegex,
-} from '../utils/replacementUtils';
+} from '../replacement/replacementUtils';
 
 // Local imports - latex utils
 import { runLatexIndent } from '../latex/latexindent';

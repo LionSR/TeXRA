@@ -28,6 +28,7 @@ import {
   SCRATCHPAD_XML_REPLACEMENTS,
   STYLE_REPLACEMENTS,
   PERSONAL_STYLE_REPLACEMENTS,
+  LATEXDIFF_REPLACEMENTS,
 } from './replacementRules';
 import { MAX_STYLE_REPLACEMENTS } from './replacementMax';
 
@@ -36,6 +37,7 @@ import {
   LATEXDIFF_MARKUP_REPLACEMENTS,
   INLINE_MATH_REPLACEMENTS,
   TIKZ_REPLACEMENTS,
+  EQUATION_STYLE_REPLACEMENTS,
 } from './replacementRulesRegex';
 
 // ===== LaTeX Content Formatting =====
@@ -54,6 +56,7 @@ function getEnabledReplacements(): string[] {
     'unicode',
     'scratchpad_xml',
     'style',
+    'latexdiff',
   ]);
 }
 
@@ -73,6 +76,8 @@ const NON_REGEX_CATEGORIES: ReplacementCategory[] = [
   // Personal Style
   PERSONAL_STYLE_REPLACEMENTS,
   MAX_STYLE_REPLACEMENTS,
+  // LaTeXdiff specific fixes
+  LATEXDIFF_REPLACEMENTS,
 ];
 
 // Define all available regex categories
@@ -81,6 +86,7 @@ const REGEX_CATEGORIES: ReplacementCategory[] = [
   TIKZ_REPLACEMENTS,
   PARENTHESES_REPLACEMENTS,
   LATEXDIFF_MARKUP_REPLACEMENTS,
+  EQUATION_STYLE_REPLACEMENTS,
 ];
 
 /**
@@ -92,6 +98,7 @@ function getEnabledReplacementsRegex(): string[] {
     'tikz',
     'parentheses',
     'latexdiff_markup',
+    'equation_style',
   ]);
 }
 
