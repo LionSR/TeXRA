@@ -63,7 +63,10 @@
               "gemini2fT",
               "DSV3",
               "DSR1",
-              "grok3"
+              "grok3",
+              "qwenplus",
+              "kimit",
+              "kimiv"
             ],
             "description": "List of available models",
             "scope": "resource"
@@ -502,6 +505,7 @@
               "gemini2f",
               "gemini2p",
               "o3-mini",
+              "gpt41",
               "gpt4o",
               "DSV3",
               "qwenplus",
@@ -516,6 +520,7 @@
               "Gemini 2 Flash",
               "Gemini 2 Pro",
               "OpenAI O3 Mini",
+              "OpenAI GPT-4.1",
               "OpenAI GPT-4O",
               "DeepSeek V3",
               "Qwen Plus",
