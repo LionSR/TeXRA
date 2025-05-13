@@ -161,12 +161,16 @@ export const EQUATION_REPLACEMENTS: ReplacementCategory = {
     // figure \ref{ -> figure~\ref{
     // Table \ref{ -> Table~\ref{
     const referencePatterns = generateReferenceSpacing([
+      'Figure',
       'figure',
+      'Table',
       'table',
+      'Eq.',
+      'Eqs.',
+      'Eqns.',
       'equation',
       'eq.',
       'eqn.',
-      'Eqs.',
     ]);
     Object.assign(patterns, referencePatterns);
 
