@@ -454,7 +454,7 @@
           "texra.latex.customReplacementsRegex": {
             "type": "object",
             "default": {},
-            "description": "Custom regex replacements in the format: { 'pattern': 'replacement' }. Use capture groups with $1, $2, etc. Example: { '\\\\\\\\section\\{([^}]+)\\}': '\\\\section{$1}' }",
+            "description": "Custom regex replacements in the format: { 'pattern': 'replacement' }. Use capture groups with $1, $2, etc. Example: { '\\\\section\\{([^}]+)\\}': '\\section{$1}' }",
             "additionalProperties": {
               "type": "string"
             },
