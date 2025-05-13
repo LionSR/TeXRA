@@ -424,8 +424,37 @@
               "scratchpad_xml",
               "style"
             ],
-            "description": "List of enabled LaTeX replacement categories",
+            "description": "List of enabled non-regex LaTeX replacement categories",
             "order": 6
+          },
+          "texra.latex.enabledReplacementsRegex": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "inline_math",
+                "tikz",
+                "parentheses",
+                "latexdiff_markup"
+              ]
+            },
+            "default": [
+              "inline_math",
+              "tikz",
+              "parentheses",
+              "latexdiff_markup"
+            ],
+            "description": "List of enabled regex LaTeX replacement categories",
+            "order": 7
+          },
+          "texra.latex.customReplacementsRegex": {
+            "type": "object",
+            "default": {},
+            "description": "Custom regex replacements in the format: { 'pattern': 'replacement' }. Use capture groups with $1, $2, etc. Example: { '\\\\\\\\section\\{([^}]+)\\}': '\\\\section{$1}' }",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "order": 8
           },
           "texra.latex.customReplacements": {
             "type": "object",
@@ -434,7 +463,7 @@
             "additionalProperties": {
               "type": "string"
             },
-            "order": 7
+            "order": 9
           }
         }
       },
