@@ -21,7 +21,7 @@ import {
   applyReplacements,
   getAllReplacements,
   getAllReplacementsRegex,
-} from '../utils/replacementUtils';
+} from '../replacement/replacementUtils';
 
 const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);

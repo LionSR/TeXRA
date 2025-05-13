@@ -1,4 +1,16 @@
 import { ReplacementCategory } from './replacementTypes';
+import {
+  generateGroupedBackslashFixes,
+  generateReferenceSpacing,
+  generateEnvironmentLinebreakFixes,
+  generateXmlLatexConversions,
+  generateLatexToXmlConversions,
+  generateEnvironmentBracesFixes,
+  generateSectionSpacingFixes,
+  GREEK_LETTERS,
+  SECTION_TYPES,
+  MATH_OPERATORS,
+} from './replacementHelpers';
 
 // LaTeX spacing and punctuation fixes
 export const LATEX_SPACING_REPLACEMENTS: ReplacementCategory = {
@@ -117,246 +129,149 @@ export const EQUATION_REPLACEMENTS: ReplacementCategory = {
   name: 'equations',
   description: 'Fixes for LaTeX equation spacing and formatting',
   isRegex: false,
-  patterns: {
+  patterns: (() => {
+    // Initialize patterns object for auto-generated items
+    const patterns: { [key: string]: string } = {};
+
+    // ====================================================================
+    // Auto-generated replacements - for easily maintainable pattern groups
+    // ====================================================================
+
     // ===== Environment spacing fixes =====
-    // Align environment spacing
-    '\n\n\\begin{align}': '\n\\begin{align}',
-    '\\end{align}\n\n': '\\end{align}\n',
-    '\n\n\\begin{equation}': '\n\\begin{equation}',
-    '\\end{equation}\n\n': '\\end{equation}\n',
+    // Examples:
+    // \n\n\begin{align} -> \n\begin{align}
+    // \end{equation}\n\n -> \end{equation}\n
+    // const envSpacingPatterns = generateEnvironmentSpacingFixes(
+    //   MATH_ENVIRONMENTS.slice(0, 2),
+    // );
+    // Object.assign(patterns, envSpacingPatterns);
+    // This is too aggressive
 
     // ===== Linebreak fixes within environments =====
-    // Remove extra newlines in align environments
-    '\n\n\\end{align}': '\n\\end{align}',
-    '\n    \n\\end{align}': '\n\\end{align}',
-    '\n\t\n\\end{align}': '\n\\end{align}',
-    '\n\n\\end{aligned}': '\n\\end{aligned}',
-    '\n    \n\\end{aligned}': '\n\\end{aligned}',
-    '\n\t\n\\end{aligned}': '\n\\end{aligned}',
-
-    // ===== latexdiff compatibility fixes =====
-    // Fix issues with latexdiff markup
-    '\n\n}\\end{align*}%DIFAUXCMD': '\n}\\end{align*}%DIFAUXCMD',
-    '\n    \n}\\end{align*}%DIFAUXCMD': '\n}\\end{align*}%DIFAUXCMD',
-    '\n\t\n}\\end{align*}%DIFAUXCMD': '\n}\\end{align*}%DIFAUXCMD',
-    '\n\n}\\end{aligned*}%DIFAUXCMD': '\n}\\end{aligned*}%DIFAUXCMD',
-    '\n    \n}\\end{aligned*}%DIFAUXCMD': '\n}\\end{aligned*}%DIFAUXCMD',
-    '\n\t\n}\\end{aligned*}%DIFAUXCMD': '\n}\\end{aligned*}%DIFAUXCMD',
+    // Examples:
+    // \n\n\end{align} -> \n\end{align}
+    // \n    \n\end{aligned} -> \n\end{aligned}
+    const linebreakFixesPatterns = generateEnvironmentLinebreakFixes(
+      'align aligned'.split(' '),
+    );
+    Object.assign(patterns, linebreakFixesPatterns);
 
     // ===== Reference formatting =====
-    // Add non-breaking spaces between references and their numbers
-    'figure \\ref{': 'figure~\\ref{',
-    'table \\ref{': 'table~\\ref{',
-    'equation \\ref{': 'equation~\\ref{',
-    'Fig. \\ref{': 'Fig.~\\ref{',
-    'Table \\ref{': 'Table~\\ref{',
-    'Equation \\ref{': 'Equation~\\ref{',
-    'eq. \\ref{': 'eq.~\\ref{',
-    'eqn. \\ref{': 'eqn.~\\ref{',
-    'Eq. \\ref{': 'Eq.~\\ref{',
-    'Eqs. \\ref{': 'Eqs.~\\ref{',
+    // Examples:
+    // figure \ref{ -> figure~\ref{
+    // Table \ref{ -> Table~\ref{
+    const referencePatterns = generateReferenceSpacing([
+      'figure',
+      'table',
+      'equation',
+      'eq.',
+      'eqn.',
+      'Eqs.',
+    ]);
+    Object.assign(patterns, referencePatterns);
 
-    // ===== Math operator command fixes =====
-    // Fix incorrect backslashes in math operators
-    '\\\\cos': '\\cos',
-    '\\\\sin': '\\sin',
-    '\\\\tan': '\\tan',
-    '\\\\arctan': '\\arctan',
-    '\\\\arccos': '\\arccos',
-    '\\\\arcsin': '\\arcsin',
-    '\\\\log': '\\log',
-    '\\\\ln': '\\ln',
-    '\\\\exp': '\\exp',
-    '\\\\sqrt': '\\sqrt',
-    '\\\\pi': '\\pi',
-    '\\\\bna': '\\bna',
-
-    // ===== Greek letter command fixes =====
-    '\\\\alpha': '\\alpha',
-    '\\\\beta': '\\beta',
-    '\\\\gamma': '\\gamma',
-    '\\\\delta': '\\delta',
-    '\\\\epsilon': '\\epsilon',
-    '\\\\zeta': '\\zeta',
-    '\\\\eta': '\\eta',
-    '\\\\theta': '\\theta',
-    '\\\\iota': '\\iota',
-    '\\\\kappa': '\\kappa',
-    '\\\\lambda': '\\lambda',
-    '\\\\mu': '\\mu',
-    '\\\\nu': '\\nu',
-    '\\\\xi': '\\xi',
-    '\\\\omicron': '\\omicron',
-    '\\\\\\rho': '\\rho',
-    '\\\\rho': '\\rho',
-    '\\\\\\delta': '\\delta',
-
-    // ===== LaTeX command fixes =====
-    // Fix common delimiter commands
-    '\\\\left': '\\left',
-    '\\\\right': '\\right',
-    '\\\\left(': '\\left(',
-    '\\\\right(': '\\right(',
-    '\\\\left[': '\\left[',
-    '\\\\right[': '\\right[',
-
-    // Fix line breaks in delimiters
-    '\\right\n)': '\\right)',
-    '\\right\n]': '\\right]',
-    '\\right\n}': '\\right}',
-    '\\left\n(': '\\left(',
-    '\\left\n[': '\\left[',
-    '\\left\n{': '\\left{',
-
-    // Fix fraction and other math commands
-    '\\\\frac': '\\frac',
-    '\\\\rho_': '\\rho_',
-    '\\\\rho^': '\\rho^',
-    '\\\\rho\\': '\\rho\\',
-    '\\\\sum_': '\\sum_',
-    '\\\\prod_': '\\prod_',
-    '\\\\int_': '\\int_',
-    '\\\\oint_': '\\oint_',
-    '\\\\nabla': '\\nabla',
-
-    // ===== Symbol and dot fixes =====
-    '\\\\cdot': '\\cdot',
-    '\\\\dot': '\\dot',
-    '\\\\ldots': '\\ldots',
-    '\\\\cdots': '\\cdots',
-    '\\\\vdots': '\\vdots',
-    '\\\\ddots': '\\ddots',
-    '\\\\int': '\\int',
-    '\\\\oint': '\\oint',
-
-    // ===== Math variable naming fixes =====
-    // Fix variable notations with wrong backslashes
-    '\\\\e^': 'e^',
+    // ===== Grouped backslash fixes =====
+    // Use the new grouped helper to organize the backslash fixes logically
+    const groupedBackslashPatterns = generateGroupedBackslashFixes({
+      mathOperators: MATH_OPERATORS.concat(['pi', 'bna']),
+      greekLetters: GREEK_LETTERS.concat([
+        'partial',
+        'Delta',
+        'Gamma',
+        'Lambda',
+        'Sigma',
+        'Omega',
+      ]),
+      delimiters: 'left right left( right( left[ right['.split(' '),
+      mathCommands: 'frac sum_ prod_ int_ oint_ nabla'.split(' '),
+      integrals: 'int iint iiint oint ooint ooooint'.split(' '),
+      dots: 'cdot dot ldots cdots vdots ddots iddots'.split(' '),
+      formattingCommands: `
+        mathbf mathbb mathcal mathscr bm 
+        sum prod lim infty rightarrow leftarrow Rightarrow
+        Leftarrow exists forall der partial Delta Gamma Lambda Sigma Omega
+      `
+        .trim()
+        .split(/\s+/),
+      formattingWithBraces: `
+        text{ tilde{ textit{ textbf{ emph{ underline{
+        overbrace{ underbrace{ label{
+      `
+        .trim()
+        .split(/\s+/),
+    });
+    Object.assign(patterns, groupedBackslashPatterns);
 
     // Greek letter notation fixes
-    '\\a_': 'a_',
-    '\\b_': 'b_',
-    '\\c_': 'c_',
-    '\\d_': 'd_',
-    '\\e_': 'e_',
-    '\\f_': 'f_',
-    '\\g_': 'g_',
-    '\\h_': 'h_',
-    '\\i_': 'i_',
-    '\\j_': 'j_',
-    '\\k_': 'k_',
-    '\\l_': 'l_',
-    '\\m_': 'm_',
-    '\\n_': 'n_',
-    '\\o_': 'o_',
-    '\\p_': 'p_',
-    '\\q_': 'q_',
-    '\\r_': 'r_',
-    '\\s_': 's_',
-    '\\t_': 't_',
-    '\\u_': 'u_',
-    '\\v_': 'v_',
-    '\\w_': 'w_',
-    '\\x_': 'x_',
-    '\\y_': 'y_',
-    '\\z_': 'z_',
-
-    // Letter with superscript fixes
-    '\\a^': 'a^',
-    '\\b^': 'b^',
-    '\\c^': 'c^',
-    '\\d^': 'd^',
-    '\\e^': 'e^',
-    '\\f^': 'f^',
-    '\\g^': 'g^',
-    '\\h^': 'h^',
-    '\\i^': 'i^',
-    '\\j^': 'j^',
-    '\\k^': 'k^',
-    '\\l^': 'l^',
-    '\\m^': 'm^',
-    '\\n^': 'n^',
-    '\\o^': 'o^',
-    '\\p^': 'p^',
-    '\\q^': 'q^',
-    '\\r^': 'r^',
-    '\\s^': 's^',
-    '\\t^': 't^',
-    '\\u^': 'u^',
-    '\\v^': 'v^',
-    '\\w^': 'w^',
-    '\\x^': 'x^',
-    '\\y^': 'y^',
-    '\\z^': 'z^',
-
-    // ===== Text formatting fixes =====
-    '\\\\mathbf': '\\mathbf',
-    '\\\\mathbb': '\\mathbb',
-    '\\\\mathcal': '\\mathcal',
-    '\\\\mathscr': '\\mathscr',
-    '\\\\bm': '\\bm',
-    '\\\\text{': '\\text{',
-    '\\\\tilde{': '\\tilde',
-    '\\\\textit{': '\\textit',
-    '\\\\textbf{': '\\textbf',
-    '\\\\emph{': '\\emph',
-    '\\\\underline{': '\\underline',
-    '\\\\overbrace{': '\\overbrace',
-    '\\\\underbrace{': '\\underbrace',
-    // Extra backslashes in commands
-    '\\\\sum': '\\sum',
-    '\\\\prod': '\\prod',
-    '\\\\lim': '\\lim',
-    '\\\\infty': '\\infty',
-    '\\\\rightarrow': '\\rightarrow',
-    '\\\\leftarrow': '\\leftarrow',
-    '\\\\Rightarrow': '\\Rightarrow',
-    '\\\\Leftarrow': '\\Leftarrow',
-    '\\\\exists': '\\exists',
-    '\\\\forall': '\\forall',
-
-    // ===== Math differential and operator fixes =====
-    '\\e^{': 'e^{',
-    '\\\\\\der': '\\der',
-    '\\\\der': '\\der',
-    '\\\\partial': '\\partial',
-    '\\\\Delta': '\\Delta',
-    '\\\\Gamma': '\\Gamma',
-    '\\\\Lambda': '\\Lambda',
-    '\\\\Sigma': '\\Sigma',
-    '\\\\Omega': '\\Omega',
-
-    // ===== Label fixes =====
-    ',    \\label{': ',\\label{',
-    ',  \\label{': ',\\label{',
-    ',        \\label{': ',\\label{',
-    '\\\\label{': '\\label{',
-    '\\\nlabel{': '\\label{',
-
-    // ===== Environment name fixes =====
-    '\\end{Galign}': '\\end{align}',
+    // Examples:
+    // \a_ -> a_
+    // \a^ -> a^
+    // \x^ -> x^ [this should not be included]
+    const letters = 'abcdefghijklmnopqrstuvwyz'.split('');
+    letters.forEach((letter) => {
+      patterns[`\\${letter}_`] = `${letter}_`;
+      patterns[`\\${letter}^`] = `${letter}^`;
+    });
 
     // ===== Environment end command fixes =====
-    '\n\\\nend{align}': '\n\\end{align}',
-    '\n\\\nend{equation}': '\n\\end{equation}',
-    '\n\\\nend{itemize}': '\n\\end{itemize}',
-    '\n\\\nend{enumerate}': '\n\\end{enumerate}',
-    '\n\\\nend{figure}': '\n\\end{figure}',
-    '\n\\\nend{tikzpicture}': '\n\\end{tikzpicture}',
-    '\n\\\nend{document}': '\n\\end{document}',
+    // Examples:
+    // \n\\nend{align} -> \n\end{align}
+    // \n\\nend{document} -> \n\end{document}
+    const environments =
+      'align equation itemize enumerate figure tikzpicture document'.split(' ');
+    environments.forEach((env) => {
+      patterns[`\n\\\nend{${env}}`] = `\n\\end{${env}}`;
+    });
 
     // ===== Environment braces/brackets fixes =====
-    '{\\align}': '{align}',
-    '{\\equation}': '{equation}',
-    '{\\itemize}': '{itemize}',
-    '{\\enumerate}': '{enumerate}',
-    '{\\figure}': '{figure}',
-    '{\\tikzpicture}': '{tikzpicture}',
-    '{\\document}': '{document}',
+    // Examples:
+    // {\align} -> {align}
+    // {\document} -> {document}
+    const bracesEnvironments =
+      'align equation itemize enumerate figure tikzpicture document'.split(' ');
+    const bracesFixes = generateEnvironmentBracesFixes(bracesEnvironments);
+    Object.assign(patterns, bracesFixes);
 
-    // Unusal line/paragraph separators (Gemini problem)
-    '/[\u2028\u2029]/g': '\n',
-  },
+    // ===================================================================
+    // Manual replacements - for specific cases that need special handling
+    // ===================================================================
+
+    // Note: latexdiff compatibility fixes moved to dedicated LATEXDIFF_REPLACEMENTS category
+
+    // Additional specific Greek letter fixes
+    patterns['\\\\\\rho'] = '\\rho';
+    patterns['\\\\\\delta'] = '\\delta';
+
+    // Additional specific fixes for rho
+    patterns['\\\\rho_'] = '\\rho_';
+    patterns['\\\\rho^'] = '\\rho^';
+    patterns['\\\\rho\\'] = '\\rho\\';
+
+    // Fix line breaks in delimiters
+    patterns['\\right\n)'] = '\\right)';
+    patterns['\\right\n]'] = '\\right]';
+    patterns['\\right\n}'] = '\\right}';
+    patterns['\\left\n('] = '\\left(';
+    patterns['\\left\n['] = '\\left[';
+    patterns['\\left\n{'] = '\\left{';
+
+    // Fix variable notations with wrong backslashes
+    patterns['\\\\e^'] = 'e^';
+
+    // Label spacing fixes
+    patterns[',    \\label{'] = ',\\label{';
+    patterns[',  \\label{'] = ',\\label{';
+    patterns[',        \\label{'] = ',\\label{';
+    patterns['\\\nlabel{'] = '\\label{';
+
+    // Environment name fixes
+    patterns['\\end{Galign}'] = '\\end{align}';
+
+    // Unusual line/paragraph separators (Gemini problem)
+    patterns['/[\u2028\u2029]/g'] = '\n';
+
+    return patterns;
+  })(),
 };
 
 // Section spacing fixes
@@ -364,14 +279,14 @@ export const SECTION_REPLACEMENTS: ReplacementCategory = {
   name: 'sections',
   description: 'Fixes for section spacing in LaTeX documents',
   isRegex: false,
-  patterns: {
-    '\\end{align}\n\\section': '\\end{align}\n\n\n\\section',
-    '\\end{equation}\n\\section': '\\end{equation}\n\n\n\\section',
-    '\\end{align}\n\\subsection': '\\end{align}\n\n\n\\subsection',
-    '\\end{equation}\n\\subsection': '\\end{equation}\n\n\n\\subsection',
-    '\\end{align}\n\\paragraph': '\\end{align}\n\n\n\\paragraph',
-    '\\end{equation}\n\\paragraph': '\\end{equation}\n\n\n\\paragraph',
-  },
+  patterns: (() => {
+    // Examples:
+    // \end{align}\n\section -> \end{align}\n\n\n\section
+    // \end{equation}\n\paragraph -> \end{equation}\n\n\n\paragraph
+    const environments = ['align', 'equation'];
+
+    return generateSectionSpacingFixes(environments, SECTION_TYPES.slice(0, 3));
+  })(),
 };
 
 // Special character replacements
@@ -413,10 +328,10 @@ export const UNICODE_REPLACEMENTS: ReplacementCategory = {
 
     // ===== Quote character replacements =====
     // Convert Unicode quotes to ASCII quotes
-    '’': "'", // right single quote (U+2019) to ASCII single quote
-    '‘': "'", // left single quote (U+2018) to ASCII single quote
-    '”': "''", // right double quote (U+201D) to ASCII double quote
-    '“': '``', // left double quote (U+201C) to ASCII double quote
+    '\u2019': "'", // right single quote (U+2019) to ASCII single quote
+    '\u2018': "'", // left single quote (U+2018) to ASCII single quote
+    '\u201D': "''", // right double quote (U+201D) to ASCII double quote
+    '\u201C': '``', // left double quote (U+201C) to ASCII double quote
   },
 };
 
@@ -428,6 +343,10 @@ export const LATEX_XML_REPLACEMENTS: ReplacementCategory = {
   description: 'Fixes specific to XML output processing',
   isRegex: false,
   patterns: (() => {
+    // ====================================================================
+    // Auto-generated replacements - for easily maintainable pattern groups
+    // ====================================================================
+
     // Lists of environment/tag names
     const latexEnvironments = [
       'document',
@@ -470,6 +389,25 @@ export const LATEX_XML_REPLACEMENTS: ReplacementCategory = {
     // Initialize patterns object
     const patterns: { [key: string]: string } = {};
 
+    // ===== XML to LaTeX conversions =====
+    // Examples:
+    // <align> -> \begin{align}
+    // </tikzpicture> -> \end{tikzpicture}
+    // <figure}> -> \begin{figure}
+    const xmlToLatexPatterns = generateXmlLatexConversions(latexEnvironments);
+    Object.assign(patterns, xmlToLatexPatterns);
+
+    // ===== LaTeX to XML conversions =====
+    // Examples:
+    // \begin{scratchpad} -> <scratchpad>
+    // \end{latex_document} -> </latex_document>
+    const latexToXmlPatterns = generateLatexToXmlConversions(pureXmlTags);
+    Object.assign(patterns, latexToXmlPatterns);
+
+    // ===================================================================
+    // Manual replacements - for specific cases that need special handling
+    // ===================================================================
+
     // ===== 1. LATEX TAG ENDING FIXES =====
     // Fix LaTeX tags with incorrect XML-style ending (with '>')
     latexEnvironments.forEach((env) => {
@@ -483,7 +421,7 @@ export const LATEX_XML_REPLACEMENTS: ReplacementCategory = {
       patterns[`</${tag}}`] = `</${tag}>`;
     });
 
-    // ===== 3. XML-TO-LATEX CONVERSIONS =====
+    // ===== 3. Special Case Handling =====
     // Special cases for minipage
     patterns['\\minipage}'] = '\\end{minipage}';
     patterns['\\n\\minipage}'] = '\\n\\end{minipage}';
@@ -491,27 +429,6 @@ export const LATEX_XML_REPLACEMENTS: ReplacementCategory = {
     // Special case for item tag
     patterns['<item>'] = '\\item';
     patterns['</item>'] = '';
-
-    // Convert LaTeX environments when used as XML tags to LaTeX environments
-    latexEnvironments.forEach((env) => {
-      patterns[`<${env}>`] = `\\begin{${env}}`;
-      patterns[`</${env}>`] = `\\end{${env}}`;
-
-      // ===== 4. XML-TO-LATEX CONVERSIONS WITH BRACES =====
-      // Fix XML tags with extra braces that should be LaTeX environments
-      patterns[`<${env}}`] = `\\begin{${env}}`;
-      patterns[`</${env}}`] = `\\end{${env}}`;
-    });
-
-    // ===== 5. LaTeX-TO-XML TAG CONVERSIONS =====
-    // Convert LaTeX environments to XML tags for the pure XML tags
-    pureXmlTags.forEach((tag) => {
-      patterns[`\\begin{${tag}}`] = `<${tag}>`;
-      patterns[`\\end{${tag}}`] = `</${tag}>`;
-      // Also handle common error case with '>' at the end
-      patterns[`\\begin{${tag}>}`] = `<${tag}>`;
-      patterns[`\\end{${tag}>}`] = `</${tag}>`;
-    });
 
     // ===== 6. LATEX BRACE FIXES =====
     // Fix extra braces in LaTeX environment tags
@@ -726,5 +643,21 @@ export const PERSONAL_STYLE_REPLACEMENTS: ReplacementCategory = {
     'cf.~Eq': 'cf. Eq',
     'to~App': 'to App',
     '~(\\ref{': ' (\\ref{',
+  },
+};
+
+// ===== LaTeXdiff compatibility fixes =====
+export const LATEXDIFF_REPLACEMENTS: ReplacementCategory = {
+  name: 'latexdiff',
+  description: 'Fixes for LaTeXdiff markup and compatibility issues',
+  isRegex: false,
+  patterns: {
+    // Fix issues with latexdiff markup and excessive newlines
+    '\n\n}\\end{align*}%DIFAUXCMD': '\n}\\end{align*}%DIFAUXCMD',
+    '\n    \n}\\end{align*}%DIFAUXCMD': '\n}\\end{align*}%DIFAUXCMD',
+    '\n\t\n}\\end{align*}%DIFAUXCMD': '\n}\\end{align*}%DIFAUXCMD',
+    '\n\n}\\end{aligned*}%DIFAUXCMD': '\n}\\end{aligned*}%DIFAUXCMD',
+    '\n    \n}\\end{aligned*}%DIFAUXCMD': '\n}\\end{aligned*}%DIFAUXCMD',
+    '\n\t\n}\\end{aligned*}%DIFAUXCMD': '\n}\\end{aligned*}%DIFAUXCMD',
   },
 };
