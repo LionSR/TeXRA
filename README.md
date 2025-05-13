@@ -2,7 +2,7 @@
 
 TeXRA is a powerful VS Code extension designed to help frustrated academics with their writing and research by leveraging the power of large language models (LLMs). It provides a seamless AI-assisted writing experience through an intuitive interface integrated directly into VS Code.
 
-See [texra.ai](https://texra.ai). For detailed guides and usage instructions, visit the [**Full Documentation Site**](https://texra.ai/docs/).
+See [texra.ai](https://texra.ai). For detailed guides and usage instructions, visit the [**Full Documentation Site**](https://texra.ai/guide/).
 
 ## UI Features
 
@@ -15,7 +15,7 @@ See [texra.ai](https://texra.ai). For detailed guides and usage instructions, vi
 - Advanced PDF and image handling capabilities:
   - PDF page counting and conversion to images
   - Image encoding and processing
-  - Support for various image formats (PNG, JPG, SVG, etc.)
+  - Support for various image formats (PNG, JPG, PDF,etc.)
 - LaTeX-specific tools:
   - Automatic document indentation
   - Word and element counting (text, headers, captions, math)
@@ -91,7 +91,8 @@ TeXRA provides agents optimized for various academic tasks. Some core examples i
 - `polish`: Improve writing style, clarity, and flow.
 - `draw`: Create or enhance TikZ figures from descriptions.
 - `paper2slide`: Convert research papers into presentation slides.
-- `paper2note`: Transform papers into structured lecture notes.
+- `ocr`: Convert images or PDF documents to LaTeX code.
+- `transcribe_audio`: Transcribe audio files to transcript.
 
 See the [**Built-in Agents Guide**](https://texra.ai/guide/built-in-agents.html) for the full default list and detailed descriptions.
 

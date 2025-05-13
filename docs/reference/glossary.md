@@ -178,7 +178,7 @@ Documents that provide examples or additional context for the AI, such as sample
 
 ### Figure Files
 
-Image files used in a document, including various formats like PNG, JPG, PDF, or SVG.
+Image files used in a document, including various formats like PNG, JPG, or PDF.
 
 ### Output Files
 
