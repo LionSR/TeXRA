@@ -2,7 +2,7 @@
   "name": "texra",
   "displayName": "TeXRA",
   "description": "TeXRA: Your LLM-powered 24/7 LaTeX Research Assistant.",
-  "version": "0.30.4",
+  "version": "0.30.5",
   "publisher": "texra-ai",
   "engines": {
     "vscode": "^1.94.0"
@@ -658,6 +658,20 @@
         "enablement": "!virtualWorkspace"
       },
       {
+        "command": "texra.applyReplacements",
+        "title": "Apply LaTeX Replacements to Current File",
+        "category": "TeXRA",
+        "icon": "$(symbol-text)",
+        "enablement": "!virtualWorkspace"
+      },
+      {
+        "command": "texra.getTeXCount",
+        "title": "Count Words in Current TeX File",
+        "category": "TeXRA",
+        "icon": "$(symbol-number)",
+        "enablement": "!virtualWorkspace"
+      },
+      {
         "command": "texra.countPdfPages",
         "title": "Count PDF Pages",
         "category": "TeXRA"
@@ -691,13 +705,6 @@
         "command": "texra.compileTikzFigures",
         "title": "Compile TikZ Figures from Current File",
         "category": "TeXRA"
-      },
-      {
-        "command": "texra.getTeXCount",
-        "title": "Count Words in Current TeX File",
-        "category": "TeXRA",
-        "icon": "$(symbol-number)",
-        "enablement": "!virtualWorkspace"
       },
       {
         "command": "texra.testConnection",
@@ -897,6 +904,11 @@
         {
           "when": "editorLangId =~ /^latex$|^latex-expl3$|^doctex$/",
           "command": "texra.indentCurrentTeX",
+          "group": "navigation"
+        },
+        {
+          "when": "editorLangId =~ /^latex$|^latex-expl3$|^doctex$/",
+          "command": "texra.applyReplacements",
           "group": "navigation"
         },
         {
