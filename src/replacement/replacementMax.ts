@@ -1,27 +1,404 @@
 import { ReplacementCategory } from './replacementTypes';
+import {
+  generateMathCommandShortcuts,
+  generateDecoratedMathShortcuts,
+  generateMathFontShortcuts,
+  generateBoldBackslashFixes,
+  generateDecoratorShortcuts,
+  generateNestedDecoratorShortcuts,
+  generateVectorShortcuts,
+  generateDifferentialSpacing,
+  generateCommandShortcuts,
+  generateArrowRelationShortcuts,
+  generateBackslashFixes,
+  GREEK_LETTERS,
+} from './replacementHelpers';
 
-// Maximum style replacements for LaTeX; by default not enabled in package.json
-export const MAX_STYLE_REPLACEMENTS: ReplacementCategory = {
-  name: 'max_style',
-  description: 'Maximum style replacements for LaTeX commands and symbols',
+// Greek letter shortcut mappings
+export const GREEK_LETTER_SHORTCUTS: { [key: string]: string } = {
+  alpha: 'al',
+  beta: 'bt',
+  gamma: 'ga',
+  delta: 'de',
+  epsilon: 'eps',
+  varepsilon: 'varepsilon',
+  zeta: 'ze',
+  eta: 'eta',
+  theta: 'ta',
+  Theta: 'Ta',
+  iota: 'io',
+  kappa: 'ka',
+  lambda: 'la',
+  mu: 'mu',
+  nu: 'nu',
+  xi: 'xi',
+  omicron: 'om',
+  pi: 'pi',
+  rho: 'rho',
+  sigma: 'sg',
+  Sigma: 'Sig',
+  tau: 'tau',
+  upsilon: 'ups',
+  phi: 'phi',
+  varphi: 'vphi',
+  chi: 'chi',
+  psi: 'psi',
+  omega: 'om',
+  Omega: 'Om',
+  Gamma: 'Ga',
+  Lambda: 'Lambda',
+  Delta: 'Delta',
+};
+
+// Automatically generated replacement patterns
+export const MAX_AUTO_REPLACEMENTS: ReplacementCategory = {
+  name: 'max_auto',
+  description: 'Automatically generated maximum style replacements for LaTeX',
+  isRegex: false,
+  patterns: (() => {
+    // Initialize patterns object
+    const patterns: { [key: string]: string } = {};
+
+    // ====================================================================
+    // Backslash and command fixes
+    // ====================================================================
+
+    // Fix for double backslashes in various commands
+    // Examples: \\alpha -> \alpha, \\mathbf -> \mathbf
+
+    // Math Operators, Greek Letters, Symbols, and common commands
+    // prettier-ignore
+    const backslashFixCommands = [
+      // Common custom shortcuts (max-specific only)
+      'bet', 'bze', 'cP', 'Om', 'bbf', 'al', 'bt', 'ga', 'de', 'eps', 'ta', 'Ta',
+      'ka', 'la', 'sg', 'Sig', 'vphi', 'sha', 'ha', 'Id', 'bzero', 'bone', 'dd',
+      'barrho', 'barH', 'barS', 'baral', 'barbv', 'tzero', 'tone', 'tit', 'tif',
+      'effH', 'ceffH', 'peq', 'qeq', 'rhoeq', 'rhost', 'nimplies', 'bna', 'bdiv',
+      'ddt', 'dddt', 'nn', 'da', 'bksl', 'Ra', 'tauf', 'beps'
+    ];
+
+    // Generate backslash fixes for all the above commands
+    Object.assign(patterns, generateBackslashFixes(backslashFixCommands));
+
+    // ====================================================================
+    // Specialized handling for math operators and text commands
+    // ====================================================================
+
+    // 1. Math Operators (defined with \DeclareMathOperator*)
+    // These require _{\op} and ^{\op} format
+    // prettier-ignore
+    const mathOperators = [
+      'argmin','argmax','tr','Tr','sign','sort','argsort','Cov','Cat','Bern','Unif','ReLU','Concat','Skip','Upsample','Softmax','Conv','BatchNorm','LayerNorm','MaxPool','Dropout','TransformerEncoder','Attention','MultiHead','AdaLN',
+      'sort','argsort','Cov','Cat','Bern','Unif','ReLU','Concat','Skip','Upsample','Softmax','Conv','BatchNorm','LayerNorm','MaxPool','Dropout','TransformerEncoder','Attention','MultiHead','AdaLN',
+    ];
+
+    // Direct mapping: \mathrm{op} -> \op and \text{op} -> \op
+    mathOperators.forEach((op) => {
+      // Common variants
+      patterns[`\\mathrm{${op}}`] = `\\${op}`;
+      patterns[`\\text{${op}}`] = `\\${op}`;
+      patterns[`\\mbox{${op}}`] = `\\${op}`;
+      patterns[`\\textrm{${op}}`] = `\\${op}`;
+      patterns[`{\\rm ${op}}`] = `\\${op}`;
+      patterns[`_\\op`] = `_{\\${op}}`;
+      patterns[`^\\op`] = `^{\\${op}}`;
+    });
+
+    // 2. Text Commands (defined with \newcommand{\cmd}{{\text{name}}})
+    // These allow direct subscript/superscript like P_\cmd
+    // prettier-ignore
+    const textCommands = ['sys', 'bath', 'tot', 'const', 'discrete', 'decoder', 'encoder', 'pool', 'data', 'mar', 'model', 'prior', 'target', 'full', 'observed', 'accept', 'aux', 'eq', 'st', 'nc', 'irr', 'rev', 'hkp', 'adi', 'nadi', 'exc', 'pos', 'head', 'PE', 'class', 'window', 'Output', 'FFN', 'Strat', 'Ito', 'diss'];
+
+    // Direct mapping: \text{cmd} -> \cmd
+    textCommands.forEach((cmd) => {
+      // Common variants
+      patterns[`\\text{${cmd}}`] = `\\${cmd}`;
+      patterns[`\\mathrm{${cmd}}`] = `\\${cmd}`;
+      patterns[`\\mbox{${cmd}}`] = `\\${cmd}`;
+      patterns[`\\textrm{${cmd}}`] = `\\${cmd}`;
+      patterns[`{\\rm ${cmd}}`] = `\\${cmd}`;
+      patterns[`_{\\${cmd}}`] = `_\\${cmd}`;
+      patterns[`^{\\${cmd}}`] = `^\\${cmd}`;
+      patterns[`_{${cmd}}`] = `_\\${cmd}`;
+      patterns[`^{${cmd}}`] = `^\\${cmd}`;
+    });
+
+    // prettier-ignore
+    const symbolOperators = [
+      'infty', 'top',
+      'N', 'M', 'S',
+      '0','1','2',
+      'tit', 'wtit', 'tif', 'ttf', 'ttauf', 'tze', 'tzero', 'tone', 'tauf', 'tf', 'ttau', 'tau', 'ttf',
+      'bu', 'ta'
+    ];
+    // these variables might occur as lower indices, but they do not need {..}
+    symbolOperators.forEach((op) => {
+      patterns[`_{\\${op}}`] = `_\\${op}`;
+      patterns[`^{\\${op}}`] = `^\\${op}`;
+    });
+
+    // ====================================================================
+    // Auto-generated differential notation patterns
+    // ====================================================================
+
+    // Variables that need differential spacing
+    // prettier-ignore
+    const differentialVariables = ['x', 't', 'tau', 'ttau', 'beta', 'bx', 'bz', 'bze', 'bxi', 'tbx'];
+
+    // Generate differential spacing patterns
+    const differentialSpacingPatterns = generateDifferentialSpacing(
+      differentialVariables,
+      '~',
+    );
+    Object.assign(patterns, differentialSpacingPatterns);
+
+    // Variables that need differential replacement in fractions and integrals
+    // prettier-ignore
+    const fractionDiffVariables = ['t', 'x', 'tau', 'ttau', 'beta', 'bx', 'bz', 'bze', 'bxi', 'S'];
+
+    // Generate patterns for each variable
+    fractionDiffVariables.forEach((variable) => {
+      // Handle cases like {dx} -> {\\dd x}
+      patterns[`{d${variable}}`] = `{\\dd${variable}}`;
+
+      // Handle cases like \\frac{dx} -> \\frac{\\dd x}
+      patterns[`\\frac{d${variable}`] = `\\frac{\\dd${variable}`;
+
+      // Handle cases like \\frac{d}{dx} -> \\frac{\\dd}{\\dd x}
+      patterns[`\\frac{d}{d${variable}}`] = `\\frac{\\dd}{\\dd${variable}}`;
+    });
+
+    // Integration patterns
+    patterns['\\int d\\'] = '\\int \\dd\\';
+    patterns['\\int \\dd \\bx \\'] = '\\int \\dd \\bx~ \\';
+
+    // Keep the generateTextCommandNormalization utility for other cases where needed
+
+    // Arrows and Relations
+    // Examples: \rightarrow -> \ra, \Leftrightarrow -> \LRa
+    const arrowRelationMap = {
+      rightarrow: 'ra',
+      leftarrow: 'lar',
+      leftrightarrow: 'lra',
+      Leftarrow: 'La',
+      Rightarrow: 'Ra',
+      Leftrightarrow: 'LRa',
+    };
+    Object.assign(patterns, generateArrowRelationShortcuts(arrowRelationMap));
+
+    // Calculus command shortcuts
+    // Examples: \partial -> \der, \nabla -> \na
+    const calculusCommandMap = {
+      partial: 'der',
+      nabla: 'na',
+    };
+    Object.assign(patterns, generateCommandShortcuts(calculusCommandMap));
+
+    // Vector Variables
+    // Examples:
+    // \vec{p} -> \vp (momentum vector)
+    // \vec{x} -> \vx (position vector)
+    const vectorLetters = 'pqvxyz'.split('');
+    Object.assign(patterns, generateVectorShortcuts(vectorLetters));
+
+    // Greek Letters (Regular)
+    // Map full Greek letter names to shorter versions
+    // Examples:
+    // \alpha -> \al
+    // \theta -> \ta
+
+    // Make a copy of GREEK_LETTER_SHORTCUTS and remove Delta to avoid shortening it
+    const greekShortcuts = { ...GREEK_LETTER_SHORTCUTS };
+    delete greekShortcuts['Delta']; // Prevent Delta from being shortened to De
+
+    Object.assign(patterns, generateMathCommandShortcuts(greekShortcuts));
+
+    // Greek Letters (Bold)
+    // Generate patterns for bold Greek letters with \b prefix
+    // prettier-ignore
+    const commonGreekLetters = GREEK_LETTERS.filter((letter) => ['alpha', 'beta', 'gamma', 'epsilon', 'eta', 'theta', 'mu', 'nu', 'omega', 'phi', 'sigma', 'xi', 'zeta'].includes(letter));
+
+    // prettier-ignore
+    const greekBoldLetters = [...commonGreekLetters, 'chi', 'pi', 'varphi', 'Sigma', 'lambda', 'Gamma', 'Lambda'];
+    Object.assign(
+      patterns,
+      generateDecoratedMathShortcuts(['boldsymbol'], greekBoldLetters, 'b'),
+    );
+
+    // Mathcal Letters
+    // Map \mathcal{X} to shorter \cX versions for all uppercase letters
+    const upperLetters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+    Object.assign(
+      patterns,
+      generateMathFontShortcuts(upperLetters, 'mathcal', 'c'),
+    );
+
+    // Mathbb Letters
+    // Map \mathbb{X} to shorter \eX versions for specific letters
+    const mathbbLetters = 'CEINPQRTV'.split('');
+    Object.assign(
+      patterns,
+      generateMathFontShortcuts(mathbbLetters, 'mathbb', 'e'),
+    );
+
+    // Mathbf Letters (Lowercase)
+    // Map \mathbf{x} to shorter \bx versions
+    const lowerLetters = 'abcdefghjnpqrsuvwxyz'.split('');
+    Object.assign(
+      patterns,
+      generateMathFontShortcuts(lowerLetters, 'mathbf', 'b'),
+    );
+
+    // Mathbf Letters (Uppercase)
+    // Map \mathbf{X} to shorter \bX versions for uppercase letters
+    const mathbfUpperLetters = 'ABCDEFGIJKMQRUVWXYZ'.split('');
+    Object.assign(
+      patterns,
+      generateMathFontShortcuts(mathbfUpperLetters, 'mathbf', 'b'),
+    );
+
+    // Tilde variables - simple letters
+    // Examples: \tilde{x} -> \tx, \tilde{B} -> \tB
+    const tildeLetters = 'xzpqBFJMPTZ'.split('');
+    Object.assign(
+      patterns,
+      generateDecoratorShortcuts('tilde', tildeLetters, 't'),
+    );
+
+    // Tilde with mathbf - lowercase
+    // Example: \tilde{\mathbf{x}} -> \tbx
+    const tildeLettersMathbf = 'axpvwz'.split('');
+    Object.assign(
+      patterns,
+      generateNestedDecoratorShortcuts(
+        'tilde',
+        'mathbf',
+        tildeLettersMathbf,
+        't',
+        'b',
+      ),
+    );
+
+    // Tilde with mathbf - uppercase
+    // Example: \tilde{\mathbf{M}} -> \tbM
+    const tildeLettersMathbfUppercase = 'MTX'.split('');
+    Object.assign(
+      patterns,
+      generateNestedDecoratorShortcuts(
+        'tilde',
+        'mathbf',
+        tildeLettersMathbfUppercase,
+        't',
+        'b',
+      ),
+    );
+
+    // Tilde with mathcal - uppercase
+    // Example: \tilde{\mathcal{H}} -> \tcH
+    const tildeLettersMathcal = 'HQSW'.split('');
+    Object.assign(
+      patterns,
+      generateNestedDecoratorShortcuts(
+        'tilde',
+        'mathcal',
+        tildeLettersMathcal,
+        't',
+        'c',
+      ),
+    );
+
+    // Tilde with Greek letters
+    // Example: \tilde{\gamma} -> \tga
+    const tildeGreekLetters = 'gamma lambda phi psi rho Sigma mu tau'.split(
+      ' ',
+    );
+    tildeGreekLetters.forEach((letter) => {
+      const shortcut = GREEK_LETTER_SHORTCUTS[letter] || letter;
+      patterns[`\\tilde{\\${letter}}`] = `\\t${shortcut}`;
+    });
+
+    // Tilde with boldsymbol+Greek
+    // Example: \tilde{\boldsymbol{\zeta}} -> \tbze
+    const tildeGreekBoldLetters = 'zeta gamma lambda pi xi eta Gamma'.split(
+      ' ',
+    );
+    tildeGreekBoldLetters.forEach((letter) => {
+      const shortcut = GREEK_LETTER_SHORTCUTS[letter] || letter;
+      patterns[`\\tilde{\\boldsymbol{\\${letter}}}`] = `\\tb${shortcut}`;
+    });
+
+    // Hat variables
+    // Example: \hat{H} -> \hH
+    const hatLetters = 'HFP'.split('');
+    Object.assign(patterns, generateDecoratorShortcuts('hat', hatLetters, 'h'));
+
+    // Hat with Greek letters
+    // Example: \hat{\sigma} -> \hsg
+    const hatGreekLetters = 'sigma Sigma pi rho'.split(' ');
+    hatGreekLetters.forEach((letter) => {
+      const shortcut = GREEK_LETTER_SHORTCUTS[letter] || letter;
+      patterns[`\\hat{\\${letter}}`] = `\\h${shortcut}`;
+    });
+
+    // Hat with mathbf
+    // Example: \hat{\mathbf{n}} -> \hbn
+    const hatMathbfLetters = 'nv'.split('');
+    Object.assign(
+      patterns,
+      generateNestedDecoratorShortcuts(
+        'hat',
+        'mathbf',
+        hatMathbfLetters,
+        'h',
+        'b',
+      ),
+    );
+
+    // Hat with boldsymbol+Greek
+    // Example: \hat{\boldsymbol{\zeta}} -> \hbze
+    const hatBoldsymbolLetters = 'zeta'.split(' ');
+    hatBoldsymbolLetters.forEach((letter) => {
+      const shortcut = GREEK_LETTER_SHORTCUTS[letter] || letter;
+      patterns[`\\hat{\\boldsymbol{\\${letter}}}`] = `\\hb${shortcut}`;
+    });
+
+    // Fix for extra backslashes in bold symbols
+    // Automatically generate fixes for lowercase bold letters (e.g., \\ba -> \ba)
+    Object.assign(patterns, generateBoldBackslashFixes('b', lowerLetters));
+
+    // Automatically generate fixes for uppercase bold letters (e.g., \\bA -> \bA)
+    Object.assign(
+      patterns,
+      generateBoldBackslashFixes('b', mathbfUpperLetters),
+    );
+
+    // Fix for double backslashes in custom commands
+    // Examples: \\bet -> \bet, \\bbf -> \bbf
+    const customShortcutFixes = ['bet', 'bze', 'cP', 'Om', 'bbf'];
+    customShortcutFixes.forEach((shortcut) => {
+      patterns[`\\\\${shortcut}`] = `\\${shortcut}`;
+    });
+
+    // Convert functions to simpler forms (e.g., F_/G_)
+    // Examples: \F_ -> F_, \G( -> G(
+    const functionNames = ['F', 'G'];
+    functionNames.forEach((name) => {
+      patterns[`\\${name}_`] = `${name}_`;
+      patterns[`\\${name}^`] = `${name}^`;
+      patterns[`\\${name}(`] = `${name}(`;
+    });
+
+    return patterns;
+  })(),
+};
+
+// Manually specified replacement patterns
+export const MAX_MANUAL_REPLACEMENTS: ReplacementCategory = {
+  name: 'max_manual',
+  description: 'Manually specified maximum style replacements for LaTeX',
   isRegex: false,
   patterns: {
-    // Basic Math Operators
-    '\\text{tr}': '\\tr',
-    '\\text{Tr}': '\\tr',
-    // '\\Tr': '\\tr',
-    '\\text{sign}': '\\sign',
-    '\\text{argmin}': '\\argmin',
-    '\\text{argmax}': '\\argmax',
-    '\\text{sort}': '\\sort',
-    '\\text{argsort}': '\\argsort',
-    '\\text{Cat}': '\\Cat',
-    '\\text{Bern}': '\\Bern',
-    '\\text{Unif}': '\\Unif',
-    '\\marhrm{const}': '\\const',
-    '\\text{const}': '\\const',
-    '\\text{det}': '\\det',
-    '\\text{tot}': '\\tot',
+    // Subscript/superscript formatting
     '_{tot}': '_{\\tot}',
     '^{tot}': '^{\\tot}',
     '^\\intercal': '^\\top',
@@ -35,145 +412,14 @@ export const MAX_STYLE_REPLACEMENTS: ReplacementCategory = {
     '\\boldsymbol{1}': '\\bone',
     '\\mathrm{d}': '\\dd',
 
-    // Greek Letters (Regular)
-    '\\alpha': '\\al',
-    '\\beta': '\\bt',
-    '\\gamma': '\\ga',
-    '\\delta': '\\de',
-    '\\varepsilon': '\\eps',
-    '\\theta': '\\ta',
-    '\\Theta': '\\Ta',
-    '\\kappa': '\\ka',
-    '\\lambda': '\\la',
-    '\\omega': '\\om',
-    '\\Omega': '\\Om',
-    '\\sigma': '\\sg',
-    '\\Sigma': '\\Sig',
-    '\\varphi': '\\vphi',
-
-    // Correct spelling errors of greek letters
-    '\\\\bet': '\\bet',
-    '\\\\bze': '\\bze',
-    '\\\\cP': '\\cP',
-    '\\\\Om': '\\Om',
-
-    // Greek Letters (Bold)
-    '\\boldsymbol{\\alpha}': '\\bal',
-    '\\boldsymbol{\\beta}': '\\bbt',
-    '\\boldsymbol{\\chi}': '\\bch',
-    '\\boldsymbol{\\epsilon}': '\\beps',
-    '\\boldsymbol{\\eta}': '\\bet',
-    '\\boldsymbol{\\gamma}': '\\bga',
-    '\\boldsymbol{\\mu}': '\\bmu',
-    '\\boldsymbol{\\nu}': '\\bnu',
-    '\\boldsymbol{\\omega}': '\\bom',
-    '\\boldsymbol{\\phi}': '\\bphi',
-    '\\boldsymbol{\\pi}': '\\bpi',
-    '\\boldsymbol{\\sigma}': '\\bsigma',
-    '\\boldsymbol{\\theta}': '\\bta',
-    '\\boldsymbol{\\varphi}': '\\bvphi',
-    '\\boldsymbol{\\xi}': '\\bxi',
-    '\\boldsymbol{\\zeta}': '\\bze',
+    // Fix specific cases
     '\\boldsymbol{\\Sigma}': '\\bSig',
-    '\\boldsymbol{\\lambda}': '\\bla',
-    '\\boldsymbol{\\Gamma}': '\\bGa',
-    '\\boldsymbol{\\Lambda}': '\\bLa',
     '\\bSigma': '\\bSig',
-
-    // Hat Variables
-    '\\hat{\\sigma}': '\\hsg',
-    '\\hat{\\Sigma}': '\\hSig',
-    '\\hat{\\pi}': '\\hpi',
-    '\\hat{\\rho}': '\\hrho',
-    '\\hat{H}': '\\hH',
-    '\\hat{F}': '\\hF',
-    '\\hat{P}': '\\hP',
-    '\\hat{\\mathbf{n}}': '\\hbn',
-    '\\hat{\\mathbf{v}}': '\\hbv',
-    '\\hat{\\boldsymbol{\\zeta}}': '\\hbze',
 
     '\\frac12': '\\ha',
 
-    // Mathcal Letters
-    '\\mathcal{A}': '\\cA',
-    '\\mathcal{B}': '\\cB',
-    '\\mathcal{C}': '\\cC',
-    '\\mathcal{D}': '\\cD',
-    '\\mathcal{E}': '\\cE',
-    '\\mathcal{F}': '\\cF',
-    '\\mathcal{G}': '\\cG',
-    '\\mathcal{H}': '\\cH',
-    '\\mathcal{I}': '\\cI',
-    '\\mathcal{J}': '\\cJ',
-    '\\mathcal{K}': '\\cK',
-    '\\mathcal{L}': '\\cL',
-    '\\mathcal{M}': '\\cM',
-    '\\mathcal{N}': '\\cN',
-    '\\mathcal{O}': '\\cO',
-    '\\mathcal{P}': '\\cP',
-    '\\mathcal{Q}': '\\cQ',
-    '\\mathcal{R}': '\\cR',
-    '\\mathcal{S}': '\\cS',
-    '\\mathcal{T}': '\\cT',
-    '\\mathcal{U}': '\\cU',
-    '\\mathcal{V}': '\\cV',
-    '\\mathcal{W}': '\\cW',
-    '\\mathcal{X}': '\\cX',
-    '\\mathcal{Y}': '\\cY',
-    '\\mathcal{Z}': '\\cZ',
-
-    // Mathbb Letters
-    '\\mathbb{C}': '\\eC',
-    '\\mathbb{E}': '\\eE',
-    '\\mathbb{I}': '\\eI',
-    '\\mathbb{N}': '\\eN',
-    '\\mathbb{P}': '\\eP',
-    '\\mathbb{Q}': '\\eQ',
-    '\\mathbb{R}': '\\eR',
-    '\\mathbb{T}': '\\eT',
-    '\\mathbb{V}': '\\eV',
-
-    // Mathbf Letters (Lowercase)
-    '\\mathbf{a}': '\\ba',
-    '\\mathbf{b}': '\\bb',
-    '\\mathbf{c}': '\\bc',
-    '\\mathbf{e}': '\\be',
+    // Special case for 'f' which uses 'bbf' instead of 'bf'
     '\\mathbf{f}': '\\bbf',
-    '\\mathbf{g}': '\\bg',
-    '\\mathbf{h}': '\\bh',
-    '\\mathbf{j}': '\\bj',
-    '\\mathbf{n}': '\\bn',
-    '\\mathbf{p}': '\\bp',
-    '\\mathbf{q}': '\\bq',
-    '\\mathbf{r}': '\\br',
-    '\\mathbf{s}': '\\bs',
-    '\\mathbf{u}': '\\bu',
-    '\\mathbf{v}': '\\bv',
-    '\\mathbf{w}': '\\bw',
-    '\\mathbf{x}': '\\bx',
-    '\\mathbf{y}': '\\by',
-    '\\mathbf{z}': '\\bz',
-
-    // Mathbf Letters (Uppercase)
-    '\\mathbf{A}': '\\bA',
-    '\\mathbf{B}': '\\bB',
-    '\\mathbf{C}': '\\bC',
-    '\\mathbf{D}': '\\bD',
-    '\\mathbf{E}': '\\bE',
-    '\\mathbf{F}': '\\bF',
-    '\\mathbf{G}': '\\bG',
-    '\\mathbf{I}': '\\bI',
-    '\\mathbf{J}': '\\bJ',
-    '\\mathbf{K}': '\\bK',
-    '\\mathbf{M}': '\\bM',
-    '\\mathbf{Q}': '\\bQ',
-    '\\mathbf{R}': '\\bR',
-    '\\mathbf{U}': '\\bU',
-    '\\mathbf{V}': '\\bV',
-    '\\mathbf{W}': '\\bW',
-    '\\mathbf{X}': '\\bX',
-    '\\mathbf{Y}': '\\bY',
-    '\\mathbf{Z}': '\\bZ',
 
     // Bar Variables
     '\\bar{\\rho}': '\\barrho',
@@ -182,57 +428,11 @@ export const MAX_STYLE_REPLACEMENTS: ReplacementCategory = {
     '\\bar{\\alpha}': '\\baral',
     '\\bar{\\mathbf{v}}': '\\barbv',
 
-    // Tilde Variables
-    '\\tilde{\\mathcal{H}}': '\\tcH',
-    '\\tilde{\\mathcal{Q}}': '\\tcQ',
-    '\\tilde{\\mathcal{S}}': '\\tcS',
-    '\\tilde{\\mathcal{W}}': '\\tcW',
-    '\\tilde{\\gamma}': '\\tga',
-    '\\tilde{\\lambda}': '\\tla',
-    '\\tilde{\\phi}': '\\tphi',
-    '\\tilde{\\psi}': '\\tpsi',
-    '\\tilde{\\rho}': '\\trho',
-    '\\tilde{\\Sigma}': '\\tSig',
-    '\\tilde{\\mu}': '\\tmu',
-    '\\tilde{\\tau}': '\\ttau',
-    '\\tilde{\\mathbf{a}}': '\\tba',
-    '\\tilde{\\mathbf{x}}': '\\tbx',
-    '\\tilde{\\mathbf{v}}': '\\tbv',
-    '\\tilde{\\mathbf{p}}': '\\tbp',
-    '\\tilde{\\mathbf{w}}': '\\tbw',
-    '\\tilde{\\mathbf{z}}': '\\tbz',
-    '\\tilde{\\mathbf{M}}': '\\tbM',
-    '\\tilde{\\mathbf{T}}': '\\tbT',
-    '\\tilde{\\mathbf{X}}': '\\tbX',
-    '\\tilde{\\boldsymbol{\\zeta}}': '\\tbze',
-    '\\tilde{\\boldsymbol{\\gamma}}': '\\tbga',
-    '\\tilde{\\boldsymbol{\\lambda}}': '\\tbla',
-    '\\tilde{\\boldsymbol{\\pi}}': '\\tbpi',
-    '\\tilde{\\boldsymbol{\\xi}}': '\\tbxi',
-    '\\tilde{\\boldsymbol{\\eta}}': '\\tbet',
-    '\\tilde{\\boldsymbol{\\Gamma}}': '\\tbGa',
+    // Special tilde cases - constants
     '\\tilde{0}': '\\tzero',
     '\\tilde{1}': '\\tone',
     '\\tilde{t}': '\\tit',
     '\\tilde{f}': '\\tif',
-    '\\tilde{x}': '\\tx',
-    '\\tilde{z}': '\\tz',
-    '\\tilde{p}': '\\tp',
-    '\\tilde{q}': '\\tq',
-    '\\tilde{B}': '\\tB',
-    '\\tilde{F}': '\\tF',
-    '\\tilde{J}': '\\tJ',
-    '\\tilde{M}': '\\tM',
-    '\\tilde{P}': '\\tP',
-    '\\tilde{T}': '\\tT',
-    '\\tilde{Z}': '\\tZ',
-
-    // Vector Variables
-    '\\vec{p}': '\\vp',
-    '\\vec{q}': '\\vq',
-    '\\vec{v}': '\\vv',
-    '\\vec{x}': '\\vx',
-    '\\vec{y}': '\\vy',
 
     // Physics and Statistical Mechanics
     'H^{\\text{eff}}': '\\effH',
@@ -242,18 +442,8 @@ export const MAX_STYLE_REPLACEMENTS: ReplacementCategory = {
     '\\rho^{\\text{eq}}': '\\rhoeq',
     '\\rho^{\\text{st}}': '\\rhost',
 
-    // Arrows and Relations
-    '\\rightarrow': '\\ra',
-    '\\leftarrow': '\\lar',
-    '\\leftrightarrow': '\\lra',
-    '\\Leftarrow': '\\La',
-    '\\Rightarrow': '\\Ra',
-    '\\Leftrightarrow': '\\LRa',
+    // Special cases that don't fit the auto-generated patterns
     '\\not\\implies': '\\nimplies',
-
-    // Calculus
-    '\\partial': '\\der',
-    '\\nabla': '\\na',
     '\\boldsymbol{\\nabla}': '\\bna',
     '\\text{div}': '\\bdiv',
     '\\frac{\\partial}{\\partial t}': '\\ddt',
@@ -264,93 +454,14 @@ export const MAX_STYLE_REPLACEMENTS: ReplacementCategory = {
     '\\dagger': '\\da',
     '\\backslash': '\\bksl',
 
-    // Differential spacing preferences
-    '\\dd s\\,': '\\dd s~',
-    '\\dd\\bze\\,': '\\dd\\bze~',
-    '\\dd\\bxi\\,': '\\dd\\bxi~',
-    '\\dd\\beta\\,': '\\dd\\beta~',
-    '\\dd\\tau\\,': '\\dd\\tau~',
-    '\\dd\\t\\,': '\\dd\\t~',
-    '\\dd\\bx\\,': '\\dd\\bx~',
-    '\\dd\\bz\\,': '\\dd\\bz~',
-    '\\dd\\bze_{\\tauf}\\,': '\\dd\\bze_{\\tauf}~',
-    '\\dd x ': '\\dd x~ ',
-    '\\dd x': "\\dd x'~'",
+    // Arrow spacing
     '\\quad\\Ra': '~~~\\Ra',
     '\\Ra\,': '\\Ra~',
-    '\\tau_f': '\\tauf',
-    '\\frac{d\\tbx': '\\frac{\\dd\\tbx',
-    '\\frac{d\\bx': '\\frac{\\dd\\bx',
-    '\\frac{d}{d\\tau}': '\\frac{\\dd}{\\dd\\tau}',
-    '\\frac{d}{d\\}': '\\frac{\\dd}{\\dd\\}',
-    '{d t}': '{\\dd t}',
-    '{dt}': '{\\dd t}',
-    '{d x}': '{\\dd x}',
-    '{dx}': '{\\dd x}',
-    '\\frac{d}{d\\': '\\frac{\\dd}{\\dd\\',
-    '{d\\tau}': '{\\dd\\tau}',
-    '{d\\ttau}': '{\\dd\\ttau}',
-    '{d\\bze}': '{\\dd\\bze}',
-    '{d\\bxi}': '{\\dd\\bxi}',
-    '{d\\beta}': '{\\dd\\beta}',
-    '{d\\bx}': '{\\dd\\bx}',
-    '{d\\bz}': '{\\dd\\bz}',
-    ' d\\bz': ' d\\bz~',
-    ' d\\bx': ' d\\bx~',
-    ' d\\bze': ' d\\bze~',
-    ' d\\bxi': ' d\\bxi~',
-    ' d\\beta': ' d\\beta~',
-    ' d\\tau': ' d\\tau~',
-    ' d\\ttau': ' d\\ttau~',
-    '\\int d\\': '\\int \\dd\\',
 
-    '\\int \\dd \\bx \\': '\\int \\dd \\bx~ \\',
-    '\\frac{dS}': '\\frac{\\dd S}',
-    '\\\\ba': '\\ba',
-    '\\\\bb': '\\bb',
-    '\\\\bc': '\\bc',
-    '\\\\be': '\\be',
-    '\\\\bf': '\\bf',
-    '\\\\bg': '\\bg',
-    '\\\\bh': '\\bh',
-    '\\\\bj': '\\bj',
-    '\\\\bn': '\\bn',
-    '\\\\bp': '\\bp',
-    '\\\\bq': '\\bq',
-    '\\\\br': '\\br',
-    '\\\\bs': '\\bs',
-    '\\\\bu': '\\bu',
-    '\\\\bv': '\\bv',
-    '\\\\bw': '\\bw',
-    '\\\\bx': '\\bx',
-    '\\\\by': '\\by',
-    '\\\\bz': '\\bz',
-    '\\\\bA': '\\bA',
-    '\\\\bB': '\\bB',
-    '\\\\bC': '\\bC',
-    '\\\\bD': '\\bD',
-    '\\\\bE': '\\bE',
-    '\\\\bF': '\\bF',
-    '\\\\bG': '\\bG',
-    '\\\\bH': '\\bH',
-    '\\\\bI': '\\bI',
-    '\\\\bJ': '\\bJ',
-    '\\\\bK': '\\bK',
-    '\\\\bL': '\\bL',
-    '\\\\bM': '\\bM',
-    '\\\\bN': '\\bN',
-    '\\\\bP': '\\bP',
-    '\\\\bQ': '\\bQ',
-    '\\\\bR': '\\bR',
-    '\\\\bS': '\\bS',
-    '\\\\bT': '\\bT',
-    '\\\\bU': '\\bU',
-    '\\\\bV': '\\bV',
-    '\\\\bW': '\\bW',
-    '\\\\bX': '\\bX',
-    '\\\\bY': '\\bY',
-    '\\\\bZ': '\\bZ',
-    // equilibrium and steady state
+    // Other replacements
+    '\\tau_f': '\\tauf',
+
+    // Equilibrium and steady state notation
     '{\\text{ss}}': '{\\text{st}}',
     '\\rho^{st}': '\\rhost',
     '\\rho^{eq}': '\\rhoeq',
@@ -360,18 +471,34 @@ export const MAX_STYLE_REPLACEMENTS: ReplacementCategory = {
     '\\rho_{ss}': '\\rhost',
     '\\ln': '\\log',
     '\\rhost^R': '\\rhost_R',
-    '\\F_': 'F_',
-    '\\F^': 'F^',
     '\\bepsilon': '\\beps',
-    // '\\mathbf{I}': '\\bI',
-    '{\\rm tot}': '\\text{tot}',
-    '{\\rm eq}': '\\text{eq}',
-    '{\\rm st}': '\\text{st}',
-    '{\\rm na}': '\\text{na}',
-    '\\G(': 'G(',
-    '\\F(': 'F(',
+    '_{ex}': '_\\exc',
+    '^{ex}': '^{\\exc}',
+    '_{hk}': '_\\hkp',
+    '^{hk}': '^{\\hkp}',
+    '_{na}': '_\\nadi',
+    '^{na}': '^{\\nadi}',
 
-    // Some aggressive ones:
+    // cleveref notation:
+    '\\cref{ch:': 'Chapter~\\ref{ch:',
+
+    // '\\mathbf{I}': '\\bI',
+
+    // Specialized replacements
     '+ O(': '+ \\cO(',
   },
+};
+
+// Combined replacements for backward compatibility
+export const MAX_STYLE_REPLACEMENTS: ReplacementCategory = {
+  name: 'max_style',
+  description: 'Maximum style replacements for LaTeX commands and symbols',
+  isRegex: false,
+  patterns: (() => {
+    const combinedPatterns = {
+      ...MAX_AUTO_REPLACEMENTS.patterns,
+      ...MAX_MANUAL_REPLACEMENTS.patterns,
+    };
+    return combinedPatterns;
+  })(),
 };
