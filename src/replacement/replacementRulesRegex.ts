@@ -102,3 +102,30 @@ export const LATEXDIFF_MARKUP_REPLACEMENTS: ReplacementCategory = {
       '\n\\end{$1$2}%DIFAUXCMD',
   },
 };
+
+export const EQUATION_STYLE_REPLACEMENTS: ReplacementCategory = {
+  name: 'equation_style',
+  description: 'Fixes for equation style formatting',
+  isRegex: true,
+  flags: 'g',
+  patterns: {
+    // Swap order of superscript and subscript in integrals/sums/products to ensure subscript comes first
+    // Example: \int^{x}_{t} -> \int_{t}^{x}
+    '\\\\int\\^\\{([^{}]+|\\{[^{}]*\\})\\}_\\{([^{}]+|\\{[^{}]*\\})\\}':
+      '\\\\int_{$2}^{$1}',
+    '\\\\sum\\^\\{([^{}]+|\\{[^{}]*\\})\\}_\\{([^{}]+|\\{[^{}]*\\})\\}':
+      '\\\\sum_{$2}^{$1}',
+    '\\\\prod\\^\\{([^{}]+|\\{[^{}]*\\})\\}_\\{([^{}]+|\\{[^{}]*\\})\\}':
+      '\\\\prod_{$2}^{$1}',
+    // Remove extra space after \left( and before \right)
+    '\\\\left\\(\\s+': '\\\\left(',
+    '\\s+\\\\right\\)': '\\\\right)',
+    '\\\\begin\\{itemize\\}\\s*\\\\item': '\\\\begin{itemize}\n  \\\\item',
+    '\\\\begin\\{enumerate\\}\\s*\\\\item': '\\\\begin{enumerate}\n  \\\\item',
+    '\\\\begin\\{description\\}\\s*\\\\item':
+      '\\\\begin{description}\n  \\\\item',
+    // Fix Repeated Words (Common Typos)
+    '\\b(the|and|or|of|in|to|a|for|that|this) \\1\\b': '$1',
+    '([Ff]igure|[Tt]able|[Ss]ection|[Ee]quation)~?\\s*\\\\ref': '$1~\\ref',
+  },
+};
