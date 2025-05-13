@@ -409,6 +409,7 @@
                 "unicode",
                 "scratchpad_xml",
                 "style",
+                "latexdiff",
                 "personal_style",
                 "max_style"
               ]
@@ -421,6 +422,7 @@
               "latex_xml",
               "latex_document",
               "unicode",
+              "latexdiff",
               "scratchpad_xml",
               "style"
             ],
@@ -435,14 +437,16 @@
                 "inline_math",
                 "tikz",
                 "parentheses",
-                "latexdiff_markup"
+                "latexdiff_markup",
+                "equation_style"
               ]
             },
             "default": [
               "inline_math",
               "tikz",
               "parentheses",
-              "latexdiff_markup"
+              "latexdiff_markup",
+              "equation_style"
             ],
             "description": "List of enabled regex LaTeX replacement categories",
             "order": 7
