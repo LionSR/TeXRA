@@ -124,8 +124,9 @@ export const EQUATION_STYLE_REPLACEMENTS: ReplacementCategory = {
     '\\s+\\\\right\\]': '\\right]',
 
     // Fix list item spacing
-    '\\\\begin\\{(itemize|enumerate|description)\\}\\s*\\\\item':
-      '\\begin{$1}\n    \\item',
+    // '\\\\begin\\{(itemize|enumerate|description)\\}\\s*\\\\item':
+    // '\\begin{$1}\n    \\item',
+    // this is also detecting \n after \begin{itemize}
 
     // Fix Repeated Words (Common Typos)
     '\\b(the|and|or|of|in|to|a|for|that|this|with|by|on|as) \\1\\b': '$1',
