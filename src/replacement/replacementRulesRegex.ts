@@ -99,7 +99,13 @@ export const LATEXDIFF_MARKUP_REPLACEMENTS: ReplacementCategory = {
     // Collapse redundant blank lines / spaces between a closing brace and \end{...}%DIFAUXCMD
     // Matches: newline + spaces/tabs + newline + spaces/tabs + }\end{align*}%DIFAUXCMD
     '\n[ \t]*\n[ \t]*\\}\\\\end\\{(align|aligned)(\\*?)\\}%DIFAUXCMD':
-      '\n\\end{$1$2}%DIFAUXCMD',
+      '\n}\\end{$1$2}%DIFAUXCMD',
+
+    // fix \DIFdel{_I()}%DIFDELCMD
+    // '\\\\DIFdel\\{^([a-zA-Z])[^\\n\\}]*\\}%DIFDELCMD':
+    // '\\DIFdel{$^$1($}%DIFDELCMD',
+    '\\\\DIFdel\\{_([a-zA-Z])[^\\n\\}]{0,10}\\}%DIFDELCMD':
+      '\\DIFdel{$^$1($}%DIFDELCMD',
   },
 };
 
