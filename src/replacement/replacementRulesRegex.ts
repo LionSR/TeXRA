@@ -111,21 +111,55 @@ export const EQUATION_STYLE_REPLACEMENTS: ReplacementCategory = {
   patterns: {
     // Swap order of superscript and subscript in integrals/sums/products to ensure subscript comes first
     // Example: \int^{x}_{t} -> \int_{t}^{x}
-    '\\\\int\\^\\{([^{}]+|\\{[^{}]*\\})\\}_\\{([^{}]+|\\{[^{}]*\\})\\}':
-      '\\\\int_{$2}^{$1}',
-    '\\\\sum\\^\\{([^{}]+|\\{[^{}]*\\})\\}_\\{([^{}]+|\\{[^{}]*\\})\\}':
-      '\\\\sum_{$2}^{$1}',
-    '\\\\prod\\^\\{([^{}]+|\\{[^{}]*\\})\\}_\\{([^{}]+|\\{[^{}]*\\})\\}':
-      '\\\\prod_{$2}^{$1}',
+    '(\\\\int|\\\\sum|\\\\prod)\\^\\{([^{}]+|\\{[^{}]*\\})\\}_\\{([^{}]+|\\{[^{}]*\\})\\}':
+      '$1_{$3}^{$2}',
     // Remove extra space after \left( and before \right)
-    '\\\\left\\(\\s+': '\\\\left(',
-    '\\s+\\\\right\\)': '\\\\right)',
-    '\\\\begin\\{itemize\\}\\s*\\\\item': '\\\\begin{itemize}\n  \\\\item',
-    '\\\\begin\\{enumerate\\}\\s*\\\\item': '\\\\begin{enumerate}\n  \\\\item',
-    '\\\\begin\\{description\\}\\s*\\\\item':
-      '\\\\begin{description}\n  \\\\item',
+    '\\\\left\\(\\s+': '\\left(',
+    '\\s+\\\\right\\)': '\\right)', // this works
+    '\\\\left\\\\{\\s+': '\\left\\{', // Note the double backslash before {
+    '\\s+\\\\right\\\\}': '\\right\\}', // Note the double backslash before }
+    '\\\\left\\|\\s+': '\\left|',
+    '\\s+\\\\right\\|': '\\right|',
+    '\\\\left\\[\\s+': '\\left[',
+    '\\s+\\\\right\\]': '\\right]',
+
+    // Fix list item spacing
+    '\\\\begin\\{(itemize|enumerate|description)\\}\\s*\\\\item':
+      '\\begin{$1}\n    \\item',
+
     // Fix Repeated Words (Common Typos)
-    '\\b(the|and|or|of|in|to|a|for|that|this) \\1\\b': '$1',
-    '([Ff]igure|[Tt]able|[Ss]ection|[Ee]quation)~?\\s*\\\\ref': '$1~\\ref',
+    '\\b(the|and|or|of|in|to|a|for|that|this|with|by|on|as) \\1\\b': '$1',
+    '([Aa]ppendix|[Pp]roblem|[Ss]olution|[Cc]hapter|[Aa]lgorithm|[Ff]igure|[Tt]able|[Ss]ection|[Ee]quation|[Ll]emma|[Cc]orollary|[Pp]roposition|[Tt]heorem)~?\\s*\\ref':
+      '$1~\\ref',
+
+    // Fix inconsistent blank lines after environments (universally preferred)
+    '(\\\\end\\{(equation|align|figure|table|itemize|enumerate|description)\\})([A-Za-z])':
+      '$1\n\n$3',
+
+    // Remove spaces inside formatting
+    '\\\\(?:textbf|textit|emph|underline|overbrace|underbrace|label|caption(?:\\*)?)\\{\\s+([^}]*)\\s+\\}':
+      '\\$1{$2}',
+
+    // Fix space before closing braces in commands (nearly universal style)
+    // '\\\\(textbf|textit|emph|underline)\\{([^{}]*)\\s+\\}': '\\\\$1{$2}', // might not working now
+
+    // Remove spaces inside textbf
+    '\\\\textbf\\{\\s+([^}]*)\\s+\\}': '\\textbf{$1}',
+    // Remove spaces inside textit
+    '\\\\textit\\{\\s+([^}]*)\\s+\\}': '\\textit{$1}',
+    // Remove spaces inside emph
+    '\\\\emph\\{\\s+([^}]*)\\s+\\}': '\\emph{$1}',
+    // Remove spaces inside underline
+    '\\\\underline\\{\\s+([^}]*)\\s+\\}': '\\underline{$1}',
+    // Remove spaces inside overbrace
+    '\\\\overbrace\\{\\s+([^}]*)\\s+\\}': '\\overbrace{$1}',
+    // Remove spaces inside underbrace
+    '\\\\underbrace\\{\\s+([^}]*)\\s+\\}': '\\underbrace{$1}',
+    // Remove spaces inside label
+    '\\\\label\\{\\s+([^}]*)\\s+\\}': '\\label{$1}',
+    // Remove spaces inside caption
+    '\\\\caption\\{\\s+([^}]*)\\s+\\}': '\\caption{$1}',
+    // Remove spaces inside caption*
+    '\\\\caption\\*\\{\\s+([^}]*)\\s+\\}': '\\caption*{$1}',
   },
 };
