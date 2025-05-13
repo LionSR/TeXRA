@@ -8,6 +8,8 @@ import { ModelHandlerGoogle } from './modelHandlerGoogle';
 import { ModelHandlerGoogleGenAI } from './modelHandlerGoogleGenAI';
 import { ModelHandlerDeepSeek } from './modelHandlerDeepSeek';
 import { ModelHandlerXAI } from './modelHandlerXAI';
+import { ModelHandlerKimi } from './modelHandlerKimi';
+import { ModelHandlerDashScope } from './modelHandlerDashScope';
 import {
   ModelHandlerOpenRouter,
   ModelHandlerAnthropicViaOpenRouter,
@@ -71,6 +73,8 @@ export class ModelFactory {
       [ModelProvider.GOOGLE, ModelHandlerGoogle],
       [ModelProvider.DEEPSEEK, ModelHandlerDeepSeek],
       [ModelProvider.XAI, ModelHandlerXAI],
+      [ModelProvider.MOONSHOT, ModelHandlerKimi],
+      [ModelProvider.DASHSCOPE, ModelHandlerDashScope],
       [ModelProvider.OTHERS, ModelHandlerOpenRouter],
     ]);
 
