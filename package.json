@@ -498,7 +498,10 @@
               "gemini2p",
               "o3-mini",
               "gpt4o",
-              "DSV3"
+              "DSV3",
+              "qwenplus",
+              "kimit",
+              "Kimiv"
             ],
             "enumDescriptions": [
               "Claude Sonnet 3.7",
@@ -509,7 +512,10 @@
               "Gemini 2 Pro",
               "OpenAI O3 Mini",
               "OpenAI GPT-4O",
-              "DeepSeek V3"
+              "DeepSeek V3",
+              "Qwen Plus",
+              "Kimi Thinking",
+              "Kimi Vision"
             ],
             "description": "Default model to use for merge operations",
             "order": 1
@@ -1010,9 +1016,9 @@
   },
   "homepage": "https://texra.ai",
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.40.1",
+    "@anthropic-ai/sdk": "^0.50.4",
     "@cantoo/pdf-lib": "^2.3.2",
-    "@google/genai": "^0.12.0",
+    "@google/genai": "^0.13.0",
     "@types/yaml": "^1.9.6",
     "@vscode/codicons": "^0.0.36",
     "@wolfram-alpha/wolfram-alpha-api": "^23.1004.144821-RELEASE",
@@ -1025,7 +1031,7 @@
     "identifiers-arxiv": "^0.1.1",
     "marked": "^15.0.11",
     "nunjucks": "^3.2.4",
-    "openai": "^4.97.0",
+    "openai": "^4.98.0",
     "pdf2pic": "^3.1.4",
     "sortablejs": "^1.15.6",
     "split.js": "^1.6.5",

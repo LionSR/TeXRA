@@ -42,6 +42,8 @@ export enum ModelProvider {
   GOOGLE = 'google',
   DEEPSEEK = 'deepseek',
   XAI = 'xai',
+  MOONSHOT = 'moonshot',
+  DASHSCOPE = 'dashscope',
   OTHERS = 'others',
 }
 

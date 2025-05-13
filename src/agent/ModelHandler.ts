@@ -129,6 +129,9 @@ export abstract class ModelHandler {
       [ModelProvider.ANTHROPIC]: 'https://api.anthropic.com/v1/',
       [ModelProvider.DEEPSEEK]: 'https://api.deepseek.com',
       [ModelProvider.XAI]: 'https://api.x.ai/v1',
+      [ModelProvider.MOONSHOT]: 'https://api.moonshot.cn/v1',
+      [ModelProvider.DASHSCOPE]:
+        'https://dashscope-intl.aliyuncs.com/compatible-mode/v1',
       [ModelProvider.OTHERS]: null,
     };
     return BASE_URLS[this.config.provider];
@@ -142,6 +145,8 @@ export abstract class ModelHandler {
       ModelProvider.OTHERS,
       ModelProvider.DEEPSEEK,
       ModelProvider.XAI,
+      ModelProvider.MOONSHOT,
+      ModelProvider.DASHSCOPE,
       ModelProvider.ANTHROPIC,
     ].includes(this.config.provider);
   }
@@ -185,6 +190,8 @@ export abstract class ModelHandler {
       [ModelProvider.OPENAI]: 'Openai',
       [ModelProvider.GOOGLE]: 'Google',
       [ModelProvider.DEEPSEEK]: 'Deepseek',
+      [ModelProvider.MOONSHOT]: 'Moonshot',
+      [ModelProvider.DASHSCOPE]: 'Dashscope',
       [ModelProvider.XAI]: 'Xai',
       [ModelProvider.OTHERS]: '', // Will fall back to global
     };
