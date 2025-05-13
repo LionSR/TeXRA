@@ -26,7 +26,7 @@ In these notes, we explore the spectral properties of random graphs, with partic
 
 \section{Preliminaries}
 \begin{definition}
-An Erdős-Rényi random graph $G(n,p)$ is a graph on $n$ vertices where each posible edge is included with probability $p$ independent of all other edges.
+    An Erdős-Rényi random graph $G(n,p)$ is a graph on $n$ vertices where each posible edge is included with probability $p$ independent of all other edges.
 \end{definition}
 
 Let $A$ be the adjacency matrix of a graph $G$. The eigenvalues of $A$ are denoted $\lambda_1 \geq \lambda_2 \geq \cdots \geq \lambda_n$.
@@ -35,21 +35,21 @@ Let $A$ be the adjacency matrix of a graph $G$. The eigenvalues of $A$ are denot
 For a $d$-regular graph, it is well-known that $\lambda_1 = d$. The spectral gap, defined as $d - \lambda_2$, plays a crucial role in determining the expansion properties of the graph.
 
 \begin{theorem}[Alon-Bopanna]
-For any $d$-regular graph on $n$ vertices, we have
-\begin{equation}
-\lambda_2 \geq 2\sqrt{d-1} - o(1)
-\end{equation}
-where $o(1)$ tends to zero as the diameter of the graph tends to infinity.
+    For any $d$-regular graph on $n$ vertices, we have
+    \begin{equation}
+        \lambda_2 \geq 2\sqrt{d-1} - o(1)
+    \end{equation}
+    where $o(1)$ tends to zero as the diameter of the graph tends to infinity.
 \end{theorem}
 
 However, for random $d$-regular graphs, we can establish a stronger result
 
 \begin{theorem}[Friedman's Theorem]
-For any $\epsilon > 0$, a random $d$-regular graph $G$ satisfies
-\begin{equation}
-\lambda_2(G) \leq 2\sqrt{d-1} + \epsilon
-\end{equation}
-with probability approaching 1 as $n \to \infty$.
+    For any $\epsilon > 0$, a random $d$-regular graph $G$ satisfies
+    \begin{equation}
+        \lambda_2(G) \leq 2\sqrt{d-1} + \epsilon
+    \end{equation}
+    with probability approaching 1 as $n \to \infty$.
 \end{theorem}
 
 The proof relies on the trace method and careful analysis of the moments of \dots
@@ -58,11 +58,11 @@ The proof relies on the trace method and careful analysis of the moments of \dot
 For the Erdős-Rényi random graph $G(n,p)$ with $p = \frac{d}{n}$ for some constant $d > 0$, the eigenvalues of the adjacency matrix exhibit interesting concentration phenomena.
 
 \begin{proposition}
-Let $A$ be the adjacency matrix of $G(n,p)$ with $p = \frac{d}{n}$. Then, as $n \to \infty$:
-\begin{enumerate}
-\item $\lambda_1 = (1+o(1))np = (1+o(1))d$ almost surely
-\item For $i \ge 2$, $|\lambda_i| \leq (2+o(1))\sqrt{np(1-p)} = (2+o(1))\sqrt{d}$ almost surely
-\end{enumerate}
+    Let $A$ be the adjacency matrix of $G(n,p)$ with $p = \frac{d}{n}$. Then, as $n \to \infty$:
+    \begin{enumerate}
+        \item $\lambda_1 = (1+o(1))np = (1+o(1))d$ almost surely
+        \item For $i \ge 2$, $|\lambda_i| \leq (2+o(1))\sqrt{np(1-p)} = (2+o(1))\sqrt{d}$ almost surely
+    \end{enumerate}
 \end{proposition}
 
 This shows that the bulk of the spectrum is concentrated in a band of width $O(\sqrt{d})$ around the origin, while the largest eigenvalue is separated from this band.
@@ -71,22 +71,22 @@ This shows that the bulk of the spectrum is concentrated in a band of width $O(\
 
 \bibliographystyle{plain}
 \begin{thebibliography}{9}
-\bibitem{erdos1960evolution}
-P. Erdős and A. Rényi,
-\textit{On the evolution of random graphs},
-Publ. Math. Inst. Hung. Acad. Sci, 5(1):17--60, 1960.
+    \bibitem{erdos1960evolution}
+    P. Erdős and A. Rényi,
+    \textit{On the evolution of random graphs},
+    Publ. Math. Inst. Hung. Acad. Sci, 5(1):17--60, 1960.
 
-\bibitem{friedman2008proof}
-J. Friedman,
-\textit{A proof of Alon's second eigenvalue conjecture and related problems},
-Memoirs of the American Mathematical Society, 195(910), 2008.
+    \bibitem{friedman2008proof}
+    J. Friedman,
+    \textit{A proof of Alon's second eigenvalue conjecture and related problems},
+    Memoirs of the American Mathematical Society, 195(910), 2008.
 
-\bibitem{wigner1958distribution}
-E. P. Wigner,
-\textit{On the distribution of the roots of certain symmetric matrices},
-Annals of Mathematics, 67(2):325--327, 1958.
+    \bibitem{wigner1958distribution}
+    E. P. Wigner,
+    \textit{On the distribution of the roots of certain symmetric matrices},
+    Annals of Mathematics, 67(2):325--327, 1958.
 
-% [TODO: Add more relevant citations, maybe something on Wigner's semicircle law?]
+    % [TODO: Add more relevant citations, maybe something on Wigner's semicircle law?]
 
 \end{thebibliography}
 
