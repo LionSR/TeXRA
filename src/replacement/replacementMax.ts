@@ -486,6 +486,14 @@ export const MAX_MANUAL_REPLACEMENTS: ReplacementCategory = {
 
     // Specialized replacements
     '+ O(': '+ \\cO(',
+
+    // However, use a hyphen when closing up the word might lead to confusion, where the closed-up word would be cumbersome, or where the second element begins with a capital letter or number, e.g. un-ionized, pre-loss, pseudo-objectivity, sub-Gaussian.
+    unionized: 'uni-ionized',
+    preloss: 'pre-loss',
+    subgaussian: 'sub-gaussian',
+    nongaussian: 'non-gaussian',
+    nonGaussian: 'non-Gaussian',
+    pseudoobjectivity: 'pseudo-objectivity',
   },
 };
 
@@ -501,4 +509,24 @@ export const MAX_STYLE_REPLACEMENTS: ReplacementCategory = {
     };
     return combinedPatterns;
   })(),
+};
+
+export const MAX_REGEX_REPLACEMENTS: ReplacementCategory = {
+  name: 'max_style_regex',
+  description:
+    'Maximum style regex replacements for LaTeX commands and symbols',
+  isRegex: true,
+  patterns: {
+    // Subscript/superscript formatting
+
+    // MATHEMATICS STYLE
+    // Functions defined with domain/range should use \colon
+    '([a-zA-Z]\\s*):([^:]+)\\\\to': '$1\\colon$2\\to',
+
+    // PUNCTUATION AND SPACING
+
+    // Spell words with the following preﬁxes solid and not hyphenated: anti, co, counter, extra, inter, intra, macro, micro, multi, non, over, post, pre, pro, pseudo, psycho, re, semi, socio, sub, trans.
+    '\\b(anti|co|counter|extra|inter|intra|macro|micro|multi|non|over|post|pre|pro|pseudo|psycho|re|semi|socio|sub|trans)-([a-z]+)':
+      '$1$2',
+  },
 };
