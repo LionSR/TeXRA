@@ -9,10 +9,13 @@
   },
   "categories": [
     "Programming Languages",
+    "Chat",
+    "Machine Learning",
     "Linters",
     "Formatters",
     "AI",
-    "Education"
+    "Education",
+    "Data Science"
   ],
   "activationEvents": [
     "onView:texra",
@@ -265,6 +268,8 @@
               "gemini",
               "grok",
               "deepseek",
+              "qwen",
+              "kimi",
               "llama",
               "egg-info",
               "yaml"
