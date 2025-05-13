@@ -286,6 +286,7 @@ export function generateReferenceSpacing(referenceTypes: string[]): {
     if (/^[a-z]/.test(type)) {
       const capitalizedType = capitalize(type);
       patterns[`${capitalizedType} \\ref{`] = `${capitalizedType}~\\ref{`;
+      patterns[`${capitalizedType}\\ref{`] = `${capitalizedType}~\\ref{`;
     }
   });
 
