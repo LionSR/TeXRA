@@ -71,6 +71,12 @@ export const MODELS = [
   'grok2',
   'grok3',
   'grok3-',
+  'kimi',
+  'kimit',
+  'kimiv',
+  'qwenmax',
+  'qwenturbo',
+  'qwenplus',
 ];
 
 export const HISTORY_DIR = 'History';
