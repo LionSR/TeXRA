@@ -6,6 +6,11 @@ import * as logger from '../logger/logUtils';
 
 // Local imports - utilities
 import { getRelativePath } from '../utils/workspaceFileUtils';
+import {
+  applyReplacements,
+  getAllReplacements,
+  getAllReplacementsRegex,
+} from '../utils/replacementUtils';
 
 // Local imports - latex utils
 import { runLatexIndent } from '../latex/latexindent';
@@ -28,7 +33,64 @@ export function registerLatexCommands(context: vscode.ExtensionContext) {
     ),
     vscode.commands.registerCommand('texra.getTeXCount', handleGetTeXCount),
     vscode.commands.registerCommand('texra.indentTeX', runIndentTeX),
+    vscode.commands.registerCommand(
+      'texra.applyReplacements',
+      handleApplyReplacements,
+    ),
   );
+}
+
+async function handleApplyReplacements(): Promise<void> {
+  try {
+    // Get active editor
+    const editor = vscode.window.activeTextEditor;
+    if (!editor) {
+      vscode.window.showWarningMessage('No active text editor found');
+      return;
+    }
+    if (editor?.document.isDirty) {
+      await editor.document.save();
+    }
+
+    // Get document content
+    const document = editor.document;
+    const text = document.getText();
+
+    // Apply replacements
+    let processedText = text;
+    processedText = applyReplacements(
+      processedText,
+      getAllReplacements(),
+    ).trim();
+    processedText = applyReplacements(
+      processedText,
+      getAllReplacementsRegex(),
+    ).trim();
+    processedText = applyReplacements(
+      processedText,
+      getAllReplacements(),
+    ).trim();
+
+    // Update document content
+    const fullRange = new vscode.Range(
+      document.positionAt(0),
+      document.positionAt(text.length),
+    );
+
+    await editor.edit((editBuilder) => {
+      editBuilder.replace(fullRange, processedText);
+    });
+
+    vscode.window.showInformationMessage(
+      'LaTeX replacements applied successfully',
+    );
+  } catch (err) {
+    logger.error(
+      CHANNEL,
+      `Error applying replacements: ${err instanceof Error ? err.message : String(err)}`,
+    );
+    vscode.window.showErrorMessage('Error applying LaTeX replacements');
+  }
 }
 
 async function handleIndentCurrentTeX(): Promise<void> {
@@ -164,4 +226,5 @@ export const latexCommands = {
   handleIndentCurrentTeX,
   handleGetTeXCount,
   runIndentTeX,
+  handleApplyReplacements,
 };
