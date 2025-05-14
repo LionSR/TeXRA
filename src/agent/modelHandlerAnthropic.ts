@@ -19,7 +19,7 @@ import {
   applyReplacements,
   getAllReplacements,
   getAllReplacementsRegex,
-} from '../utils/replacementUtils';
+} from '../replacement/replacementUtils';
 import { extractAndLogScratchpad } from '../utils/xmlUtils';
 
 // Local imports - agent components

@@ -408,7 +408,8 @@
                 "latex_document",
                 "unicode",
                 "scratchpad_xml",
-                "style",
+                "latexdiff",
+                "gptness",
                 "personal_style",
                 "max_style"
               ]
@@ -422,10 +423,43 @@
               "latex_document",
               "unicode",
               "scratchpad_xml",
-              "style"
+              "latexdiff",
+              "gptness"
             ],
-            "description": "List of enabled LaTeX replacement categories",
+            "description": "List of enabled non-regex LaTeX replacement categories",
             "order": 6
+          },
+          "texra.latex.enabledReplacementsRegex": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "inline_math",
+                "tikz",
+                "parentheses",
+                "latexdiff_markup",
+                "equation_style",
+                "max_style_regex"
+              ]
+            },
+            "default": [
+              "inline_math",
+              "tikz",
+              "parentheses",
+              "latexdiff_markup",
+              "equation_style"
+            ],
+            "description": "List of enabled regex LaTeX replacement categories",
+            "order": 7
+          },
+          "texra.latex.customReplacementsRegex": {
+            "type": "object",
+            "default": {},
+            "description": "Custom regex replacements in the format: { 'pattern': 'replacement' }. Use capture groups with $1, $2, etc. Example: { '\\\\section\\{([^}]+)\\}': '\\section{$1}' }",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "order": 8
           },
           "texra.latex.customReplacements": {
             "type": "object",
@@ -434,7 +468,7 @@
             "additionalProperties": {
               "type": "string"
             },
-            "order": 7
+            "order": 9
           }
         }
       },
@@ -1040,14 +1074,14 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.50.4",
     "@cantoo/pdf-lib": "^2.3.2",
-    "@google/genai": "^0.13.0",
+    "@google/genai": "^0.14.0",
     "@types/yaml": "^1.9.6",
     "@vscode/codicons": "^0.0.36",
     "@wolfram-alpha/wolfram-alpha-api": "^23.1004.144821-RELEASE",
     "axios": "^1.9.0",
     "diff-match-patch": "^1.0.5",
     "difflib": "^0.2.4",
-    "fast-xml-parser": "^5.2.1",
+    "fast-xml-parser": "^5.2.3",
     "glob": "^11.0.2",
     "gpt-tokenizer": "^2.9.0",
     "identifiers-arxiv": "^0.1.1",
@@ -1057,7 +1091,7 @@
     "pdf2pic": "^3.1.4",
     "sortablejs": "^1.15.6",
     "split.js": "^1.6.5",
-    "terser-webpack-plugin": "^5.3.10",
+    "terser-webpack-plugin": "^5.3.14",
     "winston": "^3.17.0",
     "yaml": "^2.7.1"
   }
