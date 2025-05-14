@@ -26,7 +26,7 @@ import {
   LATEX_XML_REPLACEMENTS,
   LATEX_DOCUMENT_REPLACEMENTS,
   SCRATCHPAD_XML_REPLACEMENTS,
-  STYLE_REPLACEMENTS,
+  GPTNESS_REPLACEMENTS,
   PERSONAL_STYLE_REPLACEMENTS,
   LATEXDIFF_REPLACEMENTS,
 } from './replacementRules';
@@ -58,7 +58,7 @@ function getEnabledReplacements(): string[] {
     'latex_document',
     'unicode',
     'scratchpad_xml',
-    'style',
+    'gptness',
     'latexdiff',
   ]);
 }
@@ -75,7 +75,7 @@ const NON_REGEX_CATEGORIES: ReplacementCategory[] = [
   LATEX_XML_REPLACEMENTS,
   LATEX_DOCUMENT_REPLACEMENTS,
   SCRATCHPAD_XML_REPLACEMENTS,
-  STYLE_REPLACEMENTS,
+  GPTNESS_REPLACEMENTS,
   // Personal Style
   PERSONAL_STYLE_REPLACEMENTS,
   MAX_STYLE_REPLACEMENTS,
