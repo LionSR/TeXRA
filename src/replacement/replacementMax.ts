@@ -493,6 +493,7 @@ export const MAX_MANUAL_REPLACEMENTS: ReplacementCategory = {
     '\\cref{ch:': 'Chapter~\\ref{ch:',
     '  \\cref': ' \\cref',
     '  \\ref': ' \\ref',
+    '\\eqref{eqn:': '\\cref{eqn:',
 
     '\\log\\': '\\log \\',
 
@@ -630,8 +631,10 @@ const FULL_WORDS_REGEX_PART_INTERNAL = createWordRegexPart(
 // Pre-construct the regex patterns
 const SEP_WORDS_CREF_EQN_PATTERN = `(${SEP_WORDS_REGEX_PART_INTERNAL})(?:,)?\\s+\\\\cref\\{(eqn:[^,}]+)\\}`;
 const GEP_WORDS_CREF_EQN_PATTERN = `(${GEP_WORDS_REGEX_PART_INTERNAL})(?:,)?\\s+\\\\cref\\{(eqn:[^,}]+)\\}`;
+const GEP_WORDS_EQREF_EQN_PATTERN = `(${GEP_WORDS_REGEX_PART_INTERNAL})(?:,)?\\s+\\\\eqref\\{(eqn:[^,}]+)\\}`;
 const SEP_WORDS_PAREN_CREF_EQN_PATTERN = `(${SEP_WORDS_REGEX_PART_INTERNAL})(?:,)?\\s+\\(\\\\cref\\{(eqn:[^,}]+)\\}\\)`;
 const GEP_WORDS_PAREN_CREF_EQN_PATTERN = `(${GEP_WORDS_REGEX_PART_INTERNAL})(?:,)?\\s+\\(\\\\cref\\{(eqn:[^,}]+)\\}\\)`;
+const GEP_WORDS_PAREN_EQREF_EQN_PATTERN = `(${GEP_WORDS_REGEX_PART_INTERNAL})(?:,)?\\s+\\(\\\\eqref\\{(eqn:[^,}]+)\\}\\)`;
 const FULL_WORDS_CREF_FIG_PATTERN = `(${FULL_WORDS_REGEX_PART_INTERNAL})(?:,)?\\s+\\\\cref\\{(fig:[^,}]+)\\}`;
 
 export const MAX_REGEX_REPLACEMENTS: ReplacementCategory = {
@@ -674,6 +677,9 @@ export const MAX_REGEX_REPLACEMENTS: ReplacementCategory = {
     // General words before non-parenthesized \cref{eqn:...}
     [GEP_WORDS_CREF_EQN_PATTERN]: '$1 eqn.~\\ref{$2}',
 
+    // General
+    [GEP_WORDS_EQREF_EQN_PATTERN]: '$1 eqn.~\\ref{$2}',
+
     // Special pattern for "and \cref"
     'and\\s+\\\\cref\\{(eqn:[^,}]+)\\}': 'and eqn.~\\ref{$1}',
 
@@ -682,6 +688,10 @@ export const MAX_REGEX_REPLACEMENTS: ReplacementCategory = {
 
     // General words before parenthesized \cref{eqn:...}
     [GEP_WORDS_PAREN_CREF_EQN_PATTERN]: '$1 eqn.~(\\ref{$2})',
+
+    // General words before \eqref{eqn:...}
+    [GEP_WORDS_PAREN_EQREF_EQN_PATTERN]: '$1 eqn.~\\ref{$2}',
+
     // --- End of custom word list based \cref{eqn:...} replacements ---
 
     // Capitalized Cref version

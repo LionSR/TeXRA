@@ -408,8 +408,8 @@
                 "latex_document",
                 "unicode",
                 "scratchpad_xml",
-                "style",
                 "latexdiff",
+                "gptness",
                 "personal_style",
                 "max_style"
               ]
@@ -422,9 +422,9 @@
               "latex_xml",
               "latex_document",
               "unicode",
-              "latexdiff",
               "scratchpad_xml",
-              "style"
+              "latexdiff",
+              "gptness"
             ],
             "description": "List of enabled non-regex LaTeX replacement categories",
             "order": 6
