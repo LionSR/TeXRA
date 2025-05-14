@@ -10,7 +10,6 @@ import {
   shouldUseConsolidatedChannel,
   getColorForLevel,
   isAgentStream,
-  shouldExcludeFromProgressView,
 } from '../utils/loggerUtils';
 
 const { combine, timestamp } = winston.format;

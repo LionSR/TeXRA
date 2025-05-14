@@ -788,6 +788,7 @@ export const PERSONAL_STYLE_REPLACEMENTS: ReplacementCategory = {
     // Preferred operator command forms
     '\\mathrm{tr}': '\\tr',
     '\\mathrm{Tr}': '\\Tr',
+    '\\mathrm{KL}': '\\KL',
 
     // ===== Reference formatting =====
     // Add non-breaking spaces for references (chktex compatibility)
@@ -810,6 +811,8 @@ export const PERSONAL_STYLE_REPLACEMENTS: ReplacementCategory = {
     'to~App': 'to App',
     '~(\\ref{': ' (\\ref{',
     'form \\cref': 'from \\cref',
+    ' ~\\citep{': ' \\citep{',
+    ' ~\\citet{': ' \\citet{',
   },
 };
 
