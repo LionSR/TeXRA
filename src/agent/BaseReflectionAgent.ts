@@ -35,7 +35,7 @@ import {
   getReplacementsByCategory,
   getAllReplacements,
   getAllReplacementsRegex,
-} from '../utils/replacementUtils';
+} from '../replacement/replacementUtils';
 import { checkForMassiveRepetition } from '../utils/repetitionUtils';
 import {
   extractAndLogScratchpad,

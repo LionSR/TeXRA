@@ -32,7 +32,7 @@ import {
   applyReplacements,
   getAllReplacements,
   getAllReplacementsRegex,
-} from '../utils/replacementUtils';
+} from '../replacement/replacementUtils';
 import { extractAndLogScratchpad } from '../utils/xmlUtils';
 import { getConfig } from '../utils/configUtils';
 
