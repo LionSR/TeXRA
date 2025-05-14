@@ -439,8 +439,11 @@ export const MAX_MANUAL_REPLACEMENTS: ReplacementCategory = {
     '\\mathcal{H}^{\\text{eff}}': '\\ceffH',
     'p^{\\text{eq}}': '\\peq',
     'q^{\\text{eq}}': '\\qeq',
-    '\\rho^{\\text{eq}}': '\\rhoeq',
-    '\\rho^{\\text{st}}': '\\rhost',
+    'p^{\\text{st}}': '\\pst',
+    'q^{\\text{st}}': '\\qst',
+    'p^{\\text{ss}}': '\\pst',
+    'q^{\\text{ss}}': '\\qst',
+    
 
     // Special cases that don't fit the auto-generated patterns
     '\\not\\implies': '\\nimplies',
@@ -456,18 +459,26 @@ export const MAX_MANUAL_REPLACEMENTS: ReplacementCategory = {
 
     // Arrow spacing
     '\\quad\\Ra': '~~~\\Ra',
+    '    &\\quad ': '&~~~ ',
     '\\Ra\,': '\\Ra~',
 
     // Other replacements
     '\\tau_f': '\\tauf',
 
     // Equilibrium and steady state notation
+    '\\rho^{\\text{eq}}': '\\rhoeq',
+    '\\rho^{\\text{st}}': '\\rhost',
+    '\\rho^{\\text{ss}}': '\\rhost',
+    '\\rho^{\\text{sst}}': '\\rhost',
+    '\\rho_{\\text{eq}}': '\\rhoeq',
+    '\\rho_{\\text{ss}}': '\\rhost',
+    '\\rho_{\\text{st}}': '\\rhost',
+    '\\rho_{\\text{sst}}': '\\rhost',
     '{\\text{ss}}': '{\\text{st}}',
+    '{\\text{sst}}': '{\\text{st}}',
     '\\rho^{st}': '\\rhost',
     '\\rho^{eq}': '\\rhoeq',
-    '\\rho^{\\text{ss}}': '\\rhost',
     '\\rho^{ss}': '\\rhost',
-    '\\rho_{\\text{ss}}': '\\rhost',
     '\\rho_{ss}': '\\rhost',
     '\\ln': '\\log',
     '\\rhost^R': '\\rhost_R',
@@ -481,6 +492,10 @@ export const MAX_MANUAL_REPLACEMENTS: ReplacementCategory = {
 
     // cleveref notation:
     '\\cref{ch:': 'Chapter~\\ref{ch:',
+    '  \\cref': ' \\cref',
+    '  \\ref': ' \\ref',
+
+    '\\log\\': '\\log \\',
 
     // '\\mathbf{I}': '\\bI',
 
@@ -494,6 +509,7 @@ export const MAX_MANUAL_REPLACEMENTS: ReplacementCategory = {
     nongaussian: 'non-gaussian',
     nonGaussian: 'non-Gaussian',
     pseudoobjectivity: 'pseudo-objectivity',
+    nonnegati: 'non-negati',
   },
 };
 
@@ -511,22 +527,188 @@ export const MAX_STYLE_REPLACEMENTS: ReplacementCategory = {
   })(),
 };
 
+// Helper to create | separated regex part from a list of words
+const createWordRegexPart = (words: string[]): string => words.join('|');
+
+// Define the comprehensive list of all trigger words (from our previous discussion)
+// prettier-ignore
+// Define the comprehensive list of all trigger words (from our previous discussion)
+const _fullWordsArrayInternal = [
+  'apply', 'Apply', 'applies', 'Applies', 'applying', 'Applying', 'base', 'Base', 'based', 'Based', 'bases', 'Bases', 'basing', 'Basing', 'but', 'But', 'by', 'By', 
+  'between', 'Between', 'betweening', 'Betweening', 'betweened', 'Betweened', 'betweenes', 'Betweenes',
+  'compare', 'Compare', 'compares', 'Compares', 'comparing', 'Comparing', 'condition', 'Condition', 'conditions', 'Conditions', 
+  'define', 'Define', 'defines', 'Defines', 'defining', 'Defining', 'definition', 'Definition', 'definitions', 'Definitions', 
+  'derive', 'Derive', 'derived', 'Derived', 'derives', 'Derives', 'deriving', 'Deriving', 
+  'differentiate', 'Differentiate', 'differentiates', 'Differentiates', 'differentiating', 'Differentiating', 
+  // 'equation', 'Equation', 'equations', 'Equations', // Special word
+  'express', 'Express', 'expresses', 'Expresses', 'expressing', 'Expressing', 'execute', 'Execute', 'executes', 'Executes', 'executing', 'Executing',
+  'Finally', 
+  'follow', 'Follow', 'follows', 'Follows', 'following', 'Following', 'for', 'For', 
+  'be',
+  'formula', 'Formula', 'formulas', 'Formulas', // Special word
+  'from', 'From', 
+  'give', 'Give', 'given', 'Given', 'gives', 'Gives', 'giving', 'Giving', 
+  'hold', 'Hold', 'holds', 'Holds', 'holding', 'Holding', 'if', 'If', 'in', 'In', 
+  'integrate', 'Integrate', 'integrates', 'Integrates', 'integrating', 'Integrating', 'into', 'Into', 
+  'know', 'Know', 'knowing', 'Knowing', 'known', 'Known', 'knows', 'Knows', 'like', 'Like', 
+  'limit', 'Limit', 'limits', 'Limits', 'now', 'Now', 'of', 'Of', 
+  'probability', 'Probability', 'probabilities', 'Probabilities', 
+  'rearrange', 'Rearrange', 'rearranged', 'Rearranged', 'rearranges', 'Rearranges', 'rearranging', 'Rearranging', 
+  'rewrite', 'Rewrite', 'rewrites', 'Rewrites', 'rewriting', 'Rewriting', 
+  'run', 'Run', 'running', 'Running', 'runs', 'Runs', 
+  // 'SDE', 'SDEs', // Special word
+  'satisfy', 'Satisfy', 'satisfies', 'Satisfies', 'satisfying', 'Satisfying', 
+  'see', 'See', 'seeing', 'Seeing', 'sees', 'Sees', 
+  'show', 'Show', 'shown', 'Shown', 'shows', 'Shows', 'showing', 'Showing', 
+  'solve', 'Solve', 'solves', 'Solves', 'solving', 'Solving', 
+  'state', 'State', 'states', 'States', 'stating', 'Stating', 
+  'substitute', 'Substitute', 'substitutes', 'Substitutes', 'substituting', 'Substituting', 
+  'that', 'That', 'Then', 
+  // 'theorem', 'Theorem', 'theorems', 'Theorems', 
+  'to', 'To', 'under', 'Under', 
+  'use', 'Use', 'uses', 'Uses', 'using', 'Using', 'used', 'Used',
+  'particular',
+  'vector', 'Vector', 'vectors', 'Vectors', 'where', 'Where', 'While', 'while', 'with', 'With',
+  'transform', 'Transform', 'transforms', 'Transforms', 'transforming', 'Transforming',
+];
+
+// Define the "special" words that don't get 'eqn.~' prefix
+// prettier-ignore
+const _sepWordsArrayInternal = [
+  'equation',
+  'Equation',
+  'equations',
+  'Equations',
+  'SDE',
+  'SDEs',
+  'formula',
+  'Formula',
+  'formulas',
+  'Formulas',
+  'recipe',
+  'Recipe',
+  'recipes',
+  'Recipes',
+  'problem',
+  'Problem',
+  'problems',
+  'Problems',
+  'solution',
+  'Solution',
+  'solutions',
+  'equality',
+  'Equality',
+  'equalities',
+  'Equalities',
+  'inequality',
+  'Inequality',
+  'inequalities',
+  'process',
+  'Process',
+  'processes',
+  'Processes',
+  'procedure',
+  'Procedure',
+  'procedures',
+];
+
+// Define "general" words (full list minus special words)
+const _gepWordsArrayInternal = _fullWordsArrayInternal.filter(
+  (word) => !_sepWordsArrayInternal.includes(word),
+);
+
+// Create regex parts for use in the patterns object
+const SEP_WORDS_REGEX_PART_INTERNAL = createWordRegexPart(
+  _sepWordsArrayInternal,
+);
+const GEP_WORDS_REGEX_PART_INTERNAL = createWordRegexPart(
+  _gepWordsArrayInternal,
+);
+const FULL_WORDS_REGEX_PART_INTERNAL = createWordRegexPart(
+  _fullWordsArrayInternal,
+);
+
+// Pre-construct the regex patterns
+const SEP_WORDS_CREF_EQN_PATTERN = `(${SEP_WORDS_REGEX_PART_INTERNAL})(?:,)?\\s+\\\\cref\\{(eqn:[^,}]+)\\}`;
+const GEP_WORDS_CREF_EQN_PATTERN = `(${GEP_WORDS_REGEX_PART_INTERNAL})(?:,)?\\s+\\\\cref\\{(eqn:[^,}]+)\\}`;
+const SEP_WORDS_PAREN_CREF_EQN_PATTERN = `(${SEP_WORDS_REGEX_PART_INTERNAL})(?:,)?\\s+\\(\\\\cref\\{(eqn:[^,}]+)\\}\\)`;
+const GEP_WORDS_PAREN_CREF_EQN_PATTERN = `(${GEP_WORDS_REGEX_PART_INTERNAL})(?:,)?\\s+\\(\\\\cref\\{(eqn:[^,}]+)\\}\\)`;
+const FULL_WORDS_CREF_FIG_PATTERN = `(${FULL_WORDS_REGEX_PART_INTERNAL})(?:,)?\\s+\\\\cref\\{(fig:[^,}]+)\\}`;
+
 export const MAX_REGEX_REPLACEMENTS: ReplacementCategory = {
   name: 'max_style_regex',
   description:
     'Maximum style regex replacements for LaTeX commands and symbols',
   isRegex: true,
+  flags: 'gms',
   patterns: {
     // Subscript/superscript formatting
 
     // MATHEMATICS STYLE
     // Functions defined with domain/range should use \colon
-    '([a-zA-Z]\\s*):([^:]+)\\\\to': '$1\\colon$2\\to',
+    // '([a-zA-Z]\\s*):([^:]+)\\\\to\\s*([A-Za-z])': '$1\\colon$2\\to $3',
+    // Functions defined with domain/range should use \colon (improved version)
+    // '(\\$[^$]*[a-zA-Z][a-zA-Z0-9]*(?:\\([^)]*\\))?\\s*):(?!:)(\\s*[^:$]+?\\\\to)':
+    // '$1\\colon$2',
+    // Not working, maybe we should limit the length
+    // This is too dangerous
+
+    // // Ellipses should be raised between operators but not between punctuation
+    // '([+\\-*\\/])\\s*\\.\\.\\.\\s*([+\\-*\\/])': '$1\\cdots$2',
+    // '([,;])\\s*\\.\\.\\.\\s*([,;])': '$1\\ldots$2',
+    // Max like ,..,
 
     // PUNCTUATION AND SPACING
 
     // Spell words with the following preﬁxes solid and not hyphenated: anti, co, counter, extra, inter, intra, macro, micro, multi, non, over, post, pre, pro, pseudo, psycho, re, semi, socio, sub, trans.
     '\\b(anti|co|counter|extra|inter|intra|macro|micro|multi|non|over|post|pre|pro|pseudo|psycho|re|semi|socio|sub|trans)-([a-z]+)':
       '$1$2',
+
+    // GROUP 1: PARENTHESIZED REFERENCES
+    // Single equation in parentheses (\cref{eqn:...})
+    '\\(\\\\cref\\{(eqn:[^,}]+)\\}\\)': '(eqn.~\\ref{$1})',
+
+    // --- Custom word list based \cref{eqn:...} replacements ---
+    // Special words (equation, SDE, formula) before non-parenthesized \cref{eqn:...}
+    [SEP_WORDS_CREF_EQN_PATTERN]: '$1~\\ref{$2}',
+
+    // General words before non-parenthesized \cref{eqn:...}
+    [GEP_WORDS_CREF_EQN_PATTERN]: '$1 eqn.~\\ref{$2}',
+
+    // Special pattern for "and \cref"
+    'and\\s+\\\\cref\\{(eqn:[^,}]+)\\}': 'and eqn.~\\ref{$1}',
+
+    // Special words (equation, SDE, formula) before parenthesized \cref{eqn:...}
+    [SEP_WORDS_PAREN_CREF_EQN_PATTERN]: '$1~(\\ref{$2})',
+
+    // General words before parenthesized \cref{eqn:...}
+    [GEP_WORDS_PAREN_CREF_EQN_PATTERN]: '$1 eqn.~(\\ref{$2})',
+    // --- End of custom word list based \cref{eqn:...} replacements ---
+
+    // Capitalized Cref version
+    '\\\\Cref\\{(eqn:[^,}]+)\\}': 'Eqn.~\\ref{$1}',
+
+    // General case for \cref{eqn:...} not covered by specific preceding words or parentheses
+    // '\\\\cref\\{(eqn:[^,}]+)\\}': 'eqn.~\\ref{$1}',
+
+    // PARENTHESIZED REFERENCES
+    // Single figure in parentheses (\cref{fig:...})
+    '\\(\\\\cref\\{(fig:[^,}]+)\\}\\)': '(Figure~\\ref{$1})',
+
+    // --- Custom word list based \cref{fig:...} replacements ---
+    // Common phrases (full word list) followed by \cref{fig:...}
+    [FULL_WORDS_CREF_FIG_PATTERN]: '$1 Figure~\\ref{$2}',
+    // --- End of custom word list based \cref{fig:...} replacements ---
+
+    '\\(see\\s+\\\\cref\\{(fig:[^,}]+)\\}\\)': '(see Figure~\\ref{$1})',
+
+    // General case for \cref{fig:...} not covered by specific preceding words or parentheses
+    // '\\\\cref\\{(fig:[^,}]+)\\}': 'Figure~\\ref{$1}',
+    // General case for \Cref{fig:...}
+    // '\\\\Cref\\{(fig:[^,}]+)\\}': 'Figure~\\ref{$1}',
+
+    // Next step
+    // \KL[|] -> \\KL[\|]
+    // get _ or - in the equation labels consistent.
   },
 };

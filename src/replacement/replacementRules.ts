@@ -32,6 +32,8 @@ export const LATEX_SPACING_REPLACEMENTS: ReplacementCategory = {
     ' \\,\\nn': ' \\nn',
     '\n    \\\\': '\\\\',
     ' nn\n': ' \\nn\n',
+    ' .\n': '.\n',
+    ' ,\\nn\\\\\n': ',\\nn\\\\\n',
 
     // Multiple space fixes
     '.  ': '. ',
@@ -274,6 +276,7 @@ export const EQUATION_REPLACEMENTS: ReplacementCategory = {
     // Unusual line/paragraph separators (Gemini problem)
     patterns['/[\u2028\u2029]/g'] = '\n';
 
+    patterns[':\\colon'] = '\\colon';
     return patterns;
   })(),
 };
@@ -647,6 +650,7 @@ export const PERSONAL_STYLE_REPLACEMENTS: ReplacementCategory = {
     'cf.~Eq': 'cf. Eq',
     'to~App': 'to App',
     '~(\\ref{': ' (\\ref{',
+    'form \\cref': 'from \\cref',
   },
 };
 
