@@ -21,7 +21,7 @@ import {
   applyReplacements,
   getReplacementsByCategory,
   getAllReplacements,
-} from '../utils/replacementUtils';
+} from '../replacement/replacementUtils';
 import {
   runLatexdiff,
   runLatexdiffForRound,

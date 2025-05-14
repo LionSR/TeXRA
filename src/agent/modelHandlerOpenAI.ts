@@ -20,7 +20,7 @@ import {
   applyReplacements,
   getAllReplacements,
   getAllReplacementsRegex,
-} from '../utils/replacementUtils';
+} from '../replacement/replacementUtils';
 import { getConfig } from '../utils/configUtils';
 import { extractAndLogScratchpad } from '../utils/xmlUtils';
 

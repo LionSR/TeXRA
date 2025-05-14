@@ -41,7 +41,7 @@ After installing the extension, you can configure your API keys in VS Code setti
 - OpenAI API key
 - Anthropic API key
 - Gemini API key
-- Other (xAI, deepseek, OpenRouter, etc.) API keys
+- Other (xAI, deepseek, OpenRouter, Qwen, Kimi, etc.) API keys
 
 ## Required Dependencies
 
@@ -53,7 +53,7 @@ TeXRA requires several system dependencies for full functionality. See the [**In
   - Windows:
     - MiKTeX ([download](https://miktex.org/download)) or
     - TeX Live ([download](https://tug.org/texlive/windows.html))
-  - macOS: MacTeX ([download](https://www.tug.org/mactex/mactex-download.html))
+  - macOS: MacTeX ([download](https://www.tug.org/mactex/mactex-download.html)) or via homebrew (`brew install texlive`)
   - Linux: TeX Live (`sudo apt-get install texlive-full` for Ubuntu)
 
 ### Perl
