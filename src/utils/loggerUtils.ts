@@ -8,7 +8,7 @@ import { getConfig } from './configUtils';
  */
 export function isAgentStream(streamName: string): boolean {
   // Special cases that are always treated as agent streams
-  if (streamName === 'merge') {
+  if (streamName.includes('merge')) {
     return true;
   }
 
