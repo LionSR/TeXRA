@@ -443,7 +443,6 @@ export const MAX_MANUAL_REPLACEMENTS: ReplacementCategory = {
     'q^{\\text{st}}': '\\qst',
     'p^{\\text{ss}}': '\\pst',
     'q^{\\text{ss}}': '\\qst',
-    
 
     // Special cases that don't fit the auto-generated patterns
     '\\not\\implies': '\\nimplies',
