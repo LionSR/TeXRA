@@ -438,7 +438,8 @@
                 "tikz",
                 "parentheses",
                 "latexdiff_markup",
-                "equation_style"
+                "equation_style",
+                "max_style_regex"
               ]
             },
             "default": [
