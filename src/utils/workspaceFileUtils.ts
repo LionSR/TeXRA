@@ -170,15 +170,15 @@ export async function findFileInBuild(
   ext?: string,
 ): Promise<string | null> {
   try {
-    // Only search in inputDir and inputDir/build, not build/build
+    // Search in the specified inputDir and, when the input directory isn't
+    // already within a build folder, also search its sibling build directory
     const workspacePath = getWorkspacePath();
     if (!workspacePath) {
       throw new Error('No workspace path found');
     }
 
-    // Only search in inputDir and inputDir/build, not build/build
     const searchDirs = [path.join(workspacePath, inputDir)];
-    if (!workspacePath.includes('build')) {
+    if (!inputDir.includes('build')) {
       searchDirs.push(path.join(workspacePath, inputDir, 'build'));
     }
 
