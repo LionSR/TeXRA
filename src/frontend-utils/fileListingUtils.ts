@@ -201,9 +201,14 @@ export async function getFilesRecursively(
       const isSymbolicLink =
         (stat.type & vscode.FileType.SymbolicLink) ===
         vscode.FileType.SymbolicLink;
+      const isDirectory =
+        (stat.type & vscode.FileType.Directory) === vscode.FileType.Directory;
+      const isFile =
+        (stat.type & vscode.FileType.File) === vscode.FileType.File;
 
       if (
-        (type === vscode.FileType.Directory || isSymbolicLink) &&
+        (type === vscode.FileType.Directory ||
+          (isSymbolicLink && isDirectory)) &&
         !name.startsWith('.') &&
         !normalizedExcludeDirs.has(name.toLowerCase())
       ) {
@@ -217,7 +222,7 @@ export async function getFilesRecursively(
           excludeFiles,
         );
       } else if (
-        type === vscode.FileType.File &&
+        (type === vscode.FileType.File || (isSymbolicLink && isFile)) &&
         !name.startsWith('.') &&
         (includeExtensions.length === 0 ||
           includeExtensions.some((ext) =>
