@@ -116,6 +116,21 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       : this._groupsStorageKey;
   }
 
+  /**
+   * Extract a timestamp from an HTML log message.
+   *
+   * Mirrors the logic used by {@link getMessageTimestamp} in the webview
+   * code so recovered logs are sorted consistently.
+   */
+  private _extractTimestamp(html: string): string {
+    const attrMatch = html.match(/data-full-timestamp="([^"]+)"/);
+    if (attrMatch) {
+      return attrMatch[1];
+    }
+    const bracketMatch = html.match(/\[(.*?)\]/);
+    return bracketMatch ? bracketMatch[1] : '';
+  }
+
   private _loadState() {
     const savedState = this.context.workspaceState.get<{
       [key: string]: ColoredLogMessage[];
@@ -484,13 +499,25 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       ? messages
       : messages.filter((msg) => msg.level !== 'debug');
 
+    // Sort messages chronologically in case they were loaded out of order
+    const sortedMessages = [...displayMessages].sort((a, b) => {
+      const tA = this._extractTimestamp(a.message);
+      const tB = this._extractTimestamp(b.message);
+      const dA = new Date(tA);
+      const dB = new Date(tB);
+      if (!isNaN(dA.getTime()) && !isNaN(dB.getTime())) {
+        return dA.getTime() - dB.getTime();
+      }
+      return tA.localeCompare(tB);
+    });
+
     // Get groups for this stream
     const groups = this._logGroups.get(stream) || new Map();
 
     this._view.webview.postMessage({
       command: COMMANDS.UPDATE_LOGS,
       stream: stream,
-      messages: displayMessages,
+      messages: sortedMessages,
       groups: Array.from(groups.values()),
     });
 
