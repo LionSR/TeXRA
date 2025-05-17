@@ -189,6 +189,7 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     outputPrice: 4.4,
     capabilities: {
       ...DEFAULT_MODEL_CAPABILITIES,
+      supportsPromptCaching: true,
       supportsAutoPromptCaching: true,
       cacheDiscountFactor: 0.25,
       supportsVision: true,
@@ -210,6 +211,7 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     outputPrice: 40.0,
     capabilities: {
       ...DEFAULT_MODEL_CAPABILITIES,
+      supportsPromptCaching: true,
       supportsAutoPromptCaching: true,
       cacheDiscountFactor: 0.25,
       supportsVision: true,
@@ -473,8 +475,9 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     outputPrice: 10.0,
     capabilities: {
       ...DEFAULT_MODEL_CAPABILITIES,
-      supportsPromptCaching: false,
-      supportsAutoPromptCaching: false,
+      supportsPromptCaching: true,
+      supportsAutoPromptCaching: true,
+      cacheDiscountFactor: 0.25,
       supportsNativePdf: true,
       supportsVision: true,
       supportsReasoning: true,
@@ -494,8 +497,9 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     outputPrice: 10.0,
     capabilities: {
       ...DEFAULT_MODEL_CAPABILITIES,
-      supportsPromptCaching: false,
-      supportsAutoPromptCaching: false,
+      supportsPromptCaching: true,
+      supportsAutoPromptCaching: true,
+      cacheDiscountFactor: 0.25,
       supportsNativePdf: true,
       supportsVision: true,
       supportsReasoning: true,
@@ -515,6 +519,9 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     outputPrice: 5.0,
     capabilities: {
       ...DEFAULT_MODEL_CAPABILITIES,
+      supportsPromptCaching: true,
+      supportsAutoPromptCaching: true,
+      cacheDiscountFactor: 0.25,
       supportsNativePdf: true,
       supportsVision: true,
       supportsNativeAudio: true,
@@ -532,8 +539,9 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     outputPrice: 5.0,
     capabilities: {
       ...DEFAULT_MODEL_CAPABILITIES,
-      supportsPromptCaching: false,
-      supportsAutoPromptCaching: false,
+      supportsPromptCaching: true,
+      supportsAutoPromptCaching: true,
+      cacheDiscountFactor: 0.25,
       supportsNativePdf: true,
       supportsVision: true,
       supportsReasoning: true,
@@ -553,8 +561,9 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     outputPrice: 0.3,
     capabilities: {
       ...DEFAULT_MODEL_CAPABILITIES,
-      supportsPromptCaching: false,
-      supportsAutoPromptCaching: false,
+      supportsPromptCaching: true,
+      supportsAutoPromptCaching: true,
+      cacheDiscountFactor: 0.25,
       supportsNativePdf: true,
       supportsVision: true,
       supportsNativeAudio: true,
@@ -592,6 +601,8 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     outputPrice: 5.0,
     capabilities: {
       ...DEFAULT_MODEL_CAPABILITIES,
+      supportsAutoPromptCaching: true,
+      cacheDiscountFactor: 0.25,
       supportsNativePdf: true,
       supportsVision: true,
       supportsNativeAudio: true,
@@ -609,6 +620,8 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     outputPrice: 0.3,
     capabilities: {
       ...DEFAULT_MODEL_CAPABILITIES,
+      supportsAutoPromptCaching: true,
+      cacheDiscountFactor: 0.25,
       supportsNativePdf: true,
       supportsVision: true,
       supportsNativeAudio: true,
