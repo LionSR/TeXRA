@@ -7,6 +7,7 @@ import * as logger from '../logger/logUtils';
 // Local imports - utils
 import { getLinterMessages } from '../utils/linterUtils';
 import { getRelativePath } from '../utils/workspaceFileUtils';
+import { sleep } from '../utils/timeUtils';
 
 // Local imports - core
 import { TeXLinterFixAgent } from '../AnthropicTool';
@@ -198,8 +199,9 @@ export async function handleFixLinterIssues(): Promise<void> {
           progress.report({ message: 'Could not fix all issues' });
         }
 
-        // Return a Promise that resolves after 1.5 seconds to give user time to see the result
-        return new Promise((resolve) => setTimeout(resolve, 1500));
+        // Short delay to give user time to see the result
+        await sleep(1500);
+        return;
       },
     );
   } catch (err) {
