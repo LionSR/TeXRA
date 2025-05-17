@@ -460,7 +460,7 @@ export const MAX_MANUAL_REPLACEMENTS: ReplacementCategory = {
     '\\quad\\Ra': '~~~\\Ra',
     '    &\\quad ': '    &~~~ ',
     '\\Ra\,': '\\Ra~',
-  
+
     //
     '{\\ddt}': '{\\dd t}',
     '\\int_0^\\tauf dt': '\\int_0^{\\tauf} \\ddt',
@@ -514,7 +514,7 @@ export const MAX_MANUAL_REPLACEMENTS: ReplacementCategory = {
     nonGaussian: 'non-Gaussian',
     pseudoobjectivity: 'pseudo-objectivity',
     nonnegati: 'non-negati',
-    'antiIto': 'anti-Ito',
+    antiIto: 'anti-Ito',
   },
 };
 
