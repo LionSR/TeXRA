@@ -1,5 +1,6 @@
 // Third-party imports
 import * as vscode from 'vscode';
+import { capitalize, uncapitalize } from '../utils/stringUtils';
 
 export const showInfoMessage = vscode.window.showInformationMessage;
 export const showWarningMessage = vscode.window.showWarningMessage;
@@ -14,10 +15,4 @@ export function ensureArray<T>(value: T | T[] | null | undefined): T[] {
   return [];
 }
 
-export function capitalize(str: string) {
-  return str.charAt(0).toUpperCase() + str.slice(1);
-}
-
-export function uncapitalize(str: string) {
-  return str.charAt(0).toLowerCase() + str.slice(1);
-}
+export { capitalize, uncapitalize };
