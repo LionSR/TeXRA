@@ -28,6 +28,7 @@ import { ModelHandler } from './ModelHandler';
 import { OpenAIAPIResponseUsage, ResponseUsageFactory } from './ResponseUsage';
 import { ToolState } from './ToolState';
 import { K_SLICE } from '../utils/constants';
+import { calculateTokenPrice } from '../utils/priceUtils';
 
 /**
  * OpenAI-specific handlers.
@@ -551,10 +552,12 @@ export class ModelHandlerOpenAI extends ModelHandler {
     const promptTokens = responseUsage.prompt_tokens ?? 0;
     const completionTokens = responseUsage.completion_tokens ?? 0;
 
-    let basePrice =
-      (promptTokens * this.config.inputPrice +
-        completionTokens * this.config.outputPrice) /
-      1e6;
+    let basePrice = calculateTokenPrice(
+      promptTokens,
+      completionTokens,
+      this.config.inputPrice,
+      this.config.outputPrice,
+    );
 
     // Handle special token types
     if (responseUsage.reasoning_tokens) {

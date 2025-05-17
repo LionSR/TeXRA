@@ -36,6 +36,7 @@ import {
 } from '../replacement/replacementUtils';
 import { extractAndLogScratchpad } from '../utils/xmlUtils';
 import { getConfig } from '../utils/configUtils';
+import { calculateTokenPrice } from '../utils/priceUtils';
 
 // Local constant
 import { K_SLICE } from '../utils/constants';
@@ -509,10 +510,11 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
     if (!responseUsage) return 0.0;
     const promptTokens = responseUsage.promptTokenCount ?? 0;
     const completionTokens = responseUsage.candidatesTokenCount ?? 0;
-    return (
-      (promptTokens * this.config.inputPrice +
-        completionTokens * this.config.outputPrice) /
-      1e6
+    return calculateTokenPrice(
+      promptTokens,
+      completionTokens,
+      this.config.inputPrice,
+      this.config.outputPrice,
     );
   }
 
