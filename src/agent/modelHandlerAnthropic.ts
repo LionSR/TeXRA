@@ -19,6 +19,7 @@ import {
   applyReplacements,
   getAllReplacements,
   getAllReplacementsRegex,
+  cleanFileContent,
 } from '../replacement/replacementUtils';
 import { extractAndLogScratchpad } from '../utils/xmlUtils';
 
@@ -34,8 +35,8 @@ import { ToolState } from './ToolState';
 import { AgentStateRound } from './AgentState';
 import { messageToSkeleton } from './messageUtils';
 import { getConfig } from '../utils/configUtils';
-
-const K_SLICE = 200;
+import { K_SLICE } from '../utils/constants';
+import { calculateTokenPrice } from '../utils/priceUtils';
 
 /**
  * Anthropic-specific model handler implementation for managing API interactions and message processing.
@@ -453,11 +454,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
 
     // Get prefill from existing and non-trivial file
     let fileContent = await readFile(outputFile);
-    fileContent = applyReplacements(fileContent, getAllReplacements()).trim();
-    fileContent = applyReplacements(
-      fileContent,
-      getAllReplacementsRegex(),
-    ).trim();
+    fileContent = cleanFileContent(fileContent);
 
     // Extract and log any existing scratchpad content
     extractAndLogScratchpad(fileContent, this.logger);
@@ -531,10 +528,12 @@ export class ModelHandlerAnthropic extends ModelHandler {
 
   /** Calculates API usage cost based on input/output tokens and cache usage if supported. */
   computePrice(responseUsage: any): number {
-    let basePrice =
-      (responseUsage.input_tokens * this.config.inputPrice +
-        responseUsage.output_tokens * this.config.outputPrice) /
-      1e6;
+    let basePrice = calculateTokenPrice(
+      responseUsage.input_tokens,
+      responseUsage.output_tokens,
+      this.config.inputPrice,
+      this.config.outputPrice,
+    );
 
     if (this.capabilities.supportsPromptCaching) {
       if ('cache_creation_input_tokens' in responseUsage) {

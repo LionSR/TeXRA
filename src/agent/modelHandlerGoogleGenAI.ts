@@ -32,12 +32,14 @@ import {
   applyReplacements,
   getAllReplacements,
   getAllReplacementsRegex,
+  cleanFileContent,
 } from '../replacement/replacementUtils';
 import { extractAndLogScratchpad } from '../utils/xmlUtils';
 import { getConfig } from '../utils/configUtils';
+import { calculateTokenPrice } from '../utils/priceUtils';
 
 // Local constant
-const K_SLICE = 200;
+import { K_SLICE } from '../utils/constants';
 
 // Internal type definition
 type InternalMessagePart = {
@@ -508,10 +510,11 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
     if (!responseUsage) return 0.0;
     const promptTokens = responseUsage.promptTokenCount ?? 0;
     const completionTokens = responseUsage.candidatesTokenCount ?? 0;
-    return (
-      (promptTokens * this.config.inputPrice +
-        completionTokens * this.config.outputPrice) /
-      1e6
+    return calculateTokenPrice(
+      promptTokens,
+      completionTokens,
+      this.config.inputPrice,
+      this.config.outputPrice,
     );
   }
 
@@ -674,11 +677,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
       `Output file ${outputFile} exists and is non-trivial. Reading content.`,
     );
     let fileContent = await readFile(outputFile);
-    fileContent = applyReplacements(fileContent, getAllReplacements()).trim();
-    fileContent = applyReplacements(
-      fileContent,
-      getAllReplacementsRegex(),
-    ).trim();
+    fileContent = cleanFileContent(fileContent);
 
     extractAndLogScratchpad(fileContent, this.logger);
     await writeFile(outputFile, fileContent);
