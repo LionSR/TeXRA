@@ -259,3 +259,12 @@ export function applyReplacements(
 
   return text;
 }
+
+/**
+ * Clean content using all replacement rules.
+ */
+export function cleanFileContent(content: string): string {
+  let cleaned = applyReplacements(content, getAllReplacements()).trim();
+  cleaned = applyReplacements(cleaned, getAllReplacementsRegex()).trim();
+  return cleaned;
+}

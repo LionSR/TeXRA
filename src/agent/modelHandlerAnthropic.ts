@@ -19,6 +19,7 @@ import {
   applyReplacements,
   getAllReplacements,
   getAllReplacementsRegex,
+  cleanFileContent,
 } from '../replacement/replacementUtils';
 import { extractAndLogScratchpad } from '../utils/xmlUtils';
 
@@ -34,8 +35,7 @@ import { ToolState } from './ToolState';
 import { AgentStateRound } from './AgentState';
 import { messageToSkeleton } from './messageUtils';
 import { getConfig } from '../utils/configUtils';
-
-const K_SLICE = 200;
+import { K_SLICE } from '../utils/constants';
 
 /**
  * Anthropic-specific model handler implementation for managing API interactions and message processing.
@@ -453,11 +453,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
 
     // Get prefill from existing and non-trivial file
     let fileContent = await readFile(outputFile);
-    fileContent = applyReplacements(fileContent, getAllReplacements()).trim();
-    fileContent = applyReplacements(
-      fileContent,
-      getAllReplacementsRegex(),
-    ).trim();
+    fileContent = cleanFileContent(fileContent);
 
     // Extract and log any existing scratchpad content
     extractAndLogScratchpad(fileContent, this.logger);

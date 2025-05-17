@@ -16,11 +16,7 @@ import {
   writeFile,
   fileExistsAndNonTrivial,
 } from '../utils/workspaceFileUtils';
-import {
-  applyReplacements,
-  getAllReplacements,
-  getAllReplacementsRegex,
-} from '../replacement/replacementUtils';
+import { cleanFileContent } from '../replacement/replacementUtils';
 import { getConfig } from '../utils/configUtils';
 import { extractAndLogScratchpad } from '../utils/xmlUtils';
 
@@ -31,8 +27,7 @@ import { AgentStateRound } from './AgentState';
 import { ModelHandler } from './ModelHandler';
 import { OpenAIAPIResponseUsage, ResponseUsageFactory } from './ResponseUsage';
 import { ToolState } from './ToolState';
-
-const K_SLICE = 200;
+import { K_SLICE } from '../utils/constants';
 
 /**
  * OpenAI-specific handlers.
@@ -486,11 +481,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
 
     // Get prefill from existing and non-trivial file
     let fileContent = await readFile(outputFile);
-    fileContent = applyReplacements(fileContent, getAllReplacements()).trim();
-    fileContent = applyReplacements(
-      fileContent,
-      getAllReplacementsRegex(),
-    ).trim();
+    fileContent = cleanFileContent(fileContent);
 
     // Extract and log any existing scratchpad content
     extractAndLogScratchpad(fileContent, this.logger);
