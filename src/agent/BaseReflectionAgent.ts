@@ -54,7 +54,8 @@ import { messageToSkeleton } from './messageUtils';
 // System imports - common utilities
 import { getConfig } from '../utils/configUtils';
 
-const K_SLICE = 200;
+// Shared constants
+import { K_SLICE } from '../utils/constants';
 
 /**
  * Abstract base class for agents that support multi-turn reflection and refinement.
