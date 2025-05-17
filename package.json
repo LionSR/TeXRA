@@ -882,6 +882,11 @@
         "category": "TeXRA"
       },
       {
+        "command": "texra.openDoc",
+        "title": "Open TeXRA Documentation",
+        "category": "TeXRA"
+      },
+      {
         "command": "texra.showAgentHistory",
         "title": "Show Agent Execution History",
         "category": "TeXRA"
