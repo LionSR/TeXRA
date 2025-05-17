@@ -334,7 +334,7 @@ export function replaceMathUnicode(text: string): string {
   }
 
   // Also handle inline math with $ ... $
-  let inlineMathPattern = /\$(.*?)\$/g;
+  const inlineMathPattern = /\$(.*?)\$/g;
   text = text.replace(inlineMathPattern, (match, p1) => {
     let content = p1;
 
