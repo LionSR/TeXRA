@@ -9,7 +9,10 @@ import * as logger from './logger/logUtils';
 import {
   getBuiltInAgentsDirectory,
   getCustomAgentsDirectory,
+  getOrPromptForCustomAgentsDirectory,
 } from './utils/pathUtils';
+import { promptToAddAgentToConfig } from './utils/agentRegistration';
+import { isValidAgentYaml } from './agent/agentLoad';
 import { fileExistsAbsolute } from './utils/absoluteFileUtils';
 
 const CHANNEL = 'Webview';
@@ -156,15 +159,26 @@ export class FolderExplorer implements vscode.TreeDataProvider<FileItem> {
 
   private async createNew(node: FileItem | undefined, isFolder: boolean) {
     try {
-      const parentPath =
-        node?.resourceUri.fsPath ||
-        (this.context
-          ? await getBuiltInAgentsDirectory(this.context)
-          : undefined);
+      // Ensure we have a custom agents directory configured
+      const customBase = await getOrPromptForCustomAgentsDirectory();
+      if (!customBase) {
+        return;
+      }
+
+      let parentPath = node?.resourceUri.fsPath || customBase;
+
+      if (parentPath.startsWith(this.builtInAgentsPath)) {
+        // Mirror built-in structure under the custom directory
+        const relative = path.relative(this.builtInAgentsPath, parentPath);
+        parentPath = path.join(customBase, relative);
+      }
 
       if (!parentPath) {
         throw new Error('No valid parent path found');
       }
+
+      // Ensure parent directory exists
+      await vscode.workspace.fs.createDirectory(vscode.Uri.file(parentPath));
 
       // Create a temporary item for in-place editing
       const tempName = isFolder ? 'New Folder' : 'new-file.yaml';
@@ -237,6 +251,7 @@ export class FolderExplorer implements vscode.TreeDataProvider<FileItem> {
         const newPath = path.join(path.dirname(oldPath), newName);
 
         // For new items, create them
+        let created = false;
         if (!(await fileExistsAbsolute(oldPath))) {
           if (item.collapsibleState === vscode.TreeItemCollapsibleState.None) {
             // Create new file
@@ -244,9 +259,11 @@ export class FolderExplorer implements vscode.TreeDataProvider<FileItem> {
               vscode.Uri.file(newPath),
               new Uint8Array(),
             );
+            created = true;
           } else {
             // Create new folder
             await vscode.workspace.fs.createDirectory(vscode.Uri.file(newPath));
+            created = true;
           }
         } else {
           // Rename existing item
@@ -255,6 +272,10 @@ export class FolderExplorer implements vscode.TreeDataProvider<FileItem> {
             vscode.Uri.file(newPath),
             { overwrite: false },
           );
+        }
+
+        if (created) {
+          await this.afterCreate(newPath, item.collapsibleState);
         }
       } catch (err) {
         logger.error(CHANNEL, `Error renaming item: ${err}`);
@@ -266,6 +287,29 @@ export class FolderExplorer implements vscode.TreeDataProvider<FileItem> {
     this.editingItem = undefined;
     item.editing = false;
     this.refresh();
+  }
+
+  private async afterCreate(
+    filePath: string,
+    state: vscode.TreeItemCollapsibleState,
+  ) {
+    if (state !== vscode.TreeItemCollapsibleState.None) {
+      return;
+    }
+
+    if (!filePath.endsWith('.yaml')) {
+      return;
+    }
+
+    const customDir = await getCustomAgentsDirectory();
+    if (!customDir || !filePath.startsWith(customDir)) {
+      return;
+    }
+
+    if (await isValidAgentYaml(filePath)) {
+      const agentName = path.basename(filePath, '.yaml');
+      await promptToAddAgentToConfig(agentName);
+    }
   }
 
   public async setupFileSystemWatcher() {
