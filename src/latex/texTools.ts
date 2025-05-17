@@ -92,7 +92,14 @@ export async function checkToolInstalled(
     return true;
   } catch (err) {
     if (showError) {
-      vscode.window.showErrorMessage(TOOL_CONFIGS[tool].errorMessage);
+      const openDocs = 'View Installation Guide';
+      const choice = await vscode.window.showErrorMessage(
+        TOOL_CONFIGS[tool].errorMessage,
+        openDocs,
+      );
+      if (choice === openDocs) {
+        vscode.commands.executeCommand('texra.openDoc', 'installation');
+      }
     }
     return false;
   }
