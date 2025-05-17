@@ -21,6 +21,7 @@ import {
   getFilesIfNotEmpty,
 } from '../frontend-utils/fileListingUtils';
 import { polishTextWithAI, FileContext } from '../utils/textEnhancementUtils';
+import { sleep } from '../utils/timeUtils';
 
 // Local imports - agent
 import { ToolConfig } from '../agent/ToolConfig';
@@ -735,7 +736,7 @@ export class WebviewMessageHandler {
             progress.report({ message: 'Preparing text and context...' });
 
             // Short delay to show first progress step
-            await new Promise((resolve) => setTimeout(resolve, 300));
+            await sleep(300);
 
             // Update progress
             progress.report({
@@ -750,7 +751,7 @@ export class WebviewMessageHandler {
             progress.report({ message: 'Applying changes...', increment: 60 });
 
             // Short delay to show final progress step
-            await new Promise((resolve) => setTimeout(resolve, 300));
+            await sleep(300);
 
             if (result.success) {
               // Send the polished text back to the webview

@@ -4,6 +4,7 @@ import * as vscode from 'vscode';
 // Local imports - log
 import * as logger from '../logger/logUtils';
 import { getFullPathFromWorkspace } from './workspaceFileUtils';
+import { sleep } from './timeUtils';
 
 const CHANNEL = 'LinterUtils';
 logger.initialize(CHANNEL);
@@ -72,7 +73,7 @@ export async function triggerLaTeXBuild(filePath: string): Promise<void> {
     await vscode.commands.executeCommand('latex-workshop.build', fileUri);
 
     // Wait for the build and diagnostics to complete
-    await new Promise((resolve) => setTimeout(resolve, 2500));
+    await sleep(2500);
 
     // Try to trigger diagnostics refresh explicitly if the editor is available
     if (editor) {
@@ -82,7 +83,7 @@ export async function triggerLaTeXBuild(filePath: string): Promise<void> {
     }
 
     // Wait a bit more for diagnostics to be updated
-    await new Promise((resolve) => setTimeout(resolve, 500));
+    await sleep(500);
   } catch (buildErr) {
     logger.warn(
       CHANNEL,

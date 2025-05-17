@@ -6,6 +6,7 @@ import * as logger from '../logger/logUtils';
 
 // Local imports - utilities
 import { getRelativePath } from '../utils/workspaceFileUtils';
+import { sleep } from '../utils/timeUtils';
 import {
   applyReplacements,
   getAllReplacements,
@@ -122,7 +123,7 @@ async function handleIndentCurrentTeX(): Promise<void> {
     if (success) {
       // Instead of trying to modify the document directly,
       // let VS Code handle the file change notification
-      await new Promise((resolve) => setTimeout(resolve, 100)); // Small delay to ensure file is written
+      await sleep(100); // Small delay to ensure file is written
       vscode.window.showInformationMessage('LaTeX file indented successfully');
     } else {
       vscode.window.showErrorMessage('Failed to indent LaTeX file');
