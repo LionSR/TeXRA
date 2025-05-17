@@ -57,22 +57,6 @@ body {
   cursor: pointer;
 }
 
-/* Basic button group */
-.button-group {
-  margin-bottom: var(--spacing-small);
-}
-
-.button-group label {
-  display: block;
-  font-size: var(--font-size);
-  margin-bottom: var(--spacing-small);
-}
-
-.button-container {
-  display: flex;
-  gap: var(--spacing-small);
-  flex-wrap: wrap; /* Allow wrapping if space is limited */
-}
 
 /* Input field */
 .vscode-input {
