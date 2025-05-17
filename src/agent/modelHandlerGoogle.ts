@@ -8,6 +8,7 @@ import OpenAI from 'openai';
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 import { hasEndTag } from './AgentDataclass';
 import { OpenAIAPIResponseUsage, ResponseUsageFactory } from './ResponseUsage';
+import { calculateTokenPrice } from '../utils/priceUtils';
 
 /**
  * Handler for Google models using OpenAI-compatible API.
@@ -30,10 +31,11 @@ export class ModelHandlerGoogle extends ModelHandlerOpenAI {
     const promptTokens = responseUsage?.promptTokens ?? 0;
     const completionTokens = responseUsage?.completionTokens ?? 0;
 
-    return (
-      (promptTokens * this.config.inputPrice +
-        completionTokens * this.config.outputPrice) /
-      1e6
+    return calculateTokenPrice(
+      promptTokens,
+      completionTokens,
+      this.config.inputPrice,
+      this.config.outputPrice,
     );
   }
 
