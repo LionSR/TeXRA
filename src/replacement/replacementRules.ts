@@ -308,6 +308,31 @@ export const CHARACTER_REPLACEMENTS: ReplacementCategory = {
   },
 };
 
+// Deprecated font commands (e.g., {\rm X}) to modern equivalents
+export const FONT_COMMAND_REPLACEMENTS: ReplacementCategory = {
+  name: 'font_commands',
+  description: 'Normalize deprecated font commands to modern equivalents',
+  isRegex: false,
+  patterns: (() => {
+    const patterns: { [key: string]: string } = {};
+    const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'.split('');
+    letters.forEach((letter) => {
+      patterns[`{\\rm ${letter}}`] = `\\mathrm{${letter}}`;
+      patterns[`{\\bf ${letter}}`] = `\\mathbf{${letter}}`;
+      patterns[`{\\it ${letter}}`] = `\\mathit{${letter}}`;
+      patterns[`{\\sf ${letter}}`] = `\\mathsf{${letter}}`;
+      patterns[`{\\tt ${letter}}`] = `\\mathtt{${letter}}`;
+    });
+
+    const uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+    uppercase.forEach((letter) => {
+      patterns[`{\\cal ${letter}}`] = `\\mathcal{${letter}}`;
+    });
+
+    return patterns;
+  })(),
+};
+
 // Unicode character replacements
 export const UNICODE_REPLACEMENTS: ReplacementCategory = {
   name: 'unicode',
