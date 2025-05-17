@@ -21,8 +21,8 @@ import {
   addEventListenerSafely,
   safeGetElementValue,
   safeGetElementChecked,
-  capitalize,
 } from './utils.js';
+import { capitalize } from './stringUtils.js';
 
 // Add this function to handle textarea auto-resize
 export function autoResizeTextarea(textarea) {
