@@ -41,6 +41,7 @@ import {
   extractAndLogScratchpad,
   formatAndLogThinking,
 } from '../utils/xmlUtils';
+import { sleep } from '../utils/timeUtils';
 
 // Local imports - agent components
 import { AgentConfig } from './AgentConfig';
@@ -151,7 +152,7 @@ export abstract class BaseReflectionAgent {
   protected async initializeClient(): Promise<void> {
     this.client = await this.modelHandler.getClient();
     // wait for 50 mili seconds
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    await sleep(50);
   }
 
   /**
