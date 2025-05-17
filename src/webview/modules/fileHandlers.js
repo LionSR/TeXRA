@@ -5,9 +5,8 @@ import {
   addEventListenerSafely,
   safeGetElementById,
   safeSetElementValue,
-  capitalize,
-  uncapitalize,
 } from './utils.js';
+import { capitalize, uncapitalize } from './stringUtils.js';
 
 export function updateFileSelect(id, files) {
   const selectDiv = document.getElementById(id);
