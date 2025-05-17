@@ -8,10 +8,6 @@
   position: relative;
 }
 
-.dropdown-right .dropdown-options {
-  right: 0;
-  left: auto;
-}
 
 .dropdown-left .dropdown-options {
   left: 0;
