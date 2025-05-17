@@ -9,7 +9,7 @@ import {
 import { safeSetElementValue, safeGetElementById } from './utils.js';
 import { restoreState, saveState } from './stateManager.js';
 import { FILE_TYPES } from './constants.js';
-import { capitalize, uncapitalize } from './utils.js';
+import { capitalize, uncapitalize } from './stringUtils.js';
 
 /**
  * Handle state restoration from log view
