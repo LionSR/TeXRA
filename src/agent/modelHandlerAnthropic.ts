@@ -36,6 +36,7 @@ import { AgentStateRound } from './AgentState';
 import { messageToSkeleton } from './messageUtils';
 import { getConfig } from '../utils/configUtils';
 import { K_SLICE } from '../utils/constants';
+import { calculateTokenPrice } from '../utils/priceUtils';
 
 /**
  * Anthropic-specific model handler implementation for managing API interactions and message processing.
@@ -527,10 +528,12 @@ export class ModelHandlerAnthropic extends ModelHandler {
 
   /** Calculates API usage cost based on input/output tokens and cache usage if supported. */
   computePrice(responseUsage: any): number {
-    let basePrice =
-      (responseUsage.input_tokens * this.config.inputPrice +
-        responseUsage.output_tokens * this.config.outputPrice) /
-      1e6;
+    let basePrice = calculateTokenPrice(
+      responseUsage.input_tokens,
+      responseUsage.output_tokens,
+      this.config.inputPrice,
+      this.config.outputPrice,
+    );
 
     if (this.capabilities.supportsPromptCaching) {
       if ('cache_creation_input_tokens' in responseUsage) {
