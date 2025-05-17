@@ -119,3 +119,19 @@ export async function loadAgentSettingAndPrompts(
     throw err;
   }
 }
+
+/**
+ * Check whether a YAML file represents a valid agent configuration.
+ */
+export async function isValidAgentYaml(filePath: string): Promise<boolean> {
+  try {
+    const data = (await loadYaml(filePath)) as any;
+    if (data && data.settings && data.prompts) {
+      validateAgentSetting(data.settings as AgentSetting);
+      return true;
+    }
+  } catch {
+    // Ignore parse or validation errors
+  }
+  return false;
+}
