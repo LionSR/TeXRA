@@ -32,12 +32,13 @@ import {
   applyReplacements,
   getAllReplacements,
   getAllReplacementsRegex,
+  cleanFileContent,
 } from '../replacement/replacementUtils';
 import { extractAndLogScratchpad } from '../utils/xmlUtils';
 import { getConfig } from '../utils/configUtils';
 
 // Local constant
-const K_SLICE = 200;
+import { K_SLICE } from '../utils/constants';
 
 // Internal type definition
 type InternalMessagePart = {
@@ -674,11 +675,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
       `Output file ${outputFile} exists and is non-trivial. Reading content.`,
     );
     let fileContent = await readFile(outputFile);
-    fileContent = applyReplacements(fileContent, getAllReplacements()).trim();
-    fileContent = applyReplacements(
-      fileContent,
-      getAllReplacementsRegex(),
-    ).trim();
+    fileContent = cleanFileContent(fileContent);
 
     extractAndLogScratchpad(fileContent, this.logger);
     await writeFile(outputFile, fileContent);
