@@ -90,7 +90,6 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI {
     return reasoningContent;
   }
 
-
   /**
    * Preprocess messages array to ensure there are no consecutive user or assistant messages
    * and that content is in string format for DeepSeek models
