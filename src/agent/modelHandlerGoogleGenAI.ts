@@ -19,6 +19,7 @@ import { AgentSetting, hasEndTag } from './AgentDataclass';
 import { AgentStateRound, AgentStateGlobal } from './AgentState';
 import { ToolState } from './ToolState';
 import { OpenAIAPIResponseUsage, ResponseUsageFactory } from './ResponseUsage';
+import { MediaEntry } from './mediaTypes';
 
 // Local imports - utilities
 import {
@@ -313,6 +314,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
       `Determining MIME type for extension: '${ext}' from file: ${filePath}`,
     );
 
+    // TODO: this map/function can be put somewhere else to be more DRY and reusable
     const mimeMap: { [key: string]: string } = {
       '.jpg': 'image/jpeg',
       '.jpeg': 'image/jpeg',
@@ -430,7 +432,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
     return messages;
   }
 
-  createMediaContent(mediaMessage: any[]): any[] {
+  createMediaContent(mediaMessage: MediaEntry[]): any[] {
     this.logger.warn(
       'createMediaContent called on ModelHandlerGoogleGenAI - should be obsolete.',
     );
