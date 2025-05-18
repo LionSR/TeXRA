@@ -162,21 +162,12 @@ export async function executeWolframScriptFile(
   }
 }
 
-/**
- * Helper to verify mathematical derivations or expressions
- * @param expression The mathematical expression to verify
- * @returns A promise that resolves to the verification result
- */
-export async function verifyMathematicalExpression(
-  expression: string,
-): Promise<WolframScriptResult> {
-  // Simple wrapper that could be expanded with specific verification logic
-  return executeWolframCode(expression);
-}
+// The verifyMathematicalExpression helper has been removed. It previously
+// wrapped executeWolframCode without adding any logic. Call executeWolframCode
+// directly when verification is needed.
 
 export default {
   checkWolframScriptInstalled,
   executeWolframCode,
   executeWolframScriptFile,
-  verifyMathematicalExpression,
 };
