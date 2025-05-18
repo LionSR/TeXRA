@@ -834,7 +834,7 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     fullName: 'kimi-thinking-preview',
     openrouterFullName: 'moonshot/kimi-thinking-preview',
     provider: ModelProvider.MOONSHOT,
-    maxOutputTokens: 128000,
+    maxOutputTokens: 64000,
     contextWindow: 128000,
     inputPrice: 0.42,
     outputPrice: 1.68,
