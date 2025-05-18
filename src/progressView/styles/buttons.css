@@ -26,7 +26,6 @@
   gap: 4px;
 }
 
-
 /* Codicon override for trash icon */
 .codicon-trash:before {
   content: '\eb9f';
