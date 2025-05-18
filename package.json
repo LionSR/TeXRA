@@ -2,7 +2,7 @@
   "name": "texra",
   "displayName": "TeXRA",
   "description": "TeXRA: Your LLM-powered 24/7 LaTeX Research Assistant.",
-  "version": "0.30.5",
+  "version": "0.30.6",
   "publisher": "texra-ai",
   "engines": {
     "vscode": "^1.94.0"
@@ -1052,7 +1052,7 @@
     "type": "git",
     "url": "https://github.com/texra-ai/texra-issues.git"
   },
-  "license": "MIT",
+  "license": "SEE LICENSE IN LICENSE",
   "author": "TeXRA.ai",
   "icon": "resources/logo-128x128.png",
   "keywords": [
