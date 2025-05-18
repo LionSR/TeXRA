@@ -102,18 +102,9 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     this._view = undefined;
   }
 
-  private _getWorkspaceKey(): string {
+  private _getWorkspaceKey(key: string = this._storageKey): string {
     const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-    return workspaceFolder
-      ? `${this._storageKey}.${workspaceFolder.uri.fsPath}`
-      : this._storageKey;
-  }
-
-  private _getGroupsWorkspaceKey(): string {
-    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-    return workspaceFolder
-      ? `${this._groupsStorageKey}.${workspaceFolder.uri.fsPath}`
-      : this._groupsStorageKey;
+    return workspaceFolder ? `${key}.${workspaceFolder.uri.fsPath}` : key;
   }
 
   private _loadState() {
@@ -134,7 +125,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     // Load groups
     const savedGroups = this.context.workspaceState.get<{
       [key: string]: { [groupId: string]: LogGroup };
-    }>(this._getGroupsWorkspaceKey());
+    }>(this._getWorkspaceKey(this._groupsStorageKey));
     if (savedGroups) {
       this._logGroups = new Map(
         Object.entries(savedGroups)
@@ -191,7 +182,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       ]);
     const groupsObj = Object.fromEntries(persistentGroups);
     this.context.workspaceState.update(
-      this._getGroupsWorkspaceKey(),
+      this._getWorkspaceKey(this._groupsStorageKey),
       groupsObj,
     );
 

@@ -21,8 +21,8 @@ import {
   addEventListenerSafely,
   safeGetElementValue,
   safeGetElementChecked,
-  capitalize,
 } from './utils.js';
+import { capitalize } from './stringUtils.js';
 
 // Add this function to handle textarea auto-resize
 export function autoResizeTextarea(textarea) {
@@ -112,10 +112,12 @@ export function setupUIHandlers() {
       safeGetElementChecked(id),
     );
 
-    const indicator = hasAutoExtractChecked ? '●' : '○';
     const direction = isVisible ? 'up' : 'down';
 
-    autoExtractToggle.innerHTML = `<i class="codicon codicon-wand"></i> ${indicator}<i class="codicon codicon-chevron-${direction}"></i>`;
+    if (autoExtractToggle) {
+      autoExtractToggle.classList.toggle('active', hasAutoExtractChecked);
+      autoExtractToggle.innerHTML = `<i class="codicon codicon-wand"></i><i class="codicon codicon-chevron-${direction}"></i>`;
+    }
   }
 
   addEventListenerSafely('toggleAutoExtract', 'click', function () {
