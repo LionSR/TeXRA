@@ -508,7 +508,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
     if (!this.capabilities.supportsAssistantPrefill) {
       // For models that don't support assistant prefill, we need to:
       // add a continuation message in addition
-      const state = AgentStateRound.initialize(0);
+      const state = new AgentStateRound(0);
       this.addContinueMessageWithoutPrefill(
         messages,
         state,
