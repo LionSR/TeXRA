@@ -42,23 +42,6 @@ export interface LaTeXdiffMultipleResult {
   message?: string;
 }
 
-/**
- * Checks if latexdiff is installed and shows error if not
- */
-export async function ensureLatexdiffInstalled(
-  showError: boolean = true,
-): Promise<boolean> {
-  return checkToolInstalled('latexdiff', showError);
-}
-
-/**
- * Checks if latexdiff-vc is installed and shows error if not
- */
-export async function ensureLatexdiffVcInstalled(
-  showError: boolean = true,
-): Promise<boolean> {
-  return checkToolInstalled('latexdiff-vc', showError);
-}
 
 async function processDiffFile(
   diffFileName: string,
