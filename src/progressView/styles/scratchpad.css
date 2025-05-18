@@ -154,7 +154,6 @@
   color: var(--vscode-symbolIcon-keywordForeground, #569cd6);
 }
 
-
 .scratchpad-content a {
   color: var(--vscode-textLink-activeForeground, #3794ff);
   text-decoration: none;
