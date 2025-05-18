@@ -1,5 +1,5 @@
 /**
- * Structured representation of media data used when constructing 
+ * Structured representation of media data used when constructing
  * multi-modal messages before provider-specific formatting.
  */
 export interface MediaEntry {
