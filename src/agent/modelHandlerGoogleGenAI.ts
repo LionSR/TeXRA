@@ -704,7 +704,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
     );
     toolState.updateAccumulatedOutput(fileContent);
     toolState.lastResponse = fileContent;
-    const state = AgentStateRound.initialize(0);
+    const state = new AgentStateRound(0);
     this.addContinueMessageWithoutPrefill(
       messages,
       state,

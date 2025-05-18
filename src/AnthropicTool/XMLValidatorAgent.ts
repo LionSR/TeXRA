@@ -22,7 +22,6 @@ logger.initialize(CHANNEL);
  * Agent that validates XML files and fixes validation errors using Claude
  */
 export class XMLValidatorAgent extends AnthropicToolAgent<XMLValidationError> {
-
   /**
    * Validate XML file
    * Implementation of abstract method from base class
