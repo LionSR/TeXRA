@@ -145,10 +145,7 @@
   box-shadow: 0 0 4px var(--vscode-testing-iconSkipped, #cca700);
 }
 
-/* Basic status color classes */
-.debug,
-.info,
-.warn,
+/* Basic status color class */
 .error {
   color: inherit;
 }
