@@ -44,7 +44,7 @@ export class ToolState implements IToolState {
     return this.thinkingBlocks.length > 0 ? this.thinkingBlocks[0] : null;
   }
 
-  private constructor() {
+  constructor() {
     this.texcountStats = null;
     this.firstKCharsFromInput = null;
     this.lastResponse = '';
@@ -54,10 +54,6 @@ export class ToolState implements IToolState {
     this.thinkingAdded = false;
   }
 
-  /** Creates a new ToolState instance with initialized values. */
-  static initialize(): ToolState {
-    return new ToolState();
-  }
 
   /**
    * Updates the most recent model response.
