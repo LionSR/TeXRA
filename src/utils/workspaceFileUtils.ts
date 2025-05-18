@@ -245,6 +245,9 @@ export async function createDirectory(relativePath: string): Promise<void> {
         CHANNEL,
         `Unable to create directory ${relativePath}. Permission denied.`,
       );
+      await vscode.window.showErrorMessage(
+        `Unable to create directory ${relativePath}. Permission denied.`,
+      );
       throw new Error(
         `Unable to create directory ${relativePath}. Permission denied.`,
       );

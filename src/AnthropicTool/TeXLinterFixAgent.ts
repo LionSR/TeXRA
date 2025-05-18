@@ -23,13 +23,6 @@ logger.initialize(CHANNEL);
  */
 export class TeXLinterFixAgent extends AnthropicToolAgent<LinterMessage[]> {
   /**
-   * Static factory method to create a TeXLinterFixAgent instance
-   */
-  public static create(): TeXLinterFixAgent {
-    return new TeXLinterFixAgent();
-  }
-
-  /**
    * Validate if the file has any linter issues
    * Implementation of abstract method from base class
    */
