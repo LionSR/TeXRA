@@ -22,12 +22,6 @@ logger.initialize(CHANNEL);
  * Agent that fixes linter issues in TeX files using Claude
  */
 export class TeXLinterFixAgent extends AnthropicToolAgent<LinterMessage[]> {
-  /**
-   * Static factory method to create a TeXLinterFixAgent instance
-   */
-  public static create(): TeXLinterFixAgent {
-    return new TeXLinterFixAgent();
-  }
 
   /**
    * Validate if the file has any linter issues
