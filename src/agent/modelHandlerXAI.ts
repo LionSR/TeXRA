@@ -7,6 +7,7 @@ import OpenAI from 'openai';
 // Local imports - agent components
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 import { ToolState } from './ToolState';
+import { K_SLICE } from '../utils/constants';
 
 /**
  * Handler for xAI models using OpenAI-compatible API.
@@ -76,7 +77,7 @@ export class ModelHandlerXAI extends ModelHandlerOpenAI {
 
     // Log preview of thinking content
     this.logger.debug(
-      `xAI reasoning content preview: ${reasoningContent.substring(0, 200)}...`,
+      `xAI reasoning content preview: ${reasoningContent.substring(0, K_SLICE)}...`,
       groupId,
     );
 

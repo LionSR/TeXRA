@@ -11,6 +11,7 @@ import { MediaEntry } from './mediaTypes';
 
 // Local imports - utilities
 import { convertContentToString } from '../utils/messageUtils';
+import { K_SLICE, MESSAGE_PREVIEW_LENGTH } from '../utils/constants';
 
 /**
  * Handler for Moonshot Kimi models using OpenAI-compatible API.
@@ -87,7 +88,7 @@ export class ModelHandlerKimi extends ModelHandlerOpenAI {
 
     // Log preview of thinking content
     this.logger.debug(
-      `Kimi thinking content preview: ${reasoningContent.substring(0, 200)}...`,
+      `Kimi thinking content preview: ${reasoningContent.substring(0, K_SLICE)}...`,
       groupId,
     );
 
@@ -127,7 +128,6 @@ export class ModelHandlerKimi extends ModelHandlerOpenAI {
     return processedMessages;
   }
 
-
   /**
    * Override createResponse to preprocess messages for Kimi models
    */
@@ -151,7 +151,7 @@ export class ModelHandlerKimi extends ModelHandlerOpenAI {
     processedMessages.forEach((msg, index) => {
       const contentPreview =
         typeof msg.content === 'string'
-          ? msg.content.substring(0, 50)
+          ? msg.content.substring(0, MESSAGE_PREVIEW_LENGTH)
           : 'non-string content';
       this.logger.debug(`Message ${index} (${msg.role}): ${contentPreview}...`);
     });
