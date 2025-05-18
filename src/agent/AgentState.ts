@@ -41,7 +41,6 @@ export class AgentStateRound implements IAgentStateRound {
     this.APIUsage = null;
   }
 
-
   /** Updates token usage metrics from model API response. */
   updateTokenCounts(
     responseUsage: OpenAIAPIResponseUsage | AnthropicAPIResponseUsage,
@@ -102,7 +101,6 @@ export class AgentStateGlobal implements IAgentStateGlobal {
     this.totalRounds = 0;
     this.APIUsage = null;
   }
-
 
   /** Updates global metrics by incorporating round state data. */
   updateFromCurrRound(stateRound: AgentStateRound): void {

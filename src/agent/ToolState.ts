@@ -54,7 +54,6 @@ export class ToolState implements IToolState {
     this.thinkingAdded = false;
   }
 
-
   /**
    * Updates the most recent model response.
    * @param response New response text from the model
