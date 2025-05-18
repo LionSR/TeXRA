@@ -73,7 +73,8 @@ export abstract class BaseReflectionAgent {
   protected agentSetting: AgentSetting;
   protected agentPrompt: AgentPrompt;
   protected agentPath: string;
-  protected outputFile: [string, string];
+  /** File paths for each round's raw model output. */
+  protected outputFile: string[];
   protected outputFiles: { [key: number]: string[] };
   protected baseFiles: string[];
   protected client: any;
@@ -117,7 +118,7 @@ export abstract class BaseReflectionAgent {
     this.modelHandler.setLogger(this.logger);
 
     // Initialize basic attributes
-    this.outputFile = ['', ''];
+    this.outputFile = [];
     this.outputFiles = { 0: [], 1: [] };
     this.baseFiles = this.agentConfig.outputFiles || [
       this.agentConfig.inputFile,
@@ -129,7 +130,7 @@ export abstract class BaseReflectionAgent {
     this.useScratchpad =
       this.agentSetting.prefills?.includes('<scratchpad>') || false;
 
-    // Set output files
+    // Set output files for the existing two rounds
     this.outputFile[0] = this.getOutputFile(0);
     this.outputFile[1] = this.getOutputFile(1);
 
