@@ -31,6 +31,12 @@
   font-weight: normal;
 }
 
+.auto-toggle.active {
+  background: var(--vscode-list-activeSelectionBackground);
+  color: var(--vscode-list-activeSelectionForeground);
+  border-color: var(--vscode-list-activeSelectionBackground);
+}
+
 .auto-toggle i {
   font-size: calc(var(--font-size) * 0.8);
   color: var(--vscode-foreground);
