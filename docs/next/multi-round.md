@@ -5,14 +5,17 @@ This document outlines initial considerations for extending `BaseReflectionAgent
 ## Infrastructure Needs
 
 - **Configuration**
+
   - Introduce a `rounds` field in `ToolConfig` so a workflow can define how many sequential steps to perform.
   - Prompts may need to support an array of `userReflect` templates or reuse a single template for each additional round.
 
 - **State Management**
+
   - The agent already tracks `AgentStateRound` and `AgentStateGlobal` which are not tied to a fixed number of rounds. These classes should work for arbitrary counts as long as arrays are sized dynamically.
   - `OutputHandler` stores processed files per round in `outputFiles[currRound]`; this can naturally extend to more rounds.
 
 - **Agent Core Logic**
+
   - Refactor `BaseReflectionAgent` so `run()` iterates over rounds rather than calling `process()` and `reflect()` only once. Each iteration would:
     1. Render prompts for the current round.
     2. Invoke `processResponseCycle`.
