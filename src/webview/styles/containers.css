@@ -45,10 +45,6 @@
   padding: 0;
 }
 
-.multiple-files-header {
-  margin-bottom: var(--spacing-small);
-}
-
 .multiple-files-list {
   background-color: var(--dropdown-background);
   border: 1px solid var(--dropdown-border);
