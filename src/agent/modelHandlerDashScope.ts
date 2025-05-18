@@ -11,6 +11,7 @@ import { MediaEntry } from './mediaTypes';
 
 // Local imports - utilities
 import { convertContentToString } from '../utils/messageUtils';
+import { MESSAGE_PREVIEW_LENGTH } from '../utils/constants';
 
 /**
  * Handler for DashScope Qwen models using OpenAI-compatible API.
@@ -72,7 +73,6 @@ export class ModelHandlerDashScope extends ModelHandlerOpenAI {
     return processedMessages;
   }
 
-
   /**
    * Override createResponse to preprocess messages for DashScope models
    */
@@ -96,7 +96,7 @@ export class ModelHandlerDashScope extends ModelHandlerOpenAI {
     processedMessages.forEach((msg, index) => {
       const contentPreview =
         typeof msg.content === 'string'
-          ? msg.content.substring(0, 50)
+          ? msg.content.substring(0, MESSAGE_PREVIEW_LENGTH)
           : 'non-string content';
       this.logger.debug(`Message ${index} (${msg.role}): ${contentPreview}...`);
     });
