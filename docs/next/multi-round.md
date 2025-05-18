@@ -22,4 +22,4 @@ This document outlines initial considerations for extending `BaseReflectionAgent
 - **Prompt Rendering**
   - New helper methods may be needed to retrieve the correct `prefill` and prompt text for each round.
 
-These changes should provide a smoother path to implementing true multi-round workflows in the future.
+These changes should provide a smoother path to implementing true multi-round workflows in the future. Nothing is yet decided on this yet.
