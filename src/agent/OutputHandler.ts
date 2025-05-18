@@ -26,9 +26,9 @@ import {
   runLatexdiff,
   runLatexdiffForRound,
   runLatexdiffBetweenRounds,
-  ensureLatexdiffInstalled,
   LaTeXdiffResult,
 } from '../latex/latexdiff';
+import { checkToolInstalled } from '../latex/texTools';
 import { runLatexIndent } from '../latex/latexindent';
 
 // Local imports - agent components
@@ -355,7 +355,7 @@ export class OutputHandler {
 
     try {
       // Check if latexdiff is installed before proceeding
-      if (!(await ensureLatexdiffInstalled())) {
+      if (!(await checkToolInstalled('latexdiff'))) {
         this.logger.warn(
           'Skipping latexdiff operations - latexdiff not installed',
           diffProcessGroupId,
