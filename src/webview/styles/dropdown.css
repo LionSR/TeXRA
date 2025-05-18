@@ -8,11 +8,6 @@
   position: relative;
 }
 
-.dropdown-right .dropdown-options {
-  right: 0;
-  left: auto;
-}
-
 .dropdown-left .dropdown-options {
   left: 0;
   right: auto;
@@ -33,6 +28,12 @@
   border: 1px solid var(--vscode-button-border);
   pointer-events: auto;
   font-weight: normal;
+}
+
+.auto-toggle.active {
+  background: var(--vscode-list-activeSelectionBackground);
+  color: var(--vscode-list-activeSelectionForeground);
+  border-color: var(--vscode-list-activeSelectionBackground);
 }
 
 .auto-toggle i {
