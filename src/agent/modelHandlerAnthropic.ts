@@ -32,6 +32,7 @@ import {
   ResponseUsageFactory,
 } from './ResponseUsage';
 import { ToolState } from './ToolState';
+import { MediaEntry } from './mediaTypes';
 import { AgentStateRound } from './AgentState';
 import { messageToSkeleton } from './messageUtils';
 import { getConfig } from '../utils/configUtils';
@@ -256,7 +257,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
   }
 
   /** Converts image/document content array into Anthropic-compatible message format with type and source metadata. */
-  createMediaContent(mediaMessage: any[]): ContentBlock[] {
+  createMediaContent(mediaMessage: MediaEntry[]): ContentBlock[] {
     if (mediaMessage.length === 0) {
       return [];
     }
@@ -509,7 +510,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
     if (!this.capabilities.supportsAssistantPrefill) {
       // For models that don't support assistant prefill, we need to:
       // add a continuation message in addition
-      const state = AgentStateRound.initialize(0);
+      const state = new AgentStateRound(0);
       this.addContinueMessageWithoutPrefill(
         messages,
         state,

@@ -7,9 +7,11 @@ import OpenAI from 'openai';
 // Local imports - agent components
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 import { ToolState } from './ToolState';
+import { MediaEntry } from './mediaTypes';
 
 // Local imports - utilities
 import { convertContentToString } from '../utils/messageUtils';
+import { MESSAGE_PREVIEW_LENGTH } from '../utils/constants';
 
 /**
  * Handler for DashScope Qwen models using OpenAI-compatible API.
@@ -95,7 +97,7 @@ export class ModelHandlerDashScope extends ModelHandlerOpenAI {
     processedMessages.forEach((msg, index) => {
       const contentPreview =
         typeof msg.content === 'string'
-          ? msg.content.substring(0, 50)
+          ? msg.content.substring(0, MESSAGE_PREVIEW_LENGTH)
           : 'non-string content';
       this.logger.debug(`Message ${index} (${msg.role}): ${contentPreview}...`);
     });
@@ -115,7 +117,7 @@ export class ModelHandlerDashScope extends ModelHandlerOpenAI {
    * Creates media content formatted for DashScope Qwen-VL models
    * Overrides the parent method to handle DashScope-specific formatting
    */
-  createMediaContent(mediaMessage: any[]): any[] {
+  createMediaContent(mediaMessage: MediaEntry[]): any[] {
     return mediaMessage.flatMap((media): any[] => {
       if (media.media_category === 'image') {
         return [

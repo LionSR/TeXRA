@@ -7,6 +7,7 @@ import OpenAI from 'openai';
 // Local imports - agent components
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 import { ToolState } from './ToolState';
+import { K_SLICE } from '../utils/constants';
 
 /**
  * Handler for models accessed through OpenRouter.
@@ -95,7 +96,7 @@ export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
       // Log preview of reasoning content
       if (typeof reasoning === 'string') {
         this.logger.debug(
-          `Reasoning preview: ${reasoning.substring(0, 200)}...`,
+          `Reasoning preview: ${reasoning.substring(0, K_SLICE)}...`,
           groupId,
         );
         return reasoning;
@@ -103,7 +104,7 @@ export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
         // If reasoning is an object, convert to string
         const reasoningStr = JSON.stringify(reasoning);
         this.logger.debug(
-          `Reasoning preview: ${reasoningStr.substring(0, 200)}...`,
+          `Reasoning preview: ${reasoningStr.substring(0, K_SLICE)}...`,
           groupId,
         );
         return reasoningStr;
