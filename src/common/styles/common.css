@@ -49,17 +49,6 @@
   top: 0;
 }
 
-/* Common icon styling */
-.icon-with-text {
-  display: flex;
-  align-items: center;
-}
-
-.icon-with-text .codicon {
-  margin-right: var(--spacing-small);
-  color: var(--icon-color);
-}
-
 /* Unified button styling */
 .vscode-button {
   height: 24px;
@@ -188,15 +177,6 @@
   margin-right: var(--spacing-small);
 }
 
-/* Container styling */
-.container-box {
-  background-color: var(--dropdown-background);
-  border: 1px solid var(--dropdown-border);
-  border-radius: 4px;
-  padding: var(--spacing-medium);
-  margin-bottom: var(--spacing-large);
-}
-
 /* Dropdown/Select styling */
 select {
   padding: 4px 8px;
@@ -223,32 +203,4 @@ select:focus {
 
 .section-header-between {
   justify-content: space-between;
-}
-
-/* Common layout utilities */
-.flex-row {
-  display: flex;
-  align-items: center;
-}
-
-.flex-column {
-  display: flex;
-  flex-direction: column;
-}
-
-.flex-space-between {
-  justify-content: space-between;
-}
-
-.flex-center {
-  justify-content: center;
-  align-items: center;
-}
-
-.flex-gap-small {
-  gap: var(--spacing-small);
-}
-
-.flex-gap-medium {
-  gap: var(--spacing-medium);
 }
