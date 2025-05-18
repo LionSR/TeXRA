@@ -56,7 +56,11 @@ import { messageToSkeleton } from './messageUtils';
 import { getConfig } from '../utils/configUtils';
 
 // Shared constants
-import { K_SLICE } from '../utils/constants';
+import {
+  K_SLICE,
+  SHORT_SLEEP_MS,
+  REPETITION_DETECTION_THRESHOLD,
+} from '../utils/constants';
 
 /**
  * Abstract base class for agents that support multi-turn reflection and refinement.
@@ -151,8 +155,8 @@ export abstract class BaseReflectionAgent {
    */
   protected async initializeClient(): Promise<void> {
     this.client = await this.modelHandler.getClient();
-    // wait for 50 mili seconds
-    await sleep(50);
+    // wait briefly to avoid rate limit issues
+    await sleep(SHORT_SLEEP_MS);
   }
 
   /**
@@ -601,7 +605,7 @@ export abstract class BaseReflectionAgent {
         );
         if (repetitionResult.massiveRepetitionDetected) {
           this.logger.error(
-            `The new response is (first 1000 chars): ${newResponse.substring(0, 1000)}`,
+            `The new response is (first ${REPETITION_DETECTION_THRESHOLD} chars): ${newResponse.substring(0, REPETITION_DETECTION_THRESHOLD)}`,
             responseCycleGroupId,
           );
           this.logger.error(
