@@ -39,6 +39,20 @@ body {
   background-color: var(--vscode-focusBorder);
 }
 
+.gutter-horizontal {
+  cursor: col-resize;
+  width: 1px;
+}
+
+.gutter-horizontal::after {
+  content: '';
+  position: absolute;
+  left: -4px;
+  right: -4px;
+  top: 0;
+  bottom: 0;
+}
+
 /* Animations */
 /* Animation for status indicator */
 @keyframes pulse {
