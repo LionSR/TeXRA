@@ -524,9 +524,6 @@ export function generateLegacyTextCommandNormalization(
   variantsToUse.forEach((v) => {
     terms.forEach((term) => {
       patterns[`{\\${v} ${term}}`] = `\\${targetCommand}{${term}}`;
-      patterns[`{\\${v} ${term}}}`] = `\\${targetCommand}{${term}}}`;
-      patterns[`{\\${v} ${term}}_`] = `\\${targetCommand}{${term}}_`;
-      patterns[`{\\${v} ${term}}^`] = `\\${targetCommand}{${term}}^`;
       // Handle {\rm{X}} style
       patterns[`{\\${v}{${term}}}`] = `\\${targetCommand}{${term}}`;
     });
