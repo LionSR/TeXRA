@@ -22,12 +22,6 @@ logger.initialize(CHANNEL);
  * Agent that validates XML files and fixes validation errors using Claude
  */
 export class XMLValidatorAgent extends AnthropicToolAgent<XMLValidationError> {
-  /**
-   * Static factory method to create an XMLValidatorAgent instance
-   */
-  public static create(): XMLValidatorAgent {
-    return new XMLValidatorAgent();
-  }
 
   /**
    * Validate XML file
