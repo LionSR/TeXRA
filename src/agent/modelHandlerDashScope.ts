@@ -8,6 +8,9 @@ import OpenAI from 'openai';
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 import { ToolState } from './ToolState';
 
+// Local imports - utilities
+import { convertContentToString } from '../utils/messageUtils';
+
 /**
  * Handler for DashScope Qwen models using OpenAI-compatible API.
  */
@@ -54,7 +57,7 @@ export class ModelHandlerDashScope extends ModelHandlerOpenAI {
 
       // Convert content to string if it's an array
       if (Array.isArray(processedMessage.content)) {
-        processedMessage.content = this.convertContentToString(
+        processedMessage.content = convertContentToString(
           processedMessage.content,
         );
         this.logger.debug(
@@ -66,26 +69,6 @@ export class ModelHandlerDashScope extends ModelHandlerOpenAI {
     });
 
     return processedMessages;
-  }
-
-  /**
-   * Convert content array to a string for DashScope compatibility
-   * @param content The message content (array or string)
-   * @returns String representation of the content
-   */
-  private convertContentToString(content: any): string {
-    if (typeof content === 'string') {
-      return content;
-    }
-
-    if (Array.isArray(content)) {
-      return content
-        .filter((item) => item.type === 'text')
-        .map((item) => item.text)
-        .join('\n');
-    }
-
-    return '';
   }
 
   /**
