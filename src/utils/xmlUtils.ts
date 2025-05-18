@@ -1,6 +1,7 @@
 // Local imports - log
 import * as logger from '../logger/logUtils';
 import { AgentLogger } from '../logger/AgentLogger';
+import { K_SLICE } from './constants';
 
 const CHANNEL = 'xmlUtils';
 logger.initialize(CHANNEL);
@@ -247,7 +248,7 @@ export function formatAndLogContent(
   // Log original content for debugging
   logger.debug(
     CHANNEL,
-    `Original ${contentType.toLowerCase()} content before formatting: ${content.substring(0, 200)}${content.length > 200 ? '...' : ''}`,
+    `Original ${contentType.toLowerCase()} content before formatting: ${content.substring(0, K_SLICE)}${content.length > K_SLICE ? '...' : ''}`,
   );
 
   // Format the content for improved rendering
