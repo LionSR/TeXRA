@@ -106,7 +106,7 @@ export async function handleValidateAndFixXml(): Promise<void> {
     }
 
     // Initialize the validator agent
-    const validator = XMLValidatorAgent.create();
+    const validator = new XMLValidatorAgent();
 
     // Save the file first to make sure we're working with the latest content
     await editor.document.save();
