@@ -10,6 +10,7 @@ import { ToolState } from './ToolState';
 
 // Local imports - utilities
 import { convertContentToString } from '../utils/messageUtils';
+import { K_SLICE, MESSAGE_PREVIEW_LENGTH } from '../utils/constants';
 
 /**
  * Handler for DeepSeek models using OpenAI-compatible API.
@@ -82,14 +83,13 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI {
 
     // Log preview of thinking content (assuming it's a string)
     this.logger.debug(
-      `DeepSeek reasoning content preview: ${reasoningContent.substring(0, 200)}...`,
+      `DeepSeek reasoning content preview: ${reasoningContent.substring(0, K_SLICE)}...`,
       groupId,
     );
 
     // Return the reasoning content (already a string for DeepSeek)
     return reasoningContent;
   }
-
 
   /**
    * Preprocess messages array to ensure there are no consecutive user or assistant messages
@@ -197,7 +197,7 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI {
     processedMessages.forEach((msg, index) => {
       const contentPreview =
         typeof msg.content === 'string'
-          ? msg.content.substring(0, 50)
+          ? msg.content.substring(0, MESSAGE_PREVIEW_LENGTH)
           : 'non-string content';
       this.logger.debug(`Message ${index} (${msg.role}): ${contentPreview}...`);
     });
