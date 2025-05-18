@@ -540,6 +540,7 @@ export abstract class ModelHandler {
     temperature: number,
     systemPrompt?: string,
     endTag?: string,
+    signal?: AbortSignal,
   ): Promise<any>;
 
   /**

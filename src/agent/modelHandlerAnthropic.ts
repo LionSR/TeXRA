@@ -59,6 +59,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
     temperature: number,
     systemPrompt?: string,
     endTag?: string,
+    signal?: AbortSignal,
   ): Promise<any> {
     // Get streaming config
     const useStreaming = this.getStreamingConfig();
@@ -129,11 +130,11 @@ export class ModelHandlerAnthropic extends ModelHandler {
     if (useStreaming) {
       // in the future if we pass stream to outside, calling stream.controller.abort() will abort the stream; which will be very useful for our stop button
       // we should also make sure partial results can be returned in the presence of errors!
-      const stream = await client.beta.messages.stream(options);
+      const stream = await client.beta.messages.stream(options, { signal });
       const response = await stream.finalMessage();
       return response;
     } else {
-      response = await client.beta.messages.create(options);
+      response = await client.beta.messages.create(options, { signal });
     }
 
     return response;

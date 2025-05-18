@@ -126,7 +126,6 @@ export class ModelHandlerKimi extends ModelHandlerOpenAI {
     return processedMessages;
   }
 
-
   /**
    * Override createResponse to preprocess messages for Kimi models
    */
@@ -136,6 +135,7 @@ export class ModelHandlerKimi extends ModelHandlerOpenAI {
     temperature: number,
     systemPrompt?: string,
     endTag?: string,
+    signal?: AbortSignal,
   ): Promise<any> {
     // Preprocess messages for Kimi compatibility
     const processedMessages = this.preprocessMessages(messages);
@@ -178,7 +178,9 @@ export class ModelHandlerKimi extends ModelHandlerOpenAI {
       }
 
       try {
-        const response = await client.chat.completions.create(kwargs);
+        const response = await client.chat.completions.create(kwargs, {
+          signal,
+        });
         return response;
       } catch (err) {
         this.logger.error(
@@ -195,6 +197,7 @@ export class ModelHandlerKimi extends ModelHandlerOpenAI {
       temperature,
       systemPrompt,
       endTag,
+      signal,
     );
   }
 
