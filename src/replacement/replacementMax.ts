@@ -11,6 +11,8 @@ import {
   generateCommandShortcuts,
   generateArrowRelationShortcuts,
   generateBackslashFixes,
+  generateTextCommandNormalization,
+  generateLegacyTextCommandNormalization,
   GREEK_LETTERS,
 } from './replacementHelpers';
 
@@ -255,6 +257,22 @@ export const MAX_AUTO_REPLACEMENTS: ReplacementCategory = {
     Object.assign(
       patterns,
       generateMathFontShortcuts(mathbfUpperLetters, 'mathbf', 'b'),
+    );
+
+    // Normalize legacy font commands {\rm X}, {\bf X} and {\cal X}
+    const alphabetLetters =
+      'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'.split('');
+    Object.assign(
+      patterns,
+      generateLegacyTextCommandNormalization(alphabetLetters, 'mathrm', 'rm'),
+    );
+    Object.assign(
+      patterns,
+      generateLegacyTextCommandNormalization(alphabetLetters, 'mathbf', 'bf'),
+    );
+    Object.assign(
+      patterns,
+      generateLegacyTextCommandNormalization(alphabetLetters, 'mathcal', 'cal'),
     );
 
     // Tilde variables - simple letters
