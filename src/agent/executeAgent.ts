@@ -352,6 +352,14 @@ export async function executeAgent(
       // Get model configuration
       const modelName = fullConfig.model;
       if (!(modelName in MODEL_CONFIGS)) {
+        const openDocs = 'Model Documentation';
+        const choice = await vscode.window.showErrorMessage(
+          `Model ${modelName} is not recognized.`,
+          openDocs,
+        );
+        if (choice === openDocs) {
+          vscode.commands.executeCommand('texra.openDoc', 'models');
+        }
         throw new Error(`Model ${modelName} not found in MODEL_CONFIGS`);
       }
 
@@ -409,6 +417,14 @@ export async function executeMergeAgent(
 
       // Get model configuration
       if (!(model in MODEL_CONFIGS)) {
+        const openDocs = 'Model Documentation';
+        const choice = await vscode.window.showErrorMessage(
+          `Model ${model} is not recognized.`,
+          openDocs,
+        );
+        if (choice === openDocs) {
+          vscode.commands.executeCommand('texra.openDoc', 'models');
+        }
         throw new Error(`Model ${model} not found in MODEL_CONFIGS`);
       }
 
