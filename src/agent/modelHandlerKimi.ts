@@ -127,7 +127,6 @@ export class ModelHandlerKimi extends ModelHandlerOpenAI {
     return processedMessages;
   }
 
-
   /**
    * Override createResponse to preprocess messages for Kimi models
    */
