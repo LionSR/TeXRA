@@ -64,23 +64,12 @@ export abstract class AnthropicToolAgent<
   }
 
   /**
-   * Standard public method to fix issues in a file
-   * Clients should call this method rather than the protected runFixIssues
+   * Fix issues in the specified file.
    *
    * @param filePath Path to the file to fix
    * @returns Whether the fixing was successful
    */
   public async fixIssues(filePath: string): Promise<boolean> {
-    return this.runFixIssues(filePath);
-  }
-
-  /**
-   * Protected method that implements the fixing logic
-   *
-   * @param filePath Path to the file to fix
-   * @returns Whether the fixing was successful
-   */
-  protected async runFixIssues(filePath: string): Promise<boolean> {
     logger.info(CHANNEL, `Starting issue fixing for ${filePath}`);
 
     try {
