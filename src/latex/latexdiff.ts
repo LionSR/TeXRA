@@ -42,7 +42,6 @@ export interface LaTeXdiffMultipleResult {
   message?: string;
 }
 
-
 async function processDiffFile(
   diffFileName: string,
   channel: string = CHANNEL,
