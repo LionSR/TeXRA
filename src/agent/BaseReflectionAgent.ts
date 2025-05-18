@@ -56,7 +56,11 @@ import { messageToSkeleton } from './messageUtils';
 import { getConfig } from '../utils/configUtils';
 
 // Shared constants
-import { K_SLICE } from '../utils/constants';
+import {
+  K_SLICE,
+  SHORT_SLEEP_MS,
+  REPETITION_DETECTION_THRESHOLD,
+} from '../utils/constants';
 
 /**
  * Abstract base class for agents that support multi-turn reflection and refinement.
@@ -69,7 +73,8 @@ export abstract class BaseReflectionAgent {
   protected agentSetting: AgentSetting;
   protected agentPrompt: AgentPrompt;
   protected agentPath: string;
-  protected outputFile: [string, string];
+  /** File paths for each round's raw model output. */
+  protected outputFile: string[];
   protected outputFiles: { [key: number]: string[] };
   protected baseFiles: string[];
   protected client: any;
@@ -113,7 +118,7 @@ export abstract class BaseReflectionAgent {
     this.modelHandler.setLogger(this.logger);
 
     // Initialize basic attributes
-    this.outputFile = ['', ''];
+    this.outputFile = [];
     this.outputFiles = { 0: [], 1: [] };
     this.baseFiles = this.agentConfig.outputFiles || [
       this.agentConfig.inputFile,
@@ -125,7 +130,7 @@ export abstract class BaseReflectionAgent {
     this.useScratchpad =
       this.agentSetting.prefills?.includes('<scratchpad>') || false;
 
-    // Set output files
+    // Set output files for the existing two rounds
     this.outputFile[0] = this.getOutputFile(0);
     this.outputFile[1] = this.getOutputFile(1);
 
@@ -151,8 +156,8 @@ export abstract class BaseReflectionAgent {
    */
   protected async initializeClient(): Promise<void> {
     this.client = await this.modelHandler.getClient();
-    // wait for 50 mili seconds
-    await sleep(50);
+    // wait briefly to avoid rate limit issues
+    await sleep(SHORT_SLEEP_MS);
   }
 
   /**
@@ -601,7 +606,7 @@ export abstract class BaseReflectionAgent {
         );
         if (repetitionResult.massiveRepetitionDetected) {
           this.logger.error(
-            `The new response is (first 1000 chars): ${newResponse.substring(0, 1000)}`,
+            `The new response is (first ${REPETITION_DETECTION_THRESHOLD} chars): ${newResponse.substring(0, REPETITION_DETECTION_THRESHOLD)}`,
             responseCycleGroupId,
           );
           this.logger.error(
@@ -861,11 +866,11 @@ export abstract class BaseReflectionAgent {
       this.agentConfig.inputFile,
       ...(this.agentConfig.inputFiles || []),
     ];
-    const toolState = ToolState.initialize();
+    const toolState = new ToolState();
 
     // Initialize state and messages
     const currRound = 0;
-    const stateGlobal = AgentStateGlobal.initialize();
+    const stateGlobal = new AgentStateGlobal();
 
     this.logger.info(`Processing round ${currRound}`);
 
@@ -975,7 +980,7 @@ export abstract class BaseReflectionAgent {
           prefill,
         );
 
-      const stateRound = AgentStateRound.initialize(currRound);
+      const stateRound = new AgentStateRound(currRound);
       let finalEndTurn = endTurn;
 
       if (!endTurn) {
@@ -1095,7 +1100,7 @@ export abstract class BaseReflectionAgent {
       }
 
       // Initialize reflection round
-      const stateRound = AgentStateRound.initialize(currRound);
+      const stateRound = new AgentStateRound(currRound);
 
       // Prepare reflection message
       const userRequestReflect = await renderPrompt(
@@ -1210,7 +1215,7 @@ export abstract class BaseReflectionAgent {
         this.agentConfig.toolConfig.reflect &&
         endTurn
       ) {
-        const toolStateReflection = ToolState.initialize();
+        const toolStateReflection = new ToolState();
         await this.reflect(stateGlobal, messages, toolStateReflection);
         this.logger.info(`Round 1 completed\n`, this.runGroupId);
       }
