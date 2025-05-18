@@ -22,6 +22,8 @@ See [texra.ai](https://texra.ai). For detailed guides and usage instructions, vi
   - Smart merging of included files
 - YAML and XML configuration support
 - Git integration for version control
+- ProgressBoard view for detailed logs and re-running tasks
+- Multiple output support and intelligent merge tools
 
 ## Architecture
 
@@ -32,7 +34,7 @@ TeXRA is built as a TypeScript-based VS Code extension that provides:
 - Automatic figure and TikZ extraction
 - Version control integration (latexdiff functionality)
 - Customizable prompts and settings
-- Direct integration with OpenAI and Anthropic APIs
+- Direct integration with OpenAI, Anthropic, Google, DeepSeek, Moonshot (Kimi), and DashScope (Qwen) APIs with optional OpenRouter routing
 
 ## Installation Guide
 
