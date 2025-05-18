@@ -21,6 +21,7 @@ import {
   EQUATION_REPLACEMENTS,
   SECTION_REPLACEMENTS,
   CHARACTER_REPLACEMENTS,
+  FONT_COMMAND_REPLACEMENTS,
   UNICODE_REPLACEMENTS,
   LATEX_SPACING_REPLACEMENTS,
   LATEX_XML_REPLACEMENTS,
@@ -54,6 +55,7 @@ function getEnabledReplacements(): string[] {
     'equations',
     'sections',
     'characters',
+    'font_commands',
     'latex_xml',
     'latex_document',
     'unicode',
@@ -69,6 +71,7 @@ const NON_REGEX_CATEGORIES: ReplacementCategory[] = [
   EQUATION_REPLACEMENTS,
   SECTION_REPLACEMENTS,
   CHARACTER_REPLACEMENTS,
+  FONT_COMMAND_REPLACEMENTS,
   UNICODE_REPLACEMENTS,
   LATEX_SPACING_REPLACEMENTS,
   // XML/Structural Formatting
