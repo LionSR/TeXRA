@@ -314,6 +314,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
       `Determining MIME type for extension: '${ext}' from file: ${filePath}`,
     );
 
+    // TODO: this map/function can be put somewhere else to be more DRY and reusable
     const mimeMap: { [key: string]: string } = {
       '.jpg': 'image/jpeg',
       '.jpeg': 'image/jpeg',
