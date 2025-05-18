@@ -65,6 +65,26 @@ Strong technical and coding performance, cost-effective.
 | `DSV3`   | Good coding & general tasks | $             | Fast           | DeepSeek V3 Chat |
 | `DSR1`   | Advanced reasoning          | $$            | Medium         | DeepSeek R1      |
 
+### Moonshot Kimi Models
+
+High context models from Moonshot, suitable for complex reasoning and large documents.
+
+| Model ID | Key Strength / Use Case        | Relative Cost | Relative Speed | Notes                 |
+| :------- | :----------------------------- | :------------ | :------------- | :-------------------- |
+| `kimit`  | Detailed reasoning with vision | $$$           | Medium         | Kimi Thinking Preview |
+| `kimi`   | Large context, general tasks   | $$            | Medium         | 128k context          |
+| `kimiv`  | Vision-enabled variant         | $$            | Medium         | 128k context, vision  |
+
+### DashScope Qwen Models
+
+Cost-effective models from Alibaba with strong multilingual capabilities.
+
+| Model ID    | Key Strength / Use Case       | Relative Cost | Relative Speed | Notes      |
+| :---------- | :---------------------------- | :------------ | :------------- | :--------- |
+| `qwenmax`   | Advanced reasoning            | $$            | Medium         | Qwen Max   |
+| `qwenplus`  | Large context general purpose | $$            | Medium         | Qwen Plus  |
+| `qwenturbo` | Fast responses                | $             | Fast           | Qwen Turbo |
+
 ### Grok / xAI Models
 
 Large context models from xAI.
@@ -108,20 +128,21 @@ The specific models available by default and their identifiers (`sonnet37`, `gpt
 "texra.models": [
   "sonnet37T",
   "sonnet37",
+  "o3",
+  "o4-",
   "o3-",
   "o1",
-  "gpt45",
+  "gpt41",
   "gpt4o",
-  "gpt4ol",
   "gemini25p",
   "gemini25f",
-  "gemini2p",
-  "gemini2f",
   "gemini2fT",
   "DSV3",
   "DSR1",
   "grok3",
-  "grok3-"
+  "qwenplus",
+  "kimit",
+  "kimiv"
 ]
 ```
 
