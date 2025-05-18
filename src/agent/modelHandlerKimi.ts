@@ -7,6 +7,11 @@ import OpenAI from 'openai';
 // Local imports - agent components
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 import { ToolState } from './ToolState';
+import { MediaEntry } from './mediaTypes';
+
+// Local imports - utilities
+import { convertContentToString } from '../utils/messageUtils';
+import { K_SLICE, MESSAGE_PREVIEW_LENGTH } from '../utils/constants';
 
 /**
  * Handler for Moonshot Kimi models using OpenAI-compatible API.
@@ -83,7 +88,7 @@ export class ModelHandlerKimi extends ModelHandlerOpenAI {
 
     // Log preview of thinking content
     this.logger.debug(
-      `Kimi thinking content preview: ${reasoningContent.substring(0, 200)}...`,
+      `Kimi thinking content preview: ${reasoningContent.substring(0, K_SLICE)}...`,
       groupId,
     );
 
@@ -109,7 +114,7 @@ export class ModelHandlerKimi extends ModelHandlerOpenAI {
 
       // Convert content to string if it's an array
       if (Array.isArray(processedMessage.content)) {
-        processedMessage.content = this.convertContentToString(
+        processedMessage.content = convertContentToString(
           processedMessage.content,
         );
         this.logger.debug(
@@ -121,26 +126,6 @@ export class ModelHandlerKimi extends ModelHandlerOpenAI {
     });
 
     return processedMessages;
-  }
-
-  /**
-   * Convert content array to a string for Kimi compatibility
-   * @param content The message content (array or string)
-   * @returns String representation of the content
-   */
-  private convertContentToString(content: any): string {
-    if (typeof content === 'string') {
-      return content;
-    }
-
-    if (Array.isArray(content)) {
-      return content
-        .filter((item) => item.type === 'text')
-        .map((item) => item.text)
-        .join('\n');
-    }
-
-    return '';
   }
 
   /**
@@ -166,7 +151,7 @@ export class ModelHandlerKimi extends ModelHandlerOpenAI {
     processedMessages.forEach((msg, index) => {
       const contentPreview =
         typeof msg.content === 'string'
-          ? msg.content.substring(0, 50)
+          ? msg.content.substring(0, MESSAGE_PREVIEW_LENGTH)
           : 'non-string content';
       this.logger.debug(`Message ${index} (${msg.role}): ${contentPreview}...`);
     });
@@ -218,7 +203,7 @@ export class ModelHandlerKimi extends ModelHandlerOpenAI {
    * Creates media content formatted for Kimi models
    * Overrides the parent method to handle Kimi-specific formatting
    */
-  createMediaContent(mediaMessage: any[]): any[] {
+  createMediaContent(mediaMessage: MediaEntry[]): any[] {
     return mediaMessage.flatMap((media): any[] => {
       if (media.media_category === 'image') {
         return [
