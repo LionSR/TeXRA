@@ -105,23 +105,6 @@ export async function checkToolInstalled(
   }
 }
 
-// Specific tool check functions for backward compatibility
-export async function checkLatexdiffInstalled(): Promise<boolean> {
-  return checkToolInstalled('latexdiff', false);
-}
-
-export async function checkLatexdiffVcInstalled(): Promise<boolean> {
-  return checkToolInstalled('latexdiff-vc', false);
-}
-
-export async function checkLatexindentInstalled(): Promise<boolean> {
-  return checkToolInstalled('latexindent', false);
-}
-
-export async function checkTexcountInstalled(): Promise<boolean> {
-  return checkToolInstalled('texcount', false);
-}
-
 /**
  * Compile a LaTeX file to PDF
  * @param latexFile Path to the LaTeX file
