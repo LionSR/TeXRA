@@ -33,17 +33,12 @@ export class AgentStateRound implements IAgentStateRound {
   outputFile: string;
   APIUsage: OpenAIAPIResponseUsage | AnthropicAPIResponseUsage | null;
 
-  private constructor(currRound: number) {
+  constructor(currRound: number) {
     this.currRound = currRound;
     this.continuationCount = 0;
     this.responseTime = 0;
     this.outputFile = '';
     this.APIUsage = null;
-  }
-
-  /** Creates a new AgentStateRound instance with initial values. */
-  static initialize(currRound: number): AgentStateRound {
-    return new AgentStateRound(currRound);
   }
 
   /** Updates token usage metrics from model API response. */
@@ -98,18 +93,13 @@ export class AgentStateGlobal implements IAgentStateGlobal {
   public totalCacheCreationInputTokens: number = 0;
   public totalReasoningTokens: number = 0;
 
-  private constructor() {
+  constructor() {
     this.firstInputTokens = 0;
     this.totalResponseTime = 0;
     this.totalInputTokens = 0;
     this.totalOutputTokens = 0;
     this.totalRounds = 0;
     this.APIUsage = null;
-  }
-
-  /** Creates a new AgentStateGlobal instance with zeroed metrics. */
-  static initialize(): AgentStateGlobal {
-    return new AgentStateGlobal();
   }
 
   /** Updates global metrics by incorporating round state data. */
@@ -184,7 +174,7 @@ export class AgentStateGlobal implements IAgentStateGlobal {
   /** Creates an AgentStateGlobal instance from a persisted state object. */
   static fromObject(stateObj: Record<string, any> | null): AgentStateGlobal {
     if (!stateObj) {
-      return AgentStateGlobal.initialize();
+      return new AgentStateGlobal();
     }
 
     const state = new AgentStateGlobal();
