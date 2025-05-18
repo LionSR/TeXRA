@@ -7,6 +7,7 @@ import OpenAI from 'openai';
 // Local imports - agent components
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 import { ToolState } from './ToolState';
+import { MediaEntry } from './mediaTypes';
 
 // Local imports - utilities
 import { convertContentToString } from '../utils/messageUtils';
@@ -202,7 +203,7 @@ export class ModelHandlerKimi extends ModelHandlerOpenAI {
    * Creates media content formatted for Kimi models
    * Overrides the parent method to handle Kimi-specific formatting
    */
-  createMediaContent(mediaMessage: any[]): any[] {
+  createMediaContent(mediaMessage: MediaEntry[]): any[] {
     return mediaMessage.flatMap((media): any[] => {
       if (media.media_category === 'image') {
         return [
