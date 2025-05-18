@@ -7,6 +7,10 @@ import * as difflib from 'difflib';
 
 // Local imports - log
 import * as logger from '../logger/logUtils';
+import {
+  REPETITION_DETECTION_THRESHOLD,
+  REPETITION_PREVIEW_LENGTH,
+} from './constants';
 
 const CHANNEL = 'repetitionUtils';
 logger.initialize(CHANNEL);
@@ -43,13 +47,14 @@ export function checkForMassiveRepetition(
     );
     const ratio =
       (2.0 * matchLength) / (lastResponse.length + newResponse.length);
-    const massiveRepetitionDetected = longestMatch.length > 1000;
+    const massiveRepetitionDetected =
+      longestMatch.length > REPETITION_DETECTION_THRESHOLD;
 
     if (massiveRepetitionDetected) {
       logger.error(CHANNEL, `Repetition ratio: ${ratio}`);
       logger.error(
         CHANNEL,
-        `Longest matching substring(preview): ${longestMatch.slice(0, 400)}`,
+        `Longest matching substring(preview): ${longestMatch.slice(0, REPETITION_PREVIEW_LENGTH)}`,
       );
       logger.error(CHANNEL, 'Massive repetition detected - stopping process.');
     }
@@ -89,13 +94,14 @@ export function checkRepetitionDifflib(
       newResponse.length,
     );
     const longestMatch = lastResponse.slice(match[0], match[0] + match[2]);
-    const massiveRepetitionDetected = longestMatch.length > 1000;
+    const massiveRepetitionDetected =
+      longestMatch.length > REPETITION_DETECTION_THRESHOLD;
 
     if (massiveRepetitionDetected) {
       logger.debug(CHANNEL, `Repetition ratio: ${ratio}`);
       logger.debug(
         CHANNEL,
-        `Longest matching substring (preview): ${longestMatch.slice(0, 400)}`,
+        `Longest matching substring (preview): ${longestMatch.slice(0, REPETITION_PREVIEW_LENGTH)}`,
       );
       logger.error(CHANNEL, 'Massive repetition detected - stopping process.');
     }
