@@ -177,7 +177,6 @@
   margin-right: var(--spacing-small);
 }
 
-
 /* Dropdown/Select styling */
 select {
   padding: 4px 8px;
@@ -205,4 +204,3 @@ select:focus {
 .section-header-between {
   justify-content: space-between;
 }
-
