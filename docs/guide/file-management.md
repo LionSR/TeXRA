@@ -96,21 +96,13 @@ TeXRA intelligently handles file paths to ensure proper document processing:
 
 ### File Path Configuration
 
-You can customize how TeXRA handles files by configuring file extensions and ignored paths in VS Code settings:
+You can customize file extensions and ignored paths in VS Code settings. The
+default values are listed in the [Configuration Guide](./configuration.md). A
+minimal example configuration might look like this:
 
 ```json
-"texra.files.included.inputExtensions": [
-  ".txt",
-  ".tex",
-  ".md"
-],
-"texra.files.ignored.directories": [
-  "build",
-  "node_modules",
-  "__pycache__",
-  "figures",
-  "venv"
-],
+"texra.files.included.inputExtensions": [".tex", ".md"],
+"texra.files.ignored.directories": ["build", "node_modules"]
 ```
 
 ## Output File Naming
