@@ -24,3 +24,11 @@ export const TOOL_CONFIG_FIELDS = [
 
 // Length for preview slices of tool output and responses
 export const K_SLICE = 200;
+
+// Generic preview lengths for logging and repetition checks
+export const MESSAGE_PREVIEW_LENGTH = 50;
+export const REPETITION_PREVIEW_LENGTH = 400;
+export const REPETITION_DETECTION_THRESHOLD = 1000;
+
+// Time constants
+export const SHORT_SLEEP_MS = 50;

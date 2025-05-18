@@ -7,6 +7,7 @@ import {
   executeWolframCode,
   executeWolframScriptFile,
 } from '../WolframTool/wolframScriptUtils';
+import { REPETITION_DETECTION_THRESHOLD } from '../utils/constants';
 
 export const wolframScriptCommands = {
   testWolframScript: 'texra.testWolframScript',
@@ -217,8 +218,8 @@ export function registerWolframScriptCommands(
         // Read a sample of the file content to display in the result
         const fileContent = editor.document.getText();
         const sampleContent =
-          fileContent.length > 1000
-            ? `${fileContent.substring(0, 1000)}...`
+          fileContent.length > REPETITION_DETECTION_THRESHOLD
+            ? `${fileContent.substring(0, REPETITION_DETECTION_THRESHOLD)}...`
             : fileContent;
 
         // Create a webview panel to display the result
