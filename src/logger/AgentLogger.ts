@@ -3,6 +3,8 @@
 
 // Local imports - log
 import * as logger from './logUtils';
+import { sleep } from '../utils/timeUtils';
+import { SHORT_SLEEP_MS } from '../utils/constants';
 
 /**
  * Encapsulates logging functionality for agents with a dedicated channel.
@@ -42,8 +44,8 @@ export class AgentLogger {
     id?: string,
     parentGroupId?: string,
   ): Promise<string> {
-    // wait for 50 mili seconds
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    // brief delay to ensure log order
+    await sleep(SHORT_SLEEP_MS);
     return logger.startGroup(this.channelId, groupName, id, parentGroupId);
   }
 

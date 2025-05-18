@@ -10,6 +10,7 @@ import { XMLValidatorAgent } from '../AnthropicTool';
 
 // Local imports - utils
 import { getRelativePath } from '../utils/workspaceFileUtils';
+import { sleep } from '../utils/timeUtils';
 
 const CHANNEL = 'XmlCommands';
 logger.initialize(CHANNEL);
@@ -105,7 +106,7 @@ export async function handleValidateAndFixXml(): Promise<void> {
     }
 
     // Initialize the validator agent
-    const validator = XMLValidatorAgent.create();
+    const validator = new XMLValidatorAgent();
 
     // Save the file first to make sure we're working with the latest content
     await editor.document.save();
@@ -135,8 +136,9 @@ export async function handleValidateAndFixXml(): Promise<void> {
           progress.report({ message: 'Could not fix all issues' });
         }
 
-        // Return a Promise that resolves after 1.5 seconds to give user time to see the result
-        return new Promise((resolve) => setTimeout(resolve, 1500));
+        // Short delay to give user time to see the result
+        await sleep(1500);
+        return;
       },
     );
   } catch (err) {

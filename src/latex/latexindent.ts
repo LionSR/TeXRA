@@ -11,6 +11,7 @@ import * as logger from '../logger/logUtils';
 // Local imports - utilities
 import { deleteFile, getWorkspacePath } from '../utils/workspaceFileUtils';
 import { executeCommand } from '../utils/execUtils';
+import { sleep } from '../utils/timeUtils';
 import { checkToolInstalled } from './texTools';
 
 const CHANNEL = 'LaTeXCommands';
@@ -46,7 +47,7 @@ export async function runLatexIndent(filePath: string): Promise<boolean> {
     }
 
     // Wait a moment for the file system to stabilize
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    await sleep(100);
 
     // Setup cleanup patterns relative to workspace
     const fileBaseName = path.basename(filePath, '.tex');
