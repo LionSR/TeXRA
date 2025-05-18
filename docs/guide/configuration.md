@@ -38,31 +38,12 @@ Control which agents are available in the dropdown menu. Below is the default li
 
 ### Model Configuration
 
-Define which AI models appear in the model selection dropdown. The default list is:
+Define which AI models appear in the model selection dropdown. The current
+default list is maintained in the [Models Guide](./models.md). Override it by
+specifying your own model identifiers:
 
 ```json
-"texra.models": [
-  "sonnet37T",
-  "sonnet37",
-  "sonnet35",
-  "opus",
-  "o4-",
-  "o3",
-  "o3-",
-  "o1",
-  "gpt45",
-  "gpt4o",
-  "gpt4ol",
-  "gemini25p",
-  "gemini25f",
-  "gemini2p",
-  "gemini2f",
-  "gemini2fT",
-  "DSV3",
-  "DSR1",
-  "grok3",
-  "grok3-"
-]
+"texra.models": ["sonnet37T", "gpt4o"]
 ```
 
 ### API Provider Settings
@@ -228,7 +209,7 @@ For project-specific configurations, use workspace settings:
 ```json
 // .vscode/settings.json
 {
-  "texra.files.included.inputExtensions": [".tex", ".md", ".txt"],
+  "texra.files.included.inputExtensions": [".tex", ".md"],
   "texra.latex.tikzInputDirectory": "${workspaceFolder}/styles"
 }
 ```
