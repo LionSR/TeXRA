@@ -865,11 +865,11 @@ export abstract class BaseReflectionAgent {
       this.agentConfig.inputFile,
       ...(this.agentConfig.inputFiles || []),
     ];
-    const toolState = ToolState.initialize();
+    const toolState = new ToolState();
 
     // Initialize state and messages
     const currRound = 0;
-    const stateGlobal = AgentStateGlobal.initialize();
+    const stateGlobal = new AgentStateGlobal();
 
     this.logger.info(`Processing round ${currRound}`);
 
@@ -979,7 +979,7 @@ export abstract class BaseReflectionAgent {
           prefill,
         );
 
-      const stateRound = AgentStateRound.initialize(currRound);
+      const stateRound = new AgentStateRound(currRound);
       let finalEndTurn = endTurn;
 
       if (!endTurn) {
@@ -1099,7 +1099,7 @@ export abstract class BaseReflectionAgent {
       }
 
       // Initialize reflection round
-      const stateRound = AgentStateRound.initialize(currRound);
+      const stateRound = new AgentStateRound(currRound);
 
       // Prepare reflection message
       const userRequestReflect = await renderPrompt(
@@ -1214,7 +1214,7 @@ export abstract class BaseReflectionAgent {
         this.agentConfig.toolConfig.reflect &&
         endTurn
       ) {
-        const toolStateReflection = ToolState.initialize();
+        const toolStateReflection = new ToolState();
         await this.reflect(stateGlobal, messages, toolStateReflection);
         this.logger.info(`Round 1 completed\n`, this.runGroupId);
       }
