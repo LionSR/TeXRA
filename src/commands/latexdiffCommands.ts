@@ -15,11 +15,10 @@ import { fileExists } from '../utils/workspaceFileUtils';
 import {
   runLatexdiff,
   runLatexdiffvc,
-  ensureLatexdiffInstalled,
-  ensureLatexdiffVcInstalled,
   runLatexdiffForRound,
   runLatexdiffBetweenRounds,
 } from '../latex/latexdiff';
+import { checkToolInstalled } from '../latex/texTools';
 
 // Local imports - housekeeping
 import {
@@ -67,7 +66,7 @@ async function handleLatexdiff(
   const fileToUse = baseFile || inputFile;
   try {
     // Check if latexdiff is installed
-    if (!(await ensureLatexdiffInstalled())) {
+    if (!(await checkToolInstalled('latexdiff'))) {
       return;
     }
 
@@ -130,7 +129,7 @@ async function handleLatexdiffvc(
   const fileToUse = baseFile || inputFile;
   try {
     // Check if latexdiff-vc is installed
-    if (!(await ensureLatexdiffVcInstalled())) {
+    if (!(await checkToolInstalled('latexdiff-vc'))) {
       return;
     }
 
@@ -189,7 +188,7 @@ async function handlePackLatexdiffvc(
 ) {
   try {
     // Check if latexdiff-vc is installed
-    if (!(await ensureLatexdiffVcInstalled())) {
+    if (!(await checkToolInstalled('latexdiff-vc'))) {
       return;
     }
 
@@ -213,7 +212,7 @@ async function handlePackLatexdiffvcMultiple(
 ) {
   try {
     // Check if latexdiff-vc is installed
-    if (!(await ensureLatexdiffVcInstalled())) {
+    if (!(await checkToolInstalled('latexdiff-vc'))) {
       return;
     }
 
@@ -237,7 +236,7 @@ async function handleCleanLatexdiffvc(
 ) {
   try {
     // Check if latexdiff-vc is installed
-    if (!(await ensureLatexdiffVcInstalled())) {
+    if (!(await checkToolInstalled('latexdiff-vc'))) {
       return;
     }
 
@@ -260,7 +259,7 @@ async function handleCleanLatexdiffvcMultiple(
 ) {
   try {
     // Check if latexdiff-vc is installed
-    if (!(await ensureLatexdiffVcInstalled())) {
+    if (!(await checkToolInstalled('latexdiff-vc'))) {
       return;
     }
 
@@ -286,7 +285,7 @@ async function handleRunLatexdiff(config: any) {
     );
 
     // Check if latexdiff is installed
-    if (!(await ensureLatexdiffInstalled())) {
+    if (!(await checkToolInstalled('latexdiff'))) {
       return;
     }
 
