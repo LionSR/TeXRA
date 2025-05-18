@@ -154,12 +154,6 @@
   color: var(--vscode-symbolIcon-keywordForeground, #569cd6);
 }
 
-/* Add custom styling for special latex markup */
-.scratchpad-content .latex-inline {
-  font-style: italic;
-  color: var(--vscode-symbolIcon-functionForeground, #dcdcaa);
-}
-
 .scratchpad-content a {
   color: var(--vscode-textLink-activeForeground, #3794ff);
   text-decoration: none;
