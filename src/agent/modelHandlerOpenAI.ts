@@ -528,7 +528,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
       toolState.updateAccumulatedOutput(prefill + fileContent);
       await writeFile(outputFile, toolState.accumulatedOutput);
     }
-    const state = AgentStateRound.initialize(0);
+    const state = new AgentStateRound(0);
     toolState.lastResponse = toolState.accumulatedOutput;
     this.addContinueMessageWithoutPrefill(
       messages,
