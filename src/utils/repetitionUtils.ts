@@ -24,6 +24,8 @@ export interface RepetitionResult {
 /**
  * Checks for massive repetition using diff-match-patch
  */
+
+// TODO: the following functions seem not DRY. Need to refactor into one with the more prominent used one as the default.
 export function checkForMassiveRepetition(
   lastResponse: string,
   newResponse: string,

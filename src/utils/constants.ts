@@ -30,5 +30,8 @@ export const MESSAGE_PREVIEW_LENGTH = 50;
 export const REPETITION_PREVIEW_LENGTH = 400;
 export const REPETITION_DETECTION_THRESHOLD = 1000;
 
+// for file preview
+export const MAX_PREVIEW_LENGTH = 1000;
+
 // Time constants
 export const SHORT_SLEEP_MS = 50;
