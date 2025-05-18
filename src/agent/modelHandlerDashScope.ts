@@ -71,7 +71,6 @@ export class ModelHandlerDashScope extends ModelHandlerOpenAI {
     return processedMessages;
   }
 
-
   /**
    * Override createResponse to preprocess messages for DashScope models
    */
