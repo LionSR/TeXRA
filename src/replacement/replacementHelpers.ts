@@ -484,7 +484,7 @@ export function generateVectorShortcuts(
  *
  * @param terms List of terms to generate patterns for
  * @param targetCommand Target command to convert to (default: 'text')
- * @param variant Specific variant to convert from: 'mathrm', 'mbox', 'textrm', or 'rm'.
+ * @param variant Specific variant to convert from: 'mathrm', 'mbox', or 'textrm'.
  *                If not provided, handles all variants.
  */
 export function generateTextCommandNormalization(
@@ -495,27 +495,38 @@ export function generateTextCommandNormalization(
   const patterns: { [key: string]: string } = {};
 
   // Define all possible variants if none specified
-  const allVariants = ['mathrm', 'mbox', 'textrm', 'rm'];
+  const allVariants = ['mathrm', 'mbox', 'textrm'];
   const variantsToUse = variant ? [variant] : allVariants;
 
   variantsToUse.forEach((v) => {
-    if (v === 'rm') {
-      // Special handling for \rm which uses {\\rm XYZ} format
-      terms.forEach((term) => {
-        patterns[`{\\${v} ${term}}`] = `\\${targetCommand}{${term}}`;
-        // Also handle common scenarios with brackets
-        patterns[`{\\${v} ${term}}}`] = `\\${targetCommand}{${term}}}`;
-        // Handle with underscore
-        patterns[`{\\${v} ${term}}_`] = `\\${targetCommand}{${term}}_`;
-        // Handle with superscript
-        patterns[`{\\${v} ${term}}^`] = `\\${targetCommand}{${term}}^`;
-      });
-    } else {
-      // Standard handling for \mathrm{}, \mbox{}, \textrm{}
-      terms.forEach((term) => {
-        patterns[`\\${v}{${term}}`] = `\\${targetCommand}{${term}}`;
-      });
-    }
+    terms.forEach((term) => {
+      patterns[`\\${v}{${term}}`] = `\\${targetCommand}{${term}}`;
+    });
+  });
+
+  return patterns;
+}
+
+/**
+ * Generate patterns to normalize legacy font commands like {\rm X}, {\bf X},
+ * or {\cal X}.
+ */
+export function generateLegacyTextCommandNormalization(
+  terms: string[],
+  targetCommand: string,
+  variant?: string,
+): { [key: string]: string } {
+  const patterns: { [key: string]: string } = {};
+
+  const allVariants = ['rm', 'bf', 'cal'];
+  const variantsToUse = variant ? [variant] : allVariants;
+
+  variantsToUse.forEach((v) => {
+    terms.forEach((term) => {
+      patterns[`{\\${v} ${term}}`] = `\\${targetCommand}{${term}}`;
+      // Handle {\rm{X}} style
+      patterns[`{\\${v}{${term}}}`] = `\\${targetCommand}{${term}}`;
+    });
   });
 
   return patterns;
