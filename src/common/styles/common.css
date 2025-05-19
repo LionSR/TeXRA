@@ -200,7 +200,3 @@ select:focus {
   align-items: center;
   margin-bottom: var(--spacing-medium);
 }
-
-.section-header-between {
-  justify-content: space-between;
-}
