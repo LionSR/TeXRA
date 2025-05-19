@@ -21,6 +21,16 @@ export interface FileDialogOptions {
   defaultUri?: vscode.Uri | null;
 }
 
+function getDefaultUri(currentFile: string): vscode.Uri | null {
+  const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  if (!workspacePath) {
+    return null;
+  }
+  return currentFile
+    ? vscode.Uri.file(path.dirname(path.join(workspacePath, currentFile)))
+    : vscode.Uri.file(workspacePath);
+}
+
 /**
  * Generic helper to show an open file dialog and return selected relative paths.
  */
@@ -59,14 +69,4 @@ export async function selectFile(
 ): Promise<string | null> {
   const paths = await selectFiles({ ...options, allowMany: false });
   return paths ? paths[0] : null;
-}
-
-function getDefaultUri(currentFile: string): vscode.Uri | null {
-  const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-  if (!workspacePath) {
-    return null;
-  }
-  return currentFile
-    ? vscode.Uri.file(path.dirname(path.join(workspacePath, currentFile)))
-    : vscode.Uri.file(workspacePath);
 }
