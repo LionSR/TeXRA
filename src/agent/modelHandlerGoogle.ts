@@ -30,13 +30,13 @@ export class ModelHandlerGoogle extends ModelHandlerOpenAI {
     // Google models return completionTokens, promptTokens instead of completion_tokens, prompt_tokens
     const promptTokens = responseUsage?.promptTokens ?? 0;
     const completionTokens = responseUsage?.completionTokens ?? 0;
-    const reasoningTokens = responseUsage?.reasoning_tokens ?? 0;
     const thoughtTokens =
       responseUsage?.thoughtsTokenCount ?? responseUsage?.thoughtTokens ?? 0;
+    const toolUseTokens = responseUsage?.toolUseTokenCount ?? 0;
 
     return calculateTokenPrice(
       promptTokens,
-      completionTokens + reasoningTokens + thoughtTokens,
+      completionTokens + thoughtTokens + toolUseTokens,
       this.config.inputPrice,
       this.config.outputPrice,
     );
@@ -49,16 +49,14 @@ export class ModelHandlerGoogle extends ModelHandlerOpenAI {
   ): OpenAIAPIResponseUsage {
     // Create a minimal usage object with Google's token counts
     const usageObj = {
-      prompt_tokens: responseUsage?.promptTokens ?? 0,
+      prompt_tokens: responseUsage?.candidatesTokenCount ?? 0,
       completion_tokens: responseUsage?.completionTokens ?? 0,
-      total_tokens: responseUsage?.totalTokens ?? 0,
-      prompt_tokens_details: { cached_tokens: 0 },
+      total_tokens: responseUsage?.totalTokenCount ?? 0,
+      prompt_tokens_details: {
+        cached_tokens: responseUsage?.cachedContentTokenCount ?? 0,
+      },
       completion_tokens_details: {
-        reasoning_tokens:
-          responseUsage?.reasoning_tokens ??
-          responseUsage?.thoughtsTokenCount ??
-          responseUsage?.thoughtTokens ??
-          0,
+        reasoning_tokens: responseUsage?.thoughtsTokenCount ?? 0,
         accepted_prediction_tokens: null,
         rejected_prediction_tokens: null,
       },
