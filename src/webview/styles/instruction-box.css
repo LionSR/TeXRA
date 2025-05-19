@@ -78,20 +78,3 @@
   right: 16px;
   z-index: 10;
 }
-
-/* Checkbox group within instruction box */
-.checkbox-group {
-  display: flex;
-  gap: 1px;
-  flex-direction: column;
-}
-
-.checkbox-group label {
-  display: flex;
-  align-items: center;
-  font-size: var(--font-size);
-}
-
-.checkbox-group input[type='checkbox'] {
-  margin-right: var(--spacing-small);
-}

@@ -162,7 +162,8 @@ document.addEventListener('DOMContentLoaded', function () {
     ).length;
 
     if (toggleToolConfig) {
-      toggleToolConfig.innerHTML = `<i class="codicon codicon-tools"></i> ${checkedCount > 0 ? '●' : '○'}<i class="codicon codicon-chevron-down"></i>`;
+      toggleToolConfig.classList.toggle('active', checkedCount > 0);
+      toggleToolConfig.innerHTML = `<i class="codicon codicon-tools"></i><i class="codicon codicon-chevron-down"></i>`;
     }
   }
 
