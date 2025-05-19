@@ -1,0 +1,61 @@
+import {
+  DEFAULT_MODEL_CAPABILITIES,
+  ModelCapabilities,
+  ModelConfig,
+  ModelProvider,
+  ReasoningEffort,
+} from '../ModelConfig';
+
+export const DASHSCOPE_MODELS: Record<string, ModelConfig> = {
+  qwenmax: {
+    name: 'qwenmax',
+    fullName: 'qwen-max-latest',
+    openrouterFullName: 'qwen/qwen-max',
+    provider: ModelProvider.DASHSCOPE,
+    maxOutputTokens: 4096,
+    contextWindow: 32768,
+    inputPrice: 0.56,
+    outputPrice: 2.24,
+    capabilities: {
+      ...DEFAULT_MODEL_CAPABILITIES,
+      supportsPromptCaching: false,
+      supportsVision: true,
+      supportsSystemPrompt: true,
+    } satisfies ModelCapabilities,
+    openRouterOnly: false,
+  },
+  qwenplus: {
+    name: 'qwenplus',
+    fullName: 'qwen-plus-latest',
+    openrouterFullName: 'qwen/qwen-plus',
+    provider: ModelProvider.DASHSCOPE,
+    maxOutputTokens: 8192,
+    contextWindow: 131072,
+    inputPrice: 0.28,
+    outputPrice: 1.12,
+    capabilities: {
+      ...DEFAULT_MODEL_CAPABILITIES,
+      supportsPromptCaching: false,
+      supportsVision: true,
+      supportsSystemPrompt: true,
+    } satisfies ModelCapabilities,
+    openRouterOnly: false,
+  },
+  qwenturbo: {
+    name: 'qwenturbo',
+    fullName: 'qwen-turbo-latest',
+    openrouterFullName: 'qwen/qwen-turbo',
+    provider: ModelProvider.DASHSCOPE,
+    maxOutputTokens: 8192,
+    contextWindow: 131072,
+    inputPrice: 0.14,
+    outputPrice: 0.56,
+    capabilities: {
+      ...DEFAULT_MODEL_CAPABILITIES,
+      supportsPromptCaching: false,
+      supportsVision: true,
+      supportsSystemPrompt: true,
+    } satisfies ModelCapabilities,
+    openRouterOnly: false,
+  },
+};
