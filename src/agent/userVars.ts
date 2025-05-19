@@ -32,7 +32,7 @@ export async function buildUserVars(
     await getPatternBasedFileVars(agentConfig, agentSetting, logger),
   );
   Object.assign(userVars, getOutputFilesOrder(agentConfig, agentSetting));
-  Object.assign(userVars, getToolFlags(agentConfig));
+  Object.assign(userVars, getToolFlags(agentConfig, agentSetting));
   return userVars;
 }
 
@@ -242,8 +242,12 @@ function getOutputFilesOrder(
   return userVars;
 }
 
-function getToolFlags(agentConfig: AgentConfig): Record<string, any> {
+function getToolFlags(
+  agentConfig: AgentConfig,
+  agentSetting: AgentSetting,
+): Record<string, any> {
   return {
+    ROUNDS: agentSetting.rounds ?? 2,
     AUTO_EXTRACT_FIGURE: agentConfig.toolConfig.autoExtractFigure,
     AUTO_EXTRACT_TIKZ_FIGURE: agentConfig.toolConfig.autoExtractTikzFigure,
     INCLUDE_TEX_COUNT: agentConfig.toolConfig.attachTeXCount,
