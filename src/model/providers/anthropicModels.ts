@@ -6,6 +6,11 @@ import {
   ReasoningEffort,
 } from '../ModelConfig';
 
+// reansoning effort:
+// For Anthropic models, maybe a good value:
+// 1. The reasoning token allocation is capped at 32,000 tokens maximum and 1024 tokens minimum.
+// 2. effort_ratio is 0.8 for high effort, 0.5 for medium effort, and 0.2 for low effort.
+
 export const ANTHROPIC_MODELS: Record<string, ModelConfig> = {
   sonnet37T: {
     name: 'sonnet37T',

@@ -81,5 +81,4 @@ export const DEEPSEEK_MODELS: Record<string, ModelConfig> = {
     } satisfies ModelCapabilities,
     openRouterOnly: false,
   },
-
 };

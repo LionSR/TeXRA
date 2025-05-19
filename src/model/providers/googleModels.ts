@@ -166,5 +166,4 @@ export const GOOGLE_MODELS: Record<string, ModelConfig> = {
     } satisfies ModelCapabilities,
     openRouterOnly: false,
   },
-
 };
