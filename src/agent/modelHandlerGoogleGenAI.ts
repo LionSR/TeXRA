@@ -158,6 +158,9 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
     const historyMessages = messages.slice(0, -1);
     const lastMessage = messages.at(-1);
 
+    // chatHistory intentionally excludes the final user message because
+    // we send it separately with `chat.sendMessage` below
+
     const chatHistory = convertMessagesToGoogleContentHistory(
       historyMessages,
       this.logger,
@@ -193,6 +196,48 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
         systemInstruction: { role: 'system', parts: [{ text: systemPrompt }] },
       }),
     };
+
+    if (this.capabilities.supportsTokenCounting) {
+      try {
+        const countContents: Content[] = [];
+        if (systemPrompt) {
+          countContents.push({
+            role: 'system',
+            parts: [{ text: systemPrompt }],
+          });
+        }
+        countContents.push(...chatHistory);
+        // The token count API expects the upcoming message as part of the
+        // history, so append the final user message that will be sent next.
+        countContents.push({ role: 'user', parts: lastMessageParts });
+
+        const responseTokenCount = await client.models.countTokens({
+          model: this.config.fullName,
+          contents: countContents,
+        });
+        const totalTokens = responseTokenCount.totalTokens ?? 0;
+        this.logger.debug(`Token count of message: ${totalTokens}`);
+        if (totalTokens > this.config.contextWindow) {
+          this.logger.error(
+            `Token count of message exceeds context window: ${totalTokens} > ${this.config.contextWindow}`,
+          );
+          throw new Error(
+            `Token count of message exceeds context window: ${totalTokens} > ${this.config.contextWindow}`,
+          );
+        }
+        if (this.config.contextWindow - totalTokens < generationConfig.maxOutputTokens) {
+          this.logger.warn(
+            `Token count of message plus max tokens exceeds context window: ${totalTokens} + ${generationConfig.maxOutputTokens} > ${this.config.contextWindow}. Reducing max tokens to ${this.config.contextWindow - totalTokens}.`,
+          );
+          generationConfig.maxOutputTokens =
+            this.config.contextWindow - totalTokens - 10;
+        }
+      } catch (err: any) {
+        this.logger.error(
+          `Token counting failed: ${err.message}. Proceeding without token adjustment.`,
+        );
+      }
+    }
 
     const useStreaming = false; // Hardcoded to false
     if (getConfig<boolean>('model.useStreaming', false)) {
