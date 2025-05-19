@@ -145,7 +145,7 @@ export async function runPackSingle(
     }
   }
 
-  return outputFolder || '';
+  return outputFolder ?? '';
 }
 
 export async function runPackMultiple(

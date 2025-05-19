@@ -63,11 +63,11 @@ export function restoreState() {
     };
 
     VALUE_ELEMENTS.forEach((id) => {
-      safeSetElementValue(id, previousState[id] || defaultValues[id] || '');
+      safeSetElementValue(id, previousState[id] ?? defaultValues[id] ?? '');
     });
 
     CHECK_BOXES.forEach((id) => {
-      safeSetElementChecked(id, previousState[id] || false);
+      safeSetElementChecked(id, previousState[id] ?? false);
     });
 
     // Initialize auto-extract toggle in closed state
@@ -107,7 +107,7 @@ export function restoreState() {
       selectDiv.innerHTML = '';
 
       // Get files and visibility from state
-      const filesArray = previousState[id] || [];
+      const filesArray = previousState[id] ?? [];
       const isVisible = previousState[`${id}Visible`];
 
       if (filesArray && filesArray.length > 0) {
@@ -134,7 +134,7 @@ export function restoreState() {
         toggleOutputNameOverrideDiv.textContent = '<';
       safeSetElementValue(
         'outputNameOverride',
-        previousState.outputNameOverride || '',
+        previousState.outputNameOverride ?? '',
       );
     } else {
       if (outputNameOverride) outputNameOverride.style.display = 'none';

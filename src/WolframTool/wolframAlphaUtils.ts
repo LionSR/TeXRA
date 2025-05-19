@@ -86,7 +86,7 @@ export class WolframAlphaClient {
         return {
           status: 'error',
           message: error.message,
-          url: error.config?.url || null,
+          url: error.config?.url ?? null,
         };
       }
       return {
