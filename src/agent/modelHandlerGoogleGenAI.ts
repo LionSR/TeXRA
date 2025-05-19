@@ -68,7 +68,7 @@ function convertInternalPartsToGoogleParts(
         return null;
       }
     })
-    .filter((part: Part | null): part is Part => part !== null);
+    .filter((part: Part | null): part is Part => part != null);
 }
 
 // Helper function
@@ -100,7 +100,7 @@ function convertMessagesToGoogleContentHistory(
             return null;
           }
         })
-        .filter((part: Part | null): part is Part => part !== null);
+        .filter((part: Part | null): part is Part => part != null);
     } else if (typeof msg.content === 'string') {
       parts = [{ text: msg.content }];
     }

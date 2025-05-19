@@ -57,13 +57,13 @@ export async function executeCommand(
 
     const finalCommand = Array.isArray(command) ? command.join(' ') : command;
     logger.debug(
-      options.channel || CHANNEL,
+      options.channel ?? CHANNEL,
       `Running command: ${finalCommand}`,
     );
 
     const execOptions = {
       cwd: workspacePath,
-      encoding: options.encoding || 'utf8',
+      encoding: options.encoding ?? 'utf8',
       env: options.env ? { ...process.env, ...options.env } : process.env,
       timeout: options.timeout,
     };
@@ -78,14 +78,14 @@ export async function executeCommand(
 
     if (stderr && stderr.trim()) {
       logger.debug(
-        options.channel || CHANNEL,
+        options.channel ?? CHANNEL,
         `Command stderr: ${processOutput(stderr)}`,
       );
     }
 
     // if (stdout && stdout.trim()) {
     //   logger.debug(
-    //     options.channel || CHANNEL,
+    //     options.channel ?? CHANNEL,
     //     `Command stdout: ${processOutput(stdout)}`,
     //   );
     // }
@@ -98,7 +98,7 @@ export async function executeCommand(
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : String(err);
     logger.error(
-      options.channel || CHANNEL,
+      options.channel ?? CHANNEL,
       `Error executing command: ${errorMessage}`,
     );
 
