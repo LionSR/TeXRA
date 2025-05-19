@@ -59,5 +59,4 @@ export const MOONSHOT_MODELS: Record<string, ModelConfig> = {
     } satisfies ModelCapabilities,
     openRouterOnly: false,
   },
-
 };

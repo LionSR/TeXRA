@@ -6,6 +6,8 @@ import {
   ReasoningEffort,
 } from '../ModelConfig';
 
+// ===== OpenRouter Models =====
+
 export const OTHER_MODELS: Record<string, ModelConfig> = {
   llama31: {
     name: 'llama31',
