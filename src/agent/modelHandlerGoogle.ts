@@ -30,10 +30,13 @@ export class ModelHandlerGoogle extends ModelHandlerOpenAI {
     // Google models return completionTokens, promptTokens instead of completion_tokens, prompt_tokens
     const promptTokens = responseUsage?.promptTokens ?? 0;
     const completionTokens = responseUsage?.completionTokens ?? 0;
+    const reasoningTokens = responseUsage?.reasoning_tokens ?? 0;
+    const thoughtTokens =
+      responseUsage?.thoughtsTokenCount ?? responseUsage?.thoughtTokens ?? 0;
 
     return calculateTokenPrice(
       promptTokens,
-      completionTokens,
+      completionTokens + reasoningTokens + thoughtTokens,
       this.config.inputPrice,
       this.config.outputPrice,
     );
@@ -51,7 +54,11 @@ export class ModelHandlerGoogle extends ModelHandlerOpenAI {
       total_tokens: responseUsage?.totalTokens ?? 0,
       prompt_tokens_details: { cached_tokens: 0 },
       completion_tokens_details: {
-        reasoning_tokens: 0,
+        reasoning_tokens:
+          responseUsage?.reasoning_tokens ??
+          responseUsage?.thoughtsTokenCount ??
+          responseUsage?.thoughtTokens ??
+          0,
         accepted_prediction_tokens: null,
         rejected_prediction_tokens: null,
       },
