@@ -510,9 +510,10 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
     if (!responseUsage) return 0.0;
     const promptTokens = responseUsage.promptTokenCount ?? 0;
     const completionTokens = responseUsage.candidatesTokenCount ?? 0;
+    const thoughtTokens = responseUsage.thoughtsTokenCount ?? 0;
     return calculateTokenPrice(
       promptTokens,
-      completionTokens,
+      completionTokens + thoughtTokens,
       this.config.inputPrice,
       this.config.outputPrice,
     );
@@ -528,7 +529,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
       total_tokens: responseUsage?.totalTokenCount ?? 0,
       prompt_tokens_details: { cached_tokens: 0 },
       completion_tokens_details: {
-        reasoning_tokens: 0,
+        reasoning_tokens: responseUsage?.thoughtsTokenCount ?? 0,
         accepted_prediction_tokens: null,
         rejected_prediction_tokens: null,
       },
