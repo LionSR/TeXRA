@@ -2,6 +2,8 @@
  * Utility functions for working with message objects in agent conversations.
  */
 
+import { MESSAGE_PREVIEW_LENGTH } from '../utils/constants';
+
 /**
  * Creates a skeleton representation of a message object for debugging.
  * Preserves structure while truncating content to avoid cluttering logs.
@@ -11,7 +13,7 @@
  */
 export function messageToSkeleton(
   message: any,
-  maxContentLength: number = 50,
+  maxContentLength: number = MESSAGE_PREVIEW_LENGTH,
 ): any {
   if (!message) {
     return null;

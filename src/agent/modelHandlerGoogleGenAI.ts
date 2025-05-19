@@ -19,6 +19,7 @@ import { AgentSetting, hasEndTag } from './AgentDataclass';
 import { AgentStateRound, AgentStateGlobal } from './AgentState';
 import { ToolState } from './ToolState';
 import { OpenAIAPIResponseUsage, ResponseUsageFactory } from './ResponseUsage';
+import { MediaEntry } from './mediaTypes';
 
 // Local imports - utilities
 import {
@@ -313,6 +314,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
       `Determining MIME type for extension: '${ext}' from file: ${filePath}`,
     );
 
+    // TODO: this map/function can be put somewhere else to be more DRY and reusable
     const mimeMap: { [key: string]: string } = {
       '.jpg': 'image/jpeg',
       '.jpeg': 'image/jpeg',
@@ -430,7 +432,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
     return messages;
   }
 
-  createMediaContent(mediaMessage: any[]): any[] {
+  createMediaContent(mediaMessage: MediaEntry[]): any[] {
     this.logger.warn(
       'createMediaContent called on ModelHandlerGoogleGenAI - should be obsolete.',
     );
@@ -510,9 +512,11 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
     if (!responseUsage) return 0.0;
     const promptTokens = responseUsage.promptTokenCount ?? 0;
     const completionTokens = responseUsage.candidatesTokenCount ?? 0;
+    const thoughtTokens = responseUsage.thoughtsTokenCount ?? 0;
+    const toolUseTokens = responseUsage.toolUseTokenCount ?? 0;
     return calculateTokenPrice(
       promptTokens,
-      completionTokens,
+      completionTokens + thoughtTokens + toolUseTokens,
       this.config.inputPrice,
       this.config.outputPrice,
     );
@@ -526,9 +530,11 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
       prompt_tokens: responseUsage?.promptTokenCount ?? 0,
       completion_tokens: responseUsage?.candidatesTokenCount ?? 0,
       total_tokens: responseUsage?.totalTokenCount ?? 0,
-      prompt_tokens_details: { cached_tokens: 0 },
+      prompt_tokens_details: {
+        cached_tokens: responseUsage?.cachedContentTokenCount ?? 0,
+      },
       completion_tokens_details: {
-        reasoning_tokens: 0,
+        reasoning_tokens: responseUsage?.thoughtsTokenCount ?? 0,
         accepted_prediction_tokens: null,
         rejected_prediction_tokens: null,
       },
@@ -703,7 +709,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
     );
     toolState.updateAccumulatedOutput(fileContent);
     toolState.lastResponse = fileContent;
-    const state = AgentStateRound.initialize(0);
+    const state = new AgentStateRound(0);
     this.addContinueMessageWithoutPrefill(
       messages,
       state,
