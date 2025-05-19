@@ -9,7 +9,7 @@ export const showErrorMessage = vscode.window.showErrorMessage;
 export function ensureArray<T>(value: T | T[] | null | undefined): T[] {
   if (Array.isArray(value)) {
     return value;
-  } else if (value !== null && value !== undefined) {
+  } else if (value != null) {
     return [value];
   }
   return [];

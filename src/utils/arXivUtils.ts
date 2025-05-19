@@ -114,7 +114,7 @@ export async function extractTarFile(
   options: ExtractOptions = {},
 ): Promise<ExtractResult> {
   logger.debug(
-    options.channel || CHANNEL,
+    options.channel ?? CHANNEL,
     `Extracting tar file: ${tarPath} to ${destDir}`,
   );
 
@@ -123,14 +123,14 @@ export async function extractTarFile(
 
   // Use executeCommand from execUtils
   const result = await executeCommand(tarCommand, {
-    channel: options.channel || CHANNEL,
+    channel: options.channel ?? CHANNEL,
     timeout: options.timeout,
     truncate: true,
   });
 
   if (!result.success) {
     logger.error(
-      options.channel || CHANNEL,
+      options.channel ?? CHANNEL,
       `Failed to extract tar file: ${result.stderr}`,
     );
     return {
