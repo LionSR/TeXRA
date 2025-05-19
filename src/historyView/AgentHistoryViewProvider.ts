@@ -168,7 +168,7 @@ export class AgentHistoryViewProvider implements vscode.WebviewViewProvider {
         .replace('${vscodeApiUri}', vscodeApiUri.toString())
         .replace('${domHandlersUri}', domHandlersUri.toString())
         .replace(/\${nonce}/g, nonce)
-        .replace(/\${cspSource}/g, this._view?.webview.cspSource || '');
+        .replace(/\${cspSource}/g, this._view?.webview.cspSource ?? '');
     } catch (error) {
       console.error('Error generating HTML content:', error);
       return `<html><body><h1>Error loading history view</h1><p>${error}</p></body></html>`;

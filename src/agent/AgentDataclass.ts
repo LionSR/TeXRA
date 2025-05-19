@@ -62,7 +62,7 @@ export function validateAgentSetting(settings: AgentSetting): void {
   }
 
   if (
-    settings.temperature !== null &&
+    settings.temperature != null &&
     (settings.temperature < 0.0 || settings.temperature > 1.0)
   ) {
     throw new Error(

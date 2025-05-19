@@ -202,7 +202,7 @@ async function handleCompileTikzFigures(): Promise<void> {
           if (selected) {
             // Open the selected PDF
             const uri = vscode.Uri.file(
-              path.join(getWorkspacePath() || '', selected.file),
+              path.join(getWorkspacePath() ?? '', selected.file),
             );
             await vscode.commands.executeCommand('vscode.open', uri);
           }
