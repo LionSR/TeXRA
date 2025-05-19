@@ -226,7 +226,10 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
             `Token count of message exceeds context window: ${totalTokens} > ${this.config.contextWindow}`,
           );
         }
-        if (this.config.contextWindow - totalTokens < generationConfig.maxOutputTokens) {
+        if (
+          this.config.contextWindow - totalTokens <
+          generationConfig.maxOutputTokens
+        ) {
           this.logger.warn(
             `Token count of message plus max tokens exceeds context window: ${totalTokens} + ${generationConfig.maxOutputTokens} > ${this.config.contextWindow}. Reducing max tokens to ${this.config.contextWindow - totalTokens}.`,
           );
