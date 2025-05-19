@@ -2,7 +2,7 @@
   "name": "texra",
   "displayName": "TeXRA",
   "description": "TeXRA: Your LLM-powered 24/7 LaTeX Research Assistant.",
-  "version": "0.30.5",
+  "version": "0.30.7",
   "publisher": "texra-ai",
   "engines": {
     "vscode": "^1.94.0"
@@ -882,6 +882,11 @@
         "category": "TeXRA"
       },
       {
+        "command": "texra.openDoc",
+        "title": "Open TeXRA Documentation",
+        "category": "TeXRA"
+      },
+      {
         "command": "texra.showAgentHistory",
         "title": "Show Agent Execution History",
         "category": "TeXRA"
@@ -1027,7 +1032,8 @@
     "@types/vscode": "^1.93.0",
     "@typescript-eslint/eslint-plugin": "^8.27.0",
     "@typescript-eslint/parser": "^8.27.0",
-    "@vscode/test-electron": "^2.4.0",
+    "@vscode/test-cli": "^0.0.10",
+    "@vscode/test-electron": "^2.5.2",
     "chokidar": "^3.6.0",
     "eslint": "^9.23.0",
     "globals": "^15.8.0",
@@ -1047,7 +1053,7 @@
     "type": "git",
     "url": "https://github.com/texra-ai/texra-issues.git"
   },
-  "license": "MIT",
+  "license": "SEE LICENSE IN LICENSE",
   "author": "TeXRA.ai",
   "icon": "resources/logo-128x128.png",
   "keywords": [
@@ -1072,9 +1078,9 @@
   },
   "homepage": "https://texra.ai",
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.50.4",
+    "@anthropic-ai/sdk": "^0.51.0",
     "@cantoo/pdf-lib": "^2.3.2",
-    "@google/genai": "^0.14.0",
+    "@google/genai": "^0.14.1",
     "@types/yaml": "^1.9.6",
     "@vscode/codicons": "^0.0.36",
     "@wolfram-alpha/wolfram-alpha-api": "^23.1004.144821-RELEASE",
@@ -1087,7 +1093,7 @@
     "identifiers-arxiv": "^0.1.1",
     "marked": "^15.0.11",
     "nunjucks": "^3.2.4",
-    "openai": "^4.98.0",
+    "openai": "^4.100.0",
     "pdf2pic": "^3.1.4",
     "sortablejs": "^1.15.6",
     "split.js": "^1.6.5",
