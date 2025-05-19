@@ -224,7 +224,6 @@ export abstract class BaseReflectionAgent {
     );
   }
 
-
   /**
    * Manages single response cycle with model interaction.
    * @param messages Current conversation messages
