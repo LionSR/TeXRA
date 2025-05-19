@@ -1,0 +1,62 @@
+import {
+  DEFAULT_MODEL_CAPABILITIES,
+  ModelCapabilities,
+  ModelConfig,
+  ModelProvider,
+  ReasoningEffort,
+} from '../ModelConfig';
+
+export const MOONSHOT_MODELS: Record<string, ModelConfig> = {
+  kimi: {
+    name: 'kimi128k',
+    fullName: 'moonshot-v1-128k',
+    openrouterFullName: 'moonshot/moonshot-v1-128k',
+    provider: ModelProvider.MOONSHOT,
+    maxOutputTokens: 640000,
+    contextWindow: 128000,
+    inputPrice: 0.28,
+    outputPrice: 1.12,
+    capabilities: {
+      ...DEFAULT_MODEL_CAPABILITIES,
+      supportsPromptCaching: false,
+      supportsVision: false,
+      supportsSystemPrompt: true,
+    } satisfies ModelCapabilities,
+    openRouterOnly: false,
+  },
+  kimiv: {
+    name: 'kimi128kv',
+    fullName: 'moonshot-v1-128k-vision',
+    openrouterFullName: 'moonshot/moonshot-v1-128k-vision',
+    provider: ModelProvider.MOONSHOT,
+    maxOutputTokens: 64000,
+    contextWindow: 128000,
+    inputPrice: 0.35,
+    outputPrice: 1.4,
+    capabilities: {
+      ...DEFAULT_MODEL_CAPABILITIES,
+      supportsPromptCaching: false,
+      supportsVision: true,
+      supportsSystemPrompt: true,
+    } satisfies ModelCapabilities,
+    openRouterOnly: false,
+  },
+  kimit: {
+    name: 'kimit',
+    fullName: 'kimi-thinking-preview',
+    openrouterFullName: 'moonshot/kimi-thinking-preview',
+    provider: ModelProvider.MOONSHOT,
+    maxOutputTokens: 64000,
+    contextWindow: 128000,
+    inputPrice: 0.42,
+    outputPrice: 1.68,
+    capabilities: {
+      ...DEFAULT_MODEL_CAPABILITIES,
+      supportsPromptCaching: false,
+      supportsVision: true,
+      supportsSystemPrompt: true,
+      supportsReasoning: true,
+    } satisfies ModelCapabilities,
+    openRouterOnly: false,
+  },
+};
