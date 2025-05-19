@@ -354,3 +354,23 @@ export function replaceMathUnicode(text: string): string {
 
   return text;
 }
+
+/**
+ * Fix orientation of LaTeX-style quotes and adjust punctuation placement.
+ * Only processes well-formed quoted segments to avoid affecting apostrophes.
+ */
+export function fixLatexQuoteIssues(text: string): string {
+  // ''text'' -> ``text''
+  text = text.replace(/''([^']+?)''/g, "``$1''");
+
+  // 'text' -> `text'
+  text = text.replace(/(?<![\w])'([^']+?)'(?![\w])/g, "`$1'");
+
+  // Move punctuation outside closing double quotes
+  text = text.replace(/(``[^']+?)([.,;:])''/g, "$1''$2");
+
+  // Move punctuation outside closing single quotes
+  text = text.replace(/(`[^']+?)([.,;:])'/g, "$1'$2");
+
+  return text;
+}
