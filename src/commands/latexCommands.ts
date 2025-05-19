@@ -201,7 +201,7 @@ async function handleGetTeXCount(): Promise<void> {
             mathInlineMatch ? `Inline math: ${mathInlineMatch[1]}` : null,
             mathDisplayMatch ? `Display math: ${mathDisplayMatch[1]}` : null,
           ]
-            .filter((item): item is string => item !== null) // Type guard to remove nulls
+            .filter((item): item is string => item != null) // Type guard to remove nulls
             .map((label) => ({ label })); // Convert strings to QuickPickItems
 
           // Show results in QuickPick
