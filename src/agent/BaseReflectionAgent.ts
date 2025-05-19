@@ -1,6 +1,5 @@
 // Standard library imports
 import * as path from 'path';
-import * as fs from 'fs';
 
 // Third-party imports
 // (none needed)
@@ -17,22 +16,14 @@ import {
 } from '../latex';
 
 // Local imports - utilities
-import {
-  readFile,
-  writeFile,
-  appendFile,
-  fileExists,
-} from '../utils/workspaceFileUtils';
+import { writeFile, appendFile, fileExists } from '../utils/workspaceFileUtils';
 import {
   renderPrompt,
-  getListOfFiles,
   getFirstKCharsFromDocument,
   writePromptToXml,
-  getXmlFormatFromFiles,
 } from '../utils/promptUtils';
 import {
   applyReplacements,
-  getReplacementsByCategory,
   getAllReplacements,
   getAllReplacementsRegex,
 } from '../replacement/replacementUtils';
@@ -51,12 +42,17 @@ import { ToolState } from './ToolState';
 import { ModelHandler } from './ModelHandler';
 import { OutputHandler } from './OutputHandler';
 import { messageToSkeleton } from './messageUtils';
+import { buildUserVars } from './userVars';
 
 // System imports - common utilities
 import { getConfig } from '../utils/configUtils';
 
 // Shared constants
-import { K_SLICE } from '../utils/constants';
+import {
+  K_SLICE,
+  SHORT_SLEEP_MS,
+  REPETITION_DETECTION_THRESHOLD,
+} from '../utils/constants';
 
 /**
  * Abstract base class for agents that support multi-turn reflection and refinement.
@@ -69,7 +65,8 @@ export abstract class BaseReflectionAgent {
   protected agentSetting: AgentSetting;
   protected agentPrompt: AgentPrompt;
   protected agentPath: string;
-  protected outputFile: [string, string];
+  /** File paths for each round's raw model output. */
+  protected outputFile: string[];
   protected outputFiles: { [key: number]: string[] };
   protected baseFiles: string[];
   protected client: any;
@@ -113,7 +110,7 @@ export abstract class BaseReflectionAgent {
     this.modelHandler.setLogger(this.logger);
 
     // Initialize basic attributes
-    this.outputFile = ['', ''];
+    this.outputFile = [];
     this.outputFiles = { 0: [], 1: [] };
     this.baseFiles = this.agentConfig.outputFiles || [
       this.agentConfig.inputFile,
@@ -125,7 +122,7 @@ export abstract class BaseReflectionAgent {
     this.useScratchpad =
       this.agentSetting.prefills?.includes('<scratchpad>') || false;
 
-    // Set output files
+    // Set output files for the existing two rounds
     this.outputFile[0] = this.getOutputFile(0);
     this.outputFile[1] = this.getOutputFile(1);
 
@@ -151,8 +148,8 @@ export abstract class BaseReflectionAgent {
    */
   protected async initializeClient(): Promise<void> {
     this.client = await this.modelHandler.getClient();
-    // wait for 50 mili seconds
-    await sleep(50);
+    // wait briefly to avoid rate limit issues
+    await sleep(SHORT_SLEEP_MS);
   }
 
   /**
@@ -217,260 +214,14 @@ export abstract class BaseReflectionAgent {
    * @returns Combined dictionary of variables for prompt templates
    */
   protected async getUserVars(): Promise<Record<string, any>> {
-    // Build user variables incrementally with clear categories
     this.logger.debug(`Obtaining dynamic variables...`);
-    const userVars: Record<string, any> = {};
-    Object.assign(userVars, this.getBasicVars());
-    Object.assign(userVars, await this.getFileVars());
-    Object.assign(userVars, await this.getRequiredFileVars());
-    Object.assign(userVars, await this.getPatternBasedFileVars());
-    Object.assign(userVars, this.getOutputFilesOrder());
-    Object.assign(userVars, this.getToolFlags());
-    return userVars;
-  }
-
-  /**
-   * Collects basic model and instruction variables.
-   * @returns Core variables about model capabilities and instructions
-   */
-  private getBasicVars(): Record<string, any> {
-    return {
-      MODEL: this.agentConfig.model,
-      INSTRUCTION: this.agentConfig.instruction,
-      IS_OPENAI_MODEL: this.modelHandler.isOpenai,
-      IS_ANTHROPIC_MODEL: this.modelHandler.isAnthropic,
-      IS_GOOGLE_MODEL: this.modelHandler.isGoogle,
-    };
-  }
-
-  /**
-   * Processes input, reference, and auxiliary files into variables.
-   * @returns File content and metadata variables for prompts
-   */
-  private async getFileVars(): Promise<Record<string, any>> {
-    const userVars: Record<string, any> = {};
-
-    const allInputFiles = [
-      this.agentConfig.inputFile,
-      ...(this.agentConfig.inputFiles?.filter(Boolean) || []),
-    ];
-    const allReferenceFiles = [
-      this.agentConfig.referenceFile,
-      ...(this.agentConfig.referenceFiles?.filter(Boolean) || []),
-    ];
-    const allAuxiliaryFiles = [
-      this.agentConfig.auxiliaryFile,
-      ...(this.agentConfig.auxiliaryFiles?.filter(Boolean) || []),
-    ];
-
-    // Handle single files
-    const singleFileMappings = {
-      INPUT: this.agentConfig.inputFile,
-      REFERENCE: this.agentConfig.referenceFile,
-      AUXILIARY: this.agentConfig.auxiliaryFile,
-      EDITED: this.agentConfig.editedFile,
-    };
-
-    for (const [prefix, filePath] of Object.entries(singleFileMappings)) {
-      userVars[`${prefix}_FILE`] = filePath;
-      userVars[`${prefix}_CONTENT`] = filePath
-        ? await readFile(filePath)
-        : null;
-    }
-
-    // Handle file collections
-    const collectionMappings = {
-      INPUT: [
-        this.agentConfig.inputFiles?.filter(Boolean),
-        allInputFiles.filter(Boolean),
-      ],
-      REFERENCE: [
-        this.agentConfig.referenceFiles?.filter(Boolean),
-        allReferenceFiles.filter(Boolean),
-      ],
-      AUXILIARY: [
-        this.agentConfig.auxiliaryFiles?.filter(Boolean),
-        allAuxiliaryFiles.filter(Boolean),
-      ],
-    };
-
-    for (const [prefix, [additionalFiles, allFiles]] of Object.entries(
-      collectionMappings,
-    )) {
-      const additionalXml = additionalFiles
-        ? await getXmlFormatFromFiles(additionalFiles as string[])
-        : null;
-      const allXml = allFiles
-        ? await getXmlFormatFromFiles(allFiles as string[])
-        : null;
-
-      userVars[`ADDITIONAL_${prefix}S`] = additionalXml;
-      userVars[`ALL_${prefix}S`] = allXml;
-      userVars[`LIST_OF_ALL_${prefix}S`] = getListOfFiles(allFiles as string[]);
-    }
-
-    return userVars;
-  }
-
-  /**
-   * Processes required files specified in agent settings.
-   * @returns Variables containing required file contents
-   */
-  private async getRequiredFileVars(): Promise<Record<string, any>> {
-    const userVars: Record<string, any> = {};
-
-    // Add variables for required files
-    if (this.agentSetting.requiredFiles) {
-      for (const [varName, filePath] of Object.entries(
-        this.agentSetting.requiredFiles,
-      )) {
-        if (filePath) {
-          try {
-            const fileContent = await readFile(filePath);
-            userVars[`${varName}_FILE`] = filePath;
-            userVars[`${varName}_CONTENT`] = fileContent;
-            this.logger.info(
-              `Found from [requiredFiles] the [VAR '${varName}']: ${filePath}`,
-            );
-          } catch (err) {
-            this.logger.warn(
-              `[Required file] ${filePath} not found from [VAR '${varName}']`,
-            );
-          }
-        }
-      }
-    }
-
-    // Add variables for internal required files (from prompt directory)
-    if (this.agentSetting.requiredFilesInternal) {
-      for (const [varName, filePath] of Object.entries(
-        this.agentSetting.requiredFilesInternal,
-      )) {
-        const fullPath = path.join(this.agentPath, filePath);
-        try {
-          const fileContent = await fs.promises.readFile(fullPath, 'utf-8');
-          userVars[`${varName}_FILE`] = fullPath;
-          userVars[`${varName}_CONTENT`] = fileContent;
-          this.logger.info(
-            `Found from [requiredFilesInternal] the [VAR '${varName}']: ${fullPath}`,
-          );
-        } catch (err) {
-          this.logger.warn(
-            `[Required file internal] ${fullPath} not found from [VAR '${varName}']`,
-          );
-        }
-      }
-    }
-
-    return userVars;
-  }
-
-  /**
-   * Processes files matching patterns in agent settings.
-   * @returns Variables from pattern-matched files
-   */
-  private async getPatternBasedFileVars(): Promise<Record<string, any>> {
-    const userVars: Record<string, any> = {};
-
-    // Handle pattern-based file mappings if defined in settings
-    if (this.agentSetting.filePatternsContain) {
-      for (const patternConfig of this.agentSetting.filePatternsContain) {
-        const pattern = patternConfig.pattern.toLowerCase();
-        const varName = patternConfig.varName;
-        const categories = patternConfig.categories;
-
-        // Search in specified categories
-        for (const category of categories) {
-          // Get the value from AgentConfig using dictionary-style access
-          const categoryValue = (this.agentConfig as any)[category];
-
-          if (category.endsWith('File')) {
-            // Single file categories
-            if (
-              categoryValue &&
-              categoryValue.toLowerCase().includes(pattern)
-            ) {
-              try {
-                const fileContent = await readFile(categoryValue);
-                userVars[`${varName}_FILE`] = categoryValue;
-                userVars[`${varName}_CONTENT`] = fileContent;
-                this.logger.info(
-                  `Found from [Pattern '${pattern}'] the [VAR '${varName}']: ${categoryValue}`,
-                );
-              } catch (err) {
-                this.logger.warn(
-                  `File ${categoryValue} not found from [Pattern '${pattern}']`,
-                );
-              }
-            }
-          } else if (category.endsWith('Files')) {
-            // Multiple file categories
-            if (categoryValue) {
-              for (const file of categoryValue) {
-                if (file.toLowerCase().includes(pattern)) {
-                  try {
-                    const fileContent = await readFile(file);
-                    userVars[`${varName}_FILE`] = file;
-                    userVars[`${varName}_CONTENT`] = fileContent;
-                    this.logger.info(
-                      `Found from [Pattern '${pattern}'] the [VAR '${varName}']: ${file}`,
-                    );
-                    break; // Stop after first match
-                  } catch (err) {
-                    this.logger.warn(
-                      `File ${file} not found from [Pattern '${pattern}']`,
-                    );
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-
-    return userVars;
-  }
-
-  /**
-   * Determines order of output file processing.
-   * @returns Variables controlling output file ordering
-   */
-  private getOutputFilesOrder(): Record<string, any> {
-    const userVars: Record<string, any> = {};
-
-    // Handle output files order - use defaultOutputFiles if no outputFiles specified
-    if (
-      Array.isArray(this.agentConfig.outputFiles) &&
-      this.agentConfig.outputFiles.length > 0
-    ) {
-      userVars.OUTPUT_FILES_ORDER = this.agentConfig.outputFiles.join(', ');
-    } else if (
-      Array.isArray(this.agentSetting.defaultOutputFiles) &&
-      this.agentSetting.defaultOutputFiles.length > 0
-    ) {
-      // If no outputFiles specified but defaultOutputFiles exists in settings
-      this.agentConfig.outputFiles = this.agentSetting.defaultOutputFiles;
-      userVars.OUTPUT_FILES_ORDER =
-        this.agentSetting.defaultOutputFiles.join(', ');
-    }
-
-    return userVars;
-  }
-
-  /**
-   * Collects tool-specific configuration flags.
-   * @returns Variables for tool behavior control
-   */
-  private getToolFlags(): Record<string, any> {
-    return {
-      AUTO_EXTRACT_FIGURE: this.agentConfig.toolConfig.autoExtractFigure,
-      AUTO_EXTRACT_TIKZ_FIGURE:
-        this.agentConfig.toolConfig.autoExtractTikzFigure,
-      INCLUDE_TEX_COUNT: this.agentConfig.toolConfig.attachTeXCount,
-      USE_PREFILL_FROM_INPUT: this.agentConfig.toolConfig.usePrefillFromInput,
-      PRINT_INPUT_PROMPT: this.agentConfig.toolConfig.printInputPrompt,
-    };
+    return buildUserVars(
+      this.agentConfig,
+      this.agentSetting,
+      this.agentPath,
+      this.modelHandler,
+      this.logger,
+    );
   }
 
   /**
@@ -601,7 +352,7 @@ export abstract class BaseReflectionAgent {
         );
         if (repetitionResult.massiveRepetitionDetected) {
           this.logger.error(
-            `The new response is (first 1000 chars): ${newResponse.substring(0, 1000)}`,
+            `The new response is (first ${REPETITION_DETECTION_THRESHOLD} chars): ${newResponse.substring(0, REPETITION_DETECTION_THRESHOLD)}`,
             responseCycleGroupId,
           );
           this.logger.error(
@@ -861,11 +612,11 @@ export abstract class BaseReflectionAgent {
       this.agentConfig.inputFile,
       ...(this.agentConfig.inputFiles || []),
     ];
-    const toolState = ToolState.initialize();
+    const toolState = new ToolState();
 
     // Initialize state and messages
     const currRound = 0;
-    const stateGlobal = AgentStateGlobal.initialize();
+    const stateGlobal = new AgentStateGlobal();
 
     this.logger.info(`Processing round ${currRound}`);
 
@@ -975,7 +726,7 @@ export abstract class BaseReflectionAgent {
           prefill,
         );
 
-      const stateRound = AgentStateRound.initialize(currRound);
+      const stateRound = new AgentStateRound(currRound);
       let finalEndTurn = endTurn;
 
       if (!endTurn) {
@@ -1095,7 +846,7 @@ export abstract class BaseReflectionAgent {
       }
 
       // Initialize reflection round
-      const stateRound = AgentStateRound.initialize(currRound);
+      const stateRound = new AgentStateRound(currRound);
 
       // Prepare reflection message
       const userRequestReflect = await renderPrompt(
@@ -1210,7 +961,7 @@ export abstract class BaseReflectionAgent {
         this.agentConfig.toolConfig.reflect &&
         endTurn
       ) {
-        const toolStateReflection = ToolState.initialize();
+        const toolStateReflection = new ToolState();
         await this.reflect(stateGlobal, messages, toolStateReflection);
         this.logger.info(`Round 1 completed\n`, this.runGroupId);
       }
