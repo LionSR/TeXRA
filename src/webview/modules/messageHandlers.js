@@ -278,7 +278,7 @@ export function setupMessageHandlers() {
           const multipleFileId = `${uncapitalize(fileType)}Files`;
           const toggleId = `toggle${capitalize(fileType)}Files`;
 
-          let filesToAdd = message.files || [];
+          let filesToAdd = message.files ?? [];
 
           // If shouldFilter is true, filter out the file that's already selected in the single select
           if (message.shouldFilter) {

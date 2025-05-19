@@ -221,7 +221,7 @@ export function initializeOutputFiles() {
   }
 
   // Add opened files to the output files list
-  const openedFiles = vscode.getState()?.openedFiles || [];
+  const openedFiles = vscode.getState()?.openedFiles ?? [];
   openedFiles.forEach((file) => {
     addFileToList('outputFiles', file);
   });
