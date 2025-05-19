@@ -9,8 +9,12 @@ import * as logger from './logger/logUtils';
 import {
   getBuiltInAgentsDirectory,
   getCustomAgentsDirectory,
+  getOrPromptForCustomAgentsDirectory,
 } from './utils/pathUtils';
+import { promptToAddAgentToConfig } from './utils/agentRegistration';
+import { isValidAgentYaml } from './agent/agentLoad';
 import { fileExistsAbsolute } from './utils/absoluteFileUtils';
+import { getConfig } from './utils/configUtils';
 
 const CHANNEL = 'Webview';
 logger.initialize(CHANNEL);
@@ -31,6 +35,7 @@ export class FolderExplorer implements vscode.TreeDataProvider<FileItem> {
   private fileSystemWatchers: vscode.FileSystemWatcher[] = [];
   private editingItem: FileItem | undefined;
   private builtInAgentsPath: string = '';
+  private _disposables: vscode.Disposable[] = [];
 
   constructor(
     private workspaceRoot: string | undefined,
@@ -119,11 +124,10 @@ export class FolderExplorer implements vscode.TreeDataProvider<FileItem> {
   // Create a custom copy of a built-in agent file
   private async createCustomCopy(uri: vscode.Uri) {
     try {
-      const customPath = await getCustomAgentsDirectory();
+      // Ensure we have a custom agents directory configured by prompting if needed
+      const customPath = await getOrPromptForCustomAgentsDirectory();
       if (!customPath) {
-        vscode.window.showErrorMessage(
-          'Custom agents directory not configured. Please set it in settings.',
-        );
+        // User cancelled the folder selection dialog
         return;
       }
 
@@ -156,15 +160,26 @@ export class FolderExplorer implements vscode.TreeDataProvider<FileItem> {
 
   private async createNew(node: FileItem | undefined, isFolder: boolean) {
     try {
-      const parentPath =
-        node?.resourceUri.fsPath ||
-        (this.context
-          ? await getBuiltInAgentsDirectory(this.context)
-          : undefined);
+      // Ensure we have a custom agents directory configured
+      const customBase = await getOrPromptForCustomAgentsDirectory();
+      if (!customBase) {
+        return;
+      }
+
+      let parentPath = node?.resourceUri.fsPath || customBase;
+
+      if (parentPath.startsWith(this.builtInAgentsPath)) {
+        // Mirror built-in structure under the custom directory
+        const relative = path.relative(this.builtInAgentsPath, parentPath);
+        parentPath = path.join(customBase, relative);
+      }
 
       if (!parentPath) {
         throw new Error('No valid parent path found');
       }
+
+      // Ensure parent directory exists
+      await vscode.workspace.fs.createDirectory(vscode.Uri.file(parentPath));
 
       // Create a temporary item for in-place editing
       const tempName = isFolder ? 'New Folder' : 'new-file.yaml';
@@ -271,51 +286,121 @@ export class FolderExplorer implements vscode.TreeDataProvider<FileItem> {
   public async setupFileSystemWatcher() {
     try {
       if (!this.context) {
+        logger.warn(
+          CHANNEL,
+          'Cannot set up file system watcher: context is undefined',
+        );
         return;
       }
 
-      // Watch both built-in and custom directories
-      const builtInPath = await getBuiltInAgentsDirectory(this.context);
-      const customPath = await getCustomAgentsDirectory();
+      // Dispose of existing watchers before creating new ones
+      this._disposables.forEach((d) => d.dispose());
+      this._disposables = [];
 
-      // Dispose of existing watchers
-      this.dispose();
+      const builtInAgentsPath = await getBuiltInAgentsDirectory(this.context);
+      const customAgentsPath = await getCustomAgentsDirectory();
 
-      // Create watchers for both directories
-      this.fileSystemWatchers = [
-        vscode.workspace.createFileSystemWatcher(
-          new vscode.RelativePattern(builtInPath, '**/*'),
-        ),
-      ];
-
-      if (customPath) {
-        this.fileSystemWatchers.push(
-          vscode.workspace.createFileSystemWatcher(
-            new vscode.RelativePattern(customPath, '**/*'),
-          ),
-        );
+      const pathsToWatch = [builtInAgentsPath];
+      if (customAgentsPath) {
+        pathsToWatch.push(customAgentsPath);
       }
 
-      // Watch for all file system events
-      this.fileSystemWatchers.forEach((watcher) => {
-        watcher.onDidCreate(() => this.refresh());
-        watcher.onDidDelete(() => this.refresh());
-        watcher.onDidChange(() => this.refresh());
-      });
+      for (const watchPath of pathsToWatch) {
+        if (!watchPath) continue;
+
+        const pattern = new vscode.RelativePattern(watchPath, '**/*');
+        const watcher = vscode.workspace.createFileSystemWatcher(
+          pattern,
+          false, // ignoreCreateEvents - we want them for general refresh
+          false, // ignoreChangeEvents - we want them
+          false, // ignoreDeleteEvents - we want them for general refresh
+        );
+        this._disposables.push(watcher);
+
+        // General refresh for any change in watched directories
+        watcher.onDidCreate(() => {
+          logger.debug(
+            CHANNEL,
+            `File/folder created in ${watchPath}, refreshing.`,
+          );
+          this.refresh();
+        });
+        watcher.onDidDelete(() => {
+          logger.debug(
+            CHANNEL,
+            `File/folder deleted in ${watchPath}, refreshing.`,
+          );
+          this.refresh();
+        });
+
+        // Specific logic for .yaml file changes in the custom agents directory
+        if (watchPath === customAgentsPath) {
+          watcher.onDidChange(async (uri) => {
+            logger.debug(
+              CHANNEL,
+              `onDidChange triggered for ${uri.fsPath} in custom agents dir.`,
+            );
+            this.refresh(); // Refresh UI first
+
+            const filePath = uri.fsPath;
+            if (!filePath.endsWith('.yaml')) {
+              return; // Only process YAML files for agent logic
+            }
+
+            const validationResult = await isValidAgentYaml(filePath);
+            if (validationResult) {
+              const filenameBase = path.basename(filePath, '.yaml');
+              const internalName = validationResult.name; // Get name from the validation result
+
+              if (filenameBase !== internalName) {
+                vscode.window.showWarningMessage(
+                  `Agent file '${filenameBase}.yaml' has a different internal name '${internalName}' defined in its YAML. ` +
+                    `Consider renaming the file or updating the internal name in the YAML for consistency.`,
+                );
+                // Do not prompt to add if names mismatch
+              } else {
+                // Names match, proceed to check if it needs to be added to config
+                const configuredAgents = getConfig<string[]>(
+                  'texra.agents',
+                  [],
+                );
+                if (!configuredAgents.includes(filenameBase)) {
+                  // Since filenameBase === internalName, we only need to check one.
+                  await promptToAddAgentToConfig(filenameBase);
+                }
+              }
+            } else {
+              logger.debug(
+                CHANNEL,
+                `File ${filePath} is not a valid agent YAML or failed validation according to new structure.`,
+              );
+            }
+          });
+        } else {
+          // For built-in directory, just refresh on change
+          watcher.onDidChange(() => {
+            logger.debug(
+              CHANNEL,
+              `File/folder changed in built-in dir ${watchPath}, refreshing.`,
+            );
+            this.refresh();
+          });
+        }
+      }
 
       logger.info(
         CHANNEL,
-        `File system watchers set up for: ${[builtInPath, customPath].filter(Boolean).join(', ')}`,
+        `File system watchers set up for: ${pathsToWatch.filter(Boolean).join(', ')}`,
       );
-    } catch (err) {
-      logger.error(CHANNEL, `Error setting up file system watcher: ${err}`);
+    } catch (error) {
+      logger.error(CHANNEL, `Error setting up file system watcher: ${error}`);
     }
   }
 
   // Add dispose method to clean up resources
   dispose() {
-    this.fileSystemWatchers.forEach((watcher) => watcher.dispose());
-    this.fileSystemWatchers = [];
+    this._disposables.forEach((watcher) => watcher.dispose());
+    this._disposables = [];
   }
 
   refresh(): void {
