@@ -544,12 +544,12 @@ export class ModelHandlerOpenAI extends ModelHandler {
 
   /** Computes cost based on token usage and model pricing. */
   computePrice(responseUsage: any): number {
-    // Handle Google models that return None for usage
+    // Handle models that return None for usage
     if (!responseUsage) {
       return 0.0;
     }
 
-    // Get token counts with defaults for Google models
+    // Get token counts
     const promptTokens = responseUsage.prompt_tokens ?? 0;
     const completionTokens = responseUsage.completion_tokens ?? 0;
 
@@ -560,14 +560,21 @@ export class ModelHandlerOpenAI extends ModelHandler {
       this.config.outputPrice,
     );
 
-    // Handle special token types
-    if (responseUsage.reasoning_tokens) {
-      basePrice +=
-        (responseUsage.reasoning_tokens * this.config.outputPrice) / 1e6;
+    // Retrieve nested token details if present
+    const reasoningTokens =
+      responseUsage.completion_tokens_details?.reasoning_tokens ??
+      0;
+    const cachedTokens =
+      responseUsage.prompt_tokens_details?.cached_tokens ??
+      responseUsage.prompt_cache_hit_tokens ?? // deepseek
+      0;
+
+    if (reasoningTokens) {
+      basePrice += (reasoningTokens * this.config.outputPrice) / 1e6;
     }
-    if (responseUsage.cached_tokens) {
+    if (cachedTokens) {
       basePrice -=
-        (responseUsage.cached_tokens *
+        (cachedTokens *
           this.config.inputPrice *
           (1 - this.capabilities.cacheDiscountFactor)) /
         1e6;
