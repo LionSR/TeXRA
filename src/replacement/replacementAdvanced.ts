@@ -361,16 +361,18 @@ export function replaceMathUnicode(text: string): string {
  */
 export function fixLatexQuoteIssues(text: string): string {
   // ''text'' -> ``text''
-  text = text.replace(/''([^']+?)''/g, "``$1''");
+  // But avoid modifying text that's already in the format ``text''
+  text = text.replace(/(?<!`)''([a-zA-Z\s]{3,16})''(?!`)/g, "``$1''");
 
   // 'text' -> `text'
-  text = text.replace(/(?<![\w])'([^']+?)'(?![\w])/g, "`$1'");
+  // Only for single quotes that aren't already in the format `text'
+  text = text.replace(/(?<![\w`])'([a-zA-Z\s]{3,16})'(?![\w'])/g, "`$1'");
 
   // Move punctuation outside closing double quotes
-  text = text.replace(/(``[^']+?)([.,;:])''/g, "$1''$2");
+  text = text.replace(/(``[a-zA-Z\s]{3,16})([.,;:])('')(.*)/g, "$1''$2$4");
 
   // Move punctuation outside closing single quotes
-  text = text.replace(/(`[^']+?)([.,;:])'/g, "$1'$2");
+  text = text.replace(/(`[a-zA-Z\s]{3,16})([.,;:])(')/g, "$1'$2");
 
   return text;
 }
