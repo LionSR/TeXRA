@@ -110,8 +110,12 @@ export abstract class BaseReflectionAgent {
     this.modelHandler.setLogger(this.logger);
 
     // Initialize basic attributes
-    this.outputFile = [];
-    this.outputFiles = { 0: [], 1: [] };
+    const numRounds = this.getNumberOfRounds();
+    this.outputFile = new Array(numRounds);
+    this.outputFiles = {};
+    for (let i = 0; i < numRounds; i++) {
+      this.outputFiles[i] = [];
+    }
     this.baseFiles = this.agentConfig.outputFiles || [
       this.agentConfig.inputFile,
     ];
@@ -122,9 +126,10 @@ export abstract class BaseReflectionAgent {
     this.useScratchpad =
       this.agentSetting.prefills?.includes('<scratchpad>') || false;
 
-    // Set output files for the existing two rounds
-    this.outputFile[0] = this.getOutputFile(0);
-    this.outputFile[1] = this.getOutputFile(1);
+    // Set output files for all rounds
+    for (let i = 0; i < numRounds; i++) {
+      this.outputFile[i] = this.getOutputFile(i);
+    }
 
     // Initialize logging
     this.logId = 0;
@@ -222,6 +227,13 @@ export abstract class BaseReflectionAgent {
       this.modelHandler,
       this.logger,
     );
+  }
+
+  /**
+   * Returns the configured number of conversation rounds.
+   */
+  protected getNumberOfRounds(): number {
+    return this.agentSetting.rounds ?? 2;
   }
 
   /**
