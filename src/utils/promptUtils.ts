@@ -64,10 +64,12 @@ export async function getXmlFormatFromFiles(
  */
 export function getListOfFiles(files: string[] | null | undefined): string {
   try {
-    if (!files) {
+    if (!files || files.length === 0) {
       return '';
     }
-    return files.filter((f) => f !== null).join(', ');
+    return files
+      .filter((f): f is string => f != null && f.trim() !== '')
+      .join(', ');
   } catch (err) {
     logger.error(
       CHANNEL,
@@ -93,7 +95,7 @@ export async function renderPrompt(
     for (const [key, value] of Object.entries(variables)) {
       if (value instanceof Promise) {
         resolvedVariables[key] = await value;
-      } else if (typeof value === 'object' && value !== null) {
+      } else if (typeof value === 'object' && value != null) {
         // Handle nested objects that might contain promises
         const resolved: { [key: string]: any } = {};
         for (const [nestedKey, nestedValue] of Object.entries(value)) {
