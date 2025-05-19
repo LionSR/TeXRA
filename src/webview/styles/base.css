@@ -79,16 +79,6 @@ body {
   color: var(--vscode-input-placeholderForeground);
 }
 
-.input-container {
-  width: 100%;
-  margin: var(--spacing-small) 0;
-}
-
-/* Basic section styling */
-.section {
-  margin-bottom: var(--spacing-small);
-}
-
 .section-header {
   font-size: calc(var(--font-size) * 1.1);
   font-weight: bold;
