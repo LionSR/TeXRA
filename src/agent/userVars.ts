@@ -5,10 +5,7 @@ import * as fs from 'fs';
 
 import { AgentLogger } from '../logger/AgentLogger';
 import { readFile } from '../utils/workspaceFileUtils';
-import {
-  getXmlFormatFromFiles,
-  getListOfFiles,
-} from '../utils/promptUtils';
+import { getXmlFormatFromFiles, getListOfFiles } from '../utils/promptUtils';
 import { AgentConfig } from './AgentConfig';
 import { AgentSetting } from './AgentDataclass';
 import { ModelHandler } from './ModelHandler';
@@ -57,19 +54,18 @@ async function getFileVars(
 ): Promise<Record<string, any>> {
   const userVars: Record<string, any> = {};
 
-  const allInputFiles = (
-    [agentConfig.inputFile, ...(agentConfig.inputFiles || [])].filter(Boolean)
-  ) as string[];
-  const allReferenceFiles = (
-    [agentConfig.referenceFile, ...(agentConfig.referenceFiles || [])].filter(
-      Boolean,
-    )
-  ) as string[];
-  const allAuxiliaryFiles = (
-    [agentConfig.auxiliaryFile, ...(agentConfig.auxiliaryFiles || [])].filter(
-      Boolean,
-    )
-  ) as string[];
+  const allInputFiles = [
+    agentConfig.inputFile,
+    ...(agentConfig.inputFiles || []),
+  ].filter(Boolean) as string[];
+  const allReferenceFiles = [
+    agentConfig.referenceFile,
+    ...(agentConfig.referenceFiles || []),
+  ].filter(Boolean) as string[];
+  const allAuxiliaryFiles = [
+    agentConfig.auxiliaryFile,
+    ...(agentConfig.auxiliaryFiles || []),
+  ].filter(Boolean) as string[];
 
   const singleFileMappings = {
     INPUT: agentConfig.inputFile,
@@ -84,9 +80,18 @@ async function getFileVars(
   }
 
   const collectionMappings: Record<string, [string[] | undefined, string[]]> = {
-    INPUT: [agentConfig.inputFiles?.filter(Boolean) as string[] | undefined, allInputFiles],
-    REFERENCE: [agentConfig.referenceFiles?.filter(Boolean) as string[] | undefined, allReferenceFiles],
-    AUXILIARY: [agentConfig.auxiliaryFiles?.filter(Boolean) as string[] | undefined, allAuxiliaryFiles],
+    INPUT: [
+      agentConfig.inputFiles?.filter(Boolean) as string[] | undefined,
+      allInputFiles,
+    ],
+    REFERENCE: [
+      agentConfig.referenceFiles?.filter(Boolean) as string[] | undefined,
+      allReferenceFiles,
+    ],
+    AUXILIARY: [
+      agentConfig.auxiliaryFiles?.filter(Boolean) as string[] | undefined,
+      allAuxiliaryFiles,
+    ],
   };
 
   for (const [prefix, [additionalFiles, allFiles]] of Object.entries(
@@ -95,7 +100,9 @@ async function getFileVars(
     const additionalXml = additionalFiles
       ? await getXmlFormatFromFiles(additionalFiles as string[])
       : null;
-    const allXml = allFiles ? await getXmlFormatFromFiles(allFiles as string[]) : null;
+    const allXml = allFiles
+      ? await getXmlFormatFromFiles(allFiles as string[])
+      : null;
 
     userVars[`ADDITIONAL_${prefix}S`] = additionalXml;
     userVars[`ALL_${prefix}S`] = allXml;
@@ -113,15 +120,21 @@ async function getRequiredFileVars(
   const userVars: Record<string, any> = {};
 
   if (agentSetting.requiredFiles) {
-    for (const [varName, filePath] of Object.entries(agentSetting.requiredFiles)) {
+    for (const [varName, filePath] of Object.entries(
+      agentSetting.requiredFiles,
+    )) {
       if (filePath) {
         try {
           const fileContent = await readFile(filePath);
           userVars[`${varName}_FILE`] = filePath;
           userVars[`${varName}_CONTENT`] = fileContent;
-          logger.info(`Found from [requiredFiles] the [VAR '${varName}']: ${filePath}`);
+          logger.info(
+            `Found from [requiredFiles] the [VAR '${varName}']: ${filePath}`,
+          );
         } catch {
-          logger.warn(`[Required file] ${filePath} not found from [VAR '${varName}']`);
+          logger.warn(
+            `[Required file] ${filePath} not found from [VAR '${varName}']`,
+          );
         }
       }
     }
@@ -140,7 +153,9 @@ async function getRequiredFileVars(
           `Found from [requiredFilesInternal] the [VAR '${varName}']: ${fullPath}`,
         );
       } catch {
-        logger.warn(`[Required file internal] ${fullPath} not found from [VAR '${varName}']`);
+        logger.warn(
+          `[Required file internal] ${fullPath} not found from [VAR '${varName}']`,
+        );
       }
     }
   }
@@ -174,7 +189,9 @@ async function getPatternBasedFileVars(
                 `Found from [Pattern '${pattern}'] the [VAR '${varName}']: ${categoryValue}`,
               );
             } catch {
-              logger.warn(`File ${categoryValue} not found from [Pattern '${pattern}']`);
+              logger.warn(
+                `File ${categoryValue} not found from [Pattern '${pattern}']`,
+              );
             }
           }
         } else if (category.endsWith('Files')) {
@@ -190,7 +207,9 @@ async function getPatternBasedFileVars(
                   );
                   break;
                 } catch {
-                  logger.warn(`File ${file} not found from [Pattern '${pattern}']`);
+                  logger.warn(
+                    `File ${file} not found from [Pattern '${pattern}']`,
+                  );
                 }
               }
             }
@@ -208,7 +227,10 @@ function getOutputFilesOrder(
   agentSetting: AgentSetting,
 ): Record<string, any> {
   const userVars: Record<string, any> = {};
-  if (Array.isArray(agentConfig.outputFiles) && agentConfig.outputFiles.length > 0) {
+  if (
+    Array.isArray(agentConfig.outputFiles) &&
+    agentConfig.outputFiles.length > 0
+  ) {
     userVars.OUTPUT_FILES_ORDER = agentConfig.outputFiles.join(', ');
   } else if (
     Array.isArray(agentSetting.defaultOutputFiles) &&
