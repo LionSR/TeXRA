@@ -11,6 +11,8 @@ import {
   generateCommandShortcuts,
   generateArrowRelationShortcuts,
   generateBackslashFixes,
+  generateTextCommandNormalization,
+  generateLegacyTextCommandNormalization,
   GREEK_LETTERS,
 } from './replacementHelpers';
 
@@ -257,6 +259,22 @@ export const MAX_AUTO_REPLACEMENTS: ReplacementCategory = {
       generateMathFontShortcuts(mathbfUpperLetters, 'mathbf', 'b'),
     );
 
+    // Normalize legacy font commands {\rm X}, {\bf X} and {\cal X}
+    const alphabetLetters =
+      'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'.split('');
+    Object.assign(
+      patterns,
+      generateLegacyTextCommandNormalization(alphabetLetters, 'mathrm', 'rm'),
+    );
+    Object.assign(
+      patterns,
+      generateLegacyTextCommandNormalization(alphabetLetters, 'mathbf', 'bf'),
+    );
+    Object.assign(
+      patterns,
+      generateLegacyTextCommandNormalization(alphabetLetters, 'mathcal', 'cal'),
+    );
+
     // Tilde variables - simple letters
     // Examples: \tilde{x} -> \tx, \tilde{B} -> \tB
     const tildeLetters = 'xzpqBFJMPTZ'.split('');
@@ -460,7 +478,7 @@ export const MAX_MANUAL_REPLACEMENTS: ReplacementCategory = {
     '\\quad\\Ra': '~~~\\Ra',
     '    &\\quad ': '    &~~~ ',
     '\\Ra\,': '\\Ra~',
-  
+
     //
     '{\\ddt}': '{\\dd t}',
     '\\int_0^\\tauf dt': '\\int_0^{\\tauf} \\ddt',
@@ -514,7 +532,7 @@ export const MAX_MANUAL_REPLACEMENTS: ReplacementCategory = {
     nonGaussian: 'non-Gaussian',
     pseudoobjectivity: 'pseudo-objectivity',
     nonnegati: 'non-negati',
-    'antiIto': 'anti-Ito',
+    antiIto: 'anti-Ito',
   },
 };
 
