@@ -92,7 +92,7 @@ export class TextEditorTool extends BaseAnthropicTool {
           return await this.strReplace(
             filePath,
             input.old_str,
-            input.new_str || '',
+            input.new_str ?? '',
           );
 
         case 'insert':
