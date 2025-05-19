@@ -32,12 +32,13 @@ export function setDefaultState() {
   if (toggleOutputNameOverrideDiv)
     toggleOutputNameOverrideDiv.textContent = '>';
 
-  // Initialize auto-extract toggle with empty circle
+  // Initialize auto-extract toggle with default state
   const autoExtractToggle = safeGetElementById('toggleAutoExtract');
   const autoExtractOptions = safeGetElementById('autoExtractOptions');
   if (autoExtractToggle && autoExtractOptions) {
+    autoExtractToggle.classList.remove('active');
     autoExtractToggle.innerHTML =
-      '<i class="codicon codicon-wand"></i> ○<i class="codicon codicon-chevron-down"></i>';
+      '<i class="codicon codicon-wand"></i><i class="codicon codicon-chevron-down"></i>';
     autoExtractOptions.style.display = 'none';
   }
 
@@ -76,11 +77,9 @@ export function restoreState() {
     const hasAutoExtractChecked = CHECK_BOXES_AUTO_EXTRACT.some((id) =>
       safeGetElementChecked(id),
     );
-    const indicator = hasAutoExtractChecked ? '●' : '○';
-
     if (autoExtractToggle && autoExtractOptions) {
-      autoExtractToggle.classList.remove('active');
-      autoExtractToggle.innerHTML = `<i class="codicon codicon-wand"></i> ${indicator}<i class="codicon codicon-chevron-down"></i>`;
+      autoExtractToggle.classList.toggle('active', hasAutoExtractChecked);
+      autoExtractToggle.innerHTML = `<i class="codicon codicon-wand"></i><i class="codicon codicon-chevron-down"></i>`;
       autoExtractOptions.style.display = 'none';
     }
 
@@ -90,10 +89,9 @@ export function restoreState() {
     const hasToolConfigChecked = CHECK_BOXES_TOOL_USE.some((id) =>
       safeGetElementChecked(id),
     );
-    const toolConfigIndicator = hasToolConfigChecked ? '●' : '○';
-
     if (toggleToolConfig && toolConfigOptions) {
-      toggleToolConfig.innerHTML = `<i class="codicon codicon-tools"></i> ${toolConfigIndicator}<i class="codicon codicon-chevron-down"></i>`;
+      toggleToolConfig.classList.toggle('active', hasToolConfigChecked);
+      toggleToolConfig.innerHTML = `<i class="codicon codicon-tools"></i><i class="codicon codicon-chevron-down"></i>`;
       toolConfigOptions.style.display = 'none';
     }
 
