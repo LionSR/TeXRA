@@ -15,12 +15,14 @@ import { ReplacementCategory } from './replacementTypes';
 import {
   applyLatexQuotesFormatting,
   replaceMathUnicode,
+  fixLatexQuoteIssues,
 } from './replacementAdvanced';
 
 import {
   EQUATION_REPLACEMENTS,
   SECTION_REPLACEMENTS,
   CHARACTER_REPLACEMENTS,
+  FONT_COMMAND_REPLACEMENTS,
   UNICODE_REPLACEMENTS,
   LATEX_SPACING_REPLACEMENTS,
   LATEX_XML_REPLACEMENTS,
@@ -54,6 +56,7 @@ function getEnabledReplacements(): string[] {
     'equations',
     'sections',
     'characters',
+    'font_commands',
     'latex_xml',
     'latex_document',
     'unicode',
@@ -69,6 +72,7 @@ const NON_REGEX_CATEGORIES: ReplacementCategory[] = [
   EQUATION_REPLACEMENTS,
   SECTION_REPLACEMENTS,
   CHARACTER_REPLACEMENTS,
+  FONT_COMMAND_REPLACEMENTS,
   UNICODE_REPLACEMENTS,
   LATEX_SPACING_REPLACEMENTS,
   // XML/Structural Formatting
@@ -256,6 +260,9 @@ export function applyReplacements(
 
   // Apply LaTeX quotes formatting
   text = applyLatexQuotesFormatting(text);
+
+  // Cleanup common quote issues
+  text = fixLatexQuoteIssues(text);
 
   return text;
 }
