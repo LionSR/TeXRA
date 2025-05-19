@@ -1,6 +1,7 @@
 // Local imports - log
 import * as logger from '../logger/logUtils';
 import { AgentLogger } from '../logger/AgentLogger';
+import { K_SLICE } from './constants';
 
 const CHANNEL = 'xmlUtils';
 logger.initialize(CHANNEL);
@@ -236,7 +237,7 @@ export function extractContentFromXMLbyTagMultiple(
  */
 export function formatAndLogContent(
   content: string,
-  logger: AgentLogger,
+  agentLogger: AgentLogger,
   contentType: string = 'Scratchpad',
   groupId?: string,
 ): void {
@@ -245,9 +246,9 @@ export function formatAndLogContent(
   }
 
   // Log original content for debugging
-  logger.debug(
-    CHANNEL,
-    `Original ${contentType.toLowerCase()} content before formatting: ${content.substring(0, 200)}${content.length > 200 ? '...' : ''}`,
+  agentLogger.debug(
+    `Original ${contentType.toLowerCase()} content before formatting: ${content.substring(0, K_SLICE)}${content.length > K_SLICE ? '...' : ''}`,
+    groupId,
   );
 
   // Format the content for improved rendering
@@ -277,7 +278,7 @@ export function formatAndLogContent(
   // \\item/enumerate: fot this is tricky because it also takes a line that should be get rid of
 
   // Log the formatted content
-  logger.info(`${contentType} content:\n${formattedContent}`, groupId);
+  agentLogger.info(`${contentType} content:\n${formattedContent}`, groupId);
 }
 
 /**
@@ -291,13 +292,13 @@ export function formatAndLogContent(
  */
 export function extractAndLogScratchpad(
   outputContent: string,
-  logger: AgentLogger,
+  agentLogger: AgentLogger,
   thinkingTag: string = 'scratchpad',
   groupId?: string,
 ): void {
   const extractedContent = extractTextFromTag(outputContent, thinkingTag);
   if (extractedContent) {
-    formatAndLogContent(extractedContent, logger, 'Scratchpad', groupId);
+    formatAndLogContent(extractedContent, agentLogger, 'Scratchpad', groupId);
   }
 }
 
@@ -311,8 +312,8 @@ export function extractAndLogScratchpad(
  */
 export function formatAndLogThinking(
   thinkingContent: string,
-  logger: AgentLogger,
+  agentLogger: AgentLogger,
   groupId?: string,
 ): void {
-  formatAndLogContent(thinkingContent, logger, 'Thinking', groupId);
+  formatAndLogContent(thinkingContent, agentLogger, 'Thinking', groupId);
 }
