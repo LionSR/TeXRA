@@ -23,13 +23,6 @@ logger.initialize(CHANNEL);
  */
 export class XMLValidatorAgent extends AnthropicToolAgent<XMLValidationError> {
   /**
-   * Static factory method to create an XMLValidatorAgent instance
-   */
-  public static create(): XMLValidatorAgent {
-    return new XMLValidatorAgent();
-  }
-
-  /**
    * Validate XML file
    * Implementation of abstract method from base class
    */

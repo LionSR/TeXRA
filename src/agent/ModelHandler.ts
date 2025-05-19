@@ -31,6 +31,7 @@ import {
   ModelCapabilities,
 } from '../model/ModelConfig';
 import { ToolState } from './ToolState';
+import { MediaEntry } from './mediaTypes';
 
 // Default continuation limits
 const DEFAULT_CONTINUE_LIMIT = 10;
@@ -382,7 +383,7 @@ export abstract class ModelHandler {
    * Individual providers can override if needed.
    */
   public async createMediaMessage(mediaFiles: string[]): Promise<any[]> {
-    const mediaMessage: any[] = [];
+    const mediaMessage: MediaEntry[] = [];
     const addedMedia: string[] = [];
 
     for (const mediaFile of mediaFiles) {
@@ -410,12 +411,11 @@ export abstract class ModelHandler {
           this.capabilities.supportsNativePdf &&
           mediaType === 'application/pdf'
         ) {
-          const imageEntry = {
-            type: 'file',
-            file: {
-              file_name: path.basename(mediaFile),
-              file_data: Array.isArray(mediaData) ? mediaData[0] : mediaData,
-            },
+          const imageEntry: MediaEntry = {
+            file_name: path.basename(mediaFile),
+            data: Array.isArray(mediaData) ? mediaData[0] : mediaData,
+            media_type: mediaType,
+            media_category: mediaCategory,
           };
           mediaMessage.push(imageEntry);
           addedMedia.push(mediaFile);
@@ -428,7 +428,7 @@ export abstract class ModelHandler {
             `Adding ${mediaData.length} pages/parts to the media contents`,
           );
           for (let i = 0; i < mediaData.length; i++) {
-            const mediaEntry = {
+            const mediaEntry: MediaEntry = {
               file_name: `${path.basename(mediaFile)}_page_${i + 1}`,
               data: mediaData[i],
               media_type: mediaType,
@@ -441,7 +441,7 @@ export abstract class ModelHandler {
           this.logger.debug(
             `Adding single part to the media contents: ${mediaFile}`,
           );
-          const mediaEntry = {
+          const mediaEntry: MediaEntry = {
             file_name: path.basename(mediaFile),
             data: mediaData,
             media_type: mediaType,
@@ -567,7 +567,7 @@ export abstract class ModelHandler {
    * Formats image content into provider-specific message format.
    * @returns Array of formatted image/document content objects
    */
-  abstract createMediaContent(mediaMessage: any[]): any[];
+  abstract createMediaContent(mediaMessage: MediaEntry[]): any[];
 
   /**
    * Extracts the response text and metadata from the model's response object
