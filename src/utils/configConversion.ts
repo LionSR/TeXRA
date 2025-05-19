@@ -42,7 +42,10 @@ function copyToolFlags(
   });
 }
 
-function setActiveFlagsFromArrays(dest: Record<string, any>, src: Record<string, any>) {
+function setActiveFlagsFromArrays(
+  dest: Record<string, any>,
+  src: Record<string, any>,
+) {
   ACTIVE_FLAGS.forEach((flag) => {
     const filesField = flag.replace('Active', '');
     dest[flag] = Array.isArray(src[filesField]) && src[filesField].length > 0;
@@ -79,7 +82,9 @@ export function agentConfigToTaskState(config: AgentConfig): TaskState {
   };
 
   // Add single and multi-file selections
-  copyFields(taskState, config, SINGLE_FILE_FIELDS, '', { skipOutputFile: true });
+  copyFields(taskState, config, SINGLE_FILE_FIELDS, '', {
+    skipOutputFile: true,
+  });
   copyFields(taskState, config, MULTIPLE_FILE_FIELDS, []);
 
   // Set active flags based on array content
