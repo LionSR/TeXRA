@@ -29,6 +29,7 @@ import { OpenAIAPIResponseUsage, ResponseUsageFactory } from './ResponseUsage';
 import { ToolState } from './ToolState';
 import { K_SLICE } from '../utils/constants';
 import { calculateTokenPrice } from '../utils/priceUtils';
+import { MediaEntry } from './mediaTypes';
 
 /**
  * OpenAI-specific handlers.
@@ -274,7 +275,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
   }
 
   /** Formats image/audio content for OpenAI/Google's vision/audio API. */
-  createMediaContent(mediaMessage: any[]): ChatCompletionContentPart[] {
+  createMediaContent(mediaMessage: MediaEntry[]): ChatCompletionContentPart[] {
     return mediaMessage.flatMap((media): ChatCompletionContentPart[] => {
       if (media.media_category === 'image') {
         return [
@@ -319,7 +320,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
             type: 'input_audio' as any, // Cast as any to bypass strict OpenAI typing for now
             input_audio: {
               data: media.data,
-              format: audioFormat,
+              format: audioFormat as any,
             },
           },
         ];
@@ -527,7 +528,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
       toolState.updateAccumulatedOutput(prefill + fileContent);
       await writeFile(outputFile, toolState.accumulatedOutput);
     }
-    const state = AgentStateRound.initialize(0);
+    const state = new AgentStateRound(0);
     toolState.lastResponse = toolState.accumulatedOutput;
     this.addContinueMessageWithoutPrefill(
       messages,
