@@ -72,7 +72,9 @@ export async function getAgentsDirectory(
  * chosen path in the workspace configuration.
  * @returns The selected folder path or undefined if the user cancelled.
  */
-export async function promptForCustomAgentsDirectory(): Promise<string | undefined> {
+export async function promptForCustomAgentsDirectory(): Promise<
+  string | undefined
+> {
   const folder = await vscode.window.showOpenDialog({
     canSelectFiles: false,
     canSelectFolders: true,
@@ -104,7 +106,9 @@ export async function promptForCustomAgentsDirectory(): Promise<string | undefin
  * to select one.
  * @returns The configured directory path or undefined if none could be obtained.
  */
-export async function getOrPromptForCustomAgentsDirectory(): Promise<string | undefined> {
+export async function getOrPromptForCustomAgentsDirectory(): Promise<
+  string | undefined
+> {
   const current = await getCustomAgentsDirectory();
   if (current) {
     return current;
