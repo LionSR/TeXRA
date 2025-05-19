@@ -111,7 +111,7 @@ async function handleTestTextEditor(): Promise<void> {
         });
 
         input.old_str = oldStr;
-        input.new_str = newStr || '';
+        input.new_str = newStr ?? '';
         break;
 
       case 'insert':

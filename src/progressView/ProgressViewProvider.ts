@@ -155,7 +155,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     if (savedActiveStream && this._logStreams.has(savedActiveStream)) {
       this._activeStream = savedActiveStream;
     } else {
-      this._activeStream = Array.from(this._logStreams.keys())[0] || '';
+      this._activeStream = Array.from(this._logStreams.keys())[0] ?? '';
     }
 
     // Load taskStates
@@ -286,7 +286,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
 
     // Use stored active stream, fallback to first stream if active stream doesn't exist
     if (!streams.includes(this._activeStream)) {
-      this._activeStream = streams[0] || '';
+      this._activeStream = streams[0] ?? '';
     }
 
     this._view.webview.postMessage({
@@ -471,7 +471,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     // If no stream is provided or stream doesn't exist, use the first available stream
     if (!stream || !this._logStreams.has(stream)) {
       const streams = Array.from(this._logStreams.keys());
-      stream = streams[0] || '';
+      stream = streams[0] ?? '';
     }
 
     if (!this._logStreams.has(stream)) {
@@ -547,7 +547,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       // If the deleted stream was the active one, switch to another stream if available
       if (stream === this._activeStream) {
         const remainingStreams = Array.from(this._logStreams.keys());
-        this._activeStream = remainingStreams[0] || '';
+        this._activeStream = remainingStreams[0] ?? '';
       }
 
       this._saveState();

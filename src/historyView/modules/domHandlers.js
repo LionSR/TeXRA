@@ -224,7 +224,7 @@ function renderToolConfig(label, obj, exclude = []) {
   const entries = Object.entries(obj).filter(([key, value]) => {
     // Filter out null, undefined, empty arrays, and excluded keys
     if (exclude.includes(key)) return false;
-    if (value === null || value === undefined) return false;
+    if (value == null) return false;
     if (Array.isArray(value) && value.length === 0) return false;
     return true;
   });
