@@ -17,6 +17,48 @@ import {
   TOOL_CONFIG_FIELDS,
 } from './constants';
 
+function copyFields(
+  dest: Record<string, any>,
+  src: Record<string, any>,
+  fields: readonly string[],
+  defaultValue: any,
+  { skipOutputFile = false } = {},
+) {
+  fields.forEach((field) => {
+    if (skipOutputFile && field === 'outputFile') {
+      return;
+    }
+    dest[field] = src[field] ?? defaultValue;
+  });
+}
+
+function copyToolFlags(
+  dest: Record<string, any>,
+  src: Record<string, any>,
+  defaultValue: any,
+) {
+  [...AUTO_EXTRACT_FIELDS, ...TOOL_CONFIG_FIELDS].forEach((field) => {
+    dest[field] = src[field] ?? src.toolConfig?.[field] ?? defaultValue;
+  });
+}
+
+function setActiveFlagsFromArrays(dest: Record<string, any>, src: Record<string, any>) {
+  ACTIVE_FLAGS.forEach((flag) => {
+    const filesField = flag.replace('Active', '');
+    dest[flag] = Array.isArray(src[filesField]) && src[filesField].length > 0;
+  });
+}
+
+function copyActiveFileLists(
+  dest: Record<string, any>,
+  src: Record<string, any>,
+) {
+  MULTIPLE_FILE_FIELDS.forEach((field) => {
+    const activeFlag = `${field}Active`;
+    dest[field] = src[activeFlag] && src[field] ? src[field] : null;
+  });
+}
+
 /**
  * Converts an AgentConfig object to a TaskState object
  *
@@ -36,36 +78,15 @@ export function agentConfigToTaskState(config: AgentConfig): TaskState {
     outputNameOverrideVisible: !!config.outputNameOverride,
   };
 
-  // Add single file selections with defaults
-  SINGLE_FILE_FIELDS.forEach((field) => {
-    if (field !== 'outputFile') {
-      // outputFile isn't part of the schema
-      (taskState as any)[field] = (config as any)[field] || '';
-    }
-  });
-
-  // Add multiple file selections with defaults
-  MULTIPLE_FILE_FIELDS.forEach((field) => {
-    (taskState as any)[field] = (config as any)[field] || [];
-  });
+  // Add single and multi-file selections
+  copyFields(taskState, config, SINGLE_FILE_FIELDS, '', { skipOutputFile: true });
+  copyFields(taskState, config, MULTIPLE_FILE_FIELDS, []);
 
   // Set active flags based on array content
-  ACTIVE_FLAGS.forEach((flag) => {
-    const filesField = flag.replace('Active', '');
-    (taskState as any)[flag] =
-      Array.isArray((config as any)[filesField]) &&
-      (config as any)[filesField].length > 0;
-  });
-
-  // Add auto extract settings
-  AUTO_EXTRACT_FIELDS.forEach((field) => {
-    (taskState as any)[field] = config.toolConfig?.[field] || false;
-  });
+  setActiveFlagsFromArrays(taskState, config);
 
   // Add tool config settings
-  TOOL_CONFIG_FIELDS.forEach((field) => {
-    (taskState as any)[field] = config.toolConfig?.[field] || false;
-  });
+  copyToolFlags(taskState, config, false);
 
   return taskState as TaskState;
 }
@@ -91,33 +112,15 @@ export function objectToTaskState(obj: Record<string, any>): TaskState {
       obj.outputNameOverrideVisible || !!obj.outputNameOverride || false,
   };
 
-  // Add single file selections with defaults
-  SINGLE_FILE_FIELDS.forEach((field) => {
-    if (field !== 'outputFile') {
-      // outputFile isn't part of the schema
-      (taskState as any)[field] = obj[field] || '';
-    }
-  });
-
-  // Add multiple file selections with defaults
-  MULTIPLE_FILE_FIELDS.forEach((field) => {
-    (taskState as any)[field] = obj[field] || [];
-  });
+  // Add single and multi-file selections
+  copyFields(taskState, obj, SINGLE_FILE_FIELDS, '', { skipOutputFile: true });
+  copyFields(taskState, obj, MULTIPLE_FILE_FIELDS, []);
 
   // Set active flags
-  ACTIVE_FLAGS.forEach((flag) => {
-    (taskState as any)[flag] = obj[flag] || false;
-  });
-
-  // Add auto extract settings - check both direct property and toolConfig
-  AUTO_EXTRACT_FIELDS.forEach((field) => {
-    (taskState as any)[field] = obj[field] || obj.toolConfig?.[field] || false;
-  });
+  copyFields(taskState, obj, ACTIVE_FLAGS, false);
 
   // Add tool config settings - check both direct property and toolConfig
-  TOOL_CONFIG_FIELDS.forEach((field) => {
-    (taskState as any)[field] = obj[field] || obj.toolConfig?.[field] || false;
-  });
+  copyToolFlags(taskState, obj, false);
 
   return taskState as TaskState;
 }
@@ -143,22 +146,11 @@ export function taskStateToAgentConfig(taskState: TaskState): AgentConfig {
     toolConfig: {} as ToolConfig,
   };
 
-  // Add single file selections with null defaults
-  SINGLE_FILE_FIELDS.forEach((field) => {
-    if (field !== 'outputFile') {
-      // outputFile isn't part of the schema
-      (agentConfig as any)[field] = (taskState as any)[field] || null;
-    }
+  // Add single and multi-file selections
+  copyFields(agentConfig, taskState, SINGLE_FILE_FIELDS, null, {
+    skipOutputFile: true,
   });
-
-  // Add multiple file selections, only if active
-  MULTIPLE_FILE_FIELDS.forEach((field) => {
-    const activeFlag = `${field}Active`;
-    (agentConfig as any)[field] =
-      (taskState as any)[activeFlag] && (taskState as any)[field]
-        ? (taskState as any)[field]
-        : null;
-  });
+  copyActiveFileLists(agentConfig, taskState);
 
   // Special case for outputNameOverride since it needs null rather than empty string
   agentConfig.outputNameOverride = taskState.outputNameOverride || null;
