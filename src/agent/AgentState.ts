@@ -130,6 +130,11 @@ export class AgentStateGlobal implements IAgentStateGlobal {
           this.totalCacheReadInputTokens += promptDetails.cached_tokens ?? 0;
         }
       }
+      // Handle legacy OpenAI usage with cached_tokens at the top level
+      else if ('cached_tokens' in stateRound.APIUsage) {
+        this.totalCacheReadInputTokens +=
+          stateRound.APIUsage.cached_tokens ?? 0;
+      }
 
       // For OpenAI models, handle reasoning tokens from completion_tokens_details
       if (
