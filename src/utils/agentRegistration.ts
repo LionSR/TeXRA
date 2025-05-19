@@ -14,7 +14,9 @@ logger.initialize(CHANNEL);
  * If the agent already exists in the configuration the function silently
  * returns.
  */
-export async function promptToAddAgentToConfig(agentName: string): Promise<void> {
+export async function promptToAddAgentToConfig(
+  agentName: string,
+): Promise<void> {
   const config = vscode.workspace.getConfiguration();
   const current = config.get<string[]>('texra.agents', []);
 
@@ -32,8 +34,13 @@ export async function promptToAddAgentToConfig(agentName: string): Promise<void>
 
   if (choice === addButton) {
     current.push(agentName);
-    await config.update('texra.agents', current, vscode.ConfigurationTarget.Workspace);
-    vscode.window.showInformationMessage(`Added "${agentName}" to texra.agents`);
+    await config.update(
+      'texra.agents',
+      current,
+      vscode.ConfigurationTarget.Workspace,
+    );
+    vscode.window.showInformationMessage(
+      `Added "${agentName}" to texra.agents`,
+    );
   }
 }
-
