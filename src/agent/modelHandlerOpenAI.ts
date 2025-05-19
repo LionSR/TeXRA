@@ -562,8 +562,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
 
     // Retrieve nested token details if present
     const reasoningTokens =
-      responseUsage.completion_tokens_details?.reasoning_tokens ??
-      0;
+      responseUsage.completion_tokens_details?.reasoning_tokens ?? 0;
     const cachedTokens =
       responseUsage.prompt_tokens_details?.cached_tokens ??
       responseUsage.prompt_cache_hit_tokens ?? // deepseek
