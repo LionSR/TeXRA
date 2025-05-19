@@ -1080,7 +1080,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.51.0",
     "@cantoo/pdf-lib": "^2.3.2",
-    "@google/genai": "^0.15.0",
+    "@google/genai": "^0.14.1",
     "@types/yaml": "^1.9.6",
     "@vscode/codicons": "^0.0.36",
     "@wolfram-alpha/wolfram-alpha-api": "^23.1004.144821-RELEASE",
