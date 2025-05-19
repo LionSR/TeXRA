@@ -15,7 +15,7 @@ import { ProgressViewProvider } from './progressView/ProgressViewProvider';
 import { FolderExplorer } from './FolderExplorer';
 import { registerCommands } from './commands';
 
-export function activate(context: vscode.ExtensionContext) {
+export async function activate(context: vscode.ExtensionContext) {
   // Initialize secrets storage
   initializeSecrets(context);
 
@@ -33,7 +33,7 @@ export function activate(context: vscode.ExtensionContext) {
   progressViewProvider.cleanupTasksAfterRestart();
 
   // Copy default agents
-  copyDefaultAgents(context);
+  await copyDefaultAgents(context);
 
   // Configure LaTeX settings if LaTeX Workshop is installed
   configureLatexSettings();
