@@ -6,7 +6,8 @@ This document outlines initial considerations for extending `BaseReflectionAgent
 
 - **Configuration**
 
-  - Introduce a `rounds` field in `ToolConfig` so a workflow can define how many sequential steps to perform.
+  - A `rounds` field now exists in `AgentSetting` allowing a workflow to specify how many sequential steps to perform (defaults to `2`).
+  - The value is exposed to prompt templates via the `ROUNDS` user variable.
   - Prompts may need to support an array of `userReflect` templates or reuse a single template for each additional round.
 
 - **State Management**
@@ -20,7 +21,7 @@ This document outlines initial considerations for extending `BaseReflectionAgent
     1. Render prompts for the current round.
     2. Invoke `processResponseCycle`.
     3. Run `handleRoundCompletion`.
-  - The `outputFile` property has been changed to an array to simplify managing an arbitrary number of round outputs.
+  - The `outputFile` property is initialized based on the configured number of rounds rather than assuming two.
 
 - **Prompt Rendering**
   - New helper methods may be needed to retrieve the correct `prefill` and prompt text for each round.
