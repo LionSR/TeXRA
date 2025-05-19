@@ -9,6 +9,7 @@ export const DEFAULT_AGENT_SETTINGS: AgentSetting = {
   agentType: AgentType.CoT,
   documentTag: 'document',
   temperature: 0.0,
+  rounds: 2,
   prefills: [],
   outputExt: 'txt',
   endTag: '</latex_document>',
@@ -34,6 +35,9 @@ export interface AgentSetting {
   documentTag: string;
   temperature: number | null;
   isRewrite: boolean;
+
+  /** Number of conversation rounds to run. */
+  rounds?: number;
 
   /** Generation settings */
   prefills: string[];
