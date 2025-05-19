@@ -15,6 +15,7 @@ import { ReplacementCategory } from './replacementTypes';
 import {
   applyLatexQuotesFormatting,
   replaceMathUnicode,
+  fixLatexQuoteIssues,
 } from './replacementAdvanced';
 
 import {
@@ -259,6 +260,9 @@ export function applyReplacements(
 
   // Apply LaTeX quotes formatting
   text = applyLatexQuotesFormatting(text);
+
+  // Cleanup common quote issues
+  text = fixLatexQuoteIssues(text);
 
   return text;
 }
