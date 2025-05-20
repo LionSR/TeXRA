@@ -298,22 +298,9 @@ export function extractAndLogScratchpad(
 ): void {
   const extractedContent = extractTextFromTag(outputContent, thinkingTag);
   if (extractedContent) {
-    formatAndLogContent(extractedContent, agentLogger, thinkingTag, groupId);
+    // Always log using the canonical "Scratchpad" label so that the progress
+    // view recognises the message. The thinkingTag is still used for
+    // extraction so alternative tag names continue to work.
+    formatAndLogContent(extractedContent, agentLogger, 'Scratchpad', groupId);
   }
-}
-
-/**
- * Formats and logs model thinking content.
- * Uses the same formatting logic as the scratchpad content.
- *
- * @param thinkingContent The thinking content to format and log
- * @param logger The logger instance to use for logging
- * @param groupId Optional group ID for logging
- */
-export function formatAndLogThinking(
-  thinkingContent: string,
-  agentLogger: AgentLogger,
-  groupId?: string,
-): void {
-  formatAndLogContent(thinkingContent, agentLogger, 'Thinking', groupId);
 }
