@@ -458,6 +458,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
     fileContent = cleanFileContent(fileContent);
 
     // Extract and log any existing scratchpad content
+    // This did not export group ID??
     extractAndLogScratchpad(fileContent, this.logger);
 
     await writeFile(outputFile, fileContent);
