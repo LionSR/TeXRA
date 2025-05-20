@@ -298,7 +298,10 @@ export function extractAndLogScratchpad(
 ): void {
   const extractedContent = extractTextFromTag(outputContent, thinkingTag);
   if (extractedContent) {
-    formatAndLogContent(extractedContent, agentLogger, thinkingTag, groupId);
+    // Always log using the canonical "Scratchpad" label so that the progress
+    // view recognises the message. The thinkingTag is still used for
+    // extraction so alternative tag names continue to work.
+    formatAndLogContent(extractedContent, agentLogger, 'Scratchpad', groupId);
   }
 }
 

@@ -740,6 +740,7 @@ export abstract class BaseReflectionAgent {
           toolState,
           this.outputFile[0],
           prefill,
+          round0GroupId,
         );
 
       const stateRound = new AgentStateRound(currRound);
@@ -899,6 +900,7 @@ export abstract class BaseReflectionAgent {
           toolState,
           this.outputFile[1],
           prefill,
+          round1GroupId,
         );
 
       if (!endTurn) {
