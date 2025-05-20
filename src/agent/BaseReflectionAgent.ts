@@ -318,7 +318,11 @@ export abstract class BaseReflectionAgent {
           );
 
         // Extract thinking from XML tags in the response text
-        this.extractAndLogScratchpad(newResponse);
+        this.extractAndLogScratchpad(
+          newResponse,
+          'scratchpad',
+          responseCycleGroupId,
+        );
         // this has a potential bug if <scratchpad> is included in the prefill
 
         this.logger.debug(`Stop reason: ${stopReason}`, responseCycleGroupId);

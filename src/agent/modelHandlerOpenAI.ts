@@ -486,6 +486,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
     fileContent = cleanFileContent(fileContent);
 
     // Extract and log any existing scratchpad content
+    // TODO: this did not export group ID??
     extractAndLogScratchpad(fileContent, this.logger);
 
     // Write file content to output file
