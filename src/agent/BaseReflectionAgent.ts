@@ -28,7 +28,10 @@ import {
   getAllReplacementsRegex,
 } from '../replacement/replacementUtils';
 import { checkForMassiveRepetition } from '../utils/repetitionUtils';
-import { extractAndLogScratchpad, formatAndLogContent } from '../utils/xmlUtils';
+import {
+  extractAndLogScratchpad,
+  formatAndLogContent,
+} from '../utils/xmlUtils';
 import { sleep } from '../utils/timeUtils';
 
 // Local imports - agent components
