@@ -28,10 +28,7 @@ import {
   getAllReplacementsRegex,
 } from '../replacement/replacementUtils';
 import { checkForMassiveRepetition } from '../utils/repetitionUtils';
-import {
-  extractAndLogScratchpad,
-  formatAndLogThinking,
-} from '../utils/xmlUtils';
+import { extractAndLogScratchpad, formatAndLogContent } from '../utils/xmlUtils';
 import { sleep } from '../utils/timeUtils';
 
 // Local imports - agent components
@@ -342,9 +339,10 @@ export abstract class BaseReflectionAgent {
 
         // If thinking content was extracted, format and log it
         if (thinkingContent) {
-          formatAndLogThinking(
+          formatAndLogContent(
             thinkingContent,
             this.logger,
+            'Thinking',
             responseCycleGroupId,
           );
 
@@ -740,6 +738,7 @@ export abstract class BaseReflectionAgent {
           toolState,
           this.outputFile[0],
           prefill,
+          round0GroupId,
         );
 
       const stateRound = new AgentStateRound(currRound);
@@ -899,6 +898,7 @@ export abstract class BaseReflectionAgent {
           toolState,
           this.outputFile[1],
           prefill,
+          round1GroupId,
         );
 
       if (!endTurn) {
