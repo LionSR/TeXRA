@@ -57,7 +57,7 @@ export const GOOGLE_MODELS: Record<string, ModelConfig> = {
     openrouterFullName: 'google/gemini-2.0-pro-exp-02-05:free',
     provider: ModelProvider.GOOGLE,
     maxOutputTokens: 8192,
-    contextWindow: 2097152,
+    contextWindow: 2000000,
     inputPrice: 1.25,
     outputPrice: 5.0,
     capabilities: {
@@ -120,9 +120,9 @@ export const GOOGLE_MODELS: Record<string, ModelConfig> = {
     openrouterFullName: 'google/gemini-2.0-flash-thinking-exp:free',
     provider: ModelProvider.GOOGLE,
     maxOutputTokens: 65536,
-    contextWindow: 1048576,
-    inputPrice: 0.075,
-    outputPrice: 0.3,
+    contextWindow: 1000000,
+    inputPrice: 0.10,
+    outputPrice: 0.40,
     capabilities: {
       ...DEFAULT_MODEL_CAPABILITIES,
       supportsPromptCaching: true,
@@ -139,7 +139,7 @@ export const GOOGLE_MODELS: Record<string, ModelConfig> = {
     openrouterFullName: 'google/gemini-2.0-flash-001',
     provider: ModelProvider.GOOGLE,
     maxOutputTokens: 8192,
-    contextWindow: 1048576,
+    contextWindow: 1000000,
     inputPrice: 0.1,
     outputPrice: 0.4,
     capabilities: {
@@ -158,7 +158,7 @@ export const GOOGLE_MODELS: Record<string, ModelConfig> = {
     openrouterFullName: 'google/gemini-1.5-pro',
     provider: ModelProvider.GOOGLE,
     maxOutputTokens: 8192,
-    contextWindow: 1048576,
+    contextWindow: 2000000,
     inputPrice: 1.25,
     outputPrice: 5.0,
     capabilities: {
@@ -176,7 +176,7 @@ export const GOOGLE_MODELS: Record<string, ModelConfig> = {
     openrouterFullName: 'google/gemini-1.5-fresh',
     provider: ModelProvider.GOOGLE,
     maxOutputTokens: 8192,
-    contextWindow: 1048576,
+    contextWindow: 1000000,
     inputPrice: 0.075,
     outputPrice: 0.3,
     capabilities: {
