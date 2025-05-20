@@ -411,6 +411,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
     toolState: ToolState,
     outputFile: string,
     prefill: string,
+    groupId?: string,
   ): Promise<[boolean, any[]]> {
     let endTurn = false;
 
@@ -458,8 +459,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
     fileContent = cleanFileContent(fileContent);
 
     // Extract and log any existing scratchpad content
-    // This did not export group ID??
-    extractAndLogScratchpad(fileContent, this.logger);
+    extractAndLogScratchpad(fileContent, this.logger, 'scratchpad', groupId);
 
     await writeFile(outputFile, fileContent);
 
