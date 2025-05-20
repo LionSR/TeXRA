@@ -120,9 +120,9 @@ export const GOOGLE_MODELS: Record<string, ModelConfig> = {
     openrouterFullName: 'google/gemini-2.0-flash-thinking-exp:free',
     provider: ModelProvider.GOOGLE,
     maxOutputTokens: 65536,
-    contextWindow: 1048576,
-    inputPrice: 0.075,
-    outputPrice: 0.3,
+    contextWindow: 1000000,
+    inputPrice: 0.1,
+    outputPrice: 0.4,
     capabilities: {
       ...DEFAULT_MODEL_CAPABILITIES,
       supportsPromptCaching: true,
