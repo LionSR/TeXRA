@@ -671,7 +671,8 @@ export const GPTNESS_REPLACEMENTS: ReplacementCategory = {
   description: 'GPTness improvements',
   isRegex: false,
   patterns: {
-    delve: 'discuss',
+    'delve into': 'discuss',
+    'delves into': 'discusses',
     embark: 'start',
     realm: 'area',
     intricate: 'complex',
