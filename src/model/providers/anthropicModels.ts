@@ -131,8 +131,8 @@ export const ANTHROPIC_MODELS: Record<string, ModelConfig> = {
     provider: ModelProvider.ANTHROPIC,
     maxOutputTokens: 8192,
     contextWindow: 200000,
-    inputPrice: 0.80,
-    outputPrice: 4.00,
+    inputPrice: 0.8,
+    outputPrice: 4.0,
     capabilities: {
       ...DEFAULT_MODEL_CAPABILITIES,
       supportsPromptCaching: true,
