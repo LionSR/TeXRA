@@ -689,6 +689,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
     toolState: ToolState,
     outputFile: string,
     prefill: string,
+    groupId?: string,
   ): Promise<[boolean, any[]]> {
     let endTurn = false;
     this.logger.debug(
@@ -733,8 +734,8 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
     let fileContent = await readFile(outputFile);
     fileContent = cleanFileContent(fileContent);
 
-    // TODO: this did not export groupID of the logger?
-    extractAndLogScratchpad(fileContent, this.logger);
+    // Extract and log any existing scratchpad content
+    extractAndLogScratchpad(fileContent, this.logger, 'scratchpad', groupId);
 
     await writeFile(outputFile, fileContent);
     this.logger.debug(`Cleaned and saved existing content to ${outputFile}.`);
