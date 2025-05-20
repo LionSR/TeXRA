@@ -298,7 +298,7 @@ export function extractAndLogScratchpad(
 ): void {
   const extractedContent = extractTextFromTag(outputContent, thinkingTag);
   if (extractedContent) {
-    formatAndLogContent(extractedContent, agentLogger, 'Scratchpad', groupId);
+    formatAndLogContent(extractedContent, agentLogger, thinkingTag, groupId);
   }
 }
 

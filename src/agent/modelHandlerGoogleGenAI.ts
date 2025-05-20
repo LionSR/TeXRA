@@ -733,7 +733,9 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
     let fileContent = await readFile(outputFile);
     fileContent = cleanFileContent(fileContent);
 
+    // TODO: this did not export groupID of the logger?
     extractAndLogScratchpad(fileContent, this.logger);
+
     await writeFile(outputFile, fileContent);
     this.logger.debug(`Cleaned and saved existing content to ${outputFile}.`);
     messages.push({
