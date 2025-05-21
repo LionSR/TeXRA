@@ -157,7 +157,6 @@ mark.current-match {
 }
 
 .history-actions {
-  display: flex;
   gap: 8px;
 }
 
