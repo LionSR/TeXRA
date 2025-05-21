@@ -201,7 +201,7 @@ export class OutputHandler {
    * @returns Map of source files to their best matching target files
    * @private
    */
-  private createFileMapping(
+  public createFileMapping(
     sourceFiles: string[],
     targetFiles: string[],
     matchStrategy: 'basename' | 'contains' = 'basename',
