@@ -42,12 +42,6 @@
   gap: var(--spacing-medium);
 }
 
-.instruction-header-actions {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
 .instruction-header label {
   font-size: var(--font-size);
   font-weight: bold;

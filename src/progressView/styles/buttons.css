@@ -20,12 +20,6 @@
   color: var(--vscode-testing-runAction, #2ea043);
 }
 
-/* Header actions container */
-.header-actions {
-  display: flex;
-  gap: 4px;
-}
-
 /* Codicon override for trash icon */
 .codicon-trash:before {
   content: '\eb9f';
