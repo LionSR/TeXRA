@@ -68,7 +68,7 @@ function createHistoryItemElement(item) {
   header.className = 'history-item-header';
   header.innerHTML = `
     <div class="history-timestamp">${formattedDate}</div>
-    <div class="history-actions">
+    <div class="history-actions button-group">
       <button class="button delete-btn" data-id="${item.id}" title="Delete this history item">Delete</button>
       <button class="button restore-btn" data-id="${item.id}" title="Load configuration to main view">Restore</button>
       <button class="button rerun-btn" data-id="${item.id}" title="Execute this configuration">Rerun</button>
