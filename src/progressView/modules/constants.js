@@ -34,4 +34,11 @@ export const COMMANDS = {
   ADD_LOG_GROUP: 'addLogGroup',
   UPDATE_LOG_GROUP: 'updateLogGroup',
   UPDATE_STATUS: 'updateStatus',
+  UPDATE_FILES: 'updateFiles',
+  OPEN_FILE: 'openFile',
+  COMPARE_ORIGINAL: 'compareOriginal',
+  COMPARE_PREVIOUS: 'comparePrevious',
+  ACCEPT_FILE: 'acceptFile',
+  MERGE_FILE: 'mergeFile',
+  LATEXDIFF_FILE: 'latexdiffFile',
 };

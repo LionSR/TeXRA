@@ -126,6 +126,137 @@ export function updateStatus(status) {
 }
 
 /**
+ * Update the generated files list
+ * @param {Array<string>} files - Array of file paths
+ */
+export function updateFileList(filesByRound) {
+  const container = document.getElementById('generatedFiles');
+  if (!container) return;
+
+  container.innerHTML = '';
+
+  if (!filesByRound || Object.keys(filesByRound).length === 0) {
+    container.textContent = 'No generated files';
+    return;
+  }
+
+  const rounds = Object.keys(filesByRound)
+    .map((r) => parseInt(r, 10))
+    .sort((a, b) => a - b);
+
+  rounds.forEach((round) => {
+    const group = document.createElement('div');
+    group.className = 'round-group';
+
+    const header = document.createElement('div');
+    header.className = 'round-header';
+    header.textContent = `Round ${round}`;
+    group.appendChild(header);
+
+    const files = filesByRound[round] || [];
+    files.forEach((info) => {
+      const item = document.createElement('div');
+      item.className = 'file-item';
+
+      const nameSpan = document.createElement('span');
+      nameSpan.className = 'file-name';
+      nameSpan.textContent = info.path;
+
+      if (info.added !== undefined && info.removed !== undefined) {
+        const statsSpan = document.createElement('span');
+        statsSpan.innerHTML = `<span class="added">+${info.added}</span> <span class="removed">-${info.removed}</span>`;
+        nameSpan.appendChild(statsSpan);
+      }
+
+      const actions = document.createElement('span');
+      actions.className = 'file-actions';
+
+      const openBtn = document.createElement('button');
+      openBtn.className = 'vscode-button tiny';
+      openBtn.title = 'Open file';
+      openBtn.innerHTML = '<i class="codicon codicon-go-to-file"></i>';
+      openBtn.addEventListener('click', () => {
+        vscode.postMessage({ command: COMMANDS.OPEN_FILE, file: info.path });
+      });
+
+      const compareBtn = document.createElement('button');
+      compareBtn.className = 'vscode-button tiny';
+      compareBtn.title = 'Compare with base';
+      compareBtn.innerHTML = '<i class="codicon codicon-diff"></i>';
+      compareBtn.addEventListener('click', () => {
+        vscode.postMessage({
+          command: COMMANDS.COMPARE_ORIGINAL,
+          file: info.path,
+          base: info.base,
+        });
+      });
+
+      const prevBtn = document.createElement('button');
+      prevBtn.className = 'vscode-button tiny';
+      prevBtn.title = 'Compare with previous round';
+      prevBtn.innerHTML = '<i class="codicon codicon-diff-all"></i>';
+      prevBtn.addEventListener('click', () => {
+        vscode.postMessage({
+          command: COMMANDS.COMPARE_PREVIOUS,
+          file: info.path,
+          prev: info.prev,
+        });
+      });
+
+      const acceptBtn = document.createElement('button');
+      acceptBtn.className = 'vscode-button tiny';
+      acceptBtn.title = 'Accept edits';
+      acceptBtn.innerHTML = '<i class="codicon codicon-pass"></i>';
+      acceptBtn.addEventListener('click', () => {
+        vscode.postMessage({
+          command: COMMANDS.ACCEPT_FILE,
+          file: info.path,
+          base: info.base,
+        });
+      });
+
+      const mergeBtn = document.createElement('button');
+      mergeBtn.className = 'vscode-button tiny';
+      mergeBtn.title = 'Merge edits';
+      mergeBtn.innerHTML = '<i class="codicon codicon-merge"></i>';
+      mergeBtn.addEventListener('click', () => {
+        vscode.postMessage({
+          command: COMMANDS.MERGE_FILE,
+          file: info.path,
+          base: info.base,
+        });
+      });
+
+      const diffBtn = document.createElement('button');
+      diffBtn.className = 'vscode-button tiny';
+      diffBtn.title = 'Latexdiff again';
+      diffBtn.innerHTML = '<i class="codicon codicon-diff-added"></i>';
+      diffBtn.addEventListener('click', () => {
+        vscode.postMessage({
+          command: COMMANDS.LATEXDIFF_FILE,
+          file: info.path,
+          base: info.base,
+          prev: info.prev,
+        });
+      });
+
+      actions.appendChild(openBtn);
+      actions.appendChild(compareBtn);
+      actions.appendChild(prevBtn);
+      actions.appendChild(acceptBtn);
+      actions.appendChild(mergeBtn);
+      actions.appendChild(diffBtn);
+
+      item.appendChild(nameSpan);
+      item.appendChild(actions);
+      group.appendChild(item);
+    });
+
+    container.appendChild(group);
+  });
+}
+
+/**
  * Adds a log group to the DOM
  * @param {Object} group - Group data
  */
