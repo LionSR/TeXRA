@@ -25,7 +25,7 @@ export function renderHistoryItems(historyItems) {
 
   // Add clear button
   clearButtonContainer.innerHTML = `
-    <button class="button button-clear" id="clearHistoryBtn">Clear All History</button>
+    <button class="vscode-button button-clear" id="clearHistoryBtn">Clear All History</button>
   `;
 
   // Add event listener for clear button
@@ -68,11 +68,11 @@ function createHistoryItemElement(item) {
   header.className = 'history-item-header';
   header.innerHTML = `
     <div class="history-timestamp">${formattedDate}</div>
-    <div class="history-actions">
-      <button class="button delete-btn" data-id="${item.id}" title="Delete this history item">Delete</button>
-      <button class="button restore-btn" data-id="${item.id}" title="Load configuration to main view">Restore</button>
-      <button class="button rerun-btn" data-id="${item.id}" title="Execute this configuration">Rerun</button>
-    </div>
+      <div class="history-actions button-group">
+        <button class="vscode-button delete-btn" data-id="${item.id}" title="Delete this history item">Delete</button>
+        <button class="vscode-button restore-btn" data-id="${item.id}" title="Load configuration to main view">Restore</button>
+        <button class="vscode-button rerun-btn" data-id="${item.id}" title="Execute this configuration">Rerun</button>
+      </div>
   `;
 
   // Create the basic details section
