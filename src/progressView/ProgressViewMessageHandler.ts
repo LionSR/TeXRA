@@ -52,6 +52,12 @@ export class ProgressViewMessageHandler {
       case COMMANDS.RESTORE_STATE:
         await this.handleRestoreState(message.stream);
         break;
+      case COMMANDS.OPEN_FILE:
+        await vscode.commands.executeCommand(
+          'vscode.open',
+          vscode.Uri.file(message.file),
+        );
+        break;
       default:
         logger.warn(CHANNEL, `Unknown command: ${message.command}`);
     }
@@ -67,14 +73,23 @@ export class ProgressViewMessageHandler {
     logger.debug(CHANNEL, `Found taskState for stream: ${stream}`);
     logger.debug(CHANNEL, `Task state: ${JSON.stringify(taskState)}`);
 
-    // Execute pack command with taskState
+    const generated = this.provider.getOutputFiles(stream);
+    let files: string[] = [];
+    if (generated) {
+      for (const arr of Object.values(generated)) {
+        files.push(...arr);
+      }
+    } else if (taskState.outputFilesActive) {
+      files = taskState.outputFiles;
+    }
+
     await vscode.commands.executeCommand('texra.pack', {
       agent: taskState.agent,
       model: taskState.model,
       inputFile: taskState.inputFile,
       outputNameOverride: taskState.outputNameOverride,
-      outputFiles: taskState.outputFiles,
-      outputFilesActive: taskState.outputFilesActive,
+      outputFiles: files,
+      outputFilesActive: files.length > 0,
     });
   }
 
@@ -105,14 +120,23 @@ export class ProgressViewMessageHandler {
     logger.debug(CHANNEL, `Found taskState for stream: ${stream}`);
     logger.debug(CHANNEL, `Task state: ${JSON.stringify(taskState)}`);
 
-    // Execute clean command with taskState
+    const generated = this.provider.getOutputFiles(stream);
+    let files: string[] = [];
+    if (generated) {
+      for (const arr of Object.values(generated)) {
+        files.push(...arr);
+      }
+    } else if (taskState.outputFilesActive) {
+      files = taskState.outputFiles;
+    }
+
     await vscode.commands.executeCommand('texra.clean', {
       agent: taskState.agent,
       model: taskState.model,
       inputFile: taskState.inputFile,
       outputNameOverride: taskState.outputNameOverride,
-      outputFiles: taskState.outputFiles,
-      outputFilesActive: taskState.outputFilesActive,
+      outputFiles: files,
+      outputFilesActive: files.length > 0,
     });
   }
 

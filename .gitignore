@@ -8,3 +8,4 @@ releases/
 .cursor
 .cursor/rules
 **/.claude/settings.local.json
+out/

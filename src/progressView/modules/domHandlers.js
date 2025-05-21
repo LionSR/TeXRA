@@ -126,6 +126,54 @@ export function updateStatus(status) {
 }
 
 /**
+ * Update the generated files list
+ * @param {Object} filesByRound - Mapping of round -> Array of file paths
+ */
+export function updateFileList(filesByRound) {
+  const container = document.getElementById('generatedFiles');
+  if (!container) return;
+
+  container.innerHTML = '';
+
+  if (!filesByRound || Object.keys(filesByRound).length === 0) {
+    container.textContent = 'No generated files';
+    return;
+  }
+
+  Object.entries(filesByRound).forEach(([round, files]) => {
+    const roundHeader = document.createElement('div');
+    roundHeader.className = 'round-header';
+    roundHeader.textContent = `Round ${round.replace(/^r/, '')}`;
+    container.appendChild(roundHeader);
+
+    files.forEach((file) => {
+      const item = document.createElement('div');
+      item.className = 'file-item';
+
+      const nameSpan = document.createElement('span');
+      nameSpan.className = 'file-name';
+      nameSpan.textContent = file;
+
+      const actions = document.createElement('span');
+      actions.className = 'file-actions';
+
+      const openBtn = document.createElement('button');
+      openBtn.className = 'vscode-button tiny';
+      openBtn.title = 'Open file';
+      openBtn.innerHTML = '<i class="codicon codicon-go-to-file"></i>';
+      openBtn.addEventListener('click', () => {
+        vscode.postMessage({ command: COMMANDS.OPEN_FILE, file });
+      });
+
+      actions.appendChild(openBtn);
+      item.appendChild(nameSpan);
+      item.appendChild(actions);
+      container.appendChild(item);
+    });
+  });
+}
+
+/**
  * Adds a log group to the DOM
  * @param {Object} group - Group data
  */

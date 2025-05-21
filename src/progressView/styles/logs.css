@@ -144,3 +144,40 @@
   background-color: var(--vscode-testing-iconSkipped, #cca700);
   box-shadow: 0 0 4px var(--vscode-testing-iconSkipped, #cca700);
 }
+
+/* Generated files list */
+.files-container {
+  padding: 4px;
+  border-top: 1px solid var(--vscode-panel-border);
+  background-color: var(--vscode-sideBar-background);
+  font-size: var(--vscode-editor-font-size);
+  overflow-x: auto;
+}
+
+.file-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 2px 0;
+}
+
+.round-header {
+  margin-top: 4px;
+  font-weight: bold;
+}
+
+.file-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.file-actions {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.file-actions button {
+  margin-left: 4px;
+}
