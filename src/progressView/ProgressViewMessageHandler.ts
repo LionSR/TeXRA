@@ -52,6 +52,52 @@ export class ProgressViewMessageHandler {
       case COMMANDS.RESTORE_STATE:
         await this.handleRestoreState(message.stream);
         break;
+      case COMMANDS.OPEN_FILE:
+        await vscode.commands.executeCommand(
+          'texra.openFileCompile',
+          message.file,
+        );
+        break;
+      case COMMANDS.COMPARE_ORIGINAL:
+        await vscode.commands.executeCommand(
+          'texra.compare',
+          undefined,
+          message.base,
+          message.file,
+        );
+        break;
+      case COMMANDS.COMPARE_PREVIOUS:
+        await vscode.commands.executeCommand(
+          'texra.compare',
+          undefined,
+          message.prev,
+          message.file,
+        );
+        break;
+      case COMMANDS.ACCEPT_FILE:
+        await vscode.commands.executeCommand(
+          'texra.acceptEdited',
+          undefined,
+          message.base,
+          message.file,
+        );
+        break;
+      case COMMANDS.MERGE_FILE:
+        await vscode.commands.executeCommand(
+          'texra.merge',
+          undefined,
+          message.base,
+          message.file,
+        );
+        break;
+      case COMMANDS.LATEXDIFF_FILE:
+        await vscode.commands.executeCommand(
+          'texra.latexdiff',
+          undefined,
+          message.base,
+          message.file,
+        );
+        break;
       default:
         logger.warn(CHANNEL, `Unknown command: ${message.command}`);
     }
