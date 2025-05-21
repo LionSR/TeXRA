@@ -159,16 +159,27 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     }
 
     // Load taskStates
-    const savedTaskStates = this.context.workspaceState.get<{
-      [key: string]: Record<string, any>;
-    }>(this._taskStateKey);
+    const savedTaskStates = this.context.workspaceState.get<
+      | { [key: string]: Record<string, any> }
+      | [string, Record<string, any>][]
+    >(this._taskStateKey);
     if (savedTaskStates) {
-      this._taskStates = new Map(
-        Object.entries(savedTaskStates).map(([stream, state]) => [
-          stream,
-          objectToTaskState(state),
-        ]),
-      );
+      if (Array.isArray(savedTaskStates)) {
+        // Backwards compatibility: convert from array format if encountered
+        this._taskStates = new Map(
+          savedTaskStates.map(([stream, state]) => [
+            stream,
+            objectToTaskState(state),
+          ]),
+        );
+      } else {
+        this._taskStates = new Map(
+          Object.entries(savedTaskStates).map(([stream, state]) => [
+            stream,
+            objectToTaskState(state),
+          ]),
+        );
+      }
     } else {
       this._taskStates.clear();
     }
@@ -609,9 +620,9 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
 
   private saveTaskStates(): void {
     this.logger.debug('Saving taskStates to workspace state');
-    const taskStatesArray = Array.from(this._taskStates.entries());
-    this.logger.debug(`Saving taskStates: ${JSON.stringify(taskStatesArray)}`);
-    this.context.workspaceState.update(this._taskStateKey, taskStatesArray);
+    const taskStatesObj = Object.fromEntries(this._taskStates.entries());
+    this.logger.debug(`Saving taskStates: ${JSON.stringify(taskStatesObj)}`);
+    this.context.workspaceState.update(this._taskStateKey, taskStatesObj);
   }
 
   /**
