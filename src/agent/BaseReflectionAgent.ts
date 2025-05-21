@@ -14,9 +14,16 @@ import {
   bestConnectionMethod,
   getTeXCountStats,
 } from '../latex';
+import { ProgressViewProvider } from '../progressView/ProgressViewProvider';
+import { diff_match_patch } from 'diff-match-patch';
 
 // Local imports - utilities
-import { writeFile, appendFile, fileExists } from '../utils/workspaceFileUtils';
+import {
+  writeFile,
+  appendFile,
+  fileExists,
+  readFile,
+} from '../utils/workspaceFileUtils';
 import {
   renderPrompt,
   getFirstKCharsFromDocument,
@@ -542,6 +549,32 @@ export abstract class BaseReflectionAgent {
     return prefill;
   }
 
+  private async computeDiffStats(
+    baseFile: string,
+    outputFile: string,
+  ): Promise<{ added: number; removed: number }> {
+    try {
+      const [baseContent, outContent] = await Promise.all([
+        readFile(baseFile),
+        readFile(outputFile),
+      ]);
+      const dmp = new diff_match_patch();
+      const diffs = dmp.diff_main(baseContent, outContent);
+      let added = 0;
+      let removed = 0;
+      for (const [op, text] of diffs) {
+        if (op === 1) {
+          added += text.split(/\n/).length;
+        } else if (op === -1) {
+          removed += text.split(/\n/).length;
+        }
+      }
+      return { added, removed };
+    } catch {
+      return { added: 0, removed: 0 };
+    }
+  }
+
   /**
    * Processes completion of conversation round.
    */
@@ -577,6 +610,53 @@ export abstract class BaseReflectionAgent {
       this.logger.info(`Completed round ${currRound}`, roundGroupId);
     } catch (error) {
       throw error;
+    }
+
+    const provider = ProgressViewProvider.getInstance();
+    if (provider) {
+      const roundOutputs = this.outputHandler.outputFiles[currRound] || [];
+
+      // Map output files to their original base files
+      const baseMap = this.outputHandler.createFileMapping(
+        this.baseFiles,
+        roundOutputs,
+        'contains',
+      );
+
+      // Map output files to previous round files if available
+      const prevMap =
+        currRound > 0
+          ? this.outputHandler.createFileMapping(
+              this.outputHandler.outputFiles[currRound - 1] || [],
+              roundOutputs,
+              'basename',
+              true,
+            )
+          : new Map<string, string>();
+
+      const fileInfos = [] as any[];
+      for (const file of roundOutputs) {
+        const baseFile =
+          Array.from(baseMap.entries()).find(([, out]) => out === file)?.[0] ||
+          null;
+        const prevFile =
+          Array.from(prevMap.entries()).find(([, out]) => out === file)?.[0] ||
+          null;
+        let stats = { added: 0, removed: 0 };
+        if (baseFile) {
+          stats = await this.computeDiffStats(baseFile, file);
+        }
+        fileInfos.push({
+          path: file,
+          base: baseFile,
+          prev: prevFile,
+          ...stats,
+        });
+      }
+
+      provider.addOutputFiles(this.logger.channelId, {
+        [currRound]: fileInfos,
+      });
     }
   }
 

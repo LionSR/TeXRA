@@ -144,3 +144,100 @@
   background-color: var(--vscode-testing-iconSkipped, #cca700);
   box-shadow: 0 0 4px var(--vscode-testing-iconSkipped, #cca700);
 }
+
+/* Generated files list */
+.files-container {
+  padding: 4px;
+  border-top: 1px solid var(--vscode-panel-border);
+  background-color: var(--vscode-sideBar-background);
+  font-size: var(--vscode-editor-font-size);
+  overflow-y: auto;
+  max-height: 300px;
+}
+
+.file-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 2px 0;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+
+.file-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 100px;
+  padding-right: 8px;
+}
+
+.file-dir {
+  opacity: 0.7;
+  font-size: 0.9em;
+}
+
+.file-basename {
+  font-weight: 500;
+}
+
+.file-stats {
+  margin-left: 8px;
+  white-space: nowrap;
+}
+
+.file-actions {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 2px;
+}
+
+/* Remove custom button styling to use common.css styles instead */
+.file-actions .vscode-button {
+  /* Keep only essential positioning */
+  margin-right: 0; /* Override the default margin-right from common.css */
+  margin-left: 1px; /* Small gap between buttons */
+}
+
+.round-group {
+  margin-bottom: 10px;
+}
+
+.round-header {
+  font-weight: bold;
+  margin-top: 6px;
+  margin-bottom: 4px;
+  padding: 2px 4px;
+  background-color: var(--vscode-sideBarSectionHeader-background);
+  border-radius: 2px;
+}
+
+.added {
+  color: var(--vscode-charts-green, green);
+  margin-left: 4px;
+  font-size: 0.9em;
+}
+
+.removed {
+  color: var(--vscode-charts-red, red);
+  margin-left: 4px;
+  font-size: 0.9em;
+}
+
+/* Responsive adjustments */
+@media (max-width: 500px) {
+  .file-item {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .file-name {
+    margin-bottom: 4px;
+    width: 100%;
+  }
+
+  .file-actions {
+    align-self: flex-end;
+  }
+}
