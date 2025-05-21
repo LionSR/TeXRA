@@ -52,6 +52,12 @@ export class ProgressViewMessageHandler {
       case COMMANDS.RESTORE_STATE:
         await this.handleRestoreState(message.stream);
         break;
+      case COMMANDS.OPEN_FILE:
+        await vscode.commands.executeCommand(
+          'vscode.open',
+          vscode.Uri.file(message.file),
+        );
+        break;
       default:
         logger.warn(CHANNEL, `Unknown command: ${message.command}`);
     }

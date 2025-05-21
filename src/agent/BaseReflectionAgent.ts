@@ -14,6 +14,7 @@ import {
   bestConnectionMethod,
   getTeXCountStats,
 } from '../latex';
+import { ProgressViewProvider } from '../progressView/ProgressViewProvider';
 
 // Local imports - utilities
 import { writeFile, appendFile, fileExists } from '../utils/workspaceFileUtils';
@@ -577,6 +578,14 @@ export abstract class BaseReflectionAgent {
       this.logger.info(`Completed round ${currRound}`, roundGroupId);
     } catch (error) {
       throw error;
+    }
+
+    const provider = ProgressViewProvider.getInstance();
+    if (provider) {
+      provider.addOutputFiles(
+        this.logger.channelId,
+        this.outputHandler.outputFiles[currRound],
+      );
     }
   }
 
