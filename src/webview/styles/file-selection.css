@@ -50,9 +50,6 @@
 }
 
 .file-select-actions {
-  display: flex;
-  align-items: center;
-  gap: 4px;
   flex-wrap: nowrap;
   margin-left: auto;
   position: relative;
