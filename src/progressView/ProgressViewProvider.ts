@@ -176,8 +176,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
 
     // Load taskStates
     const savedTaskStates = this.context.workspaceState.get<
-      | { [key: string]: Record<string, any> }
-      | [string, Record<string, any>][]
+      { [key: string]: Record<string, any> } | [string, Record<string, any>][]
     >(this._taskStateKey);
     if (savedTaskStates) {
       if (Array.isArray(savedTaskStates)) {
