@@ -188,7 +188,6 @@
 }
 
 .file-actions {
-  display: flex;
   flex-wrap: nowrap;
   gap: 2px;
 }

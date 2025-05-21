@@ -200,3 +200,10 @@ select:focus {
   align-items: center;
   margin-bottom: var(--spacing-medium);
 }
+
+/* Generic button group container */
+.button-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
