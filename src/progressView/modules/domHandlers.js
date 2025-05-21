@@ -126,6 +126,136 @@ export function updateStatus(status) {
 }
 
 /**
+ * Update the generated files list
+ * @param {Array<string>} files - Array of file paths
+ */
+export function updateFileList(filesByRound) {
+  const container = document.getElementById('generatedFiles');
+  if (!container) return;
+
+  container.innerHTML = '';
+
+  if (!filesByRound || Object.keys(filesByRound).length === 0) {
+    container.textContent = 'No generated files';
+    return;
+  }
+
+  const rounds = Object.keys(filesByRound).sort(
+    (a, b) => Number(a) - Number(b),
+  );
+
+  rounds.forEach((round) => {
+    const header = document.createElement('div');
+    header.className = 'round-header';
+    header.textContent = `Round ${round}`;
+    container.appendChild(header);
+
+    filesByRound[round].forEach((info) => {
+      const item = document.createElement('div');
+      item.className = 'file-item';
+
+      const nameSpan = document.createElement('span');
+      nameSpan.className = 'file-name';
+      nameSpan.textContent = info.file;
+
+      const statsSpan = document.createElement('span');
+      statsSpan.className = 'file-stats';
+      if (info.added !== undefined && info.removed !== undefined) {
+        statsSpan.innerHTML = `<span class="added">+${info.added}</span> <span class="removed">-${info.removed}</span>`;
+      }
+
+      const actions = document.createElement('span');
+      actions.className = 'file-actions';
+
+      const openBtn = document.createElement('button');
+      openBtn.className = 'vscode-button tiny';
+      openBtn.title = 'Open file';
+      openBtn.innerHTML = '<i class="codicon codicon-go-to-file"></i>';
+      openBtn.addEventListener('click', () => {
+        vscode.postMessage({ command: COMMANDS.OPEN_FILE, file: info.file });
+      });
+      actions.appendChild(openBtn);
+
+      if (info.base) {
+        const compareBtn = document.createElement('button');
+        compareBtn.className = 'vscode-button tiny';
+        compareBtn.title = 'Compare with original';
+        compareBtn.innerHTML = '<i class="codicon codicon-diff"></i>';
+        compareBtn.addEventListener('click', () => {
+          vscode.postMessage({
+            command: COMMANDS.COMPARE_ORIGINAL,
+            base: info.base,
+            file: info.file,
+          });
+        });
+        actions.appendChild(compareBtn);
+      }
+
+      if (info.prev) {
+        const prevBtn = document.createElement('button');
+        prevBtn.className = 'vscode-button tiny';
+        prevBtn.title = 'Compare with previous';
+        prevBtn.innerHTML = '<i class="codicon codicon-history"></i>';
+        prevBtn.addEventListener('click', () => {
+          vscode.postMessage({
+            command: COMMANDS.COMPARE_PREVIOUS,
+            prev: info.prev,
+            file: info.file,
+          });
+        });
+        actions.appendChild(prevBtn);
+      }
+
+      if (info.base) {
+        const acceptBtn = document.createElement('button');
+        acceptBtn.className = 'vscode-button tiny';
+        acceptBtn.title = 'Accept edits';
+        acceptBtn.innerHTML = '<i class="codicon codicon-check"></i>';
+        acceptBtn.addEventListener('click', () => {
+          vscode.postMessage({
+            command: COMMANDS.ACCEPT_FILE,
+            base: info.base,
+            file: info.file,
+          });
+        });
+        actions.appendChild(acceptBtn);
+
+        const mergeBtn = document.createElement('button');
+        mergeBtn.className = 'vscode-button tiny';
+        mergeBtn.title = 'Merge using AI';
+        mergeBtn.innerHTML = '<i class="codicon codicon-git-merge"></i>';
+        mergeBtn.addEventListener('click', () => {
+          vscode.postMessage({
+            command: COMMANDS.MERGE_FILE,
+            base: info.base,
+            file: info.file,
+          });
+        });
+        actions.appendChild(mergeBtn);
+
+        const diffAgainBtn = document.createElement('button');
+        diffAgainBtn.className = 'vscode-button tiny';
+        diffAgainBtn.title = 'Run latexdiff again';
+        diffAgainBtn.innerHTML = '<i class="codicon codicon-diff-added"></i>';
+        diffAgainBtn.addEventListener('click', () => {
+          vscode.postMessage({
+            command: COMMANDS.LATEXDIFF_FILE,
+            base: info.base,
+            file: info.file,
+          });
+        });
+        actions.appendChild(diffAgainBtn);
+      }
+
+      item.appendChild(nameSpan);
+      item.appendChild(statsSpan);
+      item.appendChild(actions);
+      container.appendChild(item);
+    });
+  });
+}
+
+/**
  * Adds a log group to the DOM
  * @param {Object} group - Group data
  */

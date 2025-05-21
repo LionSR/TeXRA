@@ -271,6 +271,23 @@ export class OutputHandler {
     return fileMapping;
   }
 
+  /**
+   * Public wrapper around createFileMapping to expose file mapping logic
+   */
+  public getFileMapping(
+    sourceFiles: string[],
+    targetFiles: string[],
+    matchStrategy: 'basename' | 'contains' = 'basename',
+    roundAware: boolean = false,
+  ): Map<string, string> {
+    return this.createFileMapping(
+      sourceFiles,
+      targetFiles,
+      matchStrategy,
+      roundAware,
+    );
+  }
+
   /** Updates \input commands in output files to reference new file paths. */
   public async replaceInputCommands(
     baseFiles: string[],

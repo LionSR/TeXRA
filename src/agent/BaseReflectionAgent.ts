@@ -14,6 +14,7 @@ import {
   bestConnectionMethod,
   getTeXCountStats,
 } from '../latex';
+import { ProgressViewProvider } from '../progressView/ProgressViewProvider';
 
 // Local imports - utilities
 import { writeFile, appendFile, fileExists } from '../utils/workspaceFileUtils';
@@ -577,6 +578,31 @@ export abstract class BaseReflectionAgent {
       this.logger.info(`Completed round ${currRound}`, roundGroupId);
     } catch (error) {
       throw error;
+    }
+
+    const provider = ProgressViewProvider.getInstance();
+    if (provider) {
+      const outputFiles = this.outputHandler.outputFiles[currRound];
+      const baseMap = this.outputHandler.getFileMapping(
+        this.outputHandler.baseFiles,
+        outputFiles,
+        'contains',
+      );
+      const prevFiles =
+        currRound > 0 ? this.outputHandler.outputFiles[currRound - 1] : [];
+      const prevMap = this.outputHandler.getFileMapping(
+        prevFiles,
+        outputFiles,
+        'basename',
+        true,
+      );
+      await provider.addOutputFiles(
+        this.logger.channelId,
+        currRound,
+        outputFiles,
+        baseMap,
+        prevMap,
+      );
     }
   }
 

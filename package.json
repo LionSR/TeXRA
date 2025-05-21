@@ -887,6 +887,11 @@
         "category": "TeXRA"
       },
       {
+        "command": "texra.openFileCompile",
+        "title": "Open and Compile LaTeX File",
+        "category": "TeXRA"
+      },
+      {
         "command": "texra.showAgentHistory",
         "title": "Show Agent Execution History",
         "category": "TeXRA"
