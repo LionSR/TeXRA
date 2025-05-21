@@ -189,7 +189,7 @@ export function updateFileList(filesByRound) {
       }
 
       const actions = document.createElement('span');
-      actions.className = 'file-actions';
+      actions.className = 'file-actions button-group';
 
       // Create all buttons
 
