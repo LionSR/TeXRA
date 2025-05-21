@@ -126,6 +126,166 @@ export function updateStatus(status) {
 }
 
 /**
+ * Update the generated files list
+ * @param {Array<string>} files - Array of file paths
+ */
+export function updateFileList(filesByRound) {
+  const container = document.getElementById('generatedFiles');
+  if (!container) return;
+
+  container.innerHTML = '';
+
+  if (!filesByRound || Object.keys(filesByRound).length === 0) {
+    container.textContent = 'No generated files';
+    return;
+  }
+
+  const rounds = Object.keys(filesByRound)
+    .map((r) => parseInt(r, 10))
+    .sort((a, b) => a - b);
+
+  rounds.forEach((round) => {
+    const group = document.createElement('div');
+    group.className = 'round-group';
+
+    const header = document.createElement('div');
+    header.className = 'round-header';
+    header.textContent = `Round ${round}`;
+    group.appendChild(header);
+
+    const files = filesByRound[round] || [];
+    files.forEach((info) => {
+      const item = document.createElement('div');
+      item.className = 'file-item';
+
+      const nameSpan = document.createElement('span');
+      nameSpan.className = 'file-name';
+
+      // Get basename of the file for cleaner display
+      const basename = info.path.split('/').pop();
+      const dirPath = info.path.substring(
+        0,
+        info.path.length - basename.length,
+      );
+
+      // Create two spans - one for directory and one for filename
+      const dirSpan = document.createElement('span');
+      dirSpan.className = 'file-dir';
+      dirSpan.style.opacity = '0.7';
+      dirSpan.textContent = dirPath;
+
+      const fileSpan = document.createElement('span');
+      fileSpan.className = 'file-basename';
+      fileSpan.textContent = basename;
+
+      nameSpan.appendChild(dirSpan);
+      nameSpan.appendChild(fileSpan);
+
+      if (info.added !== undefined && info.removed !== undefined) {
+        const statsSpan = document.createElement('span');
+        statsSpan.className = 'file-stats';
+        statsSpan.innerHTML = `<span class="added">+${info.added}</span><span class="removed">-${info.removed}</span>`;
+        nameSpan.appendChild(statsSpan);
+      }
+
+      const actions = document.createElement('span');
+      actions.className = 'file-actions';
+
+      // Create all buttons
+
+      // Only create the previous round comparison button if there's a previous file
+      // Put this first since this is right aligned to be more symmetric
+      const prevBtn = info.prev ? document.createElement('button') : null;
+      if (prevBtn) {
+        prevBtn.className = 'vscode-button tiny';
+        prevBtn.title = 'Compare with previous round';
+        prevBtn.innerHTML = '<i class="codicon codicon-diff-added"></i>';
+        prevBtn.addEventListener('click', () => {
+          vscode.postMessage({
+            command: COMMANDS.COMPARE_PREVIOUS,
+            file: info.path,
+            prev: info.prev,
+          });
+        });
+      }
+
+      const openBtn = document.createElement('button');
+      openBtn.className = 'vscode-button tiny';
+      openBtn.title = 'Open file';
+      openBtn.innerHTML = '<i class="codicon codicon-go-to-file"></i>';
+      openBtn.addEventListener('click', () => {
+        vscode.postMessage({ command: COMMANDS.OPEN_FILE, file: info.path });
+      });
+
+      const compareBtn = document.createElement('button');
+      compareBtn.className = 'vscode-button tiny';
+      compareBtn.title = 'Compare with base';
+      compareBtn.innerHTML = '<i class="codicon codicon-diff"></i>';
+      compareBtn.addEventListener('click', () => {
+        vscode.postMessage({
+          command: COMMANDS.COMPARE_ORIGINAL,
+          file: info.path,
+          base: info.base,
+        });
+      });
+
+      const acceptBtn = document.createElement('button');
+      acceptBtn.className = 'vscode-button tiny';
+      acceptBtn.title = 'Accept edits';
+      acceptBtn.innerHTML = '<i class="codicon codicon-check"></i>';
+      acceptBtn.addEventListener('click', () => {
+        vscode.postMessage({
+          command: COMMANDS.ACCEPT_FILE,
+          file: info.path,
+          base: info.base,
+        });
+      });
+
+      const mergeBtn = document.createElement('button');
+      mergeBtn.className = 'vscode-button tiny';
+      mergeBtn.title = 'Merge edits';
+      mergeBtn.innerHTML = '<i class="codicon codicon-git-merge"></i>';
+      mergeBtn.addEventListener('click', () => {
+        vscode.postMessage({
+          command: COMMANDS.MERGE_FILE,
+          file: info.path,
+          base: info.base,
+        });
+      });
+
+      const diffBtn = document.createElement('button');
+      diffBtn.className = 'vscode-button tiny';
+      diffBtn.title = 'LaTeXdiff';
+      diffBtn.innerHTML = '<i class="codicon codicon-git-compare"></i>';
+      diffBtn.addEventListener('click', () => {
+        vscode.postMessage({
+          command: COMMANDS.LATEXDIFF_FILE,
+          file: info.path,
+          base: info.base,
+          prev: info.prev,
+        });
+      });
+
+      // Add all buttons to the actions container
+      actions.appendChild(openBtn);
+      actions.appendChild(compareBtn);
+      actions.appendChild(acceptBtn);
+      actions.appendChild(mergeBtn);
+      actions.appendChild(diffBtn);
+      if (prevBtn) {
+        actions.appendChild(prevBtn);
+      }
+
+      item.appendChild(nameSpan);
+      item.appendChild(actions);
+      group.appendChild(item);
+    });
+
+    container.appendChild(group);
+  });
+}
+
+/**
  * Adds a log group to the DOM
  * @param {Object} group - Group data
  */
