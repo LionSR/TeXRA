@@ -12,6 +12,7 @@ import {
   addLogGroup,
   updateLogGroupUI,
   appendLogToGroup,
+  updateFileList,
 } from './domHandlers.js';
 import {
   formatLogEntry,
@@ -166,6 +167,23 @@ export function setupMessageHandlers() {
 
       case COMMANDS.UPDATE_STATUS:
         updateStatus(message.status);
+        break;
+
+      case COMMANDS.UPDATE_FILES:
+        if (message.stream === getCurrentStream()) {
+          updateFileList(message.files);
+        }
+        break;
+
+      case COMMANDS.OPEN_FILE:
+        // no-op in webview, handled in extension
+        break;
+      case COMMANDS.COMPARE_ORIGINAL:
+      case COMMANDS.COMPARE_PREVIOUS:
+      case COMMANDS.ACCEPT_FILE:
+      case COMMANDS.MERGE_FILE:
+      case COMMANDS.LATEXDIFF_FILE:
+        // handled by extension
         break;
 
       case COMMANDS.DELETE_STREAM:
