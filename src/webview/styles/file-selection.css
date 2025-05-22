@@ -4,12 +4,12 @@
  */
 
 .file-select {
-  margin-bottom: 12px;
+  margin-bottom: var(--spacing-large);
 }
 
 /* Make optional sections more compact */
 .file-select:has(.optional-label) {
-  margin-bottom: 2px;
+  margin-bottom: var(--spacing-tiny);
 }
 
 .file-select-header {
@@ -31,11 +31,11 @@
 .file-select-label-group {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--spacing-small);
   flex-wrap: nowrap;
   flex: 1;
   min-width: 0;
-  min-height: 24px;
+  min-height: var(--control-height);
   position: relative;
 }
 
@@ -57,7 +57,7 @@
 
 .file-select label {
   display: block;
-  margin-bottom: 2px;
+  margin-bottom: var(--spacing-tiny);
   font-size: var(--font-size);
 }
 
@@ -73,7 +73,7 @@
   min-width: 160px;
   display: flex;
   align-items: center;
-  height: 24px;
+  height: var(--control-height);
   opacity: 0.7;
 }
 
@@ -82,12 +82,12 @@
   user-select: none;
   margin: 0;
   position: relative;
-  padding: 0 2px;
+  padding: 0 var(--spacing-tiny);
   color: var(--text-color);
   opacity: 0.8;
   display: flex;
   align-items: center;
-  height: 24px;
+  height: var(--control-height);
 }
 
 /* When toggled (input is visible), make the label more prominent */
