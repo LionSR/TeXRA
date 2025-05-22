@@ -10,6 +10,7 @@ import * as logger from '../logger/logUtils';
 // Local imports - utilities
 import { getWorkspacePath } from '../utils/workspaceFileUtils';
 import { fileExists } from '../utils/workspaceFileUtils';
+import { openAndBuildIfTex } from '../utils/openBuildUtils';
 
 // Local imports - latex utils
 import {
@@ -100,15 +101,10 @@ async function handleLatexdiff(
       return;
     }
 
-    const doc = await vscode.window.showTextDocument(fullPath);
-    await vscode.window.showTextDocument(doc.document, {
-      preview: false,
-      preserveFocus: true,
-    });
+    await openAndBuildIfTex(filePathRelative, { preserveFocus: true });
     await vscode.commands.executeCommand(
       'workbench.view.extension.latex-workshop-activitybar',
     );
-    await vscode.commands.executeCommand('latex-workshop.build');
 
     // Wait for build to complete before viewing
     setTimeout(async () => {
@@ -162,12 +158,7 @@ async function handleLatexdiffvc(
       return;
     }
 
-    const doc = await vscode.window.showTextDocument(fullPath);
-    await vscode.window.showTextDocument(doc.document, {
-      preview: false,
-      preserveFocus: true,
-    });
-    await vscode.commands.executeCommand('latex-workshop.build');
+    await openAndBuildIfTex(filePathRelative, { preserveFocus: true });
 
     // Wait for build to complete before viewing
     setTimeout(async () => {
