@@ -173,6 +173,16 @@
   padding-right: var(--spacing-medium);
 }
 
+.file-name.clickable {
+  cursor: pointer;
+  color: var(--vscode-textLink-foreground);
+}
+
+.file-name.clickable:hover {
+  color: var(--vscode-textLink-activeForeground);
+  text-decoration: underline;
+}
+
 .file-dir {
   opacity: 0.7;
   font-size: 0.9em;
