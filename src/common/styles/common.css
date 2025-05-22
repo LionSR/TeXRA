@@ -62,6 +62,11 @@
   --border-medium: 2px;
   --border-thick: 3px;
   --border-xlarge: 4px;
+
+  /* Opacity levels */
+  --opacity-disabled: 0.5;
+  --opacity-subtle: 0.7;
+  --opacity-full: 1;
 }
 
 /* Common codicon styling */
@@ -118,7 +123,7 @@
 }
 
 .vscode-button:disabled {
-  opacity: 0.5;
+  opacity: var(--opacity-disabled);
   cursor: not-allowed;
 }
 
@@ -170,7 +175,7 @@
 
 .vscode-input::placeholder {
   color: var(--text-color);
-  opacity: 0.7;
+  opacity: var(--opacity-subtle);
 }
 
 /* Common textarea styling */

@@ -52,7 +52,7 @@
 .instruction-header label .codicon {
   margin-right: var(--spacing-small);
   color: var(--icon-color);
-  opacity: 0.8;
+  opacity: var(--opacity-subtle);
 }
 
 /* Model selection footer */

@@ -58,15 +58,15 @@ body {
 @keyframes pulse {
   0% {
     transform: scale(1);
-    opacity: 0.8;
+    opacity: var(--opacity-subtle);
   }
   50% {
     transform: scale(1.1);
-    opacity: 1;
+    opacity: var(--opacity-full);
   }
   100% {
     transform: scale(1);
-    opacity: 0.8;
+    opacity: var(--opacity-subtle);
   }
 }
 
