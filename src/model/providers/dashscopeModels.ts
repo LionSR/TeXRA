@@ -6,6 +6,14 @@ import {
   ReasoningEffort,
 } from '../ModelConfig';
 
+// Common capabilities for DashScope models
+const DASHSCOPE_DEFAULT_CAPABILITIES: ModelCapabilities = {
+  ...DEFAULT_MODEL_CAPABILITIES,
+  supportsPromptCaching: false,
+  supportsVision: true,
+  supportsSystemPrompt: true,
+};
+
 export const DASHSCOPE_MODELS: Record<string, ModelConfig> = {
   qwenmax: {
     name: 'qwenmax',
@@ -17,10 +25,7 @@ export const DASHSCOPE_MODELS: Record<string, ModelConfig> = {
     inputPrice: 0.56,
     outputPrice: 2.24,
     capabilities: {
-      ...DEFAULT_MODEL_CAPABILITIES,
-      supportsPromptCaching: false,
-      supportsVision: true,
-      supportsSystemPrompt: true,
+      ...DASHSCOPE_DEFAULT_CAPABILITIES,
     } satisfies ModelCapabilities,
     openRouterOnly: false,
   },
@@ -34,10 +39,7 @@ export const DASHSCOPE_MODELS: Record<string, ModelConfig> = {
     inputPrice: 0.28,
     outputPrice: 1.12,
     capabilities: {
-      ...DEFAULT_MODEL_CAPABILITIES,
-      supportsPromptCaching: false,
-      supportsVision: true,
-      supportsSystemPrompt: true,
+      ...DASHSCOPE_DEFAULT_CAPABILITIES,
     } satisfies ModelCapabilities,
     openRouterOnly: false,
   },
@@ -51,10 +53,7 @@ export const DASHSCOPE_MODELS: Record<string, ModelConfig> = {
     inputPrice: 0.14,
     outputPrice: 0.56,
     capabilities: {
-      ...DEFAULT_MODEL_CAPABILITIES,
-      supportsPromptCaching: false,
-      supportsVision: true,
-      supportsSystemPrompt: true,
+      ...DASHSCOPE_DEFAULT_CAPABILITIES,
     } satisfies ModelCapabilities,
     openRouterOnly: false,
   },

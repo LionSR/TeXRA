@@ -34,49 +34,9 @@ export const TEMP_EXTENSIONS = [
   'Notes.bib',
 ];
 
-export const MODELS = [
-  'opus',
-  'sonnet',
-  'sonnet37T',
-  'sonnet37',
-  'sonnet35',
-  'sonnet36',
-  'haiku35',
-  'haiku',
-  'o4-',
-  'o3',
-  'o3-',
-  'o1',
-  'o1preview',
-  'o1-',
-  'gpt41',
-  'gpt41-',
-  'gpt41--',
-  'gpt4ol',
-  'gpt4o',
-  'gpt4o-',
-  'gpt4t',
-  'gemini25p',
-  'gemini25f',
-  'gemini2p',
-  'gemini2fT',
-  'gemini2f',
-  'gemini15p',
-  'gemini15f',
-  'qvq-72b',
-  'DSV3',
-  'DSR1',
-  'DSV3o',
-  'DSR1o',
-  'grok2',
-  'grok3',
-  'grok3-',
-  'kimi',
-  'kimit',
-  'kimiv',
-  'qwenmax',
-  'qwenturbo',
-  'qwenplus',
-];
+// Auto-generated from ModelRegistry
+import { MODEL_CONFIGS } from '../model/ModelRegistry';
+
+export const MODELS = Object.keys(MODEL_CONFIGS);
 
 export const HISTORY_DIR = 'History';
