@@ -26,6 +26,8 @@
   --font-size: var(--vscode-font-size);
   --font-family: var(--vscode-font-family);
   --font-weight: var(--vscode-font-weight);
+  --font-size-sm: calc(var(--font-size) * 0.9);
+  --font-size-lg: calc(var(--font-size) * 1.2);
 
   /* Spacing */
   --spacing-tiny: 2px;
@@ -60,7 +62,7 @@
   height: 24px;
   min-width: 24px;
   padding: 2px;
-  font-size: calc(var(--font-size) * 0.9);
+  font-size: var(--font-size-sm);
   background-color: transparent;
   color: var(--vscode-foreground);
   border: none;
@@ -102,7 +104,7 @@
 }
 
 .vscode-button .codicon {
-  font-size: calc(var(--font-size) * 0.9);
+  font-size: var(--font-size-sm);
   color: var(--vscode-foreground);
 }
 
