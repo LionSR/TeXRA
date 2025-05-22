@@ -6,6 +6,11 @@ import {
   ReasoningEffort,
 } from '../ModelConfig';
 
+// Common capabilities for xAI models
+const XAI_DEFAULT_CAPABILITIES: ModelCapabilities = {
+  ...DEFAULT_MODEL_CAPABILITIES,
+};
+
 export const XAI_MODELS: Record<string, ModelConfig> = {
   grok3: {
     name: 'grok3',
@@ -17,7 +22,7 @@ export const XAI_MODELS: Record<string, ModelConfig> = {
     inputPrice: 3.0,
     outputPrice: 15.0,
     capabilities: {
-      ...DEFAULT_MODEL_CAPABILITIES,
+      ...XAI_DEFAULT_CAPABILITIES,
       supportsReasoning: false,
       supportsReasoningEffort: false,
     } satisfies ModelCapabilities,
@@ -33,7 +38,7 @@ export const XAI_MODELS: Record<string, ModelConfig> = {
     inputPrice: 0.3,
     outputPrice: 0.5,
     capabilities: {
-      ...DEFAULT_MODEL_CAPABILITIES,
+      ...XAI_DEFAULT_CAPABILITIES,
       supportsReasoning: true,
       supportsReasoningEffort: true,
       reasoningEffort: ReasoningEffort.LOW,
@@ -49,7 +54,7 @@ export const XAI_MODELS: Record<string, ModelConfig> = {
     contextWindow: 131072,
     inputPrice: 2.0,
     outputPrice: 10.0,
-    capabilities: DEFAULT_MODEL_CAPABILITIES satisfies ModelCapabilities,
+    capabilities: XAI_DEFAULT_CAPABILITIES satisfies ModelCapabilities,
     openRouterOnly: false,
   },
   grok2v: {
@@ -62,7 +67,7 @@ export const XAI_MODELS: Record<string, ModelConfig> = {
     inputPrice: 2.0,
     outputPrice: 10.0,
     capabilities: {
-      ...DEFAULT_MODEL_CAPABILITIES,
+      ...XAI_DEFAULT_CAPABILITIES,
       supportsVision: true,
     } satisfies ModelCapabilities,
     openRouterOnly: false,
