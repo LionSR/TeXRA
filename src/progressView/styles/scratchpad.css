@@ -219,7 +219,7 @@
 
 .scratchpad-log .timestamp,
 .scratchpad-log .level-info {
-  opacity: 0.7;
+  opacity: var(--opacity-subtle);
 }
 
 /* Make the 'Scratchpad content:' text subtle */
