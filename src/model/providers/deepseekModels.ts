@@ -15,8 +15,8 @@ const DEEPSEEK_DEFAULT_CAPABILITIES: ModelCapabilities = {
 };
 
 export const DEEPSEEK_MODELS: Record<string, ModelConfig> = {
-  DSV3: {
-    name: 'DSV3',
+  dsv3: {
+    name: 'dsv3',
     fullName: 'deepseek-chat',
     openrouterFullName: 'deepseek/deepseek-chat',
     provider: ModelProvider.DEEPSEEK,
@@ -30,8 +30,8 @@ export const DEEPSEEK_MODELS: Record<string, ModelConfig> = {
     } satisfies ModelCapabilities,
     openRouterOnly: false,
   },
-  DSR1: {
-    name: 'DSR1',
+  dsr1: {
+    name: 'dsr1',
     fullName: 'deepseek-reasoner',
     openrouterFullName: 'deepseek/deepseek-R1',
     provider: ModelProvider.DEEPSEEK,
@@ -46,8 +46,8 @@ export const DEEPSEEK_MODELS: Record<string, ModelConfig> = {
     } satisfies ModelCapabilities,
     openRouterOnly: false,
   },
-  DSV3o: {
-    name: 'DSV3o',
+  dsv3o: {
+    name: 'dsv3o',
     fullName: 'deepseek-chat',
     openrouterFullName: 'deepseek/deepseek-chat-v3-0324',
     provider: ModelProvider.DEEPSEEK,
@@ -61,8 +61,8 @@ export const DEEPSEEK_MODELS: Record<string, ModelConfig> = {
     } satisfies ModelCapabilities,
     openRouterOnly: false,
   },
-  DSR1o: {
-    name: 'DSR1o',
+  dsr1o: {
+    name: 'dsr1o',
     fullName: 'deepseek-reasoner',
     openrouterFullName: 'deepseek/deepseek-R1',
     provider: ModelProvider.DEEPSEEK,
