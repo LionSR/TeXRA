@@ -6,6 +6,7 @@ import { AgentHistoryManager } from './AgentHistoryManager';
 import { executeCommand } from '../commands/executeCommand';
 
 import { agentConfigToTaskState } from '../utils/configConversion';
+import { generateNonce } from '../utils/nonceUtils';
 
 // Local imports - log
 import * as logger from '../logger/logUtils';
@@ -169,7 +170,7 @@ export class AgentHistoryViewProvider implements vscode.WebviewViewProvider {
       );
 
       // Create a nonce for script security
-      const nonce = this.getNonce();
+      const nonce = generateNonce();
 
       // Replace placeholders in HTML with actual content
       return htmlContent
@@ -207,19 +208,6 @@ export class AgentHistoryViewProvider implements vscode.WebviewViewProvider {
       relativePath,
     );
     return this._view.webview.asWebviewUri(diskPath);
-  }
-
-  /**
-   * Generate a nonce for content security policy
-   */
-  private getNonce(): string {
-    let text = '';
-    const possible =
-      'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-    for (let i = 0; i < 32; i++) {
-      text += possible.charAt(Math.floor(Math.random() * possible.length));
-    }
-    return text;
   }
 
   /**
