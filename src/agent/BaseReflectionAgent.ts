@@ -185,9 +185,13 @@ export abstract class BaseReflectionAgent {
    * Initializes user variables that require async operations.
    * Must be called after constructor before using the agent.
    */
-  public async init(): Promise<void> {
+  public async init(parentGroupId?: string): Promise<void> {
     // Create an initialization group for better log organization
-    const initGroupId = await this.logger.startGroup(`Initialization`);
+    const initGroupId = await this.logger.startGroup(
+      `Initialization`,
+      undefined,
+      parentGroupId,
+    );
 
     try {
       // Log configuration details in the initialization group
@@ -1047,6 +1051,9 @@ export abstract class BaseReflectionAgent {
     );
 
     try {
+      // Initialize agent variables within the run group
+      await this.init(this.runGroupId);
+
       // Initialize client before starting
       await this.initializeClient();
 
