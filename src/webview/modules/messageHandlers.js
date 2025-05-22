@@ -14,7 +14,7 @@ import {
   getWebviewState,
   updateWebviewState,
   setWebviewState,
-} from '../../common/webviewState.js';
+} from './webviewState.js';
 
 /**
  * Handle state restoration from log view
