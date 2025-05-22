@@ -1,4 +1,9 @@
 import { vscode } from './vscodeApi.js';
+import {
+  getWebviewState,
+  updateWebviewState,
+  setWebviewState,
+} from '../../common/webviewState.js';
 
 import {
   MULTIPLE_SELECTIONS,
@@ -56,7 +61,7 @@ export function setDefaultState() {
 }
 
 export function restoreState() {
-  const previousState = vscode.getState();
+  const previousState = getWebviewState();
   if (previousState) {
     const defaultValues = {
       agent: 'correct',
@@ -179,5 +184,5 @@ export function saveState() {
   // Log the state being saved for debugging
   console.log('Saving state:', state);
 
-  vscode.setState(state);
+  setWebviewState(state);
 }
