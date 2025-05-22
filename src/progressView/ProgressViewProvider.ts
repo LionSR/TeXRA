@@ -391,6 +391,13 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       if (this._view) {
         this._view.show(true); // Show the panel and give it focus
         this.logger.debug(`Auto-focused to new stream: ${stream}`);
+      } else {
+        // If view doesn't exist yet, show the progress view panel
+        // compare to this
+        this.logger.debug(
+          `View not yet created, showing progress view panel for stream: ${stream}`,
+        );
+        vscode.commands.executeCommand('texra.showProgressView');
       }
     }
 
@@ -430,6 +437,20 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     // Skip if this stream should be excluded from the progress view
     if (shouldExcludeFromProgressView(stream)) {
       return;
+    }
+
+    // Ensure the stream exists so the UI can create a new tab immediately
+    // this seems to be the fix for the issue where the progress view panel is not shown when a new stream is created
+    if (!this._logStreams.has(stream)) {
+      this.logger.debug(`Creating stream from addLogGroup: ${stream}`);
+      this._logStreams.set(stream, []);
+      if (!this._streamStatus.has(stream)) {
+        this.updateStreamStatus(stream, STATUS.RUNNING);
+      }
+      this.setActiveStream(stream);
+      if (this._view) {
+        this._view.show(true);
+      }
     }
 
     // Create stream groups mapping if it doesn't exist
