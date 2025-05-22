@@ -168,7 +168,10 @@ export function updateFileList(filesByRound) {
         info.path.length - basename.length,
       );
 
-      // Create two spans - one for directory and one for filename
+      // Create a clickable container for the directory and filename
+      const pathSpan = document.createElement('span');
+      pathSpan.className = 'file-path clickable';
+
       const dirSpan = document.createElement('span');
       dirSpan.className = 'file-dir';
       dirSpan.style.opacity = '0.7';
@@ -178,8 +181,9 @@ export function updateFileList(filesByRound) {
       fileSpan.className = 'file-basename';
       fileSpan.textContent = basename;
 
-      nameSpan.appendChild(dirSpan);
-      nameSpan.appendChild(fileSpan);
+      pathSpan.appendChild(dirSpan);
+      pathSpan.appendChild(fileSpan);
+      nameSpan.appendChild(pathSpan);
 
       if (info.added !== undefined && info.removed !== undefined) {
         const statsSpan = document.createElement('span');
@@ -209,9 +213,8 @@ export function updateFileList(filesByRound) {
         });
       }
 
-      // Make the filename clickable to open the file directly
-      nameSpan.classList.add('clickable');
-      nameSpan.addEventListener('click', () => {
+      // Make the file path clickable to open the file directly
+      pathSpan.addEventListener('click', () => {
         vscode.postMessage({ command: COMMANDS.OPEN_FILE, file: info.path });
       });
 
