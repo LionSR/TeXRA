@@ -36,12 +36,7 @@
   border-color: var(--vscode-list-activeSelectionBackground);
 }
 
-.auto-toggle i {
-  font-size: var(--font-size-sm);
-  color: var(--vscode-foreground);
-  margin-left: 1px;
-  pointer-events: none;
-}
+/* Remove duplicate icon styling - use .auto-toggle .codicon instead */
 
 .auto-toggle .codicon {
   font-size: var(--font-size-sm);
@@ -68,7 +63,7 @@
   border: 1px solid var(--vscode-menu-border);
   border-radius: var(--border-radius);
   box-shadow: var(--vscode-widget-shadow);
-  min-width: 180px;
+  min-width: var(--width-dropdown);
   display: none;
   font-size: var(--font-size-sm);
   padding: var(--spacing-small);
@@ -79,7 +74,7 @@
 /* Dropdown option labels - special styles not covered by vscode-checkbox */
 .dropdown-options .vscode-checkbox {
   padding: var(--spacing-small) var(--spacing-medium);
-  border-radius: calc(var(--border-radius) - 1px);
+  border-radius: var(--border-radius-small);
   font-weight: normal;
 }
 
@@ -87,11 +82,8 @@
   background: var(--vscode-list-hoverBackground);
 }
 
-.dropdown-options i {
-  width: 16px;
+.dropdown-options .codicon {
+  width: var(--width-icon);
   text-align: center;
-  color: var(--icon-color);
-  opacity: 0.8;
+  opacity: var(--opacity-subtle);
 }
-
-/* Remove legacy auto-extract-options styles as they're merged into dropdown-options */
