@@ -26,7 +26,7 @@ export const ANTHROPIC_MODELS: Record<string, ModelConfig> = {
     fullName: 'claude-opus-4-20250514',
     openrouterFullName: 'anthropic/claude-opus-4:thinking',
     provider: ModelProvider.ANTHROPIC,
-    maxOutputTokens: 21333, // Using extended output with beta header; if >21333, then we need streaming
+    maxOutputTokens: 32000, // Official Claude Opus 4 limit - streaming recommended for large outputs
     contextWindow: 200000,
     inputPrice: 15.0,
     outputPrice: 75.0,
@@ -42,7 +42,7 @@ export const ANTHROPIC_MODELS: Record<string, ModelConfig> = {
     fullName: 'claude-opus-4-20250514',
     openrouterFullName: 'anthropic/claude-opus-4',
     provider: ModelProvider.ANTHROPIC,
-    maxOutputTokens: 21333, // Using extended output with beta header; if >21333, then we need streaming
+    maxOutputTokens: 32000, // Official Claude Opus 4 limit - streaming recommended for large outputs
     contextWindow: 200000,
     inputPrice: 15.0,
     outputPrice: 75.0,
@@ -58,7 +58,7 @@ export const ANTHROPIC_MODELS: Record<string, ModelConfig> = {
     fullName: 'claude-sonnet-4-20250514',
     openrouterFullName: 'anthropic/claude-sonnet-4:thinking',
     provider: ModelProvider.ANTHROPIC,
-    maxOutputTokens: 21333, // Using extended output with beta header; if >21333, then we need streaming
+    maxOutputTokens: 64000, // Official Claude Sonnet 4 limit - streaming recommended for large outputs
     contextWindow: 200000,
     inputPrice: 5.0,
     outputPrice: 25.0,
@@ -74,7 +74,7 @@ export const ANTHROPIC_MODELS: Record<string, ModelConfig> = {
     fullName: 'claude-sonnet-4-20250514',
     openrouterFullName: 'anthropic/claude-sonnet-4',
     provider: ModelProvider.ANTHROPIC,
-    maxOutputTokens: 21333, // Using extended output with beta header; if >21333, then we need streaming
+    maxOutputTokens: 64000, // Official Claude Sonnet 4 limit - streaming recommended for large outputs
     contextWindow: 200000,
     inputPrice: 3.0,
     outputPrice: 15.0,
@@ -90,7 +90,7 @@ export const ANTHROPIC_MODELS: Record<string, ModelConfig> = {
     fullName: 'claude-3-7-sonnet-20250219',
     openrouterFullName: 'anthropic/claude-3.7-sonnet:thinking',
     provider: ModelProvider.ANTHROPIC,
-    maxOutputTokens: 21333, // Using extended output with beta header; if >21333, then we need streaming
+    maxOutputTokens: 64000, // Official Claude 3.7 Sonnet limit - streaming recommended for large outputs
     contextWindow: 200000,
     inputPrice: 3.0,
     outputPrice: 15.0,
@@ -106,7 +106,7 @@ export const ANTHROPIC_MODELS: Record<string, ModelConfig> = {
     fullName: 'claude-3-7-sonnet-20250219',
     openrouterFullName: 'anthropic/claude-3.7-sonnet',
     provider: ModelProvider.ANTHROPIC,
-    maxOutputTokens: 21333, // Using extended output with beta header; if >21333, then we need streaming
+    maxOutputTokens: 64000, // Official Claude 3.7 Sonnet limit - streaming recommended for large outputs
     contextWindow: 200000,
     inputPrice: 3.0,
     outputPrice: 15.0,

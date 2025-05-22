@@ -65,8 +65,8 @@ Strong technical and coding performance, cost-effective.
 
 | Model ID | Key Strength / Use Case     | Relative Cost | Relative Speed | Notes            |
 | :------- | :-------------------------- | :------------ | :------------- | :--------------- |
-| `DSV3`   | Good coding & general tasks | $             | Fast           | DeepSeek V3 Chat |
-| `DSR1`   | Advanced reasoning          | $$            | Medium         | DeepSeek R1      |
+| `dsv3`   | Good coding & general tasks | $             | Fast           | DeepSeek V3 Chat |
+| `dsr1`   | Advanced reasoning          | $$            | Medium         | DeepSeek R1      |
 
 ### Moonshot Kimi Models
 
@@ -115,7 +115,7 @@ Consider these factors:
 - **Task Complexity**: Simple corrections might only need a `$`/Fast model (`gemini2f`), while complex paper transformations benefit from `$$$$`/Slow models (`opus`, `o1`).
 - **Budget**: Use cost indicators ($ - $$$$) to guide selection.
 - **Speed**: If quick turnaround is needed, prefer Fast/Very Fast models.
-- **Special Capabilities**: Do you need explicit reasoning (`sonnet37T`, `gemini2fT`, `o1`, `o3-`, `o1-`, `DSR1`), vision (`gpt4o`, `gemini*`), native PDF/audio (`gemini*`), or very large context (`gemini*`, `gpt41`)?
+- **Special Capabilities**: Do you need explicit reasoning (`sonnet37T`, `gemini2fT`, `o1`, `o3-`, `o1-`, `dsr1`), vision (`gpt4o`, `gemini*`), native PDF/audio (`gemini*`), or very large context (`gemini*`, `gpt41`)?
 
 Experimentation is often key to finding the best model for your specific needs and writing style.
 
@@ -140,8 +140,8 @@ The specific models available by default and their identifiers (`sonnet37`, `gpt
   "gemini25p",
   "gemini25f",
   "gemini2fT",
-  "DSV3",
-  "DSR1",
+  "dsv3",
+  "dsr1",
   "grok3",
   "qwenplus",
   "kimit",

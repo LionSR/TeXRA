@@ -10,8 +10,8 @@
   min-width: 0;
   min-height: 0;
   background-color: var(--vscode-editor-background);
-  font-family: var(--vscode-editor-font-family);
-  font-size: var(--vscode-editor-font-size);
+  font-family: var(--font-family);
+  font-size: var(--font-size);
 }
 
 .log-line {
@@ -20,7 +20,7 @@
   word-break: break-all;
   line-height: 1.4;
   margin: 0;
-  padding: 1px 0;
+  padding: calc(var(--spacing-tiny) / 2) 0;
   display: block;
 }
 
@@ -86,19 +86,19 @@
 
 /* Status indicator styling */
 .status-indicator {
-  width: 8px;
-  height: 8px;
+  width: var(--spacing-medium);
+  height: var(--spacing-medium);
   border-radius: 50%;
   display: inline-block;
   margin-left: var(--spacing-small);
   margin-right: var(--spacing-small);
   position: relative;
-  opacity: 0.8;
+  opacity: var(--opacity-subtle);
   transition: all 0.3s ease;
 }
 
 .status-indicator:hover {
-  opacity: 1;
+  opacity: var(--opacity-full);
   transform: scale(1.1);
 }
 
@@ -110,7 +110,7 @@
   transform: translateX(-50%);
   padding: var(--spacing-small) var(--spacing-medium);
   background: var(--vscode-editor-background);
-  border: 1px solid var(--vscode-panel-border);
+  border: var(--border-thin) solid var(--vscode-panel-border);
   border-radius: var(--border-radius-large);
   font-size: var(--font-size-sm);
   white-space: nowrap;
@@ -120,13 +120,13 @@
 }
 
 .status-indicator:hover::after {
-  opacity: 1;
+  opacity: var(--opacity-full);
 }
 
 .status-indicator.ready {
   background-color: var(--vscode-descriptionForeground, #888888);
   box-shadow: none;
-  opacity: 0.5;
+  opacity: var(--opacity-disabled);
 }
 
 .status-indicator.running {
@@ -152,7 +152,7 @@
   background-color: var(--vscode-sideBar-background);
   font-size: var(--vscode-editor-font-size);
   overflow-y: auto;
-  max-height: 300px;
+  max-height: var(--height-large);
 }
 
 .file-item {
@@ -169,7 +169,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   flex: 1;
-  min-width: 100px;
+  min-width: calc(var(--width-button-min) + var(--spacing-xlarge));
   padding-right: var(--spacing-medium);
 }
 
@@ -190,7 +190,7 @@
 }
 
 .file-dir {
-  opacity: 0.7;
+  opacity: var(--opacity-subtle);
   font-size: var(--font-size-sm);
 }
 
@@ -207,7 +207,7 @@
 .file-actions .vscode-button {
   /* Keep only essential positioning */
   margin-right: 0; /* Override the default margin-right from common.css */
-  margin-left: 1px; /* Small gap between buttons */
+  margin-left: var(--spacing-tiny); /* Small gap between buttons */
 }
 
 .round-group {
