@@ -21,8 +21,8 @@
   display: flex;
   align-items: center;
   gap: var(--spacing-tiny);
-  padding: 2px 6px;
-  font-size: calc(var(--font-size) * 0.9);
+  padding: var(--spacing-tiny) var(--spacing-medium);
+  font-size: var(--font-size-sm);
   border-radius: var(--border-radius);
   background: transparent;
   border: 1px solid var(--vscode-button-border);
@@ -37,14 +37,14 @@
 }
 
 .auto-toggle i {
-  font-size: calc(var(--font-size) * 0.8);
+  font-size: var(--font-size-sm);
   color: var(--vscode-foreground);
   margin-left: 1px;
   pointer-events: none;
 }
 
 .auto-toggle .codicon {
-  font-size: calc(var(--font-size) * 0.9);
+  font-size: var(--font-size-sm);
   margin-left: 1px;
   margin-right: 0;
   color: var(--vscode-foreground);
@@ -70,15 +70,15 @@
   box-shadow: var(--vscode-widget-shadow);
   min-width: 180px;
   display: none;
-  font-size: calc(var(--font-size) * 0.8);
-  padding: 4px;
+  font-size: var(--font-size-sm);
+  padding: var(--spacing-small);
   white-space: nowrap;
   font-weight: normal;
 }
 
 /* Dropdown option labels - special styles not covered by vscode-checkbox */
 .dropdown-options .vscode-checkbox {
-  padding: 4px 8px;
+  padding: var(--spacing-small) var(--spacing-medium);
   border-radius: calc(var(--border-radius) - 1px);
   font-weight: normal;
 }
