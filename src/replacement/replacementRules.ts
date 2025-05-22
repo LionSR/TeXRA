@@ -538,6 +538,7 @@ export const LATEX_XML_REPLACEMENTS: ReplacementCategory = {
     // Fix LaTeX tags with incorrect XML-style ending (with '>')
     latexEnvironments.forEach((env) => {
       patterns[`\\end{${env}>}`] = `\\end{${env}}`;
+      patterns[`\\end{${env}>`] = `\\end{${env}}`;
     });
 
     // ===== 2. XML BRACE FIXES =====
