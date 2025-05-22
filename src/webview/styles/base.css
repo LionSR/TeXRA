@@ -49,7 +49,7 @@ body {
 .select-group select {
   flex-grow: 1;
   padding: var(--spacing-small);
-  height: 28px;
+  height: calc(var(--control-height) + var(--spacing-small));
   border: 1px solid var(--input-border);
   border-radius: var(--border-radius);
   background-color: var(--input-background);
@@ -60,23 +60,25 @@ body {
 /* Input field */
 .vscode-input {
   width: 100%;
-  height: 24px;
-  padding: 4px 8px;
-  border: 1px solid var(--vscode-input-border);
+  height: var(--control-height);
+  padding: var(--spacing-small) var(--spacing-medium);
+  border: 1px solid var(--input-border);
   border-radius: var(--border-radius);
-  background-color: var(--vscode-input-background);
-  color: var(--vscode-input-foreground);
-  font-family: var(--vscode-font-family);
+  background-color: var(--input-background);
+  color: var(--input-foreground);
+  font-family: var(--font-family);
   font-size: var(--font-size);
+  box-sizing: border-box;
 }
 
 .vscode-input:focus {
-  outline: 1px solid var(--vscode-focusBorder);
+  outline: 1px solid var(--focus-border);
   outline-offset: -1px;
 }
 
 .vscode-input::placeholder {
-  color: var(--vscode-input-placeholderForeground);
+  color: var(--text-color);
+  opacity: 0.7;
 }
 
 .section-header {
@@ -84,8 +86,8 @@ body {
   font-weight: bold;
   margin-top: var(--spacing-small);
   margin-bottom: var(--spacing-small);
-  padding-bottom: 4px;
-  border-bottom: 1px solid #ccc;
+  padding-bottom: var(--spacing-small);
+  border-bottom: 1px solid var(--vscode-panel-border);
   display: flex;
   align-items: center;
   line-height: 1.5;

@@ -27,8 +27,8 @@
 /* Ensure all button sizes are consistent */
 .latexdiffs-section .vscode-button,
 .file-select-actions .vscode-button {
-  width: 24px;
-  height: 24px;
+  width: var(--control-height);
+  height: var(--control-height);
 }
 
 /* Container for multiple files */
@@ -56,7 +56,7 @@
 }
 
 .multiple-files-list div {
-  padding: 2px 4px;
+  padding: var(--spacing-tiny) var(--spacing-small);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -64,10 +64,10 @@
 
 .output-filename-override {
   border-top: 1px solid var(--dropdown-border);
-  padding-top: 8px;
+  padding-top: var(--spacing-medium);
 }
 
 .remove-button {
-  color: #ff4444;
+  color: var(--vscode-errorForeground);
   cursor: pointer;
 }
