@@ -78,16 +78,36 @@ export class ModelHandlerAnthropic extends ModelHandler {
     if (this.capabilities.supportsReasoning) {
       // This ensures thinking is explicitly enabled for all models that support it
       this.logger.debug('Enabling thinking for model with reasoning support');
+
+      // Calculate thinking budget based on max_tokens constraint
+      // budget_tokens must be less than max_tokens
+      const maxBudget = Math.floor(this.config.maxOutputTokens * 0.5); // Use 50% of max_tokens as safe budget
+      const defaultBudget = useStreaming ? 32768 : 4096; // this logics only applies to sonnet 3.7
+      const thinkingBudget = Math.min(defaultBudget, maxBudget);
+
       options.thinking = {
         type: 'enabled',
-        budget_tokens: useStreaming ? 32768 : 4096,
+        budget_tokens: thinkingBudget,
       };
+
+      this.logger.debug(
+        `Set thinking budget: ${thinkingBudget} tokens (max_tokens: ${this.config.maxOutputTokens}, streaming: ${useStreaming})`,
+      );
+
+      // Remove temperature for Claude 4 models when thinking is enabled as per Anthropic docs
+      if (
+        this.config.fullName.includes('claude-opus-4') ||
+        this.config.fullName.includes('claude-sonnet-4') ||
+        this.config.fullName.includes('claude-3-7-sonnet')
+      ) {
+        delete options.temperature;
+      }
     }
 
     // Add beta features for Claude 3.7 Sonnet to increase max output to 128k tokens and enable thinking
     if (this.config.fullName === 'claude-3-7-sonnet-20250219') {
       // useStreaming = true; should consider to be true by default
-      delete options.temperature;
+      // temperature already deleted above for reasoning models
 
       options.betas = ['output-128k-2025-02-19'];
       // Update max tokens to use the higher limit when streaming
@@ -760,6 +780,14 @@ export class ModelHandlerAnthropic extends ModelHandler {
     this.logger.debug(
       `Checking if should continue - stop reason: "${stopReason}"`,
     );
+
+    // Handle Claude 4 refusal stop reason - never continue when model refuses
+    if (stopReason === 'refusal') {
+      this.logger.warn(
+        'Model refused to generate content - stopping generation',
+      );
+      return false;
+    }
 
     // We should continue if:
     // 1. We hit the max tokens limit (stopReason === 'max_tokens')
