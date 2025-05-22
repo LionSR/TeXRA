@@ -69,9 +69,15 @@ function createHistoryItemElement(item) {
   header.innerHTML = `
     <div class="history-timestamp">${formattedDate}</div>
       <div class="history-actions button-group">
-        <button class="vscode-button delete-btn" data-id="${item.id}" title="Delete this history item">Delete</button>
-        <button class="vscode-button restore-btn" data-id="${item.id}" title="Load configuration to main view">Restore</button>
-        <button class="vscode-button rerun-btn" data-id="${item.id}" title="Execute this configuration">Rerun</button>
+        <button class="vscode-button delete-btn" data-id="${item.id}" title="Delete this history item">
+          <i class="codicon codicon-trash"></i>
+        </button>
+        <button class="vscode-button restore-btn" data-id="${item.id}" title="Load configuration to main view">
+          <i class="codicon codicon-reply"></i>
+        </button>
+        <button class="vscode-button rerun-btn" data-id="${item.id}" title="Execute this configuration">
+          <i class="codicon codicon-debug-rerun"></i>
+        </button>
       </div>
   `;
 
