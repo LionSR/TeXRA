@@ -214,9 +214,6 @@ async function executeAgentWithLogging<T extends AgentWithConfig>(
       logger.info(`Input file: ${config.inputFile}`, taskDetailsGroupId);
 
       try {
-        // Initializes user variables
-        await agent.init();
-
         logger.debug(
           `Creating stream with ID: ${fullStreamId}`,
           taskDetailsGroupId,
