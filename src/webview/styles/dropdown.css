@@ -21,7 +21,7 @@
   display: flex;
   align-items: center;
   gap: var(--spacing-tiny);
-  padding: 2px 6px;
+  padding: var(--spacing-tiny) calc(var(--spacing-small) + var(--spacing-tiny));
   font-size: calc(var(--font-size) * 0.9);
   border-radius: var(--border-radius);
   background: transparent;
@@ -71,14 +71,14 @@
   min-width: 180px;
   display: none;
   font-size: calc(var(--font-size) * 0.8);
-  padding: 4px;
+  padding: var(--spacing-small);
   white-space: nowrap;
   font-weight: normal;
 }
 
 /* Dropdown option labels - special styles not covered by vscode-checkbox */
 .dropdown-options .vscode-checkbox {
-  padding: 4px 8px;
+  padding: var(--spacing-small) var(--spacing-medium);
   border-radius: calc(var(--border-radius) - 1px);
   font-weight: normal;
 }
