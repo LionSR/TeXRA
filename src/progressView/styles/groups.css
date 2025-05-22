@@ -28,8 +28,8 @@
 }
 
 .log-group-content {
-  margin-left: 16px;
-  padding-left: 8px;
+  margin-left: 12px;
+  padding-left: 4px;
   border-left: 1px dashed var(--vscode-editorGroupHeader-tabsBorder);
 }
 
