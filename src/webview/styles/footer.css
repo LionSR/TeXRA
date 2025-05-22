@@ -27,7 +27,5 @@
 
 .model-selection-footer .codicon {
   margin-right: var(--spacing-small);
-  font-size: var(--font-size);
-  color: var(--icon-color);
   opacity: 0.8;
 }

@@ -12,7 +12,7 @@
   display: flex;
   align-items: center;
   background-color: var(--vscode-editor-background);
-  border-left: 2px solid var(--vscode-panel-border);
+  border-left: var(--border-medium) solid var(--vscode-panel-border);
 }
 
 .log-group-header.running {
@@ -30,7 +30,8 @@
 .log-group-content {
   margin-left: var(--spacing-large);
   padding-left: var(--spacing-small);
-  border-left: 1px dashed var(--vscode-editorGroupHeader-tabsBorder);
+  border-left: var(--border-thin) dashed
+    var(--vscode-editorGroupHeader-tabsBorder);
 }
 
 .group-toggle {
@@ -64,14 +65,14 @@
 
 /* Make sure log lines in groups are associated */
 .log-line[data-group-id] {
-  border-left: 2px solid transparent;
+  border-left: var(--border-medium) solid transparent;
 }
 
 /* Log group hierarchy styles */
 
 /* Child group headers have a different style to show hierarchy */
 .log-group-content .log-group-header {
-  border-left-width: 1px; /* Thinner border for child groups */
+  border-left-width: var(--border-thin); /* Thinner border for child groups */
   margin-left: var(--spacing-medium); /* Small indent for child group headers */
 }
 
@@ -96,10 +97,10 @@
 .log-group-content .log-group-header::before {
   content: '';
   position: absolute;
-  left: -8px;
+  left: calc(0px - var(--spacing-medium));
   top: 50%;
-  width: 8px;
-  height: 1px;
+  width: var(--spacing-medium);
+  height: var(--border-thin);
   background-color: var(--vscode-panel-border);
   display: none; /* Start hidden, only show on advanced view option */
 }
