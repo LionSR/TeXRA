@@ -78,10 +78,21 @@ export class ModelHandlerAnthropic extends ModelHandler {
     if (this.capabilities.supportsReasoning) {
       // This ensures thinking is explicitly enabled for all models that support it
       this.logger.debug('Enabling thinking for model with reasoning support');
+
+      // Calculate thinking budget based on max_tokens constraint
+      // budget_tokens must be less than max_tokens
+      const maxBudget = Math.floor(this.config.maxOutputTokens * 0.5); // Use 50% of max_tokens as safe budget
+      const defaultBudget = useStreaming ? 32768 : 4096; // this logics only applies to sonnet 3.7
+      const thinkingBudget = Math.min(defaultBudget, maxBudget);
+
       options.thinking = {
         type: 'enabled',
-        budget_tokens: useStreaming ? 32768 : 4096,
+        budget_tokens: thinkingBudget,
       };
+
+      this.logger.debug(
+        `Set thinking budget: ${thinkingBudget} tokens (max_tokens: ${this.config.maxOutputTokens}, streaming: ${useStreaming})`,
+      );
 
       // Remove temperature for Claude 4 models when thinking is enabled as per Anthropic docs
       if (
