@@ -74,7 +74,7 @@
   display: flex;
   align-items: center;
   height: var(--height-control);
-  opacity: 0.7;
+  opacity: var(--opacity-subtle);
 }
 
 .toggle-icon {
@@ -84,7 +84,7 @@
   position: relative;
   padding: 0 var(--spacing-tiny);
   color: var(--text-color);
-  opacity: 0.8;
+  opacity: var(--opacity-subtle);
   display: flex;
   align-items: center;
   height: var(--height-control);
@@ -97,7 +97,7 @@
 .file-select:has(.multiple-files-container[style*='block']) .optional-label,
 .file-select:has(.multiple-files-container[style*='block']) .toggle-icon {
   color: var(--vscode-foreground);
-  opacity: 1;
+  opacity: var(--opacity-full);
 }
 
 /* Add this specific selector for Multiple Output Files section */

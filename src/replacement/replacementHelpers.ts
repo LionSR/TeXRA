@@ -211,6 +211,7 @@ export function generateXmlLatexConversions(environments: string[]): {
 
     // LaTeX with incorrect XML ending
     patterns[`\\end{${env}>}`] = `\\end{${env}}`;
+    patterns[`\\end{${env}>`] = `\\end{${env}}`;
   });
 
   return patterns;
@@ -231,7 +232,9 @@ export function generateLatexToXmlConversions(tags: string[]): {
 
     // LaTeX with '>' at the end to XML
     patterns[`\\begin{${tag}>}`] = `<${tag}>`;
+    patterns[`\\begin{${tag}>`] = `<${tag}>`;
     patterns[`\\end{${tag}>}`] = `</${tag}>`;
+    patterns[`\\end{${tag}>`] = `</${tag}>`;
   });
 
   return patterns;
