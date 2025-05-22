@@ -611,7 +611,7 @@ export abstract class BaseReflectionAgent {
         `Processed ${inputInfo}. The round ${currRound} output was saved as ${outputFile}`,
         roundGroupId,
       );
-      this.logger.info(`Completed round ${currRound}`, roundGroupId);
+      this.logger.debug(`Completed round ${currRound}`, roundGroupId);
     } catch (error) {
       throw error;
     }
@@ -719,7 +719,7 @@ export abstract class BaseReflectionAgent {
     const currRound = 0;
     const stateGlobal = new AgentStateGlobal();
 
-    this.logger.info(`Processing round ${currRound}`);
+    this.logger.debug(`Processing round ${currRound}`);
 
     // Create a dedicated group for Round 0, as a child of the main run group
     const round0GroupId = await this.logger.startGroup(
@@ -911,7 +911,7 @@ export abstract class BaseReflectionAgent {
     toolState: ToolState,
     currRound: number = 1,
   ): Promise<[AgentStateRound, AgentStateGlobal, any[], boolean]> {
-    this.logger.info(`Processing round ${currRound}`);
+    this.logger.debug(`Processing round ${currRound}`);
 
     // Create a dedicated group for Round 1 reflection, as a child of the main run group
     const round1GroupId = await this.logger.startGroup(
@@ -1059,7 +1059,7 @@ export abstract class BaseReflectionAgent {
 
       const [stateRound, stateGlobal, messages, endTurn, toolState] =
         await this.process();
-      this.logger.info(`Round 0 completed\n`, this.runGroupId);
+      this.logger.debug(`Round 0 completed\n`, this.runGroupId);
 
       // Check for interruption before reflection
       if (
@@ -1069,7 +1069,7 @@ export abstract class BaseReflectionAgent {
       ) {
         const toolStateReflection = new ToolState();
         await this.reflect(stateGlobal, messages, toolStateReflection);
-        this.logger.info(`Round 1 completed\n`, this.runGroupId);
+        this.logger.debug(`Round 1 completed\n`, this.runGroupId);
       }
 
       // End the run group with success status
