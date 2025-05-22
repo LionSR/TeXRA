@@ -82,7 +82,7 @@ body {
 }
 
 .section-header {
-  font-size: calc(var(--font-size) * 1.1);
+  font-size: var(--font-size-lg);
   font-weight: bold;
   margin-top: var(--spacing-small);
   margin-bottom: var(--spacing-small);

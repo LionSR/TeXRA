@@ -25,9 +25,8 @@ h2 {
 
 .search-input {
   flex-grow: 1;
-  padding: calc(var(--spacing-small) + var(--spacing-tiny))
-    var(--spacing-medium);
-  font-size: 14px;
+  padding: var(--spacing-medium) var(--spacing-medium);
+  font-size: var(--font-size);
 }
 
 .search-controls {
@@ -40,11 +39,11 @@ h2 {
   min-width: 30px;
   height: 30px;
   padding: 0;
-  font-size: 14px;
+  font-size: var(--font-size);
 }
 
 .match-count {
-  font-size: calc(var(--font-size) * 0.85);
+  font-size: var(--font-size-sm);
   color: var(--vscode-descriptionForeground);
   min-width: 60px;
   text-align: center;
@@ -92,7 +91,7 @@ mark.current-match {
 
 .history-timestamp {
   color: var(--vscode-descriptionForeground);
-  font-size: 0.8em;
+  font-size: var(--font-size-sm);
   margin-bottom: var(--spacing-small);
 }
 
@@ -123,7 +122,7 @@ mark.current-match {
 
 .button-clear {
   margin-bottom: var(--spacing-xlarge);
-  padding: calc(var(--spacing-small) + var(--spacing-tiny)) var(--spacing-large);
+  padding: var(--spacing-medium) var(--spacing-large);
 }
 
 /* Empty state */

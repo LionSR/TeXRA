@@ -69,7 +69,7 @@
 
 .log-header {
   padding: var(--spacing-tiny) var(--spacing-small);
-  font-size: calc(var(--font-size) * 0.9);
+  font-size: var(--font-size-sm);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -112,7 +112,7 @@
   background: var(--vscode-editor-background);
   border: 1px solid var(--vscode-panel-border);
   border-radius: var(--border-radius-large);
-  font-size: calc(var(--font-size) * 0.8);
+  font-size: var(--font-size-sm);
   white-space: nowrap;
   opacity: 0;
   pointer-events: none;
@@ -185,7 +185,7 @@
 
 .file-dir {
   opacity: 0.7;
-  font-size: 0.9em;
+  font-size: var(--font-size-sm);
 }
 
 .file-basename {
@@ -215,7 +215,7 @@
 
 .round-header {
   font-weight: bold;
-  margin-top: calc(var(--spacing-small) + var(--spacing-tiny));
+  margin-top: var(--spacing-medium);
   margin-bottom: var(--spacing-small);
   padding: var(--spacing-tiny) var(--spacing-small);
   background-color: var(--vscode-sideBarSectionHeader-background);
@@ -225,13 +225,13 @@
 .added {
   color: var(--vscode-charts-green, green);
   margin-left: var(--spacing-small);
-  font-size: 0.9em;
+  font-size: var(--font-size-sm);
 }
 
 .removed {
   color: var(--vscode-charts-red, red);
   margin-left: var(--spacing-small);
-  font-size: 0.9em;
+  font-size: var(--font-size-sm);
 }
 
 /* Responsive adjustments */

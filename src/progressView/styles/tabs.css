@@ -9,7 +9,7 @@
   width: 120px;
   min-width: 80px;
   max-width: 400px;
-  font-size: calc(var(--font-size) * 0.85);
+  font-size: var(--font-size-sm);
   border-left: 1px solid var(--vscode-panel-border);
   height: 100%;
   overflow: hidden;
@@ -39,7 +39,7 @@
   background: none;
   color: var(--vscode-foreground);
   font-family: var(--vscode-font-family);
-  font-size: calc(var(--font-size) * 0.85);
+  font-size: var(--font-size-sm);
 }
 
 .clear-button:hover {
@@ -93,7 +93,7 @@
   opacity: 0.7;
   cursor: pointer;
   margin-right: var(--spacing-small);
-  font-size: calc(var(--font-size) * 0.85);
+  font-size: var(--font-size-sm);
   width: calc(var(--control-height) - var(--spacing-small));
   height: calc(var(--control-height) - var(--spacing-small));
   align-items: center;
@@ -111,7 +111,7 @@
 }
 
 .tab-delete .codicon {
-  font-size: calc(var(--font-size) * 0.9);
+  font-size: var(--font-size-sm);
   color: var(--vscode-foreground);
   opacity: 0.7;
   margin-right: 0;
