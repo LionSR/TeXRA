@@ -90,7 +90,7 @@
   border: none;
   background: none;
   color: var(--vscode-foreground);
-  opacity: 0.7;
+  opacity: var(--opacity-subtle);
   cursor: pointer;
   margin-right: var(--spacing-small);
   font-size: var(--font-size-sm);
@@ -106,18 +106,18 @@
 }
 
 .tab-delete:hover {
-  opacity: 1;
+  opacity: var(--opacity-full);
   color: var(--vscode-errorForeground);
 }
 
 .tab-delete .codicon {
   font-size: var(--font-size-sm);
   color: var(--vscode-foreground);
-  opacity: 0.7;
+  opacity: var(--opacity-subtle);
   margin-right: 0;
 }
 
 .tab-delete:hover .codicon {
-  opacity: 1;
+  opacity: var(--opacity-full);
   color: var(--vscode-errorForeground);
 }

@@ -85,5 +85,5 @@
 .dropdown-options .codicon {
   width: var(--width-icon);
   text-align: center;
-  opacity: 0.8;
+  opacity: var(--opacity-subtle);
 }

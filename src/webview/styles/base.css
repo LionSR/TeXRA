@@ -41,7 +41,7 @@ body {
 .select-group .codicon {
   margin-right: var(--spacing-small);
   color: var(--text-color);
-  opacity: 0.8;
+  opacity: var(--opacity-subtle);
   vertical-align: text-bottom;
 }
 
@@ -74,6 +74,6 @@ body {
 }
 
 .codicon.clickable:hover {
-  opacity: 1;
+  opacity: var(--opacity-full);
   color: var(--button-hover-background);
 }
