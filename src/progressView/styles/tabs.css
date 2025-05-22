@@ -6,11 +6,11 @@
 .tabs {
   display: flex;
   flex-direction: column;
-  width: 120px;
-  min-width: 80px;
-  max-width: 400px;
+  width: var(--width-sidebar);
+  min-width: var(--width-button-min);
+  max-width: var(--height-xlarge);
   font-size: var(--font-size-sm);
-  border-left: 1px solid var(--vscode-panel-border);
+  border-left: var(--border-thin) solid var(--vscode-panel-border);
   height: 100%;
   overflow: hidden;
   background-color: var(--vscode-sideBar-background);
@@ -25,7 +25,7 @@
 .clear-all-container {
   flex-shrink: 0;
   background-color: var(--vscode-sideBar-background);
-  border-top: 1px solid var(--vscode-panel-border);
+  border-top: var(--border-thin) solid var(--vscode-panel-border);
   padding: var(--spacing-small);
 }
 
@@ -38,7 +38,7 @@
   border: none;
   background: none;
   color: var(--vscode-foreground);
-  font-family: var(--vscode-font-family);
+  font-family: var(--font-family);
   font-size: var(--font-size-sm);
 }
 
@@ -76,7 +76,7 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  font-family: var(--vscode-font-family);
+  font-family: var(--font-family);
   min-width: 0;
 }
 
@@ -94,8 +94,8 @@
   cursor: pointer;
   margin-right: var(--spacing-small);
   font-size: var(--font-size-sm);
-  width: calc(var(--control-height) - var(--spacing-small));
-  height: calc(var(--control-height) - var(--spacing-small));
+  width: calc(var(--height-control) - var(--spacing-small));
+  height: calc(var(--height-control) - var(--spacing-small));
   align-items: center;
   justify-content: center;
 }

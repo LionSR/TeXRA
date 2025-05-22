@@ -4,7 +4,7 @@
 
 /* Base styles */
 body {
-  font-family: var(--vscode-font-family);
+  font-family: var(--font-family);
   color: var(--vscode-editor-foreground);
   background-color: var(--vscode-editor-background);
   padding: var(--spacing-xlarge);
@@ -36,8 +36,8 @@ h2 {
 }
 
 .search-nav-btn {
-  min-width: 30px;
-  height: 30px;
+  min-width: var(--height-button);
+  height: var(--height-button);
   padding: 0;
   font-size: var(--font-size);
 }
@@ -45,7 +45,7 @@ h2 {
 .match-count {
   font-size: var(--font-size-sm);
   color: var(--vscode-descriptionForeground);
-  min-width: 60px;
+  min-width: calc(var(--height-button) * 2);
   text-align: center;
 }
 
@@ -62,7 +62,7 @@ mark {
 
 mark.current-match {
   background-color: var(--vscode-editor-findMatchBackground, #ff8b0088);
-  outline: 1px solid var(--vscode-focusBorder);
+  outline: var(--border-thin) solid var(--vscode-focusBorder);
 }
 
 /* History container and items */
@@ -73,7 +73,7 @@ mark.current-match {
 }
 
 .history-item {
-  border: 1px solid var(--vscode-panelSection-border);
+  border: var(--border-thin) solid var(--vscode-panelSection-border);
   border-radius: var(--border-radius-large);
   padding: var(--spacing-medium);
   margin-bottom: var(--spacing-medium);
@@ -128,19 +128,19 @@ mark.current-match {
 /* Empty state */
 .empty-state {
   text-align: center;
-  margin-top: 40px;
+  margin-top: calc(var(--spacing-xlarge) + var(--spacing-xlarge));
   color: var(--vscode-descriptionForeground);
 }
 
 /* Collapsible content */
 .collapsible {
-  max-height: 200px;
+  max-height: var(--height-medium);
   overflow: hidden;
   transition: max-height 0.3s ease;
 }
 
 .collapsible.expanded {
-  max-height: 1000px;
+  max-height: var(--height-max);
 }
 
 .toggle-button {
@@ -155,7 +155,7 @@ mark.current-match {
 
 /* Automatically expand sections that contain search matches */
 .collapsible:has(mark) {
-  max-height: 1000px;
+  max-height: var(--height-max);
 }
 
 /* Configuration section */
@@ -179,5 +179,7 @@ mark.current-match {
 .config-key {
   font-weight: 500;
   color: var(--vscode-editorInfo-foreground);
-  min-width: 150px;
+  min-width: calc(
+    var(--width-button-min) + var(--spacing-xlarge) + var(--spacing-xlarge)
+  );
 }
