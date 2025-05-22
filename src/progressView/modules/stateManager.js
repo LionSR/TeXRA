@@ -1,4 +1,7 @@
-import { vscode } from './vscodeApi.js';
+import {
+  getWebviewState,
+  updateWebviewState,
+} from '../../common/webviewState.js';
 
 // State variables
 let currentStream = '';
@@ -10,7 +13,7 @@ let groupToggleStates = new Map(); // groupId -> collapsed state
  * Initializes state from previously saved state
  */
 export function initializeState() {
-  const previousState = vscode.getState() || {};
+  const previousState = getWebviewState();
   if (previousState.groupToggleStates) {
     try {
       groupToggleStates = new Map(JSON.parse(previousState.groupToggleStates));
@@ -29,8 +32,7 @@ export function saveState() {
     const serializedGroupStates = JSON.stringify([
       ...groupToggleStates.entries(),
     ]);
-    vscode.setState({
-      ...vscode.getState(),
+    updateWebviewState({
       groupToggleStates: serializedGroupStates,
     });
   } catch (e) {
