@@ -1,4 +1,4 @@
-const vscode = acquireVsCodeApi();
+import { vscode } from './vscodeApi.js';
 
 export function getWebviewState() {
   try {
