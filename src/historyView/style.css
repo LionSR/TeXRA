@@ -122,35 +122,8 @@ mark.current-match {
 }
 
 .button-clear {
-  background-color: var(--vscode-errorForeground);
   margin-bottom: var(--spacing-xlarge);
   padding: calc(var(--spacing-small) + var(--spacing-tiny)) var(--spacing-large);
-}
-
-.button-clear:hover {
-  background-color: var(--vscode-testing-iconErrored);
-}
-
-.history-actions {
-  gap: var(--spacing-medium);
-}
-
-.restore-btn {
-  background-color: var(--vscode-button-secondaryBackground);
-  color: var(--vscode-button-secondaryForeground);
-}
-
-.restore-btn:hover {
-  background-color: var(--vscode-button-secondaryHoverBackground);
-}
-
-.delete-btn {
-  background-color: var(--vscode-errorForeground);
-  color: var(--vscode-button-foreground);
-}
-
-.delete-btn:hover {
-  background-color: var(--vscode-testing-iconErrored);
 }
 
 /* Empty state */
