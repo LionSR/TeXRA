@@ -262,7 +262,7 @@ async function executeAgentWithLogging<T extends AgentWithConfig>(
           );
           await agent.run();
           // Mark the task as completed successfully
-          logger.info(`Task completed successfully`, mainTaskGroupId);
+          logger.debug(`Task completed successfully`, mainTaskGroupId);
           logger.endGroup(mainTaskGroupId, 'stopped');
           // Update status to stopped on successful completion
           progressViewProvider.updateStreamStatus(fullStreamId, 'stopped');
