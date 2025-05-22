@@ -65,6 +65,9 @@ async function handleCompare(
     const title = `Compare: ${editedFileName} ↔ ${baseFileName}`;
     // const title = `Compare: ${baseFileName} ↔ ${editedFileName}`;
 
+    // Close the terminal panel before opening the diff view
+    await vscode.commands.executeCommand('workbench.action.closePanel');
+
     // Open files in diff editor
     await vscode.commands.executeCommand(
       'vscode.diff',
