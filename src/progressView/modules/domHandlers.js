@@ -209,11 +209,9 @@ export function updateFileList(filesByRound) {
         });
       }
 
-      const openBtn = document.createElement('button');
-      openBtn.className = 'vscode-button tiny';
-      openBtn.title = 'Open file';
-      openBtn.innerHTML = '<i class="codicon codicon-go-to-file"></i>';
-      openBtn.addEventListener('click', () => {
+      // Make the filename clickable to open the file directly
+      nameSpan.classList.add('clickable');
+      nameSpan.addEventListener('click', () => {
         vscode.postMessage({ command: COMMANDS.OPEN_FILE, file: info.path });
       });
 
@@ -267,7 +265,6 @@ export function updateFileList(filesByRound) {
       });
 
       // Add all buttons to the actions container
-      actions.appendChild(openBtn);
       actions.appendChild(compareBtn);
       actions.appendChild(acceptBtn);
       actions.appendChild(mergeBtn);
