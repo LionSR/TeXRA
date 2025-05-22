@@ -9,6 +9,7 @@ import * as logger from '../logger/logUtils';
 
 // Local imports - utilities
 import { getConfig } from '../utils/configUtils';
+import { generateNonce } from '../utils/nonceUtils';
 
 const CHANNEL = 'Webview';
 logger.initialize(CHANNEL);
@@ -41,7 +42,7 @@ export class WebviewContentProvider {
 
       const htmlContent = fs.readFileSync(htmlPath.fsPath, 'utf-8');
 
-      const nonce = this.getNonce();
+      const nonce = generateNonce();
       const styleUri = webview.asWebviewUri(cssPath);
       const commonStyleUri = webview.asWebviewUri(commonCssPath);
       const scriptUri = webview.asWebviewUri(mainScriptPath);
@@ -100,15 +101,5 @@ export class WebviewContentProvider {
       );
       return '<html><body>Error loading content</body></html>';
     }
-  }
-
-  private getNonce() {
-    let text = '';
-    const possible =
-      'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-    for (let i = 0; i < 32; i++) {
-      text += possible.charAt(Math.floor(Math.random() * possible.length));
-    }
-    return text;
   }
 }
