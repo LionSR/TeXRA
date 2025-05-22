@@ -25,16 +25,8 @@ h2 {
 
 .search-input {
   flex-grow: 1;
-  background-color: var(--vscode-input-background);
-  color: var(--vscode-input-foreground);
-  border: 1px solid var(--vscode-input-border, transparent);
-  border-radius: 2px;
   padding: 6px 8px;
   font-size: 14px;
-}
-
-.search-input:focus {
-  outline: 1px solid var(--vscode-focusBorder);
 }
 
 .search-controls {
@@ -126,24 +118,6 @@ mark.current-match {
   color: var(--vscode-editor-foreground);
   word-break: break-word;
   padding: 4px 0;
-}
-
-/* Buttons */
-.button {
-  background-color: var(--vscode-button-background);
-  color: var(--vscode-button-foreground);
-  border: none;
-  padding: 4px 8px;
-  border-radius: 2px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 60px;
-}
-
-.button:hover {
-  background-color: var(--vscode-button-hoverBackground);
 }
 
 .button-clear {
