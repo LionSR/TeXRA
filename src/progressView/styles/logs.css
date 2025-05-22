@@ -173,14 +173,20 @@
   padding-right: var(--spacing-medium);
 }
 
-.file-name.clickable {
+.file-path.clickable {
   cursor: pointer;
   color: var(--vscode-textLink-foreground);
 }
 
-.file-name.clickable:hover {
+.file-path.clickable:hover {
   color: var(--vscode-textLink-activeForeground);
   text-decoration: underline;
+}
+
+.file-stats {
+  margin-left: var(--spacing-medium);
+  white-space: nowrap;
+  text-decoration: none;
 }
 
 .file-dir {
@@ -190,11 +196,6 @@
 
 .file-basename {
   font-weight: 500;
-}
-
-.file-stats {
-  margin-left: var(--spacing-medium);
-  white-space: nowrap;
 }
 
 .file-actions {
