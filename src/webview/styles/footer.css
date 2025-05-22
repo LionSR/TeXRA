@@ -6,8 +6,8 @@
 /* Model Selection Footer styles */
 .model-selection-footer {
   position: absolute;
-  bottom: calc(var(--spacing-medium) * 2);
-  left: calc(var(--spacing-medium) * 2);
+  bottom: var(--spacing-xlarge);
+  left: var(--spacing-xlarge);
   display: flex;
   gap: var(--spacing-small);
   z-index: 10;

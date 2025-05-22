@@ -10,8 +10,7 @@
   --special-color: var(--vscode-panel-border);
   --label: '';
   border-radius: calc(var(--border-radius) * 2);
-  padding: var(--spacing-medium)
-    calc(var(--spacing-medium) + var(--spacing-small));
+  padding: var(--spacing-medium) var(--spacing-large);
   margin: var(--spacing-small) 0;
   overflow: auto;
   max-height: 500px;
@@ -28,7 +27,7 @@
   color: white;
   padding: var(--spacing-tiny) var(--spacing-small);
   border-radius: 0 0 var(--border-radius) var(--border-radius);
-  font-size: calc(var(--font-size) * 0.85);
+  font-size: var(--font-size-sm);
   font-weight: 500;
 }
 
@@ -64,13 +63,13 @@
 }
 
 .scratchpad-content h1 {
-  font-size: calc(var(--font-size) * 1.3);
+  font-size: var(--font-size-lg);
   border-bottom: 1px solid var(--vscode-panel-border, #555);
   padding-bottom: 4px;
 }
 
 .scratchpad-content h2 {
-  font-size: calc(var(--font-size) * 1.2);
+  font-size: var(--font-size-lg);
   padding-left: var(--spacing-medium);
   margin-top: var(--spacing-large);
   margin-bottom: 5px;
@@ -82,11 +81,11 @@
 }
 
 .scratchpad-content h3 {
-  font-size: calc(var(--font-size) * 1.1);
+  font-size: var(--font-size-lg);
 }
 
 .scratchpad-content h4 {
-  font-size: calc(var(--font-size) * 1.05);
+  font-size: var(--font-size-lg);
 }
 
 /* Add styles to control paragraph spacing */
@@ -120,12 +119,11 @@
   padding: var(--spacing-tiny) var(--spacing-small);
   border-radius: 3px;
   font-family: var(--vscode-editor-font-family);
-  font-size: calc(var(--font-size) * 0.9);
+  font-size: var(--font-size-sm);
 }
 
 .scratchpad-content pre {
-  padding: var(--spacing-medium)
-    calc(var(--spacing-medium) + var(--spacing-tiny));
+  padding: var(--spacing-medium) var(--spacing-large);
   margin: 0.5em 0;
   border-radius: 3px;
   background-color: var(--vscode-textPreformat-background, #0a0a0a);
@@ -158,7 +156,7 @@
 .scratchpad-content blockquote {
   border-left: 3px solid var(--vscode-activityBarBadge-background, #007acc);
   margin: var(--spacing-medium) 0;
-  padding-left: calc(var(--spacing-medium) * 2);
+  padding-left: var(--spacing-xlarge);
   color: var(--vscode-descriptionForeground, #cccccc);
   font-style: italic;
 }
@@ -166,14 +164,13 @@
 .scratchpad-content table {
   border-collapse: collapse;
   width: 100%;
-  margin: calc(var(--spacing-medium) * 2) 0;
+  margin: var(--spacing-xlarge) 0;
 }
 
 .scratchpad-content table th,
 .scratchpad-content table td {
   border: 1px solid var(--vscode-panel-border, #555);
-  padding: calc(var(--spacing-small) + var(--spacing-tiny))
-    calc(var(--spacing-medium) + var(--spacing-tiny));
+  padding: var(--spacing-small) var(--spacing-large);
 }
 
 .scratchpad-content table th {
