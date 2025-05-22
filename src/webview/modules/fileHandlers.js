@@ -1,9 +1,6 @@
 import { vscode } from './vscodeApi.js';
 import { saveState } from './stateManager.js';
-import {
-  getWebviewState,
-  updateWebviewState,
-} from '../../common/webviewState.js';
+import { getWebviewState, updateWebviewState } from './webviewState.js';
 import { MULTIPLE_SELECTIONS } from './constants.js';
 import {
   addEventListenerSafely,

@@ -1,9 +1,4 @@
-import { vscode } from './vscodeApi.js';
-import {
-  getWebviewState,
-  updateWebviewState,
-  setWebviewState,
-} from '../../common/webviewState.js';
+import { getWebviewState, setWebviewState } from './webviewState.js';
 
 import {
   MULTIPLE_SELECTIONS,
