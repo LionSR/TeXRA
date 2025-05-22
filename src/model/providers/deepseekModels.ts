@@ -6,6 +6,14 @@ import {
   ReasoningEffort,
 } from '../ModelConfig';
 
+// Common capabilities for DeepSeek models
+const DEEPSEEK_DEFAULT_CAPABILITIES: ModelCapabilities = {
+  ...DEFAULT_MODEL_CAPABILITIES,
+  supportsAutoPromptCaching: true,
+  cacheDiscountFactor: 0.5,
+  supportsVision: false,
+};
+
 export const DEEPSEEK_MODELS: Record<string, ModelConfig> = {
   DSV3: {
     name: 'DSV3',
@@ -17,11 +25,8 @@ export const DEEPSEEK_MODELS: Record<string, ModelConfig> = {
     inputPrice: 0.14,
     outputPrice: 0.28,
     capabilities: {
-      ...DEFAULT_MODEL_CAPABILITIES,
+      ...DEEPSEEK_DEFAULT_CAPABILITIES,
       supportsAssistantPrefill: true,
-      supportsAutoPromptCaching: true,
-      cacheDiscountFactor: 0.5,
-      supportsVision: false,
     } satisfies ModelCapabilities,
     openRouterOnly: false,
   },
@@ -35,11 +40,8 @@ export const DEEPSEEK_MODELS: Record<string, ModelConfig> = {
     inputPrice: 4,
     outputPrice: 4,
     capabilities: {
-      ...DEFAULT_MODEL_CAPABILITIES,
-      supportsAutoPromptCaching: true,
-      cacheDiscountFactor: 0.5,
+      ...DEEPSEEK_DEFAULT_CAPABILITIES,
       supportsReasoning: true,
-      supportsVision: false,
       supportsReasoningEffort: false,
     } satisfies ModelCapabilities,
     openRouterOnly: false,
@@ -54,11 +56,8 @@ export const DEEPSEEK_MODELS: Record<string, ModelConfig> = {
     inputPrice: 0.27,
     outputPrice: 1.1,
     capabilities: {
-      ...DEFAULT_MODEL_CAPABILITIES,
+      ...DEEPSEEK_DEFAULT_CAPABILITIES,
       supportsAssistantPrefill: true,
-      supportsAutoPromptCaching: true,
-      cacheDiscountFactor: 0.5,
-      supportsVision: false,
     } satisfies ModelCapabilities,
     openRouterOnly: false,
   },
@@ -72,11 +71,8 @@ export const DEEPSEEK_MODELS: Record<string, ModelConfig> = {
     inputPrice: 0.55,
     outputPrice: 2.19,
     capabilities: {
-      ...DEFAULT_MODEL_CAPABILITIES,
-      supportsAutoPromptCaching: true,
-      cacheDiscountFactor: 0.5,
+      ...DEEPSEEK_DEFAULT_CAPABILITIES,
       supportsReasoning: true,
-      supportsVision: false,
       supportsReasoningEffort: false,
     } satisfies ModelCapabilities,
     openRouterOnly: false,
