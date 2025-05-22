@@ -1,5 +1,9 @@
 import { vscode } from './vscodeApi.js';
 import { saveState } from './stateManager.js';
+import {
+  getWebviewState,
+  updateWebviewState,
+} from '../../common/webviewState.js';
 import { MULTIPLE_SELECTIONS } from './constants.js';
 import {
   addEventListenerSafely,
@@ -178,7 +182,7 @@ export function handleCheckboxChange(event) {
  */
 export function initializeOutputFiles() {
   // Get the current state
-  const state = vscode.getState();
+  const state = getWebviewState();
 
   // Get references to the DOM elements
   const inputFileDiv = safeGetElementById('inputFile');
@@ -221,7 +225,7 @@ export function initializeOutputFiles() {
   }
 
   // Add opened files to the output files list
-  const openedFiles = vscode.getState()?.openedFiles ?? [];
+  const openedFiles = getWebviewState()?.openedFiles ?? [];
   openedFiles.forEach((file) => {
     addFileToList('outputFiles', file);
   });
@@ -234,7 +238,7 @@ export function initializeOutputFiles() {
 
   if (outputNameOverrideInput && outputNameOverrideToggle) {
     // Get the current state from the stored state
-    const state = vscode.getState();
+    const state = getWebviewState();
     const isOutputNameOverrideVisible =
       state && state.outputNameOverrideVisible;
 
@@ -270,9 +274,7 @@ export function toggleOutputNameOverride() {
   toggleIcon.textContent = isVisible ? '>' : '<';
 
   // Store the visibility state in the vscode state
-  const state = vscode.getState() || {};
-  state.outputNameOverrideVisible = !isVisible;
-  vscode.setState(state);
+  updateWebviewState({ outputNameOverrideVisible: !isVisible });
 
   saveState();
 }
@@ -307,9 +309,7 @@ export function emptyMultipleFiles(containerId, toggleId) {
       outputNameOverrideToggle.textContent = '>';
 
       // Update the state
-      const state = vscode.getState() || {};
-      state.outputNameOverrideVisible = false;
-      vscode.setState(state);
+      updateWebviewState({ outputNameOverrideVisible: false });
     }
   }
 
@@ -341,7 +341,7 @@ export function initializeOutputContainer() {
   const toggleIcon = safeGetElementById('toggleOutputFiles');
 
   if (container && toggleIcon) {
-    const state = vscode.getState();
+    const state = getWebviewState();
     const shouldShow = state && state.outputFilesActive;
 
     container.style.display = shouldShow ? 'block' : 'none';
