@@ -115,7 +115,7 @@
   background-color: var(--button-background);
   color: var(--button-foreground);
   padding: 4px 10px;
-  height: 28px;
+  height: 24px;
   min-width: 80px;
 }
 
