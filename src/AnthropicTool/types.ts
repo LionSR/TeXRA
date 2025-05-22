@@ -14,8 +14,11 @@ export type BetaToolUnionParam = {
  * Type for the text editor tool parameters
  */
 export interface TextEditorToolParams extends BetaToolUnionParam {
-  name: 'str_replace_editor';
-  type: 'text_editor_20250124' | 'text_editor_20241022';
+  name: 'str_replace_editor' | 'str_replace_based_edit_tool';
+  type:
+    | 'text_editor_20250124'
+    | 'text_editor_20241022'
+    | 'text_editor_20250429';
 }
 
 /**
