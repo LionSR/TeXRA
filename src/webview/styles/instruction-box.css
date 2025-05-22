@@ -14,7 +14,7 @@
 
 .instruction-box label {
   display: block;
-  margin-bottom: 2px;
+  margin-bottom: var(--spacing-tiny);
   font-size: var(--font-size);
 }
 
@@ -25,7 +25,7 @@
   resize: none;
   overflow-y: auto;
   transition: height 0.1s ease-out;
-  margin-top: 8px;
+  margin-top: var(--spacing-medium);
 }
 
 .instruction-header {
@@ -68,7 +68,7 @@
 #executeButton {
   font-size: var(--font-size);
   position: absolute;
-  bottom: 16px;
-  right: 16px;
+  bottom: var(--spacing-xlarge);
+  right: var(--spacing-xlarge);
   z-index: 10;
 }
