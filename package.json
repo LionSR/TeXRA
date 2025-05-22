@@ -50,6 +50,10 @@
               "type": "string"
             },
             "default": [
+              "opus4T",
+              "opus4",
+              "sonnet4T",
+              "sonnet4",
               "sonnet37T",
               "sonnet37",
               "o3",
@@ -1078,7 +1082,7 @@
   },
   "homepage": "https://texra.ai",
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.51.0",
+    "@anthropic-ai/sdk": "^0.52.0",
     "@cantoo/pdf-lib": "^2.3.2",
     "@google/genai": "^0.14.1",
     "@types/yaml": "^1.9.6",

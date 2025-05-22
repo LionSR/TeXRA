@@ -21,12 +21,15 @@ Here's a quick comparison of the models available by default in TeXRA:
 
 Known for strong instruction following and context handling.
 
-| Model ID    | Key Strength / Use Case                     | Relative Cost | Relative Speed | Notes                        |
-| :---------- | :------------------------------------------ | :------------ | :------------- | :--------------------------- |
-| `opus`      | High quality, complex tasks                 | $$$$          | Slow           |                              |
-| `sonnet37`  | Strong all-rounder, good context            | $$$           | Medium         |                              |
-| `sonnet37T` | `sonnet37` with explicit reasoning steps    | $$$           | Medium         | Good for math, complex logic |
-| `sonnet35`  | Good balance of quality/cost (older Sonnet) | $$$           | Medium         |                              |
+| Model ID    | Key Strength / Use Case                     | Relative Cost | Relative Speed | Notes                         |
+| :---------- | :------------------------------------------ | :------------ | :------------- | :---------------------------- |
+| `opus4T`    | Latest Opus with explicit reasoning steps   | $$$$          | Slow           | Claude 4 Opus with thinking   |
+| `opus4`     | Latest high quality, complex tasks          | $$$$          | Slow           | Claude 4 Opus                 |
+| `sonnet4T`  | Latest Sonnet with explicit reasoning steps | $$$           | Medium         | Claude 4 Sonnet with thinking |
+| `sonnet4`   | Latest strong all-rounder                   | $$$           | Medium         | Claude 4 Sonnet               |
+| `sonnet37T` | `sonnet37` with explicit reasoning steps    | $$$           | Medium         | Good for math, complex logic  |
+| `sonnet37`  | Strong all-rounder, good context            | $$$           | Medium         |                               |
+| `sonnet35`  | Good balance of quality/cost (older Sonnet) | $$$           | Medium         |                               |
 
 ### OpenAI Models
 

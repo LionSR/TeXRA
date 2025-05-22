@@ -6,6 +6,13 @@ import {
   ReasoningEffort,
 } from '../ModelConfig';
 
+// Common capabilities for Moonshot models
+const MOONSHOT_DEFAULT_CAPABILITIES: ModelCapabilities = {
+  ...DEFAULT_MODEL_CAPABILITIES,
+  supportsPromptCaching: false,
+  supportsSystemPrompt: true,
+};
+
 export const MOONSHOT_MODELS: Record<string, ModelConfig> = {
   kimi: {
     name: 'kimi128k',
@@ -17,10 +24,8 @@ export const MOONSHOT_MODELS: Record<string, ModelConfig> = {
     inputPrice: 0.28,
     outputPrice: 1.12,
     capabilities: {
-      ...DEFAULT_MODEL_CAPABILITIES,
-      supportsPromptCaching: false,
+      ...MOONSHOT_DEFAULT_CAPABILITIES,
       supportsVision: false,
-      supportsSystemPrompt: true,
     } satisfies ModelCapabilities,
     openRouterOnly: false,
   },
@@ -34,10 +39,8 @@ export const MOONSHOT_MODELS: Record<string, ModelConfig> = {
     inputPrice: 0.35,
     outputPrice: 1.4,
     capabilities: {
-      ...DEFAULT_MODEL_CAPABILITIES,
-      supportsPromptCaching: false,
+      ...MOONSHOT_DEFAULT_CAPABILITIES,
       supportsVision: true,
-      supportsSystemPrompt: true,
     } satisfies ModelCapabilities,
     openRouterOnly: false,
   },
@@ -51,10 +54,8 @@ export const MOONSHOT_MODELS: Record<string, ModelConfig> = {
     inputPrice: 0.42,
     outputPrice: 1.68,
     capabilities: {
-      ...DEFAULT_MODEL_CAPABILITIES,
-      supportsPromptCaching: false,
+      ...MOONSHOT_DEFAULT_CAPABILITIES,
       supportsVision: true,
-      supportsSystemPrompt: true,
       supportsReasoning: true,
     } satisfies ModelCapabilities,
     openRouterOnly: false,
