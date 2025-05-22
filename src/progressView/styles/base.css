@@ -8,8 +8,8 @@ body {
   margin: 0;
   display: flex;
   height: 100vh;
-  font-family: var(--vscode-editor-font-family);
-  font-size: var(--vscode-editor-font-size);
+  font-family: var(--font-family);
+  font-size: var(--font-size);
   background-color: var(--vscode-editor-background);
   color: var(--vscode-editor-foreground);
 }
