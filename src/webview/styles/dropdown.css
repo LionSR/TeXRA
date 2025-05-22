@@ -70,18 +70,9 @@
   box-shadow: var(--vscode-widget-shadow);
   min-width: 180px;
   display: none;
-  font-size: calc(var(--font-size) * 0.9);
+  font-size: calc(var(--font-size) * 0.8);
   padding: 4px;
   white-space: nowrap;
-}
-
-/* Dropdown options content */
-.dropdown-options-content {
-  font-size: calc(var(--font-size) * 0.8);
-  background: var(--vscode-menu-background);
-  border: 1px solid var(--vscode-input-border);
-  border-radius: var(--border-radius);
-  box-shadow: inset 0 0 0 1px var(--vscode-menu-border);
   font-weight: normal;
 }
 
