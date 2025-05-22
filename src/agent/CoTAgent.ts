@@ -66,29 +66,20 @@ export class CoTAgent extends BaseReflectionAgent {
           outputProcessGroupId,
         );
 
-        // Create a dedicated XML processing subgroup
-        const xmlProcessGroupId = await this.outputHandler.startProcessing(
-          `XMLProcessing`,
+        // Create a single subgroup for XML and file handling
+        const fileProcessGroupId = await this.outputHandler.startProcessing(
+          `XML/File Processing`,
           outputProcessGroupId,
         );
 
-        // Process XML structure first
+        // First fix XML structure
         await this.outputHandler.ensureCorrectXmlStructure(
           outputFile,
           this.agentSetting.documentTag,
         );
         this.logger.debug(
           `XML structure processed for round ${currRound}`,
-          xmlProcessGroupId,
-        );
-
-        // End XML processing subgroup
-        this.outputHandler.endProcessing('stopped', xmlProcessGroupId);
-
-        // Create a dedicated File Processing subgroup
-        const fileProcessGroupId = await this.outputHandler.startProcessing(
-          `FileProcessing`,
-          outputProcessGroupId,
+          fileProcessGroupId,
         );
 
         // Then process output files using the parent class method but with our group ID
