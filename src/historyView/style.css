@@ -7,32 +7,33 @@ body {
   font-family: var(--vscode-font-family);
   color: var(--vscode-editor-foreground);
   background-color: var(--vscode-editor-background);
-  padding: 20px;
+  padding: var(--spacing-xlarge);
 }
 
 h2 {
-  margin-bottom: 20px;
+  margin-bottom: var(--spacing-xlarge);
 }
 
 /* Search container */
 .search-container {
   display: flex;
   align-items: center;
-  margin-bottom: 20px;
-  gap: 10px;
+  margin-bottom: var(--spacing-xlarge);
+  gap: var(--spacing-medium);
   width: 100%;
 }
 
 .search-input {
   flex-grow: 1;
-  padding: 6px 8px;
+  padding: calc(var(--spacing-small) + var(--spacing-tiny))
+    var(--spacing-medium);
   font-size: 14px;
 }
 
 .search-controls {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--spacing-small);
 }
 
 .search-nav-btn {
@@ -43,7 +44,7 @@ h2 {
 }
 
 .match-count {
-  font-size: 12px;
+  font-size: calc(var(--font-size) * 0.85);
   color: var(--vscode-descriptionForeground);
   min-width: 60px;
   text-align: center;
@@ -57,7 +58,7 @@ mark {
   );
   color: var(--vscode-editor-findMatchHighlightForeground, inherit);
   padding: 0;
-  border-radius: 2px;
+  border-radius: var(--border-radius-small);
 }
 
 mark.current-match {
@@ -69,14 +70,14 @@ mark.current-match {
 .history-container {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--spacing-medium);
 }
 
 .history-item {
   border: 1px solid var(--vscode-panelSection-border);
-  border-radius: 4px;
-  padding: 10px;
-  margin-bottom: 10px;
+  border-radius: var(--border-radius-large);
+  padding: var(--spacing-medium);
+  margin-bottom: var(--spacing-medium);
   background-color: var(--vscode-editor-background);
   transition:
     transform 0.2s ease,
@@ -92,7 +93,7 @@ mark.current-match {
 .history-timestamp {
   color: var(--vscode-descriptionForeground);
   font-size: 0.8em;
-  margin-bottom: 4px;
+  margin-bottom: var(--spacing-small);
 }
 
 /* Header and details */
@@ -105,8 +106,8 @@ mark.current-match {
 .history-details {
   display: grid;
   grid-template-columns: 100px 1fr;
-  gap: 5px;
-  margin-top: 8px;
+  gap: var(--spacing-small);
+  margin-top: var(--spacing-medium);
 }
 
 .history-label {
@@ -117,13 +118,13 @@ mark.current-match {
 .history-value {
   color: var(--vscode-editor-foreground);
   word-break: break-word;
-  padding: 4px 0;
+  padding: var(--spacing-small) 0;
 }
 
 .button-clear {
   background-color: var(--vscode-errorForeground);
-  margin-bottom: 20px;
-  padding: 6px 12px;
+  margin-bottom: var(--spacing-xlarge);
+  padding: calc(var(--spacing-small) + var(--spacing-tiny)) var(--spacing-large);
 }
 
 .button-clear:hover {
@@ -131,7 +132,7 @@ mark.current-match {
 }
 
 .history-actions {
-  gap: 8px;
+  gap: var(--spacing-medium);
 }
 
 .restore-btn {
@@ -177,7 +178,7 @@ mark.current-match {
   cursor: pointer;
   text-decoration: underline;
   padding: 0;
-  margin-top: 4px;
+  margin-top: var(--spacing-small);
 }
 
 /* Automatically expand sections that contain search matches */
@@ -189,17 +190,17 @@ mark.current-match {
 .config-section {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: var(--spacing-small);
   background-color: var(--vscode-editor-inactiveSelectionBackground);
-  padding: 8px;
-  border-radius: 3px;
-  margin: 8px 0;
+  padding: var(--spacing-medium);
+  border-radius: var(--border-radius);
+  margin: var(--spacing-medium) 0;
 }
 
 .config-item {
   display: flex;
   flex-direction: row;
-  gap: 8px;
+  gap: var(--spacing-medium);
   align-items: baseline;
 }
 

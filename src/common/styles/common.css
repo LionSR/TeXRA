@@ -29,12 +29,18 @@
 
   /* Spacing */
   --spacing-tiny: 2px;
-  --spacing-small: 5px;
-  --spacing-medium: 10px;
-  --spacing-large: 15px;
+  --spacing-small: 4px;
+  --spacing-medium: 8px;
+  --spacing-large: 12px;
+  --spacing-xlarge: 20px;
 
   /* Border radius */
+  --border-radius-small: 2px;
   --border-radius: 3px;
+  --border-radius-large: 6px;
+
+  /* Common control height */
+  --control-height: 24px;
 }
 
 /* Common codicon styling */
