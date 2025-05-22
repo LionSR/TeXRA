@@ -53,6 +53,13 @@ export class AgentHistoryViewProvider implements vscode.WebviewViewProvider {
             'common',
             'styles',
           ),
+          vscode.Uri.joinPath(
+            this.context.extensionUri,
+            'node_modules',
+            '@vscode',
+            'codicons',
+            'dist',
+          ),
         ],
       },
     );
@@ -144,6 +151,15 @@ export class AgentHistoryViewProvider implements vscode.WebviewViewProvider {
       const styleUri = this.getWebviewUri('style.css');
       const vscodeApiUri = this.getWebviewUri('modules/vscodeApi.js');
       const domHandlersUri = this.getWebviewUri('modules/domHandlers.js');
+      const codiconPath = vscode.Uri.joinPath(
+        this.context.extensionUri,
+        'node_modules',
+        '@vscode',
+        'codicons',
+        'dist',
+        'codicon.css',
+      );
+      const codiconUri = this._view?.webview.asWebviewUri(codiconPath);
       const commonStyleUri = vscode.Uri.joinPath(
         this.context.extensionUri,
         'src',
@@ -167,6 +183,7 @@ export class AgentHistoryViewProvider implements vscode.WebviewViewProvider {
         )
         .replace('${vscodeApiUri}', vscodeApiUri.toString())
         .replace('${domHandlersUri}', domHandlersUri.toString())
+        .replace('${codiconUri}', codiconUri?.toString() ?? '')
         .replace(/\${nonce}/g, nonce)
         .replace(/\${cspSource}/g, this._view?.webview.cspSource ?? '');
     } catch (error) {
