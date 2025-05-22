@@ -365,7 +365,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
 
         // Add end tag if response was stopped and tag isn't present
         if (stopReason === 'stop' && endTag && !newResponse.includes(endTag)) {
-          this.logger.info(`Adding end tag to response: ${endTag}`);
+          this.logger.debug(`Adding end tag to response: ${endTag}`);
           newResponse = `${newResponse}\n${endTag}`;
         }
 
@@ -399,7 +399,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
 
     // Add end tag if response was stopped and tag isn't present
     if (stopReason === 'stop' && endTag && !newResponse.includes(endTag)) {
-      this.logger.info(`Adding end tag to response: ${endTag}`);
+      this.logger.debug(`Adding end tag to response: ${endTag}`);
       newResponse = `${newResponse}\n${endTag}`;
     }
 
