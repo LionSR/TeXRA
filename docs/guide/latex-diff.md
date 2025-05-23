@@ -375,7 +375,7 @@ Maintain a clear version strategy:
 
 ## Next Steps
 
-Now that you understand TeXRA's LaTeX diff functionality, you might want to explore:
+Now that you understand TeXRA's LaTeX diff functionality, you may be interested in:
 
 - [Intelligent Merge](/guide/intelligent-merge) - Learn how to combine changes intelligently
 - [File Management](/guide/file-management) - Understand how to organize your files effectively
