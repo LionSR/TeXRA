@@ -4,7 +4,7 @@ TeXRA excels at managing complex academic projects often split across multiple f
 
 ## Why Use Multiple Files?
 
-Working with multiple files is essential when:
+Working with multiple files is often necessary when:
 
 - Your source document is split (e.g., `chapter1.tex`, `chapter2.tex`, `appendixA.tex`).
 - You need to apply consistent changes (like polishing or correcting) across related documents.
