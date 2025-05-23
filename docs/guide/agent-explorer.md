@@ -28,7 +28,7 @@ You can manage your custom agent files directly within the "Custom Agents" secti
 
 Available actions for **Custom Agents** include:
 
-- **New File** <i class="codicon codicon-new-file"></i>: Creates a new, empty file (e.g., `new-file.yaml`) within the selected folder (or the root custom agents folder). You will be prompted to rename it immediately.
+- **New File** <i class="codicon codicon-new-file"></i>: Creates a new file populated with a starter template (e.g., `new-file.yaml`) within the selected folder (or the root custom agents folder). You will be prompted to rename it immediately.
 - **New Folder** <i class="codicon codicon-new-folder"></i>: Creates a new folder within the selected folder. You will be prompted to rename it.
 - **Rename** <i class="codicon codicon-edit"></i>: Renames the selected custom file or folder.
 - **Delete** <i class="codicon codicon-trash"></i>: Deletes the selected custom file or folder (with confirmation).
