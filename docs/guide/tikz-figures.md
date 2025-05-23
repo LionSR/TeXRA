@@ -234,7 +234,7 @@ TikZ compilation can be resource-intensive:
 
 ## Next Steps
 
-Now that you understand how to work with TikZ figures in TeXRA, you might want to explore:
+Now that you understand how to work with TikZ figures in TeXRA, you may want to learn about:
 
 - [LaTeX Diff](/guide/latex-diff) - Learn how to compare document versions including figures
 - [Tool Integration](/guide/tool-integration) - Discover other tools TeXRA integrates with
