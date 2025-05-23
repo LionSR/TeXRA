@@ -264,49 +264,29 @@ function renderToolConfig(label, obj, exclude = []) {
  * Set up event listeners for the history items
  */
 function setupItemEventListeners() {
-  // Handle rerun buttons
-  document.querySelectorAll('.rerun-btn').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const historyId = btn.getAttribute('data-id');
-      vscode.postMessage({
-        command: 'rerunAgent',
-        historyId: historyId,
-      });
-    });
-  });
+  document.getElementById('historyContainer').addEventListener('click', (e) => {
+    const rerun = e.target.closest('.rerun-btn');
+    const restore = e.target.closest('.restore-btn');
+    const del = e.target.closest('.delete-btn');
+    const toggle = e.target.closest('.toggle-button');
 
-  // Handle restore buttons
-  document.querySelectorAll('.restore-btn').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const historyId = btn.getAttribute('data-id');
-      vscode.postMessage({
-        command: 'restoreAgent',
-        historyId: historyId,
-      });
-    });
-  });
-
-  // Handle delete buttons
-  document.querySelectorAll('.delete-btn').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const historyId = btn.getAttribute('data-id');
-      vscode.postMessage({
-        command: 'deleteAgent',
-        historyId: historyId,
-      });
-    });
-  });
-
-  // Handle collapse/expand
-  document.querySelectorAll('.toggle-button').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const itemId = btn.getAttribute('data-id');
+    if (rerun) {
+      const historyId = rerun.getAttribute('data-id');
+      vscode.postMessage({ command: 'rerunAgent', historyId });
+    } else if (restore) {
+      const historyId = restore.getAttribute('data-id');
+      vscode.postMessage({ command: 'restoreAgent', historyId });
+    } else if (del) {
+      const historyId = del.getAttribute('data-id');
+      vscode.postMessage({ command: 'deleteAgent', historyId });
+    } else if (toggle) {
+      const itemId = toggle.getAttribute('data-id');
       const content = document.getElementById('content-' + itemId);
       content.classList.toggle('expanded');
-      btn.textContent = content.classList.contains('expanded')
+      toggle.textContent = content.classList.contains('expanded')
         ? 'Show less'
         : 'Show more';
-    });
+    }
   });
 }
 

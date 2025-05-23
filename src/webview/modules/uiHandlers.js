@@ -128,6 +128,19 @@ export function setupUIHandlers() {
     updateAutoToggleState();
   });
 
+  /**
+   * Helper to register a command handler for a button
+   * @param {string} id - Button element ID
+   * @param {string} command - Command to send
+   * @param {Function} gather - Function returning payload object
+   */
+  function registerCommandHandler(id, command, gather) {
+    addEventListenerSafely(id, 'click', () => {
+      const payload = gather ? gather() : {};
+      vscode.postMessage({ command, ...payload });
+    });
+  }
+
   // Add checkbox change listeners for auto-extract options
   CHECK_BOXES_AUTO_EXTRACT.forEach((id) => {
     addEventListenerSafely(id, 'change', function () {
@@ -277,53 +290,38 @@ export function setupUIHandlers() {
     }
   });
 
-  addEventListenerSafely('executeButton', 'click', function () {
+  registerCommandHandler('executeButton', 'execute', () => {
     const agent = safeGetElementValue('agent');
     const model = safeGetElementValue('model');
     const instruction = safeGetElementValue('instruction');
 
-    // Get single files and multiple files data
     const singleFiles = getSingleFileData();
     const multipleFilesData = getMultipleFileData(singleFiles);
 
-    // Get checkbox values using loops
     const checkboxValues = {};
     CHECK_BOXES.forEach((id) => {
       checkboxValues[id] = safeGetElementChecked(id);
     });
 
-    vscode.postMessage({
-      command: 'execute',
-      // parameters
+    return {
       agent,
       model,
-      // instruction
       instruction,
-      // single files
       ...singleFiles,
-      // multiple files
       ...multipleFilesData,
-      // checkboxes (auto extract options and tool config)
       ...checkboxValues,
-      // output override
       outputNameOverride: getOutputNameOverride(),
-    });
+    };
   });
 
-  addEventListenerSafely('mergeButton', 'click', function () {
+  registerCommandHandler('mergeButton', 'merge', () => {
     const { inputFile } = getSingleFileData(['input']);
     const editedFile = safeGetElementValue('editedFile');
-
-    vscode.postMessage({
-      command: 'merge',
-      inputFile,
-      editedFile,
-    });
-
     vscode.postMessage({
       command: 'showInformationMessage',
       text: `Merging files: ${inputFile} and ${editedFile}`,
     });
+    return { inputFile, editedFile };
   });
 
   ['pack', 'clean'].forEach((action) => {
@@ -383,40 +381,26 @@ export function setupUIHandlers() {
   });
 
   // LaTeX diff operations
-  addEventListenerSafely('latexdiffButton', 'click', function () {
+  registerCommandHandler('latexdiffButton', 'latexdiff', () => {
     const { inputFile } = getSingleFileData(['input']);
     const baseFile = safeGetElementValue('baseFile');
     const editedFile = safeGetElementValue('editedFile');
-
-    vscode.postMessage({
-      command: 'latexdiff',
-      inputFile,
-      baseFile,
-      editedFile,
-    });
-
     vscode.postMessage({
       command: 'showInformationMessage',
       text: `Running LaTeX diff between ${baseFile} and ${editedFile}`,
     });
+    return { inputFile, baseFile, editedFile };
   });
 
-  addEventListenerSafely('latexdiffvcButton', 'click', function () {
+  registerCommandHandler('latexdiffvcButton', 'latexdiffvc', () => {
     const { inputFile } = getSingleFileData(['input']);
     const baseFile = safeGetElementValue('baseFile');
     const commitHash = safeGetElementValue('commit');
-
-    vscode.postMessage({
-      command: 'latexdiffvc',
-      inputFile,
-      baseFile,
-      commitHash,
-    });
-
     vscode.postMessage({
       command: 'showInformationMessage',
       text: `Running LaTeX diff with version control: ${baseFile} at commit ${commitHash}`,
     });
+    return { inputFile, baseFile, commitHash };
   });
 
   // Pack/clean LaTeX diff operations
