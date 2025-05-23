@@ -228,4 +228,4 @@ If you encounter persistent installation issues:
 
 ## Next Steps
 
-With TeXRA and all dependencies installed, you're ready to start using the tool to enhance your academic research. Check out the [Quick Start Guide](/guide/quick-start) to learn the basics, or explore specific features in the other documentation sections.
+With TeXRA and all dependencies installed, you're ready to start using the tool to enhance your academic research. Check out the [Quick Start Guide](/guide/quick-start) to learn the basics, or examine specific features in the other documentation sections.
