@@ -674,6 +674,20 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     return this._outputFiles.get(stream);
   }
 
+  public clearOutputFiles(stream: string): void {
+    if (this._outputFiles.has(stream)) {
+      this._outputFiles.delete(stream);
+      this._saveState();
+      if (this._view && stream === this._activeStream) {
+        this._view.webview.postMessage({
+          command: COMMANDS.UPDATE_FILES,
+          stream,
+          files: {},
+        });
+      }
+    }
+  }
+
   public setActiveStream(stream: string) {
     if (this._logStreams.has(stream)) {
       this._activeStream = stream;
