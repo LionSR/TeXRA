@@ -1,5 +1,8 @@
 // Third-party imports
 import * as vscode from 'vscode';
+import * as path from 'path';
+
+import { ProgressViewProvider } from '../progressView/ProgressViewProvider';
 
 // Local imports - log
 import * as logger from '../logger/logUtils';
@@ -14,6 +17,17 @@ import {
 
 const CHANNEL = 'cleanCommands';
 logger.initialize(CHANNEL);
+
+function getStreamId(
+  agent: string,
+  model: string,
+  inputFile: string,
+  outputFiles?: string[],
+): string {
+  const agentName =
+    outputFiles && outputFiles.length > 1 ? `${agent}_multiple` : agent;
+  return `${agentName}@${model}: ${path.basename(inputFile)}`;
+}
 
 export function registerCleanCommands(context: vscode.ExtensionContext) {
   context.subscriptions.push(
@@ -47,6 +61,12 @@ async function handleCleanSingle(
     return;
   }
   await runCleanSingle(model, outputNameOverride || inputFile, agent);
+
+  const provider = ProgressViewProvider.getInstance();
+  if (provider) {
+    const streamId = getStreamId(agent, model, inputFile);
+    provider.clearOutputFiles(streamId);
+  }
 }
 
 async function handleCleanMultiple(
@@ -78,6 +98,12 @@ async function handleCleanMultiple(
     : outputFiles;
 
   await runCleanMultiple(model, inputFile, agent, inputFilesWithOverride);
+
+  const provider = ProgressViewProvider.getInstance();
+  if (provider) {
+    const streamId = getStreamId(agent, model, inputFile, outputFiles);
+    provider.clearOutputFiles(streamId);
+  }
 }
 
 export async function handleClean(config: any) {
@@ -108,6 +134,17 @@ export async function handleClean(config: any) {
   } else {
     logger.info(CHANNEL, `Running clean single`);
     await runCleanSingle(config.model, config.inputFile, config.agent);
+  }
+
+  const provider = ProgressViewProvider.getInstance();
+  if (provider) {
+    const streamId = getStreamId(
+      config.agent,
+      config.model,
+      config.inputFile,
+      outputFiles,
+    );
+    provider.clearOutputFiles(streamId);
   }
 }
 
