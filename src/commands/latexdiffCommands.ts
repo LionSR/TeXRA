@@ -64,6 +64,15 @@ async function handleLatexdiff(
   baseFile: string,
   editedFile: string,
 ) {
+  if (!(baseFile || inputFile)) {
+    vscode.window.showErrorMessage('No base file specified for latexdiff');
+    return;
+  }
+  if (!editedFile) {
+    vscode.window.showErrorMessage('No revised file specified for latexdiff');
+    return;
+  }
+
   const fileToUse = baseFile || inputFile;
   try {
     // Check if latexdiff is installed
@@ -452,7 +461,9 @@ async function handleRunLatexdiff(config: any) {
             results.push({
               success: result.success,
               message: result.message,
-              diffFile: result.diffFileName,
+              diffFile: result.diffFileName
+                ? path.join(path.dirname(inputFile), result.diffFileName)
+                : undefined,
             });
 
             completedOperations++;
@@ -486,7 +497,9 @@ async function handleRunLatexdiff(config: any) {
               results.push({
                 success: result.success,
                 message: result.message,
-                diffFile: result.diffFileName,
+                diffFile: result.diffFileName
+                  ? path.join(path.dirname(currentFile), result.diffFileName)
+                  : undefined,
               });
 
               completedOperations++;
@@ -520,6 +533,21 @@ async function handleRunLatexdiff(config: any) {
               CHANNEL,
               `Successfully generated diff: ${result.diffFile}`,
             );
+            await openAndBuildIfTex(result.diffFile, { preserveFocus: true });
+            await vscode.commands.executeCommand(
+              'workbench.view.extension.latex-workshop-activitybar',
+            );
+
+            setTimeout(async () => {
+              await vscode.commands.executeCommand('latex-workshop.view');
+              setTimeout(
+                () =>
+                  vscode.commands.executeCommand(
+                    'latex-workshop.refresh-viewer',
+                  ),
+                5000,
+              );
+            }, 10000);
           } else {
             logger.warn(CHANNEL, `Failed to generate diff: ${result.message}`);
           }
