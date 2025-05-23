@@ -37,6 +37,7 @@ import { AgentStateRound } from './AgentState';
 import { messageToSkeleton } from './messageUtils';
 import { getConfig } from '../utils/configUtils';
 import { K_SLICE } from '../utils/constants';
+import { objectToLogString } from '../utils/stringUtils';
 import { calculateTokenPrice } from '../utils/priceUtils';
 
 /**
@@ -342,8 +343,10 @@ export class ModelHandlerAnthropic extends ModelHandler {
       // Anthropic specific empty response check
       const errorMsg = 'No output generated - API returned empty response';
       this.logger.error(errorMsg);
-      this.logger.debug(`responseObject: ${responseObject}`);
-      this.logger.debug(`responseObject.content: ${responseObject.content}`);
+      this.logger.debug(`responseObject: ${objectToLogString(responseObject)}`);
+      this.logger.debug(
+        `responseObject.content: ${objectToLogString(responseObject.content)}`,
+      );
       throw new Error(errorMsg);
     }
 

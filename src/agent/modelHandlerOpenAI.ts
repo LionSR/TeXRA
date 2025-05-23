@@ -28,6 +28,7 @@ import { ModelHandler } from './ModelHandler';
 import { OpenAIAPIResponseUsage, ResponseUsageFactory } from './ResponseUsage';
 import { ToolState } from './ToolState';
 import { K_SLICE } from '../utils/constants';
+import { objectToLogString } from '../utils/stringUtils';
 import { calculateTokenPrice } from '../utils/priceUtils';
 import { MediaEntry } from './mediaTypes';
 
@@ -339,7 +340,9 @@ export class ModelHandlerOpenAI extends ModelHandler {
   /** Extracts response text and usage statistics from API response. */
   extractResponse(responseObject: any, endTag: string): [string, any, string] {
     if (!responseObject.choices?.length) {
-      this.logger.debug(`Response object: ${JSON.stringify(responseObject)}`);
+      this.logger.debug(
+        `Response object: ${objectToLogString(responseObject)}`,
+      );
 
       // Add fallback for streaming which returns content directly in responseObject
       if (responseObject.role && responseObject.content) {
@@ -380,7 +383,9 @@ export class ModelHandlerOpenAI extends ModelHandler {
 
       const errorMsg = 'Invalid response from API: missing choices';
       this.logger.error(errorMsg);
-      this.logger.error(`Response object: ${JSON.stringify(responseObject)}`);
+      this.logger.error(
+        `Response object: ${objectToLogString(responseObject)}`,
+      );
       throw new Error(errorMsg);
     }
 
@@ -393,7 +398,9 @@ export class ModelHandlerOpenAI extends ModelHandler {
       newResponse = choice.message.content.trim();
     } else {
       newResponse = '';
-      this.logger.error(`Response object: ${JSON.stringify(responseObject)}`);
+      this.logger.error(
+        `Response object: ${objectToLogString(responseObject)}`,
+      );
       this.logger.error('content is empty');
     }
 
