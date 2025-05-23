@@ -26,7 +26,7 @@ Clearly state what should and shouldn't be changed:
 
 Help the AI understand the purpose and audience:
 
-✅ "Polish this abstract for submission to the Journal of Quantum Physics. The target audience is scientists with expertise in quantum field theory. Focus on highlighting the novelty and significance of the results."
+✅ "Polish this abstract for submission to the Journal of Quantum Physics. The target audience is scientists with expertise in quantum field theory. Focus on highlighting the originality and significance of the results."
 
 ### Use Structured Instructions
 
@@ -259,7 +259,7 @@ IEEE formatting style.
 ```
 Improve the clarity and flow of this paper for submission to Nature Communications.
 The target audience consists of interdisciplinary researchers in computational
-biology. Enhance the introduction to better highlight our novel contributions.
+biology. Enhance the introduction to better highlight our original contributions.
 Make the methodology section more accessible while maintaining technical accuracy.
 Strengthen the conclusion by emphasizing broader impacts. Maintain all citations,
 mathematical notation, and technical terms.
@@ -305,7 +305,7 @@ over text and include bullet points rather than full paragraphs.
 
 ## Next Steps
 
-Now that you're familiar with TeXRA best practices, you might want to explore:
+Now that you're familiar with TeXRA best practices, you may wish to review:
 
 - [Configuration](/guide/configuration) - Learn how to customize TeXRA
 - [Custom Agents](/guide/custom-agents) - Create specialized agents for your workflow
