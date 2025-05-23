@@ -327,7 +327,7 @@ Common configuration issues include:
 
 ## Next Steps
 
-Now that you understand how to configure TeXRA, you might want to explore:
+Now that you understand how to configure TeXRA, you may want to learn about:
 
 - [Custom Agents](/guide/custom-agents) - Learn how to create your own specialized agents
 - [Best Practices](/reference/best-practices) - Discover recommended settings for different workflows
