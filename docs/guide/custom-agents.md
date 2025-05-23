@@ -29,7 +29,7 @@ Custom agents reside in a specific directory.
 
 ### Step 3: Define the Agent
 
-Open the newly created `.yaml` file and define your agent's structure. Start with a basic template and customize it. Here are the key fields:
+Open the newly created `.yaml` file and you'll find a starter template already inserted. Customize it to define your agent's structure. Here are the key fields:
 
 ```yaml
 # --- Agent Inheritance (Optional) ---
