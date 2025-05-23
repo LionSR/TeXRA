@@ -77,7 +77,7 @@ export function updateMultipleFileSelect(selectId, toggleId, files) {
       addFileToList(selectId, file);
     });
     selectDiv.style.display = 'block';
-    toggleIcon.textContent = '▲';
+    toggleIcon.innerHTML = '<i class="codicon codicon-chevron-up"></i>';
     const containerDiv = selectDiv.closest('.file-select');
     if (containerDiv) {
       containerDiv.style.display = 'block';
@@ -117,7 +117,9 @@ export function setMultipleFileSelectVisibility(
   }
 
   container.style.display = isVisible ? 'block' : 'none';
-  toggleIcon.textContent = isVisible ? '▲' : '▼';
+  toggleIcon.innerHTML = isVisible
+    ? '<i class="codicon codicon-chevron-up"></i>'
+    : '<i class="codicon codicon-chevron-down"></i>';
 }
 
 export function setElementsDisabled(elements, disabled) {
@@ -268,7 +270,9 @@ export function toggleOutputNameOverride() {
 
   const isVisible = input.style.display !== 'none';
   input.style.display = isVisible ? 'none' : 'inline-block';
-  toggleIcon.textContent = isVisible ? '>' : '<';
+  toggleIcon.innerHTML = isVisible
+    ? '<i class="codicon codicon-chevron-left"></i>'
+    : '<i class="codicon codicon-chevron-right"></i>';
 
   // Store the visibility state in the vscode state
   updateWebviewState({ outputNameOverrideVisible: !isVisible });
@@ -303,7 +307,8 @@ export function emptyMultipleFiles(containerId, toggleId) {
 
     if (outputNameOverrideInput && outputNameOverrideToggle) {
       outputNameOverrideInput.style.display = 'none';
-      outputNameOverrideToggle.textContent = '>';
+      outputNameOverrideToggle.innerHTML =
+        '<i class="codicon codicon-chevron-right"></i>';
 
       // Update the state
       updateWebviewState({ outputNameOverrideVisible: false });
@@ -342,6 +347,8 @@ export function initializeOutputContainer() {
     const shouldShow = state && state.outputFilesActive;
 
     container.style.display = shouldShow ? 'block' : 'none';
-    toggleIcon.textContent = shouldShow ? '▲' : '▼';
+    toggleIcon.innerHTML = shouldShow
+      ? '<i class="codicon codicon-chevron-up"></i>'
+      : '<i class="codicon codicon-chevron-down"></i>';
   }
 }
