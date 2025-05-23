@@ -16,6 +16,32 @@ import { isValidAgentYaml } from './agent/agentLoad';
 import { fileExistsAbsolute } from './utils/absoluteFileUtils';
 import { getConfig } from './utils/configUtils';
 
+const NEW_AGENT_TEMPLATE = `# --- Agent Inheritance (Optional) ---
+# inherits: base
+
+# --- Agent Settings ---
+settings:
+  agentType: CoT
+  temperature: 0.1
+  isRewrite: true
+  documentTag: document
+  endTag: '</document>'
+  outputExt: tex
+  prefills:
+    - "<document>\n"
+
+# --- Agent Prompts ---
+prompts:
+  systemPrompt: |
+    [Define the AI's role and core instructions]
+
+  userPrefix: |
+    [Provide context using variables like {{ INPUT_CONTENT }}]
+
+  userRequest: |
+    [Define the initial task prompt]
+`;
+
 const CHANNEL = 'Webview';
 logger.initialize(CHANNEL);
 
@@ -246,6 +272,8 @@ export class FolderExplorer implements vscode.TreeDataProvider<FileItem> {
     });
 
     // Handle the rename result
+    let createdFile: vscode.Uri | undefined;
+
     if (newName && newName !== item.label) {
       try {
         const oldPath = item.resourceUri.fsPath;
@@ -254,11 +282,15 @@ export class FolderExplorer implements vscode.TreeDataProvider<FileItem> {
         // For new items, create them
         if (!(await fileExistsAbsolute(oldPath))) {
           if (item.collapsibleState === vscode.TreeItemCollapsibleState.None) {
-            // Create new file
+            // Create new file with starter content if it's YAML
+            const content = newPath.endsWith('.yaml')
+              ? Buffer.from(NEW_AGENT_TEMPLATE)
+              : new Uint8Array();
             await vscode.workspace.fs.writeFile(
               vscode.Uri.file(newPath),
-              new Uint8Array(),
+              content,
             );
+            createdFile = vscode.Uri.file(newPath);
           } else {
             // Create new folder
             await vscode.workspace.fs.createDirectory(vscode.Uri.file(newPath));
@@ -275,6 +307,11 @@ export class FolderExplorer implements vscode.TreeDataProvider<FileItem> {
         logger.error(CHANNEL, `Error renaming item: ${err}`);
         vscode.window.showErrorMessage('Failed to rename item');
       }
+    }
+
+    if (createdFile) {
+      const doc = await vscode.workspace.openTextDocument(createdFile);
+      await vscode.window.showTextDocument(doc);
     }
 
     // Clear editing state
