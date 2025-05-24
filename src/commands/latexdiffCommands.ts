@@ -10,7 +10,7 @@ import * as logger from '../logger/logUtils';
 // Local imports - utilities
 import { getWorkspacePath } from '../utils/workspaceFileUtils';
 import { fileExists } from '../utils/workspaceFileUtils';
-import { openAndBuildIfTex } from '../utils/openBuildUtils';
+import { openBuildDisplayIfTex } from '../utils/openBuildUtils';
 
 // Local imports - latex utils
 import {
@@ -110,15 +110,7 @@ async function handleLatexdiff(
       return;
     }
 
-    await openAndBuildIfTex(filePathRelative, { preserveFocus: true });
-    await vscode.commands.executeCommand(
-      'workbench.view.extension.latex-workshop-activitybar',
-    );
-
-    // Wait for build to complete before viewing
-    setTimeout(async () => {
-      await vscode.commands.executeCommand('latex-workshop.view');
-    }, 10000);
+    await openBuildDisplayIfTex(filePathRelative, { preserveFocus: true });
   } catch (err) {
     vscode.window.showErrorMessage(
       `Error creating LaTeX diff: ${err instanceof Error ? err.message : String(err)}`,
@@ -167,12 +159,7 @@ async function handleLatexdiffvc(
       return;
     }
 
-    await openAndBuildIfTex(filePathRelative, { preserveFocus: true });
-
-    // Wait for build to complete before viewing
-    setTimeout(async () => {
-      await vscode.commands.executeCommand('latex-workshop.view');
-    }, 5000);
+    await openBuildDisplayIfTex(filePathRelative, { preserveFocus: true });
   } catch (err) {
     vscode.window.showErrorMessage(
       `Error creating LaTeX diff: ${err instanceof Error ? err.message : String(err)}`,
@@ -533,21 +520,9 @@ async function handleRunLatexdiff(config: any) {
               CHANNEL,
               `Successfully generated diff: ${result.diffFile}`,
             );
-            await openAndBuildIfTex(result.diffFile, { preserveFocus: true });
-            await vscode.commands.executeCommand(
-              'workbench.view.extension.latex-workshop-activitybar',
-            );
-
-            setTimeout(async () => {
-              await vscode.commands.executeCommand('latex-workshop.view');
-              setTimeout(
-                () =>
-                  vscode.commands.executeCommand(
-                    'latex-workshop.refresh-viewer',
-                  ),
-                5000,
-              );
-            }, 10000);
+            await openBuildDisplayIfTex(result.diffFile, {
+              preserveFocus: true,
+            });
           } else {
             logger.warn(CHANNEL, `Failed to generate diff: ${result.message}`);
           }
