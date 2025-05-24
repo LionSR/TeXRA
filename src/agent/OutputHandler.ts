@@ -846,6 +846,13 @@ export class OutputHandler {
         );
       }
 
+      if (stateGlobal.totalToolUseTokens > 0) {
+        this.logger.info(
+          `Total tool use tokens: ${stateGlobal.totalToolUseTokens}`,
+          statsGroupId,
+        );
+      }
+
       // Format token usage reporting by model provider
       let responseUsage: any = {};
       if (this.modelHandler.isOpenai) {
@@ -853,6 +860,7 @@ export class OutputHandler {
           responseUsage = {
             prompt_tokens: stateGlobal.totalInputTokens,
             completion_tokens: stateGlobal.totalOutputTokens,
+            tool_use_tokens: stateGlobal.totalToolUseTokens,
             prompt_tokens_details: {
               cached_tokens: stateGlobal.totalCacheReadInputTokens,
             },
@@ -864,6 +872,7 @@ export class OutputHandler {
           responseUsage = {
             prompt_tokens: stateGlobal.totalInputTokens,
             completion_tokens: stateGlobal.totalOutputTokens,
+            tool_use_tokens: stateGlobal.totalToolUseTokens,
             reasoning_tokens: stateGlobal.totalReasoningTokens,
             cached_tokens: stateGlobal.totalCacheReadInputTokens,
           };
@@ -880,6 +889,7 @@ export class OutputHandler {
         responseUsage = {
           promptTokens: stateGlobal.totalInputTokens,
           completionTokens: stateGlobal.totalOutputTokens,
+          toolUseTokenCount: stateGlobal.totalToolUseTokens,
         };
       }
 
