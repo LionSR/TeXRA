@@ -37,6 +37,9 @@ import { AgentSetting } from './AgentDataclass';
 import { AgentStateGlobal, AgentStateRound } from './AgentState';
 import { ProgressViewProvider } from '../progressView/ProgressViewProvider';
 
+// Local imports - types
+import { TokenUsageStats } from '../types/UsageTypes';
+
 /** Generates output filename incorporating model and round information. */
 export function getOutputFileName(
   inputFile: string,
