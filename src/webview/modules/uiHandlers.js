@@ -134,7 +134,8 @@ export function setupUIHandlers() {
     return multipleFilesData;
   }
 
-  addEventListenerSafely('toggleAutoExtract', 'click', function () {
+  addEventListenerSafely('toggleAutoExtract', 'click', function (e) {
+    e.stopPropagation();
     const autoExtractOptions = safeGetElementById('autoExtractOptions');
     const isVisible = autoExtractOptions.style.display === 'block';
 
@@ -142,7 +143,8 @@ export function setupUIHandlers() {
     updateAutoToggleState();
   });
 
-  addEventListenerSafely('toggleToolConfig', 'click', function () {
+  addEventListenerSafely('toggleToolConfig', 'click', function (e) {
+    e.stopPropagation();
     const toolConfigOptions = safeGetElementById('toolConfigOptions');
     const isVisible = toolConfigOptions.style.display === 'block';
 
