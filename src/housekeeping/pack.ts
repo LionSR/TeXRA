@@ -29,7 +29,7 @@ export async function runPackSingle(
   inputFile: string,
   agent: string,
   outputFolder?: string,
-): Promise<string> {
+): Promise<string | undefined> {
   logger.info(
     CHANNEL,
     `Starting packing with model=${model}, inputFile=${inputFile}, agent=${agent}, outputFolder=${outputFolder}`,
@@ -84,10 +84,10 @@ export async function runPackSingle(
 
   if (onlyInputFilePacked) {
     logger.warn(CHANNEL, `No files found to pack for ${inputFile}`);
-    vscode.window.showInformationMessage(
+    vscode.window.showWarningMessage(
       `No files found to pack for ${inputFile}`,
     );
-    return '';
+    return undefined;
   }
 
   if (movedFiles.length > 0 || copiedFiles.length > 0) {
