@@ -149,15 +149,14 @@ export function createGroupHeader(group) {
   const statusIcon = getStatusIcon(group.status);
 
   return `
-    <div id="group-header-${group.id}" class="log-group-header ${group.status}">
-      <span class="group-toggle"><i class="codicon codicon-chevron-down"></i></span>
+    <summary id="group-header-${group.id}" class="log-group-header ${group.status}">
       <span class="group-status-icon">${statusIcon}</span>
       <span class="group-title">${group.name}</span>
       <span class="group-time">
         <span class="group-start-time">Started: ${formattedStartTime}</span>
         ${durationDisplay}
       </span>
-    </div>
+    </summary>
   `;
 }
 
