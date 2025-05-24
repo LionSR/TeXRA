@@ -554,6 +554,9 @@ export class ModelHandlerAnthropic extends ModelHandler {
 
   /** Calculates API usage cost based on input/output tokens and cache usage if supported. */
   computePrice(responseUsage: AnthropicUsage): number {
+    if (!responseUsage) {
+      return 0;
+    }
     let basePrice = calculateTokenPrice(
       responseUsage.input_tokens,
       responseUsage.output_tokens,
