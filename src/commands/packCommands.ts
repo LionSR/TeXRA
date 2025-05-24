@@ -64,6 +64,7 @@ async function handlePack(config: any) {
       outputFiles,
     );
     provider.clearOutputFiles(streamId);
+    provider.clearTaskOutput(streamId);
   }
 }
 
@@ -96,6 +97,7 @@ async function handlePackSingle(
   if (provider) {
     const streamId = getStreamId(agent, model, inputFile);
     provider.clearOutputFiles(streamId);
+    provider.clearTaskOutput(streamId);
   }
 }
 
@@ -135,6 +137,7 @@ async function handlePackMultiple(
   if (provider) {
     const streamId = getStreamId(agent, model, inputFile, outputFiles);
     provider.clearOutputFiles(streamId);
+    provider.clearTaskOutput(streamId);
   }
 }
 
