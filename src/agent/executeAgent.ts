@@ -23,6 +23,7 @@ import { CoTAgent } from './CoTAgent';
 import { MergeAgent } from './MergeAgent';
 import { ProgressViewProvider } from '../progressView/ProgressViewProvider';
 import { AgentLogger } from '../logger/AgentLogger';
+import { openBuildDisplayIfTex } from '../utils/openBuildUtils';
 
 const CHANNEL = 'executeAgent';
 const logger = new AgentLogger(CHANNEL);
@@ -266,6 +267,12 @@ async function executeAgentWithLogging<T extends AgentWithConfig>(
           logger.endGroup(mainTaskGroupId, 'stopped');
           // Update status to stopped on successful completion
           progressViewProvider.updateStreamStatus(fullStreamId, 'stopped');
+
+          if (config.outputFiles && config.outputFiles.length > 0) {
+            for (const out of config.outputFiles) {
+              await openBuildDisplayIfTex(out, { preserveFocus: true });
+            }
+          }
         } catch (err) {
           // Mark the task as failed
           logger.error(
