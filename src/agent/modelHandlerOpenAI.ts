@@ -25,7 +25,11 @@ import { AgentConfig } from './AgentConfig';
 import { AgentSetting, hasEndTag } from './AgentDataclass';
 import { AgentStateRound } from './AgentState';
 import { ModelHandler } from './ModelHandler';
-import { OpenAIAPIResponseUsage, ResponseUsageFactory } from './ResponseUsage';
+import {
+  OpenAIAPIResponseUsage,
+  ResponseUsageFactory,
+  ExtendedCompletionUsage,
+} from './ResponseUsage';
 import { ToolState } from './ToolState';
 import { K_SLICE } from '../utils/constants';
 import { objectToLogString } from '../utils/stringUtils';
@@ -551,7 +555,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
   }
 
   /** Computes cost based on token usage and model pricing. */
-  computePrice(responseUsage: any): number {
+  computePrice(responseUsage: ExtendedCompletionUsage | null): number {
     // Handle models that return None for usage
     if (!responseUsage) {
       return 0.0;
@@ -592,19 +596,20 @@ export class ModelHandlerOpenAI extends ModelHandler {
 
   /** Creates usage statistics from OpenAI's response format. */
   computeResponseUsage(
-    responseUsage: any,
+    responseUsage: ExtendedCompletionUsage | null,
     responseTime: number,
   ): OpenAIAPIResponseUsage {
     // For Google models, create a minimal usage object with zeros
     if (!responseUsage) {
-      const emptyUsage = {
+      const emptyUsage: ExtendedCompletionUsage = {
         prompt_tokens: 0,
         completion_tokens: 0,
+        total_tokens: 0,
         prompt_tokens_details: { cached_tokens: 0 },
         completion_tokens_details: {
           reasoning_tokens: 0,
-          accepted_prediction_tokens: null,
-          rejected_prediction_tokens: null,
+          accepted_prediction_tokens: undefined,
+          rejected_prediction_tokens: undefined,
         },
       };
       return ResponseUsageFactory.fromOpenAIResponse(
