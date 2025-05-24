@@ -126,6 +126,23 @@ export function updateStatus(status) {
 }
 
 /**
+ * Update token and cost summary in the header
+ * @param {Object} usage - Usage data with inputTokens, outputTokens, cost
+ */
+export function updateUsageSummary(usage) {
+  const summaryElem = document.getElementById('runSummary');
+  if (!summaryElem) return;
+
+  if (!usage) {
+    summaryElem.textContent = '';
+    return;
+  }
+
+  const { inputTokens = 0, outputTokens = 0, cost = 0 } = usage;
+  summaryElem.textContent = `in: ${inputTokens}, out: ${outputTokens}, $${cost.toFixed(3)}`;
+}
+
+/**
  * Update the generated files list
  * @param {Array<string>} files - Array of file paths
  */
