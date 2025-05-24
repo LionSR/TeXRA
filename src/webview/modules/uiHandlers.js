@@ -136,24 +136,36 @@ export function setupUIHandlers() {
     });
   });
 
-  // Add event listeners for the empty buttons
-  const fileTypesWithEmptyButtons = [
-    'input',
-    'reference',
-    'auxiliary',
-    'media',
-    'base',
-    'edited',
-  ];
-  fileTypesWithEmptyButtons.forEach((type) => {
-    const capitalizedType = capitalize(type);
-    addEventListenerSafely(`empty${capitalizedType}FileButton`, 'click', () => {
-      const selectElement = safeGetElementById(`${type}File`);
-      if (selectElement) {
-        selectElement.value = '';
-        saveState();
+  // Delegate file action buttons
+  addEventListenerSafely(document, 'click', (event) => {
+    const target = event.target.closest('[data-filetype][data-action]');
+    if (!target) return;
+
+    const { filetype, action } = target.dataset;
+    const cap = capitalize(filetype);
+
+    switch (action) {
+      case 'clear-single': {
+        const selectElement = safeGetElementById(`${filetype}File`);
+        if (selectElement) {
+          selectElement.value = '';
+          saveState();
+        }
+        break;
       }
-    });
+      case 'clear-multiple':
+        emptyMultipleFiles(`${filetype}Files`, `toggle${cap}Files`);
+        break;
+      case 'toggle-multiple':
+        if (filetype === 'output') {
+          toggleOutputFiles();
+        } else {
+          toggleMultipleFiles(`${filetype}Files`, `toggle${cap}Files`);
+        }
+        break;
+      default:
+        break;
+    }
   });
 
   addEventListenerSafely('agent', 'change', function () {
@@ -211,17 +223,6 @@ export function setupUIHandlers() {
         currentFile: currentFile,
       });
     });
-  });
-
-  // Handle empty buttons and toggles for all multiple selections
-  MULTIPLE_SELECTIONS.forEach((id) => {
-    const toggleId = `toggle${capitalize(id)}`;
-    const emptyButtonId = `empty${capitalize(id)}Button`;
-
-    // Empty button handler
-    addEventListenerSafely(emptyButtonId, 'click', () =>
-      emptyMultipleFiles(id, toggleId),
-    );
   });
 
   CHECK_BOXES.forEach((id) => {
@@ -514,17 +515,6 @@ export function setupUIHandlers() {
       baseFile: baseFile,
     });
     updateEditedFileSelect(baseFile);
-  });
-
-  MULTIPLE_SELECTIONS.forEach((id) => {
-    const toggleId = `toggle${capitalize(id)}`;
-    addEventListenerSafely(toggleId, 'click', () => {
-      if (id === 'outputFiles') {
-        toggleOutputFiles();
-      } else {
-        toggleMultipleFiles(id, toggleId);
-      }
-    });
   });
 
   // Add event listener for history button

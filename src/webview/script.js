@@ -2,6 +2,7 @@ import { vscode } from './modules/vscodeApi.js';
 import { restoreState, saveState } from './modules/stateManager.js';
 import { setupMessageHandlers } from './modules/messageHandlers.js';
 import { setupUIHandlers } from './modules/uiHandlers.js';
+import { insertFileSelectors } from './modules/fileTemplates.js';
 
 import { CHECK_BOXES_TOOL_USE } from './modules/constants.js';
 import { autoResizeTextarea } from './modules/uiHandlers.js';
@@ -51,6 +52,7 @@ window.onload = function () {
 setupMessageHandlers();
 
 document.addEventListener('DOMContentLoaded', function () {
+  insertFileSelectors();
   setupUIHandlers();
 
   // Pack and Clean button handlers
