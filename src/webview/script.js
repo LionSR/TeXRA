@@ -119,21 +119,9 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
-  // Tool Config dropdown toggle
-  const toggleToolConfig = document.getElementById('toggleToolConfig');
-  const toolConfigOptions = document.getElementById('toolConfigOptions');
-
-  if (toggleToolConfig && toolConfigOptions) {
-    // Initial state
-    updateToolConfigToggleState();
-
-    toggleToolConfig.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const isVisible = toolConfigOptions.style.display === 'block';
-      toolConfigOptions.style.display = isVisible ? 'none' : 'block';
-      updateToolConfigToggleState();
-    });
-  }
+  // Update initial toggle states
+  updateToolConfigToggleState();
+  updateAutoToggleState();
 
   // Close dropdowns when clicking outside
   document.addEventListener('click', (e) => {
@@ -146,15 +134,19 @@ document.addEventListener('DOMContentLoaded', function () {
       !toggleToolConfig?.contains(e.target) &&
       !toolConfigOptions?.contains(e.target)
     ) {
-      toolConfigOptions.style.display = 'none';
-      updateToolConfigToggleState();
+      if (toolConfigOptions) {
+        toolConfigOptions.style.display = 'none';
+        updateToolConfigToggleState();
+      }
     }
     if (
       !toggleAutoExtract?.contains(e.target) &&
       !autoExtractOptions?.contains(e.target)
     ) {
-      autoExtractOptions.style.display = 'none';
-      updateAutoToggleState();
+      if (autoExtractOptions) {
+        autoExtractOptions.style.display = 'none';
+        updateAutoToggleState();
+      }
     }
   });
 });
