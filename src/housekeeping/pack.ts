@@ -77,6 +77,19 @@ export async function runPackSingle(
     }
   }
 
+  const onlyInputFilePacked =
+    movedFiles.length === 0 &&
+    copiedFiles.length === 1 &&
+    copiedFiles[0] === inputFile;
+
+  if (onlyInputFilePacked) {
+    logger.warn(CHANNEL, `No files found to pack for ${inputFile}`);
+    vscode.window.showInformationMessage(
+      `No files found to pack for ${inputFile}`,
+    );
+    return '';
+  }
+
   if (movedFiles.length > 0 || copiedFiles.length > 0) {
     logger.debug(
       CHANNEL,
@@ -111,9 +124,8 @@ export async function runPackSingle(
         operations.push(`Copying: ${file} -> ${destination}`);
         await copyFile(file, destination);
       }
-      // if only inputFile is packed, don't show message
-      // potential improvement here
-      if (operations.length > 1) {
+      // Display a summary only when actual files were packed
+      if (operations.length > 0 && !onlyInputFilePacked) {
         logger.info(CHANNEL, `Files packed into ${outputFolder}`);
         vscode.window.showInformationMessage(
           `Files packed into ${outputFolder}`,
