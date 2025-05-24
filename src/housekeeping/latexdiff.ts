@@ -141,7 +141,7 @@ export async function runPackLatexdiffvcMultiple(
     await runPackLatexdiffvc(inputFile, commitHash, clean);
   }
 
-  logger.info(CHANNEL, 'Multiple LaTeX diff files processed');
+  logger.debug(CHANNEL, 'Multiple LaTeX diff files processed');
 }
 
 export async function runCleanLatexdiffvc(

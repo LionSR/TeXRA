@@ -136,24 +136,6 @@
   color: var(--vscode-textLink-foreground);
 }
 
-/* Primary button variation */
-.vscode-button.primary {
-  background-color: var(--button-background);
-  color: var(--button-foreground);
-  padding: 4px 10px;
-  height: var(--height-control);
-  min-width: var(--width-button-min);
-}
-
-.vscode-button.primary:hover {
-  background-color: var(--button-hover-background);
-}
-
-.vscode-button.primary .codicon {
-  color: var(--button-foreground);
-  margin-right: var(--spacing-small);
-}
-
 /* Input styling */
 .vscode-input {
   width: 100%;

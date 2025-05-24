@@ -103,7 +103,6 @@
 
 .status-indicator:hover {
   opacity: var(--opacity-full);
-  transform: scale(1.1);
 }
 
 .status-indicator::after {
@@ -161,10 +160,9 @@
 
 .file-item {
   display: flex;
-  justify-content: space-between;
   align-items: center;
   padding: var(--spacing-tiny) 0;
-  flex-wrap: wrap;
+  gap: var(--spacing-medium);
   margin-bottom: var(--spacing-small);
 }
 
@@ -173,8 +171,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   flex: 1;
-  min-width: calc(var(--width-button-min) + var(--spacing-xlarge));
-  padding-right: var(--spacing-medium);
+  min-width: 200px;
 }
 
 .file-path.clickable {
@@ -188,9 +185,11 @@
 }
 
 .file-stats {
-  margin-left: var(--spacing-medium);
   white-space: nowrap;
   text-decoration: none;
+  flex-shrink: 0;
+  font-size: var(--font-size-sm);
+  color: var(--vscode-descriptionForeground);
 }
 
 .file-dir {
@@ -204,6 +203,7 @@
 
 .file-actions {
   flex-wrap: nowrap;
+  flex-shrink: 0;
   gap: var(--spacing-tiny);
 }
 
@@ -244,11 +244,15 @@
   .file-item {
     flex-direction: column;
     align-items: flex-start;
+    gap: var(--spacing-small);
   }
 
   .file-name {
-    margin-bottom: var(--spacing-small);
     width: 100%;
+  }
+
+  .file-stats {
+    align-self: flex-start;
   }
 
   .file-actions {

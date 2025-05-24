@@ -767,6 +767,20 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     return taskState;
   }
 
+  /**
+   * Clears output file information from the stored task state
+   * @param streamId Stream identifier
+   */
+  public clearTaskOutput(streamId: string): void {
+    const state = this._taskStates.get(streamId);
+    if (state) {
+      state.outputFiles = [];
+      state.outputFilesActive = false;
+      this._taskStates.set(streamId, state);
+      this.saveTaskStates();
+    }
+  }
+
   private saveTaskStates(): void {
     this.logger.debug('Saving taskStates to workspace state');
     const taskStatesObj = Object.fromEntries(this._taskStates.entries());
