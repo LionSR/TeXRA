@@ -66,6 +66,7 @@ async function handleCleanSingle(
   if (provider) {
     const streamId = getStreamId(agent, model, inputFile);
     provider.clearOutputFiles(streamId);
+    provider.clearTaskOutput(streamId);
   }
 }
 
@@ -103,6 +104,7 @@ async function handleCleanMultiple(
   if (provider) {
     const streamId = getStreamId(agent, model, inputFile, outputFiles);
     provider.clearOutputFiles(streamId);
+    provider.clearTaskOutput(streamId);
   }
 }
 
@@ -145,6 +147,7 @@ export async function handleClean(config: any) {
       outputFiles,
     );
     provider.clearOutputFiles(streamId);
+    provider.clearTaskOutput(streamId);
   }
 }
 
