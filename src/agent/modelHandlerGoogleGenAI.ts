@@ -18,7 +18,12 @@ import { AgentConfig } from './AgentConfig';
 import { AgentSetting, hasEndTag } from './AgentDataclass';
 import { AgentStateRound, AgentStateGlobal } from './AgentState';
 import { ToolState } from './ToolState';
-import { OpenAIAPIResponseUsage, ResponseUsageFactory } from './ResponseUsage';
+import {
+  OpenAIAPIResponseUsage,
+  ResponseUsageFactory,
+  GenerateContentResponseUsageMetadata,
+  ExtendedCompletionUsage,
+} from './ResponseUsage';
 import { MediaEntry } from './mediaTypes';
 
 // Local imports - utilities
@@ -68,7 +73,7 @@ function convertInternalPartsToGoogleParts(
         return null;
       }
     })
-    .filter((part: Part | null): part is Part => part != null);
+    .filter((part: Part | null): part is Part => part !== null);
 }
 
 // Helper function
@@ -100,7 +105,7 @@ function convertMessagesToGoogleContentHistory(
             return null;
           }
         })
-        .filter((part: Part | null): part is Part => part != null);
+        .filter((part: Part | null): part is Part => part !== null);
     } else if (typeof msg.content === 'string') {
       parts = [{ text: msg.content }];
     }
@@ -556,12 +561,14 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
     return [responseText, usage, stopReason];
   }
 
-  computePrice(responseUsage: any): number {
+  computePrice(
+    responseUsage: GenerateContentResponseUsageMetadata | null,
+  ): number {
     if (!responseUsage) return 0.0;
     const promptTokens = responseUsage.promptTokenCount ?? 0;
-    const completionTokens = responseUsage.candidatesTokenCount ?? 0;
+    const completionTokens = responseUsage.responseTokenCount ?? 0;
     const thoughtTokens = responseUsage.thoughtsTokenCount ?? 0;
-    const toolUseTokens = responseUsage.toolUseTokenCount ?? 0;
+    const toolUseTokens = responseUsage.toolUsePromptTokenCount ?? 0;
     return calculateTokenPrice(
       promptTokens,
       completionTokens + thoughtTokens + toolUseTokens,
@@ -571,20 +578,20 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
   }
 
   computeResponseUsage(
-    responseUsage: any,
+    responseUsage: GenerateContentResponseUsageMetadata | null,
     responseTime: number,
   ): OpenAIAPIResponseUsage {
-    const usageObj = {
+    const usageObj: ExtendedCompletionUsage = {
       prompt_tokens: responseUsage?.promptTokenCount ?? 0,
-      completion_tokens: responseUsage?.candidatesTokenCount ?? 0,
+      completion_tokens: responseUsage?.responseTokenCount ?? 0,
       total_tokens: responseUsage?.totalTokenCount ?? 0,
       prompt_tokens_details: {
         cached_tokens: responseUsage?.cachedContentTokenCount ?? 0,
       },
       completion_tokens_details: {
         reasoning_tokens: responseUsage?.thoughtsTokenCount ?? 0,
-        accepted_prediction_tokens: null,
-        rejected_prediction_tokens: null,
+        accepted_prediction_tokens: undefined,
+        rejected_prediction_tokens: undefined,
       },
     };
     return ResponseUsageFactory.fromOpenAIResponse(
