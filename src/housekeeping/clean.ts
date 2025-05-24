@@ -72,6 +72,17 @@ export async function runCleanSingle(
     }
   }
 
+  const onlyInputFileFound =
+    filesToDelete.length === 1 && filesToDelete[0] === inputFile;
+
+  if (onlyInputFileFound) {
+    logger.warn(CHANNEL, `No matching files found to clean for ${inputFile}`);
+    vscode.window.showInformationMessage(
+      `No files found to clean for ${inputFile}`,
+    );
+    return;
+  }
+
   if (filesToDelete.length === 0) {
     logger.warn(CHANNEL, `No matching files found to clean for ${inputFile}`);
     vscode.window.showInformationMessage(
