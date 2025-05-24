@@ -30,6 +30,7 @@ import { ModelHandler } from './ModelHandler';
 import {
   AnthropicAPIResponseUsage,
   ResponseUsageFactory,
+  AnthropicUsage,
 } from './ResponseUsage';
 import { ToolState } from './ToolState';
 import { MediaEntry } from './mediaTypes';
@@ -552,7 +553,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
   }
 
   /** Calculates API usage cost based on input/output tokens and cache usage if supported. */
-  computePrice(responseUsage: any): number {
+  computePrice(responseUsage: AnthropicUsage): number {
     let basePrice = calculateTokenPrice(
       responseUsage.input_tokens,
       responseUsage.output_tokens,
@@ -561,14 +562,20 @@ export class ModelHandlerAnthropic extends ModelHandler {
     );
 
     if (this.capabilities.supportsPromptCaching) {
-      if ('cache_creation_input_tokens' in responseUsage) {
+      if (
+        'cache_creation_input_tokens' in responseUsage &&
+        responseUsage.cache_creation_input_tokens !== null
+      ) {
         basePrice +=
           (responseUsage.cache_creation_input_tokens *
             this.config.inputPrice *
             1.25) /
           1e6;
       }
-      if ('cache_read_input_tokens' in responseUsage) {
+      if (
+        'cache_read_input_tokens' in responseUsage &&
+        responseUsage.cache_read_input_tokens !== null
+      ) {
         basePrice +=
           (responseUsage.cache_read_input_tokens *
             this.config.inputPrice *
@@ -582,7 +589,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
 
   /** Computes detailed response usage metrics including tokens, price, and response time. */
   computeResponseUsage(
-    responseUsage: any,
+    responseUsage: AnthropicUsage,
     responseTime: number,
   ): AnthropicAPIResponseUsage {
     return ResponseUsageFactory.fromAnthropicResponse(
