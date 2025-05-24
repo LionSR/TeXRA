@@ -29,6 +29,7 @@ type StreamStatusType =
 interface ColoredLogMessage {
   message: string;
   level: 'error' | 'warn' | 'info' | 'debug';
+  timestamp: number;
   groupId?: string;
 }
 
@@ -125,9 +126,22 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     if (savedState) {
       // Only load channels that should be persisted
       this._logStreams = new Map(
-        Object.entries(savedState).filter(([channel]) =>
-          shouldPersistStream(channel),
-        ),
+        Object.entries(savedState)
+          .filter(([channel]) => shouldPersistStream(channel))
+          .map(([stream, messages]) => [
+            stream,
+            messages.map((msg) => {
+              if (msg.timestamp === undefined) {
+                const attrMatch = msg.message.match(
+                  /data-full-timestamp="([^"]+)"/,
+                );
+                const timeString =
+                  attrMatch?.[1] || (msg.message.match(/\[(.*?)\]/)?.[1] ?? '');
+                msg.timestamp = new Date(timeString).getTime() || Date.now();
+              }
+              return msg;
+            }),
+          ]),
       );
     } else {
       this._logStreams.clear();
@@ -360,6 +374,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     message: string,
     level: 'error' | 'warn' | 'info' | 'debug' = 'info',
     groupId?: string,
+    timestamp: number = Date.now(),
   ) {
     // Skip if this stream should be excluded from the progress view
     if (shouldExcludeFromProgressView(stream)) {
@@ -404,6 +419,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     const logMessage: ColoredLogMessage = {
       message,
       level,
+      timestamp,
       groupId,
     };
 
