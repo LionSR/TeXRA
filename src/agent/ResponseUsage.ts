@@ -1,5 +1,21 @@
 /** Types and utilities for tracking and analyzing model API response usage metrics. */
 
+import type { CompletionUsage } from 'openai/resources/completions';
+import type { Usage as AnthropicUsage } from '@anthropic-ai/sdk/resources/messages';
+import type { UsageMetadata as GenerateContentResponseUsageMetadata } from '@google/genai';
+
+// Extended OpenAI usage type with additional fields used by various providers
+export interface ExtendedCompletionUsage extends CompletionUsage {
+  prompt_cache_hit_tokens?: number; // DeepSeek specific
+}
+
+// Re-export SDK types for use in model handlers
+export type {
+  CompletionUsage,
+  AnthropicUsage,
+  GenerateContentResponseUsageMetadata,
+};
+
 /** Base interface for common response usage metrics across all model providers. */
 export interface ResponseUsageBase {
   totalInputTokens: number;
@@ -37,7 +53,7 @@ export class ResponseUsageFactory {
    * @returns Structured OpenAI usage metrics
    */
   static fromOpenAIResponse(
-    responseUsage: any,
+    responseUsage: ExtendedCompletionUsage,
     cost: number,
     responseTime: number,
   ): OpenAIAPIResponseUsage {
@@ -84,7 +100,7 @@ export class ResponseUsageFactory {
    * @returns Structured Anthropic usage metrics
    */
   static fromAnthropicResponse(
-    responseUsage: any,
+    responseUsage: AnthropicUsage,
     cost: number,
     responseTime: number,
   ): AnthropicAPIResponseUsage {
