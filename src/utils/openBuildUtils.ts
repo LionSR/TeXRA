@@ -42,3 +42,31 @@ export async function openAndBuildIfTex(
     logger.error(CHANNEL, `Error opening file: ${err}`);
   }
 }
+
+/**
+ * Open a file, compile if it is TeX, and display the resulting PDF.
+ * The PDF viewer is refreshed if already loaded.
+ *
+ * @param file Relative path to the file within the workspace
+ * @param options Optional settings for showing the document
+ */
+export async function openBuildDisplayIfTex(
+  file: string,
+  options: { preserveFocus?: boolean } = {},
+): Promise<void> {
+  await openAndBuildIfTex(file, options);
+
+  if (file.toLowerCase().endsWith('.tex')) {
+    try {
+      setTimeout(async () => {
+        await vscode.commands.executeCommand('latex-workshop.view');
+        setTimeout(
+          () => vscode.commands.executeCommand('latex-workshop.refresh-viewer'),
+          5000,
+        );
+      }, 5000);
+    } catch (err) {
+      logger.warn(CHANNEL, `Viewer display failed: ${err}`);
+    }
+  }
+}

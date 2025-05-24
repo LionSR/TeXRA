@@ -328,14 +328,6 @@ export abstract class BaseReflectionAgent {
             this.agentSetting.endTag,
           );
 
-        // Extract thinking from XML tags in the response text
-        this.extractAndLogScratchpad(
-          newResponse,
-          'scratchpad',
-          responseCycleGroupId,
-        );
-        // this has a potential bug if <scratchpad> is included in the prefill
-
         this.logger.debug(`Stop reason: ${stopReason}`, responseCycleGroupId);
         this.logger.debug(
           `Token usage: ${JSON.stringify(responseUsage)}`,
@@ -351,7 +343,7 @@ export abstract class BaseReflectionAgent {
           toolState,
         );
 
-        // If thinking content was extracted, format and log it
+        // If thinking content was extracted, format and log it first
         if (thinkingContent) {
           formatAndLogContent(
             thinkingContent,
@@ -363,6 +355,14 @@ export abstract class BaseReflectionAgent {
           // Note: The complete thinking blocks (including signatures) have already been
           // stored in toolState.thinkingBlocks by the processThinkingBlock method
         }
+
+        // Extract thinking from XML tags in the response text
+        this.extractAndLogScratchpad(
+          newResponse,
+          'scratchpad',
+          responseCycleGroupId,
+        );
+        // this has a potential bug if <scratchpad> is included in the prefill
 
         // Compute statistics and update states
         const APIUsage = this.modelHandler.computeResponseUsage(
@@ -607,7 +607,7 @@ export abstract class BaseReflectionAgent {
       );
 
       const inputInfo = `inputFile ${this.agentConfig.inputFile} and/or inputFiles ${this.agentConfig.inputFiles}`;
-      this.logger.info(
+      this.logger.debug(
         `Processed ${inputInfo}. The round ${currRound} output was saved as ${outputFile}`,
         roundGroupId,
       );
