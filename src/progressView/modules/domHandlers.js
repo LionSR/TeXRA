@@ -291,7 +291,12 @@ export function updateFileList(filesByRound) {
  */
 export function addLogGroup(group) {
   setLogGroup(group.id, group);
-  // Create the header element programmatically instead of using innerHTML
+  // Create the details container that will manage toggle state
+  const detailsElem = document.createElement('details');
+  detailsElem.className = 'log-group';
+  detailsElem.id = `group-${group.id}`;
+
+  // Create the header element as a <summary>
   const headerTemplate = document.createElement('template');
   headerTemplate.innerHTML = createGroupHeader(group);
   const headerElement = headerTemplate.content.firstElementChild;
@@ -303,22 +308,20 @@ export function addLogGroup(group) {
 
   // Check if we have a saved collapsed state for this group
   const isCollapsed = getGroupToggleState(group.id);
-  // Collapse if explicitly set to collapsed in the saved state OR if the group status is 'stopped'
-  if (isCollapsed === true || group.status === 'stopped') {
-    groupContainer.style.display = 'none';
-    // Update the toggle icon to reflect collapsed state
-    const toggleIcon = headerElement.querySelector('.group-toggle i');
-    if (toggleIcon) {
-      toggleIcon.className = 'codicon codicon-chevron-right';
-    }
+  const shouldCollapse = isCollapsed === true || group.status === 'stopped';
+  detailsElem.open = !shouldCollapse;
 
-    // If it's not already saved as collapsed but status is 'stopped', update the toggle state
-    if (isCollapsed !== true && group.status === 'stopped') {
-      setGroupToggleState(group.id, true);
-    }
-  } else {
-    groupContainer.style.display = 'block'; // Default to visible if no saved state
+  if (shouldCollapse && isCollapsed !== true && group.status === 'stopped') {
+    setGroupToggleState(group.id, true);
   }
+
+  detailsElem.appendChild(headerElement);
+  detailsElem.appendChild(groupContainer);
+
+  // Update toggle state when the user expands/collapses the details element
+  detailsElem.addEventListener('toggle', () => {
+    setGroupToggleState(group.id, !detailsElem.open);
+  });
 
   // Determine where to add this group based on parentGroupId
   if (group.parentGroupId) {
@@ -362,24 +365,23 @@ export function addLogGroup(group) {
           }
         }
         // Check if it's another group header
-        else if (child.classList.contains('log-group-header')) {
-          // Get the full timestamp from the group data
-          const otherGroupId = child.id.replace('group-header-', '');
-          const otherGroup = getLogGroup(otherGroupId);
+        else if (child.tagName === 'DETAILS') {
+          const headerEl = child.querySelector('.log-group-header');
+          const timeElem = headerEl?.querySelector('.group-start-time');
 
-          if (otherGroup && otherGroup.startTime) {
-            const otherTime = new Date(otherGroup.startTime);
+          if (timeElem) {
+            const otherGroupId = headerEl.id.replace('group-header-', '');
+            const otherGroup = getLogGroup(otherGroupId);
 
-            if (startTime < otherTime) {
-              insertPosition = child;
-              break;
-            }
-          } else {
-            // Fallback to extracting time from the element
-            const timeElem = child.querySelector('.group-start-time');
-            if (timeElem) {
+            if (otherGroup && otherGroup.startTime) {
+              const otherTime = new Date(otherGroup.startTime);
+
+              if (startTime < otherTime) {
+                insertPosition = child;
+                break;
+              }
+            } else {
               const timeText = timeElem.textContent.replace('Started: ', '');
-              // Use a dummy date for time-only comparison
               const otherTime = new Date(`2000-01-01 ${timeText}`);
 
               if (startTime < otherTime) {
@@ -388,62 +390,26 @@ export function addLogGroup(group) {
               }
             }
           }
-
-          // Skip the content container of this group
-          if (i + 1 < childElements.length) {
-            const nextElem = childElements[i + 1];
-            if (nextElem.classList.contains('log-group-content')) {
-              i++; // Skip next element
-            }
-          }
         }
       }
 
       // Insert at the determined position or append at the end
       if (insertPosition) {
-        parentContentElement.insertBefore(headerElement, insertPosition);
-        parentContentElement.insertBefore(groupContainer, insertPosition);
+        parentContentElement.insertBefore(detailsElem, insertPosition);
       } else {
         // Add to end of parent container
-        parentContentElement.appendChild(headerElement);
-        parentContentElement.appendChild(groupContainer);
+        parentContentElement.appendChild(detailsElem);
       }
     } else {
       // Fallback if parent not found - add to main container
       const logContent = document.getElementById('logContent');
-      logContent.appendChild(headerElement);
-      logContent.appendChild(groupContainer);
+      logContent.appendChild(detailsElem);
     }
   } else {
     // This is a top-level group - add to main container
     const logContent = document.getElementById('logContent');
-    logContent.appendChild(headerElement);
-    logContent.appendChild(groupContainer);
+    logContent.appendChild(detailsElem);
   }
-
-  // Add click handler to the header for toggling - now done directly on the DOM element
-  headerElement.addEventListener('click', (event) => {
-    // Stop event propagation to prevent parent toggles from also firing
-    event.stopPropagation();
-
-    const content = document.getElementById(`group-content-${group.id}`);
-    if (!content) return;
-
-    if (content.style.display === 'none') {
-      content.style.display = 'block';
-      headerElement.querySelector('.group-toggle i').className =
-        'codicon codicon-chevron-down';
-      setGroupToggleState(group.id, false); // Not collapsed
-    } else {
-      content.style.display = 'none';
-      headerElement.querySelector('.group-toggle i').className =
-        'codicon codicon-chevron-right';
-      setGroupToggleState(group.id, true); // Collapsed
-    }
-
-    // Save the updated state
-    saveState();
-  });
 }
 
 /**
@@ -496,23 +462,10 @@ export function updateLogGroupUI(groupId, status, endTime) {
 
     // Automatically collapse the group if it finished normally (status is "stopped")
     if (status === 'stopped') {
-      // Get the content element
-      const content = document.getElementById(`group-content-${groupId}`);
-      if (content) {
-        // Collapse the content
-        content.style.display = 'none';
-
-        // Update the toggle icon
-        const toggleIcon = header.querySelector('.group-toggle i');
-        if (toggleIcon) {
-          toggleIcon.className = 'codicon codicon-chevron-right';
-        }
-
-        // Update the group toggle state
-        setGroupToggleState(groupId, true); // Set to collapsed
-
-        // Save the updated state
-        saveState();
+      const details = document.getElementById(`group-${groupId}`);
+      if (details) {
+        details.open = false;
+        setGroupToggleState(groupId, true);
       }
     }
   }
@@ -550,24 +503,22 @@ export function appendLogToGroup(logMessage) {
       for (let i = 0; i < childElements.length; i++) {
         const child = childElements[i];
 
-        // If this is a group header, get its start time
-        if (child.classList.contains('log-group-header')) {
-          const startTimeElem = child.querySelector('.group-start-time');
+        // If this is a nested group, get its start time
+        if (child.tagName === 'DETAILS') {
+          const headerEl = child.querySelector('.log-group-header');
+          const startTimeElem = headerEl?.querySelector('.group-start-time');
           if (startTimeElem) {
-            // Get full ISO timestamp from the group data
-            const groupId = child.id.replace('group-header-', '');
+            const groupId = headerEl.id.replace('group-header-', '');
             const group = getLogGroup(groupId);
             if (group && group.startTime) {
               const childDate = new Date(group.startTime);
 
-              // Compare using full date objects if available
               if (msgDate && childDate) {
                 if (msgDate < childDate) {
                   insertPosition = child;
                   break;
                 }
               } else {
-                // Fallback to simple time string comparison
                 const timeText = startTimeElem.textContent;
                 const childTimestamp = timeText.replace('Started: ', '');
                 if (msgTimestamp < childTimestamp) {
@@ -576,13 +527,6 @@ export function appendLogToGroup(logMessage) {
                 }
               }
             }
-          }
-          // Skip the corresponding content container of this child group
-          if (
-            i + 1 < childElements.length &&
-            childElements[i + 1].classList.contains('log-group-content')
-          ) {
-            i++; // Skip the next element (content container)
           }
         }
         // If this is a log message, extract its timestamp
@@ -638,23 +582,10 @@ export function applyGroupToggleStates() {
   const logGroups = getLogGroups();
   for (const [groupId, _] of logGroups) {
     const isCollapsed = getGroupToggleState(groupId);
-    const headerElem = document.getElementById(`group-header-${groupId}`);
-    const contentElem = document.getElementById(`group-content-${groupId}`);
+    const detailsElem = document.getElementById(`group-${groupId}`);
 
-    if (headerElem && contentElem && isCollapsed !== undefined) {
-      if (isCollapsed) {
-        contentElem.style.display = 'none';
-        const toggleIcon = headerElem.querySelector('.group-toggle i');
-        if (toggleIcon) {
-          toggleIcon.className = 'codicon codicon-chevron-right';
-        }
-      } else {
-        contentElem.style.display = 'block';
-        const toggleIcon = headerElem.querySelector('.group-toggle i');
-        if (toggleIcon) {
-          toggleIcon.className = 'codicon codicon-chevron-down';
-        }
-      }
+    if (detailsElem && isCollapsed !== undefined) {
+      detailsElem.open = !isCollapsed;
     }
   }
 }
