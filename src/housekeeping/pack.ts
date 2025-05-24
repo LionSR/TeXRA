@@ -229,7 +229,7 @@ export async function runPack(
   agent: string,
   outputFiles: string[] = [],
   outputNameOverride?: string,
-): Promise<string> {
+): Promise<string | undefined> {
   logger.debug(
     CHANNEL,
     `Starting pack with model=${model}, inputFile=${inputFile}, agent=${agent}, outputNameOverride=${outputNameOverride}`,
@@ -242,12 +242,12 @@ export async function runPack(
       `Missing required parameters: model=${model}, inputFile=${inputFile}, agent=${agent}`,
     );
     vscode.window.showErrorMessage('Missing required parameters for pack');
-    return '';
+    return undefined;
   }
 
   // Use multiple mode if there are output files
   if (outputFiles.length > 0) {
-    return runPackMultiple(
+    return await runPackMultiple(
       model,
       inputFile,
       agent,
@@ -255,6 +255,6 @@ export async function runPack(
       outputNameOverride,
     );
   } else {
-    return runPackSingle(model, inputFile, agent, outputNameOverride);
+    return await runPackSingle(model, inputFile, agent, outputNameOverride);
   }
 }
