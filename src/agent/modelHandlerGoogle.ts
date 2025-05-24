@@ -3,6 +3,7 @@
 
 // Third-party imports
 import OpenAI from 'openai';
+import { CompletionUsage } from 'openai/resources/completions';
 import { GenerateContentResponseUsageMetadata } from '@google/genai/dist/node/node';
 
 // Local imports - agent components
@@ -26,40 +27,57 @@ export class ModelHandlerGoogle extends ModelHandlerOpenAI {
     return new OpenAI({ apiKey, baseURL });
   }
 
-  /** Computes cost based on Google's token usage format. */
-  computePrice(responseUsage: GenerateContentResponseUsageMetadata): number {
-    // Google models return completionTokens, promptTokens instead of completion_tokens, prompt_tokens
-    const promptTokens = responseUsage?.promptTokens ?? 0;
-    const completionTokens = responseUsage?.completionTokens ?? 0;
-    const thoughtTokens =
-      responseUsage?.thoughtsTokenCount ?? responseUsage?.thoughtTokens ?? 0;
-    const toolUseTokens = responseUsage?.toolUseTokenCount ?? 0;
+  /** Computes cost based on token usage. Overrides base implementation to handle Google's format. */
+  computePrice(
+    responseUsage: CompletionUsage | GenerateContentResponseUsageMetadata,
+  ): number {
+    // Handle OpenAI CompletionUsage format (from base class)
+    if ('prompt_tokens' in responseUsage) {
+      return super.computePrice(responseUsage as CompletionUsage);
+    }
+
+    // Handle Google's GenerateContentResponseUsageMetadata format
+    const googleUsage = responseUsage as GenerateContentResponseUsageMetadata;
+    const promptTokens = googleUsage?.promptTokenCount ?? 0;
+    const completionTokens = googleUsage?.candidatesTokenCount ?? 0;
+    const thoughtTokens = googleUsage?.thoughtsTokenCount ?? 0;
 
     return calculateTokenPrice(
       promptTokens,
-      completionTokens + thoughtTokens + toolUseTokens,
+      completionTokens + thoughtTokens,
       this.config.inputPrice,
       this.config.outputPrice,
     );
   }
 
-  /** Creates usage statistics from Google's response format. */
+  /** Creates usage statistics from response format. Overrides base implementation to handle Google's format. */
   computeResponseUsage(
-    responseUsage: GenerateContentResponseUsageMetadata,
+    responseUsage: CompletionUsage | GenerateContentResponseUsageMetadata,
     responseTime: number,
   ): OpenAIAPIResponseUsage {
-    // Create a minimal usage object with Google's token counts
-    const usageObj = {
-      prompt_tokens: responseUsage?.candidatesTokenCount ?? 0,
-      completion_tokens: responseUsage?.completionTokens ?? 0,
-      total_tokens: responseUsage?.totalTokenCount ?? 0,
+    // Handle OpenAI CompletionUsage format (from base class)
+    if ('prompt_tokens' in responseUsage) {
+      return super.computeResponseUsage(
+        responseUsage as CompletionUsage,
+        responseTime,
+      );
+    }
+
+    // Handle Google's GenerateContentResponseUsageMetadata format
+    const googleUsage = responseUsage as GenerateContentResponseUsageMetadata;
+
+    // Create a CompletionUsage object compatible with OpenAI's format
+    const usageObj: CompletionUsage = {
+      prompt_tokens: googleUsage?.promptTokenCount ?? 0,
+      completion_tokens: googleUsage?.candidatesTokenCount ?? 0,
+      total_tokens: googleUsage?.totalTokenCount ?? 0,
       prompt_tokens_details: {
-        cached_tokens: responseUsage?.cachedContentTokenCount ?? 0,
+        cached_tokens: googleUsage?.cachedContentTokenCount ?? 0,
       },
       completion_tokens_details: {
-        reasoning_tokens: responseUsage?.thoughtsTokenCount ?? 0,
-        accepted_prediction_tokens: null,
-        rejected_prediction_tokens: null,
+        reasoning_tokens: googleUsage?.thoughtsTokenCount ?? 0,
+        accepted_prediction_tokens: undefined,
+        rejected_prediction_tokens: undefined,
       },
     };
 

@@ -35,6 +35,12 @@ import { K_SLICE } from '../utils/constants';
 import { objectToLogString } from '../utils/stringUtils';
 import { calculateTokenPrice } from '../utils/priceUtils';
 import { MediaEntry } from './mediaTypes';
+import {
+  appendToLastMessage,
+  getMessageAt,
+  createTextPart,
+  PROVIDERS,
+} from '../utils/messageContentUtils';
 
 /**
  * OpenAI-specific handlers.
@@ -203,11 +209,24 @@ export class ModelHandlerOpenAI extends ModelHandler {
     }
 
     // Append the formatted content to the correct message
-    let lastRole = messages.length > 0 ? messages.at(-1).role : null;
+    const lastMessage = getMessageAt(messages, -1);
+    let lastRole = lastMessage?.role || null;
     if (lastRole === 'system' || messages.length === 0) {
       messages.push({ role: 'user', content: userMessageContent });
-    } else if (lastRole === 'user') {
-      messages.at(-1).content.push(...userMessageContent);
+    } else if (lastRole === 'user' && lastMessage) {
+      // Use utility to safely append content
+      if (Array.isArray(lastMessage.content)) {
+        (lastMessage.content as ChatCompletionContentPart[]).push(
+          ...userMessageContent,
+        );
+      } else {
+        // Convert string content to array format
+        const existingContent = lastMessage.content;
+        lastMessage.content = [
+          createTextPart(existingContent || ''),
+          ...userMessageContent,
+        ] as ChatCompletionContentPart[];
+      }
     } else {
       // Fallback: Should not happen with current logic but good to handle
       messages.push({ role: 'user', content: userMessageContent });
@@ -220,18 +239,29 @@ export class ModelHandlerOpenAI extends ModelHandler {
     const requestRole = this.config.capabilities.supportsIntermDevMsgs
       ? 'system'
       : 'user';
-    lastRole = messages.length > 0 ? messages.at(-1).role : null;
+    const lastMsg = messages.length > 0 ? messages.at(-1) : null;
+    lastRole = lastMsg?.role || null;
 
     if (requestRole === 'system') {
       messages.push({
         role: requestRole,
         content: [{ type: 'text', text: userRequest }],
       });
-    } else if (requestRole === 'user' && lastRole === 'user') {
-      messages.at(-1).content.push({
-        type: 'text',
-        text: userRequest,
-      });
+    } else if (requestRole === 'user' && lastRole === 'user' && lastMsg) {
+      // Ensure content is an array before pushing
+      if (Array.isArray(lastMsg.content)) {
+        (lastMsg.content as ChatCompletionContentPart[]).push({
+          type: 'text' as const,
+          text: userRequest,
+        });
+      } else {
+        // Convert string content to array format
+        const existingContent = lastMsg.content;
+        lastMsg.content = [
+          { type: 'text' as const, text: existingContent || '' },
+          { type: 'text' as const, text: userRequest },
+        ] as ChatCompletionContentPart[];
+      }
     } else {
       messages.push({
         role: requestRole,
@@ -483,10 +513,13 @@ export class ModelHandlerOpenAI extends ModelHandler {
       }
 
       const PseudoPrefillMsgContentString = `Organize your response with xml tags. Start your response with:\n${prefill}`;
-      messages.at(-1).content.push({
-        type: 'text',
-        text: PseudoPrefillMsgContentString,
-      });
+      if (
+        !appendToLastMessage(messages, PseudoPrefillMsgContentString, 'openai')
+      ) {
+        this.logger.warn(
+          'Failed to append pseudo prefill message to last message',
+        );
+      }
       this.logger.debug(
         `Added pseudo prefill message to messages:\n${PseudoPrefillMsgContentString}`,
       );
@@ -516,16 +549,22 @@ export class ModelHandlerOpenAI extends ModelHandler {
     const lastMessage = messages.at(-1);
     if (hasEndTag(agentSetting, fileContent)) {
       this.logger.info('End tag detected - skipping continuation');
-      if (Array.isArray(lastMessage.content)) {
-        // this is suspicious, because the two conflicts!!!
-        lastMessage.content[lastMessage.content.length - 1].text = fileContent;
-      } else {
-        lastMessage.content = [
-          {
-            type: 'text',
-            text: fileContent,
-          },
-        ];
+      if (lastMessage) {
+        if (Array.isArray(lastMessage.content)) {
+          // Update the last text content part
+          const lastContentPart =
+            lastMessage.content[lastMessage.content.length - 1];
+          if (lastContentPart && 'text' in lastContentPart) {
+            lastContentPart.text = fileContent;
+          }
+        } else {
+          lastMessage.content = [
+            {
+              type: 'text' as const,
+              text: fileContent,
+            },
+          ];
+        }
       }
       endTurn = true;
       return [endTurn, messages];
@@ -577,7 +616,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
       responseUsage.completion_tokens_details?.reasoning_tokens ?? 0;
     const cachedTokens =
       responseUsage.prompt_tokens_details?.cached_tokens ??
-      responseUsage.prompt_cache_hit_tokens ?? // deepseek
+      (responseUsage as any).prompt_cache_hit_tokens ?? // deepseek - non-standard property
       0;
 
     if (reasoningTokens) {
@@ -601,14 +640,15 @@ export class ModelHandlerOpenAI extends ModelHandler {
   ): OpenAIAPIResponseUsage {
     // For Google models, create a minimal usage object with zeros
     if (!responseUsage) {
-      const emptyUsage = {
+      const emptyUsage: CompletionUsage = {
         prompt_tokens: 0,
         completion_tokens: 0,
+        total_tokens: 0,
         prompt_tokens_details: { cached_tokens: 0 },
         completion_tokens_details: {
           reasoning_tokens: 0,
-          accepted_prediction_tokens: null,
-          rejected_prediction_tokens: null,
+          accepted_prediction_tokens: 0,
+          rejected_prediction_tokens: 0,
         },
       };
       return ResponseUsageFactory.fromOpenAIResponse(
@@ -636,24 +676,19 @@ export class ModelHandlerOpenAI extends ModelHandler {
       'Updating message content for OpenAI models with prefill support',
     );
 
-    const lastMessage = messages.at(-1);
+    const lastMessage = getMessageAt(messages, -1);
 
-    if (lastMessage.role === 'assistant') {
-      if (Array.isArray(lastMessage.content)) {
-        const newMessage = {
-          type: 'text',
-          text: bestConnector + newResponse,
-        };
-        lastMessage.content.push(newMessage);
-      } else {
-        lastMessage.content = [
-          {
-            type: 'text',
-            text: toolState.accumulatedOutput,
-          },
-        ];
+    if (lastMessage && lastMessage.role === 'assistant') {
+      if (
+        !appendToLastMessage(messages, bestConnector + newResponse, 'openai')
+      ) {
+        // Fallback to direct assignment if append fails
+        lastMessage.content = [createTextPart(toolState.accumulatedOutput)];
       }
-    } else if (lastMessage.role === 'user' || lastMessage.role === 'system') {
+    } else if (
+      lastMessage &&
+      (lastMessage.role === 'user' || lastMessage.role === 'system')
+    ) {
       this.logger.debug(
         ' Last message is a user or system message - unexpected format',
       );
@@ -680,7 +715,10 @@ export class ModelHandlerOpenAI extends ModelHandler {
     const lastMessage = messages.at(-1);
     const secondLastMessage = messages.at(-2);
 
-    if (lastMessage.role !== 'user' && lastMessage.role !== 'system') {
+    if (
+      !lastMessage ||
+      (lastMessage.role !== 'user' && lastMessage.role !== 'system')
+    ) {
       this.logger.error(
         'Last message is not a user or system message - unexpected format',
       );
@@ -688,25 +726,25 @@ export class ModelHandlerOpenAI extends ModelHandler {
     }
     this.logger.debug('Last message is a user/system message');
 
-    if (this.containCutOffMessage(lastMessage.content)) {
+    if (lastMessage && this.containCutOffMessage(lastMessage.content)) {
       this.logger.debug(
         'Last message is a user message asking to continue after cut off',
       );
       // Then the last message is a user message
       // So the second last message must be an assistant message
-      if (secondLastMessage.role === 'assistant') {
+      if (secondLastMessage && secondLastMessage.role === 'assistant') {
         // we get gradually get rid if this kind of isArray conditioning since now we are consistently using the content array
         // but why do the following two differ?
         if (Array.isArray(secondLastMessage.content)) {
           secondLastMessage.content.push({
-            type: 'text',
+            type: 'text' as const,
             text: bestConnector + newResponse,
           });
         } else {
           this.logger.error('Second last message content is not a list');
           secondLastMessage.content = [
             {
-              type: 'text',
+              type: 'text' as const,
               text: toolState.accumulatedOutput,
             },
           ];
@@ -727,7 +765,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
       );
       messages.push({
         role: 'assistant',
-        content: [{ type: 'text', text: toolState.accumulatedOutput }],
+        content: [{ type: 'text' as const, text: toolState.accumulatedOutput }],
       });
     }
   }

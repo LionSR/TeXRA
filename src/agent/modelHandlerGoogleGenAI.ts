@@ -9,7 +9,6 @@ import {
   GenerateContentResponse,
   FinishReason,
   File,
-  createPartFromUri,
 } from '@google/genai';
 import { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 import { CompletionUsage } from 'openai/resources/completions';
@@ -19,7 +18,7 @@ import { GenerateContentResponseUsageMetadata } from '@google/genai/dist/node/no
 import { ModelHandler } from './ModelHandler';
 import { AgentConfig } from './AgentConfig';
 import { AgentSetting, hasEndTag } from './AgentDataclass';
-import { AgentStateRound, AgentStateGlobal } from './AgentState';
+import { AgentStateRound } from './AgentState';
 import { ToolState } from './ToolState';
 import { OpenAIAPIResponseUsage, ResponseUsageFactory } from './ResponseUsage';
 import { MediaEntry } from './mediaTypes';
@@ -44,37 +43,16 @@ import { calculateTokenPrice } from '../utils/priceUtils';
 
 // Local constant
 import { K_SLICE } from '../utils/constants';
+import {
+  appendToLastMessage,
+  appendContentToLastMessage,
+  updateLastTextPart,
+  getMessageAt,
+} from '../utils/messageContentUtils';
 
-// Internal type definition
-type InternalMessagePart = {
-  type: 'text' | 'file_uri' | string;
-  text?: string;
-  uri?: string;
-  mimeType?: string;
-};
+// No need for custom types - use native Google GenAI Part type directly
 
-// Helper function
-function convertInternalPartsToGoogleParts(
-  internalParts: InternalMessagePart[],
-  logger: any,
-): Part[] {
-  return internalParts
-    .map((part: InternalMessagePart): Part | null => {
-      if (part.type === 'text' && typeof part.text === 'string') {
-        return { text: part.text };
-      } else if (part.type === 'file_uri' && part.uri && part.mimeType) {
-        return createPartFromUri(part.uri, part.mimeType);
-      } else {
-        logger.warn(
-          `Skipping unsupported internal part type for sendMessage: ${JSON.stringify(part)}`,
-        );
-        return null;
-      }
-    })
-    .filter((part: Part | null): part is Part => part != null);
-}
-
-// Helper function
+// Helper function to convert OpenAI messages to Google GenAI Content format
 function convertMessagesToGoogleContentHistory(
   messages: ChatCompletionMessageParam[],
   logger: any,
@@ -91,15 +69,23 @@ function convertMessagesToGoogleContentHistory(
     let parts: Part[] = [];
     if (Array.isArray(msg.content)) {
       parts = msg.content
-        .map((part: InternalMessagePart): Part | null => {
-          if (part.type === 'text' && typeof part.text === 'string') {
+        .map((part: any): Part | null => {
+          // Native Google Part format (from our own messages)
+          if (part.text !== undefined) {
             return { text: part.text };
-          } else if (part.type === 'file_uri' && part.uri && part.mimeType) {
-            return { fileData: { fileUri: part.uri, mimeType: part.mimeType } };
+          } else if (part.fileData) {
+            return { fileData: part.fileData };
+          }
+          // OpenAI text format (from other handlers)
+          else if (part.type === 'text' && typeof part.text === 'string') {
+            return { text: part.text };
+          }
+          // Handle image URLs by skipping (Google needs file URIs)
+          else if (part.type === 'image_url') {
+            logger.warn('Image URLs not supported by Google GenAI - skipping');
+            return null;
           } else {
-            logger.warn(
-              `Skipping unsupported internal part type for history conversion: ${JSON.stringify(part)}`,
-            );
+            logger.warn(`Skipping unsupported part: ${JSON.stringify(part)}`);
             return null;
           }
         })
@@ -173,10 +159,21 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
     let lastMessageParts: Part[] = [];
     if (lastMessage?.content) {
       if (Array.isArray(lastMessage.content)) {
-        lastMessageParts = convertInternalPartsToGoogleParts(
-          lastMessage.content,
-          this.logger,
-        );
+        // Convert content array to Google Parts
+        lastMessageParts = lastMessage.content
+          .map((part: any): Part | null => {
+            if (part.text !== undefined) {
+              return { text: part.text };
+            } else if (part.fileData) {
+              return { fileData: part.fileData };
+            } else {
+              this.logger.warn(
+                `Skipping unsupported part in sendMessage: ${JSON.stringify(part)}`,
+              );
+              return null;
+            }
+          })
+          .filter((part): part is Part => part !== null);
       } else if (typeof lastMessage.content === 'string') {
         lastMessageParts = [{ text: lastMessage.content }];
       }
@@ -246,7 +243,6 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
       }
     }
 
-    const useStreaming = false; // Hardcoded to false
     if (getConfig<boolean>('model.useStreaming', false)) {
       this.logger.warn(
         'Streaming is configured but currently disabled in ModelHandlerGoogleGenAI (using Chat API).',
@@ -292,9 +288,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
     systemPrompt?: string,
   ): Promise<ChatCompletionMessageParam[]> {
     const client = await this.getClient();
-    const userContentParts: InternalMessagePart[] = [
-      { type: 'text', text: userPrefix },
-    ];
+    const userContentParts: Part[] = [{ text: userPrefix }];
 
     if (
       mediaFiles &&
@@ -338,14 +332,20 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
           );
 
           userContentParts.push({
-            type: 'text',
             text: `\nFile attached: ${path.basename(mediaFile)}`,
           });
-          userContentParts.push({
-            type: 'file_uri',
-            uri: uploadResult.uri,
-            mimeType: uploadResult.mimeType,
-          });
+          if (uploadResult.uri && uploadResult.mimeType) {
+            userContentParts.push({
+              fileData: {
+                fileUri: uploadResult.uri,
+                mimeType: uploadResult.mimeType,
+              },
+            });
+          } else {
+            this.logger.error(
+              `Upload result missing URI or MIME type for ${mediaFile}`,
+            );
+          }
         } catch (error) {
           this.logger.error(
             `Failed to upload media file ${mediaFile} via native SDK: ${error}`,
@@ -354,9 +354,9 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
       }
     }
 
-    userContentParts.push({ type: 'text', text: `\n${userRequest}` });
+    userContentParts.push({ text: `\n${userRequest}` });
 
-    return [{ role: 'user', content: userContentParts }];
+    return [{ role: 'user', content: userContentParts as any }];
   }
 
   private determineMimeType(filePath: string): string | null {
@@ -409,7 +409,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
     mediaFiles?: string[],
   ): Promise<ChatCompletionMessageParam[]> {
     const client = await this.getClient();
-    const reflectionParts: InternalMessagePart[] = [];
+    const reflectionParts: Part[] = [];
 
     if (
       mediaFiles &&
@@ -461,14 +461,16 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
           }
 
           reflectionParts.push({
-            type: 'text',
             text: `\nReflecting on file: ${path.basename(mediaFile)}`,
           });
-          reflectionParts.push({
-            type: 'file_uri',
-            uri: uploadResult.uri,
-            mimeType: uploadResult.mimeType,
-          });
+          if (uploadResult.uri && uploadResult.mimeType) {
+            reflectionParts.push({
+              fileData: {
+                fileUri: uploadResult.uri,
+                mimeType: uploadResult.mimeType,
+              },
+            });
+          }
         } catch (error) {
           this.logger.error(
             `Failed to upload media file ${mediaFile} for reflection: ${error}`,
@@ -477,9 +479,9 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
       }
     }
 
-    reflectionParts.push({ type: 'text', text: userMessage });
+    reflectionParts.push({ text: userMessage });
 
-    messages.push({ role: 'user', content: reflectionParts });
+    messages.push({ role: 'user', content: reflectionParts as any });
     return messages;
   }
 
@@ -564,7 +566,8 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
     const promptTokens = responseUsage.promptTokenCount ?? 0;
     const completionTokens = responseUsage.candidatesTokenCount ?? 0;
     const thoughtTokens = responseUsage.thoughtsTokenCount ?? 0;
-    const toolUseTokens = responseUsage.toolUseTokenCount ?? 0;
+    // Keep toolUseTokenCount for future use even if the type doesn't have it yet
+    const toolUseTokens = (responseUsage as any).toolUseTokenCount ?? 0;
     return calculateTokenPrice(
       promptTokens,
       completionTokens + thoughtTokens + toolUseTokens,
@@ -577,7 +580,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
     responseUsage: GenerateContentResponseUsageMetadata,
     responseTime: number,
   ): OpenAIAPIResponseUsage {
-    const usageObj = {
+    const usageObj: CompletionUsage = {
       prompt_tokens: responseUsage?.promptTokenCount ?? 0,
       completion_tokens: responseUsage?.candidatesTokenCount ?? 0,
       total_tokens: responseUsage?.totalTokenCount ?? 0,
@@ -586,8 +589,8 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
       },
       completion_tokens_details: {
         reasoning_tokens: responseUsage?.thoughtsTokenCount ?? 0,
-        accepted_prediction_tokens: null,
-        rejected_prediction_tokens: null,
+        accepted_prediction_tokens: undefined,
+        rejected_prediction_tokens: undefined,
       },
     };
     return ResponseUsageFactory.fromOpenAIResponse(
@@ -643,37 +646,24 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
       this.logger.debug('Removed user continuation prompt.');
     }
 
-    const modelMessage = messages.at(-1);
+    const modelMessage = getMessageAt(messages, -1);
     if (modelMessage?.role === 'assistant') {
-      if (Array.isArray(modelMessage.content)) {
-        let lastTextPart = null;
-        for (let i = modelMessage.content.length - 1; i >= 0; i--) {
-          if (
-            modelMessage.content[i] &&
-            modelMessage.content[i].type === 'text'
-          ) {
-            lastTextPart = modelMessage.content[i];
-            break;
-          }
-        }
-        if (lastTextPart) {
-          lastTextPart.text =
-            (lastTextPart.text || '') + bestConnector + newResponse;
-        } else {
-          modelMessage.content.push({
-            type: 'text',
-            text: bestConnector + newResponse,
-          });
-          this.logger.warn(
-            'Added new text part to last model message as none existed.',
-          );
-        }
-      } else {
-        modelMessage.content = [
-          { type: 'text', text: toolState.accumulatedOutput },
-        ];
-        this.logger.error(
-          'Last model message content was not an array. Resetting content.',
+      // Use unified function to update last text part
+      const updated = updateLastTextPart(
+        modelMessage,
+        (text) => text + bestConnector + newResponse,
+        'google',
+      );
+
+      if (!updated) {
+        // If no text part found, append new one using unified function
+        appendContentToLastMessage(
+          messages,
+          { text: bestConnector + newResponse },
+          'google',
+        );
+        this.logger.warn(
+          'Added new text part to last model message as none existed.',
         );
       }
     } else {
@@ -718,13 +708,10 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
       }
 
       // Add pseudo-prefill instruction instead of skipping it
-      const lastMessage = messages[messages.length - 1];
       const pseudoPrefillMsg = `Organize your response with XML tags. Start your response with:\n${prefill}`;
 
-      if (Array.isArray(lastMessage.content)) {
-        lastMessage.content.push({ type: 'text', text: pseudoPrefillMsg });
-      } else {
-        lastMessage.content = [{ type: 'text', text: pseudoPrefillMsg }];
+      if (!appendToLastMessage(messages, pseudoPrefillMsg, 'google')) {
+        this.logger.warn('Failed to append pseudo-prefill message');
       }
 
       this.logger.debug(`Added pseudo-prefill message: "${pseudoPrefillMsg}"`);

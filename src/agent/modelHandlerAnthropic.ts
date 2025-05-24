@@ -40,6 +40,11 @@ import { getConfig } from '../utils/configUtils';
 import { K_SLICE } from '../utils/constants';
 import { objectToLogString } from '../utils/stringUtils';
 import { calculateTokenPrice } from '../utils/priceUtils';
+import {
+  appendToLastMessage,
+  getMessageAt,
+  PROVIDERS,
+} from '../utils/messageContentUtils';
 
 /**
  * Anthropic-specific model handler implementation for managing API interactions and message processing.
@@ -205,7 +210,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
     return messages;
   }
 
-  public removeCacheControl(content: any[]) {
+  public removeCacheControl(content: any[] | string) {
     // With the updated Anthropic prompt caching, we should ensure we never exceed
     // Anthropic's limit of 4 cache_control blocks across the entire conversation
 
@@ -218,6 +223,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
         }
       }
     }
+    // If content is a string, there's nothing to remove
   }
 
   /** Creates a reflection message array for Anthropic models, managing cache control and image content. */
@@ -467,10 +473,17 @@ export class ModelHandlerAnthropic extends ModelHandler {
         // add prefill as part of the user message like OpenAI handler
 
         const PseudoPrefillMsgContentString = `Start your response with:\n${prefill}`;
-        messages.at(-1).content.push({
-          type: 'text',
-          text: PseudoPrefillMsgContentString,
-        });
+        if (
+          !appendToLastMessage(
+            messages,
+            PseudoPrefillMsgContentString,
+            'anthropic',
+          )
+        ) {
+          this.logger.warn(
+            'Failed to append pseudo prefill message to last message',
+          );
+        }
         this.logger.debug(
           `Added pseudo prefill message to messages:\n${PseudoPrefillMsgContentString}`,
         );
@@ -495,18 +508,23 @@ export class ModelHandlerAnthropic extends ModelHandler {
     if (hasEndTag(agentSetting, fileContent)) {
       this.logger.debug('End tag detected - skipping continuation');
       // this is suspicious, because the two conflicts!!! we should check
-      if (Array.isArray(lastMessage.content)) {
-        lastMessage.content[lastMessage.content.length - 1].text = fileContent;
-      } else {
-        lastMessage.content = [
-          {
-            type: 'text',
-            text: fileContent,
-          },
-        ];
+      if (lastMessage) {
+        if (Array.isArray(lastMessage.content)) {
+          const lastContentItem =
+            lastMessage.content[lastMessage.content.length - 1];
+          if (lastContentItem && 'text' in lastContentItem) {
+            lastContentItem.text = fileContent;
+          }
+        } else {
+          lastMessage.content = [
+            {
+              type: 'text',
+              text: fileContent,
+            },
+          ];
+        }
+        this.removeCacheControl(lastMessage.content);
       }
-
-      this.removeCacheControl(messages.at(-1).content);
 
       endTurn = true;
       return [endTurn, messages];
@@ -519,12 +537,13 @@ export class ModelHandlerAnthropic extends ModelHandler {
     // For thinking-enabled models that don't support assistant prefill,
     // add continuation as part of the user message
 
-    const content = [
+    const content: ContentBlock[] = [
       {
-        type: 'text',
+        type: 'text' as const,
         text: fileContent,
+        citations: null,
         ...(this.capabilities.supportsPromptCaching
-          ? { cache_control: { type: 'ephemeral' } }
+          ? { cache_control: { type: 'ephemeral' as const } }
           : {}),
       },
     ];
@@ -562,14 +581,20 @@ export class ModelHandlerAnthropic extends ModelHandler {
     );
 
     if (this.capabilities.supportsPromptCaching) {
-      if ('cache_creation_input_tokens' in responseUsage) {
+      if (
+        'cache_creation_input_tokens' in responseUsage &&
+        responseUsage.cache_creation_input_tokens !== null
+      ) {
         basePrice +=
           (responseUsage.cache_creation_input_tokens *
             this.config.inputPrice *
             1.25) /
           1e6;
       }
-      if ('cache_read_input_tokens' in responseUsage) {
+      if (
+        'cache_read_input_tokens' in responseUsage &&
+        responseUsage.cache_read_input_tokens !== null
+      ) {
         basePrice +=
           (responseUsage.cache_read_input_tokens *
             this.config.inputPrice *
@@ -599,20 +624,18 @@ export class ModelHandlerAnthropic extends ModelHandler {
     newResponse: string,
     toolState: ToolState,
   ): void {
-    const lastMessage = messages.at(-1);
+    const lastMessage = getMessageAt(messages, -1);
 
-    if (lastMessage.role === 'assistant') {
-      if (Array.isArray(lastMessage.content)) {
-        const newMessage = {
-          type: 'text',
-          text: bestConnector + newResponse,
-        };
-        lastMessage.content.push(newMessage);
-      } else {
+    if (lastMessage && lastMessage.role === 'assistant') {
+      if (
+        !appendToLastMessage(messages, bestConnector + newResponse, 'anthropic')
+      ) {
+        // Fallback to direct assignment if append fails
         lastMessage.content = [
           {
-            type: 'text',
+            type: 'text' as const,
             text: toolState.accumulatedOutput,
+            citations: null,
           },
         ];
       }
@@ -629,9 +652,16 @@ export class ModelHandlerAnthropic extends ModelHandler {
           // Remove all existing cache_control
           this.removeCacheControl(lastMessage.content);
 
-          lastMessage.content.at(-1).cache_control = {
-            type: 'ephemeral',
-          };
+          const lastContentItem = lastMessage.content.at(-1);
+          if (
+            lastContentItem &&
+            typeof lastContentItem === 'object' &&
+            'type' in lastContentItem
+          ) {
+            (lastContentItem as any).cache_control = {
+              type: 'ephemeral',
+            };
+          }
         }
       }
     }
@@ -649,7 +679,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
     const lastMessage = messages.at(-1);
     const secondLastMessage = messages.at(-2);
 
-    if (lastMessage.role !== 'user') {
+    if (!lastMessage || lastMessage.role !== 'user') {
       this.logger.error(
         'Last message is not a user message - unexpected format',
       );
@@ -666,16 +696,15 @@ export class ModelHandlerAnthropic extends ModelHandler {
       // The last message is a user message
       // So the second last message must be an assistant message
 
-      if (secondLastMessage.role === 'assistant') {
+      if (secondLastMessage && secondLastMessage.role === 'assistant') {
         // Preserve any thinking blocks that might exist in the content array
-        const thinkingBlocks = secondLastMessage.content.filter(
+        const contentArray = Array.isArray(secondLastMessage.content)
+          ? secondLastMessage.content
+          : [{ type: 'text', text: secondLastMessage.content }];
+
+        const thinkingBlocks = contentArray.filter(
           (item: any) =>
             item.type === 'thinking' || item.type === 'redacted_thinking',
-        );
-
-        // Find text blocks in the content array
-        const textBlocks = secondLastMessage.content.filter(
-          (item: any) => item.type === 'text',
         );
 
         // Anthropic models should include thinking blocks first in the content array
@@ -685,15 +714,33 @@ export class ModelHandlerAnthropic extends ModelHandler {
           this.logger.debug(
             `Using ${thinkingBlocks.length} existing thinking blocks from previous message`,
           );
-          secondLastMessage.content.push({
-            type: 'text',
-            text: bestConnector + newResponse,
-          });
+          // Ensure content is an array before pushing
+          if (Array.isArray(secondLastMessage.content)) {
+            secondLastMessage.content.push({
+              type: 'text',
+              text: bestConnector + newResponse,
+            });
+          } else {
+            // Convert string content to array
+            secondLastMessage.content = [
+              { type: 'text', text: secondLastMessage.content },
+              { type: 'text', text: bestConnector + newResponse },
+            ];
+          }
         } else {
-          secondLastMessage.content.push({
-            type: 'text',
-            text: bestConnector + newResponse,
-          });
+          // Ensure content is an array before pushing
+          if (Array.isArray(secondLastMessage.content)) {
+            secondLastMessage.content.push({
+              type: 'text',
+              text: bestConnector + newResponse,
+            });
+          } else {
+            // Convert string content to array
+            secondLastMessage.content = [
+              { type: 'text', text: secondLastMessage.content },
+              { type: 'text', text: bestConnector + newResponse },
+            ];
+          }
           // Add the updated text content
           // If there are existing text blocks, update with new content
           // Otherwise create a new text block with the new returned thinking block if it is not after cut off
@@ -750,7 +797,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
         'Last message is a request message rather than a ask to continue after cut off',
       );
       // Create a new assistant message with the response
-      const assistantMessage: { role: string; content: any[] } = {
+      const assistantMessage: MessageParam = {
         role: 'assistant',
         content: [],
       };
@@ -760,14 +807,18 @@ export class ModelHandlerAnthropic extends ModelHandler {
         this.logger.debug(
           `Adding ${toolState.thinkingBlocks.length} thinking blocks to new assistant message`,
         );
-        assistantMessage.content.push(...toolState.thinkingBlocks);
+        if (Array.isArray(assistantMessage.content)) {
+          assistantMessage.content.push(...toolState.thinkingBlocks);
+        }
       }
 
       // Add the text content
-      assistantMessage.content.push({
-        type: 'text',
-        text: toolState.accumulatedOutput,
-      });
+      if (Array.isArray(assistantMessage.content)) {
+        assistantMessage.content.push({
+          type: 'text',
+          text: toolState.accumulatedOutput,
+        });
+      }
 
       messages.push(assistantMessage);
       this.logger.debug('Added a new assistant message');
