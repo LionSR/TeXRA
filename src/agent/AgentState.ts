@@ -149,8 +149,8 @@ export class AgentStateGlobal implements IAgentStateGlobal {
       }
 
       // Track tokens used for tool calls
-      if ('tool_use_tokens' in stateRound.APIUsage) {
-        this.totalToolUseTokens += stateRound.APIUsage.tool_use_tokens ?? 0;
+      if (stateRound.APIUsage?.tool_use_tokens != null) {
+        this.totalToolUseTokens += stateRound.APIUsage.tool_use_tokens;
       }
 
       // Update global totals
