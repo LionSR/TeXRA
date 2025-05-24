@@ -64,6 +64,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   private readonly _groupsStorageKey = 'texra.logGroups';
   private readonly _filesStorageKey = 'texra.outputFiles';
   private readonly _taskStateKey = 'texra.taskStates';
+  private readonly _usageKey = 'texra.usageStats';
   private _disposables: vscode.Disposable[] = [];
   private readonly _extensionUri: vscode.Uri;
   private readonly _viewTitle: string;
@@ -72,6 +73,10 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   private _activeStream: string = '';
   private readonly _activeStreamKey = 'texra.activeLogStream';
   private _taskStates: Map<string, TaskState> = new Map();
+  private _usageStats: Map<
+    string,
+    { inputTokens: number; outputTokens: number; cost: number }
+  > = new Map();
   private readonly logger: AgentLogger;
 
   constructor(
@@ -198,6 +203,20 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     } else {
       this._taskStates.clear();
     }
+
+    // Load usage stats
+    const savedUsage = this.context.workspaceState.get<{
+      [key: string]: {
+        inputTokens: number;
+        outputTokens: number;
+        cost: number;
+      };
+    }>(this._usageKey);
+    if (savedUsage) {
+      this._usageStats = new Map(Object.entries(savedUsage));
+    } else {
+      this._usageStats.clear();
+    }
   }
 
   private _saveState() {
@@ -237,6 +256,9 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       this._getWorkspaceKey(this._filesStorageKey),
       filesObj,
     );
+
+    const usageObj = Object.fromEntries(this._usageStats.entries());
+    this.context.workspaceState.update(this._usageKey, usageObj);
   }
 
   public resolveWebviewView(webviewView: vscode.WebviewView): void {
@@ -335,6 +357,12 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       command: COMMANDS.UPDATE_FILES,
       stream: this._activeStream,
       files,
+    });
+
+    const usage = this._usageStats.get(this._activeStream);
+    this._view.webview.postMessage({
+      command: COMMANDS.UPDATE_USAGE,
+      usage,
     });
 
     // Update status for current stream
@@ -595,6 +623,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     this._logGroups.clear();
     this._taskStates.clear();
     this._outputFiles.clear();
+    this._usageStats.clear();
     this._saveState();
     if (this._view) {
       this._view.webview.postMessage({ command: COMMANDS.CLEAR_LOGS });
@@ -616,6 +645,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       this._logGroups.delete(stream);
       this._taskStates.delete(stream);
       this._outputFiles.delete(stream);
+      this._usageStats.delete(stream);
 
       // If the deleted stream was the active one, switch to another stream if available
       if (stream === this._activeStream) {
@@ -686,6 +716,26 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
         });
       }
     }
+  }
+
+  public updateStreamUsage(
+    stream: string,
+    usage: { inputTokens: number; outputTokens: number; cost: number },
+  ): void {
+    this._usageStats.set(stream, usage);
+    this._saveState();
+    if (this._view && stream === this._activeStream) {
+      this._view.webview.postMessage({
+        command: COMMANDS.UPDATE_USAGE,
+        usage,
+      });
+    }
+  }
+
+  public getStreamUsage(
+    stream: string,
+  ): { inputTokens: number; outputTokens: number; cost: number } | undefined {
+    return this._usageStats.get(stream);
   }
 
   public setActiveStream(stream: string) {

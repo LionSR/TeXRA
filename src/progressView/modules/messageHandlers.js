@@ -13,6 +13,7 @@ import {
   updateLogGroupUI,
   appendLogToGroup,
   updateFileList,
+  updateUsageSummary,
 } from './domHandlers.js';
 import {
   formatLogEntry,
@@ -167,6 +168,10 @@ export function setupMessageHandlers() {
 
       case COMMANDS.UPDATE_STATUS:
         updateStatus(message.status);
+        break;
+
+      case COMMANDS.UPDATE_USAGE:
+        updateUsageSummary(message.usage);
         break;
 
       case COMMANDS.UPDATE_FILES:
