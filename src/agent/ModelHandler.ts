@@ -640,10 +640,10 @@ export abstract class ModelHandler<
    * Computes detailed usage metrics from model response.
    * @returns Provider-specific response usage object
    */
-  abstract computeResponseUsage(
+  abstract computeResponseUsage<T>(
     responseUsage: UsageT,
     responseTime: number,
-  ): any;
+  ): T;
 
   /**
    * Updates model message content with response for models with prefill support.
