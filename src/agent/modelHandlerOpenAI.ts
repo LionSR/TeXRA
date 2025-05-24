@@ -564,10 +564,11 @@ export class ModelHandlerOpenAI extends ModelHandler {
     // Get token counts
     const promptTokens = responseUsage.prompt_tokens ?? 0;
     const completionTokens = responseUsage.completion_tokens ?? 0;
+    const toolUseTokens = responseUsage.tool_use_tokens ?? 0;
 
     let basePrice = calculateTokenPrice(
       promptTokens,
-      completionTokens,
+      completionTokens + toolUseTokens,
       this.config.inputPrice,
       this.config.outputPrice,
     );
@@ -605,6 +606,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
         prompt_tokens: 0,
         completion_tokens: 0,
         total_tokens: 0,
+        tool_use_tokens: 0,
         prompt_tokens_details: { cached_tokens: 0 },
         completion_tokens_details: {
           reasoning_tokens: 0,
