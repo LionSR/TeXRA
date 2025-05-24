@@ -5,6 +5,7 @@ import {
   CHECK_BOXES,
   ELEMENTS_TO_SAVE,
   CHECK_BOXES_AUTO_EXTRACT,
+  CHECK_BOXES_TOOL_USE,
   FILE_TYPES,
 } from './constants.js';
 import {
@@ -39,6 +40,38 @@ export function autoResizeTextarea(textarea) {
   // Show/hide scrollbar based on content height
   textarea.style.overflowY =
     textarea.scrollHeight > maxHeight ? 'auto' : 'hidden';
+}
+
+function updateDropdownToggleState(toggleId, optionsId, checkboxIds, icon) {
+  const toggle = safeGetElementById(toggleId);
+  const options = safeGetElementById(optionsId);
+  const isVisible = options.style.display === 'block';
+
+  const hasChecked = checkboxIds.some((id) => safeGetElementChecked(id));
+  const direction = isVisible ? 'up' : 'down';
+
+  if (toggle) {
+    toggle.classList.toggle('active', hasChecked);
+    toggle.innerHTML = `<i class="codicon codicon-${icon}"></i><i class="codicon codicon-chevron-${direction}"></i>`;
+  }
+}
+
+export function updateAutoToggleState() {
+  updateDropdownToggleState(
+    'toggleAutoExtract',
+    'autoExtractOptions',
+    CHECK_BOXES_AUTO_EXTRACT,
+    'wand',
+  );
+}
+
+export function updateToolConfigToggleState() {
+  updateDropdownToggleState(
+    'toggleToolConfig',
+    'toolConfigOptions',
+    CHECK_BOXES_TOOL_USE,
+    'tools',
+  );
 }
 
 export function setupUIHandlers() {
@@ -101,25 +134,6 @@ export function setupUIHandlers() {
     return multipleFilesData;
   }
 
-  // Add auto-extract toggle handler
-  function updateAutoToggleState() {
-    const autoExtractToggle = safeGetElementById('toggleAutoExtract');
-    const autoExtractOptions = safeGetElementById('autoExtractOptions');
-    const isVisible = autoExtractOptions.style.display === 'block';
-
-    // Check if any auto-extract checkbox is checked
-    const hasAutoExtractChecked = CHECK_BOXES_AUTO_EXTRACT.some((id) =>
-      safeGetElementChecked(id),
-    );
-
-    const direction = isVisible ? 'up' : 'down';
-
-    if (autoExtractToggle) {
-      autoExtractToggle.classList.toggle('active', hasAutoExtractChecked);
-      autoExtractToggle.innerHTML = `<i class="codicon codicon-wand"></i><i class="codicon codicon-chevron-${direction}"></i>`;
-    }
-  }
-
   addEventListenerSafely('toggleAutoExtract', 'click', function () {
     const autoExtractOptions = safeGetElementById('autoExtractOptions');
     const isVisible = autoExtractOptions.style.display === 'block';
@@ -128,10 +142,25 @@ export function setupUIHandlers() {
     updateAutoToggleState();
   });
 
+  addEventListenerSafely('toggleToolConfig', 'click', function () {
+    const toolConfigOptions = safeGetElementById('toolConfigOptions');
+    const isVisible = toolConfigOptions.style.display === 'block';
+
+    toolConfigOptions.style.display = isVisible ? 'none' : 'block';
+    updateToolConfigToggleState();
+  });
+
   // Add checkbox change listeners for auto-extract options
   CHECK_BOXES_AUTO_EXTRACT.forEach((id) => {
     addEventListenerSafely(id, 'change', function () {
       updateAutoToggleState();
+      handleCheckboxChange.call(this);
+    });
+  });
+
+  CHECK_BOXES_TOOL_USE.forEach((id) => {
+    addEventListenerSafely(id, 'change', function () {
+      updateToolConfigToggleState();
       handleCheckboxChange.call(this);
     });
   });
