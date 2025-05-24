@@ -4,12 +4,12 @@ import type { CompletionUsage } from 'openai/resources/completions';
 import type { Usage as AnthropicUsage } from '@anthropic-ai/sdk/resources/messages';
 import type { UsageMetadata as GenerateContentResponseUsageMetadata } from '@google/genai';
 
-/** 
+/**
  * Extended OpenAI usage type with additional fields used by various providers.
- * 
+ *
  * This interface extends the `CompletionUsage` type from the OpenAI SDK to include
- * additional metrics required by DeepSeek and other providers. 
- * 
+ * additional metrics required by DeepSeek and other providers.
+ *
  * Fields:
  * - `prompt_cache_hit_tokens` (optional): Represents the number of tokens retrieved
  *   from the prompt cache during a completion request. This is specific to DeepSeek's
@@ -18,6 +18,7 @@ import type { UsageMetadata as GenerateContentResponseUsageMetadata } from '@goo
  */
 export interface ExtendedCompletionUsage extends CompletionUsage {
   prompt_cache_hit_tokens?: number;
+  tool_use_tokens?: number;
 }
 
 // Re-export SDK types for use in model handlers
@@ -42,6 +43,7 @@ export interface OpenAIAPIResponseUsage extends ResponseUsageBase {
   completion_tokens: number;
   cached_tokens: number;
   reasoning_tokens: number;
+  tool_use_tokens: number;
   accepted_prediction_tokens: number | null;
   rejected_prediction_tokens: number | null;
 }
@@ -81,6 +83,8 @@ export class ResponseUsageFactory {
       completionDetails?.rejected_prediction_tokens ?? null;
 
     // Calculate percentage cached
+    const toolUseTokens = responseUsage.tool_use_tokens ?? 0;
+
     const percentageCached =
       responseUsage.prompt_tokens > 0
         ? (cachedTokens / responseUsage.prompt_tokens) * 100
@@ -89,13 +93,14 @@ export class ResponseUsageFactory {
     return {
       // Base fields
       totalInputTokens: responseUsage.prompt_tokens,
-      totalOutputTokens: responseUsage.completion_tokens,
+      totalOutputTokens: responseUsage.completion_tokens + toolUseTokens,
       percentageCached,
       cost,
       responseTime,
       // OpenAI specific fields (keeping snake_case)
       prompt_tokens: responseUsage.prompt_tokens,
       completion_tokens: responseUsage.completion_tokens,
+      tool_use_tokens: toolUseTokens,
       cached_tokens: cachedTokens,
       reasoning_tokens: reasoningTokens,
       accepted_prediction_tokens: acceptedPredictionTokens,

@@ -585,6 +585,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
       prompt_tokens: responseUsage?.promptTokenCount ?? 0,
       completion_tokens: responseUsage?.responseTokenCount ?? 0,
       total_tokens: responseUsage?.totalTokenCount ?? 0,
+      tool_use_tokens: responseUsage?.toolUsePromptTokenCount ?? 0,
       prompt_tokens_details: {
         cached_tokens: responseUsage?.cachedContentTokenCount ?? 0,
       },
