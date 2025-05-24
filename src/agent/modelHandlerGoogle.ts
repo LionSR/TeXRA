@@ -7,8 +7,10 @@ import OpenAI from 'openai';
 // Local imports - agent components
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 import { hasEndTag } from './AgentDataclass';
-import { OpenAIAPIResponseUsage, ResponseUsageFactory } from './ResponseUsage';
-import { calculateTokenPrice } from '../utils/priceUtils';
+import {
+  OpenAIAPIResponseUsage,
+  ExtendedCompletionUsage,
+} from './ResponseUsage';
 
 /**
  * Handler for Google models using OpenAI-compatible API.
@@ -25,21 +27,41 @@ export class ModelHandlerGoogle extends ModelHandlerOpenAI {
     return new OpenAI({ apiKey, baseURL });
   }
 
+  /** Normalizes Google's usage format to OpenAI CompletionUsage format. */
+  private normalizeToOpenAIFormat(usage: any): ExtendedCompletionUsage {
+    // If it's already in OpenAI format, return as-is
+    if ('prompt_tokens' in usage && 'completion_tokens' in usage) {
+      return usage;
+    }
+
+    // Convert Google's format to OpenAI format
+    const thoughtTokens = usage.thoughtsTokenCount ?? usage.thoughtTokens ?? 0;
+    const toolTokens = usage.toolUseTokenCount ?? 0;
+
+    return {
+      prompt_tokens: usage.promptTokens ?? 0,
+      completion_tokens:
+        (usage.completionTokens ?? 0) + thoughtTokens + toolTokens,
+      total_tokens: usage.totalTokens ?? 0,
+      prompt_tokens_details: {
+        cached_tokens: usage.cachedContentTokenCount ?? 0,
+      },
+      completion_tokens_details: {
+        reasoning_tokens: thoughtTokens,
+        accepted_prediction_tokens: undefined,
+        rejected_prediction_tokens: undefined,
+      },
+    };
+  }
+
   /** Computes cost based on Google's token usage format. */
   computePrice(responseUsage: any): number {
-    // Google models return completionTokens, promptTokens instead of completion_tokens, prompt_tokens
-    const promptTokens = responseUsage?.promptTokens ?? 0;
-    const completionTokens = responseUsage?.completionTokens ?? 0;
-    const thoughtTokens =
-      responseUsage?.thoughtsTokenCount ?? responseUsage?.thoughtTokens ?? 0;
-    const toolUseTokens = responseUsage?.toolUseTokenCount ?? 0;
+    if (!responseUsage) return 0;
 
-    return calculateTokenPrice(
-      promptTokens,
-      completionTokens + thoughtTokens + toolUseTokens,
-      this.config.inputPrice,
-      this.config.outputPrice,
-    );
+    const normalized = this.normalizeToOpenAIFormat(responseUsage);
+
+    // Use the parent class's computePrice with normalized OpenAI format
+    return super.computePrice(normalized);
   }
 
   /** Creates usage statistics from Google's response format. */
@@ -47,26 +69,15 @@ export class ModelHandlerGoogle extends ModelHandlerOpenAI {
     responseUsage: any,
     responseTime: number,
   ): OpenAIAPIResponseUsage {
-    // Create a minimal usage object with Google's token counts
-    const usageObj = {
-      prompt_tokens: responseUsage?.candidatesTokenCount ?? 0,
-      completion_tokens: responseUsage?.completionTokens ?? 0,
-      total_tokens: responseUsage?.totalTokenCount ?? 0,
-      prompt_tokens_details: {
-        cached_tokens: responseUsage?.cachedContentTokenCount ?? 0,
-      },
-      completion_tokens_details: {
-        reasoning_tokens: responseUsage?.thoughtsTokenCount ?? 0,
-        accepted_prediction_tokens: null,
-        rejected_prediction_tokens: null,
-      },
-    };
+    if (!responseUsage) {
+      // Use parent's method for null case
+      return super.computeResponseUsage(null, responseTime);
+    }
 
-    return ResponseUsageFactory.fromOpenAIResponse(
-      usageObj,
-      this.computePrice(responseUsage),
-      responseTime,
-    );
+    const normalized = this.normalizeToOpenAIFormat(responseUsage);
+
+    // Use the parent class's computeResponseUsage with normalized format
+    return super.computeResponseUsage(normalized, responseTime);
   }
 
   /** Determines if generation should continue based on response content. */
