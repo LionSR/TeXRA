@@ -84,6 +84,10 @@
   gap: var(--spacing-medium);
 }
 
+.run-summary {
+  opacity: var(--opacity-subtle);
+}
+
 /* Status indicator styling */
 .status-indicator {
   width: var(--spacing-medium);
