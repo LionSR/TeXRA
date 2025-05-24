@@ -76,22 +76,11 @@ export function setupMessageHandlers() {
           // Now add messages to their groups - sort them by timestamp first
           // This ensures we process messages in chronological order
           const sortedMessages = [...message.messages].sort((a, b) => {
+            if (a.timestamp !== undefined && b.timestamp !== undefined) {
+              return a.timestamp - b.timestamp;
+            }
             const timestampA = getMessageTimestamp(a.message);
             const timestampB = getMessageTimestamp(b.message);
-
-            // Try to use Date objects for more accurate comparison
-            const dateA = timestampA.includes('-')
-              ? new Date(timestampA)
-              : null;
-            const dateB = timestampB.includes('-')
-              ? new Date(timestampB)
-              : null;
-
-            if (dateA && dateB) {
-              return dateA - dateB;
-            }
-
-            // Fallback to string comparison
             return timestampA.localeCompare(timestampB);
           });
 
