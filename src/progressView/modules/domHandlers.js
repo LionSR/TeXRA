@@ -185,11 +185,12 @@ export function updateFileList(filesByRound) {
       pathSpan.appendChild(fileSpan);
       nameSpan.appendChild(pathSpan);
 
+      // Create diff stats outside the file-name container so they're always visible
+      let statsSpan = null;
       if (info.added !== undefined && info.removed !== undefined) {
-        const statsSpan = document.createElement('span');
+        statsSpan = document.createElement('span');
         statsSpan.className = 'file-stats';
         statsSpan.innerHTML = `<span class="added">+${info.added}</span><span class="removed">-${info.removed}</span>`;
-        nameSpan.appendChild(statsSpan);
       }
 
       const actions = document.createElement('span');
@@ -277,6 +278,9 @@ export function updateFileList(filesByRound) {
       }
 
       item.appendChild(nameSpan);
+      if (statsSpan) {
+        item.appendChild(statsSpan);
+      }
       item.appendChild(actions);
       group.appendChild(item);
     });
