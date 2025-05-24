@@ -6,6 +6,7 @@ import { Anthropic } from '@anthropic-ai/sdk';
 import {
   MessageParam,
   ContentBlock,
+  Usage,
 } from '@anthropic-ai/sdk/resources/messages';
 
 // Local imports - utilities
@@ -57,7 +58,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
   /** Creates a chat completion response using Anthropic's API with specified parameters and optional system prompt. */
   async createResponse(
     client: Anthropic,
-    messages: any[],
+    messages: MessageParam[],
     temperature: number,
     systemPrompt?: string,
     endTag?: string,
@@ -221,7 +222,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
 
   /** Creates a reflection message array for Anthropic models, managing cache control and image content. */
   async createReflectionMessages(
-    messages: any[],
+    messages: MessageParam[],
     userMessage: string,
     mediaFiles?: string[],
   ): Promise<MessageParam[]> {
@@ -387,7 +388,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
 
   /** Manages continuation with prefill support (typically no-op for models with prefill). */
   addContinueMessageWithPrefill(
-    messages: any[],
+    messages: MessageParam[],
     stateRound: AgentStateRound,
     toolState: ToolState,
     agentSetting: AgentSetting,
@@ -399,7 +400,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
 
   /** Manages continuation for models without prefill support by adding a continuation prompt. */
   addContinueMessageWithoutPrefill(
-    messages: any[],
+    messages: MessageParam[],
     stateRound: AgentStateRound,
     toolState: ToolState,
     agentSetting: AgentSetting,
@@ -430,12 +431,12 @@ export class ModelHandlerAnthropic extends ModelHandler {
   async initializeOutputAndPrefill(
     agentConfig: AgentConfig,
     agentSetting: AgentSetting,
-    messages: any[],
+    messages: MessageParam[],
     toolState: ToolState,
     outputFile: string,
     prefill: string,
     groupId?: string,
-  ): Promise<[boolean, any[]]> {
+  ): Promise<[boolean, MessageParam[]]> {
     let endTurn = false;
 
     if (!(await fileExistsAndNonTrivial(outputFile))) {
@@ -552,7 +553,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
   }
 
   /** Calculates API usage cost based on input/output tokens and cache usage if supported. */
-  computePrice(responseUsage: any): number {
+  computePrice(responseUsage: Usage): number {
     let basePrice = calculateTokenPrice(
       responseUsage.input_tokens,
       responseUsage.output_tokens,
@@ -582,7 +583,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
 
   /** Computes detailed response usage metrics including tokens, price, and response time. */
   computeResponseUsage(
-    responseUsage: any,
+    responseUsage: Usage,
     responseTime: number,
   ): AnthropicAPIResponseUsage {
     return ResponseUsageFactory.fromAnthropicResponse(
@@ -593,7 +594,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
   }
 
   updateMessageContentWithPrefill(
-    messages: any[],
+    messages: MessageParam[],
     bestConnector: string,
     newResponse: string,
     toolState: ToolState,
@@ -638,7 +639,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
   }
 
   updateMessageContentWithoutPrefill(
-    messages: any[],
+    messages: MessageParam[],
     bestConnector: string,
     newResponse: string,
     toolState: ToolState,

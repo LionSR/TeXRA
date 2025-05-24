@@ -7,7 +7,11 @@ import OpenAI, {
   NotFoundError,
   PermissionDeniedError,
 } from 'openai';
-import { ChatCompletionContentPart } from 'openai/resources/chat/completions';
+import {
+  ChatCompletionContentPart,
+  ChatCompletionMessageParam,
+} from 'openai/resources/chat/completions';
+import { CompletionUsage } from 'openai/resources/completions';
 import { countTokens } from 'gpt-tokenizer';
 
 // Local imports - utilities
@@ -49,7 +53,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
   /** Creates a chat completion with model-specific parameters. */
   async createResponse(
     client: OpenAI,
-    messages: any[],
+    messages: ChatCompletionMessageParam[],
     temperature: number,
     systemPrompt?: string,
     endTag?: string,
@@ -162,8 +166,8 @@ export class ModelHandlerOpenAI extends ModelHandler {
     userRequest: string,
     mediaFiles?: string[],
     systemPrompt?: string,
-  ): Promise<any[]> {
-    const messages: any[] = [];
+  ): Promise<ChatCompletionMessageParam[]> {
+    const messages: ChatCompletionMessageParam[] = [];
 
     // Handle system prompt differently for O1 models
     if (systemPrompt) {
@@ -240,10 +244,10 @@ export class ModelHandlerOpenAI extends ModelHandler {
 
   /** Adds user message with reflection content to existing messages. */
   async createReflectionMessages(
-    messages: any[],
+    messages: ChatCompletionMessageParam[],
     userMessage: string,
     mediaFiles?: string[],
-  ): Promise<any[]> {
+  ): Promise<ChatCompletionMessageParam[]> {
     const reflectionContent: ChatCompletionContentPart[] = [];
 
     // const role = this.config.capabilities.supportsIntermDevMsgs
@@ -415,7 +419,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
 
   /** Manages continuation with prefill support (typically no-op for models with prefill). */
   addContinueMessageWithPrefill(
-    messages: any[],
+    messages: ChatCompletionMessageParam[],
     stateRound: AgentStateRound,
     toolState: ToolState,
     agentSetting: AgentSetting,
@@ -427,7 +431,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
 
   /** Manages continuation for models without prefill support by adding a continuation prompt. */
   addContinueMessageWithoutPrefill(
-    messages: any[],
+    messages: ChatCompletionMessageParam[],
     stateRound: AgentStateRound,
     toolState: ToolState,
     agentSetting: AgentSetting,
@@ -460,12 +464,12 @@ export class ModelHandlerOpenAI extends ModelHandler {
   async initializeOutputAndPrefill(
     agentConfig: AgentConfig,
     agentSetting: AgentSetting,
-    messages: any[],
+    messages: ChatCompletionMessageParam[],
     toolState: ToolState,
     outputFile: string,
     prefill: string,
     groupId?: string,
-  ): Promise<[boolean, any[]]> {
+  ): Promise<[boolean, ChatCompletionMessageParam[]]> {
     let endTurn = false;
 
     if (!(await fileExistsAndNonTrivial(outputFile))) {
@@ -551,7 +555,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
   }
 
   /** Computes cost based on token usage and model pricing. */
-  computePrice(responseUsage: any): number {
+  computePrice(responseUsage: CompletionUsage): number {
     // Handle models that return None for usage
     if (!responseUsage) {
       return 0.0;
@@ -592,7 +596,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
 
   /** Creates usage statistics from OpenAI's response format. */
   computeResponseUsage(
-    responseUsage: any,
+    responseUsage: CompletionUsage,
     responseTime: number,
   ): OpenAIAPIResponseUsage {
     // For Google models, create a minimal usage object with zeros
@@ -623,7 +627,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
 
   /** Updates message content for models with prefill support. */
   updateMessageContentWithPrefill(
-    messages: any[],
+    messages: ChatCompletionMessageParam[],
     bestConnector: string,
     newResponse: string,
     toolState: ToolState,
@@ -663,7 +667,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
 
   /** Updates message content for models without prefill support. */
   updateMessageContentWithoutPrefill(
-    messages: any[],
+    messages: ChatCompletionMessageParam[],
     bestConnector: string,
     newResponse: string,
     toolState: ToolState,
@@ -763,7 +767,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
    * @throws Error if token calculation fails.
    */
   private _calculateApproximateTokens(
-    messages: any[],
+    messages: ChatCompletionMessageParam[],
     systemPrompt?: string,
   ): number {
     // Note: This is a simplified token count. A more accurate count would

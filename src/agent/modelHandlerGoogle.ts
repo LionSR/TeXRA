@@ -3,6 +3,7 @@
 
 // Third-party imports
 import OpenAI from 'openai';
+import { GenerateContentResponseUsageMetadata } from '@google/genai/dist/node/node';
 
 // Local imports - agent components
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
@@ -26,7 +27,7 @@ export class ModelHandlerGoogle extends ModelHandlerOpenAI {
   }
 
   /** Computes cost based on Google's token usage format. */
-  computePrice(responseUsage: any): number {
+  computePrice(responseUsage: GenerateContentResponseUsageMetadata): number {
     // Google models return completionTokens, promptTokens instead of completion_tokens, prompt_tokens
     const promptTokens = responseUsage?.promptTokens ?? 0;
     const completionTokens = responseUsage?.completionTokens ?? 0;
@@ -44,7 +45,7 @@ export class ModelHandlerGoogle extends ModelHandlerOpenAI {
 
   /** Creates usage statistics from Google's response format. */
   computeResponseUsage(
-    responseUsage: any,
+    responseUsage: GenerateContentResponseUsageMetadata,
     responseTime: number,
   ): OpenAIAPIResponseUsage {
     // Create a minimal usage object with Google's token counts

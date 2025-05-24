@@ -11,6 +11,9 @@ import {
   File,
   createPartFromUri,
 } from '@google/genai';
+import { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
+import { CompletionUsage } from 'openai/resources/completions';
+import { GenerateContentResponseUsageMetadata } from '@google/genai/dist/node/node';
 
 // Local imports - agent components
 import { ModelHandler } from './ModelHandler';
@@ -73,7 +76,7 @@ function convertInternalPartsToGoogleParts(
 
 // Helper function
 function convertMessagesToGoogleContentHistory(
-  messages: any[],
+  messages: ChatCompletionMessageParam[],
   logger: any,
 ): Content[] {
   const history: Content[] = [];
@@ -146,7 +149,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
   /** Creates a chat completion response using Google's GenAI API with specified parameters and optional system prompt. */
   async createResponse(
     client: GoogleGenAI,
-    messages: any[],
+    messages: ChatCompletionMessageParam[],
     temperature: number,
     systemPrompt?: string,
     endTag?: string,
@@ -287,7 +290,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
     userRequest: string,
     mediaFiles?: string[],
     systemPrompt?: string,
-  ): Promise<any[]> {
+  ): Promise<ChatCompletionMessageParam[]> {
     const client = await this.getClient();
     const userContentParts: InternalMessagePart[] = [
       { type: 'text', text: userPrefix },
@@ -401,10 +404,10 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
 
   /** Creates a reflection message array for Google GenAI models, managing image content and message structure. */
   async createReflectionMessages(
-    messages: any[],
+    messages: ChatCompletionMessageParam[],
     userMessage: string,
     mediaFiles?: string[],
-  ): Promise<any[]> {
+  ): Promise<ChatCompletionMessageParam[]> {
     const client = await this.getClient();
     const reflectionParts: InternalMessagePart[] = [];
 
@@ -556,7 +559,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
     return [responseText, usage, stopReason];
   }
 
-  computePrice(responseUsage: any): number {
+  computePrice(responseUsage: GenerateContentResponseUsageMetadata): number {
     if (!responseUsage) return 0.0;
     const promptTokens = responseUsage.promptTokenCount ?? 0;
     const completionTokens = responseUsage.candidatesTokenCount ?? 0;
@@ -571,7 +574,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
   }
 
   computeResponseUsage(
-    responseUsage: any,
+    responseUsage: GenerateContentResponseUsageMetadata,
     responseTime: number,
   ): OpenAIAPIResponseUsage {
     const usageObj = {
@@ -601,7 +604,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
   }
 
   addContinueMessageWithoutPrefill(
-    messages: any[],
+    messages: ChatCompletionMessageParam[],
     stateRound: AgentStateRound,
     toolState: ToolState,
     agentSetting: AgentSetting,
@@ -623,7 +626,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
   }
 
   updateMessageContentWithoutPrefill(
-    messages: any[],
+    messages: ChatCompletionMessageParam[],
     bestConnector: string,
     newResponse: string,
     toolState: ToolState,
@@ -685,12 +688,12 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
   async initializeOutputAndPrefill(
     agentConfig: AgentConfig,
     agentSetting: AgentSetting,
-    messages: any[],
+    messages: ChatCompletionMessageParam[],
     toolState: ToolState,
     outputFile: string,
     prefill: string,
     groupId?: string,
-  ): Promise<[boolean, any[]]> {
+  ): Promise<[boolean, ChatCompletionMessageParam[]]> {
     let endTurn = false;
     this.logger.debug(
       `Initializing output and prefill for ${outputFile}. Prefill content: "${prefill.slice(0, 100)}..."`,

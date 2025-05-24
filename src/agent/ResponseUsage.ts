@@ -1,4 +1,7 @@
 /** Types and utilities for tracking and analyzing model API response usage metrics. */
+// Third-party imports
+import { CompletionUsage } from 'openai/resources/completions';
+import { Usage as AnthropicUsage } from '@anthropic-ai/sdk/src/resources/messages/messages';
 
 /** Base interface for common response usage metrics across all model providers. */
 export interface ResponseUsageBase {
@@ -37,7 +40,7 @@ export class ResponseUsageFactory {
    * @returns Structured OpenAI usage metrics
    */
   static fromOpenAIResponse(
-    responseUsage: any,
+    responseUsage: CompletionUsage,
     cost: number,
     responseTime: number,
   ): OpenAIAPIResponseUsage {
@@ -84,7 +87,7 @@ export class ResponseUsageFactory {
    * @returns Structured Anthropic usage metrics
    */
   static fromAnthropicResponse(
-    responseUsage: any,
+    responseUsage: AnthropicUsage,
     cost: number,
     responseTime: number,
   ): AnthropicAPIResponseUsage {
