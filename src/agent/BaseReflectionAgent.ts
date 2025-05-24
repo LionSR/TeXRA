@@ -607,7 +607,7 @@ export abstract class BaseReflectionAgent {
       );
 
       const inputInfo = `inputFile ${this.agentConfig.inputFile} and/or inputFiles ${this.agentConfig.inputFiles}`;
-      this.logger.info(
+      this.logger.debug(
         `Processed ${inputInfo}. The round ${currRound} output was saved as ${outputFile}`,
         roundGroupId,
       );
