@@ -92,6 +92,7 @@ export class AgentStateGlobal implements IAgentStateGlobal {
   public totalCacheReadInputTokens: number = 0;
   public totalCacheCreationInputTokens: number = 0;
   public totalReasoningTokens: number = 0;
+  public totalToolUseTokens: number = 0;
 
   constructor() {
     this.firstInputTokens = 0;
@@ -147,6 +148,11 @@ export class AgentStateGlobal implements IAgentStateGlobal {
         this.totalReasoningTokens += stateRound.APIUsage.reasoning_tokens ?? 0;
       }
 
+      // Track tokens used for tool calls
+      if ('tool_use_tokens' in stateRound.APIUsage) {
+        this.totalToolUseTokens += stateRound.APIUsage.tool_use_tokens ?? 0;
+      }
+
       // Update global totals
       this.totalInputTokens += stateRound.APIUsage.totalInputTokens;
       this.totalOutputTokens += stateRound.APIUsage.totalOutputTokens;
@@ -168,6 +174,7 @@ export class AgentStateGlobal implements IAgentStateGlobal {
       totalCacheReadInputTokens: this.totalCacheReadInputTokens,
       totalCacheCreationInputTokens: this.totalCacheCreationInputTokens,
       totalReasoningTokens: this.totalReasoningTokens,
+      totalToolUseTokens: this.totalToolUseTokens,
     };
   }
 
@@ -188,6 +195,7 @@ export class AgentStateGlobal implements IAgentStateGlobal {
     state.totalCacheCreationInputTokens =
       stateObj.totalCacheCreationInputTokens ?? 0;
     state.totalReasoningTokens = stateObj.totalReasoningTokens ?? 0;
+    state.totalToolUseTokens = stateObj.totalToolUseTokens ?? 0;
     return state;
   }
 }
