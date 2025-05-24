@@ -84,9 +84,7 @@ export async function runPackSingle(
 
   if (onlyInputFilePacked) {
     logger.warn(CHANNEL, `No files found to pack for ${inputFile}`);
-    vscode.window.showWarningMessage(
-      `No files found to pack for ${inputFile}`,
-    );
+    vscode.window.showWarningMessage(`No files found to pack for ${inputFile}`);
     return '';
   }
 
