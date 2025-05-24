@@ -244,7 +244,8 @@ export function initializeOutputFiles() {
     // Restore the output name override toggle state
     if (isOutputNameOverrideVisible) {
       outputNameOverrideInput.style.display = 'inline-block';
-      outputNameOverrideToggle.innerHTML = '<i class="codicon codicon-chevron-left"></i>';
+      outputNameOverrideToggle.innerHTML =
+        '<i class="codicon codicon-chevron-left"></i>';
     }
   }
 

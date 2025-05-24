@@ -30,7 +30,8 @@ export function setDefaultState() {
   );
   if (outputNameOverride) outputNameOverride.style.display = 'none';
   if (toggleOutputNameOverrideDiv)
-    toggleOutputNameOverrideDiv.innerHTML = '<i class="codicon codicon-chevron-right"></i>';
+    toggleOutputNameOverrideDiv.innerHTML =
+      '<i class="codicon codicon-chevron-right"></i>';
 
   // Initialize auto-extract toggle with default state
   const autoExtractToggle = safeGetElementById('toggleAutoExtract');
@@ -129,7 +130,8 @@ export function restoreState() {
     if (previousState.outputNameOverrideVisible) {
       if (outputNameOverride) outputNameOverride.style.display = 'inline-block';
       if (toggleOutputNameOverrideDiv)
-        toggleOutputNameOverrideDiv.innerHTML = '<i class="codicon codicon-chevron-left"></i>';
+        toggleOutputNameOverrideDiv.innerHTML =
+          '<i class="codicon codicon-chevron-left"></i>';
       safeSetElementValue(
         'outputNameOverride',
         previousState.outputNameOverride ?? '',
@@ -137,7 +139,8 @@ export function restoreState() {
     } else {
       if (outputNameOverride) outputNameOverride.style.display = 'none';
       if (toggleOutputNameOverrideDiv)
-        toggleOutputNameOverrideDiv.innerHTML = '<i class="codicon codicon-chevron-right"></i>';
+        toggleOutputNameOverrideDiv.innerHTML =
+          '<i class="codicon codicon-chevron-right"></i>';
     }
   } else {
     // If there's no previous state, set to default
