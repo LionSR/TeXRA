@@ -159,6 +159,7 @@ export function updateStatus(status) {
         'cleanStreamBtn',
         'restoreStateBtn',
         'diffStreamBtn',
+        'eraseStreamBtn',
       ],
     },
     [STATUS.STOPPED]: {
@@ -170,6 +171,7 @@ export function updateStatus(status) {
         'cleanStreamBtn',
         'restoreStateBtn',
         'diffStreamBtn',
+        'eraseStreamBtn',
       ],
     },
     [STATUS.READY]: {
@@ -188,6 +190,7 @@ export function updateStatus(status) {
       'cleanStreamBtn',
       'restoreStateBtn',
       'diffStreamBtn',
+      'eraseStreamBtn',
     ],
   };
 
