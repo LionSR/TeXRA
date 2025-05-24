@@ -53,11 +53,13 @@ function handleStateRestoration(state) {
   if (state.outputNameOverrideVisible) {
     if (outputNameOverride) outputNameOverride.style.display = 'inline-block';
     if (toggleOutputNameOverrideDiv)
-      toggleOutputNameOverrideDiv.textContent = '<';
+      toggleOutputNameOverrideDiv.innerHTML =
+        '<i class="codicon codicon-chevron-left"></i>';
   } else {
     if (outputNameOverride) outputNameOverride.style.display = 'none';
     if (toggleOutputNameOverrideDiv)
-      toggleOutputNameOverrideDiv.textContent = '>';
+      toggleOutputNameOverrideDiv.innerHTML =
+        '<i class="codicon codicon-chevron-right"></i>';
   }
 
   // Prepare the state to save with all necessary properties
@@ -134,7 +136,9 @@ function handleStateRestoration(state) {
       // Update the toggle indicator based on visibility
       const toggleElement = safeGetElementById(toggleId);
       if (toggleElement) {
-        toggleElement.textContent = isVisible ? '▲' : '▼';
+        toggleElement.innerHTML = isVisible
+          ? '<i class="codicon codicon-chevron-up"></i>'
+          : '<i class="codicon codicon-chevron-down"></i>';
       }
 
       // Only update the file list if we have files to restore
