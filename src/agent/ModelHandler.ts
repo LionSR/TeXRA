@@ -43,7 +43,12 @@ const DEFAULT_OUTPUT_TOKEN_LIMIT_FACTOR = 2.5;
 /**
  * Abstract base class for model-specific handlers that manage API interactions, message processing, and response handling.
  */
-export abstract class ModelHandler {
+export abstract class ModelHandler<
+  ClientT = unknown,
+  MessageT = unknown,
+  ResponseT = unknown,
+  UsageT = unknown,
+> {
   public config: ModelConfig;
   public capabilities: ModelCapabilities;
   public continueLimit: number;
@@ -382,7 +387,7 @@ export abstract class ModelHandler {
    * This is a shared implementation that can be used by all providers.
    * Individual providers can override if needed.
    */
-  public async createMediaMessage(mediaFiles: string[]): Promise<any[]> {
+  public async createMediaMessage(mediaFiles: string[]): Promise<MessageT[]> {
     const mediaMessage: MediaEntry[] = [];
     const addedMedia: string[] = [];
 
@@ -535,19 +540,19 @@ export abstract class ModelHandler {
   }
 
   /** Creates and configures a client instance for the specific model provider. */
-  abstract getClient(): Promise<any>;
+  abstract getClient(): Promise<ClientT>;
 
   /**
    * Generates a model response using the provider's API.
    * @returns Promise resolving to provider-specific response object
    */
   abstract createResponse(
-    client: any,
-    messages: any[],
+    client: ClientT,
+    messages: MessageT[],
     temperature: number,
     systemPrompt?: string,
     endTag?: string,
-  ): Promise<any>;
+  ): Promise<ResponseT>;
 
   /**
    * Creates initial message array for conversation with optional images and system prompt.
@@ -558,17 +563,17 @@ export abstract class ModelHandler {
     userRequest: string,
     mediaFiles?: string[],
     systemPrompt?: string,
-  ): Promise<any[]>;
+  ): Promise<MessageT[]>;
 
   /**
    * Creates reflection messages for multi-turn conversations with optional images.
    * @returns Provider-specific message array with reflection content
    */
   abstract createReflectionMessages(
-    messages: any[],
+    messages: MessageT[],
     userMessage: string,
     mediaFiles?: string[],
-  ): Promise<any[]>;
+  ): Promise<MessageT[]>;
 
   /**
    * Formats image content into provider-specific message format.
@@ -583,16 +588,16 @@ export abstract class ModelHandler {
    * @returns A tuple containing [responseText, usageInfo, stopReason]
    */
   abstract extractResponse(
-    responseObject: any,
+    responseObject: ResponseT,
     endTag: string,
-  ): [string, any, string];
+  ): [string, UsageT, string];
 
   /**
    * Manages continuation for truncated responses in multi-turn conversations with prefill support.
    * Updates messages array and tool state for next turn.
    */
   abstract addContinueMessageWithPrefill(
-    messages: any[],
+    messages: MessageT[],
     stateRound: AgentStateRound,
     toolState: ToolState,
     agentSetting: AgentSetting,
@@ -604,7 +609,7 @@ export abstract class ModelHandler {
    * Updates messages array and tool state for next turn.
    */
   abstract addContinueMessageWithoutPrefill(
-    messages: any[],
+    messages: MessageT[],
     stateRound: AgentStateRound,
     toolState: ToolState,
     agentSetting: AgentSetting,
@@ -618,31 +623,34 @@ export abstract class ModelHandler {
   abstract initializeOutputAndPrefill(
     agentConfig: AgentConfig,
     agentSetting: AgentSetting,
-    messages: any[],
+    messages: MessageT[],
     toolState: ToolState,
     outputFile: string,
     prefill: string,
     groupId?: string,
-  ): Promise<[boolean, any[]]>;
+  ): Promise<[boolean, MessageT[]]>;
 
   /**
    * Calculates API usage cost based on token counts and provider pricing.
    * @returns Total cost in provider's currency units
    */
-  abstract computePrice(responseUsage: any): number;
+  abstract computePrice(responseUsage: UsageT): number;
 
   /**
    * Computes detailed usage metrics from model response.
    * @returns Provider-specific response usage object
    */
-  abstract computeResponseUsage(responseUsage: any, responseTime: number): any;
+  abstract computeResponseUsage(
+    responseUsage: UsageT,
+    responseTime: number,
+  ): any;
 
   /**
    * Updates model message content with response for models with prefill support.
    * Handles cache control and content formatting.
    */
   abstract updateMessageContentWithPrefill(
-    messages: any[],
+    messages: MessageT[],
     bestConnector: string,
     newResponse: string,
     toolState: ToolState,
@@ -653,7 +661,7 @@ export abstract class ModelHandler {
    * Handles cache control and content formatting.
    */
   abstract updateMessageContentWithoutPrefill(
-    messages: any[],
+    messages: MessageT[],
     bestConnector: string,
     newResponse: string,
     toolState: ToolState,
@@ -677,7 +685,7 @@ export abstract class ModelHandler {
    * @returns The extracted thinking content string or null if no thinking content is available
    */
   abstract processThinkingBlock(
-    responseObject: any,
+    responseObject: ResponseT,
     groupId?: string,
     toolState?: ToolState,
   ): string | null;
