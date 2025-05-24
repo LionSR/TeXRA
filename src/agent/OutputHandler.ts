@@ -403,7 +403,7 @@ export class OutputHandler {
 
       // 1. ROUND DIFFS: Comparing original input to current output (only in rewrite mode)
       if (this.agentSetting.isRewrite) {
-        this.logger.info(
+        this.logger.debug(
           `Running round-based latexdiff operations`,
           diffProcessGroupId,
         );
@@ -423,7 +423,7 @@ export class OutputHandler {
 
       // 2. SEQUENTIAL ROUND DIFFS: Comparing previous round to current round
       if (currRound > 0) {
-        this.logger.info(
+        this.logger.debug(
           `Running between-rounds latexdiff operations`,
           diffProcessGroupId,
         );
