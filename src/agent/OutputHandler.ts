@@ -35,6 +35,7 @@ import { runLatexIndent } from '../latex/latexindent';
 import { AgentConfig } from './AgentConfig';
 import { AgentSetting } from './AgentDataclass';
 import { AgentStateGlobal, AgentStateRound } from './AgentState';
+import { ProgressViewProvider } from '../progressView/ProgressViewProvider';
 
 /** Generates output filename incorporating model and round information. */
 export function getOutputFileName(
@@ -884,6 +885,15 @@ export class OutputHandler {
       }
 
       const cost = this.modelHandler.computePrice(responseUsage);
+
+      const provider = ProgressViewProvider.getInstance();
+      if (provider) {
+        provider.updateStreamUsage(this.channel, {
+          inputTokens: stateGlobal.totalInputTokens,
+          outputTokens: stateGlobal.totalOutputTokens,
+          cost,
+        });
+      }
 
       this.logger.info(
         `Total response time : ${stateGlobal.totalResponseTime.toFixed(1)} seconds`,
