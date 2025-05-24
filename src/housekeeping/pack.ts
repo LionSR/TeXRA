@@ -77,6 +77,19 @@ export async function runPackSingle(
     }
   }
 
+  const onlyInputFilePacked =
+    movedFiles.length === 0 &&
+    copiedFiles.length === 1 &&
+    copiedFiles[0] === inputFile;
+
+  if (onlyInputFilePacked) {
+    logger.warn(CHANNEL, `No files found to pack for ${inputFile}`);
+    vscode.window.showInformationMessage(
+      `No files found to pack for ${inputFile}`,
+    );
+    return '';
+  }
+
   if (movedFiles.length > 0 || copiedFiles.length > 0) {
     logger.debug(
       CHANNEL,
