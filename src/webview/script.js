@@ -1,10 +1,12 @@
 import { vscode } from './modules/vscodeApi.js';
 import { restoreState, saveState } from './modules/stateManager.js';
 import { setupMessageHandlers } from './modules/messageHandlers.js';
-import { setupUIHandlers } from './modules/uiHandlers.js';
-
-import { CHECK_BOXES_TOOL_USE } from './modules/constants.js';
-import { autoResizeTextarea } from './modules/uiHandlers.js';
+import {
+  setupUIHandlers,
+  updateAutoToggleState,
+  updateToolConfigToggleState,
+  autoResizeTextarea,
+} from './modules/uiHandlers.js';
 
 window.onload = function () {
   const dataRequests = [
@@ -127,8 +129,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
     toggleToolConfig.addEventListener('click', (e) => {
       e.stopPropagation();
-      toolConfigOptions.style.display =
-        toolConfigOptions.style.display === 'none' ? 'block' : 'none';
+      const isVisible = toolConfigOptions.style.display === 'block';
+      toolConfigOptions.style.display = isVisible ? 'none' : 'block';
+      updateToolConfigToggleState();
     });
   }
 
@@ -144,34 +147,14 @@ document.addEventListener('DOMContentLoaded', function () {
       !toolConfigOptions?.contains(e.target)
     ) {
       toolConfigOptions.style.display = 'none';
+      updateToolConfigToggleState();
     }
     if (
       !toggleAutoExtract?.contains(e.target) &&
       !autoExtractOptions?.contains(e.target)
     ) {
       autoExtractOptions.style.display = 'none';
-    }
-  });
-
-  // Update checkbox states in toggle button
-  function updateToolConfigToggleState() {
-    const toggleToolConfig = document.getElementById('toggleToolConfig');
-
-    const checkedCount = CHECK_BOXES_TOOL_USE.filter(
-      (id) => document.getElementById(id)?.checked,
-    ).length;
-
-    if (toggleToolConfig) {
-      toggleToolConfig.classList.toggle('active', checkedCount > 0);
-      toggleToolConfig.innerHTML = `<i class="codicon codicon-tools"></i><i class="codicon codicon-chevron-down"></i>`;
-    }
-  }
-
-  // Add change listeners to all tool config checkboxes
-  CHECK_BOXES_TOOL_USE.forEach((id) => {
-    const checkbox = document.getElementById(id);
-    if (checkbox) {
-      checkbox.addEventListener('change', updateToolConfigToggleState);
+      updateAutoToggleState();
     }
   });
 });
