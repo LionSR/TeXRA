@@ -12,6 +12,7 @@ import {
   shouldExcludeFromProgressView,
   shouldPersistStream,
 } from '../utils/loggerUtils';
+import { TokenUsageStats } from '../types/UsageTypes';
 // @ts-ignore - Import JavaScript module
 import { STATUS, COMMANDS } from './modules/constants.js';
 
@@ -73,10 +74,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   private _activeStream: string = '';
   private readonly _activeStreamKey = 'texra.activeLogStream';
   private _taskStates: Map<string, TaskState> = new Map();
-  private _usageStats: Map<
-    string,
-    { inputTokens: number; outputTokens: number; cost: number }
-  > = new Map();
+  private _usageStats: Map<string, TokenUsageStats> = new Map();
   private readonly logger: AgentLogger;
 
   constructor(
@@ -718,10 +716,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     }
   }
 
-  public updateStreamUsage(
-    stream: string,
-    usage: { inputTokens: number; outputTokens: number; cost: number },
-  ): void {
+  public updateStreamUsage(stream: string, usage: TokenUsageStats): void {
     this._usageStats.set(stream, usage);
     this._saveState();
     if (this._view && stream === this._activeStream) {
@@ -732,9 +727,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     }
   }
 
-  public getStreamUsage(
-    stream: string,
-  ): { inputTokens: number; outputTokens: number; cost: number } | undefined {
+  public getStreamUsage(stream: string): TokenUsageStats | undefined {
     return this._usageStats.get(stream);
   }
 
