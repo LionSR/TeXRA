@@ -88,7 +88,7 @@ export class CoTAgent extends BaseReflectionAgent {
           currRound,
           fileProcessGroupId,
         );
-        this.logger.info(
+        this.logger.debug(
           `Output files processed for round ${currRound}`,
           fileProcessGroupId,
         );
