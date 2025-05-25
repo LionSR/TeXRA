@@ -182,7 +182,7 @@ ${text}`;
     return {
       success: false,
       text: text,
-      error: `Error polishing text: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      error: `Error polishing text: ${error instanceof Error ? 'Text enhancement failed' : 'Unknown error'}`,
     };
   }
 }
