@@ -3,6 +3,9 @@
 
 // Third-party imports
 import { Anthropic } from '@anthropic-ai/sdk';
+
+// Local imports - error utils
+import { formatProviderError } from '../utils/sdkErrorUtils';
 import {
   MessageParam,
   ContentBlock,
@@ -149,14 +152,18 @@ export class ModelHandlerAnthropic extends ModelHandler {
 
     let response;
 
-    if (useStreaming) {
-      // in the future if we pass stream to outside, calling stream.controller.abort() will abort the stream; which will be very useful for our stop button
-      // we should also make sure partial results can be returned in the presence of errors!
-      const stream = await client.beta.messages.stream(options);
-      const response = await stream.finalMessage();
-      return response;
-    } else {
-      response = await client.beta.messages.create(options);
+    try {
+      if (useStreaming) {
+        // in the future if we pass stream to outside, calling stream.controller.abort() will abort the stream; which will be very useful for our stop button
+        // we should also make sure partial results can be returned in the presence of errors!
+        const stream = await client.beta.messages.stream(options);
+        response = await stream.finalMessage();
+      } else {
+        response = await client.beta.messages.create(options);
+      }
+    } catch (err) {
+      this.logger.error(formatProviderError('Error creating response', err));
+      throw err;
     }
 
     return response;
