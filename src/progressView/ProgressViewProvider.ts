@@ -137,7 +137,8 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
                 );
                 const timeString =
                   attrMatch?.[1] || (msg.message.match(/\[(.*?)\]/)?.[1] ?? '');
-                msg.timestamp = new Date(timeString).getTime() || Date.now();
+                const timestamp = new Date(timeString).getTime();
+                msg.timestamp = isNaN(timestamp) ? Date.now() : timestamp;
               }
               return msg;
             }),
