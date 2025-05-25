@@ -4,6 +4,9 @@ import * as vscode from 'vscode';
 // Third-party imports
 import Anthropic from '@anthropic-ai/sdk';
 
+// Local imports - error utils
+import { getSdkErrorMessage } from '../utils/sdkErrorUtils';
+
 // Local imports - core
 import { TextEditorTool } from './TextEditorTool';
 import { ToolResult } from './base';
@@ -437,7 +440,7 @@ export abstract class AnthropicToolAgent<
    * This helps maintain a consistent error message format throughout the codebase
    */
   protected formatErrorMessage(err: unknown): string {
-    return err instanceof Error ? err.message : String(err);
+    return getSdkErrorMessage(err);
   }
 
   /**
