@@ -23,35 +23,23 @@ import {
  * Returns a human-readable message for common SDK errors.
  */
 export function getSdkErrorMessage(err: unknown): string {
-  if (
-    err instanceof OpenAIRateLimitError ||
-    err instanceof AnthropicRateLimitError
-  ) {
-    return 'Rate limit exceeded.';
-  }
-  if (
-    err instanceof OpenAIConnectionTimeoutError ||
-    err instanceof AnthropicConnectionTimeoutError
-  ) {
-    return 'Connection timed out.';
-  }
-  if (
-    err instanceof OpenAIConnectionError ||
-    err instanceof AnthropicConnectionError
-  ) {
-    return 'Connection error.';
-  }
-  if (
-    err instanceof OpenAIAuthenticationError ||
-    err instanceof AnthropicAuthenticationError
-  ) {
-    return 'Authentication failed.';
-  }
-  if (
-    err instanceof OpenAIPermissionDeniedError ||
-    err instanceof AnthropicPermissionDeniedError
-  ) {
-    return 'Permission denied.';
+  const errorMapping: [Function, string][] = [
+    [OpenAIRateLimitError, 'Rate limit exceeded.'],
+    [AnthropicRateLimitError, 'Rate limit exceeded.'],
+    [OpenAIConnectionTimeoutError, 'Connection timed out.'],
+    [AnthropicConnectionTimeoutError, 'Connection timed out.'],
+    [OpenAIConnectionError, 'Connection error.'],
+    [AnthropicConnectionError, 'Connection error.'],
+    [OpenAIAuthenticationError, 'Authentication failed.'],
+    [AnthropicAuthenticationError, 'Authentication failed.'],
+    [OpenAIPermissionDeniedError, 'Permission denied.'],
+    [AnthropicPermissionDeniedError, 'Permission denied.'],
+  ];
+
+  for (const [ErrorClass, message] of errorMapping) {
+    if (err instanceof ErrorClass) {
+      return message;
+    }
   }
   if (err instanceof OpenAIAPIError || err instanceof AnthropicAPIError) {
     const status = err.status ? `${err.status} ` : '';
