@@ -4,12 +4,12 @@ import type { CompletionUsage } from 'openai/resources/completions';
 import type { Usage as AnthropicUsage } from '@anthropic-ai/sdk/resources/messages';
 import type { UsageMetadata as GenerateContentResponseUsageMetadata } from '@google/genai';
 
-/** 
+/**
  * Extended OpenAI usage type with additional fields used by various providers.
- * 
+ *
  * This interface extends the `CompletionUsage` type from the OpenAI SDK to include
- * additional metrics required by DeepSeek and other providers. 
- * 
+ * additional metrics required by DeepSeek and other providers.
+ *
  * Fields:
  * - `prompt_cache_hit_tokens` (optional): Represents the number of tokens retrieved
  *   from the prompt cache during a completion request. This is specific to DeepSeek's
