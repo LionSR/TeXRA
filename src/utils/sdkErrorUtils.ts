@@ -29,7 +29,7 @@ import { getConfig } from './configUtils';
  */
 export function getSdkErrorMessage(err: unknown): string {
   const isDebugMode = getConfig<boolean>('logger.verboseOutput', false);
-  
+
   // In debug mode, always show the full error message
   if (isDebugMode) {
     return err instanceof Error ? err.message : String(err);

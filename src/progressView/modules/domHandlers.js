@@ -151,7 +151,7 @@ export function updateGroupUsage(groupId, usage) {
   if (!usageElem) {
     usageElem = document.createElement('span');
     usageElem.className = 'group-usage';
-    
+
     // Insert usage display after the group time element
     const timeContainer = groupHeader.querySelector('.group-time');
     if (timeContainer) {
