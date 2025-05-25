@@ -564,9 +564,9 @@ export class ModelHandlerAnthropic extends ModelHandler {
     if (!responseUsage) {
       return 0;
     }
-    
+
     // Note: Anthropic doesn't provide tool_use_tokens in their API response
-    
+
     let basePrice = calculateTokenPrice(
       responseUsage.input_tokens,
       responseUsage.output_tokens,

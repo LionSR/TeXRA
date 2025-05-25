@@ -147,7 +147,7 @@ export function createGroupHeader(group) {
 
   // Add indicator based on status
   const statusIcon = getStatusIcon(group.status);
-  
+
   // Add usage information if available
   let usageDisplay = '';
   if (group.usage) {
