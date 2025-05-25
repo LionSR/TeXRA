@@ -538,10 +538,11 @@ export function appendLogToGroup(logMessage) {
       const logLineElement = messageElement.firstElementChild;
 
       // Extract timestamp from the message for chronological ordering
-      const msgTimestamp = getMessageTimestamp(logMessage.message);
-      const msgDate = msgTimestamp.includes('-')
-        ? new Date(msgTimestamp)
+      const msgDate = logMessage.timestamp
+        ? new Date(logMessage.timestamp)
         : null;
+      const msgTimestamp =
+        msgDate?.toISOString() || getMessageTimestamp(logMessage.message);
 
       // Find where to insert this message chronologically
       let insertPosition = null;
