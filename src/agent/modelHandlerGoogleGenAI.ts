@@ -244,7 +244,10 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
         }
       } catch (err: any) {
         this.logger.error(
-          `Token counting failed: ${err.message}. Proceeding without token adjustment.`,
+          formatProviderError(
+            'Token counting failed, proceeding without token adjustment',
+            err,
+          ),
         );
       }
     }
@@ -272,7 +275,6 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
       this.logger.error(
         formatProviderError('Error during Google GenAI Chat API call', error),
       );
-      this.logger.error(error.message);
       if (error.message?.includes('request.contents[0].parts')) {
         this.logger.error(
           'Potential issue with sendMessage parameter structure. Check conversion.',
