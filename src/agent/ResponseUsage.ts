@@ -18,6 +18,7 @@ import type { UsageMetadata as GenerateContentResponseUsageMetadata } from '@goo
  */
 export interface ExtendedCompletionUsage extends CompletionUsage {
   prompt_cache_hit_tokens?: number;
+  // Note: tool_use_tokens is not provided by OpenAI API
 }
 
 // Re-export SDK types for use in model handlers
@@ -42,8 +43,11 @@ export interface OpenAIAPIResponseUsage extends ResponseUsageBase {
   completion_tokens: number;
   cached_tokens: number;
   reasoning_tokens: number;
+  // Note: OpenAI API doesn't provide tool_use_tokens
   accepted_prediction_tokens: number | null;
   rejected_prediction_tokens: number | null;
+  // Only present for Google models when using OpenAI-compatible interface
+  tool_use_tokens?: number;
 }
 
 /** Anthropic-specific response usage metrics with cache statistics. */
@@ -52,6 +56,7 @@ export interface AnthropicAPIResponseUsage extends ResponseUsageBase {
   output_tokens: number;
   cache_read_input_tokens: number | null;
   cache_creation_input_tokens: number | null;
+  // Note: Anthropic API doesn't provide tool_use_tokens
 }
 
 /** Factory class for creating provider-specific response usage objects. */
