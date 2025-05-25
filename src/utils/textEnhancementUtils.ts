@@ -4,6 +4,9 @@
 // Third-party imports
 import Anthropic from '@anthropic-ai/sdk';
 
+// Local imports - error utils
+import { formatProviderError } from './sdkErrorUtils';
+
 // Local imports - log
 import * as logger from '../logger/logUtils';
 
@@ -175,14 +178,11 @@ ${text}`;
       text: trimmedText,
     };
   } catch (error) {
-    logger.error(
-      CHANNEL,
-      `Error polishing text: ${error instanceof Error ? error.message : String(error)}`,
-    );
+    logger.error(CHANNEL, formatProviderError('Error polishing text', error));
     return {
       success: false,
       text: text,
-      error: `Error polishing text: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      error: `Error polishing text: ${error instanceof Error ? 'Text enhancement failed' : 'Unknown error'}`,
     };
   }
 }
