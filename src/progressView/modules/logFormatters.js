@@ -147,6 +147,13 @@ export function createGroupHeader(group) {
 
   // Add indicator based on status
   const statusIcon = getStatusIcon(group.status);
+  
+  // Add usage information if available
+  let usageDisplay = '';
+  if (group.usage) {
+    const { inputTokens = 0, outputTokens = 0, cost = 0 } = group.usage;
+    usageDisplay = `<span class="group-usage"> • in: ${inputTokens}, out: ${outputTokens}, $${cost.toFixed(3)}</span>`;
+  }
 
   return `
     <summary id="group-header-${group.id}" class="log-group-header ${group.status}">
@@ -155,6 +162,7 @@ export function createGroupHeader(group) {
       <span class="group-time">
         <span class="group-start-time">Started: ${formattedStartTime}</span>
         ${durationDisplay}
+        ${usageDisplay}
       </span>
     </summary>
   `;

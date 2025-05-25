@@ -891,7 +891,8 @@ export class OutputHandler {
 
       const provider = ProgressViewProvider.getInstance();
       if (provider) {
-        provider.updateStreamUsage(this.channel, {
+        // Update group-level usage stats instead of stream-level
+        provider.updateGroupUsage(this.channel, statsGroupId, {
           inputTokens: stateGlobal.totalInputTokens,
           outputTokens: stateGlobal.totalOutputTokens,
           cost,

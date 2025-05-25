@@ -239,6 +239,14 @@
   font-size: var(--font-size-sm);
 }
 
+/* Group usage display styling */
+.group-usage {
+  color: var(--vscode-descriptionForeground);
+  font-size: var(--font-size-sm);
+  opacity: var(--opacity-subtle);
+  font-weight: normal;
+}
+
 /* Responsive adjustments */
 @media (max-width: 500px) {
   .file-item {

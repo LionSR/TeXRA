@@ -40,6 +40,7 @@ interface LogGroup {
   endTime?: string;
   status: StatusType;
   parentGroupId?: string;
+  usage?: TokenUsageStats;
 }
 
 // Channels that should not be persisted in workspace storage
@@ -724,6 +725,27 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
         command: COMMANDS.UPDATE_USAGE,
         usage,
       });
+    }
+  }
+
+  public updateGroupUsage(stream: string, groupId: string, usage: TokenUsageStats): void {
+    const streamGroups = this._logGroups.get(stream);
+    if (streamGroups) {
+      const group = streamGroups.get(groupId);
+      if (group) {
+        group.usage = usage;
+        this._saveState();
+        
+        // Notify frontend about group usage update
+        if (this._view && stream === this._activeStream) {
+          this._view.webview.postMessage({
+            command: COMMANDS.UPDATE_GROUP_USAGE,
+            stream,
+            groupId,
+            usage,
+          });
+        }
+      }
     }
   }
 
