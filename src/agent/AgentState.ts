@@ -149,7 +149,9 @@ export class AgentStateGlobal implements IAgentStateGlobal {
       }
 
       // Track tokens used for tool calls
-      if (stateRound.APIUsage?.tool_use_tokens != null) {
+      // Note: Only Google models provide tool_use_tokens (as toolUsePromptTokenCount)
+      // OpenAI and Anthropic don't provide this information in their API responses
+      if ('tool_use_tokens' in stateRound.APIUsage && stateRound.APIUsage.tool_use_tokens != null) {
         this.totalToolUseTokens += stateRound.APIUsage.tool_use_tokens;
       }
 
