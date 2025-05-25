@@ -79,6 +79,14 @@ export function setupMessageHandlers() {
             if (a.timestamp !== undefined && b.timestamp !== undefined) {
               return a.timestamp - b.timestamp;
             }
+            // Handle cases where only one has a timestamp
+            if (a.timestamp !== undefined) {
+              return -1; // a comes before b
+            }
+            if (b.timestamp !== undefined) {
+              return 1; // b comes before a
+            }
+            // Both undefined, fall back to string comparison
             const timestampA = getMessageTimestamp(a.message);
             const timestampB = getMessageTimestamp(b.message);
             return timestampA.localeCompare(timestampB);
