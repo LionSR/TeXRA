@@ -126,6 +126,52 @@ export function updateStatus(status) {
 }
 
 /**
+ * Update token and cost summary in the header (now cleared since we show per-group)
+ * @param {Object} usage - Usage data with inputTokens, outputTokens, cost
+ */
+export function updateUsageSummary(usage) {
+  const summaryElem = document.getElementById('runSummary');
+  if (!summaryElem) return;
+
+  // Clear global usage display since we now show usage per-group
+  summaryElem.textContent = '';
+}
+
+/**
+ * Update token and cost usage for a specific group
+ * @param {string} groupId - ID of the group to update
+ * @param {Object} usage - Usage data with inputTokens, outputTokens, cost
+ */
+export function updateGroupUsage(groupId, usage) {
+  const groupHeader = document.getElementById(`group-header-${groupId}`);
+  if (!groupHeader) return;
+
+  // Find or create usage display element in the group header
+  let usageElem = groupHeader.querySelector('.group-usage');
+  if (!usageElem) {
+    usageElem = document.createElement('span');
+    usageElem.className = 'group-usage';
+    
+    // Insert usage display after the group time element
+    const timeContainer = groupHeader.querySelector('.group-time');
+    if (timeContainer) {
+      timeContainer.appendChild(usageElem);
+    } else {
+      // Fallback: append to the header
+      groupHeader.appendChild(usageElem);
+    }
+  }
+
+  if (!usage) {
+    usageElem.textContent = '';
+    return;
+  }
+
+  const { inputTokens = 0, outputTokens = 0, cost = 0 } = usage;
+  usageElem.textContent = ` • in: ${inputTokens}, out: ${outputTokens}, $${cost.toFixed(3)}`;
+}
+
+/**
  * Update the generated files list
  * @param {Array<string>} files - Array of file paths
  */

@@ -84,6 +84,10 @@
   gap: var(--spacing-medium);
 }
 
+.run-summary {
+  opacity: var(--opacity-subtle);
+}
+
 /* Status indicator styling */
 .status-indicator {
   width: var(--spacing-medium);
@@ -233,6 +237,14 @@
   color: var(--vscode-charts-red, red);
   margin-left: var(--spacing-small);
   font-size: var(--font-size-sm);
+}
+
+/* Group usage display styling */
+.group-usage {
+  color: var(--vscode-descriptionForeground);
+  font-size: var(--font-size-sm);
+  opacity: var(--opacity-subtle);
+  font-weight: normal;
 }
 
 /* Responsive adjustments */
