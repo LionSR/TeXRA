@@ -14,6 +14,7 @@ import {
   appendLogToGroup,
   updateFileList,
   updateUsageSummary,
+  updateGroupUsage,
 } from './domHandlers.js';
 import {
   formatLogEntry,
@@ -172,6 +173,12 @@ export function setupMessageHandlers() {
 
       case COMMANDS.UPDATE_USAGE:
         updateUsageSummary(message.usage);
+        break;
+
+      case COMMANDS.UPDATE_GROUP_USAGE:
+        if (message.stream === getCurrentStream()) {
+          updateGroupUsage(message.groupId, message.usage);
+        }
         break;
 
       case COMMANDS.UPDATE_FILES:
