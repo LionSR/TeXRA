@@ -16,13 +16,26 @@ import {
   RateLimitError as AnthropicRateLimitError,
 } from '@anthropic-ai/sdk';
 
+// Local imports
+import { getConfig } from './configUtils';
+
 // Google GenAI errors are not formally exported, but the SDK assigns
 // the names 'ClientError' and 'ServerError'. We detect them via name.
 
 /**
  * Returns a human-readable message for common SDK errors.
+ * In debug mode (logger.verboseOutput = true), returns the full error message.
+ * Otherwise, returns a graceful, user-friendly message.
  */
 export function getSdkErrorMessage(err: unknown): string {
+  const isDebugMode = getConfig<boolean>('logger.verboseOutput', false);
+  
+  // In debug mode, always show the full error message
+  if (isDebugMode) {
+    return err instanceof Error ? err.message : String(err);
+  }
+
+  // In normal mode, provide graceful error messages
   const errorMapping: [Function, string][] = [
     [OpenAIRateLimitError, 'Rate limit exceeded.'],
     [AnthropicRateLimitError, 'Rate limit exceeded.'],
@@ -42,17 +55,16 @@ export function getSdkErrorMessage(err: unknown): string {
     }
   }
   if (err instanceof OpenAIAPIError || err instanceof AnthropicAPIError) {
-    const status = err.status ? `${err.status} ` : '';
-    return `${status}${err.message}`.trim();
+    return 'API error occurred.';
   }
   if ((err as Error)?.name === 'ClientError') {
-    return `Google GenAI client error: ${(err as Error).message}`;
+    return 'Google GenAI client error occurred.';
   }
   if ((err as Error)?.name === 'ServerError') {
-    return `Google GenAI server error: ${(err as Error).message}`;
+    return 'Google GenAI server error occurred.';
   }
 
-  return err instanceof Error ? err.message : String(err);
+  return 'An unexpected error occurred.';
 }
 
 /**
