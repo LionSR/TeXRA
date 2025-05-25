@@ -43,7 +43,9 @@ export class ModelHandlerGoogle extends ModelHandlerOpenAI {
       completion_tokens:
         (usage.completionTokens ?? 0) + thoughtTokens + toolTokens,
       total_tokens: usage.totalTokens ?? 0,
-      tool_use_tokens: toolTokens,
+
+      // here we should return a ExtendedCompletionUsage object
+      // or even better return the native openai one, and handle deepseek case etc separtely
       prompt_tokens_details: {
         cached_tokens: usage.cachedContentTokenCount ?? 0,
       },

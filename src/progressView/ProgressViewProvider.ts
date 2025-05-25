@@ -745,14 +745,18 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     }
   }
 
-  public updateGroupUsage(stream: string, groupId: string, usage: TokenUsageStats): void {
+  public updateGroupUsage(
+    stream: string,
+    groupId: string,
+    usage: TokenUsageStats,
+  ): void {
     const streamGroups = this._logGroups.get(stream);
     if (streamGroups) {
       const group = streamGroups.get(groupId);
       if (group) {
         group.usage = usage;
         this._saveState();
-        
+
         // Notify frontend about group usage update
         if (this._view && stream === this._activeStream) {
           this._view.webview.postMessage({
