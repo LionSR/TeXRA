@@ -18,7 +18,7 @@ import type { UsageMetadata as GenerateContentResponseUsageMetadata } from '@goo
  */
 export interface ExtendedCompletionUsage extends CompletionUsage {
   prompt_cache_hit_tokens?: number;
-  tool_use_tokens?: number;
+  // Note: tool_use_tokens is not provided by OpenAI API
 }
 
 // Re-export SDK types for use in model handlers
@@ -43,9 +43,11 @@ export interface OpenAIAPIResponseUsage extends ResponseUsageBase {
   completion_tokens: number;
   cached_tokens: number;
   reasoning_tokens: number;
-  tool_use_tokens: number;
+  // Note: OpenAI API doesn't provide tool_use_tokens
   accepted_prediction_tokens: number | null;
   rejected_prediction_tokens: number | null;
+  // Only present for Google models when using OpenAI-compatible interface
+  tool_use_tokens?: number;
 }
 
 /** Anthropic-specific response usage metrics with cache statistics. */
@@ -54,7 +56,7 @@ export interface AnthropicAPIResponseUsage extends ResponseUsageBase {
   output_tokens: number;
   cache_read_input_tokens: number | null;
   cache_creation_input_tokens: number | null;
-  tool_use_tokens: number;
+  // Note: Anthropic API doesn't provide tool_use_tokens
 }
 
 /** Factory class for creating provider-specific response usage objects. */
@@ -84,8 +86,6 @@ export class ResponseUsageFactory {
       completionDetails?.rejected_prediction_tokens ?? null;
 
     // Calculate percentage cached
-    const toolUseTokens = responseUsage.tool_use_tokens ?? 0;
-
     const percentageCached =
       responseUsage.prompt_tokens > 0
         ? (cachedTokens / responseUsage.prompt_tokens) * 100
@@ -94,14 +94,13 @@ export class ResponseUsageFactory {
     return {
       // Base fields
       totalInputTokens: responseUsage.prompt_tokens,
-      totalOutputTokens: responseUsage.completion_tokens + toolUseTokens,
+      totalOutputTokens: responseUsage.completion_tokens,
       percentageCached,
       cost,
       responseTime,
       // OpenAI specific fields (keeping snake_case)
       prompt_tokens: responseUsage.prompt_tokens,
       completion_tokens: responseUsage.completion_tokens,
-      tool_use_tokens: toolUseTokens,
       cached_tokens: cachedTokens,
       reasoning_tokens: reasoningTokens,
       accepted_prediction_tokens: acceptedPredictionTokens,
@@ -126,9 +125,6 @@ export class ResponseUsageFactory {
     const cacheCreationInputTokens =
       responseUsage.cache_creation_input_tokens ?? null;
 
-    // Extract tool use tokens (if available)
-    const toolUseTokens = (responseUsage as any).tool_use_tokens ?? 0;
-
     // Calculate percentage cached
     const totalCacheTokens =
       (cacheReadInputTokens ?? 0) + (cacheCreationInputTokens ?? 0);
@@ -140,7 +136,7 @@ export class ResponseUsageFactory {
     return {
       // Base fields
       totalInputTokens: responseUsage.input_tokens,
-      totalOutputTokens: responseUsage.output_tokens + toolUseTokens,
+      totalOutputTokens: responseUsage.output_tokens,
       percentageCached,
       cost,
       responseTime,
@@ -149,7 +145,6 @@ export class ResponseUsageFactory {
       output_tokens: responseUsage.output_tokens,
       cache_read_input_tokens: cacheReadInputTokens,
       cache_creation_input_tokens: cacheCreationInputTokens,
-      tool_use_tokens: toolUseTokens,
     };
   }
 }
