@@ -20,7 +20,9 @@ const extensionConfig = {
     libraryTarget: 'commonjs2',
   },
   externals: {
-    fsevents: "require('fsevents')",
+    bufferutil: 'bufferutil',
+    'utf-8-validate': 'utf-8-validate',
+    fsevents: 'require("fsevents")',
     'split.js': 'Split',
     '@vscode/codicons': 'commonjs @vscode/codicons',
     vscode: 'commonjs vscode', // the vscode-module is created on-the-fly and must be excluded. Add other modules that cannot be webpack'ed, 📖 -> https://webpack.js.org/configuration/externals/
