@@ -558,8 +558,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
       return 0;
     }
     
-    // Extract tool use tokens if available
-    const toolUseTokens = (responseUsage as any).tool_use_tokens ?? 0;
+    // Note: Anthropic doesn't provide tool_use_tokens in their API response
     
     let basePrice = calculateTokenPrice(
       responseUsage.input_tokens,
@@ -567,11 +566,6 @@ export class ModelHandlerAnthropic extends ModelHandler {
       this.config.inputPrice,
       this.config.outputPrice,
     );
-
-    // Add tool use token costs (typically priced as output tokens)
-    if (toolUseTokens > 0) {
-      basePrice += (toolUseTokens * this.config.outputPrice) / 1e6;
-    }
 
     if (this.capabilities.supportsPromptCaching) {
       if (
