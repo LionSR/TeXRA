@@ -860,7 +860,7 @@ export class OutputHandler {
           responseUsage = {
             prompt_tokens: stateGlobal.totalInputTokens,
             completion_tokens: stateGlobal.totalOutputTokens,
-            tool_use_tokens: stateGlobal.totalToolUseTokens,
+            // Note: OpenAI doesn't provide tool_use_tokens in their API
             prompt_tokens_details: {
               cached_tokens: stateGlobal.totalCacheReadInputTokens,
             },
@@ -872,7 +872,7 @@ export class OutputHandler {
           responseUsage = {
             prompt_tokens: stateGlobal.totalInputTokens,
             completion_tokens: stateGlobal.totalOutputTokens,
-            tool_use_tokens: stateGlobal.totalToolUseTokens,
+            // Note: OpenAI doesn't provide tool_use_tokens in their API
             reasoning_tokens: stateGlobal.totalReasoningTokens,
             cached_tokens: stateGlobal.totalCacheReadInputTokens,
           };
@@ -881,6 +881,7 @@ export class OutputHandler {
         responseUsage = {
           input_tokens: stateGlobal.totalInputTokens,
           output_tokens: stateGlobal.totalOutputTokens,
+          // Note: Anthropic doesn't provide tool_use_tokens in their API
           cache_read_input_tokens: stateGlobal.totalCacheReadInputTokens,
           cache_creation_input_tokens:
             stateGlobal.totalCacheCreationInputTokens,
