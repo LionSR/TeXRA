@@ -34,6 +34,7 @@ import {
   getFullPathFromWorkspace,
 } from '../utils/workspaceFileUtils';
 import { fileExistsAbsolute } from '../utils/absoluteFileUtils';
+import { formatProviderError } from '../utils/sdkErrorUtils';
 import {
   applyReplacements,
   getAllReplacements,
@@ -269,7 +270,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
       return result;
     } catch (error: any) {
       this.logger.error(
-        `Error during Google GenAI Chat API call: ${error?.message || error}`,
+        formatProviderError('Error during Google GenAI Chat API call', error),
       );
       this.logger.error(error.message);
       if (error.message?.includes('request.contents[0].parts')) {
@@ -350,7 +351,10 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
           });
         } catch (error) {
           this.logger.error(
-            `Failed to upload media file ${mediaFile} via native SDK: ${error}`,
+            formatProviderError(
+              `Failed to upload media file ${mediaFile} via native SDK`,
+              error,
+            ),
           );
         }
       }
@@ -473,7 +477,10 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
           });
         } catch (error) {
           this.logger.error(
-            `Failed to upload media file ${mediaFile} for reflection: ${error}`,
+            formatProviderError(
+              `Failed to upload media file ${mediaFile} for reflection`,
+              error,
+            ),
           );
         }
       }

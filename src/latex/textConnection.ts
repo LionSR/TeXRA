@@ -2,6 +2,9 @@
 import Anthropic from '@anthropic-ai/sdk';
 import OpenAI from 'openai';
 
+// Local imports - error utils
+import { formatProviderError } from '../utils/sdkErrorUtils';
+
 // Local imports - log
 import * as logger from '../logger/logUtils';
 import {
@@ -142,7 +145,7 @@ export async function bestConnectionMethod(
   } catch (err) {
     logger.error(
       CHANNEL,
-      `Error in bestConnectionMethod: ${err instanceof Error ? err.message : String(err)}`,
+      formatProviderError('Error in bestConnectionMethod', err),
     );
     return {
       connector: ' ',
@@ -195,7 +198,7 @@ export async function bestConnectionMethodAnthropic(
   } catch (err) {
     logger.error(
       CHANNEL,
-      `Error in bestConnectionMethodAnthropic: ${err instanceof Error ? err.message : String(err)}`,
+      formatProviderError('Error in bestConnectionMethodAnthropic', err),
     );
     return {
       connector: ' ',
