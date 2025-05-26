@@ -41,8 +41,9 @@
               class="status-indicator stopped"
               data-status="Ready"
             ></span>
+            <span id="runSummary" class="run-summary"></span>
           </div>
-          <div class="header-actions">
+          <div class="header-actions button-group">
             <button
               class="vscode-button stop-button"
               id="stopStreamBtn"
@@ -101,6 +102,7 @@
           </div>
         </div>
         <div id="logContent" class="log-container"></div>
+        <div id="generatedFiles" class="files-container"></div>
       </div>
       <div class="tabs split">
         <div id="streamTabs" class="tabs-content">

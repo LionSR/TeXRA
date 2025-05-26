@@ -6,6 +6,17 @@ import {
   ReasoningEffort,
 } from '../ModelConfig';
 
+// Common capabilities for OpenAI reasoning models
+const OPENAI_REASONING_DEFAULT_CAPABILITIES: ModelCapabilities = {
+  ...DEFAULT_MODEL_CAPABILITIES,
+  supportsAutoPromptCaching: true,
+  cacheDiscountFactor: 0.5,
+  supportsReasoning: true,
+  supportsIntermDevMsgs: true,
+  reasoningEffort: ReasoningEffort.HIGH,
+  supportsReasoningEffort: true,
+};
+
 export const OPENAI_REASONING_MODELS: Record<string, ModelConfig> = {
   'o4-': {
     name: 'o4-',
@@ -17,14 +28,9 @@ export const OPENAI_REASONING_MODELS: Record<string, ModelConfig> = {
     inputPrice: 1.0,
     outputPrice: 4.4,
     capabilities: {
-      ...DEFAULT_MODEL_CAPABILITIES,
-      supportsAutoPromptCaching: true,
+      ...OPENAI_REASONING_DEFAULT_CAPABILITIES,
       cacheDiscountFactor: 0.25,
       supportsVision: true,
-      supportsReasoning: true,
-      reasoningEffort: ReasoningEffort.HIGH,
-      supportsIntermDevMsgs: true,
-      supportsReasoningEffort: true,
     } satisfies ModelCapabilities,
     openRouterOnly: false,
   },
@@ -38,14 +44,9 @@ export const OPENAI_REASONING_MODELS: Record<string, ModelConfig> = {
     inputPrice: 10.0,
     outputPrice: 40.0,
     capabilities: {
-      ...DEFAULT_MODEL_CAPABILITIES,
-      supportsAutoPromptCaching: true,
+      ...OPENAI_REASONING_DEFAULT_CAPABILITIES,
       cacheDiscountFactor: 0.25,
       supportsVision: true,
-      supportsReasoning: true,
-      reasoningEffort: ReasoningEffort.HIGH,
-      supportsIntermDevMsgs: true,
-      supportsReasoningEffort: true,
     } satisfies ModelCapabilities,
     openRouterOnly: false,
   },
@@ -59,14 +60,8 @@ export const OPENAI_REASONING_MODELS: Record<string, ModelConfig> = {
     inputPrice: 1.1,
     outputPrice: 4.4,
     capabilities: {
-      ...DEFAULT_MODEL_CAPABILITIES,
-      supportsAutoPromptCaching: true,
-      cacheDiscountFactor: 0.5,
+      ...OPENAI_REASONING_DEFAULT_CAPABILITIES,
       supportsVision: false,
-      supportsReasoning: true,
-      reasoningEffort: ReasoningEffort.HIGH,
-      supportsIntermDevMsgs: true,
-      supportsReasoningEffort: true,
     } satisfies ModelCapabilities,
     openRouterOnly: false,
   },
@@ -80,14 +75,8 @@ export const OPENAI_REASONING_MODELS: Record<string, ModelConfig> = {
     inputPrice: 15.0,
     outputPrice: 60.0,
     capabilities: {
-      ...DEFAULT_MODEL_CAPABILITIES,
-      supportsAutoPromptCaching: true,
-      cacheDiscountFactor: 0.5,
+      ...OPENAI_REASONING_DEFAULT_CAPABILITIES,
       supportsVision: true,
-      supportsReasoning: true,
-      supportsIntermDevMsgs: true,
-      supportsReasoningEffort: true,
-      reasoningEffort: ReasoningEffort.HIGH,
     } satisfies ModelCapabilities,
     openRouterOnly: false,
   },
@@ -101,11 +90,8 @@ export const OPENAI_REASONING_MODELS: Record<string, ModelConfig> = {
     inputPrice: 15.0,
     outputPrice: 60.0,
     capabilities: {
-      ...DEFAULT_MODEL_CAPABILITIES,
-      supportsAutoPromptCaching: true,
-      cacheDiscountFactor: 0.5,
+      ...OPENAI_REASONING_DEFAULT_CAPABILITIES,
       supportsVision: false,
-      supportsReasoning: true,
       supportsSystemPrompt: false,
     } satisfies ModelCapabilities,
     openRouterOnly: false,
@@ -120,11 +106,8 @@ export const OPENAI_REASONING_MODELS: Record<string, ModelConfig> = {
     inputPrice: 1.1,
     outputPrice: 4.4,
     capabilities: {
-      ...DEFAULT_MODEL_CAPABILITIES,
-      supportsAutoPromptCaching: true,
-      cacheDiscountFactor: 0.5,
+      ...OPENAI_REASONING_DEFAULT_CAPABILITIES,
       supportsVision: false,
-      supportsReasoning: true,
       supportsSystemPrompt: false,
     } satisfies ModelCapabilities,
     openRouterOnly: false,

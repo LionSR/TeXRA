@@ -12,6 +12,9 @@ import {
   addLogGroup,
   updateLogGroupUI,
   appendLogToGroup,
+  updateFileList,
+  updateUsageSummary,
+  updateGroupUsage,
 } from './domHandlers.js';
 import {
   formatLogEntry,
@@ -75,22 +78,19 @@ export function setupMessageHandlers() {
           // Now add messages to their groups - sort them by timestamp first
           // This ensures we process messages in chronological order
           const sortedMessages = [...message.messages].sort((a, b) => {
+            if (a.timestamp !== undefined && b.timestamp !== undefined) {
+              return a.timestamp - b.timestamp;
+            }
+            // Handle cases where only one has a timestamp
+            if (a.timestamp !== undefined) {
+              return -1; // a comes before b
+            }
+            if (b.timestamp !== undefined) {
+              return 1; // b comes before a
+            }
+            // Both undefined, fall back to string comparison
             const timestampA = getMessageTimestamp(a.message);
             const timestampB = getMessageTimestamp(b.message);
-
-            // Try to use Date objects for more accurate comparison
-            const dateA = timestampA.includes('-')
-              ? new Date(timestampA)
-              : null;
-            const dateB = timestampB.includes('-')
-              ? new Date(timestampB)
-              : null;
-
-            if (dateA && dateB) {
-              return dateA - dateB;
-            }
-
-            // Fallback to string comparison
             return timestampA.localeCompare(timestampB);
           });
 
@@ -166,6 +166,33 @@ export function setupMessageHandlers() {
 
       case COMMANDS.UPDATE_STATUS:
         updateStatus(message.status);
+        break;
+
+      case COMMANDS.UPDATE_USAGE:
+        updateUsageSummary(message.usage);
+        break;
+
+      case COMMANDS.UPDATE_GROUP_USAGE:
+        if (message.stream === getCurrentStream()) {
+          updateGroupUsage(message.groupId, message.usage);
+        }
+        break;
+
+      case COMMANDS.UPDATE_FILES:
+        if (message.stream === getCurrentStream()) {
+          updateFileList(message.files);
+        }
+        break;
+
+      case COMMANDS.OPEN_FILE:
+        // no-op in webview, handled in extension
+        break;
+      case COMMANDS.COMPARE_ORIGINAL:
+      case COMMANDS.COMPARE_PREVIOUS:
+      case COMMANDS.ACCEPT_FILE:
+      case COMMANDS.MERGE_FILE:
+      case COMMANDS.LATEXDIFF_FILE:
+        // handled by extension
         break;
 
       case COMMANDS.DELETE_STREAM:

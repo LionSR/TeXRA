@@ -11,43 +11,14 @@ marked.setOptions({
 });
 
 /**
- * Format a log entry
+ * Format a log entry with Markdown rendering for special content
  * @param {Object} logMessage - The log message to format
  * @returns {string} Formatted HTML for the log message
  */
 export function formatLogEntry(logMessage) {
-  // Process message for special formats like scratchpad
-  return processScratchpadContent(logMessage.message);
-}
+  let message = logMessage.message;
 
-/**
- * Process scratchpad content with Markdown formatting
- * @param {string} message - The message containing scratchpad content
- * @returns {string} Processed message with formatted scratchpad content
- */
-export function processScratchpadContent(message) {
-  // Check if this message has the scratchpad data attribute
-  if (message.includes('data-is-scratchpad="true"')) {
-    // Extract the actual scratchpad content
-    const scratchpadMatch = message.match(
-      /<span class="message-info">(Scratchpad content:.*?)<\/span>/s,
-    );
-    if (scratchpadMatch && scratchpadMatch[1]) {
-      let content = scratchpadMatch[1];
-
-      // Extract content after the "Scratchpad content:" prefix
-      const contentStartIndex = content.indexOf('Scratchpad content:');
-      if (contentStartIndex !== -1) {
-        content = content.substring(
-          contentStartIndex + 'Scratchpad content:'.length,
-        );
-
-        return formatSpecialContent(message, content, 'Scratchpad content:');
-      }
-    }
-  }
-
-  // Check for thinking content
+  // Show thinking content before scratchpad content
   if (message.includes('Thinking content:')) {
     // Extract the actual thinking content
     const thinkingMatch = message.match(
@@ -64,6 +35,27 @@ export function processScratchpadContent(message) {
         );
 
         return formatSpecialContent(message, content, 'Thinking content:');
+      }
+    }
+  }
+
+  // Check for scratchpad content
+  if (message.includes('data-is-scratchpad="true"')) {
+    // Extract the actual scratchpad content
+    const scratchpadMatch = message.match(
+      /<span class="message-info">(Scratchpad content:.*?)<\/span>/s,
+    );
+    if (scratchpadMatch && scratchpadMatch[1]) {
+      let content = scratchpadMatch[1];
+
+      // Extract content after the "Scratchpad content:" prefix
+      const contentStartIndex = content.indexOf('Scratchpad content:');
+      if (contentStartIndex !== -1) {
+        content = content.substring(
+          contentStartIndex + 'Scratchpad content:'.length,
+        );
+
+        return formatSpecialContent(message, content, 'Scratchpad content:');
       }
     }
   }
@@ -156,16 +148,23 @@ export function createGroupHeader(group) {
   // Add indicator based on status
   const statusIcon = getStatusIcon(group.status);
 
+  // Add usage information if available
+  let usageDisplay = '';
+  if (group.usage) {
+    const { inputTokens = 0, outputTokens = 0, cost = 0 } = group.usage;
+    usageDisplay = `<span class="group-usage"> • in: ${inputTokens}, out: ${outputTokens}, $${cost.toFixed(3)}</span>`;
+  }
+
   return `
-    <div id="group-header-${group.id}" class="log-group-header ${group.status}">
-      <span class="group-toggle"><i class="codicon codicon-chevron-down"></i></span>
+    <summary id="group-header-${group.id}" class="log-group-header ${group.status}">
       <span class="group-status-icon">${statusIcon}</span>
       <span class="group-title">${group.name}</span>
       <span class="group-time">
         <span class="group-start-time">Started: ${formattedStartTime}</span>
         ${durationDisplay}
+        ${usageDisplay}
       </span>
-    </div>
+    </summary>
   `;
 }
 
