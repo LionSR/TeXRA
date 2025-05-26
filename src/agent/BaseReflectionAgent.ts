@@ -83,6 +83,7 @@ export abstract class BaseReflectionAgent {
   /** Group ID for the main run group, used as parent for subgroups */
   protected runGroupId?: string;
   private isInterrupted: boolean = false;
+  private abortController: AbortController | null = null;
 
   // Static map to track running agents by their stream ID
   private static runningAgents: Map<string, BaseReflectionAgent> = new Map();
@@ -533,13 +534,31 @@ export abstract class BaseReflectionAgent {
           }
         }
 
-        const responseObject = await this.modelHandler.createResponse(
-          this.client,
-          messages,
-          this.agentSetting.temperature || 0.0,
-          systemPrompt,
-          this.agentSetting.endTag,
-        );
+        const useStreaming = this.modelHandler.getStreamingConfig();
+        if (useStreaming) {
+          this.abortController = new AbortController();
+        }
+        let responseObject: any;
+        try {
+          responseObject = await this.modelHandler.createResponse(
+            this.client,
+            messages,
+            this.agentSetting.temperature || 0.0,
+            systemPrompt,
+            this.agentSetting.endTag,
+            useStreaming ? this.abortController?.signal : undefined,
+          );
+        } catch (error: any) {
+          if (error.name === 'AbortError') {
+            this.logger.info('Request aborted by user', responseCycleGroupId);
+            break;
+          }
+          throw error;
+        } finally {
+          if (useStreaming) {
+            this.abortController = null;
+          }
+        }
         const responseTime = (Date.now() - startTime) / 1000;
         stateRound.updateResponseTime(responseTime);
         this.logger.info(
@@ -1375,6 +1394,9 @@ export abstract class BaseReflectionAgent {
    */
   public interrupt(): void {
     this.isInterrupted = true;
+    if (this.abortController) {
+      this.abortController.abort();
+    }
     this.logger.info(
       'Agent execution interrupted by user. Note that already sent response might still return outputs but no more request messages will be sent.',
     );

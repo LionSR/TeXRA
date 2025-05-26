@@ -51,6 +51,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
     temperature: number,
     systemPrompt?: string,
     endTag?: string,
+    signal?: AbortSignal,
   ): Promise<any> {
     // Get streaming config
     const useStreaming = this.getStreamingConfig();
@@ -126,7 +127,10 @@ export class ModelHandlerOpenAI extends ModelHandler {
       let response: any;
       kwargs.stream_options = { include_usage: true };
       try {
-        const stream = client.beta.chat.completions.stream(kwargs);
+        const stream = client.beta.chat.completions.stream(
+          kwargs,
+          signal ? { signal } : undefined,
+        );
         response = await stream.finalMessage();
 
         // in the future we can add: stream_options: {"include_usage": true} to get usage statistics

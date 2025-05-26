@@ -90,7 +90,6 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI {
     return reasoningContent;
   }
 
-
   /**
    * Preprocess messages array to ensure there are no consecutive user or assistant messages
    * and that content is in string format for DeepSeek models
@@ -183,6 +182,7 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI {
     temperature: number,
     systemPrompt?: string,
     endTag?: string,
+    signal?: AbortSignal,
   ): Promise<any> {
     // Preprocess messages to merge consecutive messages and convert content to strings
     const processedMessages = this.preprocessMessages(messages);
@@ -209,6 +209,7 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI {
       temperature,
       systemPrompt,
       endTag,
+      signal,
     );
   }
 }

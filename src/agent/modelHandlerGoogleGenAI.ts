@@ -149,6 +149,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
     temperature: number,
     systemPrompt?: string,
     endTag?: string,
+    signal?: AbortSignal,
   ): Promise<GenerateContentResponse> {
     if (messages.length === 0) {
       this.logger.error('Cannot create response from empty messages array.');
