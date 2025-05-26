@@ -18,6 +18,7 @@ import type { UsageMetadata as GenerateContentResponseUsageMetadata } from '@goo
  */
 export interface ExtendedCompletionUsage extends CompletionUsage {
   prompt_cache_hit_tokens?: number;
+  // total_tokens: number;
   // Note: tool_use_tokens is not provided by OpenAI API
 }
 
