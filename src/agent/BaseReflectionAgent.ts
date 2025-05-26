@@ -14,9 +14,16 @@ import {
   bestConnectionMethod,
   getTeXCountStats,
 } from '../latex';
+import { ProgressViewProvider } from '../progressView/ProgressViewProvider';
+import { diff_match_patch } from 'diff-match-patch';
 
 // Local imports - utilities
-import { writeFile, appendFile, fileExists } from '../utils/workspaceFileUtils';
+import {
+  writeFile,
+  appendFile,
+  fileExists,
+  readFile,
+} from '../utils/workspaceFileUtils';
 import {
   renderPrompt,
   getFirstKCharsFromDocument,
@@ -178,9 +185,13 @@ export abstract class BaseReflectionAgent {
    * Initializes user variables that require async operations.
    * Must be called after constructor before using the agent.
    */
-  public async init(): Promise<void> {
+  public async init(parentGroupId?: string): Promise<void> {
     // Create an initialization group for better log organization
-    const initGroupId = await this.logger.startGroup(`Initialization`);
+    const initGroupId = await this.logger.startGroup(
+      `Initialization`,
+      undefined,
+      parentGroupId,
+    );
 
     try {
       // Log configuration details in the initialization group
@@ -317,14 +328,6 @@ export abstract class BaseReflectionAgent {
             this.agentSetting.endTag,
           );
 
-        // Extract thinking from XML tags in the response text
-        this.extractAndLogScratchpad(
-          newResponse,
-          'scratchpad',
-          responseCycleGroupId,
-        );
-        // this has a potential bug if <scratchpad> is included in the prefill
-
         this.logger.debug(`Stop reason: ${stopReason}`, responseCycleGroupId);
         this.logger.debug(
           `Token usage: ${JSON.stringify(responseUsage)}`,
@@ -340,7 +343,7 @@ export abstract class BaseReflectionAgent {
           toolState,
         );
 
-        // If thinking content was extracted, format and log it
+        // If thinking content was extracted, format and log it first
         if (thinkingContent) {
           formatAndLogContent(
             thinkingContent,
@@ -352,6 +355,14 @@ export abstract class BaseReflectionAgent {
           // Note: The complete thinking blocks (including signatures) have already been
           // stored in toolState.thinkingBlocks by the processThinkingBlock method
         }
+
+        // Extract thinking from XML tags in the response text
+        this.extractAndLogScratchpad(
+          newResponse,
+          'scratchpad',
+          responseCycleGroupId,
+        );
+        // this has a potential bug if <scratchpad> is included in the prefill
 
         // Compute statistics and update states
         const APIUsage = this.modelHandler.computeResponseUsage(
@@ -542,6 +553,32 @@ export abstract class BaseReflectionAgent {
     return prefill;
   }
 
+  private async computeDiffStats(
+    baseFile: string,
+    outputFile: string,
+  ): Promise<{ added: number; removed: number }> {
+    try {
+      const [baseContent, outContent] = await Promise.all([
+        readFile(baseFile),
+        readFile(outputFile),
+      ]);
+      const dmp = new diff_match_patch();
+      const diffs = dmp.diff_main(baseContent, outContent);
+      let added = 0;
+      let removed = 0;
+      for (const [op, text] of diffs) {
+        if (op === 1) {
+          added += text.split(/\n/).length;
+        } else if (op === -1) {
+          removed += text.split(/\n/).length;
+        }
+      }
+      return { added, removed };
+    } catch {
+      return { added: 0, removed: 0 };
+    }
+  }
+
   /**
    * Processes completion of conversation round.
    */
@@ -570,13 +607,60 @@ export abstract class BaseReflectionAgent {
       );
 
       const inputInfo = `inputFile ${this.agentConfig.inputFile} and/or inputFiles ${this.agentConfig.inputFiles}`;
-      this.logger.info(
+      this.logger.debug(
         `Processed ${inputInfo}. The round ${currRound} output was saved as ${outputFile}`,
         roundGroupId,
       );
-      this.logger.info(`Completed round ${currRound}`, roundGroupId);
+      this.logger.debug(`Completed round ${currRound}`, roundGroupId);
     } catch (error) {
       throw error;
+    }
+
+    const provider = ProgressViewProvider.getInstance();
+    if (provider) {
+      const roundOutputs = this.outputHandler.outputFiles[currRound] || [];
+
+      // Map output files to their original base files
+      const baseMap = this.outputHandler.createFileMapping(
+        this.baseFiles,
+        roundOutputs,
+        'contains',
+      );
+
+      // Map output files to previous round files if available
+      const prevMap =
+        currRound > 0
+          ? this.outputHandler.createFileMapping(
+              this.outputHandler.outputFiles[currRound - 1] || [],
+              roundOutputs,
+              'basename',
+              true,
+            )
+          : new Map<string, string>();
+
+      const fileInfos = [] as any[];
+      for (const file of roundOutputs) {
+        const baseFile =
+          Array.from(baseMap.entries()).find(([, out]) => out === file)?.[0] ||
+          null;
+        const prevFile =
+          Array.from(prevMap.entries()).find(([, out]) => out === file)?.[0] ||
+          null;
+        let stats = { added: 0, removed: 0 };
+        if (baseFile) {
+          stats = await this.computeDiffStats(baseFile, file);
+        }
+        fileInfos.push({
+          path: file,
+          base: baseFile,
+          prev: prevFile,
+          ...stats,
+        });
+      }
+
+      provider.addOutputFiles(this.logger.channelId, {
+        [currRound]: fileInfos,
+      });
     }
   }
 
@@ -635,7 +719,7 @@ export abstract class BaseReflectionAgent {
     const currRound = 0;
     const stateGlobal = new AgentStateGlobal();
 
-    this.logger.info(`Processing round ${currRound}`);
+    this.logger.debug(`Processing round ${currRound}`);
 
     // Create a dedicated group for Round 0, as a child of the main run group
     const round0GroupId = await this.logger.startGroup(
@@ -827,7 +911,7 @@ export abstract class BaseReflectionAgent {
     toolState: ToolState,
     currRound: number = 1,
   ): Promise<[AgentStateRound, AgentStateGlobal, any[], boolean]> {
-    this.logger.info(`Processing round ${currRound}`);
+    this.logger.debug(`Processing round ${currRound}`);
 
     // Create a dedicated group for Round 1 reflection, as a child of the main run group
     const round1GroupId = await this.logger.startGroup(
@@ -967,12 +1051,15 @@ export abstract class BaseReflectionAgent {
     );
 
     try {
+      // Initialize agent variables within the run group
+      await this.init(this.runGroupId);
+
       // Initialize client before starting
       await this.initializeClient();
 
       const [stateRound, stateGlobal, messages, endTurn, toolState] =
         await this.process();
-      this.logger.info(`Round 0 completed\n`, this.runGroupId);
+      this.logger.debug(`Round 0 completed\n`, this.runGroupId);
 
       // Check for interruption before reflection
       if (
@@ -982,7 +1069,7 @@ export abstract class BaseReflectionAgent {
       ) {
         const toolStateReflection = new ToolState();
         await this.reflect(stateGlobal, messages, toolStateReflection);
-        this.logger.info(`Round 1 completed\n`, this.runGroupId);
+        this.logger.debug(`Round 1 completed\n`, this.runGroupId);
       }
 
       // End the run group with success status

@@ -126,12 +126,227 @@ export function updateStatus(status) {
 }
 
 /**
+ * Update token and cost summary in the header (now cleared since we show per-group)
+ * @param {Object} usage - Usage data with inputTokens, outputTokens, cost
+ */
+export function updateUsageSummary(usage) {
+  const summaryElem = document.getElementById('runSummary');
+  if (!summaryElem) return;
+
+  // Clear global usage display since we now show usage per-group
+  summaryElem.textContent = '';
+}
+
+/**
+ * Update token and cost usage for a specific group
+ * @param {string} groupId - ID of the group to update
+ * @param {Object} usage - Usage data with inputTokens, outputTokens, cost
+ */
+export function updateGroupUsage(groupId, usage) {
+  const groupHeader = document.getElementById(`group-header-${groupId}`);
+  if (!groupHeader) return;
+
+  // Find or create usage display element in the group header
+  let usageElem = groupHeader.querySelector('.group-usage');
+  if (!usageElem) {
+    usageElem = document.createElement('span');
+    usageElem.className = 'group-usage';
+
+    // Insert usage display after the group time element
+    const timeContainer = groupHeader.querySelector('.group-time');
+    if (timeContainer) {
+      timeContainer.appendChild(usageElem);
+    } else {
+      // Fallback: append to the header
+      groupHeader.appendChild(usageElem);
+    }
+  }
+
+  if (!usage) {
+    usageElem.textContent = '';
+    return;
+  }
+
+  const { inputTokens = 0, outputTokens = 0, cost = 0 } = usage;
+  usageElem.textContent = ` • in: ${inputTokens}, out: ${outputTokens}, $${cost.toFixed(3)}`;
+}
+
+/**
+ * Update the generated files list
+ * @param {Array<string>} files - Array of file paths
+ */
+export function updateFileList(filesByRound) {
+  const container = document.getElementById('generatedFiles');
+  if (!container) return;
+
+  container.innerHTML = '';
+
+  if (!filesByRound || Object.keys(filesByRound).length === 0) {
+    container.textContent = 'No generated files';
+    return;
+  }
+
+  const rounds = Object.keys(filesByRound)
+    .map((r) => parseInt(r, 10))
+    .sort((a, b) => a - b);
+
+  rounds.forEach((round) => {
+    const group = document.createElement('div');
+    group.className = 'round-group';
+
+    const header = document.createElement('div');
+    header.className = 'round-header';
+    header.textContent = `Round ${round}`;
+    group.appendChild(header);
+
+    const files = filesByRound[round] || [];
+    files.forEach((info) => {
+      const item = document.createElement('div');
+      item.className = 'file-item';
+
+      const nameSpan = document.createElement('span');
+      nameSpan.className = 'file-name';
+
+      // Get basename of the file for cleaner display
+      const basename = info.path.split('/').pop();
+      const dirPath = info.path.substring(
+        0,
+        info.path.length - basename.length,
+      );
+
+      // Create a clickable container for the directory and filename
+      const pathSpan = document.createElement('span');
+      pathSpan.className = 'file-path clickable';
+
+      const dirSpan = document.createElement('span');
+      dirSpan.className = 'file-dir';
+      dirSpan.style.opacity = '0.7';
+      dirSpan.textContent = dirPath;
+
+      const fileSpan = document.createElement('span');
+      fileSpan.className = 'file-basename';
+      fileSpan.textContent = basename;
+
+      pathSpan.appendChild(dirSpan);
+      pathSpan.appendChild(fileSpan);
+      nameSpan.appendChild(pathSpan);
+
+      // Create diff stats outside the file-name container so they're always visible
+      let statsSpan = null;
+      if (info.added !== undefined && info.removed !== undefined) {
+        statsSpan = document.createElement('span');
+        statsSpan.className = 'file-stats';
+        statsSpan.innerHTML = `<span class="added">+${info.added}</span><span class="removed">-${info.removed}</span>`;
+      }
+
+      const actions = document.createElement('span');
+      actions.className = 'file-actions button-group';
+
+      // Create all buttons
+
+      // Only create the previous round comparison button if there's a previous file
+      // Put this first since this is right aligned to be more symmetric
+      const prevBtn = info.prev ? document.createElement('button') : null;
+      if (prevBtn) {
+        prevBtn.className = 'vscode-button tiny';
+        prevBtn.title = 'Compare with previous round';
+        prevBtn.innerHTML = '<i class="codicon codicon-diff-added"></i>';
+        prevBtn.addEventListener('click', () => {
+          vscode.postMessage({
+            command: COMMANDS.COMPARE_PREVIOUS,
+            file: info.path,
+            prev: info.prev,
+          });
+        });
+      }
+
+      // Make the file path clickable to open the file directly
+      pathSpan.addEventListener('click', () => {
+        vscode.postMessage({ command: COMMANDS.OPEN_FILE, file: info.path });
+      });
+
+      const compareBtn = document.createElement('button');
+      compareBtn.className = 'vscode-button tiny';
+      compareBtn.title = 'Compare with base';
+      compareBtn.innerHTML = '<i class="codicon codicon-diff"></i>';
+      compareBtn.addEventListener('click', () => {
+        vscode.postMessage({
+          command: COMMANDS.COMPARE_ORIGINAL,
+          file: info.path,
+          base: info.base,
+        });
+      });
+
+      const acceptBtn = document.createElement('button');
+      acceptBtn.className = 'vscode-button tiny';
+      acceptBtn.title = 'Accept edits';
+      acceptBtn.innerHTML = '<i class="codicon codicon-check"></i>';
+      acceptBtn.addEventListener('click', () => {
+        vscode.postMessage({
+          command: COMMANDS.ACCEPT_FILE,
+          file: info.path,
+          base: info.base,
+        });
+      });
+
+      const mergeBtn = document.createElement('button');
+      mergeBtn.className = 'vscode-button tiny';
+      mergeBtn.title = 'Merge edits';
+      mergeBtn.innerHTML = '<i class="codicon codicon-git-merge"></i>';
+      mergeBtn.addEventListener('click', () => {
+        vscode.postMessage({
+          command: COMMANDS.MERGE_FILE,
+          file: info.path,
+          base: info.base,
+        });
+      });
+
+      const diffBtn = document.createElement('button');
+      diffBtn.className = 'vscode-button tiny';
+      diffBtn.title = 'LaTeXdiff';
+      diffBtn.innerHTML = '<i class="codicon codicon-git-compare"></i>';
+      diffBtn.addEventListener('click', () => {
+        vscode.postMessage({
+          command: COMMANDS.LATEXDIFF_FILE,
+          file: info.path,
+          base: info.base,
+          prev: info.prev,
+        });
+      });
+
+      // Add all buttons to the actions container
+      actions.appendChild(compareBtn);
+      actions.appendChild(acceptBtn);
+      actions.appendChild(mergeBtn);
+      actions.appendChild(diffBtn);
+      if (prevBtn) {
+        actions.appendChild(prevBtn);
+      }
+
+      item.appendChild(nameSpan);
+      if (statsSpan) {
+        item.appendChild(statsSpan);
+      }
+      item.appendChild(actions);
+      group.appendChild(item);
+    });
+
+    container.appendChild(group);
+  });
+}
+
+/**
  * Adds a log group to the DOM
  * @param {Object} group - Group data
  */
 export function addLogGroup(group) {
   setLogGroup(group.id, group);
-  // Create the header element programmatically instead of using innerHTML
+  // Create the details container that will manage toggle state
+  const detailsElem = document.createElement('details');
+  detailsElem.className = 'log-group';
+  detailsElem.id = `group-${group.id}`;
+
+  // Create the header element as a <summary>
   const headerTemplate = document.createElement('template');
   headerTemplate.innerHTML = createGroupHeader(group);
   const headerElement = headerTemplate.content.firstElementChild;
@@ -143,22 +358,20 @@ export function addLogGroup(group) {
 
   // Check if we have a saved collapsed state for this group
   const isCollapsed = getGroupToggleState(group.id);
-  // Collapse if explicitly set to collapsed in the saved state OR if the group status is 'stopped'
-  if (isCollapsed === true || group.status === 'stopped') {
-    groupContainer.style.display = 'none';
-    // Update the toggle icon to reflect collapsed state
-    const toggleIcon = headerElement.querySelector('.group-toggle i');
-    if (toggleIcon) {
-      toggleIcon.className = 'codicon codicon-chevron-right';
-    }
+  const shouldCollapse = isCollapsed === true || group.status === 'stopped';
+  detailsElem.open = !shouldCollapse;
 
-    // If it's not already saved as collapsed but status is 'stopped', update the toggle state
-    if (isCollapsed !== true && group.status === 'stopped') {
-      setGroupToggleState(group.id, true);
-    }
-  } else {
-    groupContainer.style.display = 'block'; // Default to visible if no saved state
+  if (shouldCollapse && isCollapsed !== true && group.status === 'stopped') {
+    setGroupToggleState(group.id, true);
   }
+
+  detailsElem.appendChild(headerElement);
+  detailsElem.appendChild(groupContainer);
+
+  // Update toggle state when the user expands/collapses the details element
+  detailsElem.addEventListener('toggle', () => {
+    setGroupToggleState(group.id, !detailsElem.open);
+  });
 
   // Determine where to add this group based on parentGroupId
   if (group.parentGroupId) {
@@ -202,24 +415,23 @@ export function addLogGroup(group) {
           }
         }
         // Check if it's another group header
-        else if (child.classList.contains('log-group-header')) {
-          // Get the full timestamp from the group data
-          const otherGroupId = child.id.replace('group-header-', '');
-          const otherGroup = getLogGroup(otherGroupId);
+        else if (child.tagName === 'DETAILS') {
+          const headerEl = child.querySelector('.log-group-header');
+          const timeElem = headerEl?.querySelector('.group-start-time');
 
-          if (otherGroup && otherGroup.startTime) {
-            const otherTime = new Date(otherGroup.startTime);
+          if (timeElem) {
+            const otherGroupId = headerEl.id.replace('group-header-', '');
+            const otherGroup = getLogGroup(otherGroupId);
 
-            if (startTime < otherTime) {
-              insertPosition = child;
-              break;
-            }
-          } else {
-            // Fallback to extracting time from the element
-            const timeElem = child.querySelector('.group-start-time');
-            if (timeElem) {
+            if (otherGroup && otherGroup.startTime) {
+              const otherTime = new Date(otherGroup.startTime);
+
+              if (startTime < otherTime) {
+                insertPosition = child;
+                break;
+              }
+            } else {
               const timeText = timeElem.textContent.replace('Started: ', '');
-              // Use a dummy date for time-only comparison
               const otherTime = new Date(`2000-01-01 ${timeText}`);
 
               if (startTime < otherTime) {
@@ -228,62 +440,26 @@ export function addLogGroup(group) {
               }
             }
           }
-
-          // Skip the content container of this group
-          if (i + 1 < childElements.length) {
-            const nextElem = childElements[i + 1];
-            if (nextElem.classList.contains('log-group-content')) {
-              i++; // Skip next element
-            }
-          }
         }
       }
 
       // Insert at the determined position or append at the end
       if (insertPosition) {
-        parentContentElement.insertBefore(headerElement, insertPosition);
-        parentContentElement.insertBefore(groupContainer, insertPosition);
+        parentContentElement.insertBefore(detailsElem, insertPosition);
       } else {
         // Add to end of parent container
-        parentContentElement.appendChild(headerElement);
-        parentContentElement.appendChild(groupContainer);
+        parentContentElement.appendChild(detailsElem);
       }
     } else {
       // Fallback if parent not found - add to main container
       const logContent = document.getElementById('logContent');
-      logContent.appendChild(headerElement);
-      logContent.appendChild(groupContainer);
+      logContent.appendChild(detailsElem);
     }
   } else {
     // This is a top-level group - add to main container
     const logContent = document.getElementById('logContent');
-    logContent.appendChild(headerElement);
-    logContent.appendChild(groupContainer);
+    logContent.appendChild(detailsElem);
   }
-
-  // Add click handler to the header for toggling - now done directly on the DOM element
-  headerElement.addEventListener('click', (event) => {
-    // Stop event propagation to prevent parent toggles from also firing
-    event.stopPropagation();
-
-    const content = document.getElementById(`group-content-${group.id}`);
-    if (!content) return;
-
-    if (content.style.display === 'none') {
-      content.style.display = 'block';
-      headerElement.querySelector('.group-toggle i').className =
-        'codicon codicon-chevron-down';
-      setGroupToggleState(group.id, false); // Not collapsed
-    } else {
-      content.style.display = 'none';
-      headerElement.querySelector('.group-toggle i').className =
-        'codicon codicon-chevron-right';
-      setGroupToggleState(group.id, true); // Collapsed
-    }
-
-    // Save the updated state
-    saveState();
-  });
 }
 
 /**
@@ -336,23 +512,10 @@ export function updateLogGroupUI(groupId, status, endTime) {
 
     // Automatically collapse the group if it finished normally (status is "stopped")
     if (status === 'stopped') {
-      // Get the content element
-      const content = document.getElementById(`group-content-${groupId}`);
-      if (content) {
-        // Collapse the content
-        content.style.display = 'none';
-
-        // Update the toggle icon
-        const toggleIcon = header.querySelector('.group-toggle i');
-        if (toggleIcon) {
-          toggleIcon.className = 'codicon codicon-chevron-right';
-        }
-
-        // Update the group toggle state
-        setGroupToggleState(groupId, true); // Set to collapsed
-
-        // Save the updated state
-        saveState();
+      const details = document.getElementById(`group-${groupId}`);
+      if (details) {
+        details.open = false;
+        setGroupToggleState(groupId, true);
       }
     }
   }
@@ -375,10 +538,11 @@ export function appendLogToGroup(logMessage) {
       const logLineElement = messageElement.firstElementChild;
 
       // Extract timestamp from the message for chronological ordering
-      const msgTimestamp = getMessageTimestamp(logMessage.message);
-      const msgDate = msgTimestamp.includes('-')
-        ? new Date(msgTimestamp)
+      const msgDate = logMessage.timestamp
+        ? new Date(logMessage.timestamp)
         : null;
+      const msgTimestamp =
+        msgDate?.toISOString() || getMessageTimestamp(logMessage.message);
 
       // Find where to insert this message chronologically
       let insertPosition = null;
@@ -390,24 +554,22 @@ export function appendLogToGroup(logMessage) {
       for (let i = 0; i < childElements.length; i++) {
         const child = childElements[i];
 
-        // If this is a group header, get its start time
-        if (child.classList.contains('log-group-header')) {
-          const startTimeElem = child.querySelector('.group-start-time');
+        // If this is a nested group, get its start time
+        if (child.tagName === 'DETAILS') {
+          const headerEl = child.querySelector('.log-group-header');
+          const startTimeElem = headerEl?.querySelector('.group-start-time');
           if (startTimeElem) {
-            // Get full ISO timestamp from the group data
-            const groupId = child.id.replace('group-header-', '');
+            const groupId = headerEl.id.replace('group-header-', '');
             const group = getLogGroup(groupId);
             if (group && group.startTime) {
               const childDate = new Date(group.startTime);
 
-              // Compare using full date objects if available
               if (msgDate && childDate) {
                 if (msgDate < childDate) {
                   insertPosition = child;
                   break;
                 }
               } else {
-                // Fallback to simple time string comparison
                 const timeText = startTimeElem.textContent;
                 const childTimestamp = timeText.replace('Started: ', '');
                 if (msgTimestamp < childTimestamp) {
@@ -416,13 +578,6 @@ export function appendLogToGroup(logMessage) {
                 }
               }
             }
-          }
-          // Skip the corresponding content container of this child group
-          if (
-            i + 1 < childElements.length &&
-            childElements[i + 1].classList.contains('log-group-content')
-          ) {
-            i++; // Skip the next element (content container)
           }
         }
         // If this is a log message, extract its timestamp
@@ -478,23 +633,10 @@ export function applyGroupToggleStates() {
   const logGroups = getLogGroups();
   for (const [groupId, _] of logGroups) {
     const isCollapsed = getGroupToggleState(groupId);
-    const headerElem = document.getElementById(`group-header-${groupId}`);
-    const contentElem = document.getElementById(`group-content-${groupId}`);
+    const detailsElem = document.getElementById(`group-${groupId}`);
 
-    if (headerElem && contentElem && isCollapsed !== undefined) {
-      if (isCollapsed) {
-        contentElem.style.display = 'none';
-        const toggleIcon = headerElem.querySelector('.group-toggle i');
-        if (toggleIcon) {
-          toggleIcon.className = 'codicon codicon-chevron-right';
-        }
-      } else {
-        contentElem.style.display = 'block';
-        const toggleIcon = headerElem.querySelector('.group-toggle i');
-        if (toggleIcon) {
-          toggleIcon.className = 'codicon codicon-chevron-down';
-        }
-      }
+    if (detailsElem && isCollapsed !== undefined) {
+      detailsElem.open = !isCollapsed;
     }
   }
 }

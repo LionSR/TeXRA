@@ -9,6 +9,7 @@
     />
     <link rel="stylesheet" href="${commonStyleUri}" />
     <link rel="stylesheet" href="${styleUri}" />
+    <link rel="stylesheet" href="${codiconUri}" />
     <title>TeXRA History</title>
     <script
       nonce="${nonce}"
@@ -33,23 +34,23 @@
         <input
           type="text"
           id="searchInput"
-          class="search-input"
+          class="search-input vscode-input"
           placeholder="Search history items..."
         />
         <div class="search-controls">
           <button
             id="prevMatch"
-            class="button search-nav-btn"
+            class="vscode-button search-nav-btn"
             title="Previous match"
           >
-            ↑
+            <i class="codicon codicon-chevron-up"></i>
           </button>
           <button
             id="nextMatch"
-            class="button search-nav-btn"
+            class="vscode-button search-nav-btn"
             title="Next match"
           >
-            ↓
+            <i class="codicon codicon-chevron-down"></i>
           </button>
           <span id="matchCount" class="match-count"></span>
         </div>

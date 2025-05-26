@@ -8,6 +8,11 @@ import {
 
 // ===== OpenRouter Models =====
 
+// Common capabilities for Other/OpenRouter models
+const OTHER_DEFAULT_CAPABILITIES: ModelCapabilities = {
+  ...DEFAULT_MODEL_CAPABILITIES,
+};
+
 export const OTHER_MODELS: Record<string, ModelConfig> = {
   llama31: {
     name: 'llama31',
@@ -18,7 +23,7 @@ export const OTHER_MODELS: Record<string, ModelConfig> = {
     contextWindow: 131072,
     inputPrice: 3.0,
     outputPrice: 3.0,
-    capabilities: DEFAULT_MODEL_CAPABILITIES satisfies ModelCapabilities,
+    capabilities: OTHER_DEFAULT_CAPABILITIES satisfies ModelCapabilities,
     openRouterOnly: true,
   },
   'qvq-72b': {
@@ -31,7 +36,7 @@ export const OTHER_MODELS: Record<string, ModelConfig> = {
     inputPrice: 0.25,
     outputPrice: 0.5,
     capabilities: {
-      ...DEFAULT_MODEL_CAPABILITIES,
+      ...OTHER_DEFAULT_CAPABILITIES,
     } satisfies ModelCapabilities,
     openRouterOnly: true,
   },

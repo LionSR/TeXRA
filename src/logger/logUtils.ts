@@ -69,7 +69,7 @@ class VSCodeTransport extends Transport {
   private messageBuffer: {
     level: string;
     message: string;
-    timestamp: string;
+    timestamp: number;
     groupId?: string;
   }[] = [];
   private groups: Map<string, LogGroup> = new Map();
@@ -150,19 +150,21 @@ class VSCodeTransport extends Transport {
       `</div>`;
 
     // Write to ProgressView if available (with colors and escaped HTML)
+    const numericTimestamp = new Date(timestamp).getTime();
     if (this.progressViewProvider) {
       this.progressViewProvider.addLogMessage(
         this.streamName,
         coloredFormattedMessage,
         level as 'error' | 'warn' | 'info' | 'debug',
         groupId,
+        numericTimestamp,
       );
     } else {
       // Buffer the message if ProgressViewProvider is not available
       this.messageBuffer.push({
         level,
         message: coloredFormattedMessage,
-        timestamp,
+        timestamp: numericTimestamp,
         groupId,
       });
     }
@@ -198,6 +200,7 @@ class VSCodeTransport extends Transport {
         msg.message,
         msg.level as 'error' | 'warn' | 'info' | 'debug',
         msg.groupId,
+        msg.timestamp,
       );
     }
 

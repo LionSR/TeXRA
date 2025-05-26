@@ -1,3 +1,5 @@
+.claude
+.github
 .cursor
 .cursor/*
 .cursorignore
@@ -35,6 +37,7 @@ resources/.DS_Store
 !src/webview/styles/*.css
 !src/webview/modules/*.js
 !src/common/styles/*.css
+!src/common/webviewState.js
 
 !src/historyView/modules/*.js
 !src/historyView/styles/*.css

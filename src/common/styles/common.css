@@ -26,15 +26,47 @@
   --font-size: var(--vscode-font-size);
   --font-family: var(--vscode-font-family);
   --font-weight: var(--vscode-font-weight);
+  --font-size-sm: calc(var(--font-size) * 0.9);
+  --font-size-lg: calc(var(--font-size) * 1.2);
 
   /* Spacing */
   --spacing-tiny: 2px;
-  --spacing-small: 5px;
-  --spacing-medium: 10px;
-  --spacing-large: 15px;
+  --spacing-small: 4px;
+  --spacing-medium: 8px;
+  --spacing-large: 12px;
+  --spacing-xlarge: 20px;
 
   /* Border radius */
+  --border-radius-small: 2px;
   --border-radius: 3px;
+  --border-radius-large: 6px;
+
+  /* Heights */
+  --height-control: 24px;
+  --height-button: 30px;
+  --height-small: 100px;
+  --height-medium: 200px;
+  --height-large: 300px;
+  --height-xlarge: 400px;
+  --height-xxlarge: 500px;
+  --height-max: 1000px;
+
+  /* Widths */
+  --width-icon: 16px;
+  --width-button-min: 80px;
+  --width-sidebar: 120px;
+  --width-dropdown: 180px;
+
+  /* Borders */
+  --border-thin: 1px;
+  --border-medium: 2px;
+  --border-thick: 3px;
+  --border-xlarge: 4px;
+
+  /* Opacity levels */
+  --opacity-disabled: 0.5;
+  --opacity-subtle: 0.7;
+  --opacity-full: 1;
 }
 
 /* Common codicon styling */
@@ -51,10 +83,10 @@
 
 /* Unified button styling */
 .vscode-button {
-  height: 24px;
-  min-width: 24px;
+  height: var(--height-control);
+  min-width: var(--height-control);
   padding: 2px;
-  font-size: calc(var(--font-size) * 0.9);
+  font-size: var(--font-size-sm);
   background-color: transparent;
   color: var(--vscode-foreground);
   border: none;
@@ -91,12 +123,12 @@
 }
 
 .vscode-button:disabled {
-  opacity: 0.5;
+  opacity: var(--opacity-disabled);
   cursor: not-allowed;
 }
 
 .vscode-button .codicon {
-  font-size: calc(var(--font-size) * 0.9);
+  font-size: var(--font-size-sm);
   color: var(--vscode-foreground);
 }
 
@@ -104,28 +136,10 @@
   color: var(--vscode-textLink-foreground);
 }
 
-/* Primary button variation */
-.vscode-button.primary {
-  background-color: var(--button-background);
-  color: var(--button-foreground);
-  padding: 4px 10px;
-  height: 28px;
-  min-width: 80px;
-}
-
-.vscode-button.primary:hover {
-  background-color: var(--button-hover-background);
-}
-
-.vscode-button.primary .codicon {
-  color: var(--button-foreground);
-  margin-right: var(--spacing-small);
-}
-
 /* Input styling */
 .vscode-input {
   width: 100%;
-  height: 24px;
+  height: var(--height-control);
   padding: 4px 8px;
   border: 1px solid var(--input-border);
   border-radius: var(--border-radius);
@@ -143,13 +157,13 @@
 
 .vscode-input::placeholder {
   color: var(--text-color);
-  opacity: 0.7;
+  opacity: var(--opacity-subtle);
 }
 
 /* Common textarea styling */
 .vscode-textarea {
   width: 100%;
-  min-height: 100px;
+  min-height: var(--height-small);
   padding: 8px;
   border: 1px solid var(--input-border);
   border-radius: var(--border-radius);
@@ -180,7 +194,7 @@
 /* Dropdown/Select styling */
 select {
   padding: 4px 8px;
-  height: 28px;
+  height: calc(var(--height-control) + var(--spacing-small));
   border: 1px solid var(--input-border);
   border-radius: var(--border-radius);
   background-color: var(--dropdown-background);
@@ -199,4 +213,11 @@ select:focus {
   display: flex;
   align-items: center;
   margin-bottom: var(--spacing-medium);
+}
+
+/* Generic button group container */
+.button-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }

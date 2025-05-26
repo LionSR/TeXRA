@@ -9,6 +9,7 @@ import * as logger from '../logger/logUtils';
 
 // Local imports - utilities
 import { getConfig } from '../utils/configUtils';
+import { generateNonce } from '../utils/nonceUtils';
 
 const CHANNEL = 'Webview';
 logger.initialize(CHANNEL);
@@ -20,17 +21,16 @@ export class WebviewContentProvider {
     try {
       const getWebviewPath = (path: string) =>
         vscode.Uri.joinPath(this.context.extensionUri, 'src', 'webview', path);
+      const getCommonPath = (path: string) =>
+        vscode.Uri.joinPath(this.context.extensionUri, 'src', 'common', path);
+      const getNodeModulesPath = (path: string) =>
+        vscode.Uri.joinPath(this.context.extensionUri, 'node_modules', path);
 
       const htmlPath = getWebviewPath('index.html');
       const cssPath = getWebviewPath('styles/index.css');
-      const commonCssPath = vscode.Uri.joinPath(
-        this.context.extensionUri,
-        'src',
-        'common',
-        'styles',
-        'common.css',
-      );
+      const commonCssPath = getCommonPath('styles/common.css');
       const mainScriptPath = getWebviewPath('script.js');
+      const webviewStatePath = getWebviewPath('modules/webviewState.js');
 
       // Get URIs for all modules
       const stateManagerPath = getWebviewPath('modules/stateManager.js');
@@ -42,10 +42,11 @@ export class WebviewContentProvider {
 
       const htmlContent = fs.readFileSync(htmlPath.fsPath, 'utf-8');
 
-      const nonce = this.getNonce();
+      const nonce = generateNonce();
       const styleUri = webview.asWebviewUri(cssPath);
       const commonStyleUri = webview.asWebviewUri(commonCssPath);
       const scriptUri = webview.asWebviewUri(mainScriptPath);
+      const webviewStateUri = webview.asWebviewUri(webviewStatePath);
       const stateManagerUri = webview.asWebviewUri(stateManagerPath);
       const messageHandlersUri = webview.asWebviewUri(messageHandlersPath);
       const fileHandlersUri = webview.asWebviewUri(fileHandlersPath);
@@ -53,21 +54,11 @@ export class WebviewContentProvider {
       const utilsUri = webview.asWebviewUri(utilsPath);
       const vscodeApiUri = webview.asWebviewUri(vscodeApiPath);
 
-      const codiconPath = vscode.Uri.joinPath(
-        this.context.extensionUri,
-        'node_modules',
-        '@vscode',
-        'codicons',
-        'dist',
-        'codicon.css',
+      const codiconPath = getNodeModulesPath(
+        '@vscode/codicons/dist/codicon.css',
       );
-      const codiconsFontPath = vscode.Uri.joinPath(
-        this.context.extensionUri,
-        'node_modules',
-        '@vscode',
-        'codicons',
-        'dist',
-        'codicon.ttf',
+      const codiconsFontPath = getNodeModulesPath(
+        '@vscode/codicons/dist/codicon.ttf',
       );
       const codiconUri = webview.asWebviewUri(codiconPath);
       const codiconsFontUri = webview.asWebviewUri(codiconsFontPath);
@@ -93,6 +84,7 @@ export class WebviewContentProvider {
         .replace('${modelOptions}', modelOptions)
         .replace(/\${cspSource}/g, webview.cspSource)
         .replace('${utilsUri}', utilsUri.toString())
+        .replace('${webviewStateUri}', webviewStateUri.toString())
         .replace('${stateManagerUri}', stateManagerUri.toString())
         .replace('${messageHandlersUri}', messageHandlersUri.toString())
         .replace('${fileHandlersUri}', fileHandlersUri.toString())
@@ -109,15 +101,5 @@ export class WebviewContentProvider {
       );
       return '<html><body>Error loading content</body></html>';
     }
-  }
-
-  private getNonce() {
-    let text = '';
-    const possible =
-      'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-    for (let i = 0; i < 32; i++) {
-      text += possible.charAt(Math.floor(Math.random() * possible.length));
-    }
-    return text;
   }
 }
