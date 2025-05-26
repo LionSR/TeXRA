@@ -183,6 +183,7 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI {
     temperature: number,
     systemPrompt?: string,
     endTag?: string,
+    signal?: AbortSignal,
   ): Promise<any> {
     // Preprocess messages to merge consecutive messages and convert content to strings
     const processedMessages = this.preprocessMessages(messages);
@@ -209,6 +210,7 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI {
       temperature,
       systemPrompt,
       endTag,
+      signal,
     );
   }
 }

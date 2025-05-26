@@ -36,7 +36,7 @@ export function getSdkErrorMessage(err: unknown): string {
   }
 
   // In normal mode, provide graceful error messages
-  const errorMapping: [Function, string][] = [
+  const errorMapping: [new (...args: any[]) => any, string][] = [
     [OpenAIRateLimitError, 'Rate limit exceeded.'],
     [AnthropicRateLimitError, 'Rate limit exceeded.'],
     [OpenAIConnectionTimeoutError, 'Connection timed out.'],
