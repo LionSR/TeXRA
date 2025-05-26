@@ -156,6 +156,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
     temperature: number,
     systemPrompt?: string,
     endTag?: string,
+    signal?: AbortSignal,
   ): Promise<GenerateContentResponse> {
     if (messages.length === 0) {
       this.logger.error('Cannot create response from empty messages array.');
@@ -221,6 +222,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
         const responseTokenCount = await client.models.countTokens({
           model: this.config.fullName,
           contents: countContents,
+          config: { abortSignal: signal },
         });
         const totalTokens = responseTokenCount.totalTokens ?? 0;
         this.logger.debug(`Token count of message: ${totalTokens}`);
@@ -268,7 +270,10 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
       this.logger.debug(
         `Sending message with ${lastMessageParts.length} parts.`,
       );
-      const result = await chat.sendMessage({ message: lastMessageParts });
+      const result = await chat.sendMessage({
+        message: lastMessageParts,
+        config: { abortSignal: signal },
+      });
 
       return result;
     } catch (error: any) {

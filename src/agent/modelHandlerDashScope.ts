@@ -82,6 +82,7 @@ export class ModelHandlerDashScope extends ModelHandlerOpenAI {
     temperature: number,
     systemPrompt?: string,
     endTag?: string,
+    signal?: AbortSignal,
   ): Promise<any> {
     // Preprocess messages for DashScope compatibility
     const processedMessages = this.preprocessMessages(messages);
@@ -108,6 +109,7 @@ export class ModelHandlerDashScope extends ModelHandlerOpenAI {
       temperature,
       systemPrompt,
       endTag,
+      signal,
     );
   }
 
