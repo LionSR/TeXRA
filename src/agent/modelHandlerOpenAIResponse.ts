@@ -41,6 +41,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
     temperature: number,
     systemPrompt?: string,
     endTag?: string,
+    signal?: AbortSignal,
   ): Promise<any> {
     const useStreaming = this.getStreamingConfig();
 
@@ -66,13 +67,17 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
 
     if (useStreaming) {
       params.stream = true;
-      const stream = (await client.responses.create(params)) as any;
+      const stream = (await client.responses.create(params, {
+        signal,
+      })) as any;
       const response = await stream.finalResponse();
       this.previousResponseId = response.id;
       this.sentMessages = messages.length;
       return response;
     } else {
-      const response = await client.responses.create(params);
+      const response = await client.responses.create(params, {
+        signal,
+      });
       this.previousResponseId = response.id;
       this.sentMessages = messages.length;
       return response;
