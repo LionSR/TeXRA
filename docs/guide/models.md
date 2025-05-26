@@ -21,12 +21,15 @@ Here's a quick comparison of the models available by default in TeXRA:
 
 Known for strong instruction following and context handling.
 
-| Model ID    | Key Strength / Use Case                     | Relative Cost | Relative Speed | Notes                        |
-| :---------- | :------------------------------------------ | :------------ | :------------- | :--------------------------- |
-| `opus`      | High quality, complex tasks                 | $$$$          | Slow           |                              |
-| `sonnet37`  | Strong all-rounder, good context            | $$$           | Medium         |                              |
-| `sonnet37T` | `sonnet37` with explicit reasoning steps    | $$$           | Medium         | Good for math, complex logic |
-| `sonnet35`  | Good balance of quality/cost (older Sonnet) | $$$           | Medium         |                              |
+| Model ID    | Key Strength / Use Case                     | Relative Cost | Relative Speed | Notes                         |
+| :---------- | :------------------------------------------ | :------------ | :------------- | :---------------------------- |
+| `opus4T`    | Latest Opus with explicit reasoning steps   | $$$$          | Slow           | Claude 4 Opus with thinking   |
+| `opus4`     | Latest high quality, complex tasks          | $$$$          | Slow           | Claude 4 Opus                 |
+| `sonnet4T`  | Latest Sonnet with explicit reasoning steps | $$$           | Medium         | Claude 4 Sonnet with thinking |
+| `sonnet4`   | Latest strong all-rounder                   | $$$           | Medium         | Claude 4 Sonnet               |
+| `sonnet37T` | `sonnet37` with explicit reasoning steps    | $$$           | Medium         | Good for math, complex logic  |
+| `sonnet37`  | Strong all-rounder, good context            | $$$           | Medium         |                               |
+| `sonnet35`  | Good balance of quality/cost (older Sonnet) | $$$           | Medium         |                               |
 
 ### OpenAI Models
 
@@ -62,8 +65,8 @@ Strong technical and coding performance, cost-effective.
 
 | Model ID | Key Strength / Use Case     | Relative Cost | Relative Speed | Notes            |
 | :------- | :-------------------------- | :------------ | :------------- | :--------------- |
-| `DSV3`   | Good coding & general tasks | $             | Fast           | DeepSeek V3 Chat |
-| `DSR1`   | Advanced reasoning          | $$            | Medium         | DeepSeek R1      |
+| `dsv3`   | Good coding & general tasks | $             | Fast           | DeepSeek V3 Chat |
+| `dsr1`   | Advanced reasoning          | $$            | Medium         | DeepSeek R1      |
 
 ### Moonshot Kimi Models
 
@@ -112,7 +115,7 @@ Consider these factors:
 - **Task Complexity**: Simple corrections might only need a `$`/Fast model (`gemini2f`), while complex paper transformations benefit from `$$$$`/Slow models (`opus`, `o1`).
 - **Budget**: Use cost indicators ($ - $$$$) to guide selection.
 - **Speed**: If quick turnaround is needed, prefer Fast/Very Fast models.
-- **Special Capabilities**: Do you need explicit reasoning (`sonnet37T`, `gemini2fT`, `o1`, `o3-`, `o1-`, `DSR1`), vision (`gpt4o`, `gemini*`), native PDF/audio (`gemini*`), or very large context (`gemini*`, `gpt41`)?
+- **Special Capabilities**: Do you need explicit reasoning (`sonnet37T`, `gemini2fT`, `o1`, `o3-`, `o1-`, `dsr1`), vision (`gpt4o`, `gemini*`), native PDF/audio (`gemini*`), or very large context (`gemini*`, `gpt41`)?
 
 Experimentation is often key to finding the best model for your specific needs and writing style.
 
@@ -137,8 +140,8 @@ The specific models available by default and their identifiers (`sonnet37`, `gpt
   "gemini25p",
   "gemini25f",
   "gemini2fT",
-  "DSV3",
-  "DSR1",
+  "dsv3",
+  "dsr1",
   "grok3",
   "qwenplus",
   "kimit",

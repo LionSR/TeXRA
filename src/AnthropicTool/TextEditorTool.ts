@@ -27,8 +27,11 @@ const SNIPPET_LINES = 4;
  */
 export class TextEditorTool extends BaseAnthropicTool {
   // Tool type and name
-  private apiType: 'text_editor_20250124' | 'text_editor_20241022';
-  private name: 'str_replace_editor' = 'str_replace_editor';
+  private apiType:
+    | 'text_editor_20250124'
+    | 'text_editor_20241022'
+    | 'text_editor_20250429';
+  private name: 'str_replace_editor' | 'str_replace_based_edit_tool';
 
   // File history for undo operations
   private fileHistory: Map<string, string[]> = new Map();
@@ -40,10 +43,16 @@ export class TextEditorTool extends BaseAnthropicTool {
   constructor(
     apiType:
       | 'text_editor_20250124'
-      | 'text_editor_20241022' = 'text_editor_20250124',
+      | 'text_editor_20241022'
+      | 'text_editor_20250429' = 'text_editor_20250124',
   ) {
     super();
     this.apiType = apiType;
+    // Set tool name based on type - Claude 4 models use different name
+    this.name =
+      apiType === 'text_editor_20250429'
+        ? 'str_replace_based_edit_tool'
+        : 'str_replace_editor';
   }
 
   /**
@@ -112,11 +121,21 @@ export class TextEditorTool extends BaseAnthropicTool {
           );
           return await this.insert(filePath, input.insert_line, input.new_str);
         case 'undo_edit':
+          // Claude 4 models don't support undo_edit command
+          if (this.apiType === 'text_editor_20250429') {
+            throw new ToolError(
+              `The 'undo_edit' command is not supported in Claude 4 models. Use the str_replace_based_edit_tool with explicit content instead.`,
+            );
+          }
           logger.info(CHANNEL, `undo_edit: ${filePath}`);
           return await this.undoEdit(filePath);
         default:
+          const allowedCommands =
+            this.apiType === 'text_editor_20250429'
+              ? 'view, create, str_replace, insert'
+              : 'view, create, str_replace, insert, undo_edit';
           throw new ToolError(
-            `Unrecognized command ${command}. The allowed commands for the ${this.name} tool are: view, create, str_replace, insert, undo_edit`,
+            `Unrecognized command ${command}. The allowed commands for the ${this.name} tool are: ${allowedCommands}`,
           );
       }
     } catch (error) {

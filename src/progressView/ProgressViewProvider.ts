@@ -12,6 +12,7 @@ import {
   shouldExcludeFromProgressView,
   shouldPersistStream,
 } from '../utils/loggerUtils';
+import { TokenUsageStats } from '../types/UsageTypes';
 // @ts-ignore - Import JavaScript module
 import { STATUS, COMMANDS } from './modules/constants.js';
 
@@ -29,6 +30,7 @@ type StreamStatusType =
 interface ColoredLogMessage {
   message: string;
   level: 'error' | 'warn' | 'info' | 'debug';
+  timestamp: number;
   groupId?: string;
 }
 
@@ -39,20 +41,33 @@ interface LogGroup {
   endTime?: string;
   status: StatusType;
   parentGroupId?: string;
+  usage?: TokenUsageStats;
 }
 
 // Channels that should not be persisted in workspace storage
+
+interface OutputFileInfo {
+  path: string;
+  base?: string | null;
+  prev?: string | null;
+  added?: number;
+  removed?: number;
+}
 
 export class ProgressViewProvider implements vscode.WebviewViewProvider {
   private static _instance: ProgressViewProvider | undefined;
   private _view?: vscode.WebviewView;
   private _logStreams: Map<string, ColoredLogMessage[]> = new Map();
   private _logGroups: Map<string, Map<string, LogGroup>> = new Map(); // streamId -> groupId -> LogGroup
+  private _outputFiles: Map<string, { [key: number]: OutputFileInfo[] }> =
+    new Map();
   private readonly _contentProvider: ProgressViewContentProvider;
   private readonly _messageHandler: ProgressViewMessageHandler;
   private readonly _storageKey = 'texra.logStreams';
   private readonly _groupsStorageKey = 'texra.logGroups';
+  private readonly _filesStorageKey = 'texra.outputFiles';
   private readonly _taskStateKey = 'texra.taskStates';
+  private readonly _usageKey = 'texra.usageStats';
   private _disposables: vscode.Disposable[] = [];
   private readonly _extensionUri: vscode.Uri;
   private readonly _viewTitle: string;
@@ -61,6 +76,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   private _activeStream: string = '';
   private readonly _activeStreamKey = 'texra.activeLogStream';
   private _taskStates: Map<string, TaskState> = new Map();
+  private _usageStats: Map<string, TokenUsageStats> = new Map();
   private readonly logger: AgentLogger;
 
   constructor(
@@ -114,9 +130,23 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     if (savedState) {
       // Only load channels that should be persisted
       this._logStreams = new Map(
-        Object.entries(savedState).filter(([channel]) =>
-          shouldPersistStream(channel),
-        ),
+        Object.entries(savedState)
+          .filter(([channel]) => shouldPersistStream(channel))
+          .map(([stream, messages]) => [
+            stream,
+            messages.map((msg) => {
+              if (msg.timestamp === undefined) {
+                const attrMatch = msg.message.match(
+                  /data-full-timestamp="([^"]+)"/,
+                );
+                const timeString =
+                  attrMatch?.[1] || (msg.message.match(/\[(.*?)\]/)?.[1] ?? '');
+                const timestamp = new Date(timeString).getTime();
+                msg.timestamp = isNaN(timestamp) ? Date.now() : timestamp;
+              }
+              return msg;
+            }),
+          ]),
       );
     } else {
       this._logStreams.clear();
@@ -139,6 +169,20 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       this._logGroups.clear();
     }
 
+    // Load output files
+    const savedFiles = this.context.workspaceState.get<{
+      [key: string]: { [key: number]: OutputFileInfo[] };
+    }>(this._getWorkspaceKey(this._filesStorageKey));
+    if (savedFiles) {
+      this._outputFiles = new Map(
+        Object.entries(savedFiles).filter(([channel]) =>
+          shouldPersistStream(channel),
+        ),
+      );
+    } else {
+      this._outputFiles.clear();
+    }
+
     // Load active stream
     const savedActiveStream = this.context.workspaceState.get<string>(
       this._activeStreamKey,
@@ -150,18 +194,42 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     }
 
     // Load taskStates
-    const savedTaskStates = this.context.workspaceState.get<{
-      [key: string]: Record<string, any>;
-    }>(this._taskStateKey);
+    const savedTaskStates = this.context.workspaceState.get<
+      { [key: string]: Record<string, any> } | [string, Record<string, any>][]
+    >(this._taskStateKey);
     if (savedTaskStates) {
-      this._taskStates = new Map(
-        Object.entries(savedTaskStates).map(([stream, state]) => [
-          stream,
-          objectToTaskState(state),
-        ]),
-      );
+      if (Array.isArray(savedTaskStates)) {
+        // Backwards compatibility: convert from array format if encountered
+        this._taskStates = new Map(
+          savedTaskStates.map(([stream, state]) => [
+            stream,
+            objectToTaskState(state),
+          ]),
+        );
+      } else {
+        this._taskStates = new Map(
+          Object.entries(savedTaskStates).map(([stream, state]) => [
+            stream,
+            objectToTaskState(state),
+          ]),
+        );
+      }
     } else {
       this._taskStates.clear();
+    }
+
+    // Load usage stats
+    const savedUsage = this.context.workspaceState.get<{
+      [key: string]: {
+        inputTokens: number;
+        outputTokens: number;
+        cost: number;
+      };
+    }>(this._usageKey);
+    if (savedUsage) {
+      this._usageStats = new Map(Object.entries(savedUsage));
+    } else {
+      this._usageStats.clear();
     }
   }
 
@@ -195,6 +263,16 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     // Save taskStates
     const taskStatesObj = Object.fromEntries(this._taskStates.entries());
     this.context.workspaceState.update(this._taskStateKey, taskStatesObj);
+
+    // Save output files
+    const filesObj = Object.fromEntries(this._outputFiles.entries());
+    this.context.workspaceState.update(
+      this._getWorkspaceKey(this._filesStorageKey),
+      filesObj,
+    );
+
+    const usageObj = Object.fromEntries(this._usageStats.entries());
+    this.context.workspaceState.update(this._usageKey, usageObj);
   }
 
   public resolveWebviewView(webviewView: vscode.WebviewView): void {
@@ -287,6 +365,20 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     });
     this.updateLogContent(this._activeStream);
 
+    // Send output files for current stream
+    const files = this._outputFiles.get(this._activeStream) || {};
+    this._view.webview.postMessage({
+      command: COMMANDS.UPDATE_FILES,
+      stream: this._activeStream,
+      files,
+    });
+
+    const usage = this._usageStats.get(this._activeStream);
+    this._view.webview.postMessage({
+      command: COMMANDS.UPDATE_USAGE,
+      usage,
+    });
+
     // Update status for current stream
     if (this._activeStream) {
       const status = this._streamStatus.get(this._activeStream);
@@ -310,6 +402,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     message: string,
     level: 'error' | 'warn' | 'info' | 'debug' = 'info',
     groupId?: string,
+    timestamp: number = Date.now(),
   ) {
     // Skip if this stream should be excluded from the progress view
     if (shouldExcludeFromProgressView(stream)) {
@@ -341,12 +434,20 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       if (this._view) {
         this._view.show(true); // Show the panel and give it focus
         this.logger.debug(`Auto-focused to new stream: ${stream}`);
+      } else {
+        // If view doesn't exist yet, show the progress view panel
+        // compare to this
+        this.logger.debug(
+          `View not yet created, showing progress view panel for stream: ${stream}`,
+        );
+        vscode.commands.executeCommand('texra.showProgressView');
       }
     }
 
     const logMessage: ColoredLogMessage = {
       message,
       level,
+      timestamp,
       groupId,
     };
 
@@ -380,6 +481,20 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     // Skip if this stream should be excluded from the progress view
     if (shouldExcludeFromProgressView(stream)) {
       return;
+    }
+
+    // Ensure the stream exists so the UI can create a new tab immediately
+    // this seems to be the fix for the issue where the progress view panel is not shown when a new stream is created
+    if (!this._logStreams.has(stream)) {
+      this.logger.debug(`Creating stream from addLogGroup: ${stream}`);
+      this._logStreams.set(stream, []);
+      if (!this._streamStatus.has(stream)) {
+        this.updateStreamStatus(stream, STATUS.RUNNING);
+      }
+      this.setActiveStream(stream);
+      if (this._view) {
+        this._view.show(true);
+      }
     }
 
     // Create stream groups mapping if it doesn't exist
@@ -491,6 +606,14 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       command: COMMANDS.UPDATE_STATUS,
       status: status,
     });
+
+    // Send output files for this stream
+    const files = this._outputFiles.get(stream) || {};
+    this._view.webview.postMessage({
+      command: COMMANDS.UPDATE_FILES,
+      stream: stream,
+      files,
+    });
   }
 
   public getLogStreams(): Map<string, ColoredLogMessage[]> {
@@ -505,6 +628,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     if (this._logStreams.has(stream)) {
       this._logStreams.get(stream)!.length = 0;
       this._logGroups.delete(stream);
+      this._outputFiles.delete(stream);
       this._saveState();
       this.updateLogContent(stream);
     }
@@ -514,6 +638,8 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     this._logStreams.clear();
     this._logGroups.clear();
     this._taskStates.clear();
+    this._outputFiles.clear();
+    this._usageStats.clear();
     this._saveState();
     if (this._view) {
       this._view.webview.postMessage({ command: COMMANDS.CLEAR_LOGS });
@@ -534,6 +660,8 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       this._logStreams.delete(stream);
       this._logGroups.delete(stream);
       this._taskStates.delete(stream);
+      this._outputFiles.delete(stream);
+      this._usageStats.delete(stream);
 
       // If the deleted stream was the active one, switch to another stream if available
       if (stream === this._activeStream) {
@@ -569,6 +697,83 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     return this._streamStatus.get(stream);
   }
 
+  public addOutputFiles(
+    stream: string,
+    filesByRound: { [key: number]: OutputFileInfo[] },
+  ): void {
+    const existing = this._outputFiles.get(stream) || {};
+    const merged = { ...existing, ...filesByRound };
+    this._outputFiles.set(stream, merged);
+    this._saveState();
+    if (this._view && stream === this._activeStream) {
+      this._view.webview.postMessage({
+        command: COMMANDS.UPDATE_FILES,
+        stream,
+        files: merged,
+      });
+    }
+  }
+
+  public getOutputFiles(
+    stream: string,
+  ): { [key: number]: OutputFileInfo[] } | undefined {
+    return this._outputFiles.get(stream);
+  }
+
+  public clearOutputFiles(stream: string): void {
+    if (this._outputFiles.has(stream)) {
+      this._outputFiles.delete(stream);
+      this._saveState();
+      if (this._view && stream === this._activeStream) {
+        this._view.webview.postMessage({
+          command: COMMANDS.UPDATE_FILES,
+          stream,
+          files: {},
+        });
+      }
+    }
+  }
+
+  public updateStreamUsage(stream: string, usage: TokenUsageStats): void {
+    this._usageStats.set(stream, usage);
+    this._saveState();
+    if (this._view && stream === this._activeStream) {
+      this._view.webview.postMessage({
+        command: COMMANDS.UPDATE_USAGE,
+        usage,
+      });
+    }
+  }
+
+  public updateGroupUsage(
+    stream: string,
+    groupId: string,
+    usage: TokenUsageStats,
+  ): void {
+    const streamGroups = this._logGroups.get(stream);
+    if (streamGroups) {
+      const group = streamGroups.get(groupId);
+      if (group) {
+        group.usage = usage;
+        this._saveState();
+
+        // Notify frontend about group usage update
+        if (this._view && stream === this._activeStream) {
+          this._view.webview.postMessage({
+            command: COMMANDS.UPDATE_GROUP_USAGE,
+            stream,
+            groupId,
+            usage,
+          });
+        }
+      }
+    }
+  }
+
+  public getStreamUsage(stream: string): TokenUsageStats | undefined {
+    return this._usageStats.get(stream);
+  }
+
   public setActiveStream(stream: string) {
     if (this._logStreams.has(stream)) {
       this._activeStream = stream;
@@ -598,11 +803,25 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     return taskState;
   }
 
+  /**
+   * Clears output file information from the stored task state
+   * @param streamId Stream identifier
+   */
+  public clearTaskOutput(streamId: string): void {
+    const state = this._taskStates.get(streamId);
+    if (state) {
+      state.outputFiles = [];
+      state.outputFilesActive = false;
+      this._taskStates.set(streamId, state);
+      this.saveTaskStates();
+    }
+  }
+
   private saveTaskStates(): void {
     this.logger.debug('Saving taskStates to workspace state');
-    const taskStatesArray = Array.from(this._taskStates.entries());
-    this.logger.debug(`Saving taskStates: ${JSON.stringify(taskStatesArray)}`);
-    this.context.workspaceState.update(this._taskStateKey, taskStatesArray);
+    const taskStatesObj = Object.fromEntries(this._taskStates.entries());
+    this.logger.debug(`Saving taskStates: ${JSON.stringify(taskStatesObj)}`);
+    this.context.workspaceState.update(this._taskStateKey, taskStatesObj);
   }
 
   /**

@@ -7,25 +7,25 @@
   margin-bottom: var(--spacing-small);
   position: relative;
   background-color: var(--dropdown-background);
-  border: 1px solid var(--dropdown-border);
-  border-radius: 4px;
+  border: var(--border-thin) solid var(--dropdown-border);
+  border-radius: var(--border-radius);
   padding: var(--spacing-medium);
 }
 
 .instruction-box label {
   display: block;
-  margin-bottom: 2px;
+  margin-bottom: var(--spacing-tiny);
   font-size: var(--font-size);
 }
 
 #instruction {
-  min-height: 200px;
-  max-height: 400px;
-  padding-bottom: 50px;
+  min-height: var(--height-medium);
+  max-height: var(--height-xlarge);
+  padding-bottom: calc(var(--spacing-xlarge) + var(--spacing-large));
   resize: none;
   overflow-y: auto;
   transition: height 0.1s ease-out;
-  margin-top: 8px;
+  margin-top: var(--spacing-medium);
 }
 
 .instruction-header {
@@ -42,12 +42,6 @@
   gap: var(--spacing-medium);
 }
 
-.instruction-header-actions {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
 .instruction-header label {
   font-size: var(--font-size);
   font-weight: bold;
@@ -58,7 +52,7 @@
 .instruction-header label .codicon {
   margin-right: var(--spacing-small);
   color: var(--icon-color);
-  opacity: 0.8;
+  opacity: var(--opacity-subtle);
 }
 
 /* Model selection footer */
@@ -68,13 +62,15 @@
   align-items: center;
   gap: var(--spacing-medium);
   margin-top: var(--spacing-medium);
-  padding-right: 100px; /* Space for execute button */
+  padding-right: calc(
+    var(--width-button-min) + var(--spacing-xlarge)
+  ); /* Space for execute button */
 }
 
 #executeButton {
   font-size: var(--font-size);
   position: absolute;
-  bottom: 16px;
-  right: 16px;
+  bottom: var(--spacing-xlarge);
+  right: var(--spacing-xlarge);
   z-index: 10;
 }

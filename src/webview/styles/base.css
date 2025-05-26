@@ -40,54 +40,25 @@ body {
 
 .select-group .codicon {
   margin-right: var(--spacing-small);
-  font-size: var(--font-size);
   color: var(--text-color);
-  opacity: 0.8;
+  opacity: var(--opacity-subtle);
   vertical-align: text-bottom;
 }
 
 .select-group select {
   flex-grow: 1;
-  padding: var(--spacing-small);
-  height: 28px;
-  border: 1px solid var(--input-border);
-  border-radius: var(--border-radius);
-  background-color: var(--input-background);
-  color: var(--input-foreground);
-  cursor: pointer;
+  height: var(--height-button);
 }
 
-/* Input field */
-.vscode-input {
-  width: 100%;
-  height: 24px;
-  padding: 4px 8px;
-  border: 1px solid var(--vscode-input-border);
-  border-radius: var(--border-radius);
-  background-color: var(--vscode-input-background);
-  color: var(--vscode-input-foreground);
-  font-family: var(--vscode-font-family);
-  font-size: var(--font-size);
-}
+/* Input field - uses common.css styles */
 
-.vscode-input:focus {
-  outline: 1px solid var(--vscode-focusBorder);
-  outline-offset: -1px;
-}
-
-.vscode-input::placeholder {
-  color: var(--vscode-input-placeholderForeground);
-}
-
+/* Section header - extended from common.css */
 .section-header {
-  font-size: calc(var(--font-size) * 1.1);
+  font-size: var(--font-size-lg);
   font-weight: bold;
   margin-top: var(--spacing-small);
-  margin-bottom: var(--spacing-small);
-  padding-bottom: 4px;
-  border-bottom: 1px solid #ccc;
-  display: flex;
-  align-items: center;
+  padding-bottom: var(--spacing-small);
+  border-bottom: var(--border-thin) solid var(--vscode-panel-border);
   line-height: 1.5;
 }
 
@@ -103,6 +74,6 @@ body {
 }
 
 .codicon.clickable:hover {
-  opacity: 1;
+  opacity: var(--opacity-full);
   color: var(--button-hover-background);
 }
