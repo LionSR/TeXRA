@@ -329,7 +329,7 @@ export abstract class ModelHandler {
           if (pdfResult == null) {
             // If conversion fails but model supports native PDF, fall back to PDF
             if (this.capabilities.supportsNativePdf) {
-              this.logger.info(
+              this.logger.debug(
                 `PDF to PNG conversion failed. Falling back to native PDF for ${mediaFile}`,
               );
               mediaType = 'application/pdf';
@@ -462,9 +462,10 @@ export abstract class ModelHandler {
       if (addedMedia.length < mediaFiles.length) {
         this.logger.warn(
           `Requested ${mediaFiles.length} media files but loaded ${addedMedia.length}: ${addedMedia}`,
+          // TODO: we should just show the files that were not loaded.
         );
       } else {
-        this.logger.info(`Successfully added: ${addedMedia}`);
+        this.logger.info(`Added: ${addedMedia}`);
       }
     }
 
@@ -512,6 +513,7 @@ export abstract class ModelHandler {
 
     // Print debug info if stopping
     if (shouldStop) {
+      // StopFlags maybe should be a interface
       this.logger.debug(
         `StopFlags:
                 endTurn: ${endTurn}
