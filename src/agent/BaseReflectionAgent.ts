@@ -439,13 +439,13 @@ export abstract class BaseReflectionAgent {
 
         // Write or append to output file
         if (!exists) {
-          this.logger.info(
+          this.logger.debug(
             `Creating new file: ${outputFile}`,
             responseCycleGroupId,
           );
           await writeFile(outputFile, processedResponse);
         } else {
-          this.logger.info(
+          this.logger.debug(
             `Appending to existing file: ${outputFile}`,
             responseCycleGroupId,
           );
