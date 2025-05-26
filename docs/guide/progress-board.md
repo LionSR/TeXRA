@@ -40,7 +40,7 @@ The header provides a summary and actions for the selected stream:
   - **Red (Error)**: The agent encountered an error during execution.
   - **Yellow (Ready/Initial)**: The view is ready, but no stream is active yet.
 - **Stream Header Actions**:
-  - <i class="codicon codicon-debug-stop"></i> **Stop**: Attempts to gracefully stop the currently running task for this stream. Note that the current API call (if any) will complete first.
+  - <i class="codicon codicon-debug-stop"></i> **Stop**: Attempts to gracefully stop the currently running task for this stream. For providers supporting `AbortController` (like OpenAI or Anthropic) the active request is aborted immediately; otherwise the current API call will finish before stopping.
   - <i class="codicon codicon-debug-rerun"></i> **Run Again**: Re-runs the task associated with this stream using the _exact same configuration_ (agent, model, files, instruction) that was used when it originally ran. Useful for retrying failed tasks or reproducing results.
   - <i class="codicon codicon-reply"></i> **Restore**: Loads the configuration (agent, model, files, instruction) from this stream back into the main TeXRA webview interface. This allows you to easily modify and re-run a previous task.
   - <i class="codicon codicon-diff-multiple"></i> **Diff**: Triggers the `latexdiff` process to compare the original input file(s) with the generated output `.tex` file(s) from this stream. Generates `_diff_rN.tex` and `_diff_rN-rM.tex` files. Requires `latexdiff` to be installed. See [LaTeX Diff](./latex-diff.md).
