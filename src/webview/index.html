@@ -42,7 +42,7 @@
                   Input</label
                 >
               </div>
-              <div class="file-select-actions">
+              <div class="file-select-actions button-group">
                 <button
                   id="currentInputFileButton"
                   class="vscode-button"
@@ -58,8 +58,8 @@
                   <i class="codicon codicon-close"></i>
                 </button>
                 <span id="toggleInputFiles" class="toggle-icon" title="Multiple"
-                  >▼</span
-                >
+                  ><i class="codicon codicon-chevron-down"></i
+                ></span>
                 <button
                   id="addOpenedInputFilesButton"
                   class="vscode-button"
@@ -105,7 +105,7 @@
                 ></i>
                 Reference</label
               >
-              <div class="file-select-actions">
+              <div class="file-select-actions button-group">
                 <button
                   id="currentReferenceFileButton"
                   class="vscode-button"
@@ -124,8 +124,8 @@
                   id="toggleReferenceFiles"
                   class="toggle-icon"
                   title="Multiple"
-                  >▼</span
-                >
+                  ><i class="codicon codicon-chevron-down"></i
+                ></span>
                 <button
                   id="addOpenedReferenceFilesButton"
                   class="vscode-button"
@@ -171,7 +171,7 @@
                 ></i>
                 Auxiliary</label
               >
-              <div class="file-select-actions">
+              <div class="file-select-actions button-group">
                 <button
                   id="currentAuxiliaryFileButton"
                   class="vscode-button"
@@ -190,8 +190,8 @@
                   id="toggleAuxiliaryFiles"
                   class="toggle-icon"
                   title="Multiple"
-                  >▼</span
-                >
+                  ><i class="codicon codicon-chevron-down"></i
+                ></span>
                 <button
                   id="addOpenedAuxiliaryFilesButton"
                   class="vscode-button"
@@ -252,24 +252,22 @@
                     class="dropdown-options"
                     style="display: none"
                   >
-                    <div class="dropdown-options-content">
-                      <label class="vscode-checkbox"
-                        ><input type="checkbox" id="autoExtractFigure" /><i
-                          class="codicon codicon-file-media"
-                        ></i
-                        >Figures</label
-                      >
-                      <label class="vscode-checkbox"
-                        ><input type="checkbox" id="autoExtractTikzFigure" /><i
-                          class="codicon codicon-file-code"
-                        ></i
-                        >TikZ Figures</label
-                      >
-                    </div>
+                    <label class="vscode-checkbox"
+                      ><input type="checkbox" id="autoExtractFigure" /><i
+                        class="codicon codicon-file-media"
+                      ></i
+                      >Figures</label
+                    >
+                    <label class="vscode-checkbox"
+                      ><input type="checkbox" id="autoExtractTikzFigure" /><i
+                        class="codicon codicon-file-code"
+                      ></i
+                      >TikZ Figures</label
+                    >
                   </div>
                 </div>
               </div>
-              <div class="file-select-actions">
+              <div class="file-select-actions button-group">
                 <button
                   id="emptyMediaFileButton"
                   class="vscode-button"
@@ -278,8 +276,8 @@
                   <i class="codicon codicon-close"></i>
                 </button>
                 <span id="toggleMediaFiles" class="toggle-icon" title="Multiple"
-                  >▼</span
-                >
+                  ><i class="codicon codicon-chevron-down"></i
+                ></span>
                 <button
                   id="emptyMediaFilesButton"
                   class="vscode-button"
@@ -316,11 +314,11 @@
                   id="toggleOutputFiles"
                   class="toggle-icon"
                   title="Multiple"
-                  >▼</span
-                >
+                  ><i class="codicon codicon-chevron-down"></i
+                ></span>
                 <span class="optional-label">Multiple Outputs</span>
               </div>
-              <div class="file-select-actions">
+              <div class="file-select-actions button-group">
                 <button
                   id="emptyOutputFilesButton"
                   class="vscode-button"
@@ -344,14 +342,17 @@
             >
               <div class="multiple-files-content">
                 <div id="outputFiles" class="multiple-files-list"></div>
-                <div class="output-filename-override" style="margin-top: 8px">
+                <div
+                  class="output-filename-override"
+                  style="margin-top: var(--spacing-medium)"
+                >
                   <div
                     class="file-select-label-group"
                     title="Optional: Customize the output filename (including extension)"
                   >
                     <span id="toggleOutputNameOverride" class="toggle-icon"
-                      >></span
-                    >
+                      ><i class="codicon codicon-chevron-right"></i
+                    ></span>
                     <span class="optional-label">Output Filename</span>
                     <input
                       type="text"
@@ -386,31 +387,29 @@
                   class="dropdown-options"
                   style="display: none"
                 >
-                  <div class="dropdown-options-content">
-                    <label class="vscode-checkbox"
-                      ><input type="checkbox" id="reflect" />
-                      <i class="codicon codicon-refresh"></i> Reflect</label
-                    >
-                    <label class="vscode-checkbox"
-                      ><input type="checkbox" id="attachTeXCount" />
-                      <i class="codicon codicon-symbol-numeric"></i> Attach TeX
-                      Count</label
-                    >
-                    <label class="vscode-checkbox"
-                      ><input type="checkbox" id="usePrefillFromInput" />
-                      <i class="codicon codicon-edit"></i> Use Prefill from
-                      Input</label
-                    >
-                    <label class="vscode-checkbox"
-                      ><input type="checkbox" id="printInputPrompt" />
-                      <i class="codicon codicon-file-code"></i> Print Input
-                      Prompt</label
-                    >
-                  </div>
+                  <label class="vscode-checkbox"
+                    ><input type="checkbox" id="reflect" />
+                    <i class="codicon codicon-refresh"></i> Reflect</label
+                  >
+                  <label class="vscode-checkbox"
+                    ><input type="checkbox" id="attachTeXCount" />
+                    <i class="codicon codicon-symbol-numeric"></i> Attach TeX
+                    Count</label
+                  >
+                  <label class="vscode-checkbox"
+                    ><input type="checkbox" id="usePrefillFromInput" />
+                    <i class="codicon codicon-edit"></i> Use Prefill from
+                    Input</label
+                  >
+                  <label class="vscode-checkbox"
+                    ><input type="checkbox" id="printInputPrompt" />
+                    <i class="codicon codicon-file-code"></i> Print Input
+                    Prompt</label
+                  >
                 </div>
               </div>
             </div>
-            <div class="instruction-header-actions">
+            <div class="instruction-header-actions button-group">
               <button
                 id="settingsButton"
                 class="vscode-button"
@@ -474,8 +473,8 @@
               </select>
             </div>
           </div>
-          <button id="executeButton" class="vscode-button primary">
-            <i class="codicon codicon-play"></i> Execute
+          <button id="executeButton" class="vscode-button" title="Execute">
+            <i class="codicon codicon-play"></i>
           </button>
         </div>
       </div>
@@ -490,7 +489,7 @@
                 ><i class="codicon codicon-file"></i> Base</label
               >
             </div>
-            <div class="file-select-actions">
+            <div class="file-select-actions button-group">
               <button
                 id="currentBaseFileButton"
                 class="vscode-button"
@@ -522,13 +521,13 @@
                 Edited</label
               >
             </div>
-            <div class="file-select-actions">
+            <div class="file-select-actions button-group">
               <button
                 id="acceptButton"
                 class="vscode-button"
                 title="Accept changes from edited file and overwrite base file"
               >
-                <i class="codicon codicon-pass"></i>
+                <i class="codicon codicon-check"></i>
               </button>
               <button
                 id="compareButton"
@@ -582,7 +581,7 @@
                 Commit</label
               >
             </div>
-            <div class="file-select-actions">
+            <div class="file-select-actions button-group">
               <button
                 id="latexdiffvcButton"
                 class="vscode-button"

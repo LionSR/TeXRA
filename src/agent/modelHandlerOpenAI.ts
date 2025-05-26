@@ -25,9 +25,14 @@ import { AgentConfig } from './AgentConfig';
 import { AgentSetting, hasEndTag } from './AgentDataclass';
 import { AgentStateRound } from './AgentState';
 import { ModelHandler } from './ModelHandler';
-import { OpenAIAPIResponseUsage, ResponseUsageFactory } from './ResponseUsage';
+import {
+  OpenAIAPIResponseUsage,
+  ResponseUsageFactory,
+  ExtendedCompletionUsage,
+} from './ResponseUsage';
 import { ToolState } from './ToolState';
 import { K_SLICE } from '../utils/constants';
+import { objectToLogString } from '../utils/stringUtils';
 import { calculateTokenPrice } from '../utils/priceUtils';
 import { MediaEntry } from './mediaTypes';
 
@@ -339,7 +344,9 @@ export class ModelHandlerOpenAI extends ModelHandler {
   /** Extracts response text and usage statistics from API response. */
   extractResponse(responseObject: any, endTag: string): [string, any, string] {
     if (!responseObject.choices?.length) {
-      this.logger.debug(`Response object: ${JSON.stringify(responseObject)}`);
+      this.logger.debug(
+        `Response object: ${objectToLogString(responseObject)}`,
+      );
 
       // Add fallback for streaming which returns content directly in responseObject
       if (responseObject.role && responseObject.content) {
@@ -365,7 +372,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
 
         // Add end tag if response was stopped and tag isn't present
         if (stopReason === 'stop' && endTag && !newResponse.includes(endTag)) {
-          this.logger.info(`Adding end tag to response: ${endTag}`);
+          this.logger.debug(`Adding end tag to response: ${endTag}`);
           newResponse = `${newResponse}\n${endTag}`;
         }
 
@@ -380,7 +387,9 @@ export class ModelHandlerOpenAI extends ModelHandler {
 
       const errorMsg = 'Invalid response from API: missing choices';
       this.logger.error(errorMsg);
-      this.logger.error(`Response object: ${JSON.stringify(responseObject)}`);
+      this.logger.error(
+        `Response object: ${objectToLogString(responseObject)}`,
+      );
       throw new Error(errorMsg);
     }
 
@@ -393,13 +402,15 @@ export class ModelHandlerOpenAI extends ModelHandler {
       newResponse = choice.message.content.trim();
     } else {
       newResponse = '';
-      this.logger.error(`Response object: ${JSON.stringify(responseObject)}`);
+      this.logger.error(
+        `Response object: ${objectToLogString(responseObject)}`,
+      );
       this.logger.error('content is empty');
     }
 
     // Add end tag if response was stopped and tag isn't present
     if (stopReason === 'stop' && endTag && !newResponse.includes(endTag)) {
-      this.logger.info(`Adding end tag to response: ${endTag}`);
+      this.logger.debug(`Adding end tag to response: ${endTag}`);
       newResponse = `${newResponse}\n${endTag}`;
     }
 
@@ -544,7 +555,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
   }
 
   /** Computes cost based on token usage and model pricing. */
-  computePrice(responseUsage: any): number {
+  computePrice(responseUsage: ExtendedCompletionUsage | null): number {
     // Handle models that return None for usage
     if (!responseUsage) {
       return 0.0;
@@ -553,6 +564,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
     // Get token counts
     const promptTokens = responseUsage.prompt_tokens ?? 0;
     const completionTokens = responseUsage.completion_tokens ?? 0;
+    // Note: OpenAI doesn't provide tool_use_tokens in their API response
 
     let basePrice = calculateTokenPrice(
       promptTokens,
@@ -585,19 +597,21 @@ export class ModelHandlerOpenAI extends ModelHandler {
 
   /** Creates usage statistics from OpenAI's response format. */
   computeResponseUsage(
-    responseUsage: any,
+    responseUsage: ExtendedCompletionUsage | null,
     responseTime: number,
   ): OpenAIAPIResponseUsage {
     // For Google models, create a minimal usage object with zeros
     if (!responseUsage) {
-      const emptyUsage = {
+      const emptyUsage: ExtendedCompletionUsage = {
         prompt_tokens: 0,
         completion_tokens: 0,
+        total_tokens: 0,
+        // Note: OpenAI doesn't provide tool_use_tokens, so we don't include it
         prompt_tokens_details: { cached_tokens: 0 },
         completion_tokens_details: {
           reasoning_tokens: 0,
-          accepted_prediction_tokens: null,
-          rejected_prediction_tokens: null,
+          accepted_prediction_tokens: undefined,
+          rejected_prediction_tokens: undefined,
         },
       };
       return ResponseUsageFactory.fromOpenAIResponse(

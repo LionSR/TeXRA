@@ -6,6 +6,7 @@ import * as vscode from 'vscode';
 
 // Local imports - log
 import * as logger from '../logger/logUtils';
+import { generateNonce } from '../utils/nonceUtils';
 
 const CHANNEL = 'Webview';
 logger.initialize(CHANNEL);
@@ -22,24 +23,17 @@ export class ProgressViewContentProvider {
           'progressView',
           filePath,
         );
+      const getCommonPath = (path: string) =>
+        vscode.Uri.joinPath(this.context.extensionUri, 'src', 'common', path);
+      const getNodeModulesPath = (path: string) =>
+        vscode.Uri.joinPath(this.context.extensionUri, 'node_modules', path);
 
       const htmlPath = getWebviewPath('index.html');
       const cssPath = getWebviewPath('styles/index.css');
-      const commonCssPath = vscode.Uri.joinPath(
-        this.context.extensionUri,
-        'src',
-        'common',
-        'styles',
-        'common.css',
-      );
+      const commonCssPath = getCommonPath('styles/common.css');
       const scriptPath = getWebviewPath('script.js');
-      const splitJsPath = vscode.Uri.joinPath(
-        this.context.extensionUri,
-        'node_modules',
-        'split.js',
-        'dist',
-        'split.es.js',
-      );
+      const splitJsPath = getNodeModulesPath('split.js/dist/split.es.js');
+      const webviewStatePath = getCommonPath('modules/webviewState.js');
 
       // Module paths
       const vscodeApiPath = getWebviewPath('modules/vscodeApi.js');
@@ -49,24 +43,14 @@ export class ProgressViewContentProvider {
       const constantsPath = getWebviewPath('modules/constants.js');
       const logFormattersPath = getWebviewPath('modules/logFormatters.js');
 
-      const codiconPath = vscode.Uri.joinPath(
-        this.context.extensionUri,
-        'node_modules',
-        '@vscode',
-        'codicons',
-        'dist',
-        'codicon.css',
+      const codiconPath = getNodeModulesPath(
+        '@vscode/codicons/dist/codicon.css',
       );
-      const codiconsFontPath = vscode.Uri.joinPath(
-        this.context.extensionUri,
-        'node_modules',
-        '@vscode',
-        'codicons',
-        'dist',
-        'codicon.ttf',
+      const codiconsFontPath = getNodeModulesPath(
+        '@vscode/codicons/dist/codicon.ttf',
       );
       const htmlContent = fs.readFileSync(htmlPath.fsPath, 'utf-8');
-      const nonce = this.getNonce();
+      const nonce = generateNonce();
       const styleUri = webview.asWebviewUri(cssPath);
       const commonStyleUri = webview.asWebviewUri(commonCssPath);
       const scriptUri = webview.asWebviewUri(scriptPath);
@@ -76,6 +60,7 @@ export class ProgressViewContentProvider {
 
       // Module URIs
       const vscodeApiUri = webview.asWebviewUri(vscodeApiPath);
+      const webviewStateUri = webview.asWebviewUri(webviewStatePath);
       const stateManagerUri = webview.asWebviewUri(stateManagerPath);
       const messageHandlersUri = webview.asWebviewUri(messageHandlersPath);
       const domHandlersUri = webview.asWebviewUri(domHandlersPath);
@@ -92,6 +77,7 @@ export class ProgressViewContentProvider {
         .replace('${codiconUri}', codiconUri.toString())
         .replace('${codiconsFontUri}', codiconsFontUri.toString())
         .replace('${vscodeApiUri}', vscodeApiUri.toString())
+        .replace('${webviewStateUri}', webviewStateUri.toString())
         .replace('${stateManagerUri}', stateManagerUri.toString())
         .replace('${messageHandlersUri}', messageHandlersUri.toString())
         .replace('${domHandlersUri}', domHandlersUri.toString())
@@ -106,15 +92,5 @@ export class ProgressViewContentProvider {
       );
       return '<html><body>Error loading content</body></html>';
     }
-  }
-
-  private getNonce() {
-    let text = '';
-    const possible =
-      'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-    for (let i = 0; i < 32; i++) {
-      text += possible.charAt(Math.floor(Math.random() * possible.length));
-    }
-    return text;
   }
 }

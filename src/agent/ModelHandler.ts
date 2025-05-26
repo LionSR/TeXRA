@@ -457,8 +457,15 @@ export abstract class ModelHandler {
     }
 
     if (mediaFiles.length > 0) {
-      this.logger.info(`Trying to load media: ${mediaFiles}`);
-      this.logger.info(`Successfully added: ${addedMedia}`);
+      this.logger.debug(`Trying to load media: ${mediaFiles}`);
+
+      if (addedMedia.length < mediaFiles.length) {
+        this.logger.warn(
+          `Requested ${mediaFiles.length} media files but loaded ${addedMedia.length}: ${addedMedia}`,
+        );
+      } else {
+        this.logger.info(`Successfully added: ${addedMedia}`);
+      }
     }
 
     return this.createMediaContent(mediaMessage);

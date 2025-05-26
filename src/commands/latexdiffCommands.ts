@@ -10,6 +10,7 @@ import * as logger from '../logger/logUtils';
 // Local imports - utilities
 import { getWorkspacePath } from '../utils/workspaceFileUtils';
 import { fileExists } from '../utils/workspaceFileUtils';
+import { openBuildDisplayIfTex } from '../utils/openBuildUtils';
 
 // Local imports - latex utils
 import {
@@ -63,6 +64,15 @@ async function handleLatexdiff(
   baseFile: string,
   editedFile: string,
 ) {
+  if (!(baseFile || inputFile)) {
+    vscode.window.showErrorMessage('No base file specified for latexdiff');
+    return;
+  }
+  if (!editedFile) {
+    vscode.window.showErrorMessage('No revised file specified for latexdiff');
+    return;
+  }
+
   const fileToUse = baseFile || inputFile;
   try {
     // Check if latexdiff is installed
@@ -100,20 +110,7 @@ async function handleLatexdiff(
       return;
     }
 
-    const doc = await vscode.window.showTextDocument(fullPath);
-    await vscode.window.showTextDocument(doc.document, {
-      preview: false,
-      preserveFocus: true,
-    });
-    await vscode.commands.executeCommand(
-      'workbench.view.extension.latex-workshop-activitybar',
-    );
-    await vscode.commands.executeCommand('latex-workshop.build');
-
-    // Wait for build to complete before viewing
-    setTimeout(async () => {
-      await vscode.commands.executeCommand('latex-workshop.view');
-    }, 10000);
+    await openBuildDisplayIfTex(filePathRelative, { preserveFocus: true });
   } catch (err) {
     vscode.window.showErrorMessage(
       `Error creating LaTeX diff: ${err instanceof Error ? err.message : String(err)}`,
@@ -162,17 +159,7 @@ async function handleLatexdiffvc(
       return;
     }
 
-    const doc = await vscode.window.showTextDocument(fullPath);
-    await vscode.window.showTextDocument(doc.document, {
-      preview: false,
-      preserveFocus: true,
-    });
-    await vscode.commands.executeCommand('latex-workshop.build');
-
-    // Wait for build to complete before viewing
-    setTimeout(async () => {
-      await vscode.commands.executeCommand('latex-workshop.view');
-    }, 5000);
+    await openBuildDisplayIfTex(filePathRelative, { preserveFocus: true });
   } catch (err) {
     vscode.window.showErrorMessage(
       `Error creating LaTeX diff: ${err instanceof Error ? err.message : String(err)}`,
@@ -461,7 +448,9 @@ async function handleRunLatexdiff(config: any) {
             results.push({
               success: result.success,
               message: result.message,
-              diffFile: result.diffFileName,
+              diffFile: result.diffFileName
+                ? path.join(path.dirname(inputFile), result.diffFileName)
+                : undefined,
             });
 
             completedOperations++;
@@ -495,7 +484,9 @@ async function handleRunLatexdiff(config: any) {
               results.push({
                 success: result.success,
                 message: result.message,
-                diffFile: result.diffFileName,
+                diffFile: result.diffFileName
+                  ? path.join(path.dirname(currentFile), result.diffFileName)
+                  : undefined,
               });
 
               completedOperations++;
@@ -529,6 +520,9 @@ async function handleRunLatexdiff(config: any) {
               CHANNEL,
               `Successfully generated diff: ${result.diffFile}`,
             );
+            await openBuildDisplayIfTex(result.diffFile, {
+              preserveFocus: true,
+            });
           } else {
             logger.warn(CHANNEL, `Failed to generate diff: ${result.message}`);
           }

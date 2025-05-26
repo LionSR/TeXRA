@@ -35,6 +35,10 @@ import { runLatexIndent } from '../latex/latexindent';
 import { AgentConfig } from './AgentConfig';
 import { AgentSetting } from './AgentDataclass';
 import { AgentStateGlobal, AgentStateRound } from './AgentState';
+import { ProgressViewProvider } from '../progressView/ProgressViewProvider';
+
+// Local imports - types
+import { TokenUsageStats } from '../types/UsageTypes';
 
 /** Generates output filename incorporating model and round information. */
 export function getOutputFileName(
@@ -201,7 +205,7 @@ export class OutputHandler {
    * @returns Map of source files to their best matching target files
    * @private
    */
-  private createFileMapping(
+  public createFileMapping(
     sourceFiles: string[],
     targetFiles: string[],
     matchStrategy: 'basename' | 'contains' = 'basename',
@@ -403,7 +407,7 @@ export class OutputHandler {
 
       // 1. ROUND DIFFS: Comparing original input to current output (only in rewrite mode)
       if (this.agentSetting.isRewrite) {
-        this.logger.info(
+        this.logger.debug(
           `Running round-based latexdiff operations`,
           diffProcessGroupId,
         );
@@ -423,7 +427,7 @@ export class OutputHandler {
 
       // 2. SEQUENTIAL ROUND DIFFS: Comparing previous round to current round
       if (currRound > 0) {
-        this.logger.info(
+        this.logger.debug(
           `Running between-rounds latexdiff operations`,
           diffProcessGroupId,
         );
@@ -846,6 +850,13 @@ export class OutputHandler {
         );
       }
 
+      if (stateGlobal.totalToolUseTokens > 0) {
+        this.logger.info(
+          `Total tool use tokens: ${stateGlobal.totalToolUseTokens}`,
+          statsGroupId,
+        );
+      }
+
       // Format token usage reporting by model provider
       let responseUsage: any = {};
       if (this.modelHandler.isOpenai) {
@@ -853,6 +864,7 @@ export class OutputHandler {
           responseUsage = {
             prompt_tokens: stateGlobal.totalInputTokens,
             completion_tokens: stateGlobal.totalOutputTokens,
+            // Note: OpenAI doesn't provide tool_use_tokens in their API
             prompt_tokens_details: {
               cached_tokens: stateGlobal.totalCacheReadInputTokens,
             },
@@ -864,6 +876,7 @@ export class OutputHandler {
           responseUsage = {
             prompt_tokens: stateGlobal.totalInputTokens,
             completion_tokens: stateGlobal.totalOutputTokens,
+            // Note: OpenAI doesn't provide tool_use_tokens in their API
             reasoning_tokens: stateGlobal.totalReasoningTokens,
             cached_tokens: stateGlobal.totalCacheReadInputTokens,
           };
@@ -872,6 +885,7 @@ export class OutputHandler {
         responseUsage = {
           input_tokens: stateGlobal.totalInputTokens,
           output_tokens: stateGlobal.totalOutputTokens,
+          // Note: Anthropic doesn't provide tool_use_tokens in their API
           cache_read_input_tokens: stateGlobal.totalCacheReadInputTokens,
           cache_creation_input_tokens:
             stateGlobal.totalCacheCreationInputTokens,
@@ -880,10 +894,21 @@ export class OutputHandler {
         responseUsage = {
           promptTokens: stateGlobal.totalInputTokens,
           completionTokens: stateGlobal.totalOutputTokens,
+          toolUseTokenCount: stateGlobal.totalToolUseTokens,
         };
       }
 
       const cost = this.modelHandler.computePrice(responseUsage);
+
+      const provider = ProgressViewProvider.getInstance();
+      if (provider) {
+        // Update group-level usage stats instead of stream-level
+        provider.updateGroupUsage(this.channel, statsGroupId, {
+          inputTokens: stateGlobal.totalInputTokens,
+          outputTokens: stateGlobal.totalOutputTokens,
+          cost,
+        });
+      }
 
       this.logger.info(
         `Total response time : ${stateGlobal.totalResponseTime.toFixed(1)} seconds`,

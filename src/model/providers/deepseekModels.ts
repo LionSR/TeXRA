@@ -6,9 +6,17 @@ import {
   ReasoningEffort,
 } from '../ModelConfig';
 
+// Common capabilities for DeepSeek models
+const DEEPSEEK_DEFAULT_CAPABILITIES: ModelCapabilities = {
+  ...DEFAULT_MODEL_CAPABILITIES,
+  supportsAutoPromptCaching: true,
+  cacheDiscountFactor: 0.5,
+  supportsVision: false,
+};
+
 export const DEEPSEEK_MODELS: Record<string, ModelConfig> = {
-  DSV3: {
-    name: 'DSV3',
+  dsv3: {
+    name: 'dsv3',
     fullName: 'deepseek-chat',
     openrouterFullName: 'deepseek/deepseek-chat',
     provider: ModelProvider.DEEPSEEK,
@@ -17,16 +25,13 @@ export const DEEPSEEK_MODELS: Record<string, ModelConfig> = {
     inputPrice: 0.14,
     outputPrice: 0.28,
     capabilities: {
-      ...DEFAULT_MODEL_CAPABILITIES,
+      ...DEEPSEEK_DEFAULT_CAPABILITIES,
       supportsAssistantPrefill: true,
-      supportsAutoPromptCaching: true,
-      cacheDiscountFactor: 0.5,
-      supportsVision: false,
     } satisfies ModelCapabilities,
     openRouterOnly: false,
   },
-  DSR1: {
-    name: 'DSR1',
+  dsr1: {
+    name: 'dsr1',
     fullName: 'deepseek-reasoner',
     openrouterFullName: 'deepseek/deepseek-R1',
     provider: ModelProvider.DEEPSEEK,
@@ -35,17 +40,14 @@ export const DEEPSEEK_MODELS: Record<string, ModelConfig> = {
     inputPrice: 4,
     outputPrice: 4,
     capabilities: {
-      ...DEFAULT_MODEL_CAPABILITIES,
-      supportsAutoPromptCaching: true,
-      cacheDiscountFactor: 0.5,
+      ...DEEPSEEK_DEFAULT_CAPABILITIES,
       supportsReasoning: true,
-      supportsVision: false,
       supportsReasoningEffort: false,
     } satisfies ModelCapabilities,
     openRouterOnly: false,
   },
-  DSV3o: {
-    name: 'DSV3o',
+  dsv3o: {
+    name: 'dsv3o',
     fullName: 'deepseek-chat',
     openrouterFullName: 'deepseek/deepseek-chat-v3-0324',
     provider: ModelProvider.DEEPSEEK,
@@ -54,16 +56,13 @@ export const DEEPSEEK_MODELS: Record<string, ModelConfig> = {
     inputPrice: 0.27,
     outputPrice: 1.1,
     capabilities: {
-      ...DEFAULT_MODEL_CAPABILITIES,
+      ...DEEPSEEK_DEFAULT_CAPABILITIES,
       supportsAssistantPrefill: true,
-      supportsAutoPromptCaching: true,
-      cacheDiscountFactor: 0.5,
-      supportsVision: false,
     } satisfies ModelCapabilities,
     openRouterOnly: false,
   },
-  DSR1o: {
-    name: 'DSR1o',
+  dsr1o: {
+    name: 'dsr1o',
     fullName: 'deepseek-reasoner',
     openrouterFullName: 'deepseek/deepseek-R1',
     provider: ModelProvider.DEEPSEEK,
@@ -72,11 +71,8 @@ export const DEEPSEEK_MODELS: Record<string, ModelConfig> = {
     inputPrice: 0.55,
     outputPrice: 2.19,
     capabilities: {
-      ...DEFAULT_MODEL_CAPABILITIES,
-      supportsAutoPromptCaching: true,
-      cacheDiscountFactor: 0.5,
+      ...DEEPSEEK_DEFAULT_CAPABILITIES,
       supportsReasoning: true,
-      supportsVision: false,
       supportsReasoningEffort: false,
     } satisfies ModelCapabilities,
     openRouterOnly: false,
