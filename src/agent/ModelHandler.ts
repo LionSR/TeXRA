@@ -532,6 +532,12 @@ export abstract class ModelHandler {
 
   /**
    * Generates a model response using the provider's API.
+   * @param client The provider-specific client instance
+   * @param messages Array of conversation messages
+   * @param temperature Controls randomness in the response (0.0 to 1.0)
+   * @param systemPrompt Optional system prompt to guide model behavior
+   * @param endTag Optional stop sequence to terminate generation
+   * @param signal Optional AbortSignal to cancel the request
    * @returns Promise resolving to provider-specific response object
    */
   abstract createResponse(

@@ -212,7 +212,10 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
       this.logger.debug(
         `Sending message with ${lastMessageParts.length} parts.`,
       );
-      const result = await chat.sendMessage({ message: lastMessageParts });
+      const result = await chat.sendMessage(
+        { message: lastMessageParts },
+        { signal },
+      );
 
       return result;
     } catch (error: any) {
