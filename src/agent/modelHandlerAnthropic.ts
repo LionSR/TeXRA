@@ -3,6 +3,9 @@
 
 // Third-party imports
 import { Anthropic } from '@anthropic-ai/sdk';
+
+// Local imports - error utils
+import { formatProviderError } from '../utils/sdkErrorUtils';
 import {
   MessageParam,
   ContentBlock,
@@ -30,6 +33,7 @@ import { ModelHandler } from './ModelHandler';
 import {
   AnthropicAPIResponseUsage,
   ResponseUsageFactory,
+  AnthropicUsage,
 } from './ResponseUsage';
 import { ToolState } from './ToolState';
 import { MediaEntry } from './mediaTypes';
@@ -37,6 +41,7 @@ import { AgentStateRound } from './AgentState';
 import { messageToSkeleton } from './messageUtils';
 import { getConfig } from '../utils/configUtils';
 import { K_SLICE } from '../utils/constants';
+import { objectToLogString } from '../utils/stringUtils';
 import { calculateTokenPrice } from '../utils/priceUtils';
 
 /**
@@ -78,16 +83,36 @@ export class ModelHandlerAnthropic extends ModelHandler {
     if (this.capabilities.supportsReasoning) {
       // This ensures thinking is explicitly enabled for all models that support it
       this.logger.debug('Enabling thinking for model with reasoning support');
+
+      // Calculate thinking budget based on max_tokens constraint
+      // budget_tokens must be less than max_tokens
+      const maxBudget = Math.floor(this.config.maxOutputTokens * 0.5); // Use 50% of max_tokens as safe budget
+      const defaultBudget = useStreaming ? 32768 : 4096; // this logics only applies to sonnet 3.7
+      const thinkingBudget = Math.min(defaultBudget, maxBudget);
+
       options.thinking = {
         type: 'enabled',
-        budget_tokens: useStreaming ? 32768 : 4096,
+        budget_tokens: thinkingBudget,
       };
+
+      this.logger.debug(
+        `Set thinking budget: ${thinkingBudget} tokens (max_tokens: ${this.config.maxOutputTokens}, streaming: ${useStreaming})`,
+      );
+
+      // Remove temperature for Claude 4 models when thinking is enabled as per Anthropic docs
+      if (
+        this.config.fullName.includes('claude-opus-4') ||
+        this.config.fullName.includes('claude-sonnet-4') ||
+        this.config.fullName.includes('claude-3-7-sonnet')
+      ) {
+        delete options.temperature;
+      }
     }
 
     // Add beta features for Claude 3.7 Sonnet to increase max output to 128k tokens and enable thinking
     if (this.config.fullName === 'claude-3-7-sonnet-20250219') {
       // useStreaming = true; should consider to be true by default
-      delete options.temperature;
+      // temperature already deleted above for reasoning models
 
       options.betas = ['output-128k-2025-02-19'];
       // Update max tokens to use the higher limit when streaming
@@ -127,14 +152,18 @@ export class ModelHandlerAnthropic extends ModelHandler {
 
     let response;
 
-    if (useStreaming) {
-      // in the future if we pass stream to outside, calling stream.controller.abort() will abort the stream; which will be very useful for our stop button
-      // we should also make sure partial results can be returned in the presence of errors!
-      const stream = await client.beta.messages.stream(options);
-      const response = await stream.finalMessage();
-      return response;
-    } else {
-      response = await client.beta.messages.create(options);
+    try {
+      if (useStreaming) {
+        // in the future if we pass stream to outside, calling stream.controller.abort() will abort the stream; which will be very useful for our stop button
+        // we should also make sure partial results can be returned in the presence of errors!
+        const stream = await client.beta.messages.stream(options);
+        response = await stream.finalMessage();
+      } else {
+        response = await client.beta.messages.create(options);
+      }
+    } catch (err) {
+      this.logger.error(formatProviderError('Error creating response', err));
+      throw err;
     }
 
     return response;
@@ -322,8 +351,10 @@ export class ModelHandlerAnthropic extends ModelHandler {
       // Anthropic specific empty response check
       const errorMsg = 'No output generated - API returned empty response';
       this.logger.error(errorMsg);
-      this.logger.debug(`responseObject: ${responseObject}`);
-      this.logger.debug(`responseObject.content: ${responseObject.content}`);
+      this.logger.debug(`responseObject: ${objectToLogString(responseObject)}`);
+      this.logger.debug(
+        `responseObject.content: ${objectToLogString(responseObject.content)}`,
+      );
       throw new Error(errorMsg);
     }
 
@@ -529,7 +560,13 @@ export class ModelHandlerAnthropic extends ModelHandler {
   }
 
   /** Calculates API usage cost based on input/output tokens and cache usage if supported. */
-  computePrice(responseUsage: any): number {
+  computePrice(responseUsage: AnthropicUsage): number {
+    if (!responseUsage) {
+      return 0;
+    }
+
+    // Note: Anthropic doesn't provide tool_use_tokens in their API response
+
     let basePrice = calculateTokenPrice(
       responseUsage.input_tokens,
       responseUsage.output_tokens,
@@ -538,14 +575,20 @@ export class ModelHandlerAnthropic extends ModelHandler {
     );
 
     if (this.capabilities.supportsPromptCaching) {
-      if ('cache_creation_input_tokens' in responseUsage) {
+      if (
+        'cache_creation_input_tokens' in responseUsage &&
+        responseUsage.cache_creation_input_tokens !== null
+      ) {
         basePrice +=
           (responseUsage.cache_creation_input_tokens *
             this.config.inputPrice *
             1.25) /
           1e6;
       }
-      if ('cache_read_input_tokens' in responseUsage) {
+      if (
+        'cache_read_input_tokens' in responseUsage &&
+        responseUsage.cache_read_input_tokens !== null
+      ) {
         basePrice +=
           (responseUsage.cache_read_input_tokens *
             this.config.inputPrice *
@@ -559,7 +602,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
 
   /** Computes detailed response usage metrics including tokens, price, and response time. */
   computeResponseUsage(
-    responseUsage: any,
+    responseUsage: AnthropicUsage,
     responseTime: number,
   ): AnthropicAPIResponseUsage {
     return ResponseUsageFactory.fromAnthropicResponse(
@@ -760,6 +803,14 @@ export class ModelHandlerAnthropic extends ModelHandler {
     this.logger.debug(
       `Checking if should continue - stop reason: "${stopReason}"`,
     );
+
+    // Handle Claude 4 refusal stop reason - never continue when model refuses
+    if (stopReason === 'refusal') {
+      this.logger.warn(
+        'Model refused to generate content - stopping generation',
+      );
+      return false;
+    }
 
     // We should continue if:
     // 1. We hit the max tokens limit (stopReason === 'max_tokens')

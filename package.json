@@ -2,7 +2,7 @@
   "name": "texra",
   "displayName": "TeXRA",
   "description": "TeXRA: Your LLM-powered 24/7 LaTeX Research Assistant.",
-  "version": "0.30.7",
+  "version": "0.30.10",
   "publisher": "texra-ai",
   "engines": {
     "vscode": "^1.94.0"
@@ -50,6 +50,10 @@
               "type": "string"
             },
             "default": [
+              "opus4T",
+              "opus4",
+              "sonnet4T",
+              "sonnet4",
               "sonnet37T",
               "sonnet37",
               "o3",
@@ -61,8 +65,8 @@
               "gemini25p",
               "gemini25f",
               "gemini2fT",
-              "DSV3",
-              "DSR1",
+              "dsv3",
+              "dsr1",
               "grok3",
               "qwenplus",
               "kimit",
@@ -547,7 +551,7 @@
               "o3-mini",
               "gpt41",
               "gpt4o",
-              "DSV3",
+              "dsv3",
               "qwenplus",
               "kimit",
               "Kimiv"
@@ -1084,7 +1088,7 @@
   },
   "homepage": "https://texra.ai",
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.51.0",
+    "@anthropic-ai/sdk": "^0.52.0",
     "@cantoo/pdf-lib": "^2.3.2",
     "@google/genai": "^0.14.1",
     "@types/yaml": "^1.9.6",

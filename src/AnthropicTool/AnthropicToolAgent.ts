@@ -4,6 +4,9 @@ import * as vscode from 'vscode';
 // Third-party imports
 import Anthropic from '@anthropic-ai/sdk';
 
+// Local imports - error utils
+import { getSdkErrorMessage } from '../utils/sdkErrorUtils';
+
 // Local imports - core
 import { TextEditorTool } from './TextEditorTool';
 import { ToolResult } from './base';
@@ -44,7 +47,14 @@ export abstract class AnthropicToolAgent<
   protected maxTokens: number = AnthropicToolAgent.DEFAULT_MAX_TOKENS;
 
   constructor() {
-    this.textEditorTool = new TextEditorTool('text_editor_20250124');
+    // Use different text editor tool for Claude 4 models vs older models
+    const isClaude4Model =
+      this.model.includes('claude-opus-4') ||
+      this.model.includes('claude-sonnet-4');
+    const textEditorType = isClaude4Model
+      ? 'text_editor_20250429'
+      : 'text_editor_20250124';
+    this.textEditorTool = new TextEditorTool(textEditorType);
 
     // Derive agent name from class name
     this.agentName = this.constructor.name;
@@ -267,12 +277,7 @@ export abstract class AnthropicToolAgent<
           max_tokens: this.maxTokens,
           system: systemMessage,
           messages,
-          tools: [
-            {
-              type: 'text_editor_20250124' as const,
-              name: 'str_replace_editor',
-            },
-          ],
+          tools: [this.textEditorTool.toParams() as any], // Type assertion needed for Claude 4 compatibility
         });
 
         logger.debug(
@@ -435,7 +440,7 @@ export abstract class AnthropicToolAgent<
    * This helps maintain a consistent error message format throughout the codebase
    */
   protected formatErrorMessage(err: unknown): string {
-    return err instanceof Error ? err.message : String(err);
+    return getSdkErrorMessage(err);
   }
 
   /**

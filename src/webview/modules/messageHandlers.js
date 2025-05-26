@@ -10,6 +10,11 @@ import { safeSetElementValue, safeGetElementById } from './utils.js';
 import { restoreState, saveState } from './stateManager.js';
 import { FILE_TYPES } from './constants.js';
 import { capitalize, uncapitalize } from './stringUtils.js';
+import {
+  getWebviewState,
+  updateWebviewState,
+  setWebviewState,
+} from './webviewState.js';
 
 /**
  * Handle state restoration from log view
@@ -48,11 +53,13 @@ function handleStateRestoration(state) {
   if (state.outputNameOverrideVisible) {
     if (outputNameOverride) outputNameOverride.style.display = 'inline-block';
     if (toggleOutputNameOverrideDiv)
-      toggleOutputNameOverrideDiv.textContent = '<';
+      toggleOutputNameOverrideDiv.innerHTML =
+        '<i class="codicon codicon-chevron-left"></i>';
   } else {
     if (outputNameOverride) outputNameOverride.style.display = 'none';
     if (toggleOutputNameOverrideDiv)
-      toggleOutputNameOverrideDiv.textContent = '>';
+      toggleOutputNameOverrideDiv.innerHTML =
+        '<i class="codicon codicon-chevron-right"></i>';
   }
 
   // Prepare the state to save with all necessary properties
@@ -129,7 +136,9 @@ function handleStateRestoration(state) {
       // Update the toggle indicator based on visibility
       const toggleElement = safeGetElementById(toggleId);
       if (toggleElement) {
-        toggleElement.textContent = isVisible ? '▲' : '▼';
+        toggleElement.innerHTML = isVisible
+          ? '<i class="codicon codicon-chevron-up"></i>'
+          : '<i class="codicon codicon-chevron-down"></i>';
       }
 
       // Only update the file list if we have files to restore
@@ -164,11 +173,9 @@ function handleStateRestoration(state) {
               });
 
               // Save state to persist changes
-              // saveState();
-              // Use vscode.setState directly instead of calling saveState
-              const currentState = vscode.getState() || {};
-              currentState[`${fileType}Files`] = updatedFiles;
-              vscode.setState(currentState);
+              updateWebviewState({
+                [`${fileType}Files`]: updatedFiles,
+              });
             });
           }
         });
@@ -177,7 +184,7 @@ function handleStateRestoration(state) {
   }
 
   // Save the prepared state
-  vscode.setState(savedState);
+  setWebviewState(savedState);
 
   // Use the stateManager's restoreState to update UI elements from this state
   // This will handle setting all form values and updating indicators
@@ -300,7 +307,7 @@ export function setupMessageHandlers() {
           updateFileSelect('baseFile', message.files);
 
           // Get the stored state
-          const state = vscode.getState();
+          const state = getWebviewState();
           const storedBaseFile = state?.baseFile;
 
           // First try to restore from stored state, then fallback to current if preserveBaseFile

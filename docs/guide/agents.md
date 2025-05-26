@@ -260,7 +260,7 @@ Preserve mathematical notation and citations from the original.
 
 ## Next Steps
 
-Now that you understand the default built-in agents, you might want to explore:
+Now that you understand the default built-in agents, you might want to learn more:
 
 - [Agent Architecture & Execution Flow](./agent-architecture.md) - Understand how agents work internally.
 - [Custom Agents](./custom-agents.md) - Learn how to create your own specialized agents.

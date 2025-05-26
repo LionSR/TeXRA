@@ -538,6 +538,7 @@ export const LATEX_XML_REPLACEMENTS: ReplacementCategory = {
     // Fix LaTeX tags with incorrect XML-style ending (with '>')
     latexEnvironments.forEach((env) => {
       patterns[`\\end{${env}>}`] = `\\end{${env}}`;
+      patterns[`\\end{${env}>`] = `\\end{${env}}`;
     });
 
     // ===== 2. XML BRACE FIXES =====
@@ -673,11 +674,19 @@ export const GPTNESS_REPLACEMENTS: ReplacementCategory = {
   patterns: {
     'delve into': 'discuss',
     'delves into': 'discusses',
+    'delving into': 'discussing',
+    disparate: 'different',
+    disseminates: 'distributes',
+    disseminated: 'distributed',
+    disseminating: 'distributing',
+    dissemination: 'distribution',
+    disseminations: 'distributions',
+    parsimonious: 'simple',
     embark: 'start',
     realm: 'area',
     intricate: 'complex',
     '"exact"': "``exact''",
-    'delving into': 'discussing',
+
     "It's important to note": 'Note that',
     'our exploration': 'our discussion',
     'inter-layer': 'interlayer',

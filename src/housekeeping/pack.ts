@@ -29,7 +29,7 @@ export async function runPackSingle(
   inputFile: string,
   agent: string,
   outputFolder?: string,
-): Promise<string> {
+): Promise<string | undefined> {
   logger.info(
     CHANNEL,
     `Starting packing with model=${model}, inputFile=${inputFile}, agent=${agent}, outputFolder=${outputFolder}`,
@@ -77,6 +77,17 @@ export async function runPackSingle(
     }
   }
 
+  const onlyInputFilePacked =
+    movedFiles.length === 0 &&
+    copiedFiles.length === 1 &&
+    copiedFiles[0] === inputFile;
+
+  if (onlyInputFilePacked) {
+    logger.warn(CHANNEL, `No files found to pack for ${inputFile}`);
+    vscode.window.showWarningMessage(`No files found to pack for ${inputFile}`);
+    return '';
+  }
+
   if (movedFiles.length > 0 || copiedFiles.length > 0) {
     logger.debug(
       CHANNEL,
@@ -111,9 +122,8 @@ export async function runPackSingle(
         operations.push(`Copying: ${file} -> ${destination}`);
         await copyFile(file, destination);
       }
-      // if only inputFile is packed, don't show message
-      // potential improvement here
-      if (operations.length > 1) {
+      // Display a summary only when actual files were packed
+      if (operations.length > 0 && !onlyInputFilePacked) {
         logger.info(CHANNEL, `Files packed into ${outputFolder}`);
         vscode.window.showInformationMessage(
           `Files packed into ${outputFolder}`,
@@ -219,7 +229,7 @@ export async function runPack(
   agent: string,
   outputFiles: string[] = [],
   outputNameOverride?: string,
-): Promise<string> {
+): Promise<string | undefined> {
   logger.debug(
     CHANNEL,
     `Starting pack with model=${model}, inputFile=${inputFile}, agent=${agent}, outputNameOverride=${outputNameOverride}`,
@@ -232,12 +242,12 @@ export async function runPack(
       `Missing required parameters: model=${model}, inputFile=${inputFile}, agent=${agent}`,
     );
     vscode.window.showErrorMessage('Missing required parameters for pack');
-    return '';
+    return undefined;
   }
 
   // Use multiple mode if there are output files
   if (outputFiles.length > 0) {
-    return runPackMultiple(
+    return await runPackMultiple(
       model,
       inputFile,
       agent,
@@ -245,6 +255,6 @@ export async function runPack(
       outputNameOverride,
     );
   } else {
-    return runPackSingle(model, inputFile, agent, outputNameOverride);
+    return await runPackSingle(model, inputFile, agent, outputNameOverride);
   }
 }

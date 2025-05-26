@@ -180,7 +180,7 @@ Transcribe the provided lecture audio file [lecture.mp3]. Provide the output as 
 
 ## Next Steps
 
-Now that you've met the built-in crew, you might want to dive deeper:
+Now that you've met the built-in crew, you may want to learn more:
 
 - [Agent Architecture & Execution Flow](./agent-architecture.md) - Understand how agents work internally.
 - [Custom Agents](./custom-agents.md) - Learn how to create your own specialized agents.

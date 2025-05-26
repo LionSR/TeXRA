@@ -6,6 +6,7 @@ import { AgentHistoryManager } from './AgentHistoryManager';
 import { executeCommand } from '../commands/executeCommand';
 
 import { agentConfigToTaskState } from '../utils/configConversion';
+import { generateNonce } from '../utils/nonceUtils';
 
 // Local imports - log
 import * as logger from '../logger/logUtils';
@@ -52,6 +53,13 @@ export class AgentHistoryViewProvider implements vscode.WebviewViewProvider {
             'src',
             'common',
             'styles',
+          ),
+          vscode.Uri.joinPath(
+            this.context.extensionUri,
+            'node_modules',
+            '@vscode',
+            'codicons',
+            'dist',
           ),
         ],
       },
@@ -144,6 +152,15 @@ export class AgentHistoryViewProvider implements vscode.WebviewViewProvider {
       const styleUri = this.getWebviewUri('style.css');
       const vscodeApiUri = this.getWebviewUri('modules/vscodeApi.js');
       const domHandlersUri = this.getWebviewUri('modules/domHandlers.js');
+      const codiconPath = vscode.Uri.joinPath(
+        this.context.extensionUri,
+        'node_modules',
+        '@vscode',
+        'codicons',
+        'dist',
+        'codicon.css',
+      );
+      const codiconUri = this._view?.webview.asWebviewUri(codiconPath);
       const commonStyleUri = vscode.Uri.joinPath(
         this.context.extensionUri,
         'src',
@@ -153,7 +170,7 @@ export class AgentHistoryViewProvider implements vscode.WebviewViewProvider {
       );
 
       // Create a nonce for script security
-      const nonce = this.getNonce();
+      const nonce = generateNonce();
 
       // Replace placeholders in HTML with actual content
       return htmlContent
@@ -167,6 +184,7 @@ export class AgentHistoryViewProvider implements vscode.WebviewViewProvider {
         )
         .replace('${vscodeApiUri}', vscodeApiUri.toString())
         .replace('${domHandlersUri}', domHandlersUri.toString())
+        .replace('${codiconUri}', codiconUri?.toString() ?? '')
         .replace(/\${nonce}/g, nonce)
         .replace(/\${cspSource}/g, this._view?.webview.cspSource ?? '');
     } catch (error) {
@@ -190,19 +208,6 @@ export class AgentHistoryViewProvider implements vscode.WebviewViewProvider {
       relativePath,
     );
     return this._view.webview.asWebviewUri(diskPath);
-  }
-
-  /**
-   * Generate a nonce for content security policy
-   */
-  private getNonce(): string {
-    let text = '';
-    const possible =
-      'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-    for (let i = 0; i < 32; i++) {
-      text += possible.charAt(Math.floor(Math.random() * possible.length));
-    }
-    return text;
   }
 
   /**

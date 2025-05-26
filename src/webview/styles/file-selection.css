@@ -4,12 +4,12 @@
  */
 
 .file-select {
-  margin-bottom: 12px;
+  margin-bottom: var(--spacing-large);
 }
 
 /* Make optional sections more compact */
 .file-select:has(.optional-label) {
-  margin-bottom: 2px;
+  margin-bottom: var(--spacing-tiny);
 }
 
 .file-select-header {
@@ -31,11 +31,11 @@
 .file-select-label-group {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--spacing-small);
   flex-wrap: nowrap;
   flex: 1;
   min-width: 0;
-  min-height: 24px;
+  min-height: var(--control-height);
   position: relative;
 }
 
@@ -50,9 +50,6 @@
 }
 
 .file-select-actions {
-  display: flex;
-  align-items: center;
-  gap: 4px;
   flex-wrap: nowrap;
   margin-left: auto;
   position: relative;
@@ -60,7 +57,7 @@
 
 .file-select label {
   display: block;
-  margin-bottom: 2px;
+  margin-bottom: var(--spacing-tiny);
   font-size: var(--font-size);
 }
 
@@ -73,11 +70,11 @@
   font-weight: normal;
   font-size: var(--font-size);
   white-space: nowrap;
-  min-width: 160px;
+  min-width: calc(var(--width-button-min) * 2);
   display: flex;
   align-items: center;
-  height: 24px;
-  opacity: 0.7;
+  height: var(--height-control);
+  opacity: var(--opacity-subtle);
 }
 
 .toggle-icon {
@@ -85,12 +82,12 @@
   user-select: none;
   margin: 0;
   position: relative;
-  padding: 0 2px;
+  padding: 0 var(--spacing-tiny);
   color: var(--text-color);
-  opacity: 0.8;
+  opacity: var(--opacity-subtle);
   display: flex;
   align-items: center;
-  height: 24px;
+  height: var(--height-control);
 }
 
 /* When toggled (input is visible), make the label more prominent */
@@ -100,7 +97,7 @@
 .file-select:has(.multiple-files-container[style*='block']) .optional-label,
 .file-select:has(.multiple-files-container[style*='block']) .toggle-icon {
   color: var(--vscode-foreground);
-  opacity: 1;
+  opacity: var(--opacity-full);
 }
 
 /* Add this specific selector for Multiple Output Files section */
