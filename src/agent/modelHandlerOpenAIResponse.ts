@@ -149,12 +149,14 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
       const emptyUsage = {
         input_tokens: 0,
         output_tokens: 0,
+        total_tokens: 0,
         input_tokens_details: { cached_tokens: 0 },
         output_tokens_details: { reasoning_tokens: 0 },
       };
       const mapped = {
         prompt_tokens: 0,
         completion_tokens: 0,
+        total_tokens: 0,
         prompt_tokens_details: { cached_tokens: 0 },
         completion_tokens_details: { reasoning_tokens: 0 },
       };
@@ -168,14 +170,15 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
     const mapped = {
       prompt_tokens: responseUsage.input_tokens,
       completion_tokens: responseUsage.output_tokens,
+      total_tokens: responseUsage.total_tokens,
       prompt_tokens_details: {
         cached_tokens: responseUsage.input_tokens_details?.cached_tokens ?? 0,
       },
       completion_tokens_details: {
         reasoning_tokens:
           responseUsage.output_tokens_details?.reasoning_tokens ?? 0,
-        accepted_prediction_tokens: null,
-        rejected_prediction_tokens: null,
+        accepted_prediction_tokens: undefined,
+        rejected_prediction_tokens: undefined,
       },
     };
 
