@@ -15,6 +15,7 @@ import {
   ModelHandlerAnthropicViaOpenRouter,
 } from './modelHandlerOpenRouter';
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
+import { ModelHandlerOpenAIResponse } from './modelHandlerOpenAIResponse';
 
 // Local imports - utils
 import { getConfig } from '../utils/configUtils';
@@ -61,6 +62,19 @@ export class ModelFactory {
         'Using Native Google GenAI SDK Handler (ModelHandlerGoogleGenAI)',
       );
       return new ModelHandlerGoogleGenAI(config);
+    }
+
+    // Check for OpenAI Responses API usage
+    const useOpenAIResponsesAPI = getConfig<boolean>(
+      'model.useOpenAIResponsesAPI',
+      false,
+    );
+    if (config.provider === ModelProvider.OPENAI && useOpenAIResponsesAPI) {
+      logger.debug(
+        CHANNEL,
+        'Using OpenAI Responses API Handler (ModelHandlerOpenAIResponse)',
+      );
+      return new ModelHandlerOpenAIResponse(config);
     }
 
     // Map providers to their handler classes (excluding the native Google handler handled above)
