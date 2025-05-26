@@ -128,6 +128,12 @@
             "description": "Enable streaming for models accessed via OpenRouter. Overrides the global useStreaming setting.",
             "scope": "resource"
           },
+          "texra.model.useOpenAIResponsesAPI": {
+            "type": "boolean",
+            "default": false,
+            "description": "Use the OpenAI Responses API instead of the Chat Completions API when available.",
+            "scope": "resource"
+          },
           "texra.model.useNativeGoogleSDK": {
             "type": "boolean",
             "default": false,
