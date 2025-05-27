@@ -606,7 +606,6 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
     responseUsage: GenerateContentResponseUsageMetadata | null,
     responseTime: number,
   ): OpenAIAPIResponseUsage {
-
     // Use the usageMetadata attribute on the response object after calling generate_content. (we did)
     // This returns the total number of tokens in both the input and the output: totalTokenCount.
     // It also returns the token counts of the input and output separately: promptTokenCount (input tokens) and candidatesTokenCount (output tokens).
@@ -614,8 +613,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
     const usageObj: ExtendedCompletionUsage = {
       prompt_tokens: responseUsage?.promptTokenCount ?? 0,
       completion_tokens: responseUsage?.candidatesTokenCount ?? 0,
-      total_tokens:
-        (responseUsage?.totalTokenCount ?? 0), 
+      total_tokens: responseUsage?.totalTokenCount ?? 0,
       prompt_tokens_details: {
         cached_tokens: responseUsage?.cachedContentTokenCount ?? 0,
       },

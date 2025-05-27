@@ -9,8 +9,9 @@ import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 import { hasEndTag } from './AgentDataclass';
 import {
   OpenAIAPIResponseUsage,
-  ExtendedCompletionUsage,
+  GenerateContentResponseUsageMetadata,
 } from './ResponseUsage';
+import type { CompletionUsage } from 'openai/resources/completions';
 
 /**
  * Handler for Google models using OpenAI-compatible API.
@@ -28,24 +29,23 @@ export class ModelHandlerGoogle extends ModelHandlerOpenAI {
   }
 
   /** Normalizes Google's usage format to OpenAI CompletionUsage format. */
-  private normalizeToOpenAIFormat(usage: any): ExtendedCompletionUsage {
+  private normalizeToOpenAIFormat(
+    usage: GenerateContentResponseUsageMetadata | CompletionUsage,
+  ): CompletionUsage {
     // If it's already in OpenAI format, return as-is
     if ('prompt_tokens' in usage && 'completion_tokens' in usage) {
       return usage;
     }
 
     // Convert Google's format to OpenAI format
-    const thoughtTokens = usage.thoughtsTokenCount ?? usage.thoughtTokens ?? 0;
-    const toolTokens = usage.toolUseTokenCount ?? 0;
+    const thoughtTokens = usage.thoughtsTokenCount ?? 0;
+    const toolTokens = usage.toolUsePromptTokenCount ?? 0;
 
     return {
-      prompt_tokens: usage.promptTokens ?? 0,
-      completion_tokens:
-        (usage.completionTokens ?? 0) + thoughtTokens + toolTokens,
-      total_tokens: usage.totalTokens ?? 0,
+      prompt_tokens: (usage.promptTokenCount ?? 0) + toolTokens,
+      completion_tokens: (usage.candidatesTokenCount ?? 0) + thoughtTokens,
+      total_tokens: usage.totalTokenCount ?? 0,
 
-      // here we should return a ExtendedCompletionUsage object
-      // or even better return the native openai one, and handle deepseek case etc separtely
       prompt_tokens_details: {
         cached_tokens: usage.cachedContentTokenCount ?? 0,
       },
@@ -68,6 +68,8 @@ export class ModelHandlerGoogle extends ModelHandlerOpenAI {
   }
 
   /** Creates usage statistics from Google's response format. */
+
+  // In the future i want to type this to GenerateContentResponseUsageMetadata | CompletionUsage, but this needs to change the base class
   computeResponseUsage(
     responseUsage: any,
     responseTime: number,
