@@ -65,6 +65,17 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
       params.instructions = systemPrompt;
     }
 
+    if (this.capabilities.supportsReasoning) {
+      // Different models support different reasoning summarizers—for example, our computer use model supports the concise summarizer, while o4-mini supports detailed. To simply access the most detailed summarizer available, set the value of this parameter to auto and view the reasoning summary as part of the summary array in the reasoning output item.
+      // This feature is also supported with streaming, and across the following reasoning models: o4-mini, o3, o3-mini and o1.
+      params.reasoning = {
+        summary: 'auto', // or "detailed",
+      };
+      if (this.capabilities.supportsReasoningEffort) {
+        params.reasoning.effort = 'high'; // or "medium" or "low"
+      }
+    }
+
     if (useStreaming) {
       params.stream = true;
       const stream = (await client.responses.create(params, {
