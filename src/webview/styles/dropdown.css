@@ -65,7 +65,7 @@
   box-shadow: var(--vscode-widget-shadow);
   min-width: var(--width-dropdown);
   display: none;
-  font-size: var(--font-size-sm);
+  font-size: calc(var(--vscode-editor-font-size) * 0.9);
   padding: var(--spacing-small);
   white-space: nowrap;
   font-weight: normal;
@@ -73,7 +73,7 @@
 
 /* Dropdown option labels - special styles not covered by vscode-checkbox */
 .dropdown-options .vscode-checkbox {
-  padding: var(--spacing-small) var(--spacing-medium);
+  padding: var(--spacing-small) var(--spacing-small);
   border-radius: var(--border-radius-small);
   font-weight: normal;
 }
