@@ -190,11 +190,18 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
       throw new Error('Last message conversion resulted in empty parts.');
     }
 
-    const generationConfig = {
+    const generationConfig: GenerationConfig = {
       temperature: temperature,
       maxOutputTokens: this.config.maxOutputTokens,
       ...(endTag && { stopSequences: [endTag] }),
     };
+
+    if (
+      this.config.fullName.includes('2.5-pro') ||
+      this.config.fullName.includes('2.5-flash')
+    ) {
+      generationConfig.thinkingConfig = { includeThoughts: true };
+    }
 
     const chatParams = {
       model: this.config.fullName,
@@ -822,10 +829,49 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
     groupId?: string,
     toolState?: ToolState,
   ): string | null {
-    this.logger.debug(
-      'processThinkingBlock: Native Google SDK does not expose thinking process via API response. Returning null.',
+    if (
+      !responseObject ||
+      !responseObject.candidates ||
+      responseObject.candidates.length === 0
+    ) {
+      return null;
+    }
+
+    const candidate = responseObject.candidates[0];
+    const parts = candidate?.content?.parts;
+    if (!Array.isArray(parts)) {
+      return null;
+    }
+
+    const thoughtParts: Part[] = parts.filter(
+      (p: Part) => p.thought && typeof p.text === 'string',
     );
-    return null;
+
+    if (thoughtParts.length === 0) {
+      return null;
+    }
+
+    const thoughtContent = thoughtParts
+      .map((p) => p.text ?? '')
+      .join('')
+      .trim();
+
+    if (toolState && !toolState.thinkingAdded) {
+      toolState.thinkingBlocks = thoughtParts.map((p) => ({
+        type: 'thinking',
+        thinking: p.text ?? '',
+      }));
+      toolState.thinkingAdded = true;
+    }
+
+    if (thoughtContent) {
+      this.logger.debug(
+        `Google GenAI thought summary preview: ${thoughtContent.substring(0, K_SLICE)}...`,
+        groupId,
+      );
+    }
+
+    return thoughtContent || null;
   }
 
   // Assuming containCutOffMessage is available from base class ModelHandler
