@@ -94,6 +94,9 @@ function handleStateRestoration(state) {
     printInputPrompt:
       state.printInputPrompt ||
       (toolConfig ? toolConfig.printInputPrompt : false),
+    autoCompileInputPdf:
+      state.autoCompileInputPdf ||
+      (toolConfig ? toolConfig.autoCompileInputPdf : false),
   };
 
   // Process multiple file selections
