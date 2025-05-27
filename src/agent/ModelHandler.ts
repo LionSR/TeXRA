@@ -61,6 +61,7 @@ export abstract class ModelHandler {
         reflect: false,
         attachTeXCount: false,
         printInputPrompt: false,
+        autoCompileInputPdf: false,
       },
     };
     this.capabilities = config.capabilities;

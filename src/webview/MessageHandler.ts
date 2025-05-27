@@ -183,6 +183,7 @@ export class WebviewMessageHandler {
         attachTeXCount: message.attachTeXCount,
         usePrefillFromInput: message.usePrefillFromInput,
         printInputPrompt: message.printInputPrompt,
+        autoCompileInputPdf: message.autoCompileInputPdf,
       };
 
       const agentConfig: AgentConfig = {
