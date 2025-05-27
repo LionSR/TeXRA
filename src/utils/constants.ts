@@ -14,6 +14,7 @@ export const ACTIVE_FLAGS = FILE_TYPES.map((type) => `${type}FilesActive`);
 export const AUTO_EXTRACT_FIELDS = [
   'autoExtractFigure',
   'autoExtractTikzFigure',
+  'autoCompileInputPdf',
 ] as const;
 export const TOOL_CONFIG_FIELDS = [
   'attachTeXCount',

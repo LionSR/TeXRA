@@ -14,7 +14,7 @@ import * as logger from '../logger/logUtils';
 // Local imports - utilities
 import { executeCommand } from '../utils/execUtils';
 import { getConfig } from '../utils/configUtils';
-import { getWorkspacePath } from '../utils/workspaceFileUtils';
+import { getWorkspacePath, createDirectory } from '../utils/workspaceFileUtils';
 
 const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);
@@ -109,14 +109,17 @@ export async function checkToolInstalled(
  * Compile a LaTeX file to PDF
  * @param latexFile Path to the LaTeX file
  * @param channel Optional channel for logging
+ * @param outputDirectory Directory for compiled PDF (default: alongside file)
  * @returns Promise<boolean> True if compilation succeeded
  */
 export async function compileLatex2Pdf(
   latexFile: string,
   channel: string = CHANNEL,
+  outputDirectory?: string,
 ): Promise<boolean> {
   try {
-    const outputDirectory = path.dirname(latexFile);
+    const outDir = outputDirectory || path.dirname(latexFile);
+    await createDirectory(outDir);
 
     // Get TikZ input directory from configuration
     const tikzInputDirectory = getConfig<string>(
@@ -171,7 +174,7 @@ export async function compileLatex2Pdf(
     const command = [
       'pdflatex',
       '-interaction=nonstopmode',
-      `-output-directory="${outputDirectory}"`,
+      `-output-directory="${outDir}"`,
       `"${latexFile}"`,
     ];
 
