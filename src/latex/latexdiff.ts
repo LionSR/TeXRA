@@ -536,7 +536,7 @@ export async function runLatexdiffvc(
     const { mathMarkup, pictureEnvs } = getLatexdiffConfig();
 
     // Execute latexdiff-vc with fallback
-    await executeWithFallback(
+    const result = await executeWithFallback(
       (useFlatten) =>
         buildLatexdiffVcCommand(
           inputFile,
