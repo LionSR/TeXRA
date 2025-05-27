@@ -47,32 +47,44 @@
           "texra.models": {
             "type": "array",
             "items": {
-              "type": "string"
+              "type": "string",
+              "enum": [
+                "opus4T",
+                "opus4",
+                "sonnet4T",
+                "sonnet4",
+                "sonnet37T",
+                "sonnet37",
+                "o3",
+                "o4-",
+                "o3-",
+                "o1",
+                "gpt41",
+                "gpt4o",
+                "gemini25p",
+                "gemini25f",
+                "gemini2fT",
+                "dsv3",
+                "dsr1",
+                "grok3",
+                "qwenplus",
+                "kimit",
+                "kimiv"
+              ]
             },
             "default": [
               "opus4T",
-              "opus4",
               "sonnet4T",
-              "sonnet4",
-              "sonnet37T",
-              "sonnet37",
               "o3",
               "o4-",
               "o3-",
-              "o1",
               "gpt41",
               "gpt4o",
               "gemini25p",
               "gemini25f",
-              "gemini2fT",
-              "dsv3",
-              "dsr1",
-              "grok3",
-              "qwenplus",
-              "kimit",
-              "kimiv"
+              "dsr1"
             ],
-            "description": "List of available models",
+            "description": "List of available models. Model codes: opus4T/opus4 (Claude Opus 4 Thinking/Regular), sonnet4T/sonnet4 (Claude Sonnet 4 Thinking/Regular), sonnet37T/sonnet37 (Claude Sonnet 3.7 Thinking/Regular), o3/o4-/o3-/o1 (OpenAI models), gpt41/gpt4o (GPT-4.1/4O), gemini25p/gemini25f/gemini2fT (Gemini 2.5 Pro/Flash, 2.0 Flash Thinking), dsv3/dsr1 (DeepSeek V3/R1), grok3 (Grok 3), qwenplus (Qwen Plus), kimit/kimiv (Kimi Thinking/Vision)",
             "scope": "resource"
           }
         }
