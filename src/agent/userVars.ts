@@ -253,5 +253,6 @@ function getToolFlags(
     INCLUDE_TEX_COUNT: agentConfig.toolConfig.attachTeXCount,
     USE_PREFILL_FROM_INPUT: agentConfig.toolConfig.usePrefillFromInput,
     PRINT_INPUT_PROMPT: agentConfig.toolConfig.printInputPrompt,
+    AUTO_COMPILE_INPUT_PDF: agentConfig.toolConfig.autoCompileInputPdf,
   };
 }
