@@ -190,7 +190,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
       throw new Error('Last message conversion resulted in empty parts.');
     }
 
-    const generationConfig: any = {
+    const generationConfig: GenerationConfig = {
       temperature: temperature,
       maxOutputTokens: this.config.maxOutputTokens,
       ...(endTag && { stopSequences: [endTag] }),
