@@ -35,6 +35,7 @@ export interface TaskState {
   attachTeXCount: boolean;
   usePrefillFromInput: boolean;
   printInputPrompt: boolean;
+  autoCompileInputPdf: boolean;
 
   // Output name override visibility
   outputNameOverrideVisible: boolean;

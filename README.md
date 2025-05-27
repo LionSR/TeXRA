@@ -114,6 +114,7 @@ TeXRA offers various customization options through VS Code settings:
 
 - Multi-file processing for complex projects
 - Automatic TikZ figure extraction and compilation
+- Automatic compilation of input and output LaTeX files to PDFs
 - LaTeX diff functionality for version comparison
 - Git integration for accessing recent commits
 - Intelligent document merging with conflict resolution

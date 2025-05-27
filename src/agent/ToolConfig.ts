@@ -6,4 +6,5 @@ export interface ToolConfig {
   autoExtractTikzFigure: boolean;
   attachTeXCount: boolean;
   printInputPrompt: boolean;
+  autoCompileInputPdf: boolean;
 }
