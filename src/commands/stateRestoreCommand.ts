@@ -46,6 +46,7 @@ async function restoreState(config: any) {
         usePrefillFromInput: taskState.usePrefillFromInput,
         printInputPrompt: taskState.printInputPrompt,
         reflect: taskState.reflect,
+        autoCompileInputPdf: taskState.autoCompileInputPdf,
       },
     };
 

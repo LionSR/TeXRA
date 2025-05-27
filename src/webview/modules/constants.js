@@ -24,6 +24,7 @@ export const MULTIPLE_SELECTIONS = FILE_TYPES.map((type) => `${type}Files`);
 export const CHECK_BOXES_AUTO_EXTRACT = [
   'autoExtractFigure',
   'autoExtractTikzFigure',
+  'autoCompileInputPdf',
 ];
 
 // Tool configuration checkboxes
