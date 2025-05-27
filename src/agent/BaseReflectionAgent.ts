@@ -13,6 +13,7 @@ import {
   extractFigurePathsFromLatex,
   bestConnectionMethod,
   getTeXCountStats,
+  compileLatex2Pdf,
 } from '../latex';
 import { ProgressViewProvider } from '../progressView/ProgressViewProvider';
 import { diff_match_patch } from 'diff-match-patch';
@@ -784,6 +785,33 @@ export abstract class BaseReflectionAgent {
             }
           }
         }
+
+        if (this.agentConfig.toolConfig.autoCompileInputPdf) {
+          for (const inputFile of inputFiles) {
+            if (!inputFile.toLowerCase().endsWith('.tex')) {
+              continue;
+            }
+            const buildDir = path.join(path.dirname(inputFile), 'build');
+            const compiled = await compileLatex2Pdf(
+              inputFile,
+              undefined,
+              buildDir,
+            );
+            if (compiled) {
+              const pdfFile = path.join(
+                buildDir,
+                path.basename(inputFile).replace(/\.tex$/, '.pdf'),
+              );
+              if (await fileExists(pdfFile)) {
+                this.logger.info(
+                  `Compiled PDF for ${inputFile}: ${pdfFile}`,
+                  round0GroupId,
+                );
+                toolState.addMediaFiles([pdfFile]);
+              }
+            }
+          }
+        }
       }
 
       const messages: any[] = [];
@@ -1116,6 +1144,36 @@ export abstract class BaseReflectionAgent {
           await extractAndCompileTikzPicturesWithLabels(outputFile);
         if (extractedTikzFigures) {
           toolState.addMediaFiles(extractedTikzFigures);
+        }
+      }
+    }
+
+    if (
+      this.modelHandler.capabilities.supportsVision &&
+      this.agentConfig.toolConfig.autoCompileInputPdf
+    ) {
+      for (const outputFile of outputFiles) {
+        if (!outputFile.toLowerCase().endsWith('.tex')) {
+          continue;
+        }
+        const buildDir = path.join(path.dirname(outputFile), 'build');
+        const compiled = await compileLatex2Pdf(
+          outputFile,
+          undefined,
+          buildDir,
+        );
+        if (compiled) {
+          const pdfFile = path.join(
+            buildDir,
+            path.basename(outputFile).replace(/\.tex$/, '.pdf'),
+          );
+          if (await fileExists(pdfFile)) {
+            this.logger.info(
+              `Compiled PDF for ${outputFile}: ${pdfFile}`,
+              this.logger.getActiveGroupId(),
+            );
+            toolState.addMediaFiles([pdfFile]);
+          }
         }
       }
     }
