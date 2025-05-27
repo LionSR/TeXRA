@@ -10,6 +10,7 @@ import {
   FinishReason,
   File,
   createPartFromUri,
+  GenerationConfig,
 } from '@google/genai';
 
 // Local imports - agent components
@@ -192,7 +193,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
 
     const generationConfig: GenerationConfig = {
       temperature: temperature,
-      maxOutputTokens: this.config.maxOutputTokens,
+      maxOutputTokens: this.config.maxOutputTokens ?? 8192,
       ...(endTag && { stopSequences: [endTag] }),
     };
 
@@ -243,7 +244,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
         }
         if (
           this.config.contextWindow - totalTokens <
-          generationConfig.maxOutputTokens
+          (generationConfig.maxOutputTokens ?? 8192)
         ) {
           this.logger.warn(
             `Token count of message plus max tokens exceeds context window: ${totalTokens} + ${generationConfig.maxOutputTokens} > ${this.config.contextWindow}. Reducing max tokens to ${this.config.contextWindow - totalTokens}.`,
@@ -587,12 +588,15 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
   ): number {
     if (!responseUsage) return 0.0;
     const promptTokens = responseUsage.promptTokenCount ?? 0;
-    const completionTokens = responseUsage.responseTokenCount ?? 0;
+    const completionTokens = responseUsage.candidatesTokenCount ?? 0;
+    // const completionTokens = responseUsage.responseTokenCount ?? 0;
+    // responseTokenCount is not correct, we need to compute the completion tokens from the response, maybe it is response.usageMetadata.candidatesTokenCount
+    // completion token computed this way seems to be zero for some reason
     const thoughtTokens = responseUsage.thoughtsTokenCount ?? 0;
     const toolUseTokens = responseUsage.toolUsePromptTokenCount ?? 0;
     return calculateTokenPrice(
-      promptTokens,
-      completionTokens + thoughtTokens + toolUseTokens,
+      promptTokens + toolUseTokens,
+      thoughtTokens + completionTokens,
       this.config.inputPrice,
       this.config.outputPrice,
     );
@@ -602,13 +606,16 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
     responseUsage: GenerateContentResponseUsageMetadata | null,
     responseTime: number,
   ): OpenAIAPIResponseUsage {
+
+    // Use the usageMetadata attribute on the response object after calling generate_content. (we did)
+    // This returns the total number of tokens in both the input and the output: totalTokenCount.
+    // It also returns the token counts of the input and output separately: promptTokenCount (input tokens) and candidatesTokenCount (output tokens).
+
     const usageObj: ExtendedCompletionUsage = {
       prompt_tokens: responseUsage?.promptTokenCount ?? 0,
-      completion_tokens: responseUsage?.responseTokenCount ?? 0,
+      completion_tokens: responseUsage?.candidatesTokenCount ?? 0,
       total_tokens:
-        (responseUsage?.totalTokenCount ?? 0) +
-        (responseUsage?.toolUsePromptTokenCount ?? 0),
-      // tool_use_tokens: responseUsage?.toolUsePromptTokenCount ?? 0,
+        (responseUsage?.totalTokenCount ?? 0), 
       prompt_tokens_details: {
         cached_tokens: responseUsage?.cachedContentTokenCount ?? 0,
       },
