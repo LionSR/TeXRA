@@ -26,6 +26,175 @@ import {
 const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);
 
+// Constants
+const LATEXDIFF_TIMEOUT_MS = 10000;
+const DEFAULT_PICTURE_ENVS =
+  '(?:picture|tikzpicture|scope|DIFnomarkup)[\\w\\d*@]*';
+const DEFAULT_MATH_MARKUP = 'coarse';
+// '"PICTUREENV=(?:picture|scope|DIFnomarkup)[\\w\\d*@]*"',
+// '--math-markup=whole',
+
+// Bibliography error detection patterns
+const BIBLIOGRAPHY_ERROR_PATTERNS = [
+  'bibtex',
+  'Something went wrong in executing',
+  'latex -draftmode',
+  'Running bibtex to generate',
+] as const;
+
+// Error messages
+const ERROR_MESSAGES = {
+  TIMEOUT: (commandType: string, timeoutMs: number) =>
+    `${commandType} operation timed out after ${timeoutMs}ms`,
+  TIMEOUT_RETRY: (commandType: string, timeoutMs: number) =>
+    `${commandType} operation timed out after ${timeoutMs}ms (retry)`,
+  FAILED_BOTH: (commandType: string) =>
+    `Failed to run ${commandType} (both with and without --flatten)`,
+  FAILED_GENERAL: (commandType: string) => `Failed to run ${commandType}`,
+} as const;
+
+// Helper function to check if error is related to bibliography compilation
+function isBibliographyError(errorOutput: string): boolean {
+  return BIBLIOGRAPHY_ERROR_PATTERNS.every((pattern) =>
+    errorOutput.includes(pattern),
+  );
+}
+
+// Helper function to get latexdiff configuration
+function getLatexdiffConfig(): { mathMarkup: string; pictureEnvs: string } {
+  return {
+    mathMarkup: getConfig<string>('latexdiff.mathMarkup', DEFAULT_MATH_MARKUP),
+    pictureEnvs: getConfig<string>(
+      'latexdiff.pictureEnvironments',
+      DEFAULT_PICTURE_ENVS,
+    ),
+  };
+}
+
+// Helper function to build latexdiff command
+function buildLatexdiffCommand(
+  inputFile: string,
+  editedFile: string,
+  pictureEnvs: string,
+  mathMarkup: string,
+  useFlatten: boolean = true,
+): string[] {
+  const baseCommand = [
+    'latexdiff',
+    '--encoding=utf8',
+    '-c',
+    `"PICTUREENV=${pictureEnvs}"`,
+    // '"MATHENV=(?:tikzpicture)"',
+    `--math-markup=${mathMarkup}`,
+    `"${inputFile}"`,
+    `"${editedFile}"`,
+  ];
+
+  if (useFlatten) {
+    baseCommand.splice(1, 0, '--flatten');
+  }
+
+  return baseCommand;
+}
+
+// Helper function to build latexdiff-vc command
+function buildLatexdiffVcCommand(
+  inputFile: string,
+  commitHash: string,
+  pictureEnvs: string,
+  mathMarkup: string,
+  useFlatten: boolean = true,
+): string[] {
+  const baseCommand = [
+    'latexdiff-vc',
+    '--encoding=utf8',
+    '-c',
+    `"PICTUREENV=${pictureEnvs}"`,
+    '--force',
+    '--git',
+    `--math-markup=${mathMarkup}`,
+    '-r',
+    commitHash,
+    `"${inputFile}"`,
+  ];
+
+  if (useFlatten) {
+    // Insert --flatten after --force
+    baseCommand.splice(5, 0, '--flatten');
+  }
+
+  return baseCommand;
+}
+
+// Type for command execution result
+interface CommandResult {
+  success: boolean;
+  stdout?: string | null;
+  stderr?: string | null;
+  timedOut?: boolean;
+}
+
+// Helper function to execute command with fallback
+async function executeWithFallback(
+  commandBuilder: (useFlatten: boolean) => string[],
+  commandType: string,
+  channel: string,
+): Promise<CommandResult> {
+  // First attempt with --flatten
+  logger.debug(channel, `Attempting ${commandType} with --flatten flag`);
+  let result = await executeCommand(commandBuilder(true), {
+    channel,
+    timeout: LATEXDIFF_TIMEOUT_MS,
+  });
+
+  if (!result.success) {
+    if (result.timedOut) {
+      throw new Error(
+        ERROR_MESSAGES.TIMEOUT(commandType, LATEXDIFF_TIMEOUT_MS),
+      );
+    }
+
+    // Check if the error is related to bibliography compilation
+    const errorOutput = result.stderr || '';
+    if (isBibliographyError(errorOutput)) {
+      logger.warn(
+        channel,
+        'Bibliography compilation failed with --flatten, retrying without --flatten',
+      );
+
+      // Retry without --flatten
+      logger.debug(channel, `Retrying ${commandType} without --flatten flag`);
+      result = await executeCommand(commandBuilder(false), {
+        channel,
+        timeout: LATEXDIFF_TIMEOUT_MS,
+      });
+
+      if (!result.success) {
+        if (result.timedOut) {
+          throw new Error(
+            ERROR_MESSAGES.TIMEOUT_RETRY(commandType, LATEXDIFF_TIMEOUT_MS),
+          );
+        }
+        throw new Error(ERROR_MESSAGES.FAILED_BOTH(commandType));
+      }
+
+      logger.info(
+        channel,
+        `${commandType} completed successfully (without --flatten)`,
+      );
+    } else {
+      throw new Error(ERROR_MESSAGES.FAILED_GENERAL(commandType));
+    }
+  } else {
+    logger.info(
+      channel,
+      `${commandType} completed successfully (with --flatten)`,
+    );
+  }
+
+  return result;
+}
+
 // Define interfaces for the return types
 export interface LaTeXdiffResult {
   success: boolean;
@@ -298,33 +467,22 @@ export async function runLatexdiff(
     const outputPath = path.join(path.dirname(inputFile), diffFileName);
 
     // Get latexdiff configurations
-    const mathMarkup = getConfig<string>('latexdiff.mathMarkup', 'coarse');
-    const pictureEnvs = getConfig<string>(
-      'latexdiff.pictureEnvironments',
-      '(?:picture|tikzpicture|scope|DIFnomarkup)[\\w\\d*@]*',
+    const { mathMarkup, pictureEnvs } = getLatexdiffConfig();
+
+    // Execute latexdiff with fallback
+    const result = await executeWithFallback(
+      (useFlatten) =>
+        buildLatexdiffCommand(
+          inputFile,
+          editedFile,
+          pictureEnvs,
+          mathMarkup,
+          useFlatten,
+        ),
+      'latexdiff',
+      channel,
     );
 
-    const command = [
-      'latexdiff',
-      '--flatten',
-      '--encoding=utf8',
-      '-c',
-      `"PICTUREENV=${pictureEnvs}"`,
-      // '"PICTUREENV=(?:picture|scope|DIFnomarkup)[\\w\\d*@]*"',
-      // '--math-markup=whole',
-      // '"MATHENV=(?:tikzpicture)"',
-      `--math-markup=${mathMarkup}`,
-      `"${inputFile}"`,
-      `"${editedFile}"`,
-    ];
-
-    const result = await executeCommand(command, { channel, timeout: 10000 });
-    if (!result.success) {
-      if (result.timedOut) {
-        throw new Error('Latexdiff operation timed out after 10 seconds');
-      }
-      throw new Error('Failed to run latexdiff');
-    }
     if (!result.stdout) {
       throw new Error('Latexdiff produced no output');
     }
@@ -335,7 +493,6 @@ export async function runLatexdiff(
     await processDiffFile(outputPath);
     await processTikzPictureEndings(outputPath);
 
-    logger.info(channel, 'LaTeXdiff completed successfully');
     return {
       success: true,
       diffFileName,
@@ -376,38 +533,25 @@ export async function runLatexdiffvc(
     );
 
     // Get latexdiff configurations
-    const mathMarkup = getConfig<string>('latexdiff.mathMarkup', 'coarse');
-    const pictureEnvs = getConfig<string>(
-      'latexdiff.pictureEnvironments',
-      '(?:picture|tikzpicture|DIFnomarkup)[\\w\\d*@]*',
-    );
+    const { mathMarkup, pictureEnvs } = getLatexdiffConfig();
 
-    const command = [
+    // Execute latexdiff-vc with fallback
+    const result = await executeWithFallback(
+      (useFlatten) =>
+        buildLatexdiffVcCommand(
+          inputFile,
+          commitHash,
+          pictureEnvs,
+          mathMarkup,
+          useFlatten,
+        ),
       'latexdiff-vc',
-      '--encoding=utf8',
-      '-c',
-      `"PICTUREENV=${pictureEnvs}"`,
-      '--force',
-      '--flatten',
-      '--git',
-      `--math-markup=${mathMarkup}`,
-      '-r',
-      commitHash,
-      `"${inputFile}"`,
-    ];
-
-    const result = await executeCommand(command, { channel, timeout: 10000 });
-    if (!result.success) {
-      if (result.timedOut) {
-        throw new Error('Latexdiff-vc operation timed out after 10 seconds');
-      }
-      throw new Error('Failed to run latexdiff-vc');
-    }
+      channel,
+    );
 
     await processDiffFile(outputPath);
     await processTikzPictureEndings(outputPath);
 
-    logger.info(channel, 'LaTeXdiff VC completed successfully');
     return {
       success: true,
       diffFileName: path.basename(diffFileName),
