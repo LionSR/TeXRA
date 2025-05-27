@@ -2,7 +2,8 @@
 
 import type { CompletionUsage } from 'openai/resources/completions';
 import type { Usage as AnthropicUsage } from '@anthropic-ai/sdk/resources/messages';
-import type { UsageMetadata as GenerateContentResponseUsageMetadata } from '@google/genai';
+// import type { UsageMetadata as GenerateContentResponseUsageMetadata } from '@google/genai';
+import type { GenerateContentResponseUsageMetadata } from '@google/genai';
 
 /**
  * Extended OpenAI usage type with additional fields used by various providers.
