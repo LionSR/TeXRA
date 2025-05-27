@@ -327,7 +327,7 @@ export abstract class ModelHandler {
           this.logger.debug(`Converting PDF to PNG: ${mediaFile}`);
           const pdfResult = await processPdf2Png(mediaFile);
 
-          if (pdfResult == null) {
+          if (pdfResult === null) {
             // If conversion fails but model supports native PDF, fall back to PDF
             if (this.capabilities.supportsNativePdf) {
               this.logger.debug(
