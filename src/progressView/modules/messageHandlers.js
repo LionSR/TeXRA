@@ -23,204 +23,144 @@ import {
 } from './logFormatters.js';
 import { COMMANDS } from './constants.js';
 
+const handlers = {
+  [COMMANDS.UPDATE_STREAMS]: (message) => {
+    setCurrentStream(message.currentStream);
+    updateStreamTabs(message.streams, message.currentStream);
+  },
+
+  [COMMANDS.UPDATE_LOGS]: (message) => {
+    const logContent = document.getElementById('logContent');
+    if (message.stream === getCurrentStream()) {
+      logContent.innerHTML = '';
+      clearLogGroups();
+      if (message.groups && message.groups.length > 0) {
+        const parentGroups = message.groups.filter((g) => !g.parentGroupId);
+        const childGroups = message.groups.filter((g) => g.parentGroupId);
+        parentGroups
+          .sort((a, b) => new Date(a.startTime) - new Date(b.startTime))
+          .forEach((g) => addLogGroup(g));
+        childGroups
+          .sort((a, b) => new Date(a.startTime) - new Date(b.startTime))
+          .forEach((g) => addLogGroup(g));
+      }
+      const sortedMessages = [...message.messages].sort((a, b) => {
+        if (a.timestamp !== undefined && b.timestamp !== undefined) {
+          return a.timestamp - b.timestamp;
+        }
+        if (a.timestamp !== undefined) return -1;
+        if (b.timestamp !== undefined) return 1;
+        const aTs = getMessageTimestamp(a.message);
+        const bTs = getMessageTimestamp(b.message);
+        return aTs.localeCompare(bTs);
+      });
+      sortedMessages.forEach((msg) => {
+        if (msg.groupId) {
+          if (!appendLogToGroup(msg)) {
+            const el = document.createElement('div');
+            el.innerHTML = formatLogEntry(msg);
+            logContent.appendChild(el.firstElementChild);
+          }
+        } else {
+          const el = document.createElement('div');
+          el.innerHTML = formatLogEntry(msg);
+          logContent.appendChild(el.firstElementChild);
+        }
+      });
+      logContent.scrollTop = logContent.scrollHeight;
+    }
+  },
+
+  [COMMANDS.CLEAR_LOGS]: () => {
+    const logContent = document.getElementById('logContent');
+    logContent.innerHTML = '';
+    const groupIds = [];
+    const headers = Array.from(document.querySelectorAll('.log-group-header'));
+    for (const el of headers) {
+      groupIds.push(el.id.replace('group-header-', ''));
+    }
+    clearLogGroups();
+    clearGroupToggleStates(groupIds);
+  },
+
+  [COMMANDS.APPEND_LOG]: (message) => {
+    if (message.stream === getCurrentStream()) {
+      const logContent = document.getElementById('logContent');
+      const addedToGroup = appendLogToGroup(message.logMessage);
+      if (!addedToGroup) {
+        const el = document.createElement('div');
+        el.innerHTML = formatLogEntry(message.logMessage);
+        logContent.appendChild(el.firstElementChild);
+      }
+      logContent.scrollTop = logContent.scrollHeight;
+    }
+  },
+
+  [COMMANDS.ADD_LOG_GROUP]: (message) => {
+    if (message.stream === getCurrentStream()) {
+      const logContent = document.getElementById('logContent');
+      addLogGroup(message.group);
+      logContent.scrollTop = logContent.scrollHeight;
+    }
+  },
+
+  [COMMANDS.UPDATE_LOG_GROUP]: (message) => {
+    if (message.stream === getCurrentStream()) {
+      updateLogGroup(message.groupId, message.status, message.endTime);
+      updateLogGroupUI(message.groupId, message.status, message.endTime);
+    }
+  },
+
+  [COMMANDS.UPDATE_STATUS]: (message) => {
+    updateStatus(message.status);
+  },
+
+  [COMMANDS.UPDATE_USAGE]: (message) => {
+    updateUsageSummary(message.usage);
+  },
+
+  [COMMANDS.UPDATE_GROUP_USAGE]: (message) => {
+    if (message.stream === getCurrentStream()) {
+      updateGroupUsage(message.groupId, message.usage);
+    }
+  },
+
+  [COMMANDS.UPDATE_FILES]: (message) => {
+    if (message.stream === getCurrentStream()) {
+      updateFileList(message.files);
+    }
+  },
+
+  [COMMANDS.DELETE_STREAM]: (message) => {
+    if (message.stream) {
+      deleteStreamStatus(message.stream);
+      if (message.stream === getCurrentStream()) {
+        const groupIds = [];
+        const headers = Array.from(
+          document.querySelectorAll('.log-group-header'),
+        );
+        for (const el of headers) {
+          groupIds.push(el.id.replace('group-header-', ''));
+        }
+        clearGroupToggleStates(groupIds);
+      }
+    }
+  },
+
+  [COMMANDS.DELETE_ALL]: () => {
+    clearAllGroupToggleStates();
+  },
+};
+
 /**
  * Sets up the message handler for messages from the extension
  */
 export function setupMessageHandlers() {
   window.addEventListener('message', (event) => {
     const message = event.data;
-    const logContent = document.getElementById('logContent');
-
-    switch (message.command) {
-      case COMMANDS.UPDATE_STREAMS:
-        setCurrentStream(message.currentStream);
-        updateStreamTabs(message.streams, message.currentStream);
-        break;
-
-      case COMMANDS.UPDATE_LOGS:
-        if (message.stream === getCurrentStream()) {
-          // Reset log content and log groups
-          logContent.innerHTML = '';
-          clearLogGroups();
-          // Keep the toggle states intact - we don't clear groupToggleStates
-
-          // Process groups in parent-child order AND chronologically
-          if (message.groups && message.groups.length > 0) {
-            // First identify parent groups and child groups
-            const parentGroups = message.groups.filter((g) => !g.parentGroupId);
-            const childGroups = message.groups.filter((g) => g.parentGroupId);
-
-            // Sort parent groups by timestamp
-            parentGroups.sort((a, b) => {
-              const timeA = new Date(a.startTime);
-              const timeB = new Date(b.startTime);
-              return timeA - timeB;
-            });
-
-            // Add parent groups first
-            parentGroups.forEach((group) => {
-              addLogGroup(group);
-            });
-
-            // Sort child groups by timestamp
-            childGroups.sort((a, b) => {
-              const timeA = new Date(a.startTime);
-              const timeB = new Date(b.startTime);
-              return timeA - timeB;
-            });
-
-            // Then add child groups (after parents are in place)
-            childGroups.forEach((group) => {
-              addLogGroup(group);
-            });
-          }
-
-          // Now add messages to their groups - sort them by timestamp first
-          // This ensures we process messages in chronological order
-          const sortedMessages = [...message.messages].sort((a, b) => {
-            if (a.timestamp !== undefined && b.timestamp !== undefined) {
-              return a.timestamp - b.timestamp;
-            }
-            // Handle cases where only one has a timestamp
-            if (a.timestamp !== undefined) {
-              return -1; // a comes before b
-            }
-            if (b.timestamp !== undefined) {
-              return 1; // b comes before a
-            }
-            // Both undefined, fall back to string comparison
-            const timestampA = getMessageTimestamp(a.message);
-            const timestampB = getMessageTimestamp(b.message);
-            return timestampA.localeCompare(timestampB);
-          });
-
-          sortedMessages.forEach((msg) => {
-            if (msg.groupId) {
-              // Try to append to a group first
-              if (!appendLogToGroup(msg)) {
-                // If group doesn't exist, append to main content
-                const messageElement = document.createElement('div');
-                messageElement.innerHTML = formatLogEntry(msg);
-                logContent.appendChild(messageElement.firstElementChild);
-              }
-            } else {
-              // Messages without group ID
-              const messageElement = document.createElement('div');
-              messageElement.innerHTML = formatLogEntry(msg);
-              logContent.appendChild(messageElement.firstElementChild);
-            }
-          });
-
-          logContent.scrollTop = logContent.scrollHeight;
-        }
-        break;
-
-      case COMMANDS.CLEAR_LOGS:
-        logContent.innerHTML = '';
-
-        // Get all group IDs from this stream to clear toggle states
-        const groupIds = [];
-        const headerElements = Array.from(
-          document.querySelectorAll('.log-group-header'),
-        );
-        for (const el of headerElements) {
-          groupIds.push(el.id.replace('group-header-', ''));
-        }
-
-        // Clear the log groups for this stream
-        clearLogGroups();
-
-        // Clear toggle states for these groups
-        clearGroupToggleStates(groupIds);
-        break;
-
-      case COMMANDS.APPEND_LOG:
-        if (message.stream === getCurrentStream()) {
-          // Try to append to a group first
-          const addedToGroup = appendLogToGroup(message.logMessage);
-
-          // If not added to a group, append to main content
-          if (!addedToGroup) {
-            const messageElement = document.createElement('div');
-            messageElement.innerHTML = formatLogEntry(message.logMessage);
-            logContent.appendChild(messageElement.firstElementChild);
-          }
-
-          logContent.scrollTop = logContent.scrollHeight;
-        }
-        break;
-
-      case COMMANDS.ADD_LOG_GROUP:
-        if (message.stream === getCurrentStream()) {
-          addLogGroup(message.group);
-          logContent.scrollTop = logContent.scrollHeight;
-        }
-        break;
-
-      case COMMANDS.UPDATE_LOG_GROUP:
-        if (message.stream === getCurrentStream()) {
-          updateLogGroup(message.groupId, message.status, message.endTime);
-          updateLogGroupUI(message.groupId, message.status, message.endTime);
-        }
-        break;
-
-      case COMMANDS.UPDATE_STATUS:
-        updateStatus(message.status);
-        break;
-
-      case COMMANDS.UPDATE_USAGE:
-        updateUsageSummary(message.usage);
-        break;
-
-      case COMMANDS.UPDATE_GROUP_USAGE:
-        if (message.stream === getCurrentStream()) {
-          updateGroupUsage(message.groupId, message.usage);
-        }
-        break;
-
-      case COMMANDS.UPDATE_FILES:
-        if (message.stream === getCurrentStream()) {
-          updateFileList(message.files);
-        }
-        break;
-
-      case COMMANDS.OPEN_FILE:
-        // no-op in webview, handled in extension
-        break;
-      case COMMANDS.COMPARE_ORIGINAL:
-      case COMMANDS.COMPARE_PREVIOUS:
-      case COMMANDS.ACCEPT_FILE:
-      case COMMANDS.MERGE_FILE:
-      case COMMANDS.LATEXDIFF_FILE:
-        // handled by extension
-        break;
-
-      case COMMANDS.DELETE_STREAM:
-        if (message.stream) {
-          // Handle deleting a stream
-          deleteStreamStatus(message.stream);
-
-          // If active stream was deleted, we should clear the toggle states
-          // for any groups that were in that stream
-          if (message.stream === getCurrentStream()) {
-            const groupIds = [];
-            const headerElements = Array.from(
-              document.querySelectorAll('.log-group-header'),
-            );
-            for (const el of headerElements) {
-              groupIds.push(el.id.replace('group-header-', ''));
-            }
-
-            // Clear toggle states for these groups
-            clearGroupToggleStates(groupIds);
-          }
-        }
-        break;
-
-      case COMMANDS.DELETE_ALL:
-        // When deleting all streams, clear all toggle states as well
-        clearAllGroupToggleStates();
-        break;
+    const handler = handlers[message.command];
+    if (handler) {
+      handler(message);
     }
   });
 }
