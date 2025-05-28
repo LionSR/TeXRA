@@ -349,13 +349,9 @@ export class OutputHandler {
    */
   public async handleLatexdiffofOutput(
     currRound: number,
-    parentGroupId?: string,
+    groupId?: string,
   ): Promise<void> {
-    // Create a dedicated log group for latexdiff operations FIRST
-    const diffProcessGroupId = await this.startProcessing(
-      `LatexDiff`,
-      parentGroupId,
-    );
+    const diffProcessGroupId = groupId;
 
     try {
       // Check if latexdiff is installed before proceeding
@@ -364,7 +360,6 @@ export class OutputHandler {
           'Skipping latexdiff operations - latexdiff not installed',
           diffProcessGroupId,
         );
-        this.endProcessing('stopped', diffProcessGroupId);
         return;
       }
 
@@ -375,7 +370,6 @@ export class OutputHandler {
           `No output files found for round ${currRound}, skipping latexdiff operations`,
           diffProcessGroupId,
         );
-        this.endProcessing('stopped', diffProcessGroupId);
         return;
       }
 
@@ -472,14 +466,11 @@ export class OutputHandler {
           );
         }
       }
-
-      this.endProcessing('stopped', diffProcessGroupId);
     } catch (err) {
       this.logger.error(
         `Error during latexdiff processing: ${err instanceof Error ? err.message : String(err)}`,
         diffProcessGroupId,
       );
-      this.endProcessing('error', diffProcessGroupId);
     }
   }
 
@@ -780,13 +771,9 @@ export class OutputHandler {
   /** Prints statistics about token usage and costs */
   public async printStatistics(
     stateGlobal: AgentStateGlobal,
-    parentGroupId?: string,
+    groupId?: string,
   ): Promise<void> {
-    // Create a dedicated log group for statistics
-    const statsGroupId = await this.startProcessing(
-      'Statistics',
-      parentGroupId,
-    );
+    const statsGroupId = groupId;
 
     try {
       this.logger.info('=== Task Statistics ===', statsGroupId);
@@ -901,7 +888,7 @@ export class OutputHandler {
       const cost = this.modelHandler.computePrice(responseUsage);
 
       const provider = ProgressViewProvider.getInstance();
-      if (provider) {
+      if (provider && statsGroupId) {
         // Update group-level usage stats instead of stream-level
         provider.updateGroupUsage(this.channel, statsGroupId, {
           inputTokens: stateGlobal.totalInputTokens,
@@ -919,12 +906,8 @@ export class OutputHandler {
         statsGroupId,
       );
       this.logger.info('=======================', statsGroupId);
-
-      // End the statistics group
-      this.endProcessing('stopped', statsGroupId);
     } catch (error) {
       this.logger.error(`Error printing statistics: ${error}`, statsGroupId);
-      this.endProcessing('error', statsGroupId);
     }
   }
   /** Processes output files for current round. */
