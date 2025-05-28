@@ -43,63 +43,7 @@
             ></span>
             <span id="runSummary" class="run-summary"></span>
           </div>
-          <div class="header-actions button-group">
-            <button
-              class="vscode-button stop-button"
-              id="stopStreamBtn"
-              disabled
-              title="Request task interruption (note: current API call will complete)"
-            >
-              <span class="codicon codicon-debug-stop"></span>
-            </button>
-            <button
-              class="vscode-button run-button"
-              id="runAgainBtn"
-              disabled
-              title="Run this task again"
-            >
-              <i class="codicon codicon-debug-rerun"></i>
-            </button>
-            <button
-              class="vscode-button restore-button"
-              id="restoreStateBtn"
-              disabled
-              title="Restore this configuration to the main view"
-            >
-              <i class="codicon codicon-reply"></i>
-            </button>
-            <button
-              class="vscode-button diff-button"
-              id="diffStreamBtn"
-              disabled
-              title="Run latexdiff on existing tex files"
-            >
-              <i class="codicon codicon-diff-multiple"></i>
-            </button>
-            <button
-              class="vscode-button pack-button"
-              id="packStreamBtn"
-              disabled
-              title="Pack the output for this agent into the History folder"
-            >
-              <i class="codicon codicon-archive"></i>
-            </button>
-            <button
-              class="vscode-button clean-button"
-              id="cleanStreamBtn"
-              disabled
-              title="Clean the output for this agent"
-            >
-              <i class="codicon codicon-trash"></i>
-            </button>
-            <button
-              class="vscode-button clear-button"
-              id="eraseStreamBtn"
-              title="Erase the stream output for this agent"
-            >
-              <i class="codicon codicon-clear-all"></i>
-            </button>
-          </div>
+          <div id="toolbarContainer" class="header-actions button-group"></div>
         </div>
         <div id="logContent" class="log-container"></div>
         <div id="generatedFiles" class="files-container"></div>
