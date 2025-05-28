@@ -11,6 +11,7 @@ import {
   getColorForLevel,
   isAgentStream,
 } from '../utils/loggerUtils';
+import { LogGroup } from '../types/LogTypes';
 
 const { combine, timestamp } = winston.format;
 
@@ -30,14 +31,6 @@ const emojis = {
 };
 
 // Group State
-interface LogGroup {
-  id: string;
-  name: string;
-  startTime: string;
-  endTime?: string;
-  status: 'running' | 'error' | 'stopped' | 'ready';
-  parentGroupId?: string; // Optional parent group for nested groups
-}
 
 // Helper function to escape HTML tags
 function escapeHtml(text: string): string {
