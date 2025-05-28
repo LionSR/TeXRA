@@ -13,6 +13,7 @@ import {
   shouldPersistStream,
 } from '../utils/loggerUtils';
 import { TokenUsageStats } from '../types/UsageTypes';
+import { LogGroup } from '../types/LogTypes';
 // @ts-ignore - Import JavaScript module
 import { STATUS, COMMANDS } from './modules/constants.js';
 
@@ -32,16 +33,6 @@ interface ColoredLogMessage {
   level: 'error' | 'warn' | 'info' | 'debug';
   timestamp: number;
   groupId?: string;
-}
-
-interface LogGroup {
-  id: string;
-  name: string;
-  startTime: string;
-  endTime?: string;
-  status: StatusType;
-  parentGroupId?: string;
-  usage?: TokenUsageStats;
 }
 
 // Channels that should not be persisted in workspace storage
