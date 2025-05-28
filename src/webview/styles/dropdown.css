@@ -66,16 +66,18 @@
   min-width: var(--width-dropdown);
   display: none;
   font-size: calc(var(--vscode-editor-font-size) * 0.9);
-  padding: var(--spacing-small);
+  padding: 1px;
   white-space: nowrap;
   font-weight: normal;
 }
 
 /* Dropdown option labels - special styles not covered by vscode-checkbox */
 .dropdown-options .vscode-checkbox {
-  padding: var(--spacing-small) var(--spacing-small);
+  padding: 1px var(--spacing-tiny);
   border-radius: var(--border-radius-small);
   font-weight: normal;
+  font-size: calc(var(--vscode-editor-font-size) * 0.9);
+  line-height: 1;
 }
 
 .dropdown-options .vscode-checkbox:hover {
@@ -86,4 +88,5 @@
   width: var(--width-icon);
   text-align: center;
   opacity: var(--opacity-subtle);
+  font-size: calc(var(--vscode-editor-font-size) * 0.9);
 }
