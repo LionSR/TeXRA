@@ -11,6 +11,9 @@ import { calculateTokenPrice } from '../utils/priceUtils';
 import { ToolState } from './ToolState';
 import { K_SLICE } from '../utils/constants';
 
+// import { ResponseCreateParams } from 'openai/src/resources/responses/response';
+// this is incorrect now, but would be nice to use
+
 /**
  * Handler for OpenAI's new Responses API. Uses `previous_response_id` to
  * manage conversation state between calls.
