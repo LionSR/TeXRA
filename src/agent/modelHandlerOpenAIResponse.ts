@@ -8,6 +8,8 @@ import OpenAI from 'openai';
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 import { ResponseUsageFactory } from './ResponseUsage';
 import { calculateTokenPrice } from '../utils/priceUtils';
+import { ToolState } from './ToolState';
+import { K_SLICE } from '../utils/constants';
 
 /**
  * Handler for OpenAI's new Responses API. Uses `previous_response_id` to
@@ -198,5 +200,45 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
       this.computePrice(responseUsage),
       responseTime,
     );
+  }
+
+  /**
+   * Process reasoning summaries from the Responses API.
+   * @param responseObject The API response object
+   * @param groupId Optional group ID for logging
+   * @param toolState Optional toolState to update with thinking blocks
+   * @returns The concatenated reasoning summary or null
+   */
+  processThinkingBlock(
+    responseObject: any,
+    groupId?: string,
+    toolState?: ToolState,
+  ): string | null {
+    const summaryParts = responseObject?.reasoning?.summary;
+    if (!Array.isArray(summaryParts) || summaryParts.length === 0) {
+      return null;
+    }
+
+    const thoughtContent = summaryParts
+      .map((p: any) => p.text ?? '')
+      .join('')
+      .trim();
+
+    if (toolState && !toolState.thinkingAdded) {
+      toolState.thinkingBlocks = summaryParts.map((p: any) => ({
+        type: 'thinking',
+        thinking: p.text ?? '',
+      }));
+      toolState.thinkingAdded = true;
+    }
+
+    if (thoughtContent) {
+      this.logger.debug(
+        `OpenAI Responses reasoning preview: ${thoughtContent.substring(0, K_SLICE)}...`,
+        groupId,
+      );
+    }
+
+    return thoughtContent || null;
   }
 }
