@@ -7,6 +7,7 @@ import * as logger from '../logger/logUtils';
 
 // Local imports - utilities
 import { getWorkspacePath } from './workspaceFileUtils';
+import { ExecResult } from '../types/ResultTypes';
 
 const execAsync = promisify(cp.exec);
 
@@ -26,13 +27,6 @@ function truncateOutput(
     return '...' + text.slice(-maxChars);
   }
   return text;
-}
-
-interface ExecResult {
-  success: boolean;
-  stdout: string | null;
-  stderr: string | null;
-  timedOut?: boolean;
 }
 
 /**
