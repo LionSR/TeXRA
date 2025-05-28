@@ -278,9 +278,10 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
       this.logger.debug(
         `Sending message with ${lastMessageParts.length} parts.`,
       );
+      // Is the following including the system prompt etc? somehow 
       const result = await chat.sendMessage({
         message: lastMessageParts,
-        config: { abortSignal: signal },
+        config: { ...generationConfig, abortSignal: signal },
       });
 
       return result;
