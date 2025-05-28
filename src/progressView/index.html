@@ -47,6 +47,43 @@
         </div>
         <div id="logContent" class="log-container"></div>
         <div id="generatedFiles" class="files-container"></div>
+        <template id="fileItemTemplate">
+          <div class="file-item">
+            <span class="file-name">
+              <span class="file-path clickable">
+                <span class="file-dir"></span>
+                <span class="file-basename"></span>
+              </span>
+            </span>
+            <span class="file-stats"></span>
+            <span class="file-actions button-group">
+              <button
+                class="vscode-button tiny compare-btn"
+                title="Compare with base"
+              >
+                <i class="codicon codicon-diff"></i>
+              </button>
+              <button
+                class="vscode-button tiny accept-btn"
+                title="Accept edits"
+              >
+                <i class="codicon codicon-check"></i>
+              </button>
+              <button class="vscode-button tiny merge-btn" title="Merge edits">
+                <i class="codicon codicon-git-merge"></i>
+              </button>
+              <button class="vscode-button tiny diff-btn" title="LaTeXdiff">
+                <i class="codicon codicon-git-compare"></i>
+              </button>
+              <button
+                class="vscode-button tiny prev-btn"
+                title="Compare with previous round"
+              >
+                <i class="codicon codicon-diff-added"></i>
+              </button>
+            </span>
+          </div>
+        </template>
       </div>
       <div class="tabs split">
         <div id="streamTabs" class="tabs-content">
