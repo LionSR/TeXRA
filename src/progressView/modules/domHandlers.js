@@ -18,7 +18,45 @@ import {
   getStatusIcon,
   formatDuration,
 } from './logFormatters.js';
-import { STATUS, COMMANDS, SPLIT_SIZES } from './constants.js';
+import { STATUS, COMMANDS, SPLIT_SIZES, TOOLBAR_BUTTONS } from './constants.js';
+// import { createIconButton } from 'modules/utils.js';
+
+const STATUS_MAP = {
+  [STATUS.RUNNING]: {
+    className: 'running',
+    label: 'Running',
+    enable: ['stopStreamBtn'],
+  },
+  [STATUS.ERROR]: {
+    className: 'error',
+    label: 'Error',
+    enable: [
+      'runAgainBtn',
+      'packStreamBtn',
+      'cleanStreamBtn',
+      'restoreStateBtn',
+      'diffStreamBtn',
+    ],
+  },
+  [STATUS.STOPPED]: {
+    className: 'stopped',
+    label: 'Stopped',
+    enable: [
+      'runAgainBtn',
+      'packStreamBtn',
+      'cleanStreamBtn',
+      'restoreStateBtn',
+      'diffStreamBtn',
+    ],
+  },
+  [STATUS.READY]: {
+    className: 'ready',
+    label: 'Ready',
+    enable: [],
+  },
+};
+
+const BUTTON_IDS = TOOLBAR_BUTTONS.map((b) => b.id);
 
 import Split from 'split.js';
 
@@ -53,71 +91,55 @@ export function updateStreamTabs(streams, activeStream) {
   }
 }
 
+export function renderToolbar() {
+  const container = document.getElementById('toolbarContainer');
+  if (!container) return;
+  container.innerHTML = '';
+  TOOLBAR_BUTTONS.forEach((def) => {
+    const btn = createIconButton({
+      id: def.id,
+      icon: def.icon,
+      title: def.title,
+      className: def.className,
+      disabled: def.disabled,
+      dataset: { command: def.command },
+    });
+    container.appendChild(btn);
+  });
+}
+
 /**
  * Updates the stream status indicator and enables/disables buttons accordingly
  * @param {string} status - The status to set
  */
 export function updateStatus(status) {
   const statusIndicator = document.getElementById('statusIndicator');
-  const stopButton = document.getElementById('stopStreamBtn');
-  const runAgainBtn = document.getElementById('runAgainBtn');
-  const packButton = document.getElementById('packStreamBtn');
-  const cleanButton = document.getElementById('cleanStreamBtn');
-  const restoreButton = document.getElementById('restoreStateBtn');
-  const diffButton = document.getElementById('diffStreamBtn');
+  const buttons = BUTTON_IDS.map((id) => document.getElementById(id));
 
-  // First disable all action buttons (we'll enable them based on status)
-  stopButton.disabled = true;
-  runAgainBtn.disabled = true;
-  packButton.disabled = true;
-  cleanButton.disabled = true;
-  restoreButton.disabled = true;
-  diffButton.disabled = true;
+  buttons.forEach((b) => {
+    if (b) b.disabled = true;
+  });
 
-  // Default status is empty - ready for input
   statusIndicator.className = 'status-indicator';
   statusIndicator.dataset.status = 'Ready';
 
   if (status) {
-    // Remove the old status classes
     statusIndicator.classList.remove('running', 'error', 'stopped', 'ready');
 
-    // Configure UI based on status
-    switch (status) {
-      case STATUS.RUNNING:
-        statusIndicator.classList.add('running');
-        statusIndicator.dataset.status = 'Running';
-        stopButton.disabled = false;
-        break;
-      case STATUS.ERROR:
-        statusIndicator.classList.add('error');
-        statusIndicator.dataset.status = 'Error';
-        runAgainBtn.disabled = false;
-        packButton.disabled = false;
-        cleanButton.disabled = false;
-        restoreButton.disabled = false;
-        diffButton.disabled = false;
-        break;
-      case STATUS.STOPPED:
-        statusIndicator.classList.add('stopped');
-        statusIndicator.dataset.status = 'Stopped';
-        runAgainBtn.disabled = false;
-        packButton.disabled = false;
-        cleanButton.disabled = false;
-        restoreButton.disabled = false;
-        diffButton.disabled = false;
-        break;
-      case STATUS.READY:
-        statusIndicator.classList.add('ready');
-        statusIndicator.dataset.status = 'Ready';
-        break;
-      default:
-        statusIndicator.classList.add('stopped');
-        statusIndicator.dataset.status = status || 'Ready';
-        break;
-    }
+    const cfg = STATUS_MAP[status] || {
+      className: 'stopped',
+      label: status || 'Ready',
+      enable: [],
+    };
 
-    // Store status for current stream
+    statusIndicator.classList.add(cfg.className);
+    statusIndicator.dataset.status = cfg.label;
+
+    cfg.enable.forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.disabled = false;
+    });
+
     const currentStream = getCurrentStream();
     if (currentStream && status !== STATUS.READY) {
       setStreamStatus(currentStream, status);
@@ -658,80 +680,13 @@ export function setupEventListeners() {
     }
   });
 
-  // Stop button click handler
-  document.getElementById('stopStreamBtn').addEventListener('click', () => {
+  document.getElementById('toolbarContainer').addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-command]');
+    if (!btn) return;
+    const command = btn.dataset.command;
     const currentStream = getCurrentStream();
     if (currentStream) {
-      vscode.postMessage({
-        command: COMMANDS.STOP_STREAM,
-        stream: currentStream,
-      });
-    }
-  });
-
-  // Run again button click handler
-  document.getElementById('runAgainBtn').addEventListener('click', () => {
-    const currentStream = getCurrentStream();
-    if (currentStream) {
-      vscode.postMessage({
-        command: COMMANDS.RUN_AGAIN,
-        stream: currentStream,
-      });
-    }
-  });
-
-  // Restore state button click handler
-  document.getElementById('restoreStateBtn').addEventListener('click', () => {
-    const currentStream = getCurrentStream();
-    if (currentStream) {
-      vscode.postMessage({
-        command: COMMANDS.RESTORE_STATE,
-        stream: currentStream,
-      });
-    }
-  });
-
-  // Diff button click handler
-  document.getElementById('diffStreamBtn').addEventListener('click', () => {
-    const currentStream = getCurrentStream();
-    if (currentStream) {
-      vscode.postMessage({
-        command: COMMANDS.DIFF_STREAM,
-        stream: currentStream,
-      });
-    }
-  });
-
-  // Pack button click handler
-  document.getElementById('packStreamBtn').addEventListener('click', () => {
-    const currentStream = getCurrentStream();
-    if (currentStream) {
-      vscode.postMessage({
-        command: COMMANDS.PACK_STREAM,
-        stream: currentStream,
-      });
-    }
-  });
-
-  // Clean button click handler
-  document.getElementById('cleanStreamBtn').addEventListener('click', () => {
-    const currentStream = getCurrentStream();
-    if (currentStream) {
-      vscode.postMessage({
-        command: COMMANDS.CLEAN_STREAM,
-        stream: currentStream,
-      });
-    }
-  });
-
-  // Erase button click handler
-  document.getElementById('eraseStreamBtn').addEventListener('click', () => {
-    const currentStream = getCurrentStream();
-    if (currentStream) {
-      vscode.postMessage({
-        command: COMMANDS.ERASE_STREAM,
-        stream: currentStream,
-      });
+      vscode.postMessage({ command, stream: currentStream });
     }
   });
 
@@ -748,4 +703,24 @@ export function setupEventListeners() {
     gutterSize: 5,
     cursor: 'col-resize',
   });
+}
+
+export function createIconButton({
+  id,
+  icon,
+  title = '',
+  className = 'vscode-button',
+  disabled = false,
+  dataset = {},
+}) {
+  const btn = document.createElement('button');
+  btn.id = id;
+  btn.className = className;
+  btn.innerHTML = `<i class="codicon codicon-${icon}"></i>`;
+  btn.title = title;
+  btn.disabled = disabled;
+  Object.entries(dataset).forEach(([key, value]) => {
+    btn.dataset[key] = value;
+  });
+  return btn;
 }

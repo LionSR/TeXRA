@@ -69,13 +69,13 @@ function createHistoryItemElement(item) {
   header.innerHTML = `
     <div class="history-timestamp">${formattedDate}</div>
       <div class="history-actions button-group">
-        <button class="vscode-button delete-btn" data-id="${item.id}" title="Delete this history item">
+        <button class="vscode-button delete-btn" data-id="${item.id}" data-command="deleteAgent" title="Delete this history item">
           <i class="codicon codicon-trash"></i>
         </button>
-        <button class="vscode-button restore-btn" data-id="${item.id}" title="Load configuration to main view">
+        <button class="vscode-button restore-btn" data-id="${item.id}" data-command="restoreAgent" title="Load configuration to main view">
           <i class="codicon codicon-reply"></i>
         </button>
-        <button class="vscode-button rerun-btn" data-id="${item.id}" title="Execute this configuration">
+        <button class="vscode-button rerun-btn" data-id="${item.id}" data-command="rerunAgent" title="Execute this configuration">
           <i class="codicon codicon-debug-rerun"></i>
         </button>
       </div>
@@ -264,49 +264,27 @@ function renderToolConfig(label, obj, exclude = []) {
  * Set up event listeners for the history items
  */
 function setupItemEventListeners() {
-  // Handle rerun buttons
-  document.querySelectorAll('.rerun-btn').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const historyId = btn.getAttribute('data-id');
-      vscode.postMessage({
-        command: 'rerunAgent',
-        historyId: historyId,
-      });
-    });
-  });
+  const container = document.getElementById('historyContainer');
+  if (!container) return;
 
-  // Handle restore buttons
-  document.querySelectorAll('.restore-btn').forEach((btn) => {
-    btn.addEventListener('click', () => {
+  container.addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-command]');
+    if (btn) {
+      const command = btn.dataset.command;
       const historyId = btn.getAttribute('data-id');
-      vscode.postMessage({
-        command: 'restoreAgent',
-        historyId: historyId,
-      });
-    });
-  });
+      vscode.postMessage({ command, historyId });
+      return;
+    }
 
-  // Handle delete buttons
-  document.querySelectorAll('.delete-btn').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const historyId = btn.getAttribute('data-id');
-      vscode.postMessage({
-        command: 'deleteAgent',
-        historyId: historyId,
-      });
-    });
-  });
-
-  // Handle collapse/expand
-  document.querySelectorAll('.toggle-button').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const itemId = btn.getAttribute('data-id');
+    const toggle = e.target.closest('.toggle-button');
+    if (toggle) {
+      const itemId = toggle.getAttribute('data-id');
       const content = document.getElementById('content-' + itemId);
       content.classList.toggle('expanded');
-      btn.textContent = content.classList.contains('expanded')
+      toggle.textContent = content.classList.contains('expanded')
         ? 'Show less'
         : 'Show more';
-    });
+    }
   });
 }
 
