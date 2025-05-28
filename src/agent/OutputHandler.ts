@@ -351,7 +351,7 @@ export class OutputHandler {
     currRound: number,
     groupId?: string,
   ): Promise<void> {
-    const diffProcessGroupId = groupId;
+    const diffProcessGroupId = groupId ?? this.logger.getActiveGroupId();
 
     try {
       // Check if latexdiff is installed before proceeding
@@ -773,7 +773,7 @@ export class OutputHandler {
     stateGlobal: AgentStateGlobal,
     groupId?: string,
   ): Promise<void> {
-    const statsGroupId = groupId;
+    const statsGroupId = groupId ?? this.logger.getActiveGroupId();
 
     try {
       this.logger.info('=== Task Statistics ===', statsGroupId);
