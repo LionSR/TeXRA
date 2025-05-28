@@ -66,12 +66,6 @@ export class CoTAgent extends BaseReflectionAgent {
           outputProcessGroupId,
         );
 
-        // Create a single subgroup for XML and file handling
-        const fileProcessGroupId = await this.outputHandler.startProcessing(
-          `XML/File Processing`,
-          outputProcessGroupId,
-        );
-
         // First fix XML structure
         await this.outputHandler.ensureCorrectXmlStructure(
           outputFile,
@@ -79,22 +73,19 @@ export class CoTAgent extends BaseReflectionAgent {
         );
         this.logger.debug(
           `XML structure processed for round ${currRound}`,
-          fileProcessGroupId,
+          outputProcessGroupId,
         );
 
-        // Then process output files using the parent class method but with our group ID
+        // Then process output files using the parent class method
         await super.processOutputFiles(
           outputFile,
           currRound,
-          fileProcessGroupId,
+          outputProcessGroupId,
         );
         this.logger.debug(
           `Output files processed for round ${currRound}`,
-          fileProcessGroupId,
+          outputProcessGroupId,
         );
-
-        // End File Processing subgroup
-        this.outputHandler.endProcessing('stopped', fileProcessGroupId);
 
         // Note: latexdiff processing is now handled in the parent class's handleOutput method
       }
