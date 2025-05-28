@@ -253,6 +253,8 @@ export function updateFileList(filesByRound) {
         });
       }
 
+      // If file stat values (added and removed) are not present, remove the statsSpan element.
+      // This ensures that the UI does not display an empty or misleading stats section.
       if (statsSpan) {
         if (info.added !== undefined && info.removed !== undefined) {
           statsSpan.innerHTML = `<span class="added">+${info.added}</span><span class="removed">-${info.removed}</span>`;
