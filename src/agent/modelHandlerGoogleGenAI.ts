@@ -280,7 +280,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
       );
       const result = await chat.sendMessage({
         message: lastMessageParts,
-        config: { abortSignal: signal },
+        config: { ...generationConfig, abortSignal: signal },
       });
 
       return result;
