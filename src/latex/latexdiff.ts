@@ -10,6 +10,7 @@ import * as logger from '../logger/logUtils';
 // Local imports - utilities
 import { readFile, writeFile, fileExists } from '../utils/workspaceFileUtils';
 import { executeCommand } from '../utils/execUtils';
+import { ExecResult } from '../types/ResultTypes';
 import { getConfig } from '../utils/configUtils';
 
 // Local imports - latex utils
@@ -126,20 +127,12 @@ function buildLatexdiffVcCommand(
   return baseCommand;
 }
 
-// Type for command execution result
-interface CommandResult {
-  success: boolean;
-  stdout?: string | null;
-  stderr?: string | null;
-  timedOut?: boolean;
-}
-
 // Helper function to execute command with fallback
 async function executeWithFallback(
   commandBuilder: (useFlatten: boolean) => string[],
   commandType: string,
   channel: string,
-): Promise<CommandResult> {
+): Promise<ExecResult> {
   // First attempt with --flatten
   logger.debug(channel, `Attempting ${commandType} with --flatten flag`);
   let result = await executeCommand(commandBuilder(true), {
