@@ -3,6 +3,7 @@ import { setupMessageHandlers } from './modules/messageHandlers.js';
 import {
   setupEventListeners,
   applyGroupToggleStates,
+  renderToolbar,
 } from './modules/domHandlers.js';
 import { vscode } from './modules/vscodeApi.js';
 import { COMMANDS } from './modules/constants.js';
@@ -15,6 +16,7 @@ setupMessageHandlers();
 
 // Initialize event listeners and state when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
+  renderToolbar();
   // Setup UI event listeners
   setupEventListeners();
 
