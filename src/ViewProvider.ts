@@ -5,6 +5,7 @@ import * as vscode from 'vscode';
 import { WebviewMessageHandler } from './webview/MessageHandler';
 import { WebviewContentProvider } from './webview/WebviewContentProvider';
 import { anyApiKeyExists } from './utils/secretUtils';
+import { watchConfig } from './utils/configUtils';
 
 export class TeXRAViewProvider implements vscode.WebviewViewProvider {
   private messageHandler: WebviewMessageHandler;
@@ -76,16 +77,10 @@ export class TeXRAViewProvider implements vscode.WebviewViewProvider {
 
   private setupConfigurationWatcher() {
     // Watch for configuration changes
-    this.context.subscriptions.push(
-      vscode.workspace.onDidChangeConfiguration((e) => {
-        if (
-          e.affectsConfiguration('texra.agents') ||
-          e.affectsConfiguration('texra.models') ||
-          e.affectsConfiguration('texra.files')
-        ) {
-          this.refreshOptionsAndView();
-        }
-      }),
+    watchConfig(
+      this.context,
+      ['texra.agents', 'texra.models', 'texra.files'],
+      () => this.refreshOptionsAndView(),
     );
   }
 
