@@ -1,3 +1,4 @@
+// Third-party imports
 import * as vscode from 'vscode';
 
 export function getConfig<T>(path: string, defaultValue?: T): T {
@@ -20,4 +21,29 @@ export function getConfig<T>(path: string, defaultValue?: T): T {
 
   // Return default value if still undefined
   return result !== undefined ? result : (defaultValue as T);
+}
+
+/**
+ * Register a listener for configuration changes on the given keys.
+ *
+ * @param context Extension context used to dispose the listener
+ * @param keys Configuration keys to watch
+ * @param callback Callback executed when any watched key changes
+ * @returns Disposable for the registered listener
+ */
+export function watchConfig(
+  context: vscode.ExtensionContext,
+  keys: string | string[],
+  callback: () => void,
+): vscode.Disposable {
+  const keyArray = Array.isArray(keys) ? keys : [keys];
+
+  const disposable = vscode.workspace.onDidChangeConfiguration((e) => {
+    if (keyArray.some((key) => e.affectsConfiguration(key))) {
+      callback();
+    }
+  });
+
+  context.subscriptions.push(disposable);
+  return disposable;
 }
