@@ -323,6 +323,13 @@ export abstract class BaseReflectionAgent {
         } finally {
           this.abortController = null;
         }
+        if (!responseObject) {
+          this.logger.warn(
+            'Model response was aborted or returned no data; output may be incomplete.',
+            responseCycleGroupId,
+          );
+          break;
+        }
         const responseTime = (Date.now() - startTime) / 1000;
         stateRound.updateResponseTime(responseTime);
         this.logger.info(
@@ -1302,7 +1309,7 @@ export abstract class BaseReflectionAgent {
       this.abortController.abort();
     }
     this.logger.info(
-      'Agent execution interrupted by user. Note that already sent response might still return outputs but no more request messages will be sent.',
+      'Agent execution interrupted by user. Active request aborted; partial output may remain.',
     );
   }
 
