@@ -9,6 +9,7 @@ import * as vscode from 'vscode';
 import * as logger from './logger/logUtils';
 import { initializeSecrets } from './utils/secretUtils';
 import { copyDefaultAgents, configureLatexSettings } from './utils/setupUtils';
+import { watchConfig } from './utils/configUtils';
 
 // Local imports - components
 import { ProgressViewProvider } from './progressView/ProgressViewProvider';
@@ -57,16 +58,15 @@ export async function activate(context: vscode.ExtensionContext) {
       'texra.folderExplorer',
       folderExplorer,
     ),
-    // Add watcher for configuration changes
-    vscode.workspace.onDidChangeConfiguration((e) => {
-      if (e.affectsConfiguration('texra.explorer.agentsDirectory')) {
-        folderExplorer.setupFileSystemWatcher();
-        folderExplorer.refresh();
-      }
-    }),
     // Add disposable for cleanup
     { dispose: () => folderExplorer.dispose() },
   );
+
+  // Watch for agents directory changes
+  watchConfig(context, 'texra.explorer.agentsDirectory', () => {
+    folderExplorer.setupFileSystemWatcher();
+    folderExplorer.refresh();
+  });
 }
 
 export function deactivate() {
