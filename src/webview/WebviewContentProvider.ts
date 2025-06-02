@@ -30,15 +30,16 @@ export class WebviewContentProvider {
       const cssPath = getWebviewPath('styles/index.css');
       const commonCssPath = getCommonPath('styles/common.css');
       const mainScriptPath = getWebviewPath('script.js');
-      const webviewStatePath = getWebviewPath('modules/webviewState.js');
+      const webviewStatePath = getCommonPath('modules/webviewState.js');
 
       // Get URIs for all modules
       const stateManagerPath = getWebviewPath('modules/stateManager.js');
       const messageHandlersPath = getWebviewPath('modules/messageHandlers.js');
       const fileHandlersPath = getWebviewPath('modules/fileHandlers.js');
       const uiHandlersPath = getWebviewPath('modules/uiHandlers.js');
+      const templateUtilsPath = getCommonPath('modules/templateUtils.js');
       const utilsPath = getWebviewPath('modules/utils.js');
-      const vscodeApiPath = getWebviewPath('modules/vscodeApi.js');
+      const vscodeApiPath = getCommonPath('modules/vscodeApi.js');
 
       const htmlContent = fs.readFileSync(htmlPath.fsPath, 'utf-8');
 
@@ -51,6 +52,7 @@ export class WebviewContentProvider {
       const messageHandlersUri = webview.asWebviewUri(messageHandlersPath);
       const fileHandlersUri = webview.asWebviewUri(fileHandlersPath);
       const uiHandlersUri = webview.asWebviewUri(uiHandlersPath);
+      const templateUtilsUri = webview.asWebviewUri(templateUtilsPath);
       const utilsUri = webview.asWebviewUri(utilsPath);
       const vscodeApiUri = webview.asWebviewUri(vscodeApiPath);
 
@@ -89,6 +91,7 @@ export class WebviewContentProvider {
         .replace('${messageHandlersUri}', messageHandlersUri.toString())
         .replace('${fileHandlersUri}', fileHandlersUri.toString())
         .replace('${uiHandlersUri}', uiHandlersUri.toString())
+        .replace('${templateUtilsUri}', templateUtilsUri.toString())
         .replace('${vscodeApiUri}', vscodeApiUri.toString())
         .replace('${codiconUri}', codiconUri.toString())
         .replace('${codiconsFontUri}', codiconsFontUri.toString());
