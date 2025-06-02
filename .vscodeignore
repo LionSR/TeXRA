@@ -37,7 +37,7 @@ resources/.DS_Store
 !src/webview/styles/*.css
 !src/webview/modules/*.js
 !src/common/styles/*.css
-!src/common/webviewState.js
+!src/common/modules/*.js
 
 !src/historyView/modules/*.js
 !src/historyView/styles/*.css
