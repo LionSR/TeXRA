@@ -36,12 +36,13 @@ export class ProgressViewContentProvider {
       const webviewStatePath = getCommonPath('modules/webviewState.js');
 
       // Module paths
-      const vscodeApiPath = getWebviewPath('modules/vscodeApi.js');
+      const vscodeApiPath = getCommonPath('modules/vscodeApi.js');
       const stateManagerPath = getWebviewPath('modules/stateManager.js');
       const messageHandlersPath = getWebviewPath('modules/messageHandlers.js');
       const domHandlersPath = getWebviewPath('modules/domHandlers.js');
       const constantsPath = getWebviewPath('modules/constants.js');
       const logFormattersPath = getWebviewPath('modules/logFormatters.js');
+      const templateUtilsPath = getCommonPath('modules/templateUtils.js');
 
       const codiconPath = getNodeModulesPath(
         '@vscode/codicons/dist/codicon.css',
@@ -57,6 +58,7 @@ export class ProgressViewContentProvider {
       const splitJsUri = webview.asWebviewUri(splitJsPath);
       const codiconUri = webview.asWebviewUri(codiconPath);
       const codiconsFontUri = webview.asWebviewUri(codiconsFontPath);
+      const templateUtilsUri = webview.asWebviewUri(templateUtilsPath);
 
       // Module URIs
       const vscodeApiUri = webview.asWebviewUri(vscodeApiPath);
@@ -81,6 +83,7 @@ export class ProgressViewContentProvider {
         .replace('${stateManagerUri}', stateManagerUri.toString())
         .replace('${messageHandlersUri}', messageHandlersUri.toString())
         .replace('${domHandlersUri}', domHandlersUri.toString())
+        .replace('${templateUtilsUri}', templateUtilsUri.toString())
         .replace('${constantsUri}', constantsUri.toString())
         .replace('${logFormattersUri}', logFormattersUri.toString())
         .replace(/\${nonce}/g, nonce)

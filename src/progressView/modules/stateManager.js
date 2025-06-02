@@ -1,4 +1,4 @@
-import { getWebviewState, updateWebviewState } from './webviewState.js';
+import { getWebviewState, updateWebviewState } from '@common/webviewState.js';
 
 // State variables
 let currentStream = '';
