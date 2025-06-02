@@ -23,7 +23,10 @@ export async function runTexFmt(filePath: string): Promise<boolean> {
     const command = ['tex-fmt'];
     if (texfmtConfig) {
       command.push('--config', texfmtConfig);
+    } else {
+      command.push('--nowrap');
     }
+    command.push('--check');
     command.push(`"${filePath}"`);
 
     const result = await executeCommand(command, { channel: CHANNEL });
