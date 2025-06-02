@@ -23,7 +23,9 @@
           "./modules/messageHandlers.js": "${messageHandlersUri}",
           "./modules/domHandlers.js": "${domHandlersUri}",
           "./modules/constants.js": "${constantsUri}",
-          "./modules/logFormatters.js": "${logFormattersUri}"
+          "./modules/logFormatters.js": "${logFormattersUri}",
+          "./webviewState.js": "${webviewStateUri}",
+          "./modules/templateUtils.js": "${templateUtilsUri}"
         }
       }
     </script>
@@ -96,5 +98,10 @@
         </div>
       </div>
     </div>
+    <template id="iconButtonTemplate">
+      <button class="vscode-button">
+        <i class="codicon"></i>
+      </button>
+    </template>
   </body>
 </html>

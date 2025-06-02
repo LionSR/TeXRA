@@ -129,6 +129,12 @@ export class TeXRAViewProvider implements vscode.WebviewViewProvider {
         ),
         vscode.Uri.joinPath(
           this.context.extensionUri,
+          'src',
+          'common',
+          'modules',
+        ),
+        vscode.Uri.joinPath(
+          this.context.extensionUri,
           'node_modules',
           '@vscode',
           'codicons',
