@@ -19,8 +19,8 @@ import {
   safeGetElementChecked,
   safeSetElementValue,
   safeSetElementChecked,
-} from './utils.js';
-import { capitalize } from './stringUtils.js';
+} from '@common/domUtils.js';
+import { capitalize } from '@common/stringUtils.js';
 
 export function setDefaultState() {
   // Hide output name override by default
