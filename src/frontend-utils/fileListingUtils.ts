@@ -10,6 +10,7 @@ import * as logger from '../logger/logUtils';
 // Local imports - utilities
 import { getConfig } from '../utils/configUtils';
 import { getWorkspacePath } from '../utils/workspaceFileUtils';
+import { getIncludedExtensions } from '../utils/fileTypeUtils';
 
 const CHANNEL = 'FrontendUtils';
 logger.initialize(CHANNEL);
@@ -30,9 +31,7 @@ export async function listInputFiles(): Promise<string[]> {
     return [];
   }
 
-  const INCLUDED_INPUT_EXTENSIONS = getConfig<string[]>(
-    'files.included.inputExtensions',
-  );
+  const INCLUDED_INPUT_EXTENSIONS = getIncludedExtensions('input');
 
   return getFilesRecursively(
     workspacePath,
@@ -57,9 +56,7 @@ export async function listAuxiliaryFiles(): Promise<string[]> {
     'files.ignored.auxiliaryKeywords',
   );
 
-  const INCLUDED_AUXILIARY_EXTENSIONS = getConfig<string[]>(
-    'files.included.auxiliaryExtensions',
-  );
+  const INCLUDED_AUXILIARY_EXTENSIONS = getIncludedExtensions('auxiliary');
 
   return getFilesInDirectory(
     workspacePath,
@@ -80,9 +77,7 @@ export async function listMediaFiles(): Promise<string[]> {
     'files.ignored.mediaDirectories',
   );
 
-  const INCLUDED_FIGURE_EXTENSIONS = getConfig<string[]>(
-    'files.included.mediaExtensions',
-  );
+  const INCLUDED_FIGURE_EXTENSIONS = getIncludedExtensions('media');
 
   return getFilesRecursively(
     workspacePath,
@@ -100,9 +95,7 @@ export async function listEditedFiles(baseFileName: string): Promise<string[]> {
     return [];
   }
 
-  const INCLUDED_EDITED_EXTENSIONS = getConfig<string[]>(
-    'files.included.editedExtensions',
-  );
+  const INCLUDED_EDITED_EXTENSIONS = getIncludedExtensions('edited');
 
   const files = await getFilesRecursively(
     workspacePath,
