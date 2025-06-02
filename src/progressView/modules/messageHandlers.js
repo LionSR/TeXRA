@@ -22,6 +22,7 @@ import {
   updateLogGroup,
 } from './logFormatters.js';
 import { COMMANDS } from './constants.js';
+import { registerMessageHandlers } from '@common/messageRouter.js';
 
 const handlers = {
   [COMMANDS.UPDATE_STREAMS]: (message) => {
@@ -156,11 +157,5 @@ const handlers = {
  * Sets up the message handler for messages from the extension
  */
 export function setupMessageHandlers() {
-  window.addEventListener('message', (event) => {
-    const message = event.data;
-    const handler = handlers[message.command];
-    if (handler) {
-      handler(message);
-    }
-  });
+  registerMessageHandlers(handlers);
 }
