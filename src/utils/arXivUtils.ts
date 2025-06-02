@@ -216,7 +216,7 @@ export async function downloadArxivSource(
   // Indent LaTeX files if autoIndent is enabled
   if (autoIndent) {
     if (progressCallback) {
-      progressCallback(`Indenting LaTeX files...`, 85);
+      progressCallback(`Formatting LaTeX files...`, 85);
     }
 
     const indentedCount = await indentLatexFilesInDirectory(
@@ -225,7 +225,7 @@ export async function downloadArxivSource(
     );
 
     if (progressCallback) {
-      progressCallback(`Indented ${indentedCount} LaTeX files`, 95);
+      progressCallback(`Formatted ${indentedCount} LaTeX files`, 95);
     }
   }
 
