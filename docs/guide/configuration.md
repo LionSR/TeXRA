@@ -129,15 +129,19 @@ Control which directories TeXRA ignores:
 
 ## LaTeX Configuration
 
-### LaTeX Indentation
+### LaTeX Formatting
 
-Configure LaTeX indentation behavior:
+Configure LaTeX formatting behavior:
 
 ```json
-"texra.latex.latexindentConfig": "/path/to/latexindent.yaml"
+"texra.latex.formatter": "latexindent",
+"texra.latex.latexindentConfig": "/path/to/latexindent.yaml",
+"texra.latex.texfmtConfig": "/path/to/tex-fmt.toml"
 ```
 
-This setting points to a configuration file for `latexindent`, which controls how LaTeX files are formatted.
+- `formatter`: Choose between `latexindent` and `tex-fmt`.
+- `latexindentConfig`: Path to a `latexindent` configuration file.
+- `texfmtConfig`: Path to a `tex-fmt` configuration file.
 
 ### TikZ Figure Processing
 
@@ -272,6 +276,7 @@ For team collaboration:
 ```json
 "texra.git.numberOfCommitsToShow": 30,
 "texra.latex.latexindentConfig": "${workspaceFolder}/.latexindent.yaml"
+"texra.latex.texfmtConfig": "${workspaceFolder}/tex-fmt.toml"
 ```
 
 Use workspace settings to ensure consistent configuration across the team.
