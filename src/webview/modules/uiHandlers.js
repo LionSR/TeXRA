@@ -1,4 +1,4 @@
-import { vscode } from './vscodeApi.js';
+import { vscode } from '@common/vscodeApi.js';
 import { saveState } from './stateManager.js';
 import {
   MULTIPLE_SELECTIONS,
@@ -72,6 +72,38 @@ export function updateToolConfigToggleState() {
     CHECK_BOXES_TOOL_USE,
     'tools',
   );
+}
+
+/**
+ * Setup document-level event listeners
+ */
+export function setupDocumentListeners() {
+  // Close dropdowns when clicking outside
+  document.addEventListener('click', (e) => {
+    const toolConfigOptions = safeGetElementById('toolConfigOptions');
+    const autoExtractOptions = safeGetElementById('autoExtractOptions');
+    const toggleToolConfig = safeGetElementById('toggleToolConfig');
+    const toggleAutoExtract = safeGetElementById('toggleAutoExtract');
+
+    if (
+      !toggleToolConfig?.contains(e.target) &&
+      !toolConfigOptions?.contains(e.target)
+    ) {
+      if (toolConfigOptions) {
+        toolConfigOptions.style.display = 'none';
+        updateToolConfigToggleState();
+      }
+    }
+    if (
+      !toggleAutoExtract?.contains(e.target) &&
+      !autoExtractOptions?.contains(e.target)
+    ) {
+      if (autoExtractOptions) {
+        autoExtractOptions.style.display = 'none';
+        updateAutoToggleState();
+      }
+    }
+  });
 }
 
 export function setupUIHandlers() {
@@ -570,5 +602,42 @@ export function setupUIHandlers() {
     vscode.postMessage({
       command: 'openSettings',
     });
+  });
+
+  // Compare and Accept button handlers
+  addEventListenerSafely('compareButton', 'click', function () {
+    const baseFile = safeGetElementValue('baseFile');
+    const editedFile = safeGetElementValue('editedFile');
+
+    if (baseFile && editedFile) {
+      vscode.postMessage({
+        command: 'compare',
+        baseFile: baseFile,
+        editedFile: editedFile,
+      });
+    } else {
+      vscode.postMessage({
+        command: 'showInformationMessage',
+        text: 'Please select both base and edited files to compare',
+      });
+    }
+  });
+
+  addEventListenerSafely('acceptButton', 'click', function () {
+    const baseFile = safeGetElementValue('baseFile');
+    const editedFile = safeGetElementValue('editedFile');
+
+    if (baseFile && editedFile) {
+      vscode.postMessage({
+        command: 'acceptEdited',
+        baseFile: baseFile,
+        editedFile: editedFile,
+      });
+    } else {
+      vscode.postMessage({
+        command: 'showInformationMessage',
+        text: 'Please select both base and edited files to accept changes',
+      });
+    }
   });
 }
