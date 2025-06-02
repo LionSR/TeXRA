@@ -14,6 +14,11 @@ import {
   fileExists,
 } from '../utils/workspaceFileUtils';
 import { registerDiffRefresh } from '../utils/diffViewUtils';
+import { 
+  DIFF_EDITOR_DELAY_MS, 
+  WORD_WRAP_INIT_DELAY_MS, 
+  DIFF_REGISTRATION_DELAY_MS 
+} from '../utils/constants';
 
 const CHANNEL = 'CompareCommands';
 logger.initialize(CHANNEL);
@@ -90,15 +95,15 @@ async function handleCompare(
           setTimeout(async () => {
             await vscode.commands.executeCommand('editor.action.toggleWordWrap');
             logger.debug(CHANNEL, 'Initialized word wrap for diff editor');
-          }, 100);
+          }, DIFF_EDITOR_DELAY_MS);
         } catch (err) {
           logger.error(
             CHANNEL,
             `Error initializing word wrap: ${err instanceof Error ? err.message : String(err)}`,
           );
         }
-      }, 200);
-    }, 300);
+      }, WORD_WRAP_INIT_DELAY_MS);
+    }, DIFF_REGISTRATION_DELAY_MS);
 
     logger.info(
       CHANNEL,
