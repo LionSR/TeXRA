@@ -3,6 +3,7 @@ import * as vscode from 'vscode';
 
 // Local imports - log
 import * as logger from '../logger/logUtils';
+import { REFRESH_THRESHOLD_MS } from './constants';
 
 const CHANNEL = 'DiffRefresh';
 logger.initialize(CHANNEL);
@@ -18,7 +19,7 @@ function refreshDiff() {
     return;
   }
   const now = Date.now();
-  if (now - lastRefresh < 200) {
+  if (now - lastRefresh < REFRESH_THRESHOLD_MS) {
     return;
   }
   lastRefresh = now;
