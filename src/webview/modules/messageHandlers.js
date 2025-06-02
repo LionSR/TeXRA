@@ -1,4 +1,23 @@
-import { vscode } from './vscodeApi.js';
+import { vscode } from '@common/vscodeApi.js';
+
+/**
+ * Initialize data requests on window load
+ */
+export function initializeDataRequests() {
+  const dataRequests = [
+    'getTheme',
+    'requestInputFile',
+    'requestReferenceFile',
+    'requestAuxiliaryFile',
+    'requestMediaFile',
+    'requestRecentCommits',
+    'requestBaseFile',
+  ];
+
+  dataRequests.forEach((request) => {
+    vscode.postMessage({ command: request });
+  });
+}
 import {
   updateFileSelect,
   updateEditedFileSelect,
@@ -14,7 +33,7 @@ import {
   getWebviewState,
   updateWebviewState,
   setWebviewState,
-} from './webviewState.js';
+} from '@common/webviewState.js';
 
 /**
  * Handle state restoration from log view
