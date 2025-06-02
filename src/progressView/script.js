@@ -5,8 +5,6 @@ import {
   applyGroupToggleStates,
   renderToolbar,
 } from './modules/domHandlers.js';
-import { vscode } from './modules/vscodeApi.js';
-import { COMMANDS } from './modules/constants.js';
 
 // Initialize the state when the window loads
 initializeState();
