@@ -100,6 +100,10 @@ A tool that compares two LaTeX files and marks up significant differences, gener
 
 A tool that formats LaTeX documents with consistent indentation and structure, making them more readable and maintainable.
 
+### tex-fmt
+
+A fast LaTeX formatter written in Rust that provides minimal-configuration formatting similar to `rustfmt`.
+
 ### texcount
 
 A tool that analyzes LaTeX documents to count words, headings, equations, and other elements, providing detailed document statistics.
