@@ -1,5 +1,4 @@
 // Standard library imports
-import * as fs from 'fs';
 
 // Third-party imports
 import * as vscode from 'vscode';
@@ -9,7 +8,7 @@ import * as logger from '../logger/logUtils';
 
 // Local imports - utilities
 import { getConfig } from '../utils/configUtils';
-import { generateNonce } from '../utils/nonceUtils';
+import { buildWebviewHtml } from '../utils/webviewHtmlUtils';
 
 const CHANNEL = 'Webview';
 logger.initialize(CHANNEL);
@@ -38,12 +37,10 @@ export class WebviewContentProvider {
       const fileHandlersPath = getWebviewPath('modules/fileHandlers.js');
       const uiHandlersPath = getWebviewPath('modules/uiHandlers.js');
       const templateUtilsPath = getCommonPath('modules/templateUtils.js');
-      const utilsPath = getWebviewPath('modules/utils.js');
+      const domUtilsPath = getCommonPath('modules/domUtils.js');
+      const stringUtilsPath = getCommonPath('modules/stringUtils.js');
       const vscodeApiPath = getCommonPath('modules/vscodeApi.js');
 
-      const htmlContent = fs.readFileSync(htmlPath.fsPath, 'utf-8');
-
-      const nonce = generateNonce();
       const styleUri = webview.asWebviewUri(cssPath);
       const commonStyleUri = webview.asWebviewUri(commonCssPath);
       const scriptUri = webview.asWebviewUri(mainScriptPath);
@@ -53,7 +50,8 @@ export class WebviewContentProvider {
       const fileHandlersUri = webview.asWebviewUri(fileHandlersPath);
       const uiHandlersUri = webview.asWebviewUri(uiHandlersPath);
       const templateUtilsUri = webview.asWebviewUri(templateUtilsPath);
-      const utilsUri = webview.asWebviewUri(utilsPath);
+      const domUtilsUri = webview.asWebviewUri(domUtilsPath);
+      const stringUtilsUri = webview.asWebviewUri(stringUtilsPath);
       const vscodeApiUri = webview.asWebviewUri(vscodeApiPath);
 
       const codiconPath = getNodeModulesPath(
@@ -75,28 +73,25 @@ export class WebviewContentProvider {
         .map((model) => `<option value="${model}">${model}</option>`)
         .join('\n');
 
-      // Replace placeholders in HTML with actual content
       logger.debug(CHANNEL, 'Generated HTML content for webview');
-      const finalHtml = htmlContent
-        .replace('${commonStyleUri}', commonStyleUri.toString())
-        .replace('${styleUri}', styleUri.toString())
-        .replace('${scriptUri}', scriptUri.toString())
-        .replace(/\${nonce}/g, nonce)
-        .replace('${agentOptions}', agentOptions)
-        .replace('${modelOptions}', modelOptions)
-        .replace(/\${cspSource}/g, webview.cspSource)
-        .replace('${utilsUri}', utilsUri.toString())
-        .replace('${webviewStateUri}', webviewStateUri.toString())
-        .replace('${stateManagerUri}', stateManagerUri.toString())
-        .replace('${messageHandlersUri}', messageHandlersUri.toString())
-        .replace('${fileHandlersUri}', fileHandlersUri.toString())
-        .replace('${uiHandlersUri}', uiHandlersUri.toString())
-        .replace('${templateUtilsUri}', templateUtilsUri.toString())
-        .replace('${vscodeApiUri}', vscodeApiUri.toString())
-        .replace('${codiconUri}', codiconUri.toString())
-        .replace('${codiconsFontUri}', codiconsFontUri.toString());
-
-      return finalHtml;
+      return buildWebviewHtml(webview, htmlPath, {
+        commonStyleUri,
+        styleUri,
+        scriptUri,
+        agentOptions,
+        modelOptions,
+        domUtilsUri,
+        stringUtilsUri,
+        webviewStateUri,
+        stateManagerUri,
+        messageHandlersUri,
+        fileHandlersUri,
+        uiHandlersUri,
+        templateUtilsUri,
+        vscodeApiUri,
+        codiconUri,
+        codiconsFontUri,
+      });
     } catch (err) {
       logger.error(
         CHANNEL,

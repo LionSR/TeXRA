@@ -1,4 +1,5 @@
-import { vscode } from './modules/vscodeApi.js';
+import { vscode } from '@common/vscodeApi.js';
+import { registerMessageHandlers } from '@common/messageRouter.js';
 import {
   renderHistoryItems,
   setupEventListeners,
@@ -14,16 +15,11 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // Handle messages from the extension
-window.addEventListener('message', (event) => {
-  const message = event.data;
-
-  switch (message.command) {
-    case 'updateHistory':
-      renderHistoryItems(message.historyItems);
-      break;
-
-    case 'historyCleared':
-      renderHistoryItems([]);
-      break;
-  }
+registerMessageHandlers({
+  updateHistory: (message) => {
+    renderHistoryItems(message.historyItems);
+  },
+  historyCleared: () => {
+    renderHistoryItems([]);
+  },
 });
