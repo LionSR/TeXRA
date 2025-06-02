@@ -36,3 +36,4 @@ export const MAX_PREVIEW_LENGTH = 1000;
 
 // Time constants
 export const SHORT_SLEEP_MS = 50;
+export const REFRESH_THRESHOLD_MS = 200;
