@@ -938,4 +938,100 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   public isViewVisible(): boolean {
     return !!this._view && this._view.visible;
   }
+
+  /**
+   * Sends streaming text content to the WebView for real-time display
+   * @param stream The stream ID
+   * @param text The text content to stream
+   * @param groupId Optional group ID for the streaming content
+   */
+  public addStreamingText(
+    stream: string,
+    text: string,
+    groupId?: string,
+  ): void {
+    // Skip if this stream should be excluded from the progress view
+    if (shouldExcludeFromProgressView(stream)) {
+      return;
+    }
+
+    if (this._view && stream === this._activeStream) {
+      this._view.webview.postMessage({
+        command: COMMANDS.STREAM_TEXT,
+        stream,
+        text,
+        groupId,
+        timestamp: Date.now(),
+      });
+    }
+  }
+
+  /**
+   * Sends streaming thinking content to the WebView for real-time display
+   * @param stream The stream ID
+   * @param thinking The thinking content to stream
+   * @param groupId Optional group ID for the streaming content
+   */
+  public addStreamingThinking(
+    stream: string,
+    thinking: string,
+    groupId?: string,
+  ): void {
+    // Skip if this stream should be excluded from the progress view
+    if (shouldExcludeFromProgressView(stream)) {
+      return;
+    }
+
+    if (this._view && stream === this._activeStream) {
+      this._view.webview.postMessage({
+        command: COMMANDS.STREAM_THINKING,
+        stream,
+        thinking,
+        groupId,
+        timestamp: Date.now(),
+      });
+    }
+  }
+
+  /**
+   * Signals the start of streaming for a response
+   * @param stream The stream ID
+   * @param groupId Optional group ID for the streaming content
+   */
+  public startStreaming(stream: string, groupId?: string): void {
+    // Skip if this stream should be excluded from the progress view
+    if (shouldExcludeFromProgressView(stream)) {
+      return;
+    }
+
+    if (this._view && stream === this._activeStream) {
+      this._view.webview.postMessage({
+        command: COMMANDS.STREAM_START,
+        stream,
+        groupId,
+        timestamp: Date.now(),
+      });
+    }
+  }
+
+  /**
+   * Signals the end of streaming for a response
+   * @param stream The stream ID
+   * @param groupId Optional group ID for the streaming content
+   */
+  public endStreaming(stream: string, groupId?: string): void {
+    // Skip if this stream should be excluded from the progress view
+    if (shouldExcludeFromProgressView(stream)) {
+      return;
+    }
+
+    if (this._view && stream === this._activeStream) {
+      this._view.webview.postMessage({
+        command: COMMANDS.STREAM_END,
+        stream,
+        groupId,
+        timestamp: Date.now(),
+      });
+    }
+  }
 }

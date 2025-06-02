@@ -43,6 +43,7 @@ import { getConfig } from '../utils/configUtils';
 import { K_SLICE } from '../utils/constants';
 import { objectToLogString } from '../utils/stringUtils';
 import { calculateTokenPrice } from '../utils/priceUtils';
+import { ProgressViewProvider } from '../progressView/ProgressViewProvider';
 
 /**
  * Anthropic-specific model handler implementation for managing API interactions and message processing.
@@ -66,6 +67,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
     systemPrompt?: string,
     endTag?: string,
     signal?: AbortSignal,
+    groupId?: string,
   ): Promise<any> {
     // Get streaming config
     const useStreaming = this.getStreamingConfig();
@@ -155,9 +157,46 @@ export class ModelHandlerAnthropic extends ModelHandler {
 
     try {
       if (useStreaming) {
+        // Get the progress view provider for streaming updates
+        const progressView = ProgressViewProvider.getInstance();
+        const streamId = this.logger.channelId;
+
+        // Signal start of streaming
+        if (progressView && groupId) {
+          progressView.startStreaming(streamId, groupId);
+        }
+
         // in the future if we pass stream to outside, calling stream.controller.abort() will abort the stream; which will be very useful for our stop button
         // we should also make sure partial results can be returned in the presence of errors!
         const stream = await client.beta.messages.stream(options, { signal });
+        
+        // Add streaming event handlers for real-time updates
+        let thinkingState = 'not-started';
+        
+        stream.on('thinking', (thinking) => {
+          if (progressView && groupId) {
+            if (thinkingState === 'not-started') {
+              thinkingState = 'started';
+            }
+            progressView.addStreamingThinking(streamId, thinking, groupId);
+          }
+        });
+
+        stream.on('text', (text) => {
+          if (progressView && groupId) {
+            if (thinkingState !== 'finished') {
+              thinkingState = 'finished';
+            }
+            progressView.addStreamingText(streamId, text, groupId);
+          }
+        });
+
+        stream.on('end', () => {
+          if (progressView && groupId) {
+            progressView.endStreaming(streamId, groupId);
+          }
+        });
+
         response = await stream.finalMessage();
       } else {
         response = await client.beta.messages.create(options, { signal });

@@ -43,6 +43,11 @@ export const COMMANDS = {
   ACCEPT_FILE: 'acceptFile',
   MERGE_FILE: 'mergeFile',
   LATEXDIFF_FILE: 'latexdiffFile',
+  // Real-time streaming commands
+  STREAM_TEXT: 'streamText',
+  STREAM_THINKING: 'streamThinking',
+  STREAM_START: 'streamStart',
+  STREAM_END: 'streamEnd',
 };
 
 export const TOOLBAR_BUTTONS = [

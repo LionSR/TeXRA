@@ -319,6 +319,7 @@ export abstract class BaseReflectionAgent {
             systemPrompt,
             this.agentSetting.endTag,
             this.abortController.signal,
+            responseCycleGroupId,
           );
         } finally {
           this.abortController = null;

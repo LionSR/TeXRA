@@ -1,0 +1,138 @@
+/**
+ * Streaming response styles for real-time display
+ */
+
+/* Streaming container */
+.streaming-container {
+  margin: 8px 0;
+  padding: 12px;
+  background-color: var(--vscode-editor-background);
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 6px;
+  font-family: var(--vscode-editor-font-family);
+}
+
+/* Streaming header */
+.streaming-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+.streaming-label {
+  font-weight: bold;
+  color: var(--vscode-foreground);
+  font-size: 12px;
+}
+
+/* Animated streaming indicator */
+.streaming-indicator {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.streaming-indicator .dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background-color: var(--vscode-progressBar-background);
+  animation: streaming-pulse 1.4s infinite ease-in-out;
+}
+
+.streaming-indicator .dot1 {
+  animation-delay: -0.32s;
+}
+
+.streaming-indicator .dot2 {
+  animation-delay: -0.16s;
+}
+
+.streaming-indicator .dot3 {
+  animation-delay: 0s;
+}
+
+@keyframes streaming-pulse {
+  0%, 80%, 100% {
+    opacity: 0.3;
+    transform: scale(1);
+  }
+  40% {
+    opacity: 1;
+    transform: scale(1.2);
+  }
+}
+
+/* Thinking content */
+.streaming-thinking {
+  margin: 8px 0;
+  padding: 8px;
+  background-color: var(--vscode-editor-selectionBackground);
+  border-radius: 4px;
+  font-style: italic;
+  color: var(--vscode-descriptionForeground);
+  font-size: 11px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.streaming-thinking:empty {
+  display: none;
+}
+
+.streaming-thinking::before {
+  content: "Thinking: ";
+  font-weight: bold;
+  color: var(--vscode-foreground);
+}
+
+/* Response text content */
+.streaming-text {
+  margin: 8px 0;
+  padding: 8px;
+  background-color: var(--vscode-textBlockQuote-background);
+  border-left: 3px solid var(--vscode-textBlockQuote-border);
+  font-family: var(--vscode-editor-font-family);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  color: var(--vscode-foreground);
+}
+
+.streaming-text:empty {
+  display: none;
+}
+
+.streaming-text::before {
+  content: "Response: ";
+  font-weight: bold;
+  color: var(--vscode-foreground);
+  display: block;
+  margin-bottom: 4px;
+}
+
+/* Completed streaming state */
+.streaming-container .streaming-label:contains("Complete") {
+  color: var(--vscode-terminal-ansiGreen);
+}
+
+/* Responsive adjustments */
+@media (max-width: 600px) {
+  .streaming-container {
+    margin: 4px 0;
+    padding: 8px;
+  }
+  
+  .streaming-thinking,
+  .streaming-text {
+    font-size: 11px;
+    padding: 6px;
+  }
+}

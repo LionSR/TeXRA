@@ -551,6 +551,7 @@ export abstract class ModelHandler {
     systemPrompt?: string,
     endTag?: string,
     signal?: AbortSignal,
+    groupId?: string,
   ): Promise<any>;
 
   /**
