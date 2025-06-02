@@ -276,16 +276,25 @@ export function setupUIHandlers() {
     });
   });
 
-  // Handle empty buttons and toggles for all multiple selections
-  MULTIPLE_SELECTIONS.forEach((id) => {
-    const toggleId = `toggle${capitalize(id)}`;
-    const emptyButtonId = `empty${capitalize(id)}Button`;
-
-    // Empty button handler
-    addEventListenerSafely(emptyButtonId, 'click', () =>
-      emptyMultipleFiles(id, toggleId),
-    );
-  });
+  const fileSelectionGroup = safeGetElementById('fileSelectionGroup');
+  if (fileSelectionGroup) {
+    fileSelectionGroup.addEventListener('click', (e) => {
+      const target = e.target.closest('[data-action][data-filetype]');
+      if (!target) return;
+      const { action, filetype } = target.dataset;
+      const containerId = `${filetype}Files`;
+      const toggleId = `toggle${capitalize(filetype)}Files`;
+      if (action === 'empty') {
+        emptyMultipleFiles(containerId, toggleId);
+      } else if (action === 'toggle') {
+        if (filetype === 'output') {
+          toggleOutputFiles();
+        } else {
+          toggleMultipleFiles(containerId, toggleId);
+        }
+      }
+    });
+  }
 
   CHECK_BOXES.forEach((id) => {
     addEventListenerSafely(id, 'change', handleCheckboxChange);
@@ -577,17 +586,6 @@ export function setupUIHandlers() {
       baseFile: baseFile,
     });
     updateEditedFileSelect(baseFile);
-  });
-
-  MULTIPLE_SELECTIONS.forEach((id) => {
-    const toggleId = `toggle${capitalize(id)}`;
-    addEventListenerSafely(toggleId, 'click', () => {
-      if (id === 'outputFiles') {
-        toggleOutputFiles();
-      } else {
-        toggleMultipleFiles(id, toggleId);
-      }
-    });
   });
 
   // Add event listener for history button

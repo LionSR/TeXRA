@@ -37,6 +37,9 @@ export class WebviewContentProvider {
       const messageHandlersPath = getWebviewPath('modules/messageHandlers.js');
       const fileHandlersPath = getWebviewPath('modules/fileHandlers.js');
       const uiHandlersPath = getWebviewPath('modules/uiHandlers.js');
+      const fileSelectorTemplatesPath = getWebviewPath(
+        'modules/fileSelectorTemplates.js',
+      );
       const templateUtilsPath = getCommonPath('modules/templateUtils.js');
       const utilsPath = getWebviewPath('modules/utils.js');
       const vscodeApiPath = getCommonPath('modules/vscodeApi.js');
@@ -52,6 +55,9 @@ export class WebviewContentProvider {
       const messageHandlersUri = webview.asWebviewUri(messageHandlersPath);
       const fileHandlersUri = webview.asWebviewUri(fileHandlersPath);
       const uiHandlersUri = webview.asWebviewUri(uiHandlersPath);
+      const fileSelectorTemplatesUri = webview.asWebviewUri(
+        fileSelectorTemplatesPath,
+      );
       const templateUtilsUri = webview.asWebviewUri(templateUtilsPath);
       const utilsUri = webview.asWebviewUri(utilsPath);
       const vscodeApiUri = webview.asWebviewUri(vscodeApiPath);
@@ -91,6 +97,10 @@ export class WebviewContentProvider {
         .replace('${messageHandlersUri}', messageHandlersUri.toString())
         .replace('${fileHandlersUri}', fileHandlersUri.toString())
         .replace('${uiHandlersUri}', uiHandlersUri.toString())
+        .replace(
+          '${fileSelectorTemplatesUri}',
+          fileSelectorTemplatesUri.toString(),
+        )
         .replace('${templateUtilsUri}', templateUtilsUri.toString())
         .replace('${vscodeApiUri}', vscodeApiUri.toString())
         .replace('${codiconUri}', codiconUri.toString())

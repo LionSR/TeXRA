@@ -18,6 +18,7 @@
           "./modules/uiHandlers.js": "${uiHandlersUri}",
           "./modules/messageHandlers.js": "${messageHandlersUri}",
           "./modules/utils.js": "${utilsUri}",
+          "./modules/fileSelectorTemplates.js": "${fileSelectorTemplatesUri}",
           "@common/vscodeApi.js": "${vscodeApiUri}",
           "@common/webviewState.js": "${webviewStateUri}",
           "@common/templateUtils.js": "${templateUtilsUri}",
@@ -32,289 +33,8 @@
   <body>
     <div class="content-wrapper">
       <div class="main-content">
-        <div class="file-selection-group">
-          <div class="file-select">
-            <div class="file-select-header">
-              <div class="file-select-label-group">
-                <label for="inputFile"
-                  ><i
-                    class="codicon codicon-file-code clickable"
-                    title="Input (Click to refresh)"
-                  ></i>
-                  Input</label
-                >
-              </div>
-              <div class="file-select-actions button-group">
-                <button
-                  id="currentInputFileButton"
-                  class="vscode-button"
-                  title="Set current file as input"
-                >
-                  <i class="codicon codicon-file-code"></i>
-                </button>
-                <button
-                  id="emptyInputFileButton"
-                  class="vscode-button"
-                  title="Empty"
-                >
-                  <i class="codicon codicon-close"></i>
-                </button>
-                <span id="toggleInputFiles" class="toggle-icon" title="Multiple"
-                  ><i class="codicon codicon-chevron-down"></i
-                ></span>
-                <button
-                  id="addOpenedInputFilesButton"
-                  class="vscode-button"
-                  title="Add opened files as input"
-                >
-                  <i class="codicon codicon-folder-opened"></i>
-                </button>
-                <button
-                  id="emptyInputFilesButton"
-                  class="vscode-button"
-                  title="Empty"
-                >
-                  <i class="codicon codicon-trash"></i>
-                </button>
-                <button
-                  id="selectInputFilesButton"
-                  class="vscode-button"
-                  title="Add"
-                >
-                  <i class="codicon codicon-add"></i>
-                </button>
-              </div>
-            </div>
-            <select id="inputFile">
-              <option value="">None</option>
-            </select>
-            <div
-              id="inputFilesContainer"
-              class="multiple-files-container"
-              style="display: none"
-            >
-              <div class="multiple-files-content">
-                <div id="inputFiles" class="multiple-files-list"></div>
-              </div>
-            </div>
-          </div>
-          <div class="file-select">
-            <div class="file-select-header">
-              <label for="referenceFile"
-                ><i
-                  class="codicon codicon-book clickable"
-                  title="Reference (Click to refresh)"
-                ></i>
-                Reference</label
-              >
-              <div class="file-select-actions button-group">
-                <button
-                  id="currentReferenceFileButton"
-                  class="vscode-button"
-                  title="Set current file as reference"
-                >
-                  <i class="codicon codicon-file-code"></i>
-                </button>
-                <button
-                  id="emptyReferenceFileButton"
-                  class="vscode-button"
-                  title="Empty"
-                >
-                  <i class="codicon codicon-close"></i>
-                </button>
-                <span
-                  id="toggleReferenceFiles"
-                  class="toggle-icon"
-                  title="Multiple"
-                  ><i class="codicon codicon-chevron-down"></i
-                ></span>
-                <button
-                  id="addOpenedReferenceFilesButton"
-                  class="vscode-button"
-                  title="Add opened files as reference"
-                >
-                  <i class="codicon codicon-folder-opened"></i>
-                </button>
-                <button
-                  id="emptyReferenceFilesButton"
-                  class="vscode-button"
-                  title="Empty"
-                >
-                  <i class="codicon codicon-trash"></i>
-                </button>
-                <button
-                  id="selectReferenceFilesButton"
-                  class="vscode-button"
-                  title="Add"
-                >
-                  <i class="codicon codicon-add"></i>
-                </button>
-              </div>
-            </div>
-            <select id="referenceFile">
-              <option value="">None</option>
-            </select>
-            <div
-              id="referenceFilesContainer"
-              class="multiple-files-container"
-              style="display: none"
-            >
-              <div class="multiple-files-content">
-                <div id="referenceFiles" class="multiple-files-list"></div>
-              </div>
-            </div>
-          </div>
-          <div class="file-select">
-            <div class="file-select-header">
-              <label for="auxiliaryFile"
-                ><i
-                  class="codicon codicon-file-add clickable"
-                  title="Auxiliary (Click to refresh)"
-                ></i>
-                Auxiliary</label
-              >
-              <div class="file-select-actions button-group">
-                <button
-                  id="currentAuxiliaryFileButton"
-                  class="vscode-button"
-                  title="Set current file as auxiliary"
-                >
-                  <i class="codicon codicon-file-code"></i>
-                </button>
-                <button
-                  id="emptyAuxiliaryFileButton"
-                  class="vscode-button"
-                  title="Empty"
-                >
-                  <i class="codicon codicon-close"></i>
-                </button>
-                <span
-                  id="toggleAuxiliaryFiles"
-                  class="toggle-icon"
-                  title="Multiple"
-                  ><i class="codicon codicon-chevron-down"></i
-                ></span>
-                <button
-                  id="addOpenedAuxiliaryFilesButton"
-                  class="vscode-button"
-                  title="Add opened files as auxiliary"
-                >
-                  <i class="codicon codicon-folder-opened"></i>
-                </button>
-                <button
-                  id="emptyAuxiliaryFilesButton"
-                  class="vscode-button"
-                  title="Empty"
-                >
-                  <i class="codicon codicon-trash"></i>
-                </button>
-                <button
-                  id="selectAuxiliaryFilesButton"
-                  class="vscode-button"
-                  title="Add"
-                >
-                  <i class="codicon codicon-add"></i>
-                </button>
-              </div>
-            </div>
-            <select id="auxiliaryFile">
-              <option value="">None</option>
-            </select>
-            <div
-              id="auxiliaryFilesContainer"
-              class="multiple-files-container"
-              style="display: none"
-            >
-              <div class="multiple-files-content">
-                <div id="auxiliaryFiles" class="multiple-files-list"></div>
-              </div>
-            </div>
-          </div>
-          <div class="file-select">
-            <div class="file-select-header">
-              <div class="file-select-label-group">
-                <label for="mediaFile"
-                  ><i
-                    class="codicon codicon-file-media clickable"
-                    title="Media (Click to refresh)"
-                  ></i>
-                  Media</label
-                >
-                <div class="dropdown-container dropdown-left">
-                  <span
-                    id="toggleAutoExtract"
-                    class="auto-toggle"
-                    title="Auto-extract options"
-                  >
-                    <i class="codicon codicon-wand"></i
-                    ><i class="codicon codicon-chevron-down"></i>
-                  </span>
-                  <div
-                    id="autoExtractOptions"
-                    class="dropdown-options"
-                    style="display: none"
-                  >
-                    <label class="vscode-checkbox"
-                      ><input type="checkbox" id="autoExtractFigure" /><i
-                        class="codicon codicon-file-media"
-                      ></i
-                      >Figures</label
-                    >
-                    <label class="vscode-checkbox"
-                      ><input type="checkbox" id="autoExtractTikzFigure" /><i
-                        class="codicon codicon-file-code"
-                      ></i
-                      >TikZ Figures</label
-                    >
-                    <label class="vscode-checkbox"
-                      ><input type="checkbox" id="autoCompileInputPdf" /><i
-                        class="codicon codicon-file-pdf"
-                      ></i
-                      >Compile Input PDF</label
-                    >
-                  </div>
-                </div>
-              </div>
-              <div class="file-select-actions button-group">
-                <button
-                  id="emptyMediaFileButton"
-                  class="vscode-button"
-                  title="Empty"
-                >
-                  <i class="codicon codicon-close"></i>
-                </button>
-                <span id="toggleMediaFiles" class="toggle-icon" title="Multiple"
-                  ><i class="codicon codicon-chevron-down"></i
-                ></span>
-                <button
-                  id="emptyMediaFilesButton"
-                  class="vscode-button"
-                  title="Empty"
-                >
-                  <i class="codicon codicon-trash"></i>
-                </button>
-                <button
-                  id="selectMediaFilesButton"
-                  class="vscode-button"
-                  title="Add"
-                >
-                  <i class="codicon codicon-add"></i>
-                </button>
-              </div>
-            </div>
-            <select id="mediaFile">
-              <option value="">None</option>
-            </select>
-            <div
-              id="mediaFilesContainer"
-              class="multiple-files-container"
-              style="display: none"
-            >
-              <div class="multiple-files-content">
-                <div id="mediaFiles" class="multiple-files-list"></div>
-              </div>
-            </div>
-          </div>
+        <div id="fileSelectionGroup" class="file-selection-group">
+          <!-- File selectors inserted dynamically -->
           <div class="file-select">
             <div class="file-select-header">
               <div class="file-select-label-group">
@@ -322,6 +42,8 @@
                   id="toggleOutputFiles"
                   class="toggle-icon"
                   title="Multiple"
+                  data-action="toggle"
+                  data-filetype="output"
                   ><i class="codicon codicon-chevron-down"></i
                 ></span>
                 <span class="optional-label">Multiple Outputs</span>
@@ -331,6 +53,8 @@
                   id="emptyOutputFilesButton"
                   class="vscode-button"
                   title="Empty"
+                  data-action="empty"
+                  data-filetype="output"
                 >
                   <i class="codicon codicon-trash"></i>
                 </button>
@@ -619,6 +343,146 @@
         </div>
       </div>
     </div>
+    <template id="fileSelectorTemplate">
+      <div class="file-select">
+        <div class="file-select-header">
+          <div class="file-select-label-group">
+            <label>
+              <i class="codicon clickable file-icon"></i>
+              <span class="file-label"></span>
+            </label>
+          </div>
+          <div class="file-select-actions button-group">
+            <button class="vscode-button current-button" title="">
+              <i class="codicon codicon-file-code"></i>
+            </button>
+            <button class="vscode-button single-empty-button" title="Empty">
+              <i class="codicon codicon-close"></i>
+            </button>
+            <span class="toggle-icon multiple-toggle" data-action="toggle">
+              <i class="codicon codicon-chevron-down"></i>
+            </span>
+            <button class="vscode-button add-opened-button" title="">
+              <i class="codicon codicon-folder-opened"></i>
+            </button>
+            <button
+              class="vscode-button multi-empty-button"
+              title="Empty"
+              data-action="empty"
+            >
+              <i class="codicon codicon-trash"></i>
+            </button>
+            <button class="vscode-button select-multiple-button" title="Add">
+              <i class="codicon codicon-add"></i>
+            </button>
+          </div>
+        </div>
+        <select>
+          <option value="">None</option>
+        </select>
+        <div class="multiple-files-container" style="display: none">
+          <div class="multiple-files-content">
+            <div class="multiple-files-list"></div>
+          </div>
+        </div>
+      </div>
+    </template>
+
+    <template id="mediaFileSelectorTemplate">
+      <div class="file-select">
+        <div class="file-select-header">
+          <div class="file-select-label-group">
+            <label for="mediaFile"
+              ><i
+                class="codicon codicon-file-media clickable"
+                title="Media (Click to refresh)"
+              ></i>
+              Media</label
+            >
+            <div class="dropdown-container dropdown-left">
+              <span
+                id="toggleAutoExtract"
+                class="auto-toggle"
+                title="Auto-extract options"
+              >
+                <i class="codicon codicon-wand"></i
+                ><i class="codicon codicon-chevron-down"></i>
+              </span>
+              <div
+                id="autoExtractOptions"
+                class="dropdown-options"
+                style="display: none"
+              >
+                <label class="vscode-checkbox"
+                  ><input type="checkbox" id="autoExtractFigure" /><i
+                    class="codicon codicon-file-media"
+                  ></i
+                  >Figures</label
+                >
+                <label class="vscode-checkbox"
+                  ><input type="checkbox" id="autoExtractTikzFigure" /><i
+                    class="codicon codicon-file-code"
+                  ></i
+                  >TikZ Figures</label
+                >
+                <label class="vscode-checkbox"
+                  ><input type="checkbox" id="autoCompileInputPdf" /><i
+                    class="codicon codicon-file-pdf"
+                  ></i
+                  >Compile Input PDF</label
+                >
+              </div>
+            </div>
+          </div>
+          <div class="file-select-actions button-group">
+            <button
+              id="emptyMediaFileButton"
+              class="vscode-button"
+              title="Empty"
+            >
+              <i class="codicon codicon-close"></i>
+            </button>
+            <span
+              id="toggleMediaFiles"
+              class="toggle-icon"
+              title="Multiple"
+              data-action="toggle"
+              data-filetype="media"
+              ><i class="codicon codicon-chevron-down"></i
+            ></span>
+            <button
+              id="emptyMediaFilesButton"
+              class="vscode-button"
+              title="Empty"
+              data-action="empty"
+              data-filetype="media"
+            >
+              <i class="codicon codicon-trash"></i>
+            </button>
+            <button
+              id="selectMediaFilesButton"
+              class="vscode-button"
+              title="Add"
+            >
+              <i class="codicon codicon-add"></i>
+            </button>
+          </div>
+        </div>
+        <select id="mediaFile">
+          <option value="">None</option>
+        </select>
+        <div
+          id="mediaFilesContainer"
+          class="multiple-files-container"
+          style="display: none"
+        >
+          <div class="multiple-files-content">
+            <div id="mediaFiles" class="multiple-files-list"></div>
+          </div>
+        </div>
+      </div>
+    </template>
+
     <template id="iconButtonTemplate">
       <button class="vscode-button">
         <i class="codicon"></i>

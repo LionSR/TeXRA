@@ -10,6 +10,7 @@ import {
   autoResizeTextarea,
   setupDocumentListeners,
 } from './modules/uiHandlers.js';
+import { insertFileSelectors } from './modules/fileSelectorTemplates.js';
 
 // Initialize data requests when window loads
 window.onload = function () {
@@ -47,6 +48,7 @@ setupMessageHandlers();
 
 // Setup UI when DOM is loaded
 document.addEventListener('DOMContentLoaded', function () {
+  insertFileSelectors();
   setupUIHandlers();
 
   // Update initial toggle states
