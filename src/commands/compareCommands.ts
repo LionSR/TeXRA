@@ -14,11 +14,7 @@ import {
   fileExists,
 } from '../utils/workspaceFileUtils';
 import { registerDiffRefresh } from '../utils/diffViewUtils';
-import { 
-  DIFF_EDITOR_DELAY_MS, 
-  WORD_WRAP_INIT_DELAY_MS, 
-  DIFF_REGISTRATION_DELAY_MS 
-} from '../utils/constants';
+import { DIFF_REGISTRATION_DELAY_MS } from '../utils/constants';
 
 const CHANNEL = 'CompareCommands';
 logger.initialize(CHANNEL);
@@ -82,27 +78,8 @@ async function handleCompare(
     );
 
     // Wait a short time for the diff editor to fully open, then register listeners
-    setTimeout(async () => {
-      // Register diff refresh listeners which now include word wrap protection
+    setTimeout(() => {
       registerDiffRefresh(editedUri, baseUri, title);
-      
-      // Ensure word wrap is enabled after diff editor is ready
-      setTimeout(async () => {
-        try {
-          // Force word wrap to be enabled for diff editors
-          await vscode.commands.executeCommand('editor.action.toggleWordWrap');
-          // Small delay, then toggle again to ensure it's on (toggle off then on)
-          setTimeout(async () => {
-            await vscode.commands.executeCommand('editor.action.toggleWordWrap');
-            logger.debug(CHANNEL, 'Initialized word wrap for diff editor');
-          }, DIFF_EDITOR_DELAY_MS);
-        } catch (err) {
-          logger.error(
-            CHANNEL,
-            `Error initializing word wrap: ${err instanceof Error ? err.message : String(err)}`,
-          );
-        }
-      }, WORD_WRAP_INIT_DELAY_MS);
     }, DIFF_REGISTRATION_DELAY_MS);
 
     logger.info(
