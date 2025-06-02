@@ -22,7 +22,7 @@ export async function runTexFmt(filePath: string): Promise<boolean> {
 
     const command = ['tex-fmt'];
     if (texfmtConfig) {
-      command.push('--config', `"${texfmtConfig}"`);
+      command.push('--config', texfmtConfig);
     }
     command.push(`"${filePath}"`);
 
