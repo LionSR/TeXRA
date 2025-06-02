@@ -25,6 +25,8 @@ tsconfig.json
 venv/**
 docs/**
 prototypes/**
+AGENTS.md
+CLAUDE.md
 
 !node_modules/@vscode/codicons/dist/**
 !node_modules/split.js/**
@@ -38,6 +40,7 @@ resources/.DS_Store
 !src/webview/modules/*.js
 !src/common/styles/*.css
 !src/common/webviewState.js
+!src/common/modules/*.js
 
 !src/historyView/modules/*.js
 !src/historyView/styles/*.css
@@ -51,3 +54,5 @@ resources/.DS_Store
 !src/progressView/*.js
 !src/progressView/*.html
 !src/progressView/*.css
+
+
