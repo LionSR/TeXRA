@@ -1,6 +1,3 @@
-export { capitalize, uncapitalize } from './stringUtils.js';
-export { renderTemplate, createIconButton } from '@common/templateUtils.js';
-
 export function addEventListenerSafely(elementOrId, event, handler) {
   const element =
     typeof elementOrId === 'string'

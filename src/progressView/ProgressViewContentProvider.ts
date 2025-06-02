@@ -1,12 +1,11 @@
 // Standard library imports
-import * as fs from 'fs';
 
 // Third-party imports
 import * as vscode from 'vscode';
 
 // Local imports - log
 import * as logger from '../logger/logUtils';
-import { generateNonce } from '../utils/nonceUtils';
+import { buildWebviewHtml } from '../utils/webviewHtmlUtils';
 
 const CHANNEL = 'Webview';
 logger.initialize(CHANNEL);
@@ -43,6 +42,9 @@ export class ProgressViewContentProvider {
       const constantsPath = getWebviewPath('modules/constants.js');
       const logFormattersPath = getWebviewPath('modules/logFormatters.js');
       const templateUtilsPath = getCommonPath('modules/templateUtils.js');
+      const domUtilsPath = getCommonPath('modules/domUtils.js');
+      const stringUtilsPath = getCommonPath('modules/stringUtils.js');
+      const messageRouterPath = getCommonPath('modules/messageRouter.js');
 
       const codiconPath = getNodeModulesPath(
         '@vscode/codicons/dist/codicon.css',
@@ -50,8 +52,6 @@ export class ProgressViewContentProvider {
       const codiconsFontPath = getNodeModulesPath(
         '@vscode/codicons/dist/codicon.ttf',
       );
-      const htmlContent = fs.readFileSync(htmlPath.fsPath, 'utf-8');
-      const nonce = generateNonce();
       const styleUri = webview.asWebviewUri(cssPath);
       const commonStyleUri = webview.asWebviewUri(commonCssPath);
       const scriptUri = webview.asWebviewUri(scriptPath);
@@ -59,6 +59,9 @@ export class ProgressViewContentProvider {
       const codiconUri = webview.asWebviewUri(codiconPath);
       const codiconsFontUri = webview.asWebviewUri(codiconsFontPath);
       const templateUtilsUri = webview.asWebviewUri(templateUtilsPath);
+      const domUtilsUri = webview.asWebviewUri(domUtilsPath);
+      const stringUtilsUri = webview.asWebviewUri(stringUtilsPath);
+      const messageRouterUri = webview.asWebviewUri(messageRouterPath);
 
       // Module URIs
       const vscodeApiUri = webview.asWebviewUri(vscodeApiPath);
@@ -69,25 +72,26 @@ export class ProgressViewContentProvider {
       const constantsUri = webview.asWebviewUri(constantsPath);
       const logFormattersUri = webview.asWebviewUri(logFormattersPath);
 
-      // Replace placeholders in HTML with actual content
       logger.debug(CHANNEL, 'Generated HTML content for ProgressView');
-      return htmlContent
-        .replace('${commonStyleUri}', commonStyleUri.toString())
-        .replace('${styleUri}', styleUri.toString())
-        .replace('${scriptUri}', scriptUri.toString())
-        .replace('${splitJsUri}', splitJsUri.toString())
-        .replace('${codiconUri}', codiconUri.toString())
-        .replace('${codiconsFontUri}', codiconsFontUri.toString())
-        .replace('${vscodeApiUri}', vscodeApiUri.toString())
-        .replace('${webviewStateUri}', webviewStateUri.toString())
-        .replace('${stateManagerUri}', stateManagerUri.toString())
-        .replace('${messageHandlersUri}', messageHandlersUri.toString())
-        .replace('${domHandlersUri}', domHandlersUri.toString())
-        .replace('${templateUtilsUri}', templateUtilsUri.toString())
-        .replace('${constantsUri}', constantsUri.toString())
-        .replace('${logFormattersUri}', logFormattersUri.toString())
-        .replace(/\${nonce}/g, nonce)
-        .replace(/\${cspSource}/g, webview.cspSource);
+      return buildWebviewHtml(webview, htmlPath, {
+        commonStyleUri,
+        styleUri,
+        scriptUri,
+        splitJsUri,
+        codiconUri,
+        codiconsFontUri,
+        vscodeApiUri,
+        webviewStateUri,
+        stateManagerUri,
+        messageHandlersUri,
+        domHandlersUri,
+        messageRouterUri,
+        domUtilsUri,
+        stringUtilsUri,
+        templateUtilsUri,
+        constantsUri,
+        logFormattersUri,
+      });
     } catch (err) {
       logger.error(
         CHANNEL,
