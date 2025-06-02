@@ -32,16 +32,6 @@ function refreshDiff() {
   logger.debug(CHANNEL, 'Refreshed diff view');
 }
 
-function onVisibleRangeChange(e: vscode.TextEditorVisibleRangesChangeEvent) {
-  if (!diffInfo) {
-    return;
-  }
-  if (!vscode.window.visibleTextEditors.includes(e.textEditor)) {
-    return;
-  }
-  refreshDiff();
-}
-
 // Note: Configuration change listener removed as editor.action.toggleWordWrap
 // command doesn't update the configuration that can be read via Configuration API
 
@@ -59,7 +49,6 @@ export function registerDiffRefresh(
   disposables = [];
 
   disposables.push(
-    vscode.window.onDidChangeTextEditorVisibleRanges(onVisibleRangeChange),
     vscode.window.onDidChangeTextEditorViewColumn(onViewColumnChange),
   );
   logger.debug(CHANNEL, 'Registered diff refresh listeners');
