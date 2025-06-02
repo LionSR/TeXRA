@@ -10,10 +10,10 @@ import * as logger from '../logger/logUtils';
 
 // Local imports - utilities
 import {
-  getWorkspacePath,
   getFullPathFromWorkspace,
   fileExists,
 } from '../utils/workspaceFileUtils';
+import { registerDiffRefresh } from '../utils/diffViewUtils';
 
 const CHANNEL = 'CompareCommands';
 logger.initialize(CHANNEL);
@@ -108,6 +108,7 @@ async function handleCompare(
           `Error handling word wrap: ${err instanceof Error ? err.message : String(err)}`,
         );
       }
+      registerDiffRefresh(editedUri, baseUri, title);
     }, 300);
 
     logger.info(
