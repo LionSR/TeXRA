@@ -14,7 +14,7 @@ import {
 } from '../replacement/replacementUtils';
 
 // Local imports - latex utils
-import { runLatexIndent } from '../latex/latexindent';
+import { runLatexFormatter } from '../latex/texFormatter';
 import { getTeXCount } from '../latex/texcount';
 
 // Local imports - commands
@@ -118,7 +118,7 @@ async function handleIndentCurrentTeX(): Promise<void> {
     }
 
     // Run the indent operation with relative path
-    const success = await runLatexIndent(relativePath);
+    const success = await runLatexFormatter(relativePath);
 
     if (success) {
       // Instead of trying to modify the document directly,
