@@ -1,4 +1,3 @@
-import * as fs from 'fs';
 import * as vscode from 'vscode';
 
 // Local imports - core
@@ -6,7 +5,7 @@ import { AgentHistoryManager } from './AgentHistoryManager';
 import { executeCommand } from '../commands/executeCommand';
 
 import { agentConfigToTaskState } from '../utils/configConversion';
-import { generateNonce } from '../utils/nonceUtils';
+import { buildWebviewHtml } from '../utils/webviewHtmlUtils';
 
 // Local imports - log
 import * as logger from '../logger/logUtils';
@@ -151,7 +150,6 @@ export class AgentHistoryViewProvider implements vscode.WebviewViewProvider {
         'historyView',
         'index.html',
       );
-      const htmlContent = fs.readFileSync(htmlPath.fsPath, 'utf-8');
 
       // Get the paths for scripts and styles
       const scriptUri = this.getWebviewUri('script.js');
@@ -164,6 +162,15 @@ export class AgentHistoryViewProvider implements vscode.WebviewViewProvider {
         'vscodeApi.js',
       );
       const vscodeApiUri = this._view!.webview.asWebviewUri(vscodeApiPath);
+      const messageRouterPath = vscode.Uri.joinPath(
+        this.context.extensionUri,
+        'src',
+        'common',
+        'modules',
+        'messageRouter.js',
+      );
+      const messageRouterUri =
+        this._view!.webview.asWebviewUri(messageRouterPath);
       const domHandlersUri = this.getWebviewUri('modules/domHandlers.js');
       const codiconPath = vscode.Uri.joinPath(
         this.context.extensionUri,
@@ -182,24 +189,18 @@ export class AgentHistoryViewProvider implements vscode.WebviewViewProvider {
         'common.css',
       );
 
-      // Create a nonce for script security
-      const nonce = generateNonce();
+      const commonStyleUriWeb =
+        this._view!.webview.asWebviewUri(commonStyleUri);
 
-      // Replace placeholders in HTML with actual content
-      return htmlContent
-        .replace('${scriptUri}', scriptUri.toString())
-        .replace('${styleUri}', styleUri.toString())
-        .replace(
-          '${commonStyleUri}',
-          this._view
-            ? this._view.webview.asWebviewUri(commonStyleUri).toString()
-            : '',
-        )
-        .replace('${vscodeApiUri}', vscodeApiUri.toString())
-        .replace('${domHandlersUri}', domHandlersUri.toString())
-        .replace('${codiconUri}', codiconUri?.toString() ?? '')
-        .replace(/\${nonce}/g, nonce)
-        .replace(/\${cspSource}/g, this._view?.webview.cspSource ?? '');
+      return buildWebviewHtml(this._view!.webview, htmlPath, {
+        scriptUri,
+        styleUri,
+        commonStyleUri: commonStyleUriWeb,
+        vscodeApiUri,
+        messageRouterUri,
+        domHandlersUri,
+        codiconUri: codiconUri ?? '',
+      });
     } catch (error) {
       console.error('Error generating HTML content:', error);
       return `<html><body><h1>Error loading history view</h1><p>${error}</p></body></html>`;
