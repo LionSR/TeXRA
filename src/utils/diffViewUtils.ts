@@ -3,7 +3,7 @@ import * as vscode from 'vscode';
 
 // Local imports - log
 import * as logger from '../logger/logUtils';
-import { REFRESH_THRESHOLD_MS } from './constants';
+import { REFRESH_THRESHOLD_MS, DIFF_EDITOR_DELAY_MS } from './constants';
 
 const CHANNEL = 'DiffRefresh';
 logger.initialize(CHANNEL);
@@ -42,18 +42,15 @@ function onVisibleRangeChange(e: vscode.TextEditorVisibleRangesChangeEvent) {
   refreshDiff();
 }
 
-function onConfigChange(e: vscode.ConfigurationChangeEvent) {
-  if (e.affectsConfiguration('editor.wordWrap')) {
-    refreshDiff();
-  }
-}
+// Note: Configuration change listener removed as editor.action.toggleWordWrap
+// command doesn't update the configuration that can be read via Configuration API
 
 function onViewColumnChange() {
   // When view columns change (e.g., switching from split to inline or vice versa),
   // VS Code may reset word wrap. Apply a small delay then ensure word wrap is enabled.
   setTimeout(() => {
     ensureWordWrapEnabled();
-  }, 100);
+  }, DIFF_EDITOR_DELAY_MS);
 }
 
 function ensureWordWrapEnabled() {
@@ -68,28 +65,8 @@ function ensureWordWrapEnabled() {
   const rightUri = diffInfo.right.toString();
   
   if (activeUri === leftUri || activeUri === rightUri) {
-    // Try to enable word wrap through configuration first
-    try {
-      const config = vscode.workspace.getConfiguration('editor', activeEditor.document.uri);
-      const currentWordWrap = config.get('wordWrap');
-      
-      if (currentWordWrap !== 'on') {
-        // Try to update the configuration
-        config.update('wordWrap', 'on', vscode.ConfigurationTarget.WorkspaceFolder).then(() => {
-          logger.debug(CHANNEL, 'Updated word wrap configuration for diff editor');
-        }).catch(() => {
-          // If configuration update fails, fall back to command
-          fallbackWordWrapToggle();
-        });
-      } else {
-        // Configuration says it's on, but might not be applied in diff editor
-        // Force a refresh by toggling twice with proper timing
-        fallbackWordWrapToggle();
-      }
-    } catch (error) {
-      // Configuration approach failed, use command approach
-      fallbackWordWrapToggle();
-    }
+    // Use command-only approach since config API doesn't detect toggleWordWrap changes
+    fallbackWordWrapToggle();
   }
 }
 
@@ -98,9 +75,9 @@ function fallbackWordWrapToggle() {
   vscode.commands.executeCommand('editor.action.toggleWordWrap').then(() => {
     setTimeout(() => {
       vscode.commands.executeCommand('editor.action.toggleWordWrap').then(() => {
-        logger.debug(CHANNEL, 'Applied word wrap toggle fallback for diff editor');
+        logger.debug(CHANNEL, 'Applied word wrap toggle for diff editor');
       });
-    }, 100);
+    }, DIFF_EDITOR_DELAY_MS);
   });
 }
 
@@ -131,11 +108,10 @@ export function registerDiffRefresh(
 
   disposables.push(
     vscode.window.onDidChangeTextEditorVisibleRanges(onVisibleRangeChange),
-    vscode.workspace.onDidChangeConfiguration(onConfigChange),
     vscode.window.onDidChangeVisibleTextEditors(onVisibleEditorsChange),
     vscode.window.onDidChangeActiveTextEditor(() => {
       // When active editor changes (including view mode switches), ensure word wrap
-      setTimeout(ensureWordWrapEnabled, 100);
+      setTimeout(ensureWordWrapEnabled, DIFF_EDITOR_DELAY_MS);
     }),
     vscode.window.onDidChangeTextEditorViewColumn(onViewColumnChange),
   );
