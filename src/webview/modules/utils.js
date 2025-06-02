@@ -1,8 +1,5 @@
 export { capitalize, uncapitalize } from './stringUtils.js';
-export {
-  renderTemplate,
-  createIconButton,
-} from '../../common/modules/templateUtils.js';
+export { renderTemplate, createIconButton } from '@common/templateUtils.js';
 
 export function addEventListenerSafely(elementOrId, event, handler) {
   const element =

@@ -1,4 +1,4 @@
-import { vscode } from './vscodeApi.js';
+import { vscode } from '@common/vscodeApi.js';
 import {
   getCurrentStream,
   setStreamStatus,
@@ -9,7 +9,6 @@ import {
   getLogGroups,
   getStreamStatus,
   clearAllGroupToggleStates,
-  saveState,
 } from './stateManager.js';
 import {
   createGroupHeader,
@@ -19,7 +18,7 @@ import {
   formatDuration,
 } from './logFormatters.js';
 import { STATUS, COMMANDS, SPLIT_SIZES, TOOLBAR_BUTTONS } from './constants.js';
-import { createIconButton } from '../../common/modules/templateUtils.js';
+import { createIconButton } from '@common/templateUtils.js';
 
 const STATUS_MAP = {
   [STATUS.RUNNING]: {
