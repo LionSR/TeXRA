@@ -29,7 +29,7 @@ import {
   LaTeXdiffResult,
 } from '../latex/latexdiff';
 import { checkToolInstalled } from '../latex/texTools';
-import { runLatexIndent } from '../latex/latexindent';
+import { runLatexFormatter } from '../latex/texFormatter';
 
 // Local imports - agent components
 import { AgentConfig } from './AgentConfig';
@@ -141,8 +141,8 @@ export class OutputHandler {
     if (!filePath.includes('.tex')) {
       return;
     }
-    this.logger.debug(`Running latexindent on ${filePath}`);
-    await runLatexIndent(filePath);
+    this.logger.debug(`Formatting ${filePath}`);
+    await runLatexFormatter(filePath);
   }
 
   /**

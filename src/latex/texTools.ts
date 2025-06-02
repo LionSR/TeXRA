@@ -32,6 +32,12 @@ export const LATEXINDENT_INSTRUCTIONS =
   '- Ubuntu: sudo apt-get install texlive-extra-utils\n' +
   '- Windows: Install through MiKTeX or TeX Live package manager';
 
+export const TEXFMT_INSTRUCTIONS =
+  'Installation instructions:\n' +
+  '- Cargo: cargo install tex-fmt\n' +
+  '- Mac: brew install tex-fmt\n' +
+  '- Debian: apt install tex-fmt';
+
 export const TEXCOUNT_INSTRUCTIONS =
   'Installation instructions:\n' +
   '- Mac: brew install texcount\n' +
@@ -63,6 +69,12 @@ const TOOL_CONFIGS: Record<string, ToolConfig> = {
       'latexindent is not installed. Please install it to use this feature.\n' +
       LATEXINDENT_INSTRUCTIONS,
   },
+  'tex-fmt': {
+    command: 'tex-fmt --version',
+    errorMessage:
+      'tex-fmt is not installed. Please install it to use this feature.\n' +
+      TEXFMT_INSTRUCTIONS,
+  },
   texcount: {
     command: 'texcount --version',
     errorMessage:
@@ -76,10 +88,11 @@ export const LATEXDIFF_ERROR = TOOL_CONFIGS.latexdiff.errorMessage;
 export const LATEXDIFF_VC_ERROR = TOOL_CONFIGS['latexdiff-vc'].errorMessage;
 export const LATEXINDENT_ERROR = TOOL_CONFIGS.latexindent.errorMessage;
 export const TEXCOUNT_ERROR = TOOL_CONFIGS.texcount.errorMessage;
+export const TEXFMT_ERROR = TOOL_CONFIGS['tex-fmt'].errorMessage;
 
 /**
  * Generic function to check if a LaTeX tool is installed
- * @param tool The tool to check ('latexdiff', 'latexdiff-vc', 'latexindent', 'texcount')
+ * @param tool The tool to check ('latexdiff', 'latexdiff-vc', 'latexindent', 'tex-fmt', 'texcount')
  * @param showError Whether to show an error message if the tool is not installed
  * @returns Promise<boolean> True if the tool is installed
  */
