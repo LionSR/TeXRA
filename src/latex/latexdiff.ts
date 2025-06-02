@@ -14,7 +14,7 @@ import { ExecResult } from '../types/ResultTypes';
 import { getConfig } from '../utils/configUtils';
 
 // Local imports - latex utils
-import { runLatexIndent } from './latexindent';
+import { runLatexFormatter } from './texFormatter';
 import { checkToolInstalled } from './texTools';
 
 // Local imports - replacement utils
@@ -380,10 +380,10 @@ export async function runLatexdiff(
 
     if (runIndent) {
       const indentResults = [];
-      if (!(await runLatexIndent(inputFile))) {
+      if (!(await runLatexFormatter(inputFile))) {
         indentResults.push(inputFile);
       }
-      if (!(await runLatexIndent(editedFile))) {
+      if (!(await runLatexFormatter(editedFile))) {
         indentResults.push(editedFile);
       }
       if (indentResults.length > 0) {
