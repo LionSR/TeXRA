@@ -15,7 +15,6 @@ import { getConfig } from '../utils/configUtils';
 
 // Local imports - latex utils
 import { runLatexFormatter } from './texFormatter';
-import { checkToolInstalled } from './texTools';
 
 // Local imports - replacement utils
 import {
