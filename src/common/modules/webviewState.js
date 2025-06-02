@@ -1,4 +1,4 @@
-import { vscode } from './modules/vscodeApi.js';
+import { vscode } from './vscodeApi.js';
 
 export function getWebviewState() {
   try {
