@@ -56,6 +56,12 @@ export class AgentHistoryViewProvider implements vscode.WebviewViewProvider {
           ),
           vscode.Uri.joinPath(
             this.context.extensionUri,
+            'src',
+            'common',
+            'modules',
+          ),
+          vscode.Uri.joinPath(
+            this.context.extensionUri,
             'node_modules',
             '@vscode',
             'codicons',
@@ -150,7 +156,14 @@ export class AgentHistoryViewProvider implements vscode.WebviewViewProvider {
       // Get the paths for scripts and styles
       const scriptUri = this.getWebviewUri('script.js');
       const styleUri = this.getWebviewUri('style.css');
-      const vscodeApiUri = this.getWebviewUri('modules/vscodeApi.js');
+      const vscodeApiPath = vscode.Uri.joinPath(
+        this.context.extensionUri,
+        'src',
+        'common',
+        'modules',
+        'vscodeApi.js',
+      );
+      const vscodeApiUri = this._view!.webview.asWebviewUri(vscodeApiPath);
       const domHandlersUri = this.getWebviewUri('modules/domHandlers.js');
       const codiconPath = vscode.Uri.joinPath(
         this.context.extensionUri,
