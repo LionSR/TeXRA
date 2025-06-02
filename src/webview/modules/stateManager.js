@@ -1,4 +1,4 @@
-import { getWebviewState, setWebviewState } from './webviewState.js';
+import { getWebviewState, setWebviewState } from '@common/webviewState.js';
 
 import {
   MULTIPLE_SELECTIONS,
