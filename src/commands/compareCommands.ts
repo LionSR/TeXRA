@@ -76,42 +76,28 @@ async function handleCompare(
       title,
     );
 
-    // Wait a short time for the diff editor to fully open, then check word wrap setting
+    // Wait a short time for the diff editor to fully open, then register listeners
     setTimeout(async () => {
-      // try {
-      // TODO: this codepath is not working as expected
-      // TODO: this config does not seem to fetcht the correct word wrap status?
-      //   // Get current editor
-      //   const editor = vscode.window.activeTextEditor;
-      //   if (editor) {
-      //     // Check if word wrap is enabled through configuration for this editor
-      //     const editorConfig = vscode.workspace.getConfiguration(
-      //       'editor',
-      //       editor.document.uri,
-      //     );
-      //     const isWordWrapEnabled = editorConfig.get('wordWrap') === 'on';
-
-      //     // Only toggle if word wrap is not already on
-      //     if (!isWordWrapEnabled) {
-      //       await vscode.commands.executeCommand(
-      //         'editor.action.toggleWordWrap',
-      //       );
-      //       logger.debug(CHANNEL, 'Toggled word wrap on for diff editor');
-      //     } else {
-      //       logger.debug(
-      //         CHANNEL,
-      //         'Word wrap already enabled, no change needed',
-      //       );
-      //     }
-      //   }
-      // } catch (err) {
-      //   logger.error(
-      //     CHANNEL,
-      //     `Error handling word wrap: ${err instanceof Error ? err.message : String(err)}`,
-      //   );
-      // }
-      // the 
+      // Register diff refresh listeners which now include word wrap protection
       registerDiffRefresh(editedUri, baseUri, title);
+      
+      // Ensure word wrap is enabled after diff editor is ready
+      setTimeout(async () => {
+        try {
+          // Force word wrap to be enabled for diff editors
+          await vscode.commands.executeCommand('editor.action.toggleWordWrap');
+          // Small delay, then toggle again to ensure it's on (toggle off then on)
+          setTimeout(async () => {
+            await vscode.commands.executeCommand('editor.action.toggleWordWrap');
+            logger.debug(CHANNEL, 'Initialized word wrap for diff editor');
+          }, 100);
+        } catch (err) {
+          logger.error(
+            CHANNEL,
+            `Error initializing word wrap: ${err instanceof Error ? err.message : String(err)}`,
+          );
+        }
+      }, 200);
     }, 300);
 
     logger.info(
