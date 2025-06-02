@@ -10,6 +10,7 @@ import * as logger from './logger/logUtils';
 import { initializeSecrets } from './utils/secretUtils';
 import { copyDefaultAgents, configureLatexSettings } from './utils/setupUtils';
 import { watchConfig } from './utils/configUtils';
+import { disposeDiffRefresh } from './utils/diffViewUtils';
 
 // Local imports - components
 import { ProgressViewProvider } from './progressView/ProgressViewProvider';
@@ -76,4 +77,5 @@ export function deactivate() {
     // Mark all running tasks as cancelled when extension deactivates
     progressViewProvider.markAllRunningTasksAsCancelled();
   }
+  disposeDiffRefresh();
 }
