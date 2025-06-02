@@ -25,10 +25,10 @@ import {
   handleRecentCommits,
   handleSetCurrentFile,
 } from './fileHandlers.js';
-import { safeSetElementValue, safeGetElementById } from './utils.js';
+import { safeSetElementValue, safeGetElementById } from '@common/domUtils.js';
 import { restoreState, saveState } from './stateManager.js';
 import { FILE_TYPES } from './constants.js';
-import { capitalize, uncapitalize } from './stringUtils.js';
+import { capitalize, uncapitalize } from '@common/stringUtils.js';
 import {
   getWebviewState,
   updateWebviewState,
