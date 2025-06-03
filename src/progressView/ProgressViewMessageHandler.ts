@@ -5,6 +5,9 @@ import * as vscode from 'vscode';
 import * as logger from '../logger/logUtils';
 import { ProgressViewProvider } from './ProgressViewProvider';
 
+// Local imports - utils
+import { safeExecuteCommand } from '../utils/commandUtils';
+
 import { taskStateToAgentConfig } from '../utils/configConversion';
 
 // @ts-ignore - Import JavaScript module
@@ -25,48 +28,39 @@ export class ProgressViewMessageHandler {
       [COMMANDS.DELETE_STREAM]: (m) => this.provider.deleteStream(m.stream),
       [COMMANDS.DELETE_ALL]: () => this.provider.deleteAllStreams(),
       [COMMANDS.STOP_STREAM]: (m) =>
-        vscode.commands.executeCommand('texra.stopAgent', m.stream),
+        safeExecuteCommand('texra.stopAgent', [m.stream], CHANNEL),
       [COMMANDS.DIFF_STREAM]: (m) => this.handleDiffStream(m.stream),
       [COMMANDS.PACK_STREAM]: (m) => this.handlePackStream(m.stream),
       [COMMANDS.CLEAN_STREAM]: (m) => this.handleCleanStream(m.stream),
       [COMMANDS.RUN_AGAIN]: (m) => this.handleRunAgain(m.stream),
       [COMMANDS.RESTORE_STATE]: (m) => this.handleRestoreState(m.stream),
       [COMMANDS.OPEN_FILE]: (m) =>
-        vscode.commands.executeCommand('texra.openFileCompile', m.file),
+        safeExecuteCommand('texra.openFileCompile', [m.file], CHANNEL),
       [COMMANDS.COMPARE_ORIGINAL]: (m) =>
-        vscode.commands.executeCommand(
+        safeExecuteCommand(
           'texra.compare',
-          undefined,
-          m.base,
-          m.file,
+          [undefined, m.base, m.file],
+          CHANNEL,
         ),
       [COMMANDS.COMPARE_PREVIOUS]: (m) =>
-        vscode.commands.executeCommand(
+        safeExecuteCommand(
           'texra.compare',
-          undefined,
-          m.prev,
-          m.file,
+          [undefined, m.prev, m.file],
+          CHANNEL,
         ),
       [COMMANDS.ACCEPT_FILE]: (m) =>
-        vscode.commands.executeCommand(
+        safeExecuteCommand(
           'texra.acceptEdited',
-          undefined,
-          m.base,
-          m.file,
+          [undefined, m.base, m.file],
+          CHANNEL,
         ),
       [COMMANDS.MERGE_FILE]: (m) =>
-        vscode.commands.executeCommand(
-          'texra.merge',
-          undefined,
-          m.base,
-          m.file,
-        ),
+        safeExecuteCommand('texra.merge', [undefined, m.base, m.file], CHANNEL),
       [COMMANDS.LATEXDIFF_FILE]: (m) =>
-        vscode.commands.executeCommand(
+        safeExecuteCommand(
           'texra.latexdiff',
-          undefined,
-          m.base,
-          m.file,
+          [undefined, m.base, m.file],
+          CHANNEL,
         ),
     };
   }
@@ -96,14 +90,20 @@ export class ProgressViewMessageHandler {
     logger.debug(CHANNEL, `Task state: ${JSON.stringify(taskState)}`);
 
     // Execute pack command with taskState
-    await vscode.commands.executeCommand('texra.pack', {
-      agent: taskState.agent,
-      model: taskState.model,
-      inputFile: taskState.inputFile,
-      outputNameOverride: taskState.outputNameOverride,
-      outputFiles: taskState.outputFiles,
-      outputFilesActive: taskState.activeFiles.output,
-    });
+    await safeExecuteCommand(
+      'texra.pack',
+      [
+        {
+          agent: taskState.agent,
+          model: taskState.model,
+          inputFile: taskState.inputFile,
+          outputNameOverride: taskState.outputNameOverride,
+          outputFiles: taskState.outputFiles,
+          outputFilesActive: taskState.activeFiles.output,
+        },
+      ],
+      CHANNEL,
+    );
   }
 
   private async handleRunAgain(stream: string) {
@@ -120,7 +120,7 @@ export class ProgressViewMessageHandler {
     const agentConfig = taskStateToAgentConfig(taskState);
 
     // Execute the agent with the restored config
-    await vscode.commands.executeCommand('texra.execute', agentConfig);
+    await safeExecuteCommand('texra.execute', [agentConfig], CHANNEL);
   }
 
   private async handleCleanStream(stream: string) {
@@ -134,14 +134,20 @@ export class ProgressViewMessageHandler {
     logger.debug(CHANNEL, `Task state: ${JSON.stringify(taskState)}`);
 
     // Execute clean command with taskState
-    await vscode.commands.executeCommand('texra.clean', {
-      agent: taskState.agent,
-      model: taskState.model,
-      inputFile: taskState.inputFile,
-      outputNameOverride: taskState.outputNameOverride,
-      outputFiles: taskState.outputFiles,
-      outputFilesActive: taskState.activeFiles.output,
-    });
+    await safeExecuteCommand(
+      'texra.clean',
+      [
+        {
+          agent: taskState.agent,
+          model: taskState.model,
+          inputFile: taskState.inputFile,
+          outputNameOverride: taskState.outputNameOverride,
+          outputFiles: taskState.outputFiles,
+          outputFilesActive: taskState.activeFiles.output,
+        },
+      ],
+      CHANNEL,
+    );
   }
 
   private async handleRestoreState(stream: string) {
@@ -158,7 +164,7 @@ export class ProgressViewMessageHandler {
     logger.debug(CHANNEL, `Task state: ${JSON.stringify(taskState)}`);
 
     // Execute the restore state command with the task configuration
-    await vscode.commands.executeCommand('texra.restoreState', taskState);
+    await safeExecuteCommand('texra.restoreState', [taskState], CHANNEL);
   }
 
   private async handleDiffStream(stream: string) {
@@ -175,13 +181,19 @@ export class ProgressViewMessageHandler {
     logger.debug(CHANNEL, `Task state: ${JSON.stringify(taskState)}`);
 
     // Execute the latexdiff command with the task configuration
-    await vscode.commands.executeCommand('texra.runLatexdiff', {
-      agent: taskState.agent,
-      model: taskState.model,
-      inputFile: taskState.inputFile,
-      outputNameOverride: taskState.outputNameOverride,
-      outputFiles: taskState.outputFiles,
-      outputFilesActive: taskState.activeFiles.output,
-    });
+    await safeExecuteCommand(
+      'texra.runLatexdiff',
+      [
+        {
+          agent: taskState.agent,
+          model: taskState.model,
+          inputFile: taskState.inputFile,
+          outputNameOverride: taskState.outputNameOverride,
+          outputFiles: taskState.outputFiles,
+          outputFilesActive: taskState.activeFiles.output,
+        },
+      ],
+      CHANNEL,
+    );
   }
 }
