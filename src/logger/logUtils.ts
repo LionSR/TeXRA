@@ -146,10 +146,17 @@ class VSCodeTransport extends Transport {
         : 'default';
 
     // Colored format for ProgressView using CSS classes, but with shorter timestamp display
+    const isVerbose = getConfig<boolean>('logger.verboseOutput', false);
     const coloredFormattedMessage =
       `<div class="log-line ${isScratchpad ? 'scratchpad-log' : ''}" ${scratchpadAttr} ${groupId ? `data-group-id="${groupId}"` : ''} data-full-timestamp="${timestamp}">` +
-      `<span class="timestamp" title="${timestamp}">${emoji} [${timeDisplay}]</span> ` +
-      `<span class="level-${level}">${level.toUpperCase().padEnd(8)}</span> ` +
+      `<span class="timestamp" title="${timestamp}">${emoji}${
+        isVerbose ? ` [${timeDisplay}]` : ''
+      }</span> ` +
+      (isVerbose
+        ? `<span class="level-${level}">${level
+            .toUpperCase()
+            .padEnd(8)}</span> `
+        : '') +
       `<span class="message-${level}">${escapedMessage}</span>` +
       `</div>`;
 
