@@ -133,7 +133,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
       let response: any;
       kwargs.stream_options = { include_usage: true };
       try {
-        const stream = client.beta.chat.completions.stream(kwargs, {
+        const stream = client.chat.completions.stream(kwargs, {
           signal,
         });
         response = await stream.finalMessage();

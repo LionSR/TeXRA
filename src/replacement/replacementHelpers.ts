@@ -15,7 +15,7 @@ export const GREEK_UPPERCASE = 'Alpha Beta Gamma Delta Epsilon Zeta Eta Theta Io
 // Common LaTeX environments
 // prettier-ignore
 export const COMMON_ENVIRONMENTS = [
-  'document',
+  // 'document',
   'figure',
   'figure*',
   'tikzpicture',
