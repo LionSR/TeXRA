@@ -22,14 +22,10 @@ export const executeCommand = {
     config: AgentConfig,
     context: vscode.ExtensionContext,
   ) => {
-    try {
-      // Save the agent configuration to history (silently)
-      await AgentHistoryManager.addToHistory(context, config);
+    // Save the agent configuration to history (silently)
+    await AgentHistoryManager.addToHistory(context, config);
 
-      // Run the agent directly
-      await executeAgent(config, context);
-    } catch (err) {
-      throw err;
-    }
+    // Run the agent directly
+    await executeAgent(config, context);
   },
 };
