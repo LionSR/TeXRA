@@ -50,6 +50,7 @@ import { ModelHandler } from './ModelHandler';
 import { OutputHandler } from './OutputHandler';
 import { messageToSkeleton } from './messageUtils';
 import { buildUserVars } from './userVars';
+import { IAgent } from './IAgent';
 
 // System imports - common utilities
 import { getConfig } from '../utils/configUtils';
@@ -66,7 +67,7 @@ import {
  * Provides core functionality for processing inputs, managing state, and handling outputs
  * across multiple conversation rounds.
  */
-export abstract class BaseReflectionAgent {
+export abstract class BaseReflectionAgent implements IAgent {
   protected modelHandler: ModelHandler;
   protected agentConfig: AgentConfig;
   protected agentSetting: AgentSetting;
