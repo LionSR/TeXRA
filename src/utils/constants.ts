@@ -36,3 +36,7 @@ export const MAX_PREVIEW_LENGTH = 1000;
 
 // Time constants
 export const SHORT_SLEEP_MS = 50;
+export const REFRESH_THRESHOLD_MS = 200;
+export const DIFF_EDITOR_DELAY_MS = 100;
+export const WORD_WRAP_INIT_DELAY_MS = 200;
+export const DIFF_REGISTRATION_DELAY_MS = 300;

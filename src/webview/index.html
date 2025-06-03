@@ -17,8 +17,12 @@
           "./modules/fileHandlers.js": "${fileHandlersUri}",
           "./modules/uiHandlers.js": "${uiHandlersUri}",
           "./modules/messageHandlers.js": "${messageHandlersUri}",
-          "./modules/vscodeApi.js": "${vscodeApiUri}",
-          "./modules/utils.js": "${utilsUri}",
+          "@common/vscodeApi.js": "${vscodeApiUri}",
+          "@common/webviewState.js": "${webviewStateUri}",
+          "@common/templateUtils.js": "${templateUtilsUri}",
+          "@common/domUtils.js": "${domUtilsUri}",
+          "@common/stringUtils.js": "${stringUtilsUri}",
+          "@common/messageRouter.js": "${messageRouterUri}",
           "sortablejs": "https://cdn.skypack.dev/sortablejs"
         }
       }
@@ -617,5 +621,10 @@
         </div>
       </div>
     </div>
+    <template id="iconButtonTemplate">
+      <button class="vscode-button">
+        <i class="codicon"></i>
+      </button>
+    </template>
   </body>
 </html>

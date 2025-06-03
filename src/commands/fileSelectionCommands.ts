@@ -11,7 +11,7 @@ import {
 } from '../frontend-utils/commonUtils';
 import { getRelativePath } from '../utils/workspaceFileUtils';
 import { listInputFiles } from '../frontend-utils/fileListingUtils';
-import { getConfig } from '../utils/configUtils';
+import { getIncludedExtensions } from '../utils/fileTypeUtils';
 import { selectFile, selectFiles } from '../utils/fileDialogUtils';
 const CHANNEL = 'fileSelectionCommands';
 logger.initialize(CHANNEL);
@@ -54,8 +54,8 @@ async function selectInputFile(
     currentFile: currentInputFile,
     openLabel: 'Select File',
     filters: {
-      'Text files': getConfig<string[]>('files.included.inputExtensions').map(
-        (ext) => ext.replace('.', ''),
+      'Text files': getIncludedExtensions('input').map((ext) =>
+        ext.replace('.', ''),
       ),
     },
   });
@@ -68,10 +68,11 @@ async function selectInputFile(
 async function selectInputFiles(
   currentInputFile: string,
 ): Promise<string[] | null> {
-  const includedInputExtensions = getConfig<string[]>(
-    'files.included.inputExtensions',
-    ['.txt', '.tex', '.md'],
-  );
+  const includedInputExtensions = getIncludedExtensions('input', [
+    '.txt',
+    '.tex',
+    '.md',
+  ]);
 
   try {
     const relativePaths = await selectFiles({
@@ -104,9 +105,7 @@ async function selectInputFiles(
 async function selectReferenceFiles(
   currentReferenceFile: string,
 ): Promise<string[] | null> {
-  const includedReferenceExtensions = getConfig<string[]>(
-    'files.included.referenceExtensions',
-  );
+  const includedReferenceExtensions = getIncludedExtensions('reference');
   const relativePaths = await selectFiles({
     currentFile: currentReferenceFile,
     allowMany: true,
@@ -132,9 +131,7 @@ async function selectReferenceFiles(
 async function selectAuxiliaryFiles(
   currentAuxiliaryFile: string,
 ): Promise<string[] | null> {
-  const includedAuxiliaryExtensions = getConfig<string[]>(
-    'files.included.auxiliaryExtensions',
-  );
+  const includedAuxiliaryExtensions = getIncludedExtensions('auxiliary');
   const relativePaths = await selectFiles({
     currentFile: currentAuxiliaryFile,
     allowMany: true,
@@ -156,14 +153,8 @@ async function selectAuxiliaryFiles(
 async function selectMediaFiles(
   currentMediaFile: string,
 ): Promise<string[] | null> {
-  const includedFigureExtensions = getConfig<string[]>(
-    'files.included.mediaExtensions',
-    [],
-  );
-  const includedAudioExtensions = getConfig<string[]>(
-    'files.included.audioExtensions',
-    [],
-  );
+  const includedFigureExtensions = getIncludedExtensions('media');
+  const includedAudioExtensions = getIncludedExtensions('audio');
   const relativePaths = await selectFiles({
     currentFile: currentMediaFile,
     allowMany: true,
@@ -187,13 +178,10 @@ async function selectMediaFile(): Promise<string | null> {
   const result = await selectFile({
     openLabel: 'Select Media File',
     filters: {
-      Images: getConfig<string[]>('files.included.mediaExtensions', []).map(
-        (ext) => ext.replace('.', ''),
+      Images: getIncludedExtensions('media').map((ext) => ext.replace('.', '')),
+      'Audio files': getIncludedExtensions('audio').map((ext) =>
+        ext.replace('.', ''),
       ),
-      'Audio files': getConfig<string[]>(
-        'files.included.audioExtensions',
-        [],
-      ).map((ext) => ext.replace('.', '')),
     },
   });
   if (result) {
@@ -261,8 +249,8 @@ async function selectBaseFile(): Promise<string | null> {
   const result = await selectFile({
     openLabel: 'Select Base File',
     filters: {
-      'Text files': getConfig<string[]>('files.included.inputExtensions').map(
-        (ext) => ext.replace('.', ''),
+      'Text files': getIncludedExtensions('input').map((ext) =>
+        ext.replace('.', ''),
       ),
     },
   });

@@ -39,7 +39,7 @@ Let's go through an example to illustrate the basic workflow.
 ### Step 1: Open a Document
 
 1. Open VS Code
-2. Navigate to the TeXRA panel in the sidebar (click the brain icon)
+2. Navigate to the TeXRA panel in the sidebar (click the brain icon) or press `Ctrl+Alt+M` (`Cmd+Option+M` on macOS)
 3. Open or create a LaTeX document from the workspace you'd like to improve
 
 ::: tip Example

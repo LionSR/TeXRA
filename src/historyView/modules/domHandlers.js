@@ -1,4 +1,4 @@
-import { vscode } from './vscodeApi.js';
+import { vscode } from '@common/vscodeApi.js';
 
 // Track search state
 let markInstance;
