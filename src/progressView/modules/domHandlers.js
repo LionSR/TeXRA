@@ -147,15 +147,37 @@ export function updateStatus(status) {
 }
 
 /**
- * Update token and cost summary in the header (now cleared since we show per-group)
- * @param {Object} usage - Usage data with inputTokens, outputTokens, cost
+ * Update token and cost summary in the header by aggregating usage from
+ * "Round" groups. Falls back to the provided usage if given.
+ * @param {Object} [usage] - Optional pre-computed usage totals
  */
 export function updateUsageSummary(usage) {
   const summaryElem = document.getElementById('runSummary');
   if (!summaryElem) return;
 
-  // Clear global usage display since we now show usage per-group
-  summaryElem.textContent = '';
+  let totals = usage;
+
+  // If usage is not provided, compute it from existing log groups
+  if (!totals) {
+    totals = { inputTokens: 0, outputTokens: 0, cost: 0 };
+    for (const group of getLogGroups().values()) {
+      if (/^Round\s*\d+/i.test(group.name) && group.usage) {
+        totals.inputTokens += group.usage.inputTokens || 0;
+        totals.outputTokens += group.usage.outputTokens || 0;
+        totals.cost += group.usage.cost || 0;
+      }
+    }
+  }
+
+  if (
+    !totals ||
+    (!totals.inputTokens && !totals.outputTokens && !totals.cost)
+  ) {
+    summaryElem.textContent = '';
+    return;
+  }
+
+  summaryElem.textContent = `in: ${totals.inputTokens}, out: ${totals.outputTokens}, $${totals.cost.toFixed(3)}`;
 }
 
 /**
@@ -190,6 +212,16 @@ export function updateGroupUsage(groupId, usage) {
 
   const { inputTokens = 0, outputTokens = 0, cost = 0 } = usage;
   usageElem.textContent = ` • in: ${inputTokens}, out: ${outputTokens}, $${cost.toFixed(3)}`;
+
+  // Persist usage on the group state so the summary can be computed
+  const group = getLogGroup(groupId);
+  if (group) {
+    group.usage = { inputTokens, outputTokens, cost };
+    setLogGroup(groupId, group);
+  }
+
+  // Refresh the cumulative summary displayed in the header
+  updateUsageSummary();
 }
 
 /**
