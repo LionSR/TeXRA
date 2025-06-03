@@ -87,27 +87,18 @@ export class AgentHistoryViewProvider implements vscode.WebviewViewProvider {
   /**
    * Handle messages from the webview
    */
+  private handlers: Record<string, (message: any) => Promise<void> | void> = {
+    getHistoryData: () => this.sendHistoryData(),
+    rerunAgent: (m) => this.rerunAgent(m.historyId),
+    restoreAgent: (m) => this.restoreAgent(m.historyId),
+    deleteAgent: (m) => this.deleteHistoryItem(m.historyId),
+    clearHistory: () => this.clearHistory(),
+  };
+
   private async handleWebviewMessage(message: any) {
-    switch (message.command) {
-      case 'getHistoryData':
-        await this.sendHistoryData();
-        break;
-
-      case 'rerunAgent':
-        await this.rerunAgent(message.historyId);
-        break;
-
-      case 'restoreAgent':
-        await this.restoreAgent(message.historyId);
-        break;
-
-      case 'deleteAgent':
-        await this.deleteHistoryItem(message.historyId);
-        break;
-
-      case 'clearHistory':
-        await this.clearHistory();
-        break;
+    const handler = this.handlers[message.command];
+    if (handler) {
+      await handler(message);
     }
   }
 
