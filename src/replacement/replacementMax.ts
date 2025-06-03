@@ -501,6 +501,8 @@ export const MAX_MANUAL_REPLACEMENTS: ReplacementCategory = {
     '{\\text{sst}}': '{\\text{st}}',
     '\\rho^{st}': '\\rhost',
     '\\rho^{eq}': '\\rhoeq',
+    '\\rho^{\\eq}': '\\rhoeq',
+    '\\rho^{\\st}': '\\rhoeq',
     '\\rho^{ss}': '\\rhost',
     '\\rho_{ss}': '\\rhost',
     '\\ln': '\\log',
