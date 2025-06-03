@@ -5,7 +5,9 @@ export const FILE_TYPES = [
   'auxiliary',
   'media',
   'output',
-];
+] as const;
+
+export type FileType = (typeof FILE_TYPES)[number];
 export const SINGLE_FILE_FIELDS = FILE_TYPES.map((type) => `${type}File`);
 export const MULTIPLE_FILE_FIELDS = FILE_TYPES.map((type) => `${type}Files`);
 export const ACTIVE_FLAGS = FILE_TYPES.map((type) => `${type}FilesActive`);

@@ -45,7 +45,9 @@ async function handlePack(config: any) {
   }
 
   // Get output files if multiple files mode is enabled
-  const outputFiles = config.outputFilesActive ? config.outputFiles || [] : [];
+  const outputFiles = config.activeFiles?.output
+    ? config.outputFiles || []
+    : [];
 
   await runPack(
     config.model,

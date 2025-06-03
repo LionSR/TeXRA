@@ -12,7 +12,8 @@ import { ToolConfig } from '../agent/ToolConfig';
 import {
   SINGLE_FILE_FIELDS,
   MULTIPLE_FILE_FIELDS,
-  ACTIVE_FLAGS,
+  FILE_TYPES,
+  type FileType,
   AUTO_EXTRACT_FIELDS,
   TOOL_CONFIG_FIELDS,
 } from './constants';
@@ -42,23 +43,27 @@ function copyToolFlags(
   });
 }
 
-function setActiveFlagsFromArrays(
-  dest: Record<string, any>,
+function createActiveFilesFromArrays(
   src: Record<string, any>,
-) {
-  ACTIVE_FLAGS.forEach((flag) => {
-    const filesField = flag.replace('Active', '');
-    dest[flag] = Array.isArray(src[filesField]) && src[filesField].length > 0;
+): Record<FileType, boolean> {
+  const active: Record<FileType, boolean> = {} as Record<FileType, boolean>;
+  FILE_TYPES.forEach((type) => {
+    const filesField = `${type}Files`;
+    const flagField = `${filesField}Active`;
+    active[type] =
+      (Array.isArray(src[filesField]) && src[filesField].length > 0) ||
+      !!src[flagField];
   });
+  return active;
 }
 
 function copyActiveFileLists(
   dest: Record<string, any>,
-  src: Record<string, any>,
+  src: { [key: string]: any; activeFiles: Record<FileType, boolean> },
 ) {
   MULTIPLE_FILE_FIELDS.forEach((field) => {
-    const activeFlag = `${field}Active`;
-    dest[field] = src[activeFlag] && src[field] ? src[field] : null;
+    const type = field.replace('Files', '') as FileType;
+    dest[field] = src.activeFiles[type] && src[field] ? src[field] : null;
   });
 }
 
@@ -87,8 +92,8 @@ export function agentConfigToTaskState(config: AgentConfig): TaskState {
   });
   copyFields(taskState, config, MULTIPLE_FILE_FIELDS, []);
 
-  // Set active flags based on array content
-  setActiveFlagsFromArrays(taskState, config);
+  // Determine active file sets based on array content
+  taskState.activeFiles = createActiveFilesFromArrays(config);
 
   // Add tool config settings
   copyToolFlags(taskState, config, false);
@@ -121,8 +126,8 @@ export function objectToTaskState(obj: Record<string, any>): TaskState {
   copyFields(taskState, obj, SINGLE_FILE_FIELDS, '', { skipOutputFile: true });
   copyFields(taskState, obj, MULTIPLE_FILE_FIELDS, []);
 
-  // Set active flags
-  copyFields(taskState, obj, ACTIVE_FLAGS, false);
+  // Set active file visibility
+  taskState.activeFiles = createActiveFilesFromArrays(obj);
 
   // Add tool config settings - check both direct property and toolConfig
   copyToolFlags(taskState, obj, false);
