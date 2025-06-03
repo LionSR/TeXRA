@@ -45,6 +45,7 @@ import {
 import { extractAndLogScratchpad } from '../utils/xmlUtils';
 import { getConfig } from '../utils/configUtils';
 import { calculateTokenPrice } from '../utils/priceUtils';
+import { ProgressViewProvider } from '../progressView/ProgressViewProvider';
 
 // Local constant
 import { K_SLICE } from '../utils/constants';
@@ -158,6 +159,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
     systemPrompt?: string,
     endTag?: string,
     signal?: AbortSignal,
+    groupId?: string,
   ): Promise<GenerateContentResponse> {
     if (messages.length === 0) {
       this.logger.error('Cannot create response from empty messages array.');
@@ -262,12 +264,8 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
       }
     }
 
-    const useStreaming = false; // Hardcoded to false
-    if (getConfig<boolean>('model.useStreaming', false)) {
-      this.logger.warn(
-        'Streaming is configured but currently disabled in ModelHandlerGoogleGenAI (using Chat API).',
-      );
-    }
+    // Get streaming config
+    const useStreaming = this.getStreamingConfig();
 
     try {
       this.logger.debug(
@@ -278,13 +276,77 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
       this.logger.debug(
         `Sending message with ${lastMessageParts.length} parts.`,
       );
-      // Is the following including the system prompt etc? somehow
-      const result = await chat.sendMessage({
-        message: lastMessageParts,
-        config: { ...generationConfig, abortSignal: signal },
-      });
 
-      return result;
+      if (useStreaming) {
+        // Get the progress view provider for streaming updates
+        const progressView = ProgressViewProvider.getInstance();
+        const streamId = this.logger.channelId;
+
+        // Signal start of streaming
+        if (progressView && groupId) {
+          progressView.startStreaming(streamId, groupId);
+        }
+
+        // Create streaming request
+        const streamResult = await chat.sendMessageStream({
+          message: lastMessageParts,
+          config: { ...generationConfig, abortSignal: signal },
+        });
+
+        let accumulatedText = '';
+        let accumulatedThinking = '';
+        let thinkingState = 'not-started';
+
+        // Process streaming chunks
+        for await (const chunk of streamResult.stream) {
+          if (chunk.candidates && chunk.candidates[0]?.content?.parts) {
+            for (const part of chunk.candidates[0].content.parts) {
+              // Handle thinking content (for models that support it)
+              if (part.thought && part.text) {
+                if (progressView && groupId) {
+                  if (thinkingState === 'not-started') {
+                    thinkingState = 'started';
+                  }
+                  const newThinking = part.text.slice(accumulatedThinking.length);
+                  if (newThinking) {
+                    progressView.addStreamingThinking(streamId, newThinking, groupId);
+                    accumulatedThinking = part.text;
+                  }
+                }
+              }
+              // Handle regular text content
+              else if (part.text && !part.thought) {
+                if (progressView && groupId) {
+                  if (thinkingState !== 'finished') {
+                    thinkingState = 'finished';
+                  }
+                  const newText = part.text.slice(accumulatedText.length);
+                  if (newText) {
+                    progressView.addStreamingText(streamId, newText, groupId);
+                    accumulatedText = part.text;
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        // Signal end of streaming
+        if (progressView && groupId) {
+          progressView.endStreaming(streamId, groupId);
+        }
+
+        // Get the final result
+        const result = await streamResult.response;
+        return result;
+      } else {
+        // Non-streaming request
+        const result = await chat.sendMessage({
+          message: lastMessageParts,
+          config: { ...generationConfig, abortSignal: signal },
+        });
+        return result;
+      }
     } catch (error: any) {
       this.logger.error(
         formatProviderError('Error during Google GenAI Chat API call', error),

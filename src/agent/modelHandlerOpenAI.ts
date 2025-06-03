@@ -35,6 +35,7 @@ import { K_SLICE } from '../utils/constants';
 import { objectToLogString } from '../utils/stringUtils';
 import { calculateTokenPrice } from '../utils/priceUtils';
 import { MediaEntry } from './mediaTypes';
+import { ProgressViewProvider } from '../progressView/ProgressViewProvider';
 
 /**
  * OpenAI-specific handlers.
@@ -58,6 +59,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
     systemPrompt?: string,
     endTag?: string,
     signal?: AbortSignal,
+    groupId?: string,
   ): Promise<any> {
     // Get streaming config
     const useStreaming = this.getStreamingConfig();
@@ -132,16 +134,68 @@ export class ModelHandlerOpenAI extends ModelHandler {
     if (useStreaming) {
       let response: any;
       kwargs.stream_options = { include_usage: true };
+      
+      // Get the progress view provider for streaming updates
+      const progressView = ProgressViewProvider.getInstance();
+      const streamId = this.logger.channelId;
+
+      // Signal start of streaming
+      if (progressView && groupId) {
+        progressView.startStreaming(streamId, groupId);
+      }
+
       try {
         const stream = client.chat.completions.stream(kwargs, {
           signal,
         });
+
+        let accumulatedContent = '';
+        let accumulatedReasoning = '';
+        let reasoningState = 'not-started';
+
+        // Add streaming event handlers for real-time updates
+        stream.on('content', (delta: string, snapshot: string) => {
+          if (progressView && groupId) {
+            if (reasoningState !== 'finished') {
+              reasoningState = 'finished';
+            }
+            // Send only the new delta to avoid duplication
+            if (delta) {
+              progressView.addStreamingText(streamId, delta, groupId);
+            }
+          }
+        });
+
+        // Handle reasoning content for O1 and reasoning models
+        if (this.config.capabilities.supportsReasoning) {
+          stream.on('content.reasoning', (delta: string, snapshot: string) => {
+            if (progressView && groupId) {
+              if (reasoningState === 'not-started') {
+                reasoningState = 'started';
+              }
+              // Send only the new delta to avoid duplication
+              if (delta) {
+                progressView.addStreamingThinking(streamId, delta, groupId);
+              }
+            }
+          });
+        }
+
+        stream.on('end', () => {
+          if (progressView && groupId) {
+            progressView.endStreaming(streamId, groupId);
+          }
+        });
+
         response = await stream.finalMessage();
 
         // in the future we can add: stream_options: {"include_usage": true} to get usage statistics
         // in the future if we pass stream to outside (signal: controller.signal)), calling stream.controller.abort() will abort the stream; which will be very useful for our stop button (controller.abort();)
         // we should also make sure partial results can be returned in the presence of errors!
       } catch (err) {
+        if (progressView && groupId) {
+          progressView.endStreaming(streamId, groupId);
+        }
         if (
           err instanceof NotFoundError ||
           err instanceof RateLimitError ||
