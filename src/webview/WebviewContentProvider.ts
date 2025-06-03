@@ -20,50 +20,38 @@ export class WebviewContentProvider {
     try {
       const getWebviewPath = (path: string) =>
         vscode.Uri.joinPath(this.context.extensionUri, 'src', 'webview', path);
-      const getCommonPath = (path: string) =>
-        vscode.Uri.joinPath(this.context.extensionUri, 'src', 'common', path);
-      const getNodeModulesPath = (path: string) =>
-        vscode.Uri.joinPath(this.context.extensionUri, 'node_modules', path);
+      const getWebviewUri = (path: string) =>
+        webview.asWebviewUri(getWebviewPath(path));
+      const getCommonUri = (path: string) =>
+        webview.asWebviewUri(
+          vscode.Uri.joinPath(this.context.extensionUri, 'src', 'common', path),
+        );
+      const getNodeModulesUri = (path: string) =>
+        webview.asWebviewUri(
+          vscode.Uri.joinPath(this.context.extensionUri, 'node_modules', path),
+        );
 
       const htmlPath = getWebviewPath('index.html');
-      const cssPath = getWebviewPath('styles/index.css');
-      const commonCssPath = getCommonPath('styles/common.css');
-      const mainScriptPath = getWebviewPath('script.js');
-      const webviewStatePath = getCommonPath('modules/webviewState.js');
+      const styleUri = getWebviewUri('styles/index.css');
+      const scriptUri = getWebviewUri('script.js');
+      const commonStyleUri = getCommonUri('styles/common.css');
+      const webviewStateUri = getCommonUri('modules/webviewState.js');
 
       // Get URIs for all modules
-      const stateManagerPath = getWebviewPath('modules/stateManager.js');
-      const messageHandlersPath = getWebviewPath('modules/messageHandlers.js');
-      const fileHandlersPath = getWebviewPath('modules/fileHandlers.js');
-      const uiHandlersPath = getWebviewPath('modules/uiHandlers.js');
-      const templateUtilsPath = getCommonPath('modules/templateUtils.js');
-      const domUtilsPath = getCommonPath('modules/domUtils.js');
-      const stringUtilsPath = getCommonPath('modules/stringUtils.js');
-      const messageRouterPath = getCommonPath('modules/messageRouter.js');
-      const vscodeApiPath = getCommonPath('modules/vscodeApi.js');
+      const stateManagerUri = getWebviewUri('modules/stateManager.js');
+      const messageHandlersUri = getWebviewUri('modules/messageHandlers.js');
+      const fileHandlersUri = getWebviewUri('modules/fileHandlers.js');
+      const uiHandlersUri = getWebviewUri('modules/uiHandlers.js');
+      const templateUtilsUri = getCommonUri('modules/templateUtils.js');
+      const domUtilsUri = getCommonUri('modules/domUtils.js');
+      const stringUtilsUri = getCommonUri('modules/stringUtils.js');
+      const messageRouterUri = getCommonUri('modules/messageRouter.js');
+      const vscodeApiUri = getCommonUri('modules/vscodeApi.js');
 
-      const styleUri = webview.asWebviewUri(cssPath);
-      const commonStyleUri = webview.asWebviewUri(commonCssPath);
-      const scriptUri = webview.asWebviewUri(mainScriptPath);
-      const webviewStateUri = webview.asWebviewUri(webviewStatePath);
-      const stateManagerUri = webview.asWebviewUri(stateManagerPath);
-      const messageHandlersUri = webview.asWebviewUri(messageHandlersPath);
-      const fileHandlersUri = webview.asWebviewUri(fileHandlersPath);
-      const uiHandlersUri = webview.asWebviewUri(uiHandlersPath);
-      const templateUtilsUri = webview.asWebviewUri(templateUtilsPath);
-      const domUtilsUri = webview.asWebviewUri(domUtilsPath);
-      const stringUtilsUri = webview.asWebviewUri(stringUtilsPath);
-      const messageRouterUri = webview.asWebviewUri(messageRouterPath);
-      const vscodeApiUri = webview.asWebviewUri(vscodeApiPath);
-
-      const codiconPath = getNodeModulesPath(
-        '@vscode/codicons/dist/codicon.css',
-      );
-      const codiconsFontPath = getNodeModulesPath(
+      const codiconUri = getNodeModulesUri('@vscode/codicons/dist/codicon.css');
+      const codiconsFontUri = getNodeModulesUri(
         '@vscode/codicons/dist/codicon.ttf',
       );
-      const codiconUri = webview.asWebviewUri(codiconPath);
-      const codiconsFontUri = webview.asWebviewUri(codiconsFontPath);
 
       const agents = getConfig<string[]>('agents', []);
       const agentOptions = agents
