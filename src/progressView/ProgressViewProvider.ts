@@ -454,7 +454,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
 
     if (this._view) {
       this._view.webview.postMessage({
-        command: 'appendLog',
+        command: COMMANDS.APPEND_LOG,
         stream: stream,
         logMessage,
       });
