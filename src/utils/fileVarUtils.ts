@@ -32,7 +32,7 @@ export async function setVarFromFile(
     logger.info(`Found from [${source}] the [VAR '${varName}']: ${filePath}`);
     return true;
   } catch (err) {
-    logger.warn(`[${source}] ${filePath} not found from [VAR '${varName}']. Error: ${err.message}`);
+    logger.warn(`[${source}] ${filePath} not found from [VAR '${varName}'].`);
     return false;
   }
 }
