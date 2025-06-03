@@ -28,7 +28,7 @@ import {
   runLatexdiffBetweenRounds,
   LaTeXdiffResult,
 } from '../latex/latexdiff';
-import { checkToolInstalled } from '../latex/texTools';
+import { checkToolInstalled, compileLatex2Pdf } from '../latex/texTools';
 import { runLatexFormatter } from '../latex/texFormatter';
 
 // Local imports - agent components
@@ -416,6 +416,14 @@ export class OutputHandler {
           );
 
           this.logLatexdiffResult(result, 'round-diff', diffProcessGroupId);
+
+          if (result.success && result.diffFileName) {
+            const diffPath = path.join(
+              path.dirname(baseFile),
+              result.diffFileName,
+            );
+            await compileLatex2Pdf(diffPath, this.channel);
+          }
         }
       }
 
@@ -464,6 +472,14 @@ export class OutputHandler {
             'between-rounds-diff',
             diffProcessGroupId,
           );
+
+          if (result.success && result.diffFileName) {
+            const diffPath = path.join(
+              path.dirname(prevOutputFile),
+              result.diffFileName,
+            );
+            await compileLatex2Pdf(diffPath, this.channel);
+          }
         }
       }
     } catch (err) {
