@@ -39,6 +39,7 @@ export class WebviewContentProvider {
       const templateUtilsPath = getCommonPath('modules/templateUtils.js');
       const domUtilsPath = getCommonPath('modules/domUtils.js');
       const stringUtilsPath = getCommonPath('modules/stringUtils.js');
+      const messageRouterPath = getCommonPath('modules/messageRouter.js');
       const vscodeApiPath = getCommonPath('modules/vscodeApi.js');
 
       const styleUri = webview.asWebviewUri(cssPath);
@@ -52,6 +53,7 @@ export class WebviewContentProvider {
       const templateUtilsUri = webview.asWebviewUri(templateUtilsPath);
       const domUtilsUri = webview.asWebviewUri(domUtilsPath);
       const stringUtilsUri = webview.asWebviewUri(stringUtilsPath);
+      const messageRouterUri = webview.asWebviewUri(messageRouterPath);
       const vscodeApiUri = webview.asWebviewUri(vscodeApiPath);
 
       const codiconPath = getNodeModulesPath(
@@ -88,6 +90,7 @@ export class WebviewContentProvider {
         fileHandlersUri,
         uiHandlersUri,
         templateUtilsUri,
+        messageRouterUri,
         vscodeApiUri,
         codiconUri,
         codiconsFontUri,
