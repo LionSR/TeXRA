@@ -56,7 +56,7 @@ This scrollable area displays the detailed, timestamped logs for the selected ag
 
 - **Structure**: Logs are organized into expandable/collapsible groups (e.g., `Initialization`, `Round 0`, `Model Operation`, `Response Cycle`) allowing you to focus on specific stages. Click the arrow next to a group name to toggle it.
 - **Log Levels**: Messages are prefixed with levels like `INFO`, `DEBUG`, `WARN`, `ERROR` to indicate severity. Verbose debug messages (`DEBUG`) are only shown if `texra.logger.verboseOutput` is enabled in settings.
-- **Agent Thinking**: Look for entries indicating `<scratchpad>` content or `Thinking:` blocks, which show the intermediate reasoning steps of the AI model (especially for CoT agents).
+- **Agent Thinking**: The log highlights model reasoning in purple **Model Thinking** blocks. These sections are flagged internally with a `thinking` type so you can easily spot when the AI is exploring ideas.
 - **Errors**: Errors are highlighted, often providing clues if something went wrong.
 
 Understanding the log content is key to diagnosing problems and seeing how TeXRA and the AI models process your requests. Refer to the [Troubleshooting](../reference/troubleshooting.md) guide for more tips on using logs.

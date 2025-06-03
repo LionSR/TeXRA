@@ -33,6 +33,7 @@ interface ColoredLogMessage {
   level: 'error' | 'warn' | 'info' | 'debug';
   timestamp: number;
   groupId?: string;
+  messageType?: 'default' | 'scratchpad' | 'thinking';
 }
 
 // Channels that should not be persisted in workspace storage
@@ -134,6 +135,9 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
                   attrMatch?.[1] || (msg.message.match(/\[(.*?)\]/)?.[1] ?? '');
                 const timestamp = new Date(timeString).getTime();
                 msg.timestamp = isNaN(timestamp) ? Date.now() : timestamp;
+              }
+              if (!msg.messageType) {
+                msg.messageType = 'default';
               }
               return msg;
             }),
@@ -395,6 +399,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     level: 'error' | 'warn' | 'info' | 'debug' = 'info',
     groupId?: string,
     timestamp: number = Date.now(),
+    messageType: 'default' | 'scratchpad' | 'thinking' = 'default',
   ) {
     // Skip if this stream should be excluded from the progress view
     if (shouldExcludeFromProgressView(stream)) {
@@ -441,6 +446,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       level,
       timestamp,
       groupId,
+      messageType,
     };
 
     const messages = this._logStreams.get(stream)!;
@@ -848,6 +854,9 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
         streamId,
         'Task cancelled due to extension deactivation.',
         'warn',
+        undefined,
+        Date.now(),
+        'default',
       );
 
       // Update all active groups for this stream
@@ -894,6 +903,9 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
           streamId,
           'Task was interrupted due to extension restart.',
           'warn',
+          undefined,
+          Date.now(),
+          'default',
         );
         wasUpdated = true;
         updatedStreams++;
@@ -913,6 +925,9 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
               streamId,
               `Found inconsistent state: stream status is ${this._streamStatus.get(streamId)} but has running groups.`,
               'warn',
+              undefined,
+              Date.now(),
+              'default',
             );
             updatedStreams++;
           }
