@@ -66,8 +66,24 @@ async function handleCompare(
     const title = `Compare: ${editedFileName} ↔ ${baseFileName}`;
     // const title = `Compare: ${baseFileName} ↔ ${editedFileName}`;
 
-    // Close the terminal panel before opening the diff view
-    await vscode.commands.executeCommand('workbench.action.closePanel');
+    // If the ProgressBoard lives in the secondary sidebar, close the bottom
+    // panel to give the diff view more space. If the view is in the panel
+    // already, leave it open.
+    try {
+      const location: string | undefined = await vscode.commands.executeCommand(
+        'getContextKeyValue',
+        'viewContainerLocation:texra-panel',
+      );
+
+      if (location === 'secondarySideBar') {
+        await vscode.commands.executeCommand('workbench.action.closePanel');
+      }
+    } catch (err) {
+      logger.warn(
+        CHANNEL,
+        `Could not check ProgressBoard location: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
 
     // Open files in diff editor
     await vscode.commands.executeCommand(
