@@ -5,6 +5,7 @@ import * as fs from 'fs';
 
 import { AgentLogger } from '../logger/AgentLogger';
 import { readFile } from '../utils/workspaceFileUtils';
+import { setVarFromFile } from '../utils/fileVarUtils';
 import { getXmlFormatFromFiles, getListOfFiles } from '../utils/promptUtils';
 import { AgentConfig } from './AgentConfig';
 import { AgentSetting } from './AgentDataclass';
@@ -124,18 +125,13 @@ async function getRequiredFileVars(
       agentSetting.requiredFiles,
     )) {
       if (filePath) {
-        try {
-          const fileContent = await readFile(filePath);
-          userVars[`${varName}_FILE`] = filePath;
-          userVars[`${varName}_CONTENT`] = fileContent;
-          logger.info(
-            `Found from [requiredFiles] the [VAR '${varName}']: ${filePath}`,
-          );
-        } catch {
-          logger.warn(
-            `[Required file] ${filePath} not found from [VAR '${varName}']`,
-          );
-        }
+        await setVarFromFile(
+          filePath,
+          varName,
+          userVars,
+          logger,
+          'requiredFiles',
+        );
       }
     }
   }
@@ -145,18 +141,14 @@ async function getRequiredFileVars(
       agentSetting.requiredFilesInternal,
     )) {
       const fullPath = path.join(agentPath, filePath);
-      try {
-        const fileContent = await fs.promises.readFile(fullPath, 'utf-8');
-        userVars[`${varName}_FILE`] = fullPath;
-        userVars[`${varName}_CONTENT`] = fileContent;
-        logger.info(
-          `Found from [requiredFilesInternal] the [VAR '${varName}']: ${fullPath}`,
-        );
-      } catch {
-        logger.warn(
-          `[Required file internal] ${fullPath} not found from [VAR '${varName}']`,
-        );
-      }
+      await setVarFromFile(
+        fullPath,
+        varName,
+        userVars,
+        logger,
+        'requiredFilesInternal',
+        true,
+      );
     }
   }
 
@@ -181,35 +173,27 @@ async function getPatternBasedFileVars(
 
         if (category.endsWith('File')) {
           if (categoryValue && categoryValue.toLowerCase().includes(pattern)) {
-            try {
-              const fileContent = await readFile(categoryValue);
-              userVars[`${varName}_FILE`] = categoryValue;
-              userVars[`${varName}_CONTENT`] = fileContent;
-              logger.info(
-                `Found from [Pattern '${pattern}'] the [VAR '${varName}']: ${categoryValue}`,
-              );
-            } catch {
-              logger.warn(
-                `File ${categoryValue} not found from [Pattern '${pattern}']`,
-              );
-            }
+            await setVarFromFile(
+              categoryValue,
+              varName,
+              userVars,
+              logger,
+              `Pattern '${pattern}'`,
+            );
           }
         } else if (category.endsWith('Files')) {
           if (categoryValue) {
             for (const file of categoryValue) {
               if (file.toLowerCase().includes(pattern)) {
-                try {
-                  const fileContent = await readFile(file);
-                  userVars[`${varName}_FILE`] = file;
-                  userVars[`${varName}_CONTENT`] = fileContent;
-                  logger.info(
-                    `Found from [Pattern '${pattern}'] the [VAR '${varName}']: ${file}`,
-                  );
+                const success = await setVarFromFile(
+                  file,
+                  varName,
+                  userVars,
+                  logger,
+                  `Pattern '${pattern}'`,
+                );
+                if (success) {
                   break;
-                } catch {
-                  logger.warn(
-                    `File ${file} not found from [Pattern '${pattern}']`,
-                  );
                 }
               }
             }
