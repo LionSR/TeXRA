@@ -1,5 +1,23 @@
 import { vscode } from '@common/vscodeApi.js';
 import { registerMessageHandlers } from '@common/messageRouter.js';
+import { safeSetElementValue, safeGetElementById } from '@common/domUtils.js';
+import { capitalize, uncapitalize } from '@common/stringUtils.js';
+import {
+  getWebviewState,
+  updateWebviewState,
+  setWebviewState,
+} from '@common/webviewState.js';
+
+import {
+  updateFileSelect,
+  updateEditedFileSelect,
+  updateMultipleFileSelect,
+  handleRecentCommits,
+  handleSetCurrentFile,
+} from './fileHandlers.js';
+
+import { restoreState, saveState } from './stateManager.js';
+import { FILE_TYPES } from './constants.js';
 
 /**
  * Initialize data requests on window load
@@ -19,22 +37,6 @@ export function initializeDataRequests() {
     vscode.postMessage({ command: request });
   });
 }
-import {
-  updateFileSelect,
-  updateEditedFileSelect,
-  updateMultipleFileSelect,
-  handleRecentCommits,
-  handleSetCurrentFile,
-} from './fileHandlers.js';
-import { safeSetElementValue, safeGetElementById } from '@common/domUtils.js';
-import { restoreState, saveState } from './stateManager.js';
-import { FILE_TYPES } from './constants.js';
-import { capitalize, uncapitalize } from '@common/stringUtils.js';
-import {
-  getWebviewState,
-  updateWebviewState,
-  setWebviewState,
-} from '@common/webviewState.js';
 
 /**
  * Handle state restoration from log view
