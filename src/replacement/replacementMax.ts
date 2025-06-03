@@ -438,8 +438,6 @@ export const MAX_MANUAL_REPLACEMENTS: ReplacementCategory = {
     '\\boldsymbol{\\Sigma}': '\\bSig',
     '\\bSigma': '\\bSig',
 
-    
-
     // Special case for 'f' which uses 'bbf' instead of 'bf'
     '\\mathbf{f}': '\\bbf',
 

@@ -8,6 +8,9 @@ import { workspace } from 'vscode';
 // Local imports - log
 import * as logger from '../logger/logUtils';
 
+// Local imports - utils
+import { safeExecuteCommand } from '../utils/commandUtils';
+
 // Local imports - utilities
 import { getWorkspacePath, getRelativePath } from '../utils/workspaceFileUtils';
 import { capitalize, uncapitalize } from '../frontend-utils/commonUtils';
@@ -138,16 +141,11 @@ export class WebviewMessageHandler {
    * Handle opening the extension settings
    */
   private async handleOpenSettings() {
-    try {
-      await vscode.commands.executeCommand(
-        'workbench.action.openSettings',
-        '@ext:texra-ai.texra',
-      );
-    } catch (error) {
-      vscode.window.showErrorMessage(
-        `Failed to open extension settings: ${error}`,
-      );
-    }
+    await safeExecuteCommand(
+      'workbench.action.openSettings',
+      ['@ext:texra-ai.texra'],
+      CHANNEL,
+    );
   }
 
   private async handleInfoMessage(message: any) {
@@ -813,10 +811,6 @@ export class WebviewMessageHandler {
    * Handle showing the agent history view
    */
   private async handleShowAgentHistory() {
-    try {
-      await vscode.commands.executeCommand('texra.showAgentHistory');
-    } catch (error) {
-      vscode.window.showErrorMessage(`Failed to open agent history: ${error}`);
-    }
+    await safeExecuteCommand('texra.showAgentHistory', [], CHANNEL);
   }
 }
