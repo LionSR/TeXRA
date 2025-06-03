@@ -178,7 +178,7 @@
   align-items: center;
   padding: var(--spacing-tiny) 0;
   gap: var(--spacing-medium);
-  margin-bottom: var(--spacing-small);
+  margin-bottom: var(--spacing-tiny);
 }
 
 .file-name {
