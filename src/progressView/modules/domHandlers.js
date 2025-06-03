@@ -189,7 +189,35 @@ export function updateUsageSummary(usage) {
  * @param {string} groupId - ID of the group to update
  * @param {Object} usage - Usage data with inputTokens, outputTokens, cost
  */
-export function updateGroupUsage(groupId, usage) {
+function computeAggregatedUsage(parentId) {
+  const totals = { inputTokens: 0, outputTokens: 0, cost: 0 };
+  for (const group of getLogGroups().values()) {
+    if (group.parentGroupId === parentId) {
+      if (group.usage) {
+        totals.inputTokens += group.usage.inputTokens || 0;
+        totals.outputTokens += group.usage.outputTokens || 0;
+        totals.cost += group.usage.cost || 0;
+      }
+      const childTotals = computeAggregatedUsage(group.id);
+      totals.inputTokens += childTotals.inputTokens;
+      totals.outputTokens += childTotals.outputTokens;
+      totals.cost += childTotals.cost;
+    }
+  }
+  return totals;
+}
+
+function propagateUsageToParents(groupId) {
+  const group = getLogGroup(groupId);
+  if (!group || !group.parentGroupId) return;
+  const totals = {
+    ...computeAggregatedUsage(group.parentGroupId),
+  };
+  updateGroupUsage(group.parentGroupId, totals, true);
+  propagateUsageToParents(group.parentGroupId);
+}
+
+export function updateGroupUsage(groupId, usage, skipPropagate = false) {
   const groupHeader = document.getElementById(`group-header-${groupId}`);
   if (!groupHeader) return;
 
@@ -198,13 +226,10 @@ export function updateGroupUsage(groupId, usage) {
   if (!usageElem) {
     usageElem = document.createElement('span');
     usageElem.className = 'group-usage';
-
-    // Insert usage display after the group time element
     const timeContainer = groupHeader.querySelector('.group-time');
     if (timeContainer) {
-      timeContainer.appendChild(usageElem);
+      groupHeader.insertBefore(usageElem, timeContainer);
     } else {
-      // Fallback: append to the header
       groupHeader.appendChild(usageElem);
     }
   }
@@ -225,6 +250,9 @@ export function updateGroupUsage(groupId, usage) {
   if (group) {
     group.usage = { inputTokens, outputTokens, cost };
     setLogGroup(groupId, group);
+  }
+  if (!skipPropagate) {
+    propagateUsageToParents(groupId);
   }
 
   // Refresh the cumulative summary displayed in the header
