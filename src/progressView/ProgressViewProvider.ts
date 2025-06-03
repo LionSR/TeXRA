@@ -157,7 +157,24 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
           .filter(([channel]) => shouldPersistStream(channel))
           .map(([streamId, groups]) => [
             streamId,
-            new Map(Object.entries(groups)),
+            new Map(
+              Object.entries(groups).map(([id, g]) => [
+                id,
+                {
+                  ...g,
+                  startTime:
+                    typeof g.startTime === 'string'
+                      ? new Date(g.startTime).getTime()
+                      : g.startTime,
+                  endTime:
+                    g.endTime !== undefined
+                      ? typeof g.endTime === 'string'
+                        ? new Date(g.endTime).getTime()
+                        : g.endTime
+                      : undefined,
+                },
+              ]),
+            ),
           ]),
       );
     } else {
@@ -471,9 +488,9 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     stream: string,
     groupId: string,
     groupName: string,
-    startTime: string,
+    startTime: number,
     status: StatusType,
-    endTime?: string,
+    endTime?: number,
     parentGroupId?: string,
   ) {
     // Skip if this stream should be excluded from the progress view
@@ -532,7 +549,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     stream: string,
     groupId: string,
     status: StatusType,
-    endTime?: string,
+    endTime?: number,
   ) {
     // Skip if this stream should be excluded from the progress view
     if (shouldExcludeFromProgressView(stream)) {
@@ -843,7 +860,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     }
 
     // Set end time for all groups
-    const endTime = new Date().toISOString();
+    const endTime = Date.now();
     const STATUS_CANCELLED = STATUS.ERROR;
 
     // Update each running stream
@@ -888,7 +905,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     );
 
     const STATUS_INTERRUPTED = STATUS.ERROR;
-    const endTime = new Date().toISOString();
+    const endTime = Date.now();
     let updatedStreams = 0;
     let updatedGroups = 0;
 

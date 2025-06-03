@@ -39,10 +39,10 @@ const handlers = {
         const parentGroups = message.groups.filter((g) => !g.parentGroupId);
         const childGroups = message.groups.filter((g) => g.parentGroupId);
         parentGroups
-          .sort((a, b) => new Date(a.startTime) - new Date(b.startTime))
+          .sort((a, b) => a.startTime - b.startTime)
           .forEach((g) => addLogGroup(g));
         childGroups
-          .sort((a, b) => new Date(a.startTime) - new Date(b.startTime))
+          .sort((a, b) => a.startTime - b.startTime)
           .forEach((g) => addLogGroup(g));
       }
       const sortedMessages = [...message.messages].sort((a, b) => {
