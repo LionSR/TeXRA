@@ -1,4 +1,3 @@
-import * as fs from 'fs';
 import * as vscode from 'vscode';
 
 // Local imports - core
@@ -6,7 +5,7 @@ import { AgentHistoryManager } from './AgentHistoryManager';
 import { executeCommand } from '../commands/executeCommand';
 
 import { agentConfigToTaskState } from '../utils/configConversion';
-import { generateNonce } from '../utils/nonceUtils';
+import { buildWebviewHtml } from '../utils/webviewHtmlUtils';
 
 // Local imports - log
 import * as logger from '../logger/logUtils';
@@ -56,6 +55,12 @@ export class AgentHistoryViewProvider implements vscode.WebviewViewProvider {
           ),
           vscode.Uri.joinPath(
             this.context.extensionUri,
+            'src',
+            'common',
+            'modules',
+          ),
+          vscode.Uri.joinPath(
+            this.context.extensionUri,
             'node_modules',
             '@vscode',
             'codicons',
@@ -82,27 +87,18 @@ export class AgentHistoryViewProvider implements vscode.WebviewViewProvider {
   /**
    * Handle messages from the webview
    */
+  private handlers: Record<string, (message: any) => Promise<void> | void> = {
+    getHistoryData: () => this.sendHistoryData(),
+    rerunAgent: (m) => this.rerunAgent(m.historyId),
+    restoreAgent: (m) => this.restoreAgent(m.historyId),
+    deleteAgent: (m) => this.deleteHistoryItem(m.historyId),
+    clearHistory: () => this.clearHistory(),
+  };
+
   private async handleWebviewMessage(message: any) {
-    switch (message.command) {
-      case 'getHistoryData':
-        await this.sendHistoryData();
-        break;
-
-      case 'rerunAgent':
-        await this.rerunAgent(message.historyId);
-        break;
-
-      case 'restoreAgent':
-        await this.restoreAgent(message.historyId);
-        break;
-
-      case 'deleteAgent':
-        await this.deleteHistoryItem(message.historyId);
-        break;
-
-      case 'clearHistory':
-        await this.clearHistory();
-        break;
+    const handler = this.handlers[message.command];
+    if (handler) {
+      await handler(message);
     }
   }
 
@@ -138,76 +134,50 @@ export class AgentHistoryViewProvider implements vscode.WebviewViewProvider {
    */
   private getWebviewContent(): string {
     try {
-      // Get the path to HTML file
-      const htmlPath = vscode.Uri.joinPath(
-        this.context.extensionUri,
-        'src',
-        'historyView',
-        'index.html',
-      );
-      const htmlContent = fs.readFileSync(htmlPath.fsPath, 'utf-8');
+      const getHistoryViewPath = (path: string) =>
+        vscode.Uri.joinPath(
+          this.context.extensionUri,
+          'src',
+          'historyView',
+          path,
+        );
+      const getHistoryViewUri = (path: string) =>
+        this._view!.webview.asWebviewUri(getHistoryViewPath(path));
+      const getCommonUri = (path: string) =>
+        this._view!.webview.asWebviewUri(
+          vscode.Uri.joinPath(this.context.extensionUri, 'src', 'common', path),
+        );
+      const getNodeModulesUri = (path: string) =>
+        this._view!.webview.asWebviewUri(
+          vscode.Uri.joinPath(this.context.extensionUri, 'node_modules', path),
+        );
 
-      // Get the paths for scripts and styles
-      const scriptUri = this.getWebviewUri('script.js');
-      const styleUri = this.getWebviewUri('style.css');
-      const vscodeApiUri = this.getWebviewUri('modules/vscodeApi.js');
-      const domHandlersUri = this.getWebviewUri('modules/domHandlers.js');
-      const codiconPath = vscode.Uri.joinPath(
-        this.context.extensionUri,
-        'node_modules',
-        '@vscode',
-        'codicons',
-        'dist',
-        'codicon.css',
-      );
-      const codiconUri = this._view?.webview.asWebviewUri(codiconPath);
-      const commonStyleUri = vscode.Uri.joinPath(
-        this.context.extensionUri,
-        'src',
-        'common',
-        'styles',
-        'common.css',
-      );
+      const htmlPath = getHistoryViewPath('index.html');
+      const scriptUri = getHistoryViewUri('script.js');
+      const styleUri = getHistoryViewUri('style.css');
+      const domHandlersUri = getHistoryViewUri('modules/domHandlers.js');
 
-      // Create a nonce for script security
-      const nonce = generateNonce();
+      // Common module URIs
+      const vscodeApiUri = getCommonUri('modules/vscodeApi.js');
+      const messageRouterUri = getCommonUri('modules/messageRouter.js');
+      const commonStyleUri = getCommonUri('styles/common.css');
 
-      // Replace placeholders in HTML with actual content
-      return htmlContent
-        .replace('${scriptUri}', scriptUri.toString())
-        .replace('${styleUri}', styleUri.toString())
-        .replace(
-          '${commonStyleUri}',
-          this._view
-            ? this._view.webview.asWebviewUri(commonStyleUri).toString()
-            : '',
-        )
-        .replace('${vscodeApiUri}', vscodeApiUri.toString())
-        .replace('${domHandlersUri}', domHandlersUri.toString())
-        .replace('${codiconUri}', codiconUri?.toString() ?? '')
-        .replace(/\${nonce}/g, nonce)
-        .replace(/\${cspSource}/g, this._view?.webview.cspSource ?? '');
+      // Node modules URIs
+      const codiconUri = getNodeModulesUri('@vscode/codicons/dist/codicon.css');
+
+      return buildWebviewHtml(this._view!.webview, htmlPath, {
+        scriptUri,
+        styleUri,
+        commonStyleUri,
+        vscodeApiUri,
+        messageRouterUri,
+        domHandlersUri,
+        codiconUri,
+      });
     } catch (error) {
       console.error('Error generating HTML content:', error);
       return `<html><body><h1>Error loading history view</h1><p>${error}</p></body></html>`;
     }
-  }
-
-  /**
-   * Get a webview URI for a local resource
-   */
-  private getWebviewUri(relativePath: string): vscode.Uri {
-    if (!this._view) {
-      throw new Error('Webview is not available');
-    }
-
-    const diskPath = vscode.Uri.joinPath(
-      this.context.extensionUri,
-      'src',
-      'historyView',
-      relativePath,
-    );
-    return this._view.webview.asWebviewUri(diskPath);
   }
 
   /**

@@ -6,13 +6,13 @@ import * as vscode from 'vscode';
 import { sync as globSync } from 'glob';
 
 // Local imports - log
-import * as logger from '../logger/logUtils';
+import * as logger from '../../logger/logUtils';
 
 // Local imports - utilities
-import { deleteFile, getWorkspacePath } from '../utils/workspaceFileUtils';
-import { executeCommand } from '../utils/execUtils';
-import { sleep } from '../utils/timeUtils';
-import { checkToolInstalled } from './texTools';
+import { deleteFile, getWorkspacePath } from '../../utils/workspaceFileUtils';
+import { executeCommand } from '../../utils/execUtils';
+import { sleep } from '../../utils/timeUtils';
+import { checkToolInstalled } from '../texTools';
 
 const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);

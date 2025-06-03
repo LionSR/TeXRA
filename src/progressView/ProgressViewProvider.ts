@@ -282,6 +282,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       localResourceRoots: [
         vscode.Uri.joinPath(this._extensionUri, 'src', 'progressView'),
         vscode.Uri.joinPath(this._extensionUri, 'src', 'common', 'styles'),
+        vscode.Uri.joinPath(this._extensionUri, 'src', 'common', 'modules'),
         vscode.Uri.joinPath(this._extensionUri, 'node_modules', 'split.js'),
         vscode.Uri.joinPath(
           this._extensionUri,
@@ -453,7 +454,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
 
     if (this._view) {
       this._view.webview.postMessage({
-        command: 'appendLog',
+        command: COMMANDS.APPEND_LOG,
         stream: stream,
         logMessage,
       });

@@ -1,13 +1,13 @@
-import { vscode } from './vscodeApi.js';
+import { vscode } from '@common/vscodeApi.js';
 import { saveState } from './stateManager.js';
-import { getWebviewState, updateWebviewState } from './webviewState.js';
+import { getWebviewState, updateWebviewState } from '@common/webviewState.js';
 import { MULTIPLE_SELECTIONS } from './constants.js';
 import {
   addEventListenerSafely,
   safeGetElementById,
   safeSetElementValue,
-} from './utils.js';
-import { capitalize, uncapitalize } from './stringUtils.js';
+} from '@common/domUtils.js';
+import { capitalize, uncapitalize } from '@common/stringUtils.js';
 
 export function updateFileSelect(id, files) {
   const selectDiv = document.getElementById(id);
