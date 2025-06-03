@@ -34,20 +34,11 @@ export function formatLogEntry(logMessage) {
   ) {
     // Extract the actual thinking content
     const thinkingMatch = message.match(
-      /<span class="message-info">(Thinking content:.*?)<\/span>/s,
+      /<span class="message-info">(Thinking content:)?(.*?)<\/span>/s,
     );
-    if (thinkingMatch && thinkingMatch[1]) {
-      let content = thinkingMatch[1];
-
-      // Extract content after the "Thinking content:" prefix
-      const contentStartIndex = content.indexOf('Thinking content:');
-      if (contentStartIndex !== -1) {
-        content = content.substring(
-          contentStartIndex + 'Thinking content:'.length,
-        );
-
-        return formatSpecialContent(message, content, 'Thinking content:');
-      }
+    if (thinkingMatch && thinkingMatch[2]) {
+      const content = thinkingMatch[2];
+      return formatSpecialContent(message, content, 'Thinking content:');
     }
   }
 
@@ -58,20 +49,11 @@ export function formatLogEntry(logMessage) {
   ) {
     // Extract the actual scratchpad content
     const scratchpadMatch = message.match(
-      /<span class="message-info">(Scratchpad content:.*?)<\/span>/s,
+      /<span class="message-info">(Scratchpad content:)?(.*?)<\/span>/s,
     );
-    if (scratchpadMatch && scratchpadMatch[1]) {
-      let content = scratchpadMatch[1];
-
-      // Extract content after the "Scratchpad content:" prefix
-      const contentStartIndex = content.indexOf('Scratchpad content:');
-      if (contentStartIndex !== -1) {
-        content = content.substring(
-          contentStartIndex + 'Scratchpad content:'.length,
-        );
-
-        return formatSpecialContent(message, content, 'Scratchpad content:');
-      }
+    if (scratchpadMatch && scratchpadMatch[2]) {
+      const content = scratchpadMatch[2];
+      return formatSpecialContent(message, content, 'Scratchpad content:');
     }
   }
 
@@ -115,8 +97,7 @@ function formatSpecialContent(message, content, contentType) {
       .replace(':', '');
     return message.replace(
       new RegExp(`<span class="message-info">${contentType}.*?</span>`, 's'),
-      `<span class="message-info">${contentType}</span>
-       <div class="special-content ${cssClass}">${parsedMarkdown}</div>`,
+      `<div class="special-content ${cssClass}">${parsedMarkdown}</div>`,
     );
   } catch (e) {
     console.error('Error parsing markdown:', e);
