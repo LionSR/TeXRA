@@ -222,12 +222,6 @@
   opacity: var(--opacity-subtle);
 }
 
-/* Make the 'Scratchpad content:' text subtle */
-.scratchpad-log .message-info {
-  font-weight: bold;
-  color: var(--vscode-textLink-foreground, #3794ff);
-}
-
 /* Additional enhancements for scratchpad content */
 .scratchpad-content p:first-child {
   margin-top: 0;
