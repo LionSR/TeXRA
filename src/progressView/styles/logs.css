@@ -176,9 +176,9 @@
 .file-item {
   display: flex;
   align-items: center;
-  padding: var(--spacing-tiny) 0;
-  gap: var(--spacing-medium);
-  margin-bottom: var(--spacing-tiny);
+  padding: 1px 0;
+  gap: var(--spacing-tiny);
+  margin-bottom: 0;
 }
 
 .file-name {
