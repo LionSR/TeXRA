@@ -12,6 +12,7 @@ import { readFile, writeFile, fileExists } from '../utils/workspaceFileUtils';
 import { executeCommand } from '../utils/execUtils';
 import { ExecResult } from '../types/ResultTypes';
 import { getConfig } from '../utils/configUtils';
+import { logErrorMessage } from '../utils/errorHandlingUtils';
 
 // Local imports - latex utils
 import { runLatexFormatter } from './texFormatter';
@@ -494,9 +495,8 @@ export async function runLatexdiff(
       message: `LaTeXdiff completed successfully: ${diffFileName}`,
     };
   } catch (err) {
-    const errorMsg = `Error running LaTeX diff: ${err instanceof Error ? err.message : String(err)}`;
-    logger.error(channel, errorMsg);
-    return { success: false, message: errorMsg };
+    const message = logErrorMessage(channel, 'Error running LaTeX diff', err);
+    return { success: false, message };
   }
 }
 
@@ -553,9 +553,12 @@ export async function runLatexdiffvc(
       message: `LaTeXdiff VC completed successfully: ${path.basename(diffFileName)}`,
     };
   } catch (err) {
-    const errorMsg = `Error running LaTeX diff VC: ${err instanceof Error ? err.message : String(err)}`;
-    logger.error(channel, errorMsg);
-    return { success: false, message: errorMsg };
+    const message = logErrorMessage(
+      channel,
+      'Error running LaTeX diff VC',
+      err,
+    );
+    return { success: false, message };
   }
 }
 
@@ -630,9 +633,12 @@ export async function runLatexdiffForRound(
       return { success: false, message };
     }
   } catch (err) {
-    const errorMsg = `Error in runLatexdiffForRound: ${err instanceof Error ? err.message : String(err)}`;
-    logger.error(channel, errorMsg);
-    return { success: false, message: errorMsg };
+    const message = logErrorMessage(
+      channel,
+      'Error in runLatexdiffForRound',
+      err,
+    );
+    return { success: false, message };
   }
 }
 
@@ -663,9 +669,12 @@ export async function runLatexdiffBetweenRounds(
       return { success: false, message };
     }
   } catch (err) {
-    const errorMsg = `Error in runLatexdiffBetweenRounds: ${err instanceof Error ? err.message : String(err)}`;
-    logger.error(channel, errorMsg);
-    return { success: false, message: errorMsg };
+    const message = logErrorMessage(
+      channel,
+      'Error in runLatexdiffBetweenRounds',
+      err,
+    );
+    return { success: false, message };
   }
 }
 
@@ -735,12 +744,15 @@ export async function runLatexdiffMultiple(
       message: summary,
     };
   } catch (err) {
-    const errorMsg = `Error in runLatexdiffMultiple: ${err instanceof Error ? err.message : String(err)}`;
-    logger.error(channel, errorMsg);
+    const message = logErrorMessage(
+      channel,
+      'Error in runLatexdiffMultiple',
+      err,
+    );
     return {
       success: false,
       results: { success: [], failed: [] },
-      message: errorMsg,
+      message,
     };
   }
 }
