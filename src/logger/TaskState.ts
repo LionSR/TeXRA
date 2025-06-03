@@ -1,3 +1,6 @@
+// Local imports - constants
+import type { FileType } from '../utils/constants';
+
 /** Interface for storing task execution state */
 export interface TaskState {
   // Basic task info
@@ -20,11 +23,8 @@ export interface TaskState {
   outputFiles: string[];
 
   // Multiple file selection visibility
-  inputFilesActive: boolean;
-  referenceFilesActive: boolean;
-  auxiliaryFilesActive: boolean;
-  mediaFilesActive: boolean;
-  outputFilesActive: boolean;
+  /** Map of file type to active state */
+  activeFiles: Record<FileType, boolean>;
 
   // Auto extract settings
   autoExtractFigure: boolean;
