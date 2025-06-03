@@ -4,6 +4,7 @@ import * as vscode from 'vscode';
 // Local imports - log
 import * as logger from '../logger/logUtils';
 import { objectToTaskState } from '../utils/configConversion';
+import { safeExecuteCommand } from '../utils/commandUtils';
 
 const CHANNEL = 'stateRestoreCommand';
 logger.initialize(CHANNEL);
@@ -32,7 +33,7 @@ async function restoreState(config: any) {
   try {
     // Focus the webview panel first to make sure it's visible
     // Use the specific view ID instead of the extension to avoid sidebar switching issues
-    await vscode.commands.executeCommand('texra.mainView.focus');
+    await safeExecuteCommand('texra.mainView.focus', [], CHANNEL);
 
     // Create a complete state object from the task state using utility function
     const taskState = objectToTaskState(config);
@@ -79,7 +80,7 @@ async function restoreState(config: any) {
 
         // Try to focus the main view to trigger its activation
         // Use the specific view ID to avoid sidebar switching issues
-        await vscode.commands.executeCommand('texra.mainView.focus');
+        await safeExecuteCommand('texra.mainView.focus', [], CHANNEL);
         logger.info(CHANNEL, 'State stored in context for later restoration');
       }
     } catch (error) {
@@ -102,7 +103,7 @@ async function restoreState(config: any) {
 
       // Try to focus the main view to trigger its activation
       // Use the specific view ID to avoid sidebar switching issues
-      await vscode.commands.executeCommand('texra.mainView.focus');
+      await safeExecuteCommand('texra.mainView.focus', [], CHANNEL);
       logger.info(CHANNEL, 'State stored in context for later restoration');
     }
 

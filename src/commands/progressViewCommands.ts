@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { AgentLogger } from '../logger/AgentLogger';
+import { safeExecuteCommand } from '../utils/commandUtils';
 
 const CHANNEL = 'progressViewCommands';
 const logger = new AgentLogger(CHANNEL);
@@ -8,20 +9,9 @@ const logger = new AgentLogger(CHANNEL);
  * Show the Progress View panel
  */
 async function showProgressView() {
-  try {
-    // Focus the view in the panel
-    await vscode.commands.executeCommand(
-      'workbench.view.extension.texra-panel',
-    );
-
-    // Then specifically focus the progress view
-    await vscode.commands.executeCommand('texra.progressView.focus');
-
-    logger.info('ProgressView panel shown');
-  } catch (error) {
-    logger.error(`Error showing ProgressView: ${error}`);
-    vscode.window.showErrorMessage(`Could not open ProgressView: ${error}`);
-  }
+  await safeExecuteCommand('workbench.view.extension.texra-panel', [], CHANNEL);
+  await safeExecuteCommand('texra.progressView.focus', [], CHANNEL);
+  logger.info('ProgressView panel shown');
 }
 
 /**
