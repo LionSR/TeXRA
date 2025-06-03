@@ -193,7 +193,7 @@ export async function compileLatex2Pdf(
 
     const result = await executeCommand(command, { channel, env });
     if (result.success) {
-      logger.info(channel, `Successfully compiled ${latexFile}`);
+      logger.debug(channel, `Successfully compiled ${latexFile}`);
       return true;
     }
     return false;
