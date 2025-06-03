@@ -120,7 +120,9 @@ export async function handleClean(config: any) {
     return;
   }
 
-  const outputFiles = config.outputFilesActive ? config.outputFiles || [] : [];
+  const outputFiles = config.activeFiles?.output
+    ? config.outputFiles || []
+    : [];
 
   if (outputFiles.length > 0) {
     logger.info(

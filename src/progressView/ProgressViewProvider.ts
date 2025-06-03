@@ -803,7 +803,9 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     const state = this._taskStates.get(streamId);
     if (state) {
       state.outputFiles = [];
-      state.outputFilesActive = false;
+      if (state.activeFiles) {
+        state.activeFiles.output = false;
+      }
       this._taskStates.set(streamId, state);
       this.saveTaskStates();
     }
