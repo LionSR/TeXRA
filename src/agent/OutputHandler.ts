@@ -184,7 +184,7 @@ export class OutputHandler {
     groupId?: string,
   ): void {
     if (result.success) {
-      this.logger.info(
+      this.logger.debug(
         `Successfully generated ${operation} file: ${result.diffFileName}`,
         groupId,
       );
@@ -901,7 +901,10 @@ export class OutputHandler {
         `Total response time : ${stateGlobal.totalResponseTime.toFixed(1)} seconds`,
         statsGroupId,
       );
-      this.logger.debug(`Total cost          : ${cost.toFixed(3)} USD`, statsGroupId);
+      this.logger.debug(
+        `Total cost          : ${cost.toFixed(3)} USD`,
+        statsGroupId,
+      );
       this.logger.debug('=======================', statsGroupId);
     } catch (error) {
       this.logger.error(`Error printing statistics: ${error}`, statsGroupId);
