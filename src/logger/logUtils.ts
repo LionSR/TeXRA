@@ -34,7 +34,9 @@ interface LogGroup {
   id: string;
   name: string;
   startTime: string;
+  startTimestamp: number;
   endTime?: string;
+  endTimestamp?: number;
   status: 'running' | 'error' | 'stopped' | 'ready';
   parentGroupId?: string; // Optional parent group for nested groups
 }
@@ -188,8 +190,10 @@ class VSCodeTransport extends Transport {
         group.id,
         group.name,
         group.startTime,
+        group.startTimestamp,
         group.status,
         group.endTime,
+        group.endTimestamp,
       );
     }
 
@@ -211,13 +215,14 @@ class VSCodeTransport extends Transport {
   startGroup(groupName: string, id?: string, parentGroupId?: string): string {
     const groupId =
       id || `group-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    const now = new Date();
-    const timeString = now.toISOString();
+    const now = Date.now();
+    const timeString = new Date(now).toISOString();
 
     this.groups.set(groupId, {
       id: groupId,
       name: groupName,
       startTime: timeString,
+      startTimestamp: now,
       status: 'running',
       parentGroupId,
     });
@@ -236,8 +241,10 @@ class VSCodeTransport extends Transport {
         groupId,
         groupName,
         timeString,
+        now,
         'running',
         undefined, // No end time for a new group
+        undefined,
         parentGroupId, // Pass the parent group ID
       );
     }
@@ -252,8 +259,9 @@ class VSCodeTransport extends Transport {
       return;
     }
 
-    const now = new Date();
-    group.endTime = now.toISOString();
+    const now = Date.now();
+    group.endTime = new Date(now).toISOString();
+    group.endTimestamp = now;
     group.status = status;
 
     // Skip progress view updates for consolidated channels
@@ -267,6 +275,7 @@ class VSCodeTransport extends Transport {
         groupId,
         status,
         group.endTime,
+        now,
       );
     }
 

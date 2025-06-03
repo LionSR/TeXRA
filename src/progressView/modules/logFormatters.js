@@ -135,12 +135,12 @@ export function getMessageTimestamp(message) {
  * @returns {string} HTML for group header
  */
 export function createGroupHeader(group) {
-  const startDate = new Date(group.startTime);
+  const startDate = new Date(group.startTimestamp || group.startTime);
   const formattedStartTime = formatTime(startDate);
 
   let durationDisplay = '';
-  if (group.endTime) {
-    const endDate = new Date(group.endTime);
+  if (group.endTimestamp || group.endTime) {
+    const endDate = new Date(group.endTimestamp ?? group.endTime);
     const durationMs = endDate - startDate;
     durationDisplay = `<span class="group-duration">${formatDuration(durationMs)}</span>`;
   }
@@ -209,9 +209,9 @@ export function formatDuration(durationMs) {
   // Handle edge cases
   if (durationMs < 0) return '0s';
 
-  // For very short durations, show milliseconds
+  // For very short durations, avoid showing milliseconds
   if (durationMs < 1000) {
-    return `${durationMs}ms`;
+    return '<1s';
   }
 
   const seconds = Math.floor(durationMs / 1000) % 60;
@@ -232,13 +232,16 @@ export function formatDuration(durationMs) {
  * @param {string} status - New status
  * @param {string} endTime - End time (optional)
  */
-export function updateLogGroup(groupId, status, endTime) {
+export function updateLogGroup(groupId, status, endTime, endTimestamp) {
   const group = getLogGroup(groupId);
   if (!group) return;
 
   group.status = status;
   if (endTime) {
     group.endTime = endTime;
+  }
+  if (endTimestamp !== undefined) {
+    group.endTimestamp = endTimestamp;
   }
 
   setLogGroup(groupId, group);

@@ -382,7 +382,7 @@ export function addLogGroup(group) {
 
     if (parentContentElement) {
       // Find the correct chronological position to insert the group
-      const startTime = new Date(group.startTime);
+      const startTime = new Date(group.startTimestamp || group.startTime);
       let insertPosition = null;
 
       // Get all existing child elements in the parent container
@@ -423,8 +423,13 @@ export function addLogGroup(group) {
             const otherGroupId = headerEl.id.replace('group-header-', '');
             const otherGroup = getLogGroup(otherGroupId);
 
-            if (otherGroup && otherGroup.startTime) {
-              const otherTime = new Date(otherGroup.startTime);
+            if (
+              otherGroup &&
+              (otherGroup.startTimestamp || otherGroup.startTime)
+            ) {
+              const otherTime = new Date(
+                otherGroup.startTimestamp || otherGroup.startTime,
+              );
 
               if (startTime < otherTime) {
                 insertPosition = child;
@@ -468,13 +473,16 @@ export function addLogGroup(group) {
  * @param {string} status - New status
  * @param {string} endTime - End time (optional)
  */
-export function updateLogGroupUI(groupId, status, endTime) {
+export function updateLogGroupUI(groupId, status, endTime, endTimestamp) {
   const group = getLogGroup(groupId);
   if (!group) return;
 
   group.status = status;
   if (endTime) {
     group.endTime = endTime;
+  }
+  if (endTimestamp !== undefined) {
+    group.endTimestamp = endTimestamp;
   }
 
   // Update the header in the UI if it exists
@@ -493,7 +501,7 @@ export function updateLogGroupUI(groupId, status, endTime) {
 
     if (endTime) {
       const endDate = new Date(endTime);
-      const startDate = new Date(group.startTime);
+      const startDate = new Date(group.startTimestamp || group.startTime);
       const durationMs = endDate - startDate;
 
       // Update or create duration element
@@ -561,8 +569,10 @@ export function appendLogToGroup(logMessage) {
           if (startTimeElem) {
             const groupId = headerEl.id.replace('group-header-', '');
             const group = getLogGroup(groupId);
-            if (group && group.startTime) {
-              const childDate = new Date(group.startTime);
+            if (group && (group.startTimestamp || group.startTime)) {
+              const childDate = new Date(
+                group.startTimestamp || group.startTime,
+              );
 
               if (msgDate && childDate) {
                 if (msgDate < childDate) {

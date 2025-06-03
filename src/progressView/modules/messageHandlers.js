@@ -52,8 +52,8 @@ export function setupMessageHandlers() {
 
             // Sort parent groups by timestamp
             parentGroups.sort((a, b) => {
-              const timeA = new Date(a.startTime);
-              const timeB = new Date(b.startTime);
+              const timeA = a.startTimestamp || new Date(a.startTime).getTime();
+              const timeB = b.startTimestamp || new Date(b.startTime).getTime();
               return timeA - timeB;
             });
 
@@ -64,8 +64,8 @@ export function setupMessageHandlers() {
 
             // Sort child groups by timestamp
             childGroups.sort((a, b) => {
-              const timeA = new Date(a.startTime);
-              const timeB = new Date(b.startTime);
+              const timeA = a.startTimestamp || new Date(a.startTime).getTime();
+              const timeB = b.startTimestamp || new Date(b.startTime).getTime();
               return timeA - timeB;
             });
 
@@ -159,8 +159,18 @@ export function setupMessageHandlers() {
 
       case COMMANDS.UPDATE_LOG_GROUP:
         if (message.stream === getCurrentStream()) {
-          updateLogGroup(message.groupId, message.status, message.endTime);
-          updateLogGroupUI(message.groupId, message.status, message.endTime);
+          updateLogGroup(
+            message.groupId,
+            message.status,
+            message.endTime,
+            message.endTimestamp,
+          );
+          updateLogGroupUI(
+            message.groupId,
+            message.status,
+            message.endTime,
+            message.endTimestamp,
+          );
         }
         break;
 

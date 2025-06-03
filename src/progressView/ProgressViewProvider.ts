@@ -38,7 +38,9 @@ interface LogGroup {
   id: string;
   name: string;
   startTime: string;
+  startTimestamp: number;
   endTime?: string;
+  endTimestamp?: number;
   status: StatusType;
   parentGroupId?: string;
   usage?: TokenUsageStats;
@@ -162,7 +164,17 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
           .filter(([channel]) => shouldPersistStream(channel))
           .map(([streamId, groups]) => [
             streamId,
-            new Map(Object.entries(groups)),
+            new Map(
+              Object.entries(groups).map(([id, group]) => {
+                if (group.startTimestamp === undefined) {
+                  group.startTimestamp = new Date(group.startTime).getTime();
+                }
+                if (group.endTime && group.endTimestamp === undefined) {
+                  group.endTimestamp = new Date(group.endTime).getTime();
+                }
+                return [id, group];
+              }),
+            ),
           ]),
       );
     } else {
@@ -474,8 +486,10 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     groupId: string,
     groupName: string,
     startTime: string,
+    startTimestamp: number,
     status: StatusType,
     endTime?: string,
+    endTimestamp?: number,
     parentGroupId?: string,
   ) {
     // Skip if this stream should be excluded from the progress view
@@ -507,7 +521,9 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       id: groupId,
       name: groupName,
       startTime,
+      startTimestamp,
       endTime,
+      endTimestamp,
       status,
       parentGroupId,
     });
@@ -522,7 +538,9 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
           id: groupId,
           name: groupName,
           startTime,
+          startTimestamp,
           endTime,
+          endTimestamp,
           status,
           parentGroupId,
         },
@@ -535,6 +553,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     groupId: string,
     status: StatusType,
     endTime?: string,
+    endTimestamp?: number,
   ) {
     // Skip if this stream should be excluded from the progress view
     if (shouldExcludeFromProgressView(stream)) {
@@ -555,6 +574,9 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     if (endTime) {
       group.endTime = endTime;
     }
+    if (endTimestamp !== undefined) {
+      group.endTimestamp = endTimestamp;
+    }
 
     this._saveState();
 
@@ -565,6 +587,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
         groupId,
         status,
         endTime,
+        endTimestamp,
       });
     }
   }
@@ -843,7 +866,8 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     }
 
     // Set end time for all groups
-    const endTime = new Date().toISOString();
+    const endTimestamp = Date.now();
+    const endTime = new Date(endTimestamp).toISOString();
     const STATUS_CANCELLED = STATUS.ERROR;
 
     // Update each running stream
@@ -864,7 +888,13 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
         );
 
         for (const [groupId, group] of activeGroups) {
-          this.updateLogGroup(streamId, groupId, STATUS_CANCELLED, endTime);
+          this.updateLogGroup(
+            streamId,
+            groupId,
+            STATUS_CANCELLED,
+            endTime,
+            endTimestamp,
+          );
         }
       }
     }
@@ -885,7 +915,8 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     );
 
     const STATUS_INTERRUPTED = STATUS.ERROR;
-    const endTime = new Date().toISOString();
+    const endTimestamp = Date.now();
+    const endTime = new Date(endTimestamp).toISOString();
     let updatedStreams = 0;
     let updatedGroups = 0;
 
@@ -925,7 +956,13 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
 
           // Mark all active groups as interrupted
           for (const [groupId, group] of activeGroups) {
-            this.updateLogGroup(streamId, groupId, STATUS_INTERRUPTED, endTime);
+            this.updateLogGroup(
+              streamId,
+              groupId,
+              STATUS_INTERRUPTED,
+              endTime,
+              endTimestamp,
+            );
             updatedGroups++;
           }
         }
