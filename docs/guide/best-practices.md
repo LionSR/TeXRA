@@ -185,7 +185,7 @@ Customize your VS Code environment for a smoother TeXRA experience:
 
 For easier access, especially on wider screens, consider moving the TeXRA view to the secondary sidebar:
 
-1.  Ensure the secondary sidebar is visible: Open VS Code's Command Palette (Ctrl+Shift+P or Cmd+Shift+P on macOS) and run "View: Toggle Secondary Side Bar Visibility" (or use Alt+Cmd+B on macOS).
+1.  Ensure the secondary sidebar is visible: Open VS Code's Command Palette (Ctrl+Shift+P or Cmd+Shift+P on macOS) and run "View: Toggle Secondary Side Bar Visibility" (or use Option+Cmd+B on macOS).
 2.  Drag the TeXRA icon from the primary sidebar (usually on the left) to the secondary sidebar (usually on the right).
 
 ### Cross-Computer Sync for Outputs
