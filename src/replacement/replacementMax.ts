@@ -423,8 +423,12 @@ export const MAX_MANUAL_REPLACEMENTS: ReplacementCategory = {
     '^{\\intercal}': '^\\top',
 
     // Common Math Shortcuts
-    '\\frac{1}{2}': '\\ha',
-    '\\frac{1}{\\sqrt{2}}': '\\sha',
+    '\\frac{1}{2}\\': '\\ha\\',
+    '\\frac{1}{2} ': '\\ha ',
+    '\\frac12': '\\ha',
+    '\\frac{1}{\\sqrt{2}}\\': '\\sha\\',
+    '\\frac{1}{\\sqrt{2}} ': '\\sha ',
+    // For the special case \frac{1}{2}a -> \haa which is wrong
     '\\mathds{1}': '\\Id',
     '\\boldsymbol{0}': '\\bzero',
     '\\boldsymbol{1}': '\\bone',
@@ -434,7 +438,7 @@ export const MAX_MANUAL_REPLACEMENTS: ReplacementCategory = {
     '\\boldsymbol{\\Sigma}': '\\bSig',
     '\\bSigma': '\\bSig',
 
-    '\\frac12': '\\ha',
+    
 
     // Special case for 'f' which uses 'bbf' instead of 'bf'
     '\\mathbf{f}': '\\bbf',
