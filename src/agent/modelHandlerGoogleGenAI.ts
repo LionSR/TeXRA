@@ -866,6 +866,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
       toolState.thinkingBlocks = thoughtParts.map((p) => ({
         type: 'thinking',
         thinking: p.text ?? '',
+        thoughtSignature: (p as any).thoughtSignature,
       }));
       toolState.thinkingAdded = true;
     }
