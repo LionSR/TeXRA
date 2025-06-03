@@ -401,7 +401,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
     // Extract base response
     const choice = responseObject.choices[0];
     const stopReason = choice.finish_reason;
-    this.logger.info(`Stop reason: ${stopReason}`);
+    this.logger.debug(`Stop reason: ${stopReason}`);
     let newResponse = '';
     if (choice.message.content) {
       newResponse = choice.message.content.trim();
@@ -452,7 +452,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
       `Start your response at the next token after: "${prefillTokens}"`;
 
     // Add continuation message
-    this.logger.info(
+    this.logger.debug(
       `Adding continuation message to conversation. Continuation message:\n ${userMessageContinuation}`,
     );
 
@@ -536,7 +536,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
       return [endTurn, messages];
     }
 
-    this.logger.info(
+    this.logger.warn(
       'Output file exists but no end tag found - continuing from file',
     );
     if (fileContent.includes(prefill)) {
