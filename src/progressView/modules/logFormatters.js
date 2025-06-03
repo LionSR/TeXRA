@@ -170,8 +170,8 @@ export function createGroupHeader(group) {
   if (group.usage) {
     const { inputTokens = 0, outputTokens = 0, cost = 0 } = group.usage;
     usageDisplay =
-      `<span class="group-usage"> • <i class="codicon codicon-arrow-down"></i> ${formatTokens(inputTokens)}, ` +
-      `<i class="codicon codicon-arrow-up"></i> ${formatTokens(outputTokens)}, ` +
+      `<span class="group-usage"> • <i class="codicon codicon-arrow-up"></i> ${formatTokens(inputTokens)}, ` +
+      `<i class="codicon codicon-arrow-down"></i> ${formatTokens(outputTokens)}, ` +
       `$${cost.toFixed(3)}</span>`;
   }
 
