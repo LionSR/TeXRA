@@ -69,7 +69,7 @@ export function updateStreamTabs(streams, activeStream) {
   tabsContainer.innerHTML = streams
     .map(
       (stream) =>
-        `<div class="tab-container ${stream === activeStream ? 'active' : ''}">
+        `<div class="tab-container ${stream === activeStream ? 'active' : ''}" title="${stream}">
           <button class="tab" data-stream="${stream}" title="${stream}">${stream}</button>
           <button class="tab-delete" data-stream="${stream}" title="Delete stream">
             <i class="codicon codicon-close"></i>
