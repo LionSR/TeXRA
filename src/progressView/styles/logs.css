@@ -71,17 +71,32 @@
   padding: var(--spacing-tiny) var(--spacing-small);
   font-size: var(--font-size-sm);
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  gap: var(--spacing-medium);
   color: var(--vscode-descriptionForeground);
   background-color: var(--vscode-sideBar-background);
   border-bottom: 1px solid var(--vscode-panel-border);
 }
 
+/* Header layout */
 .header-left {
   display: flex;
   align-items: center;
   gap: var(--spacing-medium);
+  flex: 1;
+  min-width: 0;
+}
+
+#currentStreamName,
+#runSummary {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.header-actions {
+  flex-shrink: 0;
+  margin-left: auto;
 }
 
 .run-summary {
@@ -261,6 +276,19 @@
   }
 
   .file-actions {
+    margin-left: auto;
+  }
+
+  .log-header {
+    flex-wrap: wrap;
+    gap: var(--spacing-small);
+  }
+
+  .header-left {
+    flex-basis: 100%;
+  }
+
+  .header-actions {
     margin-left: auto;
   }
 }
