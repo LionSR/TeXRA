@@ -325,8 +325,8 @@ async function processTikzPictureEndings(
   const patterns_scope_tikzpicture = [
     // Some of these might be too aggressive because i am getting an edge cases wihtout any spaces before \} somehow
 
-    // Fix cases where }; appears before \end{tikzpicture}
-    [/\};(\s*)\\end\{tikzpicture\}/g, '\\end{tikzpicture}\\};'],
+    // Fix cases where `};` directly precedes \end{tikzpicture} on the same line
+    [/\};([ \t]*)\\end\{tikzpicture\}/g, '\\end{tikzpicture}\n\\};$1'],
     // Original patterns
     [/\}(\s*)\\end\{tikzpicture\};/g, '};$1\\end{tikzpicture}'],
     [
