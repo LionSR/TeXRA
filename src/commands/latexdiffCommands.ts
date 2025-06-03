@@ -516,7 +516,7 @@ async function handleRunLatexdiff(config: any) {
         // Log detailed results
         for (const result of results) {
           if (result.success && result.diffFile) {
-            logger.info(
+            logger.debug(
               CHANNEL,
               `Successfully generated diff: ${result.diffFile}`,
             );
