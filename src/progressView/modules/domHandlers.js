@@ -16,6 +16,7 @@ import {
   formatLogEntry,
   getStatusIcon,
   formatDuration,
+  formatTokens,
 } from './logFormatters.js';
 import { STATUS, COMMANDS, SPLIT_SIZES, TOOLBAR_BUTTONS } from './constants.js';
 import { createIconButton } from '@common/templateUtils.js';
@@ -161,7 +162,7 @@ export function updateUsageSummary(usage) {
   if (!totals) {
     totals = { inputTokens: 0, outputTokens: 0, cost: 0 };
     for (const group of getLogGroups().values()) {
-      if (/^Round\s*\d+/i.test(group.name) && group.usage) {
+      if (group.usage) {
         totals.inputTokens += group.usage.inputTokens || 0;
         totals.outputTokens += group.usage.outputTokens || 0;
         totals.cost += group.usage.cost || 0;
@@ -177,7 +178,10 @@ export function updateUsageSummary(usage) {
     return;
   }
 
-  summaryElem.textContent = `in: ${totals.inputTokens}, out: ${totals.outputTokens}, $${totals.cost.toFixed(3)}`;
+  summaryElem.innerHTML =
+    `<i class="codicon codicon-arrow-down"></i> ${formatTokens(totals.inputTokens)}, ` +
+    `<i class="codicon codicon-arrow-up"></i> ${formatTokens(totals.outputTokens)}, ` +
+    `$${totals.cost.toFixed(3)}`;
 }
 
 /**
@@ -211,7 +215,10 @@ export function updateGroupUsage(groupId, usage) {
   }
 
   const { inputTokens = 0, outputTokens = 0, cost = 0 } = usage;
-  usageElem.textContent = ` • in: ${inputTokens}, out: ${outputTokens}, $${cost.toFixed(3)}`;
+  usageElem.innerHTML =
+    ` • <i class="codicon codicon-arrow-down"></i> ${formatTokens(inputTokens)}, ` +
+    `<i class="codicon codicon-arrow-up"></i> ${formatTokens(outputTokens)}, ` +
+    `$${cost.toFixed(3)}`;
 
   // Persist usage on the group state so the summary can be computed
   const group = getLogGroup(groupId);
