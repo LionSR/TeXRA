@@ -2,7 +2,7 @@
   "name": "texra",
   "displayName": "TeXRA",
   "description": "TeXRA: Your LLM-powered 24/7 LaTeX Research Assistant.",
-  "version": "0.31.0",
+  "version": "0.31.1",
   "publisher": "texra-ai",
   "engines": {
     "vscode": "^1.94.0"
@@ -372,33 +372,6 @@
       {
         "title": "LaTeX",
         "properties": {
-          "texra.latex.latexindentConfig": {
-            "type": "string",
-            "default": "",
-            "description": "Path to latexindent configuration file",
-            "editPresentation": "singlelineText",
-            "order": 1
-          },
-          "texra.latex.tikzInputDirectory": {
-            "type": "string",
-            "default": "",
-            "description": "Directory where to look for extra input files when compiling extracted TikZ figures. Absolute path is required. Sets TEXINPUTS environment variable for TikZ compilation.",
-            "editPresentation": "singlelineText",
-            "order": 2
-          },
-          "texra.latex.tikzTemplate": {
-            "type": "string",
-            "default": "\\documentclass[tikz,border=10pt]{standalone}\n\\usepackage{tikz}\n\\usepackage{pgfplots}\n\\usetikzlibrary{positioning}\n\\usetikzlibrary{patterns}\n\\usetikzlibrary{arrows.meta, shapes.geometric, matrix, calc, decorations.pathreplacing}\n\\usetikzlibrary{shapes, arrows}\n\n\\begin{document}\n{{ tikzpicture }}\n\\end{document}",
-            "description": "Template used for generating standalone documents when extracting and compiling TikZ figures",
-            "editPresentation": "multilineText",
-            "order": 3
-          },
-          "texra.latex.includeWorkspaceInTexinputs": {
-            "type": "boolean",
-            "default": true,
-            "description": "Include the workspace root directory in TEXINPUTS when compiling TikZ figures",
-            "order": 4
-          },
           "texra.latex.mathMarkup": {
             "type": "string",
             "default": "coarse",
@@ -415,8 +388,67 @@
               "Detect small changes in equations and mark up at fine granularity."
             ],
             "description": "Determine granularity of markup in displayed math environments for latexdiff",
+            "order": 7
+          }
+        }
+      },
+      {
+        "title": "LaTeX Formatter",
+        "properties": {
+          "texra.latex.formatter": {
+            "type": "string",
+            "enum": [
+              "latexindent",
+              "tex-fmt"
+            ],
+            "default": "latexindent",
+            "description": "LaTeX formatter to use when formatting files",
+            "order": 1
+          },
+          "texra.latex.latexindentConfig": {
+            "type": "string",
+            "default": "",
+            "description": "Path to latexindent configuration file",
+            "editPresentation": "singlelineText",
+            "order": 2
+          },
+          "texra.latex.texfmtConfig": {
+            "type": "string",
+            "default": "",
+            "description": "Path to tex-fmt configuration file",
+            "editPresentation": "singlelineText",
+            "order": 3
+          }
+        }
+      },
+      {
+        "title": "TikZ Figures",
+        "properties": {
+          "texra.latex.tikzInputDirectory": {
+            "type": "string",
+            "default": "",
+            "description": "Directory where to look for extra input files when compiling extracted TikZ figures. Absolute path is required. Sets TEXINPUTS environment variable for TikZ compilation.",
+            "editPresentation": "singlelineText",
+            "order": 4
+          },
+          "texra.latex.tikzTemplate": {
+            "type": "string",
+            "default": "\\documentclass[tikz,border=10pt]{standalone}\n\\usepackage{tikz}\n\\usepackage{pgfplots}\n\\usetikzlibrary{positioning}\n\\usetikzlibrary{patterns}\n\\usetikzlibrary{arrows.meta, shapes.geometric, matrix, calc, decorations.pathreplacing}\n\\usetikzlibrary{shapes, arrows}\n\n\\begin{document}\n{{ tikzpicture }}\n\\end{document}",
+            "description": "Template used for generating standalone documents when extracting and compiling TikZ figures",
+            "editPresentation": "multilineText",
             "order": 5
           },
+          "texra.latex.includeWorkspaceInTexinputs": {
+            "type": "boolean",
+            "default": true,
+            "description": "Include the workspace root directory in TEXINPUTS when compiling TikZ figures",
+            "order": 6
+          }
+        }
+      },
+      {
+        "title": "LaTeX Replacements",
+        "properties": {
           "texra.latex.enabledReplacements": {
             "type": "array",
             "items": {
@@ -449,7 +481,7 @@
               "gptness"
             ],
             "description": "List of enabled non-regex LaTeX replacement categories",
-            "order": 6
+            "order": 8
           },
           "texra.latex.enabledReplacementsRegex": {
             "type": "array",
@@ -472,7 +504,7 @@
               "equation_style"
             ],
             "description": "List of enabled regex LaTeX replacement categories",
-            "order": 7
+            "order": 9
           },
           "texra.latex.customReplacementsRegex": {
             "type": "object",
@@ -481,7 +513,7 @@
             "additionalProperties": {
               "type": "string"
             },
-            "order": 8
+            "order": 10
           },
           "texra.latex.customReplacements": {
             "type": "object",
@@ -490,7 +522,7 @@
             "additionalProperties": {
               "type": "string"
             },
-            "order": 9
+            "order": 11
           }
         }
       },
@@ -1027,7 +1059,19 @@
           "group": "3_modification"
         }
       ]
-    }
+    },
+    "keybindings": [
+      {
+        "command": "texra.mainView.focus",
+        "key": "ctrl+alt+m",
+        "mac": "cmd+option+m"
+      },
+      {
+        "command": "texra.showProgressView",
+        "key": "ctrl+alt+p",
+        "mac": "cmd+option+p"
+      }
+    ]
   },
   "scripts": {
     "vscode:prepublish": "npm run package",
@@ -1102,8 +1146,8 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.52.0",
     "@cantoo/pdf-lib": "^2.4.1",
-    "@google/genai": "^1.1.0",
-    "@types/yaml": "^1.9.6",
+    "@google/genai": "^1.3.0",
+    "@types/yaml": "^1.9.7",
     "@vscode/codicons": "^0.0.36",
     "@wolfram-alpha/wolfram-alpha-api": "^23.1004.144821-RELEASE",
     "axios": "^1.9.0",
@@ -1114,9 +1158,8 @@
     "gpt-tokenizer": "^2.9.0",
     "identifiers-arxiv": "^0.1.1",
     "marked": "^15.0.12",
-    "nunjucks": "^3.2.4",
-    "openai": "^4.103.0",
-    "pdf2pic": "^3.1.4",
+    "openai": "^5.0.2",
+    "pdf2pic": "^3.2.0",
     "sortablejs": "^1.15.6",
     "split.js": "^1.6.5",
     "terser-webpack-plugin": "^5.3.14",

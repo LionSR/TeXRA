@@ -18,12 +18,17 @@
         "imports": {
           "split.js": "${splitJsUri}",
           "marked": "https://esm.sh/marked@9.1.5",
-          "./modules/vscodeApi.js": "${vscodeApiUri}",
           "./modules/stateManager.js": "${stateManagerUri}",
           "./modules/messageHandlers.js": "${messageHandlersUri}",
           "./modules/domHandlers.js": "${domHandlersUri}",
           "./modules/constants.js": "${constantsUri}",
-          "./modules/logFormatters.js": "${logFormattersUri}"
+          "./modules/logFormatters.js": "${logFormattersUri}",
+          "@common/vscodeApi.js": "${vscodeApiUri}",
+          "@common/webviewState.js": "${webviewStateUri}",
+          "@common/templateUtils.js": "${templateUtilsUri}",
+          "@common/domUtils.js": "${domUtilsUri}",
+          "@common/stringUtils.js": "${stringUtilsUri}",
+          "@common/messageRouter.js": "${messageRouterUri}"
         }
       }
     </script>
@@ -96,5 +101,10 @@
         </div>
       </div>
     </div>
+    <template id="iconButtonTemplate">
+      <button class="vscode-button">
+        <i class="codicon"></i>
+      </button>
+    </template>
   </body>
 </html>

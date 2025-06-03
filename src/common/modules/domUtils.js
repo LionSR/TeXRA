@@ -1,5 +1,3 @@
-export { capitalize, uncapitalize } from './stringUtils.js';
-
 export function addEventListenerSafely(elementOrId, event, handler) {
   const element =
     typeof elementOrId === 'string'
@@ -53,24 +51,4 @@ export function safeGetElementChecked(id) {
     return false;
   }
   return element.checked;
-}
-
-export function createIconButton({
-  id,
-  icon,
-  title = '',
-  className = 'vscode-button',
-  disabled = false,
-  dataset = {},
-}) {
-  const btn = document.createElement('button');
-  btn.id = id;
-  btn.className = className;
-  btn.innerHTML = `<i class="codicon codicon-${icon}"></i>`;
-  btn.title = title;
-  btn.disabled = disabled;
-  Object.entries(dataset).forEach(([key, value]) => {
-    btn.dataset[key] = value;
-  });
-  return btn;
 }

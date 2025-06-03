@@ -50,7 +50,8 @@ export const TOOLBAR_BUTTONS = [
     id: 'stopStreamBtn',
     icon: 'debug-stop',
     command: COMMANDS.STOP_STREAM,
-    title: 'Request task interruption (note: current API call will complete)',
+    title:
+      'Request task interruption (current API call will be aborted if supported)',
     className: 'vscode-button stop-button',
     disabled: true,
   },

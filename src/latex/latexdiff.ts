@@ -15,8 +15,7 @@ import { getConfig } from '../utils/configUtils';
 import { logErrorMessage } from '../utils/errorHandlingUtils';
 
 // Local imports - latex utils
-import { runLatexIndent } from './latexindent';
-import { checkToolInstalled } from './texTools';
+import { runLatexFormatter } from './texFormatter';
 
 // Local imports - replacement utils
 import {
@@ -325,6 +324,8 @@ async function processTikzPictureEndings(
   ];
 
   const patterns_scope_tikzpicture = [
+    // Some of these might be too aggressive because i am getting an edge cases wihtout any spaces before \} somehow
+
     // Fix cases where }; appears before \end{tikzpicture}
     [/\};(\s*)\\end\{tikzpicture\}/g, '\\end{tikzpicture}\\};'],
     // Original patterns
@@ -334,6 +335,7 @@ async function processTikzPictureEndings(
       '$1\\end{tikzpicture}};\\DIFaddendFL',
     ],
     // Handle node closures with tikzpicture
+
     [/\};(\s*)\\end\{tikzpicture\}(\s*)\};/g, '\\end{tikzpicture}$1\\};$2\\};'],
     // Handle semicolons inside tikzpicture that should be after the environment
     [
@@ -381,10 +383,10 @@ export async function runLatexdiff(
 
     if (runIndent) {
       const indentResults = [];
-      if (!(await runLatexIndent(inputFile))) {
+      if (!(await runLatexFormatter(inputFile))) {
         indentResults.push(inputFile);
       }
-      if (!(await runLatexIndent(editedFile))) {
+      if (!(await runLatexFormatter(editedFile))) {
         indentResults.push(editedFile);
       }
       if (indentResults.length > 0) {

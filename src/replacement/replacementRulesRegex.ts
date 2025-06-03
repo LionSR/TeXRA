@@ -54,6 +54,8 @@ export const TIKZ_REPLACEMENTS: ReplacementCategory = {
   patterns: {
     '\\end{document}\\s*\\chapter': '\\chapter',
     '\\end{document}\\s*\\addcontentsline': '\\addcontentsline',
+
+    // Check the following, as I get \node[annotation, align=left] at (7.5,2.5) {State evolution\\in phase space\end{tikzpicture}\}; somehow
     '(?<indent>[\\t ]*)}\s*\\end{tikzpicture};\s*\\end{tikzpicture}':
       '${indent}\\end{tikzpicture}\n${indent}};\n${indent}\\end{tikzpicture}',
     '}(\\s*)\\end{tikzpicture};': '};$1\\end{tikzpicture}',

@@ -1,4 +1,4 @@
-import { vscode } from './vscodeApi.js';
+import { vscode } from '@common/vscodeApi.js';
 import {
   getCurrentStream,
   setStreamStatus,
@@ -9,7 +9,6 @@ import {
   getLogGroups,
   getStreamStatus,
   clearAllGroupToggleStates,
-  saveState,
 } from './stateManager.js';
 import {
   createGroupHeader,
@@ -19,7 +18,7 @@ import {
   formatDuration,
 } from './logFormatters.js';
 import { STATUS, COMMANDS, SPLIT_SIZES, TOOLBAR_BUTTONS } from './constants.js';
-// import { createIconButton } from 'modules/utils.js';
+import { createIconButton } from '@common/templateUtils.js';
 
 const STATUS_MAP = {
   [STATUS.RUNNING]: {
@@ -671,24 +670,4 @@ export function setupEventListeners() {
     gutterSize: 5,
     cursor: 'col-resize',
   });
-}
-
-export function createIconButton({
-  id,
-  icon,
-  title = '',
-  className = 'vscode-button',
-  disabled = false,
-  dataset = {},
-}) {
-  const btn = document.createElement('button');
-  btn.id = id;
-  btn.className = className;
-  btn.innerHTML = `<i class="codicon codicon-${icon}"></i>`;
-  btn.title = title;
-  btn.disabled = disabled;
-  Object.entries(dataset).forEach(([key, value]) => {
-    btn.dataset[key] = value;
-  });
-  return btn;
 }

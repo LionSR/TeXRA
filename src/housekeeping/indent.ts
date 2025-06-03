@@ -11,7 +11,7 @@ import * as logger from '../logger/logUtils';
 import { deleteFile, readDirectory } from '../utils/workspaceFileUtils';
 import { fileExistsAbsolute } from '../utils/absoluteFileUtils';
 import { getConfig } from '../utils/configUtils';
-import { executeCommand } from '../utils/execUtils';
+import { runLatexFormatter } from '../latex/texFormatter';
 
 // Local imports - housekeeping
 import { EXCLUDED_DIRS } from './constants';
@@ -20,10 +20,10 @@ const CHANNEL = 'Housekeeping';
 logger.initialize(CHANNEL);
 
 /**
- * Indents LaTeX files in a specific directory and its subdirectories
+ * Formats LaTeX files in a specific directory and its subdirectories
  * @param directory The directory to process (relative to workspace). If not provided, uses the root.
  * @param progressCallback Optional callback for progress updates
- * @returns Promise<number> The number of files indented
+ * @returns Promise<number> The number of files formatted
  */
 export async function indentLatexFilesInDirectory(
   directory: string = '.',
@@ -34,19 +34,21 @@ export async function indentLatexFilesInDirectory(
     `Starting LaTeX indentation process for directory: ${directory}`,
   );
 
-  const config = getConfig<string>('latex.latexindentConfig', '');
-  logger.debug(CHANNEL, `LaTeX indent config: ${config}`);
+  const formatter = getConfig<string>('latex.formatter', 'latexindent');
+  const configKey =
+    formatter === 'tex-fmt' ? 'latex.texfmtConfig' : 'latex.latexindentConfig';
+  const config = getConfig<string>(configKey, '');
+  logger.debug(CHANNEL, `Formatter: ${formatter}, Config: ${config}`);
 
   if (config) {
-    // Check if config file exists using fileExistsAbsolute
     const configExists = await fileExistsAbsolute(config);
     if (!configExists) {
       logger.error(
         CHANNEL,
-        `Error: Latexindent config file not found at ${config}`,
+        `Error: Formatter config file not found at ${config}`,
       );
       vscode.window.showErrorMessage(
-        `Latexindent config file not found at ${config}`,
+        `Formatter config file not found at ${config}`,
       );
       return 0;
     }
@@ -76,32 +78,15 @@ export async function indentLatexFilesInDirectory(
 
           logger.debug(CHANNEL, `Processing file: ${fullPath}`);
           try {
-            const command = [
-              'latexindent',
-              `"${fullPath}"`,
-              '-w', // Write to file
-              '-s', // Silent mode
-              config ? `-l="${config}"` : '', // Use absolute config path directly
-            ]
-              .filter(Boolean)
-              .join(' ');
-
-            logger.debug(CHANNEL, `Executing command: ${command}`);
-            const result = await executeCommand(command, { channel: CHANNEL });
-            if (!result.success) {
-              logger.error(CHANNEL, `Command error: ${result.stderr}`);
-              continue;
+            const success = await runLatexFormatter(fullPath);
+            if (success) {
+              logger.info(CHANNEL, `Successfully formatted: ${fullPath}`);
+              indentedCount++;
+            } else {
+              logger.error(CHANNEL, `Failed to format ${fullPath}`);
             }
-            if (result.stdout) {
-              logger.debug(CHANNEL, `Command output: ${result.stdout}`);
-            }
-            if (result.stderr) {
-              logger.debug(CHANNEL, `Command stderr: ${result.stderr}`);
-            }
-            logger.info(CHANNEL, `Successfully indented: ${fullPath}`);
-            indentedCount++;
           } catch (err) {
-            logger.error(CHANNEL, `Error indenting file ${fullPath}: ${err}`);
+            logger.error(CHANNEL, `Error formatting file ${fullPath}: ${err}`);
             continue;
           }
         }
@@ -156,7 +141,7 @@ export async function indentLatexFilesInDirectory(
 
     logger.info(
       CHANNEL,
-      `${indentedCount} .tex files have been indented in ${directory}`,
+      `${indentedCount} .tex files have been formatted in ${directory}`,
     );
     return indentedCount;
   } catch (err) {
