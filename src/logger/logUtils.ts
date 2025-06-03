@@ -92,7 +92,7 @@ class VSCodeTransport extends Transport {
 
     // Extract parts of the timestamp for display formatting
     // Full format is: YYYY-MM-DD HH:mm:ss.SSS
-    const timeDisplay = timestamp.split(' ')[1]; // Just show the time part in the UI
+    const timeDisplay = timestamp.split(' ')[1].split('.')[0]; // Drop milliseconds for UI display
 
     // For consolidated channel, include the source channel in the message
     const channelPrefix = this.useConsolidatedChannel
@@ -218,13 +218,12 @@ class VSCodeTransport extends Transport {
   startGroup(groupName: string, id?: string, parentGroupId?: string): string {
     const groupId =
       id || `group-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    const now = new Date();
-    const timeString = now.toISOString();
+    const now = Date.now();
 
     this.groups.set(groupId, {
       id: groupId,
       name: groupName,
-      startTime: timeString,
+      startTime: now,
       status: 'running',
       parentGroupId,
     });
@@ -242,7 +241,7 @@ class VSCodeTransport extends Transport {
         this.streamName,
         groupId,
         groupName,
-        timeString,
+        now,
         'running',
         undefined, // No end time for a new group
         parentGroupId, // Pass the parent group ID
@@ -259,8 +258,8 @@ class VSCodeTransport extends Transport {
       return;
     }
 
-    const now = new Date();
-    group.endTime = now.toISOString();
+    const now = Date.now();
+    group.endTime = now;
     group.status = status;
 
     // Skip progress view updates for consolidated channels
