@@ -53,6 +53,11 @@
   margin-left: var(--spacing-medium);
 }
 
+.log-group-header.top-level .group-time {
+  flex-grow: 1;
+  margin-left: 0;
+}
+
 .group-start-time,
 .group-duration {
   margin-right: var(--spacing-medium);
