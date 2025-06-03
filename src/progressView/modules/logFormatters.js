@@ -2,6 +2,15 @@ import { marked } from 'marked';
 import { getLogGroup, setLogGroup } from './stateManager.js';
 import { STATUS } from './constants.js';
 
+/**
+ * Format token counts, displaying values in "k" units when exceeding 4096.
+ * @param {number} tokens - Raw token count
+ * @returns {string} Formatted token count
+ */
+export function formatTokens(tokens) {
+  return tokens > 4096 ? `${Math.round(tokens / 1000)}k` : `${tokens}`;
+}
+
 // Configure marked options
 marked.setOptions({
   gfm: true, // Enable GitHub Flavored Markdown
@@ -160,7 +169,10 @@ export function createGroupHeader(group) {
   let usageDisplay = '';
   if (group.usage) {
     const { inputTokens = 0, outputTokens = 0, cost = 0 } = group.usage;
-    usageDisplay = `<span class="group-usage"> • in: ${inputTokens}, out: ${outputTokens}, $${cost.toFixed(3)}</span>`;
+    usageDisplay =
+      `<span class="group-usage"> • <i class="codicon codicon-arrow-down"></i> ${formatTokens(inputTokens)}, ` +
+      `<i class="codicon codicon-arrow-up"></i> ${formatTokens(outputTokens)}, ` +
+      `$${cost.toFixed(3)}</span>`;
   }
 
   const titleMarkup = isTopLevel
