@@ -173,7 +173,9 @@ export function createGroupHeader(group) {
       <span class="group-status-icon">${statusIcon}</span>
       ${titleMarkup}
       <span class="group-time">
-        <span class="group-start-time">Started: ${formattedStartTime}</span>
+        <span class="group-start-time" data-start="${group.startTime}">
+          <i class="codicon codicon-clock"></i> ${formattedStartTime}
+        </span>
         ${durationDisplay}
         ${usageDisplay}
       </span>
