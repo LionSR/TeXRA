@@ -184,12 +184,12 @@ export function createGroupHeader(group) {
     <summary id="group-header-${group.id}" class="log-group-header ${group.status} ${topLevelClass}">
       <span class="group-status-icon">${statusIcon}</span>
       ${titleMarkup}
+      ${usageDisplay}
       <span class="group-time">
         <span class="group-start-time" data-start="${group.startTime}">
           <i class="codicon codicon-clock"></i> ${formattedStartTime}
         </span>
         ${durationDisplay}
-        ${usageDisplay}
       </span>
     </summary>
   `;
