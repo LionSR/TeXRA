@@ -9,10 +9,10 @@ export interface LogGroup {
   id: string;
   /** Display name of the group */
   name: string;
-  /** ISO timestamp when the group started */
-  startTime: string;
-  /** ISO timestamp when the group ended */
-  endTime?: string;
+  /** Unix timestamp (ms) when the group started */
+  startTime: number;
+  /** Unix timestamp (ms) when the group ended */
+  endTime?: number;
   /** Current status of the group */
   status: 'running' | 'error' | 'stopped' | 'ready';
   /** Parent group ID for nested groups */

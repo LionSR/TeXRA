@@ -146,8 +146,7 @@ export function createGroupHeader(group) {
 
   let durationDisplay = '';
   if (group.endTime) {
-    const endDate = new Date(group.endTime);
-    const durationMs = endDate - startDate;
+    const durationMs = group.endTime - group.startTime;
     durationDisplay = `<span class="group-duration">${formatDuration(durationMs)}</span>`;
   }
 
@@ -215,9 +214,9 @@ export function formatDuration(durationMs) {
   // Handle edge cases
   if (durationMs < 0) return '0s';
 
-  // For very short durations, show milliseconds
+  // For very short durations, show under a second
   if (durationMs < 1000) {
-    return `${durationMs}ms`;
+    return '<1s';
   }
 
   const seconds = Math.floor(durationMs / 1000) % 60;
