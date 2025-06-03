@@ -633,6 +633,8 @@ export const LATEX_DOCUMENT_REPLACEMENTS: ReplacementCategory = {
     '</xml:documents>': '</latex_documents>',
     '```xml\n': '',
     '</xml>': '',
+    '\\end{document>': '\\end{document}',
+    '\\end{document>\n': '\\end{document}\n',
     '\\end\n': '\\end{document}\n',
 
     // ===== Debtable one-offs =====
