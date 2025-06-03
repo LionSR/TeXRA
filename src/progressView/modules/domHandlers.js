@@ -70,7 +70,7 @@ export function updateStreamTabs(streams, activeStream) {
     .map(
       (stream) =>
         `<div class="tab-container ${stream === activeStream ? 'active' : ''}">
-          <button class="tab" data-stream="${stream}">${stream}</button>
+          <button class="tab" data-stream="${stream}" title="${stream}">${stream}</button>
           <button class="tab-delete" data-stream="${stream}" title="Delete stream">
             <i class="codicon codicon-close"></i>
           </button>
@@ -452,8 +452,11 @@ export function addLogGroup(group) {
                 break;
               }
             } else {
-              const timeText = timeElem.textContent.replace('Started: ', '');
-              const otherTime = new Date(`2000-01-01 ${timeText}`).getTime();
+              const otherTime = timeElem.dataset.start
+                ? parseInt(timeElem.dataset.start, 10)
+                : new Date(
+                    `2000-01-01 ${timeElem.textContent.replace(/^[^0-9]*/, '')}`,
+                  ).getTime();
 
               if (startTime < otherTime) {
                 insertPosition = child;
@@ -591,11 +594,24 @@ export function appendLogToGroup(logMessage) {
                   break;
                 }
               } else {
-                const timeText = startTimeElem.textContent;
-                const childTimestamp = timeText.replace('Started: ', '');
-                if (msgTimestamp < childTimestamp) {
-                  insertPosition = child;
-                  break;
+                const childTime = startTimeElem.dataset.start
+                  ? parseInt(startTimeElem.dataset.start, 10)
+                  : null;
+
+                if (msgDate && childTime) {
+                  if (msgDate.getTime() < childTime) {
+                    insertPosition = child;
+                    break;
+                  }
+                } else {
+                  const timeText = startTimeElem.textContent.replace(
+                    /^[^0-9]*/,
+                    '',
+                  );
+                  if (msgTimestamp < timeText) {
+                    insertPosition = child;
+                    break;
+                  }
                 }
               }
             }
