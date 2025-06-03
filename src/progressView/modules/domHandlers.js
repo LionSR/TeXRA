@@ -403,7 +403,7 @@ export function addLogGroup(group) {
 
     if (parentContentElement) {
       // Find the correct chronological position to insert the group
-      const startTime = new Date(group.startTime);
+      const startTime = group.startTime;
       let insertPosition = null;
 
       // Get all existing child elements in the parent container
@@ -430,7 +430,7 @@ export function addLogGroup(group) {
               : new Date(`2000-01-01 ${msgTimestamp}`);
           }
 
-          if (startTime < msgTime) {
+          if (startTime < msgTime.getTime()) {
             insertPosition = child;
             break;
           }
@@ -445,7 +445,7 @@ export function addLogGroup(group) {
             const otherGroup = getLogGroup(otherGroupId);
 
             if (otherGroup && otherGroup.startTime) {
-              const otherTime = new Date(otherGroup.startTime);
+              const otherTime = otherGroup.startTime;
 
               if (startTime < otherTime) {
                 insertPosition = child;
@@ -453,7 +453,7 @@ export function addLogGroup(group) {
               }
             } else {
               const timeText = timeElem.textContent.replace('Started: ', '');
-              const otherTime = new Date(`2000-01-01 ${timeText}`);
+              const otherTime = new Date(`2000-01-01 ${timeText}`).getTime();
 
               if (startTime < otherTime) {
                 insertPosition = child;
@@ -513,8 +513,8 @@ export function updateLogGroupUI(groupId, status, endTime) {
     const timeContainer = header.querySelector('.group-time');
 
     if (endTime) {
-      const endDate = new Date(endTime);
-      const startDate = new Date(group.startTime);
+      const endDate = endTime;
+      const startDate = group.startTime;
       const durationMs = endDate - startDate;
 
       // Update or create duration element
@@ -583,10 +583,10 @@ export function appendLogToGroup(logMessage) {
             const groupId = headerEl.id.replace('group-header-', '');
             const group = getLogGroup(groupId);
             if (group && group.startTime) {
-              const childDate = new Date(group.startTime);
+              const childTime = group.startTime;
 
-              if (msgDate && childDate) {
-                if (msgDate < childDate) {
+              if (msgDate && childTime) {
+                if (msgDate.getTime() < childTime) {
                   insertPosition = child;
                   break;
                 }
