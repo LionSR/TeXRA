@@ -31,8 +31,8 @@ export async function setVarFromFile(
     userVars[`${varName}_CONTENT`] = fileContent;
     logger.info(`Found from [${source}] the [VAR '${varName}']: ${filePath}`);
     return true;
-  } catch {
-    logger.warn(`[${source}] ${filePath} not found from [VAR '${varName}']`);
+  } catch (err) {
+    logger.warn(`[${source}] ${filePath} not found from [VAR '${varName}']. Error: ${err.message}`);
     return false;
   }
 }
