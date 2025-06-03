@@ -19,7 +19,10 @@ export function formatLogEntry(logMessage) {
   let message = logMessage.message;
 
   // Show thinking content before scratchpad content
-  if (message.includes('Thinking content:')) {
+  if (
+    logMessage.messageType === 'thinking' ||
+    message.includes('Thinking content:')
+  ) {
     // Extract the actual thinking content
     const thinkingMatch = message.match(
       /<span class="message-info">(Thinking content:.*?)<\/span>/s,
@@ -40,7 +43,10 @@ export function formatLogEntry(logMessage) {
   }
 
   // Check for scratchpad content
-  if (message.includes('data-is-scratchpad="true"')) {
+  if (
+    logMessage.messageType === 'scratchpad' ||
+    message.includes('data-is-scratchpad="true"')
+  ) {
     // Extract the actual scratchpad content
     const scratchpadMatch = message.match(
       /<span class="message-info">(Scratchpad content:.*?)<\/span>/s,
