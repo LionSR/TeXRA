@@ -422,7 +422,8 @@ export class OutputHandler {
               path.dirname(baseFile),
               result.diffFileName,
             );
-            await compileLatex2Pdf(diffPath, this.channel);
+            const buildDir = path.join(path.dirname(diffPath), 'build');
+            await compileLatex2Pdf(diffPath, this.channel, buildDir);
           }
         }
       }
@@ -478,7 +479,8 @@ export class OutputHandler {
               path.dirname(prevOutputFile),
               result.diffFileName,
             );
-            await compileLatex2Pdf(diffPath, this.channel);
+            const buildDir = path.join(path.dirname(diffPath), 'build');
+            await compileLatex2Pdf(diffPath, this.channel, buildDir);
           }
         }
       }
