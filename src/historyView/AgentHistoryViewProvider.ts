@@ -181,7 +181,7 @@ export class AgentHistoryViewProvider implements vscode.WebviewViewProvider {
         'codicon.css',
       );
       const codiconUri = this._view?.webview.asWebviewUri(codiconPath);
-      const commonStyleUri = vscode.Uri.joinPath(
+      const commonStylePath = vscode.Uri.joinPath(
         this.context.extensionUri,
         'src',
         'common',
@@ -189,13 +189,12 @@ export class AgentHistoryViewProvider implements vscode.WebviewViewProvider {
         'common.css',
       );
 
-      const commonStyleUriWeb =
-        this._view!.webview.asWebviewUri(commonStyleUri);
+      const commonStyleUri = this._view!.webview.asWebviewUri(commonStylePath);
 
       return buildWebviewHtml(this._view!.webview, htmlPath, {
         scriptUri,
         styleUri,
-        commonStyleUri: commonStyleUriWeb,
+        commonStyleUri,
         vscodeApiUri,
         messageRouterUri,
         domHandlersUri,
