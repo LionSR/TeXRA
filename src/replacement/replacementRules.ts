@@ -475,12 +475,13 @@ export const LATEX_XML_REPLACEMENTS: ReplacementCategory = {
 
     // Lists of environment/tag names
     const latexEnvironments = [
-      'document',
+      // 'document', // this also replaced xml tags which is also being used!!
       'figure',
       'figure*',
+      'axis',
       'tikzpicture',
       'scope',
-      'output',
+      // 'output', // this might also be a xml tag?
       'response',
       'itemize',
       'enumerate',
@@ -539,6 +540,7 @@ export const LATEX_XML_REPLACEMENTS: ReplacementCategory = {
     latexEnvironments.forEach((env) => {
       patterns[`\\end{${env}>}`] = `\\end{${env}}`;
       patterns[`\\end{${env}>`] = `\\end{${env}}`;
+      patterns[`</end{${env}>`] = `\\end{${env}}`;
     });
 
     // ===== 2. XML BRACE FIXES =====
@@ -592,18 +594,21 @@ export const LATEX_DOCUMENT_REPLACEMENTS: ReplacementCategory = {
     '</latex_document>\n\n</latex_document>': '</latex_document>\n',
 
     // ===== 9. DOCUMENT STRUCTURE FIXES =====
-    '\\end{document}\n\n\\<document name=':
-      '\\end{document}\\n</document>\\n\\<document name=',
-    '\\end{document}\n\\<document name=':
-      '\\end{document}\n</document>\n\\<document name=',
+    // '\\end{document}\n\n\\<document name=':
+    //   '\\end{document}\\n</document>\\n\\<document name=',
+    '\\end{document}\n\\end{document}\n<document name=':
+      '\\end{document}\n</document>\n<document name=',
+    // '\\end{document}\n\\<document name=':
+    //   '\\end{document}\n</document>\n\\<document name=',
     '\\end{latex_document}\n</latex_document>':
       '\\end{document}\n</latex_document>',
+    '\\end{document}\n\\end{document}\n</latex_documents>':
+      '\\end{document}\n</document>\n</latex_documents>',
+    // The following two might be aggressive
     '\\end{document}\n</latex_documents>':
       '\\end{document}\n</document>\n</latex_documents>',
     '\\end{document}\n\n<document name':
       '\\end{document}\n</document>\n\n<document name',
-    '\\end{document}\n\\end{document}\n<document':
-      '\\end{document}\n</document>\n<document',
     '\\end{document}\n<document name':
       '\\end{document}\n</document>\n<document name',
     '\\end{document}\n</rebuttal_package>':
@@ -631,7 +636,6 @@ export const LATEX_DOCUMENT_REPLACEMENTS: ReplacementCategory = {
     '\\end\n': '\\end{document}\n',
 
     // ===== Debtable one-offs =====
-
   },
 };
 
