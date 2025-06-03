@@ -1,4 +1,13 @@
-import { vscode } from './vscodeApi.js';
+import { vscode } from '@common/vscodeApi.js';
+import { registerMessageHandlers } from '@common/messageRouter.js';
+import { safeSetElementValue, safeGetElementById } from '@common/domUtils.js';
+import { capitalize, uncapitalize } from '@common/stringUtils.js';
+import {
+  getWebviewState,
+  updateWebviewState,
+  setWebviewState,
+} from '@common/webviewState.js';
+
 import {
   updateFileSelect,
   updateEditedFileSelect,
@@ -6,15 +15,28 @@ import {
   handleRecentCommits,
   handleSetCurrentFile,
 } from './fileHandlers.js';
-import { safeSetElementValue, safeGetElementById } from './utils.js';
+
 import { restoreState, saveState } from './stateManager.js';
 import { FILE_TYPES } from './constants.js';
-import { capitalize, uncapitalize } from './stringUtils.js';
-import {
-  getWebviewState,
-  updateWebviewState,
-  setWebviewState,
-} from './webviewState.js';
+
+/**
+ * Initialize data requests on window load
+ */
+export function initializeDataRequests() {
+  const dataRequests = [
+    'getTheme',
+    'requestInputFile',
+    'requestReferenceFile',
+    'requestAuxiliaryFile',
+    'requestMediaFile',
+    'requestRecentCommits',
+    'requestBaseFile',
+  ];
+
+  dataRequests.forEach((request) => {
+    vscode.postMessage({ command: request });
+  });
+}
 
 /**
  * Handle state restoration from log view
@@ -203,138 +225,166 @@ function handleStateRestoration(state) {
   window._skipNextRestoreState = true;
 }
 
+function postHandle() {
+  if (window._skipNextRestoreState) {
+    window._skipNextRestoreState = false;
+  } else {
+    restoreState();
+  }
+}
+
 export function setupMessageHandlers() {
-  window.addEventListener('message', (event) => {
-    const message = event.data;
-
-    switch (message.command) {
-      case 'setTheme':
-        document.body.className = message.theme;
-        break;
-      case 'modelSelected':
-        safeSetElementValue('model', message.model);
-        break;
-      case 'restoreState':
-        handleStateRestoration(message.state);
-        break;
-      case 'checkRestoredBaseFile':
-        const restoredBaseFileDiv = safeGetElementById('baseFile');
-        if (restoredBaseFileDiv && restoredBaseFileDiv.value) {
-          updateEditedFileSelect(restoredBaseFileDiv.value);
-        }
-        break;
-      case 'instructionTextPolished':
-        const instruction = safeGetElementById('instruction');
-        if (instruction && message.text) {
-          instruction.value = message.text;
-          vscode.postMessage({
-            command: 'showInformationMessage',
-            text: 'Instruction text has been polished!',
-          });
-          saveState();
-        }
-        break;
-      // File selection
-      case 'setInputFile':
-      case 'setReferenceFile':
-      case 'setAuxiliaryFile':
-      case 'setMediaFile':
-      case 'setEditedFile':
-        // console.log(
-        //   `Handling ${message.command} with ${message.files ? message.files.length : 0} files`,
-        // );
-        updateFileSelect(uncapitalize(message.command.slice(3)), message.files);
-        break;
-      case 'inputFileSelected':
-      case 'referenceFileSelected':
-      case 'auxiliaryFileSelected':
-      case 'mediaFileSelected':
-      case 'editedFileSelected':
-        safeSetElementValue(
-          message.command.replace('Selected', ''),
-          message.filePath,
-        );
-        break;
-      // Multiple file selection
-      case 'setInputFiles':
-      case 'setReferenceFiles':
-      case 'setAuxiliaryFiles':
-      case 'setMediaFiles':
-      case 'setOutputFiles':
-        // console.log(
-        //   `Handling ${message.command} with ${message.files ? message.files.length : 0} files`,
-        // );
-        // Always use lowercase container ID to match HTML structure
-        const fileTypeKey = message.command.replace('set', '');
-        const containerID = uncapitalize(fileTypeKey);
-        const toggleID = `toggle${fileTypeKey}`;
-
-        updateMultipleFileSelect(containerID, toggleID, message.files);
-        break;
-      case 'setRecentCommits':
-        handleRecentCommits(message);
-        break;
-      case 'setCurrentFile':
-        handleSetCurrentFile({
-          fileType: message.fileType,
-          filePath: message.filePath,
+  const handlers = {
+    setTheme: (m) => {
+      document.body.className = m.theme;
+      postHandle();
+    },
+    modelSelected: (m) => {
+      safeSetElementValue('model', m.model);
+      postHandle();
+    },
+    restoreState: (m) => {
+      handleStateRestoration(m.state);
+      postHandle();
+    },
+    checkRestoredBaseFile: () => {
+      const restoredBaseFileDiv = safeGetElementById('baseFile');
+      if (restoredBaseFileDiv && restoredBaseFileDiv.value) {
+        updateEditedFileSelect(restoredBaseFileDiv.value);
+      }
+      postHandle();
+    },
+    instructionTextPolished: (m) => {
+      const instruction = safeGetElementById('instruction');
+      if (instruction && m.text) {
+        instruction.value = m.text;
+        vscode.postMessage({
+          command: 'showInformationMessage',
+          text: 'Instruction text has been polished!',
         });
-        break;
-      case 'setOpenedFiles':
-        // Only update the specified file type's multiple selection
-        if (message.fileType) {
-          const fileType = message.fileType.replace('Files', '');
-          const singleFileId = `${uncapitalize(fileType)}File`;
-          const multipleFileId = `${uncapitalize(fileType)}Files`;
-          const toggleId = `toggle${capitalize(fileType)}Files`;
+        saveState();
+      }
+      postHandle();
+    },
+    setInputFile: (m) => {
+      updateFileSelect('inputFile', m.files);
+      postHandle();
+    },
+    setReferenceFile: (m) => {
+      updateFileSelect('referenceFile', m.files);
+      postHandle();
+    },
+    setAuxiliaryFile: (m) => {
+      updateFileSelect('auxiliaryFile', m.files);
+      postHandle();
+    },
+    setMediaFile: (m) => {
+      updateFileSelect('mediaFile', m.files);
+      postHandle();
+    },
+    setEditedFile: (m) => {
+      updateFileSelect('editedFile', m.files);
+      postHandle();
+    },
+    inputFileSelected: (m) => {
+      safeSetElementValue('inputFile', m.filePath);
+      postHandle();
+    },
+    referenceFileSelected: (m) => {
+      safeSetElementValue('referenceFile', m.filePath);
+      postHandle();
+    },
+    auxiliaryFileSelected: (m) => {
+      safeSetElementValue('auxiliaryFile', m.filePath);
+      postHandle();
+    },
+    mediaFileSelected: (m) => {
+      safeSetElementValue('mediaFile', m.filePath);
+      postHandle();
+    },
+    editedFileSelected: (m) => {
+      safeSetElementValue('editedFile', m.filePath);
+      postHandle();
+    },
+    setInputFiles: (m) => {
+      updateMultipleFileSelect('inputFiles', 'toggleInputFiles', m.files);
+      postHandle();
+    },
+    setReferenceFiles: (m) => {
+      updateMultipleFileSelect(
+        'referenceFiles',
+        'toggleReferenceFiles',
+        m.files,
+      );
+      postHandle();
+    },
+    setAuxiliaryFiles: (m) => {
+      updateMultipleFileSelect(
+        'auxiliaryFiles',
+        'toggleAuxiliaryFiles',
+        m.files,
+      );
+      postHandle();
+    },
+    setMediaFiles: (m) => {
+      updateMultipleFileSelect('mediaFiles', 'toggleMediaFiles', m.files);
+      postHandle();
+    },
+    setOutputFiles: (m) => {
+      updateMultipleFileSelect('outputFiles', 'toggleOutputFiles', m.files);
+      postHandle();
+    },
+    setRecentCommits: (m) => {
+      handleRecentCommits(m);
+      postHandle();
+    },
+    setCurrentFile: (m) => {
+      handleSetCurrentFile({ fileType: m.fileType, filePath: m.filePath });
+      postHandle();
+    },
+    setOpenedFiles: (m) => {
+      if (m.fileType) {
+        const fileType = m.fileType.replace('Files', '');
+        const singleFileId = `${uncapitalize(fileType)}File`;
+        const multipleFileId = `${uncapitalize(fileType)}Files`;
+        const toggleId = `toggle${capitalize(fileType)}Files`;
 
-          let filesToAdd = message.files ?? [];
-
-          // If shouldFilter is true, filter out the file that's already selected in the single select
-          if (message.shouldFilter) {
-            const singleFileSelect = safeGetElementById(singleFileId);
-            if (singleFileSelect && singleFileSelect.value) {
-              filesToAdd = filesToAdd.filter(
-                (file) => file !== singleFileSelect.value,
-              );
-            }
+        let filesToAdd = m.files ?? [];
+        if (m.shouldFilter) {
+          const singleFileSelect = safeGetElementById(singleFileId);
+          if (singleFileSelect && singleFileSelect.value) {
+            filesToAdd = filesToAdd.filter((f) => f !== singleFileSelect.value);
           }
-
-          updateMultipleFileSelect(multipleFileId, toggleId, filesToAdd);
         }
-        break;
-      case 'setBaseFile':
-        const currentBaseFileDiv = safeGetElementById('baseFile');
-        if (currentBaseFileDiv) {
-          const currentBaseFile = currentBaseFileDiv.value;
-          updateFileSelect('baseFile', message.files);
 
-          // Get the stored state
-          const state = getWebviewState();
-          const storedBaseFile = state?.baseFile;
+        updateMultipleFileSelect(multipleFileId, toggleId, filesToAdd);
+      }
+      postHandle();
+    },
+    setBaseFile: (m) => {
+      const currentBaseFileDiv = safeGetElementById('baseFile');
+      if (currentBaseFileDiv) {
+        const currentBaseFile = currentBaseFileDiv.value;
+        updateFileSelect('baseFile', m.files);
 
-          // First try to restore from stored state, then fallback to current if preserveBaseFile
-          if (storedBaseFile && message.files.includes(storedBaseFile)) {
-            currentBaseFileDiv.value = storedBaseFile;
-          } else if (
-            message.preserveBaseFile &&
-            currentBaseFile &&
-            message.files.includes(currentBaseFile)
-          ) {
-            currentBaseFileDiv.value = currentBaseFile;
-          }
+        const state = getWebviewState();
+        const storedBaseFile = state?.baseFile;
 
-          // Always update edited files based on final base file value
-          updateEditedFileSelect(currentBaseFileDiv.value);
+        if (storedBaseFile && m.files.includes(storedBaseFile)) {
+          currentBaseFileDiv.value = storedBaseFile;
+        } else if (
+          m.preserveBaseFile &&
+          currentBaseFile &&
+          m.files.includes(currentBaseFile)
+        ) {
+          currentBaseFileDiv.value = currentBaseFile;
         }
-        break;
-    }
 
-    // Only restore state if we didn't just handle a state restoration
-    if (window._skipNextRestoreState) {
-      window._skipNextRestoreState = false;
-    } else {
-      restoreState();
-    }
-  });
+        updateEditedFileSelect(currentBaseFileDiv.value);
+      }
+      postHandle();
+    },
+  };
+
+  registerMessageHandlers(handlers);
 }

@@ -82,6 +82,7 @@ export default tseslint.config(
       'src/progressView/modules/**/*.js',
       'src/webview/modules/**/*.js',
       'src/common/*.js',
+      'src/common/modules/*.js',
       'src/historyView/script.js',
       'src/progressView/script.js',
       'src/webview/script.js',

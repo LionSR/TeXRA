@@ -30,107 +30,107 @@ import { AgentConfig } from '../agent/AgentConfig';
 const CHANNEL = 'MessageHandler';
 
 export class WebviewMessageHandler {
-  constructor(private readonly context: vscode.ExtensionContext) {}
+  private handlers: Record<
+    string,
+    (message: any, webviewView: vscode.WebviewView) => unknown
+  >;
+
+  constructor(private readonly context: vscode.ExtensionContext) {
+    this.handlers = {
+      showInformationMessage: (message) => this.handleInfoMessage(message),
+      getTheme: (_m, view) => this.handleThemeRequest(view),
+      modelSelected: (message, view) =>
+        this.handleModelSelection(message, view),
+      execute: (message) => this.handleExecute(message),
+      merge: (message) => this.handleMerge(message),
+      compare: (message) => this.handleCompare(message),
+      acceptEdited: (message) => this.handleAcceptEdited(message),
+      // File selection cases
+      selectInputFile: (message, view) =>
+        this.handleFileSelection(message, view),
+      selectReferenceFile: (message, view) =>
+        this.handleFileSelection(message, view),
+      selectAuxiliaryFile: (message, view) =>
+        this.handleFileSelection(message, view),
+      selectMediaFile: (message, view) =>
+        this.handleFileSelection(message, view),
+      selectEditedFile: (_m, view) => this.handleEditedFileSelection(view),
+      // File selected cases
+      inputFileSelected: (message, view) =>
+        this.handleInputFileSelected(message, view),
+      referenceFileSelected: (message) =>
+        this.handleGenericFileSelected(message),
+      auxiliaryFileSelected: (message) =>
+        this.handleGenericFileSelected(message),
+      mediaFileSelected: (message) => this.handleGenericFileSelected(message),
+      editedFileSelected: (message) => this.handleGenericFileSelected(message),
+      // Request file cases
+      requestInputFile: (_m, view) => this.handleRequestInputFile(view),
+      requestReferenceFile: (message, view) =>
+        this.handleRequestFile(message, view),
+      requestAuxiliaryFile: (message, view) =>
+        this.handleRequestFile(message, view),
+      requestMediaFile: (message, view) =>
+        this.handleRequestFile(message, view),
+      requestEditedFile: (message, view) =>
+        this.handleRequestEditedFile(message, view),
+      requestBaseFile: (_m, view) => this.handleRequestBaseFile(view),
+      // Handle file list updates from webview
+      updateInputFiles: (message, view) =>
+        this.handleUpdateFiles(message, view),
+      updateReferenceFiles: (message, view) =>
+        this.handleUpdateFiles(message, view),
+      updateAuxiliaryFiles: (message, view) =>
+        this.handleUpdateFiles(message, view),
+      updateMediaFiles: (message, view) =>
+        this.handleUpdateFiles(message, view),
+      updateOutputFiles: (message, view) =>
+        this.handleUpdateFiles(message, view),
+      // Multiple file selection cases
+      setInputFiles: (message, view) =>
+        this.handleSetMultipleFiles(message, view),
+      setReferenceFiles: (message, view) =>
+        this.handleSetMultipleFiles(message, view),
+      setAuxiliaryFiles: (message, view) =>
+        this.handleSetMultipleFiles(message, view),
+      setMediaFiles: (message, view) =>
+        this.handleSetMultipleFiles(message, view),
+      selectMultipleFiles: (message, view) =>
+        this.handleSelectMultipleFiles(message, view),
+      refreshAllFiles: (_m, view) => this.handleRefreshAllFiles(view),
+      // Housekeeping cases
+      cleanOutput: (message) => this.handleHousekeeping(message),
+      cleanBuild: (message) => this.handleHousekeeping(message),
+      indentTeX: (message) => this.handleHousekeeping(message),
+      packSingle: (message) => this.handleSingleOperation(message),
+      cleanSingle: (message) => this.handleSingleOperation(message),
+      packMultiple: (message) => this.handleMultipleOperation(message),
+      cleanMultiple: (message) => this.handleMultipleOperation(message),
+      // Latex diff cases
+      latexdiff: (message) => this.handleLatexdiff(message),
+      latexdiffvc: (message) => this.handleLatexdiffvc(message),
+      requestRecentCommits: (_m, view) => this.handleRequestRecentCommits(view),
+      refreshCommits: (_m, view) => this.handleRefreshCommits(view),
+      packLatexdiffvc: (message) => this.handleLatexdiffvcOperation(message),
+      cleanLatexdiffvc: (message) => this.handleLatexdiffvcOperation(message),
+      // VS Code logic cases
+      getCurrentFile: (message, view) =>
+        this.handleGetCurrentFile(message, view),
+      addOpenedFiles: (message, view) =>
+        this.handleAddOpenedFiles(message.fileType, view),
+      polishInstructionText: (message, view) =>
+        this.handlePolishInstructionText(message, view),
+      showAgentHistory: () => this.handleShowAgentHistory(),
+      openSettings: () => this.handleOpenSettings(),
+    };
+  }
 
   async handleMessage(message: any, webviewView: vscode.WebviewView) {
     logger.debug(CHANNEL, `Received message: ${message.command}`);
 
-    switch (message.command) {
-      case 'showInformationMessage':
-        return this.handleInfoMessage(message);
-      case 'getTheme':
-        return this.handleThemeRequest(webviewView);
-      // Why no agentSelected?
-      case 'modelSelected':
-        return this.handleModelSelection(message, webviewView);
-      case 'execute':
-        return this.handleExecute(message);
-      case 'merge':
-        return this.handleMerge(message);
-      case 'compare':
-        return this.handleCompare(message);
-      case 'acceptEdited':
-        return this.handleAcceptEdited(message);
-      // File selection cases
-      case 'selectInputFile':
-      case 'selectReferenceFile':
-      case 'selectAuxiliaryFile':
-      case 'selectMediaFile':
-        return this.handleFileSelection(message, webviewView);
-      case 'selectEditedFile':
-        return this.handleEditedFileSelection(webviewView);
-      // File Selected cases
-      case 'inputFileSelected':
-        return this.handleInputFileSelected(message, webviewView);
-      case 'referenceFileSelected':
-      case 'auxiliaryFileSelected':
-      case 'mediaFileSelected':
-      case 'editedFileSelected':
-        return this.handleGenericFileSelected(message);
-      // Request File cases
-      case 'requestInputFile':
-        return this.handleRequestInputFile(webviewView);
-      case 'requestReferenceFile':
-      case 'requestAuxiliaryFile':
-      case 'requestMediaFile':
-        return this.handleRequestFile(message, webviewView);
-      case 'requestEditedFile':
-        return this.handleRequestEditedFile(message, webviewView);
-      case 'requestBaseFile':
-        return this.handleRequestBaseFile(webviewView);
-      // Handle file list updates from webview
-      case 'updateInputFiles':
-      case 'updateReferenceFiles':
-      case 'updateAuxiliaryFiles':
-      case 'updateMediaFiles':
-      case 'updateOutputFiles':
-        return this.handleUpdateFiles(message, webviewView);
-      // Multiple file selection cases
-      case 'setInputFiles':
-      case 'setReferenceFiles':
-      case 'setAuxiliaryFiles':
-      case 'setMediaFiles':
-        return this.handleSetMultipleFiles(message, webviewView);
-      case 'selectMultipleFiles':
-        return this.handleSelectMultipleFiles(message, webviewView);
-      case 'refreshAllFiles':
-        return this.handleRefreshAllFiles(webviewView);
-      // Housekeeping cases
-      case 'cleanOutput':
-      case 'cleanBuild':
-      case 'indentTeX':
-        return this.handleHousekeeping(message);
-      case 'packSingle':
-      case 'cleanSingle':
-        return this.handleSingleOperation(message);
-      case 'packMultiple':
-      case 'cleanMultiple':
-        return this.handleMultipleOperation(message);
-      // Latex Diff cases
-      case 'latexdiff':
-        return this.handleLatexdiff(message);
-      case 'latexdiffvc':
-        return this.handleLatexdiffvc(message);
-      case 'requestRecentCommits':
-        return this.handleRequestRecentCommits(webviewView);
-      case 'refreshCommits':
-        return this.handleRefreshCommits(webviewView);
-      case 'packLatexdiffvc':
-      case 'cleanLatexdiffvc':
-        return this.handleLatexdiffvcOperation(message);
-      // VS Code Logic cases
-      case 'getCurrentFile':
-        return this.handleGetCurrentFile(message, webviewView);
-      case 'addOpenedFiles':
-        return this.handleAddOpenedFiles(message.fileType, webviewView);
-      case 'polishInstructionText':
-        return this.handlePolishInstructionText(message, webviewView);
-      case 'showAgentHistory':
-        this.handleShowAgentHistory();
-        break;
-      case 'openSettings':
-        this.handleOpenSettings();
-        break;
+    const handler = this.handlers[message.command];
+    if (handler) {
+      return handler(message, webviewView);
     }
   }
 

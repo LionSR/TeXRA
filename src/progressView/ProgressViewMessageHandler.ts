@@ -13,7 +13,63 @@ import { COMMANDS } from './modules/constants.js';
 const CHANNEL = 'MessageHandler';
 
 export class ProgressViewMessageHandler {
-  constructor(private readonly provider: ProgressViewProvider) {}
+  private handlers: Record<
+    string,
+    (message: any, webviewView: vscode.WebviewView) => Promise<void> | void
+  >;
+
+  constructor(private readonly provider: ProgressViewProvider) {
+    this.handlers = {
+      [COMMANDS.SWITCH_STREAM]: (m) => this.provider.setActiveStream(m.stream),
+      [COMMANDS.ERASE_STREAM]: (m) => this.provider.eraseStream(m.stream),
+      [COMMANDS.DELETE_STREAM]: (m) => this.provider.deleteStream(m.stream),
+      [COMMANDS.DELETE_ALL]: () => this.provider.deleteAllStreams(),
+      [COMMANDS.STOP_STREAM]: (m) =>
+        vscode.commands.executeCommand('texra.stopAgent', m.stream),
+      [COMMANDS.DIFF_STREAM]: (m) => this.handleDiffStream(m.stream),
+      [COMMANDS.PACK_STREAM]: (m) => this.handlePackStream(m.stream),
+      [COMMANDS.CLEAN_STREAM]: (m) => this.handleCleanStream(m.stream),
+      [COMMANDS.RUN_AGAIN]: (m) => this.handleRunAgain(m.stream),
+      [COMMANDS.RESTORE_STATE]: (m) => this.handleRestoreState(m.stream),
+      [COMMANDS.OPEN_FILE]: (m) =>
+        vscode.commands.executeCommand('texra.openFileCompile', m.file),
+      [COMMANDS.COMPARE_ORIGINAL]: (m) =>
+        vscode.commands.executeCommand(
+          'texra.compare',
+          undefined,
+          m.base,
+          m.file,
+        ),
+      [COMMANDS.COMPARE_PREVIOUS]: (m) =>
+        vscode.commands.executeCommand(
+          'texra.compare',
+          undefined,
+          m.prev,
+          m.file,
+        ),
+      [COMMANDS.ACCEPT_FILE]: (m) =>
+        vscode.commands.executeCommand(
+          'texra.acceptEdited',
+          undefined,
+          m.base,
+          m.file,
+        ),
+      [COMMANDS.MERGE_FILE]: (m) =>
+        vscode.commands.executeCommand(
+          'texra.merge',
+          undefined,
+          m.base,
+          m.file,
+        ),
+      [COMMANDS.LATEXDIFF_FILE]: (m) =>
+        vscode.commands.executeCommand(
+          'texra.latexdiff',
+          undefined,
+          m.base,
+          m.file,
+        ),
+    };
+  }
 
   async handleMessage(
     message: any,
@@ -21,85 +77,11 @@ export class ProgressViewMessageHandler {
   ): Promise<void> {
     logger.debug(CHANNEL, `Received message: ${message.command}`);
 
-    switch (message.command) {
-      case COMMANDS.SWITCH_STREAM:
-        this.provider.setActiveStream(message.stream);
-        break;
-      case COMMANDS.ERASE_STREAM:
-        this.provider.eraseStream(message.stream);
-        break;
-      case COMMANDS.DELETE_STREAM:
-        this.provider.deleteStream(message.stream);
-        break;
-      case COMMANDS.DELETE_ALL:
-        this.provider.deleteAllStreams();
-        break;
-      case COMMANDS.STOP_STREAM:
-        vscode.commands.executeCommand('texra.stopAgent', message.stream);
-        break;
-      case COMMANDS.DIFF_STREAM:
-        await this.handleDiffStream(message.stream);
-        break;
-      case COMMANDS.PACK_STREAM:
-        await this.handlePackStream(message.stream);
-        break;
-      case COMMANDS.CLEAN_STREAM:
-        await this.handleCleanStream(message.stream);
-        break;
-      case COMMANDS.RUN_AGAIN:
-        await this.handleRunAgain(message.stream);
-        break;
-      case COMMANDS.RESTORE_STATE:
-        await this.handleRestoreState(message.stream);
-        break;
-      case COMMANDS.OPEN_FILE:
-        await vscode.commands.executeCommand(
-          'texra.openFileCompile',
-          message.file,
-        );
-        break;
-      case COMMANDS.COMPARE_ORIGINAL:
-        await vscode.commands.executeCommand(
-          'texra.compare',
-          undefined,
-          message.base,
-          message.file,
-        );
-        break;
-      case COMMANDS.COMPARE_PREVIOUS:
-        await vscode.commands.executeCommand(
-          'texra.compare',
-          undefined,
-          message.prev,
-          message.file,
-        );
-        break;
-      case COMMANDS.ACCEPT_FILE:
-        await vscode.commands.executeCommand(
-          'texra.acceptEdited',
-          undefined,
-          message.base,
-          message.file,
-        );
-        break;
-      case COMMANDS.MERGE_FILE:
-        await vscode.commands.executeCommand(
-          'texra.merge',
-          undefined,
-          message.base,
-          message.file,
-        );
-        break;
-      case COMMANDS.LATEXDIFF_FILE:
-        await vscode.commands.executeCommand(
-          'texra.latexdiff',
-          undefined,
-          message.base,
-          message.file,
-        );
-        break;
-      default:
-        logger.warn(CHANNEL, `Unknown command: ${message.command}`);
+    const handler = this.handlers[message.command];
+    if (handler) {
+      await handler(message, webviewView);
+    } else {
+      logger.warn(CHANNEL, `Unknown command: ${message.command}`);
     }
   }
 

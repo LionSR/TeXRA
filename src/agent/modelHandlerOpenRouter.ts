@@ -66,7 +66,7 @@ export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
 
     if (useStreaming) {
       kwargs.stream_options = { include_usage: true }; // Assuming OpenRouter passes this through
-      const stream = client.beta.chat.completions.stream(kwargs, { signal });
+      const stream = client.chat.completions.stream(kwargs, { signal });
       return await stream.finalMessage();
     } else {
       return await client.chat.completions.create(kwargs, { signal });
