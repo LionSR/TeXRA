@@ -134,53 +134,36 @@ export class AgentHistoryViewProvider implements vscode.WebviewViewProvider {
    */
   private getWebviewContent(): string {
     try {
-      // Get the path to HTML file
-      const htmlPath = vscode.Uri.joinPath(
-        this.context.extensionUri,
-        'src',
-        'historyView',
-        'index.html',
-      );
+      const getHistoryViewPath = (path: string) =>
+        vscode.Uri.joinPath(
+          this.context.extensionUri,
+          'src',
+          'historyView',
+          path,
+        );
+      const getHistoryViewUri = (path: string) =>
+        this._view!.webview.asWebviewUri(getHistoryViewPath(path));
+      const getCommonUri = (path: string) =>
+        this._view!.webview.asWebviewUri(
+          vscode.Uri.joinPath(this.context.extensionUri, 'src', 'common', path),
+        );
+      const getNodeModulesUri = (path: string) =>
+        this._view!.webview.asWebviewUri(
+          vscode.Uri.joinPath(this.context.extensionUri, 'node_modules', path),
+        );
 
-      // Get the paths for scripts and styles
-      const scriptUri = this.getWebviewUri('script.js');
-      const styleUri = this.getWebviewUri('style.css');
-      const vscodeApiPath = vscode.Uri.joinPath(
-        this.context.extensionUri,
-        'src',
-        'common',
-        'modules',
-        'vscodeApi.js',
-      );
-      const vscodeApiUri = this._view!.webview.asWebviewUri(vscodeApiPath);
-      const messageRouterPath = vscode.Uri.joinPath(
-        this.context.extensionUri,
-        'src',
-        'common',
-        'modules',
-        'messageRouter.js',
-      );
-      const messageRouterUri =
-        this._view!.webview.asWebviewUri(messageRouterPath);
-      const domHandlersUri = this.getWebviewUri('modules/domHandlers.js');
-      const codiconPath = vscode.Uri.joinPath(
-        this.context.extensionUri,
-        'node_modules',
-        '@vscode',
-        'codicons',
-        'dist',
-        'codicon.css',
-      );
-      const codiconUri = this._view?.webview.asWebviewUri(codiconPath);
-      const commonStylePath = vscode.Uri.joinPath(
-        this.context.extensionUri,
-        'src',
-        'common',
-        'styles',
-        'common.css',
-      );
+      const htmlPath = getHistoryViewPath('index.html');
+      const scriptUri = getHistoryViewUri('script.js');
+      const styleUri = getHistoryViewUri('style.css');
+      const domHandlersUri = getHistoryViewUri('modules/domHandlers.js');
 
-      const commonStyleUri = this._view!.webview.asWebviewUri(commonStylePath);
+      // Common module URIs
+      const vscodeApiUri = getCommonUri('modules/vscodeApi.js');
+      const messageRouterUri = getCommonUri('modules/messageRouter.js');
+      const commonStyleUri = getCommonUri('styles/common.css');
+
+      // Node modules URIs
+      const codiconUri = getNodeModulesUri('@vscode/codicons/dist/codicon.css');
 
       return buildWebviewHtml(this._view!.webview, htmlPath, {
         scriptUri,
@@ -189,29 +172,12 @@ export class AgentHistoryViewProvider implements vscode.WebviewViewProvider {
         vscodeApiUri,
         messageRouterUri,
         domHandlersUri,
-        codiconUri: codiconUri ?? '',
+        codiconUri,
       });
     } catch (error) {
       console.error('Error generating HTML content:', error);
       return `<html><body><h1>Error loading history view</h1><p>${error}</p></body></html>`;
     }
-  }
-
-  /**
-   * Get a webview URI for a local resource
-   */
-  private getWebviewUri(relativePath: string): vscode.Uri {
-    if (!this._view) {
-      throw new Error('Webview is not available');
-    }
-
-    const diskPath = vscode.Uri.joinPath(
-      this.context.extensionUri,
-      'src',
-      'historyView',
-      relativePath,
-    );
-    return this._view.webview.asWebviewUri(diskPath);
   }
 
   /**
