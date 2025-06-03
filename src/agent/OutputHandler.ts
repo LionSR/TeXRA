@@ -776,14 +776,14 @@ export class OutputHandler {
     const statsGroupId = groupId;
 
     try {
-      this.logger.info('=== Task Statistics ===', statsGroupId);
+      this.logger.debug('=== Task Statistics ===', statsGroupId);
 
       // Token usage statistics
-      this.logger.info(
+      this.logger.debug(
         `Total input tokens  : ${stateGlobal.totalInputTokens}`,
         statsGroupId,
       );
-      this.logger.info(
+      this.logger.debug(
         `Total output tokens : ${stateGlobal.totalOutputTokens}`,
         statsGroupId,
       );
@@ -793,14 +793,14 @@ export class OutputHandler {
         this.modelHandler.capabilities.supportsPromptCaching ||
         this.modelHandler.capabilities.supportsAutoPromptCaching
       ) {
-        this.logger.info(
+        this.logger.debug(
           `Total input tokens (cache read): ${stateGlobal.totalCacheReadInputTokens}`,
           statsGroupId,
         );
 
         // Only show cache creation for Anthropic models (which use explicit caching)
         if (this.modelHandler.capabilities.supportsPromptCaching) {
-          this.logger.info(
+          this.logger.debug(
             `Total input tokens (cache create): ${stateGlobal.totalCacheCreationInputTokens}`,
             statsGroupId,
           );
@@ -823,7 +823,7 @@ export class OutputHandler {
             ? (stateGlobal.totalCacheReadInputTokens / totalCacheableTokens) *
               100
             : 0;
-        this.logger.info(
+        this.logger.debug(
           `Percentage cached: ${percentageCached.toFixed(2)}%`,
           statsGroupId,
         );
@@ -831,14 +831,14 @@ export class OutputHandler {
 
       // Print reasoning tokens if model supports it
       if (this.modelHandler.capabilities.supportsReasoning) {
-        this.logger.info(
+        this.logger.debug(
           `Total reasoning tokens: ${stateGlobal.totalReasoningTokens}`,
           statsGroupId,
         );
       }
 
       if (stateGlobal.totalToolUseTokens > 0) {
-        this.logger.info(
+        this.logger.debug(
           `Total tool use tokens: ${stateGlobal.totalToolUseTokens}`,
           statsGroupId,
         );
@@ -897,15 +897,12 @@ export class OutputHandler {
         });
       }
 
-      this.logger.info(
+      this.logger.debug(
         `Total response time : ${stateGlobal.totalResponseTime.toFixed(1)} seconds`,
         statsGroupId,
       );
-      this.logger.info(
-        `Total cost          : ${cost.toFixed(3)} USD`,
-        statsGroupId,
-      );
-      this.logger.info('=======================', statsGroupId);
+      this.logger.debug(`Total cost          : ${cost.toFixed(3)} USD`, statsGroupId);
+      this.logger.debug('=======================', statsGroupId);
     } catch (error) {
       this.logger.error(`Error printing statistics: ${error}`, statsGroupId);
     }
