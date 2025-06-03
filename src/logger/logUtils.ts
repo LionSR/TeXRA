@@ -64,6 +64,7 @@ class VSCodeTransport extends Transport {
     message: string;
     timestamp: number;
     groupId?: string;
+    messageType?: 'default' | 'scratchpad' | 'thinking';
   }[] = [];
   private groups: Map<string, LogGroup> = new Map();
   private activeGroupId?: string;
@@ -131,8 +132,18 @@ class VSCodeTransport extends Transport {
     const isScratchpad =
       level === 'info' && message.includes('Scratchpad content:');
 
+    // Check if this is a thinking message
+    const isThinking =
+      level === 'info' && message.includes('Thinking content:');
+
     // Add a data attribute for scratchpad messages to help with styling and processing
     const scratchpadAttr = isScratchpad ? 'data-is-scratchpad="true"' : '';
+
+    const messageType = isScratchpad
+      ? 'scratchpad'
+      : isThinking
+        ? 'thinking'
+        : 'default';
 
     // Colored format for ProgressView using CSS classes, but with shorter timestamp display
     const coloredFormattedMessage =
@@ -151,6 +162,7 @@ class VSCodeTransport extends Transport {
         level as 'error' | 'warn' | 'info' | 'debug',
         groupId,
         numericTimestamp,
+        messageType,
       );
     } else {
       // Buffer the message if ProgressViewProvider is not available
@@ -159,6 +171,7 @@ class VSCodeTransport extends Transport {
         message: coloredFormattedMessage,
         timestamp: numericTimestamp,
         groupId,
+        messageType,
       });
     }
 
@@ -194,6 +207,7 @@ class VSCodeTransport extends Transport {
         msg.level as 'error' | 'warn' | 'info' | 'debug',
         msg.groupId,
         msg.timestamp,
+        msg.messageType ?? 'default',
       );
     }
 
