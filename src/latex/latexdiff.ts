@@ -323,6 +323,8 @@ async function processTikzPictureEndings(
   ];
 
   const patterns_scope_tikzpicture = [
+    // Some of these might be too aggressive because i am getting an edge cases wihtout any spaces before \} somehow
+
     // Fix cases where }; appears before \end{tikzpicture}
     [/\};(\s*)\\end\{tikzpicture\}/g, '\\end{tikzpicture}\\};'],
     // Original patterns
@@ -332,6 +334,7 @@ async function processTikzPictureEndings(
       '$1\\end{tikzpicture}};\\DIFaddendFL',
     ],
     // Handle node closures with tikzpicture
+    
     [/\};(\s*)\\end\{tikzpicture\}(\s*)\};/g, '\\end{tikzpicture}$1\\};$2\\};'],
     // Handle semicolons inside tikzpicture that should be after the environment
     [
