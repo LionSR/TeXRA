@@ -71,6 +71,7 @@ class VSCodeTransport extends Transport {
     message: string;
     timestamp: number;
     groupId?: string;
+    messageType: 'scratchpad' | 'thinking' | 'normal';
   }[] = [];
   private groups: Map<string, LogGroup> = new Map();
   private activeGroupId?: string;
@@ -134,16 +135,27 @@ class VSCodeTransport extends Transport {
     // Escape HTML tags in message for ProgressView
     const escapedMessage = escapeHtml(message);
 
-    // Check if this is a scratchpad message
+    // Check if this is scratchpad or thinking content
     const isScratchpad =
       level === 'info' && message.includes('Scratchpad content:');
+    const isThinking =
+      level === 'info' && message.includes('Thinking content:');
+
+    let messageType: 'scratchpad' | 'thinking' | 'normal' = 'normal';
+    if (isScratchpad) {
+      messageType = 'scratchpad';
+    } else if (isThinking) {
+      messageType = 'thinking';
+    }
 
     // Add a data attribute for scratchpad messages to help with styling and processing
     const scratchpadAttr = isScratchpad ? 'data-is-scratchpad="true"' : '';
+    const messageTypeAttr =
+      messageType !== 'normal' ? `data-message-type="${messageType}"` : '';
 
     // Colored format for ProgressView using CSS classes, but with shorter timestamp display
     const coloredFormattedMessage =
-      `<div class="log-line ${isScratchpad ? 'scratchpad-log' : ''}" ${scratchpadAttr} ${groupId ? `data-group-id="${groupId}"` : ''} data-full-timestamp="${timestamp}">` +
+      `<div class="log-line ${isScratchpad ? 'scratchpad-log' : ''}" ${scratchpadAttr} ${messageTypeAttr} ${groupId ? `data-group-id="${groupId}"` : ''} data-full-timestamp="${timestamp}">` +
       `<span class="timestamp" title="${timestamp}">${emoji} [${timeDisplay}]</span> ` +
       `<span class="level-${level}">${level.toUpperCase().padEnd(8)}</span> ` +
       `<span class="message-${level}">${escapedMessage}</span>` +
@@ -158,6 +170,7 @@ class VSCodeTransport extends Transport {
         level as 'error' | 'warn' | 'info' | 'debug',
         groupId,
         numericTimestamp,
+        messageType,
       );
     } else {
       // Buffer the message if ProgressViewProvider is not available
@@ -166,6 +179,7 @@ class VSCodeTransport extends Transport {
         message: coloredFormattedMessage,
         timestamp: numericTimestamp,
         groupId,
+        messageType,
       });
     }
 
@@ -201,6 +215,7 @@ class VSCodeTransport extends Transport {
         msg.level as 'error' | 'warn' | 'info' | 'debug',
         msg.groupId,
         msg.timestamp,
+        msg.messageType,
       );
     }
 

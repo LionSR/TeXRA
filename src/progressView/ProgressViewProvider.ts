@@ -32,6 +32,7 @@ interface ColoredLogMessage {
   level: 'error' | 'warn' | 'info' | 'debug';
   timestamp: number;
   groupId?: string;
+  messageType?: 'scratchpad' | 'thinking' | 'normal';
 }
 
 interface LogGroup {
@@ -403,6 +404,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     level: 'error' | 'warn' | 'info' | 'debug' = 'info',
     groupId?: string,
     timestamp: number = Date.now(),
+    messageType: 'scratchpad' | 'thinking' | 'normal' = 'normal',
   ) {
     // Skip if this stream should be excluded from the progress view
     if (shouldExcludeFromProgressView(stream)) {
@@ -449,6 +451,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       level,
       timestamp,
       groupId,
+      messageType,
     };
 
     const messages = this._logStreams.get(stream)!;
