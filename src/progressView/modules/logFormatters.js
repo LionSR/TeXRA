@@ -142,7 +142,10 @@ export function getMessageTimestamp(message) {
  */
 export function createGroupHeader(group) {
   const startDate = new Date(group.startTime);
-  const formattedStartTime = formatTime(startDate);
+  const isTopLevel = !group.parentGroupId;
+  const formattedStartTime = isTopLevel
+    ? formatDateTime(startDate)
+    : formatTime(startDate);
 
   let durationDisplay = '';
   if (group.endTime) {
@@ -161,10 +164,15 @@ export function createGroupHeader(group) {
     usageDisplay = `<span class="group-usage"> • in: ${inputTokens}, out: ${outputTokens}, $${cost.toFixed(3)}</span>`;
   }
 
+  const titleMarkup = isTopLevel
+    ? ''
+    : `<span class="group-title">${group.name}</span>`;
+  const topLevelClass = isTopLevel ? 'top-level' : '';
+
   return `
-    <summary id="group-header-${group.id}" class="log-group-header ${group.status}">
+    <summary id="group-header-${group.id}" class="log-group-header ${group.status} ${topLevelClass}">
       <span class="group-status-icon">${statusIcon}</span>
-      <span class="group-title">${group.name}</span>
+      ${titleMarkup}
       <span class="group-time">
         <span class="group-start-time">Started: ${formattedStartTime}</span>
         ${durationDisplay}
@@ -204,6 +212,16 @@ export function formatTime(date) {
     second: '2-digit',
     hour12: false,
   });
+}
+
+/**
+ * Format a date object to a date and time string
+ * @param {Date} date - Date object to format
+ * @returns {string} Formatted date and time string
+ */
+export function formatDateTime(date) {
+  const datePart = date.toLocaleDateString('en-CA');
+  return `${datePart} ${formatTime(date)}`;
 }
 
 /**
