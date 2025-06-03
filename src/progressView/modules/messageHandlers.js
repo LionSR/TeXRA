@@ -69,6 +69,9 @@ const handlers = {
         }
       });
       logContent.scrollTop = logContent.scrollHeight;
+
+      // Recalculate cumulative usage after loading groups
+      updateUsageSummary();
     }
   },
 
