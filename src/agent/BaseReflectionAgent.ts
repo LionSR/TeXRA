@@ -30,6 +30,7 @@ import {
   getFirstKCharsFromDocument,
   writePromptToXml,
 } from '../utils/promptUtils';
+import { loadTexraRules } from '../utils/texraRulesUtils';
 import {
   applyReplacements,
   getAllReplacements,
@@ -250,6 +251,18 @@ export abstract class BaseReflectionAgent {
   }
 
   /**
+   * Combines the base system prompt with additional rules from `.texrarules`.
+   */
+  protected async getSystemPromptWithRules(): Promise<string> {
+    const basePrompt = await renderPrompt(
+      this.agentPrompt.systemPrompt,
+      this.userVars,
+    );
+    const rules = await loadTexraRules();
+    return rules ? `${basePrompt}\n${rules}` : basePrompt;
+  }
+
+  /**
    * Manages single response cycle with model interaction.
    * @param messages Current conversation messages
    * @param stateRound Current round state
@@ -282,10 +295,7 @@ export abstract class BaseReflectionAgent {
 
         const exists = await fileExists(outputFile);
         const startTime = Date.now();
-        const systemPrompt = await renderPrompt(
-          this.agentPrompt.systemPrompt,
-          this.userVars,
-        );
+        const systemPrompt = await this.getSystemPromptWithRules();
 
         // Save message object to file for debugging if enabled in settings
         const shouldSaveMessageObjects = getConfig(
@@ -825,7 +835,7 @@ export abstract class BaseReflectionAgent {
 
       // Set up initial prompts
       const [systemPrompt, userRequest, userPrefix] = await Promise.all([
-        renderPrompt(this.agentPrompt.systemPrompt, this.userVars),
+        this.getSystemPromptWithRules(),
         renderPrompt(this.agentPrompt.userRequest, this.userVars),
         renderPrompt(this.agentPrompt.userPrefix, this.userVars),
       ]);
