@@ -268,15 +268,10 @@ async function executeAgentWithLogging<T extends AgentWithConfig>(
           // Update status to stopped on successful completion
           progressViewProvider.updateStreamStatus(fullStreamId, 'stopped');
 
-          const outputFetcher = agent as unknown as {
-            getAllOutputFiles?: () => string[];
-          };
-          const agentOutputs = outputFetcher.getAllOutputFiles?.() || [];
-          const filesToOpen =
-            agentOutputs.length > 0 ? agentOutputs : config.outputFiles || [];
-
-          for (const file of filesToOpen) {
-            await openBuildDisplayIfTex(file, { preserveFocus: true });
+          if (config.outputFiles && config.outputFiles.length > 0) {
+            for (const out of config.outputFiles) {
+              await openBuildDisplayIfTex(out, { preserveFocus: true });
+            }
           }
         } catch (err) {
           // Mark the task as failed
