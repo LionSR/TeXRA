@@ -1352,13 +1352,6 @@ export abstract class BaseReflectionAgent implements IAgent {
     BaseReflectionAgent.runningAgents.delete(channelId);
   }
 
-  /**
-   * Gets all generated output files across rounds.
-   */
-  public getAllOutputFiles(): string[] {
-    return Object.values(this.outputHandler.outputFiles).flat();
-  }
-
   /** Extracts and logs scratchpad content from output. */
   protected extractAndLogScratchpad(
     outputContent: string,
