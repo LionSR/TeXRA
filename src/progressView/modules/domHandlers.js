@@ -179,8 +179,8 @@ export function updateUsageSummary(usage) {
   }
 
   summaryElem.innerHTML =
-    `<i class="codicon codicon-arrow-down"></i> ${formatTokens(totals.inputTokens)}, ` +
-    `<i class="codicon codicon-arrow-up"></i> ${formatTokens(totals.outputTokens)}, ` +
+    `<i class="codicon codicon-arrow-up"></i> ${formatTokens(totals.inputTokens)}, ` +
+    `<i class="codicon codicon-arrow-down"></i> ${formatTokens(totals.outputTokens)}, ` +
     `$${totals.cost.toFixed(3)}`;
 }
 
@@ -241,8 +241,8 @@ export function updateGroupUsage(groupId, usage, skipPropagate = false) {
 
   const { inputTokens = 0, outputTokens = 0, cost = 0 } = usage;
   usageElem.innerHTML =
-    ` • <i class="codicon codicon-arrow-down"></i> ${formatTokens(inputTokens)}, ` +
-    `<i class="codicon codicon-arrow-up"></i> ${formatTokens(outputTokens)}, ` +
+    ` • <i class="codicon codicon-arrow-up"></i> ${formatTokens(inputTokens)}, ` +
+    `<i class="codicon codicon-arrow-down"></i> ${formatTokens(outputTokens)}, ` +
     `$${cost.toFixed(3)}`;
 
   // Persist usage on the group state so the summary can be computed
