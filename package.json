@@ -1059,7 +1059,19 @@
           "group": "3_modification"
         }
       ]
-    }
+    },
+    "keybindings": [
+      {
+        "command": "texra.mainView.focus",
+        "key": "ctrl+alt+m",
+        "mac": "cmd+option+m"
+      },
+      {
+        "command": "texra.showProgressView",
+        "key": "ctrl+alt+p",
+        "mac": "cmd+option+p"
+      }
+    ]
   },
   "scripts": {
     "vscode:prepublish": "npm run package",
