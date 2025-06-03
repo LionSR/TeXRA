@@ -478,6 +478,7 @@ export const LATEX_XML_REPLACEMENTS: ReplacementCategory = {
       // 'document', // this also replaced xml tags which is also being used!!
       'figure',
       'figure*',
+      'axis',
       'tikzpicture',
       'scope',
       // 'output', // this might also be a xml tag?
@@ -608,8 +609,8 @@ export const LATEX_DOCUMENT_REPLACEMENTS: ReplacementCategory = {
       '\\end{document}\n</document>\n</latex_documents>',
     '\\end{document}\n\n<document name':
       '\\end{document}\n</document>\n\n<document name',
-    // '\\end{document}\n<document name':
-    //   '\\end{document}\n</document>\n<document name',
+    '\\end{document}\n<document name':
+      '\\end{document}\n</document>\n<document name',
     '\\end{document}\n</rebuttal_package>':
       '\\end{document}\n</document>\n</rebuttal_package>',
     '<latex_document>\n```xml<latex_document>': '<latex_document>\n',

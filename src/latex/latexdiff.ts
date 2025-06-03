@@ -334,7 +334,7 @@ async function processTikzPictureEndings(
       '$1\\end{tikzpicture}};\\DIFaddendFL',
     ],
     // Handle node closures with tikzpicture
-    
+
     [/\};(\s*)\\end\{tikzpicture\}(\s*)\};/g, '\\end{tikzpicture}$1\\};$2\\};'],
     // Handle semicolons inside tikzpicture that should be after the environment
     [
