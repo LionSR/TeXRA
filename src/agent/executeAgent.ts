@@ -24,10 +24,14 @@ import { MergeAgent } from './MergeAgent';
 import { ProgressViewProvider } from '../progressView/ProgressViewProvider';
 import { AgentLogger } from '../logger/AgentLogger';
 import { openBuildDisplayIfTex } from '../utils/openBuildUtils';
+import { IAgent } from './IAgent';
 
 const CHANNEL = 'executeAgent';
 const logger = new AgentLogger(CHANNEL);
 
+/**
+ * Constructor signature for any agent implementation.
+ */
 type AgentConstructor = {
   new (
     modelHandler: any,
@@ -35,13 +39,7 @@ type AgentConstructor = {
     agentSetting: AgentSetting,
     agentPrompt: AgentPrompt,
     agentPath: string,
-  ): DirectAgent | CoTAgent;
-};
-
-type AgentWithConfig = {
-  config: AgentConfig;
-  init(): Promise<void>;
-  run(): Promise<void>;
+  ): IAgent;
 };
 
 /**
@@ -140,7 +138,7 @@ function getAgentName(
 /**
  * Common function to execute any agent with proper logging and status handling
  */
-async function executeAgentWithLogging<T extends AgentWithConfig>(
+async function executeAgentWithLogging<T extends IAgent>(
   agentName: string,
   createAgentFn: () => Promise<T>,
   context: vscode.ExtensionContext,
