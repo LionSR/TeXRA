@@ -343,7 +343,7 @@ export abstract class BaseReflectionAgent implements IAgent {
         }
         const responseTime = (Date.now() - startTime) / 1000;
         stateRound.updateResponseTime(responseTime);
-        this.logger.info(
+        this.logger.debug(
           `Response time: ${responseTime.toFixed(2)}s`,
           responseCycleGroupId,
         );
@@ -750,7 +750,7 @@ export abstract class BaseReflectionAgent implements IAgent {
 
     // Create a dedicated group for Round 0, as a child of the main run group
     const round0GroupId = await this.logger.startGroup(
-      `Round ${currRound}: Initial Generation`,
+      `Round ${currRound}`,
       undefined,
       this.runGroupId, // Use the runGroupId from the class as the parent
     );
@@ -969,7 +969,7 @@ export abstract class BaseReflectionAgent implements IAgent {
 
     // Create a dedicated group for Round 1 reflection, as a child of the main run group
     const round1GroupId = await this.logger.startGroup(
-      `Round ${currRound}: Reflection`,
+      `Round ${currRound}`,
       undefined,
       this.runGroupId,
     );

@@ -424,7 +424,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
       `Start your response at the next token after: "${prefillTokens}"`;
 
     // Add continuation message
-    this.logger.info(
+    this.logger.debug(
       `Adding continuation message to conversation. Continuation message:\n ${userMessageContinuation}`,
     );
     messages.push({
