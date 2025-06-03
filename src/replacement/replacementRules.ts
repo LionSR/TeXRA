@@ -592,23 +592,25 @@ export const LATEX_DOCUMENT_REPLACEMENTS: ReplacementCategory = {
     '</latex_document>\n\n</latex_document>': '</latex_document>\n',
 
     // ===== 9. DOCUMENT STRUCTURE FIXES =====
-    '\\end{document}\\n\\n\\<document name=':
+    '\\end{document}\n\n\\<document name=':
       '\\end{document}\\n</document>\\n\\<document name=',
-    '\\end{document}\\n\\<document name=':
-      '\\end{document}\\n</document>\\n\\<document name=',
-    '\\end{latex_document}\\n</latex_document>':
-      '\\end{document}\\n</latex_document>',
-    '\\end{document}\\n</latex_documents>':
-      '\\end{document}\\n</document>\\n</latex_documents>',
-    '\\end{document}\\n\\n<document name':
-      '\\end{document}\\n</document>\\n\\n<document name',
-    '\\end{document}\\n<document name':
-      '\\end{document}\\n</document>\\n<document name',
-    '\\end{document}\\n</rebuttal_package>':
-      '\\end{document}\\n</document>\\n</rebuttal_package>',
+    '\\end{document}\n\\<document name=':
+      '\\end{document}\n</document>\n\\<document name=',
+    '\\end{latex_document}\n</latex_document>':
+      '\\end{document}\n</latex_document>',
+    '\\end{document}\n</latex_documents>':
+      '\\end{document}\n</document>\n</latex_documents>',
+    '\\end{document}\n\n<document name':
+      '\\end{document}\n</document>\n\n<document name',
+    '\\end{document}\n\\end{document}\n<document':
+      '\\end{document}\n</document>\n<document',
+    '\\end{document}\n<document name':
+      '\\end{document}\n</document>\n<document name',
+    '\\end{document}\n</rebuttal_package>':
+      '\\end{document}\n</document>\n</rebuttal_package>',
     '<latex_document>\n```xml<latex_document>': '<latex_document>\n',
-    '{\\today}\\n\\n[Previous':
-      '{\\today}\\n\\n\\begin{document}\\n\\makeheader[Previous',
+    '{\\today}\n\n[Previous':
+      '{\\today}\n\n\\begin{document}\n\\makeheader[Previous',
 
     // ===== 11. CLEANUP AND MISCELLANEOUS =====
     '<ctrl96>': '',
@@ -627,6 +629,9 @@ export const LATEX_DOCUMENT_REPLACEMENTS: ReplacementCategory = {
     '```xml\n': '',
     '</xml>': '',
     '\\end\n': '\\end{document}\n',
+
+    // ===== Debtable one-offs =====
+
   },
 };
 
@@ -660,7 +665,7 @@ export const SCRATCHPAD_XML_REPLACEMENTS: ReplacementCategory = {
     '</scratchpad>\n\\begin{document}':
       '</scratchpad>\n\\<latex_document>\n\\begin{document}',
     // Rebuttal package fixes
-    '<rebuttal_package><scratchpad>\n\\n<rebuttal_package><scratchpad>':
+    '<rebuttal_package><scratchpad>\n\n<rebuttal_package><scratchpad>':
       '<rebuttal_package><scratchpad>',
   },
 };
