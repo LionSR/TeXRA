@@ -149,7 +149,8 @@ export class ModelHandlerOpenAI extends ModelHandler {
           }
           response = {
             role: 'assistant',
-            finish_reason: 'stop', // there is no good choice it seems unless deepseek models support it
+            finish_reason: 'stop', // there is no good choice it seems unless deepseek models support it;
+            // In the future maybe we can count the output tokens to see if it is at the limit approximatelly..
             choices: [
               {
                 message: {
