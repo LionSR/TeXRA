@@ -15,26 +15,26 @@ import {
   readFile,
   writeFile,
   fileExistsAndNonTrivial,
-} from '../utils/workspaceFileUtils';
-import { cleanFileContent } from '../replacement/replacementUtils';
-import { getConfig } from '../utils/configUtils';
-import { extractAndLogScratchpad } from '../utils/xmlUtils';
+} from '../../utils/workspaceFileUtils';
+import { cleanFileContent } from '../../replacement/replacementUtils';
+import { getConfig } from '../../utils/configUtils';
+import { extractAndLogScratchpad } from '../../utils/xmlUtils';
 
 // Local imports - agent components
-import { AgentConfig } from './AgentConfig';
-import { AgentSetting, hasEndTag } from './AgentDataclass';
-import { AgentStateRound } from './AgentState';
+import { AgentConfig } from '../AgentConfig';
+import { AgentSetting, hasEndTag } from '../AgentDataclass';
+import { AgentStateRound } from '../AgentState';
 import { ModelHandler } from './ModelHandler';
 import {
   OpenAIAPIResponseUsage,
   ResponseUsageFactory,
   ExtendedCompletionUsage,
-} from './ResponseUsage';
-import { ToolState } from './ToolState';
-import { K_SLICE } from '../utils/constants';
-import { objectToLogString } from '../utils/stringUtils';
-import { calculateTokenPrice } from '../utils/priceUtils';
-import { MediaEntry } from './mediaTypes';
+} from '../ResponseUsage';
+import { ToolState } from '../ToolState';
+import { K_SLICE } from '../../utils/constants';
+import { objectToLogString } from '../../utils/stringUtils';
+import { calculateTokenPrice } from '../../utils/priceUtils';
+import { MediaEntry } from '../mediaTypes';
 
 /**
  * OpenAI-specific handlers.
