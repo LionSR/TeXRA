@@ -148,6 +148,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
             }
           }
           response = {
+            role: 'assistant',
             finish_reason: 'stop', // there is no good choice it seems unless deepseek models support it
             choices: [
               {
@@ -155,6 +156,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
                   content: content,
                   reasoning_content: reasoning_content,
                 },
+                finish_reason: 'stop',
               },
             ],
           };
@@ -405,7 +407,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
         //   stopReason = responseObject.choices[0].finish_reason;
         // }
 
-        // For usage, we'll use empty values since they're not provided
+        // For usage, we'll use empty values since they're not provided; TODO needs to test at some points
         const usage = responseObject.usage || {
           prompt_tokens: 0,
           completion_tokens: 0,
