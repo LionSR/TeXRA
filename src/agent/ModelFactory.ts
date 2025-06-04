@@ -2,20 +2,20 @@
 import { ModelConfig, ModelProvider } from '../model';
 
 // Local imports - model handlers
-import { ModelHandler } from './ModelHandler';
-import { ModelHandlerAnthropic } from './modelHandlerAnthropic';
-import { ModelHandlerGoogle } from './modelHandlerGoogle';
-import { ModelHandlerGoogleGenAI } from './modelHandlerGoogleGenAI';
-import { ModelHandlerDeepSeek } from './modelHandlerDeepSeek';
-import { ModelHandlerXAI } from './modelHandlerXAI';
-import { ModelHandlerKimi } from './modelHandlerKimi';
-import { ModelHandlerDashScope } from './modelHandlerDashScope';
 import {
+  ModelHandler,
+  ModelHandlerAnthropic,
+  ModelHandlerGoogle,
+  ModelHandlerGoogleGenAI,
+  ModelHandlerDeepSeek,
+  ModelHandlerXAI,
+  ModelHandlerKimi,
+  ModelHandlerDashScope,
   ModelHandlerOpenRouter,
   ModelHandlerAnthropicViaOpenRouter,
-} from './modelHandlerOpenRouter';
-import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
-import { ModelHandlerOpenAIResponse } from './modelHandlerOpenAIResponse';
+  ModelHandlerOpenAI,
+  ModelHandlerOpenAIResponse,
+} from './modelHandlers';
 
 // Local imports - utils
 import { getConfig } from '../utils/configUtils';

@@ -4,7 +4,7 @@ import * as path from 'path';
 // Local imports - agent components
 import { DirectAgent } from './DirectAgent';
 import { AgentStateRound, AgentStateGlobal } from './AgentState';
-import { ModelHandler } from './ModelHandler';
+import { ModelHandler } from './modelHandlers';
 import { AgentConfig } from './AgentConfig';
 import { AgentSetting, AgentPrompt } from './AgentDataclass';
 

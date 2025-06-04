@@ -5,33 +5,33 @@ import * as path from 'path';
 // (none needed)
 
 // Local imports - log
-import { AgentLogger } from '../logger/AgentLogger';
+import { AgentLogger } from '../../logger/AgentLogger';
 
 // Local imports - utilities
-import { fileExists } from '../utils/workspaceFileUtils';
+import { fileExists } from '../../utils/workspaceFileUtils';
 import {
   getBase64EncodedMedia,
   countPdfPages,
   processPdf2Png,
   checkImageMagickInstalled,
-} from '../utils/imgUtils';
-import { getConfig } from '../utils/configUtils';
+} from '../../utils/imgUtils';
+import { getConfig } from '../../utils/configUtils';
 import {
   getApiKey as getSecretApiKey,
   ApiProvider,
-} from '../utils/secretUtils';
+} from '../../utils/secretUtils';
 
 // Local imports - agent components
-import { AgentConfig } from './AgentConfig';
-import { AgentSetting, hasEndTag } from './AgentDataclass';
-import { AgentStateRound, AgentStateGlobal } from './AgentState';
+import { AgentConfig } from '../AgentConfig';
+import { AgentSetting, hasEndTag } from '../AgentDataclass';
+import { AgentStateRound, AgentStateGlobal } from '../AgentState';
 import {
   ModelConfig,
   ModelProvider,
   ModelCapabilities,
-} from '../model/ModelConfig';
-import { ToolState } from './ToolState';
-import { MediaEntry } from './mediaTypes';
+} from '../../model/ModelConfig';
+import { ToolState } from '../ToolState';
+import { MediaEntry } from '../mediaTypes';
 
 // Default continuation limits
 const DEFAULT_CONTINUE_LIMIT = 10;
