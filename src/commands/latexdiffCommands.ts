@@ -434,7 +434,7 @@ async function handleRunLatexdiff(config: any) {
 
             logger.debug(
               CHANNEL,
-              `Running round diff for ${path.basename(inputFile)} -> ${path.basename(outputFile)} (Round ${round})`,
+              `Running round diff for ${path.basename(inputFile)} -> ${path.basename(outputFile)} (r${round})`,
             );
 
             // Use the specialized function for round-based diffs
