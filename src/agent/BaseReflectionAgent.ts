@@ -48,7 +48,7 @@ import { AgentConfig } from './AgentConfig';
 import { AgentSetting, AgentPrompt, AgentType } from './AgentDataclass';
 import { AgentStateRound, AgentStateGlobal } from './AgentState';
 import { ToolState } from './ToolState';
-import { ModelHandler } from './ModelHandler';
+import { ModelHandler } from './modelHandlers';
 import { OutputHandler } from './OutputHandler';
 import { messageToSkeleton } from './messageUtils';
 import { buildUserVars } from './userVars';
@@ -192,7 +192,7 @@ export abstract class BaseReflectionAgent implements IAgent {
   public async init(parentGroupId?: string): Promise<void> {
     // Create an initialization group for better log organization
     const initGroupId = await this.logger.startGroup(
-      `Initialization`,
+      `Init`,
       undefined,
       parentGroupId,
     );
@@ -750,7 +750,7 @@ export abstract class BaseReflectionAgent implements IAgent {
 
     // Create a dedicated group for Round 0, as a child of the main run group
     const round0GroupId = await this.logger.startGroup(
-      `Round ${currRound}`,
+      `r${currRound}`,
       undefined,
       this.runGroupId, // Use the runGroupId from the class as the parent
     );
@@ -969,7 +969,7 @@ export abstract class BaseReflectionAgent implements IAgent {
 
     // Create a dedicated group for Round 1 reflection, as a child of the main run group
     const round1GroupId = await this.logger.startGroup(
-      `Round ${currRound}`,
+      `r${currRound}`,
       undefined,
       this.runGroupId,
     );

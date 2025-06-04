@@ -6,12 +6,12 @@ import OpenAI from 'openai';
 
 // Local imports - agent components
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
-import { ToolState } from './ToolState';
-import { MediaEntry } from './mediaTypes';
+import { ToolState } from '../ToolState';
+import { MediaEntry } from '../mediaTypes';
 
 // Local imports - utilities
-import { convertContentToString } from '../utils/messageUtils';
-import { MESSAGE_PREVIEW_LENGTH } from '../utils/constants';
+import { convertContentToString } from '../../utils/messageUtils';
+import { MESSAGE_PREVIEW_LENGTH } from '../../utils/constants';
 
 /**
  * Handler for DashScope Qwen models using OpenAI-compatible API.

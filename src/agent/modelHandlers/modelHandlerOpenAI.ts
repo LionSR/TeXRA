@@ -15,26 +15,25 @@ import {
   readFile,
   writeFile,
   fileExistsAndNonTrivial,
-} from '../utils/workspaceFileUtils';
-import { cleanFileContent } from '../replacement/replacementUtils';
-import { getConfig } from '../utils/configUtils';
-import { extractAndLogScratchpad } from '../utils/xmlUtils';
+} from '../../utils/workspaceFileUtils';
+import { cleanFileContent } from '../../replacement/replacementUtils';
+import { extractAndLogScratchpad } from '../../utils/xmlUtils';
 
 // Local imports - agent components
-import { AgentConfig } from './AgentConfig';
-import { AgentSetting, hasEndTag } from './AgentDataclass';
-import { AgentStateRound } from './AgentState';
+import { AgentConfig } from '../AgentConfig';
+import { AgentSetting, hasEndTag } from '../AgentDataclass';
+import { AgentStateRound } from '../AgentState';
 import { ModelHandler } from './ModelHandler';
 import {
   OpenAIAPIResponseUsage,
   ResponseUsageFactory,
   ExtendedCompletionUsage,
-} from './ResponseUsage';
-import { ToolState } from './ToolState';
-import { K_SLICE } from '../utils/constants';
-import { objectToLogString } from '../utils/stringUtils';
-import { calculateTokenPrice } from '../utils/priceUtils';
-import { MediaEntry } from './mediaTypes';
+} from '../ResponseUsage';
+import { ToolState } from '../ToolState';
+import { K_SLICE } from '../../utils/constants';
+import { objectToLogString } from '../../utils/stringUtils';
+import { calculateTokenPrice } from '../../utils/priceUtils';
+import { MediaEntry } from '../mediaTypes';
 
 /**
  * OpenAI-specific handlers.
@@ -85,7 +84,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
         );
       }
     }
-    if (this.config.fullName.includes('deepseek')) {
+    if (this.config.fullName.includes('deepseek-chat')) {
       // for deepseek models,  this and context window are not the same for openrouter models and the official api. so we need to set max_tokens manually if the official api is used
       this.logger.debug('Setting max_tokens to 8192 for DeepSeek models');
       kwargs.max_tokens = 8192;
@@ -136,11 +135,50 @@ export class ModelHandlerOpenAI extends ModelHandler {
         const stream = client.chat.completions.stream(kwargs, {
           signal,
         });
+
+        if (this.config.fullName.includes('deepseek')) {
+          let reasoning_content = '';
+          let content = '';
+          for await (const chunk of stream) {
+            if ((chunk.choices[0].delta as any).reasoning_content) {
+              reasoning_content += (chunk.choices[0].delta as any)
+                .reasoning_content;
+            } else {
+              content += (chunk.choices[0].delta as any).content;
+            }
+          }
+          response = {
+            role: 'assistant',
+            finish_reason: 'stop', // there is no good choice it seems unless deepseek models support it
+            choices: [
+              {
+                message: {
+                  content: content,
+                  reasoning_content: reasoning_content,
+                },
+                finish_reason: 'stop',
+              },
+            ],
+          };
+          return response;
+        }
+
         response = await stream.finalMessage();
 
         // in the future we can add: stream_options: {"include_usage": true} to get usage statistics
         // in the future if we pass stream to outside (signal: controller.signal)), calling stream.controller.abort() will abort the stream; which will be very useful for our stop button (controller.abort();)
         // we should also make sure partial results can be returned in the presence of errors!
+        // TODO: This wait for finalMessage method do not support deepseek models, so we need to aggreatate the results manually like this:
+        // reasoning_content = ""
+        // content = ""
+
+        // for chunk in response:
+        //     if chunk.choices[0].delta.reasoning_content:
+        //         reasoning_content += chunk.choices[0].delta.reasoning_content
+        //     else:
+        //         content += chunk.choices[0].delta.content
+        // and then construct the response object like this:
+        // Now do it
       } catch (err) {
         if (
           err instanceof NotFoundError ||
@@ -369,7 +407,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
         //   stopReason = responseObject.choices[0].finish_reason;
         // }
 
-        // For usage, we'll use empty values since they're not provided
+        // For usage, we'll use empty values since they're not provided; TODO needs to test at some points
         const usage = responseObject.usage || {
           prompt_tokens: 0,
           completion_tokens: 0,

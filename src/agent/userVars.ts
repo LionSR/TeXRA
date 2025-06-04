@@ -9,7 +9,7 @@ import { setVarFromFile } from '../utils/fileVarUtils';
 import { getXmlFormatFromFiles, getListOfFiles } from '../utils/promptUtils';
 import { AgentConfig } from './AgentConfig';
 import { AgentSetting } from './AgentDataclass';
-import { ModelHandler } from './ModelHandler';
+import { ModelHandler } from './modelHandlers';
 
 /**
  * Build all user variables needed for prompt rendering.

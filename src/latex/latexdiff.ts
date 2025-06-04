@@ -311,6 +311,62 @@ async function processDiffFile(
   }
 }
 
+// TikZ picture fixes
+// Using ECMAScript 2018 named capture groups (?<name>pattern)
+// Similar to Python's (?P<name>pattern)
+// { and } needs to be \\{ and \\}?
+// export const TIKZ_REPLACEMENTS: ReplacementCategory = {
+//   name: 'tikz',
+//   description: 'Fixes for TikZ picture formatting and structure',
+//   isRegex: true,
+//   flags: 'gms',
+//   patterns: {
+//     '\\end{document}\\s*\\chapter': '\\chapter',
+//     '\\end{document}\\s*\\addcontentsline': '\\addcontentsline',
+
+//     // Check the following, as I get \node[annotation, align=left] at (7.5,2.5) {State evolution\\in phase space\end{tikzpicture}\}; somehow
+//     // '(?<indent>[\\t ]*)}\s*\\end{tikzpicture};\s*\\end{tikzpicture}':
+//     //   '${indent}\\end{tikzpicture}\n${indent}};\n${indent}\\end{tikzpicture}',
+//     // comment out for now
+
+//     '}(\\s*)\\end{tikzpicture};': '};$1\\end{tikzpicture}',
+//     '}(\\s*)\\end{tikzpicture}\\DIFaddendFL ;':
+//       '$1\\end{tikzpicture}};\\DIFaddendFL',
+//   },
+// };
+
+// Edge case 1: not handling well by latexdiff as it swaps }; with \end{tikzpicture} somehow
+// \begin{scope}[shift={(10.5,-1.75)}]
+// \node[plot] at (0,0) {
+//     \begin{tikzpicture}[scale=0.7]
+//         \draw[->] (-1,0) -- (1,0) node[right] {$x$};
+//         \draw[->] (0,0) -- (0,1.5) node[above] {$p_{X}(x)$};
+//         \draw[red, thick] plot[domain=-1:1, samples=100] (\x,{0.5*exp(-20*(\x+0.7)*(\x+0.7)) + 0.7*exp(-30*(\x+0.2)*(\x+0.2)) + 0.6*exp(-25*(\x-0.3)*(\x-0.3)) + 0.4*exp(-15*(\x-0.8)*(\x-0.8))});
+//     \end{tikzpicture}
+// };
+// \node[below] at (0,-1) {$\bx \sim p_{X}(\bx)$};
+// \end{scope}
+
+// Edge case 2: with the rules above it screws up
+// \begin{tikzpicture}[scale=0.8]
+// \node[anchor=north west] at (-4,2) {
+//     \begin{tabular}{l}
+//         Blue: $\bet = +1$ \\
+//         Red: $\bet = -1$  \\
+//     \end{tabular}
+// };
+// \end{tikzpicture}
+// Becomes
+// \begin{tikzpicture}[scale=0.8]
+// \node[anchor=north west] at (-4,2) {
+//     \begin{tabular}{l}
+//         Blue: $\bet = +1$ \\
+//         Red: $\bet = -1$  \\
+//     \end{tabular}
+// \end{tikzpicture}\};
+
+// So we need a middle ground.
+
 async function processTikzPictureEndings(
   filePath: string,
   channel: string = CHANNEL,
@@ -325,6 +381,7 @@ async function processTikzPictureEndings(
 
   const patterns_scope_tikzpicture = [
     // Some of these might be too aggressive because i am getting an edge cases wihtout any spaces before \} somehow
+    // check the other  TIKZ_REPLACEMENTS too.
 
     // Fix cases where }; appears before \end{tikzpicture}
     [/\};(\s*)\\end\{tikzpicture\}/g, '\\end{tikzpicture}\\};'],
@@ -349,7 +406,7 @@ async function processTikzPictureEndings(
   }
 
   for (const [pattern, replacement] of patterns_scope_tikzpicture) {
-    newContent = newContent.replace(pattern, replacement as string);
+    newContent = newContent.replaceAll(pattern, replacement as string);
   }
 
   await writeFile(filePath, newContent);

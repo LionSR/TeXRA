@@ -15,17 +15,17 @@ import {
 
 // Local imports - agent components
 import { ModelHandler } from './ModelHandler';
-import { AgentConfig } from './AgentConfig';
-import { AgentSetting, hasEndTag } from './AgentDataclass';
-import { AgentStateRound, AgentStateGlobal } from './AgentState';
-import { ToolState } from './ToolState';
+import { AgentConfig } from '../AgentConfig';
+import { AgentSetting, hasEndTag } from '../AgentDataclass';
+import { AgentStateRound, AgentStateGlobal } from '../AgentState';
+import { ToolState } from '../ToolState';
 import {
   OpenAIAPIResponseUsage,
   ResponseUsageFactory,
   GenerateContentResponseUsageMetadata,
   ExtendedCompletionUsage,
-} from './ResponseUsage';
-import { MediaEntry } from './mediaTypes';
+} from '../ResponseUsage';
+import { MediaEntry } from '../mediaTypes';
 
 // Local imports - utilities
 import {
@@ -33,21 +33,21 @@ import {
   writeFile,
   fileExistsAndNonTrivial,
   getFullPathFromWorkspace,
-} from '../utils/workspaceFileUtils';
-import { fileExistsAbsolute } from '../utils/absoluteFileUtils';
-import { formatProviderError } from '../utils/sdkErrorUtils';
+} from '../../utils/workspaceFileUtils';
+import { fileExistsAbsolute } from '../../utils/absoluteFileUtils';
+import { formatProviderError } from '../../utils/sdkErrorUtils';
 import {
   applyReplacements,
   getAllReplacements,
   getAllReplacementsRegex,
   cleanFileContent,
-} from '../replacement/replacementUtils';
-import { extractAndLogScratchpad } from '../utils/xmlUtils';
-import { getConfig } from '../utils/configUtils';
-import { calculateTokenPrice } from '../utils/priceUtils';
+} from '../../replacement/replacementUtils';
+import { extractAndLogScratchpad } from '../../utils/xmlUtils';
+import { getConfig } from '../../utils/configUtils';
+import { calculateTokenPrice } from '../../utils/priceUtils';
 
 // Local constant
-import { K_SLICE } from '../utils/constants';
+import { K_SLICE } from '../../utils/constants';
 
 // Internal type definition
 type InternalMessagePart = {

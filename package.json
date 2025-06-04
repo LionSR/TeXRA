@@ -495,7 +495,6 @@
               "type": "string",
               "enum": [
                 "inline_math",
-                "tikz",
                 "parentheses",
                 "latexdiff_markup",
                 "equation_style",
@@ -504,7 +503,6 @@
             },
             "default": [
               "inline_math",
-              "tikz",
               "parentheses",
               "latexdiff_markup",
               "equation_style"

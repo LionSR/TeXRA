@@ -30,6 +30,7 @@ export const OPENAI_REASONING_MODELS: Record<string, ModelConfig> = {
     capabilities: {
       ...OPENAI_REASONING_DEFAULT_CAPABILITIES,
       cacheDiscountFactor: 0.25,
+      supportsNativePdf: true,
       supportsVision: true,
     } satisfies ModelCapabilities,
     openRouterOnly: false,
@@ -46,6 +47,7 @@ export const OPENAI_REASONING_MODELS: Record<string, ModelConfig> = {
     capabilities: {
       ...OPENAI_REASONING_DEFAULT_CAPABILITIES,
       cacheDiscountFactor: 0.25,
+      supportsNativePdf: true,
       supportsVision: true,
     } satisfies ModelCapabilities,
     openRouterOnly: false,
@@ -77,6 +79,7 @@ export const OPENAI_REASONING_MODELS: Record<string, ModelConfig> = {
     capabilities: {
       ...OPENAI_REASONING_DEFAULT_CAPABILITIES,
       supportsVision: true,
+      supportsNativePdf: true,
     } satisfies ModelCapabilities,
     openRouterOnly: false,
   },
