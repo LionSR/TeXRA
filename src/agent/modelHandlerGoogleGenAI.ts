@@ -262,12 +262,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
       }
     }
 
-    const useStreaming = false; // Hardcoded to false
-    if (getConfig<boolean>('model.useStreaming', false)) {
-      this.logger.warn(
-        'Streaming is configured but currently disabled in ModelHandlerGoogleGenAI (using Chat API).',
-      );
-    }
+    const useStreaming = this.getStreamingConfig();
 
     try {
       this.logger.debug(
@@ -278,7 +273,44 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
       this.logger.debug(
         `Sending message with ${lastMessageParts.length} parts.`,
       );
-      // Is the following including the system prompt etc? somehow
+
+      if (useStreaming) {
+        const stream = await chat.sendMessageStream({
+          message: lastMessageParts,
+          config: { ...generationConfig, abortSignal: signal },
+        });
+
+        const fullParts: Part[] = [];
+        const finalResponse = new GenerateContentResponse();
+        for await (const chunk of stream) {
+          if (chunk.candidates?.[0]?.content?.parts) {
+            fullParts.push(...chunk.candidates[0].content.parts);
+          }
+          if (chunk.usageMetadata) {
+            finalResponse.usageMetadata = chunk.usageMetadata;
+          }
+          if (chunk.responseId) finalResponse.responseId = chunk.responseId;
+          if (chunk.createTime) finalResponse.createTime = chunk.createTime;
+          if (chunk.modelVersion)
+            finalResponse.modelVersion = chunk.modelVersion;
+          if (!finalResponse.promptFeedback && chunk.promptFeedback) {
+            finalResponse.promptFeedback = chunk.promptFeedback;
+          }
+        }
+
+        if (fullParts.length === 0) {
+          throw new Error('Stream yielded no chunks');
+        }
+
+        finalResponse.candidates = [
+          {
+            content: { role: 'model', parts: fullParts },
+          },
+        ];
+
+        return finalResponse;
+      }
+
       const result = await chat.sendMessage({
         message: lastMessageParts,
         config: { ...generationConfig, abortSignal: signal },
