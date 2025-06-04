@@ -52,7 +52,20 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
 
     const newMessages = messages.slice(this.sentMessages).map((msg) => ({
       role: msg.role,
-      content: msg.content,
+      content: msg.content.map((part: any) => {
+        if (part.type === 'text') {
+          return { type: 'input_text', text: part.text };
+        }
+        if (part.type === 'image_url') {
+          const url =
+            typeof part.image_url === 'string'
+              ? part.image_url
+              : part.image_url.url;
+          const detail = part.image_url?.detail ?? 'auto';
+          return { type: 'input_image', image_url: url, detail };
+        }
+        return part;
+      }),
     }));
 
     const params: any = {
@@ -108,7 +121,14 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
       input_tokens_details: { cached_tokens: 0 },
       output_tokens_details: { reasoning_tokens: 0 },
     };
-    const newResponse = responseObject.output_text?.trim() || '';
+    let newResponse = responseObject.output_text?.trim() || '';
+    if (!newResponse && Array.isArray(responseObject.output)) {
+      const first = responseObject.output[0];
+      const textPart = first?.content?.[0]?.text;
+      if (typeof textPart === 'string') {
+        newResponse = textPart.trim();
+      }
+    }
     const stopReason =
       responseObject.status === 'completed' ? 'stop' : 'length';
 

@@ -182,3 +182,4 @@ Configure streaming in VS Code Settings:
 
 - [Built-in Agents](./built-in-agents.md): See which agents work well with different models.
 - [Configuration](./configuration.md): Learn about other model-related settings like streaming.
+- [OpenAI Responses API](./openai-responses-api.md): Overview of the new stateful API and how TeXRA uses it.
