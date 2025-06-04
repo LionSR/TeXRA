@@ -83,7 +83,7 @@ After installing these dependencies, ensure they are accessible from the command
 8. Click "Execute" to run the AI-assisted agent
 9. Review the output in the newly created file
 
-Although many models are supported, we recommend using Anthropic sonnet\*/opus or O1/O3-series or Gemini 2 Flash/Thinking model for the best experience.
+Although many models are supported, we recommend using Anthropic sonnet\*/opus or O1/O3-series or Gemini 2 Flash/Thinking models for the best experience. You can also experiment with GitHub Copilot models via the new VS Code Language Model API.
 
 ## Available AI Agents
 
