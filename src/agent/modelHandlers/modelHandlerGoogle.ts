@@ -6,11 +6,11 @@ import OpenAI from 'openai';
 
 // Local imports - agent components
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
-import { hasEndTag } from './AgentDataclass';
+import { hasEndTag } from '../AgentDataclass';
 import {
   OpenAIAPIResponseUsage,
   GenerateContentResponseUsageMetadata,
-} from './ResponseUsage';
+} from '../ResponseUsage';
 import type { CompletionUsage } from 'openai/resources/completions';
 
 /**

@@ -8,7 +8,7 @@ import { XMLParser } from 'fast-xml-parser';
 import { AgentLogger } from '../logger/AgentLogger';
 
 // Local imports - utilities
-import { readFile, writeFile, fileExists } from '../utils/workspaceFileUtils';
+import { readFile, writeFile } from '../utils/workspaceFileUtils';
 import {
   addCdataToTags,
   addCdataToTagsMultiple,
@@ -23,7 +23,6 @@ import {
   getAllReplacements,
 } from '../replacement/replacementUtils';
 import {
-  runLatexdiff,
   runLatexdiffForRound,
   runLatexdiffBetweenRounds,
   LaTeXdiffResult,
@@ -376,7 +375,7 @@ export class OutputHandler {
       // Log debugging information within the group
       this.logger.debug(`Base files: ${this.baseFiles}`, diffProcessGroupId);
       this.logger.debug(
-        `Round ${currRound} output files: ${outputFiles}`,
+        `r${currRound} output files: ${outputFiles}`,
         diffProcessGroupId,
       );
 
