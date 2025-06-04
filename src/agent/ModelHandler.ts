@@ -134,6 +134,7 @@ export abstract class ModelHandler {
       [ModelProvider.MOONSHOT]: 'https://api.moonshot.cn/v1',
       [ModelProvider.DASHSCOPE]:
         'https://dashscope-intl.aliyuncs.com/compatible-mode/v1',
+      [ModelProvider.COPILOT]: null,
       [ModelProvider.OTHERS]: null,
     };
     return BASE_URLS[this.config.provider];
@@ -194,6 +195,7 @@ export abstract class ModelHandler {
       [ModelProvider.DEEPSEEK]: 'Deepseek',
       [ModelProvider.MOONSHOT]: 'Moonshot',
       [ModelProvider.DASHSCOPE]: 'Dashscope',
+      [ModelProvider.COPILOT]: 'Copilot',
       [ModelProvider.XAI]: 'Xai',
       [ModelProvider.OTHERS]: '', // Will fall back to global
     };
