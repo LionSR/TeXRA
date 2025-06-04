@@ -172,14 +172,12 @@ export function createGroupHeader(group) {
   const bulletMarkup = ' <i class="codicon codicon-circle-small-filled"></i> ';
 
   const headerContents = isTopLevel
-    ? `${timeMarkup}${usageDisplay ? `${bulletMarkup}${usageDisplay}` : ''}`
-    : `${usageDisplay ? `${bulletMarkup}${usageDisplay}` : ''}${timeMarkup}`;
+    ? `${timeMarkup}${usageDisplay ? `${usageDisplay}${bulletMarkup}` : ''}`
+    : `${usageDisplay ? `${usageDisplay}${bulletMarkup}` : ''}${timeMarkup}`;
 
   return `
     <summary id="group-header-${group.id}" class="log-group-header ${group.status} ${topLevelClass}">
-      <span class="group-status-icon">${statusIcon}</span>
-      ${titleMarkup}
-      ${headerContents}
+      <span class="group-status-icon">${statusIcon}</span>${titleMarkup}${headerContents}
     </summary>
   `;
 }
