@@ -3,6 +3,7 @@
 
 // Third-party imports
 import Anthropic from '@anthropic-ai/sdk';
+import * as vscode from 'vscode';
 
 // Local imports - error utils
 import { formatProviderError } from './sdkErrorUtils';
@@ -13,6 +14,7 @@ import * as logger from '../logger/logUtils';
 // Local imports - utilities
 import { getApiKey } from './secretUtils';
 import { extractTextFromTag } from './xmlUtils';
+import { getConfig } from './configUtils';
 
 const CHANNEL = 'TextEnhancement';
 
@@ -59,9 +61,11 @@ export async function polishTextWithAI(
   fileContext?: FileContext,
 ): Promise<{ success: boolean; text: string; error?: string }> {
   try {
-    // Get the API key from secrets
-    const apiKey = await getApiKey('anthropic');
-    if (!apiKey) {
+    const useCopilot = getConfig<boolean>('model.useCopilot', false);
+
+    // Get the API key from secrets when not using Copilot
+    const apiKey = useCopilot ? undefined : await getApiKey('anthropic');
+    if (!useCopilot && !apiKey) {
       return {
         success: false,
         text: text,
@@ -143,26 +147,41 @@ Return the corrected text wrapped in <corrected_text> XML tags.
 Text to correct:
 ${text}`;
 
-    // Use the Anthropic SDK
-    const anthropic = new Anthropic({ apiKey });
-    const response = await anthropic.beta.messages.create({
-      model: 'claude-3-7-sonnet-20250219',
-      messages: [{ role: 'user', content: prompt }],
-      max_tokens: 4096,
-    });
-
-    // Extract the response text
     let responseText = '';
-    if (
-      response.content &&
-      response.content.length > 0 &&
-      response.content[0].type === 'text'
-    ) {
-      responseText = response.content[0].text;
+
+    if (useCopilot) {
+      const [model] = await vscode.lm.selectChatModels({
+        vendor: 'copilot',
+        family: 'gpt-4o',
+      });
+      if (!model) {
+        return { success: false, text, error: 'No Copilot model available.' };
+      }
+      const response = await model.sendRequest([
+        vscode.LanguageModelChatMessage.User(prompt),
+      ]);
+      for await (const chunk of response.text) {
+        responseText += chunk;
+      }
     } else {
-      // Handle the case where the expected structure isn't found
-      logger.warn(CHANNEL, 'Unexpected response format from API');
-      responseText = JSON.stringify(response.content);
+      // Use the Anthropic SDK
+      const anthropic = new Anthropic({ apiKey: apiKey! });
+      const response = await anthropic.beta.messages.create({
+        model: 'claude-3-7-sonnet-20250219',
+        messages: [{ role: 'user', content: prompt }],
+        max_tokens: 4096,
+      });
+
+      if (
+        response.content &&
+        response.content.length > 0 &&
+        response.content[0].type === 'text'
+      ) {
+        responseText = response.content[0].text;
+      } else {
+        logger.warn(CHANNEL, 'Unexpected response format from API');
+        responseText = JSON.stringify(response.content);
+      }
     }
 
     // Extract the corrected text using the utility function

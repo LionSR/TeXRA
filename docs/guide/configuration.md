@@ -61,6 +61,7 @@ Configure how TeXRA connects to AI model providers:
 - `useStreaming`: Enable streaming responses for better handling of long outputs
 - `useStreamingAnthropicReasoning`: Enable streaming specifically for Anthropic reasoning models
 - `useStreamingOpenAIReasoning`: Enable streaming specifically for OpenAI reasoning models
+- `useCopilot`: Use the Copilot language model through VS Code's Language Model API for instruction polishing and text connection
 
 ## File Management Configuration
 
