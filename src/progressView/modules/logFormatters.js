@@ -151,7 +151,7 @@ export function createGroupHeader(group) {
   if (group.usage) {
     const { inputTokens = 0, outputTokens = 0, cost = 0 } = group.usage;
     usageDisplay =
-      `<span class="group-usage"> • <i class="codicon codicon-arrow-up"></i> ${formatTokens(inputTokens)}, ` +
+      `<span class="group-usage"><i class="codicon codicon-arrow-up"></i> ${formatTokens(inputTokens)}, ` +
       `<i class="codicon codicon-arrow-down"></i> ${formatTokens(outputTokens)}, ` +
       `$${cost.toFixed(3)}</span>`;
   }
@@ -161,17 +161,25 @@ export function createGroupHeader(group) {
     : `<span class="group-title">${group.name}</span>`;
   const topLevelClass = isTopLevel ? 'top-level' : '';
 
-  return `
-    <summary id="group-header-${group.id}" class="log-group-header ${group.status} ${topLevelClass}">
-      <span class="group-status-icon">${statusIcon}</span>
-      ${titleMarkup}
-      ${usageDisplay}
+  const timeMarkup = `
       <span class="group-time">
         <span class="group-start-time" data-start="${group.startTime}">
           <i class="codicon codicon-clock"></i> ${formattedStartTime}
         </span>
         ${durationDisplay}
-      </span>
+      </span>`;
+
+  const bulletMarkup = ' <i class="codicon codicon-circle-small"></i> ';
+
+  const headerContents = isTopLevel
+    ? `${timeMarkup}${usageDisplay ? `${bulletMarkup}${usageDisplay}` : ''}`
+    : `${usageDisplay ? `${bulletMarkup}${usageDisplay}` : ''}${timeMarkup}`;
+
+  return `
+    <summary id="group-header-${group.id}" class="log-group-header ${group.status} ${topLevelClass}">
+      <span class="group-status-icon">${statusIcon}</span>
+      ${titleMarkup}
+      ${headerContents}
     </summary>
   `;
 }
