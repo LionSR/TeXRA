@@ -88,6 +88,15 @@ Cost-effective models from Alibaba with strong multilingual capabilities.
 | `qwenplus`  | Large context general purpose | $$            | Medium         | Qwen Plus  |
 | `qwenturbo` | Fast responses                | $             | Fast           | Qwen Turbo |
 
+### Copilot Models
+
+GitHub Copilot models are available through VS Code's built-in Language Model API.
+These models require user consent and sign in to GitHub Copilot.
+
+| Model ID    | Key Strength / Use Case    | Relative Cost | Relative Speed | Notes               |
+| :---------- | :------------------------- | :------------ | :------------- | :------------------ |
+| `copilot4o` | Strong all-rounder, vision | $$            | Medium         | Uses GPT-4o backend |
+
 ### Grok / xAI Models
 
 Large context models from xAI.
@@ -145,7 +154,8 @@ The specific models available by default and their identifiers (`sonnet37`, `gpt
   "grok3",
   "qwenplus",
   "kimit",
-  "kimiv"
+  "kimiv",
+  "copilot4o"
 ]
 ```
 
