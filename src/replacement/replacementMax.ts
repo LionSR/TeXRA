@@ -517,6 +517,7 @@ export const MAX_MANUAL_REPLACEMENTS: ReplacementCategory = {
 
     // cleveref notation:
     '\\cref{ch:': 'Chapter~\\ref{ch:',
+    '\\crefs': '\\cref',
     '  \\cref': ' \\cref',
     '  \\ref': ' \\ref',
     '\\eqref{eqn:': '\\cref{eqn:',
