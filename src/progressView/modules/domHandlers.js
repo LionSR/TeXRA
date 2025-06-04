@@ -290,7 +290,7 @@ export function updateFileList(filesByRound) {
 
     const header = document.createElement('div');
     header.className = 'round-header';
-    header.textContent = `Round ${round}`;
+    header.textContent = `r${round}`;
     group.appendChild(header);
 
     const files = filesByRound[round] || [];

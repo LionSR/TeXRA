@@ -6,10 +6,10 @@ import OpenAI from 'openai';
 
 // Local imports - base handler
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
-import { ResponseUsageFactory } from './ResponseUsage';
-import { calculateTokenPrice } from '../utils/priceUtils';
-import { ToolState } from './ToolState';
-import { K_SLICE } from '../utils/constants';
+import { ResponseUsageFactory } from '../ResponseUsage';
+import { calculateTokenPrice } from '../../utils/priceUtils';
+import { ToolState } from '../ToolState';
+import { K_SLICE } from '../../utils/constants';
 
 // import { ResponseCreateParams } from 'openai/src/resources/responses/response';
 // this is incorrect now, but would be nice to use
@@ -68,7 +68,13 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
       role: msg.role,
       content: msg.content.map((part: any) => {
         if (part.type === 'text') {
-          return { type: 'input_text', text: part.text };
+          if (msg.role === 'user') {
+            return { type: 'input_text', text: part.text };
+          } else if (msg.role === 'assistant') {
+            return { type: 'output_text', text: part.text };
+          } else {
+            return { type: 'input_text', text: part.text };
+          }
         }
         if (part.type === 'image_url') {
           const url =
@@ -85,10 +91,18 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
     const params: any = {
       model: this.config.fullName,
       input: newMessages,
-      temperature,
       max_output_tokens: this.config.maxOutputTokens,
       store: true,
     };
+
+    if (endTag) {
+      // Up to 4 sequences where the API will stop generating further tokens. The returned text will not contain the stop sequence.
+      params.stop = [endTag];
+    }
+
+    if (!this.isOReasoningModel) {
+      params.temperature = temperature;
+    }
 
     if (this.previousResponseId) {
       params.previous_response_id = this.previousResponseId;
@@ -106,13 +120,19 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
       if (this.capabilities.supportsReasoningEffort) {
         params.reasoning.effort = 'high'; // or "medium" or "low"
       }
+      if (
+        this.config.fullName.includes('o3') ||
+        this.config.fullName.includes('o4')
+      ) {
+        // stop is not supported with latest reasoning models o3 and o4-mini.
+        params.stop = undefined;
+      }
     }
 
     if (useStreaming) {
-      params.stream = true;
-      const stream = (await client.responses.create(params, {
+      const stream = client.responses.stream(params, {
         signal,
-      })) as any;
+      }) as any;
       const response = await stream.finalResponse();
       this.previousResponseId = response.id;
       this.sentMessages = messages.length;
