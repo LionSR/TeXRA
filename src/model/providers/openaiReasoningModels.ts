@@ -80,6 +80,21 @@ export const OPENAI_REASONING_MODELS: Record<string, ModelConfig> = {
     } satisfies ModelCapabilities,
     openRouterOnly: false,
   },
+  o1pro: {
+    name: 'o1pro',
+    fullName: 'o1-pro-2025-03-19',
+    openrouterFullName: 'openai/o1-pro-2025-03-19',
+    provider: ModelProvider.OPENAI,
+    maxOutputTokens: 100000,
+    contextWindow: 200000,
+    inputPrice: 150.0,
+    outputPrice: 600.0,
+    capabilities: {
+      ...OPENAI_REASONING_DEFAULT_CAPABILITIES,
+      supportsVision: true,
+    } satisfies ModelCapabilities,
+    openRouterOnly: false,
+  },
   o1preview: {
     name: 'o1preview',
     fullName: 'o1-preview-2024-09-12',
