@@ -126,6 +126,29 @@ export function getMessageTimestamp(message) {
 }
 
 /**
+ * Formats group header elements in the correct order based on group level
+ * @param {boolean} isTopLevel - Whether this is a top-level group
+ * @param {string} timeMarkup - The time display markup
+ * @param {string} usageDisplay - The usage display markup (empty string if no usage)
+ * @param {string} bulletMarkup - The bullet separator markup
+ * @returns {string} Formatted header content in the correct order
+ */
+export function formatGroupHeaderElements(
+  isTopLevel,
+  timeMarkup,
+  usageDisplay,
+  bulletMarkup,
+) {
+  if (isTopLevel) {
+    // For top-level groups: time → bullet → usage
+    return `${timeMarkup}${usageDisplay ? `${bulletMarkup}${usageDisplay}` : ''}`;
+  } else {
+    // For non-top-level groups: usage → bullet → time
+    return `${usageDisplay ? `${usageDisplay}${bulletMarkup}` : ''}${timeMarkup}`;
+  }
+}
+
+/**
  * Create a group header HTML
  * @param {Object} group - Log group data
  * @returns {string} HTML for group header
@@ -169,17 +192,18 @@ export function createGroupHeader(group) {
         ${durationDisplay}
       </span>`;
 
-  const bulletMarkup = ' <i class="codicon codicon-circle-small"></i> ';
+  const bulletMarkup = ' <i class="codicon codicon-circle-small-filled"></i> ';
 
-  const headerContents = isTopLevel
-    ? `${timeMarkup}${usageDisplay ? `${bulletMarkup}${usageDisplay}` : ''}`
-    : `${usageDisplay ? `${bulletMarkup}${usageDisplay}` : ''}${timeMarkup}`;
+  const headerContents = formatGroupHeaderElements(
+    isTopLevel,
+    timeMarkup,
+    usageDisplay,
+    bulletMarkup,
+  );
 
   return `
     <summary id="group-header-${group.id}" class="log-group-header ${group.status} ${topLevelClass}">
-      <span class="group-status-icon">${statusIcon}</span>
-      ${titleMarkup}
-      ${headerContents}
+      <span class="group-status-icon">${statusIcon}</span>${titleMarkup}${headerContents}
     </summary>
   `;
 }
