@@ -250,7 +250,7 @@ export function updateGroupUsage(groupId, usage, skipPropagate = false) {
 
   const { inputTokens = 0, outputTokens = 0, cost = 0 } = usage;
   usageElem.innerHTML =
-    ` • <i class="codicon codicon-arrow-up"></i> ${formatTokens(inputTokens)}, ` +
+    `<i class="codicon codicon-arrow-up"></i> ${formatTokens(inputTokens)}, ` +
     `<i class="codicon codicon-arrow-down"></i> ${formatTokens(outputTokens)}, ` +
     `$${cost.toFixed(3)}`;
 
