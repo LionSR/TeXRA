@@ -151,6 +151,12 @@
             "default": false,
             "description": "Use the native @google/genai SDK for Google models instead of the OpenAI-compatible API. This feature is experimental and may not work as expected.",
             "scope": "resource"
+          },
+          "texra.model.useCopilot": {
+            "type": "boolean",
+            "default": false,
+            "description": "Use the Copilot language model via VS Code's Language Model API for polishing instructions and best connection detection.",
+            "scope": "resource"
           }
         }
       },
