@@ -788,6 +788,15 @@ export const GPTNESS_REPLACEMENTS: ReplacementCategory = {
     'ultimate guide to': 'guide to',
     'mastering the art of': 'learning',
     'empower you to': 'help you',
+
+    // Additional GPT-isms
+    brittle: 'fragile',
+    // 'deeper understanding': 'better understanding',
+    // 'are essential': 'are important',
+    // novel: 'new',
+    // explore: 'study',
+    // fostering: 'promoting',
+    // pivotal: 'important',
   },
 };
 
