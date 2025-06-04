@@ -236,8 +236,21 @@ export function updateGroupUsage(groupId, usage, skipPropagate = false) {
     usageElem = document.createElement('span');
     usageElem.className = 'group-usage';
     const timeContainer = groupHeader.querySelector('.group-time');
+
+    // Determine if this is a top-level group by checking for the 'top-level' class
+    const isTopLevel = groupHeader.classList.contains('top-level');
+
     if (timeContainer) {
-      groupHeader.insertBefore(usageElem, timeContainer);
+      if (isTopLevel) {
+        // For top-level groups: time comes first, then usage
+        timeContainer.parentNode.insertBefore(
+          usageElem,
+          timeContainer.nextSibling,
+        );
+      } else {
+        // For non-top-level groups: usage comes first, then time
+        groupHeader.insertBefore(usageElem, timeContainer);
+      }
     } else {
       groupHeader.appendChild(usageElem);
     }
