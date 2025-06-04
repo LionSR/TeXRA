@@ -17,7 +17,6 @@ import {
   fileExistsAndNonTrivial,
 } from '../../utils/workspaceFileUtils';
 import { cleanFileContent } from '../../replacement/replacementUtils';
-import { getConfig } from '../../utils/configUtils';
 import { extractAndLogScratchpad } from '../../utils/xmlUtils';
 
 // Local imports - agent components
@@ -136,11 +135,47 @@ export class ModelHandlerOpenAI extends ModelHandler {
         const stream = client.chat.completions.stream(kwargs, {
           signal,
         });
+
+        if (this.config.fullName.includes('deepseek')) {
+          let reasoning_content = '';
+          let content = '';
+          for await (const chunk of stream) {
+            if ((chunk.choices[0].delta as any).reasoning_content) {
+              reasoning_content += (chunk.choices[0].delta as any)
+                .reasoning_content;
+            } else {
+              content += (chunk.choices[0].delta as any).content;
+            }
+          }
+          response = {
+            choices: [
+              {
+                message: {
+                  content: content,
+                  reasoning_content: reasoning_content,
+                },
+              },
+            ],
+          };
+          return response;
+        }
+
         response = await stream.finalMessage();
 
         // in the future we can add: stream_options: {"include_usage": true} to get usage statistics
         // in the future if we pass stream to outside (signal: controller.signal)), calling stream.controller.abort() will abort the stream; which will be very useful for our stop button (controller.abort();)
         // we should also make sure partial results can be returned in the presence of errors!
+        // TODO: This wait for finalMessage method do not support deepseek models, so we need to aggreatate the results manually like this:
+        // reasoning_content = ""
+        // content = ""
+
+        // for chunk in response:
+        //     if chunk.choices[0].delta.reasoning_content:
+        //         reasoning_content += chunk.choices[0].delta.reasoning_content
+        //     else:
+        //         content += chunk.choices[0].delta.content
+        // and then construct the response object like this:
+        // Now do it
       } catch (err) {
         if (
           err instanceof NotFoundError ||
