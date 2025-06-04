@@ -60,7 +60,7 @@
 
 .group-start-time,
 .group-duration {
-  margin-right: var(--spacing-medium);
+  margin-right: var(--spacing-small);
 }
 
 /* Use the spin animation defined in base.css */

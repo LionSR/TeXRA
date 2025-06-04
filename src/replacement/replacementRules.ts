@@ -646,6 +646,10 @@ export const SCRATCHPAD_XML_REPLACEMENTS: ReplacementCategory = {
   description: 'Fixes for scratchpad XML processing',
   isRegex: false,
   patterns: {
+    // For Deepseek models:
+    'null<scratchpad>': '<scratchpad>',
+    '\\end{document}null': '\\end{document}',
+    'null\n</latex_document>': '\n</latex_document>',
     // Duplicate scratchpad tag fixes - remove redundant tags
     '<scratchpad><scratchpad>': '<scratchpad>',
     '<scratchpad> <scratchpad>': '<scratchpad>',
