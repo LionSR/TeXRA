@@ -128,20 +128,16 @@ export class ModelHandlerAnthropic extends ModelHandler {
         `Token count of message: ${responseTokenCount.input_tokens}`,
       );
       if (responseTokenCount.input_tokens > this.config.contextWindow) {
-        this.logger.error(
-          `Token count of message exceeds context window: ${responseTokenCount.input_tokens} > ${this.config.contextWindow}`,
-        );
-        throw new Error(
-          `Token count of message exceeds context window: ${responseTokenCount.input_tokens} > ${this.config.contextWindow}`,
-        );
+        const errMsg = `Token count of message exceeds context window: ${responseTokenCount.input_tokens} > ${this.config.contextWindow}`;
+        this.logger.error(errMsg);
+        throw new Error(errMsg);
       }
       if (
         this.config.contextWindow - responseTokenCount.input_tokens <
         options.max_tokens
       ) {
-        this.logger.warn(
-          `Token count of message plus max tokens exceeds context window: ${responseTokenCount.input_tokens} + ${options.max_tokens} > ${this.config.contextWindow}. Reducing max tokens to ${this.config.contextWindow - responseTokenCount.input_tokens}.`,
-        );
+        const warnMsg = `Token count of message plus max tokens exceeds context window: ${responseTokenCount.input_tokens} + ${options.max_tokens} > ${this.config.contextWindow}. Reducing max tokens to ${this.config.contextWindow - responseTokenCount.input_tokens}.`;
+        this.logger.warn(warnMsg);
         options.max_tokens =
           this.config.contextWindow - responseTokenCount.input_tokens - 10;
       }
@@ -154,7 +150,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
       if (useStreaming) {
         // in the future if we pass stream to outside, calling stream.controller.abort() will abort the stream; which will be very useful for our stop button
         // we should also make sure partial results can be returned in the presence of errors!
-        const stream = await client.beta.messages.stream(options, { signal });
+        const stream = client.beta.messages.stream(options, { signal });
         response = await stream.finalMessage();
       } else {
         response = await client.beta.messages.create(options, { signal });
