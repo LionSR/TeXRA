@@ -42,6 +42,7 @@ export class DirectAgent extends BaseReflectionAgent {
     // Initialize with processGroupId if provided, otherwise it will be set in the try block
     let outputProcessGroupId: string = processGroupId || '';
 
+    // These groups needs to be made consistent with the @BaseReflectionAgent.handleOutput method
     try {
       // Start a main output processing group if none provided
       if (!processGroupId) {
