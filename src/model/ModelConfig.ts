@@ -44,6 +44,7 @@ export enum ModelProvider {
   XAI = 'xai',
   MOONSHOT = 'moonshot',
   DASHSCOPE = 'dashscope',
+  COPILOT = 'copilot',
   OTHERS = 'others',
 }
 
