@@ -3,46 +3,43 @@
 
 // Third-party imports
 import { Anthropic } from '@anthropic-ai/sdk';
-
-// Local imports - error utils
-import { formatProviderError } from '../utils/sdkErrorUtils';
 import {
   MessageParam,
   ContentBlock,
 } from '@anthropic-ai/sdk/resources/messages';
 
+// Local imports - error utils
+import { formatProviderError } from '../../utils/sdkErrorUtils';
+
 // Local imports - utilities
 import {
   readFile,
   writeFile,
-  fileExists,
   fileExistsAndNonTrivial,
-} from '../utils/workspaceFileUtils';
+} from '../../utils/workspaceFileUtils';
 import {
   applyReplacements,
   getAllReplacements,
   getAllReplacementsRegex,
   cleanFileContent,
-} from '../replacement/replacementUtils';
-import { extractAndLogScratchpad } from '../utils/xmlUtils';
+} from '../../replacement/replacementUtils';
+import { extractAndLogScratchpad } from '../../utils/xmlUtils';
 
 // Local imports - agent components
-import { AgentConfig } from './AgentConfig';
-import { AgentSetting, hasEndTag } from './AgentDataclass';
+import { AgentConfig } from '../AgentConfig';
+import { AgentSetting, hasEndTag } from '../AgentDataclass';
 import { ModelHandler } from './ModelHandler';
 import {
   AnthropicAPIResponseUsage,
   ResponseUsageFactory,
   AnthropicUsage,
-} from './ResponseUsage';
-import { ToolState } from './ToolState';
-import { MediaEntry } from './mediaTypes';
-import { AgentStateRound } from './AgentState';
-import { messageToSkeleton } from './messageUtils';
-import { getConfig } from '../utils/configUtils';
-import { K_SLICE } from '../utils/constants';
-import { objectToLogString } from '../utils/stringUtils';
-import { calculateTokenPrice } from '../utils/priceUtils';
+} from '../ResponseUsage';
+import { ToolState } from '../ToolState';
+import { MediaEntry } from '../mediaTypes';
+import { AgentStateRound } from '../AgentState';
+import { K_SLICE } from '../../utils/constants';
+import { objectToLogString } from '../../utils/stringUtils';
+import { calculateTokenPrice } from '../../utils/priceUtils';
 
 /**
  * Anthropic-specific model handler implementation for managing API interactions and message processing.

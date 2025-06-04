@@ -17,6 +17,7 @@ import {
   getStatusIcon,
   formatDuration,
   formatTokens,
+  formatGroupHeaderElements,
 } from './logFormatters.js';
 import { STATUS, COMMANDS, SPLIT_SIZES, TOOLBAR_BUTTONS } from './constants.js';
 import { createIconButton } from '@common/templateUtils.js';
@@ -25,7 +26,7 @@ const STATUS_MAP = {
   [STATUS.RUNNING]: {
     className: 'running',
     label: 'Running',
-    enable: ['stopStreamBtn'],
+    enable: ['stopStreamBtn', 'restoreStateBtn'],
   },
   [STATUS.ERROR]: {
     className: 'error',
@@ -36,6 +37,7 @@ const STATUS_MAP = {
       'cleanStreamBtn',
       'restoreStateBtn',
       'diffStreamBtn',
+      'eraseStreamBtn',
     ],
   },
   [STATUS.STOPPED]: {
@@ -47,12 +49,20 @@ const STATUS_MAP = {
       'cleanStreamBtn',
       'restoreStateBtn',
       'diffStreamBtn',
+      'eraseStreamBtn',
     ],
   },
   [STATUS.READY]: {
     className: 'ready',
     label: 'Ready',
-    enable: [],
+    enable: [
+      'runAgainBtn',
+      'packStreamBtn',
+      'cleanStreamBtn',
+      'restoreStateBtn',
+      'diffStreamBtn',
+      'eraseStreamBtn',
+    ],
   },
 };
 
@@ -209,12 +219,47 @@ function computeAggregatedUsage(parentId) {
 
 function propagateUsageToParents(groupId) {
   const group = getLogGroup(groupId);
-  if (!group || !group.parentGroupId) return;
-  const totals = {
-    ...computeAggregatedUsage(group.parentGroupId),
-  };
-  updateGroupUsage(group.parentGroupId, totals, true);
-  propagateUsageToParents(group.parentGroupId);
+  if (!group) return;
+
+  // If this group has a parent, update the parent with aggregated usage
+  if (group.parentGroupId) {
+    const totals = {
+      ...computeAggregatedUsage(group.parentGroupId),
+    };
+    updateGroupUsage(group.parentGroupId, totals, true);
+    propagateUsageToParents(group.parentGroupId);
+  } else {
+    // This is a top-level group, update it with aggregated usage from its children
+    const totals = {
+      ...computeAggregatedUsage(groupId),
+    };
+    updateGroupUsage(groupId, totals, true);
+  }
+}
+
+/**
+ * Determines where to insert a usage element based on group level and existing elements
+ * @param {HTMLElement} groupHeader - The group header element
+ * @param {HTMLElement} usageElem - The usage element to insert
+ * @param {boolean} isTopLevel - Whether this is a top-level group
+ */
+function insertUsageElement(groupHeader, usageElem, isTopLevel) {
+  const timeContainer = groupHeader.querySelector('.group-time');
+
+  if (timeContainer) {
+    if (isTopLevel) {
+      // For top-level groups: time comes first, then usage
+      timeContainer.parentNode.insertBefore(
+        usageElem,
+        timeContainer.nextSibling,
+      );
+    } else {
+      // For non-top-level groups: usage comes first, then time
+      groupHeader.insertBefore(usageElem, timeContainer);
+    }
+  } else {
+    groupHeader.appendChild(usageElem);
+  }
 }
 
 export function updateGroupUsage(groupId, usage, skipPropagate = false) {
@@ -226,12 +271,10 @@ export function updateGroupUsage(groupId, usage, skipPropagate = false) {
   if (!usageElem) {
     usageElem = document.createElement('span');
     usageElem.className = 'group-usage';
-    const timeContainer = groupHeader.querySelector('.group-time');
-    if (timeContainer) {
-      groupHeader.insertBefore(usageElem, timeContainer);
-    } else {
-      groupHeader.appendChild(usageElem);
-    }
+
+    // Determine if this is a top-level group by checking for the 'top-level' class
+    const isTopLevel = groupHeader.classList.contains('top-level');
+    insertUsageElement(groupHeader, usageElem, isTopLevel);
   }
 
   if (!usage) {
@@ -290,7 +333,7 @@ export function updateFileList(filesByRound) {
 
     const header = document.createElement('div');
     header.className = 'round-header';
-    header.textContent = `Round ${round}`;
+    header.textContent = `r${round}`;
     group.appendChild(header);
 
     const files = filesByRound[round] || [];

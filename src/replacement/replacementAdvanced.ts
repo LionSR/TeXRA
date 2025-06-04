@@ -5,13 +5,8 @@
 // Local imports - log
 import * as logger from '../logger/logUtils';
 
-// Import vscode workspace configuration
-import { getConfig } from '../utils/configUtils';
-
 const CHANNEL = 'ReplacementUtils';
 logger.initialize(CHANNEL);
-
-import { ReplacementCategory } from './replacementTypes';
 
 /**
  * Applies LaTeX quotes formatting to a LaTeX document.

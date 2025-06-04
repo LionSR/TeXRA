@@ -6,10 +6,10 @@ import OpenAI from 'openai';
 
 // Local imports - base handler
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
-import { ResponseUsageFactory } from './ResponseUsage';
-import { calculateTokenPrice } from '../utils/priceUtils';
-import { ToolState } from './ToolState';
-import { K_SLICE } from '../utils/constants';
+import { ResponseUsageFactory } from '../ResponseUsage';
+import { calculateTokenPrice } from '../../utils/priceUtils';
+import { ToolState } from '../ToolState';
+import { K_SLICE } from '../../utils/constants';
 
 // import { ResponseCreateParams } from 'openai/src/resources/responses/response';
 // this is incorrect now, but would be nice to use
@@ -17,6 +17,9 @@ import { K_SLICE } from '../utils/constants';
 /**
  * Handler for OpenAI's new Responses API. Uses `previous_response_id` to
  * manage conversation state between calls.
+ *
+ * Note: PDFs are handled specially - they are converted from image_url format
+ * to input_file format with mime_type 'application/pdf' for proper processing.
  */
 export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
   private previousResponseId: string | null = null;
@@ -68,13 +71,34 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
       role: msg.role,
       content: msg.content.map((part: any) => {
         if (part.type === 'text') {
-          return { type: 'input_text', text: part.text };
+          if (msg.role === 'user') {
+            return { type: 'input_text', text: part.text };
+          } else if (msg.role === 'assistant') {
+            return { type: 'output_text', text: part.text };
+          } else {
+            return { type: 'input_text', text: part.text };
+          }
         }
         if (part.type === 'image_url') {
           const url =
             typeof part.image_url === 'string'
               ? part.image_url
               : part.image_url.url;
+
+          // Check if this is a PDF by examining the data URL
+          if (url.startsWith('data:application/pdf;base64,')) {
+            // Extract the base64 data from the data URL
+            const base64Data = url.replace('data:application/pdf;base64,', '');
+            return {
+              type: 'input_file',
+              input_file: {
+                data: base64Data,
+                mime_type: 'application/pdf',
+              },
+            };
+          }
+
+          // For regular images, use input_image format
           const detail = part.image_url?.detail ?? 'auto';
           return { type: 'input_image', image_url: url, detail };
         }
@@ -85,10 +109,18 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
     const params: any = {
       model: this.config.fullName,
       input: newMessages,
-      temperature,
       max_output_tokens: this.config.maxOutputTokens,
       store: true,
     };
+
+    if (endTag) {
+      // Up to 4 sequences where the API will stop generating further tokens. The returned text will not contain the stop sequence.
+      params.stop = [endTag];
+    }
+
+    if (!this.isOReasoningModel) {
+      params.temperature = temperature;
+    }
 
     if (this.previousResponseId) {
       params.previous_response_id = this.previousResponseId;
@@ -106,14 +138,26 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
       if (this.capabilities.supportsReasoningEffort) {
         params.reasoning.effort = 'high'; // or "medium" or "low"
       }
+      if (
+        this.config.fullName.includes('o3') ||
+        this.config.fullName.includes('o4')
+      ) {
+        // stop is not supported with latest reasoning models o3 and o4-mini.
+        params.stop = undefined;
+      }
     }
 
     if (useStreaming) {
-      params.stream = true;
-      const stream = (await client.responses.create(params, {
+      // this.logger.debug(
+      //   `OpenAI Responses streaming params: ${JSON.stringify(params)}`,
+      // );
+      const stream = client.responses.stream(params, {
         signal,
-      })) as any;
+      }) as any;
       const response = await stream.finalResponse();
+      this.logger.debug(
+        `OpenAI Responses final response: ${JSON.stringify(response)}`,
+      );
       this.previousResponseId = response.id;
       this.sentMessages = messages.length;
       return response;
@@ -127,7 +171,46 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
     }
   }
 
-  /** Extract plain text and usage information from the Responses API result. */
+  /**
+   * Extract plain text and usage information from the Responses API result.
+   *
+   * The OpenAI Responses API returns a JSON structure like:
+   * {
+   *   "id": "resp_...",
+   *   "object": "response",
+   *   "status": "completed",
+   *   "output": [
+   *     {
+   *       "id": "rs_...",
+   *       "type": "reasoning",
+   *       "summary": [
+   *         { "type": "summary_text", "text": "..." },
+   *         ...
+   *       ]
+   *     },
+   *     {
+   *       "id": "msg_...",
+   *       "type": "message",
+   *       "status": "completed",
+   *       "content": [
+   *         {
+   *           "type": "output_text",
+   *           "annotations": [],
+   *           "text": "The actual response text goes here..."
+   *         }
+   *       ],
+   *       "role": "assistant"
+   *     }
+   *   ],
+   *   "usage": {
+   *     "input_tokens": 123,
+   *     "output_tokens": 123,
+   *     "input_tokens_details": { "cached_tokens": 0 },
+   *     "output_tokens_details": { "reasoning_tokens": 9920 },
+   *     "total_tokens": 256
+   *   }
+   * }
+   */
   extractResponse(responseObject: any, endTag: string): [string, any, string] {
     const usage = responseObject.usage || {
       input_tokens: 0,
@@ -135,14 +218,45 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
       input_tokens_details: { cached_tokens: 0 },
       output_tokens_details: { reasoning_tokens: 0 },
     };
-    let newResponse = responseObject.output_text?.trim() || '';
-    if (!newResponse && Array.isArray(responseObject.output)) {
-      const first = responseObject.output[0];
-      const textPart = first?.content?.[0]?.text;
-      if (typeof textPart === 'string') {
-        newResponse = textPart.trim();
+
+    let newResponse = '';
+
+    // Try direct output_text first (some response formats)
+    if (responseObject.output_text) {
+      newResponse = responseObject.output_text.trim();
+    }
+    // Handle the nested array structure from Responses API
+    else if (Array.isArray(responseObject.output)) {
+      // First, try to extract all "message" type parts and join their "content"
+      const messageParts = responseObject.output.filter(
+        (part: any) => part.type === 'message' && part.content,
+      );
+      if (messageParts.length > 0) {
+        newResponse = messageParts
+          .map((part: any) => {
+            // If content is an array, flatten and extract output_text
+            if (Array.isArray(part.content)) {
+              return part.content
+                .filter((c: any) => c.type === 'output_text' && c.text)
+                .map((c: any) => c.text)
+                .join('');
+            } else if (typeof part.content === 'string') {
+              return part.content;
+            }
+            return '';
+          })
+          .join('')
+          .trim();
+      } else {
+        // Fallback: directly extract all output_text from output array (for older/alternate formats)
+        newResponse = responseObject.output
+          .filter((part: any) => part.type === 'output_text' && part.text)
+          .map((part: any) => part.text)
+          .join('')
+          .trim();
       }
     }
+
     const stopReason =
       responseObject.status === 'completed' ? 'stop' : 'length';
 
@@ -246,29 +360,67 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
    * @param toolState Optional toolState to update with thinking blocks
    * @returns The concatenated reasoning summary or null
    */
+  /**
+   * Process reasoning summaries from the Responses API.
+   * Handles a structure like:
+   * {
+   *   output: {
+   *     [
+   *       {
+   *         id: "...",
+   *         type: "reasoning",
+   *         summary: [
+   *           { type: "summary_text", text: "..." },
+   *           ...
+   *         ]
+   *       },
+   *       ...
+   *     ]
+   *   }
+   * }
+   * @param responseObject The API response object
+   * @param groupId Optional group ID for logging
+   * @param toolState Optional toolState to update with thinking blocks
+   * @returns The concatenated reasoning summary or null
+   */
   processThinkingBlock(
     responseObject: any,
     groupId?: string,
     toolState?: ToolState,
   ): string | null {
-    const summaryParts = responseObject?.reasoning?.summary;
+    // Find the first output item with type === "reasoning"
+    const outputArr = responseObject?.output;
+    if (!Array.isArray(outputArr)) {
+      return null;
+    }
+    const reasoningObj = outputArr.find(
+      (item: any) => item?.type === 'reasoning',
+    );
+    const summaryParts = reasoningObj?.summary;
     if (!Array.isArray(summaryParts) || summaryParts.length === 0) {
       return null;
     }
 
+    // Concatenate all 'text' fields from the summary array
     const thoughtContent = summaryParts
-      .map((p: any) => p.text ?? '')
+      .map((part: any) =>
+        part.type === 'summary_text' && typeof part?.text === 'string'
+          ? part.text
+          : '',
+      )
       .join('')
       .trim();
 
+    // If toolState is provided and not already updated, add each summary part as a thinking block
     if (toolState && !toolState.thinkingAdded) {
-      toolState.thinkingBlocks = summaryParts.map((p: any) => ({
+      toolState.thinkingBlocks = summaryParts.map((part: any) => ({
         type: 'thinking',
-        thinking: p.text ?? '',
+        thinking: typeof part?.text === 'string' ? part.text : '',
       }));
       toolState.thinkingAdded = true;
     }
 
+    // Log a preview of the reasoning content if available
     if (thoughtContent) {
       this.logger.debug(
         `OpenAI Responses reasoning preview: ${thoughtContent.substring(0, K_SLICE)}...`,

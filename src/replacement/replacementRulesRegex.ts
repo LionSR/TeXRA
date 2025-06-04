@@ -42,28 +42,6 @@ export const PARENTHESES_REPLACEMENTS: ReplacementCategory = {
   },
 };
 
-// TikZ picture fixes
-// Using ECMAScript 2018 named capture groups (?<name>pattern)
-// Similar to Python's (?P<name>pattern)
-// { and } needs to be \\{ and \\}?
-export const TIKZ_REPLACEMENTS: ReplacementCategory = {
-  name: 'tikz',
-  description: 'Fixes for TikZ picture formatting and structure',
-  isRegex: true,
-  flags: 'gms',
-  patterns: {
-    '\\end{document}\\s*\\chapter': '\\chapter',
-    '\\end{document}\\s*\\addcontentsline': '\\addcontentsline',
-
-    // Check the following, as I get \node[annotation, align=left] at (7.5,2.5) {State evolution\\in phase space\end{tikzpicture}\}; somehow
-    '(?<indent>[\\t ]*)}\s*\\end{tikzpicture};\s*\\end{tikzpicture}':
-      '${indent}\\end{tikzpicture}\n${indent}};\n${indent}\\end{tikzpicture}',
-    '}(\\s*)\\end{tikzpicture};': '};$1\\end{tikzpicture}',
-    '}(\\s*)\\end{tikzpicture}\\DIFaddendFL ;':
-      '$1\\end{tikzpicture}};\\DIFaddendFL',
-  },
-};
-
 // LaTeX inline math formatting fixes
 export const INLINE_MATH_REPLACEMENTS: ReplacementCategory = {
   name: 'inline_math',
@@ -108,6 +86,10 @@ export const LATEXDIFF_MARKUP_REPLACEMENTS: ReplacementCategory = {
     // '\\DIFdel{$^$1($}%DIFDELCMD',
     '\\\\DIFdel\\{_([a-zA-Z])[^\\n\\}]{0,10}\\}%DIFDELCMD':
       '\\DIFdel{$^$1($}%DIFDELCMD',
+    // There are more edge cases like:
+    // \DIFdel{_{t-1})D_{t-1}(}%DIFDELCMD < \bze%%%
+    // \DIFdel{_{t}|}%DIFDELCMD < \bze%%%
+    // \DIFdel{_{t-1})
   },
 };
 

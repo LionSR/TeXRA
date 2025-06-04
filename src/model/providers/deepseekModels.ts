@@ -18,7 +18,7 @@ export const DEEPSEEK_MODELS: Record<string, ModelConfig> = {
   dsv3: {
     name: 'dsv3',
     fullName: 'deepseek-chat',
-    openrouterFullName: 'deepseek/deepseek-chat',
+    openrouterFullName: 'deepseek/deepseek-chat-v3-0324',
     provider: ModelProvider.DEEPSEEK,
     maxOutputTokens: 64000,
     contextWindow: 128000,
@@ -33,7 +33,7 @@ export const DEEPSEEK_MODELS: Record<string, ModelConfig> = {
   dsr1: {
     name: 'dsr1',
     fullName: 'deepseek-reasoner',
-    openrouterFullName: 'deepseek/deepseek-R1',
+    openrouterFullName: 'deepseek/deepseek-r1-0528',
     provider: ModelProvider.DEEPSEEK,
     maxOutputTokens: 65536,
     contextWindow: 128000,
@@ -64,9 +64,9 @@ export const DEEPSEEK_MODELS: Record<string, ModelConfig> = {
   dsr1o: {
     name: 'dsr1o',
     fullName: 'deepseek-reasoner',
-    openrouterFullName: 'deepseek/deepseek-R1',
+    openrouterFullName: 'deepseek/deepseek-r1-0528',
     provider: ModelProvider.DEEPSEEK,
-    maxOutputTokens: 8192,
+    maxOutputTokens: 64000,
     contextWindow: 64000,
     inputPrice: 0.55,
     outputPrice: 2.19,
