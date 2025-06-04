@@ -416,6 +416,9 @@ export const MAX_MANUAL_REPLACEMENTS: ReplacementCategory = {
   description: 'Manually specified maximum style replacements for LaTeX',
   isRegex: false,
   patterns: {
+    // equation labels:
+    '\\label{eq:': '\\label{eqn:',
+
     // Subscript/superscript formatting
     '_{tot}': '_{\\tot}',
     '^{tot}': '^{\\tot}',
