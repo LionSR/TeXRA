@@ -297,6 +297,8 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
             finalResponse.promptFeedback = chunk.promptFeedback;
           }
         }
+        if (finalResponse.candidates?.[0]) {
+        }
 
         if (fullParts.length === 0) {
           throw new Error('Stream yielded no chunks');
@@ -305,6 +307,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
         finalResponse.candidates = [
           {
             content: { role: 'model', parts: fullParts },
+            finishReason: FinishReason.STOP, // there is no good choice, could be length, but let us just put this.
           },
         ];
 
