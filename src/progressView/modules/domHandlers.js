@@ -25,7 +25,7 @@ const STATUS_MAP = {
   [STATUS.RUNNING]: {
     className: 'running',
     label: 'Running',
-    enable: ['stopStreamBtn'],
+    enable: ['stopStreamBtn', 'restoreStateBtn'],
   },
   [STATUS.ERROR]: {
     className: 'error',
@@ -36,6 +36,7 @@ const STATUS_MAP = {
       'cleanStreamBtn',
       'restoreStateBtn',
       'diffStreamBtn',
+      'eraseStreamBtn',
     ],
   },
   [STATUS.STOPPED]: {
@@ -47,12 +48,20 @@ const STATUS_MAP = {
       'cleanStreamBtn',
       'restoreStateBtn',
       'diffStreamBtn',
+      'eraseStreamBtn',
     ],
   },
   [STATUS.READY]: {
     className: 'ready',
     label: 'Ready',
-    enable: [],
+    enable: [
+      'runAgainBtn',
+      'packStreamBtn',
+      'cleanStreamBtn',
+      'restoreStateBtn',
+      'diffStreamBtn',
+      'eraseStreamBtn',
+    ],
   },
 };
 
