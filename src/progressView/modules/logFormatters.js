@@ -169,7 +169,7 @@ export function createGroupHeader(group) {
         ${durationDisplay}
       </span>`;
 
-  const bulletMarkup = ' <i class="codicon codicon-circle-small"></i> ';
+  const bulletMarkup = ' <i class="codicon codicon-circle-small-filled"></i> ';
 
   const headerContents = isTopLevel
     ? `${timeMarkup}${usageDisplay ? `${bulletMarkup}${usageDisplay}` : ''}`
