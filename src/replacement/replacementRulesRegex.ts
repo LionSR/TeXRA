@@ -80,11 +80,6 @@ export const TIKZ_REPLACEMENTS: ReplacementCategory = {
 
 // Edge case 2: with the rules above it screws up
 // \begin{tikzpicture}[scale=0.8]
-// % Self loops
-// \draw[arrow] (i_plus) to[self, out=60, in=120] node[above] {$1-B-C$} (i_plus);
-// \draw[arrow] (i_minus) to[self, out=-60, in=-120] node[below] {$1-A-D$} (i_minus);
-
-// % Legend
 // \node[anchor=north west] at (-4,2) {
 //     \begin{tabular}{l}
 //         Blue: $\bet = +1$ \\
@@ -94,11 +89,6 @@ export const TIKZ_REPLACEMENTS: ReplacementCategory = {
 // \end{tikzpicture}
 // Becomes
 // \begin{tikzpicture}[scale=0.8]
-// % Self loops
-// \draw[arrow] (i_plus) to[self, out=60, in=120] node[above] {$1-B-C$} (i_plus);
-// \draw[arrow] (i_minus) to[self, out=-60, in=-120] node[below] {$1-A-D$} (i_minus);
-
-// % Legend
 // \node[anchor=north west] at (-4,2) {
 //     \begin{tabular}{l}
 //         Blue: $\bet = +1$ \\
