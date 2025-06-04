@@ -84,7 +84,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
         );
       }
     }
-    if (this.config.fullName.includes('deepseek')) {
+    if (this.config.fullName.includes('deepseek-chat')) {
       // for deepseek models,  this and context window are not the same for openrouter models and the official api. so we need to set max_tokens manually if the official api is used
       this.logger.debug('Setting max_tokens to 8192 for DeepSeek models');
       kwargs.max_tokens = 8192;
@@ -148,6 +148,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
             }
           }
           response = {
+            finish_reason: 'stop', // there is no good choice it seems unless deepseek models support it
             choices: [
               {
                 message: {
