@@ -86,7 +86,9 @@ export class ModelHandlerOpenAI extends ModelHandler {
     }
     if (this.config.fullName.includes('deepseek-chat')) {
       // for deepseek models,  this and context window are not the same for openrouter models and the official api. so we need to set max_tokens manually if the official api is used
-      this.logger.debug('Setting max_tokens to 8192 for DeepSeek models');
+      this.logger.debug(
+        'Setting max_tokens to 8192 for DeepSeek-chat models from the official api',
+      );
       kwargs.max_tokens = 8192;
     }
 
@@ -137,6 +139,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
         });
 
         if (this.config.fullName.includes('deepseek')) {
+          // This wait for finalMessage method do not support deepseek models, so we need to aggreatate the results manually like this:
           let reasoning_content = '';
           let content = '';
           for await (const chunk of stream) {
@@ -161,6 +164,17 @@ export class ModelHandlerOpenAI extends ModelHandler {
               },
             ],
           };
+          const tokenCount = countTokens(content + reasoning_content);
+          this.logger.debug(
+            `Token count output of deepseek model: ${tokenCount}`,
+          );
+
+          if (Math.abs(tokenCount - this.config.maxOutputTokens) < 1000) {
+            this.logger.warn(
+              `Token count output of deepseek model is close to the max output tokens: ${tokenCount} - ${this.config.maxOutputTokens}. Setting finish_reason to length`,
+            );
+            response.finish_reason = 'length';
+          }
           return response;
         }
 
@@ -169,17 +183,6 @@ export class ModelHandlerOpenAI extends ModelHandler {
         // in the future we can add: stream_options: {"include_usage": true} to get usage statistics
         // in the future if we pass stream to outside (signal: controller.signal)), calling stream.controller.abort() will abort the stream; which will be very useful for our stop button (controller.abort();)
         // we should also make sure partial results can be returned in the presence of errors!
-        // TODO: This wait for finalMessage method do not support deepseek models, so we need to aggreatate the results manually like this:
-        // reasoning_content = ""
-        // content = ""
-
-        // for chunk in response:
-        //     if chunk.choices[0].delta.reasoning_content:
-        //         reasoning_content += chunk.choices[0].delta.reasoning_content
-        //     else:
-        //         content += chunk.choices[0].delta.content
-        // and then construct the response object like this:
-        // Now do it
       } catch (err) {
         if (
           err instanceof NotFoundError ||
