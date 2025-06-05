@@ -33,7 +33,6 @@ export function isAgentStream(streamName: string): boolean {
       return true;
     }
   }
-
   return false;
 }
 
