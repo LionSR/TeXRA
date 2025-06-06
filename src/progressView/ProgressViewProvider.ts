@@ -8,7 +8,7 @@ import { TaskState } from '../logger/TaskState';
 import { AgentLogger } from '../logger/AgentLogger';
 import { getConfig } from '../utils/configUtils';
 import { objectToTaskState } from '../utils/configConversion';
-import { fileExistsAbsolute } from '../utils/absoluteFileUtils';
+import { fileExistsAbsolute, filterExistingFiles } from '../utils/absoluteFileUtils';
 import {
   shouldExcludeFromProgressView,
   shouldPersistStream,
@@ -201,12 +201,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
         }
         const roundMap: { [key: number]: OutputFileInfo[] } = {};
         for (const [roundStr, infos] of Object.entries(rounds)) {
-          const filtered: OutputFileInfo[] = [];
-          for (const info of infos) {
-            if (await fileExistsAbsolute(info.path)) {
-              filtered.push(info);
-            }
-          }
+          const filtered = await filterExistingFiles(infos);
           if (filtered.length > 0) {
             roundMap[parseInt(roundStr, 10)] = filtered;
           }
