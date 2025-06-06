@@ -200,57 +200,70 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       const cleaned: [string, { [key: number]: OutputFileInfo[] }][] = [];
       let totalFilesProcessed = 0;
       let totalFilesRemoved = 0;
-      
+
       for (const [streamId, rounds] of Object.entries(savedFiles)) {
         if (!shouldPersistStream(streamId)) {
           continue;
         }
-        
+
         const roundMap: { [key: number]: OutputFileInfo[] } = {};
-        const streamFilesProcessed = Object.values(rounds).reduce((sum, files) => sum + files.length, 0);
+        const streamFilesProcessed = Object.values(rounds).reduce(
+          (sum, files) => sum + files.length,
+          0,
+        );
         totalFilesProcessed += streamFilesProcessed;
-        
+
         for (const [roundStr, infos] of Object.entries(rounds)) {
           const roundNum = parseInt(roundStr, 10);
-          this.logger.debug(`Checking ${infos.length} files in stream ${streamId}, round ${roundNum}`);
-          
+          this.logger.debug(
+            `Checking ${infos.length} files in stream ${streamId}, round ${roundNum}`,
+          );
+
           try {
             const filtered = await filterExistingFiles(infos);
             const removedCount = infos.length - filtered.length;
-            
+
             if (removedCount > 0) {
-              this.logger.debug(`Removed ${removedCount} missing file(s) from stream ${streamId}, round ${roundNum}`);
+              this.logger.debug(
+                `Removed ${removedCount} missing file(s) from stream ${streamId}, round ${roundNum}`,
+              );
               totalFilesRemoved += removedCount;
-              
+
               // Log which files were removed for debugging
-              const removedFiles = infos.filter(info => !filtered.find(f => f.path === info.path));
-              removedFiles.forEach(file => {
+              const removedFiles = infos.filter(
+                (info) => !filtered.find((f) => f.path === info.path),
+              );
+              removedFiles.forEach((file) => {
                 this.logger.debug(`  - Removed missing file: ${file.path}`);
               });
             }
-            
+
             // Always preserve round structure, even if empty (for UI consistency)
             // Only skip rounds that had no files to begin with
             if (infos.length > 0) {
               roundMap[roundNum] = filtered;
             }
           } catch (error) {
-            this.logger.warn(`Error checking files in stream ${streamId}, round ${roundNum}: ${error instanceof Error ? error.message : String(error)}`);
+            this.logger.warn(
+              `Error checking files in stream ${streamId}, round ${roundNum}: ${error instanceof Error ? error.message : String(error)}`,
+            );
             // On error, preserve the original files to avoid data loss
             roundMap[roundNum] = infos;
           }
         }
-        
+
         // Always preserve streams that had any rounds (even if they become empty)
         if (Object.keys(rounds).length > 0) {
           cleaned.push([streamId, roundMap]);
         }
       }
-      
+
       this._outputFiles = new Map(cleaned);
-      
+
       if (totalFilesRemoved > 0) {
-        this.logger.info(`File cleanup completed: processed ${totalFilesProcessed} files, removed ${totalFilesRemoved} missing files`);
+        this.logger.info(
+          `File cleanup completed: processed ${totalFilesProcessed} files, removed ${totalFilesRemoved} missing files`,
+        );
       }
     } else {
       this._outputFiles.clear();
