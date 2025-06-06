@@ -17,12 +17,26 @@ export async function fileExistsAbsolute(filePath: string): Promise<boolean> {
  * @returns Promise that resolves to filtered array containing only items with existing files
  */
 export async function filterExistingFiles<T extends { path: string }>(
-  items: T[],
+  items: T[]
 ): Promise<T[]> {
-  const fileCheckPromises = items.map(async (item) => ({
-    item,
-    exists: await fileExistsAbsolute(item.path),
-  }));
+  if (!items || items.length === 0) {
+    return [];
+  }
+
+  const fileCheckPromises = items.map(async (item) => {
+    try {
+      const exists = await fileExistsAbsolute(item.path);
+      return { item, exists };
+    } catch (error) {
+      // If there's an error checking a specific file, assume it doesn't exist
+      // but log the error for debugging
+      console.warn(`Error checking file existence for ${item.path}: ${error instanceof Error ? error.message : String(error)}`);
+      return { item, exists: false };
+    }
+  });
+  
   const results = await Promise.all(fileCheckPromises);
-  return results.filter((result) => result.exists).map((result) => result.item);
+  return results
+    .filter((result) => result.exists)
+    .map((result) => result.item);
 }
