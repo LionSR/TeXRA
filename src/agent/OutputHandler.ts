@@ -908,7 +908,9 @@ export class OutputHandler {
       if (provider && statsGroupId) {
         // Update group-level usage stats instead of stream-level
         provider.updateGroupUsage(this.channel, statsGroupId, {
-          inputTokens: stateGlobal.totalInputTokens,
+          inputTokens:
+            stateGlobal.totalInputTokens +
+            (stateGlobal.totalCacheCreationInputTokens ?? 0),
           outputTokens: stateGlobal.totalOutputTokens,
           cost,
         });
