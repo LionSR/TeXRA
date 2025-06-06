@@ -8,6 +8,7 @@ import { TaskState } from '../logger/TaskState';
 import { AgentLogger } from '../logger/AgentLogger';
 import { getConfig } from '../utils/configUtils';
 import { objectToTaskState } from '../utils/configConversion';
+import { fileExistsAbsolute } from '../utils/absoluteFileUtils';
 import {
   shouldExcludeFromProgressView,
   shouldPersistStream,
@@ -79,7 +80,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     this._viewTitle = title;
     this._contentProvider = new ProgressViewContentProvider(context);
     this._messageHandler = new ProgressViewMessageHandler(this);
-    this._loadState();
+    // State will be loaded via initialize()
     this.logger = new AgentLogger('ProgressViewProvider');
 
     // Set instance
@@ -87,11 +88,18 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
 
     // Listen for workspace folder changes
     this._disposables.push(
-      vscode.workspace.onDidChangeWorkspaceFolders(() => {
-        this._loadState();
+      vscode.workspace.onDidChangeWorkspaceFolders(async () => {
+        await this._loadState();
         this._updateWebview();
       }),
     );
+  }
+
+  /**
+   * Initialize provider state. Must be called after construction.
+   */
+  public async initialize(): Promise<void> {
+    await this._loadState();
   }
 
   public static getInstance(): ProgressViewProvider | undefined {
@@ -115,7 +123,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     return workspaceFolder ? `${key}.${workspaceFolder.uri.fsPath}` : key;
   }
 
-  private _loadState() {
+  private async _loadState() {
     const savedState = this.context.workspaceState.get<{
       [key: string]: ColoredLogMessage[];
     }>(this._getWorkspaceKey());
@@ -181,16 +189,33 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       this._logGroups.clear();
     }
 
-    // Load output files
+    // Load output files and drop any that no longer exist on disk
     const savedFiles = this.context.workspaceState.get<{
       [key: string]: { [key: number]: OutputFileInfo[] };
     }>(this._getWorkspaceKey(this._filesStorageKey));
     if (savedFiles) {
-      this._outputFiles = new Map(
-        Object.entries(savedFiles).filter(([channel]) =>
-          shouldPersistStream(channel),
-        ),
-      );
+      const cleaned: [string, { [key: number]: OutputFileInfo[] }][] = [];
+      for (const [streamId, rounds] of Object.entries(savedFiles)) {
+        if (!shouldPersistStream(streamId)) {
+          continue;
+        }
+        const roundMap: { [key: number]: OutputFileInfo[] } = {};
+        for (const [roundStr, infos] of Object.entries(rounds)) {
+          const filtered: OutputFileInfo[] = [];
+          for (const info of infos) {
+            if (await fileExistsAbsolute(info.path)) {
+              filtered.push(info);
+            }
+          }
+          if (filtered.length > 0) {
+            roundMap[parseInt(roundStr, 10)] = filtered;
+          }
+        }
+        if (Object.keys(roundMap).length > 0) {
+          cleaned.push([streamId, roundMap]);
+        }
+      }
+      this._outputFiles = new Map(cleaned);
     } else {
       this._outputFiles.clear();
     }
@@ -243,6 +268,9 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     } else {
       this._usageStats.clear();
     }
+
+    // Persist any cleanup of missing files
+    this._saveState();
   }
 
   private _saveState() {
