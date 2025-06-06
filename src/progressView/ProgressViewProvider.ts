@@ -8,7 +8,10 @@ import { TaskState } from '../logger/TaskState';
 import { AgentLogger } from '../logger/AgentLogger';
 import { getConfig } from '../utils/configUtils';
 import { objectToTaskState } from '../utils/configConversion';
-import { fileExistsAbsolute, filterExistingFiles } from '../utils/absoluteFileUtils';
+import {
+  fileExistsAbsolute,
+  filterExistingFiles,
+} from '../utils/absoluteFileUtils';
 import {
   shouldExcludeFromProgressView,
   shouldPersistStream,
