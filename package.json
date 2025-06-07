@@ -1092,6 +1092,7 @@
   },
   "devDependencies": {
     "@stylistic/eslint-plugin": "^4.2.0",
+    "@types/cross-spawn": "^6.0.6",
     "@types/diff-match-patch": "^1.0.36",
     "@types/difflib": "^0.2.7",
     "@types/identifiers-arxiv": "^0.1.2",
@@ -1154,6 +1155,7 @@
     "@vscode/codicons": "^0.0.36",
     "@wolfram-alpha/wolfram-alpha-api": "^23.1004.144821-RELEASE",
     "axios": "^1.9.0",
+    "cross-spawn": "^7.0.6",
     "diff-match-patch": "^1.0.5",
     "difflib": "^0.2.4",
     "fast-xml-parser": "^5.2.3",
