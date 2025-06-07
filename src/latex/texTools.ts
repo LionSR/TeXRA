@@ -1,12 +1,9 @@
 // Standard library imports
 import * as path from 'path';
-import { promisify } from 'util';
-import { exec } from 'child_process';
+import spawn from 'cross-spawn';
 
 // Third-party imports
 import * as vscode from 'vscode';
-
-const execAsync = promisify(exec);
 
 // Local imports - log
 import * as logger from '../logger/logUtils';
@@ -100,22 +97,21 @@ export async function checkToolInstalled(
   tool: keyof typeof TOOL_CONFIGS,
   showError: boolean = true,
 ): Promise<boolean> {
-  try {
-    await execAsync(TOOL_CONFIGS[tool].command);
+  const result = spawn.sync(TOOL_CONFIGS[tool].command, { shell: true });
+  if (result.status === 0) {
     return true;
-  } catch (err) {
-    if (showError) {
-      const openDocs = 'View Installation Guide';
-      const choice = await vscode.window.showErrorMessage(
-        TOOL_CONFIGS[tool].errorMessage,
-        openDocs,
-      );
-      if (choice === openDocs) {
-        vscode.commands.executeCommand('texra.openDoc', 'installation');
-      }
-    }
-    return false;
   }
+  if (showError) {
+    const openDocs = 'View Installation Guide';
+    const choice = await vscode.window.showErrorMessage(
+      TOOL_CONFIGS[tool].errorMessage,
+      openDocs,
+    );
+    if (choice === openDocs) {
+      vscode.commands.executeCommand('texra.openDoc', 'installation');
+    }
+  }
+  return false;
 }
 
 /**

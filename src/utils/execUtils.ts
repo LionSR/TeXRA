@@ -1,6 +1,6 @@
 // Standard library imports
-import * as cp from 'child_process';
-import { promisify } from 'util';
+// Third-party imports
+import spawn from 'cross-spawn';
 
 // Local imports - log
 import * as logger from '../logger/logUtils';
@@ -8,8 +8,6 @@ import * as logger from '../logger/logUtils';
 // Local imports - utilities
 import { getWorkspacePath } from './workspaceFileUtils';
 import { ExecResult } from '../types/ResultTypes';
-
-const execAsync = promisify(cp.exec);
 
 const CHANNEL = 'execUtils';
 logger.initialize(CHANNEL);
@@ -55,14 +53,50 @@ export async function executeCommand(
       `Running command: ${finalCommand}`,
     );
 
-    const execOptions = {
+    const spawnOptions = {
       cwd: workspacePath,
-      encoding: options.encoding ?? 'utf8',
       env: options.env ? { ...process.env, ...options.env } : process.env,
-      timeout: options.timeout,
+      shell: true,
     };
 
-    const { stdout, stderr } = await execAsync(finalCommand, execOptions);
+    const result = await new Promise<{
+      stdout: string;
+      stderr: string;
+      exitCode: number | null;
+      timedOut: boolean;
+    }>((resolve, reject) => {
+      let stdout = '';
+      let stderr = '';
+      let timedOut = false;
+      const child = spawn(finalCommand, [], spawnOptions);
+
+      child.stdout?.on('data', (data) => {
+        stdout += data.toString(options.encoding ?? 'utf8');
+      });
+      child.stderr?.on('data', (data) => {
+        stderr += data.toString(options.encoding ?? 'utf8');
+      });
+
+      let timer: NodeJS.Timeout | undefined;
+      if (options.timeout) {
+        timer = setTimeout(() => {
+          timedOut = true;
+          child.kill();
+        }, options.timeout);
+      }
+
+      child.on('error', (error) => {
+        if (timer) clearTimeout(timer);
+        reject(error);
+      });
+
+      child.on('close', (code) => {
+        if (timer) clearTimeout(timer);
+        resolve({ stdout, stderr, exitCode: code, timedOut });
+      });
+    });
+
+    const { stdout, stderr, exitCode, timedOut } = result;
 
     const shouldTruncate = options.truncate ?? false;
     const processOutput = (output: string | null) =>
@@ -85,9 +119,10 @@ export async function executeCommand(
     // }
 
     return {
-      success: true,
+      success: exitCode === 0 && !timedOut,
       stdout: processOutput(stdout),
       stderr: processOutput(stderr),
+      timedOut,
     };
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : String(err);

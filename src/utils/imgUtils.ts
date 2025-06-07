@@ -1,9 +1,8 @@
 // Standard library imports
-import { exec } from 'child_process';
+import spawn from 'cross-spawn';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { promisify } from 'util';
 
 // Third-party imports
 import { PDFDocument } from '@cantoo/pdf-lib';
@@ -19,8 +18,6 @@ import {
   getFullPathFromWorkspace,
 } from './workspaceFileUtils';
 
-const execAsync = promisify(exec);
-
 const CHANNEL = 'ImgUtils';
 logger.initialize(CHANNEL);
 
@@ -28,17 +25,12 @@ logger.initialize(CHANNEL);
 const TEMP_DIR = path.join(os.tmpdir(), 'texra-pdf-conversion');
 
 export async function checkImageMagickInstalled(): Promise<boolean> {
-  try {
-    await execAsync('gm version');
+  const gmResult = spawn.sync('gm', ['version']);
+  if (gmResult.status === 0) {
     return true;
-  } catch (err) {
-    try {
-      await execAsync('convert -version');
-      return true;
-    } catch (err2) {
-      return false;
-    }
   }
+  const convertResult = spawn.sync('convert', ['-version']);
+  return convertResult.status === 0;
 }
 
 /**
