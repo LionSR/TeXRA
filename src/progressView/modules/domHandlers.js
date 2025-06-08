@@ -182,18 +182,8 @@ export function updateUsageSummary(usage) {
     }
   }
 
-  if (
-    !totals ||
-    (!totals.inputTokens && !totals.outputTokens && !totals.cost)
-  ) {
-    summaryElem.textContent = '';
-    return;
-  }
-
-  summaryElem.innerHTML =
-    `<i class="codicon codicon-arrow-up"></i> ${formatTokens(totals.inputTokens)}, ` +
-    `<i class="codicon codicon-arrow-down"></i> ${formatTokens(totals.outputTokens)}, ` +
-    `$${totals.cost.toFixed(3)}`;
+  // Clear the summary - we're showing total usage in the files section now
+  summaryElem.textContent = '';
 }
 
 /**
@@ -332,6 +322,32 @@ export function updateFileList(filesByRound) {
   if (!filesByRound || Object.keys(filesByRound).length === 0) {
     container.textContent = 'No generated files';
     return;
+  }
+
+  // Add total usage header
+  const usageHeader = document.createElement('div');
+  usageHeader.className = 'files-usage-header';
+
+  // Calculate total usage from all groups
+  const totals = { inputTokens: 0, outputTokens: 0, cost: 0 };
+  for (const group of getLogGroups().values()) {
+    if (group.usage) {
+      totals.inputTokens += group.usage.inputTokens || 0;
+      totals.outputTokens += group.usage.outputTokens || 0;
+      totals.cost += group.usage.cost || 0;
+    }
+  }
+
+  if (totals.inputTokens || totals.outputTokens || totals.cost) {
+    usageHeader.innerHTML = `
+      <span class="files-usage-label">Total Usage:</span>
+      <span class="files-usage-stats">
+        <i class="codicon codicon-arrow-up"></i> ${formatTokens(totals.inputTokens)}, 
+        <i class="codicon codicon-arrow-down"></i> ${formatTokens(totals.outputTokens)}, 
+        $${totals.cost.toFixed(3)}
+      </span>
+    `;
+    container.appendChild(usageHeader);
   }
 
   const rounds = Object.keys(filesByRound)

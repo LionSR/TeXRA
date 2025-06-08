@@ -4,7 +4,7 @@
  */
 
 body {
-  background-color: var(--background-color);
+  background-color: transparent;
   color: var(--text-color);
   font-family: var(--font-family);
   font-size: var(--font-size);
@@ -67,24 +67,7 @@ body {
   vertical-align: text-bottom;
 }
 
-/* Smaller header for collapsible LaTeXDiffs section */
-.latexdiffs-header {
-  font-size: var(--font-size-sm);
-  font-weight: normal;
-  border-bottom: none;
-  margin: var(--spacing-small) 0;
-  padding: 0;
-  display: flex;
-  align-items: center;
-}
-
-/* Icon styling */
-.codicon.clickable {
-  cursor: pointer;
-  transition: color 0.2s ease;
-}
-
+/* Icon styling - extends common clickable */
 .codicon.clickable:hover {
-  opacity: var(--opacity-full);
   color: var(--button-hover-background);
 }
