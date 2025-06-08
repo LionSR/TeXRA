@@ -18,6 +18,7 @@ import {
   formatDuration,
   formatTokens,
   formatGroupHeaderElements,
+  getGroupHeaderClass,
 } from './logFormatters.js';
 import { STATUS, COMMANDS, SPLIT_SIZES, TOOLBAR_BUTTONS } from './constants.js';
 import { createIconButton } from '@common/templateUtils.js';
@@ -582,7 +583,7 @@ export function updateLogGroupUI(groupId, status, endTime) {
   // Update the header in the UI if it exists
   const header = document.getElementById(`group-header-${groupId}`);
   if (header) {
-    header.className = `log-group-header ${status}`;
+    header.className = getGroupHeaderClass(group);
 
     // Update the status icon
     const statusIconElem = header.querySelector('.group-status-icon');
