@@ -137,15 +137,29 @@ export class ModelHandlerOpenAI extends ModelHandler {
         const stream = client.chat.completions.stream(kwargs, {
           signal,
         });
+        const activeGroup = this.logger.getActiveGroupId();
 
         if (this.config.fullName.includes('deepseek')) {
           // This wait for finalMessage method do not support deepseek models, so we need to aggreatate the results manually like this:
           let reasoning_content = '';
           let content = '';
+          let msgId: string | undefined;
           for await (const chunk of stream) {
             if ((chunk.choices[0].delta as any).reasoning_content) {
               reasoning_content += (chunk.choices[0].delta as any)
                 .reasoning_content;
+              if (!msgId) {
+                msgId = this.logger.infoWithId(
+                  `Thinking content: <span class="message-info">${reasoning_content}</span>`,
+                  activeGroup,
+                );
+              } else {
+                this.logger.infoWithId(
+                  `Thinking content: <span class="message-info">${reasoning_content}</span>`,
+                  activeGroup,
+                  msgId,
+                );
+              }
             } else {
               content += (chunk.choices[0].delta as any).content;
             }
@@ -178,7 +192,27 @@ export class ModelHandlerOpenAI extends ModelHandler {
           return response;
         }
 
+        const { id: reasonId } = await this.streamReasoning(
+          stream,
+          (chunk) => (chunk.choices[0].delta as any).reasoning_content,
+          this.logger.channelId,
+          activeGroup,
+        );
+
         response = await stream.finalMessage();
+
+        if (
+          reasonId &&
+          (response.choices?.[0].message as any)?.reasoning_content
+        ) {
+          this.logger.infoWithId(
+            `Thinking content: <span class="message-info">${
+              (response.choices[0].message as any).reasoning_content
+            }</span>`,
+            activeGroup,
+            reasonId,
+          );
+        }
 
         // in the future we can add: stream_options: {"include_usage": true} to get usage statistics
         // in the future if we pass stream to outside (signal: controller.signal)), calling stream.controller.abort() will abort the stream; which will be very useful for our stop button (controller.abort();)

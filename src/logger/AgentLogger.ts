@@ -24,6 +24,10 @@ export class AgentLogger {
     logger.info(this.channelId, message, groupId);
   }
 
+  infoWithId(message: string, groupId?: string, id?: string): string {
+    return logger.infoWithId(this.channelId, message, groupId, id);
+  }
+
   warn(message: string, groupId?: string): void {
     logger.warn(this.channelId, message, groupId);
   }

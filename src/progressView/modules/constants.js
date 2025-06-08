@@ -31,6 +31,7 @@ export const COMMANDS = {
   UPDATE_LOGS: 'updateLogs',
   CLEAR_LOGS: 'clearLogs',
   APPEND_LOG: 'appendLog',
+  UPDATE_LOG: 'updateLog',
   ADD_LOG_GROUP: 'addLogGroup',
   UPDATE_LOG_GROUP: 'updateLogGroup',
   UPDATE_STATUS: 'updateStatus',

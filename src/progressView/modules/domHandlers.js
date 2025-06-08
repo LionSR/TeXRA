@@ -742,6 +742,21 @@ export function appendLogToGroup(logMessage) {
 }
 
 /**
+ * Updates an existing log message element in the DOM
+ * @param {Object} logMessage - The updated log message object
+ */
+export function updateLogMessage(logMessage) {
+  const existing = document.querySelector(
+    `.log-line[data-log-id="${logMessage.id}"]`,
+  );
+  if (existing) {
+    const wrapper = document.createElement('div');
+    wrapper.innerHTML = formatLogEntry(logMessage);
+    existing.replaceWith(wrapper.firstElementChild);
+  }
+}
+
+/**
  * Apply saved toggle states to any groups already in the DOM
  */
 export function applyGroupToggleStates() {

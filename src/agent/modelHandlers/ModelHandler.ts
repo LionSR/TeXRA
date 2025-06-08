@@ -716,4 +716,36 @@ export abstract class ModelHandler {
   ): void {
     this.logger.endGroup(groupId, status);
   }
+
+  /**
+   * Streams reasoning content chunks and updates the progress view.
+   */
+  protected async streamReasoning<T>(
+    stream: AsyncIterable<T>,
+    extract: (chunk: T) => string | undefined,
+    streamId: string,
+    groupId?: string,
+  ): Promise<{ id?: string; content: string }> {
+    let aggregated = '';
+    let msgId: string | undefined;
+
+    for await (const chunk of stream) {
+      const part = extract(chunk);
+      if (!part) continue;
+      aggregated += part;
+      if (!msgId) {
+        msgId = this.logger.infoWithId(
+          `Thinking content: <span class="message-info">${part}</span>`,
+          groupId,
+        );
+      } else {
+        this.logger.infoWithId(
+          `Thinking content: <span class="message-info">${aggregated}</span>`,
+          groupId,
+          msgId,
+        );
+      }
+    }
+    return { id: msgId, content: aggregated };
+  }
 }

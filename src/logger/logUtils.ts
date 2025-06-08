@@ -42,6 +42,12 @@ function escapeHtml(text: string): string {
     .replace(/'/g, '&#039;');
 }
 
+export function generateMessageId(): string {
+  return (
+    'msg-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2)
+  );
+}
+
 // Main TeXRA output channel for non-agent logs
 let mainOutputChannel: vscode.OutputChannel | null = null;
 
@@ -60,6 +66,7 @@ class VSCodeTransport extends Transport {
   private streamName: string;
   private useConsolidatedChannel: boolean;
   private messageBuffer: {
+    id: string;
     level: string;
     message: string;
     timestamp: number;
@@ -85,6 +92,7 @@ class VSCodeTransport extends Transport {
 
   log(info: any, callback: () => void) {
     const { level, message, timestamp } = info;
+    const messageId = info.id || generateMessageId();
     // Use the provided groupId or fall back to the activeGroupId if available
     const groupId = info.groupId || this.activeGroupId;
 
@@ -148,7 +156,7 @@ class VSCodeTransport extends Transport {
     // Colored format for ProgressView using CSS classes, but with shorter timestamp display
     const isVerbose = getConfig<boolean>('logger.verboseOutput', false);
     const coloredFormattedMessage =
-      `<div class="log-line ${isScratchpad ? 'scratchpad-log' : ''}" ${scratchpadAttr} ${groupId ? `data-group-id="${groupId}"` : ''} data-full-timestamp="${timestamp}">` +
+      `<div class="log-line ${isScratchpad ? 'scratchpad-log' : ''}" ${scratchpadAttr} ${groupId ? `data-group-id="${groupId}"` : ''} data-log-id="${messageId}" data-full-timestamp="${timestamp}">` +
       `<span class="timestamp" title="${timestamp}">${emoji}${
         isVerbose ? ` [${timeDisplay}]` : ''
       }</span> ` +
@@ -163,17 +171,28 @@ class VSCodeTransport extends Transport {
     // Write to ProgressView if available (with colors and escaped HTML)
     const numericTimestamp = new Date(timestamp).getTime();
     if (this.progressViewProvider) {
-      this.progressViewProvider.addLogMessage(
-        this.streamName,
-        coloredFormattedMessage,
-        level as 'error' | 'warn' | 'info' | 'debug',
-        groupId,
-        numericTimestamp,
-        messageType,
-      );
+      if (this.progressViewProvider.hasLogMessage(this.streamName, messageId)) {
+        this.progressViewProvider.updateLogMessage(
+          this.streamName,
+          messageId,
+          coloredFormattedMessage,
+          messageType,
+        );
+      } else {
+        this.progressViewProvider.addLogMessage(
+          this.streamName,
+          coloredFormattedMessage,
+          level as 'error' | 'warn' | 'info' | 'debug',
+          groupId,
+          numericTimestamp,
+          messageType,
+          messageId,
+        );
+      }
     } else {
       // Buffer the message if ProgressViewProvider is not available
       this.messageBuffer.push({
+        id: messageId,
         level,
         message: coloredFormattedMessage,
         timestamp: numericTimestamp,
@@ -215,6 +234,7 @@ class VSCodeTransport extends Transport {
         msg.groupId,
         msg.timestamp,
         msg.messageType ?? 'default',
+        msg.id,
       );
     }
 
@@ -436,6 +456,22 @@ function logWithGroup(
   logger[level](message, { groupId: actualGroupId });
 }
 
+function logWithGroupReturnId(
+  channel: string,
+  level: string,
+  message: string,
+  groupId?: string,
+  id?: string,
+): string {
+  const logger = getOrCreateLogger(channel);
+  const transport = channelTransports.get(channel);
+  const actualGroupId = groupId || transport?.getActiveGroupId();
+  const msgId = id || generateMessageId();
+  // @ts-ignore
+  logger[level](message, { groupId: actualGroupId, id: msgId });
+  return msgId;
+}
+
 // Simplified logging methods that use channel as channel name
 export const debug = (
   channel: string,
@@ -451,6 +487,15 @@ export const info = (
   groupId?: string,
 ): void => {
   logWithGroup(channel, 'info', message, groupId);
+};
+
+export const infoWithId = (
+  channel: string,
+  message: string,
+  groupId?: string,
+  id?: string,
+): string => {
+  return logWithGroupReturnId(channel, 'info', message, groupId, id);
 };
 
 export const warn = (

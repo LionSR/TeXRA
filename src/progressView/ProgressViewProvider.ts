@@ -29,6 +29,7 @@ type StreamStatusType =
   | typeof STATUS.STOPPED;
 
 interface ColoredLogMessage {
+  id: string;
   message: string;
   level: 'error' | 'warn' | 'info' | 'debug';
   timestamp: number;
@@ -135,6 +136,11 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
                   attrMatch?.[1] || (msg.message.match(/\[(.*?)\]/)?.[1] ?? '');
                 const timestamp = new Date(timeString).getTime();
                 msg.timestamp = isNaN(timestamp) ? Date.now() : timestamp;
+              }
+              if (!msg.id) {
+                msg.id = `msg-${Date.now()}-${Math.random()
+                  .toString(36)
+                  .slice(2)}`;
               }
               if (!msg.messageType) {
                 msg.messageType = 'default';
@@ -417,6 +423,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     groupId?: string,
     timestamp: number = Date.now(),
     messageType: 'default' | 'scratchpad' | 'thinking' = 'default',
+    id: string = `msg-${Date.now()}-${Math.random().toString(36).slice(2)}`,
   ) {
     // Skip if this stream should be excluded from the progress view
     if (shouldExcludeFromProgressView(stream)) {
@@ -459,6 +466,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     }
 
     const logMessage: ColoredLogMessage = {
+      id,
       message,
       level,
       timestamp,
@@ -480,6 +488,33 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
         command: COMMANDS.APPEND_LOG,
         stream: stream,
         logMessage,
+      });
+    }
+  }
+
+  public hasLogMessage(stream: string, id: string): boolean {
+    const messages = this._logStreams.get(stream);
+    return messages ? messages.some((m) => m.id === id) : false;
+  }
+
+  public updateLogMessage(
+    stream: string,
+    id: string,
+    message: string,
+    messageType: 'default' | 'scratchpad' | 'thinking' = 'default',
+  ) {
+    const messages = this._logStreams.get(stream);
+    if (!messages) return;
+    const msg = messages.find((m) => m.id === id);
+    if (!msg) return;
+    msg.message = message;
+    msg.messageType = messageType;
+    this._saveState();
+    if (this._view && stream === this._activeStream) {
+      this._view.webview.postMessage({
+        command: COMMANDS.UPDATE_LOG,
+        stream,
+        logMessage: msg,
       });
     }
   }
