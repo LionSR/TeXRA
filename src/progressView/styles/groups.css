@@ -63,6 +63,10 @@
   margin-right: var(--spacing-small);
 }
 
+.group-bullet {
+  margin: 0 var(--spacing-tiny);
+}
+
 /* Use the spin animation defined in base.css */
 .spin {
   animation: spin 2s linear infinite;
