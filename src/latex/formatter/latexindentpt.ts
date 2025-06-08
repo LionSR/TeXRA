@@ -12,7 +12,7 @@ import * as logger from '../../logger/logUtils';
 import { deleteFile, getWorkspacePath } from '../../utils/workspaceFileUtils';
 import { executeCommand } from '../../utils/execUtils';
 import { sleep } from '../../utils/timeUtils';
-import { checkToolInstalled } from '../texTools';
+import { checkToolInstalled } from '../../utils/toolUtils';
 
 const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);

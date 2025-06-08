@@ -1,7 +1,6 @@
 // Utility functions for building user variables for prompts
 
 import * as path from 'path';
-import * as fs from 'fs';
 
 import { AgentLogger } from '../logger/AgentLogger';
 import { readFile } from '../utils/workspaceFileUtils';

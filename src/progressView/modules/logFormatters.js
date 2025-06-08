@@ -149,6 +149,19 @@ export function formatGroupHeaderElements(
 }
 
 /**
+ * Get the CSS class string for a group header
+ * @param {Object} group - Log group data
+ * @returns {string} Computed class string
+ */
+export function getGroupHeaderClass(group) {
+  const classes = ['log-group-header', group.status];
+  if (!group.parentGroupId) {
+    classes.push('top-level');
+  }
+  return classes.join(' ');
+}
+
+/**
  * Create a group header HTML
  * @param {Object} group - Log group data
  * @returns {string} HTML for group header
@@ -182,7 +195,7 @@ export function createGroupHeader(group) {
   const titleMarkup = isTopLevel
     ? ''
     : `<span class="group-title">${group.name}</span>`;
-  const topLevelClass = isTopLevel ? 'top-level' : '';
+  const headerClass = getGroupHeaderClass(group);
 
   const timeMarkup = `
       <span class="group-time">
@@ -202,7 +215,7 @@ export function createGroupHeader(group) {
   );
 
   return `
-    <summary id="group-header-${group.id}" class="log-group-header ${group.status} ${topLevelClass}">
+    <summary id="group-header-${group.id}" class="${headerClass}">
       <span class="group-status-icon">${statusIcon}</span>${titleMarkup}${headerContents}
     </summary>
   `;

@@ -27,7 +27,8 @@ import {
   runLatexdiffBetweenRounds,
   LaTeXdiffResult,
 } from '../latex/latexdiff';
-import { checkToolInstalled, compileLatex2Pdf } from '../latex/texTools';
+import { compileLatex2Pdf } from '../latex/texTools';
+import { checkToolInstalled } from '../utils/toolUtils';
 import { runLatexFormatter } from '../latex/texFormatter';
 
 // Local imports - agent components
@@ -908,7 +909,9 @@ export class OutputHandler {
       if (provider && statsGroupId) {
         // Update group-level usage stats instead of stream-level
         provider.updateGroupUsage(this.channel, statsGroupId, {
-          inputTokens: stateGlobal.totalInputTokens,
+          inputTokens:
+            stateGlobal.totalInputTokens +
+            (stateGlobal.totalCacheCreationInputTokens ?? 0),
           outputTokens: stateGlobal.totalOutputTokens,
           cost,
         });
