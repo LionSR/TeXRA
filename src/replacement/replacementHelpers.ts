@@ -24,6 +24,33 @@ export const COMMON_ENVIRONMENTS = [
   'itemize',
   'enumerate',
   'tabular',
+  'abstract',
+  'theorem',
+  'proof',
+  'definition',
+  'corollary',
+  'lemma',
+  'proposition',
+  'remark',
+  'example',
+  'exercise',
+  'problem',
+  'solution',
+  'acknowledgment',
+
+  //
+  'minipage',
+  'verbatim',
+  'lstlisting',
+  'minted',
+  'algorithm',
+  'tcolorbox',
+
+  // beamer:
+  'frame',
+  // 'block',
+  'alertblock',
+  'exampleblock',
 ];
 
 // Math Environments
@@ -38,11 +65,23 @@ export const MATH_ENVIRONMENTS = [
   'gather',
   'gather*',
   'multline',
+  'split',
   'cases',
+  'alignat',
+  'alignat*',
+  'flalign',
+  'flalign*',
+  'pmatrix',
+  'bmatrix',
+  'vmatrix',
+  'Vmatrix',
+  // 'array', // avoid super general names
+  // 'array*',
 ];
 
 // Section types
 export const SECTION_TYPES = [
+  'chapter',
   'section',
   'subsection',
   'subsubsection',
