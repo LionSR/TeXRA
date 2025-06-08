@@ -9,6 +9,7 @@
 .thinking-content {
   --special-color: var(--vscode-panel-border);
   --label: '';
+  background-color: var(--vscode-editor-background);
   border-radius: calc(var(--border-radius) * 2);
   padding: var(--spacing-medium) var(--spacing-large);
   margin: var(--spacing-small) 0;

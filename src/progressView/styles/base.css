@@ -10,7 +10,7 @@ body {
   height: 100vh;
   font-family: var(--font-family);
   font-size: var(--font-size);
-  background-color: var(--vscode-editor-background);
+  background-color: var(--background-color);
   color: var(--vscode-editor-foreground);
 }
 
