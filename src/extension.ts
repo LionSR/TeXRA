@@ -1,7 +1,3 @@
-// Standard library imports
-import * as fs from 'fs';
-import * as path from 'path';
-
 // Third-party imports
 import * as vscode from 'vscode';
 
@@ -23,6 +19,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
   // Create the log view provider
   const progressViewProvider = new ProgressViewProvider(context);
+  await progressViewProvider.initialize();
 
   // IMPORTANT: Register ProgressViewProvider with logger FIRST, before any other operations
   // This ensures all logs generated during activation go to the ProgressView
