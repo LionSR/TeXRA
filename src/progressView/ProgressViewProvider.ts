@@ -543,13 +543,14 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       // Auto-focus new agent streams - make this stream the active one
       this.setActiveStream(stream);
 
-      // If the view exists, make sure the UI shows this as the active stream
       if (this._view) {
-        this._view.show(true); // Show the panel and give it focus
-        this.logger.debug(`Auto-focused to new stream: ${stream}`);
+        if (this._view.visible) {
+          // Keep focus on the ProgressBoard if it's already visible
+          this._view.show(true);
+          this.logger.debug(`Auto-focused to new stream: ${stream}`);
+        }
       } else {
-        // If view doesn't exist yet, show the progress view panel
-        // compare to this
+        // If the view doesn't exist yet, create it without forcing focus
         this.logger.debug(
           `View not yet created, showing progress view panel for stream: ${stream}`,
         );
@@ -607,7 +608,9 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       }
       this.setActiveStream(stream);
       if (this._view) {
-        this._view.show(true);
+        if (this._view.visible) {
+          this._view.show(true);
+        }
       }
     }
 
