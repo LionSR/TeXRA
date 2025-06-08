@@ -300,7 +300,7 @@ export function formatAndLogContent(
   // \\item/enumerate: fot this is tricky because it also takes a line that should be get rid of
 
   // Log the formatted content
-  agentLogger.info(`${contentType} content:\n${formattedContent}`, groupId);
+  agentLogger.info(`${contentType} content:${formattedContent}`, groupId);
 }
 
 /**

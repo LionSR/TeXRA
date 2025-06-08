@@ -11,7 +11,7 @@
   cursor: pointer;
   display: flex;
   align-items: center;
-  background-color: var(--vscode-editor-background);
+  background-color: transparent;
   border-left: var(--border-medium) solid var(--vscode-panel-border);
 }
 
