@@ -217,7 +217,7 @@ export class OutputHandler {
     }
 
     for (const targetFile of targetFiles) {
-      if (!targetFile) {
+      if (!targetFile || typeof targetFile !== 'string') {
         continue;
       }
 
@@ -228,7 +228,7 @@ export class OutputHandler {
       let bestMatchScore = 0;
 
       for (const sourceFile of sourceFiles) {
-        if (!sourceFile) {
+        if (!sourceFile || typeof sourceFile !== 'string') {
           continue;
         }
 
