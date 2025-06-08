@@ -273,8 +273,10 @@ export function formatAndLogContent(
     .replace(/<br\s*\/?>/gi, '\n')
     .replace(/<\/?(?:p|div)\b[^>]*>/gi, '\n')
     .replace(/<\/?(?:ul|ol)\b[^>]*>/gi, '')
+    // Handle lists
     .replace(/<li\b[^>]*>/gi, '- ')
     .replace(/<\/li>/gi, '\n')
+    // the above two maybe it is safer to combine into one (note closing HTML tags cannot have attributes)
     .replace(/<(strong|b)\b[^>]*>(.*?)<\/\1>/gi, '**$2**')
     .replace(/<(em|i)\b[^>]*>(.*?)<\/\1>/gi, '*$2*')
     .replace(/<code\b[^>]*>(.*?)<\/code>/gi, '`$1`')
