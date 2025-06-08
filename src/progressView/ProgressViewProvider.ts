@@ -4,20 +4,21 @@ import * as vscode from 'vscode';
 // Local imports - webview
 import { ProgressViewContentProvider } from './ProgressViewContentProvider';
 import { ProgressViewMessageHandler } from './ProgressViewMessageHandler';
+
 import { TaskState } from '../logger/TaskState';
 import { AgentLogger } from '../logger/AgentLogger';
+
 import { getConfig } from '../utils/configUtils';
 import { objectToTaskState } from '../utils/configConversion';
-import {
-  fileExistsAbsolute,
-  filterExistingFiles,
-} from '../utils/absoluteFileUtils';
+import { filterExistingFiles } from '../utils/workspaceFileUtils';
 import {
   shouldExcludeFromProgressView,
   shouldPersistStream,
 } from '../utils/loggerUtils';
+
 import { TokenUsageStats } from '../types/UsageTypes';
 import { LogGroup } from '../types/LogTypes';
+
 // @ts-ignore - Import JavaScript module
 import { STATUS, COMMANDS } from './modules/constants.js';
 
@@ -73,6 +74,8 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   private readonly _activeStreamKey = 'texra.activeLogStream';
   private _taskStates: Map<string, TaskState> = new Map();
   private _usageStats: Map<string, TokenUsageStats> = new Map();
+  private _webviewReady = false;
+  private _pendingUpdate = false;
   private readonly logger: AgentLogger;
 
   constructor(
@@ -119,6 +122,8 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     this._viewDisposables.forEach((d) => d.dispose());
     this._viewDisposables = [];
     this._view = undefined;
+    this._webviewReady = false;
+    this._pendingUpdate = false;
   }
 
   private _getWorkspaceKey(key: string = this._storageKey): string {
@@ -368,6 +373,9 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     // Clean up old view if it exists
     this._cleanupView();
 
+    this._webviewReady = false;
+    this._pendingUpdate = false;
+
     // Instead of automatically marking running tasks as errors, preserve their status
     // We no longer need to reset running stream statuses - they'll be preserved from storage
     // this._resetRunningStreamStatuses();
@@ -418,12 +426,19 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       webviewView.webview,
     );
 
-    // Initialize webview with current state
+    // Initialize webview with current state after webview signals readiness
     this._updateWebview();
 
     // Handle webview messages
     this._viewDisposables.push(
       webviewView.webview.onDidReceiveMessage(async (message) => {
+        if (message.command === COMMANDS.WEBVIEW_READY) {
+          this._webviewReady = true;
+          if (this._pendingUpdate) {
+            this._updateWebview();
+          }
+          return;
+        }
         await this._messageHandler.handleMessage(message, webviewView);
       }),
     );
@@ -438,6 +453,11 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
 
   private _updateWebview() {
     if (!this._view) {
+      return;
+    }
+
+    if (!this._webviewReady) {
+      this._pendingUpdate = true;
       return;
     }
 
@@ -485,6 +505,8 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
         status: STATUS.READY,
       });
     }
+
+    this._pendingUpdate = false;
   }
 
   public addLogMessage(
