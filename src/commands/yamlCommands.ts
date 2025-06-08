@@ -10,6 +10,7 @@ import { loadYaml, loadAgentSettingAndPrompts } from '../agent/agentLoad';
 import * as logger from '../logger/logUtils';
 import { getAgentPath } from '../agent/executeAgent';
 import { AgentType } from '../agent/AgentDataclass';
+import { showInstructionWithSuppress } from '../utils/instructionUtils';
 
 const CHANNEL = 'TestCommands';
 logger.initialize(CHANNEL);
@@ -196,7 +197,9 @@ export async function handleLoadSpecificAgent(
   }
 }
 
-export async function handleParseYaml(): Promise<void> {
+export async function handleParseYaml(
+  context: vscode.ExtensionContext,
+): Promise<void> {
   try {
     // Get active editor
     const editor = vscode.window.activeTextEditor;
@@ -240,6 +243,13 @@ export async function handleParseYaml(): Promise<void> {
         `Failed to parse YAML: ${err instanceof Error ? err.message : String(err)}`,
       );
       vscode.window.showErrorMessage('Failed to parse YAML content');
+      await showInstructionWithSuppress(
+        context,
+        'yamlParseFail',
+        'The YAML file contains syntax errors. Please correct them and run the command again.',
+        undefined,
+        false,
+      );
     }
   } catch (err) {
     logger.error(
@@ -330,7 +340,9 @@ export function registerYamlCommands(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand(yamlCommands.loadSpecificAgent, () =>
       handleLoadSpecificAgent(context),
     ),
-    vscode.commands.registerCommand(yamlCommands.parseYaml, handleParseYaml),
+    vscode.commands.registerCommand(yamlCommands.parseYaml, () =>
+      handleParseYaml(context),
+    ),
     vscode.commands.registerCommand(yamlCommands.testYamlBrackets, () =>
       handleTestYamlBrackets(context),
     ),
