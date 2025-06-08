@@ -264,9 +264,27 @@ export function formatAndLogContent(
     .replace(/\\begin\{enumerate\}/g, '')
     .replace(/\\end\{enumerate\}/g, '')
     .replace(/\\item\s+/g, '- ')
+    // Standardize bullet lists starting with asterisk while avoiding emphasis markers
+    .replace(/(^|\n)\s*\*\s+(?=\S)/g, '$1- ')
     .replace(/\\textbf\{([^}]+)\}/g, '**$1**')
     .replace(/\\textit\{([^}]+)\}/g, '*$1*')
     .replace(/\\emph\{([^}]+)\}/g, '*$1*')
+    // Convert common HTML tags to markdown before generic XML handling
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/?(?:p|div)\b[^>]*>/gi, '\n')
+    .replace(/<\/?(?:ul|ol)\b[^>]*>/gi, '')
+    .replace(/<li\b[^>]*>/gi, '- ')
+    .replace(/<\/li\b[^>]*>/gi, '\n')
+    .replace(/<(?:strong|b)\b[^>]*>(.*?)<\/(?:strong|b)>/gi, '**$1**')
+    .replace(/<(?:em|i)\b[^>]*>(.*?)<\/(?:em|i)>/gi, '*$1*')
+    .replace(/<code\b[^>]*>(.*?)<\/code>/gi, '`$1`')
+    .replace(/<pre\b[^>]*>([\s\S]*?)<\/pre>/gi, '```\n$1\n```')
+    .replace(/<h1\b[^>]*>(.*?)<\/h1>/gi, '# $1')
+    .replace(/<h2\b[^>]*>(.*?)<\/h2>/gi, '## $1')
+    .replace(/<h3\b[^>]*>(.*?)<\/h3>/gi, '### $1')
+    .replace(/<h4\b[^>]*>(.*?)<\/h4>/gi, '#### $1')
+    .replace(/<h5\b[^>]*>(.*?)<\/h5>/gi, '##### $1')
+    .replace(/<h6\b[^>]*>(.*?)<\/h6>/gi, '###### $1')
     // Convert XML tags to markdown headings - general approach
     .replace(/<(\w+)>\s*([^<]*?)\s*<\/\1>/g, '## $1\n\n$2')
     // Convert opening tags without closing tags to markdown headings
