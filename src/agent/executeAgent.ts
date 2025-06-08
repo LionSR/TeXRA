@@ -24,6 +24,10 @@ import { MergeAgent } from './MergeAgent';
 import { ProgressViewProvider } from '../progressView/ProgressViewProvider';
 import { AgentLogger } from '../logger/AgentLogger';
 import { openBuildDisplayIfTex } from '../utils/openBuildUtils';
+import {
+  checkExpectedOutputs,
+  showInstructionWithSuppress,
+} from '../utils/instructionUtils';
 import { IAgent } from './IAgent';
 
 const CHANNEL = 'executeAgent';
@@ -75,27 +79,23 @@ export async function getAgentPath(
     });
 
     if (builtInMatches.length === 0) {
-      const configureButton = 'Configure Custom Agents';
-      const errorMessage = `Agent "${agentName}" not found`;
-
-      vscode.window
-        .showErrorMessage(
-          `${errorMessage}. TeXRA couldn't find this agent in either the built-in or custom directories.`,
+      const configureButton = 'Open Settings';
+      await showInstructionWithSuppress(
+        context,
+        'agentNotFound',
+        'Agent configuration is missing. Configure your custom agents directory and ensure the YAML file exists.',
+        [
           {
-            modal: true,
-            detail:
-              'You can configure a custom agents directory in the extension settings.',
+            title: configureButton,
+            callback: () =>
+              vscode.commands.executeCommand(
+                'workbench.action.openSettings',
+                '@ext:texra-ai.texra explorer.agentsDirectory',
+              ),
           },
-          configureButton,
-        )
-        .then((selection) => {
-          if (selection === configureButton) {
-            vscode.commands.executeCommand(
-              'workbench.action.openSettings',
-              '@ext:texra-ai.texra explorer.agentsDirectory',
-            );
-          }
-        });
+        ],
+        false,
+      );
 
       const errorMsg = `Could not find yaml file for agent: ${agentName}`;
       throw new Error(errorMsg);
@@ -260,6 +260,7 @@ async function executeAgentWithLogging<T extends IAgent>(
             mainTaskGroupId,
           );
           await agent.run();
+          await checkExpectedOutputs(config.outputFiles, context, agent);
           // Mark the task as completed successfully
           logger.debug(`Task completed successfully`, mainTaskGroupId);
           logger.endGroup(mainTaskGroupId, 'stopped');
@@ -312,15 +313,18 @@ async function executeAgentWithLogging<T extends IAgent>(
       errorMsg.includes('API key not found')
     ) {
       const setKey = 'Set API Key';
-      const result = await vscode.window.showErrorMessage(
-        errorMsg,
-        { modal: true },
-        setKey,
+      await showInstructionWithSuppress(
+        context,
+        'missingApiKey',
+        'API key not found. Set your API key in the extension settings and run again.',
+        [
+          {
+            title: setKey,
+            callback: () => vscode.commands.executeCommand('texra.setApiKey'),
+          },
+        ],
+        false,
       );
-
-      if (result === setKey) {
-        vscode.commands.executeCommand('texra.setApiKey');
-      }
     } else {
       // Show regular error message for other errors
       vscode.window.showErrorMessage(errorMsg);
@@ -355,13 +359,19 @@ export async function executeAgent(
       const modelName = fullConfig.model;
       if (!(modelName in MODEL_CONFIGS)) {
         const openDocs = 'Model Documentation';
-        const choice = await vscode.window.showErrorMessage(
-          `Model ${modelName} is not recognized.`,
-          openDocs,
+        await showInstructionWithSuppress(
+          context,
+          'modelNotRecognized',
+          `Model "${modelName}" is not recognized. Review the documentation for supported models.`,
+          [
+            {
+              title: openDocs,
+              callback: () =>
+                vscode.commands.executeCommand('texra.openDoc', 'models'),
+            },
+          ],
+          false,
         );
-        if (choice === openDocs) {
-          vscode.commands.executeCommand('texra.openDoc', 'models');
-        }
         throw new Error(`Model ${modelName} not found in MODEL_CONFIGS`);
       }
 
