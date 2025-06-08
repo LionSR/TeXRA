@@ -311,30 +311,6 @@ async function processDiffFile(
   }
 }
 
-// TikZ picture fixes
-// Using ECMAScript 2018 named capture groups (?<name>pattern)
-// Similar to Python's (?P<name>pattern)
-// { and } needs to be \\{ and \\}?
-// export const TIKZ_REPLACEMENTS: ReplacementCategory = {
-//   name: 'tikz',
-//   description: 'Fixes for TikZ picture formatting and structure',
-//   isRegex: true,
-//   flags: 'gms',
-//   patterns: {
-//     '\\end{document}\\s*\\chapter': '\\chapter',
-//     '\\end{document}\\s*\\addcontentsline': '\\addcontentsline',
-
-//     // Check the following, as I get \node[annotation, align=left] at (7.5,2.5) {State evolution\\in phase space\end{tikzpicture}\}; somehow
-//     // '(?<indent>[\\t ]*)}\s*\\end{tikzpicture};\s*\\end{tikzpicture}':
-//     //   '${indent}\\end{tikzpicture}\n${indent}};\n${indent}\\end{tikzpicture}',
-//     // comment out for now
-
-//     '}(\\s*)\\end{tikzpicture};': '};$1\\end{tikzpicture}',
-//     '}(\\s*)\\end{tikzpicture}\\DIFaddendFL ;':
-//       '$1\\end{tikzpicture}};\\DIFaddendFL',
-//   },
-// };
-
 // Edge case 1: not handling well by latexdiff as it swaps }; with \end{tikzpicture} somehow
 // \begin{scope}[shift={(10.5,-1.75)}]
 // \node[plot] at (0,0) {
@@ -378,36 +354,44 @@ async function processTikzPictureEndings(
     [/\\end\{document\}\s*\\chapter/g, '\\chapter'],
     [/\\end\{document\}\s*\\addcontentsline/g, '\\addcontentsline'],
   ];
+  // the above are not for tikzpicture endings, needs to be moved elsewhere
 
-  const patterns_scope_tikzpicture = [
-    // Some of these might be too aggressive because i am getting an edge cases wihtout any spaces before \} somehow
-    // check the other  TIKZ_REPLACEMENTS too.
-
-    // Fix cases where }; appears before \end{tikzpicture}
-    [/\};(\s*)\\end\{tikzpicture\}/g, '\\end{tikzpicture}\\};'],
-    // Original patterns
-    [/\}(\s*)\\end\{tikzpicture\};/g, '};$1\\end{tikzpicture}'],
-    [
-      /\}(\s*)\\end\{tikzpicture\}\\DIFaddendFL ;/g,
-      '$1\\end{tikzpicture}};\\DIFaddendFL',
-    ],
-    // Handle node closures with tikzpicture
-
-    [/\};(\s*)\\end\{tikzpicture\}(\s*)\};/g, '\\end{tikzpicture}$1\\};$2\\};'],
-    // Handle semicolons inside tikzpicture that should be after the environment
-    [
-      /\\begin\{tikzpicture\}(.*?)(\};)(\s*)\\end\{tikzpicture\}/gs,
-      '\\begin{tikzpicture}$1\\end{tikzpicture}$3$2',
-    ],
-  ];
-
+  // Fix document boundaries first
   for (const [pattern, replacement] of patterns) {
     newContent = newContent.replace(pattern, replacement as string);
   }
 
-  for (const [pattern, replacement] of patterns_scope_tikzpicture) {
-    newContent = newContent.replaceAll(pattern, replacement as string);
-  }
+  // Fix tikzpicture endings more carefully
+
+  // Pattern 1: Fix the specific case where } is followed by \end{tikzpicture}};
+  // This indicates the }; belongs to a node/scope closure, not tikzpicture
+  // Example: \end{tabular} \end{tikzpicture}}; -> \end{tabular} }; \end{tikzpicture}
+  // newContent = newContent.replace(
+  //   /(\})(\s*)\\end\{tikzpicture\}\};/g,
+  //   '$1\n        };\n    \\end{tikzpicture}',
+  // );
+
+  // // Pattern 2: Fix standalone }; before \end{tikzpicture} (edge case 1)
+  // // Only match when }; is on its own line with optional whitespace
+  // newContent = newContent.replace(
+  //   /^(\s*)\};(\s*\n\s*)\\end\{tikzpicture\}/gm,
+  //   '$1\\end{tikzpicture}\n$1};',
+  // );
+
+  // // Pattern 3: Handle cases where we have \\}; pattern
+  // newContent = newContent.replace(
+  //   /\\end\{tikzpicture\}(\s*)\\\};/g,
+  //   '\\end{tikzpicture}$1};',
+  // );
+
+  // // Pattern 4: Fix the specific DIFaddendFL case
+  // newContent = newContent.replace(
+  //   /\}(\s*)\\end\{tikzpicture\}\\DIFaddendFL\s*;/g,
+  //   '\\end{tikzpicture}};$1\\DIFaddendFL',
+  // );
+
+  // maybe above do more evil than correcting the issue...
+  // So they are commented out for now
 
   await writeFile(filePath, newContent);
   // logger.debug(channel, `Tikzpicture endings fixed in ${filePath}`);
