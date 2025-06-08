@@ -798,7 +798,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
       return [endTurn, messages];
     }
 
-    this.logger.info(
+    this.logger.debug(
       `Output file ${outputFile} exists and is non-trivial. Reading content.`,
     );
     let fileContent = await readFile(outputFile);
@@ -818,7 +818,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
     );
 
     if (hasEndTag(agentSetting, fileContent)) {
-      this.logger.info(
+      this.logger.debug(
         'End tag detected in existing file content - skipping generation.',
       );
       endTurn = true;
