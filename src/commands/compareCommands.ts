@@ -75,6 +75,7 @@ async function handleCompare(
         'getContextKeyValue',
         'viewContainerLocation:texra-panel',
       );
+      // 🟡 [2025-06-08 20:48:23.181] [CompareCommands] Could not check ProgressBoard location: command 'getContextKeyValue' not found
 
       if (location === 'secondarySideBar') {
         await vscode.commands.executeCommand('workbench.action.closePanel');
