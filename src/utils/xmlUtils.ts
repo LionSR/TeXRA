@@ -271,36 +271,46 @@ export function formatAndLogContent(
     .replace(/\\emph\{([^}]+)\}/g, '*$1*')
     // Convert common HTML tags to markdown before generic XML handling
     .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<\/?(?:p|div)\b[^>]*>/gi, '\n')
-    .replace(/<\/?(?:ul|ol)\b[^>]*>/gi, '')
-    // Handle lists
-    .replace(/<li\b[^>]*>/gi, '- ')
-    .replace(/<\/li>/gi, '\n')
-    // the above two maybe it is safer to combine into one (note closing HTML tags cannot have attributes)
-    .replace(/<(strong|b)\b[^>]*>(.*?)<\/\1>/gi, '**$2**')
-    .replace(/<(em|i)\b[^>]*>(.*?)<\/\1>/gi, '*$2*')
-    .replace(/<code\b[^>]*>(.*?)<\/code>/gi, '`$1`')
-    .replace(/<pre\b[^>]*>([\s\S]*?)<\/pre>/gi, '```\n$1\n```')
-    .replace(/<h1\b[^>]*>(.*?)<\/h1>/gi, '# $1')
-    .replace(/<h2\b[^>]*>(.*?)<\/h2>/gi, '## $1')
-    .replace(/<h3\b[^>]*>(.*?)<\/h3>/gi, '### $1')
-    .replace(/<h4\b[^>]*>(.*?)<\/h4>/gi, '#### $1')
-    .replace(/<h5\b[^>]*>(.*?)<\/h5>/gi, '##### $1')
-    .replace(/<h6\b[^>]*>(.*?)<\/h6>/gi, '###### $1')
-    // Convert XML tags to markdown headings - general approach
-    .replace(/<(\w+)>\s*([^<]*?)\s*<\/\1>/g, '## $1\n\n$2')
-    // Convert opening tags without closing tags to markdown headings
-    .replace(/<(\w+)>/g, '## $1\n\n')
-    .replace(/<\/\w+>/g, '')
+    // Handle p and div tags more carefully to avoid excessive newlines
+    .replace(/<(?:p|div)\b[^>]*>/gi, '')
+    .replace(/<\/(?:p|div)>/gi, '\n')
+    .replace(/<(strong|b)>(.*?)<\/\1>/gi, '**$2**')
+    .replace(/<(em|i)>(.*?)<\/\1>/gi, '*$2*')
+    .replace(/<code>(.*?)<\/code>/gi, '`$1`')
+    .replace(/<pre>([\s\S]*?)<\/pre>/gi, '```\n$1\n```')
+    .replace(/<h1>(.*?)<\/h1>/gi, '# $1\n')
+    .replace(/<h2>(.*?)<\/h2>/gi, '## $1\n')
+    .replace(/<h3>(.*?)<\/h3>/gi, '### $1\n')
+    .replace(/<h4>(.*?)<\/h4>/gi, '#### $1\n')
+    .replace(/<h5>(.*?)<\/h5>/gi, '##### $1\n')
+    .replace(/<h6>(.*?)<\/h6>/gi, '###### $1\n')
+    // Handle lists - simple approach
+    // For XML tags containing lists (ol/ul), just remove the wrapper tag
+    .replace(/<([\w-]{6,})>\s*(<[ou]l\b[\s\S]*?<\/[ou]l>)\s*<\/\1>/g, '$2')
+    // Convert XML tags to markdown headings - only for semantic tags with 6+ characters that don't contain lists
+    .replace(/<([\w-]{6,})>\s*([^<]*?)\s*<\/\1>/g, '## $1\n$2')
+    // Remove ul and ol tags
+    .replace(/<[ou]l>/gi, '')
+    .replace(/<\/[ou]l>/gi, '')
+    // Replace <li> with bullet point and remove </li> tags
+    .replace(/<li>/gi, '- ')
+    .replace(/<\/li>/gi, '')
     // Escape LaTeX references but preserve the content
+    .replace(/~\\ref\{/g, ' \\ref{')
     .replace(/\\ref\{([^}]+)\}/g, '\\\\ref{$1}')
-    // extra line breaks
-    .replace(/\n\n\n\n/g, '\n\n');
+    // Remove multiple empty lines before list items, preserving indentation
+    .replace(/\n(\s*)\n(\s*)\n(\s*)- /g, '\n$3- ')
+    .replace(/\n(\s*)\n(\s*)- /g, '\n$2- ')
+    // Clean up excessive whitespace and normalize line breaks
+    .replace(/\n{4,}/g, '\n\n') // Replace 4+ newlines with 2
 
-  // \\item/enumerate: fot this is tricky because it also takes a line that should be get rid of
+    .replace(/    /gm, '  '); // Replace 4 spaces with 2 spaces
+  // .replace(/ +$/gm, ''); // Remove trailing spaces only
+
+  // agentLogger.info(formattedContent, groupId); // for debugging
 
   // Log the formatted content
-  agentLogger.info(`${contentType} content:${formattedContent}`, groupId);
+  agentLogger.info(`${contentType} content: ${formattedContent}`, groupId);
 }
 
 /**
