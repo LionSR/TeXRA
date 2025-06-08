@@ -179,9 +179,7 @@ export function createGroupHeader(group) {
       `$${cost.toFixed(3)}</span>`;
   }
 
-  const titleMarkup = isTopLevel
-    ? ''
-    : `<span class="group-title">${group.name}</span>`;
+  const titleMarkup = `<span class="group-title">${group.name}</span>`;
   const topLevelClass = isTopLevel ? 'top-level' : '';
 
   const timeMarkup = `
