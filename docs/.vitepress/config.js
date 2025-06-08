@@ -148,6 +148,7 @@ const baseConfig = {
             { text: 'LaTeX Diff', link: '/guide/latex-diff' },
             { text: 'Intelligent Merge', link: '/guide/intelligent-merge' },
             { text: 'Multiple Output', link: '/guide/multiple-output' },
+            { text: 'Streaming Thinking', link: '/guide/streaming-thinking' },
           ],
         },
         {

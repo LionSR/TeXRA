@@ -689,6 +689,41 @@ export abstract class ModelHandler {
   ): string | null;
 
   /**
+   * Aggregate streamed chunks and log incremental thinking content.
+   *
+   * @param stream Async iterator yielding provider-specific chunks
+   * @param parser Function extracting content and thinking from each chunk
+   * @param groupId Optional progress view group ID for logging
+   * @returns Accumulated content and thinking strings
+   */
+  protected async streamThinking<T>(
+    stream: AsyncIterable<T>,
+    parser: (chunk: T) => { content?: string; thinking?: string } | null,
+    groupId?: string,
+  ): Promise<{ content: string; thinking: string }> {
+    let accumulatedContent = '';
+    let accumulatedThinking = '';
+
+    for await (const chunk of stream) {
+      const result = parser(chunk);
+      if (!result) {
+        continue;
+      }
+
+      if (result.content) {
+        accumulatedContent += result.content;
+      }
+
+      if (result.thinking) {
+        accumulatedThinking += result.thinking;
+        this.logger.info(`Thinking content:\n${accumulatedThinking}`, groupId);
+      }
+    }
+
+    return { content: accumulatedContent, thinking: accumulatedThinking };
+  }
+
+  /**
    * Creates a log group for model operations with the given name.
    * @param name Name of the operation group
    * @param parentGroupId Optional parent group ID

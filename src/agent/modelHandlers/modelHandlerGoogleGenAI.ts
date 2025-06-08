@@ -279,26 +279,39 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
           message: lastMessageParts,
           config: { ...generationConfig, abortSignal: signal },
         });
-
         const fullParts: Part[] = [];
         const finalResponse = new GenerateContentResponse();
-        for await (const chunk of stream) {
-          if (chunk.candidates?.[0]?.content?.parts) {
-            fullParts.push(...chunk.candidates[0].content.parts);
-          }
-          if (chunk.usageMetadata) {
-            finalResponse.usageMetadata = chunk.usageMetadata;
-          }
-          if (chunk.responseId) finalResponse.responseId = chunk.responseId;
-          if (chunk.createTime) finalResponse.createTime = chunk.createTime;
-          if (chunk.modelVersion)
-            finalResponse.modelVersion = chunk.modelVersion;
-          if (!finalResponse.promptFeedback && chunk.promptFeedback) {
-            finalResponse.promptFeedback = chunk.promptFeedback;
-          }
-        }
-        if (finalResponse.candidates?.[0]) {
-        }
+        await this.streamThinking(
+          stream,
+          (chunk) => {
+            if (chunk.candidates?.[0]?.content?.parts) {
+              const parts = chunk.candidates[0].content.parts;
+              fullParts.push(...parts);
+              let text = '';
+              let thinking = '';
+              for (const p of parts) {
+                if ((p as any).thought && typeof p.text === 'string') {
+                  thinking += p.text;
+                } else if (typeof p.text === 'string') {
+                  text += p.text;
+                }
+              }
+              return { content: text, thinking };
+            }
+            if (chunk.usageMetadata) {
+              finalResponse.usageMetadata = chunk.usageMetadata;
+            }
+            if (chunk.responseId) finalResponse.responseId = chunk.responseId;
+            if (chunk.createTime) finalResponse.createTime = chunk.createTime;
+            if (chunk.modelVersion)
+              finalResponse.modelVersion = chunk.modelVersion;
+            if (!finalResponse.promptFeedback && chunk.promptFeedback) {
+              finalResponse.promptFeedback = chunk.promptFeedback;
+            }
+            return null;
+          },
+          this.logger.getActiveGroupId(),
+        );
 
         if (fullParts.length === 0) {
           throw new Error('Stream yielded no chunks');
@@ -307,7 +320,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
         finalResponse.candidates = [
           {
             content: { role: 'model', parts: fullParts },
-            finishReason: FinishReason.STOP, // there is no good choice, could be length, but let us just put this.
+            finishReason: FinishReason.STOP,
           },
         ];
 

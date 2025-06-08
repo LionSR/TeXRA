@@ -138,33 +138,35 @@ export class ModelHandlerOpenAI extends ModelHandler {
           signal,
         });
 
+        const parseChunk = (chunk: any) => {
+          const delta = chunk.choices?.[0]?.delta as any;
+          if (!delta) return null;
+          return {
+            content: delta.content,
+            thinking: delta.reasoning_content,
+          };
+        };
+
         if (this.config.fullName.includes('deepseek')) {
-          // This wait for finalMessage method do not support deepseek models, so we need to aggreatate the results manually like this:
-          let reasoning_content = '';
-          let content = '';
-          for await (const chunk of stream) {
-            if ((chunk.choices[0].delta as any).reasoning_content) {
-              reasoning_content += (chunk.choices[0].delta as any)
-                .reasoning_content;
-            } else {
-              content += (chunk.choices[0].delta as any).content;
-            }
-          }
+          const { content, thinking } = await this.streamThinking(
+            stream,
+            parseChunk,
+            this.logger.getActiveGroupId(),
+          );
           response = {
             role: 'assistant',
-            finish_reason: 'stop', // there is no good choice it seems unless deepseek models support it;
-            // In the future maybe we can count the output tokens to see if it is at the limit approximatelly..
+            finish_reason: 'stop',
             choices: [
               {
                 message: {
                   content: content,
-                  reasoning_content: reasoning_content,
+                  reasoning_content: thinking,
                 },
                 finish_reason: 'stop',
               },
             ],
           };
-          const tokenCount = countTokens(content + reasoning_content);
+          const tokenCount = countTokens(content + thinking);
           this.logger.debug(
             `Token count output of deepseek model: ${tokenCount}`,
           );
@@ -178,7 +180,20 @@ export class ModelHandlerOpenAI extends ModelHandler {
           return response;
         }
 
+        await this.streamThinking(
+          stream,
+          parseChunk,
+          this.logger.getActiveGroupId(),
+        );
         response = await stream.finalMessage();
+
+        const finalMessage = response as any;
+        if (finalMessage?.reasoning_content) {
+          this.logger.info(
+            `Thinking content:\n${finalMessage.reasoning_content}`,
+            this.logger.getActiveGroupId(),
+          );
+        }
 
         // in the future we can add: stream_options: {"include_usage": true} to get usage statistics
         // in the future if we pass stream to outside (signal: controller.signal)), calling stream.controller.abort() will abort the stream; which will be very useful for our stop button (controller.abort();)
