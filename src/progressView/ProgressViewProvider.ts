@@ -4,20 +4,21 @@ import * as vscode from 'vscode';
 // Local imports - webview
 import { ProgressViewContentProvider } from './ProgressViewContentProvider';
 import { ProgressViewMessageHandler } from './ProgressViewMessageHandler';
+
 import { TaskState } from '../logger/TaskState';
 import { AgentLogger } from '../logger/AgentLogger';
+
 import { getConfig } from '../utils/configUtils';
 import { objectToTaskState } from '../utils/configConversion';
-import {
-  fileExistsAbsolute,
-  filterExistingFiles,
-} from '../utils/absoluteFileUtils';
+import { filterExistingFiles } from '../utils/workspaceFileUtils';
 import {
   shouldExcludeFromProgressView,
   shouldPersistStream,
 } from '../utils/loggerUtils';
+
 import { TokenUsageStats } from '../types/UsageTypes';
 import { LogGroup } from '../types/LogTypes';
+
 // @ts-ignore - Import JavaScript module
 import { STATUS, COMMANDS } from './modules/constants.js';
 
