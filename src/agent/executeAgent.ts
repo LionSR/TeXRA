@@ -202,7 +202,10 @@ async function executeAgentWithLogging<T extends IAgent>(
         progressViewProvider.setActiveStream(fullStreamId);
         progressViewProvider.updateStreamStatus(fullStreamId, 'running');
 
-        // Notify user only if the progress view isn't visible after switching
+        // Attempt to show the progress view
+        await vscode.commands.executeCommand('texra.showProgressView');
+
+        // Notify user only if the progress view isn't visible after attempting to show it
         if (!progressViewProvider.isViewVisible()) {
           const inputFileName = path.basename(config.inputFile);
           const outputInfo = config.outputFiles?.length
