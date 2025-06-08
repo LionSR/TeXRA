@@ -1,6 +1,9 @@
 // Standard library imports
 import spawn from 'cross-spawn';
 
+// Local imports
+import { extendEnvPath, findToolInCommonPaths } from './execUtils';
+
 // Third-party imports
 import * as vscode from 'vscode';
 
@@ -130,18 +133,40 @@ export async function checkToolInstalled(
 
     let isInstalled = false;
 
+    const spawnOptions = {
+      env: { ...process.env, PATH: extendEnvPath() },
+      shell: true,
+    };
+
     if (Array.isArray(config.command)) {
       // Try each command in the array until one succeeds
       for (const cmd of config.command) {
-        const result = spawn.sync(cmd, { shell: true });
+        let result = spawn.sync(cmd, spawnOptions);
         if (result.status === 0) {
           isInstalled = true;
           break;
         }
+        const toolName = cmd.split(' ')[0];
+        const fallback = findToolInCommonPaths(toolName);
+        if (fallback) {
+          result = spawn.sync(`${fallback} --version`, spawnOptions);
+          if (result.status === 0) {
+            isInstalled = true;
+            break;
+          }
+        }
       }
     } else {
-      const result = spawn.sync(config.command, { shell: true });
+      let result = spawn.sync(config.command, spawnOptions);
       isInstalled = result.status === 0;
+      if (!isInstalled) {
+        const toolName = config.command.split(' ')[0];
+        const fallback = findToolInCommonPaths(toolName);
+        if (fallback) {
+          result = spawn.sync(`${fallback} --version`, spawnOptions);
+          isInstalled = result.status === 0;
+        }
+      }
     }
 
     if (!isInstalled && showError) {
