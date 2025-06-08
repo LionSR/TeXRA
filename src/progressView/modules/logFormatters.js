@@ -2,6 +2,9 @@ import { marked } from 'marked';
 import { getLogGroup, setLogGroup } from './stateManager.js';
 import { STATUS } from './constants.js';
 
+export const BULLET_MARKUP =
+  '<i class="codicon codicon-circle-small-filled group-bullet"></i>';
+
 /**
  * Format token counts, displaying values in "k" units when exceeding 4096.
  * @param {number} tokens - Raw token count
@@ -205,7 +208,7 @@ export function createGroupHeader(group) {
         ${durationDisplay}
       </span>`;
 
-  const bulletMarkup = ' <i class="codicon codicon-circle-small-filled"></i> ';
+  const bulletMarkup = BULLET_MARKUP;
 
   const headerContents = formatGroupHeaderElements(
     isTopLevel,

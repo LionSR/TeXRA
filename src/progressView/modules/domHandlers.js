@@ -19,6 +19,7 @@ import {
   formatTokens,
   formatGroupHeaderElements,
   getGroupHeaderClass,
+  BULLET_MARKUP,
 } from './logFormatters.js';
 import { STATUS, COMMANDS, SPLIT_SIZES, TOOLBAR_BUTTONS } from './constants.js';
 import { createIconButton } from '@common/templateUtils.js';
@@ -247,16 +248,25 @@ function propagateUsageToParents(groupId) {
 function insertUsageElement(groupHeader, usageElem, isTopLevel) {
   const timeContainer = groupHeader.querySelector('.group-time');
 
+  let bulletElem = groupHeader.querySelector('.group-bullet');
+  if (!bulletElem) {
+    const tmpl = document.createElement('template');
+    tmpl.innerHTML = BULLET_MARKUP;
+    bulletElem = tmpl.content.firstElementChild;
+  }
+
   if (timeContainer) {
     if (isTopLevel) {
       // For top-level groups: time comes first, then usage
       timeContainer.parentNode.insertBefore(
-        usageElem,
+        bulletElem,
         timeContainer.nextSibling,
       );
+      timeContainer.parentNode.insertBefore(usageElem, bulletElem.nextSibling);
     } else {
       // For non-top-level groups: usage comes first, then time
       groupHeader.insertBefore(usageElem, timeContainer);
+      groupHeader.insertBefore(bulletElem, timeContainer);
     }
   } else {
     groupHeader.appendChild(usageElem);
