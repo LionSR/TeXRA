@@ -53,11 +53,7 @@ Even the best research assistants (human or AI) have off days. This guide helps 
    - Ensure installation directories are in your system PATH
    - Restart your terminal and VS Code after updating PATH
 
-- When launching VS Code from the system menu or Finder, it may inherit a
-  minimal PATH. TeXRA automatically searches common locations such as
-  Homebrew, Linuxbrew, TeX&nbsp;Live and MiKTeX bins (newer TeX&nbsp;Live
-  releases are preferred). Opening VS Code from a configured terminal
-  provides the most reliable environment.
+- When launching VS Code from the system menu or Finder, it may inherit a minimal PATH. TeXRA automatically searches common locations such as Homebrew, Linuxbrew, TeX&nbsp;Live and MiKTeX bins (newer TeX&nbsp;Live releases are preferred). Opening VS Code from a configured terminal provides the most reliable environment.
 
 3. **Manual installation**:
 
