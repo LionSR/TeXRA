@@ -316,7 +316,6 @@ async function executeAgentWithLogging<T extends IAgent>(
       errorMsg.includes('Missing API key') ||
       errorMsg.includes('API key not found')
     ) {
-      vscode.window.showErrorMessage(errorMsg);
       const setKey = 'Set API Key';
       await showInstructionWithSuppress(
         context,
@@ -362,7 +361,6 @@ export async function executeAgent(
       // Get model configuration
       const modelName = fullConfig.model;
       if (!(modelName in MODEL_CONFIGS)) {
-        vscode.window.showErrorMessage(`Model ${modelName} is not recognized.`);
         const openDocs = 'Model Documentation';
         await showInstructionWithSuppress(
           context,
