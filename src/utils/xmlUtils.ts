@@ -265,7 +265,7 @@ export function formatAndLogContent(
     .replace(/\\end\{enumerate\}/g, '')
     .replace(/\\item\s+/g, '- ')
     // Standardize bullet lists starting with asterisk while avoiding emphasis markers
-    .replace(/(^|\n)\s*\*\s+(?=\S)/g, '$1- ')
+    .replace(/(^|\n)(\s*)\*\s+(?=\S)/g, '$1$2- ')
     .replace(/\\textbf\{([^}]+)\}/g, '**$1**')
     .replace(/\\textit\{([^}]+)\}/g, '*$1*')
     .replace(/\\emph\{([^}]+)\}/g, '*$1*')
