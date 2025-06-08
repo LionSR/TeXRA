@@ -446,6 +446,52 @@ export function updateFileList(filesByRound) {
 }
 
 /**
+ * Collapse a group and all of its child groups recursively
+ * @param {string} groupId - ID of the group to collapse
+ */
+function collapseGroupAndChildren(groupId) {
+  const details = document.getElementById(`group-${groupId}`);
+  if (details) {
+    details.open = false;
+  }
+  setGroupToggleState(groupId, true);
+
+  for (const [childId, group] of getLogGroups()) {
+    if (group.parentGroupId === groupId) {
+      collapseGroupAndChildren(childId);
+    }
+  }
+}
+
+/**
+ * Collapse the most recent top-level group when a new one starts
+ * @param {string} currentGroupId - ID of the newly started top-level group
+ */
+function collapsePreviousTopLevelGroup(currentGroupId) {
+  const current = getLogGroup(currentGroupId);
+  if (!current) return;
+
+  let previousId = null;
+  let previousStart = -Infinity;
+
+  for (const [id, group] of getLogGroups()) {
+    if (!group.parentGroupId && id !== currentGroupId) {
+      if (
+        group.startTime < current.startTime &&
+        group.startTime > previousStart
+      ) {
+        previousId = id;
+        previousStart = group.startTime;
+      }
+    }
+  }
+
+  if (previousId) {
+    collapseGroupAndChildren(previousId);
+  }
+}
+
+/**
  * Adds a log group to the DOM
  * @param {Object} group - Group data
  */
@@ -468,12 +514,7 @@ export function addLogGroup(group) {
 
   // Check if we have a saved collapsed state for this group
   const isCollapsed = getGroupToggleState(group.id);
-  const shouldCollapse = isCollapsed === true || group.status === 'stopped';
-  detailsElem.open = !shouldCollapse;
-
-  if (shouldCollapse && isCollapsed !== true && group.status === 'stopped') {
-    setGroupToggleState(group.id, true);
-  }
+  detailsElem.open = isCollapsed !== true;
 
   detailsElem.appendChild(headerElement);
   detailsElem.appendChild(groupContainer);
@@ -572,6 +613,9 @@ export function addLogGroup(group) {
     // This is a top-level group - add to main container
     const logContent = document.getElementById('logContent');
     logContent.appendChild(detailsElem);
+
+    // Collapse the immediately previous top-level group now that a new one has started
+    collapsePreviousTopLevelGroup(group.id);
   }
 }
 
@@ -620,15 +664,6 @@ export function updateLogGroupUI(groupId, status, endTime) {
         durationSpan.textContent = `${formatDuration(durationMs)}`;
         durationSpan.style.display = 'inline';
         timeContainer.appendChild(durationSpan);
-      }
-    }
-
-    // Automatically collapse the group if it finished normally (status is "stopped")
-    if (status === 'stopped') {
-      const details = document.getElementById(`group-${groupId}`);
-      if (details) {
-        details.open = false;
-        setGroupToggleState(groupId, true);
       }
     }
   }
