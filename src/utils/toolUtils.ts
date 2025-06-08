@@ -1,6 +1,9 @@
 // Standard library imports
 import spawn from 'cross-spawn';
 
+// Local imports
+import { extendEnvPath, findToolInCommonPaths } from './execUtils';
+
 // Third-party imports
 import * as vscode from 'vscode';
 
@@ -8,7 +11,7 @@ import * as vscode from 'vscode';
 
 // Interface for tool configuration
 export interface ToolConfig {
-  command: string | string[];
+  command?: string | string[]; // Optional - defaults to "${toolName} --version"
   errorMessage: string;
   openDocsCommand?: string; // Optional command to open documentation
 }
@@ -41,8 +44,7 @@ const TEXCOUNT_INSTRUCTIONS =
 // All tool configurations in one place
 const TOOL_CONFIGS: Record<string, ToolConfig> = {
   // ImageMagick tools
-  imagemagick: {
-    command: 'convert -version',
+  magick: {
     errorMessage:
       'ImageMagick is not installed. Please install ImageMagick to use PDF to PNG conversion.\n' +
       'Installation instructions:\n' +
@@ -71,35 +73,30 @@ const TOOL_CONFIGS: Record<string, ToolConfig> = {
 
   // LaTeX tools
   latexdiff: {
-    command: 'latexdiff --version',
     errorMessage:
       'latexdiff is not installed. Please install it to use this feature.\n' +
       LATEXDIFF_INSTRUCTIONS,
     openDocsCommand: 'texra.openDoc,installation',
   },
   'latexdiff-vc': {
-    command: 'latexdiff-vc --version',
     errorMessage:
       'latexdiff-vc is not installed. Please install it to use this feature.\n' +
       LATEXDIFF_INSTRUCTIONS,
     openDocsCommand: 'texra.openDoc,installation',
   },
   latexindent: {
-    command: 'latexindent --version',
     errorMessage:
       'latexindent is not installed. Please install it to use this feature.\n' +
       LATEXINDENT_INSTRUCTIONS,
     openDocsCommand: 'texra.openDoc,installation',
   },
   'tex-fmt': {
-    command: 'tex-fmt --version',
     errorMessage:
       'tex-fmt is not installed. Please install it to use this feature.\n' +
       TEXFMT_INSTRUCTIONS,
     openDocsCommand: 'texra.openDoc,installation',
   },
   texcount: {
-    command: 'texcount --version',
     errorMessage:
       'texcount is not installed. Please install it to use this feature.\n' +
       TEXCOUNT_INSTRUCTIONS,
@@ -119,6 +116,7 @@ export async function checkToolInstalled(
 ): Promise<boolean> {
   try {
     // Get the config object - either passed directly or looked up by string key
+    const toolName = typeof toolOrConfig === 'string' ? toolOrConfig : null;
     const config =
       typeof toolOrConfig === 'string'
         ? TOOL_CONFIGS[toolOrConfig]
@@ -128,20 +126,53 @@ export async function checkToolInstalled(
       throw new Error(`Unknown tool: ${toolOrConfig}`);
     }
 
+    // Generate default command if not specified
+    const command = config.command || (toolName ? `${toolName} --version` : null);
+    
+    if (!command) {
+      throw new Error('No command specified and tool name could not be determined');
+    }
+
     let isInstalled = false;
 
-    if (Array.isArray(config.command)) {
+    const spawnOptions = {
+      env: { ...process.env, PATH: extendEnvPath() },
+      shell: true,
+    };
+
+    if (Array.isArray(command)) {
       // Try each command in the array until one succeeds
-      for (const cmd of config.command) {
-        const result = spawn.sync(cmd, { shell: true });
+      for (const cmd of command) {
+        let result = spawn.sync(cmd, spawnOptions);
         if (result.status === 0) {
           isInstalled = true;
           break;
         }
+        const toolName = cmd.split(' ')[0];
+        const fallback = findToolInCommonPaths(toolName);
+        if (fallback) {
+          const spaceIndex = cmd.indexOf(' ');
+          const originalArgs = spaceIndex > -1 ? cmd.substring(spaceIndex + 1) : '';
+          result = spawn.sync(originalArgs ? `${fallback} ${originalArgs}` : fallback, spawnOptions);
+          if (result.status === 0) {
+            isInstalled = true;
+            break;
+          }
+        }
       }
     } else {
-      const result = spawn.sync(config.command, { shell: true });
+      let result = spawn.sync(command, spawnOptions);
       isInstalled = result.status === 0;
+      if (!isInstalled) {
+        const cmdToolName = command.split(' ')[0];
+        const fallback = findToolInCommonPaths(cmdToolName);
+        if (fallback) {
+          const spaceIndex = command.indexOf(' ');
+          const originalArgs = spaceIndex > -1 ? command.substring(spaceIndex + 1) : '';
+          result = spawn.sync(originalArgs ? `${fallback} ${originalArgs}` : fallback, spawnOptions);
+          isInstalled = result.status === 0;
+        }
+      }
     }
 
     if (!isInstalled && showError) {

@@ -138,7 +138,7 @@ export async function singlePagePdf2Png(
 
     // Check for GraphicsMagick/ImageMagick installation
     const isImageMagickInstalled = await checkMultipleToolsInstalled(
-      ['imagemagick', 'gm'],
+      ['magick', 'gm'],
       false,
     );
     if (!isImageMagickInstalled.some(Boolean)) {
