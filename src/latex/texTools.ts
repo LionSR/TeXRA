@@ -1,6 +1,5 @@
 // Standard library imports
 import * as path from 'path';
-import spawn from 'cross-spawn';
 
 // Third-party imports
 import * as vscode from 'vscode';
@@ -12,107 +11,12 @@ import * as logger from '../logger/logUtils';
 import { executeCommand } from '../utils/execUtils';
 import { getConfig } from '../utils/configUtils';
 import { getWorkspacePath, createDirectory } from '../utils/workspaceFileUtils';
+// No additional imports needed
 
 const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);
 
-// Installation instructions for each tool
-export const LATEXDIFF_INSTRUCTIONS =
-  'Installation instructions:\n' +
-  '- Mac: brew install latexdiff\n' +
-  '- Ubuntu: sudo apt-get install latexdiff\n' +
-  '- Windows: Install through MiKTeX or TeX Live package manager';
-
-export const LATEXINDENT_INSTRUCTIONS =
-  'Installation instructions:\n' +
-  '- Mac: brew install latexindent\n' +
-  '- Ubuntu: sudo apt-get install texlive-extra-utils\n' +
-  '- Windows: Install through MiKTeX or TeX Live package manager';
-
-export const TEXFMT_INSTRUCTIONS =
-  'Installation instructions:\n' +
-  '- Cargo: cargo install tex-fmt\n' +
-  '- Mac: brew install tex-fmt\n' +
-  '- Debian: apt install tex-fmt';
-
-export const TEXCOUNT_INSTRUCTIONS =
-  'Installation instructions:\n' +
-  '- Mac: brew install texcount\n' +
-  '- Ubuntu: sudo apt-get install texlive-extra-utils\n' +
-  '- Windows: Install through MiKTeX or TeX Live package manager';
-
-// Tool configurations
-interface ToolConfig {
-  command: string;
-  errorMessage: string;
-}
-
-const TOOL_CONFIGS: Record<string, ToolConfig> = {
-  latexdiff: {
-    command: 'latexdiff --version',
-    errorMessage:
-      'latexdiff is not installed. Please install it to use this feature.\n' +
-      LATEXDIFF_INSTRUCTIONS,
-  },
-  'latexdiff-vc': {
-    command: 'latexdiff-vc --version',
-    errorMessage:
-      'latexdiff-vc is not installed. Please install it to use this feature.\n' +
-      LATEXDIFF_INSTRUCTIONS,
-  },
-  latexindent: {
-    command: 'latexindent --version',
-    errorMessage:
-      'latexindent is not installed. Please install it to use this feature.\n' +
-      LATEXINDENT_INSTRUCTIONS,
-  },
-  'tex-fmt': {
-    command: 'tex-fmt --version',
-    errorMessage:
-      'tex-fmt is not installed. Please install it to use this feature.\n' +
-      TEXFMT_INSTRUCTIONS,
-  },
-  texcount: {
-    command: 'texcount --version',
-    errorMessage:
-      'texcount is not installed. Please install it to use this feature.\n' +
-      TEXCOUNT_INSTRUCTIONS,
-  },
-};
-
-// Export error messages for backward compatibility
-export const LATEXDIFF_ERROR = TOOL_CONFIGS.latexdiff.errorMessage;
-export const LATEXDIFF_VC_ERROR = TOOL_CONFIGS['latexdiff-vc'].errorMessage;
-export const LATEXINDENT_ERROR = TOOL_CONFIGS.latexindent.errorMessage;
-export const TEXCOUNT_ERROR = TOOL_CONFIGS.texcount.errorMessage;
-export const TEXFMT_ERROR = TOOL_CONFIGS['tex-fmt'].errorMessage;
-
-/**
- * Generic function to check if a LaTeX tool is installed
- * @param tool The tool to check ('latexdiff', 'latexdiff-vc', 'latexindent', 'tex-fmt', 'texcount')
- * @param showError Whether to show an error message if the tool is not installed
- * @returns Promise<boolean> True if the tool is installed
- */
-export async function checkToolInstalled(
-  tool: keyof typeof TOOL_CONFIGS,
-  showError: boolean = true,
-): Promise<boolean> {
-  const result = spawn.sync(TOOL_CONFIGS[tool].command, { shell: true });
-  if (result.status === 0) {
-    return true;
-  }
-  if (showError) {
-    const openDocs = 'View Installation Guide';
-    const choice = await vscode.window.showErrorMessage(
-      TOOL_CONFIGS[tool].errorMessage,
-      openDocs,
-    );
-    if (choice === openDocs) {
-      vscode.commands.executeCommand('texra.openDoc', 'installation');
-    }
-  }
-  return false;
-}
+// Tool configurations have been moved to utils/toolUtils.ts for centralized management
 
 /**
  * Compile a LaTeX file to PDF
