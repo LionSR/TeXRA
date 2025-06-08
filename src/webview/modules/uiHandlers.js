@@ -16,6 +16,7 @@ import {
   toggleOutputFiles,
   toggleOutputNameOverride,
   emptyMultipleFiles,
+  toggleLatexdiffs,
 } from './fileHandlers.js';
 import {
   safeGetElementById,
@@ -588,6 +589,10 @@ export function setupUIHandlers() {
         toggleMultipleFiles(id, toggleId);
       }
     });
+  });
+
+  addEventListenerSafely('toggleLatexdiffs', 'click', () => {
+    toggleLatexdiffs();
   });
 
   // Add event listener for history button
