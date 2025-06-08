@@ -141,7 +141,7 @@ export async function singlePagePdf2Png(
       ['imagemagick', 'gm'],
       false,
     );
-    if (!isImageMagickInstalled) {
+    if (!isImageMagickInstalled.some(Boolean)) {
       throw new Error('GraphicsMagick/ImageMagick is not installed.');
     }
 
