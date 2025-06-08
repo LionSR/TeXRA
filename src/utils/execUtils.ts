@@ -1,6 +1,10 @@
 // Standard library imports
+import * as fs from 'fs';
+import * as path from 'path';
+
 // Third-party imports
 import spawn from 'cross-spawn';
+import glob from 'glob';
 
 // Local imports - log
 import * as logger from '../logger/logUtils';
@@ -13,6 +17,46 @@ const CHANNEL = 'execUtils';
 logger.initialize(CHANNEL);
 
 const MAX_OUTPUT_LENGTH = 150;
+
+// Additional directories that commonly contain LaTeX tools
+function getExtraDirs(): string[] {
+  const dirs = [
+    '/opt/homebrew/bin', // Homebrew on Apple Silicon
+    '/usr/local/bin',
+    '/Library/TeX/texbin',
+    '/usr/texbin',
+  ];
+  try {
+    dirs.push(...glob.sync('/usr/local/texlive/*/bin/*'));
+  } catch {
+    // ignore glob errors
+  }
+  return dirs;
+}
+
+// Extend PATH with common directories if they are missing
+export function extendEnvPath(
+  basePath: string = process.env.PATH || '',
+): string {
+  const segments = basePath.split(path.delimiter).filter(Boolean);
+  for (const dir of getExtraDirs()) {
+    if (!segments.includes(dir) && fs.existsSync(dir)) {
+      segments.push(dir);
+    }
+  }
+  return segments.join(path.delimiter);
+}
+
+// Locate a tool in the common directories
+export function findToolInCommonPaths(tool: string): string | null {
+  for (const dir of getExtraDirs()) {
+    const candidate = path.join(dir, tool);
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+  }
+  return null;
+}
 
 /**
  * Truncate text to maxChars by keeping the end portion.
@@ -53,9 +97,14 @@ export async function executeCommand(
       `Running command: ${finalCommand}`,
     );
 
+    const env = options.env
+      ? { ...process.env, ...options.env }
+      : { ...process.env };
+    env.PATH = extendEnvPath(env.PATH);
+
     const spawnOptions = {
       cwd: workspacePath,
-      env: options.env ? { ...process.env, ...options.env } : process.env,
+      env,
       shell: true,
     };
 
