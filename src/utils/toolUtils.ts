@@ -41,16 +41,31 @@ const TEXCOUNT_INSTRUCTIONS =
   '- Ubuntu: sudo apt-get install texlive-extra-utils\n' +
   '- Windows: Install through MiKTeX or TeX Live package manager';
 
+const GM_INSTRUCTIONS =
+  'Installation instructions:\n' +
+  '- Mac: brew install graphicsmagick\n' +
+  '- Ubuntu: sudo apt-get install graphicsmagick\n' +
+  '- Windows: Download from http://www.graphicsmagick.org/download.html';
+
+const MAGICK_INSTRUCTIONS =
+  'Installation instructions:\n' +
+  '- Mac: brew install imagemagick\n' +
+  '- Ubuntu: sudo apt-get install imagemagick\n' +
+  '- Windows: Download from https://imagemagick.org/script/download.php';
+
+const WOLFRAM_INSTRUCTIONS =
+  'Installation instructions:\n' +
+  '- Mac: brew install wolfram-engine\n' +
+  '- Ubuntu: sudo apt-get install wolfram-engine\n' +
+  '- Windows: Download from https://www.wolfram.com/engine/';
+
 // All tool configurations in one place
 const TOOL_CONFIGS: Record<string, ToolConfig> = {
   // ImageMagick tools
   magick: {
     errorMessage:
       'ImageMagick is not installed. Please install ImageMagick to use PDF to PNG conversion.\n' +
-      'Installation instructions:\n' +
-      '- Mac: brew install imagemagick\n' +
-      '- Ubuntu: sudo apt-get install imagemagick\n' +
-      '- Windows: Download from https://imagemagick.org/script/download.php',
+      MAGICK_INSTRUCTIONS,
   },
 
   // GraphicsMagick
@@ -58,17 +73,15 @@ const TOOL_CONFIGS: Record<string, ToolConfig> = {
     command: 'gm version',
     errorMessage:
       'GraphicsMagick is not installed. Please install GraphicsMagick to use PDF to PNG conversion.\n' +
-      'Installation instructions:\n' +
-      '- Mac: brew install graphicsmagick\n' +
-      '- Ubuntu: sudo apt-get install graphicsmagick\n' +
-      '- Windows: Download from http://www.graphicsmagick.org/download.html',
+      GM_INSTRUCTIONS,
   },
 
   // Wolfram tools
   wolframscript: {
     command: 'wolframscript -version',
     errorMessage:
-      'Mathematica/wolframscript is not installed or not in your PATH.',
+      'Mathematica/wolframscript is not installed or not in your PATH.\n' +
+      WOLFRAM_INSTRUCTIONS,
   },
 
   // LaTeX tools
