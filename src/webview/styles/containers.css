@@ -5,8 +5,8 @@
 
 /* File selection group */
 .file-selection-group {
-  background-color: var(--dropdown-background);
-  border: 1px solid var(--dropdown-border);
+  background-color: var(--background-color);
+  border: 1px solid var(--vscode-widget-border, var(--dropdown-border));
   border-radius: var(--border-radius);
   padding: var(--spacing-medium);
   margin-bottom: var(--spacing-large);
@@ -17,11 +17,18 @@
 .latexdiffs-section {
   margin-top: auto;
   padding-top: var(--spacing-large);
-  background-color: var(--dropdown-background);
-  border: 1px solid var(--dropdown-border);
+  background-color: transparent;
+  border: none;
+  padding: 0;
+  margin-bottom: var(--spacing-large);
+}
+
+/* Only add background when expanded */
+.latexdiffs-section:has(#latexdiffsContent[style*='block']) {
+  background-color: var(--background-color);
+  border: 1px solid var(--vscode-widget-border, var(--dropdown-border));
   border-radius: var(--border-radius);
   padding: var(--spacing-medium);
-  margin-bottom: var(--spacing-large);
 }
 
 /* Ensure all button sizes are consistent */
@@ -46,8 +53,8 @@
 }
 
 .multiple-files-list {
-  background-color: var(--dropdown-background);
-  border: 1px solid var(--dropdown-border);
+  background-color: var(--background-color);
+  border: 1px solid var(--vscode-widget-border, var(--dropdown-border));
   border-radius: var(--border-radius);
   padding: var(--spacing-small);
   font-size: var(--font-size);

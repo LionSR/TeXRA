@@ -13,7 +13,7 @@
   border-left: var(--border-thin) solid var(--vscode-panel-border);
   height: 100%;
   overflow: hidden;
-  background-color: var(--vscode-sideBar-background);
+  background-color: var(--background-color);
 }
 
 .tabs-content {
@@ -24,7 +24,6 @@
 
 .clear-all-container {
   flex-shrink: 0;
-  background-color: var(--vscode-sideBar-background);
   border-top: var(--border-thin) solid var(--vscode-panel-border);
   padding: var(--spacing-small);
 }

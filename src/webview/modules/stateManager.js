@@ -53,6 +53,13 @@ export function setDefaultState() {
     }
   });
 
+  const latexdiffsContent = safeGetElementById('latexdiffsContent');
+  const toggleLatexdiffs = safeGetElementById('toggleLatexdiffs');
+  if (latexdiffsContent && toggleLatexdiffs) {
+    latexdiffsContent.style.display = 'none';
+    toggleLatexdiffs.innerHTML = '<i class="codicon codicon-chevron-down"></i>';
+  }
+
   saveState();
 }
 
@@ -142,6 +149,16 @@ export function restoreState() {
         toggleOutputNameOverrideDiv.innerHTML =
           '<i class="codicon codicon-chevron-right"></i>';
     }
+
+    const latexdiffsContent = safeGetElementById('latexdiffsContent');
+    const toggleLatexdiffs = safeGetElementById('toggleLatexdiffs');
+    if (latexdiffsContent && toggleLatexdiffs) {
+      const visible = previousState.latexdiffsVisible ?? false;
+      latexdiffsContent.style.display = visible ? 'block' : 'none';
+      toggleLatexdiffs.innerHTML = visible
+        ? '<i class="codicon codicon-chevron-up"></i>'
+        : '<i class="codicon codicon-chevron-down"></i>';
+    }
   } else {
     // If there's no previous state, set to default
     setDefaultState();
@@ -153,6 +170,8 @@ export function restoreState() {
 
 export function saveState() {
   const state = {
+    latexdiffsVisible:
+      safeGetElementById('latexdiffsContent')?.style.display === 'block',
     outputNameOverrideVisible:
       safeGetElementById('outputNameOverride')?.style.display ===
       'inline-block',
