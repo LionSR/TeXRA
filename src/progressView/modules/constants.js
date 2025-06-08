@@ -43,6 +43,7 @@ export const COMMANDS = {
   ACCEPT_FILE: 'acceptFile',
   MERGE_FILE: 'mergeFile',
   LATEXDIFF_FILE: 'latexdiffFile',
+  WEBVIEW_READY: 'webviewReady',
 };
 
 export const TOOLBAR_BUTTONS = [
