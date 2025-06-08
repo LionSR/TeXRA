@@ -584,7 +584,8 @@ export function generateArrowRelationShortcuts(arrowMap: {
   const patterns: { [key: string]: string } = {};
 
   for (const [arrow, shortcut] of Object.entries(arrowMap)) {
-    patterns[`\\${arrow}`] = `\\${shortcut}`;
+    patterns[`\\${arrow} `] = `\\${shortcut} `;
+    patterns[`\\${arrow}\\`] = `\\${shortcut}\\`;
   }
 
   return patterns;
