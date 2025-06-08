@@ -307,7 +307,7 @@ export function formatAndLogContent(
     .replace(/    /gm, '  '); // Replace 4 spaces with 2 spaces
   // .replace(/ +$/gm, ''); // Remove trailing spaces only
 
-  agentLogger.info(formattedContent, groupId);
+  // agentLogger.info(formattedContent, groupId); // for debugging
 
   // Log the formatted content
   agentLogger.info(`${contentType} content: ${formattedContent}`, groupId);
