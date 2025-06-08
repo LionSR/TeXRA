@@ -1,7 +1,3 @@
-// Standard library imports
-import * as fs from 'fs';
-import * as path from 'path';
-
 // Third-party imports
 import * as vscode from 'vscode';
 

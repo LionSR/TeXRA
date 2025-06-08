@@ -3,49 +3,15 @@ import * as vscode from 'vscode';
 
 // Local imports
 import { executeCommand } from '../utils/execUtils';
+import { checkToolInstalled } from '../utils/toolUtils';
 
-// Constants for wolframscript configuration
-const WOLFRAM_SCRIPT_CONFIG = {
-  command: 'wolframscript -version',
-  errorMessage:
-    'Mathematica/wolframscript is not installed or not in your PATH.',
-};
+// Wolfram configuration is now in toolUtils.ts
 
 // Interface for execution result
 export interface WolframScriptResult {
   success: boolean;
   output: string | null;
   error: string | null;
-}
-
-/**
- * Check if wolframscript is installed and available
- * @param showError Whether to show an error message to the user if not installed
- * @returns A promise that resolves to a boolean indicating if the tool is installed
- */
-export async function checkWolframScriptInstalled(
-  showError: boolean = true,
-): Promise<boolean> {
-  try {
-    const result = await executeCommand(WOLFRAM_SCRIPT_CONFIG.command, {
-      truncate: false,
-      channel: 'WolframTool',
-    });
-
-    if (!result.success) {
-      if (showError) {
-        vscode.window.showErrorMessage(WOLFRAM_SCRIPT_CONFIG.errorMessage);
-      }
-      return false;
-    }
-
-    return true;
-  } catch (err) {
-    if (showError) {
-      vscode.window.showErrorMessage(WOLFRAM_SCRIPT_CONFIG.errorMessage);
-    }
-    return false;
-  }
 }
 
 /**
@@ -62,7 +28,8 @@ export async function executeWolframCode(
   } = {},
 ): Promise<WolframScriptResult> {
   // Check if wolframscript is installed before attempting to run code
-  const isInstalled = await checkWolframScriptInstalled(
+  const isInstalled = await checkToolInstalled(
+    'wolframscript',
     options.showErrorsToUser,
   );
   if (!isInstalled) {
@@ -120,7 +87,8 @@ export async function executeWolframScriptFile(
   } = {},
 ): Promise<WolframScriptResult> {
   // Check if wolframscript is installed before attempting to run the script
-  const isInstalled = await checkWolframScriptInstalled(
+  const isInstalled = await checkToolInstalled(
+    'wolframscript',
     options.showErrorsToUser,
   );
   if (!isInstalled) {
@@ -167,7 +135,6 @@ export async function executeWolframScriptFile(
 // directly when verification is needed.
 
 export default {
-  checkWolframScriptInstalled,
   executeWolframCode,
   executeWolframScriptFile,
 };
