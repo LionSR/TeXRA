@@ -3,10 +3,10 @@ import * as path from 'path';
 
 // local import
 import {
-  checkWolframScriptInstalled,
   executeWolframCode,
   executeWolframScriptFile,
 } from '../WolframTool/wolframScriptUtils';
+import { checkToolInstalled } from '../utils/toolUtils';
 import { MAX_PREVIEW_LENGTH } from '../utils/constants';
 
 export const wolframScriptCommands = {
@@ -23,7 +23,7 @@ export function registerWolframScriptCommands(
     wolframScriptCommands.testWolframScript,
     async () => {
       try {
-        const isInstalled = await checkWolframScriptInstalled(false);
+        const isInstalled = await checkToolInstalled('wolframscript', false);
 
         if (isInstalled) {
           vscode.window.showInformationMessage(
