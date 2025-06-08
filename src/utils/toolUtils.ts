@@ -127,10 +127,13 @@ export async function checkToolInstalled(
     }
 
     // Generate default command if not specified
-    const command = config.command || (toolName ? `${toolName} --version` : null);
-    
+    const command =
+      config.command || (toolName ? `${toolName} --version` : null);
+
     if (!command) {
-      throw new Error('No command specified and tool name could not be determined');
+      throw new Error(
+        'No command specified and tool name could not be determined',
+      );
     }
 
     let isInstalled = false;
@@ -152,8 +155,12 @@ export async function checkToolInstalled(
         const fallback = findToolInCommonPaths(toolName);
         if (fallback) {
           const spaceIndex = cmd.indexOf(' ');
-          const originalArgs = spaceIndex > -1 ? cmd.substring(spaceIndex + 1) : '';
-          result = spawn.sync(originalArgs ? `${fallback} ${originalArgs}` : fallback, spawnOptions);
+          const originalArgs =
+            spaceIndex > -1 ? cmd.substring(spaceIndex + 1) : '';
+          result = spawn.sync(
+            originalArgs ? `${fallback} ${originalArgs}` : fallback,
+            spawnOptions,
+          );
           if (result.status === 0) {
             isInstalled = true;
             break;
@@ -168,8 +175,12 @@ export async function checkToolInstalled(
         const fallback = findToolInCommonPaths(cmdToolName);
         if (fallback) {
           const spaceIndex = command.indexOf(' ');
-          const originalArgs = spaceIndex > -1 ? command.substring(spaceIndex + 1) : '';
-          result = spawn.sync(originalArgs ? `${fallback} ${originalArgs}` : fallback, spawnOptions);
+          const originalArgs =
+            spaceIndex > -1 ? command.substring(spaceIndex + 1) : '';
+          result = spawn.sync(
+            originalArgs ? `${fallback} ${originalArgs}` : fallback,
+            spawnOptions,
+          );
           isInstalled = result.status === 0;
         }
       }
