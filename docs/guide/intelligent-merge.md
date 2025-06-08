@@ -12,7 +12,7 @@ This generated _full_ document can then be cleanly compared against your origina
 
 ## The Merge Workflow
 
-Access the merge functionality via the "LaTeXdiffs" section (<i class="codicon codicon-source-control"></i> LaTeXDiffs) in the main TeXRA interface:
+Access the merge functionality via the "LaTeXdiffs" section (<i class="codicon codicon-chevron-down"></i> LaTeXDiffs) in the main TeXRA interface:
 
 1.  **Select Base File**: Choose the original document you want to merge changes _into_ using the "Base File" dropdown (<i class="codicon codicon-file"></i> Base).
 2.  **Select Edited File**: Choose the document containing the suggested changes using the "Edited File" dropdown (<i class="codicon codicon-edit"></i> Edited).

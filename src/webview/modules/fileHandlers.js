@@ -353,3 +353,43 @@ export function initializeOutputContainer() {
       : '<i class="codicon codicon-chevron-down"></i>';
   }
 }
+
+export function initializeLatexdiffsSection() {
+  const container = safeGetElementById('latexdiffsContent');
+  const toggleIcon = safeGetElementById('toggleLatexdiffs');
+
+  if (container && toggleIcon) {
+    const state = getWebviewState();
+    const shouldShow = state && state.latexdiffsVisible;
+
+    container.style.display = shouldShow ? 'block' : 'none';
+
+    // Update the icon class instead of replacing innerHTML
+    const iconElement = toggleIcon.querySelector('i');
+    if (iconElement) {
+      iconElement.className = shouldShow
+        ? 'codicon codicon-chevron-up'
+        : 'codicon codicon-chevron-down';
+    }
+  }
+}
+
+export function toggleLatexdiffs() {
+  const container = safeGetElementById('latexdiffsContent');
+  const toggleIcon = safeGetElementById('toggleLatexdiffs');
+  if (!container || !toggleIcon) return;
+
+  const isVisible = container.style.display !== 'none';
+  container.style.display = isVisible ? 'none' : 'block';
+
+  // Update the icon class instead of replacing innerHTML to preserve the title
+  const iconElement = toggleIcon.querySelector('i');
+  if (iconElement) {
+    iconElement.className = isVisible
+      ? 'codicon codicon-chevron-down'
+      : 'codicon codicon-chevron-up';
+  }
+
+  updateWebviewState({ latexdiffsVisible: !isVisible });
+  saveState();
+}
