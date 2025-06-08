@@ -50,7 +50,7 @@ export class CoTAgent extends BaseReflectionAgent {
       // Start a main output processing group if none provided
       if (!processGroupId) {
         outputProcessGroupId = await this.logger.startGroup(
-          `OutputProcessing-Round${currRound}`,
+          `OutputHandler`,
           undefined,
           this.logger.getActiveGroupId(),
         );
