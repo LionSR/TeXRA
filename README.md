@@ -69,7 +69,13 @@ Optionally, you can also install GraphicsMagick/ImageMagick & Ghostscript for th
 
 See the [Installation Guide](https://texra.ai/guide/installation.html) for setup details if needed.
 
-After installing these dependencies, ensure they are accessible from the command line by adding them to your system's PATH environment variable if necessary.
+After installing these dependencies, ensure they are accessible from the command
+line by adding them to your system's PATH if necessary. When VS Code is started
+from a system menu rather than a terminal, it may not inherit your full shell
+environment. TeXRA searches common locations for tools, including Homebrew,
+Linuxbrew, TeX Live and MiKTeX bins. Newer TeX Live installations are
+preferred when multiple versions are found. Launching VS Code from a configured
+terminal is still the most reliable approach.
 
 ## Basic Usage
 
