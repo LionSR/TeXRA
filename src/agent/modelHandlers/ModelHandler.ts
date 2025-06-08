@@ -13,8 +13,8 @@ import {
   getBase64EncodedMedia,
   countPdfPages,
   processPdf2Png,
-  checkImageMagickInstalled,
 } from '../../utils/imgUtils';
+import { checkMultipleToolsInstalled } from '../../utils/toolUtils';
 import { getConfig } from '../../utils/configUtils';
 import {
   getApiKey as getSecretApiKey,
@@ -285,18 +285,21 @@ export abstract class ModelHandler {
       '.gif': 'image/gif',
       '.pdf': await (async () => {
         // Check if ImageMagick is installed
-        const isImageMagickInstalled = await checkImageMagickInstalled();
+        const isImageMagickInstalled = await checkMultipleToolsInstalled(
+          ['imagemagick', 'gm'],
+          false,
+        );
         const pageCount = await countPdfPages(mediaFile);
 
         // Use native PDF in these cases:
         // 1. Multi-page PDF and model supports native PDFs, or
         // 2. ImageMagick not installed but model supports native PDFs
         if (
-          (pageCount > 1 || !isImageMagickInstalled) &&
+          (pageCount > 1 || !isImageMagickInstalled.some(Boolean)) &&
           this.capabilities.supportsNativePdf
         ) {
           this.logger.debug(
-            `Using native PDF for ${mediaFile}. ImageMagick installed: ${isImageMagickInstalled}, Page count: ${pageCount}`,
+            `Using native PDF for ${mediaFile}. ImageMagick installed: ${isImageMagickInstalled.some(Boolean)}, Page count: ${pageCount}`,
           );
           return 'application/pdf';
         }

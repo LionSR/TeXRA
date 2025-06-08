@@ -1,5 +1,5 @@
 // Standard library imports
-import { exec } from 'child_process';
+import spawn from 'cross-spawn';
 
 // Third-party imports
 import * as vscode from 'vscode';
@@ -18,15 +18,10 @@ export function registerGitCommands(context: vscode.ExtensionContext) {
 async function isGitRepository(): Promise<boolean> {
   const workspacePath = getWorkspacePath();
   if (workspacePath) {
-    return new Promise<boolean>((resolve) => {
-      exec(
-        'git rev-parse --is-inside-work-tree',
-        { cwd: workspacePath },
-        (error) => {
-          resolve(!error);
-        },
-      );
+    const result = spawn.sync('git', ['rev-parse', '--is-inside-work-tree'], {
+      cwd: workspacePath,
     });
+    return result.status === 0;
   }
   return false;
 }
@@ -40,20 +35,18 @@ async function getRecentCommits(): Promise<string[] | null> {
   const workspacePath = getWorkspacePath();
   if (workspacePath) {
     const numberOfCommits = getConfig('git.numberOfCommitsToShow', 20);
-    return new Promise<string[]>((resolve, reject) => {
-      exec(
-        `git log -n ${numberOfCommits} --pretty=format:"%h: %s (%cr)"`,
-        { cwd: workspacePath },
-        (error, stdout, stderr) => {
-          if (error) {
-            reject(stderr);
-          } else {
-            const commits = stdout.split('\n').map((line) => line.trim());
-            resolve(commits);
-          }
-        },
-      );
-    });
+    const result = spawn.sync(
+      'git',
+      ['log', '-n', String(numberOfCommits), '--pretty=format:%h: %s (%cr)'],
+      { cwd: workspacePath },
+    );
+    if (result.status !== 0) {
+      return [];
+    }
+    return result.stdout
+      .toString()
+      .split('\n')
+      .map((line) => line.trim());
   }
   return [];
 }
