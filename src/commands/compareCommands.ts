@@ -1,6 +1,5 @@
 // Standard library imports
 import * as path from 'path';
-import * as fs from 'fs/promises';
 
 // Third-party imports
 import * as vscode from 'vscode';
@@ -12,6 +11,8 @@ import * as logger from '../logger/logUtils';
 import {
   getFullPathFromWorkspace,
   fileExists,
+  readFile,
+  writeFile,
 } from '../utils/workspaceFileUtils';
 import { registerDiffRefresh } from '../utils/diffViewUtils';
 import { DIFF_REGISTRATION_DELAY_MS } from '../utils/constants';
@@ -141,12 +142,8 @@ async function handleAcceptEdited(
       return;
     }
 
-    // Get full paths
-    const baseFilePath = getFullPathFromWorkspace(fileToUse);
-    const editedFilePath = getFullPathFromWorkspace(editedFile);
-
-    // Read content from edited file
-    const editedContent = await fs.readFile(editedFilePath, 'utf8');
+    // Read content from edited file using workspace utilities
+    const editedContent = await readFile(editedFile);
 
     // Confirm with user
     const baseFileName = path.basename(fileToUse);
@@ -163,8 +160,8 @@ async function handleAcceptEdited(
       return;
     }
 
-    // Write content to base file
-    await fs.writeFile(baseFilePath, editedContent);
+    // Write content to base file using workspace utilities
+    await writeFile(fileToUse, editedContent);
 
     vscode.window.showInformationMessage(
       `Successfully replaced '${baseFileName}' with content from '${editedFileName}'`,
