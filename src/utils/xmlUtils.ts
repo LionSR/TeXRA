@@ -293,7 +293,9 @@ export function formatAndLogContent(
     .replace(/<(\w+)>/g, '## $1\n\n')
     .replace(/<\/\w+>/g, '')
     // Escape LaTeX references but preserve the content
-    .replace(/\\ref\{([^}]+)\}/g, '\\\\ref{$1}');
+    .replace(/\\ref\{([^}]+)\}/g, '\\\\ref{$1}')
+    // extra line breaks
+    .replace(/\n\n\n\n/g, '\n\n');
 
   // \\item/enumerate: fot this is tricky because it also takes a line that should be get rid of
 
