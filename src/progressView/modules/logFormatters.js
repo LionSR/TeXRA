@@ -98,10 +98,9 @@ function formatSpecialContent(message, content, contentType) {
       .toLowerCase()
       .replace(/\s+/g, '-')
       .replace(':', '');
-    return message.replace(
-      new RegExp(`<span class="message-info">${contentType}.*?</span>`, 's'),
-      `<div class="special-content ${cssClass}">${parsedMarkdown}</div>`,
-    );
+
+    // Always return just the special content box, hiding the log line wrapper entirely
+    return `<div class="special-content ${cssClass}">${parsedMarkdown}</div>`;
   } catch (e) {
     console.error('Error parsing markdown:', e);
     // Fallback to original content
