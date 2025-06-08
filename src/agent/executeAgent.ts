@@ -94,6 +94,7 @@ export async function getAgentPath(
               ),
           },
         ],
+        false,
       );
 
       const errorMsg = `Could not find yaml file for agent: ${agentName}`;
@@ -322,6 +323,7 @@ async function executeAgentWithLogging<T extends IAgent>(
             callback: () => vscode.commands.executeCommand('texra.setApiKey'),
           },
         ],
+        false,
       );
     } else {
       // Show regular error message for other errors
@@ -368,6 +370,7 @@ export async function executeAgent(
                 vscode.commands.executeCommand('texra.openDoc', 'models'),
             },
           ],
+          false,
         );
         throw new Error(`Model ${modelName} not found in MODEL_CONFIGS`);
       }
