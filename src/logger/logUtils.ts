@@ -133,7 +133,8 @@ class VSCodeTransport extends Transport {
       level === 'info' && message.includes('Scratchpad content:');
 
     // Check if this is a thinking message
-    const isThinking = level === 'info' && message.includes('a');
+    const isThinking =
+      level === 'info' && message.includes('Thinking content:');
 
     // Add a data attribute for scratchpad messages to help with styling and processing
     const scratchpadAttr = isScratchpad ? 'data-is-scratchpad="true"' : '';
