@@ -1,5 +1,4 @@
 // Standard library imports
-import spawn from 'cross-spawn';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -17,6 +16,7 @@ import {
   fileExists,
   getFullPathFromWorkspace,
 } from './workspaceFileUtils';
+import { checkMultipleToolsInstalled } from './toolUtils';
 
 const CHANNEL = 'ImgUtils';
 logger.initialize(CHANNEL);
@@ -24,14 +24,7 @@ logger.initialize(CHANNEL);
 // Define the temporary directory path
 const TEMP_DIR = path.join(os.tmpdir(), 'texra-pdf-conversion');
 
-export async function checkImageMagickInstalled(): Promise<boolean> {
-  const gmResult = spawn.sync('gm', ['version']);
-  if (gmResult.status === 0) {
-    return true;
-  }
-  const convertResult = spawn.sync('convert', ['-version']);
-  return convertResult.status === 0;
-}
+// ImageMagick configuration is now in toolUtils.ts
 
 /**
  * Clean up temporary files with a given base name pattern
@@ -144,15 +137,12 @@ export async function singlePagePdf2Png(
     );
 
     // Check for GraphicsMagick/ImageMagick installation
-    const isImageMagickInstalled = await checkImageMagickInstalled();
+    const isImageMagickInstalled = await checkMultipleToolsInstalled(
+      ['imagemagick', 'gm'],
+      false,
+    );
     if (!isImageMagickInstalled) {
-      throw new Error(
-        'GraphicsMagick/ImageMagick is not installed. Please install GraphicsMagick or ImageMagick to use PDF to PNG conversion.\n' +
-          'Installation instructions:\n' +
-          '- Mac: brew install graphicsmagick\n' +
-          '- Ubuntu: sudo apt-get install graphicsmagick\n' +
-          '- Windows: Download from http://www.graphicsmagick.org/download.html',
-      );
+      throw new Error('GraphicsMagick/ImageMagick is not installed.');
     }
 
     // Verify file exists

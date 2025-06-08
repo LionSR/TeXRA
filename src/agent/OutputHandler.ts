@@ -27,7 +27,8 @@ import {
   runLatexdiffBetweenRounds,
   LaTeXdiffResult,
 } from '../latex/latexdiff';
-import { checkToolInstalled, compileLatex2Pdf } from '../latex/texTools';
+import { compileLatex2Pdf } from '../latex/texTools';
+import { checkToolInstalled } from '../utils/toolUtils';
 import { runLatexFormatter } from '../latex/texFormatter';
 
 // Local imports - agent components
