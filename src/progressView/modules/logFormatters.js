@@ -37,10 +37,10 @@ export function formatLogEntry(logMessage) {
   ) {
     // Extract the actual thinking content
     const thinkingMatch = message.match(
-      /<span class="message-info">(Thinking content:)?(.*?)<\/span>/s,
+      /<span class="message-info">Thinking content:\s*(.*?)<\/span>/s,
     );
-    if (thinkingMatch && thinkingMatch[2]) {
-      const content = thinkingMatch[2];
+    if (thinkingMatch && thinkingMatch[1]) {
+      const content = thinkingMatch[1];
       return formatSpecialContent(message, content, 'Thinking content:');
     }
   }
@@ -52,10 +52,10 @@ export function formatLogEntry(logMessage) {
   ) {
     // Extract the actual scratchpad content
     const scratchpadMatch = message.match(
-      /<span class="message-info">(Scratchpad content:)?(.*?)<\/span>/s,
+      /<span class="message-info">Scratchpad content:\s*(.*?)<\/span>/s,
     );
-    if (scratchpadMatch && scratchpadMatch[2]) {
-      const content = scratchpadMatch[2];
+    if (scratchpadMatch && scratchpadMatch[1]) {
+      const content = scratchpadMatch[1];
       return formatSpecialContent(message, content, 'Scratchpad content:');
     }
   }
@@ -72,6 +72,14 @@ export function formatLogEntry(logMessage) {
  */
 function formatSpecialContent(message, content, contentType) {
   try {
+    // Unescape HTML entities that were escaped during logging
+    content = content
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&#039;/g, "'")
+      .replace(/&amp;/g, '&');
+
     // Pre-process LaTeX references to protect them from markdown parsing
     content = content.replace(/\\\\ref\{([^}]+)\}/g, '@@LATEX-REF:$1@@');
 
