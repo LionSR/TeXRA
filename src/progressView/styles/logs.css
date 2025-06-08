@@ -9,7 +9,6 @@
   padding: var(--spacing-tiny) var(--spacing-medium);
   min-width: 0;
   min-height: 0;
-  background-color: var(--vscode-editor-background);
   font-family: var(--font-family);
   font-size: var(--font-size);
 }
@@ -74,7 +73,6 @@
   align-items: center;
   gap: var(--spacing-medium);
   color: var(--vscode-descriptionForeground);
-  background-color: var(--vscode-sideBar-background);
   border-bottom: 1px solid var(--vscode-panel-border);
 }
 
@@ -127,7 +125,7 @@
   top: 100%;
   transform: translateX(-50%);
   padding: var(--spacing-small) var(--spacing-medium);
-  background: var(--vscode-editor-background);
+  background: var(--background-color);
   border: var(--border-thin) solid var(--vscode-panel-border);
   border-radius: var(--border-radius-large);
   font-size: var(--font-size-sm);
@@ -167,17 +165,38 @@
 .files-container {
   padding: var(--spacing-small);
   border-top: 1px solid var(--vscode-panel-border);
-  background-color: var(--vscode-sideBar-background);
   font-size: var(--vscode-editor-font-size);
   overflow-y: auto;
   max-height: var(--height-large);
 }
 
+/* Files usage header */
+.files-usage-header {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-medium);
+  padding: var(--spacing-small) var(--spacing-small);
+  margin-bottom: var(--spacing-medium);
+  background-color: var(--vscode-sideBarSectionHeader-background);
+  border-radius: var(--border-radius-small);
+  font-size: var(--font-size-sm);
+}
+
+.files-usage-label {
+  font-weight: 600;
+  color: var(--vscode-foreground);
+}
+
+.files-usage-stats {
+  color: var(--vscode-descriptionForeground);
+  opacity: var(--opacity-subtle);
+}
+
 .file-item {
   display: flex;
   align-items: center;
-  padding: 1px 0;
   gap: var(--spacing-tiny);
+  padding: 1px 0;
   margin-bottom: 0;
 }
 
@@ -189,15 +208,7 @@
   min-width: 200px;
 }
 
-.file-path.clickable {
-  cursor: pointer;
-  color: var(--vscode-textLink-foreground);
-}
-
-.file-path.clickable:hover {
-  color: var(--vscode-textLink-activeForeground);
-  text-decoration: underline;
-}
+/* File path uses common clickable-link styles */
 
 .file-stats {
   white-space: nowrap;
@@ -217,9 +228,10 @@
 }
 
 .file-actions {
-  flex-wrap: nowrap;
-  flex-shrink: 0;
+  display: flex;
   gap: var(--spacing-tiny);
+  flex-shrink: 0;
+  flex-wrap: nowrap;
 }
 
 /* Remove custom button styling to use common.css styles instead */
