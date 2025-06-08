@@ -42,9 +42,20 @@ const TEXCOUNT_INSTRUCTIONS =
 const TOOL_CONFIGS: Record<string, ToolConfig> = {
   // ImageMagick tools
   imagemagick: {
-    command: ['gm version', 'convert -version'],
+    command: 'convert -version',
     errorMessage:
-      'GraphicsMagick/ImageMagick is not installed. Please install GraphicsMagick or ImageMagick to use PDF to PNG conversion.\n' +
+      'ImageMagick is not installed. Please install ImageMagick to use PDF to PNG conversion.\n' +
+      'Installation instructions:\n' +
+      '- Mac: brew install imagemagick\n' +
+      '- Ubuntu: sudo apt-get install imagemagick\n' +
+      '- Windows: Download from https://imagemagick.org/script/download.php',
+  },
+
+  // GraphicsMagick
+  gm: {
+    command: 'gm version',
+    errorMessage:
+      'GraphicsMagick is not installed. Please install GraphicsMagick to use PDF to PNG conversion.\n' +
       'Installation instructions:\n' +
       '- Mac: brew install graphicsmagick\n' +
       '- Ubuntu: sudo apt-get install graphicsmagick\n' +
