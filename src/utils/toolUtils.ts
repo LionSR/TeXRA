@@ -149,7 +149,8 @@ export async function checkToolInstalled(
         const toolName = cmd.split(' ')[0];
         const fallback = findToolInCommonPaths(toolName);
         if (fallback) {
-          result = spawn.sync(`${fallback} --version`, spawnOptions);
+          const originalArgs = cmd.substring(cmd.indexOf(' ') + 1);
+          result = spawn.sync(`${fallback} ${originalArgs}`, spawnOptions);
           if (result.status === 0) {
             isInstalled = true;
             break;
@@ -163,7 +164,8 @@ export async function checkToolInstalled(
         const toolName = config.command.split(' ')[0];
         const fallback = findToolInCommonPaths(toolName);
         if (fallback) {
-          result = spawn.sync(`${fallback} --version`, spawnOptions);
+          const originalArgs = config.command.substring(config.command.indexOf(' ') + 1);
+          result = spawn.sync(`${fallback} ${originalArgs}`, spawnOptions);
           isInstalled = result.status === 0;
         }
       }
