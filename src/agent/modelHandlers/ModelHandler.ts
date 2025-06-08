@@ -295,11 +295,11 @@ export abstract class ModelHandler {
         // 1. Multi-page PDF and model supports native PDFs, or
         // 2. ImageMagick not installed but model supports native PDFs
         if (
-          (pageCount > 1 || !isImageMagickInstalled) &&
+          (pageCount > 1 || !isImageMagickInstalled.some(Boolean)) &&
           this.capabilities.supportsNativePdf
         ) {
           this.logger.debug(
-            `Using native PDF for ${mediaFile}. ImageMagick installed: ${isImageMagickInstalled}, Page count: ${pageCount}`,
+            `Using native PDF for ${mediaFile}. ImageMagick installed: ${isImageMagickInstalled.some(Boolean)}, Page count: ${pageCount}`,
           );
           return 'application/pdf';
         }
