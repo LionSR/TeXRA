@@ -17,7 +17,7 @@ Unlike standard text diff tools (which can look like hieroglyphics when comparin
 
 ## The LaTeXdiffs Section
 
-The LaTeX diff functionality is accessible through the "LaTeXdiffs" section (<i class="codicon codicon-source-control"></i> LaTeXDiffs) in the TeXRA interface:
+The LaTeX diff functionality is accessible through the "LaTeXdiffs" section (<i class="codicon codicon-chevron-down"></i> LaTeXDiffs) in the TeXRA interface:
 
 <!-- ![LaTeXdiffs Section](/images/latexdiffs-section.png) -->
 
