@@ -79,11 +79,6 @@ export async function getAgentPath(
     });
 
     if (builtInMatches.length === 0) {
-      const errorMessage = `Agent "${agentName}" not found`;
-      vscode.window.showErrorMessage(
-        `${errorMessage}. TeXRA couldn't find this agent in either the built-in or custom directories.`,
-      );
-
       const configureButton = 'Open Settings';
       await showInstructionWithSuppress(
         context,
