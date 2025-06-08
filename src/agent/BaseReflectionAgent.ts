@@ -718,11 +718,22 @@ export abstract class BaseReflectionAgent implements IAgent {
       this.outputHandler.outputFiles[currRound] &&
       this.outputHandler.outputFiles[currRound].length > 0
     ) {
-      // Pass the process group ID to maintain proper nesting in the log hierarchy
-      await this.outputHandler.handleLatexdiffofOutput(
-        currRound,
-        processGroupId,
+      const existingBase = await Promise.all(
+        this.baseFiles.map(async (f) => await fileExists(f)),
       );
+
+      if (existingBase.some((e) => e)) {
+        // Pass the process group ID to maintain proper nesting in the log hierarchy
+        await this.outputHandler.handleLatexdiffofOutput(
+          currRound,
+          processGroupId,
+        );
+      } else {
+        this.logger.debug(
+          `Skipping latexdiff for round ${currRound} - base files missing`,
+          processGroupId,
+        );
+      }
     }
 
     return this.outputHandler.outputFiles[currRound] || [];
