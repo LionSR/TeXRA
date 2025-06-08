@@ -363,9 +363,14 @@ export function initializeLatexdiffsSection() {
     const shouldShow = state && state.latexdiffsVisible;
 
     container.style.display = shouldShow ? 'block' : 'none';
-    toggleIcon.innerHTML = shouldShow
-      ? '<i class="codicon codicon-chevron-up"></i>'
-      : '<i class="codicon codicon-chevron-down"></i>';
+
+    // Update the icon class instead of replacing innerHTML
+    const iconElement = toggleIcon.querySelector('i');
+    if (iconElement) {
+      iconElement.className = shouldShow
+        ? 'codicon codicon-chevron-up'
+        : 'codicon codicon-chevron-down';
+    }
   }
 }
 
@@ -376,9 +381,14 @@ export function toggleLatexdiffs() {
 
   const isVisible = container.style.display !== 'none';
   container.style.display = isVisible ? 'none' : 'block';
-  toggleIcon.innerHTML = isVisible
-    ? '<i class="codicon codicon-chevron-down"></i>'
-    : '<i class="codicon codicon-chevron-up"></i>';
+
+  // Update the icon class instead of replacing innerHTML to preserve the title
+  const iconElement = toggleIcon.querySelector('i');
+  if (iconElement) {
+    iconElement.className = isVisible
+      ? 'codicon codicon-chevron-down'
+      : 'codicon codicon-chevron-up';
+  }
 
   updateWebviewState({ latexdiffsVisible: !isVisible });
   saveState();
