@@ -163,21 +163,22 @@ export async function configureLatexSettings() {
         vscode.ConfigurationTarget.Global,
       );
 
-      // Check if the workbench.auxiliaryActivityBar.location setting exists
-      const activityBarSetting = config.inspect(
-        'workbench.auxiliaryActivityBar.location',
-      );
-      if (activityBarSetting) {
-        // Setting exists, update it
-        await config.update(
-          'workbench.auxiliaryActivityBar.location',
-          'default',
-          vscode.ConfigurationTarget.Global,
-        );
-        logger.info(
-          'extension',
-          'Auxiliary activity bar location set to default',
-        );
+      const isWindsurf = vscode.env.appName?.toLowerCase().includes('windsurf');
+
+      if (!isWindsurf) {
+        const activityBarKey = 'workbench.activityBar.location';
+
+        // Check if the activity bar location setting exists
+        const activityBarSetting = config.inspect(activityBarKey);
+        if (activityBarSetting) {
+          // Setting exists, update it
+          await config.update(
+            activityBarKey,
+            'default',
+            vscode.ConfigurationTarget.Global,
+          );
+          logger.info('extension', 'Activity bar location set to default');
+        }
       }
 
       logger.info(
