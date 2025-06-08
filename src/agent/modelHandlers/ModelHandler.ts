@@ -286,7 +286,7 @@ export abstract class ModelHandler {
       '.pdf': await (async () => {
         // Check if ImageMagick is installed
         const isImageMagickInstalled = await checkMultipleToolsInstalled(
-          ['imagemagick', 'gm'],
+          ['magick', 'gm'],
           false,
         );
         const pageCount = await countPdfPages(mediaFile);
