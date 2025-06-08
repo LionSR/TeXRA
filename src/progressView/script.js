@@ -5,6 +5,8 @@ import {
   applyGroupToggleStates,
   renderToolbar,
 } from './modules/domHandlers.js';
+import { vscode } from '@common/vscodeApi.js';
+import { COMMANDS } from './modules/constants.js';
 
 // Initialize the state when the window loads
 initializeState();
@@ -20,4 +22,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Apply saved group toggle states to any groups already in the DOM
   applyGroupToggleStates();
+
+  // Notify extension that the webview is ready to receive messages
+  vscode.postMessage({ command: COMMANDS.WEBVIEW_READY });
 });

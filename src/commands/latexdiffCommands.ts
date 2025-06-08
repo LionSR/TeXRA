@@ -19,7 +19,7 @@ import {
   runLatexdiffForRound,
   runLatexdiffBetweenRounds,
 } from '../latex/latexdiff';
-import { checkToolInstalled } from '../latex/texTools';
+import { checkToolInstalled } from '../utils/toolUtils';
 
 // Local imports - housekeeping
 import {
