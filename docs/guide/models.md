@@ -44,6 +44,8 @@ Known for strong reasoning and creative capabilities.
 | `gpt41--` | Long-context vision, cheapest       | $             | Medium         | 1M tokens context, nano |
 | `gpt4o`   | Strong all-rounder, vision          | $$$           | Medium         | Good default choice     |
 | `gpt4ol`  | Latest `gpt4o`, potentially better  | $$$           | Medium         |                         |
+| `o3`      | Coding, tool calling                | $$$           | Medium         |                         |
+| `o3pro`   | Reliable answers, heavy compute     | $$$$          | Slow           | `o3-pro`                |
 | `o3-`     | Fast reasoning                      | $$$           | Fast           | `o3-mini`               |
 | `o1-`     | Fast reasoning (smaller `o1`)       | $$$           | Fast           | `o1-mini`               |
 

@@ -42,8 +42,8 @@ export const OPENAI_REASONING_MODELS: Record<string, ModelConfig> = {
     provider: ModelProvider.OPENAI,
     maxOutputTokens: 100000,
     contextWindow: 200000,
-    inputPrice: 10.0,
-    outputPrice: 40.0,
+    inputPrice: 2.0,
+    outputPrice: 8.0,
     capabilities: {
       ...OPENAI_REASONING_DEFAULT_CAPABILITIES,
       cacheDiscountFactor: 0.25,
@@ -64,6 +64,21 @@ export const OPENAI_REASONING_MODELS: Record<string, ModelConfig> = {
     capabilities: {
       ...OPENAI_REASONING_DEFAULT_CAPABILITIES,
       supportsVision: false,
+    } satisfies ModelCapabilities,
+    openRouterOnly: false,
+  },
+  o3pro: {
+    name: 'o3pro',
+    fullName: 'o3-pro-2025-06-10',
+    openrouterFullName: 'openai/o3-pro-2025-06-10',
+    provider: ModelProvider.OPENAI,
+    maxOutputTokens: 100000,
+    contextWindow: 200000,
+    inputPrice: 20.0,
+    outputPrice: 80.0,
+    capabilities: {
+      ...OPENAI_REASONING_DEFAULT_CAPABILITIES,
+      supportsVision: true,
     } satisfies ModelCapabilities,
     openRouterOnly: false,
   },
