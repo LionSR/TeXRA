@@ -70,7 +70,7 @@ export const OPENAI_REASONING_MODELS: Record<string, ModelConfig> = {
   o3pro: {
     name: 'o3pro',
     fullName: 'o3-pro-2025-06-10',
-    openrouterFullName: 'openai/o3-pro-2025-06-10',
+    openrouterFullName: 'openai/o3-pro',
     provider: ModelProvider.OPENAI,
     maxOutputTokens: 100000,
     contextWindow: 200000,
