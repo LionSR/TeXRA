@@ -22,6 +22,8 @@
 // Standard library imports
 import * as fs from 'fs';
 import * as path from 'path';
+// Global Buffer provided by Node; declare for TS if Node typings absent.
+declare const Buffer: any;
 
 // VS Code imports
 import * as vscode from 'vscode';
@@ -31,11 +33,6 @@ import * as logger from '../logger/logUtils';
 
 const CHANNEL = 'fsUtils';
 logger.initialize(CHANNEL);
-
-// Provide a minimal Buffer typing if Node type declarations are unavailable.
-// When @types/node is present, this augmentation is ignored (it merges safely).
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-interface Buffer {}
 
 /* ---------------------------------------------------------------------------
  * Workspace helpers
@@ -194,7 +191,7 @@ export async function fileExistsAndNonTrivial(relativePath: string): Promise<boo
   );
 }
 
-export function readFileBytesSync(relativePath: string): Buffer {
+export function readFileBytesSync(relativePath: string): any {
   const fullPath = getFullPathFromWorkspace(relativePath);
   return fs.readFileSync(fullPath);
 }
