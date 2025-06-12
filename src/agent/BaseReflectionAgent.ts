@@ -581,6 +581,13 @@ export abstract class BaseReflectionAgent implements IAgent {
     return prefill;
   }
 
+  // Helper function to consistently count lines in text
+  private countLines(text: string): number {
+    if (text.length === 0) return 0;
+    // Handle trailing newlines consistently: subtract 1 if text ends with newline
+    return text.endsWith('\n') ? text.split('\n').length - 1 : text.split('\n').length;
+  }
+
   private async computeDiffStats(
     baseFile: string | null,
     outputFile: string,
@@ -588,12 +595,9 @@ export abstract class BaseReflectionAgent implements IAgent {
     try {
       if (!baseFile) {
         const outContent = await readFile(outputFile);
-        // For new files, calculate lines correctly:
-        // - Empty file = 0 lines
-        // - Non-empty file = number of lines (handle trailing newlines properly)
-        const added = outContent.length === 0 ? 0 : 
-          outContent.endsWith('\n') ? outContent.split('\n').length - 1 : outContent.split('\n').length;
-        return { added, removed: 0 };
+        const added = this.countLines(outContent);
+        // For new files, only return added count (removed should be undefined for UI)
+        return { added };
       }
 
       const [baseContent, outContent] = await Promise.all([
@@ -608,9 +612,9 @@ export abstract class BaseReflectionAgent implements IAgent {
 
       for (const [op, text] of diffs) {
         if (op === 1) {
-          added += text.split(/\n/).length;
+          added += this.countLines(text);
         } else if (op === -1) {
-          removed += text.split(/\n/).length;
+          removed += this.countLines(text);
         }
       }
 
