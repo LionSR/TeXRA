@@ -18,6 +18,7 @@ import {
 
 import { TokenUsageStats } from '../types/UsageTypes';
 import { LogGroup } from '../types/LogTypes';
+import type { DiffStats } from '../types/DiffTypes';
 
 // @ts-ignore - Import JavaScript module
 import { STATUS, COMMANDS } from './modules/constants.js';
@@ -43,12 +44,10 @@ interface ColoredLogMessage {
 
 // Channels that should not be persisted in workspace storage
 
-interface OutputFileInfo {
+interface OutputFileInfo extends DiffStats {
   path: string;
   base?: string | null;
   prev?: string | null;
-  added?: number;
-  removed?: number;
 }
 
 export class ProgressViewProvider implements vscode.WebviewViewProvider {
