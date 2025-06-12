@@ -29,10 +29,14 @@ import * as vscode from 'vscode';
 // Local imports – log
 import * as logger from '../logger/logUtils';
 
-// Declare Node's global `Buffer` to satisfy the TS compiler when
-// the DOM lib is used without `@types/node` configured globally.
-// eslint-disable-next-line @typescript-eslint/consistent-type-imports
-declare const Buffer: any;
+// Declare minimal Buffer definition for environments where @types/node is not present
+interface _TexraBuffer extends Uint8Array {
+  toString(encoding?: string): string;
+}
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+declare const Buffer: {
+  from(data: Uint8Array | string, encoding?: string): _TexraBuffer;
+};
 
 const CHANNEL = 'fsUtils';
 logger.initialize(CHANNEL);
@@ -194,9 +198,9 @@ export async function fileExistsAndNonTrivial(relativePath: string): Promise<boo
   );
 }
 
-export function readFileBytesSync(relativePath: string): Buffer {
+export function readFileBytesSync(relativePath: string): _TexraBuffer {
   const fullPath = getFullPathFromWorkspace(relativePath);
-  return fs.readFileSync(fullPath);
+  return fs.readFileSync(fullPath) as unknown as _TexraBuffer;
 }
 
 /**
