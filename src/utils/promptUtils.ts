@@ -68,7 +68,9 @@ export function getListOfFiles(files: string[] | null | undefined): string {
       return '';
     }
     return files
-      .filter((f): f is string => f != null && f.trim() !== '')
+      .filter(
+        (f): f is string => f !== null && f !== undefined && f.trim() !== '',
+      )
       .join(', ');
   } catch (err) {
     logger.error(
@@ -95,7 +97,11 @@ export async function renderPrompt(
     for (const [key, value] of Object.entries(variables)) {
       if (value instanceof Promise) {
         resolvedVariables[key] = await value;
-      } else if (typeof value === 'object' && value != null) {
+      } else if (
+        typeof value === 'object' &&
+        value !== null &&
+        value !== undefined
+      ) {
         // Handle nested objects that might contain promises
         const resolved: { [key: string]: any } = {};
         for (const [nestedKey, nestedValue] of Object.entries(value)) {
