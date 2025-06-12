@@ -17,6 +17,7 @@ import {
 } from '../latex';
 import { ProgressViewProvider } from '../progressView/ProgressViewProvider';
 import { diff_match_patch } from 'diff-match-patch';
+import type { DiffStats } from '../types/DiffTypes';
 
 // Local imports - utilities
 import {
@@ -581,18 +582,25 @@ export abstract class BaseReflectionAgent implements IAgent {
   }
 
   private async computeDiffStats(
-    baseFile: string,
+    baseFile: string | null,
     outputFile: string,
-  ): Promise<{ added: number; removed: number }> {
+  ): Promise<DiffStats> {
     try {
+      if (!baseFile) {
+        const outContent = await readFile(outputFile);
+        return { added: outContent.split(/\n/).length };
+      }
+
       const [baseContent, outContent] = await Promise.all([
         readFile(baseFile),
         readFile(outputFile),
       ]);
+
       const dmp = new diff_match_patch();
       const diffs = dmp.diff_main(baseContent, outContent);
       let added = 0;
       let removed = 0;
+
       for (const [op, text] of diffs) {
         if (op === 1) {
           added += text.split(/\n/).length;
@@ -600,9 +608,10 @@ export abstract class BaseReflectionAgent implements IAgent {
           removed += text.split(/\n/).length;
         }
       }
+
       return { added, removed };
     } catch {
-      return { added: 0, removed: 0 };
+      return {};
     }
   }
 
@@ -673,10 +682,7 @@ export abstract class BaseReflectionAgent implements IAgent {
         const prevFile =
           Array.from(prevMap.entries()).find(([, out]) => out === file)?.[0] ||
           null;
-        let stats = { added: 0, removed: 0 };
-        if (baseFile) {
-          stats = await this.computeDiffStats(baseFile, file);
-        }
+        const stats = await this.computeDiffStats(baseFile, file);
         fileInfos.push({
           path: file,
           base: baseFile,
