@@ -32,6 +32,11 @@ import * as logger from '../logger/logUtils';
 const CHANNEL = 'fsUtils';
 logger.initialize(CHANNEL);
 
+// Provide a minimal Buffer typing if Node type declarations are unavailable.
+// When @types/node is present, this augmentation is ignored (it merges safely).
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+interface Buffer {}
+
 /* ---------------------------------------------------------------------------
  * Workspace helpers
  * -------------------------------------------------------------------------*/
