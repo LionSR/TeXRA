@@ -588,7 +588,12 @@ export abstract class BaseReflectionAgent implements IAgent {
     try {
       if (!baseFile) {
         const outContent = await readFile(outputFile);
-        return { added: outContent.split(/\n/).length };
+        // For new files, calculate lines correctly:
+        // - Empty file = 0 lines
+        // - Non-empty file = number of lines (handle trailing newlines properly)
+        const added = outContent.length === 0 ? 0 : 
+          outContent.endsWith('\n') ? outContent.split('\n').length - 1 : outContent.split('\n').length;
+        return { added, removed: 0 };
       }
 
       const [baseContent, outContent] = await Promise.all([
