@@ -45,16 +45,12 @@ export async function copyDefaultAgents(context: vscode.ExtensionContext) {
     console.log('Created or verified global storage directory');
 
     // Recursive function to copy files and directories
+    // Consider the native recursive copy available in Node 16+?
     const copyRecursively = async (sourcePath: string, targetPath: string) => {
       const stats = await fs.promises.stat(sourcePath);
 
       if (stats.isDirectory()) {
-        console.log(`Processing directory: ${sourcePath}`);
-
-        // Create target directory
         await vscode.workspace.fs.createDirectory(vscode.Uri.file(targetPath));
-
-        // Read and copy contents
         const files = await fs.promises.readdir(sourcePath);
         for (const file of files) {
           const sourceFilePath = path.join(sourcePath, file);
@@ -62,14 +58,8 @@ export async function copyDefaultAgents(context: vscode.ExtensionContext) {
           await copyRecursively(sourceFilePath, targetFilePath);
         }
       } else {
-        // Copy file with overwrite
-        console.log(`Copying file: ${sourcePath} to ${targetPath}`);
         const content = await fs.promises.readFile(sourcePath);
-        await vscode.workspace.fs.writeFile(
-          vscode.Uri.file(targetPath),
-          content,
-        );
-        console.log(`Successfully copied: ${sourcePath}`);
+        await vscode.workspace.fs.writeFile(vscode.Uri.file(targetPath), content);
       }
     };
 

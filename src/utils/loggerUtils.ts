@@ -77,22 +77,18 @@ export function shouldPersistStream(streamName: string): boolean {
   return true;
 }
 
+// Centralised emoji mapping for log levels
+export const EMOJI_BY_LEVEL: Record<string, string> = {
+  error: '🔴', // Red dot
+  warn: '🟡', // Yellow dot
+  info: '🟢', // Green dot
+  debug: '🔍', // Magnifying glass
+};
+
 /**
- * Get color code for the log level in VS Code output channel.
- * VS Code doesn't support ANSI color codes, so this is a best effort approach.
+ * Returns the emoji icon associated with a log level.
+ * Falls back to a bullet if the level is not recognised.
  */
 export function getColorForLevel(level: string): string {
-  // Using Unicode symbols for visibility since VS Code Output doesn't support true colors
-  switch (level.toLowerCase()) {
-    case 'error':
-      return '🔴'; // Red dot
-    case 'warn':
-      return '🟡'; // Yellow dot
-    case 'info':
-      return '🟢'; // Green dot
-    case 'debug':
-      return '🔍'; // Magnifying glass
-    default:
-      return '•';
-  }
+  return EMOJI_BY_LEVEL[level.toLowerCase()] ?? '•';
 }
