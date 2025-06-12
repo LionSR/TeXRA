@@ -44,17 +44,15 @@ export async function copyDefaultAgents(context: vscode.ExtensionContext) {
     );
     console.log('Created or verified global storage directory');
 
-    // Recursive function to copy files and directories
+    // Prefer the native recursive copy available in Node 16+.
+    // Fallback to the previous manual implementation if cp is unavailable or fails.
+
+    // Manual recursive copy retained as fallback
     const copyRecursively = async (sourcePath: string, targetPath: string) => {
       const stats = await fs.promises.stat(sourcePath);
 
       if (stats.isDirectory()) {
-        console.log(`Processing directory: ${sourcePath}`);
-
-        // Create target directory
         await vscode.workspace.fs.createDirectory(vscode.Uri.file(targetPath));
-
-        // Read and copy contents
         const files = await fs.promises.readdir(sourcePath);
         for (const file of files) {
           const sourceFilePath = path.join(sourcePath, file);
@@ -62,19 +60,31 @@ export async function copyDefaultAgents(context: vscode.ExtensionContext) {
           await copyRecursively(sourceFilePath, targetFilePath);
         }
       } else {
-        // Copy file with overwrite
-        console.log(`Copying file: ${sourcePath} to ${targetPath}`);
         const content = await fs.promises.readFile(sourcePath);
-        await vscode.workspace.fs.writeFile(
-          vscode.Uri.file(targetPath),
-          content,
-        );
-        console.log(`Successfully copied: ${sourcePath}`);
+        await vscode.workspace.fs.writeFile(vscode.Uri.file(targetPath), content);
       }
     };
 
-    // Start recursive copy from root
-    await copyRecursively(resourcesPath, globalStoragePath);
+    try {
+      const fsAny = fs.promises as any;
+      if (typeof fsAny.cp === 'function') {
+        // Use force:true to overwrite existing files (matches previous behaviour)
+        await fsAny.cp(resourcesPath, globalStoragePath, {
+          recursive: true,
+          force: true,
+        });
+        console.log('Copied agents using fs.promises.cp');
+      } else {
+        // cp not available (older Node) – fallback
+        await copyRecursively(resourcesPath, globalStoragePath);
+      }
+    } catch (cpErr) {
+      console.warn(
+        'fs.promises.cp failed, falling back to manual copy:',
+        cpErr,
+      );
+      await copyRecursively(resourcesPath, globalStoragePath);
+    }
 
     // Update the stored version after successful copy
     await context.globalState.update('lastKnownVersion', currentVersion);
