@@ -44,10 +44,8 @@ export async function copyDefaultAgents(context: vscode.ExtensionContext) {
     );
     console.log('Created or verified global storage directory');
 
-    // Prefer the native recursive copy available in Node 16+.
-    // Fallback to the previous manual implementation if cp is unavailable or fails.
-
-    // Manual recursive copy retained as fallback
+    // Recursive function to copy files and directories
+    // Consider the native recursive copy available in Node 16+?
     const copyRecursively = async (sourcePath: string, targetPath: string) => {
       const stats = await fs.promises.stat(sourcePath);
 
@@ -65,26 +63,8 @@ export async function copyDefaultAgents(context: vscode.ExtensionContext) {
       }
     };
 
-    try {
-      const fsAny = fs.promises as any;
-      if (typeof fsAny.cp === 'function') {
-        // Use force:true to overwrite existing files (matches previous behaviour)
-        await fsAny.cp(resourcesPath, globalStoragePath, {
-          recursive: true,
-          force: true,
-        });
-        console.log('Copied agents using fs.promises.cp');
-      } else {
-        // cp not available (older Node) – fallback
-        await copyRecursively(resourcesPath, globalStoragePath);
-      }
-    } catch (cpErr) {
-      console.warn(
-        'fs.promises.cp failed, falling back to manual copy:',
-        cpErr,
-      );
-      await copyRecursively(resourcesPath, globalStoragePath);
-    }
+    // Start recursive copy from root
+    await copyRecursively(resourcesPath, globalStoragePath);
 
     // Update the stored version after successful copy
     await context.globalState.update('lastKnownVersion', currentVersion);
