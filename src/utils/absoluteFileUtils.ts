@@ -1,17 +1,6 @@
-// Third-party imports
-import * as vscode from 'vscode';
+// RE-EXPORTED MODULE
+// -------------------
+// This module was merged into `fsUtils`. It now re-exports the unified
+// helpers so legacy import paths keep working.
 
-export async function fileExistsAbsolute(filePath: string): Promise<boolean> {
-  try {
-    await vscode.workspace.fs.stat(vscode.Uri.file(filePath));
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-export async function readFileAbsolute(filePath: string): Promise<string> {
-  const uri = vscode.Uri.file(filePath);
-  const content = await vscode.workspace.fs.readFile(uri);
-  return Buffer.from(content).toString('utf-8');
-}
+export { fileExistsAbsolute, readFileAbsolute } from './fsUtils';
