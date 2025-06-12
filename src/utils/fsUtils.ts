@@ -29,6 +29,11 @@ import * as vscode from 'vscode';
 // Local imports – log
 import * as logger from '../logger/logUtils';
 
+// Declare Node's global `Buffer` to satisfy the TS compiler when
+// the DOM lib is used without `@types/node` configured globally.
+// eslint-disable-next-line @typescript-eslint/consistent-type-imports
+declare const Buffer: any;
+
 const CHANNEL = 'fsUtils';
 logger.initialize(CHANNEL);
 
@@ -73,8 +78,7 @@ export async function fileExistsAbsolute(filePath: string): Promise<boolean> {
 export async function readFileAbsolute(filePath: string): Promise<string> {
   const uri = vscode.Uri.file(filePath);
   const content = await vscode.workspace.fs.readFile(uri);
-  const decoder = new TextDecoder();
-  return decoder.decode(content);
+  return Buffer.from(content).toString('utf-8');
 }
 
 /* ---------------------------------------------------------------------------
@@ -89,8 +93,7 @@ export async function readFile(relativePath: string): Promise<string> {
 export async function writeFile(relativePath: string, content: string): Promise<void> {
   const fullPath = getFullPathFromWorkspace(relativePath);
   const uri = vscode.Uri.file(fullPath);
-  const encoder = new TextEncoder();
-  await vscode.workspace.fs.writeFile(uri, encoder.encode(content));
+  await vscode.workspace.fs.writeFile(uri, Buffer.from(content, 'utf-8'));
 }
 
 export async function appendFile(relativePath: string, content: string): Promise<void> {
@@ -191,7 +194,7 @@ export async function fileExistsAndNonTrivial(relativePath: string): Promise<boo
   );
 }
 
-export function readFileBytesSync(relativePath: string): Uint8Array {
+export function readFileBytesSync(relativePath: string): Buffer {
   const fullPath = getFullPathFromWorkspace(relativePath);
   return fs.readFileSync(fullPath);
 }
