@@ -110,7 +110,7 @@ export class ProgressViewMessageHandler {
       inputFile: taskState.inputFile,
       outputNameOverride: taskState.outputNameOverride,
       outputFiles: Array.from(allFiles),
-      outputFilesActive: allFiles.size > 0,
+      outputFilesActive: taskState.activeFiles.output,
     });
   }
 
@@ -156,7 +156,7 @@ export class ProgressViewMessageHandler {
       inputFile: taskState.inputFile,
       outputNameOverride: taskState.outputNameOverride,
       outputFiles: Array.from(allFiles),
-      outputFilesActive: allFiles.size > 0,
+      outputFilesActive: taskState.activeFiles.output,
     });
   }
 
