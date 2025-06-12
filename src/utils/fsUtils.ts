@@ -29,12 +29,6 @@ import * as vscode from 'vscode';
 // Local imports – log
 import * as logger from '../logger/logUtils';
 
-// Node typings provide Buffer globally; no need for custom shims.
-// If Node typings are unavailable (e.g., web builds), declare a minimal Buffer
-// so the compiler doesn't complain. This is ignored when @types/node is present.
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-declare const Buffer: any;
-
 const CHANNEL = 'fsUtils';
 logger.initialize(CHANNEL);
 
@@ -195,7 +189,7 @@ export async function fileExistsAndNonTrivial(relativePath: string): Promise<boo
   );
 }
 
-export function readFileBytesSync(relativePath: string): any {
+export function readFileBytesSync(relativePath: string): Buffer {
   const fullPath = getFullPathFromWorkspace(relativePath);
   return fs.readFileSync(fullPath);
 }
