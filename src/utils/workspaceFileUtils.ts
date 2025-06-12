@@ -1,6 +1,10 @@
-// Standard library imports
-import * as fs from 'fs';
-import * as path from 'path';
+// RE-EXPORTED MODULE
+// -------------------
+// `workspaceFileUtils` has been deprecated in favour of `fsUtils`.
+// This file now solely re-exports the unified helpers so that existing
+// import paths continue to work without modification.
+
+export * from './fsUtils';
 
 // Third-party imports
 import * as vscode from 'vscode';
