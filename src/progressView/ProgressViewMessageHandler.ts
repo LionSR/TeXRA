@@ -95,14 +95,22 @@ export class ProgressViewMessageHandler {
     logger.debug(CHANNEL, `Found taskState for stream: ${stream}`);
     logger.debug(CHANNEL, `Task state: ${JSON.stringify(taskState)}`);
 
-    // Execute pack command with taskState
+    // Combine configured output files with any generated files tracked by the Progress View
+    const generated = this.provider.getOutputFiles(stream);
+    const allFiles = new Set<string>(taskState.outputFiles || []);
+    if (generated) {
+      Object.values(generated).forEach((infos) =>
+        infos.forEach((info) => allFiles.add(info.path)),
+      );
+    }
+
     await vscode.commands.executeCommand('texra.pack', {
       agent: taskState.agent,
       model: taskState.model,
       inputFile: taskState.inputFile,
       outputNameOverride: taskState.outputNameOverride,
-      outputFiles: taskState.outputFiles,
-      outputFilesActive: taskState.activeFiles.output,
+      outputFiles: Array.from(allFiles),
+      outputFilesActive: allFiles.size > 0,
     });
   }
 
@@ -133,14 +141,22 @@ export class ProgressViewMessageHandler {
     logger.debug(CHANNEL, `Found taskState for stream: ${stream}`);
     logger.debug(CHANNEL, `Task state: ${JSON.stringify(taskState)}`);
 
-    // Execute clean command with taskState
+    // Combine configured output files with any generated files tracked by the Progress View
+    const generated = this.provider.getOutputFiles(stream);
+    const allFiles = new Set<string>(taskState.outputFiles || []);
+    if (generated) {
+      Object.values(generated).forEach((infos) =>
+        infos.forEach((info) => allFiles.add(info.path)),
+      );
+    }
+
     await vscode.commands.executeCommand('texra.clean', {
       agent: taskState.agent,
       model: taskState.model,
       inputFile: taskState.inputFile,
       outputNameOverride: taskState.outputNameOverride,
-      outputFiles: taskState.outputFiles,
-      outputFilesActive: taskState.activeFiles.output,
+      outputFiles: Array.from(allFiles),
+      outputFilesActive: allFiles.size > 0,
     });
   }
 
