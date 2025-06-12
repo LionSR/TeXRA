@@ -156,7 +156,9 @@ export async function getFilesInDirectory(
       return null;
     }),
   );
-  return files.filter((file): file is string => file != null);
+  return files.filter(
+    (file): file is string => file !== null && file !== undefined,
+  );
 }
 
 export async function getFilesRecursively(
