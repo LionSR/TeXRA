@@ -85,8 +85,13 @@ export class ProgressViewMessageHandler {
     }
   }
 
-  private async handlePackStream(stream: string) {
-    logger.debug(CHANNEL, `Attempting to pack stream with ID: ${stream}`);
+  private async handleFileOperation(
+    stream: string,
+    command: 'texra.pack' | 'texra.clean',
+  ) {
+    const verb = command === 'texra.pack' ? 'pack' : 'clean';
+    logger.debug(CHANNEL, `Attempting to ${verb} stream with ID: ${stream}`);
+
     const taskState = this.provider.getTaskState(stream);
     if (!taskState) {
       logger.warn(CHANNEL, `No taskState found for stream: ${stream}`);
@@ -95,7 +100,6 @@ export class ProgressViewMessageHandler {
     logger.debug(CHANNEL, `Found taskState for stream: ${stream}`);
     logger.debug(CHANNEL, `Task state: ${JSON.stringify(taskState)}`);
 
-    // Combine configured output files with any generated files tracked by the Progress View
     const generated = this.provider.getOutputFiles(stream);
     const allFiles = new Set<string>(taskState.outputFiles || []);
     if (generated) {
@@ -104,7 +108,7 @@ export class ProgressViewMessageHandler {
       );
     }
 
-    await vscode.commands.executeCommand('texra.pack', {
+    await vscode.commands.executeCommand(command, {
       agent: taskState.agent,
       model: taskState.model,
       inputFile: taskState.inputFile,
@@ -112,6 +116,10 @@ export class ProgressViewMessageHandler {
       outputFiles: Array.from(allFiles),
       outputFilesActive: taskState.activeFiles.output,
     });
+  }
+
+  private async handlePackStream(stream: string) {
+    await this.handleFileOperation(stream, 'texra.pack');
   }
 
   private async handleRunAgain(stream: string) {
@@ -132,32 +140,7 @@ export class ProgressViewMessageHandler {
   }
 
   private async handleCleanStream(stream: string) {
-    logger.debug(CHANNEL, `Attempting to clean stream with ID: ${stream}`);
-    const taskState = this.provider.getTaskState(stream);
-    if (!taskState) {
-      logger.warn(CHANNEL, `No taskState found for stream: ${stream}`);
-      return;
-    }
-    logger.debug(CHANNEL, `Found taskState for stream: ${stream}`);
-    logger.debug(CHANNEL, `Task state: ${JSON.stringify(taskState)}`);
-
-    // Combine configured output files with any generated files tracked by the Progress View
-    const generated = this.provider.getOutputFiles(stream);
-    const allFiles = new Set<string>(taskState.outputFiles || []);
-    if (generated) {
-      Object.values(generated).forEach((infos) =>
-        infos.forEach((info) => allFiles.add(info.path)),
-      );
-    }
-
-    await vscode.commands.executeCommand('texra.clean', {
-      agent: taskState.agent,
-      model: taskState.model,
-      inputFile: taskState.inputFile,
-      outputNameOverride: taskState.outputNameOverride,
-      outputFiles: Array.from(allFiles),
-      outputFilesActive: taskState.activeFiles.output,
-    });
+    await this.handleFileOperation(stream, 'texra.clean');
   }
 
   private async handleRestoreState(stream: string) {
