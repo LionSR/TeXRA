@@ -394,6 +394,8 @@ export function updateFileList(filesByRound) {
       if (statsSpan) {
         if (info.added !== undefined && info.removed !== undefined) {
           statsSpan.innerHTML = `<span class="added">+${info.added}</span><span class="removed">-${info.removed}</span>`;
+        } else if (info.added !== undefined) {
+          statsSpan.innerHTML = `<span class="added">+${info.added}</span>`;
         } else {
           statsSpan.remove();
         }
