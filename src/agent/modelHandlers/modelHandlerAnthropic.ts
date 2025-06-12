@@ -140,6 +140,22 @@ export class ModelHandlerAnthropic extends ModelHandler {
         this.logger.warn(warnMsg);
         options.max_tokens =
           this.config.contextWindow - responseTokenCount.input_tokens - 10;
+
+        if (this.capabilities.supportsReasoning && options.thinking) {
+          const adjustedBudget = Math.max(
+            1,
+            Math.min(
+              options.thinking.budget_tokens,
+              Math.floor(options.max_tokens * 0.5),
+            ),
+          );
+          if (adjustedBudget !== options.thinking.budget_tokens) {
+            this.logger.debug(
+              `Adjusted thinking budget to ${adjustedBudget} due to reduced max_tokens`,
+            );
+            options.thinking.budget_tokens = adjustedBudget;
+          }
+        }
       }
       // in the future we log this in firstInputTokens of the AgentStateGlobal
     }
