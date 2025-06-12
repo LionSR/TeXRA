@@ -10,6 +10,7 @@ import {
   shouldUseConsolidatedChannel,
   getColorForLevel,
   isAgentStream,
+  EMOJI_BY_LEVEL as emojis,
 } from '../utils/loggerUtils';
 import { LogGroup } from '../types/LogTypes';
 
@@ -21,13 +22,6 @@ const logLevels = {
   warn: 1,
   info: 2,
   debug: 3,
-};
-
-const emojis = {
-  error: '🔴',
-  warn: '🟡',
-  debug: '🔍',
-  info: '🟢',
 };
 
 // Group State
@@ -491,4 +485,5 @@ export function getTimestamp(): string {
     .replace(',', '');
 }
 
+// Re-export central emoji mapping for backward compatibility
 export { emojis };
