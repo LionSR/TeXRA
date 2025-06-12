@@ -84,7 +84,11 @@ export function messageToSkeleton(
     ) {
       // Truncate large data strings
       result[key] = `[data: ${value.length} chars]`;
-    } else if (typeof value === 'object' && value != null) {
+    } else if (
+      typeof value === 'object' &&
+      value !== null &&
+      value !== undefined
+    ) {
       // Recursively process nested objects
       result[key] = messageToSkeleton(value, maxContentLength);
     } else {
