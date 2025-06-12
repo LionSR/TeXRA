@@ -59,7 +59,10 @@ export async function copyDefaultAgents(context: vscode.ExtensionContext) {
         }
       } else {
         const content = await fs.promises.readFile(sourcePath);
-        await vscode.workspace.fs.writeFile(vscode.Uri.file(targetPath), content);
+        await vscode.workspace.fs.writeFile(
+          vscode.Uri.file(targetPath),
+          content,
+        );
       }
     };
 
