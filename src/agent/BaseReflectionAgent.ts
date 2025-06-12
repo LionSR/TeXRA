@@ -585,7 +585,9 @@ export abstract class BaseReflectionAgent implements IAgent {
   private countLines(text: string): number {
     if (text.length === 0) return 0;
     // Handle trailing newlines consistently: subtract 1 if text ends with newline
-    return text.endsWith('\n') ? text.split('\n').length - 1 : text.split('\n').length;
+    return text.endsWith('\n')
+      ? text.split('\n').length - 1
+      : text.split('\n').length;
   }
 
   private async computeDiffStats(
