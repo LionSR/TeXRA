@@ -3,6 +3,7 @@ import * as vscode from 'vscode';
 
 // Third-party imports
 import Anthropic from '@anthropic-ai/sdk';
+import type { MessageCreateParams } from '@anthropic-ai/sdk/resources/messages';
 
 // Local imports - error utils
 import { getSdkErrorMessage } from '../utils/sdkErrorUtils';
@@ -272,13 +273,14 @@ export abstract class AnthropicToolAgent<
         const systemMessage = createSystemMessage(validationResult);
 
         // Call Claude API
-        const response = await client.messages.create({
+        const params: MessageCreateParams = {
           model: this.model,
           max_tokens: this.maxTokens,
           system: systemMessage,
           messages,
           tools: [this.textEditorTool.toParams() as any], // Type assertion needed for Claude 4 compatibility
-        });
+        };
+        const response = await client.messages.create(params);
 
         logger.debug(
           CHANNEL,
