@@ -142,7 +142,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
         options.max_tokens =
           this.config.contextWindow - responseTokenCount.input_tokens - 10;
 
-        if (this.capabilities.supportsReasoning && options.thinking) {
+        if (this.capabilities.supportsReasoning && options.thinking && options.thinking.type === 'enabled') {
           const adjustedBudget = Math.max(
             1,
             Math.min(
