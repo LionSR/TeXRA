@@ -135,7 +135,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
       kwargs.stream_options = { include_usage: true };
       try {
         const stream = client.chat.completions.stream(
-          { ...kwargs, stream: true } as any,
+          kwargs as any,
           {
             signal,
           },
