@@ -153,7 +153,8 @@ export class AgentStateGlobal implements IAgentStateGlobal {
       // OpenAI and Anthropic don't provide this information in their API responses
       if (
         'tool_use_tokens' in stateRound.APIUsage &&
-        stateRound.APIUsage.tool_use_tokens != null
+        stateRound.APIUsage.tool_use_tokens !== null &&
+        stateRound.APIUsage.tool_use_tokens !== undefined
       ) {
         this.totalToolUseTokens += stateRound.APIUsage.tool_use_tokens;
       }
