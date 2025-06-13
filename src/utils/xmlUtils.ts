@@ -304,7 +304,7 @@ export function formatAndLogContent(
     // Clean up excessive whitespace and normalize line breaks
     .replace(/\n{4,}/g, '\n\n') // Replace 4+ newlines with 2
 
-    .replace(/    /gm, '  '); // Replace 4 spaces with 2 spaces
+    .replace(/ {4}/gm, '  '); // Replace 4 spaces with 2 spaces
   // .replace(/ +$/gm, ''); // Remove trailing spaces only
 
   // agentLogger.info(formattedContent, groupId); // for debugging
