@@ -59,15 +59,14 @@ export class AgentStateRound implements IAgentStateRound {
   }
 
   /** Converts state to a serializable object for persistence. */
-  toObject(): Record<string, any> {
-    const stateObj = {
+  toObject(): IAgentStateRound {
+    return {
       currRound: this.currRound,
       continuationCount: this.continuationCount,
       responseTime: this.responseTime,
       outputFile: this.outputFile,
       APIUsage: this.APIUsage,
     };
-    return stateObj;
   }
 }
 

@@ -57,7 +57,7 @@ export class WolframAlphaClient {
   async performQuery(
     query: string,
     maxChars?: number,
-    additionalParams: Record<string, any> = {},
+    additionalParams: Record<string, string> = {},
   ): Promise<WolframResponse> {
     try {
       const params = new URLSearchParams({

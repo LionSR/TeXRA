@@ -28,7 +28,7 @@ export interface ValidAgentDefinition {
 }
 
 /** Loads and parses a YAML file from an absolute path. */
-export async function loadYaml(absolutePath: string): Promise<object> {
+export async function loadYaml<T = unknown>(absolutePath: string): Promise<T> {
   try {
     if (!path.isAbsolute(absolutePath)) {
       throw new Error('loadYaml requires an absolute path');
@@ -39,7 +39,7 @@ export async function loadYaml(absolutePath: string): Promise<object> {
     const fileContent = await vscode.workspace.fs.readFile(fileUri);
     // const fileContent = vscode.workspace.fs.readFileSync(fileUri);
     const yamlContent = Buffer.from(fileContent).toString('utf-8');
-    const parsedYaml = yaml.parse(yamlContent);
+    const parsedYaml = yaml.parse(yamlContent) as T;
 
     console.log(`Successfully loaded YAML from: ${absolutePath}`);
     return parsedYaml;
@@ -89,7 +89,7 @@ export async function loadAgentSettingAndPrompts(
 ): Promise<[AgentSetting, AgentPrompt]> {
   try {
     const agentFile = path.join(agentPath, `${agentNameFromFile}.yaml`);
-    const config = (await loadYaml(agentFile)) as any;
+    const config = await loadYaml<Record<string, unknown>>(agentFile);
 
     // Extract the agent's declared name from the root of the YAML, if present.
     // This is the authoritative name for this specific agent definition.
@@ -100,7 +100,7 @@ export async function loadAgentSettingAndPrompts(
         : agentNameFromFile; // Fallback to filename if no root name declared
     // logger.debug(CHANNEL, `Declared agent name for ${agentNameFromFile}: ${declaredAgentName}`); // Optional: for debugging
 
-    const parent = config?.inherits;
+    const parent = config?.inherits as string | undefined;
 
     let settings: Partial<AgentSetting>; // Use Partial initially for merging
     let prompts: Partial<AgentPrompt>;
@@ -155,7 +155,7 @@ export async function isValidAgentYaml(
   filePath: string,
 ): Promise<ValidAgentDefinition | null> {
   try {
-    const data = (await loadYaml(filePath)) as any;
+    const data = await loadYaml<Record<string, unknown>>(filePath);
     const rootName = data?.name;
     const settingsBlock = data?.settings;
     const promptsBlock = data?.prompts;
