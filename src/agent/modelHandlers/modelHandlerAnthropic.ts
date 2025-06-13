@@ -6,8 +6,10 @@ import { Anthropic } from '@anthropic-ai/sdk';
 import {
   MessageParam,
   ContentBlock,
+  ContentBlockParam,
   MessageCreateParams,
 } from '@anthropic-ai/sdk/resources/messages';
+import type { BetaMessage } from '@anthropic-ai/sdk/resources/beta/messages';
 
 // Local imports - error utils
 import { formatProviderError } from '../../utils/sdkErrorUtils';
@@ -59,12 +61,12 @@ export class ModelHandlerAnthropic extends ModelHandler {
   /** Creates a chat completion response using Anthropic's API with specified parameters and optional system prompt. */
   async createResponse(
     client: Anthropic,
-    messages: any[],
+    messages: MessageParam[],
     temperature: number,
     systemPrompt?: string,
     endTag?: string,
     signal?: AbortSignal,
-  ): Promise<any> {
+  ): Promise<BetaMessage> {
     // Get streaming config
     const useStreaming = this.getStreamingConfig();
 
@@ -142,7 +144,11 @@ export class ModelHandlerAnthropic extends ModelHandler {
         options.max_tokens =
           this.config.contextWindow - responseTokenCount.input_tokens - 10;
 
-        if (this.capabilities.supportsReasoning && options.thinking && options.thinking.type === 'enabled') {
+        if (
+          this.capabilities.supportsReasoning &&
+          options.thinking &&
+          options.thinking.type === 'enabled'
+        ) {
           const adjustedBudget = Math.max(
             1,
             Math.min(
@@ -161,7 +167,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
       // in the future we log this in firstInputTokens of the AgentStateGlobal
     }
 
-    let response: any;
+    let response: BetaMessage;
 
     try {
       if (useStreaming) {
@@ -223,7 +229,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
     return messages;
   }
 
-  public removeCacheControl(content: any[]) {
+  public removeCacheControl(content: ContentBlock[] | ContentBlockParam[]) {
     // With the updated Anthropic prompt caching, we should ensure we never exceed
     // Anthropic's limit of 4 cache_control blocks across the entire conversation
 
@@ -231,8 +237,9 @@ export class ModelHandlerAnthropic extends ModelHandler {
     // This ensures we don't accumulate too many cache points over time
     if (Array.isArray(content) && content.length > 0) {
       for (let i = 0; i < content.length; i++) {
-        if (typeof content[i] === 'object' && content[i]?.cache_control) {
-          delete content[i].cache_control;
+        const item = content[i] as any;
+        if (typeof item === 'object' && item?.cache_control) {
+          delete item.cache_control;
         }
       }
     }
@@ -240,7 +247,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
 
   /** Creates a reflection message array for Anthropic models, managing cache control and image content. */
   async createReflectionMessages(
-    messages: any[],
+    messages: MessageParam[],
     userMessage: string,
     mediaFiles?: string[],
   ): Promise<MessageParam[]> {
@@ -350,13 +357,10 @@ export class ModelHandlerAnthropic extends ModelHandler {
   }
 
   /** Processes Anthropic API response, handling errors, and formatting while returning [response, usage, stopReason]. */
-  extractResponse(responseObject: any, endTag: string): [string, any, string] {
-    if (responseObject.error) {
-      const errorMsg = `API error: ${JSON.stringify(responseObject.error)}`;
-      this.logger.error(errorMsg);
-      throw new Error(errorMsg);
-    }
-
+  extractResponse(
+    responseObject: BetaMessage,
+    endTag: string,
+  ): [string, AnthropicUsage, string] {
     // Check for empty response
     if (responseObject.usage.output_tokens === 3) {
       // Anthropic specific empty response check
@@ -387,7 +391,10 @@ export class ModelHandlerAnthropic extends ModelHandler {
       }
     } else if (responseObject.content && responseObject.content.length > 0) {
       // Handle regular text responses
-      newResponse = responseObject.content[0].text.trim();
+      const firstBlock = responseObject.content[0];
+      if (firstBlock.type === 'text') {
+        newResponse = firstBlock.text.trim();
+      }
     }
 
     // Add end tag if needed
@@ -401,16 +408,16 @@ export class ModelHandlerAnthropic extends ModelHandler {
       getAllReplacementsRegex(),
     ).trim();
 
-    return [newResponse, responseObject.usage, stopReason];
+    return [newResponse, responseObject.usage, stopReason || 'stop'];
   }
 
   /** Manages continuation with prefill support (typically no-op for models with prefill). */
   addContinueMessageWithPrefill(
-    messages: any[],
-    stateRound: AgentStateRound,
-    toolState: ToolState,
-    agentSetting: AgentSetting,
-    agentConfig: AgentConfig,
+    _messages: MessageParam[],
+    _stateRound: AgentStateRound,
+    _toolState: ToolState,
+    _agentSetting: AgentSetting,
+    _agentConfig: AgentConfig,
   ): void {
     this.logger.debug('Skipping continuation - assistant prefill is supported');
     // No-op for models that support prefill
@@ -418,11 +425,11 @@ export class ModelHandlerAnthropic extends ModelHandler {
 
   /** Manages continuation for models without prefill support by adding a continuation prompt. */
   addContinueMessageWithoutPrefill(
-    messages: any[],
-    stateRound: AgentStateRound,
+    messages: MessageParam[],
+    _stateRound: AgentStateRound,
     toolState: ToolState,
     agentSetting: AgentSetting,
-    agentConfig: AgentConfig,
+    _agentConfig: AgentConfig,
   ): void {
     // Create continuation message with last K tokens
     const prefillTokens = toolState.lastResponse.slice(-K_SLICE);
@@ -449,12 +456,12 @@ export class ModelHandlerAnthropic extends ModelHandler {
   async initializeOutputAndPrefill(
     agentConfig: AgentConfig,
     agentSetting: AgentSetting,
-    messages: any[],
+    messages: MessageParam[],
     toolState: ToolState,
     outputFile: string,
     prefill: string,
     groupId?: string,
-  ): Promise<[boolean, any[]]> {
+  ): Promise<[boolean, MessageParam[]]> {
     let endTurn = false;
 
     if (!(await fileExistsAndNonTrivial(outputFile))) {
@@ -485,10 +492,13 @@ export class ModelHandlerAnthropic extends ModelHandler {
         // add prefill as part of the user message like OpenAI handler
 
         const PseudoPrefillMsgContentString = `Start your response with:\n${prefill}`;
-        messages.at(-1).content.push({
-          type: 'text',
-          text: PseudoPrefillMsgContentString,
-        });
+        const lastMsg = messages.at(-1);
+        if (lastMsg && Array.isArray(lastMsg.content)) {
+          lastMsg.content.push({
+            type: 'text',
+            text: PseudoPrefillMsgContentString,
+          } as ContentBlockParam);
+        }
         this.logger.debug(
           `Added pseudo prefill message to messages:\n${PseudoPrefillMsgContentString}`,
         );
@@ -513,18 +523,24 @@ export class ModelHandlerAnthropic extends ModelHandler {
     if (hasEndTag(agentSetting, fileContent)) {
       this.logger.debug('End tag detected - skipping continuation');
       // this is suspicious, because the two conflicts!!! we should check
-      if (Array.isArray(lastMessage.content)) {
-        lastMessage.content[lastMessage.content.length - 1].text = fileContent;
-      } else {
+      if (lastMessage && Array.isArray(lastMessage.content)) {
+        const lastContent = lastMessage.content[lastMessage.content.length - 1];
+        if (lastContent && lastContent.type === 'text') {
+          lastContent.text = fileContent;
+        }
+      } else if (lastMessage) {
         lastMessage.content = [
           {
             type: 'text',
             text: fileContent,
-          },
+          } as ContentBlockParam,
         ];
       }
 
-      this.removeCacheControl(messages.at(-1).content);
+      const lastMsgContent = messages.at(-1)?.content;
+      if (lastMsgContent && Array.isArray(lastMsgContent)) {
+        this.removeCacheControl(lastMsgContent);
+      }
 
       endTurn = true;
       return [endTurn, messages];
@@ -537,12 +553,12 @@ export class ModelHandlerAnthropic extends ModelHandler {
     // For thinking-enabled models that don't support assistant prefill,
     // add continuation as part of the user message
 
-    const content = [
+    const content: ContentBlockParam[] = [
       {
-        type: 'text',
+        type: 'text' as const,
         text: fileContent,
         ...(this.capabilities.supportsPromptCaching
-          ? { cache_control: { type: 'ephemeral' } }
+          ? { cache_control: { type: 'ephemeral' as const } }
           : {}),
       },
     ];
@@ -624,16 +640,16 @@ export class ModelHandlerAnthropic extends ModelHandler {
   }
 
   updateMessageContentWithPrefill(
-    messages: any[],
+    messages: MessageParam[],
     bestConnector: string,
     newResponse: string,
     toolState: ToolState,
   ): void {
     const lastMessage = messages.at(-1);
 
-    if (lastMessage.role === 'assistant') {
+    if (lastMessage && lastMessage.role === 'assistant') {
       if (Array.isArray(lastMessage.content)) {
-        const newMessage = {
+        const newMessage: ContentBlockParam = {
           type: 'text',
           text: bestConnector + newResponse,
         };
@@ -643,7 +659,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
           {
             type: 'text',
             text: toolState.accumulatedOutput,
-          },
+          } as ContentBlockParam,
         ];
       }
 
@@ -651,7 +667,9 @@ export class ModelHandlerAnthropic extends ModelHandler {
         // First remove all cache_control from all previous messages to stay under the limit
         for (let i = 0; i < messages.length - 1; i++) {
           const msg = messages[i];
-          this.removeCacheControl(msg.content);
+          if (Array.isArray(msg.content)) {
+            this.removeCacheControl(msg.content);
+          }
         }
 
         // Then ensure the current message has at most one cache_control
@@ -659,9 +677,12 @@ export class ModelHandlerAnthropic extends ModelHandler {
           // Remove all existing cache_control
           this.removeCacheControl(lastMessage.content);
 
-          lastMessage.content.at(-1).cache_control = {
-            type: 'ephemeral',
-          };
+          const lastContentItem = lastMessage.content.at(-1);
+          if (lastContentItem && typeof lastContentItem === 'object') {
+            (lastContentItem as any).cache_control = {
+              type: 'ephemeral',
+            };
+          }
         }
       }
     }
@@ -669,7 +690,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
   }
 
   updateMessageContentWithoutPrefill(
-    messages: any[],
+    messages: MessageParam[],
     bestConnector: string,
     newResponse: string,
     toolState: ToolState,
@@ -679,7 +700,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
     const lastMessage = messages.at(-1);
     const secondLastMessage = messages.at(-2);
 
-    if (lastMessage.role !== 'user') {
+    if (!lastMessage || lastMessage.role !== 'user') {
       this.logger.error(
         'Last message is not a user message - unexpected format',
       );
@@ -688,7 +709,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
     this.logger.debug('Last message is a user message');
 
     // Fix for continuation issues
-    if (this.containCutOffMessage(lastMessage.content)) {
+    if (lastMessage && this.containCutOffMessage(lastMessage.content)) {
       this.logger.debug(
         'Last message is a user message asking to continue after cutoff',
       );
@@ -696,17 +717,16 @@ export class ModelHandlerAnthropic extends ModelHandler {
       // The last message is a user message
       // So the second last message must be an assistant message
 
-      if (secondLastMessage.role === 'assistant') {
+      if (secondLastMessage && secondLastMessage.role === 'assistant') {
         // Preserve any thinking blocks that might exist in the content array
-        const thinkingBlocks = secondLastMessage.content.filter(
-          (item: any) =>
-            item.type === 'thinking' || item.type === 'redacted_thinking',
-        );
+        const thinkingBlocks = Array.isArray(secondLastMessage.content)
+          ? secondLastMessage.content.filter(
+              (item) =>
+                item.type === 'thinking' || item.type === 'redacted_thinking',
+            )
+          : [];
 
-        // Find text blocks in the content array
-        const textBlocks = secondLastMessage.content.filter(
-          (item: any) => item.type === 'text',
-        );
+        // Text blocks filtering removed - was unused
 
         // Anthropic models should include thinking blocks first in the content array
         // Add all thinking blocks from toolState if we have them
@@ -715,15 +735,19 @@ export class ModelHandlerAnthropic extends ModelHandler {
           this.logger.debug(
             `Using ${thinkingBlocks.length} existing thinking blocks from previous message`,
           );
-          secondLastMessage.content.push({
-            type: 'text',
-            text: bestConnector + newResponse,
-          });
+          if (Array.isArray(secondLastMessage.content)) {
+            secondLastMessage.content.push({
+              type: 'text',
+              text: bestConnector + newResponse,
+            } as ContentBlockParam);
+          }
         } else {
-          secondLastMessage.content.push({
-            type: 'text',
-            text: bestConnector + newResponse,
-          });
+          if (Array.isArray(secondLastMessage.content)) {
+            secondLastMessage.content.push({
+              type: 'text',
+              text: bestConnector + newResponse,
+            } as ContentBlockParam);
+          }
           // Add the updated text content
           // If there are existing text blocks, update with new content
           // Otherwise create a new text block with the new returned thinking block if it is not after cut off
@@ -762,7 +786,9 @@ export class ModelHandlerAnthropic extends ModelHandler {
         if (this.capabilities.supportsPromptCaching) {
           for (let i = 0; i < messages.length - 1; i++) {
             const msg = messages[i];
-            this.removeCacheControl(msg.content);
+            if (Array.isArray(msg.content)) {
+              this.removeCacheControl(msg.content);
+            }
           }
         }
 
@@ -780,7 +806,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
         'Last message is a request message rather than a ask to continue after cut off',
       );
       // Create a new assistant message with the response
-      const assistantMessage: { role: string; content: any[] } = {
+      const assistantMessage: MessageParam = {
         role: 'assistant',
         content: [],
       };
@@ -790,14 +816,18 @@ export class ModelHandlerAnthropic extends ModelHandler {
         this.logger.debug(
           `Adding ${toolState.thinkingBlocks.length} thinking blocks to new assistant message`,
         );
-        assistantMessage.content.push(...toolState.thinkingBlocks);
+        if (Array.isArray(assistantMessage.content)) {
+          assistantMessage.content.push(...toolState.thinkingBlocks);
+        }
       }
 
       // Add the text content
-      assistantMessage.content.push({
-        type: 'text',
-        text: toolState.accumulatedOutput,
-      });
+      if (Array.isArray(assistantMessage.content)) {
+        assistantMessage.content.push({
+          type: 'text',
+          text: toolState.accumulatedOutput,
+        } as ContentBlockParam);
+      }
 
       messages.push(assistantMessage);
       this.logger.debug('Added a new assistant message');
@@ -850,7 +880,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
    * when sending back to the Anthropic API for continuing a conversation
    */
   processThinkingBlock(
-    responseObject: any,
+    responseObject: BetaMessage,
     groupId?: string,
     toolState?: ToolState,
   ): string | null {
@@ -894,7 +924,10 @@ export class ModelHandlerAnthropic extends ModelHandler {
     // If toolState is provided, update it with all thinking blocks
     if (toolState && !toolState.thinkingAdded) {
       // Store all thinking blocks for future reference
-      if (!this.containCutOffMessage(regularThinkingContent)) {
+      if (
+        regularThinkingContent &&
+        !this.containCutOffMessage(regularThinkingContent)
+      ) {
         toolState.thinkingBlocks = thinkingBlocks;
         // thinkingBlock is now a getter that returns thinkingBlocks[0]
         toolState.thinkingAdded = true;
