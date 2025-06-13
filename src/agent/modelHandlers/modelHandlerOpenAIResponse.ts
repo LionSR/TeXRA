@@ -6,13 +6,10 @@ import OpenAI from 'openai';
 import type {
   Response,
   ResponseUsage,
-  ResponseCreateParamsBase,
-  ResponseOutputItem,
   ResponseOutputMessage,
   ResponseOutputText,
   ResponseReasoningItem,
   EasyInputMessage,
-  ResponseInputContent,
 } from 'openai/resources/responses/responses';
 
 // Local imports - base handler
@@ -297,10 +294,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
       return 0.0;
     }
 
-    const promptTokens =
-      responseUsage.prompt_tokens ?? responseUsage.input_tokens ?? 0;
-    const completionTokens =
-      responseUsage.completion_tokens ?? responseUsage.output_tokens ?? 0;
+    // Response API uses input_tokens/output_tokens
+    const promptTokens = responseUsage.input_tokens ?? 0;
+    const completionTokens = responseUsage.output_tokens ?? 0;
 
     let basePrice = calculateTokenPrice(
       promptTokens,
@@ -309,14 +305,11 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
       this.config.outputPrice,
     );
 
+    // Response API uses output_tokens_details and input_tokens_details
     const reasoningTokens =
-      responseUsage.completion_tokens_details?.reasoning_tokens ??
-      responseUsage.output_tokens_details?.reasoning_tokens ??
-      0;
+      responseUsage.output_tokens_details?.reasoning_tokens ?? 0;
     const cachedTokens =
-      responseUsage.prompt_tokens_details?.cached_tokens ??
-      responseUsage.input_tokens_details?.cached_tokens ??
-      0;
+      responseUsage.input_tokens_details?.cached_tokens ?? 0;
 
     if (reasoningTokens) {
       basePrice += (reasoningTokens * this.config.outputPrice) / 1e6;
@@ -333,10 +326,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
   }
 
   /** Map usage fields and create usage statistics object. */
-  computeResponseUsage(
-    responseUsage: any,
-    responseTime: number,
-  ): any {
+  computeResponseUsage(responseUsage: any, responseTime: number): any {
     if (!responseUsage) {
       const emptyUsage = {
         input_tokens: 0,
