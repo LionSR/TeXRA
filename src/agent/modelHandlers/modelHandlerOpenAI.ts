@@ -289,18 +289,18 @@ export class ModelHandlerOpenAI extends ModelHandler {
     return messages;
   }
 
-  /** Adds user message with reflection content to existing messages. */
-  async createReflectionMessages(
+  /** Adds user message content for subsequent rounds. */
+  async createRoundMessages(
     messages: any[],
     userMessage: string,
     mediaFiles?: string[],
   ): Promise<any[]> {
-    const reflectionContent: ChatCompletionContentPart[] = [];
+    const roundContent: ChatCompletionContentPart[] = [];
 
     // const role = this.config.capabilities.supportsIntermDevMsgs
     // ? 'system'
     // : 'user';
-    // technically we can use system for the reflection messages, but it does not support images...
+    // technically we can use system for the follow-up round messages, but it does not support images...
     // Error in createResponse: Error: 400 Invalid 'messages[4]'. Image URLs are only allowed for messages with role 'user', but this message with role 'system' contains an image URL.
     // system role does not support images/audio
     const role = 'user';
@@ -313,16 +313,16 @@ export class ModelHandlerOpenAI extends ModelHandler {
     ) {
       try {
         const formattedMediaContent = await this.createMediaMessage(mediaFiles);
-        reflectionContent.push(...formattedMediaContent);
+        roundContent.push(...formattedMediaContent);
       } catch (err) {
         this.logger.error(
-          `Error processing media files for reflection: ${err}`,
+          `Error processing media files for follow-up round: ${err}`,
         );
       }
     }
-    reflectionContent.push({ type: 'text', text: userMessage });
+    roundContent.push({ type: 'text', text: userMessage });
 
-    messages.push({ role, content: reflectionContent });
+    messages.push({ role, content: roundContent });
     return messages;
   }
 
