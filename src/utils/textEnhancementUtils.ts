@@ -3,6 +3,7 @@
 
 // Third-party imports
 import Anthropic from '@anthropic-ai/sdk';
+import type { MessageCreateParams } from '@anthropic-ai/sdk/resources/messages';
 import * as vscode from 'vscode';
 
 // Local imports - error utils
@@ -166,11 +167,12 @@ ${text}`;
     } else {
       // Use the Anthropic SDK
       const anthropic = new Anthropic({ apiKey: apiKey! });
-      const response = await anthropic.beta.messages.create({
+      const params: MessageCreateParams = {
         model: 'claude-3-7-sonnet-20250219',
         messages: [{ role: 'user', content: prompt }],
         max_tokens: 4096,
-      });
+      };
+      const response = await anthropic.beta.messages.create(params);
 
       if (
         response.content &&
