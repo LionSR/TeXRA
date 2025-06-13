@@ -245,14 +245,14 @@ export class ModelHandlerAnthropic extends ModelHandler {
     }
   }
 
-  /** Creates a reflection message array for Anthropic models, managing cache control and image content. */
-  async createReflectionMessages(
+  /** Creates message array for subsequent rounds, managing cache control and image content. */
+  async createRoundMessages(
     messages: MessageParam[],
     userMessage: string,
     mediaFiles?: string[],
   ): Promise<MessageParam[]> {
-    // Create content list for the reflection message
-    const reflectionContent: ContentBlock[] = [];
+    // Create content list for the new round message
+    const roundContent: ContentBlock[] = [];
 
     // Add media if provided (Anthropic currently only supports images)
     if (
@@ -263,7 +263,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
       try {
         const formattedMediaContent = await this.createMediaMessage(mediaFiles);
         // Filter out any non-image content
-        reflectionContent.push(
+        roundContent.push(
           ...formattedMediaContent.filter(
             (c) =>
               c.type === 'image' ||
@@ -272,7 +272,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
         );
       } catch (err) {
         this.logger.error(
-          `Error processing media files for reflection: ${err}`,
+          `Error processing media files for follow-up round: ${err}`,
         );
       }
     }
@@ -286,7 +286,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
         ? { cache_control: { type: 'ephemeral' } }
         : {}),
     };
-    reflectionContent.push(messageBlock);
+    roundContent.push(messageBlock);
 
     // We need to ensure we don't exceed Anthropic's limit of 4 cache_control blocks
     // Remove cache_control from ALL previous message contents
@@ -298,7 +298,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
       }
     }
 
-    messages.push({ role: 'user', content: reflectionContent });
+    messages.push({ role: 'user', content: roundContent });
     return messages;
   }
 

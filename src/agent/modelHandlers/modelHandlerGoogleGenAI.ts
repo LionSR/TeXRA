@@ -477,14 +477,14 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
     return mimeType || null;
   }
 
-  /** Creates a reflection message array for Google GenAI models, managing image content and message structure. */
-  async createReflectionMessages(
+  /** Creates message array for subsequent rounds, managing image content and message structure. */
+  async createRoundMessages(
     messages: Message[],
     userMessage: string,
     mediaFiles?: string[],
   ): Promise<Message[]> {
     const client = await this.getClient();
-    const reflectionParts: InternalMessagePart[] = [];
+    const roundParts: InternalMessagePart[] = [];
 
     if (
       mediaFiles &&
@@ -493,7 +493,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
         this.config.capabilities.supportsNativeAudio)
     ) {
       this.logger.info(
-        `Uploading ${mediaFiles.length} media files for reflection via native SDK...`,
+        `Uploading ${mediaFiles.length} media files for follow-up round via native SDK...`,
       );
       for (const mediaFile of mediaFiles) {
         try {
@@ -507,7 +507,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
 
           if (!explicitMimeType) {
             this.logger.error(
-              `Cannot determine mime type for reflection file ${mediaFile}. Skipping file.`,
+              `Cannot determine mime type for file ${mediaFile}. Skipping file.`,
             );
             continue;
           }
@@ -518,28 +518,28 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
           };
 
           this.logger.debug(
-            `Attempting reflection upload for ${mediaFile} with params: ${JSON.stringify(uploadParams)}`,
+            `Attempting upload for ${mediaFile} with params: ${JSON.stringify(uploadParams)}`,
           );
           this.logger.debug(`MIME type being used: ${explicitMimeType}`);
 
           const uploadResult: File = await client.files.upload(uploadParams);
 
           this.logger.info(
-            `Uploaded reflection file ${mediaFile}, URI: ${uploadResult.uri}, MimeType: ${uploadResult.mimeType}`,
+            `Uploaded file ${mediaFile}, URI: ${uploadResult.uri}, MimeType: ${uploadResult.mimeType}`,
           );
 
           if (!uploadResult.uri || !uploadResult.mimeType) {
             this.logger.error(
-              `Upload result for reflection file ${mediaFile} missing URI or MimeType. API might have failed inference. Skipping file.`,
+              `Upload result for file ${mediaFile} missing URI or MimeType. API might have failed inference. Skipping file.`,
             );
             continue;
           }
 
-          reflectionParts.push({
+          roundParts.push({
             type: 'text',
-            text: `\nReflecting on file: ${path.basename(mediaFile)}`,
+            text: `\nProcessing file: ${path.basename(mediaFile)}`,
           });
-          reflectionParts.push({
+          roundParts.push({
             type: 'file_uri',
             uri: uploadResult.uri,
             mimeType: uploadResult.mimeType,
@@ -547,7 +547,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
         } catch (error) {
           this.logger.error(
             formatProviderError(
-              `Failed to upload media file ${mediaFile} for reflection`,
+              `Failed to upload media file ${mediaFile} for follow-up round`,
               error,
             ),
           );
@@ -555,9 +555,9 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
       }
     }
 
-    reflectionParts.push({ type: 'text', text: userMessage });
+    roundParts.push({ type: 'text', text: userMessage });
 
-    messages.push({ role: 'user', content: reflectionParts });
+    messages.push({ role: 'user', content: roundParts });
     return messages;
   }
 
