@@ -3,6 +3,14 @@
 
 // Third-party imports
 import OpenAI from 'openai';
+import type {
+  Response,
+  ResponseUsage,
+  ResponseOutputMessage,
+  ResponseOutputText,
+  ResponseReasoningItem,
+  EasyInputMessage,
+} from 'openai/resources/responses/responses';
 
 // Local imports - base handler
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
@@ -45,7 +53,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
     userRequest: string,
     mediaFiles?: string[],
     systemPrompt?: string,
-  ): Promise<any[]> {
+  ): Promise<EasyInputMessage[]> {
     this.previousResponseId = null;
     this.sentMessages = 0;
     return super.initializeMessages(
@@ -59,51 +67,57 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
   /** Create a response using the Responses API. */
   async createResponse(
     client: OpenAI,
-    messages: any[],
+    messages: EasyInputMessage[],
     temperature: number,
     systemPrompt?: string,
     endTag?: string,
     signal?: AbortSignal,
-  ): Promise<any> {
+  ): Promise<Response> {
     const useStreaming = this.getStreamingConfig();
 
     const newMessages = messages.slice(this.sentMessages).map((msg) => ({
       role: msg.role,
-      content: msg.content.map((part: any) => {
-        if (part.type === 'text') {
-          if (msg.role === 'user') {
-            return { type: 'input_text', text: part.text };
-          } else if (msg.role === 'assistant') {
-            return { type: 'output_text', text: part.text };
-          } else {
-            return { type: 'input_text', text: part.text };
-          }
-        }
-        if (part.type === 'image_url') {
-          const url =
-            typeof part.image_url === 'string'
-              ? part.image_url
-              : part.image_url.url;
+      content:
+        typeof msg.content === 'string'
+          ? [{ type: 'input_text', text: msg.content }]
+          : msg.content.map((part: any) => {
+              if (part.type === 'text') {
+                if (msg.role === 'user') {
+                  return { type: 'input_text', text: part.text };
+                } else if (msg.role === 'assistant') {
+                  return { type: 'output_text', text: part.text };
+                } else {
+                  return { type: 'input_text', text: part.text };
+                }
+              }
+              if (part.type === 'image_url') {
+                const url =
+                  typeof part.image_url === 'string'
+                    ? part.image_url
+                    : part.image_url.url;
 
-          // Check if this is a PDF by examining the data URL
-          if (url.startsWith('data:application/pdf;base64,')) {
-            // Extract the base64 data from the data URL
-            const base64Data = url.replace('data:application/pdf;base64,', '');
-            return {
-              type: 'input_file',
-              input_file: {
-                data: base64Data,
-                mime_type: 'application/pdf',
-              },
-            };
-          }
+                // Check if this is a PDF by examining the data URL
+                if (url.startsWith('data:application/pdf;base64,')) {
+                  // Extract the base64 data from the data URL
+                  const base64Data = url.replace(
+                    'data:application/pdf;base64,',
+                    '',
+                  );
+                  return {
+                    type: 'input_file',
+                    input_file: {
+                      data: base64Data,
+                      mime_type: 'application/pdf',
+                    },
+                  };
+                }
 
-          // For regular images, use input_image format
-          const detail = part.image_url?.detail ?? 'auto';
-          return { type: 'input_image', image_url: url, detail };
-        }
-        return part;
-      }),
+                // For regular images, use input_image format
+                const detail = part.image_url?.detail ?? 'auto';
+                return { type: 'input_image', image_url: url, detail };
+              }
+              return part;
+            }),
     }));
 
     const params: any = {
@@ -153,7 +167,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
       // );
       const stream = client.responses.stream(params, {
         signal,
-      }) as any;
+      });
       const response = await stream.finalResponse();
       this.logger.debug(
         `OpenAI Responses final response: ${JSON.stringify(response)}`,
@@ -211,10 +225,14 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
    *   }
    * }
    */
-  extractResponse(responseObject: any, endTag: string): [string, any, string] {
+  extractResponse(
+    responseObject: Response,
+    endTag: string,
+  ): [string, ResponseUsage | undefined, string] {
     const usage = responseObject.usage || {
       input_tokens: 0,
       output_tokens: 0,
+      total_tokens: 0,
       input_tokens_details: { cached_tokens: 0 },
       output_tokens_details: { reasoning_tokens: 0 },
     };
@@ -229,16 +247,20 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
     else if (Array.isArray(responseObject.output)) {
       // First, try to extract all "message" type parts and join their "content"
       const messageParts = responseObject.output.filter(
-        (part: any) => part.type === 'message' && part.content,
+        (part): part is ResponseOutputMessage =>
+          part.type === 'message' && 'content' in part,
       );
       if (messageParts.length > 0) {
         newResponse = messageParts
-          .map((part: any) => {
+          .map((part) => {
             // If content is an array, flatten and extract output_text
             if (Array.isArray(part.content)) {
               return part.content
-                .filter((c: any) => c.type === 'output_text' && c.text)
-                .map((c: any) => c.text)
+                .filter(
+                  (c): c is ResponseOutputText =>
+                    c.type === 'output_text' && 'text' in c,
+                )
+                .map((c) => c.text)
                 .join('');
             } else if (typeof part.content === 'string') {
               return part.content;
@@ -250,7 +272,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
       } else {
         // Fallback: directly extract all output_text from output array (for older/alternate formats)
         newResponse = responseObject.output
-          .filter((part: any) => part.type === 'output_text' && part.text)
+          .filter((part) => 'text' in part && part.type !== 'reasoning')
           .map((part: any) => part.text)
           .join('')
           .trim();
@@ -272,10 +294,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
       return 0.0;
     }
 
-    const promptTokens =
-      responseUsage.prompt_tokens ?? responseUsage.input_tokens ?? 0;
-    const completionTokens =
-      responseUsage.completion_tokens ?? responseUsage.output_tokens ?? 0;
+    // Response API uses input_tokens/output_tokens
+    const promptTokens = responseUsage.input_tokens ?? 0;
+    const completionTokens = responseUsage.output_tokens ?? 0;
 
     let basePrice = calculateTokenPrice(
       promptTokens,
@@ -284,14 +305,11 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
       this.config.outputPrice,
     );
 
+    // Response API uses output_tokens_details and input_tokens_details
     const reasoningTokens =
-      responseUsage.completion_tokens_details?.reasoning_tokens ??
-      responseUsage.output_tokens_details?.reasoning_tokens ??
-      0;
+      responseUsage.output_tokens_details?.reasoning_tokens ?? 0;
     const cachedTokens =
-      responseUsage.prompt_tokens_details?.cached_tokens ??
-      responseUsage.input_tokens_details?.cached_tokens ??
-      0;
+      responseUsage.input_tokens_details?.cached_tokens ?? 0;
 
     if (reasoningTokens) {
       basePrice += (reasoningTokens * this.config.outputPrice) / 1e6;
@@ -384,7 +402,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
    * @returns The concatenated reasoning summary or null
    */
   processThinkingBlock(
-    responseObject: any,
+    responseObject: Response,
     groupId?: string,
     toolState?: ToolState,
   ): string | null {
@@ -394,8 +412,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
       return null;
     }
     const reasoningObj = outputArr.find(
-      (item: any) => item?.type === 'reasoning',
-    );
+      (item) => item?.type === 'reasoning',
+    ) as ResponseReasoningItem | undefined;
     const summaryParts = reasoningObj?.summary;
     if (!Array.isArray(summaryParts) || summaryParts.length === 0) {
       return null;
@@ -413,7 +431,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
 
     // If toolState is provided and not already updated, add each summary part as a thinking block
     if (toolState && !toolState.thinkingAdded) {
-      toolState.thinkingBlocks = summaryParts.map((part: any) => ({
+      toolState.thinkingBlocks = summaryParts.map((part) => ({
         type: 'thinking',
         thinking: typeof part?.text === 'string' ? part.text : '',
       }));
