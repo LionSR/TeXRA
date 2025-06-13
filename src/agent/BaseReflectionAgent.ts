@@ -17,6 +17,7 @@ import {
 } from '../latex';
 import { ProgressViewProvider } from '../progressView/ProgressViewProvider';
 import { diff_match_patch } from 'diff-match-patch';
+import type { DiffStats } from '../types/DiffTypes';
 
 // Local imports - utilities
 import {
@@ -580,29 +581,48 @@ export abstract class BaseReflectionAgent implements IAgent {
     return prefill;
   }
 
+  // Helper function to consistently count lines in text
+  private countLines(text: string): number {
+    if (text.length === 0) return 0;
+    // Handle trailing newlines consistently: subtract 1 if text ends with newline
+    return text.endsWith('\n')
+      ? text.split('\n').length - 1
+      : text.split('\n').length;
+  }
+
   private async computeDiffStats(
-    baseFile: string,
+    baseFile: string | null,
     outputFile: string,
-  ): Promise<{ added: number; removed: number }> {
+  ): Promise<DiffStats> {
     try {
+      if (!baseFile) {
+        const outContent = await readFile(outputFile);
+        const added = this.countLines(outContent);
+        // For new files, only return added count (removed should be undefined for UI)
+        return { added };
+      }
+
       const [baseContent, outContent] = await Promise.all([
         readFile(baseFile),
         readFile(outputFile),
       ]);
+
       const dmp = new diff_match_patch();
       const diffs = dmp.diff_main(baseContent, outContent);
       let added = 0;
       let removed = 0;
+
       for (const [op, text] of diffs) {
         if (op === 1) {
-          added += text.split(/\n/).length;
+          added += this.countLines(text);
         } else if (op === -1) {
-          removed += text.split(/\n/).length;
+          removed += this.countLines(text);
         }
       }
+
       return { added, removed };
     } catch {
-      return { added: 0, removed: 0 };
+      return {};
     }
   }
 
@@ -673,10 +693,7 @@ export abstract class BaseReflectionAgent implements IAgent {
         const prevFile =
           Array.from(prevMap.entries()).find(([, out]) => out === file)?.[0] ||
           null;
-        let stats = { added: 0, removed: 0 };
-        if (baseFile) {
-          stats = await this.computeDiffStats(baseFile, file);
-        }
+        const stats = await this.computeDiffStats(baseFile, file);
         fileInfos.push({
           path: file,
           base: baseFile,
