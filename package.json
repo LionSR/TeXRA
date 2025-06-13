@@ -1151,9 +1151,9 @@
   },
   "homepage": "https://texra.ai",
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.53.0",
+    "@anthropic-ai/sdk": "^0.54.0",
     "@cantoo/pdf-lib": "^2.4.1",
-    "@google/genai": "^1.4.0",
+    "@google/genai": "^1.5.0",
     "@vscode/codicons": "^0.0.36",
     "@wolfram-alpha/wolfram-alpha-api": "^23.1004.144821-RELEASE",
     "axios": "^1.9.0",

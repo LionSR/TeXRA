@@ -2,6 +2,7 @@
 export enum AgentType {
   CoT = 'CoT',
   Direct = 'direct',
+  ToolUse = 'toolUse',
 }
 
 /** Base configuration for agent behavior with default values. */

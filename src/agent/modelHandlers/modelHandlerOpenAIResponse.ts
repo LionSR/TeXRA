@@ -308,8 +308,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
     // Response API uses output_tokens_details and input_tokens_details
     const reasoningTokens =
       responseUsage.output_tokens_details?.reasoning_tokens ?? 0;
-    const cachedTokens =
-      responseUsage.input_tokens_details?.cached_tokens ?? 0;
+    const cachedTokens = responseUsage.input_tokens_details?.cached_tokens ?? 0;
 
     if (reasoningTokens) {
       basePrice += (reasoningTokens * this.config.outputPrice) / 1e6;
