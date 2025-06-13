@@ -570,10 +570,10 @@ export abstract class ModelHandler {
   ): Promise<any[]>;
 
   /**
-   * Creates reflection messages for multi-turn conversations with optional images.
-   * @returns Provider-specific message array with reflection content
+   * Creates messages for follow-up conversation rounds with optional images.
+   * @returns Provider-specific message array with new round content
    */
-  abstract createReflectionMessages(
+  abstract createRoundMessages(
     messages: any[],
     userMessage: string,
     mediaFiles?: string[],
