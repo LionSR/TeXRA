@@ -6,6 +6,7 @@ import { Anthropic } from '@anthropic-ai/sdk';
 import {
   MessageParam,
   ContentBlock,
+  MessageCreateParams,
 } from '@anthropic-ai/sdk/resources/messages';
 
 // Local imports - error utils
@@ -68,7 +69,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
     const useStreaming = this.getStreamingConfig();
 
     // Prepare options for the API call
-    const options: any = {
+    const options: MessageCreateParams & { betas?: string[] } = {
       model: this.config.fullName,
       max_tokens: this.config.maxOutputTokens,
       messages,
@@ -144,7 +145,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
       // in the future we log this in firstInputTokens of the AgentStateGlobal
     }
 
-    let response;
+    let response: any;
 
     try {
       if (useStreaming) {

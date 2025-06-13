@@ -11,6 +11,9 @@ import {
   File,
   createPartFromUri,
   GenerationConfig,
+  type CreateChatParameters,
+  type SendMessageParameters,
+  type UploadFileParameters,
 } from '@google/genai';
 
 // Local imports - agent components
@@ -204,7 +207,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
       generationConfig.thinkingConfig = { includeThoughts: true };
     }
 
-    const chatParams = {
+    const chatParams: CreateChatParameters = {
       model: this.config.fullName,
       history: chatHistory,
       config: generationConfig,
@@ -275,10 +278,11 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
       );
 
       if (useStreaming) {
-        const stream = await chat.sendMessageStream({
+        const streamParams: SendMessageParameters = {
           message: lastMessageParts,
           config: { ...generationConfig, abortSignal: signal },
-        });
+        };
+        const stream = await chat.sendMessageStream(streamParams);
 
         const fullParts: Part[] = [];
         const finalResponse = new GenerateContentResponse();
@@ -312,10 +316,11 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
         return finalResponse;
       }
 
-      const result = await chat.sendMessage({
+      const sendParams: SendMessageParameters = {
         message: lastMessageParts,
         config: { ...generationConfig, abortSignal: signal },
-      });
+      };
+      const result = await chat.sendMessage(sendParams);
 
       return result;
     } catch (error: any) {
@@ -374,7 +379,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
             continue;
           }
 
-          const uploadParams = {
+          const uploadParams: UploadFileParameters = {
             file: absolutePath,
             config: { mimeType: explicitMimeType },
           };
@@ -492,7 +497,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
             continue;
           }
 
-          const uploadParams = {
+          const uploadParams: UploadFileParameters = {
             file: absolutePath,
             config: { mimeType: explicitMimeType },
           };
