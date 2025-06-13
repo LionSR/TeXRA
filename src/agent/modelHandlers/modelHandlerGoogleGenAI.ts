@@ -374,7 +374,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
       (this.config.capabilities.supportsVision ||
         this.config.capabilities.supportsNativeAudio)
     ) {
-      this.logger.info(
+      this.logger.debug(
         `Uploading ${mediaFiles.length} media files via native SDK...`,
       );
       for (const mediaFile of mediaFiles) {
@@ -405,7 +405,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
 
           const uploadResult: File = await client.files.upload(uploadParams);
 
-          this.logger.info(
+          this.logger.debug(
             `Uploaded ${mediaFile}, URI: ${uploadResult.uri}, MimeType: ${uploadResult.mimeType}`,
           );
 
@@ -492,7 +492,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
       (this.config.capabilities.supportsVision ||
         this.config.capabilities.supportsNativeAudio)
     ) {
-      this.logger.info(
+      this.logger.debug(
         `Uploading ${mediaFiles.length} media files for reflection via native SDK...`,
       );
       for (const mediaFile of mediaFiles) {
@@ -524,7 +524,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
 
           const uploadResult: File = await client.files.upload(uploadParams);
 
-          this.logger.info(
+          this.logger.debug(
             `Uploaded reflection file ${mediaFile}, URI: ${uploadResult.uri}, MimeType: ${uploadResult.mimeType}`,
           );
 
@@ -628,7 +628,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
       endTag &&
       !responseText.endsWith(endTag)
     ) {
-      this.logger.info(
+      this.logger.debug(
         `Model stopped naturally but didn't include end tag. Appending ${endTag}.`,
       );
       responseText += `\n${endTag}`;
@@ -699,7 +699,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
   ): void {
     const prefillTokens = toolState.lastResponse.slice(-K_SLICE);
     const userMessageContinuation = `Your response got cut off. Continue responding exactly where you left off, starting after: "${prefillTokens}". Do not repeat yourself or start over. Ensure you end with ${agentSetting.endTag}.`;
-    this.logger.info(`Adding continuation message.`);
+    this.logger.debug(`Adding continuation message.`);
     messages.push({
       role: 'user',
       content: [{ type: 'text', text: userMessageContinuation }],
@@ -845,7 +845,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
       return [endTurn, messages];
     }
 
-    this.logger.info(
+    this.logger.debug(
       'Existing file content found without end tag - continuing generation.',
     );
     toolState.updateAccumulatedOutput(fileContent);
