@@ -29,6 +29,7 @@ import {
   ExtendedCompletionUsage,
 } from '../ResponseUsage';
 import { MediaEntry } from '../mediaTypes';
+import { AgentLogger } from '../../logger/AgentLogger';
 
 // Local imports - utilities
 import {
@@ -60,10 +61,21 @@ type InternalMessagePart = {
   mimeType?: string;
 };
 
+// For the Message interface, I kept a simple version because:
+// 1. Google's Content type has role?: string (optional), while our internal messages always have a role
+// 2. Google's Content uses parts?: Part[] while our internal structure uses content: string | InternalMessagePart[]
+
+// Define a message interface that matches our internal structure
+// but is compatible with Google's Content type
+interface Message {
+  role: string;
+  content: string | InternalMessagePart[];
+}
+
 // Helper function
 function convertInternalPartsToGoogleParts(
   internalParts: InternalMessagePart[],
-  logger: any,
+  logger: AgentLogger,
 ): Part[] {
   return internalParts
     .map((part: InternalMessagePart): Part | null => {
@@ -83,8 +95,8 @@ function convertInternalPartsToGoogleParts(
 
 // Helper function
 function convertMessagesToGoogleContentHistory(
-  messages: any[],
-  logger: any,
+  messages: Message[],
+  logger: AgentLogger,
 ): Content[] {
   const history: Content[] = [];
   let currentRole: 'user' | 'model' | null = null;
@@ -156,7 +168,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
   /** Creates a chat completion response using Google's GenAI API with specified parameters and optional system prompt. */
   async createResponse(
     client: GoogleGenAI,
-    messages: any[],
+    messages: Message[],
     temperature: number,
     systemPrompt?: string,
     endTag?: string,
@@ -255,7 +267,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
           generationConfig.maxOutputTokens =
             this.config.contextWindow - totalTokens - 10;
         }
-      } catch (err: any) {
+      } catch (err) {
         this.logger.error(
           formatProviderError(
             'Token counting failed, proceeding without token adjustment',
@@ -323,18 +335,18 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
       const result = await chat.sendMessage(sendParams);
 
       return result;
-    } catch (error: any) {
+    } catch (error) {
       this.logger.error(
         formatProviderError('Error during Google GenAI Chat API call', error),
       );
-      if (error.message?.includes('request.contents[0].parts')) {
+      if (error instanceof Error && error.message?.includes('request.contents[0].parts')) {
         this.logger.error(
           'Potential issue with sendMessage parameter structure. Check conversion.',
         );
       }
-      if (error.message?.includes('SAFETY')) {
+      if (error instanceof Error && error.message?.includes('SAFETY')) {
         this.logger.error(
-          `Safety block details: ${JSON.stringify(error.response?.promptFeedback)}`,
+          `Safety block details: ${JSON.stringify((error as any).response?.promptFeedback)}`,
         );
       }
       throw error;
@@ -464,10 +476,10 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
 
   /** Creates a reflection message array for Google GenAI models, managing image content and message structure. */
   async createReflectionMessages(
-    messages: any[],
+    messages: Message[],
     userMessage: string,
     mediaFiles?: string[],
-  ): Promise<any[]> {
+  ): Promise<Message[]> {
     const client = await this.getClient();
     const reflectionParts: InternalMessagePart[] = [];
 
@@ -546,7 +558,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
     return messages;
   }
 
-  createMediaContent(mediaMessage: MediaEntry[]): any[] {
+  createMediaContent(mediaMessage: MediaEntry[]): MediaEntry[] {
     this.logger.warn(
       'createMediaContent called on ModelHandlerGoogleGenAI - should be obsolete.',
     );
@@ -556,7 +568,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
   extractResponse(
     responseObject: GenerateContentResponse,
     endTag: string,
-  ): [string, any, string] {
+  ): [string, GenerateContentResponseUsageMetadata | undefined, string] {
     if (!responseObject) {
       this.logger.error(`Invalid (null) response object received.`);
       return ['', undefined, 'UNKNOWN_EMPTY_RESPONSE'];
@@ -676,11 +688,11 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
   }
 
   addContinueMessageWithoutPrefill(
-    messages: any[],
-    stateRound: AgentStateRound,
+    messages: Message[],
+    _stateRound: AgentStateRound,
     toolState: ToolState,
     agentSetting: AgentSetting,
-    agentConfig: AgentConfig,
+    _agentConfig: AgentConfig,
   ): void {
     const prefillTokens = toolState.lastResponse.slice(-K_SLICE);
     const userMessageContinuation = `Your response got cut off. Continue responding exactly where you left off, starting after: "${prefillTokens}". Do not repeat yourself or start over. Ensure you end with ${agentSetting.endTag}.`;
@@ -698,7 +710,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
   }
 
   updateMessageContentWithoutPrefill(
-    messages: any[],
+    messages: Message[],
     bestConnector: string,
     newResponse: string,
     toolState: ToolState,
@@ -760,12 +772,12 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
   async initializeOutputAndPrefill(
     agentConfig: AgentConfig,
     agentSetting: AgentSetting,
-    messages: any[],
+    messages: Message[],
     toolState: ToolState,
     outputFile: string,
     prefill: string,
     groupId?: string,
-  ): Promise<[boolean, any[]]> {
+  ): Promise<[boolean, Message[]]> {
     let endTurn = false;
     this.logger.debug(
       `Initializing output and prefill for ${outputFile}. Prefill content: "${prefill.slice(0, 100)}..."`,
@@ -869,7 +881,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
   }
 
   processThinkingBlock(
-    responseObject: any,
+    responseObject: GenerateContentResponse,
     groupId?: string,
     toolState?: ToolState,
   ): string | null {
@@ -904,7 +916,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
       toolState.thinkingBlocks = thoughtParts.map((p) => ({
         type: 'thinking',
         thinking: p.text ?? '',
-        thoughtSignature: (p as any).thoughtSignature,
+        thoughtSignature: p.thoughtSignature,
       }));
       toolState.thinkingAdded = true;
     }
