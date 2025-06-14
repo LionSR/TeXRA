@@ -10,7 +10,7 @@ import { ToolState } from '../ToolState';
 import { MediaEntry } from '../mediaTypes';
 
 // Local imports - utilities
-import { convertContentToString } from '../../utils/messageUtils';
+import { convertContentToString } from '../../utils/text/messageUtils';
 import { MESSAGE_PREVIEW_LENGTH } from '../../utils/constants';
 
 /**

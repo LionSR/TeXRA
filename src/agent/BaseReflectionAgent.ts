@@ -37,12 +37,12 @@ import {
   getAllReplacements,
   getAllReplacementsRegex,
 } from '../replacement/replacementUtils';
-import { checkForMassiveRepetition } from '../utils/repetitionUtils';
+import { checkForMassiveRepetition } from '../utils/text/repetitionUtils';
 import {
   extractAndLogScratchpad,
   formatAndLogContent,
-} from '../utils/xmlUtils';
-import { sleep } from '../utils/timeUtils';
+} from '../utils/text/xmlUtils';
+import { sleep } from '../utils/helpers';
 
 // Local imports - agent components
 import { AgentConfig } from './AgentConfig';
