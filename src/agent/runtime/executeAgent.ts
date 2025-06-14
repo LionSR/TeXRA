@@ -9,26 +9,26 @@ import { glob } from 'glob';
 import {
   getBuiltInAgentsDirectory,
   getCustomAgentsDirectory,
-} from '../../frontend/agents/pathUtils';
-import { agentConfigToTaskState } from '../../utils/config';
+} from '@frontend/agents/pathUtils';
+import { agentConfigToTaskState } from '@utils/config';
 
 // Local imports - agent components
-import { AgentConfig, createAgentConfig } from '../core/AgentConfig';
-import { AgentSetting, AgentPrompt } from '../core/AgentDataclass';
-import { loadAgentSettingAndPrompts } from './agentLoad';
-import { MODEL_CONFIGS } from '../../model/ModelRegistry';
-import { ModelFactory } from './ModelFactory';
-import { DirectAgent } from '../implementations/DirectAgent';
-import { CoTAgent } from '../implementations/CoTAgent';
-import { MergeAgent } from '../implementations/MergeAgent';
-import { ProgressViewProvider } from '../../progressView/ProgressViewProvider';
-import { AgentLogger } from '../../logger/AgentLogger';
-import { openBuildDisplayIfTex } from '../../frontend/latex/openBuild';
+import { AgentConfig, createAgentConfig } from '@agent/core/AgentConfig';
+import { AgentSetting, AgentPrompt } from '@agent/core/AgentDataclass';
+import { loadAgentSettingAndPrompts } from '@agent/runtime/agentLoad';
+import { MODEL_CONFIGS } from '@model/ModelRegistry';
+import { ModelFactory } from '@agent/runtime/ModelFactory';
+import { DirectAgent } from '@agent/implementations/DirectAgent';
+import { CoTAgent } from '@agent/implementations/CoTAgent';
+import { MergeAgent } from '@agent/implementations/MergeAgent';
+import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
+import { AgentLogger } from '@logger/AgentLogger';
+import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import {
   checkExpectedOutputs,
   showInstructionWithSuppress,
-} from '../../frontend/ui/instruction';
-import { IAgent } from '../core/IAgent';
+} from '@frontend/ui/instruction';
+import { IAgent } from '@agent/core/IAgent';
 
 const CHANNEL = 'executeAgent';
 const logger = new AgentLogger(CHANNEL);
