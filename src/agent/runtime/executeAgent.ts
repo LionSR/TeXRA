@@ -9,26 +9,26 @@ import { glob } from 'glob';
 import {
   getBuiltInAgentsDirectory,
   getCustomAgentsDirectory,
-} from '../utils/files';
-import { agentConfigToTaskState } from '../utils/config';
+} from '../../utils/files';
+import { agentConfigToTaskState } from '../../utils/config';
 
 // Local imports - agent components
-import { AgentConfig, createAgentConfig } from './AgentConfig';
-import { AgentSetting, AgentPrompt } from './AgentDataclass';
+import { AgentConfig, createAgentConfig } from '../core/AgentConfig';
+import { AgentSetting, AgentPrompt } from '../core/AgentDataclass';
 import { loadAgentSettingAndPrompts } from './agentLoad';
-import { MODEL_CONFIGS } from '../model/ModelRegistry';
+import { MODEL_CONFIGS } from '../../model/ModelRegistry';
 import { ModelFactory } from './ModelFactory';
-import { DirectAgent } from './DirectAgent';
-import { CoTAgent } from './CoTAgent';
-import { MergeAgent } from './MergeAgent';
-import { ProgressViewProvider } from '../progressView/ProgressViewProvider';
-import { AgentLogger } from '../logger/AgentLogger';
-import { openBuildDisplayIfTex } from '../utils/openBuildUtils';
+import { DirectAgent } from '../implementations/DirectAgent';
+import { CoTAgent } from '../implementations/CoTAgent';
+import { MergeAgent } from '../implementations/MergeAgent';
+import { ProgressViewProvider } from '../../progressView/ProgressViewProvider';
+import { AgentLogger } from '../../logger/AgentLogger';
+import { openBuildDisplayIfTex } from '../../utils/openBuildUtils';
 import {
   checkExpectedOutputs,
   showInstructionWithSuppress,
-} from '../utils/instructionUtils';
-import { IAgent } from './IAgent';
+} from '../../utils/instructionUtils';
+import { IAgent } from '../core/IAgent';
 
 const CHANNEL = 'executeAgent';
 const logger = new AgentLogger(CHANNEL);
