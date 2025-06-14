@@ -12,6 +12,7 @@ import {
   updateFileSelect,
   updateEditedFileSelect,
   updateMultipleFileSelect,
+  getSelectedFiles,
   handleRecentCommits,
   handleSetCurrentFile,
 } from './fileHandlers.js';
@@ -331,7 +332,12 @@ export function setupMessageHandlers() {
       postHandle();
     },
     addMediaFile: (m) => {
-      updateMultipleFileSelect('mediaFiles', 'toggleMediaFiles', [m.file]);
+      const listDiv = safeGetElementById('mediaFiles');
+      const existingFiles = listDiv ? getSelectedFiles(listDiv) : [];
+      updateMultipleFileSelect('mediaFiles', 'toggleMediaFiles', [
+        ...existingFiles,
+        m.file,
+      ]);
       postHandle();
     },
     setOutputFiles: (m) => {
