@@ -78,19 +78,20 @@ export function updateMultipleFileSelect(selectId, toggleId, files) {
     });
     selectDiv.style.display = 'block';
     toggleIcon.innerHTML = '<i class="codicon codicon-chevron-up"></i>';
-    const containerDiv = selectDiv.closest('.file-select');
-    if (containerDiv) {
-      containerDiv.style.display = 'block';
+
+    // Make sure the container is also visible
+    const containerId = `${selectId}Container`;
+    const container = safeGetElementById(containerId);
+    if (container) {
+      container.style.display = 'block';
     }
   }
   saveState();
 }
 
 export function getSelectedFiles(multipleFilesDiv) {
-  const fileElements = multipleFilesDiv.getElementsByTagName('div');
-  return Array.from(fileElements).map(
-    (el) => el.textContent.replace(' -', '') || '',
-  );
+  const fileElements = multipleFilesDiv.querySelectorAll('.file-item');
+  return Array.from(fileElements).map((el) => el.dataset.path || '');
 }
 
 export function hideEmptyMultipleFileSelects() {

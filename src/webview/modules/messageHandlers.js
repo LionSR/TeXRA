@@ -338,6 +338,17 @@ export function setupMessageHandlers() {
         ...existingFiles,
         m.file,
       ]);
+
+      // Ensure the media files container is visible
+      const container = safeGetElementById('mediaFilesContainer');
+      if (container && container.style.display === 'none') {
+        container.style.display = 'block';
+        const toggleIcon = safeGetElementById('toggleMediaFiles');
+        if (toggleIcon) {
+          toggleIcon.innerHTML = '<i class="codicon codicon-chevron-up"></i>';
+        }
+      }
+
       postHandle();
     },
     setOutputFiles: (m) => {
