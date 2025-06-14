@@ -14,8 +14,8 @@ import {
   createDirectory,
   deleteFile,
   fileExists,
-} from './workspaceFileUtils';
-import { executeCommand } from './execUtils';
+} from './files';
+import { executeCommand } from './system';
 import { indentLatexFilesInDirectory } from '../housekeeping/indent';
 
 const CHANNEL = 'arXivUtils';

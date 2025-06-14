@@ -13,9 +13,9 @@ import {
   fileExists,
   readFile,
   writeFile,
-} from '../utils/workspaceFileUtils';
+} from '../utils/files';
 import { registerDiffRefresh } from '../utils/diffViewUtils';
-import { DIFF_REGISTRATION_DELAY_MS } from '../utils/constants';
+import { DIFF_REGISTRATION_DELAY_MS } from '../utils/config';
 
 const CHANNEL = 'CompareCommands';
 logger.initialize(CHANNEL);

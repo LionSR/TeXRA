@@ -5,7 +5,7 @@ import * as vscode from 'vscode';
 import * as logger from './logger/logUtils';
 import { initializeSecrets } from './utils/secretUtils';
 import { copyDefaultAgents, configureLatexSettings } from './utils/setupUtils';
-import { watchConfig } from './utils/configUtils';
+import { watchConfig } from './utils/config';
 import { disposeDiffRefresh } from './utils/diffViewUtils';
 
 // Local imports - components

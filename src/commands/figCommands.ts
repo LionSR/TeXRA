@@ -8,7 +8,7 @@ import * as vscode from 'vscode';
 import * as logger from '../logger/logUtils';
 
 // Local imports - utilities
-import { getRelativePath, getWorkspacePath } from '../utils/workspaceFileUtils';
+import { getRelativePath, getWorkspacePath } from '../utils/files';
 
 // Local imports - latex utils
 import { extractFigurePathsFromLatex } from '../latex/extractFigure';
