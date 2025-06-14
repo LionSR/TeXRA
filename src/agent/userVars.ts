@@ -3,7 +3,7 @@
 import * as path from 'path';
 
 import { AgentLogger } from '../logger/AgentLogger';
-import { readFile } from '../utils/workspaceFileUtils';
+import { readFile } from '../utils/files';
 import { setVarFromFile } from '../utils/fileVarUtils';
 import { getXmlFormatFromFiles, getListOfFiles } from '../utils/promptUtils';
 import { AgentConfig } from './AgentConfig';

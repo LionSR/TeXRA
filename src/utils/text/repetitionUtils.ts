@@ -10,7 +10,7 @@ import * as logger from '../../logger/logUtils';
 import {
   REPETITION_DETECTION_THRESHOLD,
   REPETITION_PREVIEW_LENGTH,
-} from '../constants';
+} from '../config';
 
 const CHANNEL = 'repetitionUtils';
 logger.initialize(CHANNEL);

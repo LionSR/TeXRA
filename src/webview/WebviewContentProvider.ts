@@ -7,7 +7,7 @@ import * as vscode from 'vscode';
 import * as logger from '../logger/logUtils';
 
 // Local imports - utilities
-import { getConfig } from '../utils/configUtils';
+import { getConfig } from '../utils/config';
 import { buildWebviewHtml } from '../utils/webviewHtmlUtils';
 
 const CHANNEL = 'Webview';
