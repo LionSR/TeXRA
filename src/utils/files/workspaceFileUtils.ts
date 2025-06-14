@@ -6,7 +6,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 // Local imports - log
-import * as logger from '../../logger/logUtils';
+import * as logger from '@logger/logUtils';
 import { fileExistsAbsolute } from './absoluteFileUtils';
 
 const CHANNEL = 'workspaceFileUtils';
