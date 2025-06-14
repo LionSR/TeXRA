@@ -9,8 +9,8 @@ import * as logger from '../logger/logUtils';
 import { XMLValidatorAgent } from '../AnthropicTool';
 
 // Local imports - utils
-import { getRelativePath } from '../utils/workspaceFileUtils';
-import { sleep } from '../utils/timeUtils';
+import { getRelativePath } from '../utils/files';
+import { sleep } from '../utils/helpers';
 
 const CHANNEL = 'XmlCommands';
 logger.initialize(CHANNEL);

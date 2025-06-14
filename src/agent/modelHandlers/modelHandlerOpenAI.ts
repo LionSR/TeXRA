@@ -15,25 +15,25 @@ import {
   readFile,
   writeFile,
   fileExistsAndNonTrivial,
-} from '../../utils/workspaceFileUtils';
+} from '../../utils/files';
 import { cleanFileContent } from '../../replacement/replacementUtils';
-import { extractAndLogScratchpad } from '../../utils/xmlUtils';
+import { extractAndLogScratchpad } from '../../utils/text/xmlUtils';
 
 // Local imports - agent components
-import { AgentConfig } from '../AgentConfig';
-import { AgentSetting, hasEndTag } from '../AgentDataclass';
-import { AgentStateRound } from '../AgentState';
+import { AgentConfig } from '../core/AgentConfig';
+import { AgentSetting, hasEndTag } from '../core/AgentDataclass';
+import { AgentStateRound } from '../core/AgentState';
 import { ModelHandler } from './ModelHandler';
 import {
   OpenAIAPIResponseUsage,
   ResponseUsageFactory,
   ExtendedCompletionUsage,
-} from '../ResponseUsage';
-import { ToolState } from '../ToolState';
-import { K_SLICE } from '../../utils/constants';
-import { objectToLogString } from '../../utils/stringUtils';
+} from '../core/ResponseUsage';
+import { ToolState } from '../core/ToolState';
+import { K_SLICE } from '../../utils/config';
+import { objectToLogString } from '../../utils/text/stringUtils';
 import { calculateTokenPrice } from '../../utils/priceUtils';
-import { MediaEntry } from '../mediaTypes';
+import { MediaEntry } from '../utils/mediaTypes';
 
 /**
  * OpenAI-specific handlers.
@@ -81,7 +81,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
         // Validate reasoning effort based on provider-specific constraints
         kwargs.reasoning_effort = this.validateReasoningEffort(
           this.config.capabilities.reasoningEffort,
-        );
+        ) as any; // Cast to any for compatibility with different API providers
       }
     }
     if (this.config.fullName.includes('deepseek-chat')) {
@@ -123,9 +123,9 @@ export class ModelHandlerOpenAI extends ModelHandler {
           `Approximate token count (${approximateInputTokens}) + max tokens (${originalMaxTokens}) exceeds context window (${this.config.contextWindow}). Reducing max tokens to ${kwargs[maxOutputKey]}.`,
         );
       }
-    } catch (err: any) {
+    } catch (err) {
       this.logger.error(
-        `Token counting failed: ${err.message}. Proceeding without token adjustment.`,
+        `Token counting failed: ${err instanceof Error ? err.message : String(err)}. Proceeding without token adjustment.`,
       );
       // Decide if you want to throw here or let the API call potentially fail
     }
@@ -134,7 +134,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
       let response: any;
       kwargs.stream_options = { include_usage: true };
       try {
-        const stream = client.chat.completions.stream(kwargs, {
+        const stream = client.chat.completions.stream(kwargs as any, {
           signal,
         });
 
@@ -191,7 +191,9 @@ export class ModelHandlerOpenAI extends ModelHandler {
         ) {
           throw err;
         }
-        this.logger.error(`Error in createResponse(streaming): ${err}`);
+        this.logger.error(
+          `Error in createResponse(streaming): ${err instanceof Error ? err.message : String(err)}`,
+        );
       }
       return response;
     } else {
@@ -201,7 +203,9 @@ export class ModelHandlerOpenAI extends ModelHandler {
         });
         return response;
       } catch (err) {
-        this.logger.error(`Error in createResponse: ${err}`);
+        this.logger.error(
+          `Error in createResponse: ${err instanceof Error ? err.message : String(err)}`,
+        );
         throw err;
       }
     }
@@ -267,7 +271,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
     const requestRole = this.config.capabilities.supportsIntermDevMsgs
       ? 'system'
       : 'user';
-    lastRole = messages.length > 0 ? messages.at(-1).role : null;
+    lastRole = messages.length > 0 ? messages.at(-1)?.role : null;
 
     if (requestRole === 'system') {
       messages.push({
@@ -275,10 +279,19 @@ export class ModelHandlerOpenAI extends ModelHandler {
         content: [{ type: 'text', text: userRequest }],
       });
     } else if (requestRole === 'user' && lastRole === 'user') {
-      messages.at(-1).content.push({
-        type: 'text',
-        text: userRequest,
-      });
+      const lastMessage = messages.at(-1);
+      if (lastMessage && Array.isArray(lastMessage.content)) {
+        lastMessage.content.push({
+          type: 'text',
+          text: userRequest,
+        });
+      } else if (lastMessage && typeof lastMessage.content === 'string') {
+        // Convert string content to array format
+        lastMessage.content = [
+          { type: 'text', text: lastMessage.content },
+          { type: 'text', text: userRequest },
+        ];
+      }
     } else {
       messages.push({
         role: requestRole,
@@ -289,18 +302,18 @@ export class ModelHandlerOpenAI extends ModelHandler {
     return messages;
   }
 
-  /** Adds user message with reflection content to existing messages. */
-  async createReflectionMessages(
+  /** Adds user message content for subsequent rounds. */
+  async createRoundMessages(
     messages: any[],
     userMessage: string,
     mediaFiles?: string[],
   ): Promise<any[]> {
-    const reflectionContent: ChatCompletionContentPart[] = [];
+    const roundContent: ChatCompletionContentPart[] = [];
 
     // const role = this.config.capabilities.supportsIntermDevMsgs
     // ? 'system'
     // : 'user';
-    // technically we can use system for the reflection messages, but it does not support images...
+    // technically we can use system for the follow-up round messages, but it does not support images...
     // Error in createResponse: Error: 400 Invalid 'messages[4]'. Image URLs are only allowed for messages with role 'user', but this message with role 'system' contains an image URL.
     // system role does not support images/audio
     const role = 'user';
@@ -313,16 +326,16 @@ export class ModelHandlerOpenAI extends ModelHandler {
     ) {
       try {
         const formattedMediaContent = await this.createMediaMessage(mediaFiles);
-        reflectionContent.push(...formattedMediaContent);
+        roundContent.push(...formattedMediaContent);
       } catch (err) {
         this.logger.error(
-          `Error processing media files for reflection: ${err}`,
+          `Error processing media files for follow-up round: ${err}`,
         );
       }
     }
-    reflectionContent.push({ type: 'text', text: userMessage });
+    roundContent.push({ type: 'text', text: userMessage });
 
-    messages.push({ role, content: reflectionContent });
+    messages.push({ role, content: roundContent });
     return messages;
   }
 
@@ -397,7 +410,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
 
       // Add fallback for streaming which returns content directly in responseObject
       if (responseObject.role && responseObject.content) {
-        this.logger.info(
+        this.logger.warn(
           'Using direct response format (streaming style) as fallback',
         );
         let newResponse = responseObject.content.trim();
@@ -466,11 +479,11 @@ export class ModelHandlerOpenAI extends ModelHandler {
 
   /** Manages continuation with prefill support (typically no-op for models with prefill). */
   addContinueMessageWithPrefill(
-    messages: any[],
-    stateRound: AgentStateRound,
-    toolState: ToolState,
-    agentSetting: AgentSetting,
-    agentConfig: AgentConfig,
+    _messages: any[],
+    _stateRound: AgentStateRound,
+    _toolState: ToolState,
+    _agentSetting: AgentSetting,
+    _agentConfig: AgentConfig,
   ): void {
     this.logger.debug('Skipping continuation - assistant prefill is supported');
     // No-op for models that support prefill
@@ -479,10 +492,10 @@ export class ModelHandlerOpenAI extends ModelHandler {
   /** Manages continuation for models without prefill support by adding a continuation prompt. */
   addContinueMessageWithoutPrefill(
     messages: any[],
-    stateRound: AgentStateRound,
+    _stateRound: AgentStateRound,
     toolState: ToolState,
     agentSetting: AgentSetting,
-    agentConfig: AgentConfig,
+    _agentConfig: AgentConfig,
   ): void {
     // Create continuation message with last K tokens
     const prefillTokens = toolState.lastResponse.slice(-K_SLICE);
@@ -530,10 +543,18 @@ export class ModelHandlerOpenAI extends ModelHandler {
       }
 
       const PseudoPrefillMsgContentString = `Organize your response with xml tags. Start your response with:\n${prefill}`;
-      messages.at(-1).content.push({
-        type: 'text',
-        text: PseudoPrefillMsgContentString,
-      });
+      const lastMessage = messages.at(-1);
+      if (lastMessage && Array.isArray(lastMessage.content)) {
+        lastMessage.content.push({
+          type: 'text',
+          text: PseudoPrefillMsgContentString,
+        });
+      } else if (lastMessage && typeof lastMessage.content === 'string') {
+        lastMessage.content = [
+          { type: 'text', text: lastMessage.content },
+          { type: 'text', text: PseudoPrefillMsgContentString },
+        ];
+      }
       this.logger.debug(
         `Added pseudo prefill message to messages:\n${PseudoPrefillMsgContentString}`,
       );
@@ -563,10 +584,13 @@ export class ModelHandlerOpenAI extends ModelHandler {
     const lastMessage = messages.at(-1);
     if (hasEndTag(agentSetting, fileContent)) {
       this.logger.info('End tag detected - skipping continuation');
-      if (Array.isArray(lastMessage.content)) {
+      if (lastMessage && Array.isArray(lastMessage.content)) {
         // this is suspicious, because the two conflicts!!!
-        lastMessage.content[lastMessage.content.length - 1].text = fileContent;
-      } else {
+        const lastPart = lastMessage.content[lastMessage.content.length - 1];
+        if (lastPart && 'text' in lastPart) {
+          lastPart.text = fileContent;
+        }
+      } else if (lastMessage) {
         lastMessage.content = [
           {
             type: 'text',
@@ -730,7 +754,10 @@ export class ModelHandlerOpenAI extends ModelHandler {
     const lastMessage = messages.at(-1);
     const secondLastMessage = messages.at(-2);
 
-    if (lastMessage.role !== 'user' && lastMessage.role !== 'system') {
+    if (
+      !lastMessage ||
+      (lastMessage.role !== 'user' && lastMessage.role !== 'system')
+    ) {
       this.logger.error(
         'Last message is not a user or system message - unexpected format',
       );
@@ -744,14 +771,14 @@ export class ModelHandlerOpenAI extends ModelHandler {
       );
       // Then the last message is a user message
       // So the second last message must be an assistant message
-      if (secondLastMessage.role === 'assistant') {
+      if (secondLastMessage && secondLastMessage.role === 'assistant') {
         // we get gradually get rid if this kind of isArray conditioning since now we are consistently using the content array
         // but why do the following two differ?
         if (Array.isArray(secondLastMessage.content)) {
           secondLastMessage.content.push({
             type: 'text',
             text: bestConnector + newResponse,
-          });
+          } as any);
         } else {
           this.logger.error('Second last message content is not a list');
           secondLastMessage.content = [
@@ -799,9 +826,9 @@ export class ModelHandlerOpenAI extends ModelHandler {
    * @returns Always returns null as OpenAI doesn't support thinking blocks
    */
   processThinkingBlock(
-    responseObject: any,
-    groupId?: string,
-    toolState?: ToolState,
+    _responseObject: any,
+    _groupId?: string,
+    _toolState?: ToolState,
   ): string | null {
     return null;
   }
@@ -851,9 +878,11 @@ export class ModelHandlerOpenAI extends ModelHandler {
       // Needs a mapping from model name to encoding or importing specific model tokenizers.
       // Assuming cl100k_base for gpt-3.5/4 for now. Need to enhance this.
       return countTokens(textToCount); // Assuming cl100k_base default
-    } catch (err: any) {
+    } catch (err) {
       // Log the error and re-throw to indicate failure
-      this.logger.error(`Error counting tokens: ${err.message}`);
+      this.logger.error(
+        `Error counting tokens: ${err instanceof Error ? err.message : String(err)}`,
+      );
       throw err;
     }
   }
