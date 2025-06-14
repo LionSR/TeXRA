@@ -44,9 +44,14 @@ window.onload = function () {
     instruction.addEventListener('paste', (e) => {
       const items = e.clipboardData?.items || [];
       let insertText = '';
+      let hasImage = false;
       for (const item of items) {
         if (item.type.startsWith('image/')) {
-          e.preventDefault();
+          if (!hasImage) {
+            e.preventDefault();
+            hasImage = true;
+            insertText += e.clipboardData?.getData('text/plain') || '';
+          }
           const file = item.getAsFile();
           if (file) {
             const ext = item.type.split('/')[1].replace('jpeg', 'jpg');
@@ -71,7 +76,7 @@ window.onload = function () {
           }
         }
       }
-      if (insertText) {
+      if (hasImage && insertText) {
         insertTextAtCursor(instruction, insertText);
       }
       // Use setTimeout to let the paste complete
