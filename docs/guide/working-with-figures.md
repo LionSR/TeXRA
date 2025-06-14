@@ -34,7 +34,7 @@ You can quickly add images to your TeXRA instructions by pasting directly from y
 3. The image is automatically saved and referenced as `[pasted_timestamp_hash.ext]`
 4. The Media Files section is automatically updated with the pasted image
 
-This feature supports all common image formats including JPEG, PNG, GIF, WebP, BMP, SVG, TIFF, HEIC, HEIF, AVIF, and PSD. Pasted images are stored temporarily in workspace storage and cleaned up after 3 days.
+While the clipboard accepts many image formats (JPEG, PNG, GIF, WebP, BMP, SVG, TIFF, HEIC, HEIF, AVIF, PSD), the actual formats that can be processed depend on the AI model you're using. Most vision models support common formats like JPEG, PNG, GIF, and WebP. Pasted images are stored temporarily in workspace storage and cleaned up after 3 days.
 
 ## Automatic Figure Extraction
 
