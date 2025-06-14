@@ -1,7 +1,7 @@
 /**
  * Helper functions for generating replacement patterns
  */
-import { capitalize } from '../frontend-utils/commonUtils';
+import { capitalize } from '../frontend/ui/messageUtils';
 
 // ===== Shared Constants =====
 
