@@ -25,6 +25,17 @@ TeXRA supports a range of common media types (configurable via `texra.files.incl
 TeXRA prioritizes native PDF processing for models that support it (like Anthropic/Gemini/OpenAI). If a model doesn't support native PDFs, TeXRA uses external tools (GraphicsMagick/ImageMagick and Ghostscript) as a fallback to convert PDF pages to images for analysis. See the [Installation Guide](./installation.md) for dependency details.
 :::
 
+## Quick Image Insertion via Clipboard
+
+You can quickly add images to your TeXRA instructions by pasting directly from your clipboard:
+
+1. **Copy any image** (screenshot, diagram, etc.) to your clipboard
+2. **Paste in the instruction area** using Ctrl/Cmd+V
+3. The image is automatically saved and referenced as `[pasted_timestamp_hash.ext]`
+4. The Media Files section is automatically updated with the pasted image
+
+While the clipboard accepts many image formats (JPEG, PNG, GIF, WebP, BMP, SVG, TIFF, HEIC, HEIF, AVIF, PSD), the actual formats that can be processed depend on the AI model you're using. Most vision models support common formats like JPEG, PNG, GIF, and WebP. Pasted images are stored temporarily in workspace storage and cleaned up after 3 days.
+
 ## Automatic Figure Extraction
 
 TeXRA includes an "Auto-extract" feature to automatically identify and include figures from your input `.tex` document, reducing manual selection. This feature is accessible via the dropdown next to the Media label (<i class="codicon codicon-file-media"></i>) in the main file selection area:
