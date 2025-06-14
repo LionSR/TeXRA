@@ -8,9 +8,9 @@ import * as vscode from 'vscode';
 import * as logger from '../logger/logUtils';
 
 // Local imports - utilities
-import { executeCommand } from '../utils/execUtils';
-import { getConfig } from '../utils/configUtils';
-import { getWorkspacePath, createDirectory } from '../utils/workspaceFileUtils';
+import { executeCommand } from '../utils/system';
+import { getConfig } from '../utils/config';
+import { getWorkspacePath, createDirectory } from '../utils/files';
 // No additional imports needed
 
 const CHANNEL = 'LaTeXCommands';

@@ -8,10 +8,10 @@ import * as vscode from 'vscode';
 import * as logger from '../logger/logUtils';
 
 // Local imports - utilities
-import { readFile, writeFile, fileExists } from '../utils/workspaceFileUtils';
-import { executeCommand } from '../utils/execUtils';
+import { readFile, writeFile, fileExists } from '../utils/files';
+import { executeCommand } from '../utils/system';
 import { ExecResult } from '../types/ResultTypes';
-import { getConfig } from '../utils/configUtils';
+import { getConfig } from '../utils/config';
 import { logErrorMessage } from '../utils/errorHandlingUtils';
 
 // Local imports - latex utils
