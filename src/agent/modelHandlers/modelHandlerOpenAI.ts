@@ -134,12 +134,9 @@ export class ModelHandlerOpenAI extends ModelHandler {
       let response: any;
       kwargs.stream_options = { include_usage: true };
       try {
-        const stream = client.chat.completions.stream(
-          kwargs as any,
-          {
-            signal,
-          },
-        );
+        const stream = client.chat.completions.stream(kwargs as any, {
+          signal,
+        });
 
         if (this.config.fullName.includes('deepseek')) {
           // This wait for finalMessage method do not support deepseek models, so we need to aggreatate the results manually like this:
