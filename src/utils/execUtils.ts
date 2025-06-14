@@ -10,6 +10,7 @@ import { extendEnvPath } from './PlatformPaths';
 // Local imports - utilities
 import { getWorkspacePath } from './workspaceFileUtils';
 import { ExecResult } from '../types/ResultTypes';
+import { extendEnvPath } from './platformPaths';
 
 const CHANNEL = 'execUtils';
 logger.initialize(CHANNEL);

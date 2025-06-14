@@ -2,7 +2,7 @@
 import spawn from 'cross-spawn';
 
 // Local imports
-import { extendEnvPath, findToolInCommonPaths } from './PlatformPaths';
+import { extendEnvPath, findToolInCommonPaths } from './platformPaths';
 
 // Third-party imports
 import * as vscode from 'vscode';
