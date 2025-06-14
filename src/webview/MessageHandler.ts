@@ -23,8 +23,11 @@ import {
   listEditedFiles,
   getFilesIfNotEmpty,
 } from '../frontend-utils/fileListingUtils';
-import { polishTextWithAI, FileContext } from '../utils/textEnhancementUtils';
-import { sleep } from '../utils/timeUtils';
+import {
+  polishTextWithAI,
+  FileContext,
+} from '../utils/text/textEnhancementUtils';
+import { sleep } from '../utils/helpers';
 
 // Local imports - agent
 import { ToolConfig } from '../agent/ToolConfig';
