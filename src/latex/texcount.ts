@@ -2,9 +2,8 @@
 import * as logger from '../logger/logUtils';
 
 // Local imports - utilities
-import { fileExists, readFile } from '../utils/workspaceFileUtils';
-import { executeCommand } from '../utils/execUtils';
-import { checkToolInstalled } from '../utils/toolUtils';
+import { fileExists, readFile } from '../utils/files';
+import { executeCommand, checkToolInstalled } from '../utils/system';
 
 const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);

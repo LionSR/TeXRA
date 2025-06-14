@@ -6,8 +6,8 @@ import * as path from 'path';
 import * as logger from '../logger/logUtils';
 
 // Local imports - utilities
-import { getWorkspacePath, fileExists, readFile } from './workspaceFileUtils';
-import { fileExistsAbsolute, readFileAbsolute } from './absoluteFileUtils';
+import { getWorkspacePath, fileExists, readFile } from './files';
+import { fileExistsAbsolute, readFileAbsolute } from './files';
 
 const CHANNEL = 'texraRulesUtils';
 logger.initialize(CHANNEL);
