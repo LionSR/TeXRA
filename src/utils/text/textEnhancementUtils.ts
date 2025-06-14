@@ -15,7 +15,7 @@ import * as logger from '../../logger/logUtils';
 // Local imports - utilities
 import { getApiKey } from '../secretUtils';
 import { extractTextFromTag } from './xmlUtils';
-import { getConfig } from '../config';
+import { getConfig } from '../config/configUtils';
 
 const CHANNEL = 'TextEnhancement';
 

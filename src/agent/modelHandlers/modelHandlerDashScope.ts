@@ -11,7 +11,7 @@ import { MediaEntry } from '../mediaTypes';
 
 // Local imports - utilities
 import { convertContentToString } from '../../utils/text/messageUtils';
-import { MESSAGE_PREVIEW_LENGTH } from '../../utils/config';
+import { MESSAGE_PREVIEW_LENGTH } from '../../utils/config/constants';
 
 /**
  * Handler for DashScope Qwen models using OpenAI-compatible API.

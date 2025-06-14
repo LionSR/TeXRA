@@ -30,7 +30,7 @@ import {
   ExtendedCompletionUsage,
 } from '../ResponseUsage';
 import { ToolState } from '../ToolState';
-import { K_SLICE } from '../../utils/config';
+import { K_SLICE } from '../../utils/config/constants';
 import { objectToLogString } from '../../utils/text/stringUtils';
 import { calculateTokenPrice } from '../../utils/priceUtils';
 import { MediaEntry } from '../mediaTypes';

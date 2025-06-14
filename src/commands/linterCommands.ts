@@ -6,7 +6,7 @@ import * as logger from '../logger/logUtils';
 
 // Local imports - utils
 import { getLinterMessages } from '../utils/linterUtils';
-import { getRelativePath } from '../utils/files';
+import { getRelativePath } from '../utils/files/workspaceFileUtils';
 import { sleep } from '../utils/helpers';
 
 // Local imports - core

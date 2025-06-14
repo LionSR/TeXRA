@@ -9,10 +9,10 @@ import { sync as globSync } from 'glob';
 import * as logger from '../../logger/logUtils';
 
 // Local imports - utilities
-import { deleteFile, getWorkspacePath } from '../../utils/files';
-import { executeCommand } from '../../utils/system';
+import { deleteFile, getWorkspacePath } from '../../utils/files/workspaceFileUtils';
+import { executeCommand } from '../../utils/system/execUtils';
 import { sleep } from '../../utils/helpers';
-import { checkToolInstalled } from '../../utils/system';
+import { checkToolInstalled } from '../../utils/system/toolUtils';
 
 const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);

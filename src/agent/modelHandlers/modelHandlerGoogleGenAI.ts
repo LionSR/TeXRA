@@ -47,11 +47,11 @@ import {
   cleanFileContent,
 } from '../../replacement/replacementUtils';
 import { extractAndLogScratchpad } from '../../utils/text/xmlUtils';
-import { getConfig } from '../../utils/config';
+import { getConfig } from '../../utils/config/configUtils';
 import { calculateTokenPrice } from '../../utils/priceUtils';
 
 // Local constant
-import { K_SLICE } from '../../utils/config';
+import { K_SLICE } from '../../utils/config/constants';
 
 // Internal type definition
 type InternalMessagePart = {

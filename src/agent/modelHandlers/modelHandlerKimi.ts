@@ -11,7 +11,7 @@ import { MediaEntry } from '../mediaTypes';
 
 // Local imports - utilities
 import { convertContentToString } from '../../utils/text/messageUtils';
-import { K_SLICE, MESSAGE_PREVIEW_LENGTH } from '../../utils/config';
+import { K_SLICE, MESSAGE_PREVIEW_LENGTH } from '../../utils/config/constants';
 
 /**
  * Handler for Moonshot Kimi models using OpenAI-compatible API.

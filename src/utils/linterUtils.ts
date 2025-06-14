@@ -3,7 +3,7 @@ import * as vscode from 'vscode';
 
 // Local imports - log
 import * as logger from '../logger/logUtils';
-import { getFullPathFromWorkspace } from './files';
+import { getFullPathFromWorkspace } from './files/workspaceFileUtils';
 import { sleep } from './helpers';
 
 const CHANNEL = 'LinterUtils';
