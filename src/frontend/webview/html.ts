@@ -1,6 +1,11 @@
+// Standard library imports
 import * as fs from 'fs';
+
+// VS Code imports
 import * as vscode from 'vscode';
-import { generateNonce } from '../../utils/helpers';
+
+// Local imports
+import { generateNonce } from '../nonce';
 
 /**
  * Build HTML content for a webview by replacing placeholder tokens.
