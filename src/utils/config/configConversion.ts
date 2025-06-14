@@ -5,9 +5,9 @@
 // (none needed)
 
 // Local imports - models
-import { AgentConfig } from '../../agent/core/AgentConfig';
-import { TaskState } from '../../logger/TaskState';
-import { ToolConfig } from '../../agent/core/ToolConfig';
+import { AgentConfig } from '@agent/core/AgentConfig';
+import { TaskState } from '@logger/TaskState';
+import { ToolConfig } from '@agent/core/ToolConfig';
 
 import {
   SINGLE_FILE_FIELDS,
