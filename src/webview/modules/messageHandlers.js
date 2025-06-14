@@ -330,6 +330,10 @@ export function setupMessageHandlers() {
       updateMultipleFileSelect('mediaFiles', 'toggleMediaFiles', m.files);
       postHandle();
     },
+    addMediaFile: (m) => {
+      updateMultipleFileSelect('mediaFiles', 'toggleMediaFiles', [m.file]);
+      postHandle();
+    },
     setOutputFiles: (m) => {
       updateMultipleFileSelect('outputFiles', 'toggleOutputFiles', m.files);
       postHandle();
