@@ -46,7 +46,7 @@ import {
   getAllReplacementsRegex,
   cleanFileContent,
 } from '../../replacement/replacementUtils';
-import { extractAndLogScratchpad } from '../../utils/xmlUtils';
+import { extractAndLogScratchpad } from '../../utils/text/xmlUtils';
 import { getConfig } from '../../utils/configUtils';
 import { calculateTokenPrice } from '../../utils/priceUtils';
 

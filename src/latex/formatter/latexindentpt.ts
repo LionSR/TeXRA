@@ -11,7 +11,7 @@ import * as logger from '../../logger/logUtils';
 // Local imports - utilities
 import { deleteFile, getWorkspacePath } from '../../utils/workspaceFileUtils';
 import { executeCommand } from '../../utils/execUtils';
-import { sleep } from '../../utils/timeUtils';
+import { sleep } from '../../utils/helpers';
 import { checkToolInstalled } from '../../utils/toolUtils';
 
 const CHANNEL = 'LaTeXCommands';
