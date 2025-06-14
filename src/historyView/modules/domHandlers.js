@@ -1,4 +1,5 @@
 import { vscode } from '@common/vscodeApi.js';
+/* global Mark */
 
 // Track search state
 let markInstance;
