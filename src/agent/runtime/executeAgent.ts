@@ -9,7 +9,7 @@ import { glob } from 'glob';
 import {
   getBuiltInAgentsDirectory,
   getCustomAgentsDirectory,
-} from '../../utils/files';
+} from '../../frontend/agents/pathUtils';
 import { agentConfigToTaskState } from '../../utils/config';
 
 // Local imports - agent components
@@ -23,11 +23,11 @@ import { CoTAgent } from '../implementations/CoTAgent';
 import { MergeAgent } from '../implementations/MergeAgent';
 import { ProgressViewProvider } from '../../progressView/ProgressViewProvider';
 import { AgentLogger } from '../../logger/AgentLogger';
-import { openBuildDisplayIfTex } from '../../utils/openBuildUtils';
+import { openBuildDisplayIfTex } from '../../frontend/latex/openBuild';
 import {
   checkExpectedOutputs,
   showInstructionWithSuppress,
-} from '../../utils/instructionUtils';
+} from '../../frontend/ui/instruction';
 import { IAgent } from '../core/IAgent';
 
 const CHANNEL = 'executeAgent';

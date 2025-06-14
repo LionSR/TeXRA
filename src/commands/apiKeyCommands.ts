@@ -5,7 +5,7 @@ import {
   getApiKeySecretName,
   setSecret,
   deleteSecret,
-} from '../utils/secretUtils';
+} from '../frontend/secrets';
 
 export const apiKeyCommands = {
   setApiKey: 'texra.setApiKey',

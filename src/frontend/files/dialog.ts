@@ -5,8 +5,8 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 // Local imports - utilities
-import { getRelativePath } from './workspaceFileUtils';
-import { showErrorMessage } from '../../frontend-utils/commonUtils';
+import { getRelativePath } from '../../utils/files';
+import { showErrorMessage } from '../ui/messageUtils';
 
 export interface FileDialogOptions {
   /** Whether multiple files can be selected */

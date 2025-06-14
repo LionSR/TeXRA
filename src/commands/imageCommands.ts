@@ -11,7 +11,7 @@ import {
   getBase64EncodedMedia,
   processPdf2Png,
   singlePagePdf2Png,
-} from '../utils/imgUtils';
+} from '../frontend/media/img';
 
 const CHANNEL = 'TestCommands';
 logger.initialize(CHANNEL);

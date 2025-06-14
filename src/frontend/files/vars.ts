@@ -1,8 +1,8 @@
 // Local imports - utilities
-import { readFile, readFileAbsolute } from './files';
+import { readFile, readFileAbsolute } from '../../utils/files';
 
 // Local imports - log
-import { AgentLogger } from '../logger/AgentLogger';
+import { AgentLogger } from '../../logger/AgentLogger';
 
 /**
  * Reads a file and populates user variable fields with its path and content.
