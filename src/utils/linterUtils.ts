@@ -4,7 +4,7 @@ import * as vscode from 'vscode';
 // Local imports - log
 import * as logger from '../logger/logUtils';
 import { getFullPathFromWorkspace } from './workspaceFileUtils';
-import { sleep } from './timeUtils';
+import { sleep } from './helpers';
 
 const CHANNEL = 'LinterUtils';
 logger.initialize(CHANNEL);
