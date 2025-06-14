@@ -9,12 +9,12 @@ import { workspace } from 'vscode';
 import * as logger from '../logger/logUtils';
 
 // Local imports - utils
-import { safeExecuteCommand } from '../utils/commandUtils';
+import { safeExecuteCommand } from '../utils/system';
 
 // Local imports - utilities
-import { getWorkspacePath, getRelativePath } from '../utils/workspaceFileUtils';
+import { getWorkspacePath, getRelativePath } from '../utils/files';
 import { capitalize, uncapitalize } from '../frontend-utils/commonUtils';
-import { getConfig } from '../utils/configUtils';
+import { getConfig } from '../utils/config';
 import {
   listInputFiles,
   listReferenceFiles,

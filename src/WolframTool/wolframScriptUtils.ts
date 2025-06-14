@@ -2,8 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports
-import { executeCommand } from '../utils/execUtils';
-import { checkToolInstalled } from '../utils/toolUtils';
+import { executeCommand, checkToolInstalled } from '../utils/system';
 
 // Wolfram configuration is now in toolUtils.ts
 
