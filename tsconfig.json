@@ -8,7 +8,17 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"],
-      "~/*": ["src/*"]
+      "~/*": ["src/*"],
+      "@agent/*": ["src/agent/*"],
+      "@frontend/*": ["src/frontend/*"],
+      "@utils/*": ["src/utils/*"],
+      "@logger/*": ["src/logger/*"],
+      "@latex": ["src/latex"],
+      "@latex/*": ["src/latex/*"],
+      "@model": ["src/model"],
+      "@model/*": ["src/model/*"],
+      "@progressView/*": ["src/progressView/*"],
+      "@replacement/*": ["src/replacement/*"]
     },
     "moduleResolution": "node",
     "strict": true /* enable all strict type-checking options */,

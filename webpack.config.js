@@ -34,6 +34,14 @@ const extensionConfig = {
     alias: {
       '@': path.resolve(__dirname, 'src'),
       '~': path.resolve(__dirname, 'src'),
+      '@agent': path.resolve(__dirname, 'src/agent'),
+      '@frontend': path.resolve(__dirname, 'src/frontend'),
+      '@utils': path.resolve(__dirname, 'src/utils'),
+      '@logger': path.resolve(__dirname, 'src/logger'),
+      '@latex': path.resolve(__dirname, 'src/latex'),
+      '@model': path.resolve(__dirname, 'src/model'),
+      '@progressView': path.resolve(__dirname, 'src/progressView'),
+      '@replacement': path.resolve(__dirname, 'src/replacement'),
     },
     fallback: {
       fs: false,
