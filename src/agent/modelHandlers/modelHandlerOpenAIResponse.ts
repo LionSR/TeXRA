@@ -127,10 +127,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
       store: true,
     };
 
-    if (endTag) {
-      // Up to 4 sequences where the API will stop generating further tokens. The returned text will not contain the stop sequence.
-      params.stop = [endTag];
-    }
+    // The Responses API does not currently support stop sequences. We keep the
+    // end tag for post-processing only and do not send it to the API.
 
     if (!this.isOReasoningModel) {
       params.temperature = temperature;
@@ -156,8 +154,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
         this.config.fullName.includes('o3') ||
         this.config.fullName.includes('o4')
       ) {
-        // stop is not supported with latest reasoning models o3 and o4-mini.
-        params.stop = undefined;
+        // Stop sequences are unsupported for o3 and o4 reasoning models.
       }
     }
 
