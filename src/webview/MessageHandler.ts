@@ -9,7 +9,7 @@ import { workspace } from 'vscode';
 import * as logger from '../logger/logUtils';
 
 // Local imports - utils
-import { safeExecuteCommand } from '../utils/commandUtils';
+import { safeExecuteCommand } from '../utils/system';
 
 // Local imports - utilities
 import {
@@ -19,9 +19,9 @@ import {
   createStorageDirectory,
   writeBinaryFileToStorage,
   cleanupStorageDirectory,
-} from '../utils/workspaceFileUtils';
-import { capitalize, uncapitalize } from '../frontend-utils/commonUtils';
-import { getConfig } from '../utils/configUtils';
+} from '../utils/files';
+import { capitalize, uncapitalize } from '../frontend/ui/messageUtils';
+import { getConfig } from '../utils/config';
 import {
   listInputFiles,
   listReferenceFiles,
@@ -29,13 +29,16 @@ import {
   listMediaFiles,
   listEditedFiles,
   getFilesIfNotEmpty,
-} from '../frontend-utils/fileListingUtils';
-import { polishTextWithAI, FileContext } from '../utils/textEnhancementUtils';
-import { sleep } from '../utils/timeUtils';
+} from '../frontend/files/listing';
+import {
+  polishTextWithAI,
+  FileContext,
+} from '../utils/text/textEnhancementUtils';
+import { sleep } from '../utils/helpers';
 
 // Local imports - agent
-import { ToolConfig } from '../agent/ToolConfig';
-import { AgentConfig } from '../agent/AgentConfig';
+import { ToolConfig } from '../agent/core/ToolConfig';
+import { AgentConfig } from '../agent/core/AgentConfig';
 
 const CHANNEL = 'MessageHandler';
 const PASTED_DIR = 'pasted';
