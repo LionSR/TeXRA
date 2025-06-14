@@ -12,14 +12,17 @@ import * as logger from '../logger/logUtils';
 import { safeExecuteCommand } from '../utils/system';
 
 // Local imports - utilities
+import { getWorkspacePath, getRelativePath } from '../utils/files';
 import {
-  getWorkspacePath,
-  getRelativePath,
-  getWorkspaceStoragePath,
   createStorageDirectory,
   writeBinaryFileToStorage,
   cleanupStorageDirectory,
-} from '../utils/files';
+} from '../utils/files/workspaceStorageUtils';
+import {
+  isPastedImage,
+  getPastedImageFullPath,
+  PASTED_DIR,
+} from '../utils/files/pastedImageUtils';
 import { capitalize, uncapitalize } from '../frontend/ui/messageUtils';
 import { getConfig } from '../utils/config';
 import {
@@ -41,7 +44,6 @@ import { ToolConfig } from '../agent/core/ToolConfig';
 import { AgentConfig } from '../agent/core/AgentConfig';
 
 const CHANNEL = 'MessageHandler';
-const PASTED_DIR = 'pasted';
 
 export class WebviewMessageHandler {
   private handlers: Record<
@@ -50,16 +52,19 @@ export class WebviewMessageHandler {
   >;
 
   constructor(private readonly context: vscode.ExtensionContext) {
-    cleanupStorageDirectory(
-      this.context,
-      PASTED_DIR,
-      3 * 24 * 60 * 60 * 1000,
-    ).catch((e) =>
-      logger.warn(
-        CHANNEL,
-        `Error during initial cleanup: ${e instanceof Error ? e.message : String(e)}`,
-      ),
-    );
+    // Ensure the pasted directory exists before trying to clean it
+    this.ensurePastedDirectoryExists().then(() => {
+      cleanupStorageDirectory(
+        this.context,
+        PASTED_DIR,
+        3 * 24 * 60 * 60 * 1000,
+      ).catch((e) =>
+        logger.warn(
+          CHANNEL,
+          `Error during initial cleanup: ${e instanceof Error ? e.message : String(e)}`,
+        ),
+      );
+    });
     this.handlers = {
       showInformationMessage: (message) => this.handleInfoMessage(message),
       getTheme: (_m, view) => this.handleThemeRequest(view),
@@ -209,12 +214,8 @@ export class WebviewMessageHandler {
 
       const mapMediaPath = (f: string | null): string | null => {
         if (!f) return null;
-        if (f.startsWith('pasted_')) {
-          return path.join(
-            getWorkspaceStoragePath(this.context),
-            PASTED_DIR,
-            f,
-          );
+        if (isPastedImage(f)) {
+          return getPastedImageFullPath(f, this.context);
         }
         return f;
       };
@@ -230,13 +231,13 @@ export class WebviewMessageHandler {
         auxiliaryFile: message.auxiliaryFile,
         auxiliaryFiles: getFilesIfNotEmpty(message.auxiliaryFiles),
         mediaFile: mapMediaPath(message.mediaFile),
-        mediaFiles: getFilesIfNotEmpty(
-          message.mediaFiles
-            ? message.mediaFiles
+        mediaFiles: message.mediaFiles
+          ? getFilesIfNotEmpty(
+              message.mediaFiles
                 .map(mapMediaPath)
-                .filter((f: string | null): f is string => f !== null)
-            : undefined,
-        ),
+                .filter((f: string | null): f is string => f !== null),
+            )
+          : null,
         outputFiles: getFilesIfNotEmpty(message.outputFiles),
         outputNameOverride: message.outputNameOverride,
         editedFile: null,
@@ -886,5 +887,20 @@ export class WebviewMessageHandler {
    */
   private async handleShowAgentHistory() {
     await safeExecuteCommand('texra.showAgentHistory', [], CHANNEL);
+  }
+
+  /**
+   * Ensure the pasted directory exists in workspace storage
+   */
+  private async ensurePastedDirectoryExists(): Promise<void> {
+    try {
+      await createStorageDirectory(this.context, PASTED_DIR);
+    } catch (err) {
+      // Directory might already exist, which is fine
+      logger.debug(
+        CHANNEL,
+        `Pasted directory already exists or error creating: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
   }
 }
