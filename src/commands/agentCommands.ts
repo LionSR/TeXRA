@@ -5,7 +5,7 @@ import * as vscode from 'vscode';
 import * as logger from '../logger/logUtils';
 
 // Local imports - agent
-import { BaseReflectionAgent } from '../agent/BaseReflectionAgent';
+import { BaseReflectionAgent } from '../agent/implementations/BaseReflectionAgent';
 import { ProgressViewProvider } from '../progressView/ProgressViewProvider';
 
 const CHANNEL = 'AgentCommands';

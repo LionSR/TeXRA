@@ -5,7 +5,7 @@ import Transport from 'winston-transport';
 
 // Local imports - progressView
 import { ProgressViewProvider } from '../progressView/ProgressViewProvider';
-import { getConfig } from '../utils/configUtils';
+import { getConfig } from '../utils/config';
 import {
   shouldUseConsolidatedChannel,
   getColorForLevel,

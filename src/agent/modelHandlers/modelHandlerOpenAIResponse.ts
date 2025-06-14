@@ -14,10 +14,10 @@ import type {
 
 // Local imports - base handler
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
-import { ResponseUsageFactory } from '../ResponseUsage';
+import { ResponseUsageFactory } from '../core/ResponseUsage';
 import { calculateTokenPrice } from '../../utils/priceUtils';
-import { ToolState } from '../ToolState';
-import { K_SLICE } from '../../utils/constants';
+import { ToolState } from '../core/ToolState';
+import { K_SLICE } from '../../utils/config';
 
 // import { ResponseCreateParams } from 'openai/src/resources/responses/response';
 // this is incorrect now, but would be nice to use

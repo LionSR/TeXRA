@@ -5,9 +5,9 @@ import * as vscode from 'vscode';
 import * as logger from '../logger/logUtils';
 
 // Local imports - utils
-import { getLinterMessages } from '../utils/linterUtils';
-import { getRelativePath } from '../utils/workspaceFileUtils';
-import { sleep } from '../utils/timeUtils';
+import { getLinterMessages } from '../frontend/latex/linter';
+import { getRelativePath } from '../utils/files';
+import { sleep } from '../utils/helpers';
 
 // Local imports - core
 import { TeXLinterFixAgent } from '../AnthropicTool';

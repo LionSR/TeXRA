@@ -8,9 +8,9 @@ import { ProgressViewMessageHandler } from './ProgressViewMessageHandler';
 import { TaskState } from '../logger/TaskState';
 import { AgentLogger } from '../logger/AgentLogger';
 
-import { getConfig } from '../utils/configUtils';
-import { objectToTaskState } from '../utils/configConversion';
-import { filterExistingFiles } from '../utils/workspaceFileUtils';
+import { getConfig } from '../utils/config';
+import { objectToTaskState } from '../utils/config';
+import { filterExistingFiles } from '../utils/files';
 import {
   shouldExcludeFromProgressView,
   shouldPersistStream,
