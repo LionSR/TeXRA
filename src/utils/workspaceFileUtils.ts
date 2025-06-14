@@ -49,6 +49,15 @@ export async function writeFile(
   await vscode.workspace.fs.writeFile(uri, Buffer.from(content, 'utf-8'));
 }
 
+export async function writeBinaryFile(
+  filePath: string,
+  content: Uint8Array,
+): Promise<void> {
+  const fullPath = getFullPathFromWorkspace(filePath);
+  const uri = vscode.Uri.file(fullPath);
+  await vscode.workspace.fs.writeFile(uri, content);
+}
+
 export async function appendFile(
   filePath: string,
   content: string,
@@ -331,4 +340,32 @@ export async function filterExistingFiles<T extends { path: string }>(
 
   const results = await Promise.all(fileCheckPromises);
   return results.filter((result) => result.exists).map((result) => result.item);
+}
+
+export function getWorkspaceStoragePath(
+  context: vscode.ExtensionContext,
+): string {
+  if (!context.storageUri) {
+    throw new Error('Workspace storage path not available');
+  }
+  return context.storageUri.fsPath;
+}
+
+export async function createStorageDirectory(
+  context: vscode.ExtensionContext,
+  relativePath: string,
+): Promise<void> {
+  const basePath = getWorkspaceStoragePath(context);
+  const fullPath = path.join(basePath, relativePath);
+  await vscode.workspace.fs.createDirectory(vscode.Uri.file(fullPath));
+}
+
+export async function writeBinaryFileToStorage(
+  context: vscode.ExtensionContext,
+  filePath: string,
+  content: Uint8Array,
+): Promise<void> {
+  const basePath = getWorkspaceStoragePath(context);
+  const fullPath = path.join(basePath, filePath);
+  await vscode.workspace.fs.writeFile(vscode.Uri.file(fullPath), content);
 }
