@@ -5,7 +5,7 @@ import * as path from 'path';
 // (none needed)
 
 // Local imports - log
-import { AgentLogger } from '../logger/AgentLogger';
+import { AgentLogger } from '../../logger/AgentLogger';
 
 // Local imports - latex utils
 import {
@@ -14,56 +14,51 @@ import {
   bestConnectionMethod,
   getTeXCountStats,
   compileLatex2Pdf,
-} from '../latex';
-import { ProgressViewProvider } from '../progressView/ProgressViewProvider';
+} from '../../latex';
+import { ProgressViewProvider } from '../../progressView/ProgressViewProvider';
 import { diff_match_patch } from 'diff-match-patch';
-import type { DiffStats } from '../types/DiffTypes';
+import type { DiffStats } from '../../types/DiffTypes';
 
 // Local imports - utilities
-import {
-  writeFile,
-  appendFile,
-  fileExists,
-  readFile,
-} from '../utils/workspaceFileUtils';
+import { writeFile, appendFile, fileExists, readFile } from '../../utils/files';
 import {
   renderPrompt,
   getFirstKCharsFromDocument,
   writePromptToXml,
-} from '../utils/promptUtils';
-import { loadTexraRules } from '../utils/texraRulesUtils';
+} from '../../utils/promptUtils';
+import { loadTexraRules } from '../../utils/texraRulesUtils';
 import {
   applyReplacements,
   getAllReplacements,
   getAllReplacementsRegex,
-} from '../replacement/replacementUtils';
-import { checkForMassiveRepetition } from '../utils/repetitionUtils';
+} from '../../replacement/replacementUtils';
+import { checkForMassiveRepetition } from '../../utils/text/repetitionUtils';
 import {
   extractAndLogScratchpad,
   formatAndLogContent,
-} from '../utils/xmlUtils';
-import { sleep } from '../utils/timeUtils';
+} from '../../utils/text/xmlUtils';
+import { sleep } from '../../utils/helpers';
 
 // Local imports - agent components
-import { AgentConfig } from './AgentConfig';
-import { AgentSetting, AgentPrompt, AgentType } from './AgentDataclass';
-import { AgentStateRound, AgentStateGlobal } from './AgentState';
-import { ToolState } from './ToolState';
-import { ModelHandler } from './modelHandlers';
-import { OutputHandler } from './OutputHandler';
-import { messageToSkeleton } from './messageUtils';
-import { buildUserVars } from './userVars';
-import { IAgent } from './IAgent';
+import { AgentConfig } from '../core/AgentConfig';
+import { AgentSetting, AgentPrompt, AgentType } from '../core/AgentDataclass';
+import { AgentStateRound, AgentStateGlobal } from '../core/AgentState';
+import { ToolState } from '../core/ToolState';
+import { ModelHandler } from '../modelHandlers';
+import { OutputHandler } from '../runtime/OutputHandler';
+import { messageToSkeleton } from '../utils/messageUtils';
+import { buildUserVars } from '../utils/userVars';
+import { IAgent } from '../core/IAgent';
 
 // System imports - common utilities
-import { getConfig } from '../utils/configUtils';
+import { getConfig } from '../../utils/config';
 
 // Shared constants
 import {
   K_SLICE,
   SHORT_SLEEP_MS,
   REPETITION_DETECTION_THRESHOLD,
-} from '../utils/constants';
+} from '../../utils/config';
 
 /**
  * Abstract base class for agents that support multi-turn reflection and refinement.
@@ -905,7 +900,7 @@ export abstract class BaseReflectionAgent implements IAgent {
           this.agentSetting,
           messages,
           toolState,
-          this.outputFile[0],
+          this.outputFile[currRound],
           prefill,
           round0GroupId,
         );
@@ -924,7 +919,7 @@ export abstract class BaseReflectionAgent implements IAgent {
           stateRound,
           stateGlobal,
           toolState,
-          this.outputFile[0],
+          this.outputFile[currRound],
           round0GroupId, // Pass the round group ID to processResponseCycle
         );
         finalEndTurn = newEndTurn;
@@ -933,7 +928,7 @@ export abstract class BaseReflectionAgent implements IAgent {
         await this.handleRoundCompletion(
           updatedStateRound,
           updatedStateGlobal,
-          this.outputFile[0],
+          this.outputFile[currRound],
           finalEndTurn,
           currRound,
           round0GroupId, // Pass the round group ID
@@ -960,7 +955,7 @@ export abstract class BaseReflectionAgent implements IAgent {
       await this.handleRoundCompletion(
         stateRound,
         stateGlobal,
-        this.outputFile[0],
+        this.outputFile[currRound],
         finalEndTurn,
         currRound,
         round0GroupId, // Pass the round group ID
@@ -984,7 +979,7 @@ export abstract class BaseReflectionAgent implements IAgent {
   }
 
   /**
-   * Processes reflection/refinement round.
+   * Processes a follow-up conversation round.
    * @returns Tuple of [round state, global state, messages, completion flag]
    */
   protected async reflect(
@@ -995,7 +990,7 @@ export abstract class BaseReflectionAgent implements IAgent {
   ): Promise<[AgentStateRound, AgentStateGlobal, any[], boolean]> {
     this.logger.debug(`Processing round ${currRound}`);
 
-    // Create a dedicated group for Round 1 reflection, as a child of the main run group
+    // Create a dedicated group for round 1, as a child of the main run group
     const round1GroupId = await this.logger.startGroup(
       `r${currRound}`,
       undefined,
@@ -1011,8 +1006,8 @@ export abstract class BaseReflectionAgent implements IAgent {
           toolState,
         );
       } else {
-        // Handle single output file
-        const outputFiles = this.outputHandler.outputFiles[0];
+        // Handle single output file from previous round
+        const outputFiles = this.outputHandler.outputFiles[currRound - 1];
         if (outputFiles && outputFiles.length > 0) {
           await this._handleToolStateForOutput(
             [outputFiles[0]],
@@ -1029,10 +1024,10 @@ export abstract class BaseReflectionAgent implements IAgent {
         );
       }
 
-      // Initialize reflection round
+      // Initialize round
       const stateRound = new AgentStateRound(currRound);
 
-      // Prepare reflection message
+      // Prepare round message
       const userRequestReflect = await renderPrompt(
         this.agentPrompt.userReflect,
         this.userVars,
@@ -1048,14 +1043,13 @@ export abstract class BaseReflectionAgent implements IAgent {
         return [stateRound, stateGlobal, messages, true];
       }
 
-      const reflectionMessages =
-        await this.modelHandler.createReflectionMessages(
-          messages,
-          userMessage,
-          toolState.mediaFiles,
-        );
+      const roundMessages = await this.modelHandler.createRoundMessages(
+        messages,
+        userMessage,
+        toolState.mediaFiles,
+      );
 
-      // Handle prefill for reflection round
+      // Handle prefill for round
       const prefill = this.getPrefillForRound(currRound);
       toolState.updateAccumulatedOutput(prefill);
 
@@ -1063,9 +1057,9 @@ export abstract class BaseReflectionAgent implements IAgent {
         await this.modelHandler.initializeOutputAndPrefill(
           this.agentConfig,
           this.agentSetting,
-          reflectionMessages,
+          roundMessages,
           toolState,
-          this.outputFile[1],
+          this.outputFile[currRound],
           prefill,
           round1GroupId,
         );
@@ -1081,7 +1075,7 @@ export abstract class BaseReflectionAgent implements IAgent {
           stateRound,
           stateGlobal,
           toolState,
-          this.outputFile[1],
+          this.outputFile[currRound],
           round1GroupId,
         );
 
@@ -1089,7 +1083,7 @@ export abstract class BaseReflectionAgent implements IAgent {
         await this.handleRoundCompletion(
           updatedStateRound,
           updatedStateGlobal,
-          this.outputFile[1],
+          this.outputFile[currRound],
           newEndTurn,
           currRound,
           round1GroupId,
@@ -1108,7 +1102,7 @@ export abstract class BaseReflectionAgent implements IAgent {
       await this.handleRoundCompletion(
         stateRound,
         stateGlobal,
-        this.outputFile[1],
+        this.outputFile[currRound],
         endTurn,
         currRound,
         round1GroupId,
@@ -1143,7 +1137,7 @@ export abstract class BaseReflectionAgent implements IAgent {
         await this.process();
       this.logger.debug(`Round 0 completed\n`, this.runGroupId);
 
-      // Check for interruption before reflection
+      // Check for interruption before next round
       if (
         !this.isInterrupted &&
         this.agentConfig.toolConfig.reflect &&

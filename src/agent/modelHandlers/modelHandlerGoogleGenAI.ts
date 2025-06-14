@@ -18,17 +18,17 @@ import {
 
 // Local imports - agent components
 import { ModelHandler } from './ModelHandler';
-import { AgentConfig } from '../AgentConfig';
-import { AgentSetting, hasEndTag } from '../AgentDataclass';
-import { AgentStateRound, AgentStateGlobal } from '../AgentState';
-import { ToolState } from '../ToolState';
+import { AgentConfig } from '../core/AgentConfig';
+import { AgentSetting, hasEndTag } from '../core/AgentDataclass';
+import { AgentStateRound, AgentStateGlobal } from '../core/AgentState';
+import { ToolState } from '../core/ToolState';
 import {
   OpenAIAPIResponseUsage,
   ResponseUsageFactory,
   GenerateContentResponseUsageMetadata,
   ExtendedCompletionUsage,
-} from '../ResponseUsage';
-import { MediaEntry } from '../mediaTypes';
+} from '../core/ResponseUsage';
+import { MediaEntry } from '../utils/mediaTypes';
 import { AgentLogger } from '../../logger/AgentLogger';
 
 // Local imports - utilities
@@ -37,8 +37,8 @@ import {
   writeFile,
   fileExistsAndNonTrivial,
   getFullPathFromWorkspace,
-} from '../../utils/workspaceFileUtils';
-import { fileExistsAbsolute } from '../../utils/absoluteFileUtils';
+} from '../../utils/files';
+import { fileExistsAbsolute } from '../../utils/files';
 import { formatProviderError } from '../../utils/sdkErrorUtils';
 import {
   applyReplacements,
@@ -46,12 +46,12 @@ import {
   getAllReplacementsRegex,
   cleanFileContent,
 } from '../../replacement/replacementUtils';
-import { extractAndLogScratchpad } from '../../utils/xmlUtils';
-import { getConfig } from '../../utils/configUtils';
+import { extractAndLogScratchpad } from '../../utils/text/xmlUtils';
+import { getConfig } from '../../utils/config';
 import { calculateTokenPrice } from '../../utils/priceUtils';
 
 // Local constant
-import { K_SLICE } from '../../utils/constants';
+import { K_SLICE } from '../../utils/config';
 
 // Internal type definition
 type InternalMessagePart = {
@@ -477,14 +477,14 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
     return mimeType || null;
   }
 
-  /** Creates a reflection message array for Google GenAI models, managing image content and message structure. */
-  async createReflectionMessages(
+  /** Creates message array for subsequent rounds, managing image content and message structure. */
+  async createRoundMessages(
     messages: Message[],
     userMessage: string,
     mediaFiles?: string[],
   ): Promise<Message[]> {
     const client = await this.getClient();
-    const reflectionParts: InternalMessagePart[] = [];
+    const roundParts: InternalMessagePart[] = [];
 
     if (
       mediaFiles &&
@@ -507,7 +507,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
 
           if (!explicitMimeType) {
             this.logger.error(
-              `Cannot determine mime type for reflection file ${mediaFile}. Skipping file.`,
+              `Cannot determine mime type for file ${mediaFile}. Skipping file.`,
             );
             continue;
           }
@@ -518,7 +518,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
           };
 
           this.logger.debug(
-            `Attempting reflection upload for ${mediaFile} with params: ${JSON.stringify(uploadParams)}`,
+            `Attempting upload for ${mediaFile} with params: ${JSON.stringify(uploadParams)}`,
           );
           this.logger.debug(`MIME type being used: ${explicitMimeType}`);
 
@@ -530,16 +530,16 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
 
           if (!uploadResult.uri || !uploadResult.mimeType) {
             this.logger.error(
-              `Upload result for reflection file ${mediaFile} missing URI or MimeType. API might have failed inference. Skipping file.`,
+              `Upload result for file ${mediaFile} missing URI or MimeType. API might have failed inference. Skipping file.`,
             );
             continue;
           }
 
-          reflectionParts.push({
+          roundParts.push({
             type: 'text',
-            text: `\nReflecting on file: ${path.basename(mediaFile)}`,
+            text: `\nProcessing file: ${path.basename(mediaFile)}`,
           });
-          reflectionParts.push({
+          roundParts.push({
             type: 'file_uri',
             uri: uploadResult.uri,
             mimeType: uploadResult.mimeType,
@@ -547,7 +547,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
         } catch (error) {
           this.logger.error(
             formatProviderError(
-              `Failed to upload media file ${mediaFile} for reflection`,
+              `Failed to upload media file ${mediaFile} for follow-up round`,
               error,
             ),
           );
@@ -555,9 +555,9 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
       }
     }
 
-    reflectionParts.push({ type: 'text', text: userMessage });
+    roundParts.push({ type: 'text', text: userMessage });
 
-    messages.push({ role: 'user', content: reflectionParts });
+    messages.push({ role: 'user', content: roundParts });
     return messages;
   }
 
