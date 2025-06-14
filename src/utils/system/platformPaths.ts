@@ -6,7 +6,7 @@ import * as path from 'path';
 import glob from 'glob';
 
 // Local imports - log
-import * as logger from '../../logger/logUtils';
+import * as logger from '@/logger/logUtils';
 
 const CHANNEL = 'platformPaths';
 logger.initialize(CHANNEL);

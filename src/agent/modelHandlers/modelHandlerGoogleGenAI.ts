@@ -17,19 +17,19 @@ import {
 } from '@google/genai';
 
 // Local imports - agent components
-import { ModelHandler } from './ModelHandler';
-import { AgentConfig } from '../core/AgentConfig';
-import { AgentSetting, hasEndTag } from '../core/AgentDataclass';
-import { AgentStateRound, AgentStateGlobal } from '../core/AgentState';
-import { ToolState } from '../core/ToolState';
+import { ModelHandler } from '@/agent/modelHandlers/ModelHandler';
+import { AgentConfig } from '@/agent/core/AgentConfig';
+import { AgentSetting, hasEndTag } from '@/agent/core/AgentDataclass';
+import { AgentStateRound, AgentStateGlobal } from '@/agent/core/AgentState';
+import { ToolState } from '@/agent/core/ToolState';
 import {
   OpenAIAPIResponseUsage,
   ResponseUsageFactory,
   GenerateContentResponseUsageMetadata,
   ExtendedCompletionUsage,
-} from '../core/ResponseUsage';
-import { MediaEntry } from '../utils/mediaTypes';
-import { AgentLogger } from '../../logger/AgentLogger';
+} from '@/agent/core/ResponseUsage';
+import { MediaEntry } from '@/agent/utils/mediaTypes';
+import { AgentLogger } from '@/logger/AgentLogger';
 
 // Local imports - utilities
 import {
@@ -37,21 +37,21 @@ import {
   writeFile,
   fileExistsAndNonTrivial,
   getFullPathFromWorkspace,
-} from '../../utils/files';
-import { fileExistsAbsolute } from '../../utils/files';
-import { formatProviderError } from '../../utils/sdkErrorUtils';
+} from '@/utils/files';
+import { fileExistsAbsolute } from '@/utils/files';
+import { formatProviderError } from '@/utils/sdkErrorUtils';
 import {
   applyReplacements,
   getAllReplacements,
   getAllReplacementsRegex,
   cleanFileContent,
-} from '../../replacement/replacementUtils';
-import { extractAndLogScratchpad } from '../../utils/text/xmlUtils';
-import { getConfig } from '../../utils/config';
-import { calculateTokenPrice } from '../../utils/priceUtils';
+} from '@/replacement/replacementUtils';
+import { extractAndLogScratchpad } from '@/utils/text/xmlUtils';
+import { getConfig } from '@/utils/config';
+import { calculateTokenPrice } from '@/utils/priceUtils';
 
 // Local constant
-import { K_SLICE } from '../../utils/config';
+import { K_SLICE } from '@/utils/config';
 
 // Internal type definition
 type InternalMessagePart = {

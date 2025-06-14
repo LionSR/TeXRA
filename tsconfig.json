@@ -5,6 +5,11 @@
     "lib": ["ES2022", "DOM"],
     "sourceMap": false,
     "rootDir": "src",
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"],
+      "~/*": ["src/*"]
+    },
     "moduleResolution": "node",
     "strict": true /* enable all strict type-checking options */,
     "esModuleInterop": true /* Enables emit interoperability between CommonJS and ES Modules */
