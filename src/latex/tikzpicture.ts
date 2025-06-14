@@ -13,9 +13,9 @@ import {
   fileExists,
   writeFile,
   createDirectory,
-} from '../utils/workspaceFileUtils';
+} from '../utils/files';
 import { renderPrompt } from '../utils/promptUtils';
-import { getConfig } from '../utils/configUtils';
+import { getConfig } from '../utils/config';
 
 // Local imports - latex utils
 import { compileLatex2Pdf } from './texTools';
