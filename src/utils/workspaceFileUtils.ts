@@ -369,3 +369,44 @@ export async function writeBinaryFileToStorage(
   const fullPath = path.join(basePath, filePath);
   await vscode.workspace.fs.writeFile(vscode.Uri.file(fullPath), content);
 }
+
+export async function cleanupStorageDirectory(
+  context: vscode.ExtensionContext,
+  relativePath: string,
+  maxAgeMs: number,
+): Promise<void> {
+  try {
+    const basePath = getWorkspaceStoragePath(context);
+    const fullPath = path.join(basePath, relativePath);
+    const dirUri = vscode.Uri.file(fullPath);
+    const entries = await vscode.workspace.fs.readDirectory(dirUri);
+    const now = Date.now();
+
+    for (const [name, type] of entries) {
+      if (type !== vscode.FileType.File) {
+        continue;
+      }
+      const fileUri = vscode.Uri.file(path.join(fullPath, name));
+      try {
+        const stat = await vscode.workspace.fs.stat(fileUri);
+        if (now - stat.mtime > maxAgeMs) {
+          await vscode.workspace.fs.delete(fileUri, { useTrash: false });
+          logger.debug(
+            CHANNEL,
+            `Deleted old storage file: ${path.join(relativePath, name)}`,
+          );
+        }
+      } catch (e) {
+        logger.warn(
+          CHANNEL,
+          `Error cleaning file ${name}: ${e instanceof Error ? e.message : String(e)}`,
+        );
+      }
+    }
+  } catch (err) {
+    logger.warn(
+      CHANNEL,
+      `Error cleaning storage directory ${relativePath}: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+}
