@@ -5,8 +5,8 @@ import spawn from 'cross-spawn';
 import * as vscode from 'vscode';
 
 // Local imports - utilities
-import { getConfig } from '../utils/configUtils';
-import { getWorkspacePath } from '../utils/workspaceFileUtils';
+import { getConfig } from '../utils/config';
+import { getWorkspacePath } from '../utils/files';
 
 export function registerGitCommands(context: vscode.ExtensionContext) {
   context.subscriptions.push(
