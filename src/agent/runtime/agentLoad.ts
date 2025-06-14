@@ -12,10 +12,10 @@ import {
   validateAgentSetting,
   DEFAULT_AGENT_SETTINGS,
   DEFAULT_AGENT_PROMPTS,
-} from './AgentDataclass';
+} from '../core/AgentDataclass';
 
 // Local imports - utils
-import * as logger from '../logger/logUtils';
+import * as logger from '../../logger/logUtils';
 
 const CHANNEL = 'agentLoad';
 logger.initialize(CHANNEL);
