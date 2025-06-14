@@ -2,8 +2,8 @@
 import * as vscode from 'vscode';
 
 // Local imports - agent components
-import { AgentConfig } from '../agent/AgentConfig';
-import { executeAgent } from '../agent/executeAgent';
+import { AgentConfig } from '../agent/core/AgentConfig';
+import { executeAgent } from '../agent/runtime/executeAgent';
 
 // Local imports - history
 import { AgentHistoryManager } from '../historyView/AgentHistoryManager';
