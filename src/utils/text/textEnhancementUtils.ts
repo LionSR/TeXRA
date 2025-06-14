@@ -7,15 +7,15 @@ import type { MessageCreateParams } from '@anthropic-ai/sdk/resources/messages';
 import * as vscode from 'vscode';
 
 // Local imports - error utils
-import { formatProviderError } from './sdkErrorUtils';
+import { formatProviderError } from '../sdkErrorUtils';
 
 // Local imports - log
-import * as logger from '../logger/logUtils';
+import * as logger from '../../logger/logUtils';
 
 // Local imports - utilities
-import { getApiKey } from './secretUtils';
+import { getApiKey } from '../secretUtils';
 import { extractTextFromTag } from './xmlUtils';
-import { getConfig } from './configUtils';
+import { getConfig } from '../config';
 
 const CHANNEL = 'TextEnhancement';
 

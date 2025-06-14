@@ -6,11 +6,11 @@ import { diff_match_patch } from 'diff-match-patch';
 import * as difflib from 'difflib';
 
 // Local imports - log
-import * as logger from '../logger/logUtils';
+import * as logger from '../../logger/logUtils';
 import {
   REPETITION_DETECTION_THRESHOLD,
   REPETITION_PREVIEW_LENGTH,
-} from './constants';
+} from '../config';
 
 const CHANNEL = 'repetitionUtils';
 logger.initialize(CHANNEL);

@@ -8,30 +8,30 @@ import * as path from 'path';
 import { AgentLogger } from '../../logger/AgentLogger';
 
 // Local imports - utilities
-import { fileExists } from '../../utils/workspaceFileUtils';
+import { fileExists } from '../../utils/files';
 import {
   getBase64EncodedMedia,
   countPdfPages,
   processPdf2Png,
 } from '../../utils/imgUtils';
-import { checkMultipleToolsInstalled } from '../../utils/toolUtils';
-import { getConfig } from '../../utils/configUtils';
+import { checkMultipleToolsInstalled } from '../../utils/system';
+import { getConfig } from '../../utils/config';
 import {
   getApiKey as getSecretApiKey,
   ApiProvider,
 } from '../../utils/secretUtils';
 
 // Local imports - agent components
-import { AgentConfig } from '../AgentConfig';
-import { AgentSetting, hasEndTag } from '../AgentDataclass';
-import { AgentStateRound, AgentStateGlobal } from '../AgentState';
+import { AgentConfig } from '../core/AgentConfig';
+import { AgentSetting, hasEndTag } from '../core/AgentDataclass';
+import { AgentStateRound, AgentStateGlobal } from '../core/AgentState';
 import {
   ModelConfig,
   ModelProvider,
   ModelCapabilities,
 } from '../../model/ModelConfig';
-import { ToolState } from '../ToolState';
-import { MediaEntry } from '../mediaTypes';
+import { ToolState } from '../core/ToolState';
+import { MediaEntry } from '../utils/mediaTypes';
 
 // Default continuation limits
 const DEFAULT_CONTINUE_LIMIT = 10;
@@ -39,6 +39,19 @@ const DEFAULT_CONTINUE_LIMIT = 10;
 // Default token limits
 const DEFAULT_INPUT_TOKEN_LIMIT = 1500000;
 const DEFAULT_OUTPUT_TOKEN_LIMIT_FACTOR = 2.5;
+
+/** Flags for token-based stop conditions. */
+interface TokenFlags {
+  continuationLimit: boolean;
+  inputTokenLimit: boolean;
+  maxOutputTokensExceeded: boolean;
+}
+
+/** Flags for markers indicating the end of a conversation. */
+interface MarkerFlags {
+  endTurn: boolean;
+  encounterDocumentTag: boolean;
+}
 
 /**
  * Abstract base class for model-specific handlers that manage API interactions, message processing, and response handling.
@@ -478,6 +491,37 @@ export abstract class ModelHandler {
     return this.createMediaContent(mediaMessage);
   }
 
+  /** Calculates token-based stop flags. */
+  protected computeTokenFlags(
+    stateRound: AgentStateRound,
+    stateGlobal: AgentStateGlobal,
+  ): TokenFlags {
+    const maxOutputTokens =
+      stateGlobal.firstInputTokens > 0
+        ? this.maxOutputTokensFactor * stateGlobal.firstInputTokens
+        : Number.POSITIVE_INFINITY;
+
+    return {
+      continuationLimit: stateRound.continuationCount > this.continueLimit,
+      inputTokenLimit: stateGlobal.totalInputTokens > this.inputTokenLimit,
+      maxOutputTokensExceeded: stateGlobal.totalOutputTokens > maxOutputTokens,
+    };
+  }
+
+  /** Detects stop markers in model output. */
+  protected detectStopMarkers(
+    stopReason: string,
+    response: string,
+    setting: AgentSetting,
+  ): MarkerFlags {
+    return {
+      endTurn: ['end_turn', 'stop_sequence', 'stop', 'STOP'].includes(
+        stopReason,
+      ),
+      encounterDocumentTag: response.includes(`</${setting.documentTag}>`),
+    };
+  }
+
   /**
    * Evaluates conversation stop conditions based on model response and state.
    * @returns Tuple of [endTurn: should end current turn, shouldStop: should stop conversation]
@@ -489,23 +533,14 @@ export abstract class ModelHandler {
     stateGlobal: AgentStateGlobal,
     agentSetting: AgentSetting,
   ): [boolean, boolean] {
-    const maxOutputTokens =
-      stateGlobal.firstInputTokens > 0
-        ? this.maxOutputTokensFactor * stateGlobal.firstInputTokens
-        : Number.POSITIVE_INFINITY;
-
-    const endTurn = ['end_turn', 'stop_sequence', 'stop', 'STOP'].includes(
+    const tokenFlags = this.computeTokenFlags(stateRound, stateGlobal);
+    const markerFlags = this.detectStopMarkers(
       stopReason,
+      newResponse,
+      agentSetting,
     );
-    const encounterDocumentTag = newResponse.includes(
-      `</${agentSetting.documentTag}>`,
-    );
-    const continuationLimit = stateRound.continuationCount > this.continueLimit;
-    const inputTokenLimit = stateGlobal.totalInputTokens > this.inputTokenLimit;
-    const maxOutputTokensExceeded =
-      stateGlobal.totalOutputTokens > maxOutputTokens;
 
-    if (maxOutputTokensExceeded) {
+    if (tokenFlags.maxOutputTokensExceeded) {
       this.logger.warn(
         `Output tokens exceed ${this.maxOutputTokensFactor}x input tokens`,
       );
@@ -515,22 +550,17 @@ export abstract class ModelHandler {
     }
 
     const shouldStop =
-      encounterDocumentTag || continuationLimit || inputTokenLimit;
+      markerFlags.encounterDocumentTag ||
+      tokenFlags.continuationLimit ||
+      tokenFlags.inputTokenLimit;
 
-    // Print debug info if stopping
     if (shouldStop) {
-      // StopFlags maybe should be a interface
       this.logger.debug(
-        `StopFlags:
-                endTurn: ${endTurn}
-                encounterDocumentTag: ${encounterDocumentTag}
-                continuation_limit: ${continuationLimit}
-                inputTokenLimit: ${inputTokenLimit}
-                maxOutputTokens: ${maxOutputTokensExceeded}`,
+        `StopFlags: endTurn: ${markerFlags.endTurn} encounterDocumentTag: ${markerFlags.encounterDocumentTag} continuation_limit: ${tokenFlags.continuationLimit} inputTokenLimit: ${tokenFlags.inputTokenLimit} maxOutputTokens: ${tokenFlags.maxOutputTokensExceeded}`,
       );
     }
 
-    return [endTurn, shouldStop];
+    return [markerFlags.endTurn, shouldStop];
   }
 
   public containCutOffMessage(content: any[] | string): boolean {
@@ -570,10 +600,10 @@ export abstract class ModelHandler {
   ): Promise<any[]>;
 
   /**
-   * Creates reflection messages for multi-turn conversations with optional images.
-   * @returns Provider-specific message array with reflection content
+   * Creates messages for follow-up conversation rounds with optional images.
+   * @returns Provider-specific message array with new round content
    */
-  abstract createReflectionMessages(
+  abstract createRoundMessages(
     messages: any[],
     userMessage: string,
     mediaFiles?: string[],

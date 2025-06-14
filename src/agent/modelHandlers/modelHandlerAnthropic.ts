@@ -19,29 +19,29 @@ import {
   readFile,
   writeFile,
   fileExistsAndNonTrivial,
-} from '../../utils/workspaceFileUtils';
+} from '../../utils/files';
 import {
   applyReplacements,
   getAllReplacements,
   getAllReplacementsRegex,
   cleanFileContent,
 } from '../../replacement/replacementUtils';
-import { extractAndLogScratchpad } from '../../utils/xmlUtils';
+import { extractAndLogScratchpad } from '../../utils/text/xmlUtils';
 
 // Local imports - agent components
-import { AgentConfig } from '../AgentConfig';
-import { AgentSetting, hasEndTag } from '../AgentDataclass';
+import { AgentConfig } from '../core/AgentConfig';
+import { AgentSetting, hasEndTag } from '../core/AgentDataclass';
 import { ModelHandler } from './ModelHandler';
 import {
   AnthropicAPIResponseUsage,
   ResponseUsageFactory,
   AnthropicUsage,
-} from '../ResponseUsage';
-import { ToolState } from '../ToolState';
-import { MediaEntry } from '../mediaTypes';
-import { AgentStateRound } from '../AgentState';
-import { K_SLICE } from '../../utils/constants';
-import { objectToLogString } from '../../utils/stringUtils';
+} from '../core/ResponseUsage';
+import { ToolState } from '../core/ToolState';
+import { MediaEntry } from '../utils/mediaTypes';
+import { AgentStateRound } from '../core/AgentState';
+import { K_SLICE } from '../../utils/config';
+import { objectToLogString } from '../../utils/text/stringUtils';
 import { calculateTokenPrice } from '../../utils/priceUtils';
 
 /**
@@ -245,14 +245,14 @@ export class ModelHandlerAnthropic extends ModelHandler {
     }
   }
 
-  /** Creates a reflection message array for Anthropic models, managing cache control and image content. */
-  async createReflectionMessages(
+  /** Creates message array for subsequent rounds, managing cache control and image content. */
+  async createRoundMessages(
     messages: MessageParam[],
     userMessage: string,
     mediaFiles?: string[],
   ): Promise<MessageParam[]> {
-    // Create content list for the reflection message
-    const reflectionContent: ContentBlock[] = [];
+    // Create content list for the new round message
+    const roundContent: ContentBlock[] = [];
 
     // Add media if provided (Anthropic currently only supports images)
     if (
@@ -263,7 +263,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
       try {
         const formattedMediaContent = await this.createMediaMessage(mediaFiles);
         // Filter out any non-image content
-        reflectionContent.push(
+        roundContent.push(
           ...formattedMediaContent.filter(
             (c) =>
               c.type === 'image' ||
@@ -272,7 +272,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
         );
       } catch (err) {
         this.logger.error(
-          `Error processing media files for reflection: ${err}`,
+          `Error processing media files for follow-up round: ${err}`,
         );
       }
     }
@@ -286,7 +286,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
         ? { cache_control: { type: 'ephemeral' } }
         : {}),
     };
-    reflectionContent.push(messageBlock);
+    roundContent.push(messageBlock);
 
     // We need to ensure we don't exceed Anthropic's limit of 4 cache_control blocks
     // Remove cache_control from ALL previous message contents
@@ -298,7 +298,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
       }
     }
 
-    messages.push({ role: 'user', content: reflectionContent });
+    messages.push({ role: 'user', content: roundContent });
     return messages;
   }
 
