@@ -8,6 +8,7 @@ The Responses API is a recent addition to the OpenAI platform. It allows develop
 - **Input types**: Message parts use `input_text` or `input_image` objects.
 - **Output format**: Instead of `choices`, text is found in `response.output[0].content[0].text` (or `output_text`).
 - **Instructions**: The `instructions` parameter applies only to the current request. When using `previous_response_id`, you must resend any system instructions you want applied.
+- **No stop sequences**: The Responses API does not accept a `stop` parameter. If your agent requires an end tag, handle it in post-processing rather than sending it to the API.
 
 See the [OpenAI Responses documentation](https://platform.openai.com/docs/api-reference/responses) for full details.
 
