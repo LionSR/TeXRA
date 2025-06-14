@@ -7,7 +7,7 @@ import * as logger from '../logger/logUtils';
 // Local imports - utils
 import { getLinterMessages } from '../utils/linterUtils';
 import { getRelativePath } from '../utils/workspaceFileUtils';
-import { sleep } from '../utils/timeUtils';
+import { sleep } from '../utils/helpers';
 
 // Local imports - core
 import { TeXLinterFixAgent } from '../AnthropicTool';
