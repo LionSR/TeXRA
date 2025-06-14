@@ -5,12 +5,12 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 // Local imports - log
-import * as logger from '../logger/logUtils';
+import * as logger from '../../logger/logUtils';
 
 // Local imports - utilities
-import { getConfig } from '../utils/config';
-import { getWorkspacePath } from '../utils/files';
-import { getIncludedExtensions } from '../utils/fileTypeUtils';
+import { getConfig } from '../../utils/config';
+import { getWorkspacePath } from '../../utils/files';
+import { getIncludedExtensions } from '../../utils/fileTypeUtils';
 
 const CHANNEL = 'FrontendUtils';
 logger.initialize(CHANNEL);

@@ -8,15 +8,15 @@ import { PDFDocument } from '@cantoo/pdf-lib';
 import { fromPath } from 'pdf2pic';
 
 // Local imports - log
-import * as logger from '../logger/logUtils';
+import * as logger from '../../logger/logUtils';
 
 // Local imports - utilities
 import {
   readFileBytesSync,
   fileExists,
   getFullPathFromWorkspace,
-} from './files';
-import { checkMultipleToolsInstalled } from './system';
+} from '../../utils/files';
+import { checkMultipleToolsInstalled } from '../../utils/system';
 
 const CHANNEL = 'ImgUtils';
 logger.initialize(CHANNEL);
