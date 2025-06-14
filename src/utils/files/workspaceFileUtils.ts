@@ -49,6 +49,15 @@ export async function writeFile(
   await vscode.workspace.fs.writeFile(uri, Buffer.from(content, 'utf-8'));
 }
 
+export async function writeBinaryFile(
+  filePath: string,
+  content: Uint8Array,
+): Promise<void> {
+  const fullPath = getFullPathFromWorkspace(filePath);
+  const uri = vscode.Uri.file(fullPath);
+  await vscode.workspace.fs.writeFile(uri, content);
+}
+
 export async function appendFile(
   filePath: string,
   content: string,

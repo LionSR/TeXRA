@@ -9,6 +9,8 @@ import { AgentLogger } from '../../logger/AgentLogger';
 
 // Local imports - utilities
 import { fileExists } from '../../utils/files';
+import { fileExistsAbsolute } from '../../utils/files/absoluteFileUtils';
+import { getPastedImageDisplayName } from '../../utils/files/pastedImageUtils';
 import {
   getBase64EncodedMedia,
   countPdfPages,
@@ -420,7 +422,13 @@ export abstract class ModelHandler {
     const addedMedia: string[] = [];
 
     for (const mediaFile of mediaFiles) {
-      if (!(await fileExists(mediaFile))) {
+      // Check if this is an absolute path (for pasted images in storage)
+      const isAbsolutePath = path.isAbsolute(mediaFile);
+      const fileExistsResult = isAbsolutePath
+        ? await fileExistsAbsolute(mediaFile)
+        : await fileExists(mediaFile);
+
+      if (!fileExistsResult) {
         this.logger.error(`File not found: ${mediaFile}`);
         continue;
       }
@@ -498,7 +506,11 @@ export abstract class ModelHandler {
           // TODO: we should just show the files that were not loaded.
         );
       } else {
-        this.logger.info(`Added: ${addedMedia}`);
+        // Show simplified paths in logs
+        const simplifiedMedia = addedMedia.map((m) =>
+          getPastedImageDisplayName(m),
+        );
+        this.logger.info(`Added: ${simplifiedMedia}`);
       }
     }
 
