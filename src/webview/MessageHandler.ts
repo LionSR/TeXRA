@@ -12,7 +12,13 @@ import * as logger from '../logger/logUtils';
 import { safeExecuteCommand } from '../utils/commandUtils';
 
 // Local imports - utilities
-import { getWorkspacePath, getRelativePath } from '../utils/workspaceFileUtils';
+import {
+  getWorkspacePath,
+  getRelativePath,
+  getWorkspaceStoragePath,
+  createStorageDirectory,
+  writeBinaryFileToStorage,
+} from '../utils/workspaceFileUtils';
 import { capitalize, uncapitalize } from '../frontend-utils/commonUtils';
 import { getConfig } from '../utils/configUtils';
 import {
@@ -37,6 +43,7 @@ export class WebviewMessageHandler {
     string,
     (message: any, webviewView: vscode.WebviewView) => unknown
   >;
+  private storageMediaMap = new Map<string, string>();
 
   constructor(private readonly context: vscode.ExtensionContext) {
     this.handlers = {
@@ -125,6 +132,8 @@ export class WebviewMessageHandler {
         this.handlePolishInstructionText(message, view),
       showAgentHistory: () => this.handleShowAgentHistory(),
       openSettings: () => this.handleOpenSettings(),
+      clipboardImage: (message, view) =>
+        this.handleClipboardImage(message, view),
     };
   }
 
@@ -184,6 +193,11 @@ export class WebviewMessageHandler {
         autoCompileInputPdf: message.autoCompileInputPdf,
       };
 
+      const mapMediaPath = (f: string | null): string | null => {
+        if (!f) return null;
+        return this.storageMediaMap.get(f) ?? f;
+      };
+
       const agentConfig: AgentConfig = {
         agent: message.agent,
         model: message.model,
@@ -194,8 +208,10 @@ export class WebviewMessageHandler {
         referenceFiles: getFilesIfNotEmpty(message.referenceFiles),
         auxiliaryFile: message.auxiliaryFile,
         auxiliaryFiles: getFilesIfNotEmpty(message.auxiliaryFiles),
-        mediaFile: message.mediaFile,
-        mediaFiles: getFilesIfNotEmpty(message.mediaFiles),
+        mediaFile: mapMediaPath(message.mediaFile),
+        mediaFiles: message.mediaFiles
+          ? message.mediaFiles.map(mapMediaPath)
+          : null,
         outputFiles: getFilesIfNotEmpty(message.outputFiles),
         outputNameOverride: message.outputNameOverride,
         editedFile: null,
@@ -805,6 +821,40 @@ export class WebviewMessageHandler {
       command: `set${fileType}`,
       files: files,
     });
+  }
+
+  private async handleClipboardImage(
+    message: any,
+    webviewView: vscode.WebviewView,
+  ) {
+    try {
+      const { base64, mediaType, fileName } = message;
+      if (!base64 || !mediaType || !fileName) {
+        return;
+      }
+      const dir = 'pasted';
+      await createStorageDirectory(this.context, dir);
+      const relativePath = path.join(dir, fileName);
+      await writeBinaryFileToStorage(
+        this.context,
+        relativePath,
+        Buffer.from(base64, 'base64'),
+      );
+      const fullPath = path.join(
+        getWorkspaceStoragePath(this.context),
+        relativePath,
+      );
+      this.storageMediaMap.set(fileName, fullPath);
+      webviewView.webview.postMessage({
+        command: 'addMediaFile',
+        file: fileName,
+      });
+    } catch (err) {
+      logger.error(
+        CHANNEL,
+        `Error handling clipboard image: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
   }
 
   /**
