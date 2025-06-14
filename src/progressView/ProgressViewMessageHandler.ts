@@ -5,7 +5,7 @@ import * as vscode from 'vscode';
 import * as logger from '../logger/logUtils';
 import { ProgressViewProvider } from './ProgressViewProvider';
 
-import { taskStateToAgentConfig } from '../utils/configConversion';
+import { taskStateToAgentConfig } from '../utils/config';
 
 // @ts-ignore - Import JavaScript module
 import { COMMANDS } from './modules/constants.js';

@@ -10,11 +10,11 @@ import {
   getBuiltInAgentsDirectory,
   getCustomAgentsDirectory,
   getOrPromptForCustomAgentsDirectory,
-} from './utils/pathUtils';
-import { promptToAddAgentToConfig } from './utils/agentRegistration';
-import { isValidAgentYaml } from './agent/agentLoad';
-import { fileExistsAbsolute } from './utils/absoluteFileUtils';
-import { getConfig } from './utils/configUtils';
+} from './frontend/agents/pathUtils';
+import { promptToAddAgentToConfig } from './frontend/agents/register';
+import { isValidAgentYaml } from './agent/runtime/agentLoad';
+import { fileExistsAbsolute } from './utils/files';
+import { getConfig } from './utils/config';
 
 const NEW_AGENT_TEMPLATE = `# --- Agent Inheritance (Optional) ---
 # inherits: base

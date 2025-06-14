@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 
 // Local imports - utilities
-import { openBuildDisplayIfTex } from '../utils/openBuildUtils';
+import { openBuildDisplayIfTex } from '../frontend/latex/openBuild';
 
 export function registerOpenFileCommands(context: vscode.ExtensionContext) {
   context.subscriptions.push(
