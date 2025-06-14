@@ -410,7 +410,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
 
       // Add fallback for streaming which returns content directly in responseObject
       if (responseObject.role && responseObject.content) {
-        this.logger.info(
+        this.logger.warn(
           'Using direct response format (streaming style) as fallback',
         );
         let newResponse = responseObject.content.trim();
