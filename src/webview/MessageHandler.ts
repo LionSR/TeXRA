@@ -30,8 +30,8 @@ import {
 import { sleep } from '../utils/helpers';
 
 // Local imports - agent
-import { ToolConfig } from '../agent/ToolConfig';
-import { AgentConfig } from '../agent/AgentConfig';
+import { ToolConfig } from '../agent/core/ToolConfig';
+import { AgentConfig } from '../agent/core/AgentConfig';
 
 const CHANNEL = 'MessageHandler';
 
