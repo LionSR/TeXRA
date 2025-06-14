@@ -42,7 +42,13 @@ window.onload = function () {
     });
 
     // Setup paste event listener for image handling
-    setupPasteListener(instruction, vscode, autoResizeTextarea, saveState, insertTextAtCursor);
+    setupPasteListener(
+      instruction,
+      vscode,
+      autoResizeTextarea,
+      saveState,
+      insertTextAtCursor,
+    );
   }
 };
 
