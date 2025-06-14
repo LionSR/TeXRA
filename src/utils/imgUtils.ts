@@ -15,8 +15,8 @@ import {
   readFileBytesSync,
   fileExists,
   getFullPathFromWorkspace,
-} from './workspaceFileUtils';
-import { checkMultipleToolsInstalled } from './toolUtils';
+} from './files';
+import { checkMultipleToolsInstalled } from './system';
 
 const CHANNEL = 'ImgUtils';
 logger.initialize(CHANNEL);

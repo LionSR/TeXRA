@@ -10,7 +10,7 @@ import { ToolState } from '../ToolState';
 
 // Local imports - utilities
 import { convertContentToString } from '../../utils/text/messageUtils';
-import { K_SLICE, MESSAGE_PREVIEW_LENGTH } from '../../utils/constants';
+import { K_SLICE, MESSAGE_PREVIEW_LENGTH } from '../../utils/config';
 
 // TODO: prompt_cache_hit_tokens can also be used here to correct the price and response usage computation in the base class (just overwrite the computePrice and computeResponseUsage methods with a revalues responseUsage.prompt_tokens_details?.cached_tokens and then call the super methods)
 // DEEPSEEK RESPONSE USAGE FORMAT:
