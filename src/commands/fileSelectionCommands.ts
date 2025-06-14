@@ -9,10 +9,10 @@ import {
   showInfoMessage,
   showErrorMessage,
 } from '../frontend-utils/commonUtils';
-import { getRelativePath } from '../utils/workspaceFileUtils';
+import { getRelativePath } from '../utils/files';
 import { listInputFiles } from '../frontend-utils/fileListingUtils';
 import { getIncludedExtensions } from '../utils/fileTypeUtils';
-import { selectFile, selectFiles } from '../utils/fileDialogUtils';
+import { selectFile, selectFiles } from '../utils/files';
 const CHANNEL = 'fileSelectionCommands';
 logger.initialize(CHANNEL);
 
