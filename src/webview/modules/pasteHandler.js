@@ -106,7 +106,12 @@ export async function processClipboardImage(file, mimeType, vscode) {
  * @param {Function} insertTextAtCursor - Function to insert text at cursor
  * @returns {Promise<boolean>} True if images were processed
  */
-export async function handleImagePaste(event, textarea, vscode, insertTextAtCursor) {
+export async function handleImagePaste(
+  event,
+  textarea,
+  vscode,
+  insertTextAtCursor,
+) {
   const items = event.clipboardData?.items || [];
   const images = [];
 
@@ -139,7 +144,11 @@ export async function handleImagePaste(event, textarea, vscode, insertTextAtCurs
   fileNames.forEach((fileName) => {
     if (fileName) {
       // Add spacing if needed
-      if (insertText && !insertText.endsWith(' ') && !insertText.endsWith('\n')) {
+      if (
+        insertText &&
+        !insertText.endsWith(' ') &&
+        !insertText.endsWith('\n')
+      ) {
         insertText += ' ';
       }
       insertText += `[${fileName}]`;
@@ -162,12 +171,23 @@ export async function handleImagePaste(event, textarea, vscode, insertTextAtCurs
  * @param {Function} saveState - Save state function
  * @param {Function} insertTextAtCursor - Function to insert text at cursor
  */
-export function setupPasteListener(textarea, vscode, autoResizeTextarea, saveState, insertTextAtCursor) {
+export function setupPasteListener(
+  textarea,
+  vscode,
+  autoResizeTextarea,
+  saveState,
+  insertTextAtCursor,
+) {
   if (!textarea) return;
-  
+
   textarea.addEventListener('paste', async (e) => {
-    const handled = await handleImagePaste(e, textarea, vscode, insertTextAtCursor);
-    
+    const handled = await handleImagePaste(
+      e,
+      textarea,
+      vscode,
+      insertTextAtCursor,
+    );
+
     // Auto-resize textarea after paste
     setTimeout(() => {
       autoResizeTextarea(textarea);
