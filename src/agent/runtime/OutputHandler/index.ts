@@ -5,10 +5,10 @@ import * as path from 'path';
 import { XMLParser } from 'fast-xml-parser';
 
 // Local imports - log
-import { AgentLogger } from '../logger/AgentLogger';
+import { AgentLogger } from '../../../logger/AgentLogger';
 
 // Local imports - utilities
-import { readFile, writeFile } from '../utils/workspaceFileUtils';
+import { readFile, writeFile } from '../../../utils/files';
 import {
   addCdataToTags,
   addCdataToTagsMultiple,
@@ -16,29 +16,29 @@ import {
   extractTextFromTag,
   extractContentFromXMLbyTagMultiple,
   extractMultipleTextFromTag,
-} from '../utils/xmlUtils';
+} from '../../../utils/text/xmlUtils';
 import {
   applyReplacements,
   getReplacementsByCategory,
   getAllReplacements,
-} from '../replacement/replacementUtils';
+} from '../../../replacement/replacementUtils';
 import {
   runLatexdiffForRound,
   runLatexdiffBetweenRounds,
   LaTeXdiffResult,
-} from '../latex/latexdiff';
-import { compileLatex2Pdf } from '../latex/texTools';
-import { checkToolInstalled } from '../utils/toolUtils';
-import { runLatexFormatter } from '../latex/texFormatter';
+} from '../../../latex/latexdiff';
+import { compileLatex2Pdf } from '../../../latex/texTools';
+import { checkToolInstalled } from '../../../utils/system';
+import { runLatexFormatter } from '../../../latex/texFormatter';
 
 // Local imports - agent components
-import { AgentConfig } from './AgentConfig';
-import { AgentSetting } from './AgentDataclass';
-import { AgentStateGlobal, AgentStateRound } from './AgentState';
-import { ProgressViewProvider } from '../progressView/ProgressViewProvider';
+import { AgentConfig } from '../../core/AgentConfig';
+import { AgentSetting } from '../../core/AgentDataclass';
+import { AgentStateGlobal, AgentStateRound } from '../../core/AgentState';
+import { ProgressViewProvider } from '../../../progressView/ProgressViewProvider';
 
 // Local imports - types
-import { TokenUsageStats } from '../types/UsageTypes';
+import { TokenUsageStats } from '../../../types/UsageTypes';
 
 /** Generates output filename incorporating model and round information. */
 export function getOutputFileName(

@@ -3,8 +3,8 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 // Local imports - log
-import * as logger from '../logger/logUtils';
-import { getConfig } from '../utils/configUtils';
+import * as logger from '../../logger/logUtils';
+import { getConfig } from '../config';
 
 const CHANNEL = 'AgentLoad';
 logger.initialize(CHANNEL);
