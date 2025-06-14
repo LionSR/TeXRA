@@ -10,7 +10,7 @@ import {
   getBuiltInAgentsDirectory,
   getCustomAgentsDirectory,
   getOrPromptForCustomAgentsDirectory,
-} from './utils/files';
+} from './frontend/agents/pathUtils';
 import { promptToAddAgentToConfig } from './utils/agentRegistration';
 import { isValidAgentYaml } from './agent/runtime/agentLoad';
 import { fileExistsAbsolute } from './utils/files';
