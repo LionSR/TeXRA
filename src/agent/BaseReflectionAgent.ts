@@ -373,7 +373,7 @@ export abstract class BaseReflectionAgent implements IAgent {
 
         // If thinking content was extracted, format and log it first
         if (thinkingContent) {
-          formatAndLogContent(
+          await formatAndLogContent(
             thinkingContent,
             this.logger,
             'Thinking',
@@ -385,7 +385,7 @@ export abstract class BaseReflectionAgent implements IAgent {
         }
 
         // Extract thinking from XML tags in the response text
-        this.extractAndLogScratchpad(
+        await this.extractAndLogScratchpad(
           newResponse,
           'scratchpad',
           responseCycleGroupId,
@@ -1384,7 +1384,12 @@ export abstract class BaseReflectionAgent implements IAgent {
     outputContent: string,
     thinkingTag: string = 'scratchpad',
     groupId?: string,
-  ): void {
-    extractAndLogScratchpad(outputContent, this.logger, thinkingTag, groupId);
+  ): Promise<void> {
+    return extractAndLogScratchpad(
+      outputContent,
+      this.logger,
+      thinkingTag,
+      groupId,
+    );
   }
 }
