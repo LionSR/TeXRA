@@ -18,7 +18,7 @@ import {
 } from './modelHandlers';
 
 // Local imports - utils
-import { getConfig } from '../utils/configUtils';
+import { getConfig } from '../utils/config';
 import * as logger from '../logger/logUtils';
 
 // Initialize logger

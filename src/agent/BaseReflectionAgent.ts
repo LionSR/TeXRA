@@ -20,12 +20,7 @@ import { diff_match_patch } from 'diff-match-patch';
 import type { DiffStats } from '../types/DiffTypes';
 
 // Local imports - utilities
-import {
-  writeFile,
-  appendFile,
-  fileExists,
-  readFile,
-} from '../utils/workspaceFileUtils';
+import { writeFile, appendFile, fileExists, readFile } from '../utils/files';
 import {
   renderPrompt,
   getFirstKCharsFromDocument,
@@ -56,14 +51,14 @@ import { buildUserVars } from './userVars';
 import { IAgent } from './IAgent';
 
 // System imports - common utilities
-import { getConfig } from '../utils/configUtils';
+import { getConfig } from '../utils/config';
 
 // Shared constants
 import {
   K_SLICE,
   SHORT_SLEEP_MS,
   REPETITION_DETECTION_THRESHOLD,
-} from '../utils/constants';
+} from '../utils/config';
 
 /**
  * Abstract base class for agents that support multi-turn reflection and refinement.

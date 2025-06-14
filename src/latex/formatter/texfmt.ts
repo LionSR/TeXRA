@@ -5,8 +5,7 @@ import * as vscode from 'vscode';
 import * as logger from '../../logger/logUtils';
 
 // Local imports - utilities
-import { executeCommand } from '../../utils/execUtils';
-import { checkToolInstalled } from '../../utils/toolUtils';
+import { executeCommand, checkToolInstalled } from '../../utils/system';
 
 const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);
