@@ -18,6 +18,7 @@ import {
   getWorkspaceStoragePath,
   createStorageDirectory,
   writeBinaryFileToStorage,
+  cleanupStorageDirectory,
 } from '../utils/workspaceFileUtils';
 import { capitalize, uncapitalize } from '../frontend-utils/commonUtils';
 import { getConfig } from '../utils/configUtils';
@@ -37,15 +38,25 @@ import { ToolConfig } from '../agent/ToolConfig';
 import { AgentConfig } from '../agent/AgentConfig';
 
 const CHANNEL = 'MessageHandler';
+const PASTED_DIR = 'pasted';
 
 export class WebviewMessageHandler {
   private handlers: Record<
     string,
     (message: any, webviewView: vscode.WebviewView) => unknown
   >;
-  private storageMediaMap = new Map<string, string>();
 
   constructor(private readonly context: vscode.ExtensionContext) {
+    cleanupStorageDirectory(
+      this.context,
+      PASTED_DIR,
+      3 * 24 * 60 * 60 * 1000,
+    ).catch((e) =>
+      logger.warn(
+        CHANNEL,
+        `Error during initial cleanup: ${e instanceof Error ? e.message : String(e)}`,
+      ),
+    );
     this.handlers = {
       showInformationMessage: (message) => this.handleInfoMessage(message),
       getTheme: (_m, view) => this.handleThemeRequest(view),
@@ -195,7 +206,14 @@ export class WebviewMessageHandler {
 
       const mapMediaPath = (f: string | null): string | null => {
         if (!f) return null;
-        return this.storageMediaMap.get(f) ?? f;
+        if (f.startsWith('pasted_')) {
+          return path.join(
+            getWorkspaceStoragePath(this.context),
+            PASTED_DIR,
+            f,
+          );
+        }
+        return f;
       };
 
       const agentConfig: AgentConfig = {
@@ -836,19 +854,18 @@ export class WebviewMessageHandler {
       if (!base64 || !mediaType || !fileName) {
         return;
       }
-      const dir = 'pasted';
-      await createStorageDirectory(this.context, dir);
-      const relativePath = path.join(dir, fileName);
+      await createStorageDirectory(this.context, PASTED_DIR);
+      const relativePath = path.join(PASTED_DIR, fileName);
       await writeBinaryFileToStorage(
         this.context,
         relativePath,
         Buffer.from(base64, 'base64'),
       );
-      const fullPath = path.join(
-        getWorkspaceStoragePath(this.context),
-        relativePath,
+      await cleanupStorageDirectory(
+        this.context,
+        PASTED_DIR,
+        3 * 24 * 60 * 60 * 1000,
       );
-      this.storageMediaMap.set(fileName, fullPath);
       webviewView.webview.postMessage({
         command: 'addMediaFile',
         file: fileName,
