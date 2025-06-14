@@ -39,6 +39,25 @@ These are supporting files needed for proper document processing:
 
 Files containing visual or audio content, such as images, PDFs used as figures, or audio recordings. See the [Working with Figures](./working-with-figures.md) guide for details on supported types, UI controls, and automatic extraction.
 
+#### Pasting Images from Clipboard
+
+TeXRA supports directly pasting images from your clipboard into the instruction text area. This is useful for quickly including screenshots, diagrams, or other visual content:
+
+1. **Copy an image** to your clipboard (e.g., take a screenshot or copy from another application)
+2. **Click in the instruction text area** where you want to reference the image
+3. **Paste** (Ctrl/Cmd+V) - the image will be automatically:
+   - Saved to the workspace storage
+   - Referenced in the text as `[pasted_timestamp_hash.ext]`
+   - Added to the Media Files list
+   - Made available to the AI model
+
+Supported image formats include:
+- Common formats: JPEG, PNG, GIF, WebP, BMP, SVG
+- Professional formats: TIFF, HEIC, HEIF, AVIF
+- Adobe formats: PSD
+
+Note: Pasted images are stored in workspace storage and automatically cleaned up after 3 days to save space.
+
 ## File Selection Interface
 
 The TeXRA interface provides a streamlined way to select and manage files using distinct sections for each file category (Input <i class="codicon codicon-file-code"></i>, Reference <i class="codicon codicon-book"></i>, Auxiliary <i class="codicon codicon-file-add"></i>, Media <i class="codicon codicon-file-media"></i>):
