@@ -29,17 +29,17 @@ import {
 import { extractAndLogScratchpad } from '../../utils/xmlUtils';
 
 // Local imports - agent components
-import { AgentConfig } from '../AgentConfig';
-import { AgentSetting, hasEndTag } from '../AgentDataclass';
+import { AgentConfig } from '../core/AgentConfig';
+import { AgentSetting, hasEndTag } from '../core/AgentDataclass';
 import { ModelHandler } from './ModelHandler';
 import {
   AnthropicAPIResponseUsage,
   ResponseUsageFactory,
   AnthropicUsage,
-} from '../ResponseUsage';
-import { ToolState } from '../ToolState';
-import { MediaEntry } from '../mediaTypes';
-import { AgentStateRound } from '../AgentState';
+} from '../core/ResponseUsage';
+import { ToolState } from '../core/ToolState';
+import { MediaEntry } from '../utils/mediaTypes';
+import { AgentStateRound } from '../core/AgentState';
 import { K_SLICE } from '../../utils/constants';
 import { objectToLogString } from '../../utils/stringUtils';
 import { calculateTokenPrice } from '../../utils/priceUtils';

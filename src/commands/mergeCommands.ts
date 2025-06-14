@@ -5,7 +5,7 @@ import * as vscode from 'vscode';
 import { getConfig } from '../utils/configUtils';
 
 // Local imports - agent
-import { executeMergeAgent } from '../agent/executeAgent';
+import { executeMergeAgent } from '../agent/runtime/executeAgent';
 
 export function registerMergeCommands(context: vscode.ExtensionContext) {
   context.subscriptions.push(

@@ -6,7 +6,7 @@ import OpenAI from 'openai';
 
 // Local imports - agent components
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
-import { ToolState } from '../ToolState';
+import { ToolState } from '../core/ToolState';
 
 // Local imports - utilities
 import { convertContentToString } from '../../utils/messageUtils';

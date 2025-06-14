@@ -12,7 +12,7 @@ import {
   getOrPromptForCustomAgentsDirectory,
 } from './utils/pathUtils';
 import { promptToAddAgentToConfig } from './utils/agentRegistration';
-import { isValidAgentYaml } from './agent/agentLoad';
+import { isValidAgentYaml } from './agent/runtime/agentLoad';
 import { fileExistsAbsolute } from './utils/absoluteFileUtils';
 import { getConfig } from './utils/configUtils';
 

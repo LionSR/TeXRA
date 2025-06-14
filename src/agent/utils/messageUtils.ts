@@ -2,7 +2,7 @@
  * Utility functions for working with message objects in agent conversations.
  */
 
-import { MESSAGE_PREVIEW_LENGTH } from '../utils/constants';
+import { MESSAGE_PREVIEW_LENGTH } from '../../utils/constants';
 
 /**
  * Creates a skeleton representation of a message object for debugging.

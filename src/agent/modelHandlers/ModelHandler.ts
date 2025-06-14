@@ -22,16 +22,16 @@ import {
 } from '../../utils/secretUtils';
 
 // Local imports - agent components
-import { AgentConfig } from '../AgentConfig';
-import { AgentSetting, hasEndTag } from '../AgentDataclass';
-import { AgentStateRound, AgentStateGlobal } from '../AgentState';
+import { AgentConfig } from '../core/AgentConfig';
+import { AgentSetting, hasEndTag } from '../core/AgentDataclass';
+import { AgentStateRound, AgentStateGlobal } from '../core/AgentState';
 import {
   ModelConfig,
   ModelProvider,
   ModelCapabilities,
 } from '../../model/ModelConfig';
-import { ToolState } from '../ToolState';
-import { MediaEntry } from '../mediaTypes';
+import { ToolState } from '../core/ToolState';
+import { MediaEntry } from '../utils/mediaTypes';
 
 // Default continuation limits
 const DEFAULT_CONTINUE_LIMIT = 10;

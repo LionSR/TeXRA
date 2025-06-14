@@ -5,7 +5,7 @@ import * as path from 'path';
 // (none needed)
 
 // Local imports - log
-import { AgentLogger } from '../logger/AgentLogger';
+import { AgentLogger } from '../../logger/AgentLogger';
 
 // Local imports - latex utils
 import {
@@ -14,10 +14,10 @@ import {
   bestConnectionMethod,
   getTeXCountStats,
   compileLatex2Pdf,
-} from '../latex';
-import { ProgressViewProvider } from '../progressView/ProgressViewProvider';
+} from '../../latex';
+import { ProgressViewProvider } from '../../progressView/ProgressViewProvider';
 import { diff_match_patch } from 'diff-match-patch';
-import type { DiffStats } from '../types/DiffTypes';
+import type { DiffStats } from '../../types/DiffTypes';
 
 // Local imports - utilities
 import {
@@ -25,45 +25,45 @@ import {
   appendFile,
   fileExists,
   readFile,
-} from '../utils/workspaceFileUtils';
+} from '../../utils/workspaceFileUtils';
 import {
   renderPrompt,
   getFirstKCharsFromDocument,
   writePromptToXml,
-} from '../utils/promptUtils';
-import { loadTexraRules } from '../utils/texraRulesUtils';
+} from '../../utils/promptUtils';
+import { loadTexraRules } from '../../utils/texraRulesUtils';
 import {
   applyReplacements,
   getAllReplacements,
   getAllReplacementsRegex,
-} from '../replacement/replacementUtils';
-import { checkForMassiveRepetition } from '../utils/repetitionUtils';
+} from '../../replacement/replacementUtils';
+import { checkForMassiveRepetition } from '../../utils/repetitionUtils';
 import {
   extractAndLogScratchpad,
   formatAndLogContent,
-} from '../utils/xmlUtils';
-import { sleep } from '../utils/timeUtils';
+} from '../../utils/xmlUtils';
+import { sleep } from '../../utils/timeUtils';
 
 // Local imports - agent components
-import { AgentConfig } from './AgentConfig';
-import { AgentSetting, AgentPrompt, AgentType } from './AgentDataclass';
-import { AgentStateRound, AgentStateGlobal } from './AgentState';
-import { ToolState } from './ToolState';
-import { ModelHandler } from './modelHandlers';
-import { OutputHandler } from './OutputHandler';
-import { messageToSkeleton } from './messageUtils';
-import { buildUserVars } from './userVars';
-import { IAgent } from './IAgent';
+import { AgentConfig } from '../core/AgentConfig';
+import { AgentSetting, AgentPrompt, AgentType } from '../core/AgentDataclass';
+import { AgentStateRound, AgentStateGlobal } from '../core/AgentState';
+import { ToolState } from '../core/ToolState';
+import { ModelHandler } from '../modelHandlers';
+import { OutputHandler } from '../runtime/OutputHandler';
+import { messageToSkeleton } from '../utils/messageUtils';
+import { buildUserVars } from '../utils/userVars';
+import { IAgent } from '../core/IAgent';
 
 // System imports - common utilities
-import { getConfig } from '../utils/configUtils';
+import { getConfig } from '../../utils/configUtils';
 
 // Shared constants
 import {
   K_SLICE,
   SHORT_SLEEP_MS,
   REPETITION_DETECTION_THRESHOLD,
-} from '../utils/constants';
+} from '../../utils/constants';
 
 /**
  * Abstract base class for agents that support multi-turn reflection and refinement.
@@ -739,7 +739,7 @@ export abstract class BaseReflectionAgent implements IAgent {
         this.baseFiles.map(async (f) => await fileExists(f)),
       );
 
-      if (existingBase.some((e) => e)) {
+      if (existingBase.some((e: boolean) => e)) {
         // Pass the process group ID to maintain proper nesting in the log hierarchy
         await this.outputHandler.handleLatexdiffofOutput(
           currRound,
