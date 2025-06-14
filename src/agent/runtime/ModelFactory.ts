@@ -1,5 +1,5 @@
 // Local imports - agent components
-import { ModelConfig, ModelProvider } from '@/model';
+import { ModelConfig, ModelProvider } from '@model';
 
 // Local imports - model handlers
 import {
@@ -15,11 +15,11 @@ import {
   ModelHandlerAnthropicViaOpenRouter,
   ModelHandlerOpenAI,
   ModelHandlerOpenAIResponse,
-} from '@/agent/modelHandlers';
+} from '@agent/modelHandlers';
 
 // Local imports - utils
-import { getConfig } from '@/utils/config';
-import * as logger from '@/logger/logUtils';
+import { getConfig } from '@utils/config';
+import * as logger from '@logger/logUtils';
 
 // Initialize logger
 const CHANNEL = 'ModelFactory';
