@@ -17,7 +17,7 @@ import {
   fileExistsAndNonTrivial,
 } from '../../utils/workspaceFileUtils';
 import { cleanFileContent } from '../../replacement/replacementUtils';
-import { extractAndLogScratchpad } from '../../utils/xmlUtils';
+import { extractAndLogScratchpad } from '../../utils/text/xmlUtils';
 
 // Local imports - agent components
 import { AgentConfig } from '../AgentConfig';
@@ -31,7 +31,7 @@ import {
 } from '../ResponseUsage';
 import { ToolState } from '../ToolState';
 import { K_SLICE } from '../../utils/constants';
-import { objectToLogString } from '../../utils/stringUtils';
+import { objectToLogString } from '../../utils/text/stringUtils';
 import { calculateTokenPrice } from '../../utils/priceUtils';
 import { MediaEntry } from '../mediaTypes';
 

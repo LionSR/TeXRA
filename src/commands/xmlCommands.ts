@@ -10,7 +10,7 @@ import { XMLValidatorAgent } from '../AnthropicTool';
 
 // Local imports - utils
 import { getRelativePath } from '../utils/workspaceFileUtils';
-import { sleep } from '../utils/timeUtils';
+import { sleep } from '../utils/helpers';
 
 const CHANNEL = 'XmlCommands';
 logger.initialize(CHANNEL);
