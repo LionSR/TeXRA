@@ -1,7 +1,7 @@
 // Local imports - log
-import * as logger from '../logger/logUtils';
-import { AgentLogger } from '../logger/AgentLogger';
-import { K_SLICE } from './constants';
+import * as logger from '../../logger/logUtils';
+import { AgentLogger } from '../../logger/AgentLogger';
+import { K_SLICE } from '../config';
 
 const CHANNEL = 'xmlUtils';
 logger.initialize(CHANNEL);

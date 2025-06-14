@@ -1,7 +1,10 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { getFullPathFromWorkspace, fileExists } from './workspaceFileUtils';
-import { fileExistsAbsolute } from './absoluteFileUtils';
+import {
+  getFullPathFromWorkspace,
+  fileExists,
+  fileExistsAbsolute,
+} from './files';
 
 /**
  * Show an instruction message that can be permanently dismissed.

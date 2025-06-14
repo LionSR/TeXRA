@@ -19,14 +19,14 @@ import {
   readFile,
   writeFile,
   fileExistsAndNonTrivial,
-} from '../../utils/workspaceFileUtils';
+} from '../../utils/files';
 import {
   applyReplacements,
   getAllReplacements,
   getAllReplacementsRegex,
   cleanFileContent,
 } from '../../replacement/replacementUtils';
-import { extractAndLogScratchpad } from '../../utils/xmlUtils';
+import { extractAndLogScratchpad } from '../../utils/text/xmlUtils';
 
 // Local imports - agent components
 import { AgentConfig } from '../AgentConfig';
@@ -40,8 +40,8 @@ import {
 import { ToolState } from '../ToolState';
 import { MediaEntry } from '../mediaTypes';
 import { AgentStateRound } from '../AgentState';
-import { K_SLICE } from '../../utils/constants';
-import { objectToLogString } from '../../utils/stringUtils';
+import { K_SLICE } from '../../utils/config';
+import { objectToLogString } from '../../utils/text/stringUtils';
 import { calculateTokenPrice } from '../../utils/priceUtils';
 
 /**

@@ -8,9 +8,8 @@ import * as vscode from 'vscode';
 import * as logger from '../logger/logUtils';
 
 // Local imports - utilities
-import { deleteFile, readDirectory } from '../utils/workspaceFileUtils';
-import { fileExistsAbsolute } from '../utils/absoluteFileUtils';
-import { getConfig } from '../utils/configUtils';
+import { deleteFile, readDirectory, fileExistsAbsolute } from '../utils/files';
+import { getConfig } from '../utils/config';
 import { runLatexFormatter } from '../latex/texFormatter';
 
 // Local imports - housekeeping

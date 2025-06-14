@@ -8,7 +8,7 @@ import { XMLParser } from 'fast-xml-parser';
 import { AgentLogger } from '../logger/AgentLogger';
 
 // Local imports - utilities
-import { readFile, writeFile } from '../utils/workspaceFileUtils';
+import { readFile, writeFile } from '../utils/files';
 import {
   addCdataToTags,
   addCdataToTagsMultiple,
@@ -16,7 +16,7 @@ import {
   extractTextFromTag,
   extractContentFromXMLbyTagMultiple,
   extractMultipleTextFromTag,
-} from '../utils/xmlUtils';
+} from '../utils/text/xmlUtils';
 import {
   applyReplacements,
   getReplacementsByCategory,
@@ -28,7 +28,7 @@ import {
   LaTeXdiffResult,
 } from '../latex/latexdiff';
 import { compileLatex2Pdf } from '../latex/texTools';
-import { checkToolInstalled } from '../utils/toolUtils';
+import { checkToolInstalled } from '../utils/system';
 import { runLatexFormatter } from '../latex/texFormatter';
 
 // Local imports - agent components

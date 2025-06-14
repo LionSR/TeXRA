@@ -9,7 +9,7 @@ import { ValidationResult } from './types';
 import { LinterMessage } from '../utils/linterUtils';
 
 // Local imports - utils
-import * as workspaceFileUtils from '../utils/workspaceFileUtils';
+import * as workspaceFileUtils from '../utils/files';
 import * as linterUtils from '../utils/linterUtils';
 
 // Local imports - Logging

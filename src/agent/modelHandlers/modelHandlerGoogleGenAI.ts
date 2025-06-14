@@ -37,8 +37,8 @@ import {
   writeFile,
   fileExistsAndNonTrivial,
   getFullPathFromWorkspace,
-} from '../../utils/workspaceFileUtils';
-import { fileExistsAbsolute } from '../../utils/absoluteFileUtils';
+  fileExistsAbsolute,
+} from '../../utils/files';
 import { formatProviderError } from '../../utils/sdkErrorUtils';
 import {
   applyReplacements,
@@ -46,12 +46,12 @@ import {
   getAllReplacementsRegex,
   cleanFileContent,
 } from '../../replacement/replacementUtils';
-import { extractAndLogScratchpad } from '../../utils/xmlUtils';
-import { getConfig } from '../../utils/configUtils';
+import { extractAndLogScratchpad } from '../../utils/text/xmlUtils';
+import { getConfig } from '../../utils/config';
 import { calculateTokenPrice } from '../../utils/priceUtils';
 
 // Local constant
-import { K_SLICE } from '../../utils/constants';
+import { K_SLICE } from '../../utils/config';
 
 // Internal type definition
 type InternalMessagePart = {

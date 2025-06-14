@@ -8,8 +8,7 @@ import * as vscode from 'vscode';
 import * as logger from '../logger/logUtils';
 
 // Local imports - utilities
-import { getWorkspacePath } from '../utils/workspaceFileUtils';
-import { fileExists } from '../utils/workspaceFileUtils';
+import { getWorkspacePath, fileExists } from '../utils/files';
 import { openBuildDisplayIfTex } from '../utils/openBuildUtils';
 
 // Local imports - latex utils
@@ -19,7 +18,7 @@ import {
   runLatexdiffForRound,
   runLatexdiffBetweenRounds,
 } from '../latex/latexdiff';
-import { checkToolInstalled } from '../utils/toolUtils';
+import { checkToolInstalled } from '../utils/system';
 
 // Local imports - housekeeping
 import {

@@ -10,8 +10,8 @@ import { ToolState } from '../ToolState';
 import { MediaEntry } from '../mediaTypes';
 
 // Local imports - utilities
-import { convertContentToString } from '../../utils/messageUtils';
-import { MESSAGE_PREVIEW_LENGTH } from '../../utils/constants';
+import { convertContentToString } from '../../utils/text/messageUtils';
+import { MESSAGE_PREVIEW_LENGTH } from '../../utils/config';
 
 /**
  * Handler for DashScope Qwen models using OpenAI-compatible API.
