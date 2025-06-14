@@ -26,7 +26,7 @@ import {
   getFirstKCharsFromDocument,
   writePromptToXml,
 } from '../../utils/promptUtils';
-import { loadTexraRules } from '../../utils/texraRulesUtils';
+import { loadTexraRules } from '../../frontend/files/rules';
 import {
   applyReplacements,
   getAllReplacements,

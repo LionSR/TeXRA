@@ -13,13 +13,13 @@ import {
   getBase64EncodedMedia,
   countPdfPages,
   processPdf2Png,
-} from '../../utils/imgUtils';
+} from '../../frontend/media/img';
 import { checkMultipleToolsInstalled } from '../../utils/system';
 import { getConfig } from '../../utils/config';
 import {
   getApiKey as getSecretApiKey,
   ApiProvider,
-} from '../../utils/secretUtils';
+} from '../../frontend/secrets';
 
 // Local imports - agent components
 import { AgentConfig } from '../core/AgentConfig';
