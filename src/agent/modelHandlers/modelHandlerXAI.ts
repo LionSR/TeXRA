@@ -7,7 +7,7 @@ import OpenAI from 'openai';
 // Local imports - agent components
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 import { ToolState } from '../ToolState';
-import { K_SLICE } from '../../utils/constants';
+import { K_SLICE } from '../../utils/config';
 
 /**
  * Handler for xAI models using OpenAI-compatible API.

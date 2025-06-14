@@ -8,14 +8,14 @@ import * as path from 'path';
 import { AgentLogger } from '../../logger/AgentLogger';
 
 // Local imports - utilities
-import { fileExists } from '../../utils/workspaceFileUtils';
+import { fileExists } from '../../utils/files';
 import {
   getBase64EncodedMedia,
   countPdfPages,
   processPdf2Png,
 } from '../../utils/imgUtils';
-import { checkMultipleToolsInstalled } from '../../utils/toolUtils';
-import { getConfig } from '../../utils/configUtils';
+import { checkMultipleToolsInstalled } from '../../utils/system';
+import { getConfig } from '../../utils/config';
 import {
   getApiKey as getSecretApiKey,
   ApiProvider,

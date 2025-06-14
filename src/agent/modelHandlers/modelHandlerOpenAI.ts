@@ -15,7 +15,7 @@ import {
   readFile,
   writeFile,
   fileExistsAndNonTrivial,
-} from '../../utils/workspaceFileUtils';
+} from '../../utils/files';
 import { cleanFileContent } from '../../replacement/replacementUtils';
 import { extractAndLogScratchpad } from '../../utils/text/xmlUtils';
 
@@ -30,7 +30,7 @@ import {
   ExtendedCompletionUsage,
 } from '../ResponseUsage';
 import { ToolState } from '../ToolState';
-import { K_SLICE } from '../../utils/constants';
+import { K_SLICE } from '../../utils/config';
 import { objectToLogString } from '../../utils/text/stringUtils';
 import { calculateTokenPrice } from '../../utils/priceUtils';
 import { MediaEntry } from '../mediaTypes';
