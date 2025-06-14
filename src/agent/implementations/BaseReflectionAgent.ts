@@ -5,7 +5,7 @@ import * as path from 'path';
 // (none needed)
 
 // Local imports - log
-import { AgentLogger } from '@/logger/AgentLogger';
+import { AgentLogger } from '@logger/AgentLogger';
 
 // Local imports - latex utils
 import {
@@ -14,55 +14,55 @@ import {
   bestConnectionMethod,
   getTeXCountStats,
   compileLatex2Pdf,
-} from '@/latex';
-import { ProgressViewProvider } from '@/progressView/ProgressViewProvider';
+} from '@latex';
+import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import { diff_match_patch } from 'diff-match-patch';
 import type { DiffStats } from '@/types/DiffTypes';
 
 // Local imports - utilities
-import { writeFile, appendFile, fileExists, readFile } from '@/utils/files';
+import { writeFile, appendFile, fileExists, readFile } from '@utils/files';
 import {
   renderPrompt,
   getFirstKCharsFromDocument,
   writePromptToXml,
-} from '@/utils/promptUtils';
-import { loadTexraRules } from '@/frontend/files/rules';
+} from '@utils/promptUtils';
+import { loadTexraRules } from '@frontend/files/rules';
 import {
   applyReplacements,
   getAllReplacements,
   getAllReplacementsRegex,
-} from '@/replacement/replacementUtils';
-import { checkForMassiveRepetition } from '@/utils/text/repetitionUtils';
+} from '@replacement/replacementUtils';
+import { checkForMassiveRepetition } from '@utils/text/repetitionUtils';
 import {
   extractAndLogScratchpad,
   formatAndLogContent,
-} from '@/utils/text/xmlUtils';
-import { sleep } from '@/utils/helpers';
+} from '@utils/text/xmlUtils';
+import { sleep } from '@utils/helpers';
 
 // Local imports - agent components
-import { AgentConfig } from '@/agent/core/AgentConfig';
+import { AgentConfig } from '@agent/core/AgentConfig';
 import {
   AgentSetting,
   AgentPrompt,
   AgentType,
-} from '@/agent/core/AgentDataclass';
-import { AgentStateRound, AgentStateGlobal } from '@/agent/core/AgentState';
-import { ToolState } from '@/agent/core/ToolState';
-import { ModelHandler } from '@/agent/modelHandlers';
-import { OutputHandler } from '@/agent/runtime/OutputHandler';
-import { messageToSkeleton } from '@/agent/utils/messageUtils';
-import { buildUserVars } from '@/agent/utils/userVars';
-import { IAgent } from '@/agent/core/IAgent';
+} from '@agent/core/AgentDataclass';
+import { AgentStateRound, AgentStateGlobal } from '@agent/core/AgentState';
+import { ToolState } from '@agent/core/ToolState';
+import { ModelHandler } from '@agent/modelHandlers';
+import { OutputHandler } from '@agent/runtime/OutputHandler';
+import { messageToSkeleton } from '@agent/utils/messageUtils';
+import { buildUserVars } from '@agent/utils/userVars';
+import { IAgent } from '@agent/core/IAgent';
 
 // System imports - common utilities
-import { getConfig } from '@/utils/config';
+import { getConfig } from '@utils/config';
 
 // Shared constants
 import {
   K_SLICE,
   SHORT_SLEEP_MS,
   REPETITION_DETECTION_THRESHOLD,
-} from '@/utils/config';
+} from '@utils/config';
 
 /**
  * Abstract base class for agents that support multi-turn reflection and refinement.

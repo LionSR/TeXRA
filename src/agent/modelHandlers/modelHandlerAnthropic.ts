@@ -12,33 +12,33 @@ import {
 import type { BetaMessage } from '@anthropic-ai/sdk/resources/beta/messages';
 
 // Local imports - error utils
-import { formatProviderError } from '@/utils/sdkErrorUtils';
+import { formatProviderError } from '@utils/sdkErrorUtils';
 
 // Local imports - utilities
-import { readFile, writeFile, fileExistsAndNonTrivial } from '@/utils/files';
+import { readFile, writeFile, fileExistsAndNonTrivial } from '@utils/files';
 import {
   applyReplacements,
   getAllReplacements,
   getAllReplacementsRegex,
   cleanFileContent,
-} from '@/replacement/replacementUtils';
-import { extractAndLogScratchpad } from '@/utils/text/xmlUtils';
+} from '@replacement/replacementUtils';
+import { extractAndLogScratchpad } from '@utils/text/xmlUtils';
 
 // Local imports - agent components
-import { AgentConfig } from '@/agent/core/AgentConfig';
-import { AgentSetting, hasEndTag } from '@/agent/core/AgentDataclass';
-import { ModelHandler } from '@/agent/modelHandlers/ModelHandler';
+import { AgentConfig } from '@agent/core/AgentConfig';
+import { AgentSetting, hasEndTag } from '@agent/core/AgentDataclass';
+import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
 import {
   AnthropicAPIResponseUsage,
   ResponseUsageFactory,
   AnthropicUsage,
-} from '@/agent/core/ResponseUsage';
-import { ToolState } from '@/agent/core/ToolState';
-import { MediaEntry } from '@/agent/utils/mediaTypes';
-import { AgentStateRound } from '@/agent/core/AgentState';
-import { K_SLICE } from '@/utils/config';
-import { objectToLogString } from '@/utils/text/stringUtils';
-import { calculateTokenPrice } from '@/utils/priceUtils';
+} from '@agent/core/ResponseUsage';
+import { ToolState } from '@agent/core/ToolState';
+import { MediaEntry } from '@agent/utils/mediaTypes';
+import { AgentStateRound } from '@agent/core/AgentState';
+import { K_SLICE } from '@utils/config';
+import { objectToLogString } from '@utils/text/stringUtils';
+import { calculateTokenPrice } from '@utils/priceUtils';
 
 /**
  * Anthropic-specific model handler implementation for managing API interactions and message processing.
