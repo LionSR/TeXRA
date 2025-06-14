@@ -2,11 +2,11 @@
 import spawn from 'cross-spawn';
 
 // Local imports - log
-import * as logger from '../logger/logUtils';
+import * as logger from '../../logger/logUtils';
 
 // Local imports - utilities
-import { getWorkspacePath } from './workspaceFileUtils';
-import { ExecResult } from '../types/ResultTypes';
+import { getWorkspacePath } from '../files';
+import { ExecResult } from '../../types/ResultTypes';
 import { extendEnvPath } from './platformPaths';
 
 const CHANNEL = 'execUtils';
