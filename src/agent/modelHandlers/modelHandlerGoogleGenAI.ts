@@ -18,17 +18,17 @@ import {
 
 // Local imports - agent components
 import { ModelHandler } from './ModelHandler';
-import { AgentConfig } from '../AgentConfig';
-import { AgentSetting, hasEndTag } from '../AgentDataclass';
-import { AgentStateRound, AgentStateGlobal } from '../AgentState';
-import { ToolState } from '../ToolState';
+import { AgentConfig } from '../core/AgentConfig';
+import { AgentSetting, hasEndTag } from '../core/AgentDataclass';
+import { AgentStateRound, AgentStateGlobal } from '../core/AgentState';
+import { ToolState } from '../core/ToolState';
 import {
   OpenAIAPIResponseUsage,
   ResponseUsageFactory,
   GenerateContentResponseUsageMetadata,
   ExtendedCompletionUsage,
-} from '../ResponseUsage';
-import { MediaEntry } from '../mediaTypes';
+} from '../core/ResponseUsage';
+import { MediaEntry } from '../utils/mediaTypes';
 import { AgentLogger } from '../../logger/AgentLogger';
 
 // Local imports - utilities

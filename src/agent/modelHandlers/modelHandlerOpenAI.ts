@@ -20,20 +20,20 @@ import { cleanFileContent } from '../../replacement/replacementUtils';
 import { extractAndLogScratchpad } from '../../utils/text/xmlUtils';
 
 // Local imports - agent components
-import { AgentConfig } from '../AgentConfig';
-import { AgentSetting, hasEndTag } from '../AgentDataclass';
-import { AgentStateRound } from '../AgentState';
+import { AgentConfig } from '../core/AgentConfig';
+import { AgentSetting, hasEndTag } from '../core/AgentDataclass';
+import { AgentStateRound } from '../core/AgentState';
 import { ModelHandler } from './ModelHandler';
 import {
   OpenAIAPIResponseUsage,
   ResponseUsageFactory,
   ExtendedCompletionUsage,
-} from '../ResponseUsage';
-import { ToolState } from '../ToolState';
+} from '../core/ResponseUsage';
+import { ToolState } from '../core/ToolState';
 import { K_SLICE } from '../../utils/config';
 import { objectToLogString } from '../../utils/text/stringUtils';
 import { calculateTokenPrice } from '../../utils/priceUtils';
-import { MediaEntry } from '../mediaTypes';
+import { MediaEntry } from '../utils/mediaTypes';
 
 /**
  * OpenAI-specific handlers.
