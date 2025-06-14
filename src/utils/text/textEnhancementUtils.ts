@@ -13,7 +13,7 @@ import { formatProviderError } from '../sdkErrorUtils';
 import * as logger from '../../logger/logUtils';
 
 // Local imports - utilities
-import { getApiKey } from '../secretUtils';
+import { getApiKey } from '../../frontend/secrets';
 import { extractTextFromTag } from './xmlUtils';
 import { getConfig } from '../config';
 
