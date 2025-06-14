@@ -14,12 +14,12 @@ import { ToolResult } from './base';
 import { BaseError, ValidationResult } from './types';
 
 // Local imports - utils
-import * as workspaceFileUtils from '../utils/workspaceFileUtils';
+import * as workspaceFileUtils from '../utils/files';
 import {
   getApiKey as getSecretApiKey,
   ApiProvider,
 } from '../utils/secretUtils';
-import { getConfig } from '../utils/configUtils';
+import { getConfig } from '../utils/config';
 
 // Local imports - logging
 import * as logger from '../logger/logUtils';
