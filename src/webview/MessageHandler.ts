@@ -209,9 +209,13 @@ export class WebviewMessageHandler {
         auxiliaryFile: message.auxiliaryFile,
         auxiliaryFiles: getFilesIfNotEmpty(message.auxiliaryFiles),
         mediaFile: mapMediaPath(message.mediaFile),
-        mediaFiles: message.mediaFiles
-          ? message.mediaFiles.map(mapMediaPath)
-          : null,
+        mediaFiles: getFilesIfNotEmpty(
+          message.mediaFiles
+            ? message.mediaFiles
+                .map(mapMediaPath)
+                .filter((f: string | null): f is string => f !== null)
+            : undefined,
+        ),
         outputFiles: getFilesIfNotEmpty(message.outputFiles),
         outputNameOverride: message.outputNameOverride,
         editedFile: null,
