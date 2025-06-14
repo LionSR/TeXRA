@@ -17,7 +17,7 @@ import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 import { ResponseUsageFactory } from '../ResponseUsage';
 import { calculateTokenPrice } from '../../utils/priceUtils';
 import { ToolState } from '../ToolState';
-import { K_SLICE } from '../../utils/constants';
+import { K_SLICE } from '../../utils/config';
 
 // import { ResponseCreateParams } from 'openai/src/resources/responses/response';
 // this is incorrect now, but would be nice to use

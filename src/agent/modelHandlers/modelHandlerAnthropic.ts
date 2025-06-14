@@ -19,7 +19,7 @@ import {
   readFile,
   writeFile,
   fileExistsAndNonTrivial,
-} from '../../utils/workspaceFileUtils';
+} from '../../utils/files';
 import {
   applyReplacements,
   getAllReplacements,
@@ -40,7 +40,7 @@ import {
 import { ToolState } from '../ToolState';
 import { MediaEntry } from '../mediaTypes';
 import { AgentStateRound } from '../AgentState';
-import { K_SLICE } from '../../utils/constants';
+import { K_SLICE } from '../../utils/config';
 import { objectToLogString } from '../../utils/text/stringUtils';
 import { calculateTokenPrice } from '../../utils/priceUtils';
 

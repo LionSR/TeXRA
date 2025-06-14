@@ -9,8 +9,8 @@ import { glob } from 'glob';
 import {
   getBuiltInAgentsDirectory,
   getCustomAgentsDirectory,
-} from '../utils/pathUtils';
-import { agentConfigToTaskState } from '../utils/configConversion';
+} from '../utils/files';
+import { agentConfigToTaskState } from '../utils/config';
 
 // Local imports - agent components
 import { AgentConfig, createAgentConfig } from './AgentConfig';

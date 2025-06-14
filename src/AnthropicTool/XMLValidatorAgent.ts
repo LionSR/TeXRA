@@ -7,7 +7,7 @@ import { XMLValidator } from 'fast-xml-parser';
 import { AnthropicToolAgent } from './AnthropicToolAgent';
 
 // Local imports - utils
-import * as workspaceFileUtils from '../utils/workspaceFileUtils';
+import * as workspaceFileUtils from '../utils/files';
 
 // Local imports - types
 import { XMLValidationError, ValidationResult } from './types';
