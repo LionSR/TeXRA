@@ -8,7 +8,7 @@ import * as logger from '../logger/logUtils';
 import { TextEditorTool, ToolCallInput } from '../AnthropicTool';
 
 // Local imports - utilities
-import { getRelativePath } from '../utils/workspaceFileUtils';
+import { getRelativePath } from '../utils/files';
 
 const CHANNEL = 'TextEditorCommands';
 logger.initialize(CHANNEL);

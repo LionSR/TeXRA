@@ -4,7 +4,7 @@ import * as vscode from 'vscode';
 import { AgentHistoryManager } from './AgentHistoryManager';
 import { executeCommand } from '../commands/executeCommand';
 
-import { agentConfigToTaskState } from '../utils/configConversion';
+import { agentConfigToTaskState } from '../utils/config';
 import { buildWebviewHtml } from '../utils/webviewHtmlUtils';
 
 // Local imports - log
