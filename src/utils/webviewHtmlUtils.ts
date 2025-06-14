@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as vscode from 'vscode';
-import { generateNonce } from './nonceUtils';
+import { generateNonce } from './helpers';
 
 /**
  * Build HTML content for a webview by replacing placeholder tokens.

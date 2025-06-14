@@ -5,8 +5,8 @@ import * as vscode from 'vscode';
 import * as logger from '../logger/logUtils';
 
 // Local imports - utilities
-import { getRelativePath } from '../utils/workspaceFileUtils';
-import { sleep } from '../utils/timeUtils';
+import { getRelativePath } from '../utils/files';
+import { sleep } from '../utils/helpers';
 import {
   applyReplacements,
   getAllReplacements,

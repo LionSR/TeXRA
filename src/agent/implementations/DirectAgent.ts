@@ -1,13 +1,13 @@
 // Local imports - agent components
-import { AgentStateRound, AgentStateGlobal } from './AgentState';
-import { getOutputFileName } from './OutputHandler';
 import { BaseReflectionAgent } from './BaseReflectionAgent';
+import { AgentStateRound, AgentStateGlobal } from '../core/AgentState';
+import { getOutputFileName } from '../runtime/OutputHandler';
 
 /**
- * Chain of Thought (CoT) agent implementation that extends BaseReflectionAgent.
- * Adds XML structure validation and specialized output handling for multi-step reasoning.
+ * Direct agent implementation that processes requests in a single pass.
+ * Extends BaseReflectionAgent with simplified output handling and no intermediate steps.
  */
-export class CoTAgent extends BaseReflectionAgent {
+export class DirectAgent extends BaseReflectionAgent {
   /**
    * Generates output file name based on configuration and current round.
    * @param currRound Current round number in the conversation
@@ -16,22 +16,18 @@ export class CoTAgent extends BaseReflectionAgent {
   protected getOutputFile(currRound: number): string {
     const baseOutputFile =
       this.agentConfig.outputNameOverride || this.agentConfig.inputFile;
-    const fileExtension = this.useScratchpad
-      ? 'xml'
-      : this.agentSetting.outputExt;
     return getOutputFileName(
       baseOutputFile,
       this.agentConfig.agent,
       this.modelHandler.config.name,
-      fileExtension,
+      this.agentSetting.outputExt,
       currRound,
       this.agentConfig.editedFile || undefined,
     );
   }
 
   /**
-   * Processes output for the current round with XML validation.
-   * Ensures proper sequencing of XML processing, file processing, and logging.
+   * Processes output for the current round with minimal processing.
    * @returns Array of processed output file paths
    */
   protected async handleOutput(
@@ -46,11 +42,12 @@ export class CoTAgent extends BaseReflectionAgent {
     // Initialize with processGroupId if provided, otherwise it will be set in the try block
     let outputProcessGroupId: string = processGroupId || '';
 
+    // These groups needs to be made consistent with the @BaseReflectionAgent.handleOutput method
     try {
       // Start a main output processing group if none provided
       if (!processGroupId) {
         outputProcessGroupId = await this.logger.startGroup(
-          `OutputHandler`,
+          `OutputProcessing-Round${currRound}`,
           undefined,
           this.logger.getActiveGroupId(),
         );
@@ -66,26 +63,25 @@ export class CoTAgent extends BaseReflectionAgent {
           outputProcessGroupId,
         );
 
-        // First fix XML structure
-        await this.outputHandler.ensureCorrectXmlStructure(
-          outputFile,
-          this.agentSetting.documentTag,
-        );
-        this.logger.debug(
-          `XML structure processed for round ${currRound}`,
+        // Create a dedicated File Processing subgroup
+        const fileProcessGroupId = await this.outputHandler.startProcessing(
+          `FileProcessing`,
           outputProcessGroupId,
         );
 
-        // Then process output files using the parent class method
-        await super.processOutputFiles(
+        // Process output files using the parent class method but with our group ID
+        await this.processOutputFiles(
           outputFile,
           currRound,
-          outputProcessGroupId,
+          fileProcessGroupId,
         );
         this.logger.debug(
           `Output files processed for round ${currRound}`,
-          outputProcessGroupId,
+          fileProcessGroupId,
         );
+
+        // End File Processing subgroup
+        this.outputHandler.endProcessing('stopped', fileProcessGroupId);
 
         // Note: latexdiff processing is now handled in the parent class's handleOutput method
       }
@@ -106,9 +102,9 @@ export class CoTAgent extends BaseReflectionAgent {
       }
 
       return result;
-    } catch (err) {
+    } catch (error) {
       this.logger.error(
-        `Error in handleOutput for round ${currRound}: ${err}`,
+        `Error in DirectAgent.handleOutput: ${error}`,
         processGroupId,
       );
 
@@ -117,7 +113,7 @@ export class CoTAgent extends BaseReflectionAgent {
         this.logger.endGroup(outputProcessGroupId, 'error');
       }
 
-      throw err; // Re-throw to maintain error propagation
+      throw error;
     }
   }
 }

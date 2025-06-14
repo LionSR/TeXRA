@@ -3,10 +3,10 @@ import * as path from 'path';
 
 // Local imports - agent components
 import { DirectAgent } from './DirectAgent';
-import { AgentStateRound, AgentStateGlobal } from './AgentState';
-import { ModelHandler } from './modelHandlers';
-import { AgentConfig } from './AgentConfig';
-import { AgentSetting, AgentPrompt } from './AgentDataclass';
+import { AgentStateRound, AgentStateGlobal } from '../core/AgentState';
+import { ModelHandler } from '../modelHandlers';
+import { AgentConfig } from '../core/AgentConfig';
+import { AgentSetting, AgentPrompt } from '../core/AgentDataclass';
 
 /**
  * Specialized agent for merging multiple edited files into a consolidated output.
