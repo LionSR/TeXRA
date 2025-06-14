@@ -3,11 +3,11 @@ import * as os from 'os';
 import * as path from 'path';
 
 // Local imports - log
-import * as logger from '../../logger/logUtils';
+import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
-import { getWorkspacePath, fileExists, readFile } from '../../utils/files';
-import { fileExistsAbsolute, readFileAbsolute } from '../../utils/files';
+import { getWorkspacePath, fileExists, readFile } from '@utils/files';
+import { fileExistsAbsolute, readFileAbsolute } from '@utils/files';
 
 const CHANNEL = 'texraRulesUtils';
 logger.initialize(CHANNEL);
