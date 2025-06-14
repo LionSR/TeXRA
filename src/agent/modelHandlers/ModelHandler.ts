@@ -273,21 +273,28 @@ export abstract class ModelHandler {
     return effort;
   }
 
-  /**
-   * Process image or audio for models.
-   * @param mediaFile Path to the media file
-   * @param fileExtension File extension (e.g. '.jpg', '.pdf', '.wav')
-   * @returns Tuple of [base64 encoded media data, media type, media category ('image' or 'audio')]
-   */
-  protected async processMedia(
-    mediaFile: string,
-    fileExtension: string,
-  ): Promise<[string | string[], string, 'image' | 'audio']> {
-    const ext = fileExtension.toLowerCase();
-    let mediaData: string | string[];
-    let mediaType: string;
-    let mediaCategory: 'image' | 'audio';
+  /** Determine if extension corresponds to an audio format. */
+  private isAudio(ext: string): boolean {
+    return [
+      '.wav',
+      '.m4a',
+      '.mp3',
+      '.mpeg',
+      '.aiff',
+      '.aac',
+      '.ogg',
+      '.flac',
+    ].includes(ext.toLowerCase());
+  }
 
+  /**
+   * Process an image file for model ingestion.
+   * Handles PDFs and other common image formats.
+   */
+  protected async processImage(
+    mediaFile: string,
+    ext: string,
+  ): Promise<[string | string[], string, 'image']> {
     const imageMediaTypes: { [key: string]: string } = {
       '.jpg': 'image/jpeg',
       '.jpeg': 'image/jpeg',
@@ -296,32 +303,68 @@ export abstract class ModelHandler {
       '.heic': 'image/heic',
       '.heif': 'image/heif',
       '.gif': 'image/gif',
-      '.pdf': await (async () => {
-        // Check if ImageMagick is installed
-        const isImageMagickInstalled = await checkMultipleToolsInstalled(
-          ['magick', 'gm'],
-          false,
-        );
-        const pageCount = await countPdfPages(mediaFile);
-
-        // Use native PDF in these cases:
-        // 1. Multi-page PDF and model supports native PDFs, or
-        // 2. ImageMagick not installed but model supports native PDFs
-        if (
-          (pageCount > 1 || !isImageMagickInstalled.some(Boolean)) &&
-          this.capabilities.supportsNativePdf
-        ) {
-          this.logger.debug(
-            `Using native PDF for ${mediaFile}. ImageMagick installed: ${isImageMagickInstalled.some(Boolean)}, Page count: ${pageCount}`,
-          );
-          return 'application/pdf';
-        }
-
-        // Default to PNG conversion when ImageMagick is available
-        return 'image/png';
-      })(),
     };
 
+    let mediaType: string;
+    let mediaData: string | string[];
+
+    if (ext === '.pdf') {
+      const isImageMagickInstalled = await checkMultipleToolsInstalled(
+        ['magick', 'gm'],
+        false,
+      );
+      const pageCount = await countPdfPages(mediaFile);
+
+      if (
+        (pageCount > 1 || !isImageMagickInstalled.some(Boolean)) &&
+        this.capabilities.supportsNativePdf
+      ) {
+        this.logger.debug(
+          `Using native PDF for ${mediaFile}. ImageMagick installed: ${isImageMagickInstalled.some(
+            Boolean,
+          )}, Page count: ${pageCount}`,
+        );
+        mediaType = 'application/pdf';
+        mediaData = await getBase64EncodedMedia(mediaFile);
+        return [mediaData, mediaType, 'image'];
+      }
+
+      mediaType = 'image/png';
+      this.logger.debug(`Converting PDF to PNG: ${mediaFile}`);
+      const pdfResult = await processPdf2Png(mediaFile);
+      if (pdfResult === null) {
+        if (this.capabilities.supportsNativePdf) {
+          this.logger.debug(
+            `PDF to PNG conversion failed. Falling back to native PDF for ${mediaFile}`,
+          );
+          mediaType = 'application/pdf';
+          mediaData = await getBase64EncodedMedia(mediaFile);
+        } else {
+          throw new Error(`Failed to process PDF file as image: ${mediaFile}`);
+        }
+      } else {
+        mediaData = pdfResult;
+      }
+    } else if (ext in imageMediaTypes) {
+      mediaType = imageMediaTypes[ext];
+      this.logger.debug(
+        `Processing as image: ${mediaFile}, type: ${mediaType}`,
+      );
+      mediaData = await getBase64EncodedMedia(mediaFile);
+    } else {
+      throw new Error(
+        `Unsupported image extension: ${ext}. Image support: ${this.capabilities.supportsVision}`,
+      );
+    }
+
+    return [mediaData, mediaType, 'image'];
+  }
+
+  /** Process an audio file for models supporting native audio input. */
+  protected async processAudio(
+    mediaFile: string,
+    ext: string,
+  ): Promise<[string, string, 'audio']> {
     const audioMediaTypes: { [key: string]: string } = {
       '.wav': 'audio/wav',
       '.m4a': 'audio/m4a',
@@ -333,67 +376,38 @@ export abstract class ModelHandler {
       '.flac': 'audio/flac',
     };
 
-    if (ext in imageMediaTypes) {
-      mediaType = imageMediaTypes[ext];
-      mediaCategory = 'image';
-      this.logger.debug(
-        `Processing as image: ${mediaFile}, type: ${mediaType}`,
-      );
-      if (ext === '.pdf') {
-        if (mediaType === 'image/png') {
-          // Only attempt conversion if we've determined PNG is appropriate
-          this.logger.debug(`Converting PDF to PNG: ${mediaFile}`);
-          const pdfResult = await processPdf2Png(mediaFile);
-
-          if (pdfResult === null) {
-            // If conversion fails but model supports native PDF, fall back to PDF
-            if (this.capabilities.supportsNativePdf) {
-              this.logger.debug(
-                `PDF to PNG conversion failed. Falling back to native PDF for ${mediaFile}`,
-              );
-              mediaType = 'application/pdf';
-              mediaData = await getBase64EncodedMedia(mediaFile);
-            } else {
-              throw new Error(
-                `Failed to process PDF file as image: ${mediaFile}`,
-              );
-            }
-          } else {
-            mediaData = pdfResult;
-          }
-        } else {
-          // For application/pdf media type, use PDF directly
-          this.logger.debug(`Using native PDF: ${mediaFile}`);
-          mediaData = await getBase64EncodedMedia(mediaFile);
-        }
-      } else {
-        mediaData = await getBase64EncodedMedia(mediaFile);
-      }
-    } else if (
-      ext in audioMediaTypes &&
-      this.capabilities.supportsNativeAudio
-    ) {
-      mediaType = audioMediaTypes[ext];
-      mediaCategory = 'audio';
-      this.logger.debug(
-        `Processing as audio: ${mediaFile}, type: ${mediaType}`,
-      );
-      mediaData = await getBase64EncodedMedia(mediaFile);
-      // Audio files are typically processed as a single base64 string
-      if (Array.isArray(mediaData)) {
-        this.logger.warn(
-          `Audio file ${mediaFile} processed into multiple parts, using only the first.`,
-        );
-        // I think this should not happen, but just in case
-        mediaData = mediaData[0];
-      }
-    } else {
+    if (!(ext in audioMediaTypes) || !this.capabilities.supportsNativeAudio) {
       throw new Error(
-        `Unsupported or disabled file extension: ${fileExtension}. Image support: ${this.capabilities.supportsVision}, Audio support: ${this.capabilities.supportsNativeAudio}`,
+        `Unsupported or disabled audio extension: ${ext}. Audio support: ${this.capabilities.supportsNativeAudio}`,
       );
     }
 
-    return [mediaData, mediaType, mediaCategory];
+    const mediaType = audioMediaTypes[ext];
+    this.logger.debug(`Processing as audio: ${mediaFile}, type: ${mediaType}`);
+    let mediaData = await getBase64EncodedMedia(mediaFile);
+    if (Array.isArray(mediaData)) {
+      this.logger.warn(
+        `Audio file ${mediaFile} processed into multiple parts, using only the first.`,
+      );
+      mediaData = mediaData[0];
+    }
+    return [mediaData, mediaType, 'audio'];
+  }
+
+  /**
+   * Process image or audio for models.
+   * @param mediaFile Path to the media file
+   * @param fileExtension File extension (e.g. '.jpg', '.pdf', '.wav')
+   * @returns Tuple of [base64 encoded media data, media type, media category ('image' or 'audio')]
+   */
+  protected async processMedia(
+    mediaFile: string,
+    fileExtension: string,
+  ): Promise<[string | string[], string, 'image' | 'audio']> {
+    const ext = fileExtension.toLowerCase();
+    return this.isAudio(ext)
+      ? this.processAudio(mediaFile, ext)
+      : this.processImage(mediaFile, ext);
   }
 
   /**
