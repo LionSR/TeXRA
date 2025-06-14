@@ -16,7 +16,7 @@ import {
   extractTextFromTag,
   extractContentFromXMLbyTagMultiple,
   extractMultipleTextFromTag,
-} from '../utils/xmlUtils';
+} from '../utils/text/xmlUtils';
 import {
   applyReplacements,
   getReplacementsByCategory,
