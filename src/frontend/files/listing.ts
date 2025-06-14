@@ -8,9 +8,9 @@ import * as vscode from 'vscode';
 import * as logger from '../../logger/logUtils';
 
 // Local imports - utilities
-import { getConfig } from '../../utils/config';
-import { getWorkspacePath } from '../../utils/files';
-import { getIncludedExtensions } from '../../utils/fileTypeUtils';
+import { getConfig } from '@utils/config';
+import { getWorkspacePath } from '@utils/files';
+import { getIncludedExtensions } from '@utils/fileTypeUtils';
 
 const CHANNEL = 'FrontendUtils';
 logger.initialize(CHANNEL);

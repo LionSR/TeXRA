@@ -1,7 +1,13 @@
+// Third-party imports
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { getFullPathFromWorkspace, fileExists } from '../../utils/files';
-import { fileExistsAbsolute } from '../../utils/files';
+
+// Local imports - utilities
+import {
+  fileExists,
+  fileExistsAbsolute,
+  getFullPathFromWorkspace,
+} from '@utils/files';
 
 /**
  * Show an instruction message that can be permanently dismissed.

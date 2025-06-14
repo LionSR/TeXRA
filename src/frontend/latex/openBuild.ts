@@ -3,7 +3,9 @@ import * as vscode from 'vscode';
 
 // Local imports - log
 import * as logger from '../../logger/logUtils';
-import { fileExists, getFullPathFromWorkspace } from '../../utils/files';
+
+// Local imports - utilities
+import { fileExists, getFullPathFromWorkspace } from '@utils/files';
 
 const CHANNEL = 'OpenBuildUtils';
 logger.initialize(CHANNEL);

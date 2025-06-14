@@ -1,5 +1,5 @@
 // Local imports - utilities
-import { readFile, readFileAbsolute } from '../../utils/files';
+import { readFile, readFileAbsolute } from '@utils/files';
 
 // Local imports - log
 import { AgentLogger } from '../../logger/AgentLogger';

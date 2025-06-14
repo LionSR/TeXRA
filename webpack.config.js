@@ -31,6 +31,10 @@ const extensionConfig = {
   resolve: {
     // support reading TypeScript and JavaScript files, 📖 -> https://github.com/TypeStrong/ts-loader
     extensions: ['.ts', '.js'],
+    alias: {
+      '@frontend': path.resolve(__dirname, 'src/frontend'),
+      '@utils': path.resolve(__dirname, 'src/utils'),
+    },
     fallback: {
       fs: false,
       path: require.resolve('path-browserify'),
