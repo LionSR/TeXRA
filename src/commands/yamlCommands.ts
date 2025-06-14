@@ -13,7 +13,7 @@ import {
 import * as logger from '../logger/logUtils';
 import { getAgentPath } from '../agent/runtime/executeAgent';
 import { AgentType } from '../agent/core/AgentDataclass';
-import { showInstructionWithSuppress } from '../utils/instructionUtils';
+import { showInstructionWithSuppress } from '../frontend/ui/instruction';
 
 const CHANNEL = 'TestCommands';
 logger.initialize(CHANNEL);

@@ -4,7 +4,7 @@
 import * as vscode from 'vscode';
 
 // Local imports
-import * as logger from '../logger/logUtils';
+import * as logger from '../../logger/logUtils';
 
 const CHANNEL = 'AgentRegister';
 logger.initialize(CHANNEL);

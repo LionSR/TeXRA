@@ -10,7 +10,7 @@ import * as logger from '../logger/logUtils';
 // Local imports - utilities
 import { getWorkspacePath } from '../utils/files';
 import { fileExists } from '../utils/files';
-import { openBuildDisplayIfTex } from '../utils/openBuildUtils';
+import { openBuildDisplayIfTex } from '../frontend/latex/openBuild';
 
 // Local imports - latex utils
 import {
