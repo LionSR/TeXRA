@@ -13,7 +13,7 @@ import { safeExecuteCommand } from '../utils/system';
 
 // Local imports - utilities
 import { getWorkspacePath, getRelativePath } from '../utils/files';
-import { capitalize, uncapitalize } from '../frontend-utils/commonUtils';
+import { capitalize, uncapitalize } from '../frontend/ui/messageUtils';
 import { getConfig } from '../utils/config';
 import {
   listInputFiles,
@@ -22,7 +22,7 @@ import {
   listMediaFiles,
   listEditedFiles,
   getFilesIfNotEmpty,
-} from '../frontend-utils/fileListingUtils';
+} from '../frontend/files/listing';
 import {
   polishTextWithAI,
   FileContext,
