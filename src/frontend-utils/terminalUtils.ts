@@ -3,14 +3,14 @@ import * as vscode from 'vscode';
 
 let terminal: vscode.Terminal | undefined;
 
-export function ensureTerminal() {
+export function getOrCreateTerminal(name: string): vscode.Terminal {
   const existingTerminal = vscode.window.terminals.find(
-    (t) => t.name === 'housekeeping',
+    (t) => t.name === name,
   );
   if (existingTerminal) {
     terminal = existingTerminal;
   } else if (!terminal || terminal.exitStatus !== undefined) {
-    terminal = vscode.window.createTerminal('housekeeping');
+    terminal = vscode.window.createTerminal(name);
   }
   return terminal;
 }
