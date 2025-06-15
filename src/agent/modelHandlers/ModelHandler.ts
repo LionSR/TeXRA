@@ -433,7 +433,6 @@ export abstract class ModelHandler {
       const fileExtension = path.extname(mediaFile).toLowerCase();
 
       try {
-        this.logger.debug(`Processing media: ${mediaFile}`);
         const [mediaData, mediaType, mediaCategory] = await this.processMedia(
           mediaFile,
           fileExtension,
