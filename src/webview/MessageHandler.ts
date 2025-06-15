@@ -23,7 +23,7 @@ import {
   getPastedImageFullPath,
   PASTED_DIR,
 } from '@utils/files/pastedImageUtils';
-import { capitalize, uncapitalize } from '../frontend/ui/messageUtils';
+import { capitalize, uncapitalize } from '@frontend/ui/messageUtils';
 import { getConfig } from '@utils/config';
 import {
   listInputFiles,
@@ -32,7 +32,7 @@ import {
   listMediaFiles,
   listEditedFiles,
   getFilesIfNotEmpty,
-} from '../frontend/files/listing';
+} from '@frontend/files/listing';
 import {
   polishTextWithAI,
   FileContext,
