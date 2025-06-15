@@ -499,7 +499,12 @@ export class ModelHandlerAnthropic extends ModelHandler {
     fileContent = cleanFileContent(fileContent);
 
     // Extract and log any existing scratchpad content
-    extractAndLogScratchpad(fileContent, this.logger, 'scratchpad', groupId);
+    await extractAndLogScratchpad(
+      fileContent,
+      this.logger,
+      'scratchpad',
+      groupId,
+    );
 
     await writeFile(outputFile, fileContent);
 
