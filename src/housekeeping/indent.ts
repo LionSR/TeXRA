@@ -11,7 +11,7 @@ import * as logger from '@logger/logUtils';
 import { deleteFile, readDirectory } from '@utils/files';
 import { fileExistsAbsolute } from '@utils/files';
 import { getConfig } from '@utils/config';
-import { runLatexFormatter } from '../latex/texFormatter';
+import { runLatexFormatter } from '@latex/texFormatter';
 
 // Local imports - housekeeping
 import { EXCLUDED_DIRS } from './constants';

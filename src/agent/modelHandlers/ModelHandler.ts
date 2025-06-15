@@ -15,13 +15,10 @@ import {
   getBase64EncodedMedia,
   countPdfPages,
   processPdf2Png,
-} from '../../frontend/media/img';
+} from '@frontend/media/img';
 import { checkMultipleToolsInstalled } from '@utils/system';
 import { getConfig } from '@utils/config';
-import {
-  getApiKey as getSecretApiKey,
-  ApiProvider,
-} from '../../frontend/secrets';
+import { getApiKey as getSecretApiKey, ApiProvider } from '@frontend/secrets';
 
 // Local imports - agent components
 import { AgentConfig } from '../core/AgentConfig';
@@ -31,7 +28,7 @@ import {
   ModelConfig,
   ModelProvider,
   ModelCapabilities,
-} from '../../model/ModelConfig';
+} from '@model/ModelConfig';
 import { ToolState } from '../core/ToolState';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 
