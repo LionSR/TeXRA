@@ -22,7 +22,27 @@ import {
 } from './logFormatters.js';
 import { STATUS, COMMANDS, SPLIT_SIZES, TOOLBAR_BUTTONS } from './constants.js';
 import { createIconButton } from '@common/templateUtils.js';
-import { getEffectiveBaseFile } from '@utils/files/baseFileUtils.js';
+// Note: We'll inline the getEffectiveBaseFile function since modules can't use TS aliases
+/**
+ * Get the effective base file for comparison operations.
+ * @param {string|null|undefined} base - The explicit base file path
+ * @param {string|null|undefined} original - The original source file path
+ * @param {string} current - The current generated file path
+ * @returns {string|null} The effective base file path or null
+ */
+function getEffectiveBaseFile(base, original, current) {
+  // Use explicit base if available
+  if (base) {
+    return base;
+  }
+
+  // Use original as base if it exists and differs from current
+  if (original && original !== current) {
+    return original;
+  }
+
+  return null;
+}
 
 const STATUS_MAP = {
   [STATUS.RUNNING]: {
