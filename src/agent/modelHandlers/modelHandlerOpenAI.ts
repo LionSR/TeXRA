@@ -2,11 +2,7 @@
 // (none needed)
 
 // Third-party imports
-import OpenAI, {
-  RateLimitError,
-  NotFoundError,
-  PermissionDeniedError,
-} from 'openai';
+import OpenAI from 'openai';
 import { ChatCompletionContentPart } from 'openai/resources/chat/completions';
 import { countTokens } from 'gpt-tokenizer';
 
@@ -14,6 +10,7 @@ import { countTokens } from 'gpt-tokenizer';
 import { readFile, writeFile, fileExistsAndNonTrivial } from '@utils/files';
 import { cleanFileContent } from '../../replacement/replacementUtils';
 import { extractAndLogScratchpad } from '@utils/text/xmlUtils';
+import { formatProviderError } from '@utils/sdkErrorUtils';
 
 // Local imports - agent components
 import { AgentConfig } from '../core/AgentConfig';
@@ -180,16 +177,10 @@ export class ModelHandlerOpenAI extends ModelHandler {
         // in the future if we pass stream to outside (signal: controller.signal)), calling stream.controller.abort() will abort the stream; which will be very useful for our stop button (controller.abort();)
         // we should also make sure partial results can be returned in the presence of errors!
       } catch (err) {
-        if (
-          err instanceof NotFoundError ||
-          err instanceof RateLimitError ||
-          err instanceof PermissionDeniedError
-        ) {
-          throw err;
-        }
         this.logger.error(
-          `Error in createResponse(streaming): ${err instanceof Error ? err.message : String(err)}`,
+          formatProviderError('Error in createResponse(streaming)', err),
         );
+        throw err;
       }
       return response;
     } else {
@@ -199,9 +190,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
         });
         return response;
       } catch (err) {
-        this.logger.error(
-          `Error in createResponse: ${err instanceof Error ? err.message : String(err)}`,
-        );
+        this.logger.error(formatProviderError('Error in createResponse', err));
         throw err;
       }
     }
