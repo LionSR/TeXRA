@@ -18,7 +18,7 @@ import { logErrorMessage } from '@utils/errorHandlingUtils';
 import { runLatexFormatter } from './texFormatter';
 
 // Local imports - replacement utils
-import replacementManager from '../replacement/replacementManager';
+import replacementManager from '@replacement/replacementManager';
 
 const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);

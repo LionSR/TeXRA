@@ -5,7 +5,7 @@ import { AgentHistoryManager } from './AgentHistoryManager';
 import { executeCommand } from '../commands/executeCommand';
 
 import { agentConfigToTaskState } from '@utils/config';
-import { buildWebviewHtml } from '../frontend/webview/html';
+import { buildWebviewHtml } from '@frontend/webview/html';
 
 // Local imports - log
 import * as logger from '@logger/logUtils';
