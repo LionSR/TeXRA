@@ -27,11 +27,7 @@ import {
   writePromptToXml,
 } from '@utils/promptUtils';
 import { loadTexraRules } from '@frontend/files/rules';
-import {
-  applyReplacements,
-  getAllReplacements,
-  getAllReplacementsRegex,
-} from '@replacement/replacementUtils';
+import replacementManager from '@replacement/replacementManager';
 import { checkForMassiveRepetition } from '@utils/text/repetitionUtils';
 import {
   extractAndLogScratchpad,
@@ -428,19 +424,7 @@ export abstract class BaseReflectionAgent implements IAgent {
         }
 
         // Chain response processing operations
-        let processedResponse = newResponse;
-        processedResponse = applyReplacements(
-          processedResponse,
-          getAllReplacements(),
-        ).trim();
-        processedResponse = applyReplacements(
-          processedResponse,
-          getAllReplacementsRegex(),
-        ).trim();
-        processedResponse = applyReplacements(
-          processedResponse,
-          getAllReplacements(),
-        ).trim();
+        const processedResponse = replacementManager.applyAll(newResponse);
 
         toolState.updateLastResponse(processedResponse);
 
