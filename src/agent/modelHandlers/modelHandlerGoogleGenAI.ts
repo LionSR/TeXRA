@@ -40,12 +40,8 @@ import {
 } from '@utils/files';
 import { fileExistsAbsolute } from '@utils/files';
 import { formatProviderError } from '@utils/sdkErrorUtils';
-import {
-  applyReplacements,
-  getAllReplacements,
-  getAllReplacementsRegex,
-  cleanFileContent,
-} from '@replacement/replacementUtils';
+import { cleanFileContent } from '@replacement/replacementUtils';
+import replacementManager from '@replacement/replacementManager';
 import { extractAndLogScratchpad } from '@utils/text/xmlUtils';
 import { getConfig } from '@utils/config';
 import { calculateTokenPrice } from '@utils/priceUtils';
@@ -612,11 +608,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
       );
     }
 
-    responseText = applyReplacements(responseText, getAllReplacements()).trim();
-    responseText = applyReplacements(
-      responseText,
-      getAllReplacementsRegex(),
-    ).trim();
+    responseText = replacementManager.applyAll(responseText);
 
     const usage = responseObject.usageMetadata;
     const stopReason: FinishReason =
@@ -825,7 +817,12 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
     fileContent = cleanFileContent(fileContent);
 
     // Extract and log any existing scratchpad content
-    extractAndLogScratchpad(fileContent, this.logger, 'scratchpad', groupId);
+    await extractAndLogScratchpad(
+      fileContent,
+      this.logger,
+      'scratchpad',
+      groupId,
+    );
 
     await writeFile(outputFile, fileContent);
     this.logger.debug(`Cleaned and saved existing content to ${outputFile}.`);

@@ -217,6 +217,10 @@
   font-size: var(--font-size-sm);
   color: var(--vscode-descriptionForeground);
 }
+/* Remove left spacing when only one stat is shown */
+.file-stats span:first-child {
+  margin-left: 0;
+}
 
 .file-dir {
   opacity: var(--opacity-subtle);

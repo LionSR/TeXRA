@@ -15,6 +15,7 @@
       "@logger/*": ["src/logger/*"],
       "@latex": ["src/latex"],
       "@latex/*": ["src/latex/*"],
+      "@commands/*": ["src/commands/*"],
       "@model": ["src/model"],
       "@model/*": ["src/model/*"],
       "@progressView/*": ["src/progressView/*"],

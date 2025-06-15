@@ -2,7 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports - log
-import * as logger from '../../logger/logUtils';
+import * as logger from '@logger/logUtils';
 
 const CHANNEL = 'commandUtils';
 logger.initialize(CHANNEL);
