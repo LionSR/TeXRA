@@ -17,12 +17,12 @@ import {
   getStatusIcon,
   formatDuration,
   formatTokens,
-  formatGroupHeaderElements,
   getGroupHeaderClass,
   BULLET_MARKUP,
 } from './logFormatters.js';
 import { STATUS, COMMANDS, SPLIT_SIZES, TOOLBAR_BUTTONS } from './constants.js';
 import { createIconButton } from '@common/templateUtils.js';
+import { getEffectiveBaseFile } from '@utils/files/baseFileUtils.js';
 
 const STATUS_MAP = {
   [STATUS.RUNNING]: {
@@ -377,8 +377,13 @@ export function updateFileList(filesByRound) {
       const diffBtn = fragment.querySelector('.diff-btn');
       const prevBtn = fragment.querySelector('.prev-btn');
 
-      const basename = info.path.split('/').pop();
-      const dirPath = info.path.slice(0, info.path.length - basename.length);
+      // Use original name if available, otherwise use generated path
+      const displayPath = info.original || info.path;
+      const basename = displayPath.split('/').pop();
+      const dirPath = displayPath.slice(
+        0,
+        displayPath.length - basename.length,
+      );
 
       if (dirEl) dirEl.textContent = dirPath;
       if (baseEl) baseEl.textContent = basename;
@@ -402,12 +407,17 @@ export function updateFileList(filesByRound) {
       }
 
       if (compareBtn) {
-        if (info.base) {
+        const baseFile = getEffectiveBaseFile(
+          info.base,
+          info.original,
+          info.path,
+        );
+        if (baseFile) {
           compareBtn.addEventListener('click', () => {
             vscode.postMessage({
               command: COMMANDS.COMPARE_ORIGINAL,
               file: info.path,
-              base: info.base,
+              base: baseFile,
             });
           });
         } else {
@@ -416,12 +426,17 @@ export function updateFileList(filesByRound) {
       }
 
       if (acceptBtn) {
-        if (info.base) {
+        const baseFile = getEffectiveBaseFile(
+          info.base,
+          info.original,
+          info.path,
+        );
+        if (baseFile) {
           acceptBtn.addEventListener('click', () => {
             vscode.postMessage({
               command: COMMANDS.ACCEPT_FILE,
               file: info.path,
-              base: info.base,
+              base: baseFile,
             });
           });
         } else {
@@ -430,12 +445,17 @@ export function updateFileList(filesByRound) {
       }
 
       if (mergeBtn) {
-        if (info.base) {
+        const baseFile = getEffectiveBaseFile(
+          info.base,
+          info.original,
+          info.path,
+        );
+        if (baseFile) {
           mergeBtn.addEventListener('click', () => {
             vscode.postMessage({
               command: COMMANDS.MERGE_FILE,
               file: info.path,
-              base: info.base,
+              base: baseFile,
             });
           });
         } else {
@@ -444,12 +464,17 @@ export function updateFileList(filesByRound) {
       }
 
       if (diffBtn) {
-        if (info.base) {
+        const baseFile = getEffectiveBaseFile(
+          info.base,
+          info.original,
+          info.path,
+        );
+        if (baseFile) {
           diffBtn.addEventListener('click', () => {
             vscode.postMessage({
               command: COMMANDS.LATEXDIFF_FILE,
               file: info.path,
-              base: info.base,
+              base: baseFile,
               prev: info.prev,
             });
           });
