@@ -3,6 +3,7 @@
 'use strict';
 
 const path = require('path');
+const TerserPlugin = require('terser-webpack-plugin');
 
 //@ts-check
 /** @typedef {import('webpack').Configuration} WebpackConfig **/
@@ -39,6 +40,7 @@ const extensionConfig = {
       '@utils': path.resolve(__dirname, 'src/utils'),
       '@logger': path.resolve(__dirname, 'src/logger'),
       '@latex': path.resolve(__dirname, 'src/latex'),
+      '@commands': path.resolve(__dirname, 'src/commands'),
       '@model': path.resolve(__dirname, 'src/model'),
       '@progressView': path.resolve(__dirname, 'src/progressView'),
       '@replacement': path.resolve(__dirname, 'src/replacement'),
@@ -68,6 +70,10 @@ const extensionConfig = {
   devtool: 'nosources-source-map',
   infrastructureLogging: {
     level: 'log', // enables logging required for problem matchers
+  },
+  optimization: {
+    minimize: true,
+    minimizer: [new TerserPlugin()],
   },
 };
 module.exports = [extensionConfig];

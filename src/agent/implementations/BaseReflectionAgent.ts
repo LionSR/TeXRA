@@ -27,11 +27,7 @@ import {
   writePromptToXml,
 } from '@utils/promptUtils';
 import { loadTexraRules } from '@frontend/files/rules';
-import {
-  applyReplacements,
-  getAllReplacements,
-  getAllReplacementsRegex,
-} from '@replacement/replacementUtils';
+import replacementManager from '@replacement/replacementManager';
 import { checkForMassiveRepetition } from '@utils/text/repetitionUtils';
 import {
   extractAndLogScratchpad,
@@ -49,13 +45,14 @@ import {
 import { AgentStateRound, AgentStateGlobal } from '@agent/core/AgentState';
 import { ToolState } from '@agent/core/ToolState';
 import { ModelHandler } from '@agent/modelHandlers';
-import { OutputHandler } from '@agent/runtime/OutputHandler';
+import { OutputHandler, NamedOutputFile } from '@agent/runtime/OutputHandler';
 import { messageToSkeleton } from '@agent/utils/messageUtils';
 import { buildUserVars } from '@agent/utils/userVars';
 import { IAgent } from '@agent/core/IAgent';
 
 // System imports - common utilities
 import { getConfig } from '@utils/config';
+import { getEffectiveBaseFile } from '@utils/files/baseFileUtils';
 
 // Shared constants
 import {
@@ -372,7 +369,7 @@ export abstract class BaseReflectionAgent implements IAgent {
 
         // If thinking content was extracted, format and log it first
         if (thinkingContent) {
-          formatAndLogContent(
+          await formatAndLogContent(
             thinkingContent,
             this.logger,
             'Thinking',
@@ -384,7 +381,7 @@ export abstract class BaseReflectionAgent implements IAgent {
         }
 
         // Extract thinking from XML tags in the response text
-        this.extractAndLogScratchpad(
+        await this.extractAndLogScratchpad(
           newResponse,
           'scratchpad',
           responseCycleGroupId,
@@ -428,19 +425,7 @@ export abstract class BaseReflectionAgent implements IAgent {
         }
 
         // Chain response processing operations
-        let processedResponse = newResponse;
-        processedResponse = applyReplacements(
-          processedResponse,
-          getAllReplacements(),
-        ).trim();
-        processedResponse = applyReplacements(
-          processedResponse,
-          getAllReplacementsRegex(),
-        ).trim();
-        processedResponse = applyReplacements(
-          processedResponse,
-          getAllReplacements(),
-        ).trim();
+        const processedResponse = replacementManager.applyAll(newResponse);
 
         toolState.updateLastResponse(processedResponse);
 
@@ -653,10 +638,10 @@ export abstract class BaseReflectionAgent implements IAgent {
       );
 
       const inputInfo = `inputFile ${this.agentConfig.inputFile} and/or inputFiles ${this.agentConfig.inputFiles}`;
-      this.logger.debug(
-        `Processed ${inputInfo}. The round ${currRound} output was saved as ${outputFile}`,
-        roundGroupId,
-      );
+      // this.logger.debug(
+      //   `Processed ${inputInfo}. The round ${currRound} output was saved as ${outputFile}`,
+      //   roundGroupId,
+      // );
       this.logger.debug(`Completed round ${currRound}`, roundGroupId);
     } catch (error) {
       throw error;
@@ -685,6 +670,12 @@ export abstract class BaseReflectionAgent implements IAgent {
           : new Map<string, string>();
 
       const fileInfos = [] as any[];
+      const originMap = new Map(
+        (this.outputHandler.outputMappings[currRound] || []).map((p) => [
+          p.path,
+          p.source,
+        ]),
+      );
       for (const file of roundOutputs) {
         const baseFile =
           Array.from(baseMap.entries()).find(([, out]) => out === file)?.[0] ||
@@ -692,11 +683,17 @@ export abstract class BaseReflectionAgent implements IAgent {
         const prevFile =
           Array.from(prevMap.entries()).find(([, out]) => out === file)?.[0] ||
           null;
-        const stats = await this.computeDiffStats(baseFile, file);
+        const originalFile = originMap.get(file) || null;
+
+        // Use utility to determine effective base for diff computation
+        const diffBase = getEffectiveBaseFile(baseFile, originalFile, file);
+        const stats = await this.computeDiffStats(diffBase, file);
+
         fileInfos.push({
           path: file,
           base: baseFile,
           prev: prevFile,
+          original: originalFile,
           ...stats,
         });
       }
@@ -1262,11 +1259,11 @@ export abstract class BaseReflectionAgent implements IAgent {
       // Which would be different than the single output file case below.
 
       try {
-        const processedFiles =
+        const processedPairs =
           await this.outputHandler.processMultipleXmlOutputs(outputFile);
 
-        if (processedFiles && processedFiles.length > 0) {
-          // Process output files - indent LaTeX files directly
+        if (processedPairs && processedPairs.length > 0) {
+          const processedFiles = processedPairs.map((p) => p.path);
           await this.outputHandler.indentLatexFiles(processedFiles);
           this.logger.debug(
             `Indented multiple output files: ${processedFiles.join(',')}`,
@@ -1274,6 +1271,7 @@ export abstract class BaseReflectionAgent implements IAgent {
           );
 
           this.outputHandler.outputFiles[currRound] = processedFiles;
+          this.outputHandler.outputMappings[currRound] = processedPairs;
 
           // Only attempt to replace input commands if we have valid base files
           if (this.baseFiles && this.baseFiles.length > 0) {
@@ -1288,6 +1286,7 @@ export abstract class BaseReflectionAgent implements IAgent {
             activeGroupId,
           );
           this.outputHandler.outputFiles[currRound] = [];
+          this.outputHandler.outputMappings[currRound] = [];
         }
       } catch (err) {
         this.logger.error(
@@ -1296,6 +1295,7 @@ export abstract class BaseReflectionAgent implements IAgent {
         );
         // Ensure we have an empty array at minimum to prevent undefined errors
         this.outputHandler.outputFiles[currRound] = [];
+        this.outputHandler.outputMappings[currRound] = [];
       }
     } else {
       // Single output file case
@@ -1305,27 +1305,32 @@ export abstract class BaseReflectionAgent implements IAgent {
       );
 
       try {
-        let processedFile = outputFile;
+        let processed: NamedOutputFile = {
+          source: outputFile,
+          path: outputFile,
+        };
         if (this.agentSetting.agentType === AgentType.CoT) {
-          processedFile =
+          processed =
             await this.outputHandler.processSingleXmlOutput(outputFile);
         }
 
-        if (processedFile) {
+        if (processed && processed.path) {
           // Process output file - indent LaTeX file directly
-          await this.outputHandler.indentLatexFile(processedFile);
+          await this.outputHandler.indentLatexFile(processed.path);
           this.logger.debug(
-            `Indented single output file: ${processedFile}`,
+            `Indented single output file: ${processed.path}`,
             activeGroupId,
           );
 
-          this.outputHandler.outputFiles[currRound] = [processedFile];
+          this.outputHandler.outputFiles[currRound] = [processed.path];
+          this.outputHandler.outputMappings[currRound] = [processed];
         } else {
           this.logger.warn(
             `No processed file was generated from ${outputFile}`,
             activeGroupId,
           );
           this.outputHandler.outputFiles[currRound] = [];
+          this.outputHandler.outputMappings[currRound] = [];
         }
       } catch (err) {
         this.logger.error(
@@ -1333,6 +1338,7 @@ export abstract class BaseReflectionAgent implements IAgent {
           activeGroupId,
         );
         this.outputHandler.outputFiles[currRound] = [];
+        this.outputHandler.outputMappings[currRound] = [];
       }
     }
   }
@@ -1379,11 +1385,16 @@ export abstract class BaseReflectionAgent implements IAgent {
   }
 
   /** Extracts and logs scratchpad content from output. */
-  protected extractAndLogScratchpad(
+  protected async extractAndLogScratchpad(
     outputContent: string,
     thinkingTag: string = 'scratchpad',
     groupId?: string,
-  ): void {
-    extractAndLogScratchpad(outputContent, this.logger, thinkingTag, groupId);
+  ): Promise<void> {
+    await extractAndLogScratchpad(
+      outputContent,
+      this.logger,
+      thinkingTag,
+      groupId,
+    );
   }
 }

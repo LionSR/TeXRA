@@ -16,12 +16,8 @@ import { formatProviderError } from '@utils/sdkErrorUtils';
 
 // Local imports - utilities
 import { readFile, writeFile, fileExistsAndNonTrivial } from '@utils/files';
-import {
-  applyReplacements,
-  getAllReplacements,
-  getAllReplacementsRegex,
-  cleanFileContent,
-} from '@replacement/replacementUtils';
+import { cleanFileContent } from '@replacement/replacementUtils';
+import replacementManager from '@replacement/replacementManager';
 import { extractAndLogScratchpad } from '@utils/text/xmlUtils';
 
 // Local imports - agent components
@@ -398,11 +394,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
       newResponse += `\n${endTag}`;
     }
 
-    newResponse = applyReplacements(newResponse, getAllReplacements()).trim();
-    newResponse = applyReplacements(
-      newResponse,
-      getAllReplacementsRegex(),
-    ).trim();
+    newResponse = replacementManager.applyAll(newResponse);
 
     return [newResponse, responseObject.usage, stopReason || 'stop'];
   }
@@ -507,7 +499,12 @@ export class ModelHandlerAnthropic extends ModelHandler {
     fileContent = cleanFileContent(fileContent);
 
     // Extract and log any existing scratchpad content
-    extractAndLogScratchpad(fileContent, this.logger, 'scratchpad', groupId);
+    await extractAndLogScratchpad(
+      fileContent,
+      this.logger,
+      'scratchpad',
+      groupId,
+    );
 
     await writeFile(outputFile, fileContent);
 

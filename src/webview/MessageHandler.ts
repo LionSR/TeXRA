@@ -6,25 +6,25 @@ import * as vscode from 'vscode';
 import { workspace } from 'vscode';
 
 // Local imports - log
-import * as logger from '../logger/logUtils';
+import * as logger from '@logger/logUtils';
 
 // Local imports - utils
-import { safeExecuteCommand } from '../utils/system';
+import { safeExecuteCommand } from '@utils/system';
 
 // Local imports - utilities
-import { getWorkspacePath, getRelativePath } from '../utils/files';
+import { getWorkspacePath, getRelativePath } from '@utils/files';
 import {
   createStorageDirectory,
   writeBinaryFileToStorage,
   cleanupStorageDirectory,
-} from '../utils/files/workspaceStorageUtils';
+} from '@utils/files/workspaceStorageUtils';
 import {
   isPastedImage,
   getPastedImageFullPath,
   PASTED_DIR,
-} from '../utils/files/pastedImageUtils';
-import { capitalize, uncapitalize } from '../frontend/ui/messageUtils';
-import { getConfig } from '../utils/config';
+} from '@utils/files/pastedImageUtils';
+import { capitalize, uncapitalize } from '@frontend/ui/messageUtils';
+import { getConfig } from '@utils/config';
 import {
   listInputFiles,
   listReferenceFiles,
@@ -32,12 +32,12 @@ import {
   listMediaFiles,
   listEditedFiles,
   getFilesIfNotEmpty,
-} from '../frontend/files/listing';
+} from '@frontend/files/listing';
 import {
   polishTextWithAI,
   FileContext,
-} from '../utils/text/textEnhancementUtils';
-import { sleep } from '../utils/helpers';
+} from '@utils/text/textEnhancementUtils';
+import { sleep } from '@utils/helpers';
 
 // Local imports - agent
 import { ToolConfig } from '../agent/core/ToolConfig';
