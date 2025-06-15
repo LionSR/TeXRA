@@ -9,6 +9,7 @@ TeXRA is a VS Code extension that serves as an AI-powered LaTeX research assista
 ## Development Commands
 
 ### Build and Development
+
 ```bash
 # Install dependencies
 npm install
@@ -25,6 +26,7 @@ npm run build
 ```
 
 ### Testing and Quality
+
 ```bash
 # Run all tests with linting
 npm test
@@ -45,14 +47,18 @@ npm run watch-tests
 ## Architecture Overview
 
 ### Agent System
+
 The core of TeXRA is its agent architecture located in `src/agent/`:
+
 - **Core interfaces** define agent behavior and state management
 - **Implementations** provide different reasoning strategies (Direct, Chain-of-Thought, Merge, Reflection)
 - **Model handlers** abstract different AI provider APIs (Anthropic, OpenAI, Google, etc.)
 - Agents are configured via YAML files in `resources/agents/`
 
 ### Command Organization
+
 Commands in `src/commands/` are organized by domain:
+
 - `api/` - API key management
 - `files/` - File selection and management
 - `git/` - Git integration
@@ -61,13 +67,17 @@ Commands in `src/commands/` are organized by domain:
 - `progress/` - Progress board management
 
 ### WebView Components
+
 Three main webview interfaces:
+
 - **Main webview** (`src/webview/`) - Primary agent interaction interface
 - **Progress view** (`src/progressView/`) - Task tracking board
 - **History view** (`src/historyView/`) - Execution history browser
 
 ### LaTeX Processing
+
 The `src/latex/` module provides:
+
 - Document formatting with latexindent and tex-fmt
 - LaTeX diff generation
 - TikZ figure extraction and compilation
@@ -75,7 +85,9 @@ The `src/latex/` module provides:
 - Word counting and analysis
 
 ### Path Aliases
+
 The project uses TypeScript path aliases for cleaner imports:
+
 - `@agent/*` → `src/agent/*`
 - `@utils/*` → `src/utils/*`
 - `@latex/*` → `src/latex/*`
@@ -93,22 +105,27 @@ The project uses TypeScript path aliases for cleaner imports:
 ## Common Development Tasks
 
 ### Adding a New Command
+
 1. Create command file in appropriate `src/commands/` subdirectory
 2. Export command function following existing patterns
 3. Register in `src/commands/index.ts`
 
 ### Adding a New Agent Type
+
 1. Create YAML definition in `resources/agents/`
 2. If needed, implement new agent type in `src/agent/implementations/`
 3. Update agent factory if creating new implementation
 
 ### Working with WebViews
+
 1. WebView code is in respective directories (`webview/`, `progressView/`, `historyView/`)
 2. Common modules are shared via `src/common/modules/`
 3. Use message passing for communication between extension and webview
 
 ### Model Integration
+
 To add support for a new AI provider:
+
 1. Create model handler in `src/agent/modelHandlers/`
 2. Add provider configuration in `src/model/providers/`
 3. Update model registry in `src/model/`
