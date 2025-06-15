@@ -2,9 +2,9 @@
 import * as vscode from 'vscode';
 
 // Local imports - log
-import * as logger from '../../logger/logUtils';
-import { getFullPathFromWorkspace } from '../../utils/files';
-import { sleep } from '../../utils/helpers';
+import * as logger from '@logger/logUtils';
+import { getFullPathFromWorkspace } from '@utils/files';
+import { sleep } from '@utils/helpers';
 
 const CHANNEL = 'LinterUtils';
 logger.initialize(CHANNEL);

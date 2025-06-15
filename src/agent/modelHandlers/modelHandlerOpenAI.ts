@@ -11,13 +11,9 @@ import { ChatCompletionContentPart } from 'openai/resources/chat/completions';
 import { countTokens } from 'gpt-tokenizer';
 
 // Local imports - utilities
-import {
-  readFile,
-  writeFile,
-  fileExistsAndNonTrivial,
-} from '../../utils/files';
+import { readFile, writeFile, fileExistsAndNonTrivial } from '@utils/files';
 import { cleanFileContent } from '../../replacement/replacementUtils';
-import { extractAndLogScratchpad } from '../../utils/text/xmlUtils';
+import { extractAndLogScratchpad } from '@utils/text/xmlUtils';
 
 // Local imports - agent components
 import { AgentConfig } from '../core/AgentConfig';
@@ -30,10 +26,10 @@ import {
   ExtendedCompletionUsage,
 } from '../core/ResponseUsage';
 import { ToolState } from '../core/ToolState';
-import { K_SLICE } from '../../utils/config';
-import { objectToLogString } from '../../utils/text/stringUtils';
-import { calculateTokenPrice } from '../../utils/priceUtils';
-import { MediaEntry } from '../utils/mediaTypes';
+import { K_SLICE } from '@utils/config';
+import { objectToLogString } from '@utils/text/stringUtils';
+import { calculateTokenPrice } from '@utils/priceUtils';
+import { MediaEntry } from '@agent/utils/mediaTypes';
 
 /**
  * OpenAI-specific handlers.

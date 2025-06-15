@@ -2,13 +2,13 @@
 import * as vscode from 'vscode';
 
 // Local imports - log
-import * as logger from '../logger/logUtils';
+import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
 import { showInfoMessage, showErrorMessage } from '../frontend/ui/messageUtils';
-import { getRelativePath } from '../utils/files';
+import { getRelativePath } from '@utils/files';
 import { listInputFiles } from '../frontend/files/listing';
-import { getIncludedExtensions } from '../utils/fileTypeUtils';
+import { getIncludedExtensions } from '@utils/fileTypeUtils';
 import { selectFile, selectFiles } from '../frontend/files/dialog';
 const CHANNEL = 'fileSelectionCommands';
 logger.initialize(CHANNEL);

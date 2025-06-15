@@ -5,12 +5,12 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 // Local imports - log
-import * as logger from '../logger/logUtils';
+import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
-import { deleteFile, readDirectory } from '../utils/files';
-import { fileExistsAbsolute } from '../utils/files';
-import { getConfig } from '../utils/config';
+import { deleteFile, readDirectory } from '@utils/files';
+import { fileExistsAbsolute } from '@utils/files';
+import { getConfig } from '@utils/config';
 import { runLatexFormatter } from '../latex/texFormatter';
 
 // Local imports - housekeeping
