@@ -10,10 +10,10 @@ import * as vscode from 'vscode';
 import { formatProviderError } from '../sdkErrorUtils';
 
 // Local imports - log
-import * as logger from '../../logger/logUtils';
+import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
-import { getApiKey } from '../../frontend/secrets';
+import { getApiKey } from '@frontend/secrets';
 import { extractTextFromTag } from './xmlUtils';
 import { getConfig } from '../config';
 

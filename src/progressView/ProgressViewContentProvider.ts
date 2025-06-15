@@ -4,8 +4,8 @@
 import * as vscode from 'vscode';
 
 // Local imports - log
-import * as logger from '../logger/logUtils';
-import { buildWebviewHtml } from '../frontend/webview/html';
+import * as logger from '@logger/logUtils';
+import { buildWebviewHtml } from '@frontend/webview/html';
 
 const CHANNEL = 'Webview';
 logger.initialize(CHANNEL);

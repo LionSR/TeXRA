@@ -2,10 +2,10 @@
 import * as vscode from 'vscode';
 
 // Local imports - log
-import * as logger from '../logger/logUtils';
+import * as logger from '@logger/logUtils';
 import { ProgressViewProvider } from './ProgressViewProvider';
 
-import { taskStateToAgentConfig } from '../utils/config';
+import { taskStateToAgentConfig } from '@utils/config';
 
 // @ts-ignore - Import JavaScript module
 import { COMMANDS } from './modules/constants.js';
@@ -97,24 +97,32 @@ export class ProgressViewMessageHandler {
       logger.warn(CHANNEL, `No taskState found for stream: ${stream}`);
       return;
     }
-    logger.debug(CHANNEL, `Found taskState for stream: ${stream}`);
-    logger.debug(CHANNEL, `Task state: ${JSON.stringify(taskState)}`);
+    // logger.debug(CHANNEL, `Found taskState for stream: ${stream}`);
+    // logger.debug(CHANNEL, `Task state: ${JSON.stringify(taskState)}`);
 
     const generated = this.provider.getOutputFiles(stream);
     const allFiles = new Set<string>(taskState.outputFiles || []);
     if (generated) {
       Object.values(generated).forEach((infos) =>
-        infos.forEach((info) => allFiles.add(info.path)),
+        infos.forEach((info) => {
+          // Use original name if available, otherwise use the generated path
+          const fileToAdd = info.original || info.path;
+          allFiles.add(fileToAdd);
+        }),
       );
     }
+
+    const outputFilesArray = Array.from(allFiles);
 
     await vscode.commands.executeCommand(command, {
       agent: taskState.agent,
       model: taskState.model,
       inputFile: taskState.inputFile,
       outputNameOverride: taskState.outputNameOverride,
-      outputFiles: Array.from(allFiles),
-      outputFilesActive: taskState.activeFiles.output,
+      outputFiles: outputFilesArray,
+      activeFiles: {
+        output: outputFilesArray.length > 0,
+      },
     });
   }
 

@@ -59,6 +59,12 @@ const WOLFRAM_INSTRUCTIONS =
   '- Ubuntu: sudo apt-get install wolfram-engine\n' +
   '- Windows: Download from https://www.wolfram.com/engine/';
 
+const PANDOC_INSTRUCTIONS =
+  'Installation instructions:\n' +
+  '- Mac: brew install pandoc\n' +
+  '- Ubuntu: sudo apt-get install pandoc\n' +
+  '- Windows: Download from https://pandoc.org/installing.html';
+
 // All tool configurations in one place
 const TOOL_CONFIGS: Record<string, ToolConfig> = {
   // ImageMagick tools
@@ -114,6 +120,13 @@ const TOOL_CONFIGS: Record<string, ToolConfig> = {
       'texcount is not installed. Please install it to use this feature.\n' +
       TEXCOUNT_INSTRUCTIONS,
     openDocsCommand: 'texra.openDoc,installation',
+  },
+
+  // Document conversion tools
+  pandoc: {
+    errorMessage:
+      'pandoc is not installed. Please install it to use enhanced document conversion.\n' +
+      PANDOC_INSTRUCTIONS,
   },
 };
 
