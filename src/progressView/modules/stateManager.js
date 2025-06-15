@@ -1,4 +1,6 @@
-import { getWebviewState, updateWebviewState } from '@common/webviewState.js';
+import { WebviewStateManager } from '@common/webviewState.js';
+
+const stateManager = new WebviewStateManager();
 
 // State variables
 let currentStream = '';
@@ -10,7 +12,7 @@ let groupToggleStates = new Map(); // groupId -> collapsed state
  * Initializes state from previously saved state
  */
 export function initializeState() {
-  const previousState = getWebviewState();
+  const previousState = stateManager.getState();
   if (previousState.groupToggleStates) {
     try {
       groupToggleStates = new Map(JSON.parse(previousState.groupToggleStates));
@@ -29,7 +31,7 @@ export function saveState() {
     const serializedGroupStates = JSON.stringify([
       ...groupToggleStates.entries(),
     ]);
-    updateWebviewState({
+    stateManager.update({
       groupToggleStates: serializedGroupStates,
     });
   } catch (e) {
