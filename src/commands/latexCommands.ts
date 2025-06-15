@@ -2,11 +2,11 @@
 import * as vscode from 'vscode';
 
 // Local imports - log
-import * as logger from '../logger/logUtils';
+import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
-import { getRelativePath } from '../utils/files';
-import { sleep } from '../utils/helpers';
+import { getRelativePath } from '@utils/files';
+import { sleep } from '@utils/helpers';
 import {
   applyReplacements,
   getAllReplacements,

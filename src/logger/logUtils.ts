@@ -5,13 +5,13 @@ import Transport from 'winston-transport';
 
 // Local imports - progressView
 import { ProgressViewProvider } from '../progressView/ProgressViewProvider';
-import { getConfig } from '../utils/config';
+import { getConfig } from '@utils/config';
 import {
   shouldUseConsolidatedChannel,
   getColorForLevel,
   isAgentStream,
   EMOJI_BY_LEVEL as emojis,
-} from '../utils/loggerUtils';
+} from '@utils/loggerUtils';
 import { LogGroup } from '../types/LogTypes';
 
 const { combine, timestamp } = winston.format;

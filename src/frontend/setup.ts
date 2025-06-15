@@ -6,7 +6,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 // Local imports
-import * as logger from '../logger/logUtils';
+import * as logger from '@logger/logUtils';
 
 /**
  * Copies default agent files from the extension resources to the global storage directory
