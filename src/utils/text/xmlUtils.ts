@@ -2,7 +2,7 @@
 import * as logger from '@logger/logUtils';
 import { AgentLogger } from '@logger/AgentLogger';
 import { K_SLICE } from '@utils/config';
-import spawn from 'cross-spawn';
+import { checkToolInstalled } from '@utils/system/toolUtils';
 import nodePandoc from 'node-pandoc';
 
 const CHANNEL = 'xmlUtils';
@@ -11,12 +11,11 @@ logger.initialize(CHANNEL);
 // Cache pandoc availability check
 let pandocAvailable: boolean | null = null;
 
-function isPandocAvailable(): boolean {
+async function isPandocAvailable(): Promise<boolean> {
   if (pandocAvailable !== null) {
     return pandocAvailable;
   }
-  const result = spawn.sync('pandoc', ['--version']);
-  pandocAvailable = result.status === 0;
+  pandocAvailable = await checkToolInstalled('pandoc', false);
   return pandocAvailable;
 }
 
@@ -26,7 +25,7 @@ function detectInputFormat(text: string): 'html' | 'latex' {
 }
 
 async function convertWithPandoc(text: string): Promise<string | null> {
-  if (!isPandocAvailable()) {
+  if (!(await isPandocAvailable())) {
     return null;
   }
   const format = detectInputFormat(text);
