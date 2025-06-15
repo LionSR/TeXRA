@@ -29,7 +29,7 @@ import { ToolState } from '../core/ToolState';
 import { K_SLICE } from '@utils/config';
 import { objectToLogString } from '@utils/text/stringUtils';
 import { calculateTokenPrice } from '@utils/priceUtils';
-import { MediaEntry } from '@utils/mediaTypes';
+import { MediaEntry } from '@agent/utils/mediaTypes';
 
 /**
  * OpenAI-specific handlers.

@@ -33,7 +33,7 @@ import {
   ModelCapabilities,
 } from '../../model/ModelConfig';
 import { ToolState } from '../core/ToolState';
-import { MediaEntry } from '@utils/mediaTypes';
+import { MediaEntry } from '@agent/utils/mediaTypes';
 
 // Default continuation limits
 const DEFAULT_CONTINUE_LIMIT = 10;
