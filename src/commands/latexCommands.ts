@@ -7,11 +7,7 @@ import * as logger from '@logger/logUtils';
 // Local imports - utilities
 import { getRelativePath } from '@utils/files';
 import { sleep } from '@utils/helpers';
-import {
-  applyReplacements,
-  getAllReplacements,
-  getAllReplacementsRegex,
-} from '../replacement/replacementUtils';
+import replacementManager from '../replacement/replacementManager';
 
 // Local imports - latex utils
 import { runLatexFormatter } from '../latex/texFormatter';
@@ -58,19 +54,7 @@ async function handleApplyReplacements(): Promise<void> {
     const text = document.getText();
 
     // Apply replacements
-    let processedText = text;
-    processedText = applyReplacements(
-      processedText,
-      getAllReplacements(),
-    ).trim();
-    processedText = applyReplacements(
-      processedText,
-      getAllReplacementsRegex(),
-    ).trim();
-    processedText = applyReplacements(
-      processedText,
-      getAllReplacements(),
-    ).trim();
+    const processedText = replacementManager.applyAll(text);
 
     // Update document content
     const fullRange = new vscode.Range(
