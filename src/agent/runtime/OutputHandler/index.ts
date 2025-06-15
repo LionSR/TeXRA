@@ -64,6 +64,12 @@ export function getOutputFileName(
   return outputFile;
 }
 
+/** Pair of original source name and generated output path. */
+export interface NamedOutputFile {
+  source: string;
+  path: string;
+}
+
 /** Handles output file processing and validation for agent responses. */
 export class OutputHandler {
   public agentSetting: AgentSetting;
@@ -71,6 +77,7 @@ export class OutputHandler {
   public modelHandler: any;
   public logId: number;
   public outputFiles: { [key: number]: string[] };
+  public outputMappings: { [key: number]: NamedOutputFile[] };
   public baseFiles: string[];
   public processGroupId?: string;
   protected logger: AgentLogger;
@@ -89,6 +96,7 @@ export class OutputHandler {
     this.modelHandler = modelHandler;
     this.logId = logId;
     this.outputFiles = { 0: [], 1: [] };
+    this.outputMappings = { 0: [], 1: [] };
     this.baseFiles = baseFiles;
     this.logger = logger || new AgentLogger('OutputHandler');
     this.channel = this.logger.channelId;
@@ -507,7 +515,7 @@ export class OutputHandler {
   /** Processes multiple output files with XML splitting and filtering. */
   public async processMultipleXmlOutputs(
     outputFile: string,
-  ): Promise<string[]> {
+  ): Promise<NamedOutputFile[]> {
     this.logger.debug(
       `Splitting multiple scratchpad output XML: ${outputFile}`,
     );
@@ -651,7 +659,7 @@ export class OutputHandler {
     outputFile: string,
     documentTag: string,
     thinkingTag: string = 'scratchpad',
-  ): Promise<string[]> {
+  ): Promise<NamedOutputFile[]> {
     let outputContent = await readFile(outputFile);
 
     const tagsToWrap = [thinkingTag, 'document'];
@@ -710,8 +718,8 @@ export class OutputHandler {
   async processMultipleLatexDocuments(
     latexDocuments: Array<{ content: string; name: string }>,
     outputFile: string,
-  ): Promise<string[]> {
-    const outputFiles: string[] = [];
+  ): Promise<NamedOutputFile[]> {
+    const outputFiles: NamedOutputFile[] = [];
     const outputParts = path.basename(outputFile).split('_');
     const agent = outputParts.at(-3) ?? '';
     const model = outputParts.at(-1)?.split('.')[0] ?? '';
@@ -747,7 +755,7 @@ export class OutputHandler {
         currRound,
       );
       await writeFile(texFile, doc.content.trim());
-      outputFiles.push(texFile);
+      outputFiles.push({ source, path: texFile });
       this.logger.debug(`TeX file written: ${texFile}`);
     }
 

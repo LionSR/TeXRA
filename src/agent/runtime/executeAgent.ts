@@ -272,10 +272,13 @@ async function executeAgentWithLogging<T extends IAgent>(
           // Update status to stopped on successful completion
           progressViewProvider.updateStreamStatus(fullStreamId, 'stopped');
 
-          if (config.outputFiles && config.outputFiles.length > 0) {
-            for (const out of config.outputFiles) {
-              await openBuildDisplayIfTex(out, { preserveFocus: true });
-            }
+          const generated: string[] = Object.values(
+            (agent as any).outputHandler?.outputFiles || {},
+          )
+            .flat()
+            .filter(Boolean) as string[];
+          for (const out of generated) {
+            await openBuildDisplayIfTex(out, { preserveFocus: true });
           }
         } catch (err) {
           // Mark the task as failed
