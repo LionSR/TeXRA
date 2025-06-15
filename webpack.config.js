@@ -40,6 +40,7 @@ const extensionConfig = {
       '@utils': path.resolve(__dirname, 'src/utils'),
       '@logger': path.resolve(__dirname, 'src/logger'),
       '@latex': path.resolve(__dirname, 'src/latex'),
+      '@commands': path.resolve(__dirname, 'src/commands'),
       '@model': path.resolve(__dirname, 'src/model'),
       '@progressView': path.resolve(__dirname, 'src/progressView'),
       '@replacement': path.resolve(__dirname, 'src/replacement'),
