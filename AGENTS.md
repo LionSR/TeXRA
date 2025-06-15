@@ -62,6 +62,21 @@ This document sets the common conventions for contributions. Follow these norms 
 - Maintain provider capabilities and pricing info in `ModelRegistry`.
 - Prefer debug logging for routine events; reserve info and error levels for important messages.
 
+## Design and refactoring
+
+Draw on principles from John Ousterhout's _A Philosophy of Software Design_ when
+adding new code or refactoring existing modules:
+
+- Seek out sources of complexity, especially change amplification, cognitive
+  load and unknown unknowns. Simplify these areas before adding features.
+- Identify shallow modules that merely pass data through. Deepen them by hiding
+  implementation details behind well‑defined interfaces.
+- Watch for information leakage between modules and other signs of poor
+  abstraction. Refactor to combine related functionality and make interfaces
+  simpler and more obvious.
+- When submitting a PR, describe any design issues found and how the refactoring
+  addresses them. Favor deep modules with minimal, clear APIs.
+
 ## Documentation
 
 - Documentation lives in `docs/` and uses Markdown. Follow existing heading levels and style.
