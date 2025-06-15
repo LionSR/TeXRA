@@ -26,6 +26,7 @@ logger.initialize(CHANNEL);
 export function registerCompareCommands(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand('texra.compare', handleCompare),
+    vscode.commands.registerCommand('texra.acceptEdited', handleAcceptEdited),
   );
 }
 
