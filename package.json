@@ -2,7 +2,7 @@
   "name": "texra",
   "displayName": "TeXRA",
   "description": "TeXRA: Your LLM-powered 24/7 LaTeX Research Assistant.",
-  "version": "0.31.3",
+  "version": "0.31.4",
   "publisher": "texra-ai",
   "engines": {
     "vscode": "^1.94.0"
@@ -1113,6 +1113,7 @@
     "nunjucks": "^3.2.4",
     "path-browserify": "^1.0.1",
     "prettier": "^3.4.2",
+    "terser-webpack-plugin": "^5.3.14",
     "ts-loader": "^9.5.1",
     "typescript": "^5.4.5",
     "typescript-eslint": "^8.27.0",
@@ -1153,7 +1154,7 @@
     "@google/genai": "^1.5.1",
     "@vscode/codicons": "^0.0.36",
     "@wolfram-alpha/wolfram-alpha-api": "^23.1004.144821-RELEASE",
-    "axios": "^1.9.0",
+    "axios": "^1.10.0",
     "cross-spawn": "^7.0.6",
     "diff-match-patch": "^1.0.5",
     "difflib": "^0.2.4",
