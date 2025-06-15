@@ -10,18 +10,39 @@ logger.initialize(CHANNEL);
 
 // Cache pandoc availability check
 let pandocAvailable: boolean | null = null;
+let pandocCheckPromise: Promise<boolean> | null = null;
 
 async function isPandocAvailable(): Promise<boolean> {
   if (pandocAvailable !== null) {
     return pandocAvailable;
   }
-  pandocAvailable = await checkToolInstalled('pandoc', false);
-  return pandocAvailable;
+
+  // If a check is already in progress, wait for it
+  if (pandocCheckPromise !== null) {
+    return pandocCheckPromise;
+  }
+
+  // Start new check and store the promise
+  pandocCheckPromise = checkToolInstalled('pandoc', false).then((result) => {
+    pandocAvailable = result;
+    pandocCheckPromise = null; // Clear the promise after completion
+    return result;
+  });
+
+  return pandocCheckPromise;
 }
 
-function detectInputFormat(text: string): 'html' | 'latex' {
-  const htmlRegex = /<[^>]+>/;
-  return htmlRegex.test(text) ? 'html' : 'latex';
+function detectInputFormat(text: string): 'html' | 'latex' | 'markdown' {
+  const htmlRegex = /<[^>]+>/; // this needs to be improved, as we might have some xml tags to separte scratchpad
+  const latexRegex = /\\(?:begin|end|section|subsection|textbf|textit|item)\{/;
+
+  if (latexRegex.test(text)) {
+    return 'latex';
+  } else if (htmlRegex.test(text)) {
+    return 'html';
+  } else {
+    return 'markdown';
+  }
 }
 
 async function convertWithPandoc(text: string): Promise<string | null> {
@@ -29,6 +50,12 @@ async function convertWithPandoc(text: string): Promise<string | null> {
     return null;
   }
   const format = detectInputFormat(text);
+
+  // If already markdown, return as-is
+  if (format === 'markdown') {
+    return text.trim();
+  }
+
   try {
     const result = await new Promise<string>((resolve, reject) => {
       nodePandoc(
