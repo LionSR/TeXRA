@@ -444,14 +444,18 @@ export function updateFileList(filesByRound) {
       }
 
       if (diffBtn) {
-        diffBtn.addEventListener('click', () => {
-          vscode.postMessage({
-            command: COMMANDS.LATEXDIFF_FILE,
-            file: info.path,
-            base: info.base,
-            prev: info.prev,
+        if (info.base) {
+          diffBtn.addEventListener('click', () => {
+            vscode.postMessage({
+              command: COMMANDS.LATEXDIFF_FILE,
+              file: info.path,
+              base: info.base,
+              prev: info.prev,
+            });
           });
-        });
+        } else {
+          diffBtn.remove();
+        }
       }
 
       if (prevBtn) {
