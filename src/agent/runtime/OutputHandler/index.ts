@@ -755,8 +755,6 @@ export class OutputHandler {
         continue;
       }
 
-      this.logger.debug(`XML Source: ${source}`);
-
       const { ext } = path.parse(source);
       const extension = ext.replace('.', '') || 'tex';
       const texFile = getOutputFileName(
@@ -768,7 +766,9 @@ export class OutputHandler {
       );
       await writeFile(texFile, doc.content.trim());
       outputFiles.push({ source, path: texFile });
-      this.logger.debug(`TeX file written: ${texFile}`);
+      this.logger.debug(
+        `XML Source: ${source} -> TeX file written: ${texFile}`,
+      );
     }
 
     return outputFiles;

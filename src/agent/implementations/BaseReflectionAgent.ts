@@ -638,10 +638,10 @@ export abstract class BaseReflectionAgent implements IAgent {
       );
 
       const inputInfo = `inputFile ${this.agentConfig.inputFile} and/or inputFiles ${this.agentConfig.inputFiles}`;
-      this.logger.debug(
-        `Processed ${inputInfo}. The round ${currRound} output was saved as ${outputFile}`,
-        roundGroupId,
-      );
+      // this.logger.debug(
+      //   `Processed ${inputInfo}. The round ${currRound} output was saved as ${outputFile}`,
+      //   roundGroupId,
+      // );
       this.logger.debug(`Completed round ${currRound}`, roundGroupId);
     } catch (error) {
       throw error;
