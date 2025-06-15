@@ -501,15 +501,27 @@ export class OutputHandler {
   }
 
   /** Processes single output file with XML splitting and filtering. */
-  public async processSingleXmlOutput(outputFile: string): Promise<string> {
+  public async processSingleXmlOutput(
+    outputFile: string,
+  ): Promise<NamedOutputFile> {
     this.logger.debug(`Splitting scratchpad output XML: ${outputFile}`);
+
     const processedOutputFile = await this.splitScratchpadOutputXml(
       outputFile,
       this.agentSetting.documentTag,
     );
+
+    const xmlContent = await readFile(outputFile);
+    let original = '';
+    const nameMatch = xmlContent.match(/<document[^>]*name="(.*?)"[^>]*>/);
+    if (nameMatch && nameMatch[1]) {
+      original = nameMatch[1].trim();
+    }
+
     const content = await readFile(processedOutputFile);
     await writeFile(processedOutputFile, content);
-    return processedOutputFile;
+
+    return { source: original || outputFile, path: processedOutputFile };
   }
 
   /** Processes multiple output files with XML splitting and filtering. */
