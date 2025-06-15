@@ -5,10 +5,10 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 // Local imports - log
-import * as logger from '../logger/logUtils';
+import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
-import { getRelativePath, getWorkspacePath } from '../utils/files';
+import { getRelativePath, getWorkspacePath } from '@utils/files';
 
 // Local imports - latex utils
 import { extractFigurePathsFromLatex } from '../latex/extractFigure';
