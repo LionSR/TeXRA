@@ -102,9 +102,16 @@ export class ProgressViewMessageHandler {
 
     const generated = this.provider.getOutputFiles(stream);
     const allFiles = new Set<string>(taskState.outputFiles || []);
+    const outputMappings: { source: string; path: string }[] = [];
     if (generated) {
       Object.values(generated).forEach((infos) =>
-        infos.forEach((info) => allFiles.add(info.path)),
+        infos.forEach((info) => {
+          const source = info.original || info.path;
+          allFiles.add(source);
+          if (info.original) {
+            outputMappings.push({ source, path: info.path });
+          }
+        }),
       );
     }
 
@@ -115,6 +122,7 @@ export class ProgressViewMessageHandler {
       outputNameOverride: taskState.outputNameOverride,
       outputFiles: Array.from(allFiles),
       outputFilesActive: taskState.activeFiles.output,
+      outputMappings,
     });
   }
 

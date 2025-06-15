@@ -669,6 +669,12 @@ export abstract class BaseReflectionAgent implements IAgent {
           : new Map<string, string>();
 
       const fileInfos = [] as any[];
+      const originMap = new Map(
+        (this.outputHandler.outputMappings[currRound] || []).map((p) => [
+          p.path,
+          p.source,
+        ]),
+      );
       for (const file of roundOutputs) {
         const baseFile =
           Array.from(baseMap.entries()).find(([, out]) => out === file)?.[0] ||
@@ -681,6 +687,7 @@ export abstract class BaseReflectionAgent implements IAgent {
           path: file,
           base: baseFile,
           prev: prevFile,
+          original: originMap.get(file) || null,
           ...stats,
         });
       }
@@ -1246,11 +1253,11 @@ export abstract class BaseReflectionAgent implements IAgent {
       // Which would be different than the single output file case below.
 
       try {
-        const processedFiles =
+        const processedPairs =
           await this.outputHandler.processMultipleXmlOutputs(outputFile);
 
-        if (processedFiles && processedFiles.length > 0) {
-          // Process output files - indent LaTeX files directly
+        if (processedPairs && processedPairs.length > 0) {
+          const processedFiles = processedPairs.map((p) => p.path);
           await this.outputHandler.indentLatexFiles(processedFiles);
           this.logger.debug(
             `Indented multiple output files: ${processedFiles.join(',')}`,
@@ -1258,6 +1265,7 @@ export abstract class BaseReflectionAgent implements IAgent {
           );
 
           this.outputHandler.outputFiles[currRound] = processedFiles;
+          this.outputHandler.outputMappings[currRound] = processedPairs;
 
           // Only attempt to replace input commands if we have valid base files
           if (this.baseFiles && this.baseFiles.length > 0) {
@@ -1304,6 +1312,9 @@ export abstract class BaseReflectionAgent implements IAgent {
           );
 
           this.outputHandler.outputFiles[currRound] = [processedFile];
+          this.outputHandler.outputMappings[currRound] = [
+            { source: outputFile, path: processedFile },
+          ];
         } else {
           this.logger.warn(
             `No processed file was generated from ${outputFile}`,
