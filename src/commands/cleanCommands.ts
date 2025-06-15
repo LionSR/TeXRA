@@ -64,7 +64,12 @@ async function handleCleanSingle(
 
   const provider = ProgressViewProvider.getInstance();
   if (provider) {
-    const streamId = getStreamId(agent, model, inputFile);
+    const streamId = getStreamId(
+      agent,
+      model,
+      outputNameOverride || inputFile,
+      undefined,
+    );
     provider.clearOutputFiles(streamId);
     provider.clearTaskOutput(streamId);
   }
@@ -102,7 +107,12 @@ async function handleCleanMultiple(
 
   const provider = ProgressViewProvider.getInstance();
   if (provider) {
-    const streamId = getStreamId(agent, model, inputFile, outputFiles);
+    const streamId = getStreamId(
+      agent,
+      model,
+      outputNameOverride || inputFile,
+      outputFiles,
+    );
     provider.clearOutputFiles(streamId);
     provider.clearTaskOutput(streamId);
   }
@@ -145,7 +155,7 @@ export async function handleClean(config: any) {
     const streamId = getStreamId(
       config.agent,
       config.model,
-      config.inputFile,
+      config.outputNameOverride || config.inputFile,
       outputFiles,
     );
     provider.clearOutputFiles(streamId);
