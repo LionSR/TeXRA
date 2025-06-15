@@ -35,7 +35,7 @@ export const TEMP_EXTENSIONS = [
 ];
 
 // Auto-generated from ModelRegistry
-import { MODEL_CONFIGS } from '../model/ModelRegistry';
+import { MODEL_CONFIGS } from '@model/ModelRegistry';
 
 export const MODELS = Object.keys(MODEL_CONFIGS);
 

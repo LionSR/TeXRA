@@ -11,11 +11,11 @@ import * as logger from '@logger/logUtils';
 import { getRelativePath, getWorkspacePath } from '@utils/files';
 
 // Local imports - latex utils
-import { extractFigurePathsFromLatex } from '../latex/extractFigure';
+import { extractFigurePathsFromLatex } from '@latex/extractFigure';
 import {
   extractTikzPicturesWithLabels,
   extractAndCompileTikzPicturesWithLabels,
-} from '../latex/tikzpicture';
+} from '@latex/tikzpicture';
 
 const CHANNEL = 'TestCommands';
 logger.initialize(CHANNEL);
