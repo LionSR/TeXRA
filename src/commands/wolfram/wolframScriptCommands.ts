@@ -5,7 +5,7 @@ import * as path from 'path';
 import {
   executeWolframCode,
   executeWolframScriptFile,
-} from '../WolframTool/wolframScriptUtils';
+} from '../../WolframTool/wolframScriptUtils';
 import { checkToolInstalled } from '@utils/system';
 import { MAX_PREVIEW_LENGTH } from '@utils/config';
 
