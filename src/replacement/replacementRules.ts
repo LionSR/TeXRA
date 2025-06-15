@@ -497,6 +497,8 @@ export const LATEX_XML_REPLACEMENTS: ReplacementCategory = {
       'section',
       'subsection',
       'referee',
+      'response',
+      'letter',
       'array',
       'equation*',
       'minipage',
@@ -649,6 +651,9 @@ export const SCRATCHPAD_XML_REPLACEMENTS: ReplacementCategory = {
     // For Deepseek models:
     'null<scratchpad>': '<scratchpad>',
     '\\end{document}null': '\\end{document}',
+    // gemini
+    '\\begin{document}t}': '\\begin{document}',
+    '\\end{document}t}': '\\end{document}',
     'null\n</latex_document>': '\n</latex_document>',
     // Duplicate scratchpad tag fixes - remove redundant tags
     '<scratchpad><scratchpad>': '<scratchpad>',
