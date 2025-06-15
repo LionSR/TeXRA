@@ -5,16 +5,16 @@ import * as vscode from 'vscode';
 import { ProgressViewContentProvider } from './ProgressViewContentProvider';
 import { ProgressViewMessageHandler } from './ProgressViewMessageHandler';
 
-import { TaskState } from '../logger/TaskState';
-import { AgentLogger } from '../logger/AgentLogger';
+import { TaskState } from '@logger/TaskState';
+import { AgentLogger } from '@logger/AgentLogger';
 
-import { getConfig } from '../utils/config';
-import { objectToTaskState } from '../utils/config';
-import { filterExistingFiles } from '../utils/files';
+import { getConfig } from '@utils/config';
+import { objectToTaskState } from '@utils/config';
+import { filterExistingFiles } from '@utils/files';
 import {
   shouldExcludeFromProgressView,
   shouldPersistStream,
-} from '../utils/loggerUtils';
+} from '@utils/loggerUtils';
 
 import { TokenUsageStats } from '../types/UsageTypes';
 import { LogGroup } from '../types/LogTypes';
@@ -48,6 +48,7 @@ interface OutputFileInfo extends DiffStats {
   path: string;
   base?: string | null;
   prev?: string | null;
+  original?: string;
 }
 
 export class ProgressViewProvider implements vscode.WebviewViewProvider {
@@ -936,9 +937,9 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   }
 
   private saveTaskStates(): void {
-    this.logger.debug('Saving taskStates to workspace state');
+    // this.logger.debug('Saving taskStates to workspace state');
     const taskStatesObj = Object.fromEntries(this._taskStates.entries());
-    this.logger.debug(`Saving taskStates: ${JSON.stringify(taskStatesObj)}`);
+    // this.logger.debug(`Saving taskStates: ${JSON.stringify(taskStatesObj)}`);
     this.context.workspaceState.update(this._taskStateKey, taskStatesObj);
   }
 

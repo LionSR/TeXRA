@@ -2,16 +2,16 @@
 import * as vscode from 'vscode';
 
 // Local imports - log
-import * as logger from '../logger/logUtils';
+import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
-import { getRelativePath } from '../utils/files';
+import { getRelativePath } from '@utils/files';
 import {
   countPdfPages,
   getBase64EncodedMedia,
   processPdf2Png,
   singlePagePdf2Png,
-} from '../frontend/media/img';
+} from '@frontend/media/img';
 
 const CHANNEL = 'TestCommands';
 logger.initialize(CHANNEL);

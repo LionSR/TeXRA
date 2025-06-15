@@ -20,8 +20,8 @@ import {
 import {
   applyReplacements,
   getReplacementsByCategory,
-  getAllReplacements,
 } from '@replacement/replacementUtils';
+import replacementManager from '@replacement/replacementManager';
 import {
   runLatexdiffForRound,
   runLatexdiffBetweenRounds,
@@ -64,6 +64,12 @@ export function getOutputFileName(
   return outputFile;
 }
 
+/** Pair of original source name and generated output path. */
+export interface NamedOutputFile {
+  source: string;
+  path: string;
+}
+
 /** Handles output file processing and validation for agent responses. */
 export class OutputHandler {
   public agentSetting: AgentSetting;
@@ -71,6 +77,7 @@ export class OutputHandler {
   public modelHandler: any;
   public logId: number;
   public outputFiles: { [key: number]: string[] };
+  public outputMappings: { [key: number]: NamedOutputFile[] };
   public baseFiles: string[];
   public processGroupId?: string;
   protected logger: AgentLogger;
@@ -89,6 +96,7 @@ export class OutputHandler {
     this.modelHandler = modelHandler;
     this.logId = logId;
     this.outputFiles = { 0: [], 1: [] };
+    this.outputMappings = { 0: [], 1: [] };
     this.baseFiles = baseFiles;
     this.logger = logger || new AgentLogger('OutputHandler');
     this.channel = this.logger.channelId;
@@ -156,7 +164,7 @@ export class OutputHandler {
 
   /** Processes XML content by filtering tags and applying replacements. */
   public async processXmlContent(content: string): Promise<string> {
-    content = applyReplacements(content, getAllReplacements()).trim();
+    content = replacementManager.applyNonRegex(content);
 
     const latexXmlReplacements = getReplacementsByCategory('latex_xml');
     if (latexXmlReplacements) {
@@ -493,21 +501,33 @@ export class OutputHandler {
   }
 
   /** Processes single output file with XML splitting and filtering. */
-  public async processSingleXmlOutput(outputFile: string): Promise<string> {
+  public async processSingleXmlOutput(
+    outputFile: string,
+  ): Promise<NamedOutputFile> {
     this.logger.debug(`Splitting scratchpad output XML: ${outputFile}`);
+
     const processedOutputFile = await this.splitScratchpadOutputXml(
       outputFile,
       this.agentSetting.documentTag,
     );
+
+    const xmlContent = await readFile(outputFile);
+    let original = '';
+    const nameMatch = xmlContent.match(/<document[^>]*name="(.*?)"[^>]*>/);
+    if (nameMatch && nameMatch[1]) {
+      original = nameMatch[1].trim();
+    }
+
     const content = await readFile(processedOutputFile);
     await writeFile(processedOutputFile, content);
-    return processedOutputFile;
+
+    return { source: original || outputFile, path: processedOutputFile };
   }
 
   /** Processes multiple output files with XML splitting and filtering. */
   public async processMultipleXmlOutputs(
     outputFile: string,
-  ): Promise<string[]> {
+  ): Promise<NamedOutputFile[]> {
     this.logger.debug(
       `Splitting multiple scratchpad output XML: ${outputFile}`,
     );
@@ -651,7 +671,7 @@ export class OutputHandler {
     outputFile: string,
     documentTag: string,
     thinkingTag: string = 'scratchpad',
-  ): Promise<string[]> {
+  ): Promise<NamedOutputFile[]> {
     let outputContent = await readFile(outputFile);
 
     const tagsToWrap = [thinkingTag, 'document'];
@@ -710,8 +730,8 @@ export class OutputHandler {
   async processMultipleLatexDocuments(
     latexDocuments: Array<{ content: string; name: string }>,
     outputFile: string,
-  ): Promise<string[]> {
-    const outputFiles: string[] = [];
+  ): Promise<NamedOutputFile[]> {
+    const outputFiles: NamedOutputFile[] = [];
     const outputParts = path.basename(outputFile).split('_');
     const agent = outputParts.at(-3) ?? '';
     const model = outputParts.at(-1)?.split('.')[0] ?? '';
@@ -735,8 +755,6 @@ export class OutputHandler {
         continue;
       }
 
-      this.logger.debug(`XML Source: ${source}`);
-
       const { ext } = path.parse(source);
       const extension = ext.replace('.', '') || 'tex';
       const texFile = getOutputFileName(
@@ -747,8 +765,10 @@ export class OutputHandler {
         currRound,
       );
       await writeFile(texFile, doc.content.trim());
-      outputFiles.push(texFile);
-      this.logger.debug(`TeX file written: ${texFile}`);
+      outputFiles.push({ source, path: texFile });
+      this.logger.debug(
+        `XML Source: ${source} -> TeX file written: ${texFile}`,
+      );
     }
 
     return outputFiles;

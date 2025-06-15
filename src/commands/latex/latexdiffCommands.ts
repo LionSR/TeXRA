@@ -5,12 +5,12 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 // Local imports - log
-import * as logger from '../logger/logUtils';
+import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
-import { getWorkspacePath } from '../utils/files';
-import { fileExists } from '../utils/files';
-import { openBuildDisplayIfTex } from '../frontend/latex/openBuild';
+import { getWorkspacePath } from '@utils/files';
+import { fileExists } from '@utils/files';
+import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 
 // Local imports - latex utils
 import {
@@ -18,8 +18,8 @@ import {
   runLatexdiffvc,
   runLatexdiffForRound,
   runLatexdiffBetweenRounds,
-} from '../latex/latexdiff';
-import { checkToolInstalled } from '../utils/system';
+} from '@latex/latexdiff';
+import { checkToolInstalled } from '@utils/system';
 
 // Local imports - housekeeping
 import {
@@ -27,10 +27,10 @@ import {
   runPackLatexdiffvcMultiple,
   runCleanLatexdiffvc,
   runCleanLatexdiffvcMultiple,
-} from '../housekeeping';
+} from '../../housekeeping';
 
 // Import agent utilities
-import { getAgentFirstNameChunk } from '../housekeeping/utils';
+import { getAgentFirstNameChunk } from '../../housekeeping/utils';
 
 const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);

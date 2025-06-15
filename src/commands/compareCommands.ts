@@ -5,7 +5,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 // Local imports - log
-import * as logger from '../logger/logUtils';
+import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
 import {
@@ -13,9 +13,9 @@ import {
   fileExists,
   readFile,
   writeFile,
-} from '../utils/files';
-import { registerDiffRefresh } from '../frontend/ui/diffView';
-import { DIFF_REGISTRATION_DELAY_MS } from '../utils/config';
+} from '@utils/files';
+import { registerDiffRefresh } from '@frontend/ui/diffView';
+import { DIFF_REGISTRATION_DELAY_MS } from '@utils/config';
 
 const CHANNEL = 'CompareCommands';
 logger.initialize(CHANNEL);
@@ -26,6 +26,7 @@ logger.initialize(CHANNEL);
 export function registerCompareCommands(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand('texra.compare', handleCompare),
+    vscode.commands.registerCommand('texra.acceptEdited', handleAcceptEdited),
   );
 }
 
