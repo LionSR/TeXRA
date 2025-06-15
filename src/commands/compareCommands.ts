@@ -14,7 +14,7 @@ import {
   readFile,
   writeFile,
 } from '@utils/files';
-import { registerDiffRefresh } from '../frontend/ui/diffView';
+import { registerDiffRefresh } from '@frontend/ui/diffView';
 import { DIFF_REGISTRATION_DELAY_MS } from '@utils/config';
 
 const CHANNEL = 'CompareCommands';
