@@ -2,11 +2,7 @@ import { vscode } from '@common/vscodeApi.js';
 import { registerMessageHandlers } from '@common/messageRouter.js';
 import { safeSetElementValue, safeGetElementById } from '@common/domUtils.js';
 import { capitalize, uncapitalize } from '@common/stringUtils.js';
-import {
-  getWebviewState,
-  updateWebviewState,
-  setWebviewState,
-} from '@common/webviewState.js';
+import { stateManager, restoreState, saveState } from './stateManager.js';
 
 import {
   updateFileSelect,
@@ -17,7 +13,6 @@ import {
   handleSetCurrentFile,
 } from './fileHandlers.js';
 
-import { restoreState, saveState } from './stateManager.js';
 import { FILE_TYPES } from './constants.js';
 
 /**
@@ -199,7 +194,7 @@ function handleStateRestoration(state) {
               });
 
               // Save state to persist changes
-              updateWebviewState({
+              stateManager.update({
                 [`${fileType}Files`]: updatedFiles,
               });
             });
@@ -210,7 +205,7 @@ function handleStateRestoration(state) {
   }
 
   // Save the prepared state
-  setWebviewState(savedState);
+  stateManager.setState(savedState);
 
   // Use the stateManager's restoreState to update UI elements from this state
   // This will handle setting all form values and updating indicators
@@ -388,7 +383,7 @@ export function setupMessageHandlers() {
         const currentBaseFile = currentBaseFileDiv.value;
         updateFileSelect('baseFile', m.files);
 
-        const state = getWebviewState();
+        const state = stateManager.getState();
         const storedBaseFile = state?.baseFile;
 
         if (storedBaseFile && m.files.includes(storedBaseFile)) {

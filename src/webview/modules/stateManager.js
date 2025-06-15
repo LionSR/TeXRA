@@ -1,4 +1,6 @@
-import { getWebviewState, setWebviewState } from '@common/webviewState.js';
+import { WebviewStateManager } from '@common/webviewState.js';
+
+export const stateManager = new WebviewStateManager();
 
 import {
   MULTIPLE_SELECTIONS,
@@ -64,7 +66,7 @@ export function setDefaultState() {
 }
 
 export function restoreState() {
-  const previousState = getWebviewState();
+  const previousState = stateManager.getState();
   if (previousState) {
     const defaultValues = {
       agent: 'correct',
@@ -201,5 +203,5 @@ export function saveState() {
   // Log the state being saved for debugging
   console.log('Saving state:', state);
 
-  setWebviewState(state);
+  stateManager.update(state);
 }
