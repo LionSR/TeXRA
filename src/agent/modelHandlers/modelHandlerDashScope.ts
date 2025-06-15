@@ -7,7 +7,7 @@ import OpenAI from 'openai';
 // Local imports - agent components
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 import { ToolState } from '../core/ToolState';
-import { MediaEntry } from '@utils/mediaTypes';
+import { MediaEntry } from '@agent/utils/mediaTypes';
 
 // Local imports - utilities
 import { convertContentToString } from '@utils/text/messageUtils';
