@@ -402,23 +402,31 @@ export function updateFileList(filesByRound) {
       }
 
       if (compareBtn) {
-        compareBtn.addEventListener('click', () => {
-          vscode.postMessage({
-            command: COMMANDS.COMPARE_ORIGINAL,
-            file: info.path,
-            base: info.base,
+        if (info.base) {
+          compareBtn.addEventListener('click', () => {
+            vscode.postMessage({
+              command: COMMANDS.COMPARE_ORIGINAL,
+              file: info.path,
+              base: info.base,
+            });
           });
-        });
+        } else {
+          compareBtn.remove();
+        }
       }
 
       if (acceptBtn) {
-        acceptBtn.addEventListener('click', () => {
-          vscode.postMessage({
-            command: COMMANDS.ACCEPT_FILE,
-            file: info.path,
-            base: info.base,
+        if (info.base) {
+          acceptBtn.addEventListener('click', () => {
+            vscode.postMessage({
+              command: COMMANDS.ACCEPT_FILE,
+              file: info.path,
+              base: info.base,
+            });
           });
-        });
+        } else {
+          acceptBtn.remove();
+        }
       }
 
       if (mergeBtn) {
