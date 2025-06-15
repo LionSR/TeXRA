@@ -78,7 +78,7 @@ export async function runPackLatexdiffvc(
       logger.info(CHANNEL, 'Cleanup complete.');
       vscode.window.showInformationMessage('LaTeXdiff files cleaned');
     } else {
-      // Move files to output folder
+      // Move files to output folder only when needed
       const now = new Date().toISOString().replace(/[-:]/g, '').split('.')[0];
       const outputFolder = path.join(
         inputDir,
@@ -86,12 +86,16 @@ export async function runPackLatexdiffvc(
         `${now}_${baseName}_${commitHash}`,
       );
 
-      try {
-        await createDirectory(outputFolder);
-        logger.debug(CHANNEL, `Created output directory: ${outputFolder}`);
+      let anyFilesPacked = false;
 
+      try {
         // Move main files
         for (const file of filesToProcess) {
+          if (!anyFilesPacked) {
+            await createDirectory(outputFolder);
+            logger.debug(CHANNEL, `Created output directory: ${outputFolder}`);
+            anyFilesPacked = true;
+          }
           await moveFile(file, path.join(outputFolder, path.basename(file)));
         }
 
@@ -100,7 +104,12 @@ export async function runPackLatexdiffvc(
           await deleteFile(file);
         }
 
-        logger.info(CHANNEL, `Files packed into ${outputFolder}`);
+        if (anyFilesPacked) {
+          logger.info(CHANNEL, `Files packed into ${outputFolder}`);
+          vscode.window.showInformationMessage(
+            `Files packed into ${outputFolder}`,
+          );
+        }
       } catch (err) {
         logger.error(
           CHANNEL,
