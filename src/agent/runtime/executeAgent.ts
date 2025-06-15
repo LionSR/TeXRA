@@ -1,5 +1,6 @@
 // Standard library imports
 import * as path from 'path';
+import { getStreamId } from '@utils/streamUtils';
 import * as vscode from 'vscode';
 
 // Third-party imports
@@ -155,7 +156,7 @@ async function executeAgentWithLogging<T extends IAgent>(
 
     // Get the full stream ID
     const config = agent.config;
-    const fullStreamId = `${agentName}@${config.model}: ${path.basename(config.inputFile)}`;
+    const fullStreamId = getStreamId(agentName, config.model, config.inputFile);
 
     // Check if this stream is already running
     const currentStatus = progressViewProvider.getStreamStatus(fullStreamId);

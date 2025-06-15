@@ -1,6 +1,7 @@
 // Third-party imports
 import * as vscode from 'vscode';
-import * as path from 'path';
+
+import { getStreamId } from '@utils/streamUtils';
 
 import { ProgressViewProvider } from '../progressView/ProgressViewProvider';
 
@@ -12,17 +13,6 @@ import { runPack, runPackSingle, runPackMultiple } from '../housekeeping';
 
 const CHANNEL = 'packCommands';
 logger.initialize(CHANNEL);
-
-function getStreamId(
-  agent: string,
-  model: string,
-  inputFile: string,
-  outputFiles?: string[],
-): string {
-  const agentName =
-    outputFiles && outputFiles.length > 1 ? `${agent}_multiple` : agent;
-  return `${agentName}@${model}: ${path.basename(inputFile)}`;
-}
 
 export function registerPackCommands(context: vscode.ExtensionContext) {
   context.subscriptions.push(
@@ -64,6 +54,7 @@ async function handlePack(config: any) {
       config.model,
       config.inputFile,
       outputFiles,
+      config.outputNameOverride,
     );
     provider.clearOutputFiles(streamId);
     provider.clearTaskOutput(streamId);
@@ -97,7 +88,13 @@ async function handlePackSingle(
 
   const provider = ProgressViewProvider.getInstance();
   if (provider) {
-    const streamId = getStreamId(agent, model, inputFile);
+    const streamId = getStreamId(
+      agent,
+      model,
+      inputFile,
+      undefined,
+      outputNameOverride,
+    );
     provider.clearOutputFiles(streamId);
     provider.clearTaskOutput(streamId);
   }
@@ -137,7 +134,13 @@ async function handlePackMultiple(
 
   const provider = ProgressViewProvider.getInstance();
   if (provider) {
-    const streamId = getStreamId(agent, model, inputFile, outputFiles);
+    const streamId = getStreamId(
+      agent,
+      model,
+      inputFile,
+      outputFiles,
+      outputNameOverride,
+    );
     provider.clearOutputFiles(streamId);
     provider.clearTaskOutput(streamId);
   }
