@@ -18,11 +18,7 @@ import { logErrorMessage } from '@utils/errorHandlingUtils';
 import { runLatexFormatter } from './texFormatter';
 
 // Local imports - replacement utils
-import {
-  applyReplacements,
-  getAllReplacements,
-  getAllReplacementsRegex,
-} from '../replacement/replacementUtils';
+import replacementManager from '../replacement/replacementManager';
 
 const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);
@@ -291,13 +287,7 @@ async function processDiffFile(
     }
 
     // Apply standard replacements from the replacementUtils at the end of processing
-    // First apply normal replacements
-    newContent = applyReplacements(newContent, getAllReplacements()).trim();
-    // Then apply regex replacements (which include LATEXDIFF_MARKUP_REPLACEMENTS)
-    newContent = applyReplacements(
-      newContent,
-      getAllReplacementsRegex(),
-    ).trim();
+    newContent = replacementManager.applyAll(newContent);
 
     await writeFile(diffFileName, newContent);
     // logger.debug(channel, `Line breaks added to ${diffFileName}`);
