@@ -118,6 +118,7 @@ export async function checkExpectedOutputs(
             },
           },
         ],
+        false,
       );
       break;
     }
