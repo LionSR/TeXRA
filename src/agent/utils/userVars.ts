@@ -2,13 +2,13 @@
 
 import * as path from 'path';
 
-import { AgentLogger } from '../../logger/AgentLogger';
-import { readFile } from '../../utils/files';
-import { setVarFromFile } from '../../frontend/files/vars';
-import { getXmlFormatFromFiles, getListOfFiles } from '../../utils/promptUtils';
+import { AgentLogger } from '@logger/AgentLogger';
+import { readFile } from '@utils/files';
+import { setVarFromFile } from '@frontend/files/vars';
+import { getXmlFormatFromFiles, getListOfFiles } from '@utils/promptUtils';
 import { AgentConfig } from '../core/AgentConfig';
 import { AgentSetting } from '../core/AgentDataclass';
-import { ModelHandler } from '../modelHandlers';
+import { ModelHandler } from '@agent/modelHandlers';
 
 /**
  * Build all user variables needed for prompt rendering.

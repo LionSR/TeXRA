@@ -3,18 +3,18 @@ import * as path from 'path';
 
 // Third-party imports
 import * as vscode from 'vscode';
-import * as logger from './logger/logUtils';
+import * as logger from '@logger/logUtils';
 
 // Local imports
 import {
   getBuiltInAgentsDirectory,
   getCustomAgentsDirectory,
   getOrPromptForCustomAgentsDirectory,
-} from './frontend/agents/pathUtils';
-import { promptToAddAgentToConfig } from './frontend/agents/register';
+} from '@frontend/agents/pathUtils';
+import { promptToAddAgentToConfig } from '@frontend/agents/register';
 import { isValidAgentYaml } from './agent/runtime/agentLoad';
-import { fileExistsAbsolute } from './utils/files';
-import { getConfig } from './utils/config';
+import { fileExistsAbsolute } from '@utils/files';
+import { getConfig } from '@utils/config';
 
 const NEW_AGENT_TEMPLATE = `# --- Agent Inheritance (Optional) ---
 # inherits: base
