@@ -5,10 +5,9 @@
 
 /* Model Selection Footer styles */
 .model-selection-footer {
-  position: absolute;
-  bottom: var(--spacing-xlarge);
-  left: var(--spacing-xlarge);
+  position: static;
   display: flex;
+  flex-wrap: wrap;
   gap: var(--spacing-small);
   z-index: 10;
 }
@@ -16,7 +15,8 @@
 .model-selection-footer .select-group {
   display: flex;
   align-items: center;
-  max-width: 150px;
+  flex: 1 1 auto;
+  min-width: 120px;
 }
 
 .model-selection-footer .select-group select {
