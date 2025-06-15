@@ -30,15 +30,20 @@ This document sets the common conventions for contributions. Follow these norms 
 
 - Use `getConfig` from `src/utils/configUtils` to read extension settings rather than calling `vscode.workspace.getConfiguration` directly.
 - For any filesystem access tied to the workspace, use helpers in `src/utils/workspaceFileUtils.ts`. These utilities automatically handle workspace-relative paths and use the VS Code `fs` APIs.
+- For extension storage operations (temporary assets like pasted images), use the utilities in `src/utils/files/workspaceStorageUtils.ts`.
+- These helpers also provide cleanup methods to remove old files (pasted images are deleted after three days).
+- Generate names and resolve paths for pasted images through `src/utils/files/pastedImageUtils.ts`.
 - Interact with the logging system via `src/logger/logUtils`. Create a channel-specific logger with `logger.initialize(CHANNEL)` and log messages with `logger.info`, `logger.debug`, etc. Use `startGroup` and `endGroup` for nested log blocks.
 - When executing external commands, prefer `executeCommand` from `src/utils/execUtils.ts` so that output is captured and routed through the logger.
 - Convert serialized objects into `TaskState` using `objectToTaskState` from `src/utils/configConversion.ts`. This applies default values such as the `sonnet4T` model.
 - Model handlers for each provider live under `src/agent/modelHandlers`. Add new handlers there and export them via `src/agent/modelHandlers/index.ts`.
+- When targeting the OpenAI Responses API, use `ModelHandlerOpenAIResponse`. This API does not support stop sequences, so handle any end-tag logic in post-processing.
 - Maintain text cleanup rules in the `src/replacement` modules.
 - UI components rely on VS Code codicons for icons (see `src/progressView/index.html`). Stick to these built-in icons to maintain a native look and feel.
 - CSS for views is organized per component under `src/progressView/styles` with shared variables in `src/common/styles/common.css`. Follow this structure when adding new styles.
 - Execute VS Code commands with `safeExecuteCommand` from `src/utils/commandUtils.ts` to handle errors gracefully.
 - Register webview handlers using a command map and `registerMessageHandlers` from `src/common/modules/messageRouter.js`.
+- Use `setupPasteListener` from `src/webview/modules/pasteHandler.js` to enable clipboard image pasting in text areas.
 - Implement agents using the `IAgent` interface (`src/agent/IAgent.ts`) for a consistent lifecycle.
 - Track log groups with numeric timestamps using `addLogMessage` in `src/logger/logUtils.ts`.
 - Update cumulative usage stats with `updateUsageSummary` in `src/progressView/modules/domHandlers.js`.
