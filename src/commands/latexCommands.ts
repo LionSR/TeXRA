@@ -7,11 +7,11 @@ import * as logger from '@logger/logUtils';
 // Local imports - utilities
 import { getRelativePath } from '@utils/files';
 import { sleep } from '@utils/helpers';
-import replacementManager from '../replacement/replacementManager';
+import replacementManager from '@replacement/replacementManager';
 
 // Local imports - latex utils
-import { runLatexFormatter } from '../latex/texFormatter';
-import { getTeXCount } from '../latex/texcount';
+import { runLatexFormatter } from '@latex/texFormatter';
+import { getTeXCount } from '@latex/texcount';
 
 // Local imports - commands
 import { fileSelectionCommands } from './fileSelectionCommands';
