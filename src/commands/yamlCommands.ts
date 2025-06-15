@@ -10,7 +10,7 @@ import {
   loadYaml,
   loadAgentSettingAndPrompts,
 } from '../agent/runtime/agentLoad';
-import * as logger from '../logger/logUtils';
+import * as logger from '@logger/logUtils';
 import { getAgentPath } from '../agent/runtime/executeAgent';
 import { AgentType } from '../agent/core/AgentDataclass';
 import { showInstructionWithSuppress } from '../frontend/ui/instruction';

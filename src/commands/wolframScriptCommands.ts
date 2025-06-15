@@ -6,8 +6,8 @@ import {
   executeWolframCode,
   executeWolframScriptFile,
 } from '../WolframTool/wolframScriptUtils';
-import { checkToolInstalled } from '../utils/system';
-import { MAX_PREVIEW_LENGTH } from '../utils/config';
+import { checkToolInstalled } from '@utils/system';
+import { MAX_PREVIEW_LENGTH } from '@utils/config';
 
 export const wolframScriptCommands = {
   testWolframScript: 'texra.testWolframScript',

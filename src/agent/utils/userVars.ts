@@ -2,10 +2,10 @@
 
 import * as path from 'path';
 
-import { AgentLogger } from '../../logger/AgentLogger';
-import { readFile } from '../../utils/files';
+import { AgentLogger } from '@logger/AgentLogger';
+import { readFile } from '@utils/files';
 import { setVarFromFile } from '../../frontend/files/vars';
-import { getXmlFormatFromFiles, getListOfFiles } from '../../utils/promptUtils';
+import { getXmlFormatFromFiles, getListOfFiles } from '@utils/promptUtils';
 import { AgentConfig } from '../core/AgentConfig';
 import { AgentSetting } from '../core/AgentDataclass';
 import { ModelHandler } from '../modelHandlers';

@@ -2,13 +2,13 @@
 import * as vscode from 'vscode';
 
 // Local imports - log
-import * as logger from '../logger/logUtils';
+import * as logger from '@logger/logUtils';
 
 // Local imports - Anthropic Tool
 import { TextEditorTool, ToolCallInput } from '../AnthropicTool';
 
 // Local imports - utilities
-import { getRelativePath } from '../utils/files';
+import { getRelativePath } from '@utils/files';
 
 const CHANNEL = 'TextEditorCommands';
 logger.initialize(CHANNEL);
