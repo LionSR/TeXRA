@@ -430,13 +430,17 @@ export function updateFileList(filesByRound) {
       }
 
       if (mergeBtn) {
-        mergeBtn.addEventListener('click', () => {
-          vscode.postMessage({
-            command: COMMANDS.MERGE_FILE,
-            file: info.path,
-            base: info.base,
+        if (info.base) {
+          mergeBtn.addEventListener('click', () => {
+            vscode.postMessage({
+              command: COMMANDS.MERGE_FILE,
+              file: info.path,
+              base: info.base,
+            });
           });
-        });
+        } else {
+          mergeBtn.remove();
+        }
       }
 
       if (diffBtn) {
