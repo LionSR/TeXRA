@@ -2,10 +2,10 @@
 import * as vscode from 'vscode';
 
 // Local imports - core
-import * as logger from './logger/logUtils';
+import * as logger from '@logger/logUtils';
 import { initializeSecrets } from './frontend/secrets';
 import { copyDefaultAgents, configureLatexSettings } from './frontend/setup';
-import { watchConfig } from './utils/config';
+import { watchConfig } from '@utils/config';
 import { disposeDiffRefresh } from './frontend/ui/diffView';
 
 // Local imports - components

@@ -29,7 +29,7 @@ import { registerProgressViewCommands } from './commands/progressViewCommands';
 import { registerHelpCommands } from './commands/helpCommands';
 import { registerOpenFileCommands } from './commands/openFileCommands';
 
-import * as logger from './logger/logUtils';
+import * as logger from '@logger/logUtils';
 
 const CHANNEL = 'Registration';
 logger.initialize(CHANNEL);

@@ -1,8 +1,8 @@
 import * as vscode from 'vscode';
-import { AgentLogger } from '../logger/AgentLogger';
+import { AgentLogger } from '@logger/AgentLogger';
 
 // Local imports - utils
-import { safeExecuteCommand } from '../utils/system';
+import { safeExecuteCommand } from '@utils/system';
 
 const CHANNEL = 'progressViewCommands';
 const logger = new AgentLogger(CHANNEL);
