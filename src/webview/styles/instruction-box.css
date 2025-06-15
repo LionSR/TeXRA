@@ -58,20 +58,36 @@
 
 /* Model selection footer */
 .model-selection-footer {
+  position: static;
+  z-index: 10;
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
   gap: var(--spacing-medium);
   margin-top: var(--spacing-medium);
-  padding-right: calc(
-    var(--width-button-min) + var(--spacing-xlarge)
-  ); /* Space for execute button */
+}
+
+.model-selection-footer .select-group {
+  display: flex;
+  align-items: center;
+  flex: 1 1 auto;
+  min-width: 120px;
+}
+
+.model-selection-footer .select-group select {
+  height: var(--control-height);
+  font-size: var(--font-size);
+  padding: var(--spacing-tiny) var(--spacing-small);
+}
+
+.model-selection-footer .codicon {
+  margin-right: var(--spacing-small);
+  opacity: var(--opacity-subtle);
 }
 
 #executeButton {
   font-size: var(--font-size);
-  position: absolute;
-  bottom: var(--spacing-xlarge);
-  right: var(--spacing-xlarge);
-  z-index: 10;
+  margin-left: auto;
+  margin-top: var(--spacing-small);
 }
