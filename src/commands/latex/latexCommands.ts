@@ -18,10 +18,10 @@ import { runLatexFormatter } from '@latex/texFormatter';
 import { getTeXCount } from '@latex/texcount';
 
 // Local imports - commands
-import { fileSelectionCommands } from './fileSelectionCommands';
+import { fileSelectionCommands } from '../files/fileSelectionCommands';
 
 // Local imports - housekeeping
-import { runIndentTeX } from '../housekeeping';
+import { runIndentTeX } from '../../housekeeping';
 
 const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);
