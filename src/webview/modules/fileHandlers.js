@@ -1,6 +1,5 @@
 import { vscode } from '@common/vscodeApi.js';
-import { saveState } from './stateManager.js';
-import { getWebviewState, updateWebviewState } from '@common/webviewState.js';
+import { saveState, stateManager } from './stateManager.js';
 import { MULTIPLE_SELECTIONS } from './constants.js';
 import {
   addEventListenerSafely,
@@ -182,7 +181,7 @@ export function handleCheckboxChange(event) {
  */
 export function initializeOutputFiles() {
   // Get the current state
-  const state = getWebviewState();
+  const state = stateManager.getState();
 
   // Get references to the DOM elements
   const inputFileDiv = safeGetElementById('inputFile');
@@ -225,7 +224,7 @@ export function initializeOutputFiles() {
   }
 
   // Add opened files to the output files list
-  const openedFiles = getWebviewState()?.openedFiles ?? [];
+  const openedFiles = stateManager.getState()?.openedFiles ?? [];
   openedFiles.forEach((file) => {
     addFileToList('outputFiles', file);
   });
@@ -238,7 +237,7 @@ export function initializeOutputFiles() {
 
   if (outputNameOverrideInput && outputNameOverrideToggle) {
     // Get the current state from the stored state
-    const state = getWebviewState();
+    const state = stateManager.getState();
     const isOutputNameOverrideVisible =
       state && state.outputNameOverrideVisible;
 
@@ -277,7 +276,7 @@ export function toggleOutputNameOverride() {
     : '<i class="codicon codicon-chevron-right"></i>';
 
   // Store the visibility state in the vscode state
-  updateWebviewState({ outputNameOverrideVisible: !isVisible });
+  stateManager.update({ outputNameOverrideVisible: !isVisible });
 
   saveState();
 }
@@ -313,7 +312,7 @@ export function emptyMultipleFiles(containerId, toggleId) {
         '<i class="codicon codicon-chevron-right"></i>';
 
       // Update the state
-      updateWebviewState({ outputNameOverrideVisible: false });
+      stateManager.update({ outputNameOverrideVisible: false });
     }
   }
 
@@ -345,7 +344,7 @@ export function initializeOutputContainer() {
   const toggleIcon = safeGetElementById('toggleOutputFiles');
 
   if (container && toggleIcon) {
-    const state = getWebviewState();
+    const state = stateManager.getState();
     const shouldShow = state && state.outputFilesActive;
 
     container.style.display = shouldShow ? 'block' : 'none';
@@ -360,7 +359,7 @@ export function initializeLatexdiffsSection() {
   const toggleIcon = safeGetElementById('toggleLatexdiffs');
 
   if (container && toggleIcon) {
-    const state = getWebviewState();
+    const state = stateManager.getState();
     const shouldShow = state && state.latexdiffsVisible;
 
     container.style.display = shouldShow ? 'block' : 'none';
@@ -391,6 +390,6 @@ export function toggleLatexdiffs() {
       : 'codicon codicon-chevron-up';
   }
 
-  updateWebviewState({ latexdiffsVisible: !isVisible });
+  stateManager.update({ latexdiffsVisible: !isVisible });
   saveState();
 }
