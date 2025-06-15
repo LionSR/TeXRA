@@ -8,7 +8,7 @@ import {
 } from '../../latex/textConnection';
 
 // Local imports - log
-import * as logger from '../../logger/logUtils';
+import * as logger from '@logger/logUtils';
 
 const CHANNEL = 'TestCommands';
 logger.initialize(CHANNEL);

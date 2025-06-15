@@ -7,13 +7,13 @@ import { XMLValidator } from 'fast-xml-parser';
 import { AnthropicToolAgent } from './AnthropicToolAgent';
 
 // Local imports - utils
-import * as workspaceFileUtils from '../utils/files';
+import * as workspaceFileUtils from '@utils/files';
 
 // Local imports - types
 import { XMLValidationError, ValidationResult } from './types';
 
 // Local imports - Logging
-import * as logger from '../logger/logUtils';
+import * as logger from '@logger/logUtils';
 
 const CHANNEL = 'XMLValidatorAgent';
 logger.initialize(CHANNEL);

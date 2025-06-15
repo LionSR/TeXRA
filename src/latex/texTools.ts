@@ -5,12 +5,12 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 // Local imports - log
-import * as logger from '../logger/logUtils';
+import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
-import { executeCommand } from '../utils/system';
-import { getConfig } from '../utils/config';
-import { getWorkspacePath, createDirectory } from '../utils/files';
+import { executeCommand } from '@utils/system';
+import { getConfig } from '@utils/config';
+import { getWorkspacePath, createDirectory } from '@utils/files';
 // No additional imports needed
 
 const CHANNEL = 'LaTeXCommands';
