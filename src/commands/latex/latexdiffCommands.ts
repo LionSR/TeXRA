@@ -27,10 +27,10 @@ import {
   runPackLatexdiffvcMultiple,
   runCleanLatexdiffvc,
   runCleanLatexdiffvcMultiple,
-} from '../housekeeping';
+} from '../../housekeeping';
 
 // Import agent utilities
-import { getAgentFirstNameChunk } from '../housekeeping/utils';
+import { getAgentFirstNameChunk } from '../../housekeeping/utils';
 
 const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);
