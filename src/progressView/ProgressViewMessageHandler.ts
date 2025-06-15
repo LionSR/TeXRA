@@ -2,10 +2,10 @@
 import * as vscode from 'vscode';
 
 // Local imports - log
-import * as logger from '../logger/logUtils';
+import * as logger from '@logger/logUtils';
 import { ProgressViewProvider } from './ProgressViewProvider';
 
-import { taskStateToAgentConfig } from '../utils/config';
+import { taskStateToAgentConfig } from '@utils/config';
 
 // @ts-ignore - Import JavaScript module
 import { COMMANDS } from './modules/constants.js';

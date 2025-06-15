@@ -2,12 +2,12 @@
 import * as vscode from 'vscode';
 
 // Local imports - log
-import * as logger from '../logger/logUtils';
+import * as logger from '@logger/logUtils';
 
 // Local imports - utils
 import { getLinterMessages } from '../frontend/latex/linter';
-import { getRelativePath } from '../utils/files';
-import { sleep } from '../utils/helpers';
+import { getRelativePath } from '@utils/files';
+import { sleep } from '@utils/helpers';
 
 // Local imports - core
 import { TeXLinterFixAgent } from '../AnthropicTool';

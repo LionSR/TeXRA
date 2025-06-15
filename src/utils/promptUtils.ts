@@ -5,7 +5,7 @@ import * as path from 'path';
 import * as nunjucks from 'nunjucks';
 
 // Local imports - log
-import * as logger from '../logger/logUtils';
+import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
 import { readFile, writeFile } from './files';

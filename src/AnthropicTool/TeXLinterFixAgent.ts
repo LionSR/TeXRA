@@ -9,11 +9,11 @@ import { ValidationResult } from './types';
 import { LinterMessage } from '../frontend/latex/linter';
 
 // Local imports - utils
-import * as workspaceFileUtils from '../utils/files';
+import * as workspaceFileUtils from '@utils/files';
 import * as linterUtils from '../frontend/latex/linter';
 
 // Local imports - Logging
-import * as logger from '../logger/logUtils';
+import * as logger from '@logger/logUtils';
 
 const CHANNEL = 'TeXLinterFixAgent';
 logger.initialize(CHANNEL);

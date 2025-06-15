@@ -5,7 +5,7 @@ import * as https from 'https';
 import * as arxivIdentifiers from 'identifiers-arxiv';
 
 // Local imports - log
-import * as logger from '../logger/logUtils';
+import * as logger from '@logger/logUtils';
 
 // Local imports - utils
 import {

@@ -5,7 +5,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 // Local imports - utilities
-import { getRelativePath } from '../../utils/files';
+import { getRelativePath } from '@utils/files';
 import { showErrorMessage } from '../ui/messageUtils';
 
 export interface FileDialogOptions {
