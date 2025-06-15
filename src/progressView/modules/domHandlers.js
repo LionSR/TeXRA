@@ -402,44 +402,60 @@ export function updateFileList(filesByRound) {
       }
 
       if (compareBtn) {
-        compareBtn.addEventListener('click', () => {
-          vscode.postMessage({
-            command: COMMANDS.COMPARE_ORIGINAL,
-            file: info.path,
-            base: info.base,
+        if (info.base) {
+          compareBtn.addEventListener('click', () => {
+            vscode.postMessage({
+              command: COMMANDS.COMPARE_ORIGINAL,
+              file: info.path,
+              base: info.base,
+            });
           });
-        });
+        } else {
+          compareBtn.remove();
+        }
       }
 
       if (acceptBtn) {
-        acceptBtn.addEventListener('click', () => {
-          vscode.postMessage({
-            command: COMMANDS.ACCEPT_FILE,
-            file: info.path,
-            base: info.base,
+        if (info.base) {
+          acceptBtn.addEventListener('click', () => {
+            vscode.postMessage({
+              command: COMMANDS.ACCEPT_FILE,
+              file: info.path,
+              base: info.base,
+            });
           });
-        });
+        } else {
+          acceptBtn.remove();
+        }
       }
 
       if (mergeBtn) {
-        mergeBtn.addEventListener('click', () => {
-          vscode.postMessage({
-            command: COMMANDS.MERGE_FILE,
-            file: info.path,
-            base: info.base,
+        if (info.base) {
+          mergeBtn.addEventListener('click', () => {
+            vscode.postMessage({
+              command: COMMANDS.MERGE_FILE,
+              file: info.path,
+              base: info.base,
+            });
           });
-        });
+        } else {
+          mergeBtn.remove();
+        }
       }
 
       if (diffBtn) {
-        diffBtn.addEventListener('click', () => {
-          vscode.postMessage({
-            command: COMMANDS.LATEXDIFF_FILE,
-            file: info.path,
-            base: info.base,
-            prev: info.prev,
+        if (info.base) {
+          diffBtn.addEventListener('click', () => {
+            vscode.postMessage({
+              command: COMMANDS.LATEXDIFF_FILE,
+              file: info.path,
+              base: info.base,
+              prev: info.prev,
+            });
           });
-        });
+        } else {
+          diffBtn.remove();
+        }
       }
 
       if (prevBtn) {
