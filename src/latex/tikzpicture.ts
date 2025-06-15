@@ -5,17 +5,12 @@ import * as path from 'path';
 import * as nunjucks from 'nunjucks';
 
 // Local imports - log
-import * as logger from '../logger/logUtils';
+import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
-import {
-  readFile,
-  fileExists,
-  writeFile,
-  createDirectory,
-} from '../utils/files';
-import { renderPrompt } from '../utils/promptUtils';
-import { getConfig } from '../utils/config';
+import { readFile, fileExists, writeFile, createDirectory } from '@utils/files';
+import { renderPrompt } from '@utils/promptUtils';
+import { getConfig } from '@utils/config';
 
 // Local imports - latex utils
 import { compileLatex2Pdf } from './texTools';

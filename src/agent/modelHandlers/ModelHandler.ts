@@ -5,19 +5,19 @@ import * as path from 'path';
 // (none needed)
 
 // Local imports - log
-import { AgentLogger } from '../../logger/AgentLogger';
+import { AgentLogger } from '@logger/AgentLogger';
 
 // Local imports - utilities
-import { fileExists } from '../../utils/files';
-import { fileExistsAbsolute } from '../../utils/files/absoluteFileUtils';
-import { getPastedImageDisplayName } from '../../utils/files/pastedImageUtils';
+import { fileExists } from '@utils/files';
+import { fileExistsAbsolute } from '@utils/files/absoluteFileUtils';
+import { getPastedImageDisplayName } from '@utils/files/pastedImageUtils';
 import {
   getBase64EncodedMedia,
   countPdfPages,
   processPdf2Png,
 } from '../../frontend/media/img';
-import { checkMultipleToolsInstalled } from '../../utils/system';
-import { getConfig } from '../../utils/config';
+import { checkMultipleToolsInstalled } from '@utils/system';
+import { getConfig } from '@utils/config';
 import {
   getApiKey as getSecretApiKey,
   ApiProvider,
@@ -33,7 +33,7 @@ import {
   ModelCapabilities,
 } from '../../model/ModelConfig';
 import { ToolState } from '../core/ToolState';
-import { MediaEntry } from '../utils/mediaTypes';
+import { MediaEntry } from '@agent/utils/mediaTypes';
 
 // Default continuation limits
 const DEFAULT_CONTINUE_LIMIT = 10;
