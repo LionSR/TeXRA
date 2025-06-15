@@ -71,6 +71,7 @@ export class OutputHandler {
   public modelHandler: any;
   public logId: number;
   public outputFiles: { [key: number]: string[] };
+  public generatedFiles: { [key: number]: { path: string; orig: string }[] };
   public baseFiles: string[];
   public processGroupId?: string;
   protected logger: AgentLogger;
@@ -89,6 +90,7 @@ export class OutputHandler {
     this.modelHandler = modelHandler;
     this.logId = logId;
     this.outputFiles = { 0: [], 1: [] };
+    this.generatedFiles = {};
     this.baseFiles = baseFiles;
     this.logger = logger || new AgentLogger('OutputHandler');
     this.channel = this.logger.channelId;
@@ -205,7 +207,7 @@ export class OutputHandler {
    * @returns Map of source files to their best matching target files
    * @private
    */
-  public createFileMapping(
+  public static createFileMapping(
     sourceFiles: string[],
     targetFiles: string[],
     matchStrategy: 'basename' | 'contains' = 'basename',
@@ -273,6 +275,23 @@ export class OutputHandler {
     }
 
     return fileMapping;
+  }
+
+  /**
+   * Instance wrapper for createFileMapping for backward compatibility.
+   */
+  public createFileMapping(
+    sourceFiles: string[],
+    targetFiles: string[],
+    matchStrategy: 'basename' | 'contains' = 'basename',
+    roundAware: boolean = false,
+  ): Map<string, string> {
+    return OutputHandler.createFileMapping(
+      sourceFiles,
+      targetFiles,
+      matchStrategy,
+      roundAware,
+    );
   }
 
   /** Updates \input commands in output files to reference new file paths. */
@@ -609,6 +628,12 @@ export class OutputHandler {
       const latexDocument = extractContentFromXMLbyTag(root, documentTag);
       if (latexDocument) {
         await writeFile(texFile, latexDocument);
+        const roundMatch = outputFile.match(/_r(\d+)_/);
+        const currRound = roundMatch ? parseInt(roundMatch[1]) : 0;
+        if (!this.generatedFiles[currRound]) {
+          this.generatedFiles[currRound] = [];
+        }
+        this.generatedFiles[currRound].push({ path: texFile, orig: texFile });
         return texFile;
       } else {
         this.logger.warn(
@@ -621,6 +646,12 @@ export class OutputHandler {
         );
         if (fallbackContent) {
           await writeFile(texFile, fallbackContent);
+          const roundMatch = outputFile.match(/_r(\d+)_/);
+          const currRound = roundMatch ? parseInt(roundMatch[1]) : 0;
+          if (!this.generatedFiles[currRound]) {
+            this.generatedFiles[currRound] = [];
+          }
+          this.generatedFiles[currRound].push({ path: texFile, orig: texFile });
           return texFile;
         }
         return texFile;
@@ -636,6 +667,12 @@ export class OutputHandler {
       );
       if (fallbackContent) {
         await writeFile(texFile, fallbackContent);
+        const roundMatch = outputFile.match(/_r(\d+)_/);
+        const currRound = roundMatch ? parseInt(roundMatch[1]) : 0;
+        if (!this.generatedFiles[currRound]) {
+          this.generatedFiles[currRound] = [];
+        }
+        this.generatedFiles[currRound].push({ path: texFile, orig: texFile });
         return texFile;
       }
       // Re-throw the original error if fallback also failed
@@ -712,6 +749,7 @@ export class OutputHandler {
     outputFile: string,
   ): Promise<string[]> {
     const outputFiles: string[] = [];
+    const dir = path.dirname(outputFile);
     const outputParts = path.basename(outputFile).split('_');
     const agent = outputParts.at(-3) ?? '';
     const model = outputParts.at(-1)?.split('.')[0] ?? '';
@@ -748,6 +786,13 @@ export class OutputHandler {
       );
       await writeFile(texFile, doc.content.trim());
       outputFiles.push(texFile);
+      if (!this.generatedFiles[currRound]) {
+        this.generatedFiles[currRound] = [];
+      }
+      this.generatedFiles[currRound].push({
+        path: texFile,
+        orig: path.join(dir, source),
+      });
       this.logger.debug(`TeX file written: ${texFile}`);
     }
 

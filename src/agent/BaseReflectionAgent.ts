@@ -693,11 +693,16 @@ export abstract class BaseReflectionAgent implements IAgent {
         const prevFile =
           Array.from(prevMap.entries()).find(([, out]) => out === file)?.[0] ||
           null;
+        const origEntry =
+          this.outputHandler.generatedFiles[currRound]?.find(
+            (g) => g.path === file,
+          ) || null;
         const stats = await this.computeDiffStats(baseFile, file);
         fileInfos.push({
           path: file,
           base: baseFile,
           prev: prevFile,
+          orig: origEntry?.orig || null,
           ...stats,
         });
       }

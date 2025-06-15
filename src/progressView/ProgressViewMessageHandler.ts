@@ -4,6 +4,7 @@ import * as vscode from 'vscode';
 // Local imports - log
 import * as logger from '../logger/logUtils';
 import { ProgressViewProvider } from './ProgressViewProvider';
+import { OutputHandler } from '../agent/OutputHandler';
 
 import { taskStateToAgentConfig } from '../utils/configConversion';
 
@@ -103,9 +104,21 @@ export class ProgressViewMessageHandler {
     const generated = this.provider.getOutputFiles(stream);
     const allFiles = new Set<string>(taskState.outputFiles || []);
     if (generated) {
-      Object.values(generated).forEach((infos) =>
-        infos.forEach((info) => allFiles.add(info.path)),
+      const infos = Object.values(generated).flat();
+      const originals = infos.map((i) => i.orig || i.base || i.path);
+      const paths = infos.map((i) => i.path);
+      const mapping = OutputHandler.createFileMapping(
+        originals,
+        paths,
+        'contains',
       );
+      if (mapping.size > 0) {
+        for (const orig of mapping.keys()) {
+          allFiles.add(orig);
+        }
+      } else {
+        originals.forEach((o) => allFiles.add(o));
+      }
     }
 
     await vscode.commands.executeCommand(command, {

@@ -272,7 +272,18 @@ async function executeAgentWithLogging<T extends IAgent>(
           // Update status to stopped on successful completion
           progressViewProvider.updateStreamStatus(fullStreamId, 'stopped');
 
-          if (config.outputFiles && config.outputFiles.length > 0) {
+          const generatedOutputs = Object.values(
+            ((agent as any).outputHandler?.generatedFiles || {}) as {
+              [key: number]: { path: string }[];
+            },
+          )
+            .flat()
+            .map((g) => g.path);
+          if (generatedOutputs.length > 0) {
+            for (const out of generatedOutputs) {
+              await openBuildDisplayIfTex(out, { preserveFocus: true });
+            }
+          } else if (config.outputFiles && config.outputFiles.length > 0) {
             for (const out of config.outputFiles) {
               await openBuildDisplayIfTex(out, { preserveFocus: true });
             }
