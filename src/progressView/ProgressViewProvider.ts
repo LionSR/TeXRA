@@ -48,6 +48,7 @@ interface OutputFileInfo extends DiffStats {
   path: string;
   base?: string | null;
   prev?: string | null;
+  original?: string;
 }
 
 export class ProgressViewProvider implements vscode.WebviewViewProvider {
