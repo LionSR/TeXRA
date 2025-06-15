@@ -52,6 +52,7 @@ import { IAgent } from '@agent/core/IAgent';
 
 // System imports - common utilities
 import { getConfig } from '@utils/config';
+import { getEffectiveBaseFile } from '@utils/files/baseFileUtils';
 
 // Shared constants
 import {
@@ -682,12 +683,17 @@ export abstract class BaseReflectionAgent implements IAgent {
         const prevFile =
           Array.from(prevMap.entries()).find(([, out]) => out === file)?.[0] ||
           null;
-        const stats = await this.computeDiffStats(baseFile, file);
+        const originalFile = originMap.get(file) || null;
+
+        // Use utility to determine effective base for diff computation
+        const diffBase = getEffectiveBaseFile(baseFile, originalFile, file);
+        const stats = await this.computeDiffStats(diffBase, file);
+
         fileInfos.push({
           path: file,
           base: baseFile,
           prev: prevFile,
-          original: originMap.get(file) || null,
+          original: originalFile,
           ...stats,
         });
       }
