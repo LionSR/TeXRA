@@ -12,7 +12,7 @@ import { countTokens } from 'gpt-tokenizer';
 
 // Local imports - utilities
 import { readFile, writeFile, fileExistsAndNonTrivial } from '@utils/files';
-import { cleanFileContent } from '../../replacement/replacementUtils';
+import { cleanFileContent } from '@replacement/replacementUtils';
 import { extractAndLogScratchpad } from '@utils/text/xmlUtils';
 
 // Local imports - agent components

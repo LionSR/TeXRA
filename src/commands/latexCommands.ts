@@ -11,11 +11,11 @@ import {
   applyReplacements,
   getAllReplacements,
   getAllReplacementsRegex,
-} from '../replacement/replacementUtils';
+} from '@replacement/replacementUtils';
 
 // Local imports - latex utils
-import { runLatexFormatter } from '../latex/texFormatter';
-import { getTeXCount } from '../latex/texcount';
+import { runLatexFormatter } from '@latex/texFormatter';
+import { getTeXCount } from '@latex/texcount';
 
 // Local imports - commands
 import { fileSelectionCommands } from './fileSelectionCommands';
