@@ -8,7 +8,7 @@ import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
 import { getConfig } from '@utils/config';
-import { buildWebviewHtml } from '../frontend/webview/html';
+import { buildWebviewHtml } from '@frontend/webview/html';
 
 const CHANNEL = 'Webview';
 logger.initialize(CHANNEL);
