@@ -2,7 +2,7 @@
 import axios from 'axios';
 
 // local import
-import { getApiKey } from '../frontend/secrets';
+import { getApiKey } from '@frontend/secrets';
 
 interface WolframValves {
   WOLFRAM_APP_ID: string;
