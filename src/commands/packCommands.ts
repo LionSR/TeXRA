@@ -5,7 +5,7 @@ import * as path from 'path';
 import { ProgressViewProvider } from '../progressView/ProgressViewProvider';
 
 // Local imports - log
-import * as logger from '../logger/logUtils';
+import * as logger from '@logger/logUtils';
 
 // Local imports - housekeeping
 import { runPack, runPackSingle, runPackMultiple } from '../housekeeping';

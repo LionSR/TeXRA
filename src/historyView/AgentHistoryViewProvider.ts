@@ -4,11 +4,11 @@ import * as vscode from 'vscode';
 import { AgentHistoryManager } from './AgentHistoryManager';
 import { executeCommand } from '../commands/executeCommand';
 
-import { agentConfigToTaskState } from '../utils/config';
+import { agentConfigToTaskState } from '@utils/config';
 import { buildWebviewHtml } from '../frontend/webview/html';
 
 // Local imports - log
-import * as logger from '../logger/logUtils';
+import * as logger from '@logger/logUtils';
 
 const CHANNEL = 'AgentHistoryViewProvider';
 logger.initialize(CHANNEL);
