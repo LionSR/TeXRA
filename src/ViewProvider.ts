@@ -4,7 +4,7 @@ import * as vscode from 'vscode';
 // Local imports - webview
 import { WebviewMessageHandler } from './webview/MessageHandler';
 import { WebviewContentProvider } from './webview/WebviewContentProvider';
-import { anyApiKeyExists } from './frontend/secrets';
+import { anyApiKeyExists } from '@frontend/secrets';
 import { watchConfig } from '@utils/config';
 
 export class TeXRAViewProvider implements vscode.WebviewViewProvider {

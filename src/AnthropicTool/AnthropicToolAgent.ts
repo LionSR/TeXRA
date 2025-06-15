@@ -15,7 +15,7 @@ import { BaseError, ValidationResult } from './types';
 
 // Local imports - utils
 import * as workspaceFileUtils from '@utils/files';
-import { getApiKey as getSecretApiKey, ApiProvider } from '../frontend/secrets';
+import { getApiKey as getSecretApiKey, ApiProvider } from '@frontend/secrets';
 import { getConfig } from '@utils/config';
 
 // Local imports - logging

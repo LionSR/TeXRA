@@ -10,7 +10,7 @@ import * as logger from '@logger/logUtils';
 // Local imports - utilities
 import { getWorkspacePath } from '@utils/files';
 import { fileExists } from '@utils/files';
-import { openBuildDisplayIfTex } from '../frontend/latex/openBuild';
+import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 
 // Local imports - latex utils
 import {
@@ -18,7 +18,7 @@ import {
   runLatexdiffvc,
   runLatexdiffForRound,
   runLatexdiffBetweenRounds,
-} from '../latex/latexdiff';
+} from '@latex/latexdiff';
 import { checkToolInstalled } from '@utils/system';
 
 // Local imports - housekeeping
