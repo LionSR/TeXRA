@@ -2,9 +2,83 @@
 import * as logger from '@logger/logUtils';
 import { AgentLogger } from '@logger/AgentLogger';
 import { K_SLICE } from '@utils/config';
+import { checkToolInstalled } from '@utils/system/toolUtils';
+import nodePandoc from 'node-pandoc';
 
 const CHANNEL = 'xmlUtils';
 logger.initialize(CHANNEL);
+
+// Cache pandoc availability check
+let pandocAvailable: boolean | null = null;
+let pandocCheckPromise: Promise<boolean> | null = null;
+
+async function isPandocAvailable(): Promise<boolean> {
+  if (pandocAvailable !== null) {
+    return pandocAvailable;
+  }
+
+  // If a check is already in progress, wait for it
+  if (pandocCheckPromise !== null) {
+    return pandocCheckPromise;
+  }
+
+  // Start new check and store the promise
+  pandocCheckPromise = checkToolInstalled('pandoc', false).then((result) => {
+    pandocAvailable = result;
+    pandocCheckPromise = null; // Clear the promise after completion
+    return result;
+  });
+
+  return pandocCheckPromise;
+}
+
+function detectInputFormat(text: string): 'html' | 'latex' | 'markdown' {
+  const htmlRegex = /<[^>]+>/; // this needs to be improved, as we might have some xml tags to separte scratchpad
+  const latexRegex = /\\(?:begin|end|section|subsection|textbf|textit|item)\{/;
+
+  if (latexRegex.test(text)) {
+    return 'latex';
+  } else if (htmlRegex.test(text)) {
+    return 'html';
+  } else {
+    return 'markdown';
+  }
+}
+
+async function convertWithPandoc(text: string): Promise<string | null> {
+  if (!(await isPandocAvailable())) {
+    return null;
+  }
+  const format = detectInputFormat(text);
+
+  // If already markdown, return as-is
+  if (format === 'markdown') {
+    return text.trim();
+  }
+
+  try {
+    const result = await new Promise<string>((resolve, reject) => {
+      nodePandoc(
+        text,
+        ['-f', format, '-t', 'markdown'],
+        (err: Error | null, res: string) => {
+          if (err) {
+            reject(err);
+          } else {
+            resolve(res);
+          }
+        },
+      );
+    });
+    return result.trim();
+  } catch (err) {
+    logger.error(
+      CHANNEL,
+      `Pandoc conversion failed: ${err instanceof Error ? err.message : String(err)}`,
+    );
+    return null;
+  }
+}
 
 /**
  * Get a string representation of an object's structure without its values
@@ -235,12 +309,12 @@ export function extractContentFromXMLbyTagMultiple(
  * @param contentType The type of content (e.g., 'Scratchpad', 'Thinking')
  * @param groupId Optional group ID for logging
  */
-export function formatAndLogContent(
+export async function formatAndLogContent(
   content: string,
   agentLogger: AgentLogger,
   contentType: string = 'Scratchpad',
   groupId?: string,
-): void {
+): Promise<void> {
   if (!content) {
     return;
   }
@@ -254,57 +328,63 @@ export function formatAndLogContent(
   // Format the content for improved rendering
   let formattedContent = content.trim();
 
-  // Replace LaTeX notation with markdown-friendly equivalents
-  formattedContent = formattedContent
-    .replace(/\\section\{([^}]+)\}/g, '## $1')
-    .replace(/\\subsection\{([^}]+)\}/g, '### $1')
-    .replace(/\\begin\{itemize\}/g, '')
-    .replace(/\\end\{itemize\}/g, '')
-    // Also handle enumerate environments like itemize
-    .replace(/\\begin\{enumerate\}/g, '')
-    .replace(/\\end\{enumerate\}/g, '')
-    .replace(/\\item\s+/g, '- ')
-    // Standardize bullet lists starting with asterisk while avoiding emphasis markers
-    .replace(/(^|\n)(\s*)\*\s+(?=\S)/g, '$1$2- ')
-    .replace(/\\textbf\{([^}]+)\}/g, '**$1**')
-    .replace(/\\textit\{([^}]+)\}/g, '*$1*')
-    .replace(/\\emph\{([^}]+)\}/g, '*$1*')
-    // Convert common HTML tags to markdown before generic XML handling
-    .replace(/<br\s*\/?>/gi, '\n')
-    // Handle p and div tags more carefully to avoid excessive newlines
-    .replace(/<(?:p|div)\b[^>]*>/gi, '')
-    .replace(/<\/(?:p|div)>/gi, '\n')
-    .replace(/<(strong|b)>(.*?)<\/\1>/gi, '**$2**')
-    .replace(/<(em|i)>(.*?)<\/\1>/gi, '*$2*')
-    .replace(/<code>(.*?)<\/code>/gi, '`$1`')
-    .replace(/<pre>([\s\S]*?)<\/pre>/gi, '```\n$1\n```')
-    .replace(/<h1>(.*?)<\/h1>/gi, '# $1\n')
-    .replace(/<h2>(.*?)<\/h2>/gi, '## $1\n')
-    .replace(/<h3>(.*?)<\/h3>/gi, '### $1\n')
-    .replace(/<h4>(.*?)<\/h4>/gi, '#### $1\n')
-    .replace(/<h5>(.*?)<\/h5>/gi, '##### $1\n')
-    .replace(/<h6>(.*?)<\/h6>/gi, '###### $1\n')
-    // Handle lists - simple approach
-    // For XML tags containing lists (ol/ul), just remove the wrapper tag
-    .replace(/<([\w-]{6,})>\s*(<[ou]l\b[\s\S]*?<\/[ou]l>)\s*<\/\1>/g, '$2')
-    // Convert XML tags to markdown headings - only for semantic tags with 6+ characters that don't contain lists
-    .replace(/<([\w-]{6,})>\s*([^<]*?)\s*<\/\1>/g, '## $1\n$2')
-    // Remove ul and ol tags
-    .replace(/<[ou]l>/gi, '')
-    .replace(/<\/[ou]l>/gi, '')
-    // Replace <li> with bullet point and remove </li> tags
-    .replace(/<li>/gi, '- ')
-    .replace(/<\/li>/gi, '')
-    // Escape LaTeX references but preserve the content
-    .replace(/~\\ref\{/g, ' \\ref{')
-    .replace(/\\ref\{([^}]+)\}/g, '\\\\ref{$1}')
-    // Remove multiple empty lines before list items, preserving indentation
-    .replace(/\n(\s*)\n(\s*)\n(\s*)- /g, '\n$3- ')
-    .replace(/\n(\s*)\n(\s*)- /g, '\n$2- ')
-    // Clean up excessive whitespace and normalize line breaks
-    .replace(/\n{4,}/g, '\n\n') // Replace 4+ newlines with 2
+  const pandocResult = await convertWithPandoc(formattedContent);
 
-    .replace(/ {4}/gm, '  '); // Replace 4 spaces with 2 spaces
+  if (!pandocResult) {
+    // Replace LaTeX notation with markdown-friendly equivalents
+    formattedContent = formattedContent
+      .replace(/\\section\{([^}]+)\}/g, '## $1')
+      .replace(/\\subsection\{([^}]+)\}/g, '### $1')
+      .replace(/\\begin\{itemize\}/g, '')
+      .replace(/\\end\{itemize\}/g, '')
+      // Also handle enumerate environments like itemize
+      .replace(/\\begin\{enumerate\}/g, '')
+      .replace(/\\end\{enumerate\}/g, '')
+      .replace(/\\item\s+/g, '- ')
+      // Standardize bullet lists starting with asterisk while avoiding emphasis markers
+      .replace(/(^|\n)(\s*)\*\s+(?=\S)/g, '$1$2- ')
+      .replace(/\\textbf\{([^}]+)\}/g, '**$1**')
+      .replace(/\\textit\{([^}]+)\}/g, '*$1*')
+      .replace(/\\emph\{([^}]+)\}/g, '*$1*')
+      // Convert common HTML tags to markdown before generic XML handling
+      .replace(/<br\s*\/?>/gi, '\n')
+      // Handle p and div tags more carefully to avoid excessive newlines
+      .replace(/<(?:p|div)\b[^>]*>/gi, '')
+      .replace(/<\/(?:p|div)>/gi, '\n')
+      .replace(/<(strong|b)>(.*?)<\/\1>/gi, '**$2**')
+      .replace(/<(em|i)>(.*?)<\/\1>/gi, '*$2*')
+      .replace(/<code>(.*?)<\/code>/gi, '`$1`')
+      .replace(/<pre>([\s\S]*?)<\/pre>/gi, '```\n$1\n```')
+      .replace(/<h1>(.*?)<\/h1>/gi, '# $1\n')
+      .replace(/<h2>(.*?)<\/h2>/gi, '## $1\n')
+      .replace(/<h3>(.*?)<\/h3>/gi, '### $1\n')
+      .replace(/<h4>(.*?)<\/h4>/gi, '#### $1\n')
+      .replace(/<h5>(.*?)<\/h5>/gi, '##### $1\n')
+      .replace(/<h6>(.*?)<\/h6>/gi, '###### $1\n')
+      // Handle lists - simple approach
+      // For XML tags containing lists (ol/ul), just remove the wrapper tag
+      .replace(/<([\w-]{6,})>\s*(<[ou]l\b[\s\S]*?<\/[ou]l>)\s*<\/\1>/g, '$2')
+      // Convert XML tags to markdown headings - only for semantic tags with 6+ characters that don't contain lists
+      .replace(/<([\w-]{6,})>\s*([^<]*?)\s*<\/\1>/g, '## $1\n$2')
+      // Remove ul and ol tags
+      .replace(/<[ou]l>/gi, '')
+      .replace(/<\/[ou]l>/gi, '')
+      // Replace <li> with bullet point and remove </li> tags
+      .replace(/<li>/gi, '- ')
+      .replace(/<\/li>/gi, '')
+      // Escape LaTeX references but preserve the content
+      .replace(/~\\ref\{/g, ' \\ref{')
+      .replace(/\\ref\{([^}]+)\}/g, '\\\\ref{$1}')
+      // Remove multiple empty lines before list items, preserving indentation
+      .replace(/\n(\s*)\n(\s*)\n(\s*)- /g, '\n$3- ')
+      .replace(/\n(\s*)\n(\s*)- /g, '\n$2- ')
+      // Clean up excessive whitespace and normalize line breaks
+      .replace(/\n{4,}/g, '\n\n') // Replace 4+ newlines with 2
+
+      .replace(/ {4}/gm, '  '); // Replace 4 spaces with 2 spaces
+  } else {
+    formattedContent = pandocResult;
+  }
   // .replace(/ +$/gm, ''); // Remove trailing spaces only
 
   // agentLogger.info(formattedContent, groupId); // for debugging
@@ -322,17 +402,22 @@ export function formatAndLogContent(
  * @param thinkingTag The XML tag name used for the scratchpad content
  * @param groupId Optional group ID for logging
  */
-export function extractAndLogScratchpad(
+export async function extractAndLogScratchpad(
   outputContent: string,
   agentLogger: AgentLogger,
   thinkingTag: string = 'scratchpad',
   groupId?: string,
-): void {
+): Promise<void> {
   const extractedContent = extractTextFromTag(outputContent, thinkingTag);
   if (extractedContent) {
     // Always log using the canonical "Scratchpad" label so that the progress
     // view recognises the message. The thinkingTag is still used for
     // extraction so alternative tag names continue to work.
-    formatAndLogContent(extractedContent, agentLogger, 'Scratchpad', groupId);
+    await formatAndLogContent(
+      extractedContent,
+      agentLogger,
+      'Scratchpad',
+      groupId,
+    );
   }
 }
