@@ -600,6 +600,7 @@ export const LATEX_DOCUMENT_REPLACEMENTS: ReplacementCategory = {
     // ===== 9. DOCUMENT STRUCTURE FIXES =====
     // '\\end{document}\n\n\\<document name=':
     //   '\\end{document}\\n</document>\\n\\<document name=',
+    '\\end{document}nd{document}': '\\end{document}\n</document>',
     '\\end{document}\n\\end{document}\n<document name=':
       '\\end{document}\n</document>\n<document name=',
     // '\\end{document}\n\\<document name=':
