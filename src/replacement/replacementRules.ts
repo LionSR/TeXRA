@@ -489,6 +489,8 @@ export const LATEX_XML_REPLACEMENTS: ReplacementCategory = {
       'align',
       'align*',
       'aligned',
+      'overpic',
+      'overpic*',
       'aligned*',
       'alignat',
       'alignat*',
