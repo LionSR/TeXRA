@@ -97,32 +97,32 @@ export class ProgressViewMessageHandler {
       logger.warn(CHANNEL, `No taskState found for stream: ${stream}`);
       return;
     }
-    logger.debug(CHANNEL, `Found taskState for stream: ${stream}`);
-    logger.debug(CHANNEL, `Task state: ${JSON.stringify(taskState)}`);
+    // logger.debug(CHANNEL, `Found taskState for stream: ${stream}`);
+    // logger.debug(CHANNEL, `Task state: ${JSON.stringify(taskState)}`);
 
     const generated = this.provider.getOutputFiles(stream);
     const allFiles = new Set<string>(taskState.outputFiles || []);
-    const outputMappings: { source: string; path: string }[] = [];
     if (generated) {
       Object.values(generated).forEach((infos) =>
         infos.forEach((info) => {
-          const source = info.original || info.path;
-          allFiles.add(source);
-          if (info.original) {
-            outputMappings.push({ source, path: info.path });
-          }
+          // Use original name if available, otherwise use the generated path
+          const fileToAdd = info.original || info.path;
+          allFiles.add(fileToAdd);
         }),
       );
     }
+
+    const outputFilesArray = Array.from(allFiles);
 
     await vscode.commands.executeCommand(command, {
       agent: taskState.agent,
       model: taskState.model,
       inputFile: taskState.inputFile,
       outputNameOverride: taskState.outputNameOverride,
-      outputFiles: Array.from(allFiles),
-      outputFilesActive: taskState.activeFiles.output,
-      outputMappings,
+      outputFiles: outputFilesArray,
+      activeFiles: {
+        output: outputFilesArray.length > 0,
+      },
     });
   }
 
