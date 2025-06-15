@@ -5,7 +5,7 @@ import * as vscode from 'vscode';
 import * as logger from '@logger/logUtils';
 
 // Local imports - utils
-import { getLinterMessages } from '../frontend/latex/linter';
+import { getLinterMessages } from '@frontend/latex/linter';
 import { getRelativePath } from '@utils/files';
 import { sleep } from '@utils/helpers';
 
