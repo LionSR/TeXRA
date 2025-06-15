@@ -71,19 +71,11 @@ export class CoTAgent extends BaseReflectionAgent {
           outputFile,
           this.agentSetting.documentTag,
         );
-        this.logger.debug(
-          `XML structure processed for round ${currRound}`,
-          outputProcessGroupId,
-        );
 
         // Then process output files using the parent class method
         await super.processOutputFiles(
           outputFile,
           currRound,
-          outputProcessGroupId,
-        );
-        this.logger.debug(
-          `Output files processed for round ${currRound}`,
           outputProcessGroupId,
         );
 

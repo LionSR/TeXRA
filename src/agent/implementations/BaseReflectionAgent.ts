@@ -1244,11 +1244,7 @@ export abstract class BaseReflectionAgent implements IAgent {
     ) {
       // Multiple output files case
       this.logger.debug(
-        `Processing multiple outputs for ${outputFile}`,
-        activeGroupId,
-      );
-      this.logger.debug(
-        `Output files: ${this.agentConfig.outputFiles}`,
+        `Processing multiple outputs for ${outputFile}; outputFiles: ${this.agentConfig.outputFiles}`,
         activeGroupId,
       );
 
