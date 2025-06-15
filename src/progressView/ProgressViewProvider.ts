@@ -936,9 +936,9 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   }
 
   private saveTaskStates(): void {
-    this.logger.debug('Saving taskStates to workspace state');
+    // this.logger.debug('Saving taskStates to workspace state');
     const taskStatesObj = Object.fromEntries(this._taskStates.entries());
-    this.logger.debug(`Saving taskStates: ${JSON.stringify(taskStatesObj)}`);
+    // this.logger.debug(`Saving taskStates: ${JSON.stringify(taskStatesObj)}`);
     this.context.workspaceState.update(this._taskStateKey, taskStatesObj);
   }
 
