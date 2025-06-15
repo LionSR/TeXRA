@@ -203,5 +203,5 @@ export function saveState() {
   // Log the state being saved for debugging
   console.log('Saving state:', state);
 
-  stateManager.update(state);
+  stateManager.setState(state);
 }
