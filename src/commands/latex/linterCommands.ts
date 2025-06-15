@@ -10,7 +10,7 @@ import { getRelativePath } from '@utils/files';
 import { sleep } from '@utils/helpers';
 
 // Local imports - core
-import { TeXLinterFixAgent } from '../AnthropicTool';
+import { TeXLinterFixAgent } from '../../AnthropicTool';
 
 const CHANNEL = 'LinterCommands';
 logger.initialize(CHANNEL);
