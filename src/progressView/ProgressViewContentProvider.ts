@@ -41,7 +41,7 @@ export class ProgressViewContentProvider {
       const webviewStateUri = getCommonUri('modules/webviewState.js');
 
       // Module paths
-      const vscodeApiUri = getCommonUri('modules/vscodeApi.js');
+      const webviewContextUri = getCommonUri('modules/webviewContext.js');
       const stateManagerUri = getWebviewUri('modules/stateManager.js');
       const messageHandlersUri = getWebviewUri('modules/messageHandlers.js');
       const domHandlersUri = getWebviewUri('modules/domHandlers.js');
@@ -50,7 +50,6 @@ export class ProgressViewContentProvider {
       const templateUtilsUri = getCommonUri('modules/templateUtils.js');
       const domUtilsUri = getCommonUri('modules/domUtils.js');
       const stringUtilsUri = getCommonUri('modules/stringUtils.js');
-      const messageRouterUri = getCommonUri('modules/messageRouter.js');
 
       const codiconUri = getNodeModulesUri('@vscode/codicons/dist/codicon.css');
       const codiconsFontUri = getNodeModulesUri(
@@ -65,15 +64,14 @@ export class ProgressViewContentProvider {
         splitJsUri,
         codiconUri,
         codiconsFontUri,
-        vscodeApiUri,
         webviewStateUri,
         stateManagerUri,
         messageHandlersUri,
         domHandlersUri,
-        messageRouterUri,
         domUtilsUri,
         stringUtilsUri,
         templateUtilsUri,
+        webviewContextUri,
         constantsUri,
         logFormattersUri,
       });
