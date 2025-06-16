@@ -158,8 +158,7 @@ export class AgentHistoryViewProvider implements vscode.WebviewViewProvider {
       const domHandlersUri = getHistoryViewUri('modules/domHandlers.js');
 
       // Common module URIs
-      const vscodeApiUri = getCommonUri('modules/vscodeApi.js');
-      const messageRouterUri = getCommonUri('modules/messageRouter.js');
+      const webviewContextUri = getCommonUri('modules/webviewContext.js');
       const commonStyleUri = getCommonUri('styles/common.css');
 
       // Node modules URIs
@@ -169,8 +168,7 @@ export class AgentHistoryViewProvider implements vscode.WebviewViewProvider {
         scriptUri,
         styleUri,
         commonStyleUri,
-        vscodeApiUri,
-        messageRouterUri,
+        webviewContextUri,
         domHandlersUri,
         codiconUri,
       });
