@@ -7,7 +7,7 @@ import * as logger from '@logger/logUtils';
 // Local imports - utilities
 import { showInfoMessage, showErrorMessage } from '../frontend/ui/messageUtils';
 import { getRelativePath } from '@utils/files';
-import { listInputFiles } from '../frontend/files/listing';
+import { listInputFiles } from '../frontend/files/fileLister';
 import { getIncludedExtensions } from '@utils/fileTypeUtils';
 import { selectFile, selectFiles } from '../frontend/files/dialog';
 const CHANNEL = 'fileSelectionCommands';
@@ -44,195 +44,135 @@ export function registerFileSelectionCommands(
   );
 }
 
-async function selectInputFile(
-  currentInputFile: string,
-): Promise<string | null> {
-  const result = await selectFile({
-    currentFile: currentInputFile,
-    openLabel: 'Select File',
-    filters: {
-      'Text files': getIncludedExtensions('input').map((ext) =>
-        ext.replace('.', ''),
-      ),
-    },
-  });
-  if (result) {
-    logger.info(CHANNEL, `Selected file: ${result}`);
-  }
-  return result;
-}
-
-async function selectInputFiles(
-  currentInputFile: string,
-): Promise<string[] | null> {
-  const includedInputExtensions = getIncludedExtensions('input', [
-    '.txt',
-    '.tex',
-    '.md',
-  ]);
-
-  try {
-    const relativePaths = await selectFiles({
-      currentFile: currentInputFile,
-      allowMany: true,
-      openLabel: 'Select Files',
-      filters: {
-        'Text files': includedInputExtensions.map((ext) =>
-          ext.replace('.', ''),
-        ),
-      },
-    });
-
-    if (!relativePaths) {
+function createPicker(
+  openLabel: string,
+  allowMany: true,
+  filters: () => Record<string, string[]>,
+  success: (selection: string[]) => string,
+): (currentFile?: string) => Promise<string[] | null>;
+function createPicker(
+  openLabel: string,
+  allowMany: false,
+  filters: () => Record<string, string[]>,
+  success: (selection: string) => string,
+): (currentFile?: string) => Promise<string | null>;
+function createPicker<T extends string | string[]>(
+  openLabel: string,
+  allowMany: boolean,
+  filters: () => Record<string, string[]>,
+  success: (selection: T) => string,
+): (currentFile?: string) => Promise<T | null> {
+  return async (currentFile = '') => {
+    try {
+      const opts = {
+        currentFile,
+        allowMany,
+        openLabel,
+        filters: filters(),
+      };
+      const result = allowMany
+        ? await selectFiles(opts)
+        : await selectFile(opts);
+      if (result) {
+        const message = success(result as T);
+        showInfoMessage(message);
+        logger.info(CHANNEL, message);
+      }
+      return (result ?? null) as T | null;
+    } catch (err) {
+      const errorMsg = `Error selecting files: ${err instanceof Error ? err.message : String(err)}`;
+      logger.error(CHANNEL, errorMsg);
+      showErrorMessage(errorMsg);
       return null;
     }
-
-    showInfoMessage(`Selected files: ${relativePaths.join(', ')}`);
-    logger.info(CHANNEL, `Selected files: ${relativePaths.join(', ')}`);
-    return relativePaths;
-  } catch (err) {
-    logger.error(
-      CHANNEL,
-      `Error selecting files: ${err instanceof Error ? err.message : String(err)}`,
-    );
-    return null;
-  }
+  };
 }
 
-async function selectReferenceFiles(
-  currentReferenceFile: string,
-): Promise<string[] | null> {
-  const includedReferenceExtensions = getIncludedExtensions('reference');
-  const relativePaths = await selectFiles({
-    currentFile: currentReferenceFile,
-    allowMany: true,
-    openLabel: 'Select Ref Files',
-    filters: {
-      'Text files': includedReferenceExtensions.map((ext) =>
-        ext.replace('.', ''),
-      ),
-    },
-  });
+const selectInputFile = createPicker(
+  'Select File',
+  false,
+  () => ({
+    'Text files': getIncludedExtensions('input', ['.txt', '.tex', '.md']).map(
+      (ext) => ext.replace('.', ''),
+    ),
+  }),
+  (file) => `Selected file: ${file}`,
+);
 
-  if (relativePaths) {
-    showInfoMessage(`Selected reference files: ${relativePaths.join(', ')}`);
-    logger.info(
-      CHANNEL,
-      `Selected reference files: ${relativePaths.join(', ')}`,
-    );
-  }
+const selectInputFiles = createPicker(
+  'Select Files',
+  true,
+  () => ({
+    'Text files': getIncludedExtensions('input', ['.txt', '.tex', '.md']).map(
+      (ext) => ext.replace('.', ''),
+    ),
+  }),
+  (files) => `Selected files: ${(files as string[]).join(', ')}`,
+);
 
-  return relativePaths;
-}
+const selectReferenceFiles = createPicker(
+  'Select Ref Files',
+  true,
+  () => ({
+    'Text files': getIncludedExtensions('reference').map((ext) =>
+      ext.replace('.', ''),
+    ),
+  }),
+  (files) => `Selected reference files: ${(files as string[]).join(', ')}`,
+);
 
-async function selectAuxiliaryFiles(
-  currentAuxiliaryFile: string,
-): Promise<string[] | null> {
-  const includedAuxiliaryExtensions = getIncludedExtensions('auxiliary');
-  const relativePaths = await selectFiles({
-    currentFile: currentAuxiliaryFile,
-    allowMany: true,
-    openLabel: 'Select Auxiliary Files',
-    filters: {
-      'Text files': includedAuxiliaryExtensions.map((ext) =>
-        ext.replace('.', ''),
-      ),
-    },
-  });
+const selectAuxiliaryFiles = createPicker(
+  'Select Auxiliary Files',
+  true,
+  () => ({
+    'Text files': getIncludedExtensions('auxiliary').map((ext) =>
+      ext.replace('.', ''),
+    ),
+  }),
+  (files) => `Selected files: ${(files as string[]).join(', ')}`,
+);
 
-  if (relativePaths) {
-    showInfoMessage(`Selected files: ${relativePaths.join(', ')}`);
-    logger.info(CHANNEL, `Selected files: ${relativePaths.join(', ')}`);
-  }
-  return relativePaths;
-}
+const selectMediaFiles = createPicker(
+  'Select Media',
+  true,
+  () => ({
+    'Image files': getIncludedExtensions('media').map((ext) =>
+      ext.replace('.', ''),
+    ),
+    'Audio files': getIncludedExtensions('audio').map((ext) =>
+      ext.replace('.', ''),
+    ),
+  }),
+  (files) => `Selected files: ${(files as string[]).join(', ')}`,
+);
 
-async function selectMediaFiles(
-  currentMediaFile: string,
-): Promise<string[] | null> {
-  const includedFigureExtensions = getIncludedExtensions('media');
-  const includedAudioExtensions = getIncludedExtensions('audio');
-  const relativePaths = await selectFiles({
-    currentFile: currentMediaFile,
-    allowMany: true,
-    openLabel: 'Select Media',
-    filters: {
-      'Image files': includedFigureExtensions.map((ext) =>
-        ext.replace('.', ''),
-      ),
-      'Audio files': includedAudioExtensions.map((ext) => ext.replace('.', '')),
-    },
-  });
+const selectMediaFile = createPicker(
+  'Select Media File',
+  false,
+  () => ({
+    Images: getIncludedExtensions('media').map((ext) => ext.replace('.', '')),
+    'Audio files': getIncludedExtensions('audio').map((ext) =>
+      ext.replace('.', ''),
+    ),
+  }),
+  (file) => `Selected media file: ${file}`,
+);
 
-  if (relativePaths) {
-    showInfoMessage(`Selected files: ${relativePaths.join(', ')}`);
-    logger.info(CHANNEL, `Selected files: ${relativePaths.join(', ')}`);
-  }
-  return relativePaths;
-}
+const selectOutputFiles = createPicker(
+  'Select Output Files',
+  true,
+  () => ({
+    'Text files': ['tex', 'txt', 'md'],
+  }),
+  (files) => `Selected output files: ${(files as string[]).join(', ')}`,
+);
 
-async function selectMediaFile(): Promise<string | null> {
-  const result = await selectFile({
-    openLabel: 'Select Media File',
-    filters: {
-      Images: getIncludedExtensions('media').map((ext) => ext.replace('.', '')),
-      'Audio files': getIncludedExtensions('audio').map((ext) =>
-        ext.replace('.', ''),
-      ),
-    },
-  });
-  if (result) {
-    showInfoMessage(`Selected media file: ${result}`);
-    logger.info(CHANNEL, `Selected media file: ${result}`);
-  }
-  return result;
-}
-
-async function selectOutputFiles(
-  currentInputFile: string,
-): Promise<string[] | null> {
-  try {
-    const relativePaths = await selectFiles({
-      currentFile: currentInputFile,
-      allowMany: true,
-      openLabel: 'Select Output Files',
-      filters: {
-        'Text files': ['tex', 'txt', 'md'],
-      },
-    });
-
-    if (!relativePaths) {
-      return null;
-    }
-
-    logger.info(CHANNEL, `Selected output files: ${relativePaths.join(', ')}`);
-    vscode.window.showInformationMessage(
-      `Selected output files: ${relativePaths.join(', ')}`,
-    );
-    return relativePaths;
-  } catch (err) {
-    logger.error(
-      CHANNEL,
-      `Error selecting output files: ${err instanceof Error ? err.message : String(err)}`,
-    );
-    vscode.window.showErrorMessage(
-      `Error selecting output files: ${err instanceof Error ? err.message : String(err)}`,
-    );
-    return null;
-  }
-}
-
-async function selectEditedFile(): Promise<string | null> {
-  const result = await selectFile({
-    openLabel: 'Select Edited File',
-    filters: {},
-  });
-  if (result) {
-    showInfoMessage(`Selected edited file: ${result}`);
-    logger.info(CHANNEL, `Selected edited file: ${result}`);
-  }
-  return result;
-}
+const selectEditedFile = createPicker(
+  'Select Edited File',
+  false,
+  () => ({}),
+  (file) => `Selected edited file: ${file}`,
+);
 
 async function getCurrentFile(): Promise<string | null> {
   const currentFile = vscode.window.activeTextEditor?.document;

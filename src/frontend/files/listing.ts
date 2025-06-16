@@ -8,120 +8,12 @@ import * as vscode from 'vscode';
 import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
-import { getConfig } from '@utils/config';
-import { getWorkspacePath } from '@utils/files';
-import { getIncludedExtensions } from '@utils/fileTypeUtils';
 
 const CHANNEL = 'FrontendUtils';
 logger.initialize(CHANNEL);
 
-const IGNORED_FILE_EXTENSIONS = getConfig<string[]>(
-  'files.ignored.fileExtensions',
-);
-const IGNORED_DIRECTORIES = getConfig<string[]>('files.ignored.directories');
-const IGNORED_KEYWORDS = getConfig<string[]>('files.ignored.keywords');
-
 export function getFilesIfNotEmpty<T>(files: T[] | undefined): T[] | null {
   return files && files.length > 0 ? files : null;
-}
-
-export async function listInputFiles(): Promise<string[]> {
-  const workspacePath = getWorkspacePath();
-  if (!workspacePath) {
-    return [];
-  }
-
-  const INCLUDED_INPUT_EXTENSIONS = getIncludedExtensions('input');
-
-  return getFilesRecursively(
-    workspacePath,
-    workspacePath,
-    INCLUDED_INPUT_EXTENSIONS,
-    IGNORED_FILE_EXTENSIONS,
-    IGNORED_DIRECTORIES,
-    IGNORED_KEYWORDS,
-    getConfig<string[]>('files.ignored.inputFiles'),
-  );
-}
-
-export const listReferenceFiles = listInputFiles;
-
-export async function listAuxiliaryFiles(): Promise<string[]> {
-  const workspacePath = getWorkspacePath();
-  if (!workspacePath) {
-    return [];
-  }
-
-  const IGNORED_AUXILIARY_KEYWORDS = getConfig<string[]>(
-    'files.ignored.auxiliaryKeywords',
-  );
-
-  const INCLUDED_AUXILIARY_EXTENSIONS = getIncludedExtensions('auxiliary');
-
-  return getFilesInDirectory(
-    workspacePath,
-    INCLUDED_AUXILIARY_EXTENSIONS,
-    IGNORED_FILE_EXTENSIONS,
-    IGNORED_DIRECTORIES,
-    [...IGNORED_KEYWORDS, ...IGNORED_AUXILIARY_KEYWORDS],
-  );
-}
-
-export async function listMediaFiles(): Promise<string[]> {
-  const workspacePath = getWorkspacePath();
-  if (!workspacePath) {
-    return [];
-  }
-
-  const IGNORED_FIGURE_DIRECTORIES = getConfig<string[]>(
-    'files.ignored.mediaDirectories',
-  );
-
-  const INCLUDED_FIGURE_EXTENSIONS = getIncludedExtensions('media');
-
-  return getFilesRecursively(
-    workspacePath,
-    workspacePath,
-    INCLUDED_FIGURE_EXTENSIONS,
-    [],
-    IGNORED_FIGURE_DIRECTORIES,
-    IGNORED_KEYWORDS,
-  );
-}
-
-export async function listEditedFiles(baseFileName: string): Promise<string[]> {
-  const workspacePath = getWorkspacePath();
-  if (!workspacePath) {
-    return [];
-  }
-
-  const INCLUDED_EDITED_EXTENSIONS = getIncludedExtensions('edited');
-
-  const files = await getFilesRecursively(
-    workspacePath,
-    workspacePath,
-    INCLUDED_EDITED_EXTENSIONS,
-    IGNORED_FILE_EXTENSIONS,
-    [...IGNORED_DIRECTORIES, 'PapersEx'],
-    IGNORED_KEYWORDS,
-    getConfig<string[]>('files.ignored.inputFiles'),
-  );
-
-  // Extract the base name before any round number
-  const baseNameMatch = baseFileName.match(/^(.*?)(?:_r\d+|$)/);
-  const baseNameBeforeRound = baseNameMatch ? baseNameMatch[1] : baseFileName;
-
-  return files.filter((file) => {
-    const fileBaseName = path.basename(file, path.extname(file));
-    // Check if it starts with the same base name and or has a different round number
-    return (
-      (fileBaseName.startsWith(baseFileName) &&
-        fileBaseName !== baseFileName) ||
-      (fileBaseName.startsWith(baseNameBeforeRound) &&
-        fileBaseName.match(/_r\d+/) &&
-        fileBaseName !== baseFileName)
-    );
-  });
 }
 
 export async function getFilesInDirectory(
