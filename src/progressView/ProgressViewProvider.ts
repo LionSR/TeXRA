@@ -19,6 +19,12 @@ import {
 import { TokenUsageStats } from '../types/UsageTypes';
 import { LogGroup } from '../types/LogTypes';
 import type { DiffStats } from '../types/DiffTypes';
+import {
+  agentEventBus,
+  LogMessageEvent,
+  LogGroupEvent,
+  LogGroupUpdateEvent,
+} from '@logger/eventBus';
 
 // @ts-ignore - Import JavaScript module
 import { STATUS, COMMANDS } from './modules/constants.js';
@@ -76,6 +82,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   private _webviewReady = false;
   private _pendingUpdate = false;
   private readonly logger: AgentLogger;
+  private _eventDisposables: vscode.Disposable[] = [];
 
   constructor(
     private readonly context: vscode.ExtensionContext,
@@ -90,6 +97,51 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
 
     // Set instance
     ProgressViewProvider._instance = this;
+
+    // Subscribe to log events
+    const logHandler = (evt: LogMessageEvent) => {
+      this.addLogMessage(
+        evt.stream,
+        evt.message,
+        evt.level,
+        evt.groupId,
+        evt.timestamp,
+        evt.messageType,
+      );
+    };
+    agentEventBus.on('log', logHandler);
+    this._eventDisposables.push(
+      new vscode.Disposable(() => agentEventBus.off('log', logHandler)),
+    );
+
+    const groupStartHandler = (evt: LogGroupEvent) => {
+      const g = evt.group;
+      this.addLogGroup(
+        evt.stream,
+        g.id,
+        g.name,
+        g.startTime,
+        g.status,
+        g.endTime,
+        g.parentGroupId,
+      );
+    };
+    agentEventBus.on('group-start', groupStartHandler);
+    this._eventDisposables.push(
+      new vscode.Disposable(() =>
+        agentEventBus.off('group-start', groupStartHandler),
+      ),
+    );
+
+    const groupEndHandler = (evt: LogGroupUpdateEvent) => {
+      this.updateLogGroup(evt.stream, evt.groupId, evt.status, evt.endTime);
+    };
+    agentEventBus.on('group-end', groupEndHandler);
+    this._eventDisposables.push(
+      new vscode.Disposable(() =>
+        agentEventBus.off('group-end', groupEndHandler),
+      ),
+    );
 
     // Listen for workspace folder changes
     this._disposables.push(
@@ -113,6 +165,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
 
   public dispose() {
     this._disposables.forEach((d) => d.dispose());
+    this._eventDisposables.forEach((d) => d.dispose());
     this._cleanupView();
   }
 
