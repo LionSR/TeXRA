@@ -230,6 +230,11 @@ export function setupUIHandlers() {
 
     vscode.postMessage({ command: 'requestMediaFile' });
 
+    vscode.postMessage({
+      command: 'requestDefaultOutputFiles',
+      agent: selectedAgent,
+    });
+
     saveState();
   });
 
