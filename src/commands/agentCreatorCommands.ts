@@ -8,6 +8,7 @@ import { getApiKey } from '../utils/secretUtils';
 import { getOrPromptForCustomAgentsDirectory } from '../utils/pathUtils';
 import { promptToAddAgentToConfig } from '../utils/agentRegistration';
 import * as logger from '../logger/logUtils';
+import { ANTHROPIC_MODELS } from '../model/providers/anthropicModels';
 
 const CHANNEL = 'AgentCreator';
 logger.initialize(CHANNEL);
@@ -228,11 +229,11 @@ async function handleCreateAgentWithAI(context: vscode.ExtensionContext) {
         `The user only provides a short description and the output filenames.\n` +
         `Goal: ${description}. Wrap the YAML in <yaml> tags and return nothing else.`;
       const params: MessageCreateParams = {
-        model: 'claude-opus-4-20250514',
+        model: ANTHROPIC_MODELS.opus4.fullName,
         messages: [{ role: 'user', content: prompt }],
         max_tokens: 2048,
       };
-      const response = await anthropic.beta.messages.create(params);
+      const response = await anthropic.messages.create(params);
       if (
         response.content &&
         Array.isArray(response.content) &&
