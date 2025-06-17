@@ -1,4 +1,4 @@
-import { vscode } from '@common/vscodeApi.js';
+import { vscode } from '@common/webviewContext.js';
 import { saveState, stateManager } from './stateManager.js';
 import { MULTIPLE_SELECTIONS } from './constants.js';
 import {
