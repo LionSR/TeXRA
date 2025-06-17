@@ -349,6 +349,13 @@ export function setupUIHandlers() {
   addEventListenerSafely('recordInstructionButton', 'click', async function () {
     const button = safeGetElementById('recordInstructionButton');
     if (!recording) {
+      // Prevent multiple simultaneous recording attempts
+      recording = true;
+      if (button) {
+        button.innerHTML = '<i class="codicon codicon-sync spin"></i>';
+        button.disabled = true;
+      }
+      
       try {
         recorderStream = await navigator.mediaDevices.getUserMedia({
           audio: true,
@@ -369,24 +376,48 @@ export function setupUIHandlers() {
             });
           };
           reader.readAsDataURL(blob);
-          recorderStream.getTracks().forEach((t) => t.stop());
+          // Clean up stream resources
+          if (recorderStream) {
+            recorderStream.getTracks().forEach((t) => t.stop());
+            recorderStream = null;
+          }
+          mediaRecorder = null;
+          audioChunks = [];
         });
         mediaRecorder.start();
-        recording = true;
         if (button) {
           button.innerHTML = '<i class="codicon codicon-mic-filled"></i>';
+          button.disabled = false;
         }
       } catch (err) {
+        // Clean up resources on error
+        recording = false;
+        if (recorderStream) {
+          recorderStream.getTracks().forEach((t) => t.stop());
+          recorderStream = null;
+        }
+        mediaRecorder = null;
+        audioChunks = [];
+        
+        if (button) {
+          button.innerHTML = '<i class="codicon codicon-mic"></i>';
+          button.disabled = false;
+        }
+        
         vscode.postMessage({
           command: 'showInformationMessage',
-          text: 'Microphone access denied.',
+          text: 'Microphone access denied. Please check browser permissions.',
         });
       }
     } else {
-      mediaRecorder.stop();
+      // Stop recording
+      if (mediaRecorder && mediaRecorder.state === 'recording') {
+        mediaRecorder.stop();
+      }
       recording = false;
       if (button) {
         button.innerHTML = '<i class="codicon codicon-mic"></i>';
+        button.disabled = false;
       }
     }
   });

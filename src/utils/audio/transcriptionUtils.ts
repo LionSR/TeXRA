@@ -24,7 +24,7 @@ export async function transcribeAudio(
     const file = await toFile(audio, 'recording.webm', { type: mimeType });
     const result = await client.audio.transcriptions.create({
       file,
-      model: 'gpt-4o-transcribe',
+      model: 'whisper-1',
       response_format: 'text',
     });
     return result;
