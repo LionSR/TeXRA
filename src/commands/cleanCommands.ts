@@ -14,6 +14,7 @@ import {
   runCleanBuild,
   runCleanOutput,
 } from '../housekeeping';
+import type { CleanResult } from '@/types/CleanTypes';
 
 const CHANNEL = 'cleanCommands';
 logger.initialize(CHANNEL);
@@ -27,6 +28,27 @@ function getStreamId(
   const agentName =
     outputFiles && outputFiles.length > 1 ? `${agent}_multiple` : agent;
   return `${agentName}@${model}: ${path.basename(inputFile)}`;
+}
+
+function showCleanResult(result: CleanResult, inputFile: string): void {
+  switch (result.status) {
+    case 'success':
+      vscode.window.showInformationMessage(`Cleanup complete for ${inputFile}`);
+      break;
+    case 'noFiles':
+      vscode.window.showInformationMessage(
+        `No files found to clean for ${inputFile}`,
+      );
+      break;
+    case 'missingParams':
+      vscode.window.showErrorMessage('Missing required parameters for clean');
+      break;
+    case 'error':
+      vscode.window.showErrorMessage(`Error during cleanup: ${result.error}`);
+      break;
+    default:
+      break;
+  }
 }
 
 export function registerCleanCommands(context: vscode.ExtensionContext) {
@@ -60,7 +82,12 @@ async function handleCleanSingle(
     );
     return;
   }
-  await runCleanSingle(model, outputNameOverride || inputFile, agent);
+  const result = await runCleanSingle(
+    model,
+    outputNameOverride || inputFile,
+    agent,
+  );
+  showCleanResult(result, inputFile);
 
   const provider = ProgressViewProvider.getInstance();
   if (provider) {
@@ -98,7 +125,13 @@ async function handleCleanMultiple(
     ? [outputNameOverride, ...outputFiles]
     : outputFiles;
 
-  await runCleanMultiple(model, inputFile, agent, inputFilesWithOverride);
+  const result = await runCleanMultiple(
+    model,
+    inputFile,
+    agent,
+    inputFilesWithOverride,
+  );
+  showCleanResult(result, inputFile);
 
   const provider = ProgressViewProvider.getInstance();
   if (provider) {
@@ -129,15 +162,21 @@ export async function handleClean(config: any) {
       CHANNEL,
       `Running clean multiple with ${outputFiles.length} files`,
     );
-    await runCleanMultiple(
+    const result = await runCleanMultiple(
       config.model,
       config.inputFile,
       config.agent,
       outputFiles,
     );
+    showCleanResult(result, config.inputFile);
   } else {
     logger.info(CHANNEL, `Running clean single`);
-    await runCleanSingle(config.model, config.inputFile, config.agent);
+    const result = await runCleanSingle(
+      config.model,
+      config.inputFile,
+      config.agent,
+    );
+    showCleanResult(result, config.inputFile);
   }
 
   const provider = ProgressViewProvider.getInstance();
