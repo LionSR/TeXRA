@@ -225,7 +225,7 @@ async function handleCreateAgentWithAI(context: vscode.ExtensionContext) {
         `using the chain-of-thought style. Include prompts similar to the ` +
         `polish agent with explicit rules. Mention variables from buildUserVars ` +
         `(INPUT_CONTENT, ALL_INPUTS, OUTPUT_FILES_ORDER, REFERENCE_CONTENT, ` +
-        `AUXILIARY_CONTENT).\n` +
+        `AUXILIARY_CONTENT, ADDITIONAL_INPUTS).\n` +
         `The user only provides a short description and the output filenames.\n` +
         `Goal: ${description}. Wrap the YAML in <yaml> tags and return nothing else.`;
       const params: MessageCreateParams = {
