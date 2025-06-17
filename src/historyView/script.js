@@ -1,5 +1,4 @@
-import { vscode } from '@common/vscodeApi.js';
-import { registerMessageHandlers } from '@common/messageRouter.js';
+import { vscode, registerMessageHandlers } from '@common/webviewContext.js';
 import {
   renderHistoryItems,
   setupEventListeners,

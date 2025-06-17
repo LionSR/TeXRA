@@ -489,6 +489,8 @@ export const LATEX_XML_REPLACEMENTS: ReplacementCategory = {
       'align',
       'align*',
       'aligned',
+      'overpic',
+      'overpic*',
       'aligned*',
       'alignat',
       'alignat*',
@@ -497,6 +499,8 @@ export const LATEX_XML_REPLACEMENTS: ReplacementCategory = {
       'section',
       'subsection',
       'referee',
+      'response',
+      'letter',
       'array',
       'equation*',
       'minipage',
@@ -596,6 +600,7 @@ export const LATEX_DOCUMENT_REPLACEMENTS: ReplacementCategory = {
     // ===== 9. DOCUMENT STRUCTURE FIXES =====
     // '\\end{document}\n\n\\<document name=':
     //   '\\end{document}\\n</document>\\n\\<document name=',
+    '\\end{document}nd{document}': '\\end{document}\n</document>',
     '\\end{document}\n\\end{document}\n<document name=':
       '\\end{document}\n</document>\n<document name=',
     // '\\end{document}\n\\<document name=':
@@ -649,6 +654,9 @@ export const SCRATCHPAD_XML_REPLACEMENTS: ReplacementCategory = {
     // For Deepseek models:
     'null<scratchpad>': '<scratchpad>',
     '\\end{document}null': '\\end{document}',
+    // gemini
+    '\\begin{document}t}': '\\begin{document}',
+    '\\end{document}t}': '\\end{document}',
     'null\n</latex_document>': '\n</latex_document>',
     // Duplicate scratchpad tag fixes - remove redundant tags
     '<scratchpad><scratchpad>': '<scratchpad>',

@@ -1,5 +1,5 @@
 // Local imports
-import { getConfig } from './configUtils';
+import { getConfig } from './config';
 
 /**
  * Determines if a stream name corresponds to an agent or contains agent information.

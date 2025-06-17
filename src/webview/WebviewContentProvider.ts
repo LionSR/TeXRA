@@ -4,11 +4,11 @@
 import * as vscode from 'vscode';
 
 // Local imports - log
-import * as logger from '../logger/logUtils';
+import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
-import { getConfig } from '../utils/configUtils';
-import { buildWebviewHtml } from '../utils/webviewHtmlUtils';
+import { getConfig } from '@utils/config';
+import { buildWebviewHtml } from '@frontend/webview/html';
 
 const CHANNEL = 'Webview';
 logger.initialize(CHANNEL);
@@ -45,8 +45,7 @@ export class WebviewContentProvider {
       const templateUtilsUri = getCommonUri('modules/templateUtils.js');
       const domUtilsUri = getCommonUri('modules/domUtils.js');
       const stringUtilsUri = getCommonUri('modules/stringUtils.js');
-      const messageRouterUri = getCommonUri('modules/messageRouter.js');
-      const vscodeApiUri = getCommonUri('modules/vscodeApi.js');
+      const webviewContextUri = getCommonUri('modules/webviewContext.js');
 
       const codiconUri = getNodeModulesUri('@vscode/codicons/dist/codicon.css');
       const codiconsFontUri = getNodeModulesUri(
@@ -78,8 +77,7 @@ export class WebviewContentProvider {
         fileHandlersUri,
         uiHandlersUri,
         templateUtilsUri,
-        messageRouterUri,
-        vscodeApiUri,
+        webviewContextUri,
         codiconUri,
         codiconsFontUri,
       });

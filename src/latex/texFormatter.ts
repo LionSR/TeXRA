@@ -3,7 +3,7 @@ import { runLatexIndent } from './formatter/latexindentpt';
 import { runTexFmt } from './formatter/texfmt';
 
 // Local imports - utilities
-import { getConfig } from '../utils/configUtils';
+import { getConfig } from '@utils/config';
 
 export async function runLatexFormatter(filePath: string): Promise<boolean> {
   const formatter = getConfig<string>('latex.formatter', 'latexindent');

@@ -3,7 +3,7 @@
  */
 
 // Local imports - log
-import * as logger from '../logger/logUtils';
+import * as logger from '@logger/logUtils';
 
 const CHANNEL = 'ReplacementUtils';
 logger.initialize(CHANNEL);

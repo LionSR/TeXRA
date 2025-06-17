@@ -6,15 +6,25 @@ import * as vscode from 'vscode';
 import { workspace } from 'vscode';
 
 // Local imports - log
-import * as logger from '../logger/logUtils';
+import * as logger from '@logger/logUtils';
 
 // Local imports - utils
-import { safeExecuteCommand } from '../utils/commandUtils';
+import { safeExecuteCommand } from '@utils/system';
 
 // Local imports - utilities
-import { getWorkspacePath, getRelativePath } from '../utils/workspaceFileUtils';
-import { capitalize, uncapitalize } from '../frontend-utils/commonUtils';
-import { getConfig } from '../utils/configUtils';
+import { getWorkspacePath, getRelativePath } from '@utils/files';
+import {
+  createStorageDirectory,
+  writeBinaryFileToStorage,
+  cleanupStorageDirectory,
+} from '@utils/files/workspaceStorageUtils';
+import {
+  isPastedImage,
+  getPastedImageFullPath,
+  PASTED_DIR,
+} from '@utils/files/pastedImageUtils';
+import { capitalize, uncapitalize } from '@frontend/ui/messageUtils';
+import { getConfig } from '@utils/config';
 import {
   listInputFiles,
   listReferenceFiles,
@@ -22,13 +32,16 @@ import {
   listMediaFiles,
   listEditedFiles,
   getFilesIfNotEmpty,
-} from '../frontend-utils/fileListingUtils';
-import { polishTextWithAI, FileContext } from '../utils/textEnhancementUtils';
-import { sleep } from '../utils/timeUtils';
+} from '@frontend/files/listing';
+import {
+  polishTextWithAI,
+  FileContext,
+} from '@utils/text/textEnhancementUtils';
+import { sleep } from '@utils/helpers';
 
 // Local imports - agent
-import { ToolConfig } from '../agent/ToolConfig';
-import { AgentConfig } from '../agent/AgentConfig';
+import { ToolConfig } from '../agent/core/ToolConfig';
+import { AgentConfig } from '../agent/core/AgentConfig';
 
 const CHANNEL = 'MessageHandler';
 
@@ -39,6 +52,19 @@ export class WebviewMessageHandler {
   >;
 
   constructor(private readonly context: vscode.ExtensionContext) {
+    // Ensure the pasted directory exists before trying to clean it
+    this.ensurePastedDirectoryExists().then(() => {
+      cleanupStorageDirectory(
+        this.context,
+        PASTED_DIR,
+        3 * 24 * 60 * 60 * 1000,
+      ).catch((e) =>
+        logger.warn(
+          CHANNEL,
+          `Error during initial cleanup: ${e instanceof Error ? e.message : String(e)}`,
+        ),
+      );
+    });
     this.handlers = {
       showInformationMessage: (message) => this.handleInfoMessage(message),
       getTheme: (_m, view) => this.handleThemeRequest(view),
@@ -125,6 +151,8 @@ export class WebviewMessageHandler {
         this.handlePolishInstructionText(message, view),
       showAgentHistory: () => this.handleShowAgentHistory(),
       openSettings: () => this.handleOpenSettings(),
+      clipboardImage: (message, view) =>
+        this.handleClipboardImage(message, view),
     };
   }
 
@@ -184,6 +212,14 @@ export class WebviewMessageHandler {
         autoCompileInputPdf: message.autoCompileInputPdf,
       };
 
+      const mapMediaPath = (f: string | null): string | null => {
+        if (!f) return null;
+        if (isPastedImage(f)) {
+          return getPastedImageFullPath(f, this.context);
+        }
+        return f;
+      };
+
       const agentConfig: AgentConfig = {
         agent: message.agent,
         model: message.model,
@@ -194,8 +230,14 @@ export class WebviewMessageHandler {
         referenceFiles: getFilesIfNotEmpty(message.referenceFiles),
         auxiliaryFile: message.auxiliaryFile,
         auxiliaryFiles: getFilesIfNotEmpty(message.auxiliaryFiles),
-        mediaFile: message.mediaFile,
-        mediaFiles: getFilesIfNotEmpty(message.mediaFiles),
+        mediaFile: mapMediaPath(message.mediaFile),
+        mediaFiles: message.mediaFiles
+          ? getFilesIfNotEmpty(
+              message.mediaFiles
+                .map(mapMediaPath)
+                .filter((f: string | null): f is string => f !== null),
+            )
+          : null,
         outputFiles: getFilesIfNotEmpty(message.outputFiles),
         outputNameOverride: message.outputNameOverride,
         editedFile: null,
@@ -807,10 +849,58 @@ export class WebviewMessageHandler {
     });
   }
 
+  private async handleClipboardImage(
+    message: any,
+    webviewView: vscode.WebviewView,
+  ) {
+    try {
+      const { base64, mediaType, fileName } = message;
+      if (!base64 || !mediaType || !fileName) {
+        return;
+      }
+      await createStorageDirectory(this.context, PASTED_DIR);
+      const relativePath = path.join(PASTED_DIR, fileName);
+      await writeBinaryFileToStorage(
+        this.context,
+        relativePath,
+        Buffer.from(base64, 'base64'),
+      );
+      await cleanupStorageDirectory(
+        this.context,
+        PASTED_DIR,
+        3 * 24 * 60 * 60 * 1000,
+      );
+      webviewView.webview.postMessage({
+        command: 'addMediaFile',
+        file: fileName,
+      });
+    } catch (err) {
+      logger.error(
+        CHANNEL,
+        `Error handling clipboard image: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+
   /**
    * Handle showing the agent history view
    */
   private async handleShowAgentHistory() {
     await safeExecuteCommand('texra.showAgentHistory', [], CHANNEL);
+  }
+
+  /**
+   * Ensure the pasted directory exists in workspace storage
+   */
+  private async ensurePastedDirectoryExists(): Promise<void> {
+    try {
+      await createStorageDirectory(this.context, PASTED_DIR);
+    } catch (err) {
+      // Directory might already exist, which is fine
+      logger.debug(
+        CHANNEL,
+        `Pasted directory already exists or error creating: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
   }
 }
