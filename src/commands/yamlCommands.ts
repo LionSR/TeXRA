@@ -6,11 +6,14 @@ import * as vscode from 'vscode';
 import * as yaml from 'yaml';
 
 // Local imports - utilities
-import { loadYaml, loadAgentSettingAndPrompts } from '../agent/agentLoad';
-import * as logger from '../logger/logUtils';
-import { getAgentPath } from '../agent/executeAgent';
-import { AgentType } from '../agent/AgentDataclass';
-import { showInstructionWithSuppress } from '../utils/instructionUtils';
+import {
+  loadYaml,
+  loadAgentSettingAndPrompts,
+} from '../agent/runtime/agentLoad';
+import * as logger from '@logger/logUtils';
+import { getAgentPath } from '../agent/runtime/executeAgent';
+import { AgentType } from '../agent/core/AgentDataclass';
+import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 
 const CHANNEL = 'TestCommands';
 logger.initialize(CHANNEL);

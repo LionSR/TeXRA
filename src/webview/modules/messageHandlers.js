@@ -1,22 +1,17 @@
-import { vscode } from '@common/vscodeApi.js';
-import { registerMessageHandlers } from '@common/messageRouter.js';
+import { vscode, registerMessageHandlers } from '@common/webviewContext.js';
 import { safeSetElementValue, safeGetElementById } from '@common/domUtils.js';
 import { capitalize, uncapitalize } from '@common/stringUtils.js';
-import {
-  getWebviewState,
-  updateWebviewState,
-  setWebviewState,
-} from '@common/webviewState.js';
+import { stateManager, restoreState, saveState } from './stateManager.js';
 
 import {
   updateFileSelect,
   updateEditedFileSelect,
   updateMultipleFileSelect,
+  getSelectedFiles,
   handleRecentCommits,
   handleSetCurrentFile,
 } from './fileHandlers.js';
 
-import { restoreState, saveState } from './stateManager.js';
 import { FILE_TYPES } from './constants.js';
 
 /**
@@ -198,7 +193,7 @@ function handleStateRestoration(state) {
               });
 
               // Save state to persist changes
-              updateWebviewState({
+              stateManager.update({
                 [`${fileType}Files`]: updatedFiles,
               });
             });
@@ -209,7 +204,7 @@ function handleStateRestoration(state) {
   }
 
   // Save the prepared state
-  setWebviewState(savedState);
+  stateManager.setState(savedState);
 
   // Use the stateManager's restoreState to update UI elements from this state
   // This will handle setting all form values and updating indicators
@@ -330,6 +325,26 @@ export function setupMessageHandlers() {
       updateMultipleFileSelect('mediaFiles', 'toggleMediaFiles', m.files);
       postHandle();
     },
+    addMediaFile: (m) => {
+      const listDiv = safeGetElementById('mediaFiles');
+      const existingFiles = listDiv ? getSelectedFiles(listDiv) : [];
+      updateMultipleFileSelect('mediaFiles', 'toggleMediaFiles', [
+        ...existingFiles,
+        m.file,
+      ]);
+
+      // Ensure the media files container is visible
+      const container = safeGetElementById('mediaFilesContainer');
+      if (container && container.style.display === 'none') {
+        container.style.display = 'block';
+        const toggleIcon = safeGetElementById('toggleMediaFiles');
+        if (toggleIcon) {
+          toggleIcon.innerHTML = '<i class="codicon codicon-chevron-up"></i>';
+        }
+      }
+
+      postHandle();
+    },
     setOutputFiles: (m) => {
       updateMultipleFileSelect('outputFiles', 'toggleOutputFiles', m.files);
       postHandle();
@@ -367,7 +382,7 @@ export function setupMessageHandlers() {
         const currentBaseFile = currentBaseFileDiv.value;
         updateFileSelect('baseFile', m.files);
 
-        const state = getWebviewState();
+        const state = stateManager.getState();
         const storedBaseFile = state?.baseFile;
 
         if (storedBaseFile && m.files.includes(storedBaseFile)) {

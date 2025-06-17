@@ -1,4 +1,5 @@
 import { restoreState, saveState } from './modules/stateManager.js';
+import { vscode } from '@common/webviewContext.js';
 import {
   setupMessageHandlers,
   initializeDataRequests,
@@ -10,6 +11,15 @@ import {
   autoResizeTextarea,
   setupDocumentListeners,
 } from './modules/uiHandlers.js';
+import { setupPasteListener } from './modules/pasteHandler.js';
+
+function insertTextAtCursor(textarea, text) {
+  const start = textarea.selectionStart;
+  const end = textarea.selectionEnd;
+  const original = textarea.value;
+  textarea.value = original.slice(0, start) + text + original.slice(end);
+  textarea.selectionStart = textarea.selectionEnd = start + text.length;
+}
 
 // Initialize data requests when window loads
 window.onload = function () {
@@ -31,14 +41,14 @@ window.onload = function () {
       saveState();
     });
 
-    // Handle paste events
-    instruction.addEventListener('paste', () => {
-      // Use setTimeout to let the paste complete
-      setTimeout(() => {
-        autoResizeTextarea(instruction);
-        saveState();
-      }, 0);
-    });
+    // Setup paste event listener for image handling
+    setupPasteListener(
+      instruction,
+      vscode,
+      autoResizeTextarea,
+      saveState,
+      insertTextAtCursor,
+    );
   }
 };
 

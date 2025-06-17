@@ -2,8 +2,8 @@
 import * as vscode from 'vscode';
 
 // Local imports - log
-import * as logger from '../logger/logUtils';
-import { objectToTaskState } from '../utils/configConversion';
+import * as logger from '@logger/logUtils';
+import { objectToTaskState } from '@utils/config';
 
 const CHANNEL = 'stateRestoreCommand';
 logger.initialize(CHANNEL);

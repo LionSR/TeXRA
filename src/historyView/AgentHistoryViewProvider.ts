@@ -2,13 +2,13 @@ import * as vscode from 'vscode';
 
 // Local imports - core
 import { AgentHistoryManager } from './AgentHistoryManager';
-import { executeCommand } from '../commands/executeCommand';
+import { executeCommand } from '@commands/executeCommand';
 
-import { agentConfigToTaskState } from '../utils/configConversion';
-import { buildWebviewHtml } from '../utils/webviewHtmlUtils';
+import { agentConfigToTaskState } from '@utils/config';
+import { buildWebviewHtml } from '@frontend/webview/html';
 
 // Local imports - log
-import * as logger from '../logger/logUtils';
+import * as logger from '@logger/logUtils';
 
 const CHANNEL = 'AgentHistoryViewProvider';
 logger.initialize(CHANNEL);
@@ -158,8 +158,7 @@ export class AgentHistoryViewProvider implements vscode.WebviewViewProvider {
       const domHandlersUri = getHistoryViewUri('modules/domHandlers.js');
 
       // Common module URIs
-      const vscodeApiUri = getCommonUri('modules/vscodeApi.js');
-      const messageRouterUri = getCommonUri('modules/messageRouter.js');
+      const webviewContextUri = getCommonUri('modules/webviewContext.js');
       const commonStyleUri = getCommonUri('styles/common.css');
 
       // Node modules URIs
@@ -169,8 +168,7 @@ export class AgentHistoryViewProvider implements vscode.WebviewViewProvider {
         scriptUri,
         styleUri,
         commonStyleUri,
-        vscodeApiUri,
-        messageRouterUri,
+        webviewContextUri,
         domHandlersUri,
         codiconUri,
       });

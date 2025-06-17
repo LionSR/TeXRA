@@ -2,11 +2,11 @@
 import * as vscode from 'vscode';
 
 // Local imports - core
-import * as logger from './logger/logUtils';
-import { initializeSecrets } from './utils/secretUtils';
-import { copyDefaultAgents, configureLatexSettings } from './utils/setupUtils';
-import { watchConfig } from './utils/configUtils';
-import { disposeDiffRefresh } from './utils/diffViewUtils';
+import * as logger from '@logger/logUtils';
+import { watchConfig } from '@utils/config';
+import { initializeSecrets } from '@frontend/secrets';
+import { copyDefaultAgents, configureLatexSettings } from '@frontend/setup';
+import { disposeDiffRefresh } from '@frontend/ui/diffView';
 
 // Local imports - components
 import { ProgressViewProvider } from './progressView/ProgressViewProvider';
