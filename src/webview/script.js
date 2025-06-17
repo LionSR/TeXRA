@@ -1,5 +1,5 @@
 import { restoreState, saveState } from './modules/stateManager.js';
-import { vscode } from '@common/vscodeApi.js';
+import { vscode } from '@common/webviewContext.js';
 import {
   setupMessageHandlers,
   initializeDataRequests,
