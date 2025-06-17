@@ -57,6 +57,9 @@ class VSCodeTransport extends Transport {
   private channel: vscode.OutputChannel;
   private streamName: string;
   private useConsolidatedChannel: boolean;
+  private messageBuffer: LogMessageEvent[] = [];
+  private groupStartBuffer: LogGroupEvent[] = [];
+  private groupEndBuffer: LogGroupUpdateEvent[] = [];
   private groups: Map<string, LogGroup> = new Map();
   private activeGroupId?: string;
 
@@ -151,14 +154,19 @@ class VSCodeTransport extends Transport {
 
     // Write to ProgressView if available (with colors and escaped HTML)
     const numericTimestamp = new Date(timestamp).getTime();
-    agentEventBus.emit('log', {
+    const evt: LogMessageEvent = {
       stream: this.streamName,
       message: coloredFormattedMessage,
       level: level as 'error' | 'warn' | 'info' | 'debug',
       groupId,
       timestamp: numericTimestamp,
       messageType,
-    } as LogMessageEvent);
+    };
+    if (agentEventBus.listenerCount('log') === 0) {
+      this.messageBuffer.push(evt);
+    } else {
+      agentEventBus.emit('log', evt);
+    }
 
     callback();
   }
@@ -184,7 +192,7 @@ class VSCodeTransport extends Transport {
       return groupId;
     }
 
-    agentEventBus.emit('group-start', {
+    const startEvt: LogGroupEvent = {
       stream: this.streamName,
       group: {
         id: groupId,
@@ -194,7 +202,12 @@ class VSCodeTransport extends Transport {
         endTime: undefined,
         parentGroupId,
       },
-    } as LogGroupEvent);
+    };
+    if (agentEventBus.listenerCount('group-start') === 0) {
+      this.groupStartBuffer.push(startEvt);
+    } else {
+      agentEventBus.emit('group-start', startEvt);
+    }
 
     return groupId;
   }
@@ -215,12 +228,17 @@ class VSCodeTransport extends Transport {
       return;
     }
 
-    agentEventBus.emit('group-end', {
+    const endEvt: LogGroupUpdateEvent = {
       stream: this.streamName,
       groupId,
       status,
       endTime: group.endTime,
-    } as LogGroupUpdateEvent);
+    };
+    if (agentEventBus.listenerCount('group-end') === 0) {
+      this.groupEndBuffer.push(endEvt);
+    } else {
+      agentEventBus.emit('group-end', endEvt);
+    }
 
     if (this.activeGroupId === groupId) {
       // If this group has a parent, set that as the active group
@@ -239,6 +257,30 @@ class VSCodeTransport extends Transport {
     if (groupId === undefined || this.groups.has(groupId)) {
       this.activeGroupId = groupId;
     }
+  }
+
+  // Flush buffered events to the agent event bus
+  flushBuffers(): void {
+    if (this.useConsolidatedChannel) {
+      this.messageBuffer = [];
+      this.groupStartBuffer = [];
+      this.groupEndBuffer = [];
+      return;
+    }
+
+    for (const evt of this.groupStartBuffer) {
+      agentEventBus.emit('group-start', evt);
+    }
+    for (const msg of this.messageBuffer) {
+      agentEventBus.emit('log', msg);
+    }
+    for (const endEvt of this.groupEndBuffer) {
+      agentEventBus.emit('group-end', endEvt);
+    }
+
+    this.messageBuffer = [];
+    this.groupStartBuffer = [];
+    this.groupEndBuffer = [];
   }
 
   // Get a group by ID
@@ -416,6 +458,12 @@ export function getTimestamp(): string {
       second: '2-digit',
     })
     .replace(',', '');
+}
+
+export function flushBufferedLogEvents(): void {
+  for (const transport of channelTransports.values()) {
+    transport.flushBuffers();
+  }
 }
 
 // Re-export central emoji mapping for backward compatibility

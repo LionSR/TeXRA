@@ -20,6 +20,7 @@ export async function activate(context: vscode.ExtensionContext) {
   // Create the log view provider
   const progressViewProvider = new ProgressViewProvider(context);
   await progressViewProvider.initialize();
+  logger.flushBufferedLogEvents();
 
   // Log activation message to ensure the logger is working correctly
   logger.info('extension', 'TeXRA extension activated');
