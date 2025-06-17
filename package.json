@@ -885,6 +885,12 @@
         "icon": "$(trash)"
       },
       {
+        "command": "texra.createAgentWithAI",
+        "title": "Create AI Agent",
+        "category": "TeXRA",
+        "icon": "$(sparkle)"
+      },
+      {
         "command": "texra.setApiKey",
         "title": "Set API Key",
         "category": "TeXRA"
@@ -1039,6 +1045,11 @@
         },
         {
           "command": "texra.folderExplorer.newFolder",
+          "when": "view == texra.folderExplorer",
+          "group": "navigation"
+        },
+        {
+          "command": "texra.createAgentWithAI",
           "when": "view == texra.folderExplorer",
           "group": "navigation"
         }
