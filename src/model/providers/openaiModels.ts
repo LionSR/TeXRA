@@ -14,6 +14,9 @@ const OPENAI_DEFAULT_CAPABILITIES: ModelCapabilities = {
   supportsIntermDevMsgs: true,
   supportsVision: true,
   supportsNativePdf: true,
+  supportsNativeMCPServer: false, // OpenAI uses function calling for MCP
+  supportsNativeWebSearch: false, // OpenAI uses function calling for web search
+  supportsNativeCodeExecution: false, // OpenAI uses function calling for code execution
 };
 
 export const OPENAI_MODELS: Record<string, ModelConfig> = {
@@ -29,6 +32,9 @@ export const OPENAI_MODELS: Record<string, ModelConfig> = {
     capabilities: {
       ...OPENAI_DEFAULT_CAPABILITIES,
       cacheDiscountFactor: 0.25,
+      supportsNativeMCPServer: true,
+      supportsNativeWebSearch: true,
+      supportsNativeCodeExecution: true,
       supportsPredictiveOutput: true,
     } satisfies ModelCapabilities,
     openRouterOnly: false,
@@ -45,6 +51,9 @@ export const OPENAI_MODELS: Record<string, ModelConfig> = {
     capabilities: {
       ...OPENAI_DEFAULT_CAPABILITIES,
       cacheDiscountFactor: 0.25,
+      supportsNativeMCPServer: true,
+      supportsNativeWebSearch: true,
+      supportsNativeCodeExecution: true,
       supportsPredictiveOutput: true,
     } satisfies ModelCapabilities,
     openRouterOnly: false,
@@ -61,6 +70,9 @@ export const OPENAI_MODELS: Record<string, ModelConfig> = {
     capabilities: {
       ...OPENAI_DEFAULT_CAPABILITIES,
       cacheDiscountFactor: 0.25,
+      supportsNativeMCPServer: true,
+      supportsNativeWebSearch: true,
+      supportsNativeCodeExecution: true,
       supportsPredictiveOutput: true,
     } satisfies ModelCapabilities,
     openRouterOnly: false,
@@ -91,6 +103,9 @@ export const OPENAI_MODELS: Record<string, ModelConfig> = {
     outputPrice: 10.0,
     capabilities: {
       ...OPENAI_DEFAULT_CAPABILITIES,
+      supportsNativeMCPServer: true,
+      supportsNativeWebSearch: true,
+      supportsNativeCodeExecution: true,
       supportsPredictiveOutput: true,
     } satisfies ModelCapabilities,
     openRouterOnly: false,
