@@ -35,7 +35,7 @@ import { runLatexFormatter } from '@latex/texFormatter';
 import { AgentConfig } from '@agent/core/AgentConfig';
 import { AgentSetting } from '@agent/core/AgentDataclass';
 import { AgentStateGlobal, AgentStateRound } from '@agent/core/AgentState';
-import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
+import { agentEventBus, GroupUsageEvent } from '@logger/eventBus';
 
 // Local imports - types
 import { TokenUsageStats } from '@/types/UsageTypes';
@@ -905,16 +905,18 @@ export class OutputHandler {
 
       const cost = this.modelHandler.computePrice(responseUsage);
 
-      const provider = ProgressViewProvider.getInstance();
-      if (provider && statsGroupId) {
-        // Update group-level usage stats instead of stream-level
-        provider.updateGroupUsage(this.channel, statsGroupId, {
-          inputTokens:
-            stateGlobal.totalInputTokens +
-            (stateGlobal.totalCacheCreationInputTokens ?? 0),
-          outputTokens: stateGlobal.totalOutputTokens,
-          cost,
-        });
+      if (statsGroupId) {
+        agentEventBus.emit('group-usage', {
+          stream: this.channel,
+          groupId: statsGroupId,
+          usage: {
+            inputTokens:
+              stateGlobal.totalInputTokens +
+              (stateGlobal.totalCacheCreationInputTokens ?? 0),
+            outputTokens: stateGlobal.totalOutputTokens,
+            cost,
+          },
+        } as GroupUsageEvent);
       }
 
       this.logger.debug(

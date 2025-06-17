@@ -15,7 +15,7 @@ import {
   getTeXCountStats,
   compileLatex2Pdf,
 } from '@latex';
-import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
+import { agentEventBus, OutputFilesEvent } from '@logger/eventBus';
 import { diff_match_patch } from 'diff-match-patch';
 import type { DiffStats } from '@/types/DiffTypes';
 
@@ -646,49 +646,47 @@ export abstract class BaseReflectionAgent implements IAgent {
       throw error;
     }
 
-    const provider = ProgressViewProvider.getInstance();
-    if (provider) {
-      const roundOutputs = this.outputHandler.outputFiles[currRound] || [];
+    const roundOutputs = this.outputHandler.outputFiles[currRound] || [];
 
-      // Map output files to their original base files
-      const baseMap = this.outputHandler.createFileMapping(
-        this.baseFiles,
-        roundOutputs,
-        'contains',
-      );
+    // Map output files to their original base files
+    const baseMap = this.outputHandler.createFileMapping(
+      this.baseFiles,
+      roundOutputs,
+      'contains',
+    );
 
-      // Map output files to previous round files if available
-      const prevMap =
-        currRound > 0
-          ? this.outputHandler.createFileMapping(
-              this.outputHandler.outputFiles[currRound - 1] || [],
-              roundOutputs,
-              'basename',
-              true,
-            )
-          : new Map<string, string>();
+    // Map output files to previous round files if available
+    const prevMap =
+      currRound > 0
+        ? this.outputHandler.createFileMapping(
+            this.outputHandler.outputFiles[currRound - 1] || [],
+            roundOutputs,
+            'basename',
+            true,
+          )
+        : new Map<string, string>();
 
-      const fileInfos = [] as any[];
-      for (const file of roundOutputs) {
-        const baseFile =
-          Array.from(baseMap.entries()).find(([, out]) => out === file)?.[0] ||
-          null;
-        const prevFile =
-          Array.from(prevMap.entries()).find(([, out]) => out === file)?.[0] ||
-          null;
-        const stats = await this.computeDiffStats(baseFile, file);
-        fileInfos.push({
-          path: file,
-          base: baseFile,
-          prev: prevFile,
-          ...stats,
-        });
-      }
-
-      provider.addOutputFiles(this.logger.channelId, {
-        [currRound]: fileInfos,
+    const fileInfos = [] as any[];
+    for (const file of roundOutputs) {
+      const baseFile =
+        Array.from(baseMap.entries()).find(([, out]) => out === file)?.[0] ||
+        null;
+      const prevFile =
+        Array.from(prevMap.entries()).find(([, out]) => out === file)?.[0] ||
+        null;
+      const stats = await this.computeDiffStats(baseFile, file);
+      fileInfos.push({
+        path: file,
+        base: baseFile,
+        prev: prevFile,
+        ...stats,
       });
     }
+
+    agentEventBus.emit('output-files', {
+      stream: this.logger.channelId,
+      filesByRound: { [currRound]: fileInfos },
+    } as OutputFilesEvent);
   }
 
   /**

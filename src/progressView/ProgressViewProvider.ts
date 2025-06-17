@@ -18,12 +18,16 @@ import {
 
 import { TokenUsageStats } from '../types/UsageTypes';
 import { LogGroup } from '../types/LogTypes';
-import type { DiffStats } from '../types/DiffTypes';
+import type { OutputFileInfo } from '../types/FileInfoTypes';
 import {
   agentEventBus,
   LogMessageEvent,
   LogGroupEvent,
   LogGroupUpdateEvent,
+  StreamStatusEvent,
+  TaskStateEvent,
+  OutputFilesEvent,
+  GroupUsageEvent,
 } from '@logger/eventBus';
 
 // @ts-ignore - Import JavaScript module
@@ -49,12 +53,6 @@ interface ColoredLogMessage {
 }
 
 // Channels that should not be persisted in workspace storage
-
-interface OutputFileInfo extends DiffStats {
-  path: string;
-  base?: string | null;
-  prev?: string | null;
-}
 
 export class ProgressViewProvider implements vscode.WebviewViewProvider {
   private static _instance: ProgressViewProvider | undefined;
@@ -114,6 +112,20 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       new vscode.Disposable(() => agentEventBus.off('log', logHandler)),
     );
 
+    const statusHandler = (evt: StreamStatusEvent) => {
+      this.updateStreamStatus(evt.stream, evt.status as StatusType);
+      if (evt.status === STATUS.RUNNING) {
+        this.setActiveStream(evt.stream);
+        if (!this.isViewVisible()) {
+          vscode.commands.executeCommand('texra.showProgressView');
+        }
+      }
+    };
+    agentEventBus.on('status', statusHandler);
+    this._eventDisposables.push(
+      new vscode.Disposable(() => agentEventBus.off('status', statusHandler)),
+    );
+
     const groupStartHandler = (evt: LogGroupEvent) => {
       const g = evt.group;
       this.addLogGroup(
@@ -140,6 +152,36 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     this._eventDisposables.push(
       new vscode.Disposable(() =>
         agentEventBus.off('group-end', groupEndHandler),
+      ),
+    );
+
+    const taskStateHandler = (evt: TaskStateEvent) => {
+      this.setTaskState(evt.streamId, evt.state);
+    };
+    agentEventBus.on('task-state', taskStateHandler);
+    this._eventDisposables.push(
+      new vscode.Disposable(() =>
+        agentEventBus.off('task-state', taskStateHandler),
+      ),
+    );
+
+    const filesHandler = (evt: OutputFilesEvent) => {
+      this.addOutputFiles(evt.stream, evt.filesByRound);
+    };
+    agentEventBus.on('output-files', filesHandler);
+    this._eventDisposables.push(
+      new vscode.Disposable(() =>
+        agentEventBus.off('output-files', filesHandler),
+      ),
+    );
+
+    const usageHandler = (evt: GroupUsageEvent) => {
+      this.updateGroupUsage(evt.stream, evt.groupId, evt.usage);
+    };
+    agentEventBus.on('group-usage', usageHandler);
+    this._eventDisposables.push(
+      new vscode.Disposable(() =>
+        agentEventBus.off('group-usage', usageHandler),
       ),
     );
 

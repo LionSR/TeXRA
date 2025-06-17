@@ -21,8 +21,16 @@ import { ModelFactory } from '@agent/runtime/ModelFactory';
 import { DirectAgent } from '@agent/implementations/DirectAgent';
 import { CoTAgent } from '@agent/implementations/CoTAgent';
 import { MergeAgent } from '@agent/implementations/MergeAgent';
-import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import { AgentLogger } from '@logger/AgentLogger';
+import {
+  agentEventBus,
+  StreamStatusEvent,
+  TaskStateEvent,
+} from '@logger/eventBus';
+import {
+  getStreamStatus as registryStatus,
+  setStreamStatus as setRegistryStatus,
+} from '@utils/taskRegistry';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import {
   checkExpectedOutputs,
@@ -143,25 +151,19 @@ async function executeAgentWithLogging<T extends IAgent>(
   createAgentFn: () => Promise<T>,
   context: vscode.ExtensionContext,
 ): Promise<void> {
+  let fullStreamId = '';
   try {
-    // Get logger instance
-    const progressViewProvider = ProgressViewProvider.getInstance();
-    if (!progressViewProvider) {
-      throw new Error('ProgressViewProvider not initialized');
-    }
-
     // Create agent to get config for stream ID
     const agent = await createAgentFn();
 
     // Get the full stream ID
     const config = agent.config;
-    const fullStreamId = `${agentName}@${config.model}: ${path.basename(config.inputFile)}`;
+    fullStreamId = `${agentName}@${config.model}: ${path.basename(config.inputFile)}`;
 
-    // Check if this stream is already running
-    const currentStatus = progressViewProvider.getStreamStatus(fullStreamId);
+    // Check if this stream is already running via registry
+    const currentStatus = registryStatus(fullStreamId);
     if (currentStatus === 'running') {
       const errorMsg = `Task "${fullStreamId}" is already running. Please wait for it to complete or stop it first.`;
-      // vscode.window.showErrorMessage(errorMsg);
       throw new Error(errorMsg);
     }
 
@@ -198,42 +200,12 @@ async function executeAgentWithLogging<T extends IAgent>(
           taskDetailsGroupId,
         );
 
-        // Switch to this stream and set its status to running
-        progressViewProvider.setActiveStream(fullStreamId);
-        progressViewProvider.updateStreamStatus(fullStreamId, 'running');
-
-        // If the ProgressBoard isn't visible, try to show it
-        if (!progressViewProvider.isViewVisible()) {
-          await vscode.commands.executeCommand('texra.showProgressView');
-
-          // Prompt the user only if it remains hidden after trying to show it
-          if (!progressViewProvider.isViewVisible()) {
-            const inputFileName = path.basename(config.inputFile);
-            const outputInfo = config.outputFiles?.length
-              ? `to ${
-                  config.outputFiles.length > 1
-                    ? config.outputFiles.length + ' files'
-                    : path.basename(config.outputFiles[0])
-                }`
-              : '';
-
-            vscode.window
-              .showInformationMessage(
-                `TeXRA Agent Started: "${agentName}" is processing ${inputFileName} with ${config.model} ${outputInfo}. View in ProgressBoard for progress.`,
-                {
-                  modal: false,
-                  detail:
-                    'TeXRA agents run in the background and their progress can be tracked in the ProgressBoard.',
-                },
-                'Show ProgressBoard',
-              )
-              .then((selection) => {
-                if (selection === 'Show ProgressBoard') {
-                  vscode.commands.executeCommand('texra.showProgressView');
-                }
-              });
-          }
-        }
+        // Emit running status
+        setRegistryStatus(fullStreamId, 'running');
+        agentEventBus.emit('status', {
+          stream: fullStreamId,
+          status: 'running',
+        } as StreamStatusEvent);
 
         // Store taskState
         logger.debug(
@@ -248,11 +220,12 @@ async function executeAgentWithLogging<T extends IAgent>(
         // End the task details group
         logger.endGroup(taskDetailsGroupId, 'stopped');
 
-        // Convert AgentConfig to TaskState using utility function
-        progressViewProvider.setTaskState(
-          fullStreamId,
-          agentConfigToTaskState(config),
-        );
+        // Convert AgentConfig to TaskState and emit event
+        const taskState = agentConfigToTaskState(config);
+        agentEventBus.emit('task-state', {
+          streamId: fullStreamId,
+          state: taskState,
+        } as TaskStateEvent);
         logger.debug(
           `Task state stored for stream: ${fullStreamId}`,
           mainTaskGroupId,
@@ -269,8 +242,11 @@ async function executeAgentWithLogging<T extends IAgent>(
           // Mark the task as completed successfully
           logger.debug(`Task completed successfully`, mainTaskGroupId);
           logger.endGroup(mainTaskGroupId, 'stopped');
-          // Update status to stopped on successful completion
-          progressViewProvider.updateStreamStatus(fullStreamId, 'stopped');
+          setRegistryStatus(fullStreamId, 'stopped');
+          agentEventBus.emit('status', {
+            stream: fullStreamId,
+            status: 'stopped',
+          } as StreamStatusEvent);
 
           if (config.outputFiles && config.outputFiles.length > 0) {
             for (const out of config.outputFiles) {
@@ -284,8 +260,11 @@ async function executeAgentWithLogging<T extends IAgent>(
             mainTaskGroupId,
           );
           logger.endGroup(mainTaskGroupId, 'error');
-          // Update status to error if agent run fails
-          progressViewProvider.updateStreamStatus(fullStreamId, 'error');
+          setRegistryStatus(fullStreamId, 'error');
+          agentEventBus.emit('status', {
+            stream: fullStreamId,
+            status: 'error',
+          } as StreamStatusEvent);
           throw err;
         }
       } catch (err) {
@@ -339,6 +318,11 @@ async function executeAgentWithLogging<T extends IAgent>(
     const errorGroupId = await logger.startGroup(`Error: ${agentName}`);
     logger.error(errorMsg, errorGroupId);
     logger.endGroup(errorGroupId, 'error');
+    setRegistryStatus(fullStreamId, 'error');
+    agentEventBus.emit('status', {
+      stream: fullStreamId,
+      status: 'error',
+    } as StreamStatusEvent);
     throw new Error(errorMsg);
   }
 }
