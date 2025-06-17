@@ -62,7 +62,7 @@ prompts:
   userPrefix: |
     Project context:
     <documents>
-    {{ ALL_AUXILIARYS }}
+    {{ ALL_AUXILIARIES }}
     {{ ALL_REFERENCES }}
     {{ ADDITIONAL_INPUTS }}
     <document name="{{ INPUT_FILE }}">
@@ -132,7 +132,7 @@ prompts:
   userPrefix: |
     Project context:
     <documents>
-    {{ ALL_AUXILIARYS }}
+    {{ ALL_AUXILIARIES }}
     {{ ALL_REFERENCES }}
     {{ ADDITIONAL_INPUTS }}
     <document name="{{ INPUT_FILE }}">
@@ -228,14 +228,16 @@ async function handleCreateAgentWithAI(context: vscode.ExtensionContext) {
         `The user only provides a short description and the output filenames.\n` +
         `Goal: ${description}. Wrap the YAML in <yaml> tags and return nothing else.`;
       const params: MessageCreateParams = {
-        model: 'claude-3-opus-20240229',
+        model: 'claude-opus-4-20250514',
         messages: [{ role: 'user', content: prompt }],
         max_tokens: 2048,
       };
       const response = await anthropic.beta.messages.create(params);
       if (
         response.content &&
+        Array.isArray(response.content) &&
         response.content.length > 0 &&
+        response.content[0] &&
         response.content[0].type === 'text'
       ) {
         const text = response.content[0].text.trim();
