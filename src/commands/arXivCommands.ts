@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import * as logger from '../logger/logUtils';
-import { downloadArxivSource, validateArxivId } from '../utils/arXivUtils';
+import * as logger from '@logger/logUtils';
+import { downloadArxivSource, validateArxivId } from '@utils/arXivUtils';
 
 const CHANNEL = 'arXivCommands';
 

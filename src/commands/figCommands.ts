@@ -5,17 +5,17 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 // Local imports - log
-import * as logger from '../logger/logUtils';
+import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
-import { getRelativePath, getWorkspacePath } from '../utils/workspaceFileUtils';
+import { getRelativePath, getWorkspacePath } from '@utils/files';
 
 // Local imports - latex utils
-import { extractFigurePathsFromLatex } from '../latex/extractFigure';
+import { extractFigurePathsFromLatex } from '@latex/extractFigure';
 import {
   extractTikzPicturesWithLabels,
   extractAndCompileTikzPicturesWithLabels,
-} from '../latex/tikzpicture';
+} from '@latex/tikzpicture';
 
 const CHANNEL = 'TestCommands';
 logger.initialize(CHANNEL);
