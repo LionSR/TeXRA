@@ -9,6 +9,7 @@ import * as logger from '@logger/logUtils';
 
 // Local imports - housekeeping
 import { runPack, runPackSingle, runPackMultiple } from '../housekeeping';
+import type { PackResult } from '@/types/PackTypes';
 
 const CHANNEL = 'packCommands';
 logger.initialize(CHANNEL);
@@ -22,6 +23,31 @@ function getStreamId(
   const agentName =
     outputFiles && outputFiles.length > 1 ? `${agent}_multiple` : agent;
   return `${agentName}@${model}: ${path.basename(inputFile)}`;
+}
+
+function showPackResult(result: PackResult, inputFile: string): void {
+  switch (result.status) {
+    case 'success':
+      if (result.outputFolder) {
+        vscode.window.showInformationMessage(
+          `Files packed into ${result.outputFolder}`,
+        );
+      }
+      break;
+    case 'noFiles':
+      vscode.window.showInformationMessage(
+        `No files found to pack for ${inputFile}`,
+      );
+      break;
+    case 'missingParams':
+      vscode.window.showErrorMessage('Missing required parameters for pack');
+      break;
+    case 'error':
+      vscode.window.showErrorMessage(`Error during packing: ${result.error}`);
+      break;
+    default:
+      break;
+  }
 }
 
 export function registerPackCommands(context: vscode.ExtensionContext) {
@@ -49,13 +75,14 @@ async function handlePack(config: any) {
     ? config.outputFiles || []
     : [];
 
-  await runPack(
+  const result = await runPack(
     config.model,
     config.inputFile,
     config.agent,
     outputFiles,
     config.outputNameOverride,
   );
+  showPackResult(result, config.inputFile);
 
   const provider = ProgressViewProvider.getInstance();
   if (provider) {
@@ -93,7 +120,8 @@ async function handlePackSingle(
   }
 
   const fileToPack = outputNameOverride || inputFile;
-  await runPackSingle(model, fileToPack, agent);
+  const result = await runPackSingle(model, fileToPack, agent);
+  showPackResult(result, inputFile);
 
   const provider = ProgressViewProvider.getInstance();
   if (provider) {
@@ -127,13 +155,14 @@ async function handlePackMultiple(
     return;
   }
 
-  await runPackMultiple(
+  const result = await runPackMultiple(
     model,
     inputFile,
     agent,
     outputFiles,
     outputNameOverride,
   );
+  showPackResult(result, inputFile);
 
   const provider = ProgressViewProvider.getInstance();
   if (provider) {
