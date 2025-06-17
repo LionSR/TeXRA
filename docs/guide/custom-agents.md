@@ -185,10 +185,10 @@ prompts:
     </scratchpad>
 
     <latex_documents>
-    <document name="{OUTPUT_FILES_ORDER[0]}">
+    <document name="{{ OUTPUT_FILES_ORDER[0] }}">
     % UPDATED_FILE_1
     </document>
-    <document name="{OUTPUT_FILES_ORDER[1]}">
+    <document name="{{ OUTPUT_FILES_ORDER[1] }}">
     % UPDATED_FILE_2
     </document>
     </latex_documents>
