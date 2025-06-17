@@ -13,10 +13,32 @@ const GOOGLE_DEFAULT_CAPABILITIES: ModelCapabilities = {
   supportsNativePdf: true,
   supportsVision: true,
   supportsNativeAudio: true,
+  supportsNativeMCPServer: false, // Google doesn't have native MCP support
 };
 
 export const GOOGLE_MODELS: Record<string, ModelConfig> = {
   gemini25p: {
+    name: 'gemini25p',
+    fullName: 'gemini-2.5-pro',
+    openrouterFullName: 'google/gemini-2.5-pro',
+    provider: ModelProvider.GOOGLE,
+    maxOutputTokens: 65536,
+    contextWindow: 1048576,
+    inputPrice: 1.25, // 2.5 for >200K
+    outputPrice: 10.0, // 20 for >200K
+    capabilities: {
+      ...GOOGLE_DEFAULT_CAPABILITIES,
+      supportsPromptCaching: true,
+      supportsAutoPromptCaching: true,
+      supportsReasoning: true,
+      supportsReasoningEffort: false,
+      supportsNativeCodeExecution: true,
+      supportsNativeWebSearch: true,
+      supportsNativeMCPServer: true,
+    } satisfies ModelCapabilities,
+    openRouterOnly: false,
+  },
+  gemini25p0605: {
     name: 'gemini25p',
     fullName: 'gemini-2.5-pro-preview-06-05',
     openrouterFullName: 'google/gemini-2.5-pro-preview',
@@ -31,6 +53,8 @@ export const GOOGLE_MODELS: Record<string, ModelConfig> = {
       supportsAutoPromptCaching: true,
       supportsReasoning: true,
       supportsReasoningEffort: false,
+      supportsNativeCodeExecution: true,
+      supportsNativeWebSearch: true,
     } satisfies ModelCapabilities,
     openRouterOnly: false,
   },
@@ -49,6 +73,8 @@ export const GOOGLE_MODELS: Record<string, ModelConfig> = {
       supportsAutoPromptCaching: true,
       supportsReasoning: true,
       supportsReasoningEffort: false,
+      supportsNativeCodeExecution: true,
+      supportsNativeWebSearch: true,
     } satisfies ModelCapabilities,
     openRouterOnly: false,
   },
@@ -67,6 +93,8 @@ export const GOOGLE_MODELS: Record<string, ModelConfig> = {
       supportsAutoPromptCaching: true,
       supportsReasoning: true,
       supportsReasoningEffort: false,
+      supportsNativeCodeExecution: true,
+      supportsNativeWebSearch: true,
     } satisfies ModelCapabilities,
     openRouterOnly: false,
   },
@@ -82,10 +110,33 @@ export const GOOGLE_MODELS: Record<string, ModelConfig> = {
     capabilities: {
       ...GOOGLE_DEFAULT_CAPABILITIES,
       supportsPromptCaching: true,
+      supportsNativeCodeExecution: true,
+      supportsNativeWebSearch: true,
     } satisfies ModelCapabilities,
     openRouterOnly: false,
   },
   gemini25f: {
+    name: 'gemini25f',
+    fullName: 'gemini-2.5-flash',
+    openrouterFullName: 'google/gemini-2.5-flash',
+    provider: ModelProvider.GOOGLE,
+    maxOutputTokens: 65536,
+    contextWindow: 1048576,
+    inputPrice: 0.3,
+    outputPrice: 2.5,
+    capabilities: {
+      ...GOOGLE_DEFAULT_CAPABILITIES,
+      supportsPromptCaching: true,
+      supportsAutoPromptCaching: true,
+      supportsReasoning: true,
+      supportsReasoningEffort: false,
+      supportsNativeCodeExecution: true,
+      supportsNativeWebSearch: true,
+      supportsNativeMCPServer: true,
+    } satisfies ModelCapabilities,
+    openRouterOnly: false,
+  },
+  gemini25f0520: {
     name: 'gemini25f',
     fullName: 'gemini-2.5-flash-preview-05-20',
     openrouterFullName: 'google/gemini-2.5-flash-preview-05-20:thinking',
@@ -100,6 +151,8 @@ export const GOOGLE_MODELS: Record<string, ModelConfig> = {
       supportsAutoPromptCaching: true,
       supportsReasoning: true,
       supportsReasoningEffort: false,
+      supportsNativeCodeExecution: true,
+      supportsNativeWebSearch: true,
     } satisfies ModelCapabilities,
     openRouterOnly: false,
   },
@@ -118,6 +171,28 @@ export const GOOGLE_MODELS: Record<string, ModelConfig> = {
       supportsAutoPromptCaching: true,
       supportsReasoning: true,
       supportsReasoningEffort: false,
+      supportsNativeCodeExecution: true,
+      supportsNativeWebSearch: true,
+    } satisfies ModelCapabilities,
+    openRouterOnly: false,
+  },
+  'gemini25f-': {
+    name: 'gemini25f-',
+    fullName: 'gemini-2.5-flash-lite-preview-06-17',
+    openrouterFullName: 'google/gemini-2.5-flash-lite-preview-06-17',
+    provider: ModelProvider.GOOGLE,
+    maxOutputTokens: 32768,
+    contextWindow: 65536,
+    inputPrice: 0.1,
+    outputPrice: 0.4,
+    capabilities: {
+      ...GOOGLE_DEFAULT_CAPABILITIES,
+      supportsPromptCaching: true,
+      supportsAutoPromptCaching: true,
+      supportsReasoning: true,
+      supportsReasoningEffort: false,
+      supportsNativeCodeExecution: false, // Lite doesn't support code execution
+      supportsNativeWebSearch: false, // Lite doesn't support search grounding
     } satisfies ModelCapabilities,
     openRouterOnly: false,
   },
@@ -133,6 +208,8 @@ export const GOOGLE_MODELS: Record<string, ModelConfig> = {
     capabilities: {
       ...GOOGLE_DEFAULT_CAPABILITIES,
       supportsPromptCaching: true,
+      supportsNativeCodeExecution: true,
+      supportsNativeWebSearch: true,
     } satisfies ModelCapabilities,
     openRouterOnly: false,
   },
@@ -148,6 +225,8 @@ export const GOOGLE_MODELS: Record<string, ModelConfig> = {
     capabilities: {
       ...GOOGLE_DEFAULT_CAPABILITIES,
       supportsPromptCaching: true,
+      supportsNativeCodeExecution: true,
+      supportsNativeWebSearch: true,
     } satisfies ModelCapabilities,
     openRouterOnly: false,
   },
@@ -162,6 +241,8 @@ export const GOOGLE_MODELS: Record<string, ModelConfig> = {
     outputPrice: 5.0,
     capabilities: {
       ...GOOGLE_DEFAULT_CAPABILITIES,
+      supportsNativeCodeExecution: true,
+      supportsNativeWebSearch: false, // 1.5 models don't support search grounding
     } satisfies ModelCapabilities,
     openRouterOnly: false,
   },
@@ -176,6 +257,8 @@ export const GOOGLE_MODELS: Record<string, ModelConfig> = {
     outputPrice: 0.3,
     capabilities: {
       ...GOOGLE_DEFAULT_CAPABILITIES,
+      supportsNativeCodeExecution: true,
+      supportsNativeWebSearch: false, // 1.5 models don't support search grounding
     } satisfies ModelCapabilities,
     openRouterOnly: false,
   },
