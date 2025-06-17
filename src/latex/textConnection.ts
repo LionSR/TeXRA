@@ -118,7 +118,7 @@ export async function bestConnectionMethod(
     const client = new OpenAI({ apiKey });
 
     const completion = await client.chat.completions.create({
-      model: 'gpt-4-turbo',
+      model: 'gpt-4.1', //'gpt-4-turbo',
       temperature: 0,
       n,
       messages: [
