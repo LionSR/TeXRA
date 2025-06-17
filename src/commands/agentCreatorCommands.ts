@@ -4,9 +4,9 @@ import Anthropic from '@anthropic-ai/sdk';
 import type { MessageCreateParams } from '@anthropic-ai/sdk/resources/messages';
 
 // Local imports - utils
-import { getApiKey } from '../utils/secretUtils';
-import { getOrPromptForCustomAgentsDirectory } from '../utils/pathUtils';
-import { promptToAddAgentToConfig } from '../utils/agentRegistration';
+import { getApiKey } from '../frontend/secrets';
+import { getOrPromptForCustomAgentsDirectory } from '../frontend/agents/pathUtils';
+import { promptToAddAgentToConfig } from '../frontend/agents/register';
 import * as logger from '../logger/logUtils';
 import { ANTHROPIC_MODELS } from '../model/providers/anthropicModels';
 
