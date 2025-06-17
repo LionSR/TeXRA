@@ -362,4 +362,5 @@ These settings, accessible directly in the main TeXRA webview, control how agent
 - **Pack** (<i class="codicon codicon-archive"></i>): Archive current Agent/Model/Input outputs to `History` folder.
 - **Clean** (<i class="codicon codicon-trash"></i>): Delete current Agent/Model/Input outputs.
 - **Magic Polish** (<i class="codicon codicon-sparkle"></i>): Use selected model to polish the instruction text.
+- **Record Instruction** (<i class="codicon codicon-mic"></i>): Capture spoken instructions and transcribe them.
 - **Erase Instruction** (<i class="codicon codicon-clear-all"></i>): Clear the instruction box.

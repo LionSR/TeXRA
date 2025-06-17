@@ -341,6 +341,56 @@ export function setupUIHandlers() {
     }
   });
 
+  let recording = false;
+  let recorderStream = null;
+  let mediaRecorder = null;
+  let audioChunks = [];
+
+  addEventListenerSafely('recordInstructionButton', 'click', async function () {
+    const button = safeGetElementById('recordInstructionButton');
+    if (!recording) {
+      try {
+        recorderStream = await navigator.mediaDevices.getUserMedia({
+          audio: true,
+        });
+        mediaRecorder = new MediaRecorder(recorderStream);
+        audioChunks = [];
+        mediaRecorder.addEventListener('dataavailable', (e) => {
+          if (e.data.size > 0) audioChunks.push(e.data);
+        });
+        mediaRecorder.addEventListener('stop', () => {
+          const blob = new Blob(audioChunks, { type: 'audio/webm' });
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            vscode.postMessage({
+              command: 'transcribeInstructionAudio',
+              base64: reader.result.split(',')[1],
+              mimeType: 'audio/webm',
+            });
+          };
+          reader.readAsDataURL(blob);
+          recorderStream.getTracks().forEach((t) => t.stop());
+        });
+        mediaRecorder.start();
+        recording = true;
+        if (button) {
+          button.innerHTML = '<i class="codicon codicon-mic-filled"></i>';
+        }
+      } catch (err) {
+        vscode.postMessage({
+          command: 'showInformationMessage',
+          text: 'Microphone access denied.',
+        });
+      }
+    } else {
+      mediaRecorder.stop();
+      recording = false;
+      if (button) {
+        button.innerHTML = '<i class="codicon codicon-mic"></i>';
+      }
+    }
+  });
+
   addEventListenerSafely('executeButton', 'click', function () {
     const agent = safeGetElementValue('agent');
     const model = safeGetElementValue('model');

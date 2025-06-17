@@ -37,6 +37,7 @@ import {
   polishTextWithAI,
   FileContext,
 } from '@utils/text/textEnhancementUtils';
+import { transcribeAudio } from '@utils/audio';
 import { sleep } from '@utils/helpers';
 
 // Local imports - agent
@@ -149,6 +150,8 @@ export class WebviewMessageHandler {
         this.handleAddOpenedFiles(message.fileType, view),
       polishInstructionText: (message, view) =>
         this.handlePolishInstructionText(message, view),
+      transcribeInstructionAudio: (message, view) =>
+        this.handleTranscribeInstructionAudio(message, view),
       showAgentHistory: () => this.handleShowAgentHistory(),
       openSettings: () => this.handleOpenSettings(),
       clipboardImage: (message, view) =>
@@ -824,6 +827,35 @@ export class WebviewMessageHandler {
       logger.error(
         CHANNEL,
         `Error setting up text polishing: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+
+  private async handleTranscribeInstructionAudio(
+    message: any,
+    webviewView: vscode.WebviewView,
+  ) {
+    try {
+      const { base64, mimeType } = message;
+      if (!base64 || !mimeType) {
+        vscode.window.showErrorMessage('Invalid audio data');
+        return;
+      }
+      const buffer = Buffer.from(base64, 'base64');
+      const text = await transcribeAudio(buffer, mimeType);
+      if (text) {
+        webviewView.webview.postMessage({
+          command: 'instructionTextTranscribed',
+          text,
+        });
+      }
+    } catch (error) {
+      vscode.window.showErrorMessage(
+        `Error transcribing audio: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
+      logger.error(
+        CHANNEL,
+        `Error in handleTranscribeInstructionAudio: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
   }
