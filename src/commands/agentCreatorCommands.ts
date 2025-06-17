@@ -94,7 +94,7 @@ settings:
   documentTag: latex_documents
   endTag: </latex_documents>
   defaultOutputFiles:
-    [OUTPUT_FILES]
+[OUTPUT_FILES]
   outputExt: tex
   prefills:
     - "<scratchpad>"
@@ -204,7 +204,7 @@ async function handleCreateAgentWithAI(context: vscode.ExtensionContext) {
         .split(',')
         .map((s) => s.trim())
         .filter((s) => s.length > 0);
-      outputFilesYaml = files.map((f) => `  - ${f}`).join('\n');
+      outputFilesYaml = files.map((f) => `    - ${f}`).join('\n');
     }
 
     const targetDir = await getOrPromptForCustomAgentsDirectory();
