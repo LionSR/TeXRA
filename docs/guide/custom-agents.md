@@ -1,6 +1,6 @@
 # Custom Agents
 
-TeXRA allows you to create custom agents tailored to your specific academic research needs. This is where you can truly unleash the power of AI for your unique workflows (or just make an agent that writes everything in pirate speak, we won't judge). This guide focuses on the practical steps of creating the agent definition (`.yaml`) file.
+TeXRA is a VS Code extension that orchestrates AI-driven writing tools using YAML agent files. Each agent follows a chain-of-thought workflow with scratchpad planning and a final XML-wrapped output. This guide focuses on creating those definition (`.yaml`) files so you can tailor TeXRA to your research needs (or make an agent that writes everything in pirate speak—we won't judge).
 
 ::: info Agent Fundamentals
 Before creating a custom agent, it's highly recommended to understand the underlying concepts:
@@ -20,6 +20,10 @@ Custom agents reside in a specific directory.
 
 1.  **Find Existing**: Look for the "Custom Agents" folder within the [Agent Explorer](./agent-explorer.md).
 2.  **Configure (Optional)**: If the folder doesn't exist or you want to use a different location, set the path in VS Code Settings (`Ctrl+,`) under `texra.explorer.agentsDirectory`.
+
+### Automatic Creation
+
+If you'd like TeXRA to draft an agent for you, use the **Create AI Agent** <i class="codicon codicon-sparkle"></i> button in the Agent Explorer title bar. The wizard only asks for a short description and the default output filenames. TeXRA sends this information to a Claude model, which replies with the YAML enclosed in `<yaml>...</yaml>` tags. The extension extracts the content between those tags and saves it as a basic CoT template (single or multiple files) in your Custom Agents folder.
 
 ### Step 2: Create a New YAML File
 
@@ -96,6 +100,8 @@ prompts:
 
 Prompts are processed using the Jinja2 templating engine, allowing you to insert dynamic information using `{{ variable_name }}` syntax. TeXRA provides several built-in variables based on the files and instructions you select in the UI:
 
+This mechanism is sometimes referred to as **Variable Retrieval (VR)**—the extension loads your chosen inputs, references, figures, and any additional context, then exposes them as template variables. For example, the text content of your main file becomes `{{ INPUT_CONTENT }}` while the full list of selected files can be accessed through `{{ ALL_INPUTS }}`. When you run the agent these placeholders are replaced with real data.
+
 **Common Variables:**
 
 - &#123;&#123; INSTRUCTION &#125;&#125;: The text entered into the "Instruction" box in the UI.
@@ -151,6 +157,46 @@ userPrefix: |
 - **Multiple Outputs:** If your agent needs to generate multiple distinct files, ensure your prompts generate the required XML structure. See the [Handling Multiple Files](./multiple-output.md) guide.
 - **Start Simple:** Begin with basic settings/prompts and add complexity incrementally.
 - **Test Iteratively:** Test frequently and review logs in the ProgressBoard.
+
+### Example: Multiple Output Agent
+
+If your workflow requires several output files, your agent must structure its
+response using the `OUTPUT_FILES_ORDER` variable. Below is a simplified template
+similar to the built-in `polish_multiple.yaml`:
+
+```yaml
+inherits: polish
+settings:
+  agentType: CoT
+  documentTag: latex_documents
+  endTag: </latex_documents>
+  defaultOutputFiles:
+    - introduction.tex
+    - conclusion.tex
+
+prompts:
+  userRequest: |
+    {% if OUTPUT_FILES_ORDER %}
+    The output files should be in this order: {{ OUTPUT_FILES_ORDER }}.
+    {% endif %}
+
+    <scratchpad>
+    - Plan revisions for each file
+    </scratchpad>
+
+    <latex_documents>
+    <document name="{{ OUTPUT_FILES_ORDER[0] }}">
+    % UPDATED_FILE_1
+    </document>
+    <document name="{{ OUTPUT_FILES_ORDER[1] }}">
+    % UPDATED_FILE_2
+    </document>
+    </latex_documents>
+```
+
+This structure lets TeXRA save each `<document>` block to the corresponding
+filename from the UI list. See [Handling Multiple Files](./multiple-output.md)
+for more details.
 
 ### Step 4: Save and Reload
 
