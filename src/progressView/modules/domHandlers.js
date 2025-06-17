@@ -1,4 +1,4 @@
-import { vscode } from '@common/vscodeApi.js';
+import { vscode } from '@common/webviewContext.js';
 import {
   getCurrentStream,
   setStreamStatus,
@@ -17,12 +17,32 @@ import {
   getStatusIcon,
   formatDuration,
   formatTokens,
-  formatGroupHeaderElements,
   getGroupHeaderClass,
   BULLET_MARKUP,
 } from './logFormatters.js';
 import { STATUS, COMMANDS, SPLIT_SIZES, TOOLBAR_BUTTONS } from './constants.js';
 import { createIconButton } from '@common/templateUtils.js';
+// Note: We'll inline the getEffectiveBaseFile function since modules can't use TS aliases
+/**
+ * Get the effective base file for comparison operations.
+ * @param {string|null|undefined} base - The explicit base file path
+ * @param {string|null|undefined} original - The original source file path
+ * @param {string} current - The current generated file path
+ * @returns {string|null} The effective base file path or null
+ */
+function getEffectiveBaseFile(base, original, current) {
+  // Use explicit base if available
+  if (base) {
+    return base;
+  }
+
+  // Use original as base if it exists and differs from current
+  if (original && original !== current) {
+    return original;
+  }
+
+  return null;
+}
 
 const STATUS_MAP = {
   [STATUS.RUNNING]: {
@@ -377,8 +397,13 @@ export function updateFileList(filesByRound) {
       const diffBtn = fragment.querySelector('.diff-btn');
       const prevBtn = fragment.querySelector('.prev-btn');
 
-      const basename = info.path.split('/').pop();
-      const dirPath = info.path.slice(0, info.path.length - basename.length);
+      // Use original name if available, otherwise use generated path
+      const displayPath = info.original || info.path;
+      const basename = displayPath.split('/').pop();
+      const dirPath = displayPath.slice(
+        0,
+        displayPath.length - basename.length,
+      );
 
       if (dirEl) dirEl.textContent = dirPath;
       if (baseEl) baseEl.textContent = basename;
@@ -402,44 +427,80 @@ export function updateFileList(filesByRound) {
       }
 
       if (compareBtn) {
-        compareBtn.addEventListener('click', () => {
-          vscode.postMessage({
-            command: COMMANDS.COMPARE_ORIGINAL,
-            file: info.path,
-            base: info.base,
+        const baseFile = getEffectiveBaseFile(
+          info.base,
+          info.original,
+          info.path,
+        );
+        if (baseFile) {
+          compareBtn.addEventListener('click', () => {
+            vscode.postMessage({
+              command: COMMANDS.COMPARE_ORIGINAL,
+              file: info.path,
+              base: baseFile,
+            });
           });
-        });
+        } else {
+          compareBtn.remove();
+        }
       }
 
       if (acceptBtn) {
-        acceptBtn.addEventListener('click', () => {
-          vscode.postMessage({
-            command: COMMANDS.ACCEPT_FILE,
-            file: info.path,
-            base: info.base,
+        const baseFile = getEffectiveBaseFile(
+          info.base,
+          info.original,
+          info.path,
+        );
+        if (baseFile) {
+          acceptBtn.addEventListener('click', () => {
+            vscode.postMessage({
+              command: COMMANDS.ACCEPT_FILE,
+              file: info.path,
+              base: baseFile,
+            });
           });
-        });
+        } else {
+          acceptBtn.remove();
+        }
       }
 
       if (mergeBtn) {
-        mergeBtn.addEventListener('click', () => {
-          vscode.postMessage({
-            command: COMMANDS.MERGE_FILE,
-            file: info.path,
-            base: info.base,
+        const baseFile = getEffectiveBaseFile(
+          info.base,
+          info.original,
+          info.path,
+        );
+        if (baseFile) {
+          mergeBtn.addEventListener('click', () => {
+            vscode.postMessage({
+              command: COMMANDS.MERGE_FILE,
+              file: info.path,
+              base: baseFile,
+            });
           });
-        });
+        } else {
+          mergeBtn.remove();
+        }
       }
 
       if (diffBtn) {
-        diffBtn.addEventListener('click', () => {
-          vscode.postMessage({
-            command: COMMANDS.LATEXDIFF_FILE,
-            file: info.path,
-            base: info.base,
-            prev: info.prev,
+        const baseFile = getEffectiveBaseFile(
+          info.base,
+          info.original,
+          info.path,
+        );
+        if (baseFile) {
+          diffBtn.addEventListener('click', () => {
+            vscode.postMessage({
+              command: COMMANDS.LATEXDIFF_FILE,
+              file: info.path,
+              base: baseFile,
+              prev: info.prev,
+            });
           });
-        });
+        } else {
+          diffBtn.remove();
+        }
       }
 
       if (prevBtn) {

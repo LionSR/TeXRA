@@ -6,7 +6,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import type { MessageCreateParams } from '@anthropic-ai/sdk/resources/messages';
 
 // Local imports - error utils
-import { getSdkErrorMessage } from '../utils/sdkErrorUtils';
+import { getSdkErrorMessage } from '@utils/sdkErrorUtils';
 
 // Local imports - core
 import { TextEditorTool } from './TextEditorTool';
@@ -14,15 +14,12 @@ import { ToolResult } from './base';
 import { BaseError, ValidationResult } from './types';
 
 // Local imports - utils
-import * as workspaceFileUtils from '../utils/workspaceFileUtils';
-import {
-  getApiKey as getSecretApiKey,
-  ApiProvider,
-} from '../utils/secretUtils';
-import { getConfig } from '../utils/configUtils';
+import * as workspaceFileUtils from '@utils/files';
+import { getApiKey as getSecretApiKey, ApiProvider } from '@frontend/secrets';
+import { getConfig } from '@utils/config';
 
 // Local imports - logging
-import * as logger from '../logger/logUtils';
+import * as logger from '@logger/logUtils';
 
 const CHANNEL = 'AnthropicToolAgent';
 logger.initialize(CHANNEL);

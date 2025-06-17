@@ -13,10 +13,10 @@ import {
 } from './types';
 
 // Local imports - utilities
-import * as workspaceFileUtils from '../utils/workspaceFileUtils';
+import * as workspaceFileUtils from '@utils/files';
 
 // Local imports - Log
-import * as logger from '../logger/logUtils';
+import * as logger from '@logger/logUtils';
 
 // Constants
 const CHANNEL = 'TextEditorTool';

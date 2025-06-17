@@ -3,14 +3,11 @@ import Anthropic from '@anthropic-ai/sdk';
 import OpenAI from 'openai';
 
 // Local imports - error utils
-import { formatProviderError } from '../utils/sdkErrorUtils';
+import { formatProviderError } from '@utils/sdkErrorUtils';
 
 // Local imports - log
-import * as logger from '../logger/logUtils';
-import {
-  getApiKey as getSecretApiKey,
-  ApiProvider,
-} from '../utils/secretUtils';
+import * as logger from '@logger/logUtils';
+import { getApiKey as getSecretApiKey, ApiProvider } from '@frontend/secrets';
 
 const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);

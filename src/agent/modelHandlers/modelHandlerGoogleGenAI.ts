@@ -17,19 +17,19 @@ import {
 } from '@google/genai';
 
 // Local imports - agent components
-import { ModelHandler } from './ModelHandler';
-import { AgentConfig } from '../AgentConfig';
-import { AgentSetting, hasEndTag } from '../AgentDataclass';
-import { AgentStateRound, AgentStateGlobal } from '../AgentState';
-import { ToolState } from '../ToolState';
+import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
+import { AgentConfig } from '@agent/core/AgentConfig';
+import { AgentSetting, hasEndTag } from '@agent/core/AgentDataclass';
+import { AgentStateRound, AgentStateGlobal } from '@agent/core/AgentState';
+import { ToolState } from '@agent/core/ToolState';
 import {
   OpenAIAPIResponseUsage,
   ResponseUsageFactory,
   GenerateContentResponseUsageMetadata,
   ExtendedCompletionUsage,
-} from '../ResponseUsage';
-import { MediaEntry } from '../mediaTypes';
-import { AgentLogger } from '../../logger/AgentLogger';
+} from '@agent/core/ResponseUsage';
+import { MediaEntry } from '@agent/utils/mediaTypes';
+import { AgentLogger } from '@logger/AgentLogger';
 
 // Local imports - utilities
 import {
@@ -37,21 +37,17 @@ import {
   writeFile,
   fileExistsAndNonTrivial,
   getFullPathFromWorkspace,
-} from '../../utils/workspaceFileUtils';
-import { fileExistsAbsolute } from '../../utils/absoluteFileUtils';
-import { formatProviderError } from '../../utils/sdkErrorUtils';
-import {
-  applyReplacements,
-  getAllReplacements,
-  getAllReplacementsRegex,
-  cleanFileContent,
-} from '../../replacement/replacementUtils';
-import { extractAndLogScratchpad } from '../../utils/xmlUtils';
-import { getConfig } from '../../utils/configUtils';
-import { calculateTokenPrice } from '../../utils/priceUtils';
+} from '@utils/files';
+import { fileExistsAbsolute } from '@utils/files';
+import { formatProviderError } from '@utils/sdkErrorUtils';
+import { cleanFileContent } from '@replacement/replacementUtils';
+import replacementManager from '@replacement/replacementManager';
+import { extractAndLogScratchpad } from '@utils/text/xmlUtils';
+import { getConfig } from '@utils/config';
+import { calculateTokenPrice } from '@utils/priceUtils';
 
 // Local constant
-import { K_SLICE } from '../../utils/constants';
+import { K_SLICE } from '@utils/config';
 
 // Internal type definition
 type InternalMessagePart = {
@@ -374,7 +370,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
       (this.config.capabilities.supportsVision ||
         this.config.capabilities.supportsNativeAudio)
     ) {
-      this.logger.info(
+      this.logger.debug(
         `Uploading ${mediaFiles.length} media files via native SDK...`,
       );
       for (const mediaFile of mediaFiles) {
@@ -405,7 +401,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
 
           const uploadResult: File = await client.files.upload(uploadParams);
 
-          this.logger.info(
+          this.logger.debug(
             `Uploaded ${mediaFile}, URI: ${uploadResult.uri}, MimeType: ${uploadResult.mimeType}`,
           );
 
@@ -492,8 +488,8 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
       (this.config.capabilities.supportsVision ||
         this.config.capabilities.supportsNativeAudio)
     ) {
-      this.logger.info(
-        `Uploading ${mediaFiles.length} media files for follow-up round via native SDK...`,
+      this.logger.debug(
+        `Uploading ${mediaFiles.length} media files for reflection via native SDK...`,
       );
       for (const mediaFile of mediaFiles) {
         try {
@@ -524,8 +520,8 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
 
           const uploadResult: File = await client.files.upload(uploadParams);
 
-          this.logger.info(
-            `Uploaded file ${mediaFile}, URI: ${uploadResult.uri}, MimeType: ${uploadResult.mimeType}`,
+          this.logger.debug(
+            `Uploaded reflection file ${mediaFile}, URI: ${uploadResult.uri}, MimeType: ${uploadResult.mimeType}`,
           );
 
           if (!uploadResult.uri || !uploadResult.mimeType) {
@@ -612,11 +608,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
       );
     }
 
-    responseText = applyReplacements(responseText, getAllReplacements()).trim();
-    responseText = applyReplacements(
-      responseText,
-      getAllReplacementsRegex(),
-    ).trim();
+    responseText = replacementManager.applyAll(responseText);
 
     const usage = responseObject.usageMetadata;
     const stopReason: FinishReason =
@@ -628,7 +620,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
       endTag &&
       !responseText.endsWith(endTag)
     ) {
-      this.logger.info(
+      this.logger.debug(
         `Model stopped naturally but didn't include end tag. Appending ${endTag}.`,
       );
       responseText += `\n${endTag}`;
@@ -699,7 +691,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
   ): void {
     const prefillTokens = toolState.lastResponse.slice(-K_SLICE);
     const userMessageContinuation = `Your response got cut off. Continue responding exactly where you left off, starting after: "${prefillTokens}". Do not repeat yourself or start over. Ensure you end with ${agentSetting.endTag}.`;
-    this.logger.info(`Adding continuation message.`);
+    this.logger.debug(`Adding continuation message.`);
     messages.push({
       role: 'user',
       content: [{ type: 'text', text: userMessageContinuation }],
@@ -825,7 +817,12 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
     fileContent = cleanFileContent(fileContent);
 
     // Extract and log any existing scratchpad content
-    extractAndLogScratchpad(fileContent, this.logger, 'scratchpad', groupId);
+    await extractAndLogScratchpad(
+      fileContent,
+      this.logger,
+      'scratchpad',
+      groupId,
+    );
 
     await writeFile(outputFile, fileContent);
     this.logger.debug(`Cleaned and saved existing content to ${outputFile}.`);
@@ -845,7 +842,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
       return [endTurn, messages];
     }
 
-    this.logger.info(
+    this.logger.debug(
       'Existing file content found without end tag - continuing generation.',
     );
     toolState.updateAccumulatedOutput(fileContent);

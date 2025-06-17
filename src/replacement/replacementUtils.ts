@@ -3,10 +3,10 @@
  */
 
 // Local imports - log
-import * as logger from '../logger/logUtils';
+import * as logger from '@logger/logUtils';
 
 // Import vscode workspace configuration
-import { getConfig } from '../utils/configUtils';
+import { getConfig } from '@utils/config';
 
 const CHANNEL = 'ReplacementUtils';
 logger.initialize(CHANNEL);
