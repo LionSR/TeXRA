@@ -1,5 +1,5 @@
 // Local imports - constants
-import type { FileType } from '../utils/constants';
+import type { FileType } from '@utils/config';
 
 /** Interface for storing task execution state */
 export interface TaskState {

@@ -3,6 +3,7 @@
 'use strict';
 
 const path = require('path');
+const TerserPlugin = require('terser-webpack-plugin');
 
 //@ts-check
 /** @typedef {import('webpack').Configuration} WebpackConfig **/
@@ -31,6 +32,19 @@ const extensionConfig = {
   resolve: {
     // support reading TypeScript and JavaScript files, 📖 -> https://github.com/TypeStrong/ts-loader
     extensions: ['.ts', '.js'],
+    alias: {
+      '@': path.resolve(__dirname, 'src'),
+      '~': path.resolve(__dirname, 'src'),
+      '@agent': path.resolve(__dirname, 'src/agent'),
+      '@frontend': path.resolve(__dirname, 'src/frontend'),
+      '@utils': path.resolve(__dirname, 'src/utils'),
+      '@logger': path.resolve(__dirname, 'src/logger'),
+      '@latex': path.resolve(__dirname, 'src/latex'),
+      '@commands': path.resolve(__dirname, 'src/commands'),
+      '@model': path.resolve(__dirname, 'src/model'),
+      '@progressView': path.resolve(__dirname, 'src/progressView'),
+      '@replacement': path.resolve(__dirname, 'src/replacement'),
+    },
     fallback: {
       fs: false,
       path: require.resolve('path-browserify'),
@@ -56,6 +70,10 @@ const extensionConfig = {
   devtool: 'nosources-source-map',
   infrastructureLogging: {
     level: 'log', // enables logging required for problem matchers
+  },
+  optimization: {
+    minimize: true,
+    minimizer: [new TerserPlugin()],
   },
 };
 module.exports = [extensionConfig];

@@ -5,7 +5,7 @@ import * as https from 'https';
 import * as arxivIdentifiers from 'identifiers-arxiv';
 
 // Local imports - log
-import * as logger from '../logger/logUtils';
+import * as logger from '@logger/logUtils';
 
 // Local imports - utils
 import {
@@ -14,8 +14,8 @@ import {
   createDirectory,
   deleteFile,
   fileExists,
-} from './workspaceFileUtils';
-import { executeCommand } from './execUtils';
+} from './files';
+import { executeCommand } from './system';
 import { indentLatexFilesInDirectory } from '../housekeeping/indent';
 
 const CHANNEL = 'arXivUtils';

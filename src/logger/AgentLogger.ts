@@ -3,8 +3,8 @@
 
 // Local imports - log
 import * as logger from './logUtils';
-import { sleep } from '../utils/timeUtils';
-import { SHORT_SLEEP_MS } from '../utils/constants';
+import { sleep } from '@utils/helpers';
+import { SHORT_SLEEP_MS } from '@utils/config';
 
 /**
  * Encapsulates logging functionality for agents with a dedicated channel.

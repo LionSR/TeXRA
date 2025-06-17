@@ -5,7 +5,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 // Local imports - log
-import * as logger from '../logger/logUtils';
+import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
 import {
@@ -15,7 +15,7 @@ import {
   findFileInBuild,
   createDirectory,
   fileExists,
-} from '../utils/workspaceFileUtils';
+} from '@utils/files';
 
 // Local imports - housekeeping
 import { PACK_EXTENSIONS, TEMP_EXTENSIONS, HISTORY_DIR } from './constants';
@@ -184,16 +184,31 @@ export async function runPackMultiple(
   logger.debug(CHANNEL, `Common output folder: ${commonOutputFolder}`);
 
   try {
-    await createDirectory(commonOutputFolder);
-    logger.debug(CHANNEL, `Created output directory: ${commonOutputFolder}`);
+    let anyFilesPacked = false;
 
     // Pack the main input file
-    await runPackSingle(model, fileToPack, agent, commonOutputFolder);
+    const singleResult = await runPackSingle(
+      model,
+      fileToPack,
+      agent,
+      commonOutputFolder,
+    );
+    if (singleResult) {
+      anyFilesPacked = true;
+    }
     // Pack additional files
     if (inputFiles && inputFiles.length > 0) {
       for (const file of inputFiles) {
         // logger.debug(CHANNEL, `Packing input file: ${file}`);
-        await runPackSingle(model, file, agent, commonOutputFolder);
+        const result = await runPackSingle(
+          model,
+          file,
+          agent,
+          commonOutputFolder,
+        );
+        if (result) {
+          anyFilesPacked = true;
+        }
       }
     }
 
@@ -207,13 +222,25 @@ export async function runPackMultiple(
     for (const pattern of additionalPatterns) {
       const filePath = path.join(outputDir, pattern);
       if (await fileExists(filePath)) {
+        if (!anyFilesPacked) {
+          await createDirectory(commonOutputFolder);
+        }
         logger.debug(CHANNEL, `Found additional XML file: ${filePath}`);
         await moveFile(filePath, path.join(commonOutputFolder, pattern));
+        anyFilesPacked = true;
       }
     }
 
-    logger.info(CHANNEL, `All files packed into ${commonOutputFolder}`);
-    return commonOutputFolder;
+    if (anyFilesPacked) {
+      logger.info(CHANNEL, `All files packed into ${commonOutputFolder}`);
+      return commonOutputFolder;
+    }
+
+    logger.warn(CHANNEL, `No files found to pack for ${inputFile}`);
+    vscode.window.showInformationMessage(
+      `No files found to pack for ${inputFile}`,
+    );
+    return '';
   } catch (err) {
     logger.error(
       CHANNEL,

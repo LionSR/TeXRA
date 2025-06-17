@@ -5,33 +5,32 @@ import * as path from 'path';
 // (none needed)
 
 // Local imports - log
-import { AgentLogger } from '../../logger/AgentLogger';
+import { AgentLogger } from '@logger/AgentLogger';
 
 // Local imports - utilities
-import { fileExists } from '../../utils/workspaceFileUtils';
+import { fileExists } from '@utils/files';
+import { fileExistsAbsolute } from '@utils/files/absoluteFileUtils';
+import { getPastedImageDisplayName } from '@utils/files/pastedImageUtils';
 import {
   getBase64EncodedMedia,
   countPdfPages,
   processPdf2Png,
-} from '../../utils/imgUtils';
-import { checkMultipleToolsInstalled } from '../../utils/toolUtils';
-import { getConfig } from '../../utils/configUtils';
-import {
-  getApiKey as getSecretApiKey,
-  ApiProvider,
-} from '../../utils/secretUtils';
+} from '@frontend/media/img';
+import { checkMultipleToolsInstalled } from '@utils/system';
+import { getConfig } from '@utils/config';
+import { getApiKey as getSecretApiKey, ApiProvider } from '@frontend/secrets';
 
 // Local imports - agent components
-import { AgentConfig } from '../AgentConfig';
-import { AgentSetting, hasEndTag } from '../AgentDataclass';
-import { AgentStateRound, AgentStateGlobal } from '../AgentState';
+import { AgentConfig } from '../core/AgentConfig';
+import { AgentSetting, hasEndTag } from '../core/AgentDataclass';
+import { AgentStateRound, AgentStateGlobal } from '../core/AgentState';
 import {
   ModelConfig,
   ModelProvider,
   ModelCapabilities,
-} from '../../model/ModelConfig';
-import { ToolState } from '../ToolState';
-import { MediaEntry } from '../mediaTypes';
+} from '@model/ModelConfig';
+import { ToolState } from '../core/ToolState';
+import { MediaEntry } from '@agent/utils/mediaTypes';
 
 // Default continuation limits
 const DEFAULT_CONTINUE_LIMIT = 10;
@@ -39,6 +38,19 @@ const DEFAULT_CONTINUE_LIMIT = 10;
 // Default token limits
 const DEFAULT_INPUT_TOKEN_LIMIT = 1500000;
 const DEFAULT_OUTPUT_TOKEN_LIMIT_FACTOR = 2.5;
+
+/** Flags for token-based stop conditions. */
+interface TokenFlags {
+  continuationLimit: boolean;
+  inputTokenLimit: boolean;
+  maxOutputTokensExceeded: boolean;
+}
+
+/** Flags for markers indicating the end of a conversation. */
+interface MarkerFlags {
+  endTurn: boolean;
+  encounterDocumentTag: boolean;
+}
 
 /**
  * Abstract base class for model-specific handlers that manage API interactions, message processing, and response handling.
@@ -260,21 +272,28 @@ export abstract class ModelHandler {
     return effort;
   }
 
-  /**
-   * Process image or audio for models.
-   * @param mediaFile Path to the media file
-   * @param fileExtension File extension (e.g. '.jpg', '.pdf', '.wav')
-   * @returns Tuple of [base64 encoded media data, media type, media category ('image' or 'audio')]
-   */
-  protected async processMedia(
-    mediaFile: string,
-    fileExtension: string,
-  ): Promise<[string | string[], string, 'image' | 'audio']> {
-    const ext = fileExtension.toLowerCase();
-    let mediaData: string | string[];
-    let mediaType: string;
-    let mediaCategory: 'image' | 'audio';
+  /** Determine if extension corresponds to an audio format. */
+  private isAudio(ext: string): boolean {
+    return [
+      '.wav',
+      '.m4a',
+      '.mp3',
+      '.mpeg',
+      '.aiff',
+      '.aac',
+      '.ogg',
+      '.flac',
+    ].includes(ext.toLowerCase());
+  }
 
+  /**
+   * Process an image file for model ingestion.
+   * Handles PDFs and other common image formats.
+   */
+  protected async processImage(
+    mediaFile: string,
+    ext: string,
+  ): Promise<[string | string[], string, 'image']> {
     const imageMediaTypes: { [key: string]: string } = {
       '.jpg': 'image/jpeg',
       '.jpeg': 'image/jpeg',
@@ -283,32 +302,68 @@ export abstract class ModelHandler {
       '.heic': 'image/heic',
       '.heif': 'image/heif',
       '.gif': 'image/gif',
-      '.pdf': await (async () => {
-        // Check if ImageMagick is installed
-        const isImageMagickInstalled = await checkMultipleToolsInstalled(
-          ['magick', 'gm'],
-          false,
-        );
-        const pageCount = await countPdfPages(mediaFile);
-
-        // Use native PDF in these cases:
-        // 1. Multi-page PDF and model supports native PDFs, or
-        // 2. ImageMagick not installed but model supports native PDFs
-        if (
-          (pageCount > 1 || !isImageMagickInstalled.some(Boolean)) &&
-          this.capabilities.supportsNativePdf
-        ) {
-          this.logger.debug(
-            `Using native PDF for ${mediaFile}. ImageMagick installed: ${isImageMagickInstalled.some(Boolean)}, Page count: ${pageCount}`,
-          );
-          return 'application/pdf';
-        }
-
-        // Default to PNG conversion when ImageMagick is available
-        return 'image/png';
-      })(),
     };
 
+    let mediaType: string;
+    let mediaData: string | string[];
+
+    if (ext === '.pdf') {
+      const isImageMagickInstalled = await checkMultipleToolsInstalled(
+        ['magick', 'gm'],
+        false,
+      );
+      const pageCount = await countPdfPages(mediaFile);
+
+      if (
+        (pageCount > 1 || !isImageMagickInstalled.some(Boolean)) &&
+        this.capabilities.supportsNativePdf
+      ) {
+        this.logger.debug(
+          `Using native PDF for ${mediaFile}. ImageMagick installed: ${isImageMagickInstalled.some(
+            Boolean,
+          )}, Page count: ${pageCount}`,
+        );
+        mediaType = 'application/pdf';
+        mediaData = await getBase64EncodedMedia(mediaFile);
+        return [mediaData, mediaType, 'image'];
+      }
+
+      mediaType = 'image/png';
+      this.logger.debug(`Converting PDF to PNG: ${mediaFile}`);
+      const pdfResult = await processPdf2Png(mediaFile);
+      if (pdfResult === null) {
+        if (this.capabilities.supportsNativePdf) {
+          this.logger.debug(
+            `PDF to PNG conversion failed. Falling back to native PDF for ${mediaFile}`,
+          );
+          mediaType = 'application/pdf';
+          mediaData = await getBase64EncodedMedia(mediaFile);
+        } else {
+          throw new Error(`Failed to process PDF file as image: ${mediaFile}`);
+        }
+      } else {
+        mediaData = pdfResult;
+      }
+    } else if (ext in imageMediaTypes) {
+      mediaType = imageMediaTypes[ext];
+      this.logger.debug(
+        `Processing as image: ${mediaFile}, type: ${mediaType}`,
+      );
+      mediaData = await getBase64EncodedMedia(mediaFile);
+    } else {
+      throw new Error(
+        `Unsupported image extension: ${ext}. Image support: ${this.capabilities.supportsVision}`,
+      );
+    }
+
+    return [mediaData, mediaType, 'image'];
+  }
+
+  /** Process an audio file for models supporting native audio input. */
+  protected async processAudio(
+    mediaFile: string,
+    ext: string,
+  ): Promise<[string, string, 'audio']> {
     const audioMediaTypes: { [key: string]: string } = {
       '.wav': 'audio/wav',
       '.m4a': 'audio/m4a',
@@ -320,67 +375,38 @@ export abstract class ModelHandler {
       '.flac': 'audio/flac',
     };
 
-    if (ext in imageMediaTypes) {
-      mediaType = imageMediaTypes[ext];
-      mediaCategory = 'image';
-      this.logger.debug(
-        `Processing as image: ${mediaFile}, type: ${mediaType}`,
-      );
-      if (ext === '.pdf') {
-        if (mediaType === 'image/png') {
-          // Only attempt conversion if we've determined PNG is appropriate
-          this.logger.debug(`Converting PDF to PNG: ${mediaFile}`);
-          const pdfResult = await processPdf2Png(mediaFile);
-
-          if (pdfResult === null) {
-            // If conversion fails but model supports native PDF, fall back to PDF
-            if (this.capabilities.supportsNativePdf) {
-              this.logger.debug(
-                `PDF to PNG conversion failed. Falling back to native PDF for ${mediaFile}`,
-              );
-              mediaType = 'application/pdf';
-              mediaData = await getBase64EncodedMedia(mediaFile);
-            } else {
-              throw new Error(
-                `Failed to process PDF file as image: ${mediaFile}`,
-              );
-            }
-          } else {
-            mediaData = pdfResult;
-          }
-        } else {
-          // For application/pdf media type, use PDF directly
-          this.logger.debug(`Using native PDF: ${mediaFile}`);
-          mediaData = await getBase64EncodedMedia(mediaFile);
-        }
-      } else {
-        mediaData = await getBase64EncodedMedia(mediaFile);
-      }
-    } else if (
-      ext in audioMediaTypes &&
-      this.capabilities.supportsNativeAudio
-    ) {
-      mediaType = audioMediaTypes[ext];
-      mediaCategory = 'audio';
-      this.logger.debug(
-        `Processing as audio: ${mediaFile}, type: ${mediaType}`,
-      );
-      mediaData = await getBase64EncodedMedia(mediaFile);
-      // Audio files are typically processed as a single base64 string
-      if (Array.isArray(mediaData)) {
-        this.logger.warn(
-          `Audio file ${mediaFile} processed into multiple parts, using only the first.`,
-        );
-        // I think this should not happen, but just in case
-        mediaData = mediaData[0];
-      }
-    } else {
+    if (!(ext in audioMediaTypes) || !this.capabilities.supportsNativeAudio) {
       throw new Error(
-        `Unsupported or disabled file extension: ${fileExtension}. Image support: ${this.capabilities.supportsVision}, Audio support: ${this.capabilities.supportsNativeAudio}`,
+        `Unsupported or disabled audio extension: ${ext}. Audio support: ${this.capabilities.supportsNativeAudio}`,
       );
     }
 
-    return [mediaData, mediaType, mediaCategory];
+    const mediaType = audioMediaTypes[ext];
+    this.logger.debug(`Processing as audio: ${mediaFile}, type: ${mediaType}`);
+    let mediaData = await getBase64EncodedMedia(mediaFile);
+    if (Array.isArray(mediaData)) {
+      this.logger.warn(
+        `Audio file ${mediaFile} processed into multiple parts, using only the first.`,
+      );
+      mediaData = mediaData[0];
+    }
+    return [mediaData, mediaType, 'audio'];
+  }
+
+  /**
+   * Process image or audio for models.
+   * @param mediaFile Path to the media file
+   * @param fileExtension File extension (e.g. '.jpg', '.pdf', '.wav')
+   * @returns Tuple of [base64 encoded media data, media type, media category ('image' or 'audio')]
+   */
+  protected async processMedia(
+    mediaFile: string,
+    fileExtension: string,
+  ): Promise<[string | string[], string, 'image' | 'audio']> {
+    const ext = fileExtension.toLowerCase();
+    return this.isAudio(ext)
+      ? this.processAudio(mediaFile, ext)
+      : this.processImage(mediaFile, ext);
   }
 
   /**
@@ -393,7 +419,13 @@ export abstract class ModelHandler {
     const addedMedia: string[] = [];
 
     for (const mediaFile of mediaFiles) {
-      if (!(await fileExists(mediaFile))) {
+      // Check if this is an absolute path (for pasted images in storage)
+      const isAbsolutePath = path.isAbsolute(mediaFile);
+      const fileExistsResult = isAbsolutePath
+        ? await fileExistsAbsolute(mediaFile)
+        : await fileExists(mediaFile);
+
+      if (!fileExistsResult) {
         this.logger.error(`File not found: ${mediaFile}`);
         continue;
       }
@@ -401,7 +433,6 @@ export abstract class ModelHandler {
       const fileExtension = path.extname(mediaFile).toLowerCase();
 
       try {
-        this.logger.debug(`Processing media: ${mediaFile}`);
         const [mediaData, mediaType, mediaCategory] = await this.processMedia(
           mediaFile,
           fileExtension,
@@ -471,11 +502,46 @@ export abstract class ModelHandler {
           // TODO: we should just show the files that were not loaded.
         );
       } else {
-        this.logger.info(`Added: ${addedMedia}`);
+        // Show simplified paths in logs
+        const simplifiedMedia = addedMedia.map((m) =>
+          getPastedImageDisplayName(m),
+        );
+        this.logger.info(`Added: ${simplifiedMedia}`);
       }
     }
 
     return this.createMediaContent(mediaMessage);
+  }
+
+  /** Calculates token-based stop flags. */
+  protected computeTokenFlags(
+    stateRound: AgentStateRound,
+    stateGlobal: AgentStateGlobal,
+  ): TokenFlags {
+    const maxOutputTokens =
+      stateGlobal.firstInputTokens > 0
+        ? this.maxOutputTokensFactor * stateGlobal.firstInputTokens
+        : Number.POSITIVE_INFINITY;
+
+    return {
+      continuationLimit: stateRound.continuationCount > this.continueLimit,
+      inputTokenLimit: stateGlobal.totalInputTokens > this.inputTokenLimit,
+      maxOutputTokensExceeded: stateGlobal.totalOutputTokens > maxOutputTokens,
+    };
+  }
+
+  /** Detects stop markers in model output. */
+  protected detectStopMarkers(
+    stopReason: string,
+    response: string,
+    setting: AgentSetting,
+  ): MarkerFlags {
+    return {
+      endTurn: ['end_turn', 'stop_sequence', 'stop', 'STOP'].includes(
+        stopReason,
+      ),
+      encounterDocumentTag: response.includes(`</${setting.documentTag}>`),
+    };
   }
 
   /**
@@ -489,23 +555,14 @@ export abstract class ModelHandler {
     stateGlobal: AgentStateGlobal,
     agentSetting: AgentSetting,
   ): [boolean, boolean] {
-    const maxOutputTokens =
-      stateGlobal.firstInputTokens > 0
-        ? this.maxOutputTokensFactor * stateGlobal.firstInputTokens
-        : Number.POSITIVE_INFINITY;
-
-    const endTurn = ['end_turn', 'stop_sequence', 'stop', 'STOP'].includes(
+    const tokenFlags = this.computeTokenFlags(stateRound, stateGlobal);
+    const markerFlags = this.detectStopMarkers(
       stopReason,
+      newResponse,
+      agentSetting,
     );
-    const encounterDocumentTag = newResponse.includes(
-      `</${agentSetting.documentTag}>`,
-    );
-    const continuationLimit = stateRound.continuationCount > this.continueLimit;
-    const inputTokenLimit = stateGlobal.totalInputTokens > this.inputTokenLimit;
-    const maxOutputTokensExceeded =
-      stateGlobal.totalOutputTokens > maxOutputTokens;
 
-    if (maxOutputTokensExceeded) {
+    if (tokenFlags.maxOutputTokensExceeded) {
       this.logger.warn(
         `Output tokens exceed ${this.maxOutputTokensFactor}x input tokens`,
       );
@@ -515,22 +572,17 @@ export abstract class ModelHandler {
     }
 
     const shouldStop =
-      encounterDocumentTag || continuationLimit || inputTokenLimit;
+      markerFlags.encounterDocumentTag ||
+      tokenFlags.continuationLimit ||
+      tokenFlags.inputTokenLimit;
 
-    // Print debug info if stopping
     if (shouldStop) {
-      // StopFlags maybe should be a interface
       this.logger.debug(
-        `StopFlags:
-                endTurn: ${endTurn}
-                encounterDocumentTag: ${encounterDocumentTag}
-                continuation_limit: ${continuationLimit}
-                inputTokenLimit: ${inputTokenLimit}
-                maxOutputTokens: ${maxOutputTokensExceeded}`,
+        `StopFlags: endTurn: ${markerFlags.endTurn} encounterDocumentTag: ${markerFlags.encounterDocumentTag} continuation_limit: ${tokenFlags.continuationLimit} inputTokenLimit: ${tokenFlags.inputTokenLimit} maxOutputTokens: ${tokenFlags.maxOutputTokensExceeded}`,
       );
     }
 
-    return [endTurn, shouldStop];
+    return [markerFlags.endTurn, shouldStop];
   }
 
   public containCutOffMessage(content: any[] | string): boolean {

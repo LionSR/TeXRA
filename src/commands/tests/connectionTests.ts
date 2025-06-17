@@ -5,10 +5,10 @@ import * as vscode from 'vscode';
 import {
   bestConnectionMethod,
   bestConnectionMethodAnthropic,
-} from '../../latex/textConnection';
+} from '@latex/textConnection';
 
 // Local imports - log
-import * as logger from '../../logger/logUtils';
+import * as logger from '@logger/logUtils';
 
 const CHANNEL = 'TestCommands';
 logger.initialize(CHANNEL);

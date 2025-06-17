@@ -5,12 +5,12 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 // Local imports - log
-import * as logger from '../logger/logUtils';
+import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
-import { executeCommand } from '../utils/execUtils';
-import { getConfig } from '../utils/configUtils';
-import { getWorkspacePath, createDirectory } from '../utils/workspaceFileUtils';
+import { executeCommand } from '@utils/system';
+import { getConfig } from '@utils/config';
+import { getWorkspacePath, createDirectory } from '@utils/files';
 // No additional imports needed
 
 const CHANNEL = 'LaTeXCommands';
@@ -57,20 +57,12 @@ export async function compileLatex2Pdf(
       const workspacePath = getWorkspacePath();
       if (workspacePath) {
         texInputs += `${workspacePath}:`;
-        logger.debug(
-          channel,
-          `Including workspace path in TEXINPUTS: ${workspacePath}`,
-        );
       }
     }
 
     // Add TikZ input directory if configured
     if (tikzInputDirectory && tikzInputDirectory.trim() !== '') {
       texInputs += `${tikzInputDirectory}:`;
-      logger.debug(
-        channel,
-        `Including TikZ input directory in TEXINPUTS: ${tikzInputDirectory}`,
-      );
     }
 
     // Append the existing TEXINPUTS if any

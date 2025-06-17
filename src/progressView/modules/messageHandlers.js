@@ -22,7 +22,7 @@ import {
   updateLogGroup,
 } from './logFormatters.js';
 import { COMMANDS } from './constants.js';
-import { registerMessageHandlers } from '@common/messageRouter.js';
+import { registerMessageHandlers } from '@common/webviewContext.js';
 
 const handlers = {
   [COMMANDS.UPDATE_STREAMS]: (message) => {

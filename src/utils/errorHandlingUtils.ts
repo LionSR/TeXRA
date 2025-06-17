@@ -1,7 +1,7 @@
 // Utility functions for consistent error logging and formatting
 
 // Local imports - log
-import * as logger from '../logger/logUtils';
+import * as logger from '@logger/logUtils';
 
 /**
  * Format an error with a prefix for logging or user messages.
