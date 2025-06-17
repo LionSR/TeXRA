@@ -16,6 +16,7 @@ import { registerTestCommands } from './commands/testCommands';
 import { registerXmlCommands } from './commands/xmlCommands';
 import { registerYamlCommands } from './commands/yamlCommands';
 import { registerAgentCommands } from './commands/agentCommands';
+import { registerAgentCreatorCommands } from './commands/agentCreatorCommands';
 import { registerApiKeyCommands } from './commands/apiKeyCommands';
 import { registerStateRestoreCommand } from './commands/stateRestoreCommand';
 import { registerTextEditorCommands } from './commands/textEditorCommands';
@@ -55,6 +56,7 @@ export function registerCommands(context: vscode.ExtensionContext) {
     xml: registerXmlCommands(context),
     yaml: registerYamlCommands(context),
     agent: registerAgentCommands(context),
+    agentCreator: registerAgentCreatorCommands(context),
     apiKey: registerApiKeyCommands(context),
     stateRestore: registerStateRestoreCommand(context),
     textEditor: registerTextEditorCommands(context),
@@ -108,4 +110,5 @@ export { historyCommands } from './commands/historyCommands';
 export { arXivCommands } from './commands/arXivCommands';
 export { compareCommands } from './commands/compareCommands';
 export { helpCommands } from './commands/helpCommands';
+export { agentCreatorCommands } from './commands/agentCreatorCommands';
 export { registerOpenFileCommands as openFileCommands } from './commands/openFileCommands';
