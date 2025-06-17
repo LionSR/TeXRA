@@ -62,7 +62,7 @@ prompts:
   userPrefix: |
     Project context:
     <documents>
-    {{ ALL_AUXILIARIES }}
+    {{ ALL_AUXILIARYS }}
     {{ ALL_REFERENCES }}
     {{ ADDITIONAL_INPUTS }}
     <document name="{{ INPUT_FILE }}">
@@ -132,7 +132,7 @@ prompts:
   userPrefix: |
     Project context:
     <documents>
-    {{ ALL_AUXILIARIES }}
+    {{ ALL_AUXILIARYS }}
     {{ ALL_REFERENCES }}
     {{ ADDITIONAL_INPUTS }}
     <document name="{{ INPUT_FILE }}">
