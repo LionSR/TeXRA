@@ -1,3 +1,5 @@
+export const vscode = acquireVsCodeApi();
+
 export function registerMessageHandlers(handlers) {
   window.addEventListener('message', (event) => {
     const message = event.data;

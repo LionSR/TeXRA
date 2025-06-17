@@ -1,5 +1,4 @@
-import { vscode } from '@common/vscodeApi.js';
-import { registerMessageHandlers } from '@common/messageRouter.js';
+import { vscode, registerMessageHandlers } from '@common/webviewContext.js';
 import { safeSetElementValue, safeGetElementById } from '@common/domUtils.js';
 import { capitalize, uncapitalize } from '@common/stringUtils.js';
 import { stateManager, restoreState, saveState } from './stateManager.js';
