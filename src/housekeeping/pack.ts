@@ -5,7 +5,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 // Local imports - result types
-import type { PackResult, PackStatus } from '@/types/PackTypes';
+import type { FileOpResult } from '@/types/ResultTypes';
 
 // Local imports - log
 import * as logger from '@logger/logUtils';
@@ -32,7 +32,7 @@ export async function runPackSingle(
   inputFile: string,
   agent: string,
   outputFolder?: string,
-): Promise<PackResult> {
+): Promise<FileOpResult> {
   logger.info(
     CHANNEL,
     `Starting packing with model=${model}, inputFile=${inputFile}, agent=${agent}, outputFolder=${outputFolder}`,
@@ -87,7 +87,7 @@ export async function runPackSingle(
     return { status: 'noFiles' };
   }
 
-  let result: PackResult;
+  let result: FileOpResult;
   if (movedFiles.length > 0 || copiedFiles.length > 0) {
     logger.debug(
       CHANNEL,
@@ -161,7 +161,7 @@ export async function runPackMultiple(
   agent: string,
   inputFiles: string[],
   outputNameOverride?: string,
-): Promise<PackResult> {
+): Promise<FileOpResult> {
   logger.debug(
     CHANNEL,
     `Starting multiple packing with model=${model}, inputFile=${inputFile}, agent=${agent}, outputNameOverride=${outputNameOverride}`,
@@ -253,7 +253,7 @@ export async function runPack(
   agent: string,
   outputFiles: string[] = [],
   outputNameOverride?: string,
-): Promise<PackResult> {
+): Promise<FileOpResult> {
   logger.debug(
     CHANNEL,
     `Starting pack with model=${model}, inputFile=${inputFile}, agent=${agent}, outputNameOverride=${outputNameOverride}`,
