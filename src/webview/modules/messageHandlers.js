@@ -10,6 +10,7 @@ import {
   getSelectedFiles,
   handleRecentCommits,
   handleSetCurrentFile,
+  setAgentDefaultOutputFiles,
 } from './fileHandlers.js';
 
 import { FILE_TYPES } from './constants.js';
@@ -299,6 +300,10 @@ export function setupMessageHandlers() {
     },
     editedFileSelected: (m) => {
       safeSetElementValue('editedFile', m.filePath);
+      postHandle();
+    },
+    setDefaultOutputFiles: (m) => {
+      setAgentDefaultOutputFiles(m.files || []);
       postHandle();
     },
     setInputFiles: (m) => {
