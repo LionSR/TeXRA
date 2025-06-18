@@ -9,7 +9,7 @@ import * as logger from '@logger/logUtils';
 
 // Local imports - housekeeping
 import { runPack, runPackSingle, runPackMultiple } from '../housekeeping';
-import type { PackResult } from '@/types/PackTypes';
+import type { FileOpResult } from '@/types/ResultTypes';
 
 const CHANNEL = 'packCommands';
 logger.initialize(CHANNEL);
@@ -25,7 +25,7 @@ function getStreamId(
   return `${agentName}@${model}: ${path.basename(inputFile)}`;
 }
 
-function showPackResult(result: PackResult, inputFile: string): void {
+function showPackResult(result: FileOpResult, inputFile: string): void {
   switch (result.status) {
     case 'success':
       if (result.outputFolder) {
