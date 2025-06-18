@@ -384,19 +384,20 @@ export class WebviewMessageHandler {
     message: any,
     webviewView: vscode.WebviewView,
   ) {
-    try {
-      const agent = message.agent;
-      if (!agent) {
-        webviewView.webview.postMessage({
-          command: 'setDefaultOutputFiles',
-          files: [],
-        });
-        return;
-      }
+    const agent = message.agent;
+    if (!agent) {
+      webviewView.webview.postMessage({
+        command: 'setDefaultOutputFiles',
+        files: [],
+      });
+      return;
+    }
 
+    try {
       const agentPath = await getAgentPath(agent, this.context);
       const [settings] = await loadAgentSettingAndPrompts(agentPath, agent);
-      const files = Array.isArray(settings.defaultOutputFiles)
+
+      const files = Array.isArray(settings?.defaultOutputFiles)
         ? settings.defaultOutputFiles
         : [];
 
@@ -409,6 +410,11 @@ export class WebviewMessageHandler {
         CHANNEL,
         `Error requesting default output files: ${err instanceof Error ? err.message : String(err)}`,
       );
+      // Send fallback message so the webview clears any stale defaults
+      webviewView.webview.postMessage({
+        command: 'setDefaultOutputFiles',
+        files: [],
+      });
     }
   }
 
