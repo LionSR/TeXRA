@@ -46,7 +46,7 @@ inherits: base # Or polish, correct, etc.
 # Override parent settings here if inheriting.
 settings:
   # Core Behavior
-  agentType: CoT # Type: 'CoT' (Chain of Thought) for complex reasoning with scratchpads, or 'direct' for simpler, direct output.
+  agentType: CoT # Type: 'CoT' (Chain of Thought) for complex reasoning with scratchpads, 'direct' for simpler direct output, or 'toolUse' for agents that call model tools.
   temperature: 0.1 # LLM creativity (0.0 = deterministic, >0 = more random). Can be overridden by user settings.
   isRewrite: true # Boolean: Does the agent primarily rewrite existing content (true) or generate new content (false)? Affects some internal handling.
 
