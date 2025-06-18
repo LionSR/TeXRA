@@ -28,14 +28,6 @@ window.onload = function () {
   // Set default state for new folders
   restoreState();
 
-  const agentSelect = document.getElementById('agent');
-  if (agentSelect) {
-    vscode.postMessage({
-      command: 'requestDefaultOutputFiles',
-      agent: agentSelect.value,
-    });
-  }
-
   // Setup auto-resize for instruction textarea
   const instruction = document.getElementById('instruction');
   if (instruction) {
