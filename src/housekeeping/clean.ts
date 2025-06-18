@@ -8,7 +8,7 @@ import * as vscode from 'vscode';
 import * as logger from '@logger/logUtils';
 
 // Local imports - result types
-import type { CleanResult } from '@/types/CleanTypes';
+import type { FileOpResult } from '@/types/ResultTypes';
 
 // Local imports - utilities
 import {
@@ -34,7 +34,7 @@ export async function runCleanSingle(
   model: string,
   inputFile: string,
   agent: string,
-): Promise<CleanResult> {
+): Promise<FileOpResult> {
   logger.info(
     CHANNEL,
     `Starting cleanup with model=${model}, inputFile=${inputFile}, agent=${agent}`,
@@ -75,7 +75,7 @@ export async function runCleanSingle(
   const onlyInputFileFound =
     filesToDelete.length === 1 && filesToDelete[0] === inputFile;
 
-  let result: CleanResult;
+  let result: FileOpResult;
 
   if (onlyInputFileFound || filesToDelete.length === 0) {
     logger.warn(CHANNEL, `No matching files found to clean for ${inputFile}`);
@@ -108,7 +108,7 @@ export async function runCleanMultiple(
   inputFile: string,
   agent: string,
   inputFiles: string[],
-): Promise<CleanResult> {
+): Promise<FileOpResult> {
   logger.debug(
     CHANNEL,
     `Starting multiple cleanup with model=${model}, inputFile=${inputFile}, agent=${agent}`,
