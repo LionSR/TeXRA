@@ -12,10 +12,12 @@ import { disposeDiffRefresh } from '@frontend/ui/diffView';
 import { ProgressViewProvider } from './progressView/ProgressViewProvider';
 import { FolderExplorer } from './FolderExplorer';
 import { registerCommands } from './commands';
+import { setStorageContext } from '@utils/files/workspaceStorageUtils';
 
 export async function activate(context: vscode.ExtensionContext) {
   // Initialize secrets storage
   initializeSecrets(context);
+  setStorageContext(context);
 
   // Create the log view provider
   const progressViewProvider = new ProgressViewProvider(context);

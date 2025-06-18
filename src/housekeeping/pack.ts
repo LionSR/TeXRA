@@ -16,6 +16,10 @@ import {
   createDirectory,
   fileExists,
 } from '@utils/files';
+import {
+  createStoragePath,
+  storagePathToAbsolute,
+} from '@utils/files/workspaceStorageUtils';
 
 // Local imports - housekeeping
 import { PACK_EXTENSIONS, TEMP_EXTENSIONS, HISTORY_DIR } from './constants';
@@ -28,6 +32,8 @@ export async function runPackSingle(
   model: string,
   inputFile: string,
   agent: string,
+  context: vscode.ExtensionContext,
+  taskId?: string,
   outputFolder?: string,
 ): Promise<string | undefined> {
   logger.info(
@@ -103,7 +109,12 @@ export async function runPackSingle(
     const now = new Date().toISOString().replace(/[-:]/g, '').split('.')[0];
     outputFolder =
       outputFolder ||
-      path.join(inputDir, HISTORY_DIR, `${now}_${baseName}_${agent}_${model}`);
+      storagePathToAbsolute(
+        createStoragePath(
+          `tasks/${taskId ?? `${now}_${baseName}_${agent}_${model}`}`,
+        ),
+        context,
+      );
     logger.debug(CHANNEL, `Output folder: ${outputFolder}`);
 
     try {
@@ -163,6 +174,8 @@ export async function runPackMultiple(
   inputFile: string,
   agent: string,
   inputFiles: string[],
+  context: vscode.ExtensionContext,
+  taskId?: string,
   outputNameOverride?: string,
 ): Promise<string> {
   logger.debug(
@@ -176,10 +189,11 @@ export async function runPackMultiple(
   const outputDir = path.dirname(fileToPack);
 
   const now = new Date().toISOString().replace(/[-:]/g, '').split('.')[0];
-  const commonOutputFolder = path.join(
-    outputDir,
-    HISTORY_DIR,
-    `${now}_${baseName}_multiple_${agent}_${model}`,
+  const commonOutputFolder = storagePathToAbsolute(
+    createStoragePath(
+      `tasks/${taskId ?? `${now}_${baseName}_multiple_${agent}_${model}`}`,
+    ),
+    context,
   );
   logger.debug(CHANNEL, `Common output folder: ${commonOutputFolder}`);
 
@@ -191,6 +205,8 @@ export async function runPackMultiple(
       model,
       fileToPack,
       agent,
+      context,
+      taskId,
       commonOutputFolder,
     );
     if (singleResult) {
@@ -204,6 +220,8 @@ export async function runPackMultiple(
           model,
           file,
           agent,
+          context,
+          taskId,
           commonOutputFolder,
         );
         if (result) {
@@ -255,6 +273,8 @@ export async function runPack(
   inputFile: string,
   agent: string,
   outputFiles: string[] = [],
+  context: vscode.ExtensionContext,
+  taskId?: string,
   outputNameOverride?: string,
 ): Promise<string | undefined> {
   logger.debug(
@@ -279,9 +299,18 @@ export async function runPack(
       inputFile,
       agent,
       outputFiles,
+      context,
+      taskId,
       outputNameOverride,
     );
   } else {
-    return await runPackSingle(model, inputFile, agent, outputNameOverride);
+    return await runPackSingle(
+      model,
+      inputFile,
+      agent,
+      context,
+      taskId,
+      outputNameOverride,
+    );
   }
 }

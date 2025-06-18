@@ -111,6 +111,34 @@ export async function writeBinaryFileToStorage(
 }
 
 /**
+ * Write UTF-8 text to a file in workspace storage
+ */
+export async function writeFileToStorage(
+  context: vscode.ExtensionContext,
+  filePath: string,
+  content: string,
+): Promise<void> {
+  await writeBinaryFileToStorage(
+    context,
+    filePath,
+    Buffer.from(content, 'utf-8'),
+  );
+}
+
+/**
+ * Read UTF-8 text from a file in workspace storage
+ */
+export async function readFileFromStorage(
+  context: vscode.ExtensionContext,
+  filePath: string,
+): Promise<string> {
+  const basePath = getWorkspaceStoragePath(context);
+  const fullPath = path.join(basePath, filePath);
+  const data = await vscode.workspace.fs.readFile(vscode.Uri.file(fullPath));
+  return Buffer.from(data).toString('utf-8');
+}
+
+/**
  * Clean up old files in a storage directory
  */
 export async function cleanupStorageDirectory(

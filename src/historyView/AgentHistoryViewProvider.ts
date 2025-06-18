@@ -6,6 +6,11 @@ import { executeCommand } from '@commands/executeCommand';
 
 import { agentConfigToTaskState } from '@utils/config';
 import { buildWebviewHtml } from '@frontend/webview/html';
+import {
+  createStoragePath,
+  storagePathToAbsolute,
+} from '@utils/files/workspaceStorageUtils';
+import * as path from 'path';
 
 // Local imports - log
 import * as logger from '@logger/logUtils';
@@ -93,6 +98,8 @@ export class AgentHistoryViewProvider implements vscode.WebviewViewProvider {
     restoreAgent: (m) => this.restoreAgent(m.historyId),
     deleteAgent: (m) => this.deleteHistoryItem(m.historyId),
     clearHistory: () => this.clearHistory(),
+    openFolder: (m) => this.openFolder(m.historyId),
+    openRawXml: (m) => this.openRawXml(m.historyId),
   };
 
   private async handleWebviewMessage(message: any) {
@@ -287,6 +294,42 @@ export class AgentHistoryViewProvider implements vscode.WebviewViewProvider {
     } catch (error) {
       logger.error(CHANNEL, `Failed to delete history item: ${error}`);
       vscode.window.showErrorMessage(`Failed to delete history item: ${error}`);
+    }
+  }
+
+  private async openFolder(historyId: string) {
+    const folderPath = storagePathToAbsolute(
+      createStoragePath(`tasks/${historyId}`),
+      this.context,
+    );
+    await vscode.commands.executeCommand(
+      'revealFileInOS',
+      vscode.Uri.file(folderPath),
+    );
+  }
+
+  private async openRawXml(historyId: string) {
+    const taskDir = storagePathToAbsolute(
+      createStoragePath(`tasks/${historyId}`),
+      this.context,
+    );
+    try {
+      const entries = await vscode.workspace.fs.readDirectory(
+        vscode.Uri.file(taskDir),
+      );
+      const xmlFile = entries.find(
+        ([name, type]) =>
+          type === vscode.FileType.File && name.endsWith('.xml'),
+      )?.[0];
+      if (xmlFile) {
+        const uri = vscode.Uri.file(path.join(taskDir, xmlFile));
+        const doc = await vscode.workspace.openTextDocument(uri);
+        await vscode.window.showTextDocument(doc, { preview: false });
+      } else {
+        vscode.window.showWarningMessage('No XML file found for this task');
+      }
+    } catch (err) {
+      vscode.window.showErrorMessage(`Failed to open XML: ${err}`);
     }
   }
 }

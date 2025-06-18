@@ -3,6 +3,7 @@ import * as path from 'path';
 
 // Third-party imports
 import { XMLParser } from 'fast-xml-parser';
+import * as vscode from 'vscode';
 
 // Local imports - log
 import { AgentLogger } from '@logger/AgentLogger';
@@ -30,6 +31,13 @@ import {
 import { compileLatex2Pdf } from '@latex/texTools';
 import { checkToolInstalled } from '@utils/system';
 import { runLatexFormatter } from '@latex/texFormatter';
+import {
+  createStoragePath,
+  parseStoragePath,
+  isStoragePath,
+  storagePathToAbsolute,
+  getStorageContext,
+} from '@utils/files/workspaceStorageUtils';
 
 // Local imports - agent components
 import { AgentConfig } from '@agent/core/AgentConfig';
@@ -48,6 +56,7 @@ export function getOutputFileName(
   outputExt: string,
   currRound: number,
   editedFile?: string,
+  baseDir?: string,
 ): string {
   const { dir, name: fileName } = path.parse(inputFile);
   const agentFirstNameChunk = agent.split('_')[0];
@@ -60,8 +69,13 @@ export function getOutputFileName(
   }
 
   const outputBaseName = `${fileName}_${agentFirstNameChunk}_r${newRound}_${model}.${outputExt}`;
-  const outputFile = path.join(dir, outputBaseName);
-  return outputFile;
+  const targetDir = baseDir || dir;
+  if (targetDir.startsWith('storage://')) {
+    return createStoragePath(
+      path.join(parseStoragePath(targetDir), outputBaseName),
+    );
+  }
+  return path.join(targetDir, outputBaseName);
 }
 
 /** Pair of original source name and generated output path. */
@@ -82,6 +96,7 @@ export class OutputHandler {
   public processGroupId?: string;
   protected logger: AgentLogger;
   protected channel: string;
+  private context: vscode.ExtensionContext | null = null;
 
   constructor(
     agentSetting: AgentSetting,
@@ -90,6 +105,7 @@ export class OutputHandler {
     logId: number,
     baseFiles: string[] = [],
     logger?: AgentLogger,
+    context?: vscode.ExtensionContext,
   ) {
     this.agentSetting = agentSetting;
     this.agentConfig = agentConfig;
@@ -100,6 +116,7 @@ export class OutputHandler {
     this.baseFiles = baseFiles;
     this.logger = logger || new AgentLogger('OutputHandler');
     this.channel = this.logger.channelId;
+    this.context = context || getStorageContext();
   }
 
   /**
@@ -160,6 +177,38 @@ export class OutputHandler {
     for (const filePath of filePaths) {
       await this.indentLatexFile(filePath);
     }
+  }
+
+  private async readFileSmart(filePath: string): Promise<string> {
+    if (isStoragePath(filePath)) {
+      const ctx = this.context;
+      if (!ctx) {
+        throw new Error('Storage context not available');
+      }
+      const abs = storagePathToAbsolute(filePath, ctx);
+      const data = await vscode.workspace.fs.readFile(vscode.Uri.file(abs));
+      return Buffer.from(data).toString('utf-8');
+    }
+    return readFile(filePath);
+  }
+
+  private async writeFileSmart(
+    filePath: string,
+    content: string,
+  ): Promise<void> {
+    if (isStoragePath(filePath)) {
+      const ctx = this.context;
+      if (!ctx) {
+        throw new Error('Storage context not available');
+      }
+      const abs = storagePathToAbsolute(filePath, ctx);
+      await vscode.workspace.fs.writeFile(
+        vscode.Uri.file(abs),
+        Buffer.from(content, 'utf-8'),
+      );
+      return;
+    }
+    await this.writeFileSmart(filePath, content);
   }
 
   /** Processes XML content by filtering tags and applying replacements. */
@@ -328,14 +377,14 @@ export class OutputHandler {
       }
 
       try {
-        const content = await readFile(outputFile);
+        const content = await this.readFileSmart(outputFile);
         // Replace \input commands with references to the new file paths
         const newContent = content.replace(/\\input{([^}]+)}/g, (match, p1) =>
           baseToOutput.has(p1) ? `\\input{${baseToOutput.get(p1)}}` : match,
         );
 
         if (newContent !== content) {
-          await writeFile(outputFile, newContent);
+          await this.writeFileSmart(outputFile, newContent);
           this.logger.debug(`Updated input commands in ${outputFile}`);
         }
       } catch (err) {
@@ -511,15 +560,15 @@ export class OutputHandler {
       this.agentSetting.documentTag,
     );
 
-    const xmlContent = await readFile(outputFile);
+    const xmlContent = await this.readFileSmart(outputFile);
     let original = '';
     const nameMatch = xmlContent.match(/<document[^>]*name="(.*?)"[^>]*>/);
     if (nameMatch && nameMatch[1]) {
       original = nameMatch[1].trim();
     }
 
-    const content = await readFile(processedOutputFile);
-    await writeFile(processedOutputFile, content);
+    const content = await this.readFileSmart(processedOutputFile);
+    await this.writeFileSmart(processedOutputFile, content);
 
     return { source: original || outputFile, path: processedOutputFile };
   }
@@ -611,7 +660,7 @@ export class OutputHandler {
     const { dir, name, ext } = path.parse(outputFile);
     const texFile = path.join(dir, `${name}.tex`);
 
-    let outputContent = await readFile(outputFile);
+    let outputContent = await this.readFileSmart(outputFile);
 
     const tagsToWrap = [documentTag, thinkingTag];
     outputContent = addCdataToTags(outputContent, tagsToWrap);
@@ -628,7 +677,7 @@ export class OutputHandler {
 
       const latexDocument = extractContentFromXMLbyTag(root, documentTag);
       if (latexDocument) {
-        await writeFile(texFile, latexDocument);
+        await this.writeFileSmart(texFile, latexDocument);
         return texFile;
       } else {
         this.logger.warn(
@@ -640,7 +689,7 @@ export class OutputHandler {
           documentTag,
         );
         if (fallbackContent) {
-          await writeFile(texFile, fallbackContent);
+          await this.writeFileSmart(texFile, fallbackContent);
           return texFile;
         }
         return texFile;
@@ -655,7 +704,7 @@ export class OutputHandler {
         documentTag,
       );
       if (fallbackContent) {
-        await writeFile(texFile, fallbackContent);
+        await this.writeFileSmart(texFile, fallbackContent);
         return texFile;
       }
       // Re-throw the original error if fallback also failed
@@ -672,7 +721,7 @@ export class OutputHandler {
     documentTag: string,
     thinkingTag: string = 'scratchpad',
   ): Promise<NamedOutputFile[]> {
-    let outputContent = await readFile(outputFile);
+    let outputContent = await this.readFileSmart(outputFile);
 
     const tagsToWrap = [thinkingTag, 'document'];
     outputContent = addCdataToTagsMultiple(outputContent, tagsToWrap);
@@ -763,8 +812,12 @@ export class OutputHandler {
         model,
         extension,
         currRound,
+        undefined,
+        this.agentConfig.taskId
+          ? createStoragePath(`tasks/${this.agentConfig.taskId}`)
+          : undefined,
       );
-      await writeFile(texFile, doc.content.trim());
+      await this.writeFileSmart(texFile, doc.content.trim());
       outputFiles.push({ source, path: texFile });
       this.logger.debug(
         `XML Source: ${source} -> TeX file written: ${texFile}`,
@@ -781,7 +834,7 @@ export class OutputHandler {
     documentTag: string,
   ): Promise<void> {
     this.logger.debug(`Ensuring correct XML structure: ${filePath}`);
-    let content = await readFile(filePath);
+    let content = await this.readFileSmart(filePath);
 
     content = await this.processXmlContent(content);
 
@@ -803,7 +856,7 @@ export class OutputHandler {
         }
       }
     }
-    await writeFile(filePath, content);
+    await this.writeFileSmart(filePath, content);
   }
 
   /** Prints statistics about token usage and costs */

@@ -9,3 +9,4 @@ releases/
 .cursor/rules
 **/.claude/settings.local.json
 webview-common/
+out/

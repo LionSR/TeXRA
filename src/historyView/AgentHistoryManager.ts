@@ -26,8 +26,10 @@ export class AgentHistoryManager {
     context: vscode.ExtensionContext,
     config: AgentConfig,
   ): Promise<string> {
+    const id = randomUUID();
+    config.taskId = id;
     const historyItem: AgentHistoryItem = {
-      id: randomUUID(),
+      id,
       timestamp: new Date().toISOString(),
       config,
     };

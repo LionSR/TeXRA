@@ -112,6 +112,10 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     return this._instance;
   }
 
+  public getContext(): vscode.ExtensionContext {
+    return this.context;
+  }
+
   public dispose() {
     this._disposables.forEach((d) => d.dispose());
     this._cleanupView();

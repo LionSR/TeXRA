@@ -39,4 +39,7 @@ export interface TaskState {
 
   // Output name override visibility
   outputNameOverrideVisible: boolean;
+
+  // Unique task ID
+  taskId: string | null;
 }

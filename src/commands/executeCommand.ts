@@ -23,8 +23,9 @@ export const executeCommand = {
     context: vscode.ExtensionContext,
   ) => {
     try {
-      // Save the agent configuration to history (silently)
-      await AgentHistoryManager.addToHistory(context, config);
+      // Save the agent configuration to history and get the task ID
+      const taskId = await AgentHistoryManager.addToHistory(context, config);
+      config.taskId = taskId;
 
       // Run the agent directly
       await executeAgent(config, context);

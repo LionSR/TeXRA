@@ -1,5 +1,6 @@
 // Standard library imports
 import * as path from 'path';
+import * as vscode from 'vscode';
 
 // Local imports - agent components
 import { DirectAgent } from './DirectAgent';
@@ -19,8 +20,16 @@ export class MergeAgent extends DirectAgent {
     agentSetting: AgentSetting,
     agentPrompt: AgentPrompt,
     agentPath: string,
+    context: vscode.ExtensionContext,
   ) {
-    super(modelHandler, agentConfig, agentSetting, agentPrompt, agentPath);
+    super(
+      modelHandler,
+      agentConfig,
+      agentSetting,
+      agentPrompt,
+      agentPath,
+      context,
+    );
     this.outputFile = [this.getOutputFile(0), this.getOutputFile(1)];
   }
 

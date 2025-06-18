@@ -120,6 +120,8 @@ export class ProgressViewMessageHandler {
       inputFile: taskState.inputFile,
       outputNameOverride: taskState.outputNameOverride,
       outputFiles: outputFilesArray,
+      taskId: taskState.taskId,
+      context: this.provider.getContext(),
       activeFiles: {
         output: outputFilesArray.length > 0,
       },

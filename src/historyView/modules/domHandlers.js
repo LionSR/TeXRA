@@ -79,6 +79,12 @@ function createHistoryItemElement(item) {
         <button class="vscode-button rerun-btn" data-id="${item.id}" data-command="rerunAgent" title="Execute this configuration">
           <i class="codicon codicon-debug-rerun"></i>
         </button>
+        <button class="vscode-button folder-btn" data-id="${item.id}" data-command="openFolder" title="Open task folder">
+          <i class="codicon codicon-folder-opened"></i>
+        </button>
+        <button class="vscode-button xml-btn" data-id="${item.id}" data-command="openRawXml" title="Open raw XML">
+          <i class="codicon codicon-file-code"></i>
+        </button>
       </div>
   `;
 

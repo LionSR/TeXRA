@@ -2,6 +2,7 @@
 import { AgentStateRound, AgentStateGlobal } from '../core/AgentState';
 import { getOutputFileName } from '../runtime/OutputHandler';
 import { BaseReflectionAgent } from './BaseReflectionAgent';
+import { createStoragePath } from '@utils/files/workspaceStorageUtils';
 
 /**
  * Chain of Thought (CoT) agent implementation that extends BaseReflectionAgent.
@@ -26,6 +27,9 @@ export class CoTAgent extends BaseReflectionAgent {
       fileExtension,
       currRound,
       this.agentConfig.editedFile || undefined,
+      this.agentConfig.taskId
+        ? createStoragePath(`tasks/${this.agentConfig.taskId}`)
+        : undefined,
     );
   }
 

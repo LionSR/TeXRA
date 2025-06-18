@@ -241,6 +241,7 @@ export class WebviewMessageHandler {
         outputFiles: getFilesIfNotEmpty(message.outputFiles),
         outputNameOverride: message.outputNameOverride,
         editedFile: null,
+        taskId: null,
         toolConfig,
       };
 

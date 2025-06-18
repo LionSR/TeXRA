@@ -2,6 +2,7 @@
 import { BaseReflectionAgent } from './BaseReflectionAgent';
 import { AgentStateRound, AgentStateGlobal } from '../core/AgentState';
 import { getOutputFileName } from '../runtime/OutputHandler';
+import { createStoragePath } from '@utils/files/workspaceStorageUtils';
 
 /**
  * Direct agent implementation that processes requests in a single pass.
@@ -23,6 +24,9 @@ export class DirectAgent extends BaseReflectionAgent {
       this.agentSetting.outputExt,
       currRound,
       this.agentConfig.editedFile || undefined,
+      this.agentConfig.taskId
+        ? createStoragePath(`tasks/${this.agentConfig.taskId}`)
+        : undefined,
     );
   }
 

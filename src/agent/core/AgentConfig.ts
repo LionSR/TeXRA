@@ -20,6 +20,7 @@ export const DEFAULT_AGENT_CONFIG: AgentConfig = {
   outputNameOverride: null,
   editedFile: null,
   toolConfig: {} as ToolConfig,
+  taskId: null,
 };
 
 /** Configuration interface for controlling agent execution and file handling. */
@@ -41,6 +42,9 @@ export interface AgentConfig {
   outputFiles: string[] | null;
   outputNameOverride: string | null;
   editedFile: string | null;
+
+  /** Unique ID for this task */
+  taskId: string | null;
 
   // Tool configuration
   toolConfig: ToolConfig;

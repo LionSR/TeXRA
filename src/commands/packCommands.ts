@@ -26,13 +26,19 @@ function getStreamId(
 
 export function registerPackCommands(context: vscode.ExtensionContext) {
   context.subscriptions.push(
-    vscode.commands.registerCommand('texra.pack', handlePack),
-    vscode.commands.registerCommand('texra.packSingle', handlePackSingle),
-    vscode.commands.registerCommand('texra.packMultiple', handlePackMultiple),
+    vscode.commands.registerCommand('texra.pack', (cfg) =>
+      handlePack(cfg, context),
+    ),
+    vscode.commands.registerCommand('texra.packSingle', (i, a, m, o) =>
+      handlePackSingle(i, a, m, context, o),
+    ),
+    vscode.commands.registerCommand('texra.packMultiple', (i, a, m, f, o) =>
+      handlePackMultiple(i, a, m, f, context, o),
+    ),
   );
 }
 
-async function handlePack(config: any) {
+async function handlePack(config: any, context: vscode.ExtensionContext) {
   logger.debug(
     CHANNEL,
     `Pack command called with config: ${JSON.stringify(config)}`,
@@ -54,6 +60,8 @@ async function handlePack(config: any) {
     config.inputFile,
     config.agent,
     outputFiles,
+    context,
+    config.taskId,
     config.outputNameOverride,
   );
 
@@ -74,6 +82,8 @@ async function handlePackSingle(
   inputFile: string,
   agent: string,
   model: string,
+  context: vscode.ExtensionContext,
+  taskId?: string,
   outputNameOverride?: string,
 ) {
   logger.debug(
@@ -93,7 +103,7 @@ async function handlePackSingle(
   }
 
   const fileToPack = outputNameOverride || inputFile;
-  await runPackSingle(model, fileToPack, agent);
+  await runPackSingle(model, fileToPack, agent, context, taskId);
 
   const provider = ProgressViewProvider.getInstance();
   if (provider) {
@@ -108,6 +118,8 @@ async function handlePackMultiple(
   agent: string,
   model: string,
   outputFiles: string[] = [],
+  context: vscode.ExtensionContext,
+  taskId?: string,
   outputNameOverride?: string,
 ) {
   logger.debug(
@@ -132,6 +144,8 @@ async function handlePackMultiple(
     inputFile,
     agent,
     outputFiles,
+    context,
+    taskId,
     outputNameOverride,
   );
 

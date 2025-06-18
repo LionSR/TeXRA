@@ -1,5 +1,6 @@
 // Standard library imports
 import * as path from 'path';
+import * as vscode from 'vscode';
 
 // Third-party imports
 // (none needed)
@@ -80,6 +81,7 @@ export abstract class BaseReflectionAgent implements IAgent {
   protected useScratchpad: boolean = false;
   protected logId: number = 0;
   protected logger: AgentLogger;
+  protected taskId: string;
   /** Handler for output file processing and validation. */
   protected outputHandler: OutputHandler;
   /** Cached user variables to avoid recomputation */
@@ -103,6 +105,7 @@ export abstract class BaseReflectionAgent implements IAgent {
     agentSetting: AgentSetting,
     agentPrompt: AgentPrompt,
     agentPath: string,
+    private readonly context: vscode.ExtensionContext,
   ) {
     this.modelHandler = modelHandler;
     this.agentConfig = agentConfig;
@@ -110,8 +113,10 @@ export abstract class BaseReflectionAgent implements IAgent {
     this.agentPrompt = agentPrompt;
     this.agentPath = agentPath;
 
+    this.taskId = this.agentConfig.taskId || this.deriveTaskId();
+
     // Initialize logger with unique channel ID
-    const channelId = this.getTaskId();
+    const channelId = this.taskId;
     this.logger = new AgentLogger(channelId);
 
     // Update model handler's logger
@@ -149,6 +154,7 @@ export abstract class BaseReflectionAgent implements IAgent {
       this.logId,
       this.baseFiles,
       this.logger,
+      this.context,
     );
 
     // Register this agent instance
@@ -169,7 +175,7 @@ export abstract class BaseReflectionAgent implements IAgent {
    * Gets unique task ID from output name override or input filename.
    * @returns Task ID string used for logging and output naming
    */
-  private getTaskId(): string {
+  private deriveTaskId(): string {
     const baseName = path.basename(
       this.agentConfig.outputNameOverride || this.agentConfig.inputFile,
     );
@@ -1376,8 +1382,7 @@ export abstract class BaseReflectionAgent implements IAgent {
    * Removes a running agent from tracking
    */
   private cleanup(): void {
-    const channelId = this.getTaskId();
-    BaseReflectionAgent.runningAgents.delete(channelId);
+    BaseReflectionAgent.runningAgents.delete(this.taskId);
   }
 
   /** Extracts and logs scratchpad content from output. */

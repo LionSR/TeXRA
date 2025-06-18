@@ -43,6 +43,7 @@ type AgentConstructor = {
     agentSetting: AgentSetting,
     agentPrompt: AgentPrompt,
     agentPath: string,
+    context: vscode.ExtensionContext,
   ): IAgent;
 };
 
@@ -407,6 +408,7 @@ export async function executeAgent(
         agentSetting,
         agentPrompt,
         agentPath,
+        context,
       );
     },
     context,
@@ -464,6 +466,7 @@ export async function executeMergeAgent(
         agentSetting,
         agentPrompt,
         agentPath,
+        context,
       );
     },
     context,

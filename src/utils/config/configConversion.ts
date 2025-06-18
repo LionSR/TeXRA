@@ -84,6 +84,7 @@ export function agentConfigToTaskState(config: AgentConfig): TaskState {
     // Output name override visibility
     outputNameOverride: config.outputNameOverride || '',
     outputNameOverrideVisible: !!config.outputNameOverride,
+    taskId: config.taskId || null,
   };
 
   // Add single and multi-file selections
@@ -120,6 +121,7 @@ export function objectToTaskState(obj: Record<string, any>): TaskState {
     outputNameOverride: obj.outputNameOverride || '',
     outputNameOverrideVisible:
       obj.outputNameOverrideVisible || !!obj.outputNameOverride || false,
+    taskId: obj.taskId || null,
   };
 
   // Add single and multi-file selections
@@ -154,6 +156,7 @@ export function taskStateToAgentConfig(taskState: TaskState): AgentConfig {
 
     // Initialize tool config
     toolConfig: {} as ToolConfig,
+    taskId: taskState.taskId,
   };
 
   // Add single and multi-file selections
