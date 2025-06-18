@@ -32,14 +32,6 @@ export function initializeDataRequests() {
   dataRequests.forEach((request) => {
     vscode.postMessage({ command: request });
   });
-
-  const agentSelect = safeGetElementById('agent');
-  if (agentSelect) {
-    vscode.postMessage({
-      command: 'requestDefaultOutputFiles',
-      agent: agentSelect.value,
-    });
-  }
 }
 
 /**
