@@ -20,7 +20,11 @@ export async function promptToAddAgentToConfig(
   const config = vscode.workspace.getConfiguration();
   const current = config.get<string[]>('texra.agents', []);
 
-  if (current.includes(agentName)) {
+  const baseName = agentName.endsWith('_multiple')
+    ? agentName.replace(/_multiple$/, '')
+    : agentName;
+
+  if (current.includes(agentName) || current.includes(baseName)) {
     logger.debug(CHANNEL, `Agent "${agentName}" already in configuration`);
     return;
   }
