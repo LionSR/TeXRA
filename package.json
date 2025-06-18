@@ -955,7 +955,14 @@
       {
         "command": "texra.showAgentHistory",
         "title": "Show Agent Execution History",
-        "category": "TeXRA"
+        "category": "TeXRA",
+        "icon": "$(history)"
+      },
+      {
+        "command": "texra.openSettings",
+        "title": "Open TeXRA Settings",
+        "category": "TeXRA",
+        "icon": "$(settings-gear)"
       },
       {
         "command": "texra.showProgressView",
@@ -1052,6 +1059,16 @@
           "command": "texra.createAgentWithAI",
           "when": "view == texra.folderExplorer",
           "group": "navigation"
+        },
+        {
+          "command": "texra.openSettings",
+          "when": "view == texra.mainView",
+          "group": "navigation@1"
+        },
+        {
+          "command": "texra.showAgentHistory",
+          "when": "view == texra.mainView",
+          "group": "navigation@2"
         }
       ],
       "view/item/context": [
@@ -1176,7 +1193,7 @@
     "identifiers-arxiv": "^0.1.1",
     "marked": "^15.0.12",
     "node-pandoc": "^0.3.0",
-    "openai": "^5.3.0",
+    "openai": "^5.5.1",
     "pdf2pic": "^3.2.0",
     "sortablejs": "^1.15.6",
     "split.js": "^1.6.5",
