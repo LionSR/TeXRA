@@ -600,20 +600,6 @@ export function setupUIHandlers() {
     toggleLatexdiffs();
   });
 
-  // Add event listener for history button
-  addEventListenerSafely('historyButton', 'click', function () {
-    vscode.postMessage({
-      command: 'showAgentHistory',
-    });
-  });
-
-  // Add event listener for settings button
-  addEventListenerSafely('settingsButton', 'click', function () {
-    vscode.postMessage({
-      command: 'openSettings',
-    });
-  });
-
   // Compare and Accept button handlers
   addEventListenerSafely('compareButton', 'click', function () {
     const baseFile = safeGetElementValue('baseFile');
