@@ -14,7 +14,7 @@ import {
   runCleanBuild,
   runCleanOutput,
 } from '../housekeeping';
-import type { CleanResult } from '@/types/CleanTypes';
+import type { FileOpResult } from '@/types/ResultTypes';
 
 const CHANNEL = 'cleanCommands';
 logger.initialize(CHANNEL);
@@ -30,7 +30,7 @@ function getStreamId(
   return `${agentName}@${model}: ${path.basename(inputFile)}`;
 }
 
-function showCleanResult(result: CleanResult, inputFile: string): void {
+function showCleanResult(result: FileOpResult, inputFile: string): void {
   switch (result.status) {
     case 'success':
       vscode.window.showInformationMessage(`Cleanup complete for ${inputFile}`);
