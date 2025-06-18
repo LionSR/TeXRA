@@ -29,6 +29,7 @@ import { registerCompareCommands } from './commands/compareCommands';
 import { registerHelpCommands } from './commands/helpCommands';
 import { registerProgressViewCommands } from '@commands/progress/progressViewCommands';
 import { registerOpenFileCommands } from '@commands/files/openFileCommands';
+import { registerSettingsCommands } from './commands/settingsCommands';
 
 import * as logger from '@logger/logUtils';
 
@@ -69,6 +70,7 @@ export function registerCommands(context: vscode.ExtensionContext) {
     progressView: registerProgressViewCommands(context),
     openFile: registerOpenFileCommands(context),
     help: registerHelpCommands(context),
+    settings: registerSettingsCommands(context),
   };
 
   // Register webview provider
@@ -112,3 +114,4 @@ export { compareCommands } from './commands/compareCommands';
 export { helpCommands } from './commands/helpCommands';
 export { agentCreatorCommands } from '@commands/agentCreatorCommands';
 export { registerOpenFileCommands as openFileCommands } from '@commands/files/openFileCommands';
+export { settingsCommands } from './commands/settingsCommands';
