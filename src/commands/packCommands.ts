@@ -121,7 +121,7 @@ async function handlePackSingle(
 
   const fileToPack = outputNameOverride || inputFile;
   const result = await runPackSingle(model, fileToPack, agent);
-  showPackResult(result, inputFile);
+  showPackResult(result, fileToPack);
 
   const provider = ProgressViewProvider.getInstance();
   if (provider) {
