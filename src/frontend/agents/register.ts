@@ -23,7 +23,9 @@ export async function promptToAddAgentToConfig(
   const baseName = agentName.endsWith('_multiple')
     ? agentName.replace(/_multiple$/, '')
     : agentName;
-  const multipleName = agentName.endsWith('_multiple') ? agentName : `${agentName}_multiple`;
+  const multipleName = agentName.endsWith('_multiple')
+    ? agentName
+    : `${agentName}_multiple`;
 
   // Check if agent already exists (exact match)
   if (current.includes(agentName)) {
@@ -35,13 +37,19 @@ export async function promptToAddAgentToConfig(
   if (agentName.endsWith('_multiple')) {
     // Adding a _multiple variant, check if base agent exists
     if (current.includes(baseName)) {
-      logger.debug(CHANNEL, `Base agent "${baseName}" already in configuration, skipping "${agentName}"`);
+      logger.debug(
+        CHANNEL,
+        `Base agent "${baseName}" already in configuration, skipping "${agentName}"`,
+      );
       return;
     }
   } else {
-    // Adding a base agent, check if _multiple variant exists  
+    // Adding a base agent, check if _multiple variant exists
     if (current.includes(multipleName)) {
-      logger.debug(CHANNEL, `Multiple variant "${multipleName}" already in configuration, skipping "${agentName}"`);
+      logger.debug(
+        CHANNEL,
+        `Multiple variant "${multipleName}" already in configuration, skipping "${agentName}"`,
+      );
       return;
     }
   }
