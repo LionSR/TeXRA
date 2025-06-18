@@ -42,6 +42,8 @@ import { sleep } from '@utils/helpers';
 // Local imports - agent
 import { ToolConfig } from '../agent/core/ToolConfig';
 import { AgentConfig } from '../agent/core/AgentConfig';
+import { getAgentPath } from '../agent/runtime/executeAgent';
+import { loadAgentSettingAndPrompts } from '../agent/runtime/agentLoad';
 
 const CHANNEL = 'MessageHandler';
 
@@ -104,6 +106,8 @@ export class WebviewMessageHandler {
       requestEditedFile: (message, view) =>
         this.handleRequestEditedFile(message, view),
       requestBaseFile: (_m, view) => this.handleRequestBaseFile(view),
+      requestDefaultOutputFiles: (message, view) =>
+        this.handleRequestDefaultOutputFiles(message, view),
       // Handle file list updates from webview
       updateInputFiles: (message, view) =>
         this.handleUpdateFiles(message, view),
@@ -374,6 +378,44 @@ export class WebviewMessageHandler {
 
   private async handleRequestBaseFile(webviewView: vscode.WebviewView) {
     this.postFileUpdate(webviewView, 'Base', await listInputFiles());
+  }
+
+  private async handleRequestDefaultOutputFiles(
+    message: any,
+    webviewView: vscode.WebviewView,
+  ) {
+    const agent = message.agent;
+    if (!agent) {
+      webviewView.webview.postMessage({
+        command: 'setDefaultOutputFiles',
+        files: [],
+      });
+      return;
+    }
+
+    try {
+      const agentPath = await getAgentPath(agent, this.context);
+      const [settings] = await loadAgentSettingAndPrompts(agentPath, agent);
+
+      const files = Array.isArray(settings?.defaultOutputFiles)
+        ? settings.defaultOutputFiles
+        : [];
+
+      webviewView.webview.postMessage({
+        command: 'setDefaultOutputFiles',
+        files,
+      });
+    } catch (err) {
+      logger.error(
+        CHANNEL,
+        `Error requesting default output files: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      // Send fallback message so the webview clears any stale defaults
+      webviewView.webview.postMessage({
+        command: 'setDefaultOutputFiles',
+        files: [],
+      });
+    }
   }
 
   private handleSetMultipleFiles(
