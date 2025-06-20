@@ -53,24 +53,18 @@ export class AbsoluteFS {
   }
 
   /**
-   * Write text content to a file
+   * Write content to a file (text or binary)
    */
-  public static async write(filePath: string, content: string): Promise<void> {
+  public static async write(
+    filePath: string,
+    content: string | Uint8Array,
+  ): Promise<void> {
     this.validatePath(filePath, 'write');
     const uri = vscode.Uri.file(filePath);
-    await vscode.workspace.fs.writeFile(uri, Buffer.from(content, 'utf-8'));
-  }
-
-  /**
-   * Write binary content to a file
-   */
-  public static async writeBinaryFile(
-    filePath: string,
-    content: Uint8Array,
-  ): Promise<void> {
-    this.validatePath(filePath, 'writeBinaryFile');
-    const uri = vscode.Uri.file(filePath);
-    await vscode.workspace.fs.writeFile(uri, content);
+    const data = typeof content === 'string' 
+      ? Buffer.from(content, 'utf-8') 
+      : content;
+    await vscode.workspace.fs.writeFile(uri, data);
   }
 
   /**
@@ -171,19 +165,18 @@ export class AbsoluteFS {
   }
 
   /**
-   * Write text content to a file (sync)
+   * Write content to a file (sync)
    */
-  public static writeSync(filePath: string, content: string): void {
+  public static writeSync(
+    filePath: string, 
+    content: string | Buffer,
+  ): void {
     this.validatePath(filePath, 'writeSync');
-    fs.writeFileSync(filePath, content, 'utf-8');
-  }
-
-  /**
-   * Write binary content to a file (sync)
-   */
-  public static writeBinaryFileSync(filePath: string, content: Buffer): void {
-    this.validatePath(filePath, 'writeBinaryFileSync');
-    fs.writeFileSync(filePath, content);
+    if (typeof content === 'string') {
+      fs.writeFileSync(filePath, content, 'utf-8');
+    } else {
+      fs.writeFileSync(filePath, content);
+    }
   }
 
   /**
@@ -259,35 +252,6 @@ export class AbsoluteFS {
   ): fs.WriteStream {
     this.validatePath(filePath, 'createWriteStream');
     return fs.createWriteStream(filePath, options);
-  }
-
-  // ===== Promise-based Methods =====
-
-  /**
-   * Get file stats using Node.js promises
-   */
-  public static statAsync(filePath: string): Promise<fs.Stats> {
-    this.validatePath(filePath, 'statAsync');
-    return fs.promises.stat(filePath);
-  }
-
-  /**
-   * Read file using promises
-   */
-  public static readAsync(filePath: string): Promise<Buffer> {
-    this.validatePath(filePath, 'readAsync');
-    return fs.promises.readFile(filePath);
-  }
-
-  /**
-   * Read directory using promises
-   */
-  public static readDirAsync(
-    dirPath: string,
-    options?: { withFileTypes?: boolean },
-  ): Promise<string[] | fs.Dirent[]> {
-    this.validatePath(dirPath, 'readDirAsync');
-    return fs.promises.readdir(dirPath, options as any);
   }
 
   // ===== Utility Methods =====

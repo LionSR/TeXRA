@@ -49,13 +49,14 @@ export class WorkspaceFS {
     await vscode.workspace.fs.writeFile(uri, Buffer.from(content, 'utf-8'));
   }
 
-  public static async writeBinaryFile(
+  public static async write(
     filePath: string,
-    content: Uint8Array,
+    content: string | Uint8Array,
   ): Promise<void> {
     const fullPath = this.fullPath(filePath);
     const uri = vscode.Uri.file(fullPath);
-    await vscode.workspace.fs.writeFile(uri, content);
+    const buffer = typeof content === 'string' ? Buffer.from(content, 'utf-8') : content;
+    await vscode.workspace.fs.writeFile(uri, buffer);
   }
 
   public static async appendFile(
