@@ -29,7 +29,7 @@ export async function handleTestAgentLoading(
   try {
     // Initialize StorageFS with the context
     StorageFS.initialize(context);
-    
+
     logger.info(CHANNEL, 'Testing YAML loading:');
 
     // Test basic YAML loading
@@ -270,12 +270,11 @@ export async function handleTestYamlBrackets(
   try {
     // Initialize StorageFS with the context
     StorageFS.initialize(context);
-    
+
     logger.info(CHANNEL, 'Testing YAML parsing with angle brackets:');
 
     // Create a temporary test YAML file
-    await GlobalStorageFS.createDir('test_yaml');
-    const testDir = GlobalStorageFS.fullPath('test_yaml');
+    await GlobalStorageFS.ensureDir('test_yaml');
 
     // Test YAML content with various angle bracket formats
     const testYaml = {
@@ -290,10 +289,7 @@ export async function handleTestYamlBrackets(
 
     // Write test YAML
     const yamlString = yaml.stringify(testYaml);
-    await GlobalStorageFS.write(
-      'test_yaml/test_brackets.yaml',
-      yamlString,
-    );
+    await GlobalStorageFS.write('test_yaml/test_brackets.yaml', yamlString);
 
     // Read and parse the YAML using GlobalStorageFS
     const content = await GlobalStorageFS.read('test_yaml/test_brackets.yaml');
