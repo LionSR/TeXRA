@@ -18,6 +18,7 @@ import {
 } from '@frontend/media/img';
 import { checkMultipleToolsInstalled } from '@utils/system';
 import { getConfig } from '@utils/config';
+import type { ProviderStopReason } from '@types/StopReasonTypes';
 import { SecretManager, ApiProvider } from '@frontend/secretManager';
 
 // Local imports - agent components
@@ -532,7 +533,7 @@ export abstract class ModelHandler {
 
   /** Detects stop markers in model output. */
   protected detectStopMarkers(
-    stopReason: string,
+    stopReason: ProviderStopReason,
     response: string,
     setting: AgentSetting,
   ): MarkerFlags {
@@ -549,7 +550,7 @@ export abstract class ModelHandler {
    * @returns Tuple of [endTurn: should end current turn, shouldStop: should stop conversation]
    */
   public checkStopConditions(
-    stopReason: string,
+    stopReason: ProviderStopReason,
     newResponse: string,
     stateRound: AgentStateRound,
     stateGlobal: AgentStateGlobal,
@@ -646,7 +647,7 @@ export abstract class ModelHandler {
   abstract extractResponse(
     responseObject: any,
     endTag: string,
-  ): [string, any, string];
+  ): [string, any, ProviderStopReason];
 
   /**
    * Manages continuation for truncated responses in multi-turn conversations with prefill support.
@@ -725,7 +726,7 @@ export abstract class ModelHandler {
    * @returns Boolean indicating if generation should continue
    */
   abstract shouldContinue(
-    stopReason: string,
+    stopReason: ProviderStopReason,
     newResponse: string,
     agentSetting: AgentSetting,
   ): boolean;
