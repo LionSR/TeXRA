@@ -107,7 +107,8 @@ export async function writeToStorage(
 ): Promise<void> {
   const basePath = getWorkspaceStoragePath(context);
   const fullPath = path.join(basePath, filePath);
-  const buffer = typeof content === 'string' ? Buffer.from(content, 'utf-8') : content;
+  const buffer =
+    typeof content === 'string' ? Buffer.from(content, 'utf-8') : content;
   await vscode.workspace.fs.writeFile(vscode.Uri.file(fullPath), buffer);
 }
 
