@@ -56,7 +56,7 @@ The header provides a summary and actions for the selected stream:
 This scrollable area displays the detailed, timestamped logs for the selected agent run.
 
 - **Structure**: Logs are organized into expandable/collapsible groups (e.g., `Initialization`, `Round 0`, `Model Operation`, `Response Cycle`) allowing you to focus on specific stages. Click the arrow next to a group name to toggle it.
-- **Log Levels**: Messages are prefixed with levels like `INFO`, `DEBUG`, `WARN`, `ERROR` to indicate severity. Verbose debug messages (`DEBUG`) are only shown if `texra.logger.verboseOutput` is enabled in settings.
+- **Log Levels**: Messages are prefixed with levels like `INFO`, `DEBUG`, `WARN`, `ERROR` to indicate severity. Verbose debug messages (`DEBUG`) are only shown if `texra.logger.debugMode` is enabled in settings.
 - **Agent Thinking**: The log highlights model reasoning in purple **Model Thinking** blocks. These sections are flagged internally with a `thinking` type so you can easily spot when the AI is exploring ideas.
 - **Errors**: Errors are highlighted, often providing clues if something went wrong.
 
