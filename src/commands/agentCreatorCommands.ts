@@ -4,7 +4,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import type { MessageCreateParams } from '@anthropic-ai/sdk/resources/messages';
 
 // Local imports - utils
-import { getApiKey } from '../frontend/secrets';
+import { SecretManager } from '../frontend/secretManager';
 import { getOrPromptForCustomAgentsDirectory } from '../frontend/agents/pathUtils';
 import { promptToAddAgentToConfig } from '../frontend/agents/register';
 import * as logger from '../logger/logUtils';
@@ -216,7 +216,7 @@ async function handleCreateAgentWithAI(context: vscode.ExtensionContext) {
 
     let yamlContent: string | undefined;
     try {
-      const apiKey = await getApiKey('anthropic');
+      const apiKey = await SecretManager.getApiKey('anthropic');
       const anthropic = new Anthropic({ apiKey });
       const prompt =
         `You are an expert on the TeXRA codebase, a VS Code extension that ` +
