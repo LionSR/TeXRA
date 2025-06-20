@@ -1,10 +1,10 @@
 import * as vscode from 'vscode';
 import {
-  API_PROVIDERS,
   ApiProvider,
   getApiKeySecretName,
   setSecret,
   deleteSecret,
+  getApiProviderQuickPickItems,
 } from '@frontend/secrets';
 
 export const apiKeyCommands = {
@@ -18,9 +18,12 @@ export function registerApiKeyCommands(context: vscode.ExtensionContext) {
     apiKeyCommands.setApiKey,
     async () => {
       // First select the provider
-      const provider = await vscode.window.showQuickPick(API_PROVIDERS, {
+      const providerItems = await getApiProviderQuickPickItems();
+      const providerPick = await vscode.window.showQuickPick(providerItems, {
         placeHolder: 'Select API provider',
       });
+
+      const provider = providerPick?.provider;
 
       if (!provider) {
         return;
@@ -54,9 +57,12 @@ export function registerApiKeyCommands(context: vscode.ExtensionContext) {
   const removeApiKeyCommand = vscode.commands.registerCommand(
     apiKeyCommands.removeApiKey,
     async () => {
-      const provider = await vscode.window.showQuickPick(API_PROVIDERS, {
+      const providerItems = await getApiProviderQuickPickItems();
+      const providerPick = await vscode.window.showQuickPick(providerItems, {
         placeHolder: 'Select API provider to remove key',
       });
+
+      const provider = providerPick?.provider;
 
       if (!provider) {
         return;
