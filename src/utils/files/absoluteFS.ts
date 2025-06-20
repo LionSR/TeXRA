@@ -61,9 +61,8 @@ export class AbsoluteFS {
   ): Promise<void> {
     this.validatePath(filePath, 'write');
     const uri = vscode.Uri.file(filePath);
-    const data = typeof content === 'string' 
-      ? Buffer.from(content, 'utf-8') 
-      : content;
+    const data =
+      typeof content === 'string' ? Buffer.from(content, 'utf-8') : content;
     await vscode.workspace.fs.writeFile(uri, data);
   }
 
@@ -167,10 +166,7 @@ export class AbsoluteFS {
   /**
    * Write content to a file (sync)
    */
-  public static writeSync(
-    filePath: string, 
-    content: string | Buffer,
-  ): void {
+  public static writeSync(filePath: string, content: string | Buffer): void {
     this.validatePath(filePath, 'writeSync');
     if (typeof content === 'string') {
       fs.writeFileSync(filePath, content, 'utf-8');
@@ -221,16 +217,18 @@ export class AbsoluteFS {
    */
   public static createReadStream(
     filePath: string,
-    options?: BufferEncoding | fs.ObjectEncodingOptions & {
-      flags?: string;
-      encoding?: BufferEncoding;
-      fd?: number;
-      mode?: number;
-      autoClose?: boolean;
-      start?: number;
-      end?: number;
-      highWaterMark?: number;
-    },
+    options?:
+      | BufferEncoding
+      | (fs.ObjectEncodingOptions & {
+          flags?: string;
+          encoding?: BufferEncoding;
+          fd?: number;
+          mode?: number;
+          autoClose?: boolean;
+          start?: number;
+          end?: number;
+          highWaterMark?: number;
+        }),
   ): fs.ReadStream {
     this.validatePath(filePath, 'createReadStream');
     return fs.createReadStream(filePath, options);
@@ -241,14 +239,16 @@ export class AbsoluteFS {
    */
   public static createWriteStream(
     filePath: string,
-    options?: BufferEncoding | fs.ObjectEncodingOptions & {
-      flags?: string;
-      encoding?: BufferEncoding;
-      fd?: number;
-      mode?: number;
-      autoClose?: boolean;
-      start?: number;
-    },
+    options?:
+      | BufferEncoding
+      | (fs.ObjectEncodingOptions & {
+          flags?: string;
+          encoding?: BufferEncoding;
+          fd?: number;
+          mode?: number;
+          autoClose?: boolean;
+          start?: number;
+        }),
   ): fs.WriteStream {
     this.validatePath(filePath, 'createWriteStream');
     return fs.createWriteStream(filePath, options);
