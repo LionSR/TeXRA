@@ -13,7 +13,7 @@ import {
 } from '@frontend/agents/pathUtils';
 import { promptToAddAgentToConfig } from '@frontend/agents/register';
 import { isValidAgentYaml } from './agent/runtime/agentLoad';
-import { fileExistsAbsolute } from '@utils/files';
+import { AbsoluteFS } from '@utils/files';
 import { getConfig } from '@utils/config';
 
 const NEW_AGENT_TEMPLATE = `# --- Agent Inheritance (Optional) ---
@@ -280,7 +280,7 @@ export class FolderExplorer implements vscode.TreeDataProvider<FileItem> {
         const newPath = path.join(path.dirname(oldPath), newName);
 
         // For new items, create them
-        if (!(await fileExistsAbsolute(oldPath))) {
+        if (!(await AbsoluteFS.exists(oldPath))) {
           if (item.collapsibleState === vscode.TreeItemCollapsibleState.None) {
             // Create new file with starter content if it's YAML
             const content = newPath.endsWith('.yaml')
