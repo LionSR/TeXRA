@@ -116,14 +116,15 @@ export interface ApiProviderQuickPickItem extends vscode.QuickPickItem {
 export async function getApiProviderQuickPickItems(): Promise<
   ApiProviderQuickPickItem[]
 > {
-  const items: ApiProviderQuickPickItem[] = [];
-  for (const provider of API_PROVIDERS) {
-    const exists = await apiKeyExists(provider);
-    items.push({
-      label: provider,
-      description: exists ? 'key set' : 'not set',
-      provider,
-    });
-  }
-  return items;
+  const checks = API_PROVIDERS.map(async (provider) => ({
+    provider,
+    exists: await apiKeyExists(provider),
+  }));
+
+  const results = await Promise.all(checks);
+  return results.map(({ provider, exists }) => ({
+    label: provider,
+    description: exists ? 'key set' : 'not set',
+    provider,
+  }));
 }
