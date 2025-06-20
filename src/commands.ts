@@ -16,6 +16,7 @@ import { registerTestCommands } from './commands/testCommands';
 import { registerXmlCommands } from './commands/xmlCommands';
 import { registerYamlCommands } from './commands/yamlCommands';
 import { registerAgentCommands } from './commands/agentCommands';
+import { registerAgentCreatorCommands } from '@commands/agentCreatorCommands';
 import { registerApiKeyCommands } from '@commands/api/apiKeyCommands';
 import { registerStateRestoreCommand } from './commands/stateRestoreCommand';
 import { registerTextEditorCommands } from './commands/textEditorCommands';
@@ -28,6 +29,7 @@ import { registerCompareCommands } from './commands/compareCommands';
 import { registerHelpCommands } from './commands/helpCommands';
 import { registerProgressViewCommands } from '@commands/progress/progressViewCommands';
 import { registerOpenFileCommands } from '@commands/files/openFileCommands';
+import { registerSettingsCommands } from './commands/settingsCommands';
 
 import * as logger from '@logger/logUtils';
 
@@ -55,6 +57,7 @@ export function registerCommands(context: vscode.ExtensionContext) {
     xml: registerXmlCommands(context),
     yaml: registerYamlCommands(context),
     agent: registerAgentCommands(context),
+    agentCreator: registerAgentCreatorCommands(context),
     apiKey: registerApiKeyCommands(context),
     stateRestore: registerStateRestoreCommand(context),
     textEditor: registerTextEditorCommands(context),
@@ -67,6 +70,7 @@ export function registerCommands(context: vscode.ExtensionContext) {
     progressView: registerProgressViewCommands(context),
     openFile: registerOpenFileCommands(context),
     help: registerHelpCommands(context),
+    settings: registerSettingsCommands(context),
   };
 
   // Register webview provider
@@ -108,4 +112,6 @@ export { historyCommands } from '@commands/history/historyCommands';
 export { arXivCommands } from './commands/arXivCommands';
 export { compareCommands } from './commands/compareCommands';
 export { helpCommands } from './commands/helpCommands';
+export { agentCreatorCommands } from '@commands/agentCreatorCommands';
 export { registerOpenFileCommands as openFileCommands } from '@commands/files/openFileCommands';
+export { settingsCommands } from './commands/settingsCommands';

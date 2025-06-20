@@ -45,7 +45,8 @@ The header provides a summary and actions for the selected stream:
   - <i class="codicon codicon-debug-stop"></i> **Stop**: Attempts to gracefully stop the currently running task for this stream. For providers supporting `AbortController` (like OpenAI or Anthropic) the active request is aborted immediately; otherwise the current API call will finish before stopping.
   - <i class="codicon codicon-debug-rerun"></i> **Run Again**: Re-runs the task associated with this stream using the _exact same configuration_ (agent, model, files, instruction) that was used when it originally ran. Useful for retrying failed tasks or reproducing results.
   - <i class="codicon codicon-reply"></i> **Restore**: Loads the configuration (agent, model, files, instruction) from this stream back into the main TeXRA webview interface. This allows you to easily modify and re-run a previous task.
-  - <i class="codicon codicon-diff-multiple"></i> **Diff**: Triggers the `latexdiff` process to compare the original input file(s) with the generated output `.tex` file(s) from this stream. Generates `_diff_rN.tex` and `_diff_rN-rM.tex` files. Requires `latexdiff` to be installed. See [LaTeX Diff](./latex-diff.md).
+  - <i class="codicon codicon-diff-multiple"></i> **Diff**: Triggers the `latexdiff` process to compare the original input file(s) with the generated output `.tex` file(s) from this stream. Generates `_diff_rN.tex` and `_diff_rN-rM.tex` files. If no base file was selected, TeXRA automatically falls back to the original file. Requires `latexdiff` to be installed. See [LaTeX Diff](./latex-diff.md).
+  - <i class="codicon codicon-check"></i> **Accept**: After reviewing a diff, replace the base file with the edited version.
   - <i class="codicon codicon-archive"></i> **Pack**: Archives the output files and log for this stream into the `History` folder. See [File Management](./file-management.md).
   - <i class="codicon codicon-trash"></i> **Clean**: Deletes the output files associated with this stream.
   - <i class="codicon codicon-clear-all"></i> **Erase**: Removes this stream and its log content entirely from the ProgressBoard.
@@ -55,7 +56,7 @@ The header provides a summary and actions for the selected stream:
 This scrollable area displays the detailed, timestamped logs for the selected agent run.
 
 - **Structure**: Logs are organized into expandable/collapsible groups (e.g., `Initialization`, `Round 0`, `Model Operation`, `Response Cycle`) allowing you to focus on specific stages. Click the arrow next to a group name to toggle it.
-- **Log Levels**: Messages are prefixed with levels like `INFO`, `DEBUG`, `WARN`, `ERROR` to indicate severity. Verbose debug messages (`DEBUG`) are only shown if `texra.logger.verboseOutput` is enabled in settings.
+- **Log Levels**: Messages are prefixed with levels like `INFO`, `DEBUG`, `WARN`, `ERROR` to indicate severity. Verbose debug messages (`DEBUG`) are only shown if `texra.logger.debugMode` is enabled in settings.
 - **Agent Thinking**: The log highlights model reasoning in purple **Model Thinking** blocks. These sections are flagged internally with a `thinking` type so you can easily spot when the AI is exploring ideas.
 - **Errors**: Errors are highlighted, often providing clues if something went wrong.
 

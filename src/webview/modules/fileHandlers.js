@@ -1,4 +1,4 @@
-import { vscode } from '@common/vscodeApi.js';
+import { vscode } from '@common/webviewContext.js';
 import { saveState, stateManager } from './stateManager.js';
 import { MULTIPLE_SELECTIONS } from './constants.js';
 import {
@@ -7,6 +7,17 @@ import {
   safeSetElementValue,
 } from '@common/domUtils.js';
 import { capitalize, uncapitalize } from '@common/stringUtils.js';
+
+// Store default output file names for the currently selected agent
+let agentDefaultOutputFiles = [];
+
+export function setAgentDefaultOutputFiles(files) {
+  agentDefaultOutputFiles = Array.isArray(files) ? files : [];
+}
+
+export function getAgentDefaultOutputFiles() {
+  return agentDefaultOutputFiles;
+}
 
 export function updateFileSelect(id, files) {
   const selectDiv = document.getElementById(id);
@@ -199,6 +210,15 @@ export function initializeOutputFiles() {
 
       // Then add each file
       state.outputFiles.forEach((file) => {
+        addFileToList('outputFiles', file);
+      });
+    } else if (
+      getAgentDefaultOutputFiles().length > 0 &&
+      (!state.outputFiles || state.outputFiles.length === 0)
+    ) {
+      // Use agent default output files if provided
+      outputFilesDiv.innerHTML = '';
+      getAgentDefaultOutputFiles().forEach((file) => {
         addFileToList('outputFiles', file);
       });
     } else {

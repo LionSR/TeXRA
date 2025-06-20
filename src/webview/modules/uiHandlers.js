@@ -1,4 +1,4 @@
-import { vscode } from '@common/vscodeApi.js';
+import { vscode } from '@common/webviewContext.js';
 import { saveState } from './stateManager.js';
 import {
   MULTIPLE_SELECTIONS,
@@ -229,6 +229,11 @@ export function setupUIHandlers() {
     }
 
     vscode.postMessage({ command: 'requestMediaFile' });
+
+    vscode.postMessage({
+      command: 'requestDefaultOutputFiles',
+      agent: selectedAgent,
+    });
 
     saveState();
   });
@@ -593,20 +598,6 @@ export function setupUIHandlers() {
 
   addEventListenerSafely('toggleLatexdiffs', 'click', () => {
     toggleLatexdiffs();
-  });
-
-  // Add event listener for history button
-  addEventListenerSafely('historyButton', 'click', function () {
-    vscode.postMessage({
-      command: 'showAgentHistory',
-    });
-  });
-
-  // Add event listener for settings button
-  addEventListenerSafely('settingsButton', 'click', function () {
-    vscode.postMessage({
-      command: 'openSettings',
-    });
   });
 
   // Compare and Accept button handlers

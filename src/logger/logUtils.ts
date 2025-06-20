@@ -4,7 +4,7 @@ import * as winston from 'winston';
 import Transport from 'winston-transport';
 
 // Local imports - progressView
-import { ProgressViewProvider } from '../progressView/ProgressViewProvider';
+import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import { getConfig } from '@utils/config';
 import {
   shouldUseConsolidatedChannel,
@@ -104,11 +104,8 @@ class VSCodeTransport extends Transport {
       this.channel.appendLine(formattedMessage);
     }
 
-    // Skip debug messages in ProgressView if verbose output is disabled
-    if (
-      level === 'debug' &&
-      !getConfig<boolean>('logger.verboseOutput', false)
-    ) {
+    // Skip debug messages in ProgressView if debug mode is disabled
+    if (level === 'debug' && !getConfig<boolean>('logger.debugMode', false)) {
       callback();
       return;
     }
@@ -140,7 +137,7 @@ class VSCodeTransport extends Transport {
         : 'default';
 
     // Colored format for ProgressView using CSS classes, but with shorter timestamp display
-    const isVerbose = getConfig<boolean>('logger.verboseOutput', false);
+    const isVerbose = getConfig<boolean>('logger.debugMode', false);
     const coloredFormattedMessage =
       `<div class="log-line ${isScratchpad ? 'scratchpad-log' : ''}" ${scratchpadAttr} ${groupId ? `data-group-id="${groupId}"` : ''} data-full-timestamp="${timestamp}">` +
       `<span class="timestamp" title="${timestamp}">${emoji}${

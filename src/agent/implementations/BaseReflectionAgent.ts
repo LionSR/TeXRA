@@ -237,7 +237,7 @@ export abstract class BaseReflectionAgent implements IAgent {
    * @returns Combined dictionary of variables for prompt templates
    */
   protected async getUserVars(): Promise<Record<string, any>> {
-    this.logger.debug(`Obtaining dynamic variables...`);
+    // this.logger.debug(`Obtaining dynamic variables...`);
     return buildUserVars(
       this.agentConfig,
       this.agentSetting,

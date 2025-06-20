@@ -526,11 +526,8 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       return;
     }
 
-    // Skip debug messages if verbose output is disabled
-    if (
-      level === 'debug' &&
-      !getConfig<boolean>('logger.verboseOutput', false)
-    ) {
+    // Skip debug messages if debug mode is disabled
+    if (level === 'debug' && !getConfig<boolean>('logger.debugMode', false)) {
       return;
     }
 
@@ -706,8 +703,8 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     }
 
     const messages = this._logStreams.get(stream)!;
-    // Filter debug messages if verbose output is disabled
-    const displayMessages = getConfig<boolean>('logger.verboseOutput', false)
+    // Filter debug messages if debug mode is disabled
+    const displayMessages = getConfig<boolean>('logger.debugMode', false)
       ? messages
       : messages.filter((msg) => msg.level !== 'debug');
 

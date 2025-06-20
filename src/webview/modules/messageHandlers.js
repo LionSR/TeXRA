@@ -1,5 +1,4 @@
-import { vscode } from '@common/vscodeApi.js';
-import { registerMessageHandlers } from '@common/messageRouter.js';
+import { vscode, registerMessageHandlers } from '@common/webviewContext.js';
 import { safeSetElementValue, safeGetElementById } from '@common/domUtils.js';
 import { capitalize, uncapitalize } from '@common/stringUtils.js';
 import { stateManager, restoreState, saveState } from './stateManager.js';
@@ -11,6 +10,7 @@ import {
   getSelectedFiles,
   handleRecentCommits,
   handleSetCurrentFile,
+  setAgentDefaultOutputFiles,
 } from './fileHandlers.js';
 
 import { FILE_TYPES } from './constants.js';
@@ -300,6 +300,10 @@ export function setupMessageHandlers() {
     },
     editedFileSelected: (m) => {
       safeSetElementValue('editedFile', m.filePath);
+      postHandle();
+    },
+    setDefaultOutputFiles: (m) => {
+      setAgentDefaultOutputFiles(m.files || []);
       postHandle();
     },
     setInputFiles: (m) => {
