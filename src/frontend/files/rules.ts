@@ -6,8 +6,7 @@ import * as path from 'path';
 import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
-import { WorkspaceFS } from '@utils/files';
-import { fileExistsAbsolute, readFileAbsolute } from '@utils/files';
+import { WorkspaceFS, AbsoluteFS } from '@utils/files';
 
 const CHANNEL = 'texraRulesUtils';
 logger.initialize(CHANNEL);
@@ -30,8 +29,8 @@ export async function loadTexraRules(): Promise<string> {
     }
 
     const homeFile = path.join(os.homedir(), rulesFile);
-    if (await fileExistsAbsolute(homeFile)) {
-      const content = await readFileAbsolute(homeFile);
+    if (await AbsoluteFS.exists(homeFile)) {
+      const content = await AbsoluteFS.read(homeFile);
       if (content.trim()) {
         logger.debug(CHANNEL, `Loaded home ${rulesFile}`);
         return content.trim();

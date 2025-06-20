@@ -32,8 +32,7 @@ import { MediaEntry } from '@agent/utils/mediaTypes';
 import { AgentLogger } from '@logger/AgentLogger';
 
 // Local imports - utilities
-import { WorkspaceFS } from '@utils/files';
-import { fileExistsAbsolute } from '@utils/files';
+import { WorkspaceFS, AbsoluteFS } from '@utils/files';
 import { formatProviderError } from '@utils/sdkErrorUtils';
 import { cleanFileContent } from '@replacement/replacementUtils';
 import replacementManager from '@replacement/replacementManager';
@@ -371,7 +370,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
       for (const mediaFile of mediaFiles) {
         try {
           const absolutePath = WorkspaceFS.fullPath(mediaFile);
-          if (!fileExistsAbsolute(absolutePath)) {
+          if (!(await AbsoluteFS.exists(absolutePath))) {
             this.logger.error(`File does not exist: ${absolutePath}`);
             continue;
           }
@@ -489,7 +488,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
       for (const mediaFile of mediaFiles) {
         try {
           const absolutePath = WorkspaceFS.fullPath(mediaFile);
-          if (!fileExistsAbsolute(absolutePath)) {
+          if (!(await AbsoluteFS.exists(absolutePath))) {
             this.logger.error(`File does not exist: ${absolutePath}`);
             continue;
           }
