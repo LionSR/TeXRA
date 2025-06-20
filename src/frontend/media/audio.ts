@@ -12,12 +12,10 @@ import * as logger from '@logger/logUtils';
 
 // Local imports - utils
 import { SecretManager } from '@frontend/secretManager';
-import { AbsoluteFS } from '@utils/files';
+import { AbsoluteFS, StorageFS } from '@utils/files';
 import {
-  createStorageDirectory,
   storagePathToAbsolute,
   createStoragePath,
-  cleanupStorageDirectory,
 } from '@utils/files/workspaceStorageUtils';
 import { getSdkErrorMessage } from '@utils/sdkErrorUtils';
 import { checkToolInstalled } from '@utils/system/toolUtils';
@@ -71,7 +69,9 @@ export async function startRecording(
         };
       }
     }
-    await createStorageDirectory(context, RECORDINGS_DIR);
+    // Initialize StorageFS with context if not already done
+    StorageFS.initialize(context);
+    await StorageFS.createDir(RECORDINGS_DIR);
     const relativePath = path.join(RECORDINGS_DIR, `record_${Date.now()}.wav`);
     const absPath = storagePathToAbsolute(
       createStoragePath(relativePath),
@@ -189,8 +189,9 @@ export async function stopRecordingAndTranscribe(
     });
 
     // Clean up old recordings
-    await cleanupStorageDirectory(
-      context,
+    // Initialize StorageFS with context if not already done
+    StorageFS.initialize(context);
+    await StorageFS.cleanupOldFiles(
       RECORDINGS_DIR,
       3 * 24 * 60 * 60 * 1000,
     );

@@ -5,7 +5,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 // Local imports
-import { getWorkspaceStoragePath } from './workspaceStorageUtils';
+import { StorageFS } from './storageFS';
 
 export const PASTED_PREFIX = 'pasted_';
 export const PASTED_DIR = 'pasted';
@@ -24,7 +24,7 @@ export function getPastedImageFullPath(
   filename: string,
   context: vscode.ExtensionContext,
 ): string {
-  return path.join(getWorkspaceStoragePath(context), PASTED_DIR, filename);
+  return StorageFS.fullPath(path.join(PASTED_DIR, filename));
 }
 
 /**

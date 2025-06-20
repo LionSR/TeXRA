@@ -55,7 +55,8 @@ export class WorkspaceFS {
   ): Promise<void> {
     const fullPath = this.fullPath(filePath);
     const uri = vscode.Uri.file(fullPath);
-    const buffer = typeof content === 'string' ? Buffer.from(content, 'utf-8') : content;
+    const buffer =
+      typeof content === 'string' ? Buffer.from(content, 'utf-8') : content;
     await vscode.workspace.fs.writeFile(uri, buffer);
   }
 
