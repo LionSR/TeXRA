@@ -117,6 +117,28 @@ export class StorageFS {
   }
 
   /**
+   * Ensure a directory exists, creating it if necessary
+   */
+  public static async ensureDir(relativePath: string): Promise<void> {
+    try {
+      const exists = await this.exists(relativePath);
+      if (!exists) {
+        await this.createDir(relativePath);
+      }
+    } catch (err) {
+      // If error is because directory already exists, ignore it
+      if (err instanceof vscode.FileSystemError && err.code === 'FileExists') {
+        return;
+      }
+      // Directory might already exist, which is fine
+      logger.debug(
+        CHANNEL,
+        `Directory already exists or error creating: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+
+  /**
    * Read directory contents
    */
   public static async readDir(
@@ -300,7 +322,32 @@ export class GlobalStorageFS {
     const fullPath = this.fullPath(relativePath);
     const uri = vscode.Uri.file(fullPath);
     await vscode.workspace.fs.createDirectory(uri);
-    logger.debug(CHANNEL, `Created directory in global storage: ${relativePath}`);
+    logger.debug(
+      CHANNEL,
+      `Created directory in global storage: ${relativePath}`,
+    );
+  }
+
+  /**
+   * Ensure a directory exists in global storage, creating it if necessary
+   */
+  public static async ensureDir(relativePath: string): Promise<void> {
+    try {
+      const exists = await this.exists(relativePath);
+      if (!exists) {
+        await this.createDir(relativePath);
+      }
+    } catch (err) {
+      // If error is because directory already exists, ignore it
+      if (err instanceof vscode.FileSystemError && err.code === 'FileExists') {
+        return;
+      }
+      // Directory might already exist, which is fine
+      logger.debug(
+        CHANNEL,
+        `Directory already exists in global storage or error creating: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
   }
 
   /**
@@ -351,7 +398,10 @@ export class GlobalStorageFS {
     const oldUri = vscode.Uri.file(this.fullPath(oldPath));
     const newUri = vscode.Uri.file(this.fullPath(newPath));
     await vscode.workspace.fs.rename(oldUri, newUri, options);
-    logger.debug(CHANNEL, `Renamed in global storage: ${oldPath} to ${newPath}`);
+    logger.debug(
+      CHANNEL,
+      `Renamed in global storage: ${oldPath} to ${newPath}`,
+    );
   }
 }
 

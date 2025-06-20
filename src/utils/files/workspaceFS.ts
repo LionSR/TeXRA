@@ -269,6 +269,24 @@ export class WorkspaceFS {
     }
   }
 
+  /**
+   * Ensure a directory exists, creating it if necessary
+   */
+  public static async ensureDir(relativePath: string): Promise<void> {
+    try {
+      const exists = await this.exists(relativePath);
+      if (!exists) {
+        await this.createDir(relativePath);
+      }
+    } catch (err) {
+      // If error is because directory already exists, ignore it
+      if (err instanceof vscode.FileSystemError && err.code === 'FileExists') {
+        return;
+      }
+      throw err;
+    }
+  }
+
   public static async readDir(
     dirPath: string,
   ): Promise<[string, vscode.FileType][]> {
