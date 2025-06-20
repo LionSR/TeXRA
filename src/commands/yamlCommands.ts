@@ -11,6 +11,7 @@ import * as logger from '@logger/logUtils';
 import { getAgentPath } from '@agent/runtime/executeAgent';
 import { AgentType } from '@agent/core/AgentDataclass';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
+import { GlobalStorageFS, StorageFS } from '@utils/files';
 
 const CHANNEL = 'TestCommands';
 logger.initialize(CHANNEL);
@@ -26,6 +27,9 @@ export async function handleTestAgentLoading(
   context: vscode.ExtensionContext,
 ): Promise<void> {
   try {
+    // Initialize StorageFS with the context
+    StorageFS.initialize(context);
+    
     logger.info(CHANNEL, 'Testing YAML loading:');
 
     // Test basic YAML loading
@@ -51,14 +55,14 @@ export async function handleTestAgentLoading(
     };
 
     // Create a temporary test YAML file
-    const testDir = path.join(context.globalStorageUri.fsPath, 'test_agents');
-    await vscode.workspace.fs.createDirectory(vscode.Uri.file(testDir));
+    await GlobalStorageFS.createDir('test_agents');
+    const testDir = GlobalStorageFS.fullPath('test_agents');
 
     // Create base agent
     const baseYamlPath = path.join(testDir, 'base.yaml');
-    await vscode.workspace.fs.writeFile(
-      vscode.Uri.file(baseYamlPath),
-      Buffer.from(JSON.stringify(testYaml)),
+    await GlobalStorageFS.write(
+      'test_agents/base.yaml',
+      JSON.stringify(testYaml),
     );
 
     // Create child agent that inherits from base
@@ -74,9 +78,9 @@ export async function handleTestAgentLoading(
     };
 
     const childYamlPath = path.join(testDir, 'child.yaml');
-    await vscode.workspace.fs.writeFile(
-      vscode.Uri.file(childYamlPath),
-      Buffer.from(JSON.stringify(childYaml)),
+    await GlobalStorageFS.write(
+      'test_agents/child.yaml',
+      JSON.stringify(childYaml),
     );
 
     // Test loading base agent
@@ -120,9 +124,9 @@ export async function handleTestAgentLoading(
     logger.info(CHANNEL, JSON.stringify(childPrompts, null, 2));
 
     // Cleanup test files
-    await vscode.workspace.fs.delete(vscode.Uri.file(baseYamlPath));
-    await vscode.workspace.fs.delete(vscode.Uri.file(childYamlPath));
-    await vscode.workspace.fs.delete(vscode.Uri.file(testDir), {
+    await GlobalStorageFS.delete('test_agents/base.yaml');
+    await GlobalStorageFS.delete('test_agents/child.yaml');
+    await GlobalStorageFS.delete('test_agents', {
       recursive: true,
     });
 
@@ -264,11 +268,14 @@ export async function handleTestYamlBrackets(
   context: vscode.ExtensionContext,
 ): Promise<void> {
   try {
+    // Initialize StorageFS with the context
+    StorageFS.initialize(context);
+    
     logger.info(CHANNEL, 'Testing YAML parsing with angle brackets:');
 
     // Create a temporary test YAML file
-    const testDir = path.join(context.globalStorageUri.fsPath, 'test_yaml');
-    await vscode.workspace.fs.createDirectory(vscode.Uri.file(testDir));
+    await GlobalStorageFS.createDir('test_yaml');
+    const testDir = GlobalStorageFS.fullPath('test_yaml');
 
     // Test YAML content with various angle bracket formats
     const testYaml = {
@@ -282,18 +289,14 @@ export async function handleTestYamlBrackets(
     };
 
     // Write test YAML
-    const testYamlPath = path.join(testDir, 'test_brackets.yaml');
     const yamlString = yaml.stringify(testYaml);
-    await vscode.workspace.fs.writeFile(
-      vscode.Uri.file(testYamlPath),
-      Buffer.from(yamlString, 'utf-8'),
+    await GlobalStorageFS.write(
+      'test_yaml/test_brackets.yaml',
+      yamlString,
     );
 
-    // Read and parse the YAML using VSCode's fs API
-    const fileContent = await vscode.workspace.fs.readFile(
-      vscode.Uri.file(testYamlPath),
-    );
-    const content = Buffer.from(fileContent).toString('utf-8');
+    // Read and parse the YAML using GlobalStorageFS
+    const content = await GlobalStorageFS.read('test_yaml/test_brackets.yaml');
     logger.info(CHANNEL, '\nRaw YAML content:');
     logger.info(CHANNEL, content);
 
@@ -314,8 +317,8 @@ export async function handleTestYamlBrackets(
     logger.info(CHANNEL, `settings.endTag: "${parsed.settings.endTag}"`);
 
     // Cleanup
-    await vscode.workspace.fs.delete(vscode.Uri.file(testYamlPath));
-    await vscode.workspace.fs.delete(vscode.Uri.file(testDir), {
+    await GlobalStorageFS.delete('test_yaml/test_brackets.yaml');
+    await GlobalStorageFS.delete('test_yaml', {
       recursive: true,
     });
 
