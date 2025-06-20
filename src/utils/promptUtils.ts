@@ -9,7 +9,7 @@ import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
 import { readFile, writeFile } from './files';
-import { getAgentFirstNameChunk } from '../housekeeping/utils';
+import { getAgentFirstNameChunk } from '@housekeeping/utils';
 
 const CHANNEL = 'promptUtils';
 logger.initialize(CHANNEL);

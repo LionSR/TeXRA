@@ -13,7 +13,7 @@ import {
   runCleanMultiple,
   runCleanBuild,
   runCleanOutput,
-} from '../housekeeping';
+} from '@housekeeping';
 import type { FileOpResult } from '@/types/ResultTypes';
 
 const CHANNEL = 'cleanCommands';
