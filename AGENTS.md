@@ -76,6 +76,7 @@ adding new code or refactoring existing modules:
   simpler and more obvious.
 - When submitting a PR, describe any design issues found and how the refactoring
   addresses them. Favor deep modules with minimal, clear APIs.
+- When your refactoring include a large number of renames, use search tools to make sure you are not missing any files or paths where changes need to be made.
 
 ## Documentation
 
