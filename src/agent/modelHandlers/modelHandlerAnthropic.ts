@@ -15,7 +15,7 @@ import type { BetaMessage } from '@anthropic-ai/sdk/resources/beta/messages';
 import { formatProviderError } from '@utils/sdkErrorUtils';
 
 // Local imports - utilities
-import { WorkspaceFileManager } from '@utils/files';
+import { WorkspaceFS } from '@utils/files';
 import { cleanFileContent } from '@replacement/replacementUtils';
 import replacementManager from '@replacement/replacementManager';
 import type { ProviderStopReason } from '@types/StopReasonTypes';
@@ -453,7 +453,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
   ): Promise<[boolean, MessageParam[]]> {
     let endTurn = false;
 
-    if (!(await WorkspaceFileManager.fileExistsAndNonTrivial(outputFile))) {
+    if (!(await WorkspaceFS.existsAndNonTrivial(outputFile))) {
       if (
         agentConfig.toolConfig.usePrefillFromInput &&
         toolState.firstKCharsFromInput
@@ -468,9 +468,9 @@ export class ModelHandlerAnthropic extends ModelHandler {
           toolState.accumulatedOutput.includes('<scratchpad>') &&
           prefill === '<scratchpad>' // this is not so neat
         ) {
-          await WorkspaceFileManager.writeFile(outputFile, prefill);
+          await WorkspaceFS.writeFile(outputFile, prefill);
         } else if (agentSetting.outputExt === 'xml') {
-          await WorkspaceFileManager.writeFile(outputFile, prefill + '\n');
+          await WorkspaceFS.writeFile(outputFile, prefill + '\n');
         }
         messages.push({
           role: 'assistant',
@@ -496,7 +496,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
     }
 
     // Get prefill from existing and non-trivial file
-    let fileContent = await WorkspaceFileManager.readFile(outputFile);
+    let fileContent = await WorkspaceFS.readFile(outputFile);
     fileContent = cleanFileContent(fileContent);
 
     // Extract and log any existing scratchpad content
@@ -507,7 +507,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
       groupId,
     );
 
-    await WorkspaceFileManager.writeFile(outputFile, fileContent);
+    await WorkspaceFS.writeFile(outputFile, fileContent);
 
     // Update the toolState with the actual file content
     toolState.updateAccumulatedOutput(fileContent);

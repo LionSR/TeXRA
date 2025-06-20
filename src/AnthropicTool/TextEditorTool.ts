@@ -13,7 +13,7 @@ import {
 } from './types';
 
 // Local imports - utilities
-import { WorkspaceFileManager } from '@utils/files';
+import { WorkspaceFS } from '@utils/files';
 
 // Local imports - Log
 import * as logger from '@logger/logUtils';
@@ -160,7 +160,7 @@ export class TextEditorTool extends BaseAnthropicTool {
     filePath: string,
   ): Promise<void> {
     // Check if the path exists (except for create command)
-    const exists = await WorkspaceFileManager.fileExists(filePath);
+    const exists = await WorkspaceFS.exists(filePath);
 
     if (!exists && command !== 'create') {
       throw new ToolError(
@@ -178,9 +178,7 @@ export class TextEditorTool extends BaseAnthropicTool {
     try {
       if (exists) {
         const stats = await vscode.workspace.fs.stat(
-          vscode.Uri.file(
-            WorkspaceFileManager.getFullPathFromWorkspace(filePath),
-          ),
+          vscode.Uri.file(WorkspaceFS.fullPath(filePath)),
         );
 
         if (stats.type === vscode.FileType.Directory && command !== 'view') {
@@ -210,9 +208,7 @@ export class TextEditorTool extends BaseAnthropicTool {
     try {
       // Check if the path is a directory
       const stats = await vscode.workspace.fs.stat(
-        vscode.Uri.file(
-          WorkspaceFileManager.getFullPathFromWorkspace(filePath),
-        ),
+        vscode.Uri.file(WorkspaceFS.fullPath(filePath)),
       );
 
       if (stats.type === vscode.FileType.Directory) {
@@ -223,7 +219,7 @@ export class TextEditorTool extends BaseAnthropicTool {
         }
 
         // Get directory contents
-        const dirContents = await WorkspaceFileManager.readDirectory(filePath);
+        const dirContents = await WorkspaceFS.readDir(filePath);
         const formattedContents = dirContents
           .map(([fileName, fileType]) => {
             const type =
@@ -238,7 +234,7 @@ export class TextEditorTool extends BaseAnthropicTool {
       }
 
       // Read file contents
-      let fileContent = await WorkspaceFileManager.readFile(filePath);
+      let fileContent = await WorkspaceFS.readFile(filePath);
       let initLine = 1;
 
       // Handle view range if provided
@@ -309,7 +305,7 @@ export class TextEditorTool extends BaseAnthropicTool {
       }
 
       // Write file content
-      await WorkspaceFileManager.writeFile(filePath, content);
+      await WorkspaceFS.writeFile(filePath, content);
 
       return new ToolResult({
         output: `File created successfully at: ${filePath}`,
@@ -333,7 +329,7 @@ export class TextEditorTool extends BaseAnthropicTool {
   ): Promise<ToolResult> {
     try {
       // Read file content
-      const fileContent = await WorkspaceFileManager.readFile(filePath);
+      const fileContent = await WorkspaceFS.readFile(filePath);
 
       // Expand tabs in content and search string
       const expandedFileContent = fileContent.replace(/\t/g, '    ');
@@ -371,7 +367,7 @@ export class TextEditorTool extends BaseAnthropicTool {
         expandedOldStr,
         expandedNewStr,
       );
-      await WorkspaceFileManager.writeFile(filePath, newFileContent);
+      await WorkspaceFS.writeFile(filePath, newFileContent);
 
       // Create a snippet of the edited section
       const textBeforeReplacement =
@@ -419,7 +415,7 @@ export class TextEditorTool extends BaseAnthropicTool {
   ): Promise<ToolResult> {
     try {
       // Read file content
-      const fileContent = await WorkspaceFileManager.readFile(filePath);
+      const fileContent = await WorkspaceFS.readFile(filePath);
 
       // Expand tabs in content and new string
       const expandedFileContent = fileContent.replace(/\t/g, '    ');
@@ -456,7 +452,7 @@ export class TextEditorTool extends BaseAnthropicTool {
 
       // Write new content to file
       const newFileContent = newFileLines.join('\n');
-      await WorkspaceFileManager.writeFile(filePath, newFileContent);
+      await WorkspaceFS.writeFile(filePath, newFileContent);
 
       // Prepare success message
       const snippetText = snippetLines.join('\n');
@@ -496,7 +492,7 @@ export class TextEditorTool extends BaseAnthropicTool {
 
       // Restore previous content
       const oldContent = history.pop()!;
-      await WorkspaceFileManager.writeFile(filePath, oldContent);
+      await WorkspaceFS.writeFile(filePath, oldContent);
 
       // If the history is now empty, delete the entry
       if (history.length === 0) {
@@ -560,9 +556,9 @@ export class TextEditorTool extends BaseAnthropicTool {
    */
   private async ensureDirectoryExists(dirPath: string): Promise<void> {
     try {
-      const exists = await WorkspaceFileManager.fileExists(dirPath);
+      const exists = await WorkspaceFS.exists(dirPath);
       if (!exists) {
-        await WorkspaceFileManager.createDirectory(dirPath);
+        await WorkspaceFS.createDir(dirPath);
       }
     } catch (error) {
       throw new ToolError(

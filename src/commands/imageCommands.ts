@@ -5,7 +5,7 @@ import * as vscode from 'vscode';
 import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
-import { WorkspaceFileManager } from '@utils/files';
+import { WorkspaceFS } from '@utils/files';
 import {
   countPdfPages,
   getBase64EncodedMedia,
@@ -51,9 +51,7 @@ async function handleCountPdfPages(): Promise<void> {
       return;
     }
 
-    const selectedFile = WorkspaceFileManager.getRelativePath(
-      fileUris[0].fsPath,
-    );
+    const selectedFile = WorkspaceFS.relativePath(fileUris[0].fsPath);
     logger.debug(CHANNEL, `Processing PDF file: ${selectedFile}`);
 
     const pageCount = await countPdfPages(selectedFile);
@@ -89,9 +87,7 @@ async function handleEncodeImageToBase64(): Promise<string | undefined> {
       return undefined;
     }
 
-    const selectedFile = WorkspaceFileManager.getRelativePath(
-      fileUris[0].fsPath,
-    );
+    const selectedFile = WorkspaceFS.relativePath(fileUris[0].fsPath);
     logger.debug(CHANNEL, `Processing image file: ${selectedFile}`);
 
     const base64String = await getBase64EncodedMedia(selectedFile);
@@ -133,9 +129,7 @@ async function handleConvertPdfToImages(): Promise<
       return undefined;
     }
 
-    const selectedFile = WorkspaceFileManager.getRelativePath(
-      fileUris[0].fsPath,
-    );
+    const selectedFile = WorkspaceFS.relativePath(fileUris[0].fsPath);
     logger.debug(CHANNEL, `Processing PDF file: ${selectedFile}`);
 
     // Get quality from user
@@ -208,9 +202,7 @@ async function handleTestPdfToImage(): Promise<string | undefined> {
       return undefined;
     }
 
-    const selectedFile = WorkspaceFileManager.getRelativePath(
-      fileUris[0].fsPath,
-    );
+    const selectedFile = WorkspaceFS.relativePath(fileUris[0].fsPath);
     logger.debug(CHANNEL, `Testing PDF to PNG conversion for: ${selectedFile}`);
 
     // Get page number from user
