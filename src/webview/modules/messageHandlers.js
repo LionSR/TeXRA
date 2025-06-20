@@ -2,6 +2,7 @@ import { vscode, registerMessageHandlers } from '@common/webviewContext.js';
 import { safeSetElementValue, safeGetElementById } from '@common/domUtils.js';
 import { capitalize, uncapitalize } from '@common/stringUtils.js';
 import { stateManager, restoreState, saveState } from './stateManager.js';
+import { setDebugMode as applyDebugMode } from './uiHandlers.js';
 
 import {
   updateFileSelect,
@@ -21,6 +22,7 @@ import { FILE_TYPES } from './constants.js';
 export function initializeDataRequests() {
   const dataRequests = [
     'getTheme',
+    'getDebugMode',
     'requestInputFile',
     'requestReferenceFile',
     'requestAuxiliaryFile',
@@ -60,25 +62,7 @@ function handleStateRestoration(state) {
   if (state.auxiliaryFile)
     safeSetElementValue('auxiliaryFile', state.auxiliaryFile);
   if (state.mediaFile) safeSetElementValue('mediaFile', state.mediaFile);
-  if (state.outputNameOverride)
-    safeSetElementValue('outputNameOverride', state.outputNameOverride);
-
-  // Handle output name override visibility
-  const outputNameOverride = safeGetElementById('outputNameOverride');
-  const toggleOutputNameOverrideDiv = safeGetElementById(
-    'toggleOutputNameOverride',
-  );
-  if (state.outputNameOverrideVisible) {
-    if (outputNameOverride) outputNameOverride.style.display = 'inline-block';
-    if (toggleOutputNameOverrideDiv)
-      toggleOutputNameOverrideDiv.innerHTML =
-        '<i class="codicon codicon-chevron-left"></i>';
-  } else {
-    if (outputNameOverride) outputNameOverride.style.display = 'none';
-    if (toggleOutputNameOverrideDiv)
-      toggleOutputNameOverrideDiv.innerHTML =
-        '<i class="codicon codicon-chevron-right"></i>';
-  }
+  // Output filename override removed
 
   // Prepare the state to save with all necessary properties
   const toolConfig = state.toolConfig || {};
@@ -93,8 +77,6 @@ function handleStateRestoration(state) {
     referenceFile: state.referenceFile,
     auxiliaryFile: state.auxiliaryFile,
     mediaFile: state.mediaFile,
-    outputNameOverride: state.outputNameOverride,
-    outputNameOverrideVisible: state.outputNameOverrideVisible,
 
     // Tool config settings - flattened from either direct or toolConfig property
     reflect: state.reflect || (toolConfig ? toolConfig.reflect : false),
@@ -233,6 +215,10 @@ export function setupMessageHandlers() {
   const handlers = {
     setTheme: (m) => {
       document.body.className = m.theme;
+      postHandle();
+    },
+    setDebugMode: (m) => {
+      applyDebugMode(m.debugMode);
       postHandle();
     },
     modelSelected: (m) => {

@@ -351,27 +351,7 @@
             >
               <div class="multiple-files-content">
                 <div id="outputFiles" class="multiple-files-list"></div>
-                <div
-                  class="output-filename-override"
-                  style="margin-top: var(--spacing-medium)"
-                >
-                  <div
-                    class="file-select-label-group"
-                    title="Optional: Customize the output filename (including extension)"
-                  >
-                    <span id="toggleOutputNameOverride" class="toggle-icon"
-                      ><i class="codicon codicon-chevron-right"></i
-                    ></span>
-                    <span class="optional-label">Output Filename</span>
-                    <input
-                      type="text"
-                      id="outputNameOverride"
-                      class="vscode-input"
-                      placeholder="(including extension)"
-                      style="display: none"
-                    />
-                  </div>
-                </div>
+                <!-- Output filename override removed -->
               </div>
             </div>
           </div>
@@ -423,6 +403,7 @@
                 id="packButton"
                 class="vscode-button"
                 title="Pack the output for this agent into the History folder"
+                style="display: none"
               >
                 <i class="codicon codicon-archive"></i>
               </button>
@@ -430,6 +411,7 @@
                 id="cleanButton"
                 class="vscode-button"
                 title="Clean the output for this agent"
+                style="display: none"
               >
                 <i class="codicon codicon-trash"></i>
               </button>

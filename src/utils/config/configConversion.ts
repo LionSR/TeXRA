@@ -80,10 +80,6 @@ export function agentConfigToTaskState(config: AgentConfig): TaskState {
     agent: config.agent,
     model: config.model,
     instruction: config.instruction || '',
-
-    // Output name override visibility
-    outputNameOverride: config.outputNameOverride || '',
-    outputNameOverrideVisible: !!config.outputNameOverride,
   };
 
   // Add single and multi-file selections
@@ -115,11 +111,6 @@ export function objectToTaskState(obj: Record<string, any>): TaskState {
     agent: obj.agent || 'correct',
     model: obj.model || 'sonnet4T',
     instruction: obj.instruction || '',
-
-    // Output name override visibility
-    outputNameOverride: obj.outputNameOverride || '',
-    outputNameOverrideVisible:
-      obj.outputNameOverrideVisible || !!obj.outputNameOverride || false,
   };
 
   // Add single and multi-file selections
@@ -161,9 +152,6 @@ export function taskStateToAgentConfig(taskState: TaskState): AgentConfig {
     skipOutputFile: true,
   });
   copyActiveFileLists(agentConfig, taskState);
-
-  // Special case for outputNameOverride since it needs null rather than empty string
-  agentConfig.outputNameOverride = taskState.outputNameOverride || null;
 
   // Add tool config settings
   const allConfigFields = [...AUTO_EXTRACT_FIELDS, ...TOOL_CONFIG_FIELDS];
