@@ -17,6 +17,7 @@ import { AgentConfig } from '../core/AgentConfig';
 import { AgentSetting, hasEndTag } from '../core/AgentDataclass';
 import { AgentStateRound } from '../core/AgentState';
 import { ModelHandler } from './ModelHandler';
+import type { ProviderStopReason } from '@types/StopReasonTypes';
 import {
   OpenAIAPIResponseUsage,
   ResponseUsageFactory,
@@ -387,7 +388,10 @@ export class ModelHandlerOpenAI extends ModelHandler {
   }
 
   /** Extracts response text and usage statistics from API response. */
-  extractResponse(responseObject: any, endTag: string): [string, any, string] {
+  extractResponse(
+    responseObject: any,
+    endTag: string,
+  ): [string, any, ProviderStopReason] {
     if (!responseObject.choices?.length) {
       this.logger.debug(
         `Response object: ${objectToLogString(responseObject)}`,
@@ -801,7 +805,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
 
   /** Determines if generation should continue based on response content. */
   shouldContinue(
-    stopReason: string,
+    stopReason: ProviderStopReason,
     newResponse: string,
     agentSetting: AgentSetting,
   ): boolean {
