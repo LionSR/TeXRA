@@ -13,7 +13,7 @@ import { formatProviderError } from '../sdkErrorUtils';
 import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
-import { getApiKey } from '@frontend/secrets';
+import { SecretManager } from '@frontend/secretManager';
 import { extractTextFromTag } from './xmlUtils';
 import { getConfig } from '../config';
 
@@ -65,7 +65,9 @@ export async function polishTextWithAI(
     const useCopilot = getConfig<boolean>('model.useCopilot', false);
 
     // Get the API key from secrets when not using Copilot
-    const apiKey = useCopilot ? undefined : await getApiKey('anthropic');
+    const apiKey = useCopilot
+      ? undefined
+      : await SecretManager.getApiKey('anthropic');
     if (!useCopilot && !apiKey) {
       return {
         success: false,
