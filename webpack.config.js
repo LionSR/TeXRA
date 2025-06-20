@@ -43,6 +43,7 @@ const extensionConfig = {
       '@commands': path.resolve(__dirname, 'src/commands'),
       '@model': path.resolve(__dirname, 'src/model'),
       '@progressView': path.resolve(__dirname, 'src/progressView'),
+      '@historyView': path.resolve(__dirname, 'src/historyView'),
       '@replacement': path.resolve(__dirname, 'src/replacement'),
     },
     fallback: {
