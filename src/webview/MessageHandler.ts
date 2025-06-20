@@ -38,7 +38,10 @@ import {
   FileContext,
 } from '@utils/text/textEnhancementUtils';
 import { sleep } from '@utils/helpers';
-import { recordAndTranscribe } from '@frontend/media/audio';
+import {
+  startRecording,
+  stopRecordingAndTranscribe,
+} from '@frontend/media/audio';
 
 // Local imports - agent
 import { ToolConfig } from '@agent/core/ToolConfig';
@@ -157,6 +160,8 @@ export class WebviewMessageHandler {
         this.handlePolishInstructionText(message, view),
       transcribeInstruction: (_m, view) =>
         this.handleTranscribeInstruction(view),
+      startRecording: (_m, view) => this.handleStartRecording(view),
+      stopRecording: (_m, view) => this.handleStopRecording(view),
       showAgentHistory: () => this.handleShowAgentHistory(),
       openSettings: () => this.handleOpenSettings(),
       clipboardImage: (message, view) =>
@@ -879,7 +884,43 @@ export class WebviewMessageHandler {
     }
   }
 
-  private async handleTranscribeInstruction(webviewView: vscode.WebviewView) {
+  private async handleTranscribeInstruction(_webviewView: vscode.WebviewView) {
+    // Legacy handler - no longer used but kept for backward compatibility
+    vscode.window.showInformationMessage(
+      'Please use the new recording interface with start/stop controls.',
+    );
+  }
+
+  private async handleStartRecording(webviewView: vscode.WebviewView) {
+    try {
+      const result = await startRecording(this.context);
+      if (result.success) {
+        webviewView.webview.postMessage({
+          command: 'recordingStarted',
+        });
+      } else if (result.error) {
+        vscode.window.showErrorMessage(result.error);
+        webviewView.webview.postMessage({
+          command: 'recordingError',
+          error: result.error,
+        });
+      }
+    } catch (error) {
+      vscode.window.showErrorMessage(
+        `Error starting recording: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
+      logger.error(
+        CHANNEL,
+        `Error in handleStartRecording: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      webviewView.webview.postMessage({
+        command: 'recordingError',
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  }
+
+  private async handleStopRecording(webviewView: vscode.WebviewView) {
     try {
       await vscode.window.withProgress(
         {
@@ -888,7 +929,7 @@ export class WebviewMessageHandler {
           cancellable: false,
         },
         async () => {
-          const result = await recordAndTranscribe(this.context);
+          const result = await stopRecordingAndTranscribe(this.context);
           if (result.success) {
             webviewView.webview.postMessage({
               command: 'instructionTextTranscribed',
@@ -896,17 +937,25 @@ export class WebviewMessageHandler {
             });
           } else if (result.error) {
             vscode.window.showErrorMessage(result.error);
+            webviewView.webview.postMessage({
+              command: 'recordingError',
+              error: result.error,
+            });
           }
         },
       );
     } catch (error) {
       vscode.window.showErrorMessage(
-        `Error during transcription: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        `Error stopping recording: ${error instanceof Error ? error.message : 'Unknown error'}`,
       );
       logger.error(
         CHANNEL,
-        `Error in handleTranscribeInstruction: ${error instanceof Error ? error.message : String(error)}`,
+        `Error in handleStopRecording: ${error instanceof Error ? error.message : String(error)}`,
       );
+      webviewView.webview.postMessage({
+        command: 'recordingError',
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
     }
   }
 
