@@ -3,7 +3,7 @@ import * as vscode from 'vscode';
 
 // Local imports - log
 import * as logger from '@logger/logUtils';
-import { WorkspaceFileManager } from '@utils/files';
+import { WorkspaceFS } from '@utils/files';
 
 const CHANNEL = 'OpenBuildUtils';
 logger.initialize(CHANNEL);
@@ -19,14 +19,12 @@ export async function openAndBuildIfTex(
   options: { preserveFocus?: boolean } = {},
 ): Promise<void> {
   try {
-    if (!(await WorkspaceFileManager.fileExists(file))) {
+    if (!(await WorkspaceFS.exists(file))) {
       vscode.window.showErrorMessage(`File not found: ${file}`);
       return;
     }
 
-    const uri = vscode.Uri.file(
-      WorkspaceFileManager.getFullPathFromWorkspace(file),
-    );
+    const uri = vscode.Uri.file(WorkspaceFS.fullPath(file));
     const doc = await vscode.workspace.openTextDocument(uri);
     await vscode.window.showTextDocument(doc, {
       preview: false,

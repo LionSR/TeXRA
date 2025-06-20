@@ -7,7 +7,7 @@ import { XMLValidator } from 'fast-xml-parser';
 import { AnthropicToolAgent } from './AnthropicToolAgent';
 
 // Local imports - utils
-import { WorkspaceFileManager } from '@utils/files';
+import { WorkspaceFS } from '@utils/files';
 
 // Local imports - types
 import { XMLValidationError, ValidationResult } from './types';
@@ -31,7 +31,7 @@ export class XMLValidatorAgent extends AnthropicToolAgent<XMLValidationError> {
   ): Promise<ValidationResult<XMLValidationError>> {
     try {
       // Read the file content
-      const content = await WorkspaceFileManager.readFile(filePath);
+      const content = await WorkspaceFS.readFile(filePath);
 
       // Use fast-xml-parser's XMLValidator to validate the XML
       const validationResult = XMLValidator.validate(content, {

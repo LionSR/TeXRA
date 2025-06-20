@@ -3,7 +3,7 @@
 import * as path from 'path';
 
 import { AgentLogger } from '@logger/AgentLogger';
-import { WorkspaceFileManager } from '@utils/files';
+import { WorkspaceFS } from '@utils/files';
 import { setVarFromFile } from '@frontend/files/vars';
 import { getXmlFormatFromFiles, getListOfFiles } from '@utils/promptUtils';
 import { AgentConfig } from '../core/AgentConfig';
@@ -77,7 +77,7 @@ async function getFileVars(
   for (const [prefix, filePath] of Object.entries(singleFileMappings)) {
     userVars[`${prefix}_FILE`] = filePath;
     userVars[`${prefix}_CONTENT`] = filePath
-      ? await WorkspaceFileManager.readFile(filePath)
+      ? await WorkspaceFS.readFile(filePath)
       : null;
   }
 
