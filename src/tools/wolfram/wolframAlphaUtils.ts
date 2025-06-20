@@ -2,7 +2,7 @@
 import axios from 'axios';
 
 // local import
-import { getApiKey } from '@frontend/secrets';
+import { SecretManager } from '@frontend/secretManager';
 
 interface WolframValves {
   WOLFRAM_APP_ID: string;
@@ -40,7 +40,7 @@ export class WolframAlphaClient {
    */
   async initialize(): Promise<void> {
     try {
-      this.appId = await getApiKey('wolframllmapp');
+      this.appId = await SecretManager.getApiKey('wolframllmapp');
     } catch (error) {
       console.error('Failed to get Wolfram Alpha API key:', error);
       throw error;
