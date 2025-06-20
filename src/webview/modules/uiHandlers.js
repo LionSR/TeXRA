@@ -14,7 +14,6 @@ import {
   handleCheckboxChange,
   toggleMultipleFiles,
   toggleOutputFiles,
-  toggleOutputNameOverride,
   emptyMultipleFiles,
   toggleLatexdiffs,
 } from './fileHandlers.js';
@@ -118,15 +117,6 @@ export function setupUIHandlers() {
       });
     }
   });
-
-  // Helper functions for common tasks
-  function getOutputNameOverride() {
-    const outputNameOverrideDiv = safeGetElementById('outputNameOverride');
-    return outputNameOverrideDiv &&
-      outputNameOverrideDiv.style.display !== 'none'
-      ? outputNameOverrideDiv.value.trim()
-      : null;
-  }
 
   // Get values for single file inputs (input, reference, auxiliary, media)
   function getSingleFileData(
@@ -247,12 +237,9 @@ export function setupUIHandlers() {
 
   addEventListenerSafely('inputFile', 'change', function () {
     const inputFile = this.value;
-    const outputNameOverride =
-      safeGetElementById('outputNameOverride')?.value.trim() || null;
     vscode.postMessage({
       command: 'inputFileSelected',
       filePath: inputFile,
-      outputNameOverride: outputNameOverride,
     });
   });
 
@@ -340,8 +327,6 @@ export function setupUIHandlers() {
         ...singleFiles,
         // Toggle status and multiple files
         ...multipleFilesData,
-        // Output override
-        outputNameOverride: getOutputNameOverride(),
       });
     }
   });
@@ -374,8 +359,6 @@ export function setupUIHandlers() {
       ...multipleFilesData,
       // checkboxes (auto extract options and tool config)
       ...checkboxValues,
-      // output override
-      outputNameOverride: getOutputNameOverride(),
     });
   });
 
@@ -418,7 +401,6 @@ export function setupUIHandlers() {
           inputFile,
           agent,
           model,
-          outputNameOverride: getOutputNameOverride(),
           outputFiles,
         });
 
@@ -440,7 +422,6 @@ export function setupUIHandlers() {
           inputFile,
           agent,
           model,
-          outputNameOverride: getOutputNameOverride(),
         });
 
         vscode.postMessage({
@@ -533,22 +514,10 @@ export function setupUIHandlers() {
 
   // Special case for instruction as it uses 'input' event
   addEventListenerSafely('instruction', 'input', saveState);
-  addEventListenerSafely('outputNameOverride', 'input', saveState);
 
   new Sortable(safeGetElementById('outputFiles'), {
     animation: 150,
     onEnd: saveState,
-  });
-
-  // Output Filename toggle only works when inside Multiple Outputs container
-  addEventListenerSafely('toggleOutputNameOverride', 'click', function () {
-    const outputFilesContainer = safeGetElementById('outputFilesContainer');
-    if (
-      outputFilesContainer &&
-      outputFilesContainer.style.display === 'block'
-    ) {
-      toggleOutputNameOverride();
-    }
   });
 
   // Add event listeners for file operations (add opened files, get current file)

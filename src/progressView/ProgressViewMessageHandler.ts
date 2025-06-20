@@ -119,7 +119,6 @@ export class ProgressViewMessageHandler {
       agent: taskState.agent,
       model: taskState.model,
       inputFile: taskState.inputFile,
-      outputNameOverride: taskState.outputNameOverride,
       outputFiles: outputFilesArray,
       activeFiles: {
         output: outputFilesArray.length > 0,
@@ -187,7 +186,6 @@ export class ProgressViewMessageHandler {
       agent: taskState.agent,
       model: taskState.model,
       inputFile: taskState.inputFile,
-      outputNameOverride: taskState.outputNameOverride,
       outputFiles: taskState.outputFiles,
       outputFilesActive: taskState.activeFiles.output,
     });
