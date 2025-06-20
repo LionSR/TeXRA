@@ -22,10 +22,10 @@ export async function getBuiltInAgentsDirectory(
 
   // Initialize StorageFS with the context
   StorageFS.initialize(context);
-  
+
   // Ensure the directory exists
-  await GlobalStorageFS.createDir('agents');
-  
+  await GlobalStorageFS.ensureDir('agents');
+
   const basePath = GlobalStorageFS.fullPath('agents');
   logger.debug(CHANNEL, `Using built-in agents directory: ${basePath}`);
 
