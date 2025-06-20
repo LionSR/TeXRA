@@ -8,7 +8,7 @@ import * as vscode from 'vscode';
 import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
-import { WorkspaceFileManager } from '@utils/files';
+import { WorkspaceFS } from '@utils/files';
 import { executeCommand } from '@utils/system';
 import { ExecResult } from '../types/ResultTypes';
 import { getConfig } from '@utils/config';
@@ -205,7 +205,7 @@ async function processDiffFile(
   channel: string = CHANNEL,
 ): Promise<void> {
   try {
-    const content = await WorkspaceFileManager.readFile(diffFileName);
+    const content = await WorkspaceFS.readFile(diffFileName);
 
     // Process the content to remove labels from star environments
     let processedContent = content;
@@ -289,7 +289,7 @@ async function processDiffFile(
     // Apply standard replacements from the replacementUtils at the end of processing
     newContent = replacementManager.applyAll(newContent);
 
-    await WorkspaceFileManager.writeFile(diffFileName, newContent);
+    await WorkspaceFS.writeFile(diffFileName, newContent);
     // logger.debug(channel, `Line breaks added to ${diffFileName}`);
   } catch (err) {
     logger.error(
@@ -337,7 +337,7 @@ async function processTikzPictureEndings(
   filePath: string,
   channel: string = CHANNEL,
 ): Promise<void> {
-  const content = await WorkspaceFileManager.readFile(filePath);
+  const content = await WorkspaceFS.readFile(filePath);
 
   let newContent = content;
   const patterns = [
@@ -383,7 +383,7 @@ async function processTikzPictureEndings(
   // maybe above do more evil than correcting the issue...
   // So they are commented out for now
 
-  await WorkspaceFileManager.writeFile(filePath, newContent);
+  await WorkspaceFS.writeFile(filePath, newContent);
   // logger.debug(channel, `Tikzpicture endings fixed in ${filePath}`);
 }
 
@@ -402,8 +402,8 @@ export async function runLatexdiff(
 
     // Check if both files exist
     if (
-      !(await WorkspaceFileManager.fileExists(inputFile)) ||
-      !(await WorkspaceFileManager.fileExists(editedFile))
+      !(await WorkspaceFS.exists(inputFile)) ||
+      !(await WorkspaceFS.exists(editedFile))
     ) {
       const message = `One or both files do not exist. Input: ${inputFile}, Edited: ${editedFile}`;
       logger.warn(channel, message);
@@ -432,8 +432,8 @@ export async function runLatexdiff(
     }
 
     // Files are now relative to workspace, no need for extra path joining
-    const inputContent = await WorkspaceFileManager.readFile(inputFile);
-    const editedContent = await WorkspaceFileManager.readFile(editedFile);
+    const inputContent = await WorkspaceFS.readFile(inputFile);
+    const editedContent = await WorkspaceFS.readFile(editedFile);
 
     const documentChecks = [
       { file: inputFile, content: inputContent },
@@ -518,7 +518,7 @@ export async function runLatexdiff(
     }
 
     // Write the output to the diff file
-    await WorkspaceFileManager.writeFile(outputPath, result.stdout);
+    await WorkspaceFS.writeFile(outputPath, result.stdout);
 
     await processDiffFile(outputPath);
     await processTikzPictureEndings(outputPath);
@@ -541,7 +541,7 @@ export async function runLatexdiffvc(
 ): Promise<LaTeXdiffResult> {
   try {
     // Use readFile which now handles workspace paths
-    const inputContent = await WorkspaceFileManager.readFile(inputFile);
+    const inputContent = await WorkspaceFS.readFile(inputFile);
 
     if (
       !inputContent.includes('\\begin{document}') ||
@@ -660,8 +660,8 @@ export async function runLatexdiffForRound(
 ): Promise<LaTeXdiffResult> {
   try {
     if (
-      (await WorkspaceFileManager.fileExists(baseFile)) &&
-      (await WorkspaceFileManager.fileExists(outputFile))
+      (await WorkspaceFS.exists(baseFile)) &&
+      (await WorkspaceFS.exists(outputFile))
     ) {
       return await runLatexdiff(baseFile, outputFile, '_diff', false);
     } else {
@@ -686,8 +686,8 @@ export async function runLatexdiffBetweenRounds(
 ): Promise<LaTeXdiffResult> {
   try {
     if (
-      (await WorkspaceFileManager.fileExists(outputFile1)) &&
-      (await WorkspaceFileManager.fileExists(outputFile2))
+      (await WorkspaceFS.exists(outputFile1)) &&
+      (await WorkspaceFS.exists(outputFile2))
     ) {
       const firstRoundMatch = outputFile1.match(/_r(\d+)_/);
       const secondRoundMatch = outputFile2.match(/_r(\d+)_/);
