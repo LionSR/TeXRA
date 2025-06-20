@@ -9,7 +9,7 @@ import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
 import { getConfig } from '@utils/config';
-import { WorkspaceFileManager } from '@utils/files';
+import { WorkspaceFS } from '@utils/files';
 import { getIncludedExtensions } from '@utils/fileTypeUtils';
 
 const CHANNEL = 'FrontendUtils';
@@ -26,7 +26,7 @@ export function getFilesIfNotEmpty<T>(files: T[] | undefined): T[] | null {
 }
 
 export async function listInputFiles(): Promise<string[]> {
-  const workspacePath = WorkspaceFileManager.getWorkspacePath();
+  const workspacePath = WorkspaceFS.getPath();
   if (!workspacePath) {
     return [];
   }
@@ -47,7 +47,7 @@ export async function listInputFiles(): Promise<string[]> {
 export const listReferenceFiles = listInputFiles;
 
 export async function listAuxiliaryFiles(): Promise<string[]> {
-  const workspacePath = WorkspaceFileManager.getWorkspacePath();
+  const workspacePath = WorkspaceFS.getPath();
   if (!workspacePath) {
     return [];
   }
@@ -68,7 +68,7 @@ export async function listAuxiliaryFiles(): Promise<string[]> {
 }
 
 export async function listMediaFiles(): Promise<string[]> {
-  const workspacePath = WorkspaceFileManager.getWorkspacePath();
+  const workspacePath = WorkspaceFS.getPath();
   if (!workspacePath) {
     return [];
   }
@@ -90,7 +90,7 @@ export async function listMediaFiles(): Promise<string[]> {
 }
 
 export async function listEditedFiles(baseFileName: string): Promise<string[]> {
-  const workspacePath = WorkspaceFileManager.getWorkspacePath();
+  const workspacePath = WorkspaceFS.getPath();
   if (!workspacePath) {
     return [];
   }
