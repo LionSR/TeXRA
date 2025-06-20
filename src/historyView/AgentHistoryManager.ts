@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { randomUUID } from 'crypto';
 
-import { AgentConfig } from '../agent/core/AgentConfig';
+import { AgentConfig } from '@agent/core/AgentConfig';
 
 /**
  * Represents a historical agent execution
