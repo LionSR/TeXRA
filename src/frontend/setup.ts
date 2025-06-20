@@ -15,7 +15,7 @@ import { AbsoluteFS, GlobalStorageFS, StorageFS } from '@utils/files';
 export async function copyDefaultAgents(context: vscode.ExtensionContext) {
   // Initialize StorageFS with the context
   StorageFS.initialize(context);
-  
+
   // Get current extension version from package.json
   const currentVersion = vscode.extensions.getExtension(context.extension.id)
     ?.packageJSON.version;
@@ -39,12 +39,15 @@ export async function copyDefaultAgents(context: vscode.ExtensionContext) {
 
   try {
     // Ensure the global storage agents directory exists
-    await GlobalStorageFS.createDir('agents');
+    await GlobalStorageFS.ensureDir('agents');
     console.log('Created or verified global storage directory');
 
     // Recursive function to copy files and directories
     // Consider the native recursive copy available in Node 16+?
-    const copyRecursively = async (sourcePath: string, targetRelativePath: string) => {
+    const copyRecursively = async (
+      sourcePath: string,
+      targetRelativePath: string,
+    ) => {
       const stats = AbsoluteFS.statSync(sourcePath);
 
       if (stats.isDirectory()) {

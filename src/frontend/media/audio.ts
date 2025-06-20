@@ -67,7 +67,7 @@ export async function startRecording(
     }
     // Initialize StorageFS with context if not already done
     StorageFS.initialize(context);
-    await StorageFS.createDir(RECORDINGS_DIR);
+    await StorageFS.ensureDir(RECORDINGS_DIR);
     const relativePath = path.join(RECORDINGS_DIR, `record_${Date.now()}.wav`);
     const absPath = StorageFS.fullPath(relativePath);
 
@@ -184,10 +184,7 @@ export async function stopRecordingAndTranscribe(
     // Clean up old recordings
     // Initialize StorageFS with context if not already done
     StorageFS.initialize(context);
-    await StorageFS.cleanupOldFiles(
-      RECORDINGS_DIR,
-      3 * 24 * 60 * 60 * 1000,
-    );
+    await StorageFS.cleanupOldFiles(RECORDINGS_DIR, 3 * 24 * 60 * 60 * 1000);
 
     return { success: true, text: result.text };
   } catch (err) {
