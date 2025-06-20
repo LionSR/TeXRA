@@ -15,7 +15,7 @@ import { safeExecuteCommand } from '@utils/system';
 import { WorkspaceFS } from '@utils/files';
 import {
   createStorageDirectory,
-  writeBinaryFileToStorage,
+  writeToStorage,
   cleanupStorageDirectory,
 } from '@utils/files/workspaceStorageUtils';
 import {
@@ -988,7 +988,7 @@ export class WebviewMessageHandler {
       }
       await createStorageDirectory(this.context, PASTED_DIR);
       const relativePath = path.join(PASTED_DIR, fileName);
-      await writeBinaryFileToStorage(
+      await writeToStorage(
         this.context,
         relativePath,
         Buffer.from(base64, 'base64'),
