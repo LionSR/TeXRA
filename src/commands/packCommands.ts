@@ -9,21 +9,11 @@ import * as logger from '@logger/logUtils';
 
 // Local imports - housekeeping
 import { runPack, runPackSingle, runPackMultiple } from '../housekeeping';
+import { getStreamId } from '@utils/streamUtils';
 import type { FileOpResult } from '@/types/ResultTypes';
 
 const CHANNEL = 'packCommands';
 logger.initialize(CHANNEL);
-
-function getStreamId(
-  agent: string,
-  model: string,
-  inputFile: string,
-  outputFiles?: string[],
-): string {
-  const agentName =
-    outputFiles && outputFiles.length > 1 ? `${agent}_multiple` : agent;
-  return `${agentName}@${model}: ${path.basename(inputFile)}`;
-}
 
 function showPackResult(result: FileOpResult, inputFile: string): void {
   switch (result.status) {
