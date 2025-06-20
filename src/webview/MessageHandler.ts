@@ -53,17 +53,20 @@ export class WebviewMessageHandler {
   >;
 
   constructor(private readonly context: vscode.ExtensionContext) {
-    // Ensure the pasted directory exists before trying to clean it
-    StorageFS.ensureDir(PASTED_DIR)
-      .then(() => {
-        return StorageFS.cleanupOldFiles(PASTED_DIR, 3 * 24 * 60 * 60 * 1000);
-      })
-      .catch((e) =>
-        logger.warn(
-          CHANNEL,
-          `Error during initial cleanup: ${e instanceof Error ? e.message : String(e)}`,
-        ),
-      );
+    // Defer the cleanup operation to avoid potential race conditions
+    // This gives time for StorageFS to be properly initialized
+    setTimeout(() => {
+      StorageFS.ensureDir(PASTED_DIR)
+        .then(() => {
+          return StorageFS.cleanupOldFiles(PASTED_DIR, 3 * 24 * 60 * 60 * 1000);
+        })
+        .catch((e) =>
+          logger.warn(
+            CHANNEL,
+            `Error during initial cleanup: ${e instanceof Error ? e.message : String(e)}`,
+          ),
+        );
+    }, 100);
     this.handlers = {
       showInformationMessage: (message) => this.handleInfoMessage(message),
       getTheme: (_m, view) => this.handleThemeRequest(view),
@@ -226,7 +229,7 @@ export class WebviewMessageHandler {
       const mapMediaPath = (f: string | null): string | null => {
         if (!f) return null;
         if (isPastedImage(f)) {
-          return getPastedImageFullPath(f, this.context);
+          return getPastedImageFullPath(f);
         }
         return f;
       };
