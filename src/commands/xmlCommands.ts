@@ -9,7 +9,7 @@ import * as logger from '@logger/logUtils';
 import { XMLValidatorAgent } from '../AnthropicTool';
 
 // Local imports - utils
-import { WorkspaceFileManager } from '@utils/files';
+import { WorkspaceFS } from '@utils/files';
 import { sleep } from '@utils/helpers';
 
 const CHANNEL = 'XmlCommands';
@@ -112,9 +112,7 @@ export async function handleValidateAndFixXml(): Promise<void> {
     await editor.document.save();
 
     // Get the file path
-    const filePath = WorkspaceFileManager.getRelativePath(
-      editor.document.fileName,
-    );
+    const filePath = WorkspaceFS.relativePath(editor.document.fileName);
 
     // Use the validator to fix any XML errors
     logger.info(CHANNEL, `Starting XML validation for ${filePath}`);
