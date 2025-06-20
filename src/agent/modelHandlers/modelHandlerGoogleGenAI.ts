@@ -32,12 +32,7 @@ import { MediaEntry } from '@agent/utils/mediaTypes';
 import { AgentLogger } from '@logger/AgentLogger';
 
 // Local imports - utilities
-import {
-  readFile,
-  writeFile,
-  fileExistsAndNonTrivial,
-  getFullPathFromWorkspace,
-} from '@utils/files';
+import { WorkspaceFileManager } from '@utils/files';
 import { fileExistsAbsolute } from '@utils/files';
 import { formatProviderError } from '@utils/sdkErrorUtils';
 import { cleanFileContent } from '@replacement/replacementUtils';
@@ -375,7 +370,8 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
       );
       for (const mediaFile of mediaFiles) {
         try {
-          const absolutePath = getFullPathFromWorkspace(mediaFile);
+          const absolutePath =
+            WorkspaceFileManager.getFullPathFromWorkspace(mediaFile);
           if (!fileExistsAbsolute(absolutePath)) {
             this.logger.error(`File does not exist: ${absolutePath}`);
             continue;
@@ -493,7 +489,8 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
       );
       for (const mediaFile of mediaFiles) {
         try {
-          const absolutePath = getFullPathFromWorkspace(mediaFile);
+          const absolutePath =
+            WorkspaceFileManager.getFullPathFromWorkspace(mediaFile);
           if (!fileExistsAbsolute(absolutePath)) {
             this.logger.error(`File does not exist: ${absolutePath}`);
             continue;
@@ -778,7 +775,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
       `Initializing output and prefill for ${outputFile}. Prefill content: "${prefill.slice(0, 100)}..."`,
     );
 
-    if (!(await fileExistsAndNonTrivial(outputFile))) {
+    if (!(await WorkspaceFileManager.fileExistsAndNonTrivial(outputFile))) {
       this.logger.debug(
         `Output file ${outputFile} does not exist or is empty.`,
       );
@@ -813,7 +810,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
     this.logger.debug(
       `Output file ${outputFile} exists and is non-trivial. Reading content.`,
     );
-    let fileContent = await readFile(outputFile);
+    let fileContent = await WorkspaceFileManager.readFile(outputFile);
     fileContent = cleanFileContent(fileContent);
 
     // Extract and log any existing scratchpad content
@@ -824,7 +821,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
       groupId,
     );
 
-    await writeFile(outputFile, fileContent);
+    await WorkspaceFileManager.writeFile(outputFile, fileContent);
     this.logger.debug(`Cleaned and saved existing content to ${outputFile}.`);
     messages.push({
       role: 'assistant',

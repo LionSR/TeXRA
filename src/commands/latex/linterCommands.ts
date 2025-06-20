@@ -6,7 +6,7 @@ import * as logger from '@logger/logUtils';
 
 // Local imports - utils
 import { getLinterMessages } from '@frontend/latex/linter';
-import { getRelativePath } from '@utils/files';
+import { WorkspaceFileManager } from '@utils/files';
 import { sleep } from '@utils/helpers';
 
 // Local imports - core
@@ -36,7 +36,7 @@ export async function handleShowLinterMessages(): Promise<void> {
 
     // Convert absolute file path to workspace-relative path
     const absolutePath = editor.document.fileName;
-    const relativePath = getRelativePath(absolutePath);
+    const relativePath = WorkspaceFileManager.getRelativePath(absolutePath);
     logger.debug(CHANNEL, `Getting linter messages for ${relativePath}`);
 
     // Get linter messages
@@ -87,7 +87,7 @@ export async function handleCountLinterMessages(): Promise<void> {
 
     // Convert absolute file path to workspace-relative path
     const absolutePath = editor.document.fileName;
-    const relativePath = getRelativePath(absolutePath);
+    const relativePath = WorkspaceFileManager.getRelativePath(absolutePath);
     logger.debug(CHANNEL, `Counting linter messages for ${relativePath}`);
 
     // Get linter messages - now uses the async version to ensure build is triggered
@@ -159,7 +159,7 @@ export async function handleFixLinterIssues(): Promise<void> {
 
     // Convert absolute file path to workspace-relative path
     const absolutePath = editor.document.fileName;
-    const relativePath = getRelativePath(absolutePath);
+    const relativePath = WorkspaceFileManager.getRelativePath(absolutePath);
     logger.debug(CHANNEL, `Fixing linter issues for ${relativePath}`);
 
     // Check if there are any linter issues

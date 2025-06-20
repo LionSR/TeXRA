@@ -8,7 +8,7 @@ import * as nunjucks from 'nunjucks';
 import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
-import { readFile, fileExists, writeFile, createDirectory } from '@utils/files';
+import { WorkspaceFileManager } from '@utils/files';
 import { renderPrompt } from '@utils/promptUtils';
 import { getConfig } from '@utils/config';
 
@@ -55,7 +55,7 @@ export async function extractTikzPicturesWithLabels(
   channel: string = CHANNEL,
 ): Promise<[string, string[]][]> {
   try {
-    const content = await readFile(latexFile);
+    const content = await WorkspaceFileManager.readFile(latexFile);
 
     // Regular expressions to match figure environments and tikzpictures
     const figurePattern =
@@ -117,7 +117,7 @@ export async function createStandaloneLatexWithLabels(
     const filePath = path.join(buildDir, filename);
 
     // Write file
-    await writeFile(filePath, standaloneContent);
+    await WorkspaceFileManager.writeFile(filePath, standaloneContent);
     logger.debug(channel, `Created standalone LaTeX file: ${filePath}`);
 
     return filePath;
@@ -145,7 +145,7 @@ export async function extractAndCompileTikzPicturesWithLabels(
     const inputDir = path.dirname(latexFile);
     const inputName = path.parse(path.basename(latexFile)).name;
     const buildDir = path.join(inputDir, 'build', inputName);
-    await createDirectory(buildDir);
+    await WorkspaceFileManager.createDirectory(buildDir);
 
     logger.debug(channel, `Extracting TikZ pictures from ${latexFile}`);
     const labeledTikzPictures = await extractTikzPicturesWithLabels(
@@ -181,7 +181,7 @@ export async function extractAndCompileTikzPicturesWithLabels(
         await compileLatex2Pdf(texFile, channel);
 
         const pdfFile = texFile.replace(/\.tex$/, '.pdf');
-        if (await fileExists(pdfFile)) {
+        if (await WorkspaceFileManager.fileExists(pdfFile)) {
           compiledFiles.push(pdfFile);
           logger.debug(channel, `Successfully compiled: ${pdfFile}`);
         }

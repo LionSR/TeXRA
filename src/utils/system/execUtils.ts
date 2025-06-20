@@ -5,7 +5,7 @@ import spawn from 'cross-spawn';
 import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
-import { getWorkspacePath } from '@utils/files';
+import { WorkspaceFileManager } from '@utils/files';
 import { ExecResult } from '@/types/ResultTypes';
 import { extendEnvPath } from '@utils/system/platformPaths';
 
@@ -42,7 +42,7 @@ export async function executeCommand(
   } = {},
 ): Promise<ExecResult> {
   try {
-    const workspacePath = getWorkspacePath();
+    const workspacePath = WorkspaceFileManager.getWorkspacePath();
     if (!workspacePath) {
       throw new Error('No workspace path found');
     }
