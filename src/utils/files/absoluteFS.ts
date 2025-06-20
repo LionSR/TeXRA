@@ -106,10 +106,10 @@ export class AbsoluteFS {
   }
 
   /**
-   * Get file stats
+   * Get file stats (VS Code API)
    */
-  public static async fileStat(filePath: string): Promise<vscode.FileStat> {
-    this.validatePath(filePath, 'fileStat');
+  public static async stat(filePath: string): Promise<vscode.FileStat> {
+    this.validatePath(filePath, 'stat');
     const uri = vscode.Uri.file(filePath);
     return await vscode.workspace.fs.stat(uri);
   }
@@ -189,8 +189,8 @@ export class AbsoluteFS {
   /**
    * Delete a file (sync)
    */
-  public static unlinkSync(filePath: string): void {
-    this.validatePath(filePath, 'unlinkSync');
+  public static deleteSync(filePath: string): void {
+    this.validatePath(filePath, 'deleteSync');
     fs.unlinkSync(filePath);
   }
 
@@ -228,7 +228,16 @@ export class AbsoluteFS {
    */
   public static createReadStream(
     filePath: string,
-    options?: any,
+    options?: BufferEncoding | fs.ObjectEncodingOptions & {
+      flags?: string;
+      encoding?: BufferEncoding;
+      fd?: number;
+      mode?: number;
+      autoClose?: boolean;
+      start?: number;
+      end?: number;
+      highWaterMark?: number;
+    },
   ): fs.ReadStream {
     this.validatePath(filePath, 'createReadStream');
     return fs.createReadStream(filePath, options);
@@ -239,7 +248,14 @@ export class AbsoluteFS {
    */
   public static createWriteStream(
     filePath: string,
-    options?: any,
+    options?: BufferEncoding | fs.ObjectEncodingOptions & {
+      flags?: string;
+      encoding?: BufferEncoding;
+      fd?: number;
+      mode?: number;
+      autoClose?: boolean;
+      start?: number;
+    },
   ): fs.WriteStream {
     this.validatePath(filePath, 'createWriteStream');
     return fs.createWriteStream(filePath, options);
@@ -248,10 +264,10 @@ export class AbsoluteFS {
   // ===== Promise-based Methods =====
 
   /**
-   * Get file stats using promises
+   * Get file stats using Node.js promises
    */
-  public static stat(filePath: string): Promise<fs.Stats> {
-    this.validatePath(filePath, 'stat');
+  public static statAsync(filePath: string): Promise<fs.Stats> {
+    this.validatePath(filePath, 'statAsync');
     return fs.promises.stat(filePath);
   }
 
@@ -293,7 +309,7 @@ export class AbsoluteFS {
   public static async isDir(filePath: string): Promise<boolean> {
     this.validatePath(filePath, 'isDir');
     try {
-      const stats = await this.fileStat(filePath);
+      const stats = await this.stat(filePath);
       return stats.type === vscode.FileType.Directory;
     } catch {
       return false;
@@ -306,7 +322,7 @@ export class AbsoluteFS {
   public static async isFile(filePath: string): Promise<boolean> {
     this.validatePath(filePath, 'isFile');
     try {
-      const stats = await this.fileStat(filePath);
+      const stats = await this.stat(filePath);
       return stats.type === vscode.FileType.File;
     } catch {
       return false;
