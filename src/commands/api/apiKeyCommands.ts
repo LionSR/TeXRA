@@ -1,11 +1,5 @@
 import * as vscode from 'vscode';
-import {
-  ApiProvider,
-  getApiKeySecretName,
-  setSecret,
-  deleteSecret,
-  getApiProviderQuickPickItems,
-} from '@frontend/secrets';
+import { SecretManager, ApiProvider } from '@frontend/secretManager';
 
 export const apiKeyCommands = {
   setApiKey: 'texra.setApiKey',
@@ -18,7 +12,7 @@ export function registerApiKeyCommands(context: vscode.ExtensionContext) {
     apiKeyCommands.setApiKey,
     async () => {
       // First select the provider
-      const providerItems = await getApiProviderQuickPickItems();
+      const providerItems = await SecretManager.getApiProviderQuickPickItems();
       const providerPick = await vscode.window.showQuickPick(providerItems, {
         placeHolder: 'Select API provider',
       });
@@ -41,7 +35,10 @@ export function registerApiKeyCommands(context: vscode.ExtensionContext) {
       }
 
       try {
-        await setSecret(getApiKeySecretName(provider as ApiProvider), apiKey);
+        await SecretManager.set(
+          SecretManager.getApiKeySecretName(provider as ApiProvider),
+          apiKey,
+        );
         vscode.window.showInformationMessage(
           `${provider} API key has been set`,
         );
@@ -57,7 +54,7 @@ export function registerApiKeyCommands(context: vscode.ExtensionContext) {
   const removeApiKeyCommand = vscode.commands.registerCommand(
     apiKeyCommands.removeApiKey,
     async () => {
-      const providerItems = await getApiProviderQuickPickItems();
+      const providerItems = await SecretManager.getApiProviderQuickPickItems();
       const providerPick = await vscode.window.showQuickPick(providerItems, {
         placeHolder: 'Select API provider to remove key',
       });
@@ -69,7 +66,9 @@ export function registerApiKeyCommands(context: vscode.ExtensionContext) {
       }
 
       try {
-        await deleteSecret(getApiKeySecretName(provider as ApiProvider));
+        await SecretManager.delete(
+          SecretManager.getApiKeySecretName(provider as ApiProvider),
+        );
         vscode.window.showInformationMessage(
           `${provider} API key has been removed`,
         );
