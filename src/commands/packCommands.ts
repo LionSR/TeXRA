@@ -8,7 +8,7 @@ import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import * as logger from '@logger/logUtils';
 
 // Local imports - housekeeping
-import { runPack, runPackSingle, runPackMultiple } from '../housekeeping';
+import { runPack, runPackSingle, runPackMultiple } from '@housekeeping';
 import type { FileOpResult } from '@/types/ResultTypes';
 
 const CHANNEL = 'packCommands';
