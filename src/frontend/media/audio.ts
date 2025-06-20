@@ -13,10 +13,6 @@ import * as logger from '@logger/logUtils';
 // Local imports - utils
 import { SecretManager } from '@frontend/secretManager';
 import { AbsoluteFS, StorageFS } from '@utils/files';
-import {
-  storagePathToAbsolute,
-  createStoragePath,
-} from '@utils/files/workspaceStorageUtils';
 import { getSdkErrorMessage } from '@utils/sdkErrorUtils';
 import { checkToolInstalled } from '@utils/system/toolUtils';
 import {
@@ -73,10 +69,7 @@ export async function startRecording(
     StorageFS.initialize(context);
     await StorageFS.createDir(RECORDINGS_DIR);
     const relativePath = path.join(RECORDINGS_DIR, `record_${Date.now()}.wav`);
-    const absPath = storagePathToAbsolute(
-      createStoragePath(relativePath),
-      context,
-    );
+    const absPath = StorageFS.fullPath(relativePath);
 
     // Start recording without duration limit
     const soxArgs = [
