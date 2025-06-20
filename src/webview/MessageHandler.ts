@@ -41,10 +41,10 @@ import { sleep } from '@utils/helpers';
 import { recordAndTranscribe } from '@frontend/media/audio';
 
 // Local imports - agent
-import { ToolConfig } from '../agent/core/ToolConfig';
-import { AgentConfig } from '../agent/core/AgentConfig';
-import { getAgentPath } from '../agent/runtime/executeAgent';
-import { loadAgentSettingAndPrompts } from '../agent/runtime/agentLoad';
+import { ToolConfig } from '@agent/core/ToolConfig';
+import { AgentConfig } from '@agent/core/AgentConfig';
+import { getAgentPath } from '@agent/runtime/executeAgent';
+import { loadAgentSettingAndPrompts } from '@agent/runtime/agentLoad';
 
 const CHANNEL = 'MessageHandler';
 
