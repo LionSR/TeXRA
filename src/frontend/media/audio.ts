@@ -12,7 +12,7 @@ import type { ChildProcess } from 'child_process';
 import * as logger from '@logger/logUtils';
 
 // Local imports - utils
-import { getApiKey } from '@frontend/secrets';
+import { SecretManager } from '@frontend/secretManager';
 import {
   createStorageDirectory,
   storagePathToAbsolute,
@@ -180,7 +180,7 @@ export async function stopRecordingAndTranscribe(
     }
 
     // Transcribe the audio
-    const apiKey = await getApiKey('openai');
+    const apiKey = await SecretManager.getApiKey('openai');
     const client = new OpenAI({ apiKey });
     const result = await client.audio.transcriptions.create({
       file: fs.createReadStream(recordingPath),
