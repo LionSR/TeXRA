@@ -1193,6 +1193,7 @@
     "identifiers-arxiv": "^0.1.1",
     "marked": "^15.0.12",
     "node-pandoc": "^0.3.0",
+    "node-record-lpcm16": "^1.0.1",
     "openai": "^5.5.1",
     "pdf2pic": "^3.2.0",
     "sortablejs": "^1.15.6",
