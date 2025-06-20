@@ -160,7 +160,7 @@ export async function runCleanBuild(): Promise<void> {
             const subEntries =
               await WorkspaceFileManager.readDirectory(fullPath);
             if (subEntries.length === 0) {
-              WorkspaceFileManager.deleteFile(fullPath);
+              await WorkspaceFileManager.deleteFile(fullPath);
               logger.debug(CHANNEL, `Removed empty directory: ${fullPath}`);
             }
             for (const [name, type] of subEntries) {
@@ -171,7 +171,7 @@ export async function runCleanBuild(): Promise<void> {
                 );
                 const size = stats.size;
                 if (size === 0) {
-                  WorkspaceFileManager.deleteFile(subPath);
+                  await WorkspaceFileManager.deleteFile(subPath);
                   logger.debug(CHANNEL, `Removed empty directory: ${subPath}`);
                 }
               }
