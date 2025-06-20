@@ -14,4 +14,5 @@ export * from './agents/register';
 export * from './secrets';
 export * from './setup';
 export * from './media/img';
+export * from './media/audio';
 export * from './nonce';
