@@ -11,7 +11,7 @@ export * from './webview/html';
 export * from './terminal';
 export * from './agents/pathUtils';
 export * from './agents/register';
-export * from './secrets';
+export * from './secretManager';
 export * from './setup';
 export * from './media/img';
 export * from './nonce';

@@ -18,7 +18,7 @@ import {
 } from '@frontend/media/img';
 import { checkMultipleToolsInstalled } from '@utils/system';
 import { getConfig } from '@utils/config';
-import { getApiKey as getSecretApiKey, ApiProvider } from '@frontend/secrets';
+import { SecretManager, ApiProvider } from '@frontend/secretManager';
 
 // Local imports - agent components
 import { AgentConfig } from '../core/AgentConfig';
@@ -103,7 +103,7 @@ export abstract class ModelHandler {
 
     if (useOpenRouter) {
       try {
-        return await getSecretApiKey('openRouter');
+        return await SecretManager.getApiKey('openRouter');
       } catch (err) {
         throw new Error(
           'Missing API key for OpenRouter. Please set it using the "Set API Key" command.',
@@ -113,7 +113,7 @@ export abstract class ModelHandler {
 
     const provider = this.config.provider.toLowerCase() as ApiProvider;
     try {
-      return await getSecretApiKey(provider);
+      return await SecretManager.getApiKey(provider);
     } catch (err) {
       throw new Error(
         `Missing API key for ${this.config.provider}. Please set it using the "Set API Key" command.`,
