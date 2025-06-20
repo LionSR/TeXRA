@@ -27,10 +27,10 @@ import {
   runPackLatexdiffvcMultiple,
   runCleanLatexdiffvc,
   runCleanLatexdiffvcMultiple,
-} from '../../housekeeping';
+} from '@housekeeping';
 
 // Import agent utilities
-import { getAgentFirstNameChunk } from '../../housekeeping/utils';
+import { getAgentFirstNameChunk } from '@housekeeping/utils';
 
 const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);
@@ -87,17 +87,6 @@ async function handleLatexdiff(
       throw new Error(result.message || 'Failed to generate diff file');
     }
 
-    // Open the diff file and build it
-    const workspacePath = getWorkspacePath();
-    if (!workspacePath) {
-      throw new Error('No workspace path found');
-    }
-
-    // Use the returned diff filename to construct the full path
-    const fullPath = vscode.Uri.file(
-      path.join(workspacePath, path.dirname(fileToUse), result.diffFileName),
-    );
-
     // Verify the file exists using fileExists utility
     const filePathRelative = path.join(
       path.dirname(fileToUse),
@@ -105,7 +94,7 @@ async function handleLatexdiff(
     );
     if (!(await fileExists(filePathRelative))) {
       vscode.window.showErrorMessage(
-        `Diff file could not be found. Expected path: ${fullPath.fsPath}`,
+        `Diff file could not be found. Expected path: ${filePathRelative}`,
       );
       return;
     }
@@ -137,16 +126,6 @@ async function handleLatexdiffvc(
       throw new Error(result.message || 'Failed to generate diff file');
     }
 
-    const workspacePath = getWorkspacePath();
-    if (!workspacePath) {
-      throw new Error('No workspace path found');
-    }
-
-    // Use the returned diff filename to construct the full path
-    const fullPath = vscode.Uri.file(
-      path.join(workspacePath, path.dirname(fileToUse), result.diffFileName),
-    );
-
     // Verify the file exists using fileExists utility
     const filePathRelative = path.join(
       path.dirname(fileToUse),
@@ -154,7 +133,7 @@ async function handleLatexdiffvc(
     );
     if (!(await fileExists(filePathRelative))) {
       vscode.window.showErrorMessage(
-        `Diff file could not be found. Expected path: ${fullPath.fsPath}`,
+        `Diff file could not be found. Expected path: ${filePathRelative}`,
       );
       return;
     }
