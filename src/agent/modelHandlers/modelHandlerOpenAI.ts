@@ -7,7 +7,7 @@ import { ChatCompletionContentPart } from 'openai/resources/chat/completions';
 import { countTokens } from 'gpt-tokenizer';
 
 // Local imports - utilities
-import { readFile, writeFile, fileExistsAndNonTrivial } from '@utils/files';
+import { WorkspaceFileManager } from '@utils/files';
 import { cleanFileContent } from '@replacement/replacementUtils';
 import { extractAndLogScratchpad } from '@utils/text/xmlUtils';
 import { formatProviderError } from '@utils/sdkErrorUtils';
@@ -517,7 +517,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
   ): Promise<[boolean, any[]]> {
     let endTurn = false;
 
-    if (!(await fileExistsAndNonTrivial(outputFile))) {
+    if (!(await WorkspaceFileManager.fileExistsAndNonTrivial(outputFile))) {
       if (
         agentConfig.toolConfig.usePrefillFromInput &&
         toolState.firstKCharsFromInput
@@ -547,7 +547,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
     }
 
     // Get prefill from existing and non-trivial file
-    let fileContent = await readFile(outputFile);
+    let fileContent = await WorkspaceFileManager.readFile(outputFile);
     fileContent = cleanFileContent(fileContent);
 
     // Extract and log any existing scratchpad content
@@ -559,7 +559,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
     );
 
     // Write file content to output file
-    await writeFile(outputFile, fileContent);
+    await WorkspaceFileManager.writeFile(outputFile, fileContent);
 
     messages.push({
       role: 'assistant',
@@ -599,7 +599,10 @@ export class ModelHandlerOpenAI extends ModelHandler {
       toolState.updateAccumulatedOutput(fileContent);
     } else {
       toolState.updateAccumulatedOutput(prefill + fileContent);
-      await writeFile(outputFile, toolState.accumulatedOutput);
+      await WorkspaceFileManager.writeFile(
+        outputFile,
+        toolState.accumulatedOutput,
+      );
     }
     const state = new AgentStateRound(0);
     toolState.lastResponse = toolState.accumulatedOutput;
