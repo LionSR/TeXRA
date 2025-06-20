@@ -193,11 +193,11 @@ This setting specifies a custom root path for the TeXRA file explorer view, whic
 Control logging behavior:
 
 ```json
-"texra.logger.verboseOutput": false,
+"texra.logger.debugMode": false,
 "texra.debug.saveMessageObjects": false
 ```
 
-- `verboseOutput`: Show detailed debug messages in the logger view
+- `debugMode`: Show detailed debug messages in the logger view
 - `saveMessageObjects`: Save message JSON objects to files before API calls (for debugging)
 
 ## Environment-Specific Configuration
@@ -258,7 +258,7 @@ For better performance:
 ```json
 "texra.model.useStreaming": true,
 "texra.files.ignored.directories": ["build", "node_modules", "versions", "history"],
-"texra.logger.verboseOutput": false
+"texra.logger.debugMode": false
 ```
 
 ### Optimizing for Quality
