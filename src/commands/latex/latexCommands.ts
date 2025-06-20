@@ -17,7 +17,7 @@ import { getTeXCount } from '@latex/texcount';
 import { fileSelectionCommands } from '../files/fileSelectionCommands';
 
 // Local imports - housekeeping
-import { runIndentTeX } from '../../housekeeping';
+import { runIndentTeX } from '@housekeeping';
 
 const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);
