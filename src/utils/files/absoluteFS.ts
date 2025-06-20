@@ -1,0 +1,317 @@
+// Standard library imports
+import * as fs from 'fs';
+import * as path from 'path';
+
+// Third-party imports
+import * as vscode from 'vscode';
+
+// Local imports - log
+import * as logger from '@logger/logUtils';
+
+const CHANNEL = 'absoluteFS';
+logger.initialize(CHANNEL);
+
+/**
+ * AbsoluteFS provides a unified interface for file system operations on absolute paths.
+ * All methods validate that paths are absolute before performing operations.
+ */
+export class AbsoluteFS {
+  /**
+   * Validates that a path is absolute
+   */
+  private static validatePath(filePath: string, methodName: string): void {
+    if (!path.isAbsolute(filePath)) {
+      throw new Error(
+        `${methodName}: Path must be absolute, got relative path: ${filePath}`,
+      );
+    }
+  }
+
+  // ===== Async Methods =====
+
+  /**
+   * Check if a file or directory exists
+   */
+  public static async exists(filePath: string): Promise<boolean> {
+    this.validatePath(filePath, 'exists');
+    try {
+      await vscode.workspace.fs.stat(vscode.Uri.file(filePath));
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Read a file as UTF-8 text
+   */
+  public static async read(filePath: string): Promise<string> {
+    this.validatePath(filePath, 'read');
+    const uri = vscode.Uri.file(filePath);
+    const content = await vscode.workspace.fs.readFile(uri);
+    return Buffer.from(content).toString('utf-8');
+  }
+
+  /**
+   * Write text content to a file
+   */
+  public static async write(filePath: string, content: string): Promise<void> {
+    this.validatePath(filePath, 'write');
+    const uri = vscode.Uri.file(filePath);
+    await vscode.workspace.fs.writeFile(uri, Buffer.from(content, 'utf-8'));
+  }
+
+  /**
+   * Write binary content to a file
+   */
+  public static async writeBinaryFile(
+    filePath: string,
+    content: Uint8Array,
+  ): Promise<void> {
+    this.validatePath(filePath, 'writeBinaryFile');
+    const uri = vscode.Uri.file(filePath);
+    await vscode.workspace.fs.writeFile(uri, content);
+  }
+
+  /**
+   * Delete a file or directory
+   */
+  public static async delete(
+    filePath: string,
+    options?: { recursive?: boolean; useTrash?: boolean },
+  ): Promise<void> {
+    this.validatePath(filePath, 'delete');
+    const uri = vscode.Uri.file(filePath);
+    await vscode.workspace.fs.delete(uri, options);
+  }
+
+  /**
+   * Create a directory (with parents if needed)
+   */
+  public static async createDir(filePath: string): Promise<void> {
+    this.validatePath(filePath, 'createDir');
+    const uri = vscode.Uri.file(filePath);
+    await vscode.workspace.fs.createDirectory(uri);
+  }
+
+  /**
+   * Read directory contents
+   */
+  public static async readDir(
+    dirPath: string,
+  ): Promise<[string, vscode.FileType][]> {
+    this.validatePath(dirPath, 'readDir');
+    const uri = vscode.Uri.file(dirPath);
+    return await vscode.workspace.fs.readDirectory(uri);
+  }
+
+  /**
+   * Get file stats
+   */
+  public static async fileStat(filePath: string): Promise<vscode.FileStat> {
+    this.validatePath(filePath, 'fileStat');
+    const uri = vscode.Uri.file(filePath);
+    return await vscode.workspace.fs.stat(uri);
+  }
+
+  /**
+   * Copy a file or directory
+   */
+  public static async copy(
+    source: string,
+    destination: string,
+    options?: { overwrite?: boolean },
+  ): Promise<void> {
+    this.validatePath(source, 'copy source');
+    this.validatePath(destination, 'copy destination');
+    const sourceUri = vscode.Uri.file(source);
+    const destUri = vscode.Uri.file(destination);
+    await vscode.workspace.fs.copy(sourceUri, destUri, options);
+  }
+
+  /**
+   * Move/rename a file or directory
+   */
+  public static async rename(
+    oldPath: string,
+    newPath: string,
+    options?: { overwrite?: boolean },
+  ): Promise<void> {
+    this.validatePath(oldPath, 'rename oldPath');
+    this.validatePath(newPath, 'rename newPath');
+    const oldUri = vscode.Uri.file(oldPath);
+    const newUri = vscode.Uri.file(newPath);
+    await vscode.workspace.fs.rename(oldUri, newUri, options);
+  }
+
+  // ===== Sync Methods =====
+
+  /**
+   * Check if a file or directory exists (sync)
+   */
+  public static existsSync(filePath: string): boolean {
+    this.validatePath(filePath, 'existsSync');
+    return fs.existsSync(filePath);
+  }
+
+  /**
+   * Read a file as UTF-8 text (sync)
+   */
+  public static readSync(filePath: string): string {
+    this.validatePath(filePath, 'readSync');
+    return fs.readFileSync(filePath, 'utf-8');
+  }
+
+  /**
+   * Read a file as buffer (sync)
+   */
+  public static readBytesSync(filePath: string): Buffer {
+    this.validatePath(filePath, 'readBytesSync');
+    return fs.readFileSync(filePath);
+  }
+
+  /**
+   * Write text content to a file (sync)
+   */
+  public static writeSync(filePath: string, content: string): void {
+    this.validatePath(filePath, 'writeSync');
+    fs.writeFileSync(filePath, content, 'utf-8');
+  }
+
+  /**
+   * Write binary content to a file (sync)
+   */
+  public static writeBinaryFileSync(filePath: string, content: Buffer): void {
+    this.validatePath(filePath, 'writeBinaryFileSync');
+    fs.writeFileSync(filePath, content);
+  }
+
+  /**
+   * Delete a file (sync)
+   */
+  public static unlinkSync(filePath: string): void {
+    this.validatePath(filePath, 'unlinkSync');
+    fs.unlinkSync(filePath);
+  }
+
+  /**
+   * Create a directory (sync)
+   */
+  public static mkdirSync(
+    dirPath: string,
+    options?: { recursive?: boolean },
+  ): void {
+    this.validatePath(dirPath, 'mkdirSync');
+    fs.mkdirSync(dirPath, options);
+  }
+
+  /**
+   * Read directory contents (sync)
+   */
+  public static readDirSync(dirPath: string): string[] {
+    this.validatePath(dirPath, 'readDirSync');
+    return fs.readdirSync(dirPath);
+  }
+
+  /**
+   * Get file stats (sync)
+   */
+  public static statSync(filePath: string): fs.Stats {
+    this.validatePath(filePath, 'statSync');
+    return fs.statSync(filePath);
+  }
+
+  // ===== Stream Methods =====
+
+  /**
+   * Create a read stream
+   */
+  public static createReadStream(
+    filePath: string,
+    options?: any,
+  ): fs.ReadStream {
+    this.validatePath(filePath, 'createReadStream');
+    return fs.createReadStream(filePath, options);
+  }
+
+  /**
+   * Create a write stream
+   */
+  public static createWriteStream(
+    filePath: string,
+    options?: any,
+  ): fs.WriteStream {
+    this.validatePath(filePath, 'createWriteStream');
+    return fs.createWriteStream(filePath, options);
+  }
+
+  // ===== Promise-based Methods =====
+
+  /**
+   * Get file stats using promises
+   */
+  public static stat(filePath: string): Promise<fs.Stats> {
+    this.validatePath(filePath, 'stat');
+    return fs.promises.stat(filePath);
+  }
+
+  /**
+   * Read file using promises
+   */
+  public static readAsync(filePath: string): Promise<Buffer> {
+    this.validatePath(filePath, 'readAsync');
+    return fs.promises.readFile(filePath);
+  }
+
+  /**
+   * Read directory using promises
+   */
+  public static readDirAsync(
+    dirPath: string,
+    options?: { withFileTypes?: boolean },
+  ): Promise<string[] | fs.Dirent[]> {
+    this.validatePath(dirPath, 'readDirAsync');
+    return fs.promises.readdir(dirPath, options as any);
+  }
+
+  // ===== Utility Methods =====
+
+  /**
+   * Delete a file with callback (for compatibility)
+   */
+  public static unlink(
+    filePath: string,
+    callback: (err: NodeJS.ErrnoException | null) => void,
+  ): void {
+    this.validatePath(filePath, 'unlink');
+    fs.unlink(filePath, callback);
+  }
+
+  /**
+   * Check if path is a directory
+   */
+  public static async isDir(filePath: string): Promise<boolean> {
+    this.validatePath(filePath, 'isDir');
+    try {
+      const stats = await this.fileStat(filePath);
+      return stats.type === vscode.FileType.Directory;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Check if path is a file
+   */
+  public static async isFile(filePath: string): Promise<boolean> {
+    this.validatePath(filePath, 'isFile');
+    try {
+      const stats = await this.fileStat(filePath);
+      return stats.type === vscode.FileType.File;
+    } catch {
+      return false;
+    }
+  }
+}
+
+export default AbsoluteFS;

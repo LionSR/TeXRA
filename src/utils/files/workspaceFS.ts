@@ -1,5 +1,4 @@
 // Standard library imports
-import * as fs from 'fs';
 import * as path from 'path';
 
 // Third-party imports
@@ -7,7 +6,7 @@ import * as vscode from 'vscode';
 
 // Local imports - log
 import * as logger from '@logger/logUtils';
-import { fileExistsAbsolute } from './absoluteFileUtils';
+import { AbsoluteFS } from './absoluteFS';
 
 const CHANNEL = 'workspaceFS';
 logger.initialize(CHANNEL);
@@ -124,7 +123,7 @@ export class WorkspaceFS {
       const destUri = vscode.Uri.file(fullDestPath);
 
       // Check if source exists
-      const sourceExists = await fileExistsAbsolute(fullSourcePath);
+      const sourceExists = await AbsoluteFS.exists(fullSourcePath);
       if (!sourceExists) {
         logger.warn(CHANNEL, `Source file doesn't exist: ${source}`);
         return;
@@ -151,7 +150,7 @@ export class WorkspaceFS {
       const destUri = vscode.Uri.file(fullDestPath);
 
       // Check if source exists
-      const sourceExists = await fileExistsAbsolute(fullSourcePath);
+      const sourceExists = await AbsoluteFS.exists(fullSourcePath);
       if (!sourceExists) {
         logger.warn(CHANNEL, `Source file doesn't exist: ${source}`);
         return;
@@ -193,7 +192,7 @@ export class WorkspaceFS {
         try {
           const dirUri = vscode.Uri.file(searchDir);
 
-          const exists = await fileExistsAbsolute(searchDir);
+          const exists = await AbsoluteFS.exists(searchDir);
           if (!exists) {
             logger.debug(CHANNEL, `Directory doesn't exist: ${searchDir}`);
             continue;
@@ -286,7 +285,7 @@ export class WorkspaceFS {
 
   public static async exists(filePath: string): Promise<boolean> {
     const fullPath = this.fullPath(filePath);
-    return await fileExistsAbsolute(fullPath);
+    return await AbsoluteFS.exists(fullPath);
   }
 
   public static async existsAndNonTrivial(filePath: string): Promise<boolean> {
@@ -299,7 +298,7 @@ export class WorkspaceFS {
   public static readFileBytesSync(filePath: string): Buffer {
     try {
       const fullPath = this.fullPath(filePath);
-      return fs.readFileSync(fullPath);
+      return AbsoluteFS.readBytesSync(fullPath);
     } catch (err) {
       logger.error(
         CHANNEL,

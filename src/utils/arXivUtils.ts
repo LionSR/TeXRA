@@ -1,4 +1,3 @@
-import * as fs from 'fs';
 import * as path from 'path';
 import * as https from 'https';
 // Import the identifiers-arxiv package
@@ -8,7 +7,7 @@ import * as arxivIdentifiers from 'identifiers-arxiv';
 import * as logger from '@logger/logUtils';
 
 // Local imports - utils
-import { WorkspaceFS } from './files';
+import { WorkspaceFS, AbsoluteFS } from './files';
 import { executeCommand } from './system';
 import { indentLatexFilesInDirectory } from '@housekeeping/indent';
 
@@ -51,7 +50,7 @@ export function validateArxivId(arxivId: string): string | null {
  */
 export function downloadFile(url: string, destPath: string): Promise<void> {
   return new Promise((resolve, reject) => {
-    const file = fs.createWriteStream(destPath);
+    const file = AbsoluteFS.createWriteStream(destPath);
 
     https
       .get(url, (response) => {
@@ -73,7 +72,7 @@ export function downloadFile(url: string, destPath: string): Promise<void> {
         });
       })
       .on('error', (err) => {
-        fs.unlink(destPath, () => {}); // Delete the file if there was an error
+        AbsoluteFS.unlink(destPath, () => {}); // Delete the file if there was an error
         reject(err);
       });
   });
