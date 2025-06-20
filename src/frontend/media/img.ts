@@ -36,7 +36,7 @@ async function cleanupTempFiles(
   for (const file of tempFiles) {
     const fullPath = path.join(basePath, file);
     try {
-      AbsoluteFS.unlinkSync(fullPath);
+      AbsoluteFS.deleteSync(fullPath);
       logger.debug(CHANNEL, `Cleaned up temporary file: ${file}`);
     } catch (err) {
       logger.warn(CHANNEL, `Failed to delete temporary file ${file}: ${err}`);

@@ -47,7 +47,7 @@ export async function copyDefaultAgents(context: vscode.ExtensionContext) {
     // Recursive function to copy files and directories
     // Consider the native recursive copy available in Node 16+?
     const copyRecursively = async (sourcePath: string, targetPath: string) => {
-      const stats = await AbsoluteFS.stat(sourcePath);
+      const stats = await AbsoluteFS.statAsync(sourcePath);
 
       if (stats.isDirectory()) {
         await vscode.workspace.fs.createDirectory(vscode.Uri.file(targetPath));
