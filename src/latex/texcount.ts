@@ -2,7 +2,7 @@
 import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
-import { fileExists, readFile } from '@utils/files';
+import { WorkspaceFileManager } from '@utils/files';
 import { executeCommand, checkToolInstalled } from '@utils/system';
 
 const CHANNEL = 'LaTeXCommands';
@@ -15,7 +15,7 @@ logger.initialize(CHANNEL);
  */
 async function hasChinesePackages(filePath: string): Promise<boolean> {
   try {
-    const content = await readFile(filePath);
+    const content = await WorkspaceFileManager.readFile(filePath);
     const chinesePackages = [
       'xeCJK',
       'ctexart',
@@ -62,7 +62,7 @@ export async function getTeXCount(
     const allOutputs: string[] = [];
 
     for (const filePath of paths) {
-      if (!(await fileExists(filePath))) {
+      if (!(await WorkspaceFileManager.fileExists(filePath))) {
         logger.warn(channel, `File ${filePath} does not exist.`);
         continue;
       }

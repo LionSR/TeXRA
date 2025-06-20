@@ -6,7 +6,7 @@ import * as vscode from 'vscode';
 
 // Local imports - utilities
 import { getConfig } from '@utils/config';
-import { getWorkspacePath } from '@utils/files';
+import { WorkspaceFileManager } from '@utils/files';
 
 export function registerGitCommands(context: vscode.ExtensionContext) {
   context.subscriptions.push(
@@ -16,7 +16,7 @@ export function registerGitCommands(context: vscode.ExtensionContext) {
 }
 
 async function isGitRepository(): Promise<boolean> {
-  const workspacePath = getWorkspacePath();
+  const workspacePath = WorkspaceFileManager.getWorkspacePath();
   if (workspacePath) {
     const result = spawn.sync('git', ['rev-parse', '--is-inside-work-tree'], {
       cwd: workspacePath,
@@ -32,7 +32,7 @@ async function getRecentCommits(): Promise<string[] | null> {
     return null;
   }
 
-  const workspacePath = getWorkspacePath();
+  const workspacePath = WorkspaceFileManager.getWorkspacePath();
   if (workspacePath) {
     const numberOfCommits = getConfig('git.numberOfCommitsToShow', 20);
     const result = spawn.sync(

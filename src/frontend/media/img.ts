@@ -11,11 +11,7 @@ import { fromPath } from 'pdf2pic';
 import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
-import {
-  readFileBytesSync,
-  fileExists,
-  getFullPathFromWorkspace,
-} from '@utils/files';
+import { WorkspaceFileManager } from '@utils/files';
 import { fileExistsAbsolute } from '@utils/files/absoluteFileUtils';
 import { checkMultipleToolsInstalled } from '@utils/system';
 
@@ -65,7 +61,7 @@ export async function getBase64EncodedMedia(
     // Check if file exists
     const fileExistsResult = isAbsolutePath
       ? await fileExistsAbsolute(mediaPath)
-      : await fileExists(mediaPath);
+      : await WorkspaceFileManager.fileExists(mediaPath);
 
     if (!fileExistsResult) {
       logger.error(CHANNEL, `Image file not found: ${mediaPath}`);
@@ -75,7 +71,7 @@ export async function getBase64EncodedMedia(
     // Read the image file as bytes
     const mediaBytes = isAbsolutePath
       ? fs.readFileSync(mediaPath)
-      : readFileBytesSync(mediaPath);
+      : WorkspaceFileManager.readFileBytesSync(mediaPath);
 
     // Convert to base64
     const base64String = mediaBytes.toString('base64');
@@ -104,7 +100,7 @@ export async function countPdfPages(pdfPath: string): Promise<number> {
     // Check if file exists
     const fileExistsResult = isAbsolutePath
       ? await fileExistsAbsolute(pdfPath)
-      : await fileExists(pdfPath);
+      : await WorkspaceFileManager.fileExists(pdfPath);
 
     if (!fileExistsResult) {
       logger.error(CHANNEL, `PDF file not found: ${pdfPath}`);
@@ -114,7 +110,7 @@ export async function countPdfPages(pdfPath: string): Promise<number> {
     // Read the PDF file using pdf-lib
     const pdfBytes = isAbsolutePath
       ? fs.readFileSync(pdfPath)
-      : readFileBytesSync(pdfPath);
+      : WorkspaceFileManager.readFileBytesSync(pdfPath);
     const pdfDoc = await PDFDocument.load(pdfBytes, {
       updateMetadata: false,
       ignoreEncryption: true,
@@ -170,7 +166,7 @@ export async function singlePagePdf2Png(
     // Verify file exists
     const fileExistsResult = isAbsolutePath
       ? await fileExistsAbsolute(pdfPath)
-      : await fileExists(pdfPath);
+      : await WorkspaceFileManager.fileExists(pdfPath);
 
     if (!fileExistsResult) {
       throw new Error(`PDF file not found: ${pdfPath}`);
@@ -178,7 +174,7 @@ export async function singlePagePdf2Png(
 
     const fullPath = isAbsolutePath
       ? pdfPath
-      : getFullPathFromWorkspace(pdfPath);
+      : WorkspaceFileManager.getFullPathFromWorkspace(pdfPath);
     logger.debug(CHANNEL, `Full path to PDF: ${fullPath}`);
 
     // Ensure the temporary directory exists
@@ -301,7 +297,7 @@ export async function processPdf2Png(
     // Verify file exists
     const fileExistsResult = isAbsolutePath
       ? await fileExistsAbsolute(pdfPath)
-      : await fileExists(pdfPath);
+      : await WorkspaceFileManager.fileExists(pdfPath);
 
     if (!fileExistsResult) {
       logger.debug(CHANNEL, `PDF file not found: ${pdfPath}`);

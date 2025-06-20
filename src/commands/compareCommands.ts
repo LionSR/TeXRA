@@ -8,12 +8,7 @@ import * as vscode from 'vscode';
 import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
-import {
-  getFullPathFromWorkspace,
-  fileExists,
-  readFile,
-  writeFile,
-} from '@utils/files';
+import { WorkspaceFileManager } from '@utils/files';
 import { registerDiffRefresh } from '@frontend/ui/diffView';
 import { DIFF_REGISTRATION_DELAY_MS } from '@utils/config';
 
@@ -48,16 +43,20 @@ async function handleCompare(
     }
 
     // Create URIs for both files
-    const baseUri = vscode.Uri.file(getFullPathFromWorkspace(fileToUse));
-    const editedUri = vscode.Uri.file(getFullPathFromWorkspace(editedFile));
+    const baseUri = vscode.Uri.file(
+      WorkspaceFileManager.getFullPathFromWorkspace(fileToUse),
+    );
+    const editedUri = vscode.Uri.file(
+      WorkspaceFileManager.getFullPathFromWorkspace(editedFile),
+    );
 
     // Verify both files exist
-    if (!(await fileExists(fileToUse))) {
+    if (!(await WorkspaceFileManager.fileExists(fileToUse))) {
       vscode.window.showErrorMessage(`Base file not found: ${fileToUse}`);
       return;
     }
 
-    if (!(await fileExists(editedFile))) {
+    if (!(await WorkspaceFileManager.fileExists(editedFile))) {
       vscode.window.showErrorMessage(`Edited file not found: ${editedFile}`);
       return;
     }
@@ -134,18 +133,18 @@ async function handleAcceptEdited(
     }
 
     // Verify both files exist
-    if (!(await fileExists(fileToUse))) {
+    if (!(await WorkspaceFileManager.fileExists(fileToUse))) {
       vscode.window.showErrorMessage(`Base file not found: ${fileToUse}`);
       return;
     }
 
-    if (!(await fileExists(editedFile))) {
+    if (!(await WorkspaceFileManager.fileExists(editedFile))) {
       vscode.window.showErrorMessage(`Edited file not found: ${editedFile}`);
       return;
     }
 
     // Read content from edited file using workspace utilities
-    const editedContent = await readFile(editedFile);
+    const editedContent = await WorkspaceFileManager.readFile(editedFile);
 
     // Confirm with user
     const baseFileName = path.basename(fileToUse);
@@ -163,7 +162,7 @@ async function handleAcceptEdited(
     }
 
     // Write content to base file using workspace utilities
-    await writeFile(fileToUse, editedContent);
+    await WorkspaceFileManager.writeFile(fileToUse, editedContent);
 
     vscode.window.showInformationMessage(
       `Successfully replaced '${baseFileName}' with content from '${editedFileName}'`,
