@@ -54,15 +54,16 @@ export class WebviewMessageHandler {
 
   constructor(private readonly context: vscode.ExtensionContext) {
     // Ensure the pasted directory exists before trying to clean it
-    this.ensurePastedDirectoryExists().then(() => {
-      StorageFS.cleanupOldFiles(PASTED_DIR, 3 * 24 * 60 * 60 * 1000).catch(
-        (e) =>
-          logger.warn(
-            CHANNEL,
-            `Error during initial cleanup: ${e instanceof Error ? e.message : String(e)}`,
-          ),
+    StorageFS.ensureDir(PASTED_DIR)
+      .then(() => {
+        return StorageFS.cleanupOldFiles(PASTED_DIR, 3 * 24 * 60 * 60 * 1000);
+      })
+      .catch((e) =>
+        logger.warn(
+          CHANNEL,
+          `Error during initial cleanup: ${e instanceof Error ? e.message : String(e)}`,
+        ),
       );
-    });
     this.handlers = {
       showInformationMessage: (message) => this.handleInfoMessage(message),
       getTheme: (_m, view) => this.handleThemeRequest(view),
@@ -978,7 +979,7 @@ export class WebviewMessageHandler {
       if (!base64 || !mediaType || !fileName) {
         return;
       }
-      await StorageFS.createDir(PASTED_DIR);
+      await StorageFS.ensureDir(PASTED_DIR);
       const relativePath = path.join(PASTED_DIR, fileName);
       await StorageFS.write(relativePath, Buffer.from(base64, 'base64'));
       await StorageFS.cleanupOldFiles(PASTED_DIR, 3 * 24 * 60 * 60 * 1000);
@@ -1001,18 +1002,4 @@ export class WebviewMessageHandler {
     await safeExecuteCommand('texra.showAgentHistory', [], CHANNEL);
   }
 
-  /**
-   * Ensure the pasted directory exists in workspace storage
-   */
-  private async ensurePastedDirectoryExists(): Promise<void> {
-    try {
-      await StorageFS.createDir(PASTED_DIR);
-    } catch (err) {
-      // Directory might already exist, which is fine
-      logger.debug(
-        CHANNEL,
-        `Pasted directory already exists or error creating: ${err instanceof Error ? err.message : String(err)}`,
-      );
-    }
-  }
 }

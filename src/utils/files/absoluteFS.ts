@@ -88,6 +88,25 @@ export class AbsoluteFS {
   }
 
   /**
+   * Ensure a directory exists, creating it if necessary
+   */
+  public static async ensureDir(filePath: string): Promise<void> {
+    this.validatePath(filePath, 'ensureDir');
+    try {
+      const exists = await this.exists(filePath);
+      if (!exists) {
+        await this.createDir(filePath);
+      }
+    } catch (err) {
+      // If error is because directory already exists, ignore it
+      if (err instanceof vscode.FileSystemError && err.code === 'FileExists') {
+        return;
+      }
+      throw err;
+    }
+  }
+
+  /**
    * Read directory contents
    */
   public static async readDir(
@@ -192,6 +211,16 @@ export class AbsoluteFS {
   ): void {
     this.validatePath(dirPath, 'mkdirSync');
     fs.mkdirSync(dirPath, options);
+  }
+
+  /**
+   * Ensure a directory exists (sync), creating it if necessary
+   */
+  public static ensureDirSync(dirPath: string): void {
+    this.validatePath(dirPath, 'ensureDirSync');
+    if (!this.existsSync(dirPath)) {
+      this.mkdirSync(dirPath, { recursive: true });
+    }
   }
 
   /**
