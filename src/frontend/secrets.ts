@@ -38,6 +38,7 @@ export const API_PROVIDERS = [
   'moonshot',
   'dashscope',
   'wolframllmapp',
+  'elevenlabs',
 ] as const;
 export type ApiProvider = (typeof API_PROVIDERS)[number];
 
