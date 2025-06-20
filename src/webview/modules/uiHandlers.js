@@ -346,6 +346,10 @@ export function setupUIHandlers() {
     }
   });
 
+  addEventListenerSafely('recordInstructionButton', 'click', function () {
+    vscode.postMessage({ command: 'transcribeInstruction' });
+  });
+
   addEventListenerSafely('executeButton', 'click', function () {
     const agent = safeGetElementValue('agent');
     const model = safeGetElementValue('model');

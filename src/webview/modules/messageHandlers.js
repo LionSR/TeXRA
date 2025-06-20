@@ -262,6 +262,18 @@ export function setupMessageHandlers() {
       }
       postHandle();
     },
+    instructionTextTranscribed: (m) => {
+      const instruction = safeGetElementById('instruction');
+      if (instruction && m.text) {
+        instruction.value = m.text;
+        vscode.postMessage({
+          command: 'showInformationMessage',
+          text: 'Instruction text transcribed!',
+        });
+        saveState();
+      }
+      postHandle();
+    },
     setInputFile: (m) => {
       updateFileSelect('inputFile', m.files);
       postHandle();

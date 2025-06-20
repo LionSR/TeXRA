@@ -38,6 +38,7 @@ import {
   FileContext,
 } from '@utils/text/textEnhancementUtils';
 import { sleep } from '@utils/helpers';
+import { recordAndTranscribe } from '@frontend/media/audio';
 
 // Local imports - agent
 import { ToolConfig } from '../agent/core/ToolConfig';
@@ -153,6 +154,8 @@ export class WebviewMessageHandler {
         this.handleAddOpenedFiles(message.fileType, view),
       polishInstructionText: (message, view) =>
         this.handlePolishInstructionText(message, view),
+      transcribeInstruction: (_m, view) =>
+        this.handleTranscribeInstruction(view),
       showAgentHistory: () => this.handleShowAgentHistory(),
       openSettings: () => this.handleOpenSettings(),
       clipboardImage: (message, view) =>
@@ -866,6 +869,37 @@ export class WebviewMessageHandler {
       logger.error(
         CHANNEL,
         `Error setting up text polishing: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+
+  private async handleTranscribeInstruction(webviewView: vscode.WebviewView) {
+    try {
+      await vscode.window.withProgress(
+        {
+          location: vscode.ProgressLocation.Notification,
+          title: 'Transcribing instruction',
+          cancellable: false,
+        },
+        async () => {
+          const result = await recordAndTranscribe(this.context);
+          if (result.success) {
+            webviewView.webview.postMessage({
+              command: 'instructionTextTranscribed',
+              text: result.text,
+            });
+          } else if (result.error) {
+            vscode.window.showErrorMessage(result.error);
+          }
+        },
+      );
+    } catch (error) {
+      vscode.window.showErrorMessage(
+        `Error during transcription: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
+      logger.error(
+        CHANNEL,
+        `Error in handleTranscribeInstruction: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
   }
