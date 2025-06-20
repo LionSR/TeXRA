@@ -4,7 +4,7 @@ import * as winston from 'winston';
 import Transport from 'winston-transport';
 
 // Local imports - progressView
-import { ProgressViewProvider } from '../progressView/ProgressViewProvider';
+import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import { getConfig } from '@utils/config';
 import {
   shouldUseConsolidatedChannel,
