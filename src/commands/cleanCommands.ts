@@ -1,11 +1,14 @@
 // Third-party imports
 import * as vscode from 'vscode';
-import * as path from 'path';
 
+// Local imports - progress view
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 
 // Local imports - log
 import * as logger from '@logger/logUtils';
+
+// Local imports - utilities
+import { getStreamId } from '@utils/loggerUtils';
 
 // Local imports - housekeeping
 import {
@@ -18,17 +21,6 @@ import type { FileOpResult } from '@/types/ResultTypes';
 
 const CHANNEL = 'cleanCommands';
 logger.initialize(CHANNEL);
-
-function getStreamId(
-  agent: string,
-  model: string,
-  inputFile: string,
-  outputFiles?: string[],
-): string {
-  const agentName =
-    outputFiles && outputFiles.length > 1 ? `${agent}_multiple` : agent;
-  return `${agentName}@${model}: ${path.basename(inputFile)}`;
-}
 
 function showCleanResult(result: FileOpResult, inputFile: string): void {
   switch (result.status) {
