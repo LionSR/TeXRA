@@ -8,7 +8,7 @@ import * as nunjucks from 'nunjucks';
 import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
-import { readFile, writeFile } from './files';
+import { WorkspaceFileManager } from './files';
 import { getAgentFirstNameChunk } from '@housekeeping/utils';
 
 const CHANNEL = 'promptUtils';
@@ -21,7 +21,7 @@ logger.initialize(CHANNEL);
  */
 export async function getXmlFormatFromFile(file: string): Promise<string> {
   try {
-    const content = await readFile(file);
+    const content = await WorkspaceFileManager.readFile(file);
     return `<document name="${file}">\n${content}\n</document>`;
   } catch (err) {
     logger.error(
@@ -140,7 +140,7 @@ export async function getFirstKCharsFromDocument(
   k: number,
 ): Promise<string | null> {
   try {
-    const content = await readFile(inputFile);
+    const content = await WorkspaceFileManager.readFile(inputFile);
     return content ? content.slice(0, k).trim() : null;
   } catch (err) {
     logger.error(
@@ -175,7 +175,7 @@ export async function writePromptToXml(
     logger.debug(CHANNEL, `Writing input prompt to ${outputFile}`);
 
     const fullPrompt = `\n<system>${systemPrompt}</system>\n\n${userPrefix}\n${userRequest}\n`;
-    await writeFile(outputFile, fullPrompt);
+    await WorkspaceFileManager.writeFile(outputFile, fullPrompt);
 
     return outputFile;
   } catch (err) {

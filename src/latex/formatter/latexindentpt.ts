@@ -9,7 +9,7 @@ import { sync as globSync } from 'glob';
 import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
-import { deleteFile, getWorkspacePath } from '@utils/files';
+import { WorkspaceFileManager } from '@utils/files';
 import { executeCommand } from '@utils/system';
 import { sleep } from '@utils/helpers';
 import { checkToolInstalled } from '@utils/system';
@@ -24,7 +24,7 @@ export async function runLatexIndent(filePath: string): Promise<boolean> {
       return false;
     }
 
-    const workspacePath = getWorkspacePath();
+    const workspacePath = WorkspaceFileManager.getWorkspacePath();
     if (!workspacePath) {
       logger.error(CHANNEL, 'No workspace path found');
       return false;
@@ -83,7 +83,7 @@ export async function runLatexIndent(filePath: string): Promise<boolean> {
 
       for (const backupFile of backupFiles) {
         try {
-          await deleteFile(backupFile);
+          await WorkspaceFileManager.deleteFile(backupFile);
           logger.debug(CHANNEL, `Removed backup file: ${backupFile}`);
         } catch (err) {
           logger.warn(
@@ -97,7 +97,7 @@ export async function runLatexIndent(filePath: string): Promise<boolean> {
     // Clean up indent.log
     const indentLogPath = path.join(path.dirname(filePath), 'indent.log');
     try {
-      await deleteFile(indentLogPath);
+      await WorkspaceFileManager.deleteFile(indentLogPath);
       logger.debug(CHANNEL, 'Removed indent.log');
     } catch (err) {
       // Ignore error if indent.log doesn't exist

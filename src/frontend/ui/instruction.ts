@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { getFullPathFromWorkspace, fileExists } from '@utils/files';
+import { WorkspaceFileManager } from '@utils/files';
 import { fileExistsAbsolute } from '@utils/files';
 
 /**
@@ -56,7 +56,7 @@ export async function checkExpectedOutputs(
   for (const file of expectedFiles) {
     const exists = path.isAbsolute(file)
       ? await fileExistsAbsolute(file)
-      : await fileExists(file);
+      : await WorkspaceFileManager.fileExists(file);
     if (!exists) {
       const openBtn = 'Open XML';
 
@@ -103,7 +103,7 @@ export async function checkExpectedOutputs(
 
               const xmlExists = path.isAbsolute(xmlPath)
                 ? await fileExistsAbsolute(xmlPath)
-                : await fileExists(xmlPath);
+                : await WorkspaceFileManager.fileExists(xmlPath);
               if (!xmlExists) {
                 vscode.window.showWarningMessage(
                   `XML file not found: ${path.basename(xmlPath)}`,
@@ -112,7 +112,9 @@ export async function checkExpectedOutputs(
               }
               const uri = path.isAbsolute(xmlPath)
                 ? vscode.Uri.file(xmlPath)
-                : vscode.Uri.file(getFullPathFromWorkspace(xmlPath));
+                : vscode.Uri.file(
+                    WorkspaceFileManager.getFullPathFromWorkspace(xmlPath),
+                  );
               const doc = await vscode.workspace.openTextDocument(uri);
               await vscode.window.showTextDocument(doc, { preview: false });
             },
