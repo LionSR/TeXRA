@@ -70,6 +70,7 @@ export class WebviewMessageHandler {
     this.handlers = {
       showInformationMessage: (message) => this.handleInfoMessage(message),
       getTheme: (_m, view) => this.handleThemeRequest(view),
+      getDebugMode: (_m, view) => this.handleDebugModeRequest(view),
       modelSelected: (message, view) =>
         this.handleModelSelection(message, view),
       execute: (message) => this.handleExecute(message),
@@ -191,6 +192,11 @@ export class WebviewMessageHandler {
         ? 'dark'
         : 'light';
     webviewView.webview.postMessage({ command: 'setTheme', theme });
+  }
+
+  private handleDebugModeRequest(webviewView: vscode.WebviewView) {
+    const debugMode = getConfig<boolean>('logger.debugMode', false);
+    webviewView.webview.postMessage({ command: 'setDebugMode', debugMode });
   }
 
   private handleModelSelection(message: any, webviewView: vscode.WebviewView) {
