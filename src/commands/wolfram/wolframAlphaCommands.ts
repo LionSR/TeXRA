@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 
 // local import
-import { WolframAlphaClient } from '../../tools/wolfram/wolframAlphaUtils';
+import { WolframAlphaClient } from '@tools/wolfram/wolframAlphaUtils';
 
 export const wolframAlphaCommands = {
   testWolframAlpha: 'texra.testWolframAlpha',
