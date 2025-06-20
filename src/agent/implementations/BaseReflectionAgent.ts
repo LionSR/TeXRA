@@ -20,7 +20,7 @@ import { diff_match_patch } from 'diff-match-patch';
 import type { DiffStats } from '@/types/DiffTypes';
 
 // Local imports - utilities
-import { writeFile, appendFile, fileExists, readFile } from '@utils/files';
+import { WorkspaceFileManager } from '@utils/files';
 import {
   renderPrompt,
   getFirstKCharsFromDocument,
@@ -289,7 +289,7 @@ export abstract class BaseReflectionAgent implements IAgent {
           break;
         }
 
-        const exists = await fileExists(outputFile);
+        const exists = await WorkspaceFileManager.fileExists(outputFile);
         const startTime = Date.now();
         const systemPrompt = await this.getSystemPromptWithRules();
 
@@ -302,7 +302,10 @@ export abstract class BaseReflectionAgent implements IAgent {
           const outputFileBaseName = outputFile.replace('.xml', '');
           const debugFilePath = `${outputFileBaseName}_cont${stateRound.continuationCount}.json`;
           try {
-            await writeFile(debugFilePath, JSON.stringify(messages, null, 2));
+            await WorkspaceFileManager.writeFile(
+              debugFilePath,
+              JSON.stringify(messages, null, 2),
+            );
             this.logger.info(
               `Saved message object to ${debugFilePath}`,
               responseCycleGroupId,
@@ -445,13 +448,16 @@ export abstract class BaseReflectionAgent implements IAgent {
             `Creating new file: ${outputFile}`,
             responseCycleGroupId,
           );
-          await writeFile(outputFile, processedResponse);
+          await WorkspaceFileManager.writeFile(outputFile, processedResponse);
         } else {
           this.logger.debug(
             `Appending to existing file: ${outputFile}`,
             responseCycleGroupId,
           );
-          await appendFile(outputFile, bestConnector + processedResponse);
+          await WorkspaceFileManager.appendFile(
+            outputFile,
+            bestConnector + processedResponse,
+          );
         }
 
         // Log response boundaries
@@ -578,15 +584,15 @@ export abstract class BaseReflectionAgent implements IAgent {
   ): Promise<DiffStats> {
     try {
       if (!baseFile) {
-        const outContent = await readFile(outputFile);
+        const outContent = await WorkspaceFileManager.readFile(outputFile);
         const added = this.countLines(outContent);
         // For new files, only return added count (removed should be undefined for UI)
         return { added };
       }
 
       const [baseContent, outContent] = await Promise.all([
-        readFile(baseFile),
-        readFile(outputFile),
+        WorkspaceFileManager.readFile(baseFile),
+        WorkspaceFileManager.readFile(outputFile),
       ]);
 
       const dmp = new diff_match_patch();
@@ -730,7 +736,9 @@ export abstract class BaseReflectionAgent implements IAgent {
       this.outputHandler.outputFiles[currRound].length > 0
     ) {
       const existingBase = await Promise.all(
-        this.baseFiles.map(async (f) => await fileExists(f)),
+        this.baseFiles.map(
+          async (f) => await WorkspaceFileManager.fileExists(f),
+        ),
       );
 
       if (existingBase.some((e) => e)) {
@@ -842,7 +850,7 @@ export abstract class BaseReflectionAgent implements IAgent {
                 buildDir,
                 path.basename(inputFile).replace(/\.tex$/, '.pdf'),
               );
-              if (await fileExists(pdfFile)) {
+              if (await WorkspaceFileManager.fileExists(pdfFile)) {
                 this.logger.info(
                   `Compiled PDF for ${inputFile}: ${pdfFile}`,
                   round0GroupId,
@@ -1206,7 +1214,7 @@ export abstract class BaseReflectionAgent implements IAgent {
             buildDir,
             path.basename(outputFile).replace(/\.tex$/, '.pdf'),
           );
-          if (await fileExists(pdfFile)) {
+          if (await WorkspaceFileManager.fileExists(pdfFile)) {
             this.logger.info(
               `Compiled PDF for ${outputFile}: ${pdfFile}`,
               this.logger.getActiveGroupId(),
