@@ -114,6 +114,7 @@ export async function startRecording(
     activeRecordingProcess.on('exit', (code) => {
       logger.info(CHANNEL, `Recording process exited with code ${code}`);
       activeRecordingProcess = null;
+      activeRecordingPath = null;
     });
 
     // Capture stderr for debugging
