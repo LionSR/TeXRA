@@ -80,7 +80,6 @@ async function handlePack(config: any) {
     config.inputFile,
     config.agent,
     outputFiles,
-    config.outputNameOverride,
   );
   showPackResult(result, config.inputFile);
 
@@ -101,11 +100,10 @@ async function handlePackSingle(
   inputFile: string,
   agent: string,
   model: string,
-  outputNameOverride?: string,
 ) {
   logger.debug(
     CHANNEL,
-    `Command called with: inputFile=${inputFile}, agent=${agent}, model=${model}, outputNameOverride=${outputNameOverride}`,
+    `Command called with: inputFile=${inputFile}, agent=${agent}, model=${model}`,
   );
 
   if (!inputFile || !agent || !model) {
@@ -119,9 +117,8 @@ async function handlePackSingle(
     return;
   }
 
-  const fileToPack = outputNameOverride || inputFile;
-  const result = await runPackSingle(model, fileToPack, agent);
-  showPackResult(result, fileToPack);
+  const result = await runPackSingle(model, inputFile, agent);
+  showPackResult(result, inputFile);
 
   const provider = ProgressViewProvider.getInstance();
   if (provider) {
@@ -136,11 +133,10 @@ async function handlePackMultiple(
   agent: string,
   model: string,
   outputFiles: string[] = [],
-  outputNameOverride?: string,
 ) {
   logger.debug(
     CHANNEL,
-    `Command called with: inputFile=${inputFile}, agent=${agent}, model=${model}, outputNameOverride=${outputNameOverride}`,
+    `Command called with: inputFile=${inputFile}, agent=${agent}, model=${model}`,
   );
   logger.debug(CHANNEL, `Additional files: ${outputFiles.join(', ')}`);
 
@@ -155,13 +151,7 @@ async function handlePackMultiple(
     return;
   }
 
-  const result = await runPackMultiple(
-    model,
-    inputFile,
-    agent,
-    outputFiles,
-    outputNameOverride,
-  );
+  const result = await runPackMultiple(model, inputFile, agent, outputFiles);
   showPackResult(result, inputFile);
 
   const provider = ProgressViewProvider.getInstance();

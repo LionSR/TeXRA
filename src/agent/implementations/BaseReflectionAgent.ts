@@ -170,9 +170,7 @@ export abstract class BaseReflectionAgent implements IAgent {
    * @returns Task ID string used for logging and output naming
    */
   private getTaskId(): string {
-    const baseName = path.basename(
-      this.agentConfig.outputNameOverride || this.agentConfig.inputFile,
-    );
+    const baseName = path.basename(this.agentConfig.inputFile);
     // Use the potentially modified agent name (with _multiple suffix if applicable)
     const agentName =
       Array.isArray(this.agentConfig.outputFiles) &&
