@@ -6,7 +6,7 @@ import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
 import { showInfoMessage, showErrorMessage } from '@frontend/ui/messageUtils';
-import { getRelativePath } from '@utils/files';
+import { WorkspaceFileManager } from '@utils/files';
 import { listInputFiles } from '@frontend/files/listing';
 import { getIncludedExtensions } from '@utils/fileTypeUtils';
 import { selectFile, selectFiles } from '@frontend/files/dialog';
@@ -237,7 +237,7 @@ async function selectEditedFile(): Promise<string | null> {
 async function getCurrentFile(): Promise<string | null> {
   const currentFile = vscode.window.activeTextEditor?.document;
   if (currentFile && currentFile.uri.scheme === 'file') {
-    return getRelativePath(currentFile.uri.fsPath);
+    return WorkspaceFileManager.getRelativePath(currentFile.uri.fsPath);
   }
   return null;
 }

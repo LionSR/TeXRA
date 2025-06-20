@@ -10,7 +10,7 @@ import { AgentLogger } from '@logger/AgentLogger';
 
 import { getConfig } from '@utils/config';
 import { objectToTaskState } from '@utils/config';
-import { filterExistingFiles } from '@utils/files';
+import { WorkspaceFileManager } from '@utils/files';
 import {
   shouldExcludeFromProgressView,
   shouldPersistStream,
@@ -225,7 +225,8 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
           );
 
           try {
-            const filtered = await filterExistingFiles(infos);
+            const filtered =
+              await WorkspaceFileManager.filterExistingFiles(infos);
             const removedCount = infos.length - filtered.length;
 
             if (removedCount > 0) {
