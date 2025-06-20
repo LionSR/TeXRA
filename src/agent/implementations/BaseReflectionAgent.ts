@@ -20,7 +20,7 @@ import { diff_match_patch } from 'diff-match-patch';
 import type { DiffStats } from '@/types/DiffTypes';
 
 // Local imports - utilities
-import { WorkspaceFileManager } from '@utils/files';
+import { WorkspaceFS } from '@utils/files';
 import {
   renderPrompt,
   getFirstKCharsFromDocument,
@@ -289,7 +289,7 @@ export abstract class BaseReflectionAgent implements IAgent {
           break;
         }
 
-        const exists = await WorkspaceFileManager.fileExists(outputFile);
+        const exists = await WorkspaceFS.exists(outputFile);
         const startTime = Date.now();
         const systemPrompt = await this.getSystemPromptWithRules();
 
@@ -302,7 +302,7 @@ export abstract class BaseReflectionAgent implements IAgent {
           const outputFileBaseName = outputFile.replace('.xml', '');
           const debugFilePath = `${outputFileBaseName}_cont${stateRound.continuationCount}.json`;
           try {
-            await WorkspaceFileManager.writeFile(
+            await WorkspaceFS.writeFile(
               debugFilePath,
               JSON.stringify(messages, null, 2),
             );
@@ -448,13 +448,13 @@ export abstract class BaseReflectionAgent implements IAgent {
             `Creating new file: ${outputFile}`,
             responseCycleGroupId,
           );
-          await WorkspaceFileManager.writeFile(outputFile, processedResponse);
+          await WorkspaceFS.writeFile(outputFile, processedResponse);
         } else {
           this.logger.debug(
             `Appending to existing file: ${outputFile}`,
             responseCycleGroupId,
           );
-          await WorkspaceFileManager.appendFile(
+          await WorkspaceFS.appendFile(
             outputFile,
             bestConnector + processedResponse,
           );
@@ -584,15 +584,15 @@ export abstract class BaseReflectionAgent implements IAgent {
   ): Promise<DiffStats> {
     try {
       if (!baseFile) {
-        const outContent = await WorkspaceFileManager.readFile(outputFile);
+        const outContent = await WorkspaceFS.readFile(outputFile);
         const added = this.countLines(outContent);
         // For new files, only return added count (removed should be undefined for UI)
         return { added };
       }
 
       const [baseContent, outContent] = await Promise.all([
-        WorkspaceFileManager.readFile(baseFile),
-        WorkspaceFileManager.readFile(outputFile),
+        WorkspaceFS.readFile(baseFile),
+        WorkspaceFS.readFile(outputFile),
       ]);
 
       const dmp = new diff_match_patch();
@@ -736,9 +736,7 @@ export abstract class BaseReflectionAgent implements IAgent {
       this.outputHandler.outputFiles[currRound].length > 0
     ) {
       const existingBase = await Promise.all(
-        this.baseFiles.map(
-          async (f) => await WorkspaceFileManager.fileExists(f),
-        ),
+        this.baseFiles.map(async (f) => await WorkspaceFS.exists(f)),
       );
 
       if (existingBase.some((e) => e)) {
@@ -850,7 +848,7 @@ export abstract class BaseReflectionAgent implements IAgent {
                 buildDir,
                 path.basename(inputFile).replace(/\.tex$/, '.pdf'),
               );
-              if (await WorkspaceFileManager.fileExists(pdfFile)) {
+              if (await WorkspaceFS.exists(pdfFile)) {
                 this.logger.info(
                   `Compiled PDF for ${inputFile}: ${pdfFile}`,
                   round0GroupId,
@@ -1214,7 +1212,7 @@ export abstract class BaseReflectionAgent implements IAgent {
             buildDir,
             path.basename(outputFile).replace(/\.tex$/, '.pdf'),
           );
-          if (await WorkspaceFileManager.fileExists(pdfFile)) {
+          if (await WorkspaceFS.exists(pdfFile)) {
             this.logger.info(
               `Compiled PDF for ${outputFile}: ${pdfFile}`,
               this.logger.getActiveGroupId(),

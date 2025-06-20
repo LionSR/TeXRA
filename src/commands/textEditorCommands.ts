@@ -8,7 +8,7 @@ import * as logger from '@logger/logUtils';
 import { TextEditorTool, ToolCallInput } from '../AnthropicTool';
 
 // Local imports - utilities
-import { WorkspaceFileManager } from '@utils/files';
+import { WorkspaceFS } from '@utils/files';
 
 const CHANNEL = 'TextEditorCommands';
 logger.initialize(CHANNEL);
@@ -37,9 +37,7 @@ async function handleTestTextEditor(): Promise<void> {
       return;
     }
 
-    const filePath = WorkspaceFileManager.getRelativePath(
-      editor.document.fileName,
-    );
+    const filePath = WorkspaceFS.relativePath(editor.document.fileName);
     logger.info(CHANNEL, `Testing text editor tool with file: ${filePath}`);
 
     // Get command to test
