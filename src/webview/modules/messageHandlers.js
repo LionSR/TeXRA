@@ -265,7 +265,22 @@ export function setupMessageHandlers() {
     instructionTextTranscribed: (m) => {
       const instruction = safeGetElementById('instruction');
       if (instruction && m.text) {
-        instruction.value = m.text;
+        // Insert text at cursor position instead of replacing all text
+        const startPos = instruction.selectionStart;
+        const endPos = instruction.selectionEnd;
+        const textBefore = instruction.value.substring(0, startPos);
+        const textAfter = instruction.value.substring(endPos);
+
+        // Insert the transcribed text at cursor position
+        instruction.value = textBefore + m.text + textAfter;
+
+        // Set cursor position after the inserted text
+        const newCursorPos = startPos + m.text.length;
+        instruction.setSelectionRange(newCursorPos, newCursorPos);
+
+        // Focus the instruction field
+        instruction.focus();
+
         vscode.postMessage({
           command: 'showInformationMessage',
           text: 'Instruction text transcribed!',
