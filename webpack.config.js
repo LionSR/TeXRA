@@ -45,6 +45,7 @@ const extensionConfig = {
       '@progressView': path.resolve(__dirname, 'src/progressView'),
       '@historyView': path.resolve(__dirname, 'src/historyView'),
       '@replacement': path.resolve(__dirname, 'src/replacement'),
+      '@tools': path.resolve(__dirname, 'src/tools'),
     },
     fallback: {
       fs: false,
