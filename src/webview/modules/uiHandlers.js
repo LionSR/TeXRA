@@ -350,6 +350,38 @@ export function setupUIHandlers() {
     }
   });
 
+  // Recording state management
+  let isRecording = false;
+
+  function updateRecordingUI(recording) {
+    isRecording = recording;
+    const recordButton = safeGetElementById('recordInstructionButton');
+    if (recordButton) {
+      if (recording) {
+        recordButton.innerHTML = '<i class="codicon codicon-stop-circle"></i>';
+        recordButton.title = 'Stop recording';
+        recordButton.classList.add('recording');
+      } else {
+        recordButton.innerHTML = '<i class="codicon codicon-mic"></i>';
+        recordButton.title = 'Record instruction with microphone';
+        recordButton.classList.remove('recording');
+      }
+    }
+  }
+
+  addEventListenerSafely('recordInstructionButton', 'click', function () {
+    if (isRecording) {
+      vscode.postMessage({ command: 'stopRecording' });
+      updateRecordingUI(false);
+    } else {
+      vscode.postMessage({ command: 'startRecording' });
+      updateRecordingUI(true);
+    }
+  });
+
+  // Export the updateRecordingUI function for use in message handlers
+  window.updateRecordingUI = updateRecordingUI;
+
   addEventListenerSafely('executeButton', 'click', function () {
     const agent = safeGetElementValue('agent');
     const model = safeGetElementValue('model');

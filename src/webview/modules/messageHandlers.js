@@ -248,6 +248,51 @@ export function setupMessageHandlers() {
       }
       postHandle();
     },
+    instructionTextTranscribed: (m) => {
+      const instruction = safeGetElementById('instruction');
+      if (instruction && m.text) {
+        // Insert text at cursor position instead of replacing all text
+        const startPos = instruction.selectionStart;
+        const endPos = instruction.selectionEnd;
+        const textBefore = instruction.value.substring(0, startPos);
+        const textAfter = instruction.value.substring(endPos);
+
+        // Insert the transcribed text at cursor position
+        instruction.value = textBefore + m.text + textAfter;
+
+        // Set cursor position after the inserted text
+        const newCursorPos = startPos + m.text.length;
+        instruction.setSelectionRange(newCursorPos, newCursorPos);
+
+        // Focus the instruction field
+        instruction.focus();
+
+        vscode.postMessage({
+          command: 'showInformationMessage',
+          text: 'Instruction text transcribed!',
+        });
+        saveState();
+      }
+      // Reset recording UI state
+      if (window.updateRecordingUI) {
+        window.updateRecordingUI(false);
+      }
+      postHandle();
+    },
+    recordingStarted: () => {
+      // Recording has started successfully
+      if (window.updateRecordingUI) {
+        window.updateRecordingUI(true);
+      }
+      postHandle();
+    },
+    recordingError: (m) => {
+      // Reset UI on error
+      if (window.updateRecordingUI) {
+        window.updateRecordingUI(false);
+      }
+      postHandle();
+    },
     setInputFile: (m) => {
       updateFileSelect('inputFile', m.files);
       postHandle();
