@@ -14,8 +14,7 @@ export class CoTAgent extends BaseReflectionAgent {
    * @returns Formatted output file path incorporating model and round information
    */
   protected getOutputFile(currRound: number): string {
-    const baseOutputFile =
-      this.agentConfig.outputNameOverride || this.agentConfig.inputFile;
+    const baseOutputFile = this.agentConfig.inputFile;
     const fileExtension = this.useScratchpad
       ? 'xml'
       : this.agentSetting.outputExt;

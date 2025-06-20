@@ -65,11 +65,10 @@ async function handleCleanSingle(
   inputFile: string,
   agent: string,
   model: string,
-  outputNameOverride: string = '',
 ) {
   logger.debug(
     CHANNEL,
-    `Command called with: inputFile=${inputFile}, agent=${agent}, model=${model}, outputNameOverride=${outputNameOverride}`,
+    `Command called with: inputFile=${inputFile}, agent=${agent}, model=${model}`,
   );
 
   if (!inputFile || !agent || !model) {
@@ -82,11 +81,7 @@ async function handleCleanSingle(
     );
     return;
   }
-  const result = await runCleanSingle(
-    model,
-    outputNameOverride || inputFile,
-    agent,
-  );
+  const result = await runCleanSingle(model, inputFile, agent);
   showCleanResult(result, inputFile);
 
   const provider = ProgressViewProvider.getInstance();
@@ -102,11 +97,10 @@ async function handleCleanMultiple(
   agent: string,
   model: string,
   outputFiles: string[] = [],
-  outputNameOverride?: string,
 ) {
   logger.debug(
     CHANNEL,
-    `Command called with: inputFile=${inputFile}, agent=${agent}, model=${model}, outputNameOverride=${outputNameOverride}`,
+    `Command called with: inputFile=${inputFile}, agent=${agent}, model=${model}`,
   );
   logger.debug(CHANNEL, `Additional files: ${outputFiles.join(', ')}`);
 
@@ -121,16 +115,7 @@ async function handleCleanMultiple(
     return;
   }
 
-  const inputFilesWithOverride = outputNameOverride
-    ? [outputNameOverride, ...outputFiles]
-    : outputFiles;
-
-  const result = await runCleanMultiple(
-    model,
-    inputFile,
-    agent,
-    inputFilesWithOverride,
-  );
+  const result = await runCleanMultiple(model, inputFile, agent, outputFiles);
   showCleanResult(result, inputFile);
 
   const provider = ProgressViewProvider.getInstance();

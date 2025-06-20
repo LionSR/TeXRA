@@ -13,7 +13,6 @@ export interface TaskState {
   referenceFile: string;
   auxiliaryFile: string;
   mediaFile: string;
-  outputNameOverride: string;
 
   // Multiple file selections
   inputFiles: string[];
@@ -36,7 +35,4 @@ export interface TaskState {
   usePrefillFromInput: boolean;
   printInputPrompt: boolean;
   autoCompileInputPdf: boolean;
-
-  // Output name override visibility
-  outputNameOverrideVisible: boolean;
 }
