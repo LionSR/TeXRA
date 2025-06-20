@@ -17,7 +17,6 @@ export const DEFAULT_AGENT_CONFIG: AgentConfig = {
   mediaFile: null,
   mediaFiles: [],
   outputFiles: null,
-  outputNameOverride: null,
   editedFile: null,
   toolConfig: {} as ToolConfig,
 };
@@ -39,7 +38,6 @@ export interface AgentConfig {
   mediaFile: string | null;
   mediaFiles: string[] | null;
   outputFiles: string[] | null;
-  outputNameOverride: string | null;
   editedFile: string | null;
 
   // Tool configuration

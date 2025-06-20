@@ -25,16 +25,6 @@ import {
 import { capitalize } from '@common/stringUtils.js';
 
 export function setDefaultState() {
-  // Hide output name override by default
-  const outputNameOverride = document.getElementById('outputNameOverride');
-  const toggleOutputNameOverrideDiv = document.getElementById(
-    'toggleOutputNameOverride',
-  );
-  if (outputNameOverride) outputNameOverride.style.display = 'none';
-  if (toggleOutputNameOverrideDiv)
-    toggleOutputNameOverrideDiv.innerHTML =
-      '<i class="codicon codicon-chevron-right"></i>';
-
   // Initialize auto-extract toggle with default state
   const autoExtractToggle = safeGetElementById('toggleAutoExtract');
   const autoExtractOptions = safeGetElementById('autoExtractOptions');
@@ -132,26 +122,6 @@ export function restoreState() {
       }
     });
 
-    const outputNameOverride = document.getElementById('outputNameOverride');
-    const toggleOutputNameOverrideDiv = document.getElementById(
-      'toggleOutputNameOverride',
-    );
-    if (previousState.outputNameOverrideVisible) {
-      if (outputNameOverride) outputNameOverride.style.display = 'inline-block';
-      if (toggleOutputNameOverrideDiv)
-        toggleOutputNameOverrideDiv.innerHTML =
-          '<i class="codicon codicon-chevron-left"></i>';
-      safeSetElementValue(
-        'outputNameOverride',
-        previousState.outputNameOverride ?? '',
-      );
-    } else {
-      if (outputNameOverride) outputNameOverride.style.display = 'none';
-      if (toggleOutputNameOverrideDiv)
-        toggleOutputNameOverrideDiv.innerHTML =
-          '<i class="codicon codicon-chevron-right"></i>';
-    }
-
     const latexdiffsContent = safeGetElementById('latexdiffsContent');
     const toggleLatexdiffs = safeGetElementById('toggleLatexdiffs');
     if (latexdiffsContent && toggleLatexdiffs) {
@@ -174,10 +144,6 @@ export function saveState() {
   const state = {
     latexdiffsVisible:
       safeGetElementById('latexdiffsContent')?.style.display === 'block',
-    outputNameOverrideVisible:
-      safeGetElementById('outputNameOverride')?.style.display ===
-      'inline-block',
-    outputNameOverride: safeGetElementValue('outputNameOverride'),
   };
 
   VALUE_ELEMENTS.forEach((id) => {
