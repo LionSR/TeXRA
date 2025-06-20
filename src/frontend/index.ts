@@ -1,4 +1,5 @@
 export * from './files/listing';
+export * from './files/FileLister';
 export * from './files/dialog';
 export * from './files/vars';
 export * from './files/rules';
