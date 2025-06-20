@@ -8,13 +8,7 @@ import * as arxivIdentifiers from 'identifiers-arxiv';
 import * as logger from '@logger/logUtils';
 
 // Local imports - utils
-import {
-  getWorkspacePath,
-  getFullPathFromWorkspace,
-  createDirectory,
-  deleteFile,
-  fileExists,
-} from './files';
+import { WorkspaceFileManager } from './files';
 import { executeCommand } from './system';
 import { indentLatexFilesInDirectory } from '@housekeeping/indent';
 
@@ -163,25 +157,26 @@ export async function downloadArxivSource(
   }
 
   // Get workspace path
-  const workspacePath = getWorkspacePath();
+  const workspacePath = WorkspaceFileManager.getWorkspacePath();
   if (!workspacePath) {
     throw new Error('No workspace folder is open');
   }
 
   // Create PapersEx directory if it doesn't exist
   const papersExDir = 'PapersEx';
-  if (!(await fileExists(papersExDir))) {
-    await createDirectory(papersExDir);
+  if (!(await WorkspaceFileManager.fileExists(papersExDir))) {
+    await WorkspaceFileManager.createDirectory(papersExDir);
   }
 
   // Create a specific directory for this paper
   const paperDirRelative = path.join(papersExDir, arxivId.replace(/\//g, '_'));
-  if (!(await fileExists(paperDirRelative))) {
-    await createDirectory(paperDirRelative);
+  if (!(await WorkspaceFileManager.fileExists(paperDirRelative))) {
+    await WorkspaceFileManager.createDirectory(paperDirRelative);
   }
 
   // Get the full paths for operations that need them
-  const paperDirFull = getFullPathFromWorkspace(paperDirRelative);
+  const paperDirFull =
+    WorkspaceFileManager.getFullPathFromWorkspace(paperDirRelative);
   const tarFileName = `${arxivId.replace(/\//g, '_')}.tar.gz`;
   const tarFilePath = path.join(paperDirFull, tarFileName);
 
@@ -211,7 +206,9 @@ export async function downloadArxivSource(
   }
 
   // Clean up the tar file
-  await deleteFile(path.join(paperDirRelative, tarFileName));
+  await WorkspaceFileManager.deleteFile(
+    path.join(paperDirRelative, tarFileName),
+  );
 
   // Indent LaTeX files if autoIndent is enabled
   if (autoIndent) {

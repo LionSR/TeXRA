@@ -11,14 +11,7 @@ import type { FileOpResult } from '@/types/ResultTypes';
 import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
-import {
-  deleteFile,
-  moveFile,
-  copyFile,
-  findFileInBuild,
-  createDirectory,
-  fileExists,
-} from '@utils/files';
+import { WorkspaceFileManager } from '@utils/files';
 
 // Local imports - housekeeping
 import { PACK_EXTENSIONS, TEMP_EXTENSIONS, HISTORY_DIR } from './constants';
@@ -66,7 +59,11 @@ export async function runPackSingle(
   // Find files to move or copy
   for (const pattern of filePatterns) {
     for (const ext of PACK_EXTENSIONS) {
-      const filePath = await findFileInBuild(inputDir, pattern, ext);
+      const filePath = await WorkspaceFileManager.findFileInBuild(
+        inputDir,
+        pattern,
+        ext,
+      );
       if (filePath) {
         if (filePath === inputFile || pattern === baseName) {
           copiedFiles.push(filePath);
@@ -107,7 +104,7 @@ export async function runPackSingle(
     logger.debug(CHANNEL, `Output folder: ${outputFolder}`);
 
     try {
-      await createDirectory(outputFolder);
+      await WorkspaceFileManager.createDirectory(outputFolder);
       logger.debug(CHANNEL, `Created output directory: ${outputFolder}`);
 
       // Move and copy files
@@ -115,12 +112,12 @@ export async function runPackSingle(
       for (const file of movedFiles) {
         const destination = path.join(outputFolder, path.basename(file));
         operations.push(`Moving: ${file} -> ${destination}`);
-        await moveFile(file, destination);
+        await WorkspaceFileManager.moveFile(file, destination);
       }
       for (const file of copiedFiles) {
         const destination = path.join(outputFolder, path.basename(file));
         operations.push(`Copying: ${file} -> ${destination}`);
-        await copyFile(file, destination);
+        await WorkspaceFileManager.copyFile(file, destination);
       }
       if (operations.length > 0 && !onlyInputFilePacked) {
         logger.info(CHANNEL, `Files packed into ${outputFolder}`);
@@ -145,9 +142,13 @@ export async function runPackSingle(
   // Clean up temporary files
   for (const pattern of filePatterns) {
     for (const ext of TEMP_EXTENSIONS) {
-      const filePath = await findFileInBuild(inputDir, pattern, ext);
+      const filePath = await WorkspaceFileManager.findFileInBuild(
+        inputDir,
+        pattern,
+        ext,
+      );
       if (filePath && filePath !== inputFile) {
-        await deleteFile(filePath);
+        await WorkspaceFileManager.deleteFile(filePath);
       }
     }
   }
@@ -217,12 +218,15 @@ export async function runPackMultiple(
 
     for (const pattern of additionalPatterns) {
       const filePath = path.join(outputDir, pattern);
-      if (await fileExists(filePath)) {
+      if (await WorkspaceFileManager.fileExists(filePath)) {
         if (!anyFilesPacked) {
-          await createDirectory(commonOutputFolder);
+          await WorkspaceFileManager.createDirectory(commonOutputFolder);
         }
         logger.debug(CHANNEL, `Found additional XML file: ${filePath}`);
-        await moveFile(filePath, path.join(commonOutputFolder, pattern));
+        await WorkspaceFileManager.moveFile(
+          filePath,
+          path.join(commonOutputFolder, pattern),
+        );
         anyFilesPacked = true;
       }
     }
