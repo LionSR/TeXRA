@@ -8,7 +8,7 @@ import * as vscode from 'vscode';
 import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
-import { WorkspaceFileManager } from '@utils/files';
+import { WorkspaceFS } from '@utils/files';
 import { fileExistsAbsolute } from '@utils/files';
 import { getConfig } from '@utils/config';
 import { runLatexFormatter } from '@latex/texFormatter';
@@ -58,7 +58,7 @@ export async function indentLatexFilesInDirectory(
 
   const processDirectory = async (dirPath: string) => {
     try {
-      const entries = await WorkspaceFileManager.readDirectory(dirPath);
+      const entries = await WorkspaceFS.readDir(dirPath);
       for (const [name, type] of entries) {
         if (EXCLUDED_DIRS.has(name.toLowerCase())) {
           continue;
@@ -102,7 +102,7 @@ export async function indentLatexFilesInDirectory(
     // Clean up temporary files recursively
     const processCleanup = async (dirPath: string) => {
       try {
-        const entries = await WorkspaceFileManager.readDirectory(dirPath);
+        const entries = await WorkspaceFS.readDir(dirPath);
         for (const [name, type] of entries) {
           if (EXCLUDED_DIRS.has(name.toLowerCase())) {
             continue;
@@ -124,7 +124,7 @@ export async function indentLatexFilesInDirectory(
               name === 'indent.log'
             ) {
               logger.debug(CHANNEL, `Found cleanup file: ${fullPath}`);
-              await WorkspaceFileManager.deleteFile(fullPath);
+              await WorkspaceFS.delete(fullPath);
             }
           }
         }
