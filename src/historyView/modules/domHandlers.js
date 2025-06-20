@@ -181,14 +181,6 @@ function createHistoryItemElement(item) {
     `;
   }
 
-  // Add output name override
-  if (config.outputNameOverride) {
-    detailsHTML += `
-      <span class="history-label">Output Name:</span>
-      <span class="history-value">${config.outputNameOverride}</span>
-    `;
-  }
-
   // Add tool config section
   if (config.toolConfig) {
     detailsHTML += renderToolConfig(

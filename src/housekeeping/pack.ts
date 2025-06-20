@@ -160,15 +160,14 @@ export async function runPackMultiple(
   inputFile: string,
   agent: string,
   inputFiles: string[],
-  outputNameOverride?: string,
 ): Promise<FileOpResult> {
   logger.debug(
     CHANNEL,
-    `Starting multiple packing with model=${model}, inputFile=${inputFile}, agent=${agent}, outputNameOverride=${outputNameOverride}`,
+    `Starting multiple packing with model=${model}, inputFile=${inputFile}, agent=${agent}`,
   );
   logger.debug(CHANNEL, `Additional files: ${inputFiles.join(', ')}`);
 
-  const fileToPack = outputNameOverride || inputFile;
+  const fileToPack = inputFile;
   const baseName = path.parse(fileToPack).name;
   const outputDir = path.dirname(fileToPack);
 
@@ -252,11 +251,10 @@ export async function runPack(
   inputFile: string,
   agent: string,
   outputFiles: string[] = [],
-  outputNameOverride?: string,
 ): Promise<FileOpResult> {
   logger.debug(
     CHANNEL,
-    `Starting pack with model=${model}, inputFile=${inputFile}, agent=${agent}, outputNameOverride=${outputNameOverride}`,
+    `Starting pack with model=${model}, inputFile=${inputFile}, agent=${agent}`,
   );
   logger.debug(CHANNEL, `Additional files: ${outputFiles.join(', ')}`);
 
@@ -270,14 +268,8 @@ export async function runPack(
 
   // Use multiple mode if there are output files
   if (outputFiles.length > 0) {
-    return await runPackMultiple(
-      model,
-      inputFile,
-      agent,
-      outputFiles,
-      outputNameOverride,
-    );
+    return await runPackMultiple(model, inputFile, agent, outputFiles);
   } else {
-    return await runPackSingle(model, inputFile, agent, outputNameOverride);
+    return await runPackSingle(model, inputFile, agent);
   }
 }

@@ -203,7 +203,7 @@ export class WebviewMessageHandler {
   }
 
   private async handleExecute(message: any) {
-    if (message.inputFile || message.outputNameOverride) {
+    if (message.inputFile) {
       const toolConfig: ToolConfig = {
         // Auto extract settings
         autoExtractFigure: message.autoExtractFigure,
@@ -243,16 +243,13 @@ export class WebviewMessageHandler {
             )
           : null,
         outputFiles: getFilesIfNotEmpty(message.outputFiles),
-        outputNameOverride: message.outputNameOverride,
         editedFile: null,
         toolConfig,
       };
 
       await vscode.commands.executeCommand('texra.execute', agentConfig);
     } else {
-      vscode.window.showErrorMessage(
-        'Please select an input file or provide an output name override.',
-      );
+      vscode.window.showErrorMessage('Please select an input file.');
     }
   }
 
@@ -500,7 +497,6 @@ export class WebviewMessageHandler {
       message.inputFile,
       message.agent,
       message.model,
-      message.outputNameOverride,
     );
   }
 
@@ -525,7 +521,6 @@ export class WebviewMessageHandler {
       message.agent,
       message.model,
       message.outputFiles,
-      message.outputNameOverride,
     );
   }
 
