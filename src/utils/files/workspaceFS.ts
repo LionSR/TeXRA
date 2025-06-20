@@ -114,10 +114,7 @@ export class WorkspaceFS {
     }
   }
 
-  public static async move(
-    source: string,
-    destination: string,
-  ): Promise<void> {
+  public static async move(source: string, destination: string): Promise<void> {
     logger.debug(CHANNEL, `Moving file from ${source} to ${destination}`);
     try {
       const fullSourcePath = this.fullPath(source);
@@ -144,10 +141,7 @@ export class WorkspaceFS {
     }
   }
 
-  public static async copy(
-    source: string,
-    destination: string,
-  ): Promise<void> {
+  public static async copy(source: string, destination: string): Promise<void> {
     logger.debug(CHANNEL, `Copying file from ${source} to ${destination}`);
     try {
       const fullSourcePath = this.fullPath(source);
@@ -295,9 +289,7 @@ export class WorkspaceFS {
     return await fileExistsAbsolute(fullPath);
   }
 
-  public static async existsAndNonTrivial(
-    filePath: string,
-  ): Promise<boolean> {
+  public static async existsAndNonTrivial(filePath: string): Promise<boolean> {
     return (
       (await this.exists(filePath)) &&
       (await this.readFile(filePath)).length > 15
