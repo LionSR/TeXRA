@@ -16,7 +16,7 @@ import {
   fileExists,
 } from './files';
 import { executeCommand } from './system';
-import { indentLatexFilesInDirectory } from '../housekeeping/indent';
+import { indentLatexFilesInDirectory } from '@housekeeping/indent';
 
 const CHANNEL = 'arXivUtils';
 
