@@ -5,7 +5,8 @@ import * as path from 'path';
 // Third-party imports
 import * as vscode from 'vscode';
 import OpenAI from 'openai';
-import { spawn } from 'child_process';
+import spawn from 'cross-spawn';
+import type { ChildProcess } from 'child_process';
 
 // Local imports - log
 import * as logger from '@logger/logUtils';
@@ -24,7 +25,6 @@ import {
   extendEnvPath,
   findToolInCommonPaths,
 } from '@utils/system/platformPaths';
-import { ChildProcess } from 'child_process';
 
 const CHANNEL = 'AudioUtils';
 logger.initialize(CHANNEL);
@@ -52,13 +52,24 @@ export async function startRecording(
       };
     }
 
-    // Check if sox is installed
-    const soxInstalled = await checkToolInstalled('sox', true);
+    // Check if sox is installed (don't show error dialog)
+    const soxPath = findToolInCommonPaths('sox');
+    logger.info(CHANNEL, `Sox path found: ${soxPath}`);
+
+    const soxInstalled = await checkToolInstalled('sox', false);
     if (!soxInstalled) {
-      return {
-        success: false,
-        error: 'sox is required for audio recording. Please install it first.',
-      };
+      logger.error(
+        CHANNEL,
+        'Sox check failed - but we found it at: ' + soxPath,
+      );
+      // If we found sox path, proceed anyway
+      if (!soxPath) {
+        return {
+          success: false,
+          error:
+            'Sox is required for audio recording. Please install it first.',
+        };
+      }
     }
     await createStorageDirectory(context, RECORDINGS_DIR);
     const relativePath = path.join(RECORDINGS_DIR, `record_${Date.now()}.wav`);
@@ -66,9 +77,6 @@ export async function startRecording(
       createStoragePath(relativePath),
       context,
     );
-
-    // Find sox executable
-    const soxPath = findToolInCommonPaths('sox') || 'sox';
 
     // Start recording without duration limit
     const soxArgs = [
@@ -92,7 +100,7 @@ export async function startRecording(
       `Starting audio recording with sox: ${soxPath} ${soxArgs.join(' ')}`,
     );
 
-    activeRecordingProcess = spawn(soxPath, soxArgs, {
+    activeRecordingProcess = spawn(soxPath || 'sox', soxArgs, {
       env: { ...process.env, PATH: extendEnvPath() },
     });
     activeRecordingPath = absPath;
@@ -225,7 +233,7 @@ export async function recordAndTranscribe(
     );
 
     // Find sox executable
-    const soxPath = findToolInCommonPaths('sox') || 'sox';
+    const soxExecutablePath = findToolInCommonPaths('sox') || 'sox';
 
     // Record audio using sox directly
     await new Promise<void>((resolve, reject) => {
@@ -250,10 +258,10 @@ export async function recordAndTranscribe(
 
       logger.info(
         CHANNEL,
-        `Recording audio with sox: ${soxPath} ${soxArgs.join(' ')}`,
+        `Recording audio with sox: ${soxExecutablePath} ${soxArgs.join(' ')}`,
       );
 
-      const soxProcess = spawn(soxPath, soxArgs, {
+      const soxProcess = spawn(soxExecutablePath, soxArgs, {
         env: { ...process.env, PATH: extendEnvPath() },
       });
 
@@ -272,7 +280,7 @@ export async function recordAndTranscribe(
       });
 
       // Capture stderr for debugging
-      soxProcess.stderr.on('data', (data) => {
+      soxProcess.stderr?.on('data', (data) => {
         logger.debug(CHANNEL, `Sox stderr: ${data}`);
       });
     });
