@@ -1,9 +1,6 @@
 // Standard library imports
 import * as path from 'path';
 
-// Third-party imports
-import * as vscode from 'vscode';
-
 // Local imports
 import { StorageFS } from './storageFS';
 
@@ -20,10 +17,7 @@ export function isPastedImage(filename: string): boolean {
 /**
  * Get the full filesystem path for a pasted image
  */
-export function getPastedImageFullPath(
-  filename: string,
-  context: vscode.ExtensionContext,
-): string {
+export function getPastedImageFullPath(filename: string): string {
   return StorageFS.fullPath(path.join(PASTED_DIR, filename));
 }
 
