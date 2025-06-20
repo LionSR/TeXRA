@@ -12,12 +12,7 @@ import * as logger from '@logger/logUtils';
 import { safeExecuteCommand } from '@utils/system';
 
 // Local imports - utilities
-import { WorkspaceFS } from '@utils/files';
-import {
-  createStorageDirectory,
-  writeToStorage,
-  cleanupStorageDirectory,
-} from '@utils/files/workspaceStorageUtils';
+import { WorkspaceFS, StorageFS } from '@utils/files';
 import {
   isPastedImage,
   getPastedImageFullPath,
@@ -60,15 +55,12 @@ export class WebviewMessageHandler {
   constructor(private readonly context: vscode.ExtensionContext) {
     // Ensure the pasted directory exists before trying to clean it
     this.ensurePastedDirectoryExists().then(() => {
-      cleanupStorageDirectory(
-        this.context,
-        PASTED_DIR,
-        3 * 24 * 60 * 60 * 1000,
-      ).catch((e) =>
-        logger.warn(
-          CHANNEL,
-          `Error during initial cleanup: ${e instanceof Error ? e.message : String(e)}`,
-        ),
+      StorageFS.cleanupOldFiles(PASTED_DIR, 3 * 24 * 60 * 60 * 1000).catch(
+        (e) =>
+          logger.warn(
+            CHANNEL,
+            `Error during initial cleanup: ${e instanceof Error ? e.message : String(e)}`,
+          ),
       );
     });
     this.handlers = {
@@ -986,18 +978,10 @@ export class WebviewMessageHandler {
       if (!base64 || !mediaType || !fileName) {
         return;
       }
-      await createStorageDirectory(this.context, PASTED_DIR);
+      await StorageFS.createDir(PASTED_DIR);
       const relativePath = path.join(PASTED_DIR, fileName);
-      await writeToStorage(
-        this.context,
-        relativePath,
-        Buffer.from(base64, 'base64'),
-      );
-      await cleanupStorageDirectory(
-        this.context,
-        PASTED_DIR,
-        3 * 24 * 60 * 60 * 1000,
-      );
+      await StorageFS.write(relativePath, Buffer.from(base64, 'base64'));
+      await StorageFS.cleanupOldFiles(PASTED_DIR, 3 * 24 * 60 * 60 * 1000);
       webviewView.webview.postMessage({
         command: 'addMediaFile',
         file: fileName,
@@ -1022,7 +1006,7 @@ export class WebviewMessageHandler {
    */
   private async ensurePastedDirectoryExists(): Promise<void> {
     try {
-      await createStorageDirectory(this.context, PASTED_DIR);
+      await StorageFS.createDir(PASTED_DIR);
     } catch (err) {
       // Directory might already exist, which is fine
       logger.debug(
