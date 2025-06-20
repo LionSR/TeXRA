@@ -15,7 +15,7 @@ import { BaseError, ValidationResult } from './types';
 
 // Local imports - utils
 import * as workspaceFileUtils from '@utils/files';
-import { getApiKey as getSecretApiKey, ApiProvider } from '@frontend/secrets';
+import { SecretManager, ApiProvider } from '@frontend/secretManager';
 import { getConfig } from '@utils/config';
 
 // Local imports - logging
@@ -171,7 +171,7 @@ export abstract class AnthropicToolAgent<
    */
   protected async getApiKey(): Promise<string> {
     try {
-      return await getSecretApiKey('anthropic' as ApiProvider);
+      return await SecretManager.getApiKey('anthropic' as ApiProvider);
     } catch (err) {
       logger.error(
         CHANNEL,
