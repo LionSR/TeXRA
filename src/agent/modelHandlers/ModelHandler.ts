@@ -8,7 +8,7 @@ import * as path from 'path';
 import { AgentLogger } from '@logger/AgentLogger';
 
 // Local imports - utilities
-import { WorkspaceFileManager } from '@utils/files';
+import { WorkspaceFS } from '@utils/files';
 import { fileExistsAbsolute } from '@utils/files/absoluteFileUtils';
 import { getPastedImageDisplayName } from '@utils/files/pastedImageUtils';
 import {
@@ -423,7 +423,7 @@ export abstract class ModelHandler {
       const isAbsolutePath = path.isAbsolute(mediaFile);
       const fileExistsResult = isAbsolutePath
         ? await fileExistsAbsolute(mediaFile)
-        : await WorkspaceFileManager.fileExists(mediaFile);
+        : await WorkspaceFS.exists(mediaFile);
 
       if (!fileExistsResult) {
         this.logger.error(`File not found: ${mediaFile}`);
