@@ -1,0 +1,208 @@
+// Standard library imports
+import * as fs from 'fs';
+import * as path from 'path';
+
+// Third-party imports
+import * as vscode from 'vscode';
+import OpenAI from 'openai';
+import spawn from 'cross-spawn';
+import type { ChildProcess } from 'child_process';
+
+// Local imports - log
+import * as logger from '@logger/logUtils';
+
+// Local imports - utils
+import { getApiKey } from '@frontend/secrets';
+import {
+  createStorageDirectory,
+  storagePathToAbsolute,
+  createStoragePath,
+  cleanupStorageDirectory,
+} from '@utils/files/workspaceStorageUtils';
+import { getSdkErrorMessage } from '@utils/sdkErrorUtils';
+import { checkToolInstalled } from '@utils/system/toolUtils';
+import {
+  extendEnvPath,
+  findToolInCommonPaths,
+} from '@utils/system/platformPaths';
+
+const CHANNEL = 'AudioUtils';
+logger.initialize(CHANNEL);
+
+const RECORDINGS_DIR = 'recordings';
+
+// Store active recording process
+let activeRecordingProcess: ChildProcess | null = null;
+let activeRecordingPath: string | null = null;
+
+/**
+ * Start recording audio from the microphone.
+ * @param context Extension context for storage path access
+ * @returns Promise with recording path or error
+ */
+export async function startRecording(
+  context: vscode.ExtensionContext,
+): Promise<{ success: boolean; recordingPath?: string; error?: string }> {
+  try {
+    // Check if already recording
+    if (activeRecordingProcess) {
+      return {
+        success: false,
+        error: 'Recording already in progress',
+      };
+    }
+
+    // Check if sox is installed (don't show error dialog)
+    const soxPath = findToolInCommonPaths('sox');
+    logger.info(CHANNEL, `Sox path found: ${soxPath}`);
+
+    const soxInstalled = await checkToolInstalled('sox', false);
+    if (!soxInstalled) {
+      logger.error(
+        CHANNEL,
+        'Sox check failed - but we found it at: ' + soxPath,
+      );
+      // If we found sox path, proceed anyway
+      if (!soxPath) {
+        return {
+          success: false,
+          error:
+            'Sox is required for audio recording. Please install it first.',
+        };
+      }
+    }
+    await createStorageDirectory(context, RECORDINGS_DIR);
+    const relativePath = path.join(RECORDINGS_DIR, `record_${Date.now()}.wav`);
+    const absPath = storagePathToAbsolute(
+      createStoragePath(relativePath),
+      context,
+    );
+
+    // Start recording without duration limit
+    const soxArgs = [
+      '--default-device', // Use default input device
+      '--no-show-progress', // Don't show progress
+      '--rate',
+      '16000', // Sample rate
+      '--channels',
+      '1', // Mono
+      '--encoding',
+      'signed-integer',
+      '--bits',
+      '16', // 16-bit
+      '--type',
+      'wav', // Output format
+      absPath, // Output file
+    ];
+
+    logger.info(
+      CHANNEL,
+      `Starting audio recording with sox: ${soxPath} ${soxArgs.join(' ')}`,
+    );
+
+    activeRecordingProcess = spawn(soxPath || 'sox', soxArgs, {
+      env: { ...process.env, PATH: extendEnvPath() },
+    });
+    activeRecordingPath = absPath;
+
+    activeRecordingProcess.on('error', (err) => {
+      logger.error(CHANNEL, `Sox process error: ${err}`);
+      activeRecordingProcess = null;
+      activeRecordingPath = null;
+    });
+
+    activeRecordingProcess.on('exit', (code) => {
+      logger.info(CHANNEL, `Recording process exited with code ${code}`);
+      activeRecordingProcess = null;
+      activeRecordingPath = null;
+    });
+
+    // Capture stderr for debugging
+    activeRecordingProcess.stderr?.on('data', (data) => {
+      logger.debug(CHANNEL, `Sox stderr: ${data}`);
+    });
+
+    return { success: true, recordingPath: absPath };
+  } catch (err) {
+    logger.error(
+      CHANNEL,
+      `Error in startRecording: ${getSdkErrorMessage(err)}`,
+    );
+    activeRecordingProcess = null;
+    activeRecordingPath = null;
+    return { success: false, error: getSdkErrorMessage(err) };
+  }
+}
+
+/**
+ * Stop the current recording and transcribe it.
+ * @param context Extension context for storage path access
+ * @returns Promise with transcribed text or error
+ */
+export async function stopRecordingAndTranscribe(
+  context: vscode.ExtensionContext,
+): Promise<{ success: boolean; text: string; error?: string }> {
+  try {
+    if (!activeRecordingProcess || !activeRecordingPath) {
+      return {
+        success: false,
+        text: '',
+        error: 'No active recording to stop',
+      };
+    }
+
+    const recordingPath = activeRecordingPath;
+
+    // Stop the recording process
+    activeRecordingProcess.kill('SIGTERM');
+    activeRecordingProcess = null;
+    activeRecordingPath = null;
+
+    // Wait a bit for the file to be properly written
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
+    // Check if the file exists and has content
+    if (!fs.existsSync(recordingPath)) {
+      return {
+        success: false,
+        text: '',
+        error: 'Recording file not found',
+      };
+    }
+
+    const stats = fs.statSync(recordingPath);
+    if (stats.size === 0) {
+      return {
+        success: false,
+        text: '',
+        error: 'Recording file is empty',
+      };
+    }
+
+    // Transcribe the audio
+    const apiKey = await getApiKey('openai');
+    const client = new OpenAI({ apiKey });
+    const result = await client.audio.transcriptions.create({
+      file: fs.createReadStream(recordingPath),
+      model: 'gpt-4o-transcribe',
+      response_format: 'json',
+    });
+
+    // Clean up old recordings
+    await cleanupStorageDirectory(
+      context,
+      RECORDINGS_DIR,
+      3 * 24 * 60 * 60 * 1000,
+    );
+
+    return { success: true, text: result.text };
+  } catch (err) {
+    logger.error(
+      CHANNEL,
+      `Error in stopRecordingAndTranscribe: ${getSdkErrorMessage(err)}`,
+    );
+    activeRecordingProcess = null;
+    activeRecordingPath = null;
+    return { success: false, text: '', error: getSdkErrorMessage(err) };
+  }
+}
