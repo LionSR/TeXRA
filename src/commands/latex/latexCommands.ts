@@ -5,7 +5,7 @@ import * as vscode from 'vscode';
 import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
-import { WorkspaceFileManager } from '@utils/files';
+import { WorkspaceFS } from '@utils/files';
 import { sleep } from '@utils/helpers';
 import replacementManager from '@replacement/replacementManager';
 
@@ -135,9 +135,7 @@ async function handleGetTeXCount(): Promise<void> {
       return;
     }
 
-    const filePath = WorkspaceFileManager.getRelativePath(
-      editor.document.fileName,
-    );
+    const filePath = WorkspaceFS.relativePath(editor.document.fileName);
     logger.debug(CHANNEL, `Getting tex count for: ${filePath}`);
 
     // Ask if user wants to merge included files
