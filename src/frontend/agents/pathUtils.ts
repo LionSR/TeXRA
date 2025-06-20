@@ -5,6 +5,7 @@ import * as vscode from 'vscode';
 // Local imports - log
 import * as logger from '@logger/logUtils';
 import { getConfig } from '@utils/config';
+import { GlobalStorageFS, StorageFS } from '@utils/files';
 
 const CHANNEL = 'AgentLoad';
 logger.initialize(CHANNEL);
@@ -19,10 +20,13 @@ export async function getBuiltInAgentsDirectory(
     throw new Error('Extension context required for built-in agents');
   }
 
-  const basePath = path.join(context.globalStorageUri.fsPath, 'agents');
-
+  // Initialize StorageFS with the context
+  StorageFS.initialize(context);
+  
   // Ensure the directory exists
-  await vscode.workspace.fs.createDirectory(vscode.Uri.file(basePath));
+  await GlobalStorageFS.createDir('agents');
+  
+  const basePath = GlobalStorageFS.fullPath('agents');
   logger.debug(CHANNEL, `Using built-in agents directory: ${basePath}`);
 
   return basePath;
