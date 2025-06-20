@@ -272,6 +272,24 @@ export function setupMessageHandlers() {
         });
         saveState();
       }
+      // Reset recording UI state
+      if (window.updateRecordingUI) {
+        window.updateRecordingUI(false);
+      }
+      postHandle();
+    },
+    recordingStarted: () => {
+      // Recording has started successfully
+      if (window.updateRecordingUI) {
+        window.updateRecordingUI(true);
+      }
+      postHandle();
+    },
+    recordingError: (m) => {
+      // Reset UI on error
+      if (window.updateRecordingUI) {
+        window.updateRecordingUI(false);
+      }
       postHandle();
     },
     setInputFile: (m) => {
