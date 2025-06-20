@@ -38,6 +38,7 @@ import { formatProviderError } from '@utils/sdkErrorUtils';
 import { cleanFileContent } from '@replacement/replacementUtils';
 import replacementManager from '@replacement/replacementManager';
 import { extractAndLogScratchpad } from '@utils/text/xmlUtils';
+import type { ProviderStopReason } from '@types/StopReasonTypes';
 import { getConfig } from '@utils/config';
 import { calculateTokenPrice } from '@utils/priceUtils';
 
@@ -564,7 +565,11 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
   extractResponse(
     responseObject: GenerateContentResponse,
     endTag: string,
-  ): [string, GenerateContentResponseUsageMetadata | undefined, string] {
+  ): [
+    string,
+    GenerateContentResponseUsageMetadata | undefined,
+    ProviderStopReason,
+  ] {
     if (!responseObject) {
       this.logger.error(`Invalid (null) response object received.`);
       return ['', undefined, 'UNKNOWN_EMPTY_RESPONSE'];
@@ -857,7 +862,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
   }
 
   shouldContinue(
-    stopReason: string,
+    stopReason: ProviderStopReason,
     newResponse: string,
     agentSetting: AgentSetting,
   ): boolean {
