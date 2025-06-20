@@ -700,7 +700,7 @@
       {
         "title": "Logger",
         "properties": {
-          "texra.logger.verboseOutput": {
+          "texra.logger.debugMode": {
             "type": "boolean",
             "default": false,
             "description": "Whether to show verbose debug messages in the logger view",

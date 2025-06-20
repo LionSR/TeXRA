@@ -74,6 +74,7 @@ export class WebviewMessageHandler {
     this.handlers = {
       showInformationMessage: (message) => this.handleInfoMessage(message),
       getTheme: (_m, view) => this.handleThemeRequest(view),
+      getDebugMode: (_m, view) => this.handleDebugModeRequest(view),
       modelSelected: (message, view) =>
         this.handleModelSelection(message, view),
       execute: (message) => this.handleExecute(message),
@@ -201,6 +202,11 @@ export class WebviewMessageHandler {
     webviewView.webview.postMessage({ command: 'setTheme', theme });
   }
 
+  private handleDebugModeRequest(webviewView: vscode.WebviewView) {
+    const debugMode = getConfig<boolean>('logger.debugMode', false);
+    webviewView.webview.postMessage({ command: 'setDebugMode', debugMode });
+  }
+
   private handleModelSelection(message: any, webviewView: vscode.WebviewView) {
     if (message.model) {
       webviewView.webview.postMessage({
@@ -211,7 +217,7 @@ export class WebviewMessageHandler {
   }
 
   private async handleExecute(message: any) {
-    if (message.inputFile || message.outputNameOverride) {
+    if (message.inputFile) {
       const toolConfig: ToolConfig = {
         // Auto extract settings
         autoExtractFigure: message.autoExtractFigure,
@@ -251,16 +257,13 @@ export class WebviewMessageHandler {
             )
           : null,
         outputFiles: getFilesIfNotEmpty(message.outputFiles),
-        outputNameOverride: message.outputNameOverride,
         editedFile: null,
         toolConfig,
       };
 
       await vscode.commands.executeCommand('texra.execute', agentConfig);
     } else {
-      vscode.window.showErrorMessage(
-        'Please select an input file or provide an output name override.',
-      );
+      vscode.window.showErrorMessage('Please select an input file.');
     }
   }
 
@@ -508,7 +511,6 @@ export class WebviewMessageHandler {
       message.inputFile,
       message.agent,
       message.model,
-      message.outputNameOverride,
     );
   }
 
@@ -533,7 +535,6 @@ export class WebviewMessageHandler {
       message.agent,
       message.model,
       message.outputFiles,
-      message.outputNameOverride,
     );
   }
 
