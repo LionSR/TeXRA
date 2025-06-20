@@ -2,6 +2,7 @@ import { vscode, registerMessageHandlers } from '@common/webviewContext.js';
 import { safeSetElementValue, safeGetElementById } from '@common/domUtils.js';
 import { capitalize, uncapitalize } from '@common/stringUtils.js';
 import { stateManager, restoreState, saveState } from './stateManager.js';
+import { setDebugMode as applyDebugMode } from './uiHandlers.js';
 
 import {
   updateFileSelect,
@@ -21,6 +22,7 @@ import { FILE_TYPES } from './constants.js';
 export function initializeDataRequests() {
   const dataRequests = [
     'getTheme',
+    'getDebugMode',
     'requestInputFile',
     'requestReferenceFile',
     'requestAuxiliaryFile',
@@ -213,6 +215,10 @@ export function setupMessageHandlers() {
   const handlers = {
     setTheme: (m) => {
       document.body.className = m.theme;
+      postHandle();
+    },
+    setDebugMode: (m) => {
+      applyDebugMode(m.debugMode);
       postHandle();
     },
     modelSelected: (m) => {

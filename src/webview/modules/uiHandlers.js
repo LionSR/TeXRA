@@ -25,6 +25,23 @@ import {
 } from '@common/domUtils.js';
 import { capitalize } from '@common/stringUtils.js';
 
+let debugMode = false;
+
+function updateDebugButtonVisibility() {
+  const packBtn = safeGetElementById('packButton');
+  const cleanBtn = safeGetElementById('cleanButton');
+  [packBtn, cleanBtn].forEach((btn) => {
+    if (btn) {
+      btn.style.display = debugMode ? '' : 'none';
+    }
+  });
+}
+
+export function setDebugMode(enabled) {
+  debugMode = !!enabled;
+  updateDebugButtonVisibility();
+}
+
 // Add this function to handle textarea auto-resize
 export function autoResizeTextarea(textarea) {
   // Reset height to auto to get the correct scrollHeight
@@ -117,6 +134,8 @@ export function setupUIHandlers() {
       });
     }
   });
+  
+  updateDebugButtonVisibility();
 
   // Get values for single file inputs (input, reference, auxiliary, media)
   function getSingleFileData(
