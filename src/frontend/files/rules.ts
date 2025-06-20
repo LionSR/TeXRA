@@ -6,7 +6,7 @@ import * as path from 'path';
 import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
-import { getWorkspacePath, fileExists, readFile } from '@utils/files';
+import { WorkspaceFileManager } from '@utils/files';
 import { fileExistsAbsolute, readFileAbsolute } from '@utils/files';
 
 const CHANNEL = 'texraRulesUtils';
@@ -18,11 +18,11 @@ logger.initialize(CHANNEL);
  */
 export async function loadTexraRules(): Promise<string> {
   try {
-    const workspacePath = getWorkspacePath();
+    const workspacePath = WorkspaceFileManager.getWorkspacePath();
     const rulesFile = '.texrarules';
 
-    if (workspacePath && (await fileExists(rulesFile))) {
-      const content = await readFile(rulesFile);
+    if (workspacePath && (await WorkspaceFileManager.fileExists(rulesFile))) {
+      const content = await WorkspaceFileManager.readFile(rulesFile);
       if (content.trim()) {
         logger.debug(CHANNEL, `Loaded workspace ${rulesFile}`);
         return content.trim();

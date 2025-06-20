@@ -8,8 +8,7 @@ import * as vscode from 'vscode';
 import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
-import { getWorkspacePath } from '@utils/files';
-import { fileExists } from '@utils/files';
+import { WorkspaceFileManager } from '@utils/files';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 
 // Local imports - latex utils
@@ -92,7 +91,7 @@ async function handleLatexdiff(
       path.dirname(fileToUse),
       result.diffFileName,
     );
-    if (!(await fileExists(filePathRelative))) {
+    if (!(await WorkspaceFileManager.fileExists(filePathRelative))) {
       vscode.window.showErrorMessage(
         `Diff file could not be found. Expected path: ${filePathRelative}`,
       );
@@ -131,7 +130,7 @@ async function handleLatexdiffvc(
       path.dirname(fileToUse),
       result.diffFileName,
     );
-    if (!(await fileExists(filePathRelative))) {
+    if (!(await WorkspaceFileManager.fileExists(filePathRelative))) {
       vscode.window.showErrorMessage(
         `Diff file could not be found. Expected path: ${filePathRelative}`,
       );
@@ -270,7 +269,7 @@ async function handleRunLatexdiff(config: any) {
     logger.debug(CHANNEL, `Using agent name chunk: ${agentNameChunk}`);
 
     // Get workspace path
-    const workspacePath = getWorkspacePath();
+    const workspacePath = WorkspaceFileManager.getWorkspacePath();
     if (!workspacePath) {
       throw new Error('No workspace path found');
     }
