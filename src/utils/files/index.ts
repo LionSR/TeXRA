@@ -1,6 +1,5 @@
 export { WorkspaceFS } from './workspaceFS';
 export { AbsoluteFS } from './absoluteFS';
-export { StorageFS } from './storageFS';
-export * from './workspaceStorageUtils';
+export { StorageFS, GlobalStorageFS } from './storageFS';
 export * from './pastedImageUtils';
 export * from './baseFileUtils';
