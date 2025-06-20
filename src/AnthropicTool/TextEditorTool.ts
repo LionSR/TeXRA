@@ -549,9 +549,4 @@ export class TextEditorTool extends BaseAnthropicTool {
     return `Here's the result of running \`cat -n\` on ${fileDescriptor}:\n${numberedLines}\n`;
   }
 
-  /**
-   * Ensure a directory exists, creating it if necessary
-   * @param dirPath - Path to the directory
-   * @private
-   */
 }
