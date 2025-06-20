@@ -8,8 +8,7 @@ import * as vscode from 'vscode';
 import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
-import { WorkspaceFS } from '@utils/files';
-import { fileExistsAbsolute } from '@utils/files';
+import { WorkspaceFS, AbsoluteFS } from '@utils/files';
 import { getConfig } from '@utils/config';
 import { runLatexFormatter } from '@latex/texFormatter';
 
@@ -41,7 +40,7 @@ export async function indentLatexFilesInDirectory(
   logger.debug(CHANNEL, `Formatter: ${formatter}, Config: ${config}`);
 
   if (config) {
-    const configExists = await fileExistsAbsolute(config);
+    const configExists = await AbsoluteFS.exists(config);
     if (!configExists) {
       logger.error(
         CHANNEL,

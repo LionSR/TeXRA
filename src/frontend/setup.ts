@@ -1,5 +1,4 @@
 // Standard library imports
-import * as fs from 'fs';
 import * as path from 'path';
 
 // VS Code imports
@@ -7,6 +6,7 @@ import * as vscode from 'vscode';
 
 // Local imports
 import * as logger from '@logger/logUtils';
+import { AbsoluteFS } from '@utils/files';
 
 /**
  * Copies default agent files from the extension resources to the global storage directory
@@ -47,18 +47,18 @@ export async function copyDefaultAgents(context: vscode.ExtensionContext) {
     // Recursive function to copy files and directories
     // Consider the native recursive copy available in Node 16+?
     const copyRecursively = async (sourcePath: string, targetPath: string) => {
-      const stats = await fs.promises.stat(sourcePath);
+      const stats = await AbsoluteFS.stat(sourcePath);
 
       if (stats.isDirectory()) {
         await vscode.workspace.fs.createDirectory(vscode.Uri.file(targetPath));
-        const files = await fs.promises.readdir(sourcePath);
+        const files = (await AbsoluteFS.readDirAsync(sourcePath)) as string[];
         for (const file of files) {
           const sourceFilePath = path.join(sourcePath, file);
           const targetFilePath = path.join(targetPath, file);
           await copyRecursively(sourceFilePath, targetFilePath);
         }
       } else {
-        const content = await fs.promises.readFile(sourcePath);
+        const content = await AbsoluteFS.readAsync(sourcePath);
         await vscode.workspace.fs.writeFile(
           vscode.Uri.file(targetPath),
           content,

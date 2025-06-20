@@ -1,5 +1,4 @@
 // Standard library imports
-import * as fs from 'fs';
 import * as path from 'path';
 
 // Third-party imports
@@ -13,6 +12,7 @@ import * as logger from '@logger/logUtils';
 
 // Local imports - utils
 import { SecretManager } from '@frontend/secretManager';
+import { AbsoluteFS } from '@utils/files';
 import {
   createStorageDirectory,
   storagePathToAbsolute,
@@ -162,7 +162,7 @@ export async function stopRecordingAndTranscribe(
     await new Promise((resolve) => setTimeout(resolve, 500));
 
     // Check if the file exists and has content
-    if (!fs.existsSync(recordingPath)) {
+    if (!AbsoluteFS.existsSync(recordingPath)) {
       return {
         success: false,
         text: '',
@@ -170,7 +170,7 @@ export async function stopRecordingAndTranscribe(
       };
     }
 
-    const stats = fs.statSync(recordingPath);
+    const stats = AbsoluteFS.statSync(recordingPath);
     if (stats.size === 0) {
       return {
         success: false,
@@ -183,7 +183,7 @@ export async function stopRecordingAndTranscribe(
     const apiKey = await SecretManager.getApiKey('openai');
     const client = new OpenAI({ apiKey });
     const result = await client.audio.transcriptions.create({
-      file: fs.createReadStream(recordingPath),
+      file: AbsoluteFS.createReadStream(recordingPath),
       model: 'gpt-4o-transcribe',
       response_format: 'json',
     });
