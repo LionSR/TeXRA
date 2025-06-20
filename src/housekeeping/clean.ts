@@ -11,7 +11,7 @@ import * as logger from '@logger/logUtils';
 import type { FileOpResult } from '@/types/ResultTypes';
 
 // Local imports - utilities
-import { WorkspaceFileManager } from '@utils/files';
+import { WorkspaceFS } from '@utils/files';
 
 // Local imports - housekeeping
 import {
@@ -60,7 +60,7 @@ export async function runCleanSingle(
   const filesToDelete: string[] = [];
   for (const pattern of filePatterns) {
     for (const ext of extensions) {
-      const filePath = await WorkspaceFileManager.findFileInBuild(
+      const filePath = await WorkspaceFS.findFileInBuild(
         inputDir,
         pattern,
         ext,
@@ -83,7 +83,7 @@ export async function runCleanSingle(
     try {
       logger.debug(CHANNEL, `Files to delete:\n${filesToDelete.join('\n')}`);
       for (const filePath of filesToDelete) {
-        await WorkspaceFileManager.deleteFile(filePath);
+        await WorkspaceFS.delete(filePath);
       }
       logger.info(CHANNEL, `Cleanup complete for ${inputFile}`);
       result = { status: 'success' };
@@ -148,19 +148,18 @@ export async function runCleanBuild(): Promise<void> {
 
   async function cleanBuildDir(directory: string) {
     const buildDir = path.join(directory, 'build');
-    if (await WorkspaceFileManager.fileExists(buildDir)) {
+    if (await WorkspaceFS.exists(buildDir)) {
       try {
-        const entries = await WorkspaceFileManager.readDirectory(buildDir);
+        const entries = await WorkspaceFS.readDir(buildDir);
         // First delete all files
         for (const [name, type] of entries) {
           const fullPath = path.join(buildDir, name);
           if (type === vscode.FileType.File) {
-            await WorkspaceFileManager.deleteFile(fullPath);
+            await WorkspaceFS.delete(fullPath);
           } else if (type === vscode.FileType.Directory) {
-            const subEntries =
-              await WorkspaceFileManager.readDirectory(fullPath);
+            const subEntries = await WorkspaceFS.readDir(fullPath);
             if (subEntries.length === 0) {
-              await WorkspaceFileManager.deleteFile(fullPath);
+              await WorkspaceFS.delete(fullPath);
               logger.debug(CHANNEL, `Removed empty directory: ${fullPath}`);
             }
             for (const [name, type] of subEntries) {
@@ -171,7 +170,7 @@ export async function runCleanBuild(): Promise<void> {
                 );
                 const size = stats.size;
                 if (size === 0) {
-                  await WorkspaceFileManager.deleteFile(subPath);
+                  await WorkspaceFS.delete(subPath);
                   logger.debug(CHANNEL, `Removed empty directory: ${subPath}`);
                 }
               }
@@ -179,8 +178,7 @@ export async function runCleanBuild(): Promise<void> {
           }
         }
         // Check if build directory itself is empty
-        const remainingEntries =
-          await WorkspaceFileManager.readDirectory(buildDir);
+        const remainingEntries = await WorkspaceFS.readDir(buildDir);
         if (remainingEntries.length === 0) {
           await vscode.workspace.fs.delete(vscode.Uri.file(buildDir), {
             recursive: true,
@@ -200,7 +198,7 @@ export async function runCleanBuild(): Promise<void> {
 
   async function processDirectory(dirPath: string) {
     try {
-      const entries = await WorkspaceFileManager.readDirectory(dirPath);
+      const entries = await WorkspaceFS.readDir(dirPath);
       for (const [name, type] of entries) {
         if (
           type === vscode.FileType.Directory &&
@@ -242,7 +240,7 @@ export async function runCleanOutput(): Promise<void> {
 
   const processDirectory = async (dirPath: string) => {
     try {
-      const entries = await WorkspaceFileManager.readDirectory(dirPath);
+      const entries = await WorkspaceFS.readDir(dirPath);
       for (const [name, type] of entries) {
         if (EXCLUDED_DIRS.has(name.toLowerCase())) {
           continue;
@@ -271,7 +269,7 @@ export async function runCleanOutput(): Promise<void> {
   await processDirectory('.');
 
   for (const file of filesToDelete) {
-    await WorkspaceFileManager.deleteFile(file);
+    await WorkspaceFS.delete(file);
   }
 
   logger.info(CHANNEL, 'All AI Generated Output files cleaned');

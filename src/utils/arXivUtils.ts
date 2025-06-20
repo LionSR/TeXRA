@@ -8,7 +8,7 @@ import * as arxivIdentifiers from 'identifiers-arxiv';
 import * as logger from '@logger/logUtils';
 
 // Local imports - utils
-import { WorkspaceFileManager } from './files';
+import { WorkspaceFS } from './files';
 import { executeCommand } from './system';
 import { indentLatexFilesInDirectory } from '@housekeeping/indent';
 
@@ -157,26 +157,25 @@ export async function downloadArxivSource(
   }
 
   // Get workspace path
-  const workspacePath = WorkspaceFileManager.getWorkspacePath();
+  const workspacePath = WorkspaceFS.getPath();
   if (!workspacePath) {
     throw new Error('No workspace folder is open');
   }
 
   // Create PapersEx directory if it doesn't exist
   const papersExDir = 'PapersEx';
-  if (!(await WorkspaceFileManager.fileExists(papersExDir))) {
-    await WorkspaceFileManager.createDirectory(papersExDir);
+  if (!(await WorkspaceFS.exists(papersExDir))) {
+    await WorkspaceFS.createDir(papersExDir);
   }
 
   // Create a specific directory for this paper
   const paperDirRelative = path.join(papersExDir, arxivId.replace(/\//g, '_'));
-  if (!(await WorkspaceFileManager.fileExists(paperDirRelative))) {
-    await WorkspaceFileManager.createDirectory(paperDirRelative);
+  if (!(await WorkspaceFS.exists(paperDirRelative))) {
+    await WorkspaceFS.createDir(paperDirRelative);
   }
 
   // Get the full paths for operations that need them
-  const paperDirFull =
-    WorkspaceFileManager.getFullPathFromWorkspace(paperDirRelative);
+  const paperDirFull = WorkspaceFS.fullPath(paperDirRelative);
   const tarFileName = `${arxivId.replace(/\//g, '_')}.tar.gz`;
   const tarFilePath = path.join(paperDirFull, tarFileName);
 
@@ -206,9 +205,7 @@ export async function downloadArxivSource(
   }
 
   // Clean up the tar file
-  await WorkspaceFileManager.deleteFile(
-    path.join(paperDirRelative, tarFileName),
-  );
+  await WorkspaceFS.delete(path.join(paperDirRelative, tarFileName));
 
   // Indent LaTeX files if autoIndent is enabled
   if (autoIndent) {
