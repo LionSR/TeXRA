@@ -8,13 +8,7 @@ import * as vscode from 'vscode';
 import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
-import {
-  deleteFile,
-  moveFile,
-  findFileInBuild,
-  createDirectory,
-  fileExists,
-} from '@utils/files';
+import { WorkspaceFileManager } from '@utils/files';
 
 // Local imports - housekeeping
 import { TEMP_EXTENSIONS } from './constants';
@@ -49,7 +43,11 @@ export async function runPackLatexdiffvc(
   // Find files to process
   for (const pattern of filePatterns) {
     for (const ext of ['.tex', '.pdf']) {
-      const filePath = await findFileInBuild(inputDir, pattern, ext);
+      const filePath = await WorkspaceFileManager.findFileInBuild(
+        inputDir,
+        pattern,
+        ext,
+      );
       if (filePath) {
         logger.debug(CHANNEL, `Found file to process: ${filePath}`);
         filesToProcess.push(filePath);
@@ -60,7 +58,7 @@ export async function runPackLatexdiffvc(
             path.dirname(filePath),
             `${pattern}${tempExt}`,
           );
-          if (await fileExists(tempFile)) {
+          if (await WorkspaceFileManager.fileExists(tempFile)) {
             logger.debug(CHANNEL, `Found temporary file: ${tempFile}`);
             filesToDelete.push(tempFile);
           }
@@ -73,7 +71,7 @@ export async function runPackLatexdiffvc(
     if (clean) {
       // Delete all files if clean mode
       for (const file of [...filesToProcess, ...filesToDelete]) {
-        await deleteFile(file);
+        await WorkspaceFileManager.deleteFile(file);
       }
       logger.info(CHANNEL, 'Cleanup complete.');
       vscode.window.showInformationMessage('LaTeXdiff files cleaned');
@@ -92,16 +90,19 @@ export async function runPackLatexdiffvc(
         // Move main files
         for (const file of filesToProcess) {
           if (!anyFilesPacked) {
-            await createDirectory(outputFolder);
+            await WorkspaceFileManager.createDirectory(outputFolder);
             logger.debug(CHANNEL, `Created output directory: ${outputFolder}`);
             anyFilesPacked = true;
           }
-          await moveFile(file, path.join(outputFolder, path.basename(file)));
+          await WorkspaceFileManager.moveFile(
+            file,
+            path.join(outputFolder, path.basename(file)),
+          );
         }
 
         // Delete temporary files
         for (const file of filesToDelete) {
-          await deleteFile(file);
+          await WorkspaceFileManager.deleteFile(file);
         }
 
         if (anyFilesPacked) {
@@ -179,7 +180,11 @@ export async function runCleanLatexdiffvc(
   for (const pattern of filePatterns) {
     // Find main files (.tex and .pdf)
     for (const ext of ['.tex', '.pdf']) {
-      const filePath = await findFileInBuild(inputDir, pattern, ext);
+      const filePath = await WorkspaceFileManager.findFileInBuild(
+        inputDir,
+        pattern,
+        ext,
+      );
       if (filePath) {
         logger.debug(CHANNEL, `Found main file to delete: ${filePath}`);
         filesToDelete.push(filePath);
@@ -188,7 +193,11 @@ export async function runCleanLatexdiffvc(
 
     // Find all temporary files
     for (const tempExt of TEMP_EXTENSIONS) {
-      const filePath = await findFileInBuild(inputDir, pattern, tempExt);
+      const filePath = await WorkspaceFileManager.findFileInBuild(
+        inputDir,
+        pattern,
+        tempExt,
+      );
       if (filePath) {
         logger.debug(CHANNEL, `Found temporary file to delete: ${filePath}`);
         filesToDelete.push(filePath);
@@ -199,7 +208,7 @@ export async function runCleanLatexdiffvc(
   if (filesToDelete.length > 0) {
     // Delete all found files
     for (const file of filesToDelete) {
-      await deleteFile(file);
+      await WorkspaceFileManager.deleteFile(file);
     }
     logger.info(CHANNEL, 'Cleanup complete.');
     vscode.window.showInformationMessage('LaTeXdiff files cleaned');

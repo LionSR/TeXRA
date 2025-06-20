@@ -5,7 +5,7 @@ import * as path from 'path';
 import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
-import { readFile, fileExists } from '@utils/files';
+import { WorkspaceFileManager } from '@utils/files';
 
 const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);
@@ -62,7 +62,7 @@ export async function extractFigurePathsFromLatex(
     ];
 
     // Read file content
-    const content = await readFile(latexFile);
+    const content = await WorkspaceFileManager.readFile(latexFile);
 
     // Parse graphicspaths
     const paths = parseGraphicspath(content);
@@ -99,7 +99,7 @@ export async function extractFigurePathsFromLatex(
             // Handle subdirectory case by attempting two different path resolutions:
             // 1. Standard way - relative to the main latex directory
             const relPathStandard = path.relative(latexDir, pathToCheck);
-            if (await fileExists(relPathStandard)) {
+            if (await WorkspaceFileManager.fileExists(relPathStandard)) {
               figurePaths.push(relPathStandard);
               break;
             }
@@ -109,7 +109,10 @@ export async function extractFigurePathsFromLatex(
               path.dirname(basePath),
               pathToCheck,
             );
-            if (basePath !== latexDir && (await fileExists(relPathToBase))) {
+            if (
+              basePath !== latexDir &&
+              (await WorkspaceFileManager.fileExists(relPathToBase))
+            ) {
               figurePaths.push(relPathToBase);
               break;
             }
