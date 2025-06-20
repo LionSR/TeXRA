@@ -60,25 +60,7 @@ function handleStateRestoration(state) {
   if (state.auxiliaryFile)
     safeSetElementValue('auxiliaryFile', state.auxiliaryFile);
   if (state.mediaFile) safeSetElementValue('mediaFile', state.mediaFile);
-  if (state.outputNameOverride)
-    safeSetElementValue('outputNameOverride', state.outputNameOverride);
-
-  // Handle output name override visibility
-  const outputNameOverride = safeGetElementById('outputNameOverride');
-  const toggleOutputNameOverrideDiv = safeGetElementById(
-    'toggleOutputNameOverride',
-  );
-  if (state.outputNameOverrideVisible) {
-    if (outputNameOverride) outputNameOverride.style.display = 'inline-block';
-    if (toggleOutputNameOverrideDiv)
-      toggleOutputNameOverrideDiv.innerHTML =
-        '<i class="codicon codicon-chevron-left"></i>';
-  } else {
-    if (outputNameOverride) outputNameOverride.style.display = 'none';
-    if (toggleOutputNameOverrideDiv)
-      toggleOutputNameOverrideDiv.innerHTML =
-        '<i class="codicon codicon-chevron-right"></i>';
-  }
+  // Output filename override removed
 
   // Prepare the state to save with all necessary properties
   const toolConfig = state.toolConfig || {};
@@ -93,8 +75,6 @@ function handleStateRestoration(state) {
     referenceFile: state.referenceFile,
     auxiliaryFile: state.auxiliaryFile,
     mediaFile: state.mediaFile,
-    outputNameOverride: state.outputNameOverride,
-    outputNameOverrideVisible: state.outputNameOverrideVisible,
 
     // Tool config settings - flattened from either direct or toolConfig property
     reflect: state.reflect || (toolConfig ? toolConfig.reflect : false),
