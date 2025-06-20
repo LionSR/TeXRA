@@ -98,16 +98,17 @@ export async function createStorageDirectory(
 }
 
 /**
- * Write binary content to a file in workspace storage
+ * Write content to a file in workspace storage
  */
-export async function writeBinaryFileToStorage(
+export async function writeToStorage(
   context: vscode.ExtensionContext,
   filePath: string,
-  content: Uint8Array,
+  content: string | Uint8Array,
 ): Promise<void> {
   const basePath = getWorkspaceStoragePath(context);
   const fullPath = path.join(basePath, filePath);
-  await vscode.workspace.fs.writeFile(vscode.Uri.file(fullPath), content);
+  const buffer = typeof content === 'string' ? Buffer.from(content, 'utf-8') : content;
+  await vscode.workspace.fs.writeFile(vscode.Uri.file(fullPath), buffer);
 }
 
 /**
