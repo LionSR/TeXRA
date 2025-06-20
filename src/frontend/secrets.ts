@@ -90,3 +90,42 @@ export async function anyApiKeyExists(): Promise<boolean> {
 
   return false;
 }
+
+/**
+ * Check if an API key exists for a given provider
+ * @param provider The API provider to check
+ * @returns true if the API key exists in secrets or environment variables
+ */
+export async function apiKeyExists(provider: ApiProvider): Promise<boolean> {
+  const secretKey = await getSecret(getApiKeySecretName(provider));
+  if (secretKey) {
+    return true;
+  }
+
+  const envKey = `${provider.toUpperCase()}_API_KEY`;
+  return Boolean(process.env[envKey]);
+}
+
+export interface ApiProviderQuickPickItem extends vscode.QuickPickItem {
+  provider: ApiProvider;
+}
+
+/**
+ * Build quick pick items listing API providers with key status
+ * @returns Quick pick items with provider name and key status
+ */
+export async function getApiProviderQuickPickItems(): Promise<
+  ApiProviderQuickPickItem[]
+> {
+  const checks = API_PROVIDERS.map(async (provider) => ({
+    provider,
+    exists: await apiKeyExists(provider),
+  }));
+
+  const results = await Promise.all(checks);
+  return results.map(({ provider, exists }) => ({
+    label: provider,
+    description: exists ? 'key set' : 'not set',
+    provider,
+  }));
+}

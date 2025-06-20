@@ -140,13 +140,6 @@ When reflection is enabled, you may also see:
 
 - Round 1: `paper_polish_r1_sonnet37.tex`
 
-### Custom Output Names
-
-For specific needs, you can override the default naming:
-
-1. Click the ">" toggle next to "Output Filename"
-2. Enter your custom filename (including extension) in the revealed input field.
-
 ## File Management Commands
 
 TeXRA provides several commands for managing generated files, accessible from the main interface or the ProgressBoard:

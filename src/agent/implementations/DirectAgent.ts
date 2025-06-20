@@ -14,8 +14,7 @@ export class DirectAgent extends BaseReflectionAgent {
    * @returns Formatted output file path incorporating model and round information
    */
   protected getOutputFile(currRound: number): string {
-    const baseOutputFile =
-      this.agentConfig.outputNameOverride || this.agentConfig.inputFile;
+    const baseOutputFile = this.agentConfig.inputFile;
     return getOutputFileName(
       baseOutputFile,
       this.agentConfig.agent,
