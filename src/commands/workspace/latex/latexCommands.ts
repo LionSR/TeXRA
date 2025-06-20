@@ -14,7 +14,7 @@ import { runLatexFormatter } from '@latex/texFormatter';
 import { getTeXCount } from '@latex/texcount';
 
 // Local imports - commands
-import { fileSelectionCommands } from '../files/fileSelectionCommands';
+import { fileSelectionCommands } from '@commands/files/fileSelectionCommands';
 
 // Local imports - housekeeping
 import { runIndentTeX } from '@housekeeping';

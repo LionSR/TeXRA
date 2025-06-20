@@ -89,6 +89,7 @@ Ready to enhance your academic research with TeXRA? The next sections will guide
 - [Core Concepts](/guide/built-in-agents.md): Understanding the fundamental components
 - [Advanced Usage](/guide/latex-diff): Leveraging powerful features
 - [Customization](/guide/configuration): Tailoring TeXRA to your needs
+- [Command Organization](/guide/commands-overview): How extension commands are structured
 
 ## Data Privacy & Security
 
