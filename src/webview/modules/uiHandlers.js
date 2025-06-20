@@ -134,7 +134,7 @@ export function setupUIHandlers() {
       });
     }
   });
-  
+
   updateDebugButtonVisibility();
 
   // Get values for single file inputs (input, reference, auxiliary, media)
