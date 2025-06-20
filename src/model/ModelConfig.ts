@@ -2,7 +2,7 @@
  * Configuration types and constants for language model interactions and capabilities.
  */
 
-import { ToolConfig } from '../agent/core/ToolConfig';
+import { ToolConfig } from '@agent/core/ToolConfig';
 
 /**
  * Default configuration values

@@ -19,6 +19,7 @@
       "@model": ["src/model"],
       "@model/*": ["src/model/*"],
       "@progressView/*": ["src/progressView/*"],
+      "@historyView/*": ["src/historyView/*"],
       "@replacement/*": ["src/replacement/*"]
     },
     "moduleResolution": "node",
