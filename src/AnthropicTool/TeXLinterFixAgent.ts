@@ -9,7 +9,7 @@ import { ValidationResult } from './types';
 import { LinterMessage } from '@frontend/latex/linter';
 
 // Local imports - utils
-import * as workspaceFileUtils from '@utils/files';
+import { WorkspaceFileManager } from '@utils/files';
 import * as linterUtils from '@frontend/latex/linter';
 
 // Local imports - Logging

@@ -1,5 +1,5 @@
 // Local imports - utilities
-import { readFile, readFileAbsolute } from '@utils/files';
+import { WorkspaceFileManager, readFileAbsolute } from '@utils/files';
 
 // Local imports - log
 import { AgentLogger } from '@logger/AgentLogger';
@@ -27,7 +27,7 @@ export async function setVarFromFile(
   try {
     const fileContent = absolute
       ? await readFileAbsolute(filePath)
-      : await readFile(filePath);
+      : await WorkspaceFileManager.readFile(filePath);
     userVars[`${varName}_FILE`] = filePath;
     userVars[`${varName}_CONTENT`] = fileContent;
     logger.info(`Found from [${source}] the [VAR '${varName}']: ${filePath}`);

@@ -14,7 +14,7 @@ import { ToolResult } from './base';
 import { BaseError, ValidationResult } from './types';
 
 // Local imports - utils
-import * as workspaceFileUtils from '@utils/files';
+import { WorkspaceFileManager } from '@utils/files';
 import { SecretManager, ApiProvider } from '@frontend/secretManager';
 import { getConfig } from '@utils/config';
 
@@ -82,7 +82,7 @@ export abstract class AnthropicToolAgent<
 
     try {
       // Verify the file exists before starting
-      const fileExists = await workspaceFileUtils.fileExists(filePath);
+      const fileExists = await WorkspaceFileManager.fileExists(filePath);
       if (!fileExists) {
         logger.error(CHANNEL, `File does not exist: ${filePath}`);
         vscode.window.showErrorMessage(`File does not exist: ${filePath}`);
@@ -112,7 +112,7 @@ export abstract class AnthropicToolAgent<
       );
 
       // Read file content for context
-      const content = await workspaceFileUtils.readFile(filePath);
+      const content = await WorkspaceFileManager.readFile(filePath);
 
       // Get the context around the error
       let errorContext = '';
@@ -202,7 +202,7 @@ export abstract class AnthropicToolAgent<
   ): Promise<ToolResult> {
     try {
       // Verify the file exists before starting
-      const fileExists = await workspaceFileUtils.fileExists(filePath);
+      const fileExists = await WorkspaceFileManager.fileExists(filePath);
       if (!fileExists) {
         logger.error(CHANNEL, `File does not exist: ${filePath}`);
         vscode.window.showErrorMessage(`File does not exist: ${filePath}`);
@@ -234,7 +234,7 @@ export abstract class AnthropicToolAgent<
       }
 
       // Read file content for error context
-      let content = await workspaceFileUtils.readFile(filePath);
+      let content = await WorkspaceFileManager.readFile(filePath);
 
       // Get initial error context
       let errorContext = '';
@@ -345,7 +345,7 @@ export abstract class AnthropicToolAgent<
             );
 
             // Read updated content and get new error context
-            content = await workspaceFileUtils.readFile(filePath);
+            content = await WorkspaceFileManager.readFile(filePath);
             if (newValidationResult.error) {
               errorContext = getErrorContext(
                 content,

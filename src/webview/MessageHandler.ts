@@ -12,7 +12,7 @@ import * as logger from '@logger/logUtils';
 import { safeExecuteCommand } from '@utils/system';
 
 // Local imports - utilities
-import { getWorkspacePath, getRelativePath } from '@utils/files';
+import { WorkspaceFileManager } from '@utils/files';
 import {
   createStorageDirectory,
   writeBinaryFileToStorage,
@@ -687,7 +687,7 @@ export class WebviewMessageHandler {
   }
 
   private async getOpenedFiles(): Promise<string[]> {
-    const workspacePath = getWorkspacePath();
+    const workspacePath = WorkspaceFileManager.getWorkspacePath();
     if (!workspacePath) {
       logger.warn(CHANNEL, 'No workspace path found for opened files');
       return [];
@@ -713,7 +713,7 @@ export class WebviewMessageHandler {
   private async selectOutputFiles(
     currentInputFile: string,
   ): Promise<string[] | null> {
-    const workspacePath = getWorkspacePath();
+    const workspacePath = WorkspaceFileManager.getWorkspacePath();
     if (!workspacePath) {
       logger.error(CHANNEL, 'No workspace folder open');
       vscode.window.showErrorMessage('No workspace folder open');
@@ -742,7 +742,9 @@ export class WebviewMessageHandler {
         return null;
       }
 
-      const relativePaths = fileUris.map((uri) => getRelativePath(uri.fsPath));
+      const relativePaths = fileUris.map((uri) =>
+        WorkspaceFileManager.getRelativePath(uri.fsPath),
+      );
       logger.info(
         CHANNEL,
         `Selected output files: ${relativePaths.join(', ')}`,
