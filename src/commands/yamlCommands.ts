@@ -248,7 +248,6 @@ export async function handleParseYaml(
       );
       vscode.window.showErrorMessage('Failed to parse YAML content');
       await showInstructionWithSuppress(
-        context,
         'yamlParseFail',
         'The YAML file contains syntax errors. Please correct them and run the command again.',
         undefined,
