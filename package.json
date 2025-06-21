@@ -923,16 +923,6 @@
         "icon": "$(fix-all)"
       },
       {
-        "command": "texra.testWolframAlpha",
-        "title": "Test Wolfram Alpha API Connection",
-        "category": "TeXRA"
-      },
-      {
-        "command": "texra.wolframAlphaQuery",
-        "title": "Query Wolfram Alpha",
-        "category": "TeXRA"
-      },
-      {
         "command": "texra.testWolframScript",
         "title": "Test Wolfram Script Installation",
         "category": "TeXRA"
