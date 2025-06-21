@@ -67,6 +67,7 @@ Commands in `src/commands/` are organized by domain:
 - `latex/` - LaTeX-specific operations (diff, figures, etc.)
 - `history/` - state restoration and history browser
 - `progress/` - Progress board management
+- `wolfram/` - Wolfram Alpha queries and script utilities
 - `system/` - help, settings, tests, XML/YAML utilities, and editor commands
 
 ### WebView Components
