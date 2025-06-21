@@ -8,7 +8,7 @@ import OpenAI from 'openai';
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 import { ToolState } from '../core/ToolState';
 import { K_SLICE } from '@utils/config';
-import type { ProviderStopReason } from '@types/StopReasonTypes';
+import type { ProviderStopReason } from '../../types/StopReasonTypes';
 
 /**
  * Handler for xAI models using OpenAI-compatible API.
