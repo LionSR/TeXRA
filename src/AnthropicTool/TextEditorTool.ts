@@ -548,5 +548,4 @@ export class TextEditorTool extends BaseAnthropicTool {
 
     return `Here's the result of running \`cat -n\` on ${fileDescriptor}:\n${numberedLines}\n`;
   }
-
 }
