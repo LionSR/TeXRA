@@ -18,7 +18,7 @@ import { ResponseUsageFactory } from '../core/ResponseUsage';
 import { calculateTokenPrice } from '@utils/priceUtils';
 import { ToolState } from '../core/ToolState';
 import { K_SLICE } from '@utils/config';
-import type { ProviderStopReason } from '@types/StopReasonTypes';
+import type { ProviderStopReason } from '../../types/StopReasonTypes';
 
 // import { ResponseCreateParams } from 'openai/src/resources/responses/response';
 // this is incorrect now, but would be nice to use
