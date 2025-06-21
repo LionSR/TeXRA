@@ -59,12 +59,15 @@ The core of TeXRA is its agent architecture located in `src/agent/`:
 
 Commands in `src/commands/` are organized by domain:
 
+- `agent/` - running and managing agents, including merge operations
 - `api/` - API key management
 - `files/` - File selection and management
 - `git/` - Git integration
-- `latex/` - LaTeX-specific operations
-- `history/` - Agent execution history
+- `housekeeping/` - cleanup, packing, and related utilities
+- `latex/` - LaTeX-specific operations (diff, figures, etc.)
+- `history/` - state restoration and history browser
 - `progress/` - Progress board management
+- `system/` - help, settings, tests, XML/YAML utilities, and editor commands
 
 ### WebView Components
 
