@@ -18,6 +18,7 @@ import { formatProviderError } from '@utils/sdkErrorUtils';
 import { WorkspaceFS } from '@utils/files';
 import { cleanFileContent } from '@replacement/replacementUtils';
 import replacementManager from '@replacement/replacementManager';
+import type { ProviderStopReason } from '@types/StopReasonTypes';
 import { extractAndLogScratchpad } from '@utils/text/xmlUtils';
 
 // Local imports - agent components
@@ -352,7 +353,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
   extractResponse(
     responseObject: BetaMessage,
     endTag: string,
-  ): [string, AnthropicUsage, string] {
+  ): [string, AnthropicUsage, ProviderStopReason] {
     // Check for empty response
     if (responseObject.usage.output_tokens === 3) {
       // Anthropic specific empty response check
@@ -829,7 +830,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
 
   /** Determines if generation should continue based on stop reason and end tag presence. */
   shouldContinue(
-    stopReason: string,
+    stopReason: ProviderStopReason,
     newResponse: string,
     agentSetting: AgentSetting,
   ): boolean {
