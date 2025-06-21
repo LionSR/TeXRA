@@ -4,11 +4,11 @@ import Anthropic from '@anthropic-ai/sdk';
 import type { MessageCreateParams } from '@anthropic-ai/sdk/resources/messages';
 
 // Local imports - utils
-import { SecretManager } from '../frontend/secretManager';
-import { getOrPromptForCustomAgentsDirectory } from '../frontend/agents/pathUtils';
-import { promptToAddAgentToConfig } from '../frontend/agents/register';
-import * as logger from '../logger/logUtils';
-import { ANTHROPIC_MODELS } from '../model/providers/anthropicModels';
+import { SecretManager } from '@frontend/secretManager';
+import { getOrPromptForCustomAgentsDirectory } from '@frontend/agents/pathUtils';
+import { promptToAddAgentToConfig } from '@frontend/agents/register';
+import * as logger from '@logger/logUtils';
+import { ANTHROPIC_MODELS } from '@model/providers/anthropicModels';
 
 const CHANNEL = 'AgentCreator';
 logger.initialize(CHANNEL);
