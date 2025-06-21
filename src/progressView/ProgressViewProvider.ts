@@ -11,6 +11,7 @@ import { AgentLogger } from '@logger/AgentLogger';
 import { getConfig } from '@utils/config';
 import { objectToTaskState } from '@utils/config';
 import { WorkspaceFS } from '@utils/files';
+import { StateManager, WorkspaceStateKey } from '@utils/stateManager';
 import {
   shouldExcludeFromProgressView,
   shouldPersistStream,
@@ -60,18 +61,12 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     new Map();
   private readonly _contentProvider: ProgressViewContentProvider;
   private readonly _messageHandler: ProgressViewMessageHandler;
-  private readonly _storageKey = 'texra.logStreams';
-  private readonly _groupsStorageKey = 'texra.logGroups';
-  private readonly _filesStorageKey = 'texra.outputFiles';
-  private readonly _taskStateKey = 'texra.taskStates';
-  private readonly _usageKey = 'texra.usageStats';
   private _disposables: vscode.Disposable[] = [];
   private readonly _extensionUri: vscode.Uri;
   private readonly _viewTitle: string;
   private _viewDisposables: vscode.Disposable[] = [];
   private _streamStatus: Map<string, StreamStatusType> = new Map();
   private _activeStream: string = '';
-  private readonly _activeStreamKey = 'texra.activeLogStream';
   private _taskStates: Map<string, TaskState> = new Map();
   private _usageStats: Map<string, TokenUsageStats> = new Map();
   private _webviewReady = false;
@@ -126,15 +121,15 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     this._pendingUpdate = false;
   }
 
-  private _getWorkspaceKey(key: string = this._storageKey): string {
+  private _getWorkspaceKey(key: WorkspaceStateKey | string): string {
     const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
     return workspaceFolder ? `${key}.${workspaceFolder.uri.fsPath}` : key;
   }
 
   private async _loadState() {
-    const savedState = this.context.workspaceState.get<{
+    const savedState = StateManager.getWorkspaceValue<{
       [key: string]: ColoredLogMessage[];
-    }>(this._getWorkspaceKey());
+    }>(this._getWorkspaceKey(WorkspaceStateKey.LOG_STREAMS));
     if (savedState) {
       // Only load channels that should be persisted
       this._logStreams = new Map(
@@ -164,9 +159,9 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     }
 
     // Load groups
-    const savedGroups = this.context.workspaceState.get<{
+    const savedGroups = StateManager.getWorkspaceValue<{
       [key: string]: { [groupId: string]: LogGroup };
-    }>(this._getWorkspaceKey(this._groupsStorageKey));
+    }>(this._getWorkspaceKey(WorkspaceStateKey.LOG_GROUPS));
     if (savedGroups) {
       this._logGroups = new Map(
         Object.entries(savedGroups)
@@ -198,9 +193,9 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     }
 
     // Load output files and drop any that no longer exist on disk
-    const savedFiles = this.context.workspaceState.get<{
+    const savedFiles = StateManager.getWorkspaceValue<{
       [key: string]: { [key: number]: OutputFileInfo[] };
-    }>(this._getWorkspaceKey(this._filesStorageKey));
+    }>(this._getWorkspaceKey(WorkspaceStateKey.OUTPUT_FILES));
     if (savedFiles) {
       const cleaned: [string, { [key: number]: OutputFileInfo[] }][] = [];
       let totalFilesProcessed = 0;
@@ -275,8 +270,8 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     }
 
     // Load active stream
-    const savedActiveStream = this.context.workspaceState.get<string>(
-      this._activeStreamKey,
+    const savedActiveStream = StateManager.getWorkspaceValue<string>(
+      WorkspaceStateKey.ACTIVE_LOG_STREAM,
     );
     if (savedActiveStream && this._logStreams.has(savedActiveStream)) {
       this._activeStream = savedActiveStream;
@@ -285,9 +280,9 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     }
 
     // Load taskStates
-    const savedTaskStates = this.context.workspaceState.get<
+    const savedTaskStates = StateManager.getWorkspaceValue<
       { [key: string]: Record<string, any> } | [string, Record<string, any>][]
-    >(this._taskStateKey);
+    >(WorkspaceStateKey.TASK_STATES);
     if (savedTaskStates) {
       if (Array.isArray(savedTaskStates)) {
         // Backwards compatibility: convert from array format if encountered
@@ -310,13 +305,13 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     }
 
     // Load usage stats
-    const savedUsage = this.context.workspaceState.get<{
+    const savedUsage = StateManager.getWorkspaceValue<{
       [key: string]: {
         inputTokens: number;
         outputTokens: number;
         cost: number;
       };
-    }>(this._usageKey);
+    }>(WorkspaceStateKey.USAGE_STATS);
     if (savedUsage) {
       this._usageStats = new Map(Object.entries(savedUsage));
     } else {
@@ -333,7 +328,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       ([channel]) => shouldPersistStream(channel),
     );
     const stateObj = Object.fromEntries(persistentStreams);
-    this.context.workspaceState.update(this._getWorkspaceKey(), stateObj);
+    StateManager.updateWorkspaceValue(this._getWorkspaceKey(WorkspaceStateKey.LOG_STREAMS), stateObj);
 
     // Save groups
     const persistentGroups = Array.from(this._logGroups.entries())
@@ -343,30 +338,30 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
         Object.fromEntries(groups.entries()),
       ]);
     const groupsObj = Object.fromEntries(persistentGroups);
-    this.context.workspaceState.update(
-      this._getWorkspaceKey(this._groupsStorageKey),
+    StateManager.updateWorkspaceValue(
+      this._getWorkspaceKey(WorkspaceStateKey.LOG_GROUPS),
       groupsObj,
     );
 
     // Save active stream
-    this.context.workspaceState.update(
-      this._activeStreamKey,
+    StateManager.updateWorkspaceValue(
+      WorkspaceStateKey.ACTIVE_LOG_STREAM,
       this._activeStream,
     );
 
     // Save taskStates
     const taskStatesObj = Object.fromEntries(this._taskStates.entries());
-    this.context.workspaceState.update(this._taskStateKey, taskStatesObj);
+    StateManager.updateWorkspaceValue(WorkspaceStateKey.TASK_STATES, taskStatesObj);
 
     // Save output files
     const filesObj = Object.fromEntries(this._outputFiles.entries());
-    this.context.workspaceState.update(
-      this._getWorkspaceKey(this._filesStorageKey),
+    StateManager.updateWorkspaceValue(
+      this._getWorkspaceKey(WorkspaceStateKey.OUTPUT_FILES),
       filesObj,
     );
 
     const usageObj = Object.fromEntries(this._usageStats.entries());
-    this.context.workspaceState.update(this._usageKey, usageObj);
+    StateManager.updateWorkspaceValue(WorkspaceStateKey.USAGE_STATS, usageObj);
   }
 
   public resolveWebviewView(webviewView: vscode.WebviewView): void {
@@ -937,7 +932,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     // this.logger.debug('Saving taskStates to workspace state');
     const taskStatesObj = Object.fromEntries(this._taskStates.entries());
     // this.logger.debug(`Saving taskStates: ${JSON.stringify(taskStatesObj)}`);
-    this.context.workspaceState.update(this._taskStateKey, taskStatesObj);
+    StateManager.updateWorkspaceValue(WorkspaceStateKey.TASK_STATES, taskStatesObj);
   }
 
   /**
