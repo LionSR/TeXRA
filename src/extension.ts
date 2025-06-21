@@ -23,9 +23,7 @@ export async function activate(context: vscode.ExtensionContext) {
   const progressViewProvider = new ProgressViewProvider(context);
   await progressViewProvider.initialize();
 
-  // IMPORTANT: Register ProgressViewProvider with logger FIRST, before any other operations
-  // This ensures all logs generated during activation go to the ProgressView
-  logger.setProgressViewProvider(progressViewProvider);
+  // ProgressViewProvider now subscribes to logging events internally
 
   // Log activation message to ensure the logger is working correctly
   logger.info('extension', 'TeXRA extension activated');

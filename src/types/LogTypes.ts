@@ -20,3 +20,33 @@ export interface LogGroup {
   /** Optional usage stats attached to the group */
   usage?: TokenUsageStats;
 }
+
+export interface ColoredLogMessage {
+  /** HTML-formatted log message */
+  message: string;
+  /** Severity level of the message */
+  level: 'error' | 'warn' | 'info' | 'debug';
+  /** Unix timestamp (ms) for ordering */
+  timestamp: number;
+  /** Optional group association */
+  groupId?: string;
+  /** Message subtype for styling */
+  messageType?: 'default' | 'scratchpad' | 'thinking';
+}
+
+export interface LogEvent {
+  stream: string;
+  logMessage: ColoredLogMessage;
+}
+
+export interface LogGroupEvent {
+  stream: string;
+  group: LogGroup;
+}
+
+export interface UpdateLogGroupEvent {
+  stream: string;
+  groupId: string;
+  status: LogGroup['status'];
+  endTime?: number;
+}

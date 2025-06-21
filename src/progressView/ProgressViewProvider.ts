@@ -17,7 +17,14 @@ import {
 } from '@utils/loggerUtils';
 
 import { TokenUsageStats } from '../types/UsageTypes';
-import { LogGroup } from '../types/LogTypes';
+import type {
+  LogGroup,
+  ColoredLogMessage,
+  LogEvent,
+  LogGroupEvent,
+  UpdateLogGroupEvent,
+} from '../types/LogTypes';
+import agentEventBus from '@logger/agentEventBus';
 import type { DiffStats } from '../types/DiffTypes';
 
 // @ts-ignore - Import JavaScript module
@@ -33,14 +40,6 @@ type StreamStatusType =
   | typeof STATUS.RUNNING
   | typeof STATUS.ERROR
   | typeof STATUS.STOPPED;
-
-interface ColoredLogMessage {
-  message: string;
-  level: 'error' | 'warn' | 'info' | 'debug';
-  timestamp: number;
-  groupId?: string;
-  messageType?: 'default' | 'scratchpad' | 'thinking';
-}
 
 // Channels that should not be persisted in workspace storage
 
@@ -88,6 +87,38 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     this._messageHandler = new ProgressViewMessageHandler(this);
     // State will be loaded via initialize()
     this.logger = new AgentLogger('ProgressViewProvider');
+
+    agentEventBus.onLog((event: LogEvent) => {
+      const m = event.logMessage;
+      this.addLogMessage(
+        event.stream,
+        m.message,
+        m.level,
+        m.groupId,
+        m.timestamp,
+        m.messageType,
+      );
+    });
+    agentEventBus.onAddGroup((event: LogGroupEvent) => {
+      const g = event.group;
+      this.addLogGroup(
+        event.stream,
+        g.id,
+        g.name,
+        g.startTime,
+        g.status,
+        g.endTime,
+        g.parentGroupId,
+      );
+    });
+    agentEventBus.onUpdateGroup((event: UpdateLogGroupEvent) => {
+      this.updateLogGroup(
+        event.stream,
+        event.groupId,
+        event.status,
+        event.endTime,
+      );
+    });
 
     // Set instance
     ProgressViewProvider._instance = this;
