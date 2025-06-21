@@ -301,7 +301,7 @@ export class TextEditorTool extends BaseAnthropicTool {
       // Create parent directories if they don't exist
       const dirPath = path.dirname(filePath);
       if (dirPath !== '.') {
-        await this.ensureDirectoryExists(dirPath);
+        await WorkspaceFS.ensureDir(dirPath);
       }
 
       // Write file content
@@ -547,23 +547,5 @@ export class TextEditorTool extends BaseAnthropicTool {
       .join('\n');
 
     return `Here's the result of running \`cat -n\` on ${fileDescriptor}:\n${numberedLines}\n`;
-  }
-
-  /**
-   * Ensure a directory exists, creating it if necessary
-   * @param dirPath - Path to the directory
-   * @private
-   */
-  private async ensureDirectoryExists(dirPath: string): Promise<void> {
-    try {
-      const exists = await WorkspaceFS.exists(dirPath);
-      if (!exists) {
-        await WorkspaceFS.createDir(dirPath);
-      }
-    } catch (error) {
-      throw new ToolError(
-        `Error creating directory ${dirPath}: ${String(error)}`,
-      );
-    }
   }
 }

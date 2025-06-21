@@ -7,6 +7,7 @@ import { watchConfig } from '@utils/config';
 import { SecretManager } from '@frontend/secretManager';
 import { copyDefaultAgents, configureLatexSettings } from '@frontend/setup';
 import { disposeDiffRefresh } from '@frontend/ui/diffView';
+import { StorageFS } from '@utils/files';
 
 // Local imports - components
 import { ProgressViewProvider } from './progressView/ProgressViewProvider';
@@ -14,8 +15,9 @@ import { FolderExplorer } from './FolderExplorer';
 import { registerCommands } from './commands';
 
 export async function activate(context: vscode.ExtensionContext) {
-  // Initialize secrets storage
+  // Initialize storage systems
   SecretManager.initialize(context);
+  StorageFS.initialize(context);
 
   // Create the log view provider
   const progressViewProvider = new ProgressViewProvider(context);

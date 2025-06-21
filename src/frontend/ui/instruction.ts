@@ -1,7 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { WorkspaceFS } from '@utils/files';
-import { fileExistsAbsolute } from '@utils/files';
+import { WorkspaceFS, AbsoluteFS } from '@utils/files';
 
 /**
  * Show an instruction message that can be permanently dismissed.
@@ -55,7 +54,7 @@ export async function checkExpectedOutputs(
 
   for (const file of expectedFiles) {
     const exists = path.isAbsolute(file)
-      ? await fileExistsAbsolute(file)
+      ? await AbsoluteFS.exists(file)
       : await WorkspaceFS.exists(file);
     if (!exists) {
       const openBtn = 'Open XML';
@@ -102,7 +101,7 @@ export async function checkExpectedOutputs(
               }
 
               const xmlExists = path.isAbsolute(xmlPath)
-                ? await fileExistsAbsolute(xmlPath)
+                ? await AbsoluteFS.exists(xmlPath)
                 : await WorkspaceFS.exists(xmlPath);
               if (!xmlExists) {
                 vscode.window.showWarningMessage(

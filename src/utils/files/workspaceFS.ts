@@ -1,5 +1,4 @@
 // Standard library imports
-import * as fs from 'fs';
 import * as path from 'path';
 
 // Third-party imports
@@ -7,7 +6,7 @@ import * as vscode from 'vscode';
 
 // Local imports - log
 import * as logger from '@logger/logUtils';
-import { fileExistsAbsolute } from './absoluteFileUtils';
+import { AbsoluteFS } from './absoluteFS';
 
 const CHANNEL = 'workspaceFS';
 logger.initialize(CHANNEL);
@@ -50,13 +49,15 @@ export class WorkspaceFS {
     await vscode.workspace.fs.writeFile(uri, Buffer.from(content, 'utf-8'));
   }
 
-  public static async writeBinaryFile(
+  public static async write(
     filePath: string,
-    content: Uint8Array,
+    content: string | Uint8Array,
   ): Promise<void> {
     const fullPath = this.fullPath(filePath);
     const uri = vscode.Uri.file(fullPath);
-    await vscode.workspace.fs.writeFile(uri, content);
+    const buffer =
+      typeof content === 'string' ? Buffer.from(content, 'utf-8') : content;
+    await vscode.workspace.fs.writeFile(uri, buffer);
   }
 
   public static async appendFile(
@@ -124,7 +125,7 @@ export class WorkspaceFS {
       const destUri = vscode.Uri.file(fullDestPath);
 
       // Check if source exists
-      const sourceExists = await fileExistsAbsolute(fullSourcePath);
+      const sourceExists = await AbsoluteFS.exists(fullSourcePath);
       if (!sourceExists) {
         logger.warn(CHANNEL, `Source file doesn't exist: ${source}`);
         return;
@@ -151,7 +152,7 @@ export class WorkspaceFS {
       const destUri = vscode.Uri.file(fullDestPath);
 
       // Check if source exists
-      const sourceExists = await fileExistsAbsolute(fullSourcePath);
+      const sourceExists = await AbsoluteFS.exists(fullSourcePath);
       if (!sourceExists) {
         logger.warn(CHANNEL, `Source file doesn't exist: ${source}`);
         return;
@@ -193,7 +194,7 @@ export class WorkspaceFS {
         try {
           const dirUri = vscode.Uri.file(searchDir);
 
-          const exists = await fileExistsAbsolute(searchDir);
+          const exists = await AbsoluteFS.exists(searchDir);
           if (!exists) {
             logger.debug(CHANNEL, `Directory doesn't exist: ${searchDir}`);
             continue;
@@ -268,6 +269,24 @@ export class WorkspaceFS {
     }
   }
 
+  /**
+   * Ensure a directory exists, creating it if necessary
+   */
+  public static async ensureDir(relativePath: string): Promise<void> {
+    try {
+      const exists = await this.exists(relativePath);
+      if (!exists) {
+        await this.createDir(relativePath);
+      }
+    } catch (err) {
+      // If error is because directory already exists, ignore it
+      if (err instanceof vscode.FileSystemError && err.code === 'FileExists') {
+        return;
+      }
+      throw err;
+    }
+  }
+
   public static async readDir(
     dirPath: string,
   ): Promise<[string, vscode.FileType][]> {
@@ -286,7 +305,7 @@ export class WorkspaceFS {
 
   public static async exists(filePath: string): Promise<boolean> {
     const fullPath = this.fullPath(filePath);
-    return await fileExistsAbsolute(fullPath);
+    return await AbsoluteFS.exists(fullPath);
   }
 
   public static async existsAndNonTrivial(filePath: string): Promise<boolean> {
@@ -299,7 +318,7 @@ export class WorkspaceFS {
   public static readFileBytesSync(filePath: string): Buffer {
     try {
       const fullPath = this.fullPath(filePath);
-      return fs.readFileSync(fullPath);
+      return AbsoluteFS.readBytesSync(fullPath);
     } catch (err) {
       logger.error(
         CHANNEL,
