@@ -34,9 +34,22 @@ export class StateManager {
 
   public static getWorkspaceValue<T>(
     key: WorkspaceStateKey | string,
+  ): T | undefined;
+  public static getWorkspaceValue<T>(
+    key: WorkspaceStateKey | string,
+    defaultValue: T,
+  ): T;
+  public static getWorkspaceValue<T>(
+    key: WorkspaceStateKey | string,
     defaultValue?: T,
-  ): T {
-    return this.workspace.get<T>(key, defaultValue as T);
+  ): T | undefined {
+    // VS Code's Memento.get has the same overload pattern
+    // When no default is provided, it returns T | undefined
+    // When a default is provided, it returns T
+    if (arguments.length === 1) {
+      return this.workspace.get<T>(key);
+    }
+    return this.workspace.get<T>(key, defaultValue!);
   }
 
   public static updateWorkspaceValue<T>(
@@ -48,9 +61,22 @@ export class StateManager {
 
   public static getGlobalValue<T>(
     key: GlobalStateKey | string,
+  ): T | undefined;
+  public static getGlobalValue<T>(
+    key: GlobalStateKey | string,
+    defaultValue: T,
+  ): T;
+  public static getGlobalValue<T>(
+    key: GlobalStateKey | string,
     defaultValue?: T,
-  ): T {
-    return this.global.get<T>(key, defaultValue as T);
+  ): T | undefined {
+    // VS Code's Memento.get has the same overload pattern
+    // When no default is provided, it returns T | undefined
+    // When a default is provided, it returns T
+    if (arguments.length === 1) {
+      return this.global.get<T>(key);
+    }
+    return this.global.get<T>(key, defaultValue!);
   }
 
   public static updateGlobalValue<T>(
