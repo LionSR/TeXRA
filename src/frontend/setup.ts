@@ -20,7 +20,7 @@ export async function copyDefaultAgents(context: vscode.ExtensionContext) {
   // Get current extension version from package.json
   const currentVersion = vscode.extensions.getExtension(context.extension.id)
     ?.packageJSON.version;
-  const lastKnownVersion = StateManager.getGlobalValue<string>(
+  const lastKnownVersion = StateManager.globalState.get<string>(
     GlobalStateKey.LAST_KNOWN_VERSION,
   );
 
@@ -71,7 +71,7 @@ export async function copyDefaultAgents(context: vscode.ExtensionContext) {
     await copyRecursively(resourcesPath, 'agents');
 
     // Update the stored version after successful copy
-    await StateManager.updateGlobalValue(
+    await StateManager.globalState.update(
       GlobalStateKey.LAST_KNOWN_VERSION,
       currentVersion,
     );

@@ -16,7 +16,7 @@ export async function showInstructionWithSuppress(
   showSuppress = true,
 ): Promise<void> {
   if (showSuppress) {
-    const dismissed = StateManager.getGlobalValue<boolean>(
+    const dismissed = StateManager.globalState.get<boolean>(
       `${INSTRUCTION_PREFIX}${key}`,
     );
     if (dismissed) {
@@ -33,7 +33,7 @@ export async function showInstructionWithSuppress(
   );
 
   if (showSuppress && choice === never) {
-    await StateManager.updateGlobalValue(`${INSTRUCTION_PREFIX}${key}`, true);
+    await StateManager.globalState.update(`${INSTRUCTION_PREFIX}${key}`, true);
   } else if (choice) {
     const action = actions?.find((a) => a.title === choice);
     await action?.callback();
