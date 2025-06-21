@@ -8,8 +8,7 @@ import * as path from 'path';
 import { AgentLogger } from '@logger/AgentLogger';
 
 // Local imports - utilities
-import { WorkspaceFS } from '@utils/files';
-import { fileExistsAbsolute } from '@utils/files/absoluteFileUtils';
+import { WorkspaceFS, AbsoluteFS } from '@utils/files';
 import { getPastedImageDisplayName } from '@utils/files/pastedImageUtils';
 import {
   getBase64EncodedMedia,
@@ -423,7 +422,7 @@ export abstract class ModelHandler {
       // Check if this is an absolute path (for pasted images in storage)
       const isAbsolutePath = path.isAbsolute(mediaFile);
       const fileExistsResult = isAbsolutePath
-        ? await fileExistsAbsolute(mediaFile)
+        ? await AbsoluteFS.exists(mediaFile)
         : await WorkspaceFS.exists(mediaFile);
 
       if (!fileExistsResult) {
