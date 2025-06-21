@@ -1,5 +1,4 @@
 // Standard library imports
-import * as fs from 'fs';
 import * as path from 'path';
 
 // Third-party imports
@@ -13,12 +12,7 @@ import * as logger from '@logger/logUtils';
 
 // Local imports - utils
 import { SecretManager } from '@frontend/secretManager';
-import {
-  createStorageDirectory,
-  storagePathToAbsolute,
-  createStoragePath,
-  cleanupStorageDirectory,
-} from '@utils/files/workspaceStorageUtils';
+import { AbsoluteFS, StorageFS } from '@utils/files';
 import { getSdkErrorMessage } from '@utils/sdkErrorUtils';
 import { checkToolInstalled } from '@utils/system/toolUtils';
 import {
@@ -71,12 +65,11 @@ export async function startRecording(
         };
       }
     }
-    await createStorageDirectory(context, RECORDINGS_DIR);
+    // Initialize StorageFS with context if not already done
+    StorageFS.initialize(context);
+    await StorageFS.ensureDir(RECORDINGS_DIR);
     const relativePath = path.join(RECORDINGS_DIR, `record_${Date.now()}.wav`);
-    const absPath = storagePathToAbsolute(
-      createStoragePath(relativePath),
-      context,
-    );
+    const absPath = StorageFS.fullPath(relativePath);
 
     // Start recording without duration limit
     const soxArgs = [
@@ -162,7 +155,7 @@ export async function stopRecordingAndTranscribe(
     await new Promise((resolve) => setTimeout(resolve, 500));
 
     // Check if the file exists and has content
-    if (!fs.existsSync(recordingPath)) {
+    if (!AbsoluteFS.existsSync(recordingPath)) {
       return {
         success: false,
         text: '',
@@ -170,7 +163,7 @@ export async function stopRecordingAndTranscribe(
       };
     }
 
-    const stats = fs.statSync(recordingPath);
+    const stats = AbsoluteFS.statSync(recordingPath);
     if (stats.size === 0) {
       return {
         success: false,
@@ -183,17 +176,15 @@ export async function stopRecordingAndTranscribe(
     const apiKey = await SecretManager.getApiKey('openai');
     const client = new OpenAI({ apiKey });
     const result = await client.audio.transcriptions.create({
-      file: fs.createReadStream(recordingPath),
+      file: AbsoluteFS.createReadStream(recordingPath),
       model: 'gpt-4o-transcribe',
       response_format: 'json',
     });
 
     // Clean up old recordings
-    await cleanupStorageDirectory(
-      context,
-      RECORDINGS_DIR,
-      3 * 24 * 60 * 60 * 1000,
-    );
+    // Initialize StorageFS with context if not already done
+    StorageFS.initialize(context);
+    await StorageFS.cleanupOldFiles(RECORDINGS_DIR, 3 * 24 * 60 * 60 * 1000);
 
     return { success: true, text: result.text };
   } catch (err) {
