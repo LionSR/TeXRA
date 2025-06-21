@@ -53,7 +53,6 @@ export abstract class BaseAgent implements IAgent {
     const channelId = this.getTaskId();
     this.logger = new AgentLogger(channelId);
     this.modelHandler.setLogger(this.logger);
-    BaseAgent.runningAgents.set(channelId, this);
   }
 
   /** Initialize the API client. */
@@ -92,7 +91,21 @@ export abstract class BaseAgent implements IAgent {
       parentGroupId,
     );
     try {
+      this.logger.debug(
+        `AgentConfig: ${JSON.stringify(this.agentConfig)}`,
+        initGroupId,
+      );
+      this.logger.debug(
+        `AgentSetting: ${JSON.stringify(this.agentSetting)}`,
+        initGroupId,
+      );
+      this.logger.debug(
+        `ModelConfig: ${JSON.stringify(this.modelHandler.config)}`,
+        initGroupId,
+      );
+
       this.userVars = await this.getUserVars();
+      BaseAgent.runningAgents.set(this.getTaskId(), this);
       this.logger.endGroup(initGroupId, 'stopped');
     } catch (error) {
       this.logger.endGroup(initGroupId, 'error');
