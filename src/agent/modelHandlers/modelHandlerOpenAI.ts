@@ -17,7 +17,7 @@ import { AgentConfig } from '../core/AgentConfig';
 import { AgentSetting, hasEndTag } from '../core/AgentDataclass';
 import { AgentStateRound } from '../core/AgentState';
 import { ModelHandler } from './ModelHandler';
-import type { ProviderStopReason } from '@types/StopReasonTypes';
+import type { ProviderStopReason } from '../../types/StopReasonTypes';
 import {
   OpenAIAPIResponseUsage,
   ResponseUsageFactory,
