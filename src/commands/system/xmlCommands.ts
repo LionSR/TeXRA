@@ -6,7 +6,7 @@ import { XMLParser } from 'fast-xml-parser';
 import * as logger from '@logger/logUtils';
 
 // Local imports - core
-import { XMLValidatorAgent } from '../AnthropicTool';
+import { XMLValidatorAgent } from '../../AnthropicTool';
 
 // Local imports - utils
 import { WorkspaceFS } from '@utils/files';
