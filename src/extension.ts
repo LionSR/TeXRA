@@ -8,6 +8,7 @@ import { SecretManager } from '@frontend/secretManager';
 import { copyDefaultAgents, configureLatexSettings } from '@frontend/setup';
 import { disposeDiffRefresh } from '@frontend/ui/diffView';
 import { StorageFS } from '@utils/files';
+import { StateManager } from '@utils/stateManager';
 
 // Local imports - components
 import { ProgressViewProvider } from './progressView/ProgressViewProvider';
@@ -18,6 +19,7 @@ export async function activate(context: vscode.ExtensionContext) {
   // Initialize storage systems
   SecretManager.initialize(context);
   StorageFS.initialize(context);
+  StateManager.initialize(context);
 
   // Create the log view provider
   const progressViewProvider = new ProgressViewProvider(context);

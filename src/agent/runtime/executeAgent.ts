@@ -82,7 +82,6 @@ export async function getAgentPath(
     if (builtInMatches.length === 0) {
       const configureButton = 'Open Settings';
       await showInstructionWithSuppress(
-        context,
         'agentNotFound',
         'Agent configuration is missing. Configure your custom agents directory and ensure the YAML file exists.',
         [
@@ -323,7 +322,6 @@ async function executeAgentWithLogging<T extends IAgent>(
     ) {
       const setKey = 'Set API Key';
       await showInstructionWithSuppress(
-        context,
         'missingApiKey',
         'API key not found. Set your API key in the extension settings and run again.',
         [
@@ -369,7 +367,6 @@ export async function executeAgent(
       if (!(modelName in MODEL_CONFIGS)) {
         const openDocs = 'Model Documentation';
         await showInstructionWithSuppress(
-          context,
           'modelNotRecognized',
           `Model "${modelName}" is not recognized. Review the documentation for supported models.`,
           [
