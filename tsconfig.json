@@ -23,7 +23,8 @@
       "@progressView/*": ["src/progressView/*"],
       "@historyView/*": ["src/historyView/*"],
       "@replacement/*": ["src/replacement/*"],
-      "@tools/*": ["src/tools/*"]
+      "@tools/*": ["src/tools/*"],
+      "@types/*": ["src/types/*"]
     },
     "moduleResolution": "node",
     "strict": true /* enable all strict type-checking options */,
