@@ -18,6 +18,7 @@ import { ResponseUsageFactory } from '../core/ResponseUsage';
 import { calculateTokenPrice } from '@utils/priceUtils';
 import { ToolState } from '../core/ToolState';
 import { K_SLICE } from '@utils/config';
+import type { ProviderStopReason } from '@types/StopReasonTypes';
 
 // import { ResponseCreateParams } from 'openai/src/resources/responses/response';
 // this is incorrect now, but would be nice to use
@@ -225,7 +226,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
   extractResponse(
     responseObject: Response,
     endTag: string,
-  ): [string, ResponseUsage | undefined, string] {
+  ): [string, ResponseUsage | undefined, ProviderStopReason] {
     const usage = responseObject.usage || {
       input_tokens: 0,
       output_tokens: 0,
