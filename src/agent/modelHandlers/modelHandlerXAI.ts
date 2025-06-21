@@ -8,6 +8,7 @@ import OpenAI from 'openai';
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 import { ToolState } from '../core/ToolState';
 import { K_SLICE } from '@utils/config';
+import type { ProviderStopReason } from '@types/StopReasonTypes';
 
 /**
  * Handler for xAI models using OpenAI-compatible API.
@@ -85,7 +86,10 @@ export class ModelHandlerXAI extends ModelHandlerOpenAI {
   }
 
   /** Extracts response text and usage statistics from API response. */
-  extractResponse(responseObject: any, endTag: string): [string, any, string] {
+  extractResponse(
+    responseObject: any,
+    endTag: string,
+  ): [string, any, ProviderStopReason] {
     const [responseText, usage, stopReason] = super.extractResponse(
       responseObject,
       endTag,
