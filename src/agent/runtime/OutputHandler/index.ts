@@ -521,7 +521,12 @@ export class OutputHandler {
     const content = await WorkspaceFS.readFile(processedOutputFile);
     await WorkspaceFS.writeFile(processedOutputFile, content);
 
-    return { source: original || outputFile, path: processedOutputFile };
+    // Use the extracted document name when available. Otherwise use the
+    // generated TeX filename so the progress view displays the .tex file.
+    return {
+      source: original || path.basename(processedOutputFile),
+      path: processedOutputFile,
+    };
   }
 
   /** Processes multiple output files with XML splitting and filtering. */
