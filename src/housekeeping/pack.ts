@@ -2,7 +2,6 @@
 import * as path from 'path';
 
 // Third-party imports
-import * as vscode from 'vscode';
 
 // Local imports - result types
 import type { FileOpResult } from '@/types/ResultTypes';
@@ -14,146 +13,25 @@ import * as logger from '@logger/logUtils';
 import { WorkspaceFS } from '@utils/files';
 
 // Local imports - housekeeping
-import { PACK_EXTENSIONS, TEMP_EXTENSIONS, HISTORY_DIR } from './constants';
-import { getAgentFirstNameChunk, getFilePatterns } from './utils';
+import { HISTORY_DIR } from './constants';
+import { getAgentFirstNameChunk } from './utils';
+import { runOperationSingle } from './fileOps';
 
 const CHANNEL = 'Housekeeping';
 logger.initialize(CHANNEL);
-
 export async function runPackSingle(
   model: string,
   inputFile: string,
   agent: string,
   outputFolder?: string,
 ): Promise<FileOpResult> {
-  logger.info(
-    CHANNEL,
-    `Starting packing with model=${model}, inputFile=${inputFile}, agent=${agent}, outputFolder=${outputFolder}`,
-  );
-
-  if (!inputFile || !model || !agent) {
-    logger.error(
-      CHANNEL,
-      `Missing required parameters: model=${model}, inputFile=${inputFile}, agent=${agent}`,
-    );
-    return { status: 'missingParams' };
-  }
-
-  const baseName = path.parse(inputFile).name;
-  const inputDir = path.dirname(inputFile);
-  logger.debug(
-    CHANNEL,
-    `Parsed paths: baseName=${baseName}, inputDir=${inputDir}`,
-  );
-
-  const agentFirstNameChunk = getAgentFirstNameChunk(agent);
-  const filePatterns = [
-    ...getFilePatterns(baseName, model, agentFirstNameChunk),
-    baseName,
-  ];
-  logger.debug(CHANNEL, `Generated patterns: ${filePatterns}`);
-
-  const movedFiles: string[] = [];
-  const copiedFiles: string[] = [];
-
-  // Find files to move or copy
-  for (const pattern of filePatterns) {
-    for (const ext of PACK_EXTENSIONS) {
-      const filePath = await WorkspaceFS.findFileInBuild(
-        inputDir,
-        pattern,
-        ext,
-      );
-      if (filePath) {
-        if (filePath === inputFile || pattern === baseName) {
-          copiedFiles.push(filePath);
-        } else {
-          movedFiles.push(filePath);
-        }
-      }
-    }
-  }
-
-  const onlyInputFilePacked =
-    movedFiles.length === 0 &&
-    copiedFiles.length === 1 &&
-    copiedFiles[0] === inputFile;
-
-  if (onlyInputFilePacked) {
-    logger.warn(CHANNEL, `No files found to pack for ${inputFile}`);
-    return { status: 'noFiles' };
-  }
-
-  let result: FileOpResult;
-  if (movedFiles.length > 0 || copiedFiles.length > 0) {
-    logger.debug(
-      CHANNEL,
-      'Found files to process:' +
-        (movedFiles.length > 0
-          ? `\nFiles to move:\n${movedFiles.join('\n')}`
-          : '') +
-        (copiedFiles.length > 0
-          ? `\nFiles to copy:\n${copiedFiles.join('\n')}`
-          : ''),
-    );
-
-    const now = new Date().toISOString().replace(/[-:]/g, '').split('.')[0];
-    outputFolder =
-      outputFolder ||
-      path.join(inputDir, HISTORY_DIR, `${now}_${baseName}_${agent}_${model}`);
-    logger.debug(CHANNEL, `Output folder: ${outputFolder}`);
-
-    try {
-      await WorkspaceFS.createDir(outputFolder);
-      logger.debug(CHANNEL, `Created output directory: ${outputFolder}`);
-
-      // Move and copy files
-      const operations: string[] = [];
-      for (const file of movedFiles) {
-        const destination = path.join(outputFolder, path.basename(file));
-        operations.push(`Moving: ${file} -> ${destination}`);
-        await WorkspaceFS.move(file, destination);
-      }
-      for (const file of copiedFiles) {
-        const destination = path.join(outputFolder, path.basename(file));
-        operations.push(`Copying: ${file} -> ${destination}`);
-        await WorkspaceFS.copy(file, destination);
-      }
-      if (operations.length > 0 && !onlyInputFilePacked) {
-        logger.info(CHANNEL, `Files packed into ${outputFolder}`);
-        logger.debug(CHANNEL, `File operations:\n${operations.join('\n')}`);
-      }
-      result = { status: 'success', outputFolder };
-    } catch (err) {
-      logger.error(
-        CHANNEL,
-        `Error during file operations: ${err instanceof Error ? err.message : String(err)}`,
-      );
-      result = {
-        status: 'error',
-        error: err instanceof Error ? err.message : String(err),
-      };
-    }
-  } else {
-    logger.warn(CHANNEL, `No files found to pack for ${inputFile}`);
-    result = { status: 'noFiles' };
-  }
-
-  // Clean up temporary files
-  for (const pattern of filePatterns) {
-    for (const ext of TEMP_EXTENSIONS) {
-      const filePath = await WorkspaceFS.findFileInBuild(
-        inputDir,
-        pattern,
-        ext,
-      );
-      if (filePath && filePath !== inputFile) {
-        await WorkspaceFS.delete(filePath);
-      }
-    }
-  }
-
-  return result;
+  return runOperationSingle({
+    operation: 'pack',
+    model,
+    inputFile,
+    agent,
+    outputFolder,
+  });
 }
 
 export async function runPackMultiple(

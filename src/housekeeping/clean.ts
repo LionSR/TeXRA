@@ -20,86 +20,16 @@ import {
   PACK_EXTENSIONS,
   MODELS,
 } from './constants';
-import { getAgentFirstNameChunk, getFilePatterns } from './utils';
+import { runOperationSingle } from './fileOps';
 
 const CHANNEL = 'Housekeeping';
 logger.initialize(CHANNEL);
-
 export async function runCleanSingle(
   model: string,
   inputFile: string,
   agent: string,
 ): Promise<FileOpResult> {
-  logger.info(
-    CHANNEL,
-    `Starting cleanup with model=${model}, inputFile=${inputFile}, agent=${agent}`,
-  );
-
-  if (!inputFile || !model || !agent) {
-    logger.error(
-      CHANNEL,
-      `Missing required parameters: model=${model}, inputFile=${inputFile}, agent=${agent}`,
-    );
-    return { status: 'missingParams' };
-  }
-
-  const baseName = path.parse(inputFile).name;
-  const inputDir = path.dirname(inputFile);
-  logger.debug(
-    CHANNEL,
-    `Parsed paths: baseName=${baseName}, inputDir=${inputDir}`,
-  );
-
-  const agentFirstNameChunk = getAgentFirstNameChunk(agent);
-  const filePatterns = getFilePatterns(baseName, model, agentFirstNameChunk);
-  logger.debug(CHANNEL, `Generated patterns: ${filePatterns}`);
-
-  const extensions = [...TEMP_EXTENSIONS, ...PACK_EXTENSIONS];
-  logger.debug(CHANNEL, `Using extensions: ${extensions}`);
-
-  const filesToDelete: string[] = [];
-  for (const pattern of filePatterns) {
-    for (const ext of extensions) {
-      const filePath = await WorkspaceFS.findFileInBuild(
-        inputDir,
-        pattern,
-        ext,
-      );
-      if (filePath) {
-        filesToDelete.push(filePath);
-      }
-    }
-  }
-
-  const onlyInputFileFound =
-    filesToDelete.length === 1 && filesToDelete[0] === inputFile;
-
-  let result: FileOpResult;
-
-  if (onlyInputFileFound || filesToDelete.length === 0) {
-    logger.warn(CHANNEL, `No matching files found to clean for ${inputFile}`);
-    result = { status: 'noFiles' };
-  } else {
-    try {
-      logger.debug(CHANNEL, `Files to delete:\n${filesToDelete.join('\n')}`);
-      for (const filePath of filesToDelete) {
-        await WorkspaceFS.delete(filePath);
-      }
-      logger.info(CHANNEL, `Cleanup complete for ${inputFile}`);
-      result = { status: 'success' };
-    } catch (err) {
-      logger.error(
-        CHANNEL,
-        `Error during cleanup of ${inputFile}: ${err instanceof Error ? err.message : String(err)}`,
-      );
-      result = {
-        status: 'error',
-        error: err instanceof Error ? err.message : String(err),
-      };
-    }
-  }
-
-  return result;
+  return runOperationSingle({ operation: 'clean', model, inputFile, agent });
 }
 
 export async function runCleanMultiple(
