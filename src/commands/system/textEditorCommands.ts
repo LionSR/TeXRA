@@ -5,7 +5,7 @@ import * as vscode from 'vscode';
 import * as logger from '@logger/logUtils';
 
 // Local imports - Anthropic Tool
-import { TextEditorTool, ToolCallInput } from '../AnthropicTool';
+import { TextEditorTool, ToolCallInput } from '../../AnthropicTool';
 
 // Local imports - utilities
 import { WorkspaceFS } from '@utils/files';
