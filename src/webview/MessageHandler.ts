@@ -1004,5 +1004,4 @@ export class WebviewMessageHandler {
   private async handleShowAgentHistory() {
     await safeExecuteCommand('texra.showAgentHistory', [], CHANNEL);
   }
-
 }
