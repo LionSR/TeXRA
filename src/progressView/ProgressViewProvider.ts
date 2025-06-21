@@ -7,6 +7,12 @@ import { ProgressViewMessageHandler } from './ProgressViewMessageHandler';
 
 import { TaskState } from '@logger/TaskState';
 import { AgentLogger } from '@logger/AgentLogger';
+import {
+  agentEventBus,
+  LogMessageEvent,
+  AddGroupEvent,
+  UpdateGroupEvent,
+} from '@logger/agentEventBus';
 
 import { getConfig } from '@utils/config';
 import { objectToTaskState } from '@utils/config';
@@ -66,6 +72,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   private readonly _taskStateKey = 'texra.taskStates';
   private readonly _usageKey = 'texra.usageStats';
   private _disposables: vscode.Disposable[] = [];
+  private _busDisposables: Array<() => void> = [];
   private readonly _extensionUri: vscode.Uri;
   private readonly _viewTitle: string;
   private _viewDisposables: vscode.Disposable[] = [];
@@ -108,12 +115,50 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     await this._loadState();
   }
 
+  /** Subscribe to agent event bus for log updates */
+  public subscribeToEvents(): void {
+    const logHandler = (e: LogMessageEvent) =>
+      this.addLogMessage(
+        e.stream,
+        e.message,
+        e.level,
+        e.groupId,
+        e.timestamp,
+        e.messageType,
+      );
+    const addGroupHandler = (e: AddGroupEvent) =>
+      this.addLogGroup(
+        e.stream,
+        e.groupId,
+        e.groupName,
+        e.startTime,
+        e.status,
+        e.endTime,
+        e.parentGroupId,
+      );
+    const updateGroupHandler = (e: UpdateGroupEvent) =>
+      this.updateLogGroup(e.stream, e.groupId, e.status, e.endTime);
+
+    agentEventBus.on('log', logHandler);
+    agentEventBus.on('addGroup', addGroupHandler);
+    agentEventBus.on('updateGroup', updateGroupHandler);
+
+    this._busDisposables.push(() => agentEventBus.off('log', logHandler));
+    this._busDisposables.push(() =>
+      agentEventBus.off('addGroup', addGroupHandler),
+    );
+    this._busDisposables.push(() =>
+      agentEventBus.off('updateGroup', updateGroupHandler),
+    );
+  }
+
   public static getInstance(): ProgressViewProvider | undefined {
     return this._instance;
   }
 
   public dispose() {
     this._disposables.forEach((d) => d.dispose());
+    this._busDisposables.forEach((dispose) => dispose());
     this._cleanupView();
   }
 
