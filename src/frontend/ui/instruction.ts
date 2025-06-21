@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
-import { StateManager, INSTRUCTION_PREFIX } from '@utils/stateManager';
+import { INSTRUCTION_PREFIX, globalSM } from '@utils/stateManager';
 
 /**
  * Show an instruction message that can be permanently dismissed.
@@ -16,7 +16,7 @@ export async function showInstructionWithSuppress(
   showSuppress = true,
 ): Promise<void> {
   if (showSuppress) {
-    const dismissed = StateManager.globalState.get<boolean>(
+    const dismissed = globalSM.get<boolean>(
       `${INSTRUCTION_PREFIX}${key}`,
     );
     if (dismissed) {
@@ -33,7 +33,7 @@ export async function showInstructionWithSuppress(
   );
 
   if (showSuppress && choice === never) {
-    await StateManager.globalState.update(`${INSTRUCTION_PREFIX}${key}`, true);
+    await globalSM.update(`${INSTRUCTION_PREFIX}${key}`, true);
   } else if (choice) {
     const action = actions?.find((a) => a.title === choice);
     await action?.callback();
