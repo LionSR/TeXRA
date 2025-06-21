@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 
 // Local imports - core
 import { AgentHistoryManager } from './AgentHistoryManager';
-import { executeCommand } from '@commands/executeCommand';
+import { executeCommand } from '@commands/agent/executeCommand';
 
 import { agentConfigToTaskState } from '@utils/config';
 import { buildWebviewHtml } from '@frontend/webview/html';
