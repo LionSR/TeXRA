@@ -1,23 +1,24 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
+import { StateManager, INSTRUCTION_PREFIX } from '@utils/stateManager';
 
 /**
  * Show an instruction message that can be permanently dismissed.
  *
- * @param context Extension context for global storage
  * @param key Unique key for the instruction
  * @param message Message to display to the user
  */
 export async function showInstructionWithSuppress(
-  context: vscode.ExtensionContext,
   key: string,
   message: string,
   actions?: { title: string; callback: () => Thenable<void> | void }[],
   showSuppress = true,
 ): Promise<void> {
   if (showSuppress) {
-    const dismissed = context.globalState.get<boolean>(`instruction.${key}`);
+    const dismissed = StateManager.getGlobalValue<boolean>(
+      `${INSTRUCTION_PREFIX}${key}`,
+    );
     if (dismissed) {
       return;
     }
@@ -32,7 +33,7 @@ export async function showInstructionWithSuppress(
   );
 
   if (showSuppress && choice === never) {
-    await context.globalState.update(`instruction.${key}`, true);
+    await StateManager.updateGlobalValue(`${INSTRUCTION_PREFIX}${key}`, true);
   } else if (choice) {
     const action = actions?.find((a) => a.title === choice);
     await action?.callback();
@@ -86,7 +87,6 @@ export async function checkExpectedOutputs(
       }
 
       await showInstructionWithSuppress(
-        context,
         'xmlOutputMismatch',
         `Expected output "${path.basename(
           file,
