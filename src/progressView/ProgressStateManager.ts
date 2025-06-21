@@ -379,10 +379,7 @@ export class ProgressStateManager {
    * Save active stream
    */
   private _saveActiveStream(): void {
-    workspaceSM.update(
-      WorkspaceStateKey.ACTIVE_LOG_STREAM,
-      this._activeStream,
-    );
+    workspaceSM.update(WorkspaceStateKey.ACTIVE_LOG_STREAM, this._activeStream);
   }
 
   /**
@@ -390,10 +387,7 @@ export class ProgressStateManager {
    */
   private _saveTaskStates(): void {
     const taskStatesObj = Object.fromEntries(this._taskStates.entries());
-    workspaceSM.update(
-      WorkspaceStateKey.TASK_STATES,
-      taskStatesObj,
-    );
+    workspaceSM.update(WorkspaceStateKey.TASK_STATES, taskStatesObj);
   }
 
   /**
