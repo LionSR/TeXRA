@@ -52,7 +52,7 @@ export class AgentHistoryManager {
    */
   public static async getHistory(): Promise<AgentHistoryItem[]> {
     const storageKey = this.getWorkspaceStorageKey();
-    return StateManager.getWorkspaceValue<AgentHistoryItem[]>(storageKey, []);
+    return StateManager.workspaceState.get<AgentHistoryItem[]>(storageKey, []);
   }
 
   /**
@@ -60,7 +60,7 @@ export class AgentHistoryManager {
    */
   private static async saveHistory(history: AgentHistoryItem[]): Promise<void> {
     const storageKey = this.getWorkspaceStorageKey();
-    await StateManager.updateWorkspaceValue(storageKey, history);
+    await StateManager.workspaceState.update(storageKey, history);
   }
 
   /**
@@ -78,7 +78,7 @@ export class AgentHistoryManager {
    */
   public static async clearHistory(): Promise<void> {
     const storageKey = this.getWorkspaceStorageKey();
-    await StateManager.updateWorkspaceValue(storageKey, []);
+    await StateManager.workspaceState.update(storageKey, []);
   }
 
   /**

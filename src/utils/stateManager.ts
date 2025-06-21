@@ -20,6 +20,35 @@ export enum GlobalStateKey {
 export const INSTRUCTION_PREFIX = 'instruction.';
 
 /**
+ * State accessor interface for workspace and global state
+ */
+export interface StateAccessor {
+  get<T>(key: string): T | undefined;
+  get<T>(key: string, defaultValue: T): T;
+  update<T>(key: string, value: T): Thenable<void>;
+}
+
+/**
+ * Implementation of StateAccessor that wraps VS Code's Memento
+ */
+class StateAccessorImpl implements StateAccessor {
+  constructor(private memento: vscode.Memento) {}
+
+  get<T>(key: string): T | undefined;
+  get<T>(key: string, defaultValue: T): T;
+  get<T>(key: string, defaultValue?: T): T | undefined {
+    if (arguments.length === 1) {
+      return this.memento.get<T>(key);
+    }
+    return this.memento.get<T>(key, defaultValue!);
+  }
+
+  update<T>(key: string, value: T): Thenable<void> {
+    return this.memento.update(key, value);
+  }
+}
+
+/**
  * Centralized helper for accessing VS Code workspace and global state.
  * Must be initialized with the extension context before use.
  */
@@ -27,11 +56,19 @@ export class StateManager {
   private static workspace: vscode.Memento;
   private static global: vscode.Memento;
 
+  public static workspaceState: StateAccessor;
+  public static globalState: StateAccessor;
+
   public static initialize(context: vscode.ExtensionContext): void {
     this.workspace = context.workspaceState;
     this.global = context.globalState;
+
+    // Create workspace and global state accessors
+    this.workspaceState = new StateAccessorImpl(this.workspace);
+    this.globalState = new StateAccessorImpl(this.global);
   }
 
+  // Keep old methods for backward compatibility during migration
   public static getWorkspaceValue<T>(
     key: WorkspaceStateKey | string,
   ): T | undefined;
@@ -43,9 +80,6 @@ export class StateManager {
     key: WorkspaceStateKey | string,
     defaultValue?: T,
   ): T | undefined {
-    // VS Code's Memento.get has the same overload pattern
-    // When no default is provided, it returns T | undefined
-    // When a default is provided, it returns T
     if (arguments.length === 1) {
       return this.workspace.get<T>(key);
     }
@@ -70,9 +104,6 @@ export class StateManager {
     key: GlobalStateKey | string,
     defaultValue?: T,
   ): T | undefined {
-    // VS Code's Memento.get has the same overload pattern
-    // When no default is provided, it returns T | undefined
-    // When a default is provided, it returns T
     if (arguments.length === 1) {
       return this.global.get<T>(key);
     }

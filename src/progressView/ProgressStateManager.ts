@@ -115,7 +115,7 @@ export class ProgressStateManager {
    * Load log streams from storage
    */
   private async _loadLogStreams(): Promise<void> {
-    const savedState = StateManager.getWorkspaceValue<{
+    const savedState = StateManager.workspaceState.get<{
       [key: string]: ColoredLogMessage[];
     }>(this._getWorkspaceKey(WorkspaceStateKey.LOG_STREAMS));
 
@@ -152,7 +152,7 @@ export class ProgressStateManager {
    * Load log groups from storage
    */
   private async _loadLogGroups(): Promise<void> {
-    const savedGroups = StateManager.getWorkspaceValue<{
+    const savedGroups = StateManager.workspaceState.get<{
       [key: string]: { [groupId: string]: LogGroup };
     }>(this._getWorkspaceKey(WorkspaceStateKey.LOG_GROUPS));
 
@@ -191,7 +191,7 @@ export class ProgressStateManager {
    * Load output files and clean up any that no longer exist
    */
   private async _loadOutputFiles(): Promise<void> {
-    const savedFiles = StateManager.getWorkspaceValue<{
+    const savedFiles = StateManager.workspaceState.get<{
       [key: string]: { [key: number]: OutputFileInfo[] };
     }>(this._getWorkspaceKey(WorkspaceStateKey.OUTPUT_FILES));
 
@@ -273,7 +273,7 @@ export class ProgressStateManager {
    * Load active stream
    */
   private _loadActiveStream(): void {
-    const savedActiveStream = StateManager.getWorkspaceValue<string>(
+    const savedActiveStream = StateManager.workspaceState.get<string>(
       WorkspaceStateKey.ACTIVE_LOG_STREAM,
     );
     if (savedActiveStream && this._logStreams.has(savedActiveStream)) {
@@ -287,7 +287,7 @@ export class ProgressStateManager {
    * Load task states
    */
   private async _loadTaskStates(): Promise<void> {
-    const savedTaskStates = StateManager.getWorkspaceValue<
+    const savedTaskStates = StateManager.workspaceState.get<
       { [key: string]: Record<string, any> } | [string, Record<string, any>][]
     >(WorkspaceStateKey.TASK_STATES);
 
@@ -317,7 +317,7 @@ export class ProgressStateManager {
    * Load usage statistics
    */
   private async _loadUsageStats(): Promise<void> {
-    const savedUsage = StateManager.getWorkspaceValue<{
+    const savedUsage = StateManager.workspaceState.get<{
       [key: string]: {
         inputTokens: number;
         outputTokens: number;
@@ -341,7 +341,7 @@ export class ProgressStateManager {
       ([channel]) => shouldPersistStream(channel),
     );
     const stateObj = Object.fromEntries(persistentStreams);
-    StateManager.updateWorkspaceValue(
+    StateManager.workspaceState.update(
       this._getWorkspaceKey(WorkspaceStateKey.LOG_STREAMS),
       stateObj,
     );
@@ -358,7 +358,7 @@ export class ProgressStateManager {
         Object.fromEntries(groups.entries()),
       ]);
     const groupsObj = Object.fromEntries(persistentGroups);
-    StateManager.updateWorkspaceValue(
+    StateManager.workspaceState.update(
       this._getWorkspaceKey(WorkspaceStateKey.LOG_GROUPS),
       groupsObj,
     );
@@ -369,7 +369,7 @@ export class ProgressStateManager {
    */
   private _saveOutputFiles(): void {
     const filesObj = Object.fromEntries(this._outputFiles.entries());
-    StateManager.updateWorkspaceValue(
+    StateManager.workspaceState.update(
       this._getWorkspaceKey(WorkspaceStateKey.OUTPUT_FILES),
       filesObj,
     );
@@ -379,7 +379,7 @@ export class ProgressStateManager {
    * Save active stream
    */
   private _saveActiveStream(): void {
-    StateManager.updateWorkspaceValue(
+    StateManager.workspaceState.update(
       WorkspaceStateKey.ACTIVE_LOG_STREAM,
       this._activeStream,
     );
@@ -390,7 +390,7 @@ export class ProgressStateManager {
    */
   private _saveTaskStates(): void {
     const taskStatesObj = Object.fromEntries(this._taskStates.entries());
-    StateManager.updateWorkspaceValue(
+    StateManager.workspaceState.update(
       WorkspaceStateKey.TASK_STATES,
       taskStatesObj,
     );
@@ -401,7 +401,7 @@ export class ProgressStateManager {
    */
   private _saveUsageStats(): void {
     const usageObj = Object.fromEntries(this._usageStats.entries());
-    StateManager.updateWorkspaceValue(WorkspaceStateKey.USAGE_STATS, usageObj);
+    StateManager.workspaceState.update(WorkspaceStateKey.USAGE_STATS, usageObj);
   }
 
   /**
