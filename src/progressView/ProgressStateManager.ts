@@ -2,7 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports
-import { StateManager, WorkspaceStateKey } from '@utils/stateManager';
+import { WorkspaceStateKey, workspaceSM } from '@utils/stateManager';
 import { WorkspaceFS } from '@utils/files';
 import { objectToTaskState } from '@utils/config';
 import { shouldPersistStream } from '@utils/loggerUtils';
@@ -115,7 +115,7 @@ export class ProgressStateManager {
    * Load log streams from storage
    */
   private async _loadLogStreams(): Promise<void> {
-    const savedState = StateManager.workspaceState.get<{
+    const savedState = workspaceSM.get<{
       [key: string]: ColoredLogMessage[];
     }>(this._getWorkspaceKey(WorkspaceStateKey.LOG_STREAMS));
 
@@ -152,7 +152,7 @@ export class ProgressStateManager {
    * Load log groups from storage
    */
   private async _loadLogGroups(): Promise<void> {
-    const savedGroups = StateManager.workspaceState.get<{
+    const savedGroups = workspaceSM.get<{
       [key: string]: { [groupId: string]: LogGroup };
     }>(this._getWorkspaceKey(WorkspaceStateKey.LOG_GROUPS));
 
@@ -191,7 +191,7 @@ export class ProgressStateManager {
    * Load output files and clean up any that no longer exist
    */
   private async _loadOutputFiles(): Promise<void> {
-    const savedFiles = StateManager.workspaceState.get<{
+    const savedFiles = workspaceSM.get<{
       [key: string]: { [key: number]: OutputFileInfo[] };
     }>(this._getWorkspaceKey(WorkspaceStateKey.OUTPUT_FILES));
 
@@ -273,7 +273,7 @@ export class ProgressStateManager {
    * Load active stream
    */
   private _loadActiveStream(): void {
-    const savedActiveStream = StateManager.workspaceState.get<string>(
+    const savedActiveStream = workspaceSM.get<string>(
       WorkspaceStateKey.ACTIVE_LOG_STREAM,
     );
     if (savedActiveStream && this._logStreams.has(savedActiveStream)) {
@@ -287,7 +287,7 @@ export class ProgressStateManager {
    * Load task states
    */
   private async _loadTaskStates(): Promise<void> {
-    const savedTaskStates = StateManager.workspaceState.get<
+    const savedTaskStates = workspaceSM.get<
       { [key: string]: Record<string, any> } | [string, Record<string, any>][]
     >(WorkspaceStateKey.TASK_STATES);
 
@@ -317,7 +317,7 @@ export class ProgressStateManager {
    * Load usage statistics
    */
   private async _loadUsageStats(): Promise<void> {
-    const savedUsage = StateManager.workspaceState.get<{
+    const savedUsage = workspaceSM.get<{
       [key: string]: {
         inputTokens: number;
         outputTokens: number;
@@ -341,7 +341,7 @@ export class ProgressStateManager {
       ([channel]) => shouldPersistStream(channel),
     );
     const stateObj = Object.fromEntries(persistentStreams);
-    StateManager.workspaceState.update(
+    workspaceSM.update(
       this._getWorkspaceKey(WorkspaceStateKey.LOG_STREAMS),
       stateObj,
     );
@@ -358,7 +358,7 @@ export class ProgressStateManager {
         Object.fromEntries(groups.entries()),
       ]);
     const groupsObj = Object.fromEntries(persistentGroups);
-    StateManager.workspaceState.update(
+    workspaceSM.update(
       this._getWorkspaceKey(WorkspaceStateKey.LOG_GROUPS),
       groupsObj,
     );
@@ -369,7 +369,7 @@ export class ProgressStateManager {
    */
   private _saveOutputFiles(): void {
     const filesObj = Object.fromEntries(this._outputFiles.entries());
-    StateManager.workspaceState.update(
+    workspaceSM.update(
       this._getWorkspaceKey(WorkspaceStateKey.OUTPUT_FILES),
       filesObj,
     );
@@ -379,7 +379,7 @@ export class ProgressStateManager {
    * Save active stream
    */
   private _saveActiveStream(): void {
-    StateManager.workspaceState.update(
+    workspaceSM.update(
       WorkspaceStateKey.ACTIVE_LOG_STREAM,
       this._activeStream,
     );
@@ -390,7 +390,7 @@ export class ProgressStateManager {
    */
   private _saveTaskStates(): void {
     const taskStatesObj = Object.fromEntries(this._taskStates.entries());
-    StateManager.workspaceState.update(
+    workspaceSM.update(
       WorkspaceStateKey.TASK_STATES,
       taskStatesObj,
     );
@@ -401,7 +401,7 @@ export class ProgressStateManager {
    */
   private _saveUsageStats(): void {
     const usageObj = Object.fromEntries(this._usageStats.entries());
-    StateManager.workspaceState.update(WorkspaceStateKey.USAGE_STATS, usageObj);
+    workspaceSM.update(WorkspaceStateKey.USAGE_STATS, usageObj);
   }
 
   /**
