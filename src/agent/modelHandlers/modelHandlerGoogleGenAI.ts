@@ -37,7 +37,7 @@ import { formatProviderError } from '@utils/sdkErrorUtils';
 import { cleanFileContent } from '@replacement/replacementUtils';
 import replacementManager from '@replacement/replacementManager';
 import { extractAndLogScratchpad } from '@utils/text/xmlUtils';
-import type { ProviderStopReason } from '@types/StopReasonTypes';
+import type { ProviderStopReason } from '../../types/StopReasonTypes';
 import { getConfig } from '@utils/config';
 import { calculateTokenPrice } from '@utils/priceUtils';
 
