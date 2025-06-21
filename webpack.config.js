@@ -47,6 +47,7 @@ const extensionConfig = {
       '@historyView': path.resolve(__dirname, 'src/historyView'),
       '@replacement': path.resolve(__dirname, 'src/replacement'),
       '@tools': path.resolve(__dirname, 'src/tools'),
+      '@types': path.resolve(__dirname, 'src/types'),
     },
     fallback: {
       fs: false,
