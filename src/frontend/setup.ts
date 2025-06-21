@@ -7,7 +7,7 @@ import * as vscode from 'vscode';
 // Local imports
 import * as logger from '@logger/logUtils';
 import { AbsoluteFS, GlobalStorageFS, StorageFS } from '@utils/files';
-import { StateManager, GlobalStateKey } from '@utils/stateManager';
+import { GlobalStateKey, globalSM } from '@utils/stateManager';
 
 /**
  * Copies default agent files from the extension resources to the global storage directory
@@ -20,7 +20,7 @@ export async function copyDefaultAgents(context: vscode.ExtensionContext) {
   // Get current extension version from package.json
   const currentVersion = vscode.extensions.getExtension(context.extension.id)
     ?.packageJSON.version;
-  const lastKnownVersion = StateManager.globalState.get<string>(
+  const lastKnownVersion = globalSM.get<string>(
     GlobalStateKey.LAST_KNOWN_VERSION,
   );
 
@@ -71,7 +71,7 @@ export async function copyDefaultAgents(context: vscode.ExtensionContext) {
     await copyRecursively(resourcesPath, 'agents');
 
     // Update the stored version after successful copy
-    await StateManager.globalState.update(
+    await globalSM.update(
       GlobalStateKey.LAST_KNOWN_VERSION,
       currentVersion,
     );

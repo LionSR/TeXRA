@@ -20,18 +20,9 @@ export enum GlobalStateKey {
 export const INSTRUCTION_PREFIX = 'instruction.';
 
 /**
- * State accessor interface for workspace and global state
+ * State manager class that wraps VS Code's Memento
  */
-export interface StateAccessor {
-  get<T>(key: string): T | undefined;
-  get<T>(key: string, defaultValue: T): T;
-  update<T>(key: string, value: T): Thenable<void>;
-}
-
-/**
- * Implementation of StateAccessor that wraps VS Code's Memento
- */
-class StateAccessorImpl implements StateAccessor {
+class StateManagerImpl {
   constructor(private memento: vscode.Memento) {}
 
   get<T>(key: string): T | undefined;
@@ -48,24 +39,32 @@ class StateAccessorImpl implements StateAccessor {
   }
 }
 
+// Export the state managers that will be initialized
+export let workspaceSM: StateManagerImpl;
+export let globalSM: StateManagerImpl;
+
 /**
- * Centralized helper for accessing VS Code workspace and global state.
- * Must be initialized with the extension context before use.
+ * Initialize the state managers with the extension context
+ */
+export function initializeStateManagers(context: vscode.ExtensionContext): void {
+  workspaceSM = new StateManagerImpl(context.workspaceState);
+  globalSM = new StateManagerImpl(context.globalState);
+}
+
+/**
+ * Legacy StateManager class for backward compatibility
+ * @deprecated Use workspaceSM and globalSM directly
  */
 export class StateManager {
   private static workspace: vscode.Memento;
   private static global: vscode.Memento;
 
-  public static workspaceState: StateAccessor;
-  public static globalState: StateAccessor;
-
   public static initialize(context: vscode.ExtensionContext): void {
     this.workspace = context.workspaceState;
     this.global = context.globalState;
-
-    // Create workspace and global state accessors
-    this.workspaceState = new StateAccessorImpl(this.workspace);
-    this.globalState = new StateAccessorImpl(this.global);
+    
+    // Also initialize the new state managers
+    initializeStateManagers(context);
   }
 
   // Keep old methods for backward compatibility during migration
