@@ -16,9 +16,7 @@ export async function showInstructionWithSuppress(
   showSuppress = true,
 ): Promise<void> {
   if (showSuppress) {
-    const dismissed = globalSM.get<boolean>(
-      `${INSTRUCTION_PREFIX}${key}`,
-    );
+    const dismissed = globalSM.get<boolean>(`${INSTRUCTION_PREFIX}${key}`);
     if (dismissed) {
       return;
     }

@@ -71,10 +71,7 @@ export async function copyDefaultAgents(context: vscode.ExtensionContext) {
     await copyRecursively(resourcesPath, 'agents');
 
     // Update the stored version after successful copy
-    await globalSM.update(
-      GlobalStateKey.LAST_KNOWN_VERSION,
-      currentVersion,
-    );
+    await globalSM.update(GlobalStateKey.LAST_KNOWN_VERSION, currentVersion);
     console.log('Updated stored extension version');
   } catch (err) {
     console.error('Error copying default agents:', err);
