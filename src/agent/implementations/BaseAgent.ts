@@ -1,0 +1,133 @@
+// Standard library imports
+import * as path from 'path';
+
+// Local imports - log
+import { AgentLogger } from '@logger/AgentLogger';
+
+// Local imports - agent components
+import { AgentConfig } from '../core/AgentConfig';
+import { AgentPrompt, AgentSetting } from '../core/AgentDataclass';
+import { IAgent } from '../core/IAgent';
+import { ModelHandler } from '../modelHandlers';
+import { buildUserVars } from '../utils/userVars';
+
+// Local imports - utilities
+import { SHORT_SLEEP_MS } from '@utils/config';
+import { sleep } from '@utils/helpers';
+
+/**
+ * Minimal abstract base class providing shared setup and interruption logic.
+ */
+export abstract class BaseAgent implements IAgent {
+  protected modelHandler: ModelHandler;
+  protected agentConfig: AgentConfig;
+  protected agentSetting: AgentSetting;
+  protected agentPrompt: AgentPrompt;
+  protected agentPath: string;
+  protected logger: AgentLogger;
+  protected runGroupId?: string;
+  protected userVars: Record<string, any> = {};
+  protected client: any;
+  protected isInterrupted = false;
+  protected abortController: AbortController | null = null;
+
+  private static runningAgents: Map<string, BaseAgent> = new Map();
+
+  public get config(): AgentConfig {
+    return this.agentConfig;
+  }
+
+  constructor(
+    modelHandler: ModelHandler,
+    agentConfig: AgentConfig,
+    agentSetting: AgentSetting,
+    agentPrompt: AgentPrompt,
+    agentPath: string,
+  ) {
+    this.modelHandler = modelHandler;
+    this.agentConfig = agentConfig;
+    this.agentSetting = agentSetting;
+    this.agentPrompt = agentPrompt;
+    this.agentPath = agentPath;
+
+    const channelId = this.getTaskId();
+    this.logger = new AgentLogger(channelId);
+    this.modelHandler.setLogger(this.logger);
+    BaseAgent.runningAgents.set(channelId, this);
+  }
+
+  /** Initialize the API client. */
+  protected async initializeClient(): Promise<void> {
+    this.client = await this.modelHandler.getClient();
+    await sleep(SHORT_SLEEP_MS);
+  }
+
+  /** Compute a unique task identifier for logging. */
+  protected getTaskId(): string {
+    const baseName = path.basename(this.agentConfig.inputFile);
+    const agentName =
+      Array.isArray(this.agentConfig.outputFiles) &&
+      this.agentConfig.outputFiles.length > 1
+        ? `${this.agentConfig.agent}_multiple`
+        : this.agentConfig.agent;
+    return `${agentName}@${this.agentConfig.model}: ${baseName}`;
+  }
+
+  /** Gather variables used for prompt rendering. */
+  protected async getUserVars(): Promise<Record<string, any>> {
+    return buildUserVars(
+      this.agentConfig,
+      this.agentSetting,
+      this.agentPath,
+      this.modelHandler,
+      this.logger,
+    );
+  }
+
+  /** Perform asynchronous initialization work. */
+  public async init(parentGroupId?: string): Promise<void> {
+    const initGroupId = await this.logger.startGroup(
+      `Init`,
+      undefined,
+      parentGroupId,
+    );
+    try {
+      this.userVars = await this.getUserVars();
+      this.logger.endGroup(initGroupId, 'stopped');
+    } catch (error) {
+      this.logger.endGroup(initGroupId, 'error');
+      throw error;
+    }
+  }
+
+  /** Interrupt the agent's execution. */
+  public interrupt(): void {
+    this.isInterrupted = true;
+    if (this.abortController) {
+      this.abortController.abort();
+    }
+    this.logger.info(
+      'Agent execution interrupted by user. Active request aborted; partial output may remain.',
+    );
+  }
+
+  /** Check if the agent should stop due to user interruption. */
+  protected checkInterruption(): boolean {
+    if (this.isInterrupted) {
+      this.logger.info('Stopping due to user interruption');
+      return true;
+    }
+    return false;
+  }
+
+  public static getRunningAgent(streamId: string): BaseAgent | undefined {
+    return BaseAgent.runningAgents.get(streamId);
+  }
+
+  protected cleanup(): void {
+    const channelId = this.getTaskId();
+    BaseAgent.runningAgents.delete(channelId);
+  }
+
+  abstract run(): Promise<void>;
+}

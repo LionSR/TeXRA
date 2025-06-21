@@ -2,3 +2,4 @@ export * from './BaseReflectionAgent';
 export * from './DirectAgent';
 export * from './CoTAgent';
 export * from './MergeAgent';
+export * from './BaseAgent';
