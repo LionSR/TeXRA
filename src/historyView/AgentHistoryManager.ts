@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { randomUUID } from 'crypto';
 
 import { AgentConfig } from '@agent/core/AgentConfig';
+import { workspaceSM } from '@utils/stateManager';
 
 /**
  * Represents a historical agent execution
@@ -22,10 +23,7 @@ export class AgentHistoryManager {
   /**
    * Add a new agent execution to history
    */
-  public static async addToHistory(
-    context: vscode.ExtensionContext,
-    config: AgentConfig,
-  ): Promise<string> {
+  public static async addToHistory(config: AgentConfig): Promise<string> {
     const historyItem: AgentHistoryItem = {
       id: randomUUID(),
       timestamp: new Date().toISOString(),
@@ -33,7 +31,7 @@ export class AgentHistoryManager {
     };
 
     // Get current workspace-specific history
-    const history = await this.getHistory(context);
+    const history = await this.getHistory();
 
     // Add new item at beginning (most recent first)
     history.unshift(historyItem);
@@ -44,7 +42,7 @@ export class AgentHistoryManager {
     }
 
     // Save updated history
-    await this.saveHistory(context, history);
+    await this.saveHistory(history);
 
     return historyItem.id;
   }
@@ -52,43 +50,35 @@ export class AgentHistoryManager {
   /**
    * Get all history items for the current workspace
    */
-  public static async getHistory(
-    context: vscode.ExtensionContext,
-  ): Promise<AgentHistoryItem[]> {
+  public static async getHistory(): Promise<AgentHistoryItem[]> {
     const storageKey = this.getWorkspaceStorageKey();
-    return context.workspaceState.get<AgentHistoryItem[]>(storageKey, []);
+    return workspaceSM.get<AgentHistoryItem[]>(storageKey, []);
   }
 
   /**
    * Save history items for the current workspace
    */
-  private static async saveHistory(
-    context: vscode.ExtensionContext,
-    history: AgentHistoryItem[],
-  ): Promise<void> {
+  private static async saveHistory(history: AgentHistoryItem[]): Promise<void> {
     const storageKey = this.getWorkspaceStorageKey();
-    await context.workspaceState.update(storageKey, history);
+    await workspaceSM.update(storageKey, history);
   }
 
   /**
    * Get history item by ID
    */
   public static async getHistoryItemById(
-    context: vscode.ExtensionContext,
     id: string,
   ): Promise<AgentHistoryItem | undefined> {
-    const history = await this.getHistory(context);
+    const history = await this.getHistory();
     return history.find((item) => item.id === id);
   }
 
   /**
    * Clear all history for current workspace
    */
-  public static async clearHistory(
-    context: vscode.ExtensionContext,
-  ): Promise<void> {
+  public static async clearHistory(): Promise<void> {
     const storageKey = this.getWorkspaceStorageKey();
-    await context.workspaceState.update(storageKey, []);
+    await workspaceSM.update(storageKey, []);
   }
 
   /**
@@ -104,11 +94,8 @@ export class AgentHistoryManager {
   /**
    * Delete a history item by ID
    */
-  public static async deleteHistoryItemById(
-    context: vscode.ExtensionContext,
-    id: string,
-  ): Promise<boolean> {
-    const history = await this.getHistory(context);
+  public static async deleteHistoryItemById(id: string): Promise<boolean> {
+    const history = await this.getHistory();
     const initialLength = history.length;
 
     // Filter out the item to delete
@@ -116,7 +103,7 @@ export class AgentHistoryManager {
 
     if (filteredHistory.length !== initialLength) {
       // Item was found and removed
-      await this.saveHistory(context, filteredHistory);
+      await this.saveHistory(filteredHistory);
       return true;
     }
 
