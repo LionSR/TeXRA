@@ -130,11 +130,8 @@ export class StorageFS {
       if (err instanceof vscode.FileSystemError && err.code === 'FileExists') {
         return;
       }
-      // Directory might already exist, which is fine
-      logger.debug(
-        CHANNEL,
-        `Directory already exists or error creating: ${err instanceof Error ? err.message : String(err)}`,
-      );
+      // Re-throw other errors (permission denied, disk full, etc.)
+      throw err;
     }
   }
 
@@ -342,11 +339,8 @@ export class GlobalStorageFS {
       if (err instanceof vscode.FileSystemError && err.code === 'FileExists') {
         return;
       }
-      // Directory might already exist, which is fine
-      logger.debug(
-        CHANNEL,
-        `Directory already exists in global storage or error creating: ${err instanceof Error ? err.message : String(err)}`,
-      );
+      // Re-throw other errors (permission denied, disk full, etc.)
+      throw err;
     }
   }
 
