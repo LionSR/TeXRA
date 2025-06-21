@@ -276,10 +276,8 @@ export abstract class BaseReflectionAgent implements IAgent {
     outputFile: string,
     roundGroupId?: string,
   ): Promise<[AgentStateRound, AgentStateGlobal, ToolState, boolean]> {
-    // Create a response cycle group as a child of the round group if provided
-    const responseCycleGroupId = roundGroupId
-      ? await this.logger.startGroup(`Response Cycle`, undefined, roundGroupId)
-      : undefined;
+    // Use the round group directly for response cycle logging
+    const responseCycleGroupId = roundGroupId;
 
     try {
       let endTurn = false;
@@ -545,15 +543,8 @@ export abstract class BaseReflectionAgent implements IAgent {
         }
       }
 
-      if (responseCycleGroupId) {
-        this.logger.endGroup(responseCycleGroupId, 'stopped');
-      }
-
       return [stateRound, stateGlobal, toolState, endTurn];
     } catch (error) {
-      if (responseCycleGroupId) {
-        this.logger.endGroup(responseCycleGroupId, 'error');
-      }
       throw error;
     }
   }
