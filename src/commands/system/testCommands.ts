@@ -5,7 +5,7 @@ import * as vscode from 'vscode';
 import * as logger from '@logger/logUtils';
 
 // Local imports
-import { handleTestConnection } from './tests/connectionTests';
+import { handleTestConnection } from '../tests/connectionTests';
 
 const CHANNEL = 'TestCommands';
 logger.initialize(CHANNEL);

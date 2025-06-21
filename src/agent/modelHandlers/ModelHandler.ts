@@ -538,7 +538,7 @@ export abstract class ModelHandler {
   ): MarkerFlags {
     return {
       endTurn: ['end_turn', 'stop_sequence', 'stop', 'STOP'].includes(
-        stopReason,
+        stopReason ?? '',
       ),
       encounterDocumentTag: response.includes(`</${setting.documentTag}>`),
     };
