@@ -46,7 +46,9 @@ export let globalSM: StateManagerImpl;
 /**
  * Initialize the state managers with the extension context
  */
-export function initializeStateManagers(context: vscode.ExtensionContext): void {
+export function initializeStateManagers(
+  context: vscode.ExtensionContext,
+): void {
   workspaceSM = new StateManagerImpl(context.workspaceState);
   globalSM = new StateManagerImpl(context.globalState);
 }
@@ -62,7 +64,7 @@ export class StateManager {
   public static initialize(context: vscode.ExtensionContext): void {
     this.workspace = context.workspaceState;
     this.global = context.globalState;
-    
+
     // Also initialize the new state managers
     initializeStateManagers(context);
   }
@@ -92,9 +94,7 @@ export class StateManager {
     return this.workspace.update(key, value);
   }
 
-  public static getGlobalValue<T>(
-    key: GlobalStateKey | string,
-  ): T | undefined;
+  public static getGlobalValue<T>(key: GlobalStateKey | string): T | undefined;
   public static getGlobalValue<T>(
     key: GlobalStateKey | string,
     defaultValue: T,
