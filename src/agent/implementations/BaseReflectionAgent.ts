@@ -45,7 +45,7 @@ import { ToolState } from '@agent/core/ToolState';
 import { ModelHandler } from '@agent/modelHandlers';
 import { OutputHandler, NamedOutputFile } from '@agent/runtime/OutputHandler';
 import { messageToSkeleton } from '@agent/utils/messageUtils';
-import { BaseAgent } from './BaseAgent';
+import { BaseAgent } from '@agent/implementations/BaseAgent';
 
 // System imports - common utilities
 import { getConfig } from '@utils/config';
@@ -1219,19 +1219,6 @@ export abstract class BaseReflectionAgent extends BaseAgent {
         this.outputHandler.outputMappings[currRound] = [];
       }
     }
-  }
-
-  /**
-   * Interrupts the agent's execution
-   */
-  public interrupt(): void {
-    this.isInterrupted = true;
-    if (this.abortController) {
-      this.abortController.abort();
-    }
-    this.logger.info(
-      'Agent execution interrupted by user. Active request aborted; partial output may remain.',
-    );
   }
 
   /** Extracts and logs scratchpad content from output. */
