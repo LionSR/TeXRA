@@ -250,7 +250,6 @@
 .scratchpad-content h1 + h1,
 .scratchpad-content h2 + h2,
 .scratchpad-content h3 + h3,
-.scratchpad-content h4 + h4,
-.scratchpad-content p + p {
+.scratchpad-content h4 + h4 {
   margin-top: 0.3em;
 }
