@@ -101,3 +101,5 @@ API keys are stored securely using VS Code's built-in Secret Storage.
 While TeXRA itself doesn't store your data, be aware of the data usage and privacy policies of the specific AI model providers you choose to use.
 
 Let's begin your journey toward more efficient and effective academic research!
+
+If you spot a bug, feel free to email us at [contact@texra.ai](mailto:contact@texra.ai).
