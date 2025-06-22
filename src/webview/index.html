@@ -471,13 +471,21 @@
           ></textarea>
           <div class="model-selection-footer">
             <div class="select-group">
-              <i class="codicon codicon-sparkle" title="Agent"></i>
+              <i
+                id="agentSettingsButton"
+                class="codicon codicon-sparkle clickable"
+                title="Agent settings"
+              ></i>
               <select id="agent">
                 ${agentOptions}
               </select>
             </div>
             <div class="select-group">
-              <i class="codicon codicon-robot" title="Model"></i>
+              <i
+                id="modelSettingsButton"
+                class="codicon codicon-robot clickable"
+                title="Model settings"
+              ></i>
               <select id="model">
                 ${modelOptions}
               </select>
