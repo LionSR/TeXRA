@@ -19,7 +19,7 @@ import { WorkspaceFS } from '@utils/files';
 import { cleanFileContent } from '@replacement/replacementUtils';
 import replacementManager from '@replacement/replacementManager';
 import type { ProviderStopReason } from '../../types/StopReasonTypes';
-import { extractAndLogScratchpad } from '@utils/text/xmlUtils';
+import { extractScratchpad } from '@utils/text/xmlUtils';
 
 // Local imports - agent components
 import { AgentConfig } from '@agent/core/AgentConfig';
@@ -499,13 +499,11 @@ export class ModelHandlerAnthropic extends ModelHandler {
     let fileContent = await WorkspaceFS.readFile(outputFile);
     fileContent = cleanFileContent(fileContent);
 
-    // Extract and log any existing scratchpad content
-    await extractAndLogScratchpad(
-      fileContent,
-      this.logger,
-      'scratchpad',
-      groupId,
-    );
+    // Extract any existing scratchpad content
+    const scratchpad = await extractScratchpad(fileContent, 'scratchpad');
+    if (scratchpad) {
+      this.logger.info(`Scratchpad content: ${scratchpad}`, groupId);
+    }
 
     await WorkspaceFS.writeFile(outputFile, fileContent);
 
