@@ -42,8 +42,12 @@ const extensionConfig = {
       '@latex': path.resolve(__dirname, 'src/latex'),
       '@commands': path.resolve(__dirname, 'src/commands'),
       '@model': path.resolve(__dirname, 'src/model'),
+      '@housekeeping': path.resolve(__dirname, 'src/housekeeping'),
       '@progressView': path.resolve(__dirname, 'src/progressView'),
+      '@historyView': path.resolve(__dirname, 'src/historyView'),
       '@replacement': path.resolve(__dirname, 'src/replacement'),
+      '@tools': path.resolve(__dirname, 'src/tools'),
+      '@types': path.resolve(__dirname, 'src/types'),
     },
     fallback: {
       fs: false,

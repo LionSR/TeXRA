@@ -1,4 +1,4 @@
-import { vscode } from '@common/vscodeApi.js';
+import { vscode } from '@common/webviewContext.js';
 import { saveState, stateManager } from './stateManager.js';
 import { MULTIPLE_SELECTIONS } from './constants.js';
 import {
@@ -7,6 +7,17 @@ import {
   safeSetElementValue,
 } from '@common/domUtils.js';
 import { capitalize, uncapitalize } from '@common/stringUtils.js';
+
+// Store default output file names for the currently selected agent
+let agentDefaultOutputFiles = [];
+
+export function setAgentDefaultOutputFiles(files) {
+  agentDefaultOutputFiles = Array.isArray(files) ? files : [];
+}
+
+export function getAgentDefaultOutputFiles() {
+  return agentDefaultOutputFiles;
+}
 
 export function updateFileSelect(id, files) {
   const selectDiv = document.getElementById(id);
@@ -201,6 +212,15 @@ export function initializeOutputFiles() {
       state.outputFiles.forEach((file) => {
         addFileToList('outputFiles', file);
       });
+    } else if (
+      getAgentDefaultOutputFiles().length > 0 &&
+      (!state.outputFiles || state.outputFiles.length === 0)
+    ) {
+      // Use agent default output files if provided
+      outputFilesDiv.innerHTML = '';
+      getAgentDefaultOutputFiles().forEach((file) => {
+        addFileToList('outputFiles', file);
+      });
     } else {
       // Clear the list
       outputFilesDiv.innerHTML = '';
@@ -229,25 +249,7 @@ export function initializeOutputFiles() {
     addFileToList('outputFiles', file);
   });
 
-  // Make sure the Output Filename toggle works when Multiple Outputs is enabled
-  const outputNameOverrideInput = safeGetElementById('outputNameOverride');
-  const outputNameOverrideToggle = safeGetElementById(
-    'toggleOutputNameOverride',
-  );
-
-  if (outputNameOverrideInput && outputNameOverrideToggle) {
-    // Get the current state from the stored state
-    const state = stateManager.getState();
-    const isOutputNameOverrideVisible =
-      state && state.outputNameOverrideVisible;
-
-    // Restore the output name override toggle state
-    if (isOutputNameOverrideVisible) {
-      outputNameOverrideInput.style.display = 'inline-block';
-      outputNameOverrideToggle.innerHTML =
-        '<i class="codicon codicon-chevron-left"></i>';
-    }
-  }
+  // Output filename override removed
 
   saveState();
 }
@@ -262,23 +264,6 @@ export function toggleOutputFiles() {
     initializeOutputFiles();
     toggleMultipleFiles('outputFiles', 'toggleOutputFiles');
   }
-}
-
-export function toggleOutputNameOverride() {
-  const input = safeGetElementById('outputNameOverride');
-  const toggleIcon = safeGetElementById('toggleOutputNameOverride');
-  if (!input || !toggleIcon) return;
-
-  const isVisible = input.style.display !== 'none';
-  input.style.display = isVisible ? 'none' : 'inline-block';
-  toggleIcon.innerHTML = isVisible
-    ? '<i class="codicon codicon-chevron-left"></i>'
-    : '<i class="codicon codicon-chevron-right"></i>';
-
-  // Store the visibility state in the vscode state
-  stateManager.update({ outputNameOverrideVisible: !isVisible });
-
-  saveState();
 }
 
 export function toggleMultipleFiles(containerId, toggleId) {
@@ -299,22 +284,7 @@ export function emptyMultipleFiles(containerId, toggleId) {
   const toggleIconDiv = safeGetElementById(toggleId);
   if (toggleIconDiv) toggleIconDiv.textContent = '▼';
 
-  // Reset Output Filename override if we're emptying output files
-  if (containerId === 'outputFiles') {
-    const outputNameOverrideInput = safeGetElementById('outputNameOverride');
-    const outputNameOverrideToggle = safeGetElementById(
-      'toggleOutputNameOverride',
-    );
-
-    if (outputNameOverrideInput && outputNameOverrideToggle) {
-      outputNameOverrideInput.style.display = 'none';
-      outputNameOverrideToggle.innerHTML =
-        '<i class="codicon codicon-chevron-right"></i>';
-
-      // Update the state
-      stateManager.update({ outputNameOverrideVisible: false });
-    }
-  }
+  // Reset Output Filename override removed
 
   saveState();
 }

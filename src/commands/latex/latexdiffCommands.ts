@@ -8,8 +8,7 @@ import * as vscode from 'vscode';
 import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
-import { getWorkspacePath } from '@utils/files';
-import { fileExists } from '@utils/files';
+import { WorkspaceFS } from '@utils/files';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 
 // Local imports - latex utils
@@ -27,10 +26,10 @@ import {
   runPackLatexdiffvcMultiple,
   runCleanLatexdiffvc,
   runCleanLatexdiffvcMultiple,
-} from '../../housekeeping';
+} from '@housekeeping';
 
 // Import agent utilities
-import { getAgentFirstNameChunk } from '../../housekeeping/utils';
+import { getAgentFirstNameChunk } from '@housekeeping/utils';
 
 const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);
@@ -87,25 +86,14 @@ async function handleLatexdiff(
       throw new Error(result.message || 'Failed to generate diff file');
     }
 
-    // Open the diff file and build it
-    const workspacePath = getWorkspacePath();
-    if (!workspacePath) {
-      throw new Error('No workspace path found');
-    }
-
-    // Use the returned diff filename to construct the full path
-    const fullPath = vscode.Uri.file(
-      path.join(workspacePath, path.dirname(fileToUse), result.diffFileName),
-    );
-
     // Verify the file exists using fileExists utility
     const filePathRelative = path.join(
       path.dirname(fileToUse),
       result.diffFileName,
     );
-    if (!(await fileExists(filePathRelative))) {
+    if (!(await WorkspaceFS.exists(filePathRelative))) {
       vscode.window.showErrorMessage(
-        `Diff file could not be found. Expected path: ${fullPath.fsPath}`,
+        `Diff file could not be found. Expected path: ${filePathRelative}`,
       );
       return;
     }
@@ -137,24 +125,14 @@ async function handleLatexdiffvc(
       throw new Error(result.message || 'Failed to generate diff file');
     }
 
-    const workspacePath = getWorkspacePath();
-    if (!workspacePath) {
-      throw new Error('No workspace path found');
-    }
-
-    // Use the returned diff filename to construct the full path
-    const fullPath = vscode.Uri.file(
-      path.join(workspacePath, path.dirname(fileToUse), result.diffFileName),
-    );
-
     // Verify the file exists using fileExists utility
     const filePathRelative = path.join(
       path.dirname(fileToUse),
       result.diffFileName,
     );
-    if (!(await fileExists(filePathRelative))) {
+    if (!(await WorkspaceFS.exists(filePathRelative))) {
       vscode.window.showErrorMessage(
-        `Diff file could not be found. Expected path: ${fullPath.fsPath}`,
+        `Diff file could not be found. Expected path: ${filePathRelative}`,
       );
       return;
     }
@@ -291,7 +269,7 @@ async function handleRunLatexdiff(config: any) {
     logger.debug(CHANNEL, `Using agent name chunk: ${agentNameChunk}`);
 
     // Get workspace path
-    const workspacePath = getWorkspacePath();
+    const workspacePath = WorkspaceFS.getPath();
     if (!workspacePath) {
       throw new Error('No workspace path found');
     }

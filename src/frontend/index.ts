@@ -1,3 +1,4 @@
+export * from './files/fileLister';
 export * from './files/listing';
 export * from './files/dialog';
 export * from './files/vars';
@@ -11,7 +12,8 @@ export * from './webview/html';
 export * from './terminal';
 export * from './agents/pathUtils';
 export * from './agents/register';
-export * from './secrets';
+export * from './secretManager';
 export * from './setup';
 export * from './media/img';
+export * from './media/audio';
 export * from './nonce';

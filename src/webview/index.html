@@ -17,12 +17,11 @@
           "./modules/fileHandlers.js": "${fileHandlersUri}",
           "./modules/uiHandlers.js": "${uiHandlersUri}",
           "./modules/messageHandlers.js": "${messageHandlersUri}",
-          "@common/vscodeApi.js": "${vscodeApiUri}",
+          "@common/webviewContext.js": "${webviewContextUri}",
           "@common/webviewState.js": "${webviewStateUri}",
           "@common/templateUtils.js": "${templateUtilsUri}",
           "@common/domUtils.js": "${domUtilsUri}",
           "@common/stringUtils.js": "${stringUtilsUri}",
-          "@common/messageRouter.js": "${messageRouterUri}",
           "sortablejs": "https://cdn.skypack.dev/sortablejs"
         }
       }
@@ -352,27 +351,7 @@
             >
               <div class="multiple-files-content">
                 <div id="outputFiles" class="multiple-files-list"></div>
-                <div
-                  class="output-filename-override"
-                  style="margin-top: var(--spacing-medium)"
-                >
-                  <div
-                    class="file-select-label-group"
-                    title="Optional: Customize the output filename (including extension)"
-                  >
-                    <span id="toggleOutputNameOverride" class="toggle-icon"
-                      ><i class="codicon codicon-chevron-right"></i
-                    ></span>
-                    <span class="optional-label">Output Filename</span>
-                    <input
-                      type="text"
-                      id="outputNameOverride"
-                      class="vscode-input"
-                      placeholder="(including extension)"
-                      style="display: none"
-                    />
-                  </div>
-                </div>
+                <!-- Output filename override removed -->
               </div>
             </div>
           </div>
@@ -421,23 +400,10 @@
             </div>
             <div class="instruction-header-actions button-group">
               <button
-                id="settingsButton"
-                class="vscode-button"
-                title="Open Extension Settings"
-              >
-                <i class="codicon codicon-gear"></i>
-              </button>
-              <button
-                id="historyButton"
-                class="vscode-button"
-                title="Open Agent Execution History"
-              >
-                <i class="codicon codicon-history"></i>
-              </button>
-              <button
                 id="packButton"
                 class="vscode-button"
                 title="Pack the output for this agent into the History folder"
+                style="display: none"
               >
                 <i class="codicon codicon-archive"></i>
               </button>
@@ -445,6 +411,7 @@
                 id="cleanButton"
                 class="vscode-button"
                 title="Clean the output for this agent"
+                style="display: none"
               >
                 <i class="codicon codicon-trash"></i>
               </button>
@@ -454,6 +421,13 @@
                 title="Polish instruction text with AI"
               >
                 <i class="codicon codicon-sparkle"></i>
+              </button>
+              <button
+                id="recordInstructionButton"
+                class="vscode-button"
+                title="Record instruction with microphone"
+              >
+                <i class="codicon codicon-mic"></i>
               </button>
               <button
                 id="eraseInstructionButton"

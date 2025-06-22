@@ -28,6 +28,7 @@ import {
   checkExpectedOutputs,
   showInstructionWithSuppress,
 } from '@frontend/ui/instruction';
+import { getStreamId } from '@utils/loggerUtils';
 import { IAgent } from '@agent/core/IAgent';
 
 const CHANNEL = 'executeAgent';
@@ -81,7 +82,6 @@ export async function getAgentPath(
     if (builtInMatches.length === 0) {
       const configureButton = 'Open Settings';
       await showInstructionWithSuppress(
-        context,
         'agentNotFound',
         'Agent configuration is missing. Configure your custom agents directory and ensure the YAML file exists.',
         [
@@ -155,7 +155,7 @@ async function executeAgentWithLogging<T extends IAgent>(
 
     // Get the full stream ID
     const config = agent.config;
-    const fullStreamId = `${agentName}@${config.model}: ${path.basename(config.inputFile)}`;
+    const fullStreamId = getStreamId(agentName, config.model, config.inputFile);
 
     // Check if this stream is already running
     const currentStatus = progressViewProvider.getStreamStatus(fullStreamId);
@@ -322,7 +322,6 @@ async function executeAgentWithLogging<T extends IAgent>(
     ) {
       const setKey = 'Set API Key';
       await showInstructionWithSuppress(
-        context,
         'missingApiKey',
         'API key not found. Set your API key in the extension settings and run again.',
         [
@@ -368,7 +367,6 @@ export async function executeAgent(
       if (!(modelName in MODEL_CONFIGS)) {
         const openDocs = 'Model Documentation';
         await showInstructionWithSuppress(
-          context,
           'modelNotRecognized',
           `Model "${modelName}" is not recognized. Review the documentation for supported models.`,
           [

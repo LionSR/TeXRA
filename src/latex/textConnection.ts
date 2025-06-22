@@ -7,7 +7,7 @@ import { formatProviderError } from '@utils/sdkErrorUtils';
 
 // Local imports - log
 import * as logger from '@logger/logUtils';
-import { getApiKey as getSecretApiKey, ApiProvider } from '@frontend/secrets';
+import { SecretManager, ApiProvider } from '@frontend/secretManager';
 
 const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);
@@ -95,7 +95,7 @@ function processMajorityChoice(choices: string[]): ConnectionResult {
 // Use Vercel ai sdk for this for convenience?
 async function getApiKey(provider: 'openai' | 'anthropic'): Promise<string> {
   try {
-    return await getSecretApiKey(provider as ApiProvider);
+    return await SecretManager.getApiKey(provider as ApiProvider);
   } catch (err) {
     throw new Error(
       `Missing API key from ${provider.toUpperCase()}. Please set it using the "Set API Key" command.`,
@@ -118,7 +118,7 @@ export async function bestConnectionMethod(
     const client = new OpenAI({ apiKey });
 
     const completion = await client.chat.completions.create({
-      model: 'gpt-4-turbo',
+      model: 'gpt-4.1', //'gpt-4-turbo',
       temperature: 0,
       n,
       messages: [

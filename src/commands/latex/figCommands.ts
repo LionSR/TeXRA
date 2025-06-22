@@ -8,7 +8,7 @@ import * as vscode from 'vscode';
 import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
-import { getRelativePath, getWorkspacePath } from '@utils/files';
+import { WorkspaceFS } from '@utils/files';
 
 // Local imports - latex utils
 import { extractFigurePathsFromLatex } from '@latex/extractFigure';
@@ -54,7 +54,7 @@ async function handleExtractFigurePaths(): Promise<void> {
       return;
     }
 
-    const filePath = getRelativePath(editor.document.fileName);
+    const filePath = WorkspaceFS.relativePath(editor.document.fileName);
     logger.debug(CHANNEL, `Processing LaTeX file: ${filePath}`);
 
     // Extract figure paths
@@ -102,7 +102,7 @@ async function handleExtractTikzFigures(): Promise<void> {
       return;
     }
 
-    const filePath = getRelativePath(editor.document.fileName);
+    const filePath = WorkspaceFS.relativePath(editor.document.fileName);
     logger.debug(
       CHANNEL,
       `Processing LaTeX file for TikZ figures: ${filePath}`,
@@ -163,7 +163,7 @@ async function handleCompileTikzFigures(): Promise<void> {
       return;
     }
 
-    const filePath = getRelativePath(editor.document.fileName);
+    const filePath = WorkspaceFS.relativePath(editor.document.fileName);
     logger.debug(
       CHANNEL,
       `Processing LaTeX file for TikZ compilation: ${filePath}`,
@@ -202,7 +202,7 @@ async function handleCompileTikzFigures(): Promise<void> {
           if (selected) {
             // Open the selected PDF
             const uri = vscode.Uri.file(
-              path.join(getWorkspacePath() ?? '', selected.file),
+              path.join(WorkspaceFS.getPath() ?? '', selected.file),
             );
             await vscode.commands.executeCommand('vscode.open', uri);
           }
