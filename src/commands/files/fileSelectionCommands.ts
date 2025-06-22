@@ -13,24 +13,29 @@ import { selectFile, selectFiles } from '@frontend/files/dialog';
 const CHANNEL = 'fileSelectionCommands';
 logger.initialize(CHANNEL);
 
-interface PickerOptions {
-  allowMany: boolean;
+interface PickerOptions<Many extends boolean> {
+  allowMany: Many;
   openLabel: string;
   filters: () => { [name: string]: string[] };
 }
 
-function createPicker(options: PickerOptions) {
-  return async (currentFile?: string): Promise<string[] | string | null> => {
+function createPicker<Many extends boolean>(options: PickerOptions<Many>) {
+  return async (
+    currentFile?: string,
+  ): Promise<Many extends true ? string[] | null : string | null> => {
     try {
-      const result = await (options.allowMany ? selectFiles : selectFile)({
+      const baseOpts = {
         currentFile,
-        allowMany: options.allowMany,
         openLabel: options.openLabel,
         filters: options.filters(),
-      });
+      };
+
+      const result = options.allowMany
+        ? await selectFiles({ ...baseOpts, allowMany: true })
+        : await selectFile(baseOpts);
 
       if (!result) {
-        return null;
+        return null as any;
       }
 
       const message = Array.isArray(result)
@@ -38,12 +43,12 @@ function createPicker(options: PickerOptions) {
         : `Selected file: ${result}`;
       showInfoMessage(message);
       logger.info(CHANNEL, message);
-      return result;
+      return result as any;
     } catch (err) {
       const msg = `Error selecting files: ${err instanceof Error ? err.message : String(err)}`;
       logger.error(CHANNEL, msg);
       showErrorMessage(msg);
-      return null;
+      return null as any;
     }
   };
 }
