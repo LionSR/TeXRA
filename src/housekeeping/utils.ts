@@ -1,5 +1,13 @@
+// Standard library imports
+import * as path from 'path';
+
+// Third-party imports
+import { sync as globSync } from 'glob';
+
 // Local imports - log
 import * as logger from '@logger/logUtils';
+// Local imports - utilities
+import { WorkspaceFS } from '@utils/files';
 
 const CHANNEL = 'Housekeeping';
 logger.initialize(CHANNEL);
@@ -37,4 +45,43 @@ export function getFilePatterns(
     );
   }
   return patterns;
+}
+
+export function findFilesFromPatterns(
+  inputDir: string,
+  patterns: string[],
+  extensions: string[],
+): string[] {
+  logger.debug(
+    CHANNEL,
+    `Finding files in ${inputDir} using patterns ${patterns} and extensions ${extensions}`,
+  );
+
+  const workspacePath = WorkspaceFS.getPath();
+  if (!workspacePath) {
+    return [];
+  }
+
+  const searchDirs = [path.join(workspacePath, inputDir)];
+  if (!inputDir.includes('build')) {
+    searchDirs.push(path.join(workspacePath, inputDir, 'build'));
+  }
+
+  const results = new Set<string>();
+  for (const pattern of patterns) {
+    for (const ext of extensions) {
+      for (const dir of searchDirs) {
+        const matches = globSync(path.join(dir, `${pattern}${ext}`), {
+          nodir: true,
+        });
+        if (matches.length > 0) {
+          results.add(WorkspaceFS.relativePath(matches[0]));
+          break;
+        }
+      }
+    }
+  }
+
+  logger.debug(CHANNEL, `Found files: ${[...results].join(', ')}`);
+  return [...results];
 }
