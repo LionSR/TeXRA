@@ -3,45 +3,42 @@
  * Markdown and content formatting for scratchpad entries
  */
 
-/* Base styles for content display (shared between scratchpad and thinking) */
-.special-content,
-.scratchpad-content,
-.thinking-content {
-  --special-color: var(--vscode-panel-border);
-  --label: '';
-  background-color: var(--vscode-editor-background);
-  border-radius: calc(var(--border-radius) * 2);
-  padding: var(--spacing-medium) var(--spacing-large);
+/* Special block container */
+.special-details {
   margin: var(--spacing-small) 0;
-  overflow: auto;
+  border-radius: var(--border-radius-large);
+  background-color: var(--vscode-editor-background);
+  border: var(--border-thin) solid var(--vscode-panel-border);
+}
+
+.special-details summary {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-small);
+  padding: var(--spacing-small) var(--spacing-medium);
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+  border-radius: var(--border-radius-large);
+}
+
+.special-details summary::-webkit-details-marker {
+  display: none;
+}
+
+.special-details .special-content {
+  padding: var(--spacing-medium) var(--spacing-large);
+  border-top: var(--border-thin) solid var(--vscode-panel-border);
   max-height: var(--height-xxlarge);
-  position: relative;
-  border-left: var(--border-xlarge) solid var(--special-color);
+  overflow: auto;
 }
 
-.special-content::before {
-  content: var(--label);
-  position: absolute;
-  top: 0;
-  right: var(--spacing-small);
-  background-color: var(--special-color);
-  color: white;
-  padding: var(--spacing-tiny) var(--spacing-small);
-  border-radius: 0 0 var(--border-radius) var(--border-radius);
-  font-size: var(--font-size-sm);
-  font-weight: 500;
+.special-details summary.scratchpad-content .codicon {
+  color: var(--vscode-activityBarBadge-background, #007acc);
 }
 
-/* Scratchpad content */
-.scratchpad-content {
-  --special-color: var(--vscode-activityBarBadge-background, #007acc);
-  --label: 'Scratchpad';
-}
-
-/* Thinking content */
-.thinking-content {
-  --special-color: var(--vscode-symbolIcon-snippetForeground, #8250df);
-  --label: 'Model Thinking';
+.special-details summary.thinking-content .codicon {
+  color: var(--vscode-symbolIcon-snippetForeground, #8250df);
 }
 
 /* Style markdown elements in scratchpad */
@@ -253,7 +250,6 @@
 .scratchpad-content h1 + h1,
 .scratchpad-content h2 + h2,
 .scratchpad-content h3 + h3,
-.scratchpad-content h4 + h4,
-.scratchpad-content p + p {
+.scratchpad-content h4 + h4 {
   margin-top: 0.3em;
 }
