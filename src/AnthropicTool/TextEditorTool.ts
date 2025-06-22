@@ -13,7 +13,7 @@ import {
 } from './types';
 
 // Local imports - utilities
-import { WorkspaceFS } from '@utils/files';
+import { WorkspaceFS, AbsoluteFS } from '@utils/files';
 
 // Local imports - Log
 import * as logger from '@logger/logUtils';
@@ -177,9 +177,7 @@ export class TextEditorTool extends BaseAnthropicTool {
     // Check if the path is a directory (only view command can be used on directories)
     try {
       if (exists) {
-        const stats = await vscode.workspace.fs.stat(
-          vscode.Uri.file(WorkspaceFS.fullPath(filePath)),
-        );
+        const stats = await AbsoluteFS.stat(WorkspaceFS.fullPath(filePath));
 
         if (stats.type === vscode.FileType.Directory && command !== 'view') {
           throw new ToolError(
@@ -207,9 +205,7 @@ export class TextEditorTool extends BaseAnthropicTool {
   ): Promise<ToolResult> {
     try {
       // Check if the path is a directory
-      const stats = await vscode.workspace.fs.stat(
-        vscode.Uri.file(WorkspaceFS.fullPath(filePath)),
-      );
+      const stats = await AbsoluteFS.stat(WorkspaceFS.fullPath(filePath));
 
       if (stats.type === vscode.FileType.Directory) {
         if (viewRange) {

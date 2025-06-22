@@ -9,6 +9,7 @@ import { getOrPromptForCustomAgentsDirectory } from '@frontend/agents/pathUtils'
 import { promptToAddAgentToConfig } from '@frontend/agents/register';
 import * as logger from '@logger/logUtils';
 import { ANTHROPIC_MODELS } from '@model/providers/anthropicModels';
+import { AbsoluteFS } from '@utils/files';
 
 const CHANNEL = 'AgentCreator';
 logger.initialize(CHANNEL);
@@ -260,10 +261,7 @@ async function handleCreateAgentWithAI(context: vscode.ExtensionContext) {
       yamlContent = template.replace('[DESCRIPTION]', description);
     }
 
-    await vscode.workspace.fs.writeFile(
-      filePath,
-      Buffer.from(yamlContent, 'utf-8'),
-    );
+    await AbsoluteFS.write(filePath.fsPath, yamlContent);
     vscode.window.showInformationMessage(`Created agent at ${filePath.fsPath}`);
     await promptToAddAgentToConfig(agentName);
     const doc = await vscode.workspace.openTextDocument(filePath);
