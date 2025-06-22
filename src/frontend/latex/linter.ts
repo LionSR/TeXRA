@@ -3,7 +3,7 @@ import * as vscode from 'vscode';
 
 // Local imports - log
 import * as logger from '@logger/logUtils';
-import { getFullPathFromWorkspace } from '@utils/files';
+import { WorkspaceFS } from '@utils/files';
 import { sleep } from '@utils/helpers';
 
 const CHANNEL = 'LinterUtils';
@@ -30,7 +30,7 @@ export async function triggerLaTeXBuild(filePath: string): Promise<void> {
     }
 
     // Get the full path and create URI for the specific file
-    const fullPath = getFullPathFromWorkspace(filePath);
+    const fullPath = WorkspaceFS.fullPath(filePath);
     const fileUri = vscode.Uri.file(fullPath);
 
     // First, make sure the file is open in an editor
@@ -101,7 +101,7 @@ export async function triggerLaTeXBuild(filePath: string): Promise<void> {
 export function getDiagnostics(filePath: string): vscode.Diagnostic[] {
   try {
     // Convert relative path to absolute path
-    const fullPath = getFullPathFromWorkspace(filePath);
+    const fullPath = WorkspaceFS.fullPath(filePath);
 
     // Convert to Uri to match diagnostics format
     const fileUri = vscode.Uri.file(fullPath);

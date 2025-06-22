@@ -1,8 +1,8 @@
-import { vscode } from '@common/vscodeApi.js';
-import { registerMessageHandlers } from '@common/messageRouter.js';
+import { vscode, registerMessageHandlers } from '@common/webviewContext.js';
 import { safeSetElementValue, safeGetElementById } from '@common/domUtils.js';
 import { capitalize, uncapitalize } from '@common/stringUtils.js';
 import { stateManager, restoreState, saveState } from './stateManager.js';
+import { setDebugMode as applyDebugMode } from './uiHandlers.js';
 
 import {
   updateFileSelect,
@@ -11,6 +11,7 @@ import {
   getSelectedFiles,
   handleRecentCommits,
   handleSetCurrentFile,
+  setAgentDefaultOutputFiles,
 } from './fileHandlers.js';
 
 import { FILE_TYPES } from './constants.js';
@@ -21,6 +22,7 @@ import { FILE_TYPES } from './constants.js';
 export function initializeDataRequests() {
   const dataRequests = [
     'getTheme',
+    'getDebugMode',
     'requestInputFile',
     'requestReferenceFile',
     'requestAuxiliaryFile',
@@ -60,25 +62,7 @@ function handleStateRestoration(state) {
   if (state.auxiliaryFile)
     safeSetElementValue('auxiliaryFile', state.auxiliaryFile);
   if (state.mediaFile) safeSetElementValue('mediaFile', state.mediaFile);
-  if (state.outputNameOverride)
-    safeSetElementValue('outputNameOverride', state.outputNameOverride);
-
-  // Handle output name override visibility
-  const outputNameOverride = safeGetElementById('outputNameOverride');
-  const toggleOutputNameOverrideDiv = safeGetElementById(
-    'toggleOutputNameOverride',
-  );
-  if (state.outputNameOverrideVisible) {
-    if (outputNameOverride) outputNameOverride.style.display = 'inline-block';
-    if (toggleOutputNameOverrideDiv)
-      toggleOutputNameOverrideDiv.innerHTML =
-        '<i class="codicon codicon-chevron-left"></i>';
-  } else {
-    if (outputNameOverride) outputNameOverride.style.display = 'none';
-    if (toggleOutputNameOverrideDiv)
-      toggleOutputNameOverrideDiv.innerHTML =
-        '<i class="codicon codicon-chevron-right"></i>';
-  }
+  // Output filename override removed
 
   // Prepare the state to save with all necessary properties
   const toolConfig = state.toolConfig || {};
@@ -93,8 +77,6 @@ function handleStateRestoration(state) {
     referenceFile: state.referenceFile,
     auxiliaryFile: state.auxiliaryFile,
     mediaFile: state.mediaFile,
-    outputNameOverride: state.outputNameOverride,
-    outputNameOverrideVisible: state.outputNameOverrideVisible,
 
     // Tool config settings - flattened from either direct or toolConfig property
     reflect: state.reflect || (toolConfig ? toolConfig.reflect : false),
@@ -235,6 +217,10 @@ export function setupMessageHandlers() {
       document.body.className = m.theme;
       postHandle();
     },
+    setDebugMode: (m) => {
+      applyDebugMode(m.debugMode);
+      postHandle();
+    },
     modelSelected: (m) => {
       safeSetElementValue('model', m.model);
       postHandle();
@@ -259,6 +245,51 @@ export function setupMessageHandlers() {
           text: 'Instruction text has been polished!',
         });
         saveState();
+      }
+      postHandle();
+    },
+    instructionTextTranscribed: (m) => {
+      const instruction = safeGetElementById('instruction');
+      if (instruction && m.text) {
+        // Insert text at cursor position instead of replacing all text
+        const startPos = instruction.selectionStart;
+        const endPos = instruction.selectionEnd;
+        const textBefore = instruction.value.substring(0, startPos);
+        const textAfter = instruction.value.substring(endPos);
+
+        // Insert the transcribed text at cursor position
+        instruction.value = textBefore + m.text + textAfter;
+
+        // Set cursor position after the inserted text
+        const newCursorPos = startPos + m.text.length;
+        instruction.setSelectionRange(newCursorPos, newCursorPos);
+
+        // Focus the instruction field
+        instruction.focus();
+
+        vscode.postMessage({
+          command: 'showInformationMessage',
+          text: 'Instruction text transcribed!',
+        });
+        saveState();
+      }
+      // Reset recording UI state
+      if (window.updateRecordingUI) {
+        window.updateRecordingUI(false);
+      }
+      postHandle();
+    },
+    recordingStarted: () => {
+      // Recording has started successfully
+      if (window.updateRecordingUI) {
+        window.updateRecordingUI(true);
+      }
+      postHandle();
+    },
+    recordingError: (m) => {
+      // Reset UI on error
+      if (window.updateRecordingUI) {
+        window.updateRecordingUI(false);
       }
       postHandle();
     },
@@ -300,6 +331,10 @@ export function setupMessageHandlers() {
     },
     editedFileSelected: (m) => {
       safeSetElementValue('editedFile', m.filePath);
+      postHandle();
+    },
+    setDefaultOutputFiles: (m) => {
+      setAgentDefaultOutputFiles(m.files || []);
       postHandle();
     },
     setInputFiles: (m) => {

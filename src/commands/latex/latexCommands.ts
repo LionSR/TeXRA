@@ -5,7 +5,7 @@ import * as vscode from 'vscode';
 import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
-import { getRelativePath } from '@utils/files';
+import { WorkspaceFS } from '@utils/files';
 import { sleep } from '@utils/helpers';
 import replacementManager from '@replacement/replacementManager';
 
@@ -17,7 +17,7 @@ import { getTeXCount } from '@latex/texcount';
 import { fileSelectionCommands } from '../files/fileSelectionCommands';
 
 // Local imports - housekeeping
-import { runIndentTeX } from '../../housekeeping';
+import { runIndentTeX } from '@housekeeping';
 
 const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);
@@ -135,7 +135,7 @@ async function handleGetTeXCount(): Promise<void> {
       return;
     }
 
-    const filePath = getRelativePath(editor.document.fileName);
+    const filePath = WorkspaceFS.relativePath(editor.document.fileName);
     logger.debug(CHANNEL, `Getting tex count for: ${filePath}`);
 
     // Ask if user wants to merge included files

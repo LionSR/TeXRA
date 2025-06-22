@@ -105,9 +105,10 @@ export class ProgressViewMessageHandler {
     if (generated) {
       Object.values(generated).forEach((infos) =>
         infos.forEach((info) => {
-          // Use original name if available, otherwise use the generated path
-          const fileToAdd = info.original || info.path;
-          allFiles.add(fileToAdd);
+          allFiles.add(info.path);
+          if (info.original) {
+            allFiles.add(info.original);
+          }
         }),
       );
     }
@@ -118,7 +119,6 @@ export class ProgressViewMessageHandler {
       agent: taskState.agent,
       model: taskState.model,
       inputFile: taskState.inputFile,
-      outputNameOverride: taskState.outputNameOverride,
       outputFiles: outputFilesArray,
       activeFiles: {
         output: outputFilesArray.length > 0,
@@ -186,7 +186,6 @@ export class ProgressViewMessageHandler {
       agent: taskState.agent,
       model: taskState.model,
       inputFile: taskState.inputFile,
-      outputNameOverride: taskState.outputNameOverride,
       outputFiles: taskState.outputFiles,
       outputFilesActive: taskState.activeFiles.output,
     });

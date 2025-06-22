@@ -15,9 +15,10 @@ import type { BetaMessage } from '@anthropic-ai/sdk/resources/beta/messages';
 import { formatProviderError } from '@utils/sdkErrorUtils';
 
 // Local imports - utilities
-import { readFile, writeFile, fileExistsAndNonTrivial } from '@utils/files';
+import { WorkspaceFS } from '@utils/files';
 import { cleanFileContent } from '@replacement/replacementUtils';
 import replacementManager from '@replacement/replacementManager';
+import type { ProviderStopReason } from '../../types/StopReasonTypes';
 import { extractAndLogScratchpad } from '@utils/text/xmlUtils';
 
 // Local imports - agent components
@@ -352,7 +353,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
   extractResponse(
     responseObject: BetaMessage,
     endTag: string,
-  ): [string, AnthropicUsage, string] {
+  ): [string, AnthropicUsage, ProviderStopReason] {
     // Check for empty response
     if (responseObject.usage.output_tokens === 3) {
       // Anthropic specific empty response check
@@ -452,7 +453,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
   ): Promise<[boolean, MessageParam[]]> {
     let endTurn = false;
 
-    if (!(await fileExistsAndNonTrivial(outputFile))) {
+    if (!(await WorkspaceFS.existsAndNonTrivial(outputFile))) {
       if (
         agentConfig.toolConfig.usePrefillFromInput &&
         toolState.firstKCharsFromInput
@@ -467,9 +468,9 @@ export class ModelHandlerAnthropic extends ModelHandler {
           toolState.accumulatedOutput.includes('<scratchpad>') &&
           prefill === '<scratchpad>' // this is not so neat
         ) {
-          await writeFile(outputFile, prefill);
+          await WorkspaceFS.writeFile(outputFile, prefill);
         } else if (agentSetting.outputExt === 'xml') {
-          await writeFile(outputFile, prefill + '\n');
+          await WorkspaceFS.writeFile(outputFile, prefill + '\n');
         }
         messages.push({
           role: 'assistant',
@@ -495,7 +496,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
     }
 
     // Get prefill from existing and non-trivial file
-    let fileContent = await readFile(outputFile);
+    let fileContent = await WorkspaceFS.readFile(outputFile);
     fileContent = cleanFileContent(fileContent);
 
     // Extract and log any existing scratchpad content
@@ -506,7 +507,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
       groupId,
     );
 
-    await writeFile(outputFile, fileContent);
+    await WorkspaceFS.writeFile(outputFile, fileContent);
 
     // Update the toolState with the actual file content
     toolState.updateAccumulatedOutput(fileContent);
@@ -829,7 +830,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
 
   /** Determines if generation should continue based on stop reason and end tag presence. */
   shouldContinue(
-    stopReason: string,
+    stopReason: ProviderStopReason,
     newResponse: string,
     agentSetting: AgentSetting,
   ): boolean {

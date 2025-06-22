@@ -1,5 +1,4 @@
 // Standard library imports
-import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 
@@ -11,12 +10,7 @@ import { fromPath } from 'pdf2pic';
 import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
-import {
-  readFileBytesSync,
-  fileExists,
-  getFullPathFromWorkspace,
-} from '@utils/files';
-import { fileExistsAbsolute } from '@utils/files/absoluteFileUtils';
+import { WorkspaceFS, AbsoluteFS } from '@utils/files';
 import { checkMultipleToolsInstalled } from '@utils/system';
 
 const CHANNEL = 'ImgUtils';
@@ -36,13 +30,13 @@ async function cleanupTempFiles(
   basePath: string,
   tempFilePattern: string,
 ): Promise<void> {
-  const files = fs.readdirSync(basePath);
+  const files = AbsoluteFS.readDirSync(basePath);
   const tempFiles = files.filter((file) => file.startsWith(tempFilePattern));
 
   for (const file of tempFiles) {
     const fullPath = path.join(basePath, file);
     try {
-      fs.unlinkSync(fullPath);
+      AbsoluteFS.deleteSync(fullPath);
       logger.debug(CHANNEL, `Cleaned up temporary file: ${file}`);
     } catch (err) {
       logger.warn(CHANNEL, `Failed to delete temporary file ${file}: ${err}`);
@@ -64,8 +58,8 @@ export async function getBase64EncodedMedia(
 
     // Check if file exists
     const fileExistsResult = isAbsolutePath
-      ? await fileExistsAbsolute(mediaPath)
-      : await fileExists(mediaPath);
+      ? await AbsoluteFS.exists(mediaPath)
+      : await WorkspaceFS.exists(mediaPath);
 
     if (!fileExistsResult) {
       logger.error(CHANNEL, `Image file not found: ${mediaPath}`);
@@ -74,8 +68,8 @@ export async function getBase64EncodedMedia(
 
     // Read the image file as bytes
     const mediaBytes = isAbsolutePath
-      ? fs.readFileSync(mediaPath)
-      : readFileBytesSync(mediaPath);
+      ? AbsoluteFS.readBytesSync(mediaPath)
+      : WorkspaceFS.readFileBytesSync(mediaPath);
 
     // Convert to base64
     const base64String = mediaBytes.toString('base64');
@@ -103,8 +97,8 @@ export async function countPdfPages(pdfPath: string): Promise<number> {
 
     // Check if file exists
     const fileExistsResult = isAbsolutePath
-      ? await fileExistsAbsolute(pdfPath)
-      : await fileExists(pdfPath);
+      ? await AbsoluteFS.exists(pdfPath)
+      : await WorkspaceFS.exists(pdfPath);
 
     if (!fileExistsResult) {
       logger.error(CHANNEL, `PDF file not found: ${pdfPath}`);
@@ -113,8 +107,8 @@ export async function countPdfPages(pdfPath: string): Promise<number> {
 
     // Read the PDF file using pdf-lib
     const pdfBytes = isAbsolutePath
-      ? fs.readFileSync(pdfPath)
-      : readFileBytesSync(pdfPath);
+      ? AbsoluteFS.readBytesSync(pdfPath)
+      : WorkspaceFS.readFileBytesSync(pdfPath);
     const pdfDoc = await PDFDocument.load(pdfBytes, {
       updateMetadata: false,
       ignoreEncryption: true,
@@ -169,21 +163,19 @@ export async function singlePagePdf2Png(
 
     // Verify file exists
     const fileExistsResult = isAbsolutePath
-      ? await fileExistsAbsolute(pdfPath)
-      : await fileExists(pdfPath);
+      ? await AbsoluteFS.exists(pdfPath)
+      : await WorkspaceFS.exists(pdfPath);
 
     if (!fileExistsResult) {
       throw new Error(`PDF file not found: ${pdfPath}`);
     }
 
-    const fullPath = isAbsolutePath
-      ? pdfPath
-      : getFullPathFromWorkspace(pdfPath);
+    const fullPath = isAbsolutePath ? pdfPath : WorkspaceFS.fullPath(pdfPath);
     logger.debug(CHANNEL, `Full path to PDF: ${fullPath}`);
 
     // Ensure the temporary directory exists
-    if (!fs.existsSync(TEMP_DIR)) {
-      fs.mkdirSync(TEMP_DIR, { recursive: true });
+    if (!AbsoluteFS.existsSync(TEMP_DIR)) {
+      AbsoluteFS.mkdirSync(TEMP_DIR, { recursive: true });
     }
 
     const options = {
@@ -209,14 +201,14 @@ export async function singlePagePdf2Png(
     }
     tempFilePath = result.path;
 
-    if (!fs.existsSync(tempFilePath)) {
+    if (!AbsoluteFS.existsSync(tempFilePath)) {
       throw new Error(
         'Failed to convert PDF page to PNG: Output file not found',
       );
     }
 
     // Read the generated PNG file and convert to base64
-    const imageBuffer = fs.readFileSync(tempFilePath);
+    const imageBuffer = AbsoluteFS.readBytesSync(tempFilePath);
     const base64String = imageBuffer.toString('base64');
 
     logger.debug(
@@ -300,8 +292,8 @@ export async function processPdf2Png(
 
     // Verify file exists
     const fileExistsResult = isAbsolutePath
-      ? await fileExistsAbsolute(pdfPath)
-      : await fileExists(pdfPath);
+      ? await AbsoluteFS.exists(pdfPath)
+      : await WorkspaceFS.exists(pdfPath);
 
     if (!fileExistsResult) {
       logger.debug(CHANNEL, `PDF file not found: ${pdfPath}`);

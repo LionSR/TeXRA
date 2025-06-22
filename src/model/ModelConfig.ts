@@ -2,7 +2,7 @@
  * Configuration types and constants for language model interactions and capabilities.
  */
 
-import { ToolConfig } from '../agent/core/ToolConfig';
+import { ToolConfig } from '@agent/core/ToolConfig';
 
 /**
  * Default configuration values
@@ -19,6 +19,9 @@ export enum ReasoningEffort {
 /** Base model capabilities configuration with all features disabled by default. */
 export const DEFAULT_MODEL_CAPABILITIES: ModelCapabilities = {
   supportsFunctionCalling: true,
+  supportsNativeMCPServer: false,
+  supportsNativeWebSearch: false,
+  supportsNativeCodeExecution: false,
   supportsPromptCaching: false,
   supportsAutoPromptCaching: false,
   cacheDiscountFactor: 1.0,
@@ -51,6 +54,9 @@ export enum ModelProvider {
 /** Feature flags defining model's supported capabilities and behaviors. */
 export interface ModelCapabilities {
   supportsFunctionCalling: boolean;
+  supportsNativeMCPServer: boolean;
+  supportsNativeWebSearch: boolean;
+  supportsNativeCodeExecution: boolean;
   supportsPromptCaching: boolean;
   supportsAutoPromptCaching: boolean;
   cacheDiscountFactor: number;

@@ -7,7 +7,7 @@ import { ChatCompletionContentPart } from 'openai/resources/chat/completions';
 import { countTokens } from 'gpt-tokenizer';
 
 // Local imports - utilities
-import { readFile, writeFile, fileExistsAndNonTrivial } from '@utils/files';
+import { WorkspaceFS } from '@utils/files';
 import { cleanFileContent } from '@replacement/replacementUtils';
 import { extractAndLogScratchpad } from '@utils/text/xmlUtils';
 import { formatProviderError } from '@utils/sdkErrorUtils';
@@ -17,6 +17,7 @@ import { AgentConfig } from '../core/AgentConfig';
 import { AgentSetting, hasEndTag } from '../core/AgentDataclass';
 import { AgentStateRound } from '../core/AgentState';
 import { ModelHandler } from './ModelHandler';
+import type { ProviderStopReason } from '../../types/StopReasonTypes';
 import {
   OpenAIAPIResponseUsage,
   ResponseUsageFactory,
@@ -387,7 +388,10 @@ export class ModelHandlerOpenAI extends ModelHandler {
   }
 
   /** Extracts response text and usage statistics from API response. */
-  extractResponse(responseObject: any, endTag: string): [string, any, string] {
+  extractResponse(
+    responseObject: any,
+    endTag: string,
+  ): [string, any, ProviderStopReason] {
     if (!responseObject.choices?.length) {
       this.logger.debug(
         `Response object: ${objectToLogString(responseObject)}`,
@@ -517,7 +521,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
   ): Promise<[boolean, any[]]> {
     let endTurn = false;
 
-    if (!(await fileExistsAndNonTrivial(outputFile))) {
+    if (!(await WorkspaceFS.existsAndNonTrivial(outputFile))) {
       if (
         agentConfig.toolConfig.usePrefillFromInput &&
         toolState.firstKCharsFromInput
@@ -547,7 +551,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
     }
 
     // Get prefill from existing and non-trivial file
-    let fileContent = await readFile(outputFile);
+    let fileContent = await WorkspaceFS.readFile(outputFile);
     fileContent = cleanFileContent(fileContent);
 
     // Extract and log any existing scratchpad content
@@ -559,7 +563,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
     );
 
     // Write file content to output file
-    await writeFile(outputFile, fileContent);
+    await WorkspaceFS.writeFile(outputFile, fileContent);
 
     messages.push({
       role: 'assistant',
@@ -599,7 +603,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
       toolState.updateAccumulatedOutput(fileContent);
     } else {
       toolState.updateAccumulatedOutput(prefill + fileContent);
-      await writeFile(outputFile, toolState.accumulatedOutput);
+      await WorkspaceFS.writeFile(outputFile, toolState.accumulatedOutput);
     }
     const state = new AgentStateRound(0);
     toolState.lastResponse = toolState.accumulatedOutput;
@@ -801,7 +805,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
 
   /** Determines if generation should continue based on response content. */
   shouldContinue(
-    stopReason: string,
+    stopReason: ProviderStopReason,
     newResponse: string,
     agentSetting: AgentSetting,
   ): boolean {

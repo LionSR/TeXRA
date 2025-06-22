@@ -7,13 +7,11 @@ import * as vscode from 'vscode';
 // Local imports - log
 import * as logger from '@logger/logUtils';
 
+// Local imports - result types
+import type { FileOpResult } from '@/types/ResultTypes';
+
 // Local imports - utilities
-import {
-  deleteFile,
-  readDirectory,
-  fileExists,
-  findFileInBuild,
-} from '@utils/files';
+import { WorkspaceFS } from '@utils/files';
 
 // Local imports - housekeeping
 import {
@@ -22,7 +20,11 @@ import {
   PACK_EXTENSIONS,
   MODELS,
 } from './constants';
-import { getAgentFirstNameChunk, getFilePatterns } from './utils';
+import {
+  getAgentFirstNameChunk,
+  getFilePatterns,
+  findFilesFromPatterns,
+} from './utils';
 
 const CHANNEL = 'Housekeeping';
 logger.initialize(CHANNEL);
@@ -31,7 +33,7 @@ export async function runCleanSingle(
   model: string,
   inputFile: string,
   agent: string,
-): Promise<void> {
+): Promise<FileOpResult> {
   logger.info(
     CHANNEL,
     `Starting cleanup with model=${model}, inputFile=${inputFile}, agent=${agent}`,
@@ -42,10 +44,7 @@ export async function runCleanSingle(
       CHANNEL,
       `Missing required parameters: model=${model}, inputFile=${inputFile}, agent=${agent}`,
     );
-    vscode.window.showErrorMessage(
-      'Missing required parameters for cleanSingle',
-    );
-    return;
+    return { status: 'missingParams' };
   }
 
   const baseName = path.parse(inputFile).name;
@@ -62,40 +61,41 @@ export async function runCleanSingle(
   const extensions = [...TEMP_EXTENSIONS, ...PACK_EXTENSIONS];
   logger.debug(CHANNEL, `Using extensions: ${extensions}`);
 
-  const filesToDelete: string[] = [];
-  for (const pattern of filePatterns) {
-    for (const ext of extensions) {
-      const filePath = await findFileInBuild(inputDir, pattern, ext);
-      if (filePath) {
-        filesToDelete.push(filePath);
-      }
-    }
-  }
+  const filesToDelete = findFilesFromPatterns(
+    inputDir,
+    filePatterns,
+    extensions,
+  );
 
   const onlyInputFileFound =
     filesToDelete.length === 1 && filesToDelete[0] === inputFile;
 
-  if (onlyInputFileFound) {
+  let result: FileOpResult;
+
+  if (onlyInputFileFound || filesToDelete.length === 0) {
     logger.warn(CHANNEL, `No matching files found to clean for ${inputFile}`);
-    vscode.window.showInformationMessage(
-      `No files found to clean for ${inputFile}`,
-    );
-    return;
+    result = { status: 'noFiles' };
+  } else {
+    try {
+      logger.debug(CHANNEL, `Files to delete:\n${filesToDelete.join('\n')}`);
+      for (const filePath of filesToDelete) {
+        await WorkspaceFS.delete(filePath);
+      }
+      logger.info(CHANNEL, `Cleanup complete for ${inputFile}`);
+      result = { status: 'success' };
+    } catch (err) {
+      logger.error(
+        CHANNEL,
+        `Error during cleanup of ${inputFile}: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      result = {
+        status: 'error',
+        error: err instanceof Error ? err.message : String(err),
+      };
+    }
   }
 
-  if (filesToDelete.length === 0) {
-    logger.warn(CHANNEL, `No matching files found to clean for ${inputFile}`);
-    vscode.window.showInformationMessage(
-      `No files found to clean for ${inputFile}`,
-    );
-  } else {
-    logger.debug(CHANNEL, `Files to delete:\n${filesToDelete.join('\n')}`);
-    for (const filePath of filesToDelete) {
-      await deleteFile(filePath);
-    }
-    logger.info(CHANNEL, `Cleanup complete for ${inputFile}`);
-    vscode.window.showInformationMessage(`Cleanup complete for ${inputFile}`);
-  }
+  return result;
 }
 
 export async function runCleanMultiple(
@@ -103,22 +103,40 @@ export async function runCleanMultiple(
   inputFile: string,
   agent: string,
   inputFiles: string[],
-): Promise<void> {
+): Promise<FileOpResult> {
   logger.debug(
     CHANNEL,
     `Starting multiple cleanup with model=${model}, inputFile=${inputFile}, agent=${agent}`,
   );
   logger.debug(CHANNEL, `Additional files: ${inputFiles.join(', ')}`);
 
-  await runCleanSingle(model, inputFile, agent);
+  let anyCleaned = false;
+
+  const firstResult = await runCleanSingle(model, inputFile, agent);
+  if (
+    firstResult.status === 'missingParams' ||
+    firstResult.status === 'error'
+  ) {
+    return firstResult;
+  }
+  if (firstResult.status === 'success') {
+    anyCleaned = true;
+  }
 
   if (inputFiles && inputFiles.length > 0) {
     for (const file of inputFiles) {
-      await runCleanSingle(model, file, agent);
+      const res = await runCleanSingle(model, file, agent);
+      if (res.status === 'error') {
+        return res;
+      }
+      if (res.status === 'success') {
+        anyCleaned = true;
+      }
     }
   }
 
   logger.info(CHANNEL, 'Cleanup complete for multiple files.');
+  return anyCleaned ? { status: 'success' } : { status: 'noFiles' };
 }
 
 export async function runCleanBuild(): Promise<void> {
@@ -126,18 +144,18 @@ export async function runCleanBuild(): Promise<void> {
 
   async function cleanBuildDir(directory: string) {
     const buildDir = path.join(directory, 'build');
-    if (await fileExists(buildDir)) {
+    if (await WorkspaceFS.exists(buildDir)) {
       try {
-        const entries = await readDirectory(buildDir);
+        const entries = await WorkspaceFS.readDir(buildDir);
         // First delete all files
         for (const [name, type] of entries) {
           const fullPath = path.join(buildDir, name);
           if (type === vscode.FileType.File) {
-            await deleteFile(fullPath);
+            await WorkspaceFS.delete(fullPath);
           } else if (type === vscode.FileType.Directory) {
-            const subEntries = await readDirectory(fullPath);
+            const subEntries = await WorkspaceFS.readDir(fullPath);
             if (subEntries.length === 0) {
-              deleteFile(fullPath);
+              await WorkspaceFS.delete(fullPath);
               logger.debug(CHANNEL, `Removed empty directory: ${fullPath}`);
             }
             for (const [name, type] of subEntries) {
@@ -148,7 +166,7 @@ export async function runCleanBuild(): Promise<void> {
                 );
                 const size = stats.size;
                 if (size === 0) {
-                  deleteFile(subPath);
+                  await WorkspaceFS.delete(subPath);
                   logger.debug(CHANNEL, `Removed empty directory: ${subPath}`);
                 }
               }
@@ -156,7 +174,7 @@ export async function runCleanBuild(): Promise<void> {
           }
         }
         // Check if build directory itself is empty
-        const remainingEntries = await readDirectory(buildDir);
+        const remainingEntries = await WorkspaceFS.readDir(buildDir);
         if (remainingEntries.length === 0) {
           await vscode.workspace.fs.delete(vscode.Uri.file(buildDir), {
             recursive: true,
@@ -176,7 +194,7 @@ export async function runCleanBuild(): Promise<void> {
 
   async function processDirectory(dirPath: string) {
     try {
-      const entries = await readDirectory(dirPath);
+      const entries = await WorkspaceFS.readDir(dirPath);
       for (const [name, type] of entries) {
         if (
           type === vscode.FileType.Directory &&
@@ -218,7 +236,7 @@ export async function runCleanOutput(): Promise<void> {
 
   const processDirectory = async (dirPath: string) => {
     try {
-      const entries = await readDirectory(dirPath);
+      const entries = await WorkspaceFS.readDir(dirPath);
       for (const [name, type] of entries) {
         if (EXCLUDED_DIRS.has(name.toLowerCase())) {
           continue;
@@ -247,7 +265,7 @@ export async function runCleanOutput(): Promise<void> {
   await processDirectory('.');
 
   for (const file of filesToDelete) {
-    await deleteFile(file);
+    await WorkspaceFS.delete(file);
   }
 
   logger.info(CHANNEL, 'All AI Generated Output files cleaned');
