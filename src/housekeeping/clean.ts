@@ -190,7 +190,7 @@ export async function runCleanOutput(): Promise<void> {
   const modelsPattern = MODELS.join(',');
   const ignorePatterns = Array.from(EXCLUDED_DIRS).map((d) => `**/${d}/**`);
 
-  const files = globSync(`**/*_{${modelsPattern}}.{tex,pdf,xml}`, {
+  const files = globSync(`**/*_{${modelsPattern}}*.{tex,pdf,xml}`, {
     cwd: workspacePath,
     ignore: ignorePatterns,
     nodir: true,
