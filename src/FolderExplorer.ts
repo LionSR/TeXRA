@@ -163,11 +163,10 @@ export class FolderExplorer implements vscode.TreeDataProvider<FileItem> {
 
       // Ensure target directory exists
       const targetDir = path.dirname(targetPath);
-      await vscode.workspace.fs.createDirectory(vscode.Uri.file(targetDir));
+      await AbsoluteFS.ensureDir(targetDir);
 
       // Copy the file
-      const content = await vscode.workspace.fs.readFile(uri);
-      await vscode.workspace.fs.writeFile(vscode.Uri.file(targetPath), content);
+      await AbsoluteFS.copy(uri.fsPath, targetPath);
 
       // Open the new file
       const newDoc = await vscode.workspace.openTextDocument(
@@ -205,7 +204,7 @@ export class FolderExplorer implements vscode.TreeDataProvider<FileItem> {
       }
 
       // Ensure parent directory exists
-      await vscode.workspace.fs.createDirectory(vscode.Uri.file(parentPath));
+      await AbsoluteFS.ensureDir(parentPath);
 
       // Create a temporary item for in-place editing
       const tempName = isFolder ? 'New Folder' : 'new-file.yaml';
@@ -286,22 +285,15 @@ export class FolderExplorer implements vscode.TreeDataProvider<FileItem> {
             const content = newPath.endsWith('.yaml')
               ? Buffer.from(NEW_AGENT_TEMPLATE)
               : new Uint8Array();
-            await vscode.workspace.fs.writeFile(
-              vscode.Uri.file(newPath),
-              content,
-            );
+            await AbsoluteFS.write(newPath, content);
             createdFile = vscode.Uri.file(newPath);
           } else {
             // Create new folder
-            await vscode.workspace.fs.createDirectory(vscode.Uri.file(newPath));
+            await AbsoluteFS.ensureDir(newPath);
           }
         } else {
           // Rename existing item
-          await vscode.workspace.fs.rename(
-            vscode.Uri.file(oldPath),
-            vscode.Uri.file(newPath),
-            { overwrite: false },
-          );
+          await AbsoluteFS.rename(oldPath, newPath, { overwrite: false });
         }
       } catch (err) {
         logger.error(CHANNEL, `Error renaming item: ${err}`);
@@ -506,9 +498,7 @@ export class FolderExplorer implements vscode.TreeDataProvider<FileItem> {
 
   private async getFilesInDirectory(dirPath: string): Promise<FileItem[]> {
     try {
-      const dirEntries = await vscode.workspace.fs.readDirectory(
-        vscode.Uri.file(dirPath),
-      );
+      const dirEntries = await AbsoluteFS.readDir(dirPath);
       const items: FileItem[] = [];
 
       for (const [name, type] of dirEntries) {
@@ -594,11 +584,11 @@ export class FolderExplorer implements vscode.TreeDataProvider<FileItem> {
     if (choice === confirmButton) {
       try {
         if (isFolder) {
-          await vscode.workspace.fs.delete(item.resourceUri, {
+          await AbsoluteFS.delete(item.resourceUri.fsPath, {
             recursive: true,
           });
         } else {
-          await vscode.workspace.fs.delete(item.resourceUri);
+          await AbsoluteFS.delete(item.resourceUri.fsPath);
         }
         logger.info(
           CHANNEL,
