@@ -5,7 +5,7 @@ import * as vscode from 'vscode';
 // Local imports - log
 import * as logger from '@logger/logUtils';
 import { getConfig } from '@utils/config';
-import { GlobalStorageFS, StorageFS } from '@utils/files';
+import { GlobalStorageFS, StorageFS, AbsoluteFS } from '@utils/files';
 
 const CHANNEL = 'AgentLoad';
 logger.initialize(CHANNEL);
@@ -93,7 +93,7 @@ export async function promptForCustomAgentsDirectory(): Promise<
   const selectedPath = folder[0].fsPath;
 
   // Create directory if it doesn't exist
-  await vscode.workspace.fs.createDirectory(vscode.Uri.file(selectedPath));
+  await AbsoluteFS.ensureDir(selectedPath);
 
   const config = vscode.workspace.getConfiguration();
   await config.update(
