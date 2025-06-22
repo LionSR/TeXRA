@@ -321,6 +321,22 @@ export class AbsoluteFS {
       return false;
     }
   }
+
+  /**
+   * Check if path is a symbolic link
+   */
+  public static async isSymbolicLink(filePath: string): Promise<boolean> {
+    this.validatePath(filePath, 'isSymbolicLink');
+    try {
+      const stats = await this.stat(filePath);
+      return (
+        (stats.type & vscode.FileType.SymbolicLink) ===
+        vscode.FileType.SymbolicLink
+      );
+    } catch {
+      return false;
+    }
+  }
 }
 
 export default AbsoluteFS;
