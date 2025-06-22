@@ -3,6 +3,7 @@ import * as path from 'path';
 
 // Third-party imports
 import * as vscode from 'vscode';
+import { sync as globSync } from 'glob';
 
 // Local imports - log
 import * as logger from '@logger/logUtils';
@@ -142,129 +143,60 @@ export async function runCleanMultiple(
 export async function runCleanBuild(): Promise<void> {
   logger.debug(CHANNEL, 'Starting build directory cleanup');
 
-  async function cleanBuildDir(directory: string) {
-    const buildDir = path.join(directory, 'build');
-    if (await WorkspaceFS.exists(buildDir)) {
-      try {
-        const entries = await WorkspaceFS.readDir(buildDir);
-        // First delete all files
-        for (const [name, type] of entries) {
-          const fullPath = path.join(buildDir, name);
-          if (type === vscode.FileType.File) {
-            await WorkspaceFS.delete(fullPath);
-          } else if (type === vscode.FileType.Directory) {
-            const subEntries = await WorkspaceFS.readDir(fullPath);
-            if (subEntries.length === 0) {
-              await WorkspaceFS.delete(fullPath);
-              logger.debug(CHANNEL, `Removed empty directory: ${fullPath}`);
-            }
-            for (const [name, type] of subEntries) {
-              if (type === vscode.FileType.Directory) {
-                const subPath = path.join(fullPath, name);
-                const stats = await vscode.workspace.fs.stat(
-                  vscode.Uri.file(subPath),
-                );
-                const size = stats.size;
-                if (size === 0) {
-                  await WorkspaceFS.delete(subPath);
-                  logger.debug(CHANNEL, `Removed empty directory: ${subPath}`);
-                }
-              }
-            }
-          }
-        }
-        // Check if build directory itself is empty
-        const remainingEntries = await WorkspaceFS.readDir(buildDir);
-        if (remainingEntries.length === 0) {
-          await vscode.workspace.fs.delete(vscode.Uri.file(buildDir), {
-            recursive: true,
-          });
-          logger.debug(CHANNEL, `Removed empty build directory: ${buildDir}`);
-        } else {
-          logger.debug(CHANNEL, `Cleaned build directory: ${buildDir}`);
-        }
-      } catch (err) {
-        logger.error(
-          CHANNEL,
-          `Error cleaning build directory ${buildDir}: ${err instanceof Error ? err.message : String(err)}`,
-        );
-      }
-    }
+  const workspacePath = WorkspaceFS.getPath();
+  if (!workspacePath) {
+    return;
   }
 
-  async function processDirectory(dirPath: string) {
+  const ignorePatterns = Array.from(EXCLUDED_DIRS)
+    .filter((dir) => dir !== 'build')
+    .map((dir) => `**/${dir}/**`);
+
+  const buildDirs = globSync('**/build', {
+    cwd: workspacePath,
+    ignore: ignorePatterns,
+    nodir: false,
+  });
+
+  for (const dir of buildDirs) {
     try {
-      const entries = await WorkspaceFS.readDir(dirPath);
-      for (const [name, type] of entries) {
-        if (
-          type === vscode.FileType.Directory &&
-          !EXCLUDED_DIRS.has(name.toLowerCase())
-          // this excludes the build directory, is it correct?
-        ) {
-          const fullPath = path.join(dirPath, name);
-          await cleanBuildDir(fullPath);
-          await processDirectory(fullPath);
-        }
-      }
+      await vscode.workspace.fs.delete(
+        vscode.Uri.file(path.join(workspacePath, dir)),
+        {
+          recursive: true,
+          useTrash: false,
+        },
+      );
+      logger.debug(CHANNEL, `Removed build directory: ${dir}`);
     } catch (err) {
       logger.error(
         CHANNEL,
-        `Error processing directory ${dirPath}: ${err instanceof Error ? err.message : String(err)}`,
+        `Error removing build directory ${dir}: ${err instanceof Error ? err.message : String(err)}`,
       );
     }
   }
 
-  try {
-    // Clean root build directory first
-    await cleanBuildDir('.');
-    // Then process subdirectories
-    await processDirectory('.');
-    logger.info(CHANNEL, 'Build directories cleaned');
-  } catch (err) {
-    logger.error(
-      CHANNEL,
-      `Error cleaning build directories: ${err instanceof Error ? err.message : String(err)}`,
-    );
-    throw err;
-  }
+  logger.info(CHANNEL, 'Build directories cleaned');
 }
 
 export async function runCleanOutput(): Promise<void> {
   logger.debug(CHANNEL, 'Starting output directory cleanup');
-  const filesToDelete = new Set<string>();
-  const validExtensions = new Set(['.tex', '.pdf', '.xml']);
 
-  const processDirectory = async (dirPath: string) => {
-    try {
-      const entries = await WorkspaceFS.readDir(dirPath);
-      for (const [name, type] of entries) {
-        if (EXCLUDED_DIRS.has(name.toLowerCase())) {
-          continue;
-        }
+  const workspacePath = WorkspaceFS.getPath();
+  if (!workspacePath) {
+    return;
+  }
 
-        if (type === vscode.FileType.Directory) {
-          await processDirectory(path.join(dirPath, name));
-        } else if (type === vscode.FileType.File) {
-          const ext = path.extname(name);
-          if (validExtensions.has(ext)) {
-            // Check if file matches any model pattern
-            if (MODELS.some((model) => name.includes(`_${model}`))) {
-              filesToDelete.add(path.join(dirPath, name));
-            }
-          }
-        }
-      }
-    } catch (err) {
-      logger.error(
-        CHANNEL,
-        `Error processing directory ${dirPath}: ${err instanceof Error ? err.message : String(err)}`,
-      );
-    }
-  };
+  const modelsPattern = MODELS.join(',');
+  const ignorePatterns = Array.from(EXCLUDED_DIRS).map((d) => `**/${d}/**`);
 
-  await processDirectory('.');
+  const files = globSync(`**/*_{${modelsPattern}}.{tex,pdf,xml}`, {
+    cwd: workspacePath,
+    ignore: ignorePatterns,
+    nodir: true,
+  });
 
-  for (const file of filesToDelete) {
+  for (const file of files) {
     await WorkspaceFS.delete(file);
   }
 
