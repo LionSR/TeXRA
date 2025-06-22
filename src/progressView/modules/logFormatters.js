@@ -107,8 +107,16 @@ function formatSpecialContent(message, content, contentType) {
       .replace(/\s+/g, '-')
       .replace(':', '');
 
-    // Always return just the special content box, hiding the log line wrapper entirely
-    return `<div class="special-content ${cssClass}">${parsedMarkdown}</div>`;
+    const label = contentType.replace('content:', '').trim();
+    const icon = cssClass.includes('scratchpad')
+      ? 'codicon-pencil'
+      : 'codicon-lightbulb';
+
+    return `\
+<details class="special-details">\
+  <summary class="${cssClass}"><i class="codicon ${icon}"></i> ${label}</summary>\
+  <div class="special-content ${cssClass}">${parsedMarkdown}</div>\
+</details>`;
   } catch (e) {
     console.error('Error parsing markdown:', e);
     // Fallback to original content
