@@ -494,6 +494,8 @@ If you can't resolve an issue using this guide:
    - Try alternative workflows while waiting for a solution
    - Use different models or agents that might work better
    - Consider splitting complex tasks into simpler ones
+4. **Direct contact**:
+   - For critical bugs or private reports, email us at [contact@texra.ai](mailto:contact@texra.ai)
 
 ## Next Steps
 
