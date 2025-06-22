@@ -23,6 +23,15 @@ marked.setOptions({
 });
 
 /**
+ * Generate a sanitized CSS class string from a content type label
+ * @param {string} contentType - The content type to convert
+ * @returns {string} Normalized class name
+ */
+function generateCssClass(contentType) {
+  return contentType.toLowerCase().replace(/\s+/g, '-').replace(':', '');
+}
+
+/**
  * Format a log entry with Markdown rendering for special content
  * @param {Object} logMessage - The log message to format
  * @returns {string} Formatted HTML for the log message
@@ -102,10 +111,7 @@ function formatSpecialContent(message, content, contentType) {
     parsedMarkdown = parsedMarkdown.trim();
 
     // Create enhanced content element with better formatting
-    const cssClass = contentType
-      .toLowerCase()
-      .replace(/\s+/g, '-')
-      .replace(':', '');
+    const cssClass = generateCssClass(contentType);
 
     const label = contentType.replace('content:', '').trim();
     const icon = cssClass.includes('scratchpad')
