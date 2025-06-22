@@ -522,9 +522,9 @@ export class OutputHandler {
     await WorkspaceFS.writeFile(processedOutputFile, content);
 
     // Use the extracted document name when available. Otherwise use the
-    // generated TeX filename so the progress view displays the .tex file.
+    // input file path for consistent display with multiple file outputs.
     return {
-      source: original || path.basename(processedOutputFile),
+      source: original || this.agentConfig.inputFile,
       path: processedOutputFile,
     };
   }
