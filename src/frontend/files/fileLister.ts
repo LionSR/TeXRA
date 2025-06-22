@@ -53,24 +53,27 @@ export class FileLister {
     this.ignoredFileExtensions = getConfig<string[]>(
       'files.ignored.fileExtensions',
       [],
-    );
+    ).map((e) => e.toLowerCase());
     this.ignoredDirectories = getConfig<string[]>(
       'files.ignored.directories',
       [],
-    );
-    this.ignoredKeywords = getConfig<string[]>('files.ignored.keywords', []);
+    ).map((d) => d.toLowerCase());
+    this.ignoredKeywords = getConfig<string[]>(
+      'files.ignored.keywords',
+      [],
+    ).map((k) => k.toLowerCase());
     this.ignoredInputFiles = getConfig<string[]>(
       'files.ignored.inputFiles',
       [],
-    );
+    ).map((f) => f.toLowerCase());
     this.ignoredAuxKeywords = getConfig<string[]>(
       'files.ignored.auxiliaryKeywords',
       [],
-    );
+    ).map((k) => k.toLowerCase());
     this.ignoredMediaDirs = getConfig<string[]>(
       'files.ignored.mediaDirectories',
       [],
-    );
+    ).map((d) => d.toLowerCase());
   }
 
   private get workspace(): string | null {
