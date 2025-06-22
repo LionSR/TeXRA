@@ -151,6 +151,8 @@ export class WebviewMessageHandler {
         this.handlePolishInstructionText(message, view),
       showAgentHistory: () => this.handleShowAgentHistory(),
       openSettings: () => this.handleOpenSettings(),
+      openAgentSettings: () => this.handleOpenAgentSettings(),
+      openModelSettings: () => this.handleOpenModelSettings(),
       clipboardImage: (message, view) =>
         this.handleClipboardImage(message, view),
     };
@@ -172,6 +174,22 @@ export class WebviewMessageHandler {
     await safeExecuteCommand(
       'workbench.action.openSettings',
       ['@ext:texra-ai.texra'],
+      CHANNEL,
+    );
+  }
+
+  private async handleOpenAgentSettings() {
+    await safeExecuteCommand(
+      'workbench.action.openSettings',
+      ['@ext:texra-ai.texra agents'],
+      CHANNEL,
+    );
+  }
+
+  private async handleOpenModelSettings() {
+    await safeExecuteCommand(
+      'workbench.action.openSettings',
+      ['@ext:texra-ai.texra models'],
       CHANNEL,
     );
   }
