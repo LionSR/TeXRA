@@ -14,8 +14,8 @@ import { ToolResult } from './base';
 import { BaseError, ValidationResult } from './types';
 
 // Local imports - utils
-import * as workspaceFileUtils from '@utils/files';
-import { getApiKey as getSecretApiKey, ApiProvider } from '@frontend/secrets';
+import { WorkspaceFS } from '@utils/files';
+import { SecretManager, ApiProvider } from '@frontend/secretManager';
 import { getConfig } from '@utils/config';
 
 // Local imports - logging
@@ -82,7 +82,7 @@ export abstract class AnthropicToolAgent<
 
     try {
       // Verify the file exists before starting
-      const fileExists = await workspaceFileUtils.fileExists(filePath);
+      const fileExists = await WorkspaceFS.exists(filePath);
       if (!fileExists) {
         logger.error(CHANNEL, `File does not exist: ${filePath}`);
         vscode.window.showErrorMessage(`File does not exist: ${filePath}`);
@@ -112,7 +112,7 @@ export abstract class AnthropicToolAgent<
       );
 
       // Read file content for context
-      const content = await workspaceFileUtils.readFile(filePath);
+      const content = await WorkspaceFS.readFile(filePath);
 
       // Get the context around the error
       let errorContext = '';
@@ -171,7 +171,7 @@ export abstract class AnthropicToolAgent<
    */
   protected async getApiKey(): Promise<string> {
     try {
-      return await getSecretApiKey('anthropic' as ApiProvider);
+      return await SecretManager.getApiKey('anthropic' as ApiProvider);
     } catch (err) {
       logger.error(
         CHANNEL,
@@ -202,7 +202,7 @@ export abstract class AnthropicToolAgent<
   ): Promise<ToolResult> {
     try {
       // Verify the file exists before starting
-      const fileExists = await workspaceFileUtils.fileExists(filePath);
+      const fileExists = await WorkspaceFS.exists(filePath);
       if (!fileExists) {
         logger.error(CHANNEL, `File does not exist: ${filePath}`);
         vscode.window.showErrorMessage(`File does not exist: ${filePath}`);
@@ -234,7 +234,7 @@ export abstract class AnthropicToolAgent<
       }
 
       // Read file content for error context
-      let content = await workspaceFileUtils.readFile(filePath);
+      let content = await WorkspaceFS.readFile(filePath);
 
       // Get initial error context
       let errorContext = '';
@@ -345,7 +345,7 @@ export abstract class AnthropicToolAgent<
             );
 
             // Read updated content and get new error context
-            content = await workspaceFileUtils.readFile(filePath);
+            content = await WorkspaceFS.readFile(filePath);
             if (newValidationResult.error) {
               errorContext = getErrorContext(
                 content,

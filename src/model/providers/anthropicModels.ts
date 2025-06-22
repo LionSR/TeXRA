@@ -18,6 +18,9 @@ const ANTHROPIC_DEFAULT_CAPABILITIES: ModelCapabilities = {
   cacheDiscountFactor: 0.1,
   supportsTokenCounting: true,
   supportsNativePdf: true,
+  supportsNativeMCPServer: false, // Set explicitly, overridden per model
+  supportsNativeWebSearch: false, // Set explicitly, overridden per model
+  supportsNativeCodeExecution: false, // Set explicitly, overridden per model
 };
 
 export const ANTHROPIC_MODELS: Record<string, ModelConfig> = {
@@ -32,6 +35,9 @@ export const ANTHROPIC_MODELS: Record<string, ModelConfig> = {
     outputPrice: 75.0,
     capabilities: {
       ...ANTHROPIC_DEFAULT_CAPABILITIES,
+      supportsNativeMCPServer: true,
+      supportsNativeWebSearch: true,
+      supportsNativeCodeExecution: true,
       supportsAssistantPrefill: false,
       supportsReasoning: true,
     } satisfies ModelCapabilities,
@@ -48,6 +54,8 @@ export const ANTHROPIC_MODELS: Record<string, ModelConfig> = {
     outputPrice: 75.0,
     capabilities: {
       ...ANTHROPIC_DEFAULT_CAPABILITIES,
+      supportsNativeWebSearch: true,
+      supportsNativeCodeExecution: true,
       supportsAssistantPrefill: true,
       supportsReasoning: false,
     } satisfies ModelCapabilities,
@@ -64,6 +72,8 @@ export const ANTHROPIC_MODELS: Record<string, ModelConfig> = {
     outputPrice: 25.0,
     capabilities: {
       ...ANTHROPIC_DEFAULT_CAPABILITIES,
+      supportsNativeWebSearch: true,
+      supportsNativeCodeExecution: true,
       supportsAssistantPrefill: false,
       supportsReasoning: true,
     } satisfies ModelCapabilities,
@@ -80,6 +90,8 @@ export const ANTHROPIC_MODELS: Record<string, ModelConfig> = {
     outputPrice: 15.0,
     capabilities: {
       ...ANTHROPIC_DEFAULT_CAPABILITIES,
+      supportsNativeWebSearch: true,
+      supportsNativeCodeExecution: true,
       supportsAssistantPrefill: true,
       supportsReasoning: false,
     } satisfies ModelCapabilities,
@@ -96,6 +108,8 @@ export const ANTHROPIC_MODELS: Record<string, ModelConfig> = {
     outputPrice: 15.0,
     capabilities: {
       ...ANTHROPIC_DEFAULT_CAPABILITIES,
+      supportsNativeWebSearch: true,
+      supportsNativeCodeExecution: true,
       supportsAssistantPrefill: false,
       supportsReasoning: true,
     } satisfies ModelCapabilities,
@@ -112,6 +126,8 @@ export const ANTHROPIC_MODELS: Record<string, ModelConfig> = {
     outputPrice: 15.0,
     capabilities: {
       ...ANTHROPIC_DEFAULT_CAPABILITIES,
+      supportsNativeWebSearch: true,
+      supportsNativeCodeExecution: true,
       supportsAssistantPrefill: true,
       supportsReasoning: false,
     } satisfies ModelCapabilities,
@@ -160,6 +176,7 @@ export const ANTHROPIC_MODELS: Record<string, ModelConfig> = {
     outputPrice: 15.0,
     capabilities: {
       ...ANTHROPIC_DEFAULT_CAPABILITIES,
+      supportsNativeWebSearch: true,
       supportsAssistantPrefill: true,
       supportsReasoning: false,
     } satisfies ModelCapabilities,
@@ -192,6 +209,8 @@ export const ANTHROPIC_MODELS: Record<string, ModelConfig> = {
     outputPrice: 4.0,
     capabilities: {
       ...ANTHROPIC_DEFAULT_CAPABILITIES,
+      supportsNativeWebSearch: true,
+      supportsNativeCodeExecution: true,
       supportsAssistantPrefill: true,
       supportsReasoning: false,
       supportsVision: true,

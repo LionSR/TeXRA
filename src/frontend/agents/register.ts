@@ -20,9 +20,38 @@ export async function promptToAddAgentToConfig(
   const config = vscode.workspace.getConfiguration();
   const current = config.get<string[]>('texra.agents', []);
 
+  const baseName = agentName.endsWith('_multiple')
+    ? agentName.replace(/_multiple$/, '')
+    : agentName;
+  const multipleName = agentName.endsWith('_multiple')
+    ? agentName
+    : `${agentName}_multiple`;
+
+  // Check if agent already exists (exact match)
   if (current.includes(agentName)) {
     logger.debug(CHANNEL, `Agent "${agentName}" already in configuration`);
     return;
+  }
+
+  // Check if the base/multiple counterpart already exists
+  if (agentName.endsWith('_multiple')) {
+    // Adding a _multiple variant, check if base agent exists
+    if (current.includes(baseName)) {
+      logger.debug(
+        CHANNEL,
+        `Base agent "${baseName}" already in configuration, skipping "${agentName}"`,
+      );
+      return;
+    }
+  } else {
+    // Adding a base agent, check if _multiple variant exists
+    if (current.includes(multipleName)) {
+      logger.debug(
+        CHANNEL,
+        `Multiple variant "${multipleName}" already in configuration, skipping "${agentName}"`,
+      );
+      return;
+    }
   }
 
   const addButton = 'Add Agent';

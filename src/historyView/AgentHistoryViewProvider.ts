@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 
 // Local imports - core
 import { AgentHistoryManager } from './AgentHistoryManager';
-import { executeCommand } from '@commands/executeCommand';
+import { executeCommand } from '@commands/agent/executeCommand';
 
 import { agentConfigToTaskState } from '@utils/config';
 import { buildWebviewHtml } from '@frontend/webview/html';
@@ -106,7 +106,7 @@ export class AgentHistoryViewProvider implements vscode.WebviewViewProvider {
    * Send history data to the webview
    */
   private async sendHistoryData() {
-    const history = await AgentHistoryManager.getHistory(this.context);
+    const history = await AgentHistoryManager.getHistory();
 
     // Send data to the webview
     if (this._view) {
@@ -158,8 +158,7 @@ export class AgentHistoryViewProvider implements vscode.WebviewViewProvider {
       const domHandlersUri = getHistoryViewUri('modules/domHandlers.js');
 
       // Common module URIs
-      const vscodeApiUri = getCommonUri('modules/vscodeApi.js');
-      const messageRouterUri = getCommonUri('modules/messageRouter.js');
+      const webviewContextUri = getCommonUri('modules/webviewContext.js');
       const commonStyleUri = getCommonUri('styles/common.css');
 
       // Node modules URIs
@@ -169,8 +168,7 @@ export class AgentHistoryViewProvider implements vscode.WebviewViewProvider {
         scriptUri,
         styleUri,
         commonStyleUri,
-        vscodeApiUri,
-        messageRouterUri,
+        webviewContextUri,
         domHandlersUri,
         codiconUri,
       });
@@ -185,10 +183,8 @@ export class AgentHistoryViewProvider implements vscode.WebviewViewProvider {
    */
   private async rerunAgent(historyId: string) {
     try {
-      const historyItem = await AgentHistoryManager.getHistoryItemById(
-        this.context,
-        historyId,
-      );
+      const historyItem =
+        await AgentHistoryManager.getHistoryItemById(historyId);
 
       if (historyItem) {
         vscode.window.showInformationMessage(`Rerunning agent from history`);
@@ -206,10 +202,8 @@ export class AgentHistoryViewProvider implements vscode.WebviewViewProvider {
    */
   private async restoreAgent(historyId: string) {
     try {
-      const historyItem = await AgentHistoryManager.getHistoryItemById(
-        this.context,
-        historyId,
-      );
+      const historyItem =
+        await AgentHistoryManager.getHistoryItemById(historyId);
 
       if (historyItem) {
         logger.debug(
@@ -251,7 +245,7 @@ export class AgentHistoryViewProvider implements vscode.WebviewViewProvider {
    */
   private async clearHistory() {
     try {
-      await AgentHistoryManager.clearHistory(this.context);
+      await AgentHistoryManager.clearHistory();
       vscode.window.showInformationMessage('Agent history cleared');
 
       // Notify the webview
@@ -271,10 +265,8 @@ export class AgentHistoryViewProvider implements vscode.WebviewViewProvider {
       logger.debug(CHANNEL, `Deleting history item: ${historyId}`);
 
       // Use the AgentHistoryManager to delete the item
-      const deleted = await AgentHistoryManager.deleteHistoryItemById(
-        this.context,
-        historyId,
-      );
+      const deleted =
+        await AgentHistoryManager.deleteHistoryItemById(historyId);
 
       if (deleted) {
         // Update the view

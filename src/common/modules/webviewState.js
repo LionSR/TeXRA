@@ -1,4 +1,4 @@
-import { vscode } from '@common/vscodeApi.js';
+import { vscode } from '@common/webviewContext.js';
 
 /**
  * Manages persistence of state for a single webview.

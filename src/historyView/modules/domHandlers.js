@@ -1,4 +1,4 @@
-import { vscode } from '@common/vscodeApi.js';
+import { vscode } from '@common/webviewContext.js';
 /* global Mark */
 
 // Track search state
@@ -178,14 +178,6 @@ function createHistoryItemElement(item) {
     detailsHTML += `
       <span class="history-label">Output Files:</span>
       <span class="history-value">${config.outputFiles.join(', ')}</span>
-    `;
-  }
-
-  // Add output name override
-  if (config.outputNameOverride) {
-    detailsHTML += `
-      <span class="history-label">Output Name:</span>
-      <span class="history-value">${config.outputNameOverride}</span>
     `;
   }
 
