@@ -282,9 +282,7 @@ export class FolderExplorer implements vscode.TreeDataProvider<FileItem> {
         if (!(await AbsoluteFS.exists(oldPath))) {
           if (item.collapsibleState === vscode.TreeItemCollapsibleState.None) {
             // Create new file with starter content if it's YAML
-            const content = newPath.endsWith('.yaml')
-              ? Buffer.from(NEW_AGENT_TEMPLATE)
-              : new Uint8Array();
+            const content = newPath.endsWith('.yaml') ? NEW_AGENT_TEMPLATE : '';
             await AbsoluteFS.write(newPath, content);
             createdFile = vscode.Uri.file(newPath);
           } else {
