@@ -19,7 +19,11 @@ import { diff_match_patch } from 'diff-match-patch';
 import type { DiffStats } from '@/types/DiffTypes';
 
 // Local imports - utilities
-import { WorkspaceFS } from '@utils/files';
+import {
+  WorkspaceFS,
+  createFileMapping,
+  replaceInputCommands,
+} from '@utils/files';
 import {
   renderPrompt,
   getFirstKCharsFromDocument,
@@ -522,7 +526,7 @@ export abstract class BaseReflectionAgent extends BaseAgent {
       const roundOutputs = this.outputHandler.outputFiles[currRound] || [];
 
       // Map output files to their original base files
-      const baseMap = this.outputHandler.createFileMapping(
+      const baseMap = createFileMapping(
         this.baseFiles,
         roundOutputs,
         'contains',
@@ -531,7 +535,7 @@ export abstract class BaseReflectionAgent extends BaseAgent {
       // Map output files to previous round files if available
       const prevMap =
         currRound > 0
-          ? this.outputHandler.createFileMapping(
+          ? createFileMapping(
               this.outputHandler.outputFiles[currRound - 1] || [],
               roundOutputs,
               'basename',
@@ -1141,9 +1145,10 @@ export abstract class BaseReflectionAgent extends BaseAgent {
 
           // Only attempt to replace input commands if we have valid base files
           if (this.baseFiles && this.baseFiles.length > 0) {
-            await this.outputHandler.replaceInputCommands(
+            await replaceInputCommands(
               this.baseFiles,
               processedFiles,
+              this.logger,
             );
           }
         } else {
