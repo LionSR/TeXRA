@@ -4,3 +4,4 @@ export { StorageFS, GlobalStorageFS } from './storageFS';
 export { RelativeFS } from './relativeFS';
 export * from './pastedImageUtils';
 export * from './baseFileUtils';
+export * from './fileMappingUtils';
