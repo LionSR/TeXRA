@@ -28,10 +28,7 @@ import {
 import { loadTexraRules } from '@frontend/files/rules';
 import replacementManager from '@replacement/replacementManager';
 import { checkForMassiveRepetition } from '@utils/text/repetitionUtils';
-import {
-  extractAndLogScratchpad,
-  formatAndLogContent,
-} from '@utils/text/xmlUtils';
+import { extractScratchpad, formatContent } from '@utils/text/xmlUtils';
 
 // Local imports - agent components
 import { AgentConfig } from '@agent/core/AgentConfig';
@@ -246,12 +243,8 @@ export abstract class BaseReflectionAgent extends BaseAgent {
 
         // If thinking content was extracted, format and log it first
         if (thinkingContent) {
-          await formatAndLogContent(
-            thinkingContent,
-            this.logger,
-            'Thinking',
-            logGroupId,
-          );
+          const formatted = await formatContent(thinkingContent);
+          this.logger.info(`Thinking content: ${formatted}`, logGroupId);
 
           // Note: The complete thinking blocks (including signatures) have already been
           // stored in toolState.thinkingBlocks by the processThinkingBlock method
@@ -1215,11 +1208,9 @@ export abstract class BaseReflectionAgent extends BaseAgent {
     thinkingTag: string = 'scratchpad',
     groupId?: string,
   ): Promise<void> {
-    await extractAndLogScratchpad(
-      outputContent,
-      this.logger,
-      thinkingTag,
-      groupId,
-    );
+    const formatted = await extractScratchpad(outputContent, thinkingTag);
+    if (formatted) {
+      this.logger.info(`Scratchpad content: ${formatted}`, groupId);
+    }
   }
 }
