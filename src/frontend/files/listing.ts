@@ -4,6 +4,9 @@ import * as path from 'path';
 // Third-party imports
 import * as vscode from 'vscode';
 
+// Local imports - utilities
+import { AbsoluteFS } from '@utils/files';
+
 export function getFilesIfNotEmpty<T>(files: T[] | undefined): T[] | null {
   return files && files.length > 0 ? files : null;
 }
@@ -15,13 +18,11 @@ export async function getFilesInDirectory(
   excludeDirectories: string[] = [],
   excludeKeywords: string[] = [],
 ): Promise<string[]> {
-  const dirEntries = await vscode.workspace.fs.readDirectory(
-    vscode.Uri.file(dir),
-  );
+  const dirEntries = await AbsoluteFS.readDir(dir);
   const files = await Promise.all(
     dirEntries.map(async ([name, type]) => {
       const fullPath = path.join(dir, name);
-      const stat = await vscode.workspace.fs.stat(vscode.Uri.file(fullPath));
+      const stat = await AbsoluteFS.stat(fullPath);
       const isSymbolicLink =
         (stat.type & vscode.FileType.SymbolicLink) ===
         vscode.FileType.SymbolicLink;
@@ -54,13 +55,9 @@ export async function getFilesRecursively(
   excludeKeywords: string[] = [],
   excludeFiles: string[] = [],
 ): Promise<string[]> {
-  const dirEntries = await vscode.workspace.fs.readDirectory(
-    vscode.Uri.file(dir),
-  );
+  const dirEntries = await AbsoluteFS.readDir(dir);
 
-  const normalizedExcludeDirs = new Set(
-    excludeDirectories.map((d) => d.toLowerCase()),
-  );
+  const normalizedExcludeDirs = new Set(excludeDirectories);
 
   const files = await Promise.all(
     dirEntries.map(async ([name, type]) => {
@@ -68,13 +65,11 @@ export async function getFilesRecursively(
       const relativePath = path.relative(root, fullPath);
 
       const pathParts = relativePath.split(path.sep);
-      if (
-        pathParts.some((part) => normalizedExcludeDirs.has(part.toLowerCase()))
-      ) {
+      if (pathParts.some((part) => normalizedExcludeDirs.has(part))) {
         return [];
       }
 
-      const stat = await vscode.workspace.fs.stat(vscode.Uri.file(fullPath));
+      const stat = await AbsoluteFS.stat(fullPath);
       const isSymbolicLink =
         (stat.type & vscode.FileType.SymbolicLink) ===
         vscode.FileType.SymbolicLink;
@@ -87,7 +82,7 @@ export async function getFilesRecursively(
         (type === vscode.FileType.Directory ||
           (isSymbolicLink && isDirectory)) &&
         !name.startsWith('.') &&
-        !normalizedExcludeDirs.has(name.toLowerCase())
+        !normalizedExcludeDirs.has(name)
       ) {
         return await getFilesRecursively(
           fullPath,
@@ -102,12 +97,8 @@ export async function getFilesRecursively(
         (type === vscode.FileType.File || (isSymbolicLink && isFile)) &&
         !name.startsWith('.') &&
         (includeExtensions.length === 0 ||
-          includeExtensions.some((ext) =>
-            name.toLowerCase().endsWith(ext.toLowerCase()),
-          )) &&
-        !excludeExtensions.some((ext) =>
-          name.toLowerCase().endsWith(ext.toLowerCase()),
-        ) &&
+          includeExtensions.some((ext) => name.endsWith(ext))) &&
+        !excludeExtensions.some((ext) => name.endsWith(ext)) &&
         !excludeKeywords.some((keyword) => name.includes(keyword)) &&
         !excludeFiles.includes(name)
       ) {
