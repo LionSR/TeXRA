@@ -7,6 +7,7 @@ export interface TaskState {
   agent: string;
   model: string;
   instruction: string;
+  taskId?: string; // Task ID for workspace storage
 
   // File selections
   inputFile: string;

@@ -6,6 +6,7 @@ import { executeCommand } from '@commands/agent/executeCommand';
 
 import { agentConfigToTaskState } from '@utils/config';
 import { buildWebviewHtml } from '@frontend/webview/html';
+import { TaskStorageManager } from '@utils/taskStorage';
 
 // Local imports - log
 import * as logger from '@logger/logUtils';
@@ -93,6 +94,8 @@ export class AgentHistoryViewProvider implements vscode.WebviewViewProvider {
     restoreAgent: (m) => this.restoreAgent(m.historyId),
     deleteAgent: (m) => this.deleteHistoryItem(m.historyId),
     clearHistory: () => this.clearHistory(),
+    openTaskDirectory: (m) => this.openTaskDirectory(m.historyId),
+    openRawXml: (m) => this.openRawXml(m.historyId, m.round),
   };
 
   private async handleWebviewMessage(message: any) {
@@ -279,6 +282,46 @@ export class AgentHistoryViewProvider implements vscode.WebviewViewProvider {
     } catch (error) {
       logger.error(CHANNEL, `Failed to delete history item: ${error}`);
       vscode.window.showErrorMessage(`Failed to delete history item: ${error}`);
+    }
+  }
+
+  /**
+   * Open the task directory for a history item
+   */
+  private async openTaskDirectory(historyId: string) {
+    try {
+      const historyItem = await AgentHistoryManager.getHistoryItemById(historyId);
+      
+      if (historyItem && historyItem.taskId) {
+        await TaskStorageManager.openTaskDirectory(historyItem.taskId);
+      } else {
+        vscode.window.showWarningMessage(
+          `No task directory found for this history item`
+        );
+      }
+    } catch (error) {
+      logger.error(CHANNEL, `Failed to open task directory: ${error}`);
+      vscode.window.showErrorMessage(`Failed to open task directory: ${error}`);
+    }
+  }
+
+  /**
+   * Open a raw XML file for a specific round
+   */
+  private async openRawXml(historyId: string, round: number) {
+    try {
+      const historyItem = await AgentHistoryManager.getHistoryItemById(historyId);
+      
+      if (historyItem && historyItem.taskId) {
+        await TaskStorageManager.openRawXml(historyItem.taskId, round);
+      } else {
+        vscode.window.showWarningMessage(
+          `No task data found for this history item`
+        );
+      }
+    } catch (error) {
+      logger.error(CHANNEL, `Failed to open raw XML: ${error}`);
+      vscode.window.showErrorMessage(`Failed to open raw XML: ${error}`);
     }
   }
 }

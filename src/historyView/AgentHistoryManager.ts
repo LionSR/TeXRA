@@ -11,6 +11,7 @@ export interface AgentHistoryItem {
   id: string;
   timestamp: string;
   config: AgentConfig;
+  taskId?: string; // Task ID from workspace storage
 }
 
 /**
@@ -23,11 +24,12 @@ export class AgentHistoryManager {
   /**
    * Add a new agent execution to history
    */
-  public static async addToHistory(config: AgentConfig): Promise<string> {
+  public static async addToHistory(config: AgentConfig, taskId?: string): Promise<string> {
     const historyItem: AgentHistoryItem = {
       id: randomUUID(),
       timestamp: new Date().toISOString(),
       config,
+      taskId,
     };
 
     // Get current workspace-specific history
@@ -82,17 +84,7 @@ export class AgentHistoryManager {
   }
 
   /**
-   * Get workspace-specific storage key
-   */
-  public static getWorkspaceStorageKey(): string {
-    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-    return workspaceFolder
-      ? `${this.HISTORY_STORAGE_KEY}.${workspaceFolder.uri.fsPath}`
-      : this.HISTORY_STORAGE_KEY;
-  }
-
-  /**
-   * Delete a history item by ID
+   * Delete history item by ID
    */
   public static async deleteHistoryItemById(id: string): Promise<boolean> {
     const history = await this.getHistory();
@@ -109,5 +101,15 @@ export class AgentHistoryManager {
 
     // Item was not found
     return false;
+  }
+
+  /**
+   * Get workspace-specific storage key
+   */
+  public static getWorkspaceStorageKey(): string {
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+    return workspaceFolder
+      ? `${this.HISTORY_STORAGE_KEY}.${workspaceFolder.uri.fsPath}`
+      : this.HISTORY_STORAGE_KEY;
   }
 }

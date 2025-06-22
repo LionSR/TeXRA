@@ -36,6 +36,7 @@ import { AgentConfig } from '@agent/core/AgentConfig';
 import { AgentSetting } from '@agent/core/AgentDataclass';
 import { AgentStateGlobal, AgentStateRound } from '@agent/core/AgentState';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
+import { TaskStorageManager } from '@utils/taskStorage';
 
 // Local imports - types
 import { TokenUsageStats } from '@/types/UsageTypes';
@@ -506,6 +507,22 @@ export class OutputHandler {
   ): Promise<NamedOutputFile> {
     this.logger.debug(`Splitting scratchpad output XML: ${outputFile}`);
 
+    // Save raw XML to task storage if taskId is available
+    const taskId = (this.agentConfig as any).taskId;
+    if (taskId) {
+      const xmlContent = await WorkspaceFS.readFile(outputFile);
+      // Extract round number from output file name
+      const roundMatch = outputFile.match(/_r(\d+)_/);
+      const round = roundMatch ? parseInt(roundMatch[1]) : 0;
+      
+      try {
+        await TaskStorageManager.saveRawXml(taskId, round, xmlContent);
+        this.logger.debug(`Saved raw XML for task ${taskId}, round ${round}`);
+      } catch (err) {
+        this.logger.warn(`Failed to save raw XML: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+
     const processedOutputFile = await this.splitScratchpadOutputXml(
       outputFile,
       this.agentSetting.documentTag,
@@ -536,6 +553,23 @@ export class OutputHandler {
     this.logger.debug(
       `Splitting multiple scratchpad output XML: ${outputFile}`,
     );
+
+    // Save raw XML to task storage if taskId is available
+    const taskId = (this.agentConfig as any).taskId;
+    if (taskId) {
+      const xmlContent = await WorkspaceFS.readFile(outputFile);
+      // Extract round number from output file name
+      const roundMatch = outputFile.match(/_r(\d+)_/);
+      const round = roundMatch ? parseInt(roundMatch[1]) : 0;
+      
+      try {
+        await TaskStorageManager.saveRawXml(taskId, round, xmlContent);
+        this.logger.debug(`Saved raw XML for task ${taskId}, round ${round}`);
+      } catch (err) {
+        this.logger.warn(`Failed to save raw XML: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+
     const processedOutputFiles = await this.splitScratchpadMultipleOutputXml(
       outputFile,
       this.agentSetting.documentTag,

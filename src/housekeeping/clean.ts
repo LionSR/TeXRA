@@ -26,6 +26,9 @@ import {
   findFilesFromPatterns,
 } from './utils';
 
+// Local imports - task storage
+import { TaskStorageManager } from '@utils/taskStorage';
+
 const CHANNEL = 'Housekeeping';
 logger.initialize(CHANNEL);
 
@@ -196,12 +199,17 @@ export async function runCleanBuild(): Promise<void> {
     try {
       const entries = await WorkspaceFS.readDir(dirPath);
       for (const [name, type] of entries) {
+        // Skip task storage directories and other excluded directories
+        const fullPath = path.join(dirPath, name);
+        const isTaskStorageDir = fullPath === TaskStorageManager.getTasksDirectory() || 
+                                fullPath.startsWith(TaskStorageManager.getTasksDirectory() + path.sep);
+        
         if (
           type === vscode.FileType.Directory &&
-          !EXCLUDED_DIRS.has(name.toLowerCase())
+          !EXCLUDED_DIRS.has(name.toLowerCase()) &&
+          !isTaskStorageDir
           // this excludes the build directory, is it correct?
         ) {
-          const fullPath = path.join(dirPath, name);
           await cleanBuildDir(fullPath);
           await processDirectory(fullPath);
         }
@@ -242,14 +250,23 @@ export async function runCleanOutput(): Promise<void> {
           continue;
         }
 
+        // Skip task storage directories  
+        const fullPath = path.join(dirPath, name);
+        const isTaskStorageDir = fullPath === TaskStorageManager.getTasksDirectory() || 
+                                fullPath.startsWith(TaskStorageManager.getTasksDirectory() + path.sep);
+        
+        if (isTaskStorageDir) {
+          continue;
+        }
+
         if (type === vscode.FileType.Directory) {
-          await processDirectory(path.join(dirPath, name));
+          await processDirectory(fullPath);
         } else if (type === vscode.FileType.File) {
           const ext = path.extname(name);
           if (validExtensions.has(ext)) {
             // Check if file matches any model pattern
             if (MODELS.some((model) => name.includes(`_${model}`))) {
-              filesToDelete.add(path.join(dirPath, name));
+              filesToDelete.add(fullPath);
             }
           }
         }

@@ -11,6 +11,7 @@ import {
   getCustomAgentsDirectory,
 } from '@frontend/agents/pathUtils';
 import { agentConfigToTaskState } from '@utils/config';
+import { TaskStorageManager } from '@utils/taskStorage';
 
 // Local imports - agent components
 import { AgentConfig, createAgentConfig } from '@agent/core/AgentConfig';
@@ -249,9 +250,12 @@ async function executeAgentWithLogging<T extends IAgent>(
         logger.endGroup(taskDetailsGroupId, 'stopped');
 
         // Convert AgentConfig to TaskState using utility function
+        const taskState = agentConfigToTaskState(config);
+        // Add task ID to task state
+        taskState.taskId = (config as any).taskId;
         progressViewProvider.setTaskState(
           fullStreamId,
-          agentConfigToTaskState(config),
+          taskState,
         );
         logger.debug(
           `Task state stored for stream: ${fullStreamId}`,

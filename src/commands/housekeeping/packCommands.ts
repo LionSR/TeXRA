@@ -67,11 +67,15 @@ async function handlePack(config: any) {
     ? config.outputFiles || []
     : [];
 
+  // Get taskId from config if available
+  const taskId = config.taskId;
+
   const result = await runPack(
     config.model,
     config.inputFile,
     config.agent,
     outputFiles,
+    taskId,
   );
   showPackResult(result, config.inputFile);
 
@@ -92,10 +96,11 @@ async function handlePackSingle(
   inputFile: string,
   agent: string,
   model: string,
+  taskId?: string,
 ) {
   logger.debug(
     CHANNEL,
-    `Command called with: inputFile=${inputFile}, agent=${agent}, model=${model}`,
+    `Command called with: inputFile=${inputFile}, agent=${agent}, model=${model}, taskId=${taskId}`,
   );
 
   if (!inputFile || !agent || !model) {
@@ -109,7 +114,7 @@ async function handlePackSingle(
     return;
   }
 
-  const result = await runPackSingle(model, inputFile, agent);
+  const result = await runPackSingle(model, inputFile, agent, undefined, taskId);
   showPackResult(result, inputFile);
 
   const provider = ProgressViewProvider.getInstance();
@@ -125,10 +130,11 @@ async function handlePackMultiple(
   agent: string,
   model: string,
   outputFiles: string[] = [],
+  taskId?: string,
 ) {
   logger.debug(
     CHANNEL,
-    `Command called with: inputFile=${inputFile}, agent=${agent}, model=${model}`,
+    `Command called with: inputFile=${inputFile}, agent=${agent}, model=${model}, taskId=${taskId}`,
   );
   logger.debug(CHANNEL, `Additional files: ${outputFiles.join(', ')}`);
 
@@ -143,7 +149,7 @@ async function handlePackMultiple(
     return;
   }
 
-  const result = await runPackMultiple(model, inputFile, agent, outputFiles);
+  const result = await runPackMultiple(model, inputFile, agent, outputFiles, taskId);
   showPackResult(result, inputFile);
 
   const provider = ProgressViewProvider.getInstance();

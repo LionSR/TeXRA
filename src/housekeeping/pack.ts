@@ -21,6 +21,9 @@ import {
   findFilesFromPatterns,
 } from './utils';
 
+// Local imports - task storage
+import { TaskStorageManager } from '@utils/taskStorage';
+
 const CHANNEL = 'Housekeeping';
 logger.initialize(CHANNEL);
 
@@ -29,10 +32,11 @@ export async function runPackSingle(
   inputFile: string,
   agent: string,
   outputFolder?: string,
+  taskId?: string,
 ): Promise<FileOpResult> {
   logger.info(
     CHANNEL,
-    `Starting packing with model=${model}, inputFile=${inputFile}, agent=${agent}, outputFolder=${outputFolder}`,
+    `Starting packing with model=${model}, inputFile=${inputFile}, agent=${agent}, outputFolder=${outputFolder}, taskId=${taskId}`,
   );
 
   if (!inputFile || !model || !agent) {
@@ -96,42 +100,69 @@ export async function runPackSingle(
           : ''),
     );
 
-    const now = new Date().toISOString().replace(/[-:]/g, '').split('.')[0];
-    outputFolder =
-      outputFolder ||
-      path.join(inputDir, HISTORY_DIR, `${now}_${baseName}_${agent}_${model}`);
-    logger.debug(CHANNEL, `Output folder: ${outputFolder}`);
+    // Use task storage if taskId is provided, otherwise fall back to old behavior
+    if (taskId) {
+      try {
+        // Move files to task storage
+                 await TaskStorageManager.moveFilesToTask(taskId, movedFiles);
+         await TaskStorageManager.copyFilesToTask(taskId, copiedFiles);
+         
+         const taskDirectory = TaskStorageManager.getTaskDirectory(taskId);
+         outputFolder = taskDirectory;
+        
+        if (movedFiles.length > 0 || copiedFiles.length > 0) {
+          logger.info(CHANNEL, `Files packed into task storage: ${taskId}`);
+        }
+        result = { status: 'success', outputFolder };
+      } catch (err) {
+        logger.error(
+          CHANNEL,
+          `Error during task storage operations: ${err instanceof Error ? err.message : String(err)}`,
+        );
+        result = {
+          status: 'error',
+          error: err instanceof Error ? err.message : String(err),
+        };
+      }
+    } else {
+      // Fallback to old packing behavior
+      const now = new Date().toISOString().replace(/[-:]/g, '').split('.')[0];
+      outputFolder =
+        outputFolder ||
+        path.join(inputDir, HISTORY_DIR, `${now}_${baseName}_${agent}_${model}`);
+      logger.debug(CHANNEL, `Output folder: ${outputFolder}`);
 
-    try {
-      await WorkspaceFS.createDir(outputFolder);
-      logger.debug(CHANNEL, `Created output directory: ${outputFolder}`);
+      try {
+        await WorkspaceFS.createDir(outputFolder);
+        logger.debug(CHANNEL, `Created output directory: ${outputFolder}`);
 
-      // Move and copy files
-      const operations: string[] = [];
-      for (const file of movedFiles) {
-        const destination = path.join(outputFolder, path.basename(file));
-        operations.push(`Moving: ${file} -> ${destination}`);
-        await WorkspaceFS.move(file, destination);
+        // Move and copy files
+        const operations: string[] = [];
+        for (const file of movedFiles) {
+          const destination = path.join(outputFolder, path.basename(file));
+          operations.push(`Moving: ${file} -> ${destination}`);
+          await WorkspaceFS.move(file, destination);
+        }
+        for (const file of copiedFiles) {
+          const destination = path.join(outputFolder, path.basename(file));
+          operations.push(`Copying: ${file} -> ${destination}`);
+          await WorkspaceFS.copy(file, destination);
+        }
+        if (operations.length > 0 && !onlyInputFilePacked) {
+          logger.info(CHANNEL, `Files packed into ${outputFolder}`);
+          logger.debug(CHANNEL, `File operations:\n${operations.join('\n')}`);
+        }
+        result = { status: 'success', outputFolder };
+      } catch (err) {
+        logger.error(
+          CHANNEL,
+          `Error during file operations: ${err instanceof Error ? err.message : String(err)}`,
+        );
+        result = {
+          status: 'error',
+          error: err instanceof Error ? err.message : String(err),
+        };
       }
-      for (const file of copiedFiles) {
-        const destination = path.join(outputFolder, path.basename(file));
-        operations.push(`Copying: ${file} -> ${destination}`);
-        await WorkspaceFS.copy(file, destination);
-      }
-      if (operations.length > 0 && !onlyInputFilePacked) {
-        logger.info(CHANNEL, `Files packed into ${outputFolder}`);
-        logger.debug(CHANNEL, `File operations:\n${operations.join('\n')}`);
-      }
-      result = { status: 'success', outputFolder };
-    } catch (err) {
-      logger.error(
-        CHANNEL,
-        `Error during file operations: ${err instanceof Error ? err.message : String(err)}`,
-      );
-      result = {
-        status: 'error',
-        error: err instanceof Error ? err.message : String(err),
-      };
     }
   } else {
     logger.warn(CHANNEL, `No files found to pack for ${inputFile}`);
@@ -157,6 +188,7 @@ export async function runPackMultiple(
   inputFile: string,
   agent: string,
   inputFiles: string[],
+  taskId?: string,
 ): Promise<FileOpResult> {
   logger.debug(
     CHANNEL,
@@ -185,6 +217,7 @@ export async function runPackMultiple(
       fileToPack,
       agent,
       commonOutputFolder,
+      taskId,
     );
     if (singleResult.status === 'success') {
       anyFilesPacked = true;
@@ -198,6 +231,7 @@ export async function runPackMultiple(
           file,
           agent,
           commonOutputFolder,
+          taskId,
         );
         if (additionalResult.status === 'success') {
           anyFilesPacked = true;
@@ -251,6 +285,7 @@ export async function runPack(
   inputFile: string,
   agent: string,
   outputFiles: string[] = [],
+  taskId?: string,
 ): Promise<FileOpResult> {
   logger.debug(
     CHANNEL,
@@ -268,8 +303,8 @@ export async function runPack(
 
   // Use multiple mode if there are output files
   if (outputFiles.length > 0) {
-    return await runPackMultiple(model, inputFile, agent, outputFiles);
+    return await runPackMultiple(model, inputFile, agent, outputFiles, taskId);
   } else {
-    return await runPackSingle(model, inputFile, agent);
+    return await runPackSingle(model, inputFile, agent, undefined, taskId);
   }
 }
