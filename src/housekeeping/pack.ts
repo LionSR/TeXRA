@@ -15,7 +15,11 @@ import { WorkspaceFS } from '@utils/files';
 
 // Local imports - housekeeping
 import { PACK_EXTENSIONS, TEMP_EXTENSIONS, HISTORY_DIR } from './constants';
-import { getAgentFirstNameChunk, getFilePatterns } from './utils';
+import {
+  getAgentFirstNameChunk,
+  getFilePatterns,
+  findFilesFromPatterns,
+} from './utils';
 
 const CHANNEL = 'Housekeeping';
 logger.initialize(CHANNEL);
@@ -53,24 +57,19 @@ export async function runPackSingle(
   ];
   logger.debug(CHANNEL, `Generated patterns: ${filePatterns}`);
 
+  const allFiles = findFilesFromPatterns(
+    inputDir,
+    filePatterns,
+    PACK_EXTENSIONS,
+  );
   const movedFiles: string[] = [];
   const copiedFiles: string[] = [];
 
-  // Find files to move or copy
-  for (const pattern of filePatterns) {
-    for (const ext of PACK_EXTENSIONS) {
-      const filePath = await WorkspaceFS.findFileInBuild(
-        inputDir,
-        pattern,
-        ext,
-      );
-      if (filePath) {
-        if (filePath === inputFile || pattern === baseName) {
-          copiedFiles.push(filePath);
-        } else {
-          movedFiles.push(filePath);
-        }
-      }
+  for (const file of allFiles) {
+    if (file === inputFile || path.parse(file).name === baseName) {
+      copiedFiles.push(file);
+    } else {
+      movedFiles.push(file);
     }
   }
 
@@ -139,17 +138,14 @@ export async function runPackSingle(
     result = { status: 'noFiles' };
   }
 
-  // Clean up temporary files
-  for (const pattern of filePatterns) {
-    for (const ext of TEMP_EXTENSIONS) {
-      const filePath = await WorkspaceFS.findFileInBuild(
-        inputDir,
-        pattern,
-        ext,
-      );
-      if (filePath && filePath !== inputFile) {
-        await WorkspaceFS.delete(filePath);
-      }
+  const tempFiles = findFilesFromPatterns(
+    inputDir,
+    filePatterns,
+    TEMP_EXTENSIONS,
+  );
+  for (const file of tempFiles) {
+    if (file !== inputFile) {
+      await WorkspaceFS.delete(file);
     }
   }
 
