@@ -2,6 +2,7 @@
 import * as vscode from 'vscode';
 import * as winston from 'winston';
 import Transport from 'winston-transport';
+import { randomUUID } from 'crypto';
 
 // Local imports - progressView
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
@@ -54,6 +55,7 @@ class VSCodeTransport extends Transport {
   private streamName: string;
   private useConsolidatedChannel: boolean;
   private messageBuffer: {
+    id: string;
     level: string;
     message: string;
     timestamp: number;
@@ -138,8 +140,9 @@ class VSCodeTransport extends Transport {
 
     // Colored format for ProgressView using CSS classes, but with shorter timestamp display
     const isVerbose = getConfig<boolean>('logger.debugMode', false);
+    const id = randomUUID();
     const coloredFormattedMessage =
-      `<div class="log-line ${isScratchpad ? 'scratchpad-log' : ''}" ${scratchpadAttr} ${groupId ? `data-group-id="${groupId}"` : ''} data-full-timestamp="${timestamp}">` +
+      `<div class="log-line ${isScratchpad ? 'scratchpad-log' : ''}" data-log-id="${id}" ${scratchpadAttr} ${groupId ? `data-group-id="${groupId}"` : ''} data-full-timestamp="${timestamp}">` +
       `<span class="timestamp" title="${timestamp}">${emoji}${
         isVerbose ? ` [${timeDisplay}]` : ''
       }</span> ` +
@@ -161,10 +164,12 @@ class VSCodeTransport extends Transport {
         groupId,
         numericTimestamp,
         messageType,
+        id,
       );
     } else {
       // Buffer the message if ProgressViewProvider is not available
       this.messageBuffer.push({
+        id,
         level,
         message: coloredFormattedMessage,
         timestamp: numericTimestamp,
@@ -206,6 +211,7 @@ class VSCodeTransport extends Transport {
         msg.groupId,
         msg.timestamp,
         msg.messageType ?? 'default',
+        msg.id,
       );
     }
 
