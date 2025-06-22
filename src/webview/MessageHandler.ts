@@ -26,8 +26,8 @@ import {
   listAuxiliaryFiles,
   listMediaFiles,
   listEditedFiles,
-  getFilesIfNotEmpty,
-} from '@frontend/files/listing';
+} from '@frontend/files/fileLister';
+import { getFilesIfNotEmpty } from '@frontend/files/listing';
 import {
   polishTextWithAI,
   FileContext,
