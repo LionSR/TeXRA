@@ -620,6 +620,19 @@ export function setupUIHandlers() {
     toggleLatexdiffs();
   });
 
+  // Open agent and model settings directly from footer icons
+  addEventListenerSafely('agentSettingsButton', 'click', function () {
+    vscode.postMessage({
+      command: 'openAgentSettings',
+    });
+  });
+
+  addEventListenerSafely('modelSettingsButton', 'click', function () {
+    vscode.postMessage({
+      command: 'openModelSettings',
+    });
+  });
+
   // Compare and Accept button handlers
   addEventListenerSafely('compareButton', 'click', function () {
     const baseFile = safeGetElementValue('baseFile');
