@@ -9,6 +9,8 @@ import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
 import { WorkspaceFS } from '@utils/files';
+// Local imports - housekeeping utils
+import { findFilesFromPatterns } from './utils';
 
 // Local imports - housekeeping
 import { TEMP_EXTENSIONS } from './constants';
@@ -37,35 +39,24 @@ export async function runPackLatexdiffvc(
   const filePatterns = [`${baseName}-diff${commitHash}`];
   logger.debug(CHANNEL, `File patterns: ${filePatterns}`);
 
-  const filesToProcess: string[] = [];
-  const filesToDelete: string[] = [];
+  const filesToProcess = findFilesFromPatterns(inputDir, filePatterns, [
+    '.tex',
+    '.pdf',
+  ]);
+  logger.debug(
+    CHANNEL,
+    `Files to process: ${filesToProcess.length > 0 ? filesToProcess.join(', ') : 'none'}`,
+  );
 
-  // Find files to process
-  for (const pattern of filePatterns) {
-    for (const ext of ['.tex', '.pdf']) {
-      const filePath = await WorkspaceFS.findFileInBuild(
-        inputDir,
-        pattern,
-        ext,
-      );
-      if (filePath) {
-        logger.debug(CHANNEL, `Found file to process: ${filePath}`);
-        filesToProcess.push(filePath);
-
-        // Find associated temporary files
-        for (const tempExt of TEMP_EXTENSIONS) {
-          const tempFile = path.join(
-            path.dirname(filePath),
-            `${pattern}${tempExt}`,
-          );
-          if (await WorkspaceFS.exists(tempFile)) {
-            logger.debug(CHANNEL, `Found temporary file: ${tempFile}`);
-            filesToDelete.push(tempFile);
-          }
-        }
-      }
-    }
-  }
+  const filesToDelete = findFilesFromPatterns(
+    inputDir,
+    filePatterns,
+    TEMP_EXTENSIONS,
+  );
+  logger.debug(
+    CHANNEL,
+    `Temporary files: ${filesToDelete.length > 0 ? filesToDelete.join(', ') : 'none'}`,
+  );
 
   if (filesToProcess.length > 0) {
     if (clean) {
@@ -174,36 +165,14 @@ export async function runCleanLatexdiffvc(
   const filePatterns = [`${baseName}-diff${commitHash}`];
   logger.debug(CHANNEL, `File patterns: ${filePatterns}`);
 
-  const filesToDelete: string[] = [];
-
-  // Find files to delete
-  for (const pattern of filePatterns) {
-    // Find main files (.tex and .pdf)
-    for (const ext of ['.tex', '.pdf']) {
-      const filePath = await WorkspaceFS.findFileInBuild(
-        inputDir,
-        pattern,
-        ext,
-      );
-      if (filePath) {
-        logger.debug(CHANNEL, `Found main file to delete: ${filePath}`);
-        filesToDelete.push(filePath);
-      }
-    }
-
-    // Find all temporary files
-    for (const tempExt of TEMP_EXTENSIONS) {
-      const filePath = await WorkspaceFS.findFileInBuild(
-        inputDir,
-        pattern,
-        tempExt,
-      );
-      if (filePath) {
-        logger.debug(CHANNEL, `Found temporary file to delete: ${filePath}`);
-        filesToDelete.push(filePath);
-      }
-    }
-  }
+  const filesToDelete = [
+    ...findFilesFromPatterns(inputDir, filePatterns, ['.tex', '.pdf']),
+    ...findFilesFromPatterns(inputDir, filePatterns, TEMP_EXTENSIONS),
+  ];
+  logger.debug(
+    CHANNEL,
+    `Files to delete: ${filesToDelete.length > 0 ? filesToDelete.join(', ') : 'none'}`,
+  );
 
   if (filesToDelete.length > 0) {
     // Delete all found files
