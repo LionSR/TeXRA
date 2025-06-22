@@ -1,4 +1,3 @@
-import * as fs from 'fs';
 import * as path from 'path';
 import * as https from 'https';
 // Import the identifiers-arxiv package
@@ -8,15 +7,9 @@ import * as arxivIdentifiers from 'identifiers-arxiv';
 import * as logger from '@logger/logUtils';
 
 // Local imports - utils
-import {
-  getWorkspacePath,
-  getFullPathFromWorkspace,
-  createDirectory,
-  deleteFile,
-  fileExists,
-} from './files';
+import { WorkspaceFS, AbsoluteFS } from './files';
 import { executeCommand } from './system';
-import { indentLatexFilesInDirectory } from '../housekeeping/indent';
+import { indentLatexFilesInDirectory } from '@housekeeping/indent';
 
 const CHANNEL = 'arXivUtils';
 
@@ -57,7 +50,7 @@ export function validateArxivId(arxivId: string): string | null {
  */
 export function downloadFile(url: string, destPath: string): Promise<void> {
   return new Promise((resolve, reject) => {
-    const file = fs.createWriteStream(destPath);
+    const file = AbsoluteFS.createWriteStream(destPath);
 
     https
       .get(url, (response) => {
@@ -79,7 +72,7 @@ export function downloadFile(url: string, destPath: string): Promise<void> {
         });
       })
       .on('error', (err) => {
-        fs.unlink(destPath, () => {}); // Delete the file if there was an error
+        AbsoluteFS.unlink(destPath, () => {}); // Delete the file if there was an error
         reject(err);
       });
   });
@@ -163,25 +156,25 @@ export async function downloadArxivSource(
   }
 
   // Get workspace path
-  const workspacePath = getWorkspacePath();
+  const workspacePath = WorkspaceFS.getPath();
   if (!workspacePath) {
     throw new Error('No workspace folder is open');
   }
 
   // Create PapersEx directory if it doesn't exist
   const papersExDir = 'PapersEx';
-  if (!(await fileExists(papersExDir))) {
-    await createDirectory(papersExDir);
+  if (!(await WorkspaceFS.exists(papersExDir))) {
+    await WorkspaceFS.createDir(papersExDir);
   }
 
   // Create a specific directory for this paper
   const paperDirRelative = path.join(papersExDir, arxivId.replace(/\//g, '_'));
-  if (!(await fileExists(paperDirRelative))) {
-    await createDirectory(paperDirRelative);
+  if (!(await WorkspaceFS.exists(paperDirRelative))) {
+    await WorkspaceFS.createDir(paperDirRelative);
   }
 
   // Get the full paths for operations that need them
-  const paperDirFull = getFullPathFromWorkspace(paperDirRelative);
+  const paperDirFull = WorkspaceFS.fullPath(paperDirRelative);
   const tarFileName = `${arxivId.replace(/\//g, '_')}.tar.gz`;
   const tarFilePath = path.join(paperDirFull, tarFileName);
 
@@ -211,7 +204,7 @@ export async function downloadArxivSource(
   }
 
   // Clean up the tar file
-  await deleteFile(path.join(paperDirRelative, tarFileName));
+  await WorkspaceFS.delete(path.join(paperDirRelative, tarFileName));
 
   // Indent LaTeX files if autoIndent is enabled
   if (autoIndent) {

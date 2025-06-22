@@ -42,7 +42,7 @@ This document sets the common conventions for contributions. Follow these norms 
 - UI components rely on VS Code codicons for icons (see `src/progressView/index.html`). Stick to these built-in icons to maintain a native look and feel.
 - CSS for views is organized per component under `src/progressView/styles` with shared variables in `src/common/styles/common.css`. Follow this structure when adding new styles.
 - Execute VS Code commands with `safeExecuteCommand` from `src/utils/commandUtils.ts` to handle errors gracefully.
-- Register webview handlers using a command map and `registerMessageHandlers` from `src/common/modules/messageRouter.js`.
+- Register webview handlers using a command map and `registerMessageHandlers` from `src/common/modules/webviewContext.js`.
 - Use `setupPasteListener` from `src/webview/modules/pasteHandler.js` to enable clipboard image pasting in text areas.
 - Implement agents using the `IAgent` interface (`src/agent/IAgent.ts`) for a consistent lifecycle.
 - Track log groups with numeric timestamps using `addLogMessage` in `src/logger/logUtils.ts`.
@@ -54,7 +54,7 @@ This document sets the common conventions for contributions. Follow these norms 
 - Manipulate webview DOM safely using `addEventListenerSafely` from `src/common/modules/domUtils.js`.
 - Format and log errors via `logErrorMessage` in `src/utils/errorHandlingUtils.ts`.
 - Categorize log entries with the `LogMessageType` enum (`src/types/LogTypes.ts`).
-- Share modules like `messageRouter` and `vscodeApi` under `src/common/modules` across webviews.
+- Share common webview helpers like `webviewContext` under `src/common/modules`.
 - Keep result and log group interfaces under `src/types` for reuse.
 - Retrieve included file extensions through `getIncludedExtensions` in `src/utils/fileTypeUtils.ts`.
 - Initialize new agent YAML files from the provided template for a consistent structure.
@@ -76,6 +76,7 @@ adding new code or refactoring existing modules:
   simpler and more obvious.
 - When submitting a PR, describe any design issues found and how the refactoring
   addresses them. Favor deep modules with minimal, clear APIs.
+- When your refactoring include a large number of renames, use search tools to make sure you are not missing any files or paths where changes need to be made.
 
 ## Documentation
 

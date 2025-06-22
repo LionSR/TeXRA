@@ -1,5 +1,4 @@
 // Standard library imports
-import * as fs from 'fs';
 import * as path from 'path';
 
 // Third-party imports
@@ -7,6 +6,7 @@ import glob from 'glob';
 
 // Local imports - log
 import * as logger from '@logger/logUtils';
+import { AbsoluteFS } from '@utils/files';
 
 const CHANNEL = 'platformPaths';
 logger.initialize(CHANNEL);
@@ -64,7 +64,7 @@ export function extendEnvPath(
 ): string {
   const segments = basePath.split(path.delimiter).filter(Boolean);
   for (const dir of getExtraDirs()) {
-    if (!segments.includes(dir) && fs.existsSync(dir)) {
+    if (!segments.includes(dir) && AbsoluteFS.existsSync(dir)) {
       segments.push(dir);
     }
   }
@@ -83,7 +83,7 @@ export function findToolInCommonPaths(tool: string): string | null {
   for (const dir of getExtraDirs()) {
     for (const name of candidates) {
       const candidate = path.join(dir, name);
-      if (fs.existsSync(candidate)) {
+      if (AbsoluteFS.existsSync(candidate)) {
         return candidate;
       }
     }

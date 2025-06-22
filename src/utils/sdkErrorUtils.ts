@@ -39,11 +39,11 @@ import { getConfig } from './config';
 
 /**
  * Returns a human-readable message for common SDK errors.
- * In debug mode (logger.verboseOutput = true), returns the full error message.
+ * In debug mode (logger.debugMode = true), returns the full error message.
  * Otherwise, returns a graceful, user-friendly message.
  */
 export function getSdkErrorMessage(err: unknown): string {
-  const isDebugMode = getConfig<boolean>('logger.verboseOutput', false);
+  const isDebugMode = getConfig<boolean>('logger.debugMode', false);
 
   // In debug mode, always show the full error message
   if (isDebugMode) {

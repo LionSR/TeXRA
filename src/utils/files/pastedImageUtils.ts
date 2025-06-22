@@ -1,11 +1,8 @@
 // Standard library imports
 import * as path from 'path';
 
-// Third-party imports
-import * as vscode from 'vscode';
-
 // Local imports
-import { getWorkspaceStoragePath } from './workspaceStorageUtils';
+import { StorageFS } from './storageFS';
 
 export const PASTED_PREFIX = 'pasted_';
 export const PASTED_DIR = 'pasted';
@@ -20,11 +17,8 @@ export function isPastedImage(filename: string): boolean {
 /**
  * Get the full filesystem path for a pasted image
  */
-export function getPastedImageFullPath(
-  filename: string,
-  context: vscode.ExtensionContext,
-): string {
-  return path.join(getWorkspaceStoragePath(context), PASTED_DIR, filename);
+export function getPastedImageFullPath(filename: string): string {
+  return StorageFS.fullPath(path.join(PASTED_DIR, filename));
 }
 
 /**
