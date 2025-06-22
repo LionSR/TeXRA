@@ -5,7 +5,6 @@ import * as path from 'path';
 // (none needed)
 
 // Local imports - log
-import { AgentLogger } from '@logger/AgentLogger';
 
 // Local imports - latex utils
 import {
@@ -20,7 +19,7 @@ import { diff_match_patch } from 'diff-match-patch';
 import type { DiffStats } from '@/types/DiffTypes';
 
 // Local imports - utilities
-import { writeFile, appendFile, fileExists, readFile } from '@utils/files';
+import { WorkspaceFS } from '@utils/files';
 import {
   renderPrompt,
   getFirstKCharsFromDocument,
@@ -33,7 +32,6 @@ import {
   extractAndLogScratchpad,
   formatAndLogContent,
 } from '@utils/text/xmlUtils';
-import { sleep } from '@utils/helpers';
 
 // Local imports - agent components
 import { AgentConfig } from '@agent/core/AgentConfig';
@@ -47,55 +45,29 @@ import { ToolState } from '@agent/core/ToolState';
 import { ModelHandler } from '@agent/modelHandlers';
 import { OutputHandler, NamedOutputFile } from '@agent/runtime/OutputHandler';
 import { messageToSkeleton } from '@agent/utils/messageUtils';
-import { buildUserVars } from '@agent/utils/userVars';
-import { IAgent } from '@agent/core/IAgent';
+import { BaseAgent } from '@agent/implementations/BaseAgent';
 
 // System imports - common utilities
 import { getConfig } from '@utils/config';
 import { getEffectiveBaseFile } from '@utils/files/baseFileUtils';
 
 // Shared constants
-import {
-  K_SLICE,
-  SHORT_SLEEP_MS,
-  REPETITION_DETECTION_THRESHOLD,
-} from '@utils/config';
+import { K_SLICE, REPETITION_DETECTION_THRESHOLD } from '@utils/config';
 
 /**
  * Abstract base class for agents that support multi-turn reflection and refinement.
  * Provides core functionality for processing inputs, managing state, and handling outputs
  * across multiple conversation rounds.
  */
-export abstract class BaseReflectionAgent implements IAgent {
-  protected modelHandler: ModelHandler;
-  protected agentConfig: AgentConfig;
-  protected agentSetting: AgentSetting;
-  protected agentPrompt: AgentPrompt;
-  protected agentPath: string;
+export abstract class BaseReflectionAgent extends BaseAgent {
   /** File paths for each round's raw model output. */
   protected outputFile: string[];
   protected outputFiles: { [key: number]: string[] };
   protected baseFiles: string[];
-  protected client: any;
   protected useScratchpad: boolean = false;
   protected logId: number = 0;
-  protected logger: AgentLogger;
   /** Handler for output file processing and validation. */
   protected outputHandler: OutputHandler;
-  /** Cached user variables to avoid recomputation */
-  protected userVars: Record<string, any>;
-  /** Group ID for the main run group, used as parent for subgroups */
-  protected runGroupId?: string;
-  private isInterrupted: boolean = false;
-  private abortController: AbortController | null = null;
-
-  // Static map to track running agents by their stream ID
-  private static runningAgents: Map<string, BaseReflectionAgent> = new Map();
-
-  /** Public getter for agent configuration */
-  public get config(): AgentConfig {
-    return this.agentConfig;
-  }
 
   constructor(
     modelHandler: ModelHandler,
@@ -104,18 +76,7 @@ export abstract class BaseReflectionAgent implements IAgent {
     agentPrompt: AgentPrompt,
     agentPath: string,
   ) {
-    this.modelHandler = modelHandler;
-    this.agentConfig = agentConfig;
-    this.agentSetting = agentSetting;
-    this.agentPrompt = agentPrompt;
-    this.agentPath = agentPath;
-
-    // Initialize logger with unique channel ID
-    const channelId = this.getTaskId();
-    this.logger = new AgentLogger(channelId);
-
-    // Update model handler's logger
-    this.modelHandler.setLogger(this.logger);
+    super(modelHandler, agentConfig, agentSetting, agentPrompt, agentPath);
 
     // Initialize basic attributes
     const numRounds = this.getNumberOfRounds();
@@ -127,7 +88,6 @@ export abstract class BaseReflectionAgent implements IAgent {
     this.baseFiles = this.agentConfig.outputFiles || [
       this.agentConfig.inputFile,
     ];
-    this.userVars = {};
 
     // Check scratchpad usage
     // this is not so neat
@@ -150,96 +110,12 @@ export abstract class BaseReflectionAgent implements IAgent {
       this.baseFiles,
       this.logger,
     );
-
-    // Register this agent instance
-    BaseReflectionAgent.runningAgents.set(channelId, this);
-  }
-
-  /**
-   * Initializes the client asynchronously.
-   * Must be called before using any client operations.
-   */
-  protected async initializeClient(): Promise<void> {
-    this.client = await this.modelHandler.getClient();
-    // wait briefly to avoid rate limit issues
-    await sleep(SHORT_SLEEP_MS);
-  }
-
-  /**
-   * Gets unique task ID from output name override or input filename.
-   * @returns Task ID string used for logging and output naming
-   */
-  private getTaskId(): string {
-    const baseName = path.basename(
-      this.agentConfig.outputNameOverride || this.agentConfig.inputFile,
-    );
-    // Use the potentially modified agent name (with _multiple suffix if applicable)
-    const agentName =
-      Array.isArray(this.agentConfig.outputFiles) &&
-      this.agentConfig.outputFiles.length > 1
-        ? `${this.agentConfig.agent}_multiple`
-        : this.agentConfig.agent;
-    return `${agentName}@${this.agentConfig.model}: ${baseName}`;
-  }
-
-  /**
-   * Initializes user variables that require async operations.
-   * Must be called after constructor before using the agent.
-   */
-  public async init(parentGroupId?: string): Promise<void> {
-    // Create an initialization group for better log organization
-    const initGroupId = await this.logger.startGroup(
-      `Init`,
-      undefined,
-      parentGroupId,
-    );
-
-    try {
-      // Log configuration details in the initialization group
-      this.logger.debug(
-        `AgentConfig: ${JSON.stringify(this.agentConfig)}`,
-        initGroupId,
-      );
-      this.logger.debug(
-        `AgentSetting: ${JSON.stringify(this.agentSetting)}`,
-        initGroupId,
-      );
-      this.logger.debug(
-        `ModelConfig: ${JSON.stringify(this.modelHandler.config)}`,
-        initGroupId,
-      );
-
-      // Initialize user variables
-      this.userVars = await this.getUserVars();
-
-      // End the initialization group with success status
-      this.logger.endGroup(initGroupId, 'stopped');
-    } catch (error) {
-      // End the group with error status if initialization fails
-      this.logger.endGroup(initGroupId, 'error');
-      throw error;
-    }
   }
 
   /**
    * Generates output file path for specified conversation round.
    */
   protected abstract getOutputFile(currRound: number): string;
-
-  /**
-   * Collects variables for prompt rendering from various sources.
-   * @returns Combined dictionary of variables for prompt templates
-   */
-  protected async getUserVars(): Promise<Record<string, any>> {
-    this.logger.debug(`Obtaining dynamic variables...`);
-    return buildUserVars(
-      this.agentConfig,
-      this.agentSetting,
-      this.agentPath,
-      this.modelHandler,
-      this.logger,
-    );
-  }
 
   /**
    * Returns the configured number of conversation rounds.
@@ -278,10 +154,8 @@ export abstract class BaseReflectionAgent implements IAgent {
     outputFile: string,
     roundGroupId?: string,
   ): Promise<[AgentStateRound, AgentStateGlobal, ToolState, boolean]> {
-    // Create a response cycle group as a child of the round group if provided
-    const responseCycleGroupId = roundGroupId
-      ? await this.logger.startGroup(`Response Cycle`, undefined, roundGroupId)
-      : undefined;
+    // Use the round group identifier for logging this cycle
+    const logGroupId = roundGroupId;
 
     try {
       let endTurn = false;
@@ -291,7 +165,7 @@ export abstract class BaseReflectionAgent implements IAgent {
           break;
         }
 
-        const exists = await fileExists(outputFile);
+        const exists = await WorkspaceFS.exists(outputFile);
         const startTime = Date.now();
         const systemPrompt = await this.getSystemPromptWithRules();
 
@@ -304,15 +178,18 @@ export abstract class BaseReflectionAgent implements IAgent {
           const outputFileBaseName = outputFile.replace('.xml', '');
           const debugFilePath = `${outputFileBaseName}_cont${stateRound.continuationCount}.json`;
           try {
-            await writeFile(debugFilePath, JSON.stringify(messages, null, 2));
+            await WorkspaceFS.writeFile(
+              debugFilePath,
+              JSON.stringify(messages, null, 2),
+            );
             this.logger.info(
               `Saved message object to ${debugFilePath}`,
-              responseCycleGroupId,
+              logGroupId,
             );
           } catch (error) {
             this.logger.error(
               `Failed to save message object: ${error}`,
-              responseCycleGroupId,
+              logGroupId,
             );
           }
         }
@@ -334,7 +211,7 @@ export abstract class BaseReflectionAgent implements IAgent {
         if (!responseObject) {
           this.logger.warn(
             'Model response was aborted or returned no data; output may be incomplete.',
-            responseCycleGroupId,
+            logGroupId,
           );
           break;
         }
@@ -342,7 +219,7 @@ export abstract class BaseReflectionAgent implements IAgent {
         stateRound.updateResponseTime(responseTime);
         this.logger.debug(
           `Response time: ${responseTime.toFixed(2)}s`,
-          responseCycleGroupId,
+          logGroupId,
         );
 
         // Extract and validate response
@@ -352,10 +229,10 @@ export abstract class BaseReflectionAgent implements IAgent {
             this.agentSetting.endTag,
           );
 
-        this.logger.debug(`Stop reason: ${stopReason}`, responseCycleGroupId);
+        this.logger.debug(`Stop reason: ${stopReason}`, logGroupId);
         this.logger.debug(
           `Token usage: ${JSON.stringify(responseUsage)}`,
-          responseCycleGroupId,
+          logGroupId,
         );
 
         // Extract thinking blocks directly from the response object
@@ -363,7 +240,7 @@ export abstract class BaseReflectionAgent implements IAgent {
         // and returns content of the first thinking block for logging (if any)
         const thinkingContent = this.modelHandler.processThinkingBlock(
           responseObject,
-          responseCycleGroupId,
+          logGroupId,
           toolState,
         );
 
@@ -373,7 +250,7 @@ export abstract class BaseReflectionAgent implements IAgent {
             thinkingContent,
             this.logger,
             'Thinking',
-            responseCycleGroupId,
+            logGroupId,
           );
 
           // Note: The complete thinking blocks (including signatures) have already been
@@ -384,7 +261,7 @@ export abstract class BaseReflectionAgent implements IAgent {
         await this.extractAndLogScratchpad(
           newResponse,
           'scratchpad',
-          responseCycleGroupId,
+          logGroupId,
         );
         // this has a potential bug if <scratchpad> is included in the prefill
 
@@ -405,21 +282,21 @@ export abstract class BaseReflectionAgent implements IAgent {
         if (repetitionResult.massiveRepetitionDetected) {
           this.logger.error(
             `The new response is (first ${REPETITION_DETECTION_THRESHOLD} chars): ${newResponse.substring(0, REPETITION_DETECTION_THRESHOLD)}`,
-            responseCycleGroupId,
+            logGroupId,
           );
           this.logger.error(
             `Massive repetition detected - skipping this response`,
-            responseCycleGroupId,
+            logGroupId,
           );
 
           // Debug information - print message skeleton to help diagnose the problem
           this.logger.error(
             `Message structure when repetition detected:`,
-            responseCycleGroupId,
+            logGroupId,
           );
           this.logger.error(
             JSON.stringify(messageToSkeleton(messages), null, 2),
-            responseCycleGroupId,
+            logGroupId,
           );
           break;
         }
@@ -443,28 +320,28 @@ export abstract class BaseReflectionAgent implements IAgent {
 
         // Write or append to output file
         if (!exists) {
-          this.logger.debug(
-            `Creating new file: ${outputFile}`,
-            responseCycleGroupId,
-          );
-          await writeFile(outputFile, processedResponse);
+          this.logger.debug(`Creating new file: ${outputFile}`, logGroupId);
+          await WorkspaceFS.writeFile(outputFile, processedResponse);
         } else {
           this.logger.debug(
             `Appending to existing file: ${outputFile}`,
-            responseCycleGroupId,
+            logGroupId,
           );
-          await appendFile(outputFile, bestConnector + processedResponse);
+          await WorkspaceFS.appendFile(
+            outputFile,
+            bestConnector + processedResponse,
+          );
         }
 
         // Log response boundaries
-        this.logger.debug(`Response preview:`, responseCycleGroupId);
+        this.logger.debug(`Response preview:`, logGroupId);
         this.logger.debug(
           `First ${K_SLICE} chars:\n${processedResponse.slice(0, K_SLICE)}`,
-          responseCycleGroupId,
+          logGroupId,
         );
         this.logger.debug(
           `Last ${K_SLICE} chars:\n${processedResponse.slice(-K_SLICE)}`,
-          responseCycleGroupId,
+          logGroupId,
         );
 
         // Update message content
@@ -503,7 +380,7 @@ export abstract class BaseReflectionAgent implements IAgent {
         stateRound.incrementContinuation();
         this.logger.info(
           `Starting continuation #${stateRound.continuationCount}`,
-          responseCycleGroupId,
+          logGroupId,
         );
 
         // Check if model should continue generating
@@ -517,7 +394,7 @@ export abstract class BaseReflectionAgent implements IAgent {
         ) {
           this.logger.debug(
             `Should continue - adding continuation message to conversation`,
-            responseCycleGroupId,
+            logGroupId,
           );
           if (this.modelHandler.capabilities.supportsAssistantPrefill) {
             this.modelHandler.addContinueMessageWithPrefill(
@@ -541,15 +418,8 @@ export abstract class BaseReflectionAgent implements IAgent {
         }
       }
 
-      if (responseCycleGroupId) {
-        this.logger.endGroup(responseCycleGroupId, 'stopped');
-      }
-
       return [stateRound, stateGlobal, toolState, endTurn];
     } catch (error) {
-      if (responseCycleGroupId) {
-        this.logger.endGroup(responseCycleGroupId, 'error');
-      }
       throw error;
     }
   }
@@ -580,15 +450,15 @@ export abstract class BaseReflectionAgent implements IAgent {
   ): Promise<DiffStats> {
     try {
       if (!baseFile) {
-        const outContent = await readFile(outputFile);
+        const outContent = await WorkspaceFS.readFile(outputFile);
         const added = this.countLines(outContent);
         // For new files, only return added count (removed should be undefined for UI)
         return { added };
       }
 
       const [baseContent, outContent] = await Promise.all([
-        readFile(baseFile),
-        readFile(outputFile),
+        WorkspaceFS.readFile(baseFile),
+        WorkspaceFS.readFile(outputFile),
       ]);
 
       const dmp = new diff_match_patch();
@@ -732,7 +602,7 @@ export abstract class BaseReflectionAgent implements IAgent {
       this.outputHandler.outputFiles[currRound].length > 0
     ) {
       const existingBase = await Promise.all(
-        this.baseFiles.map(async (f) => await fileExists(f)),
+        this.baseFiles.map(async (f) => await WorkspaceFS.exists(f)),
       );
 
       if (existingBase.some((e) => e)) {
@@ -844,7 +714,7 @@ export abstract class BaseReflectionAgent implements IAgent {
                 buildDir,
                 path.basename(inputFile).replace(/\.tex$/, '.pdf'),
               );
-              if (await fileExists(pdfFile)) {
+              if (await WorkspaceFS.exists(pdfFile)) {
                 this.logger.info(
                   `Compiled PDF for ${inputFile}: ${pdfFile}`,
                   round0GroupId,
@@ -1208,7 +1078,7 @@ export abstract class BaseReflectionAgent implements IAgent {
             buildDir,
             path.basename(outputFile).replace(/\.tex$/, '.pdf'),
           );
-          if (await fileExists(pdfFile)) {
+          if (await WorkspaceFS.exists(pdfFile)) {
             this.logger.info(
               `Compiled PDF for ${outputFile}: ${pdfFile}`,
               this.logger.getActiveGroupId(),
@@ -1337,47 +1207,6 @@ export abstract class BaseReflectionAgent implements IAgent {
         this.outputHandler.outputMappings[currRound] = [];
       }
     }
-  }
-
-  /**
-   * Interrupts the agent's execution
-   */
-  public interrupt(): void {
-    this.isInterrupted = true;
-    if (this.abortController) {
-      this.abortController.abort();
-    }
-    this.logger.info(
-      'Agent execution interrupted by user. Active request aborted; partial output may remain.',
-    );
-  }
-
-  /**
-   * Checks if the agent should stop due to interruption
-   */
-  private checkInterruption(): boolean {
-    if (this.isInterrupted) {
-      this.logger.info('Stopping due to user interruption');
-      return true;
-    }
-    return false;
-  }
-
-  /**
-   * Gets a running agent by its stream ID
-   */
-  public static getRunningAgent(
-    streamId: string,
-  ): BaseReflectionAgent | undefined {
-    return BaseReflectionAgent.runningAgents.get(streamId);
-  }
-
-  /**
-   * Removes a running agent from tracking
-   */
-  private cleanup(): void {
-    const channelId = this.getTaskId();
-    BaseReflectionAgent.runningAgents.delete(channelId);
   }
 
   /** Extracts and logs scratchpad content from output. */

@@ -1,27 +1,45 @@
 // Third-party imports
 import * as vscode from 'vscode';
-import * as path from 'path';
 
-import { ProgressViewProvider } from '../progressView/ProgressViewProvider';
+// Local imports - progress view
+import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 
 // Local imports - log
 import * as logger from '@logger/logUtils';
 
+// Local imports - utilities
+import { getStreamId } from '@utils/loggerUtils';
+
 // Local imports - housekeeping
-import { runPack, runPackSingle, runPackMultiple } from '../housekeeping';
+import { runPack, runPackSingle, runPackMultiple } from '@housekeeping';
+import type { FileOpResult } from '@/types/ResultTypes';
 
 const CHANNEL = 'packCommands';
 logger.initialize(CHANNEL);
 
-function getStreamId(
-  agent: string,
-  model: string,
-  inputFile: string,
-  outputFiles?: string[],
-): string {
-  const agentName =
-    outputFiles && outputFiles.length > 1 ? `${agent}_multiple` : agent;
-  return `${agentName}@${model}: ${path.basename(inputFile)}`;
+function showPackResult(result: FileOpResult, inputFile: string): void {
+  switch (result.status) {
+    case 'success':
+      if (result.outputFolder) {
+        vscode.window.showInformationMessage(
+          `Files packed into ${result.outputFolder}`,
+        );
+      }
+      break;
+    case 'noFiles':
+      vscode.window.showInformationMessage(
+        `No files found to pack for ${inputFile}`,
+      );
+      break;
+    case 'missingParams':
+      vscode.window.showErrorMessage('Missing required parameters for pack');
+      break;
+    case 'error':
+      vscode.window.showErrorMessage(`Error during packing: ${result.error}`);
+      break;
+    default:
+      break;
+  }
 }
 
 export function registerPackCommands(context: vscode.ExtensionContext) {
@@ -49,13 +67,13 @@ async function handlePack(config: any) {
     ? config.outputFiles || []
     : [];
 
-  await runPack(
+  const result = await runPack(
     config.model,
     config.inputFile,
     config.agent,
     outputFiles,
-    config.outputNameOverride,
   );
+  showPackResult(result, config.inputFile);
 
   const provider = ProgressViewProvider.getInstance();
   if (provider) {
@@ -74,11 +92,10 @@ async function handlePackSingle(
   inputFile: string,
   agent: string,
   model: string,
-  outputNameOverride?: string,
 ) {
   logger.debug(
     CHANNEL,
-    `Command called with: inputFile=${inputFile}, agent=${agent}, model=${model}, outputNameOverride=${outputNameOverride}`,
+    `Command called with: inputFile=${inputFile}, agent=${agent}, model=${model}`,
   );
 
   if (!inputFile || !agent || !model) {
@@ -92,8 +109,8 @@ async function handlePackSingle(
     return;
   }
 
-  const fileToPack = outputNameOverride || inputFile;
-  await runPackSingle(model, fileToPack, agent);
+  const result = await runPackSingle(model, inputFile, agent);
+  showPackResult(result, inputFile);
 
   const provider = ProgressViewProvider.getInstance();
   if (provider) {
@@ -108,11 +125,10 @@ async function handlePackMultiple(
   agent: string,
   model: string,
   outputFiles: string[] = [],
-  outputNameOverride?: string,
 ) {
   logger.debug(
     CHANNEL,
-    `Command called with: inputFile=${inputFile}, agent=${agent}, model=${model}, outputNameOverride=${outputNameOverride}`,
+    `Command called with: inputFile=${inputFile}, agent=${agent}, model=${model}`,
   );
   logger.debug(CHANNEL, `Additional files: ${outputFiles.join(', ')}`);
 
@@ -127,13 +143,8 @@ async function handlePackMultiple(
     return;
   }
 
-  await runPackMultiple(
-    model,
-    inputFile,
-    agent,
-    outputFiles,
-    outputNameOverride,
-  );
+  const result = await runPackMultiple(model, inputFile, agent, outputFiles);
+  showPackResult(result, inputFile);
 
   const provider = ProgressViewProvider.getInstance();
   if (provider) {

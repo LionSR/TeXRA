@@ -32,17 +32,12 @@ import { MediaEntry } from '@agent/utils/mediaTypes';
 import { AgentLogger } from '@logger/AgentLogger';
 
 // Local imports - utilities
-import {
-  readFile,
-  writeFile,
-  fileExistsAndNonTrivial,
-  getFullPathFromWorkspace,
-} from '@utils/files';
-import { fileExistsAbsolute } from '@utils/files';
+import { WorkspaceFS, AbsoluteFS } from '@utils/files';
 import { formatProviderError } from '@utils/sdkErrorUtils';
 import { cleanFileContent } from '@replacement/replacementUtils';
 import replacementManager from '@replacement/replacementManager';
 import { extractAndLogScratchpad } from '@utils/text/xmlUtils';
+import type { ProviderStopReason } from '../../types/StopReasonTypes';
 import { getConfig } from '@utils/config';
 import { calculateTokenPrice } from '@utils/priceUtils';
 
@@ -375,8 +370,8 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
       );
       for (const mediaFile of mediaFiles) {
         try {
-          const absolutePath = getFullPathFromWorkspace(mediaFile);
-          if (!fileExistsAbsolute(absolutePath)) {
+          const absolutePath = WorkspaceFS.fullPath(mediaFile);
+          if (!(await AbsoluteFS.exists(absolutePath))) {
             this.logger.error(`File does not exist: ${absolutePath}`);
             continue;
           }
@@ -493,8 +488,8 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
       );
       for (const mediaFile of mediaFiles) {
         try {
-          const absolutePath = getFullPathFromWorkspace(mediaFile);
-          if (!fileExistsAbsolute(absolutePath)) {
+          const absolutePath = WorkspaceFS.fullPath(mediaFile);
+          if (!(await AbsoluteFS.exists(absolutePath))) {
             this.logger.error(`File does not exist: ${absolutePath}`);
             continue;
           }
@@ -567,7 +562,11 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
   extractResponse(
     responseObject: GenerateContentResponse,
     endTag: string,
-  ): [string, GenerateContentResponseUsageMetadata | undefined, string] {
+  ): [
+    string,
+    GenerateContentResponseUsageMetadata | undefined,
+    ProviderStopReason,
+  ] {
     if (!responseObject) {
       this.logger.error(`Invalid (null) response object received.`);
       return ['', undefined, 'UNKNOWN_EMPTY_RESPONSE'];
@@ -778,7 +777,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
       `Initializing output and prefill for ${outputFile}. Prefill content: "${prefill.slice(0, 100)}..."`,
     );
 
-    if (!(await fileExistsAndNonTrivial(outputFile))) {
+    if (!(await WorkspaceFS.existsAndNonTrivial(outputFile))) {
       this.logger.debug(
         `Output file ${outputFile} does not exist or is empty.`,
       );
@@ -813,7 +812,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
     this.logger.debug(
       `Output file ${outputFile} exists and is non-trivial. Reading content.`,
     );
-    let fileContent = await readFile(outputFile);
+    let fileContent = await WorkspaceFS.readFile(outputFile);
     fileContent = cleanFileContent(fileContent);
 
     // Extract and log any existing scratchpad content
@@ -824,7 +823,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
       groupId,
     );
 
-    await writeFile(outputFile, fileContent);
+    await WorkspaceFS.writeFile(outputFile, fileContent);
     this.logger.debug(`Cleaned and saved existing content to ${outputFile}.`);
     messages.push({
       role: 'assistant',
@@ -860,7 +859,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
   }
 
   shouldContinue(
-    stopReason: string,
+    stopReason: ProviderStopReason,
     newResponse: string,
     agentSetting: AgentSetting,
   ): boolean {

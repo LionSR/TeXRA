@@ -1,4 +1,4 @@
-import { vscode } from '@common/vscodeApi.js';
+import { vscode } from '@common/webviewContext.js';
 import {
   getCurrentStream,
   setStreamStatus,
@@ -699,6 +699,27 @@ export function addLogGroup(group) {
 }
 
 /**
+ * Play a short beep using the Web Audio API.
+ */
+function playSystemSound() {
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    const ctx = new AudioCtx();
+    const osc = ctx.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.value = 880;
+    osc.connect(ctx.destination);
+    osc.start();
+    setTimeout(() => {
+      osc.stop();
+      ctx.close();
+    }, 150);
+  } catch (err) {
+    // Ignore errors (e.g. autoplay restrictions)
+  }
+}
+
+/**
  * Updates the UI of a log group's header
  * @param {string} groupId - ID of the group to update
  * @param {string} status - New status
@@ -743,6 +764,10 @@ export function updateLogGroupUI(groupId, status, endTime) {
         durationSpan.textContent = `${formatDuration(durationMs)}`;
         durationSpan.style.display = 'inline';
         timeContainer.appendChild(durationSpan);
+      }
+
+      if (/^r\d+$/.test(group.name)) {
+        playSystemSound();
       }
     }
   }

@@ -4,9 +4,12 @@ import * as vscode from 'vscode';
 // Local imports - core
 import * as logger from '@logger/logUtils';
 import { watchConfig } from '@utils/config';
-import { initializeSecrets } from '@frontend/secrets';
+import { SecretManager } from '@frontend/secretManager';
 import { copyDefaultAgents, configureLatexSettings } from '@frontend/setup';
 import { disposeDiffRefresh } from '@frontend/ui/diffView';
+import { StorageFS } from '@utils/files';
+import { initializeStateManagers } from '@utils/stateManager';
+import { FileLister } from '@frontend/files/fileLister';
 
 // Local imports - components
 import { ProgressViewProvider } from './progressView/ProgressViewProvider';
@@ -14,8 +17,11 @@ import { FolderExplorer } from './FolderExplorer';
 import { registerCommands } from './commands';
 
 export async function activate(context: vscode.ExtensionContext) {
-  // Initialize secrets storage
-  initializeSecrets(context);
+  // Initialize storage systems
+  SecretManager.initialize(context);
+  StorageFS.initialize(context);
+  initializeStateManagers(context);
+  FileLister.initialize(context);
 
   // Create the log view provider
   const progressViewProvider = new ProgressViewProvider(context);

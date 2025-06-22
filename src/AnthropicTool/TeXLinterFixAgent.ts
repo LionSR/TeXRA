@@ -2,14 +2,12 @@
 
 // Local imports - core
 import { AnthropicToolAgent } from './AnthropicToolAgent';
-import { ToolResult } from './base';
 
 // Local imports - types
 import { ValidationResult } from './types';
 import { LinterMessage } from '@frontend/latex/linter';
 
 // Local imports - utils
-import * as workspaceFileUtils from '@utils/files';
 import * as linterUtils from '@frontend/latex/linter';
 
 // Local imports - Logging

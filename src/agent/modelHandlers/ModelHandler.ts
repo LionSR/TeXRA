@@ -8,8 +8,7 @@ import * as path from 'path';
 import { AgentLogger } from '@logger/AgentLogger';
 
 // Local imports - utilities
-import { fileExists } from '@utils/files';
-import { fileExistsAbsolute } from '@utils/files/absoluteFileUtils';
+import { WorkspaceFS, AbsoluteFS } from '@utils/files';
 import { getPastedImageDisplayName } from '@utils/files/pastedImageUtils';
 import {
   getBase64EncodedMedia,
@@ -18,7 +17,8 @@ import {
 } from '@frontend/media/img';
 import { checkMultipleToolsInstalled } from '@utils/system';
 import { getConfig } from '@utils/config';
-import { getApiKey as getSecretApiKey, ApiProvider } from '@frontend/secrets';
+import type { ProviderStopReason } from '../../types/StopReasonTypes';
+import { SecretManager, ApiProvider } from '@frontend/secretManager';
 
 // Local imports - agent components
 import { AgentConfig } from '../core/AgentConfig';
@@ -103,7 +103,7 @@ export abstract class ModelHandler {
 
     if (useOpenRouter) {
       try {
-        return await getSecretApiKey('openRouter');
+        return await SecretManager.getApiKey('openRouter');
       } catch (err) {
         throw new Error(
           'Missing API key for OpenRouter. Please set it using the "Set API Key" command.',
@@ -113,7 +113,7 @@ export abstract class ModelHandler {
 
     const provider = this.config.provider.toLowerCase() as ApiProvider;
     try {
-      return await getSecretApiKey(provider);
+      return await SecretManager.getApiKey(provider);
     } catch (err) {
       throw new Error(
         `Missing API key for ${this.config.provider}. Please set it using the "Set API Key" command.`,
@@ -422,8 +422,8 @@ export abstract class ModelHandler {
       // Check if this is an absolute path (for pasted images in storage)
       const isAbsolutePath = path.isAbsolute(mediaFile);
       const fileExistsResult = isAbsolutePath
-        ? await fileExistsAbsolute(mediaFile)
-        : await fileExists(mediaFile);
+        ? await AbsoluteFS.exists(mediaFile)
+        : await WorkspaceFS.exists(mediaFile);
 
       if (!fileExistsResult) {
         this.logger.error(`File not found: ${mediaFile}`);
@@ -532,13 +532,13 @@ export abstract class ModelHandler {
 
   /** Detects stop markers in model output. */
   protected detectStopMarkers(
-    stopReason: string,
+    stopReason: ProviderStopReason,
     response: string,
     setting: AgentSetting,
   ): MarkerFlags {
     return {
       endTurn: ['end_turn', 'stop_sequence', 'stop', 'STOP'].includes(
-        stopReason,
+        stopReason ?? '',
       ),
       encounterDocumentTag: response.includes(`</${setting.documentTag}>`),
     };
@@ -549,7 +549,7 @@ export abstract class ModelHandler {
    * @returns Tuple of [endTurn: should end current turn, shouldStop: should stop conversation]
    */
   public checkStopConditions(
-    stopReason: string,
+    stopReason: ProviderStopReason,
     newResponse: string,
     stateRound: AgentStateRound,
     stateGlobal: AgentStateGlobal,
@@ -646,7 +646,7 @@ export abstract class ModelHandler {
   abstract extractResponse(
     responseObject: any,
     endTag: string,
-  ): [string, any, string];
+  ): [string, any, ProviderStopReason];
 
   /**
    * Manages continuation for truncated responses in multi-turn conversations with prefill support.
@@ -725,7 +725,7 @@ export abstract class ModelHandler {
    * @returns Boolean indicating if generation should continue
    */
   abstract shouldContinue(
-    stopReason: string,
+    stopReason: ProviderStopReason,
     newResponse: string,
     agentSetting: AgentSetting,
   ): boolean;

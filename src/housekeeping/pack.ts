@@ -4,22 +4,22 @@ import * as path from 'path';
 // Third-party imports
 import * as vscode from 'vscode';
 
+// Local imports - result types
+import type { FileOpResult } from '@/types/ResultTypes';
+
 // Local imports - log
 import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
-import {
-  deleteFile,
-  moveFile,
-  copyFile,
-  findFileInBuild,
-  createDirectory,
-  fileExists,
-} from '@utils/files';
+import { WorkspaceFS } from '@utils/files';
 
 // Local imports - housekeeping
 import { PACK_EXTENSIONS, TEMP_EXTENSIONS, HISTORY_DIR } from './constants';
-import { getAgentFirstNameChunk, getFilePatterns } from './utils';
+import {
+  getAgentFirstNameChunk,
+  getFilePatterns,
+  findFilesFromPatterns,
+} from './utils';
 
 const CHANNEL = 'Housekeeping';
 logger.initialize(CHANNEL);
@@ -29,7 +29,7 @@ export async function runPackSingle(
   inputFile: string,
   agent: string,
   outputFolder?: string,
-): Promise<string | undefined> {
+): Promise<FileOpResult> {
   logger.info(
     CHANNEL,
     `Starting packing with model=${model}, inputFile=${inputFile}, agent=${agent}, outputFolder=${outputFolder}`,
@@ -40,10 +40,7 @@ export async function runPackSingle(
       CHANNEL,
       `Missing required parameters: model=${model}, inputFile=${inputFile}, agent=${agent}`,
     );
-    vscode.window.showErrorMessage(
-      'Missing required parameters for packSingle',
-    );
-    return '';
+    return { status: 'missingParams' };
   }
 
   const baseName = path.parse(inputFile).name;
@@ -60,20 +57,19 @@ export async function runPackSingle(
   ];
   logger.debug(CHANNEL, `Generated patterns: ${filePatterns}`);
 
+  const allFiles = findFilesFromPatterns(
+    inputDir,
+    filePatterns,
+    PACK_EXTENSIONS,
+  );
   const movedFiles: string[] = [];
   const copiedFiles: string[] = [];
 
-  // Find files to move or copy
-  for (const pattern of filePatterns) {
-    for (const ext of PACK_EXTENSIONS) {
-      const filePath = await findFileInBuild(inputDir, pattern, ext);
-      if (filePath) {
-        if (filePath === inputFile || pattern === baseName) {
-          copiedFiles.push(filePath);
-        } else {
-          movedFiles.push(filePath);
-        }
-      }
+  for (const file of allFiles) {
+    if (file === inputFile || path.parse(file).name === baseName) {
+      copiedFiles.push(file);
+    } else {
+      movedFiles.push(file);
     }
   }
 
@@ -84,10 +80,10 @@ export async function runPackSingle(
 
   if (onlyInputFilePacked) {
     logger.warn(CHANNEL, `No files found to pack for ${inputFile}`);
-    vscode.window.showWarningMessage(`No files found to pack for ${inputFile}`);
-    return '';
+    return { status: 'noFiles' };
   }
 
+  let result: FileOpResult;
   if (movedFiles.length > 0 || copiedFiles.length > 0) {
     logger.debug(
       CHANNEL,
@@ -107,7 +103,7 @@ export async function runPackSingle(
     logger.debug(CHANNEL, `Output folder: ${outputFolder}`);
 
     try {
-      await createDirectory(outputFolder);
+      await WorkspaceFS.createDir(outputFolder);
       logger.debug(CHANNEL, `Created output directory: ${outputFolder}`);
 
       // Move and copy files
@@ -115,47 +111,45 @@ export async function runPackSingle(
       for (const file of movedFiles) {
         const destination = path.join(outputFolder, path.basename(file));
         operations.push(`Moving: ${file} -> ${destination}`);
-        await moveFile(file, destination);
+        await WorkspaceFS.move(file, destination);
       }
       for (const file of copiedFiles) {
         const destination = path.join(outputFolder, path.basename(file));
         operations.push(`Copying: ${file} -> ${destination}`);
-        await copyFile(file, destination);
+        await WorkspaceFS.copy(file, destination);
       }
-      // Display a summary only when actual files were packed
       if (operations.length > 0 && !onlyInputFilePacked) {
         logger.info(CHANNEL, `Files packed into ${outputFolder}`);
-        vscode.window.showInformationMessage(
-          `Files packed into ${outputFolder}`,
-        );
         logger.debug(CHANNEL, `File operations:\n${operations.join('\n')}`);
       }
+      result = { status: 'success', outputFolder };
     } catch (err) {
       logger.error(
         CHANNEL,
         `Error during file operations: ${err instanceof Error ? err.message : String(err)}`,
       );
-      vscode.window.showErrorMessage(`Error during packing: ${err}`);
-      return '';
+      result = {
+        status: 'error',
+        error: err instanceof Error ? err.message : String(err),
+      };
     }
   } else {
     logger.warn(CHANNEL, `No files found to pack for ${inputFile}`);
-    vscode.window.showInformationMessage(
-      `No files found to pack for ${inputFile}`,
-    );
+    result = { status: 'noFiles' };
   }
 
-  // Clean up temporary files
-  for (const pattern of filePatterns) {
-    for (const ext of TEMP_EXTENSIONS) {
-      const filePath = await findFileInBuild(inputDir, pattern, ext);
-      if (filePath && filePath !== inputFile) {
-        await deleteFile(filePath);
-      }
+  const tempFiles = findFilesFromPatterns(
+    inputDir,
+    filePatterns,
+    TEMP_EXTENSIONS,
+  );
+  for (const file of tempFiles) {
+    if (file !== inputFile) {
+      await WorkspaceFS.delete(file);
     }
   }
 
-  return outputFolder ?? '';
+  return result;
 }
 
 export async function runPackMultiple(
@@ -163,15 +157,14 @@ export async function runPackMultiple(
   inputFile: string,
   agent: string,
   inputFiles: string[],
-  outputNameOverride?: string,
-): Promise<string> {
+): Promise<FileOpResult> {
   logger.debug(
     CHANNEL,
-    `Starting multiple packing with model=${model}, inputFile=${inputFile}, agent=${agent}, outputNameOverride=${outputNameOverride}`,
+    `Starting multiple packing with model=${model}, inputFile=${inputFile}, agent=${agent}`,
   );
   logger.debug(CHANNEL, `Additional files: ${inputFiles.join(', ')}`);
 
-  const fileToPack = outputNameOverride || inputFile;
+  const fileToPack = inputFile;
   const baseName = path.parse(fileToPack).name;
   const outputDir = path.dirname(fileToPack);
 
@@ -193,20 +186,20 @@ export async function runPackMultiple(
       agent,
       commonOutputFolder,
     );
-    if (singleResult) {
+    if (singleResult.status === 'success') {
       anyFilesPacked = true;
     }
     // Pack additional files
     if (inputFiles && inputFiles.length > 0) {
       for (const file of inputFiles) {
         // logger.debug(CHANNEL, `Packing input file: ${file}`);
-        const result = await runPackSingle(
+        const additionalResult = await runPackSingle(
           model,
           file,
           agent,
           commonOutputFolder,
         );
-        if (result) {
+        if (additionalResult.status === 'success') {
           anyFilesPacked = true;
         }
       }
@@ -221,32 +214,35 @@ export async function runPackMultiple(
 
     for (const pattern of additionalPatterns) {
       const filePath = path.join(outputDir, pattern);
-      if (await fileExists(filePath)) {
+      if (await WorkspaceFS.exists(filePath)) {
         if (!anyFilesPacked) {
-          await createDirectory(commonOutputFolder);
+          await WorkspaceFS.createDir(commonOutputFolder);
         }
         logger.debug(CHANNEL, `Found additional XML file: ${filePath}`);
-        await moveFile(filePath, path.join(commonOutputFolder, pattern));
+        await WorkspaceFS.move(
+          filePath,
+          path.join(commonOutputFolder, pattern),
+        );
         anyFilesPacked = true;
       }
     }
 
     if (anyFilesPacked) {
       logger.info(CHANNEL, `All files packed into ${commonOutputFolder}`);
-      return commonOutputFolder;
+      return { status: 'success', outputFolder: commonOutputFolder };
     }
 
     logger.warn(CHANNEL, `No files found to pack for ${inputFile}`);
-    vscode.window.showInformationMessage(
-      `No files found to pack for ${inputFile}`,
-    );
-    return '';
+    return { status: 'noFiles' };
   } catch (err) {
     logger.error(
       CHANNEL,
       `Error during multiple pack operation: ${err instanceof Error ? err.message : String(err)}`,
     );
-    throw err;
+    return {
+      status: 'error',
+      error: err instanceof Error ? err.message : String(err),
+    };
   }
 }
 
@@ -255,11 +251,10 @@ export async function runPack(
   inputFile: string,
   agent: string,
   outputFiles: string[] = [],
-  outputNameOverride?: string,
-): Promise<string | undefined> {
+): Promise<FileOpResult> {
   logger.debug(
     CHANNEL,
-    `Starting pack with model=${model}, inputFile=${inputFile}, agent=${agent}, outputNameOverride=${outputNameOverride}`,
+    `Starting pack with model=${model}, inputFile=${inputFile}, agent=${agent}`,
   );
   logger.debug(CHANNEL, `Additional files: ${outputFiles.join(', ')}`);
 
@@ -268,20 +263,13 @@ export async function runPack(
       CHANNEL,
       `Missing required parameters: model=${model}, inputFile=${inputFile}, agent=${agent}`,
     );
-    vscode.window.showErrorMessage('Missing required parameters for pack');
-    return undefined;
+    return { status: 'missingParams' };
   }
 
   // Use multiple mode if there are output files
   if (outputFiles.length > 0) {
-    return await runPackMultiple(
-      model,
-      inputFile,
-      agent,
-      outputFiles,
-      outputNameOverride,
-    );
+    return await runPackMultiple(model, inputFile, agent, outputFiles);
   } else {
-    return await runPackSingle(model, inputFile, agent, outputNameOverride);
+    return await runPackSingle(model, inputFile, agent);
   }
 }

@@ -1,11 +1,14 @@
 // Third-party imports
 import * as vscode from 'vscode';
-import * as path from 'path';
 
-import { ProgressViewProvider } from '../progressView/ProgressViewProvider';
+// Local imports - progress view
+import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 
 // Local imports - log
 import * as logger from '@logger/logUtils';
+
+// Local imports - utilities
+import { getStreamId } from '@utils/loggerUtils';
 
 // Local imports - housekeeping
 import {
@@ -13,20 +16,31 @@ import {
   runCleanMultiple,
   runCleanBuild,
   runCleanOutput,
-} from '../housekeeping';
+} from '@housekeeping';
+import type { FileOpResult } from '@/types/ResultTypes';
 
 const CHANNEL = 'cleanCommands';
 logger.initialize(CHANNEL);
 
-function getStreamId(
-  agent: string,
-  model: string,
-  inputFile: string,
-  outputFiles?: string[],
-): string {
-  const agentName =
-    outputFiles && outputFiles.length > 1 ? `${agent}_multiple` : agent;
-  return `${agentName}@${model}: ${path.basename(inputFile)}`;
+function showCleanResult(result: FileOpResult, inputFile: string): void {
+  switch (result.status) {
+    case 'success':
+      vscode.window.showInformationMessage(`Cleanup complete for ${inputFile}`);
+      break;
+    case 'noFiles':
+      vscode.window.showInformationMessage(
+        `No files found to clean for ${inputFile}`,
+      );
+      break;
+    case 'missingParams':
+      vscode.window.showErrorMessage('Missing required parameters for clean');
+      break;
+    case 'error':
+      vscode.window.showErrorMessage(`Error during cleanup: ${result.error}`);
+      break;
+    default:
+      break;
+  }
 }
 
 export function registerCleanCommands(context: vscode.ExtensionContext) {
@@ -43,11 +57,10 @@ async function handleCleanSingle(
   inputFile: string,
   agent: string,
   model: string,
-  outputNameOverride: string = '',
 ) {
   logger.debug(
     CHANNEL,
-    `Command called with: inputFile=${inputFile}, agent=${agent}, model=${model}, outputNameOverride=${outputNameOverride}`,
+    `Command called with: inputFile=${inputFile}, agent=${agent}, model=${model}`,
   );
 
   if (!inputFile || !agent || !model) {
@@ -60,7 +73,8 @@ async function handleCleanSingle(
     );
     return;
   }
-  await runCleanSingle(model, outputNameOverride || inputFile, agent);
+  const result = await runCleanSingle(model, inputFile, agent);
+  showCleanResult(result, inputFile);
 
   const provider = ProgressViewProvider.getInstance();
   if (provider) {
@@ -75,11 +89,10 @@ async function handleCleanMultiple(
   agent: string,
   model: string,
   outputFiles: string[] = [],
-  outputNameOverride?: string,
 ) {
   logger.debug(
     CHANNEL,
-    `Command called with: inputFile=${inputFile}, agent=${agent}, model=${model}, outputNameOverride=${outputNameOverride}`,
+    `Command called with: inputFile=${inputFile}, agent=${agent}, model=${model}`,
   );
   logger.debug(CHANNEL, `Additional files: ${outputFiles.join(', ')}`);
 
@@ -94,11 +107,8 @@ async function handleCleanMultiple(
     return;
   }
 
-  const inputFilesWithOverride = outputNameOverride
-    ? [outputNameOverride, ...outputFiles]
-    : outputFiles;
-
-  await runCleanMultiple(model, inputFile, agent, inputFilesWithOverride);
+  const result = await runCleanMultiple(model, inputFile, agent, outputFiles);
+  showCleanResult(result, inputFile);
 
   const provider = ProgressViewProvider.getInstance();
   if (provider) {
@@ -129,15 +139,21 @@ export async function handleClean(config: any) {
       CHANNEL,
       `Running clean multiple with ${outputFiles.length} files`,
     );
-    await runCleanMultiple(
+    const result = await runCleanMultiple(
       config.model,
       config.inputFile,
       config.agent,
       outputFiles,
     );
+    showCleanResult(result, config.inputFile);
   } else {
     logger.info(CHANNEL, `Running clean single`);
-    await runCleanSingle(config.model, config.inputFile, config.agent);
+    const result = await runCleanSingle(
+      config.model,
+      config.inputFile,
+      config.agent,
+    );
+    showCleanResult(result, config.inputFile);
   }
 
   const provider = ProgressViewProvider.getInstance();

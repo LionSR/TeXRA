@@ -50,8 +50,6 @@ export const VALUE_ELEMENTS = [
   ...SINGLE_FILE_ELEMENTS,
   // instruction
   'instruction',
-  // output
-  'outputNameOverride',
   // git
   'commit',
 ];

@@ -5,8 +5,8 @@ import * as vscode from 'vscode';
 import * as logger from '@logger/logUtils';
 
 // Local imports - agent
-import { BaseReflectionAgent } from '../agent/implementations/BaseReflectionAgent';
-import { ProgressViewProvider } from '../progressView/ProgressViewProvider';
+import { BaseAgent } from '@agent/implementations/BaseAgent';
+import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 
 const CHANNEL = 'AgentCommands';
 logger.initialize(CHANNEL);
@@ -19,7 +19,7 @@ export function registerAgentCommands(context: vscode.ExtensionContext) {
 
 async function handleStopAgent(stream: string) {
   // Get the running agent instance
-  const agent = BaseReflectionAgent.getRunningAgent(stream);
+  const agent = BaseAgent.getRunningAgent(stream);
   if (agent) {
     // Interrupt the agent's execution
     agent.interrupt();

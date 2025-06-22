@@ -12,12 +12,7 @@ import * as logger from '@logger/logUtils';
 import { safeExecuteCommand } from '@utils/system';
 
 // Local imports - utilities
-import { getWorkspacePath, getRelativePath } from '@utils/files';
-import {
-  createStorageDirectory,
-  writeBinaryFileToStorage,
-  cleanupStorageDirectory,
-} from '@utils/files/workspaceStorageUtils';
+import { WorkspaceFS, StorageFS } from '@utils/files';
 import {
   isPastedImage,
   getPastedImageFullPath,
@@ -31,17 +26,23 @@ import {
   listAuxiliaryFiles,
   listMediaFiles,
   listEditedFiles,
-  getFilesIfNotEmpty,
-} from '@frontend/files/listing';
+} from '@frontend/files/fileLister';
+import { getFilesIfNotEmpty } from '@frontend/files/listing';
 import {
   polishTextWithAI,
   FileContext,
 } from '@utils/text/textEnhancementUtils';
 import { sleep } from '@utils/helpers';
+import {
+  startRecording,
+  stopRecordingAndTranscribe,
+} from '@frontend/media/audio';
 
 // Local imports - agent
-import { ToolConfig } from '../agent/core/ToolConfig';
-import { AgentConfig } from '../agent/core/AgentConfig';
+import { ToolConfig } from '@agent/core/ToolConfig';
+import { AgentConfig } from '@agent/core/AgentConfig';
+import { getAgentPath } from '@agent/runtime/executeAgent';
+import { loadAgentSettingAndPrompts } from '@agent/runtime/agentLoad';
 
 const CHANNEL = 'MessageHandler';
 
@@ -52,22 +53,24 @@ export class WebviewMessageHandler {
   >;
 
   constructor(private readonly context: vscode.ExtensionContext) {
-    // Ensure the pasted directory exists before trying to clean it
-    this.ensurePastedDirectoryExists().then(() => {
-      cleanupStorageDirectory(
-        this.context,
-        PASTED_DIR,
-        3 * 24 * 60 * 60 * 1000,
-      ).catch((e) =>
-        logger.warn(
-          CHANNEL,
-          `Error during initial cleanup: ${e instanceof Error ? e.message : String(e)}`,
-        ),
-      );
-    });
+    // Defer the cleanup operation to avoid potential race conditions
+    // This gives time for StorageFS to be properly initialized
+    setTimeout(() => {
+      StorageFS.ensureDir(PASTED_DIR)
+        .then(() => {
+          return StorageFS.cleanupOldFiles(PASTED_DIR, 3 * 24 * 60 * 60 * 1000);
+        })
+        .catch((e) =>
+          logger.warn(
+            CHANNEL,
+            `Error during initial cleanup: ${e instanceof Error ? e.message : String(e)}`,
+          ),
+        );
+    }, 100);
     this.handlers = {
       showInformationMessage: (message) => this.handleInfoMessage(message),
       getTheme: (_m, view) => this.handleThemeRequest(view),
+      getDebugMode: (_m, view) => this.handleDebugModeRequest(view),
       modelSelected: (message, view) =>
         this.handleModelSelection(message, view),
       execute: (message) => this.handleExecute(message),
@@ -104,6 +107,8 @@ export class WebviewMessageHandler {
       requestEditedFile: (message, view) =>
         this.handleRequestEditedFile(message, view),
       requestBaseFile: (_m, view) => this.handleRequestBaseFile(view),
+      requestDefaultOutputFiles: (message, view) =>
+        this.handleRequestDefaultOutputFiles(message, view),
       // Handle file list updates from webview
       updateInputFiles: (message, view) =>
         this.handleUpdateFiles(message, view),
@@ -149,6 +154,10 @@ export class WebviewMessageHandler {
         this.handleAddOpenedFiles(message.fileType, view),
       polishInstructionText: (message, view) =>
         this.handlePolishInstructionText(message, view),
+      transcribeInstruction: (_m, view) =>
+        this.handleTranscribeInstruction(view),
+      startRecording: (_m, view) => this.handleStartRecording(view),
+      stopRecording: (_m, view) => this.handleStopRecording(view),
       showAgentHistory: () => this.handleShowAgentHistory(),
       openSettings: () => this.handleOpenSettings(),
       openAgentSettings: () => this.handleOpenAgentSettings(),
@@ -207,6 +216,11 @@ export class WebviewMessageHandler {
     webviewView.webview.postMessage({ command: 'setTheme', theme });
   }
 
+  private handleDebugModeRequest(webviewView: vscode.WebviewView) {
+    const debugMode = getConfig<boolean>('logger.debugMode', false);
+    webviewView.webview.postMessage({ command: 'setDebugMode', debugMode });
+  }
+
   private handleModelSelection(message: any, webviewView: vscode.WebviewView) {
     if (message.model) {
       webviewView.webview.postMessage({
@@ -217,7 +231,7 @@ export class WebviewMessageHandler {
   }
 
   private async handleExecute(message: any) {
-    if (message.inputFile || message.outputNameOverride) {
+    if (message.inputFile) {
       const toolConfig: ToolConfig = {
         // Auto extract settings
         autoExtractFigure: message.autoExtractFigure,
@@ -233,7 +247,7 @@ export class WebviewMessageHandler {
       const mapMediaPath = (f: string | null): string | null => {
         if (!f) return null;
         if (isPastedImage(f)) {
-          return getPastedImageFullPath(f, this.context);
+          return getPastedImageFullPath(f);
         }
         return f;
       };
@@ -257,16 +271,13 @@ export class WebviewMessageHandler {
             )
           : null,
         outputFiles: getFilesIfNotEmpty(message.outputFiles),
-        outputNameOverride: message.outputNameOverride,
         editedFile: null,
         toolConfig,
       };
 
       await vscode.commands.executeCommand('texra.execute', agentConfig);
     } else {
-      vscode.window.showErrorMessage(
-        'Please select an input file or provide an output name override.',
-      );
+      vscode.window.showErrorMessage('Please select an input file.');
     }
   }
 
@@ -394,6 +405,44 @@ export class WebviewMessageHandler {
     this.postFileUpdate(webviewView, 'Base', await listInputFiles());
   }
 
+  private async handleRequestDefaultOutputFiles(
+    message: any,
+    webviewView: vscode.WebviewView,
+  ) {
+    const agent = message.agent;
+    if (!agent) {
+      webviewView.webview.postMessage({
+        command: 'setDefaultOutputFiles',
+        files: [],
+      });
+      return;
+    }
+
+    try {
+      const agentPath = await getAgentPath(agent, this.context);
+      const [settings] = await loadAgentSettingAndPrompts(agentPath, agent);
+
+      const files = Array.isArray(settings?.defaultOutputFiles)
+        ? settings.defaultOutputFiles
+        : [];
+
+      webviewView.webview.postMessage({
+        command: 'setDefaultOutputFiles',
+        files,
+      });
+    } catch (err) {
+      logger.error(
+        CHANNEL,
+        `Error requesting default output files: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      // Send fallback message so the webview clears any stale defaults
+      webviewView.webview.postMessage({
+        command: 'setDefaultOutputFiles',
+        files: [],
+      });
+    }
+  }
+
   private handleSetMultipleFiles(
     message: any,
     webviewView: vscode.WebviewView,
@@ -476,7 +525,6 @@ export class WebviewMessageHandler {
       message.inputFile,
       message.agent,
       message.model,
-      message.outputNameOverride,
     );
   }
 
@@ -501,7 +549,6 @@ export class WebviewMessageHandler {
       message.agent,
       message.model,
       message.outputFiles,
-      message.outputNameOverride,
     );
   }
 
@@ -654,7 +701,7 @@ export class WebviewMessageHandler {
   }
 
   private async getOpenedFiles(): Promise<string[]> {
-    const workspacePath = getWorkspacePath();
+    const workspacePath = WorkspaceFS.getPath();
     if (!workspacePath) {
       logger.warn(CHANNEL, 'No workspace path found for opened files');
       return [];
@@ -680,7 +727,7 @@ export class WebviewMessageHandler {
   private async selectOutputFiles(
     currentInputFile: string,
   ): Promise<string[] | null> {
-    const workspacePath = getWorkspacePath();
+    const workspacePath = WorkspaceFS.getPath();
     if (!workspacePath) {
       logger.error(CHANNEL, 'No workspace folder open');
       vscode.window.showErrorMessage('No workspace folder open');
@@ -709,7 +756,9 @@ export class WebviewMessageHandler {
         return null;
       }
 
-      const relativePaths = fileUris.map((uri) => getRelativePath(uri.fsPath));
+      const relativePaths = fileUris.map((uri) =>
+        WorkspaceFS.relativePath(uri.fsPath),
+      );
       logger.info(
         CHANNEL,
         `Selected output files: ${relativePaths.join(', ')}`,
@@ -846,6 +895,81 @@ export class WebviewMessageHandler {
     }
   }
 
+  private async handleTranscribeInstruction(_webviewView: vscode.WebviewView) {
+    // Legacy handler - no longer used but kept for backward compatibility
+    vscode.window.showInformationMessage(
+      'Please use the new recording interface with start/stop controls.',
+    );
+  }
+
+  private async handleStartRecording(webviewView: vscode.WebviewView) {
+    try {
+      const result = await startRecording(this.context);
+      if (result.success) {
+        webviewView.webview.postMessage({
+          command: 'recordingStarted',
+        });
+      } else if (result.error) {
+        vscode.window.showErrorMessage(result.error);
+        webviewView.webview.postMessage({
+          command: 'recordingError',
+          error: result.error,
+        });
+      }
+    } catch (error) {
+      vscode.window.showErrorMessage(
+        `Error starting recording: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
+      logger.error(
+        CHANNEL,
+        `Error in handleStartRecording: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      webviewView.webview.postMessage({
+        command: 'recordingError',
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  }
+
+  private async handleStopRecording(webviewView: vscode.WebviewView) {
+    try {
+      await vscode.window.withProgress(
+        {
+          location: vscode.ProgressLocation.Notification,
+          title: 'Transcribing instruction',
+          cancellable: false,
+        },
+        async () => {
+          const result = await stopRecordingAndTranscribe(this.context);
+          if (result.success) {
+            webviewView.webview.postMessage({
+              command: 'instructionTextTranscribed',
+              text: result.text,
+            });
+          } else if (result.error) {
+            vscode.window.showErrorMessage(result.error);
+            webviewView.webview.postMessage({
+              command: 'recordingError',
+              error: result.error,
+            });
+          }
+        },
+      );
+    } catch (error) {
+      vscode.window.showErrorMessage(
+        `Error stopping recording: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
+      logger.error(
+        CHANNEL,
+        `Error in handleStopRecording: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      webviewView.webview.postMessage({
+        command: 'recordingError',
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  }
+
   private async handleUpdateFiles(
     message: any,
     webviewView: vscode.WebviewView,
@@ -876,18 +1000,10 @@ export class WebviewMessageHandler {
       if (!base64 || !mediaType || !fileName) {
         return;
       }
-      await createStorageDirectory(this.context, PASTED_DIR);
+      await StorageFS.ensureDir(PASTED_DIR);
       const relativePath = path.join(PASTED_DIR, fileName);
-      await writeBinaryFileToStorage(
-        this.context,
-        relativePath,
-        Buffer.from(base64, 'base64'),
-      );
-      await cleanupStorageDirectory(
-        this.context,
-        PASTED_DIR,
-        3 * 24 * 60 * 60 * 1000,
-      );
+      await StorageFS.write(relativePath, Buffer.from(base64, 'base64'));
+      await StorageFS.cleanupOldFiles(PASTED_DIR, 3 * 24 * 60 * 60 * 1000);
       webviewView.webview.postMessage({
         command: 'addMediaFile',
         file: fileName,
@@ -905,20 +1021,5 @@ export class WebviewMessageHandler {
    */
   private async handleShowAgentHistory() {
     await safeExecuteCommand('texra.showAgentHistory', [], CHANNEL);
-  }
-
-  /**
-   * Ensure the pasted directory exists in workspace storage
-   */
-  private async ensurePastedDirectoryExists(): Promise<void> {
-    try {
-      await createStorageDirectory(this.context, PASTED_DIR);
-    } catch (err) {
-      // Directory might already exist, which is fine
-      logger.debug(
-        CHANNEL,
-        `Pasted directory already exists or error creating: ${err instanceof Error ? err.message : String(err)}`,
-      );
-    }
   }
 }

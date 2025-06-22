@@ -12,3 +12,14 @@ export interface ExecResult {
   /** True if the command timed out */
   timedOut?: boolean;
 }
+
+export type FileOpStatus = 'success' | 'noFiles' | 'missingParams' | 'error';
+
+export interface FileOpResult {
+  /** Outcome of the pack or clean operation */
+  status: FileOpStatus;
+  /** Output directory if files were packed */
+  outputFolder?: string;
+  /** Error message when status is "error" */
+  error?: string;
+}

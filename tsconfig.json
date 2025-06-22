@@ -18,8 +18,13 @@
       "@commands/*": ["src/commands/*"],
       "@model": ["src/model"],
       "@model/*": ["src/model/*"],
+      "@housekeeping": ["src/housekeeping"],
+      "@housekeeping/*": ["src/housekeeping/*"],
       "@progressView/*": ["src/progressView/*"],
-      "@replacement/*": ["src/replacement/*"]
+      "@historyView/*": ["src/historyView/*"],
+      "@replacement/*": ["src/replacement/*"],
+      "@tools/*": ["src/tools/*"],
+      "@types/*": ["src/types/*"]
     },
     "moduleResolution": "node",
     "strict": true /* enable all strict type-checking options */,

@@ -8,7 +8,7 @@ import { XMLParser } from 'fast-xml-parser';
 import { AgentLogger } from '@logger/AgentLogger';
 
 // Local imports - utilities
-import { readFile, writeFile } from '@utils/files';
+import { WorkspaceFS } from '@utils/files';
 import {
   addCdataToTags,
   addCdataToTagsMultiple,
@@ -328,14 +328,14 @@ export class OutputHandler {
       }
 
       try {
-        const content = await readFile(outputFile);
+        const content = await WorkspaceFS.readFile(outputFile);
         // Replace \input commands with references to the new file paths
         const newContent = content.replace(/\\input{([^}]+)}/g, (match, p1) =>
           baseToOutput.has(p1) ? `\\input{${baseToOutput.get(p1)}}` : match,
         );
 
         if (newContent !== content) {
-          await writeFile(outputFile, newContent);
+          await WorkspaceFS.writeFile(outputFile, newContent);
           this.logger.debug(`Updated input commands in ${outputFile}`);
         }
       } catch (err) {
@@ -511,17 +511,22 @@ export class OutputHandler {
       this.agentSetting.documentTag,
     );
 
-    const xmlContent = await readFile(outputFile);
+    const xmlContent = await WorkspaceFS.readFile(outputFile);
     let original = '';
     const nameMatch = xmlContent.match(/<document[^>]*name="(.*?)"[^>]*>/);
     if (nameMatch && nameMatch[1]) {
       original = nameMatch[1].trim();
     }
 
-    const content = await readFile(processedOutputFile);
-    await writeFile(processedOutputFile, content);
+    const content = await WorkspaceFS.readFile(processedOutputFile);
+    await WorkspaceFS.writeFile(processedOutputFile, content);
 
-    return { source: original || outputFile, path: processedOutputFile };
+    // Use the extracted document name when available. Otherwise use the
+    // input file path for consistent display with multiple file outputs.
+    return {
+      source: original || this.agentConfig.inputFile,
+      path: processedOutputFile,
+    };
   }
 
   /** Processes multiple output files with XML splitting and filtering. */
@@ -611,7 +616,7 @@ export class OutputHandler {
     const { dir, name, ext } = path.parse(outputFile);
     const texFile = path.join(dir, `${name}.tex`);
 
-    let outputContent = await readFile(outputFile);
+    let outputContent = await WorkspaceFS.readFile(outputFile);
 
     const tagsToWrap = [documentTag, thinkingTag];
     outputContent = addCdataToTags(outputContent, tagsToWrap);
@@ -628,7 +633,7 @@ export class OutputHandler {
 
       const latexDocument = extractContentFromXMLbyTag(root, documentTag);
       if (latexDocument) {
-        await writeFile(texFile, latexDocument);
+        await WorkspaceFS.writeFile(texFile, latexDocument);
         return texFile;
       } else {
         this.logger.warn(
@@ -640,7 +645,7 @@ export class OutputHandler {
           documentTag,
         );
         if (fallbackContent) {
-          await writeFile(texFile, fallbackContent);
+          await WorkspaceFS.writeFile(texFile, fallbackContent);
           return texFile;
         }
         return texFile;
@@ -655,7 +660,7 @@ export class OutputHandler {
         documentTag,
       );
       if (fallbackContent) {
-        await writeFile(texFile, fallbackContent);
+        await WorkspaceFS.writeFile(texFile, fallbackContent);
         return texFile;
       }
       // Re-throw the original error if fallback also failed
@@ -672,7 +677,7 @@ export class OutputHandler {
     documentTag: string,
     thinkingTag: string = 'scratchpad',
   ): Promise<NamedOutputFile[]> {
-    let outputContent = await readFile(outputFile);
+    let outputContent = await WorkspaceFS.readFile(outputFile);
 
     const tagsToWrap = [thinkingTag, 'document'];
     outputContent = addCdataToTagsMultiple(outputContent, tagsToWrap);
@@ -764,7 +769,7 @@ export class OutputHandler {
         extension,
         currRound,
       );
-      await writeFile(texFile, doc.content.trim());
+      await WorkspaceFS.writeFile(texFile, doc.content.trim());
       outputFiles.push({ source, path: texFile });
       this.logger.debug(
         `XML Source: ${source} -> TeX file written: ${texFile}`,
@@ -781,7 +786,7 @@ export class OutputHandler {
     documentTag: string,
   ): Promise<void> {
     this.logger.debug(`Ensuring correct XML structure: ${filePath}`);
-    let content = await readFile(filePath);
+    let content = await WorkspaceFS.readFile(filePath);
 
     content = await this.processXmlContent(content);
 
@@ -803,7 +808,7 @@ export class OutputHandler {
         }
       }
     }
-    await writeFile(filePath, content);
+    await WorkspaceFS.writeFile(filePath, content);
   }
 
   /** Prints statistics about token usage and costs */

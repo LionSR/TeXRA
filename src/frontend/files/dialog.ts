@@ -5,7 +5,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 // Local imports - utilities
-import { getRelativePath } from '@utils/files';
+import { WorkspaceFS } from '@utils/files';
 import { showErrorMessage } from '../ui/messageUtils';
 
 export interface FileDialogOptions {
@@ -57,7 +57,7 @@ export async function selectFiles(
   });
 
   return fileUris && fileUris.length > 0
-    ? fileUris.map((uri) => getRelativePath(uri.fsPath))
+    ? fileUris.map((uri) => WorkspaceFS.relativePath(uri.fsPath))
     : null;
 }
 

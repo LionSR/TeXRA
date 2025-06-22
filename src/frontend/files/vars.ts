@@ -1,5 +1,5 @@
 // Local imports - utilities
-import { readFile, readFileAbsolute } from '@utils/files';
+import { WorkspaceFS, AbsoluteFS } from '@utils/files';
 
 // Local imports - log
 import { AgentLogger } from '@logger/AgentLogger';
@@ -26,8 +26,8 @@ export async function setVarFromFile(
 ): Promise<boolean> {
   try {
     const fileContent = absolute
-      ? await readFileAbsolute(filePath)
-      : await readFile(filePath);
+      ? await AbsoluteFS.read(filePath)
+      : await WorkspaceFS.readFile(filePath);
     userVars[`${varName}_FILE`] = filePath;
     userVars[`${varName}_CONTENT`] = fileContent;
     logger.info(`Found from [${source}] the [VAR '${varName}']: ${filePath}`);

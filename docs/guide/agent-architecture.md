@@ -11,7 +11,7 @@ The core of TeXRA's agent definition lies in a combination of YAML for structure
 These `.yaml` files have two main parts (and thankfully, YAML is usually less prickly than XML or JSON):
 
 1.  **`settings`**: Define general operational parameters. For example:
-    - `agentType`: Is it a complex `CoT` (Chain of Thought) agent that "thinks" step-by-step, or a simpler `direct` agent?
+    - `agentType`: Is it a complex `CoT` (Chain of Thought) agent that "thinks" step-by-step, a simpler `direct` agent, or a `toolUse` agent designed to call model-integrated tools?
     - `prefills`: Text the agent should automatically start its response with (e.g., `<scratchpad>`).
     - _(Other settings control output format, inheritance, etc. See [Configuration](./configuration.md) and [Custom Agents](./custom-agents.md) for full details)._
 2.  **`prompts`**: Contain text templates that TeXRA fills with your specific context (input files, instructions) to guide the LLM at different stages:
@@ -57,6 +57,10 @@ sequenceDiagram
 4.  **Processing:** TeXRA saves the raw LLM response (often as an `.xml` file internally). It then parses this file, extracts the content from the primary XML tag (defined by `settings.documentTag`), and saves _that extracted content_ to the final output file (e.g., `filename_agent_r0_model.tex`). You can monitor this in the [ProgressBoard](./progress-board.md). For LaTeX files, TeXRA can also automatically generate a `latexdiff` file comparing the output to the input, enhancing observability. See the [LaTeX Diff guide](./latex-diff.md) for details.
 
 **Continuation Handling:** If the LLM response gets cut off due to output token limits before generating the required `endTag`, TeXRA automatically sends a continuation prompt. This prompt asks the model to resume generating exactly where it left off, ensuring complete outputs even for very long tasks. This happens seamlessly within a processing round.
+
+### Prompt Composition and Message Flow
+
+TeXRA constructs the conversation by merging your agent's `systemPrompt`, the context-filled `userPrefix`, and the `userRequest`. Depending on settings, the extension may insert additional messages in between—for example the output of `texcount` when you enable **Attach TeX Count**, or encoded images and audio files selected in the file panel. The sequence is not a fixed "system–user–system" pattern: attachments or tool results can be inserted at any point before the LLM generates a single response containing `<scratchpad>` reasoning followed by the XML-wrapped output defined by `settings.documentTag`.
 
 **Optional Reflection (Round 1):**
 

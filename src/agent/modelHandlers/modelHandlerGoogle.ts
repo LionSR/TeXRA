@@ -12,6 +12,7 @@ import {
   GenerateContentResponseUsageMetadata,
 } from '../core/ResponseUsage';
 import type { CompletionUsage } from 'openai/resources/completions';
+import type { ProviderStopReason } from '../../types/StopReasonTypes';
 
 /**
  * Handler for Google models using OpenAI-compatible API.
@@ -87,7 +88,7 @@ export class ModelHandlerGoogle extends ModelHandlerOpenAI {
 
   /** Determines if generation should continue based on response content. */
   shouldContinue(
-    stopReason: string,
+    stopReason: ProviderStopReason,
     newResponse: string,
     agentSetting: any,
   ): boolean {
