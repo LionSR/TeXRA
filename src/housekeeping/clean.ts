@@ -20,7 +20,7 @@ import {
   PACK_EXTENSIONS,
   MODELS,
 } from './constants';
-import { runOperationSingle } from './fileOps';
+import { runOperationSingle, runOperationMultiple } from './fileOps';
 
 const CHANNEL = 'Housekeeping';
 logger.initialize(CHANNEL);
@@ -38,39 +38,13 @@ export async function runCleanMultiple(
   agent: string,
   inputFiles: string[],
 ): Promise<FileOpResult> {
-  logger.debug(
-    CHANNEL,
-    `Starting multiple cleanup with model=${model}, inputFile=${inputFile}, agent=${agent}`,
-  );
-  logger.debug(CHANNEL, `Additional files: ${inputFiles.join(', ')}`);
-
-  let anyCleaned = false;
-
-  const firstResult = await runCleanSingle(model, inputFile, agent);
-  if (
-    firstResult.status === 'missingParams' ||
-    firstResult.status === 'error'
-  ) {
-    return firstResult;
-  }
-  if (firstResult.status === 'success') {
-    anyCleaned = true;
-  }
-
-  if (inputFiles && inputFiles.length > 0) {
-    for (const file of inputFiles) {
-      const res = await runCleanSingle(model, file, agent);
-      if (res.status === 'error') {
-        return res;
-      }
-      if (res.status === 'success') {
-        anyCleaned = true;
-      }
-    }
-  }
-
-  logger.info(CHANNEL, 'Cleanup complete for multiple files.');
-  return anyCleaned ? { status: 'success' } : { status: 'noFiles' };
+  return runOperationMultiple({
+    operation: 'clean',
+    model,
+    inputFile,
+    agent,
+    inputFiles,
+  });
 }
 
 export async function runCleanBuild(): Promise<void> {
