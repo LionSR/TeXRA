@@ -20,7 +20,11 @@ import {
   PACK_EXTENSIONS,
   MODELS,
 } from './constants';
-import { getAgentFirstNameChunk, getFilePatterns } from './utils';
+import {
+  getAgentFirstNameChunk,
+  getFilePatterns,
+  findFilesFromPatterns,
+} from './utils';
 
 const CHANNEL = 'Housekeeping';
 logger.initialize(CHANNEL);
@@ -57,19 +61,11 @@ export async function runCleanSingle(
   const extensions = [...TEMP_EXTENSIONS, ...PACK_EXTENSIONS];
   logger.debug(CHANNEL, `Using extensions: ${extensions}`);
 
-  const filesToDelete: string[] = [];
-  for (const pattern of filePatterns) {
-    for (const ext of extensions) {
-      const filePath = await WorkspaceFS.findFileInBuild(
-        inputDir,
-        pattern,
-        ext,
-      );
-      if (filePath) {
-        filesToDelete.push(filePath);
-      }
-    }
-  }
+  const filesToDelete = findFilesFromPatterns(
+    inputDir,
+    filePatterns,
+    extensions,
+  );
 
   const onlyInputFileFound =
     filesToDelete.length === 1 && filesToDelete[0] === inputFile;
