@@ -67,12 +67,20 @@ export function findFilesFromPatterns(
     searchDirs.push(path.join(workspacePath, inputDir, 'build'));
   }
 
-  const bracePatterns = `{${patterns.join(',')}}{${extensions.join(',')}}`;
   const results = new Set<string>();
-  for (const dir of searchDirs) {
-    const matches = globSync(path.join(dir, bracePatterns), { nodir: true });
-    for (const match of matches) {
-      results.add(WorkspaceFS.relativePath(match));
+
+  for (const pattern of patterns) {
+    for (const ext of extensions) {
+      const bracePattern = `${pattern}${ext}`;
+      for (const dir of searchDirs) {
+        const matches = globSync(path.join(dir, bracePattern), {
+          nodir: true,
+        });
+        if (matches.length > 0) {
+          results.add(WorkspaceFS.relativePath(matches[0]));
+          break;
+        }
+      }
     }
   }
 
