@@ -31,10 +31,7 @@ export async function getFilesInDirectory(
     dirEntries.map(async ([name, type]) => {
       const nameLower = name.toLowerCase();
       const fullPath = path.join(dir, name);
-      const stat = await AbsoluteFS.stat(fullPath);
-      const isSymbolicLink =
-        (stat.type & vscode.FileType.SymbolicLink) ===
-        vscode.FileType.SymbolicLink;
+      const isSymbolicLink = await AbsoluteFS.isSymbolicLink(fullPath);
 
       if (
         (type === vscode.FileType.File || isSymbolicLink) &&
@@ -88,14 +85,9 @@ export async function getFilesRecursively(
         return [];
       }
 
-      const stat = await AbsoluteFS.stat(fullPath);
-      const isSymbolicLink =
-        (stat.type & vscode.FileType.SymbolicLink) ===
-        vscode.FileType.SymbolicLink;
-      const isDirectory =
-        (stat.type & vscode.FileType.Directory) === vscode.FileType.Directory;
-      const isFile =
-        (stat.type & vscode.FileType.File) === vscode.FileType.File;
+      const isSymbolicLink = await AbsoluteFS.isSymbolicLink(fullPath);
+      const isDirectory = await AbsoluteFS.isDir(fullPath);
+      const isFile = await AbsoluteFS.isFile(fullPath);
 
       if (
         (type === vscode.FileType.Directory ||
