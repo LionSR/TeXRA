@@ -1172,7 +1172,6 @@
     "@google/genai": "^1.5.1",
     "@modelcontextprotocol/sdk": "^1.12.3",
     "@vscode/codicons": "^0.0.36",
-    "@wolfram-alpha/wolfram-alpha-api": "^23.1004.144821-RELEASE",
     "axios": "^1.10.0",
     "cross-spawn": "^7.0.6",
     "diff-match-patch": "^1.0.5",
