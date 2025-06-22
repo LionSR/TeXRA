@@ -8,7 +8,7 @@ import { XMLParser } from 'fast-xml-parser';
 import { AgentLogger } from '@logger/AgentLogger';
 
 // Local imports - utilities
-import { WorkspaceFS } from '@utils/files';
+import { WorkspaceFS, createFileMapping } from '@utils/files';
 import {
   addCdataToTags,
   addCdataToTagsMultiple,
@@ -205,148 +205,6 @@ export class OutputHandler {
   }
 
   /**
-   * Creates a mapping between two sets of files based on name similarity
-   * @param sourceFiles Source files array
-   * @param targetFiles Target files array
-   * @param matchStrategy 'basename' for exact basename matching or 'contains' for substring matching
-   * @param roundAware If true, ignores round numbers in filenames for matching
-   * @returns Map of source files to their best matching target files
-   * @private
-   */
-  public createFileMapping(
-    sourceFiles: string[],
-    targetFiles: string[],
-    matchStrategy: 'basename' | 'contains' = 'basename',
-    roundAware: boolean = false,
-  ): Map<string, string> {
-    const fileMapping = new Map<string, string>();
-
-    if (!sourceFiles?.length || !targetFiles?.length) {
-      return fileMapping;
-    }
-
-    for (const targetFile of targetFiles) {
-      if (!targetFile || typeof targetFile !== 'string') {
-        continue;
-      }
-
-      const targetBaseName = path.basename(targetFile);
-
-      // Find the best matching source file for this target file
-      let bestMatch: string | null = null;
-      let bestMatchScore = 0;
-
-      for (const sourceFile of sourceFiles) {
-        if (!sourceFile || typeof sourceFile !== 'string') {
-          continue;
-        }
-
-        const sourceBaseName = path.basename(sourceFile);
-
-        // Extract the main filename without extension for comparison
-        const sourceName = path.parse(sourceBaseName).name;
-        const targetName = path.parse(targetBaseName).name;
-
-        // Handle round-aware matching if needed
-        const sourceNameNormalized = roundAware
-          ? sourceName.split('_r')[0]
-          : sourceName;
-        const targetNameNormalized = roundAware
-          ? targetName.split('_r')[0]
-          : targetName;
-
-        let isMatch = false;
-        let matchScore = 0;
-
-        if (matchStrategy === 'basename') {
-          // For exact basename matching
-          isMatch = sourceNameNormalized === targetNameNormalized;
-          matchScore = isMatch ? sourceNameNormalized.length : 0;
-        } else if (matchStrategy === 'contains') {
-          // For substring matching
-          isMatch = targetBaseName.includes(sourceName);
-          matchScore = isMatch ? sourceName.length : 0;
-        }
-
-        if (isMatch && matchScore > bestMatchScore) {
-          bestMatchScore = matchScore;
-          bestMatch = sourceFile;
-        }
-      }
-
-      // If we found a match, add it to our map
-      if (bestMatch) {
-        fileMapping.set(bestMatch, targetFile);
-      }
-    }
-
-    return fileMapping;
-  }
-
-  /** Updates \input commands in output files to reference new file paths. */
-  public async replaceInputCommands(
-    baseFiles: string[],
-    outputFiles: string[],
-  ): Promise<void> {
-    if (!baseFiles?.length || !outputFiles?.length) {
-      this.logger.debug('No files to process for input command replacement');
-      return;
-    }
-
-    // Create a mapping between base files and output files
-    const baseToOutputMap = this.createFileMapping(
-      baseFiles,
-      outputFiles,
-      'contains',
-    );
-
-    if (baseToOutputMap.size === 0) {
-      this.logger.debug('No valid file mappings for input command replacement');
-      return;
-    }
-
-    this.logger.debug(
-      `File mappings for input replacement: ${Array.from(
-        baseToOutputMap.entries(),
-      )
-        .map(
-          ([base, output]) =>
-            `${path.basename(base)} -> ${path.basename(output)}`,
-        )
-        .join(', ')}`,
-    );
-
-    // Create a map for basename lookups
-    const baseToOutput = new Map<string, string>();
-    for (const [baseFile, outputFile] of baseToOutputMap.entries()) {
-      baseToOutput.set(path.basename(baseFile), path.basename(outputFile));
-    }
-
-    for (const outputFile of outputFiles) {
-      if (!outputFile) {
-        continue;
-      }
-
-      try {
-        const content = await WorkspaceFS.readFile(outputFile);
-        // Replace \input commands with references to the new file paths
-        const newContent = content.replace(/\\input{([^}]+)}/g, (match, p1) =>
-          baseToOutput.has(p1) ? `\\input{${baseToOutput.get(p1)}}` : match,
-        );
-
-        if (newContent !== content) {
-          await WorkspaceFS.writeFile(outputFile, newContent);
-          this.logger.debug(`Updated input commands in ${outputFile}`);
-        }
-      } catch (err) {
-        this.logger.warn(
-          `Error processing input commands in ${outputFile}: ${err instanceof Error ? err.message : String(err)}`,
-        );
-      }
-    }
-  }
-
-  /**
    * Runs all latexdiff comparisons for the current round.
    * This is the ONLY place where latexdiff operations should be performed.
    *
@@ -389,7 +247,7 @@ export class OutputHandler {
       );
 
       // Create a mapping between base files and output files
-      const baseToOutputMap = this.createFileMapping(
+      const baseToOutputMap = createFileMapping(
         this.baseFiles,
         outputFiles,
         'contains',
@@ -446,7 +304,7 @@ export class OutputHandler {
         const prevOutputFiles = this.outputFiles[currRound - 1] || [];
 
         // Create a mapping between previous round files and current round files
-        const prevToCurrentMap = this.createFileMapping(
+        const prevToCurrentMap = createFileMapping(
           prevOutputFiles,
           outputFiles,
           'basename',
