@@ -1,6 +1,7 @@
 export {
   runCleanSingle,
   runCleanMultiple,
+  runClean,
   runCleanBuild,
   runCleanOutput,
 } from './clean';

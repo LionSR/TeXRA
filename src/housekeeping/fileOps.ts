@@ -31,6 +31,10 @@ export interface MultipleOperationOptions extends OperationOptions {
   inputFiles: string[];
 }
 
+export interface OperationParams extends OperationOptions {
+  inputFiles?: string[];
+}
+
 export async function runOperationSingle(
   options: OperationOptions,
 ): Promise<FileOpResult> {
@@ -273,4 +277,17 @@ export async function runOperationMultiple(
 
   const anySuccess = results.some((r) => r.status === 'success');
   return anySuccess ? { status: 'success' } : { status: 'noFiles' };
+}
+
+export async function runOperation(
+  options: OperationParams,
+): Promise<FileOpResult> {
+  const { inputFiles } = options;
+  if (inputFiles && inputFiles.length > 0) {
+    return runOperationMultiple({
+      ...options,
+      inputFiles,
+    });
+  }
+  return runOperationSingle(options);
 }

@@ -14,13 +14,12 @@ import type { FileOpResult } from '@/types/ResultTypes';
 import { WorkspaceFS } from '@utils/files';
 
 // Local imports - housekeeping
+import { EXCLUDED_DIRS, MODELS } from './constants';
 import {
-  EXCLUDED_DIRS,
-  TEMP_EXTENSIONS,
-  PACK_EXTENSIONS,
-  MODELS,
-} from './constants';
-import { runOperationSingle, runOperationMultiple } from './fileOps';
+  runOperationSingle,
+  runOperationMultiple,
+  runOperation,
+} from './fileOps';
 
 const CHANNEL = 'Housekeeping';
 logger.initialize(CHANNEL);
@@ -39,6 +38,27 @@ export async function runCleanMultiple(
   inputFiles: string[],
 ): Promise<FileOpResult> {
   return runOperationMultiple({
+    operation: 'clean',
+    model,
+    inputFile,
+    agent,
+    inputFiles,
+  });
+}
+
+export async function runClean(
+  model: string,
+  inputFile: string,
+  agent: string,
+  inputFiles: string[] = [],
+): Promise<FileOpResult> {
+  logger.debug(
+    CHANNEL,
+    `Starting clean with model=${model}, inputFile=${inputFile}, agent=${agent}`,
+  );
+  logger.debug(CHANNEL, `Additional files: ${inputFiles.join(', ')}`);
+
+  return runOperation({
     operation: 'clean',
     model,
     inputFile,
@@ -106,8 +126,7 @@ export async function runCleanBuild(): Promise<void> {
       for (const [name, type] of entries) {
         if (
           type === vscode.FileType.Directory &&
-          !EXCLUDED_DIRS.has(name.toLowerCase())
-          // this excludes the build directory, is it correct?
+          !EXCLUDED_DIRS.has(name.toLowerCase()) // skip build and other special dirs
         ) {
           const fullPath = path.join(dirPath, name);
           await cleanBuildDir(fullPath);

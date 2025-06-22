@@ -1,21 +1,15 @@
-// Standard library imports
-import * as path from 'path';
-
-// Third-party imports
-
 // Local imports - result types
 import type { FileOpResult } from '@/types/ResultTypes';
 
 // Local imports - log
 import * as logger from '@logger/logUtils';
 
-// Local imports - utilities
-import { WorkspaceFS } from '@utils/files';
-
 // Local imports - housekeeping
-import { HISTORY_DIR } from './constants';
-import { getAgentFirstNameChunk } from './utils';
-import { runOperationSingle, runOperationMultiple } from './fileOps';
+import {
+  runOperationSingle,
+  runOperationMultiple,
+  runOperation,
+} from './fileOps';
 
 const CHANNEL = 'Housekeeping';
 logger.initialize(CHANNEL);
@@ -61,18 +55,11 @@ export async function runPack(
   );
   logger.debug(CHANNEL, `Additional files: ${outputFiles.join(', ')}`);
 
-  if (!inputFile || !model || !agent) {
-    logger.error(
-      CHANNEL,
-      `Missing required parameters: model=${model}, inputFile=${inputFile}, agent=${agent}`,
-    );
-    return { status: 'missingParams' };
-  }
-
-  // Use multiple mode if there are output files
-  if (outputFiles.length > 0) {
-    return await runPackMultiple(model, inputFile, agent, outputFiles);
-  } else {
-    return await runPackSingle(model, inputFile, agent);
-  }
+  return runOperation({
+    operation: 'pack',
+    model,
+    inputFile,
+    agent,
+    inputFiles: outputFiles,
+  });
 }
