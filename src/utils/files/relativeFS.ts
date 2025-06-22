@@ -4,12 +4,25 @@ import * as path from 'path';
 // Third-party imports
 import * as vscode from 'vscode';
 
+// Local imports - log
+import * as logger from '@logger/logUtils';
+
+const CHANNEL = 'relativeFS';
+logger.initialize(CHANNEL);
+
 export abstract class RelativeFS {
   /**
    * Return the base path for this filesystem. Implemented by subclasses.
    */
   protected static getBasePath(): string {
     throw new Error('getBasePath not implemented');
+  }
+
+  /**
+   * Return the log channel for this filesystem. Subclasses can override.
+   */
+  protected static getChannel(): string {
+    return CHANNEL;
   }
 
   /**
@@ -63,6 +76,7 @@ export abstract class RelativeFS {
   ): Promise<void> {
     const uri = vscode.Uri.file(this.fullPath(relativePath));
     await vscode.workspace.fs.delete(uri, options);
+    logger.debug(this.getChannel(), `Deleted: ${relativePath}`);
   }
 
   /**
@@ -71,6 +85,7 @@ export abstract class RelativeFS {
   public static async createDir(relativePath: string): Promise<void> {
     const uri = vscode.Uri.file(this.fullPath(relativePath));
     await vscode.workspace.fs.createDirectory(uri);
+    logger.debug(this.getChannel(), `Created directory: ${relativePath}`);
   }
 
   /**
@@ -119,6 +134,10 @@ export abstract class RelativeFS {
     const sourceUri = vscode.Uri.file(this.fullPath(source));
     const destUri = vscode.Uri.file(this.fullPath(destination));
     await vscode.workspace.fs.copy(sourceUri, destUri, options);
+    logger.debug(
+      this.getChannel(),
+      `Copied: source=${source} to destination=${destination}`,
+    );
   }
 
   /**
@@ -132,6 +151,7 @@ export abstract class RelativeFS {
     const oldUri = vscode.Uri.file(this.fullPath(oldPath));
     const newUri = vscode.Uri.file(this.fullPath(newPath));
     await vscode.workspace.fs.rename(oldUri, newUri, options);
+    logger.debug(this.getChannel(), `Renamed: ${oldPath} to ${newPath}`);
   }
 
   /**
@@ -179,6 +199,7 @@ export abstract class RelativeFS {
           const stats = await this.stat(filePath);
           if (now - stats.mtime > maxAgeMs) {
             await this.delete(filePath);
+            logger.debug(this.getChannel(), `Deleted old file: ${filePath}`);
           }
         } catch {
           // Ignore errors when checking individual files

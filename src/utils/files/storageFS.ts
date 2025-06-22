@@ -1,6 +1,3 @@
-// Standard library imports
-import * as path from 'path';
-
 // Third-party imports
 import * as vscode from 'vscode';
 
@@ -11,7 +8,9 @@ import { RelativeFS } from './relativeFS';
 import * as logger from '@logger/logUtils';
 
 const CHANNEL = 'storageFS';
+const GLOBAL_CHANNEL = 'globalStorageFS';
 logger.initialize(CHANNEL);
+logger.initialize(GLOBAL_CHANNEL);
 
 /**
  * StorageFS provides a unified interface for VS Code extension storage operations.
@@ -28,9 +27,9 @@ export class StorageFS extends RelativeFS {
   }
 
   /**
-   * Get the workspace storage base path (per-workspace)
+   * Return the workspace storage base path (per-workspace)
    */
-  public static getPath(): string {
+  protected static override getBasePath(): string {
     if (!this.context?.storageUri) {
       throw new Error(
         'StorageFS not initialized. Call StorageFS.initialize(context) first.',
@@ -51,57 +50,11 @@ export class StorageFS extends RelativeFS {
     return this.context.globalStorageUri.fsPath;
   }
 
-  protected static override getBasePath(): string {
-    return this.getPath();
+  protected static override getChannel(): string {
+    return CHANNEL;
   }
 
-  /**
-   * Delete a file or directory
-   */
-  public static async delete(
-    relativePath: string,
-    options?: { recursive?: boolean; useTrash?: boolean },
-  ): Promise<void> {
-    await super.delete(relativePath, options);
-    logger.debug(CHANNEL, `Deleted: ${relativePath}`);
-  }
-
-  /**
-   * Create a directory
-   */
-  public static async createDir(relativePath: string): Promise<void> {
-    await super.createDir(relativePath);
-    logger.debug(CHANNEL, `Created directory: ${relativePath}`);
-  }
-
-  /**
-   * Copy a file or directory
-   */
-  public static async copy(
-    source: string,
-    destination: string,
-    options?: { overwrite?: boolean },
-  ): Promise<void> {
-    await super.copy(source, destination, options);
-    logger.debug(
-      CHANNEL,
-      `Copied: source=${source} to destination=${destination}`,
-    );
-  }
-
-  /**
-   * Move/rename a file or directory
-   */
-  public static async rename(
-    oldPath: string,
-    newPath: string,
-    options?: { overwrite?: boolean },
-  ): Promise<void> {
-    await super.rename(oldPath, newPath, options);
-    logger.debug(CHANNEL, `Renamed: ${oldPath} to ${newPath}`);
-  }
-
-  // Inherit cleanupOldFiles, isDir and isFile from RelativeFS
+  // Inherit file operations from RelativeFS
 }
 
 /**
@@ -112,60 +65,8 @@ export class GlobalStorageFS extends RelativeFS {
   protected static override getBasePath(): string {
     return StorageFS.getGlobalPath();
   }
-  // Inherit path helpers and basic operations from RelativeFS
-
-  /**
-   * Delete a file or directory from global storage
-   */
-  public static async delete(
-    relativePath: string,
-    options?: { recursive?: boolean; useTrash?: boolean },
-  ): Promise<void> {
-    await super.delete(relativePath, options);
-    logger.debug(CHANNEL, `Deleted from global storage: ${relativePath}`);
-  }
-
-  /**
-   * Create a directory in global storage
-   */
-  public static async createDir(relativePath: string): Promise<void> {
-    await super.createDir(relativePath);
-    logger.debug(
-      CHANNEL,
-      `Created directory in global storage: ${relativePath}`,
-    );
-  }
-
-  // Inherit ensureDir, readDir and stat from RelativeFS
-
-  /**
-   * Copy a file or directory in global storage
-   */
-  public static async copy(
-    source: string,
-    destination: string,
-    options?: { overwrite?: boolean },
-  ): Promise<void> {
-    await super.copy(source, destination, options);
-    logger.debug(
-      CHANNEL,
-      `Copied in global storage: source=${source} to destination=${destination}`,
-    );
-  }
-
-  /**
-   * Move/rename a file or directory in global storage
-   */
-  public static async rename(
-    oldPath: string,
-    newPath: string,
-    options?: { overwrite?: boolean },
-  ): Promise<void> {
-    await super.rename(oldPath, newPath, options);
-    logger.debug(
-      CHANNEL,
-      `Renamed in global storage: ${oldPath} to ${newPath}`,
-    );
+  protected static override getChannel(): string {
+    return GLOBAL_CHANNEL;
   }
 }
 
