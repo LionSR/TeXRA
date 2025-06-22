@@ -138,6 +138,8 @@ Installing TeXRA is simple. Follow our [Installation Guide](/guide/installation)
   <a href="/guide/quick-start" class="cta-button cta-button-alt">Quick Start Guide</a>
 </div>
 
+If you run into a bug, drop us a line at [contact@texra.ai](mailto:contact@texra.ai).
+
 <style>
 .features-grid {
   display: grid;
