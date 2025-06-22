@@ -136,6 +136,7 @@ TeXRA offers various customization options through VS Code settings:
 ## Support & Feedback
 
 Encountering issues or have suggestions? Please report them on our [**GitHub Issues page**](https://github.com/texra-ai/texra-issues/issues).
+For urgent bugs, you can also reach us directly at [contact@texra.ai](mailto:contact@texra.ai).
 
 ## License
 
