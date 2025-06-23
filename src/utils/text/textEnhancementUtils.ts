@@ -14,7 +14,7 @@ import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
 import { SecretManager } from '@frontend/secretManager';
-import { extractTextFromTag } from './xmlUtils';
+import xmlUtils from './xmlUtils';
 import { getConfig } from '../config';
 
 const CHANNEL = 'TextEnhancement';
@@ -189,7 +189,10 @@ ${text}`;
     }
 
     // Extract the corrected text using the utility function
-    const correctedText = extractTextFromTag(responseText, 'corrected_text');
+    const correctedText = xmlUtils.extractTextFromTag(
+      responseText,
+      'corrected_text',
+    );
 
     // Trim leading and trailing newlines from the text
     const trimmedText = correctedText
