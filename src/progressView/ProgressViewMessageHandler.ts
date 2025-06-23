@@ -116,6 +116,7 @@ export class ProgressViewMessageHandler {
     const outputFilesArray = Array.from(allFiles);
 
     await vscode.commands.executeCommand(command, {
+      streamId: stream,
       agent: taskState.agent,
       model: taskState.model,
       inputFile: taskState.inputFile,
