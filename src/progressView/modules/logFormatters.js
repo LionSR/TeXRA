@@ -131,11 +131,6 @@ function formatSpecialContent(message, content, contentType, logId) {
     parsedMarkdown = parsedMarkdown.trim();
 
     // Create enhanced content element with better formatting
-    const cssClass = contentType
-      .toLowerCase()
-      .replace(/\s+/g, '-')
-      .replace(':', '');
-
     // Return expandable details structure with proper toggle and icon
     const idAttr = logId ? ` data-log-id="${logId}"` : '';
     // Determine label and icon based on content type
@@ -149,7 +144,7 @@ function formatSpecialContent(message, content, contentType, logId) {
         <i class="codicon ${icon}"></i>
         <span>${labelText}</span>
       </summary>
-      <div class="special-content ${cssClass}"${idAttr}>${parsedMarkdown}</div>
+      <div class="special-content"${idAttr}>${parsedMarkdown}</div>
     </details>`;
   } catch (e) {
     console.error('Error parsing markdown:', e);
