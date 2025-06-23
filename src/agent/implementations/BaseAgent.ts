@@ -119,7 +119,7 @@ export abstract class BaseAgent implements IAgent {
     if (this.abortController) {
       this.abortController.abort();
     }
-    this.logger.info(
+    this.logger.error(
       'Agent execution interrupted by user. Active request aborted; partial output may remain.',
     );
   }
