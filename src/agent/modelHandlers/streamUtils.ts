@@ -1,4 +1,7 @@
+// Standard library imports
 import { randomUUID } from 'crypto';
+
+// Local imports
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import { AgentLogger } from '@logger/AgentLogger';
 
