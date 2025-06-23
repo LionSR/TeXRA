@@ -166,6 +166,7 @@ export const katexMacros = {
 
   // Special shortcuts
   '\\tauf': '\\tau_f',
+  '\\tf': 't_f',
   '\\sha': '\\frac{1}{\\sqrt{2}}',
   '\\tzero': '\\tilde{0}',
   '\\tone': '\\tilde{1}',
