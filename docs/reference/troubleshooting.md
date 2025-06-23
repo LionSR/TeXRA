@@ -49,7 +49,6 @@ Even the best research assistants (human or AI) have off days. This guide helps 
    ```
 
 2. **Check PATH environment**:
-
    - Ensure installation directories are in your system PATH
    - Restart your terminal and VS Code after updating PATH
 
