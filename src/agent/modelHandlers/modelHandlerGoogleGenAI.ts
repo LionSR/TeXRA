@@ -34,12 +34,14 @@ import { AgentLogger } from '@logger/AgentLogger';
 // Local imports - utilities
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
 import { formatProviderError } from '@utils/sdkErrorUtils';
-import { cleanFileContent } from '@replacement/replacementUtils';
-import replacementManager from '@replacement/replacementManager';
 import xmlUtils from '@utils/text/xmlUtils';
-import type { ProviderStopReason } from '../../types/StopReasonTypes';
-import { getConfig } from '@utils/config';
+import xmlUtils from '@utils/text/xmlUtils';
 import { calculateTokenPrice } from '@utils/priceUtils';
+
+import { cleanFileContent } from '@replacement/engine';
+import replacementEngine from '@replacement/engine';
+
+import type { ProviderStopReason } from '../../types/StopReasonTypes';
 
 // Local constant
 import { K_SLICE } from '@utils/config';
@@ -607,7 +609,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
       );
     }
 
-    responseText = replacementManager.applyAll(responseText);
+    responseText = replacementEngine.applyAll(responseText);
 
     const usage = responseObject.usageMetadata;
     const stopReason: FinishReason =

@@ -8,7 +8,7 @@ import { countTokens } from 'gpt-tokenizer';
 
 // Local imports - utilities
 import { WorkspaceFS } from '@utils/files';
-import { cleanFileContent } from '@replacement/replacementUtils';
+import { cleanFileContent } from '@replacement/engine';
 import xmlUtils from '@utils/text/xmlUtils';
 import { formatProviderError } from '@utils/sdkErrorUtils';
 
