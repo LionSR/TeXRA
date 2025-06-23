@@ -47,6 +47,7 @@ export class ProgressViewContentProvider {
       const domHandlersUri = getWebviewUri('modules/domHandlers.js');
       const constantsUri = getWebviewUri('modules/constants.js');
       const logFormattersUri = getWebviewUri('modules/logFormatters.js');
+      const katexMacrosUri = getWebviewUri('modules/katexMacros.js');
       const templateUtilsUri = getCommonUri('modules/templateUtils.js');
       const domUtilsUri = getCommonUri('modules/domUtils.js');
       const stringUtilsUri = getCommonUri('modules/stringUtils.js');
@@ -74,6 +75,7 @@ export class ProgressViewContentProvider {
         webviewContextUri,
         constantsUri,
         logFormattersUri,
+        katexMacrosUri,
       });
     } catch (err) {
       logger.error(
