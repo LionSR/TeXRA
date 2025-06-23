@@ -1,6 +1,8 @@
-import { marked } from 'marked';
+import MarkdownIt from 'markdown-it';
+import markdownItKatex from '@vscode/markdown-it-katex';
 import { getLogGroup, setLogGroup } from './stateManager.js';
 import { STATUS } from './constants.js';
+import { katexMacros } from './katexMacros.js';
 
 export const BULLET_MARKUP =
   '<i class="codicon codicon-circle-small-filled group-bullet"></i>';
@@ -14,13 +16,24 @@ export function formatTokens(tokens) {
   return tokens > 4096 ? `${Math.round(tokens / 1000)}k` : `${tokens}`;
 }
 
-// Configure marked options
-marked.setOptions({
-  gfm: true, // Enable GitHub Flavored Markdown
+// Initialize Markdown-it parser with KaTeX macros
+const md = new MarkdownIt({
   breaks: true, // Convert line breaks to <br>
-  headerIds: false, // Don't add id attributes to headers
-  mangle: false, // Don't mangle email addresses
+  linkify: true, // Automatically detect links
+}).use(markdownItKatex, {
+  throwOnError: false,
+  errorColor: ' #cc0000',
+  macros: katexMacros,
 });
+
+/**
+ * Generate a sanitized CSS class string from a content type label
+ * @param {string} contentType - The content type to convert
+ * @returns {string} Normalized class name
+ */
+function generateCssClass(contentType) {
+  return contentType.toLowerCase().replace(/\s+/g, '-').replace(':', '');
+}
 
 /**
  * Format a log entry with Markdown rendering for special content
@@ -94,7 +107,7 @@ function formatSpecialContent(message, content, contentType, logId) {
     content = content.replace(/\\\\ref\{([^}]+)\}/g, '@@LATEX-REF:$1@@');
 
     // Process content as markdown
-    let parsedMarkdown = marked.parse(content);
+    let parsedMarkdown = md.render(content);
 
     // Post-process to restore and style LaTeX references
     parsedMarkdown = parsedMarkdown.replace(
