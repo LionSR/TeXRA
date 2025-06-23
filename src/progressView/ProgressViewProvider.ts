@@ -16,7 +16,7 @@ import {
 } from '@utils/loggerUtils';
 
 import { TokenUsageStats } from '../types/UsageTypes';
-import { LogGroup } from '../types/LogTypes';
+import { LogGroup } from '../logger/LogTypes';
 import type { DiffStats } from '../types/DiffTypes';
 import { randomUUID } from 'crypto';
 

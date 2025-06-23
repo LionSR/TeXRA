@@ -1,0 +1,102 @@
+// Shared constants for replacement engine
+
+// Greek letters used for pattern generation
+// prettier-ignore
+export const GREEK_LETTERS = 'alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu xi omicron pi rho sigma tau upsilon phi chi psi omega'.split(' ');
+
+// Section commands for LaTeX documents
+export const SECTION_TYPES = [
+  'chapter',
+  'section',
+  'subsection',
+  'subsubsection',
+  'paragraph',
+];
+
+// Common math operator names
+// prettier-ignore
+export const MATH_OPERATORS = [
+  'cos',
+  'sin',
+  'tan',
+  'arctan',
+  'arccos',
+  'arcsin',
+  'log',
+  'ln',
+  'exp',
+  'sqrt',
+  'max',
+  'min',
+  'sup',
+  'inf',
+  'lim',
+  'csc',
+  'ker',
+  'limsup',
+  'deg',
+  'gcd',
+  'lg',
+  'Pr',
+  'cot',
+  'det',
+  'hom',
+  'sec',
+  'arg',
+  'coth',
+  'dim',
+  'liminf',
+];
+
+// Union of common LaTeX environments used across rules
+// prettier-ignore
+export const LATEX_ENVIRONMENTS = [
+  'figure',
+  'figure*',
+  'tikzpicture',
+  'align',
+  'equation',
+  'itemize',
+  'enumerate',
+  'tabular',
+  'abstract',
+  'theorem',
+  'proof',
+  'definition',
+  'corollary',
+  'lemma',
+  'proposition',
+  'remark',
+  'example',
+  'exercise',
+  'problem',
+  'solution',
+  'acknowledgment',
+  'minipage',
+  'verbatim',
+  'lstlisting',
+  'minted',
+  'algorithm',
+  'tcolorbox',
+  'frame',
+  'alertblock',
+  'exampleblock',
+  'axis',
+  'scope',
+  'response',
+  'align*',
+  'aligned',
+  'overpic',
+  'overpic*',
+  'aligned*',
+  'alignat',
+  'alignat*',
+  'gather',
+  'gather*',
+  'section',
+  'subsection',
+  'referee',
+  'letter',
+  'array',
+  'equation*',
+];
