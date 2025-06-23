@@ -12,6 +12,13 @@ export function createInfoSpan(
   content: string,
   type: 'thinking' | 'scratchpad',
 ): string {
+  if (!content || typeof content !== 'string') {
+    throw new Error('Content must be a non-empty string');
+  }
+  if (type !== 'thinking' && type !== 'scratchpad') {
+    throw new Error('Type must be either "thinking" or "scratchpad"');
+  }
+
   const safeContent = escapeHtml(content);
   return `<span class="message-info" data-message-type="${type}">${safeContent}</span>`;
 }

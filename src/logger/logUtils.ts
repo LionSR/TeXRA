@@ -15,6 +15,13 @@ import {
 } from '@utils/loggerUtils';
 import { LogGroup } from './LogTypes';
 
+// Message type for ProgressView entries
+export type MessageType = 'thinking' | 'scratchpad' | 'default';
+
+function isValidMessageType(type: string): type is 'thinking' | 'scratchpad' {
+  return type === 'thinking' || type === 'scratchpad';
+}
+
 const { combine, timestamp } = winston.format;
 
 // Define log levels
@@ -135,11 +142,8 @@ class VSCodeTransport extends Transport {
 
     // Detect message type from data-message-type attribute
     const typeMatch = message.match(/data-message-type="(.*?)"/);
-    const messageType =
-      typeMatch &&
-      (typeMatch[1] === 'scratchpad' || typeMatch[1] === 'thinking')
-        ? (typeMatch[1] as 'scratchpad' | 'thinking')
-        : 'default';
+    const messageType: MessageType =
+      typeMatch && isValidMessageType(typeMatch[1]) ? typeMatch[1] : 'default';
 
     // Colored format for ProgressView using CSS classes, but with shorter timestamp display
     const isVerbose = getConfig<boolean>('logger.debugMode', false);
