@@ -4,13 +4,15 @@
  */
 
 .log-container {
-  flex: 1;
+  flex: 1 1 auto;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: var(--spacing-tiny) var(--spacing-medium);
   min-width: 0;
   min-height: 0;
   font-family: var(--font-family);
   font-size: var(--font-size);
+  position: relative;
 }
 
 .log-line {
@@ -168,6 +170,7 @@
   font-size: var(--vscode-editor-font-size);
   overflow-y: auto;
   max-height: var(--height-large);
+  flex-shrink: 0;
 }
 
 /* Files usage header */
