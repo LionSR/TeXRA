@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import { AgentLogger } from '@logger/AgentLogger';
+import { escapeHtml } from '@logger/logUtils';
 
 /**
  * Create a span element for special log content.
@@ -11,7 +12,8 @@ export function createInfoSpan(
   content: string,
   type: 'thinking' | 'scratchpad',
 ): string {
-  return `<span class="message-info" data-message-type="${type}">${content}</span>`;
+  const safeContent = escapeHtml(content);
+  return `<span class="message-info" data-message-type="${type}">${safeContent}</span>`;
 }
 
 const THINKING_TEMPLATE = (content: string) =>
