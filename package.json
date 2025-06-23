@@ -2,7 +2,7 @@
   "name": "texra",
   "displayName": "TeXRA",
   "description": "TeXRA: Your LLM-powered 24/7 LaTeX Research Assistant.",
-  "version": "0.31.5",
+  "version": "0.31.6",
   "publisher": "texra-ai",
   "engines": {
     "vscode": "^1.94.0"
@@ -61,6 +61,7 @@
                 "o3-",
                 "o1pro",
                 "o1",
+                "gpt45",
                 "gpt41",
                 "gpt4o",
                 "gemini25p",
@@ -1169,7 +1170,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.54.0",
     "@cantoo/pdf-lib": "^2.4.1",
-    "@google/genai": "^1.5.1",
+    "@google/genai": "^1.6.0",
     "@modelcontextprotocol/sdk": "^1.12.3",
     "@vscode/codicons": "^0.0.36",
     "axios": "^1.10.0",
@@ -1182,7 +1183,7 @@
     "identifiers-arxiv": "^0.1.1",
     "marked": "^15.0.12",
     "node-pandoc": "^0.3.0",
-    "openai": "^5.5.1",
+    "openai": "^5.6.0",
     "pdf2pic": "^3.2.0",
     "sortablejs": "^1.15.6",
     "split.js": "^1.6.5",
