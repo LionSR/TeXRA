@@ -35,13 +35,12 @@ import { AgentLogger } from '@logger/AgentLogger';
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
 import { formatProviderError } from '@utils/sdkErrorUtils';
 import xmlUtils from '@utils/text/xmlUtils';
-import xmlUtils from '@utils/text/xmlUtils';
 import { calculateTokenPrice } from '@utils/priceUtils';
 
 import { cleanFileContent } from '@replacement/engine';
 import replacementEngine from '@replacement/engine';
 
-import type { ProviderStopReason } from '../../types/StopReasonTypes';
+import type { ProviderStopReason } from './types/StopReasonTypes';
 
 // Local constant
 import { K_SLICE } from '@utils/config';
