@@ -47,11 +47,13 @@ prompts:
     After thoroughly reviewing the original \LaTeX document (under the <original_latex> tag), the edited version of the document (under the `<edited_latex>' tag), and your generated merged document (under the `<full_edited_latex>' tag), please critically check that your output satisfies the following requirements:
 
     <requirements>
+
     - All changes and additions from the edited version are accurately incorporated.
     - Sections marked as ``unchanged'' in the edited version match the original document verbatim.
     - The structure and formatting of the original document are maintained, including section headers, equations, figures, tables, and LaTeX commands and environments.
     - No parts of the document are accidentally omitted or duplicated.
     - The output is a complete \LaTeX document, including the preamble, document class declarations, and all content up to \end{document}.
+
     </requirements>
 
     If any of these requirements are not fully met, please revise your merged document to address the issues. Output the updated version under the `<full_edited_latex>' tag.
