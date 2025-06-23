@@ -62,25 +62,16 @@ export class DirectAgent extends BaseReflectionAgent {
           outputProcessGroupId,
         );
 
-        // Create a dedicated File Processing subgroup
-        const fileProcessGroupId = await this.outputHandler.startProcessing(
-          `FileProcessing`,
-          outputProcessGroupId,
-        );
-
-        // Process output files using the parent class method but with our group ID
+        // Process output files using the parent class method
         await this.processOutputFiles(
           outputFile,
           currRound,
-          fileProcessGroupId,
+          outputProcessGroupId,
         );
         this.logger.debug(
           `Output files processed for round ${currRound}`,
-          fileProcessGroupId,
+          outputProcessGroupId,
         );
-
-        // End File Processing subgroup
-        this.outputHandler.endProcessing('stopped', fileProcessGroupId);
 
         // Note: latexdiff processing is now handled in the parent class's handleOutput method
       }
