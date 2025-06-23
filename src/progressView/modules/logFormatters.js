@@ -1,5 +1,5 @@
 import { marked } from 'marked';
-import { renderToString } from 'katex';
+import katex from 'katex';
 import { getLogGroup, setLogGroup } from './stateManager.js';
 import { STATUS } from './constants.js';
 
@@ -28,19 +28,39 @@ function renderMath(html) {
   return (
     html
       // Display equations $$...$$ or \[...\]
-      .replace(/\$\$([\s\S]+?)\$\$/g, (_, eq) =>
-        renderToString(eq, { displayMode: true }),
-      )
-      .replace(/\\\[([\s\S]+?)\\\]/g, (_, eq) =>
-        renderToString(eq, { displayMode: true }),
-      )
+      .replace(/\$\$([\s\S]+?)\$\$/g, (_, eq) => {
+        try {
+          return katex.renderToString(eq, { displayMode: true });
+        } catch (e) {
+          console.warn('KaTeX rendering failed for display equation:', e);
+          return `$$${eq}$$`; // Return original if rendering fails
+        }
+      })
+      .replace(/\\\[([\s\S]+?)\\\]/g, (_, eq) => {
+        try {
+          return katex.renderToString(eq, { displayMode: true });
+        } catch (e) {
+          console.warn('KaTeX rendering failed for display equation:', e);
+          return `\\[${eq}\\]`; // Return original if rendering fails
+        }
+      })
       // Inline equations $...$ or \(...\)
-      .replace(/\$(?!\$)([^$]+?)\$/g, (_, eq) =>
-        renderToString(eq, { displayMode: false }),
-      )
-      .replace(/\\\(([^)]+)\\\)/g, (_, eq) =>
-        renderToString(eq, { displayMode: false }),
-      )
+      .replace(/\$(?!\$)([^$]+?)\$/g, (_, eq) => {
+        try {
+          return katex.renderToString(eq, { displayMode: false });
+        } catch (e) {
+          console.warn('KaTeX rendering failed for inline equation:', e);
+          return `$${eq}$`; // Return original if rendering fails
+        }
+      })
+      .replace(/\\\(([\s\S]+?)\\\)/g, (_, eq) => {
+        try {
+          return katex.renderToString(eq, { displayMode: false });
+        } catch (e) {
+          console.warn('KaTeX rendering failed for inline equation:', e);
+          return `\\(${eq}\\)`; // Return original if rendering fails
+        }
+      })
   );
 }
 
