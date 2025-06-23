@@ -1169,7 +1169,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.54.0",
     "@cantoo/pdf-lib": "^2.4.1",
-    "@google/genai": "^1.5.1",
+    "@google/genai": "^1.6.0",
     "@modelcontextprotocol/sdk": "^1.12.3",
     "@vscode/codicons": "^0.0.36",
     "axios": "^1.10.0",
@@ -1182,7 +1182,7 @@
     "identifiers-arxiv": "^0.1.1",
     "marked": "^15.0.12",
     "node-pandoc": "^0.3.0",
-    "openai": "^5.5.1",
+    "openai": "^5.6.0",
     "pdf2pic": "^3.2.0",
     "sortablejs": "^1.15.6",
     "split.js": "^1.6.5",
