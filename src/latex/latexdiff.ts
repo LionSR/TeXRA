@@ -18,7 +18,7 @@ import { logErrorMessage } from '@utils/errorHandlingUtils';
 import { runLatexFormatter } from './texFormatter';
 
 // Local imports - replacement utils
-import replacementManager from '@replacement/replacementManager';
+import replacementEngine from '@replacement/engine';
 
 const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);
@@ -287,7 +287,7 @@ async function processDiffFile(
     }
 
     // Apply standard replacements from the replacementUtils at the end of processing
-    newContent = replacementManager.applyAll(newContent);
+    newContent = replacementEngine.applyAll(newContent);
 
     await WorkspaceFS.writeFile(diffFileName, newContent);
     // logger.debug(channel, `Line breaks added to ${diffFileName}`);
