@@ -7,7 +7,7 @@ import * as logger from '@logger/logUtils';
 // Local imports - utilities
 import { WorkspaceFS } from '@utils/files';
 import { sleep } from '@utils/helpers';
-import replacementManager from '@replacement/replacementManager';
+import replacementEngine from '@replacement/engine';
 
 // Local imports - latex utils
 import { runLatexFormatter } from '@latex/texFormatter';
@@ -54,7 +54,7 @@ async function handleApplyReplacements(): Promise<void> {
     const text = document.getText();
 
     // Apply replacements
-    const processedText = replacementManager.applyAll(text);
+    const processedText = replacementEngine.applyAll(text);
 
     // Update document content
     const fullRange = new vscode.Range(
