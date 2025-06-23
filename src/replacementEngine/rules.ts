@@ -1,4 +1,4 @@
-import { ReplacementCategory } from './replacementTypes';
+import { ReplacementCategory } from './types';
 import {
   generateGroupedBackslashFixes,
   generateReferenceSpacing,
@@ -10,7 +10,8 @@ import {
   GREEK_LETTERS,
   SECTION_TYPES,
   MATH_OPERATORS,
-} from './replacementHelpers';
+  LATEX_ENVIRONMENTS,
+} from './helpers';
 
 // LaTeX spacing and punctuation fixes
 export const LATEX_SPACING_REPLACEMENTS: ReplacementCategory = {
@@ -474,37 +475,7 @@ export const LATEX_XML_REPLACEMENTS: ReplacementCategory = {
     // ====================================================================
 
     // Lists of environment/tag names
-    const latexEnvironments = [
-      // 'document', // this also replaced xml tags which is also being used!!
-      'figure',
-      'figure*',
-      'axis',
-      'tikzpicture',
-      'scope',
-      // 'output', // this might also be a xml tag?
-      'response',
-      'itemize',
-      'enumerate',
-      'equation',
-      'align',
-      'align*',
-      'aligned',
-      'overpic',
-      'overpic*',
-      'aligned*',
-      'alignat',
-      'alignat*',
-      'gather',
-      'gather*',
-      'section',
-      'subsection',
-      'referee',
-      'response',
-      'letter',
-      'array',
-      'equation*',
-      'minipage',
-    ];
+    const latexEnvironments = LATEX_ENVIRONMENTS;
 
     // Pure XML tags that should not be treated as LaTeX environments
     const pureXmlTags = [
