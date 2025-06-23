@@ -391,3 +391,17 @@ export async function extractScratchpad(
   const extractedContent = extractTextFromTag(outputContent, thinkingTag);
   return extractedContent ? await formatContent(extractedContent) : null;
 }
+
+export const xmlUtils = {
+  addCdataToTags,
+  addCdataToTagsMultiple,
+  extractTextFromTag,
+  extractMultipleTextFromTag,
+  filterTagsFromText,
+  extractContentFromXMLbyTag,
+  extractContentFromXMLbyTagMultiple,
+  formatContent,
+  extractScratchpad,
+};
+
+export default xmlUtils;
