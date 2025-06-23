@@ -41,7 +41,12 @@ export function formatLogEntry(logMessage) {
     );
     if (thinkingMatch && thinkingMatch[1]) {
       const content = thinkingMatch[1];
-      return formatSpecialContent(message, content, 'Thinking content:');
+      return formatSpecialContent(
+        message,
+        content,
+        'Thinking content:',
+        logMessage.id,
+      );
     }
   }
 
@@ -56,7 +61,12 @@ export function formatLogEntry(logMessage) {
     );
     if (scratchpadMatch && scratchpadMatch[1]) {
       const content = scratchpadMatch[1];
-      return formatSpecialContent(message, content, 'Scratchpad content:');
+      return formatSpecialContent(
+        message,
+        content,
+        'Scratchpad content:',
+        logMessage.id,
+      );
     }
   }
 
@@ -70,7 +80,7 @@ export function formatLogEntry(logMessage) {
  * @param {string} contentType - The type label (e.g., "Scratchpad content:" or "Thinking content:")
  * @returns {string} Formatted message
  */
-function formatSpecialContent(message, content, contentType) {
+function formatSpecialContent(message, content, contentType, logId) {
   try {
     // Unescape HTML entities that were escaped during logging
     content = content
@@ -108,7 +118,8 @@ function formatSpecialContent(message, content, contentType) {
       .replace(':', '');
 
     // Always return just the special content box, hiding the log line wrapper entirely
-    return `<div class="special-content ${cssClass}">${parsedMarkdown}</div>`;
+    const idAttr = logId ? ` data-log-id="${logId}"` : '';
+    return `<div class="special-content ${cssClass}"${idAttr}>${parsedMarkdown}</div>`;
   } catch (e) {
     console.error('Error parsing markdown:', e);
     // Fallback to original content
