@@ -28,13 +28,23 @@ const logLevels = {
 // Group State
 
 // Helper function to escape HTML tags
-function escapeHtml(text: string): string {
+export function escapeHtml(text: string): string {
   return text
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
+}
+
+// Helper function to unescape HTML tags
+export function unescapeHtml(text: string): string {
+  return text
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#039;/g, "'")
+    .replace(/&amp;/g, '&');
 }
 
 // Main TeXRA output channel for non-agent logs

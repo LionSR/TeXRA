@@ -18,8 +18,10 @@ export function formatTokens(tokens) {
 
 // Initialize Markdown-it parser with KaTeX macros
 const md = new MarkdownIt({
-  breaks: true, // Convert line breaks to <br>
+  // breaks: true, // Convert line breaks to <br>
+  breaks: false, // Convert line breaks to <br>
   linkify: true, // Automatically detect links
+  html: false, // Disable HTML tags to escape them
 }).use(markdownItKatex, {
   throwOnError: false,
   errorColor: ' #cc0000',
@@ -86,6 +88,15 @@ export function formatLogEntry(logMessage) {
   return message;
 }
 
+function unescapeHtml(text) {
+  return text
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#039;/g, "'")
+    .replace(/&amp;/g, '&');
+}
+
 /**
  * Format special content like scratchpad or thinking with Markdown
  * @param {string} message - The original message
@@ -96,12 +107,7 @@ export function formatLogEntry(logMessage) {
 function formatSpecialContent(message, content, contentType, logId) {
   try {
     // Unescape HTML entities that were escaped during logging
-    content = content
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>')
-      .replace(/&quot;/g, '"')
-      .replace(/&#039;/g, "'")
-      .replace(/&amp;/g, '&');
+    content = unescapeHtml(content);
 
     // Pre-process LaTeX references to protect them from markdown parsing
     content = content.replace(/\\\\ref\{([^}]+)\}/g, '@@LATEX-REF:$1@@');
