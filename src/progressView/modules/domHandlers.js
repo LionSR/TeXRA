@@ -946,4 +946,19 @@ export function setupEventListeners() {
     gutterSize: 5,
     cursor: 'col-resize',
   });
+
+  // Handle special-details toggle events
+  document.addEventListener(
+    'toggle',
+    (e) => {
+      if (e.target && e.target.classList.contains('special-details')) {
+        const toggleIcon = e.target.querySelector('.toggle-icon');
+        if (toggleIcon) {
+          const isOpen = e.target.open;
+          toggleIcon.className = `codicon codicon-chevron-${isOpen ? 'down' : 'right'} toggle-icon`;
+        }
+      }
+    },
+    true,
+  );
 }
