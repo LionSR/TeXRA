@@ -61,7 +61,7 @@ body {
     opacity: var(--opacity-subtle);
   }
   50% {
-    transform: scale(1.1);
+    ar: scale(1.1);
     opacity: var(--opacity-full);
   }
   100% {

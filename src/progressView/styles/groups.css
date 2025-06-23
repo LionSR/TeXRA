@@ -34,7 +34,6 @@
 }
 
 .log-group-content {
-  margin-left: var(--spacing-medium);
   padding-left: var(--spacing-small);
   border-left: var(--border-thin) dashed
     var(--vscode-editorGroupHeader-tabsBorder);
