@@ -63,7 +63,7 @@ export function formatLogEntry(logMessage) {
 
 function extractSpecialContent(message, type) {
   const regex = new RegExp(
-    `<span class="message-info"[^>]*data-message-type="${type}">(.*?)</span>`,
+    `<span class="message-info"[^>]*data-message-type="${type}"[^>]*>(.*?)</span>`,
     's',
   );
   const match = message.match(regex);
