@@ -130,9 +130,21 @@ function formatSpecialContent(message, content, contentType, logId) {
       .replace(/\s+/g, '-')
       .replace(':', '');
 
-    // Always return just the special content box, hiding the log line wrapper entirely
+    // Return expandable details structure with proper toggle and icon
     const idAttr = logId ? ` data-log-id="${logId}"` : '';
-    return `<div class="special-content ${cssClass}"${idAttr}>${parsedMarkdown}</div>`;
+    // Determine label and icon based on content type
+    const isThinking = contentType.includes('Thinking');
+    const labelText = isThinking ? 'Thinking' : 'Scratchpad';
+    const icon = isThinking ? 'codicon-lightbulb' : 'codicon-pencil';
+
+    return `<details class="special-details" open>
+      <summary>
+        <i class="codicon codicon-chevron-down toggle-icon"></i>
+        <i class="codicon ${icon}"></i>
+        <span>${labelText}</span>
+      </summary>
+      <div class="special-content ${cssClass}"${idAttr}>${parsedMarkdown}</div>
+    </details>`;
   } catch (e) {
     console.error('Error parsing markdown:', e);
     // Fallback to original content
