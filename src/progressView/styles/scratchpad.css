@@ -39,15 +39,11 @@
   font-size: var(--font-size-sm);
 }
 
-/* Style markdown elements in scratchpad and thinking content */
-.scratchpad-content h1,
-.scratchpad-content h2,
-.scratchpad-content h3,
-.scratchpad-content h4,
-.thinking-content h1,
-.thinking-content h2,
-.thinking-content h3,
-.thinking-content h4 {
+/* Style markdown elements in special content */
+.special-content h1,
+.special-content h2,
+.special-content h3,
+.special-content h4 {
   color: var(--vscode-textLink-foreground, #3794ff);
   margin-top: 1em;
   margin-bottom: 0.5em;
@@ -55,20 +51,20 @@
   line-height: 1.25;
 }
 
-.scratchpad-content h1:first-child,
-.scratchpad-content h2:first-child,
-.scratchpad-content h3:first-child,
-.scratchpad-content h4:first-child {
+.special-content h1:first-child,
+.special-content h2:first-child,
+.special-content h3:first-child,
+.special-content h4:first-child {
   margin-top: 0;
 }
 
-.scratchpad-content h1 {
+.special-content h1 {
   font-size: var(--font-size-lg);
   border-bottom: var(--border-thin) solid var(--vscode-panel-border, #555);
   padding-bottom: var(--spacing-small);
 }
 
-.scratchpad-content h2 {
+.special-content h2 {
   font-size: var(--font-size-lg);
   padding-left: var(--spacing-medium);
   margin-top: var(--spacing-large);
@@ -81,41 +77,41 @@
   color: var(--vscode-textLink-foreground, #3794ff);
 }
 
-.scratchpad-content h3 {
+.special-content h3 {
   font-size: var(--font-size-lg);
 }
 
-.scratchpad-content h4 {
+.special-content h4 {
   font-size: var(--font-size-lg);
 }
 
 /* Add styles to control paragraph spacing */
-.scratchpad-content p {
+.special-content p {
   margin: 0.5em 0;
   padding: 0;
 }
 
-.scratchpad-content p:last-child {
+.special-content p:last-child {
   margin-bottom: 0;
 }
 
-.scratchpad-content ul,
-.scratchpad-content ol {
+.special-content ul,
+.special-content ol {
   margin-top: 0.5em;
   margin-bottom: 0.5em;
   padding-left: 1.5em;
 }
 
-.scratchpad-content li {
+.special-content li {
   margin: 0 0 0.2em 0;
   line-height: 1.25;
 }
 
-.scratchpad-content li + li {
+.special-content li + li {
   margin-top: 0.1em;
 }
 
-.scratchpad-content code {
+.special-content code {
   background-color: var(--vscode-textPreformat-background, #0a0a0a);
   padding: var(--spacing-tiny) var(--spacing-small);
   border-radius: var(--border-radius);
@@ -123,7 +119,7 @@
   font-size: var(--font-size-sm);
 }
 
-.scratchpad-content pre {
+.special-content pre {
   padding: var(--spacing-medium) var(--spacing-large);
   margin: 0.5em 0;
   border-radius: var(--border-radius);
@@ -133,7 +129,7 @@
   overflow-x: auto;
 }
 
-.scratchpad-content pre code {
+.special-content pre code {
   background-color: transparent;
   padding: 0;
   display: block;
@@ -141,21 +137,21 @@
 }
 
 /* Style for LaTeX references */
-.scratchpad-content .latex-ref {
+.special-content .latex-ref {
   font-family: var(--font-family);
   color: var(--vscode-symbolIcon-keywordForeground, #569cd6);
 }
 
-.scratchpad-content a {
+.special-content a {
   color: var(--vscode-textLink-activeForeground, #3794ff);
   text-decoration: none;
 }
 
-.scratchpad-content a:hover {
+.special-content a:hover {
   text-decoration: underline;
 }
 
-.scratchpad-content blockquote {
+.special-content blockquote {
   border-left: var(--border-thick) solid
     var(--vscode-activityBarBadge-background, #007acc);
   margin: var(--spacing-medium) 0;
@@ -164,38 +160,38 @@
   font-style: italic;
 }
 
-.scratchpad-content table {
+.special-content table {
   border-collapse: collapse;
   width: 100%;
   margin: var(--spacing-xlarge) 0;
 }
 
-.scratchpad-content table th,
-.scratchpad-content table td {
+.special-content table th,
+.special-content table td {
   border: var(--border-thin) solid var(--vscode-panel-border, #555);
   padding: var(--spacing-small) var(--spacing-large);
 }
 
-.scratchpad-content table th {
+.special-content table th {
   background-color: var(--vscode-editor-lineHighlightBackground, #2a2d2e);
   text-align: left;
 }
 
-.scratchpad-content img {
+.special-content img {
   max-width: 100%;
 }
 
 /* Styling for different sections in scratchpad */
-.scratchpad-content strong {
+.special-content strong {
   color: var(--vscode-editor-foreground, #d4d4d4);
   font-weight: 600;
 }
 
-.scratchpad-content em {
+.special-content em {
   font-style: italic;
 }
 
-.scratchpad-content hr {
+.special-content hr {
   margin: 0.7em 0;
   height: var(--border-thin);
   background-color: var(--vscode-editorWidget-border, #454545);
@@ -203,8 +199,8 @@
 }
 
 /* Special styling for reflection sections */
-.scratchpad-content em strong,
-.scratchpad-content strong em {
+.special-content em strong,
+.special-content strong em {
   color: var(--vscode-editorInfo-foreground, #75beff);
 }
 
@@ -223,35 +219,35 @@
 }
 
 /* Additional enhancements for scratchpad content */
-.scratchpad-content p:first-child {
+.special-content p:first-child {
   margin-top: 0;
 }
 
-.scratchpad-content p:last-child {
+.special-content p:last-child {
   margin-bottom: 0;
 }
 
 /* Special handling for reflection patterns */
-.scratchpad-content p:has(strong:first-child) {
+.special-content p:has(strong:first-child) {
   border-left: calc(var(--spacing-small) - 1px) solid
     var(--vscode-notificationsInfoIcon-foreground, #75beff);
   padding-left: var(--spacing-medium);
 }
 
 /* Paragraph spacing */
-.scratchpad-content h2 + p {
+.special-content h2 + p {
   margin-top: 0.3em;
 }
 
 /* Reduce spacing between paragraphs */
-.scratchpad-content p + p {
+.special-content p + p {
   margin-top: 0.3em;
 }
 
 /* Remove extra space between consecutive elements of the same type */
-.scratchpad-content h1 + h1,
-.scratchpad-content h2 + h2,
-.scratchpad-content h3 + h3,
-.scratchpad-content h4 + h4 {
+.special-content h1 + h1,
+.special-content h2 + h2,
+.special-content h3 + h3,
+.special-content h4 + h4 {
   margin-top: 0.3em;
 }
