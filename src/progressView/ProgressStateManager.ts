@@ -1,5 +1,6 @@
 // Third-party imports
 import * as vscode from 'vscode';
+import { randomUUID } from 'crypto';
 
 // Local imports
 import { WorkspaceStateKey, workspaceSM } from '@utils/stateManager';
@@ -11,10 +12,11 @@ import { AgentLogger } from '@logger/AgentLogger';
 
 // Types
 import { TokenUsageStats } from '../types/UsageTypes';
-import { LogGroup } from '../types/LogTypes';
+import { LogGroup } from '../logger/LogTypes';
 import type { DiffStats } from '../types/DiffTypes';
 
 interface ColoredLogMessage {
+  id: string;
   message: string;
   level: 'error' | 'warn' | 'info' | 'debug';
   timestamp: number;
@@ -127,6 +129,9 @@ export class ProgressStateManager {
           .map(([stream, messages]) => [
             stream,
             messages.map((msg) => {
+              if (!msg.id) {
+                msg.id = randomUUID();
+              }
               if (msg.timestamp === undefined) {
                 const attrMatch = msg.message.match(
                   /data-full-timestamp="([^"]+)"/,
