@@ -39,10 +39,6 @@
     var(--vscode-editorGroupHeader-tabsBorder);
 }
 
-.group-toggle {
-  margin-right: var(--spacing-small);
-}
-
 .group-status-icon {
   margin-right: var(--spacing-small);
 }
