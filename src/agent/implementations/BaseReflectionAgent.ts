@@ -30,7 +30,7 @@ import {
   writePromptToXml,
 } from '@utils/promptUtils';
 import { loadTexraRules } from '@frontend/files/rules';
-import replacementManager from '@replacement/replacementManager';
+import replacementEngine from '@replacement/engine';
 import { checkForMassiveRepetition } from '@utils/text/repetitionUtils';
 import xmlUtils from '@utils/text/xmlUtils';
 
@@ -299,7 +299,7 @@ export abstract class BaseReflectionAgent extends BaseAgent {
         }
 
         // Chain response processing operations
-        const processedResponse = replacementManager.applyAll(newResponse);
+        const processedResponse = replacementEngine.applyAll(newResponse);
 
         toolState.updateLastResponse(processedResponse);
 
