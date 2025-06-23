@@ -1,6 +1,5 @@
 // Local imports - log
 import * as logger from '@logger/logUtils';
-import { AgentLogger } from '@logger/AgentLogger';
 import { K_SLICE } from '@utils/config';
 import { checkToolInstalled } from '@utils/system/toolUtils';
 import nodePandoc from 'node-pandoc';
@@ -309,21 +308,10 @@ export function extractContentFromXMLbyTagMultiple(
  * @param contentType The type of content (e.g., 'Scratchpad', 'Thinking')
  * @param groupId Optional group ID for logging
  */
-export async function formatAndLogContent(
-  content: string,
-  agentLogger: AgentLogger,
-  contentType: string = 'Scratchpad',
-  groupId?: string,
-): Promise<void> {
+export async function formatContent(content: string): Promise<string> {
   if (!content) {
-    return;
+    return '';
   }
-
-  // Log original content for debugging
-  agentLogger.debug(
-    `Original ${contentType.toLowerCase()} content before formatting: ${content.substring(0, K_SLICE)}${content.length > K_SLICE ? '...' : ''}`,
-    groupId,
-  );
 
   // Format the content for improved rendering
   let formattedContent = content.trim();
@@ -387,37 +375,33 @@ export async function formatAndLogContent(
   }
   // .replace(/ +$/gm, ''); // Remove trailing spaces only
 
-  // agentLogger.info(formattedContent, groupId); // for debugging
-
-  // Log the formatted content
-  agentLogger.info(`${contentType} content: ${formattedContent}`, groupId);
+  return formattedContent;
 }
 
 /**
- * Extracts scratchpad content from the given output and logs it after formatting.
- * Converts LaTeX and XML notation to more readable markdown format.
+ * Extract scratchpad content from the given output and format it.
  *
  * @param outputContent The content to extract scratchpad from
- * @param logger The logger instance to use for logging the formatted content
  * @param thinkingTag The XML tag name used for the scratchpad content
- * @param groupId Optional group ID for logging
  */
-export async function extractAndLogScratchpad(
+export async function extractScratchpad(
   outputContent: string,
-  agentLogger: AgentLogger,
   thinkingTag: string = 'scratchpad',
-  groupId?: string,
-): Promise<void> {
+): Promise<string | null> {
   const extractedContent = extractTextFromTag(outputContent, thinkingTag);
-  if (extractedContent) {
-    // Always log using the canonical "Scratchpad" label so that the progress
-    // view recognises the message. The thinkingTag is still used for
-    // extraction so alternative tag names continue to work.
-    await formatAndLogContent(
-      extractedContent,
-      agentLogger,
-      'Scratchpad',
-      groupId,
-    );
-  }
+  return extractedContent ? await formatContent(extractedContent) : null;
 }
+
+export const xmlUtils = {
+  addCdataToTags,
+  addCdataToTagsMultiple,
+  extractTextFromTag,
+  extractMultipleTextFromTag,
+  filterTagsFromText,
+  extractContentFromXMLbyTag,
+  extractContentFromXMLbyTagMultiple,
+  formatContent,
+  extractScratchpad,
+};
+
+export default xmlUtils;

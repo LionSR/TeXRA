@@ -68,10 +68,12 @@ export function findFilesFromPatterns(
   }
 
   const results = new Set<string>();
+
   for (const pattern of patterns) {
     for (const ext of extensions) {
+      const bracePattern = `${pattern}${ext}`;
       for (const dir of searchDirs) {
-        const matches = globSync(path.join(dir, `${pattern}${ext}`), {
+        const matches = globSync(path.join(dir, bracePattern), {
           nodir: true,
         });
         if (matches.length > 0) {

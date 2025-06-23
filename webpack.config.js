@@ -45,7 +45,7 @@ const extensionConfig = {
       '@housekeeping': path.resolve(__dirname, 'src/housekeeping'),
       '@progressView': path.resolve(__dirname, 'src/progressView'),
       '@historyView': path.resolve(__dirname, 'src/historyView'),
-      '@replacement': path.resolve(__dirname, 'src/replacement'),
+      '@replacement': path.resolve(__dirname, 'src/replacementEngine'),
       '@tools': path.resolve(__dirname, 'src/tools'),
       '@types': path.resolve(__dirname, 'src/types'),
     },

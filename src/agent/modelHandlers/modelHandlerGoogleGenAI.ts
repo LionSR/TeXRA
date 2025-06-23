@@ -34,12 +34,13 @@ import { AgentLogger } from '@logger/AgentLogger';
 // Local imports - utilities
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
 import { formatProviderError } from '@utils/sdkErrorUtils';
-import { cleanFileContent } from '@replacement/replacementUtils';
-import replacementManager from '@replacement/replacementManager';
-import { extractAndLogScratchpad } from '@utils/text/xmlUtils';
-import type { ProviderStopReason } from '../../types/StopReasonTypes';
-import { getConfig } from '@utils/config';
+import xmlUtils from '@utils/text/xmlUtils';
 import { calculateTokenPrice } from '@utils/priceUtils';
+
+import { cleanFileContent } from '@replacement/engine';
+import replacementEngine from '@replacement/engine';
+
+import type { ProviderStopReason } from './types/StopReasonTypes';
 
 // Local constant
 import { K_SLICE } from '@utils/config';
@@ -607,7 +608,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
       );
     }
 
-    responseText = replacementManager.applyAll(responseText);
+    responseText = replacementEngine.applyAll(responseText);
 
     const usage = responseObject.usageMetadata;
     const stopReason: FinishReason =
@@ -815,13 +816,14 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
     let fileContent = await WorkspaceFS.readFile(outputFile);
     fileContent = cleanFileContent(fileContent);
 
-    // Extract and log any existing scratchpad content
-    await extractAndLogScratchpad(
+    // Extract any existing scratchpad content
+    const scratchpad = await xmlUtils.extractScratchpad(
       fileContent,
-      this.logger,
       'scratchpad',
-      groupId,
     );
+    if (scratchpad) {
+      this.logger.info(`Scratchpad content: ${scratchpad}`, groupId);
+    }
 
     await WorkspaceFS.writeFile(outputFile, fileContent);
     this.logger.debug(`Cleaned and saved existing content to ${outputFile}.`);

@@ -2,7 +2,7 @@
  * Shared logging interfaces used by the logger and progress view.
  */
 
-import type { TokenUsageStats } from './UsageTypes';
+import type { TokenUsageStats } from '../types/UsageTypes';
 
 export interface LogGroup {
   /** Unique identifier for the group */

@@ -13,7 +13,7 @@ import {
   isAgentStream,
   EMOJI_BY_LEVEL as emojis,
 } from '@utils/loggerUtils';
-import { LogGroup } from '../types/LogTypes';
+import { LogGroup } from './LogTypes';
 
 const { combine, timestamp } = winston.format;
 

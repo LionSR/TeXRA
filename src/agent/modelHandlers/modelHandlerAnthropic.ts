@@ -16,10 +16,10 @@ import { formatProviderError } from '@utils/sdkErrorUtils';
 
 // Local imports - utilities
 import { WorkspaceFS } from '@utils/files';
-import { cleanFileContent } from '@replacement/replacementUtils';
-import replacementManager from '@replacement/replacementManager';
-import type { ProviderStopReason } from '../../types/StopReasonTypes';
-import { extractAndLogScratchpad } from '@utils/text/xmlUtils';
+import { cleanFileContent } from '@replacement/engine';
+import replacementEngine from '@replacement/engine';
+import type { ProviderStopReason } from './types/StopReasonTypes';
+import xmlUtils from '@utils/text/xmlUtils';
 
 // Local imports - agent components
 import { AgentConfig } from '@agent/core/AgentConfig';
@@ -395,7 +395,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
       newResponse += `\n${endTag}`;
     }
 
-    newResponse = replacementManager.applyAll(newResponse);
+    newResponse = replacementEngine.applyAll(newResponse);
 
     return [newResponse, responseObject.usage, stopReason || 'stop'];
   }
@@ -499,13 +499,14 @@ export class ModelHandlerAnthropic extends ModelHandler {
     let fileContent = await WorkspaceFS.readFile(outputFile);
     fileContent = cleanFileContent(fileContent);
 
-    // Extract and log any existing scratchpad content
-    await extractAndLogScratchpad(
+    // Extract any existing scratchpad content
+    const scratchpad = await xmlUtils.extractScratchpad(
       fileContent,
-      this.logger,
       'scratchpad',
-      groupId,
     );
+    if (scratchpad) {
+      this.logger.info(`Scratchpad content: ${scratchpad}`, groupId);
+    }
 
     await WorkspaceFS.writeFile(outputFile, fileContent);
 

@@ -118,7 +118,10 @@ async function handleCleanMultiple(
   }
 }
 
-export async function handleClean(config: any) {
+export async function handleClean(config: {
+  streamId?: string;
+  [key: string]: any;
+}) {
   logger.debug(
     CHANNEL,
     `Clean command called with config: ${JSON.stringify(config)}`,
@@ -158,12 +161,9 @@ export async function handleClean(config: any) {
 
   const provider = ProgressViewProvider.getInstance();
   if (provider) {
-    const streamId = getStreamId(
-      config.agent,
-      config.model,
-      config.inputFile,
-      outputFiles,
-    );
+    const streamId =
+      config.streamId ||
+      getStreamId(config.agent, config.model, config.inputFile, outputFiles);
     provider.clearOutputFiles(streamId);
     provider.clearTaskOutput(streamId);
   }
