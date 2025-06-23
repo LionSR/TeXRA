@@ -579,7 +579,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
 
     const lastMessage = messages.at(-1);
     if (hasEndTag(agentSetting, fileContent)) {
-      this.logger.info('End tag detected - skipping continuation');
+      this.logger.debug('End tag detected - skipping continuation');
       if (lastMessage && Array.isArray(lastMessage.content)) {
         // this is suspicious, because the two conflicts!!!
         const lastPart = lastMessage.content[lastMessage.content.length - 1];
