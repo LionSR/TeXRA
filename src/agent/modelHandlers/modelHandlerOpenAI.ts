@@ -9,7 +9,7 @@ import { countTokens } from 'gpt-tokenizer';
 // Local imports - utilities
 import { WorkspaceFS } from '@utils/files';
 import { cleanFileContent } from '@replacement/replacementUtils';
-import { extractAndLogScratchpad } from '@utils/text/xmlUtils';
+import { extractScratchpad } from '@utils/text/xmlUtils';
 import { formatProviderError } from '@utils/sdkErrorUtils';
 
 // Local imports - agent components
@@ -554,13 +554,11 @@ export class ModelHandlerOpenAI extends ModelHandler {
     let fileContent = await WorkspaceFS.readFile(outputFile);
     fileContent = cleanFileContent(fileContent);
 
-    // Extract and log any existing scratchpad content
-    await extractAndLogScratchpad(
-      fileContent,
-      this.logger,
-      'scratchpad',
-      groupId,
-    );
+    // Extract any existing scratchpad content
+    const scratchpad = await extractScratchpad(fileContent, 'scratchpad');
+    if (scratchpad) {
+      this.logger.info(`Scratchpad content: ${scratchpad}`, groupId);
+    }
 
     // Write file content to output file
     await WorkspaceFS.writeFile(outputFile, fileContent);
