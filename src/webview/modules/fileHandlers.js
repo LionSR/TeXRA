@@ -282,7 +282,8 @@ export function emptyMultipleFiles(containerId, toggleId) {
   listDiv.innerHTML = '';
   container.style.display = 'none';
   const toggleIconDiv = safeGetElementById(toggleId);
-  if (toggleIconDiv) toggleIconDiv.textContent = '▼';
+  if (toggleIconDiv)
+    toggleIconDiv.innerHTML = '<i class="codicon codicon-chevron-down"></i>';
 
   // Reset Output Filename override removed
 

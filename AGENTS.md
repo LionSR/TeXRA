@@ -40,6 +40,8 @@ This document sets the common conventions for contributions. Follow these norms 
 - When targeting the OpenAI Responses API, use `ModelHandlerOpenAIResponse`. This API does not support stop sequences, so handle any end-tag logic in post-processing.
 - Maintain text cleanup rules in the `src/replacement` modules.
 - UI components rely on VS Code codicons for icons (see `src/progressView/index.html`). Stick to these built-in icons to maintain a native look and feel.
+- When toggling sections in webviews, use codicons for the chevron instead of plain characters. For a collapsed state,
+  render `<i class="codicon codicon-chevron-down"></i>`.
 - CSS for views is organized per component under `src/progressView/styles` with shared variables in `src/common/styles/common.css`. Follow this structure when adding new styles.
 - Execute VS Code commands with `safeExecuteCommand` from `src/utils/commandUtils.ts` to handle errors gracefully.
 - Register webview handlers using a command map and `registerMessageHandlers` from `src/common/modules/webviewContext.js`.
