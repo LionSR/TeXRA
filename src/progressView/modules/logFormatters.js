@@ -120,7 +120,7 @@ function formatSpecialContent(message, content, contentType) {
 
     return `\
 <details class="special-details">\
-  <summary class="${cssClass}"><i class="codicon ${icon}"></i> ${label}</summary>\
+  <summary class="${cssClass}"><i class="codicon codicon-chevron-down toggle-icon"></i> <i class="codicon ${icon}"></i> ${label}</summary>\
   <div class="special-content ${cssClass}">${parsedMarkdown}</div>\
 </details>`;
   } catch (e) {
