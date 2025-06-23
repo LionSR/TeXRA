@@ -47,6 +47,7 @@ import { ModelHandler } from '@agent/modelHandlers';
 import { OutputHandler, NamedOutputFile } from '@agent/runtime/OutputHandler';
 import { messageToSkeleton } from '@agent/utils/messageUtils';
 import { BaseAgent } from '@agent/implementations/BaseAgent';
+import { createInfoSpan } from '@agent/modelHandlers/streamUtils';
 
 // System imports - common utilities
 import { getConfig } from '@utils/config';
@@ -248,18 +249,23 @@ export abstract class BaseReflectionAgent extends BaseAgent {
         // If thinking content was extracted, format and log it first
         if (thinkingContent) {
           const formatted = await xmlUtils.formatContent(thinkingContent);
-          this.logger.info(`Thinking content: ${formatted}`, logGroupId);
+          this.logger.info(createInfoSpan(formatted, 'thinking'), logGroupId);
 
           // Note: The complete thinking blocks (including signatures) have already been
           // stored in toolState.thinkingBlocks by the processThinkingBlock method
         }
 
-        // Extract thinking from XML tags in the response text
-        await this.extractAndLogScratchpad(
+        // Extract scratchpad content directly from the response text
+        const scratchpad = await xmlUtils.extractScratchpad(
           newResponse,
           'scratchpad',
-          logGroupId,
         );
+        if (scratchpad) {
+          this.logger.info(
+            createInfoSpan(scratchpad, 'scratchpad'),
+            logGroupId,
+          );
+        }
         // this has a potential bug if <scratchpad> is included in the prefill
 
         // Compute statistics and update states
@@ -1204,21 +1210,6 @@ export abstract class BaseReflectionAgent extends BaseAgent {
         this.outputHandler.outputFiles[currRound] = [];
         this.outputHandler.outputMappings[currRound] = [];
       }
-    }
-  }
-
-  /** Extracts and logs scratchpad content from output. */
-  protected async extractAndLogScratchpad(
-    outputContent: string,
-    thinkingTag: string = 'scratchpad',
-    groupId?: string,
-  ): Promise<void> {
-    const formatted = await xmlUtils.extractScratchpad(
-      outputContent,
-      thinkingTag,
-    );
-    if (formatted) {
-      this.logger.info(`Scratchpad content: ${formatted}`, groupId);
     }
   }
 }

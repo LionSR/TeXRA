@@ -4,9 +4,30 @@ import { randomUUID } from 'crypto';
 // Local imports
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import { AgentLogger } from '@logger/AgentLogger';
+import { escapeHtml } from '@logger/logUtils';
+
+/**
+ * Create a span element for special log content.
+ * @param content - The text to wrap.
+ * @param type - The message type value.
+ */
+export function createInfoSpan(
+  content: string,
+  type: 'thinking' | 'scratchpad',
+): string {
+  if (!content || typeof content !== 'string') {
+    throw new Error('Content must be a non-empty string');
+  }
+  if (type !== 'thinking' && type !== 'scratchpad') {
+    throw new Error('Type must be either "thinking" or "scratchpad"');
+  }
+
+  const safeContent = escapeHtml(content);
+  return `<span class="message-info" data-message-type="${type}">${safeContent}</span>`;
+}
 
 const THINKING_TEMPLATE = (content: string) =>
-  `<span class="message-info">Thinking content: ${content}</span>`;
+  createInfoSpan(content, 'thinking');
 
 export async function streamReasoningToProgressView<T>(
   stream: AsyncIterable<T>,

@@ -15,6 +15,13 @@ import {
 } from '@utils/loggerUtils';
 import { LogGroup } from './LogTypes';
 
+// Message type for ProgressView entries
+export type MessageType = 'thinking' | 'scratchpad' | 'default';
+
+function isValidMessageType(type: string): type is 'thinking' | 'scratchpad' {
+  return type === 'thinking' || type === 'scratchpad';
+}
+
 const { combine, timestamp } = winston.format;
 
 // Define log levels
@@ -128,31 +135,21 @@ class VSCodeTransport extends Transport {
       return;
     }
 
-    // Escape HTML tags in message for ProgressView
-    const escapedMessage = escapeHtml(message);
+    const hasInfoSpan = /data-message-type="(?:thinking|scratchpad)"/.test(
+      message,
+    );
+    const processedMessage = hasInfoSpan ? message : escapeHtml(message);
 
-    // Check if this is a scratchpad message
-    const isScratchpad =
-      level === 'info' && message.includes('Scratchpad content:');
-
-    // Check if this is a thinking message
-    const isThinking =
-      level === 'info' && message.includes('Thinking content:');
-
-    // Add a data attribute for scratchpad messages to help with styling and processing
-    const scratchpadAttr = isScratchpad ? 'data-is-scratchpad="true"' : '';
-
-    const messageType = isScratchpad
-      ? 'scratchpad'
-      : isThinking
-        ? 'thinking'
-        : 'default';
+    // Detect message type from data-message-type attribute
+    const typeMatch = message.match(/data-message-type="(.*?)"/);
+    const messageType: MessageType =
+      typeMatch && isValidMessageType(typeMatch[1]) ? typeMatch[1] : 'default';
 
     // Colored format for ProgressView using CSS classes, but with shorter timestamp display
     const isVerbose = getConfig<boolean>('logger.debugMode', false);
     const id = randomUUID();
     const coloredFormattedMessage =
-      `<div class="log-line ${isScratchpad ? 'scratchpad-log' : ''}" data-log-id="${id}" ${scratchpadAttr} ${groupId ? `data-group-id="${groupId}"` : ''} data-full-timestamp="${timestamp}">` +
+      `<div class="log-line" data-log-id="${id}" ${groupId ? `data-group-id="${groupId}"` : ''} data-full-timestamp="${timestamp}">` +
       `<span class="timestamp" title="${timestamp}">${emoji}${
         isVerbose ? ` [${timeDisplay}]` : ''
       }</span> ` +
@@ -161,7 +158,7 @@ class VSCodeTransport extends Transport {
             .toUpperCase()
             .padEnd(8)}</span> `
         : '') +
-      `<span class="message-${level}">${escapedMessage}</span>` +
+      `<span class="message-${level}">${processedMessage}</span>` +
       `</div>`;
 
     // Write to ProgressView if available (with colors and escaped HTML)
