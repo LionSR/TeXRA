@@ -204,20 +204,6 @@
   color: var(--vscode-editorInfo-foreground, #75beff);
 }
 
-/* Special styling for scratchpad log entries */
-.scratchpad-log {
-  margin-top: var(--spacing-medium);
-  margin-bottom: var(--spacing-small); /* Reduced spacing after log header */
-  background-color: var(--vscode-editor-background);
-  border-radius: var(--border-radius-large) var(--border-radius-large) 0 0; /* Rounded corners only on top */
-  overflow: hidden;
-}
-
-.scratchpad-log .timestamp,
-.scratchpad-log .level-info {
-  opacity: var(--opacity-subtle);
-}
-
 /* Additional enhancements for scratchpad content */
 .special-content p:first-child {
   margin-top: 0;

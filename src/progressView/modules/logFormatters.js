@@ -42,49 +42,32 @@ marked.use(
  * @returns {string} Formatted HTML for the log message
  */
 export function formatLogEntry(logMessage) {
-  let message = logMessage.message;
+  const message = logMessage.message;
 
-  // Show thinking content before scratchpad content
-  if (
-    logMessage.messageType === 'thinking' ||
-    message.includes('Thinking content:')
-  ) {
-    // Extract the actual thinking content
-    const thinkingMatch = message.match(
-      /<span class="message-info">Thinking content:\s*(.*?)<\/span>/s,
-    );
-    if (thinkingMatch && thinkingMatch[1]) {
-      const content = thinkingMatch[1];
-      return formatSpecialContent(
-        message,
-        content,
-        'Thinking content:',
-        logMessage.id,
-      );
-    }
+  let type = logMessage.messageType;
+  if (!type) {
+    const attrMatch = message.match(/data-message-type="(.*?)"/);
+    if (attrMatch) type = attrMatch[1];
   }
 
-  // Check for scratchpad content
-  if (
-    logMessage.messageType === 'scratchpad' ||
-    message.includes('data-is-scratchpad="true"')
-  ) {
-    // Extract the actual scratchpad content
-    const scratchpadMatch = message.match(
-      /<span class="message-info">Scratchpad content:\s*(.*?)<\/span>/s,
-    );
-    if (scratchpadMatch && scratchpadMatch[1]) {
-      const content = scratchpadMatch[1];
-      return formatSpecialContent(
-        message,
-        content,
-        'Scratchpad content:',
-        logMessage.id,
-      );
+  if (type === 'thinking' || type === 'scratchpad') {
+    const content = extractSpecialContent(message, type);
+    if (content) {
+      const label = type === 'thinking' ? 'Thinking' : 'Scratchpad';
+      return formatSpecialContent(message, content, label, logMessage.id);
     }
   }
 
   return message;
+}
+
+function extractSpecialContent(message, type) {
+  const regex = new RegExp(
+    `<span class="message-info"[^>]*data-message-type="${type}">(.*?)</span>`,
+    's',
+  );
+  const match = message.match(regex);
+  return match ? match[1] : null;
 }
 
 function unescapeHtml(text) {

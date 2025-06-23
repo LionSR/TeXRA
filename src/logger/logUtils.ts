@@ -131,28 +131,19 @@ class VSCodeTransport extends Transport {
     // Escape HTML tags in message for ProgressView
     const escapedMessage = escapeHtml(message);
 
-    // Check if this is a scratchpad message
-    const isScratchpad =
-      level === 'info' && message.includes('Scratchpad content:');
-
-    // Check if this is a thinking message
-    const isThinking =
-      level === 'info' && message.includes('Thinking content:');
-
-    // Add a data attribute for scratchpad messages to help with styling and processing
-    const scratchpadAttr = isScratchpad ? 'data-is-scratchpad="true"' : '';
-
-    const messageType = isScratchpad
-      ? 'scratchpad'
-      : isThinking
-        ? 'thinking'
+    // Detect message type from data-message-type attribute
+    const typeMatch = message.match(/data-message-type="(.*?)"/);
+    const messageType =
+      typeMatch &&
+      (typeMatch[1] === 'scratchpad' || typeMatch[1] === 'thinking')
+        ? (typeMatch[1] as 'scratchpad' | 'thinking')
         : 'default';
 
     // Colored format for ProgressView using CSS classes, but with shorter timestamp display
     const isVerbose = getConfig<boolean>('logger.debugMode', false);
     const id = randomUUID();
     const coloredFormattedMessage =
-      `<div class="log-line ${isScratchpad ? 'scratchpad-log' : ''}" data-log-id="${id}" ${scratchpadAttr} ${groupId ? `data-group-id="${groupId}"` : ''} data-full-timestamp="${timestamp}">` +
+      `<div class="log-line" data-log-id="${id}" ${groupId ? `data-group-id="${groupId}"` : ''} data-full-timestamp="${timestamp}">` +
       `<span class="timestamp" title="${timestamp}">${emoji}${
         isVerbose ? ` [${timeDisplay}]` : ''
       }</span> ` +
