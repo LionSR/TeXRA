@@ -1,6 +1,8 @@
 import MarkdownIt from 'markdown-it';
+import markdownItKatex from '@vscode/markdown-it-katex';
 import { getLogGroup, setLogGroup } from './stateManager.js';
 import { STATUS } from './constants.js';
+import { katexMacros } from './katexMacros.js';
 
 export const BULLET_MARKUP =
   '<i class="codicon codicon-circle-small-filled group-bullet"></i>';
@@ -14,10 +16,14 @@ export function formatTokens(tokens) {
   return tokens > 4096 ? `${Math.round(tokens / 1000)}k` : `${tokens}`;
 }
 
-// Initialize Markdown-it parser
+// Initialize Markdown-it parser with KaTeX macros
 const md = new MarkdownIt({
   breaks: true, // Convert line breaks to <br>
   linkify: true, // Automatically detect links
+}).use(markdownItKatex, {
+  throwOnError: false,
+  errorColor: ' #cc0000',
+  macros: katexMacros,
 });
 
 /**

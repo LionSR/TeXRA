@@ -12,6 +12,7 @@ import {
   addLogGroup,
   updateLogGroupUI,
   appendLogToGroup,
+  updateLogEntry,
   updateFileList,
   updateUsageSummary,
   updateGroupUsage,
@@ -97,6 +98,12 @@ const handlers = {
         logContent.appendChild(el.firstElementChild);
       }
       logContent.scrollTop = logContent.scrollHeight;
+    }
+  },
+
+  [COMMANDS.UPDATE_LOG]: (message) => {
+    if (message.stream === getCurrentStream()) {
+      updateLogEntry(message.logMessage);
     }
   },
 
