@@ -36,7 +36,7 @@ import { WorkspaceFS, AbsoluteFS } from '@utils/files';
 import { formatProviderError } from '@utils/sdkErrorUtils';
 import { cleanFileContent } from '@replacement/replacementUtils';
 import replacementManager from '@replacement/replacementManager';
-import { extractScratchpad } from '@utils/text/xmlUtils';
+import xmlUtils from '@utils/text/xmlUtils';
 import type { ProviderStopReason } from '../../types/StopReasonTypes';
 import { getConfig } from '@utils/config';
 import { calculateTokenPrice } from '@utils/priceUtils';
@@ -816,7 +816,10 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
     fileContent = cleanFileContent(fileContent);
 
     // Extract any existing scratchpad content
-    const scratchpad = await extractScratchpad(fileContent, 'scratchpad');
+    const scratchpad = await xmlUtils.extractScratchpad(
+      fileContent,
+      'scratchpad',
+    );
     if (scratchpad) {
       this.logger.info(`Scratchpad content: ${scratchpad}`, groupId);
     }
