@@ -1,4 +1,4 @@
-import { marked } from 'marked';
+import MarkdownIt from 'markdown-it';
 import { getLogGroup, setLogGroup } from './stateManager.js';
 import { STATUS } from './constants.js';
 
@@ -14,12 +14,10 @@ export function formatTokens(tokens) {
   return tokens > 4096 ? `${Math.round(tokens / 1000)}k` : `${tokens}`;
 }
 
-// Configure marked options
-marked.setOptions({
-  gfm: true, // Enable GitHub Flavored Markdown
+// Initialize Markdown-it parser
+const md = new MarkdownIt({
   breaks: true, // Convert line breaks to <br>
-  headerIds: false, // Don't add id attributes to headers
-  mangle: false, // Don't mangle email addresses
+  linkify: true, // Automatically detect links
 });
 
 /**
@@ -93,7 +91,7 @@ function formatSpecialContent(message, content, contentType) {
     content = content.replace(/\\\\ref\{([^}]+)\}/g, '@@LATEX-REF:$1@@');
 
     // Process content as markdown
-    let parsedMarkdown = marked.parse(content);
+    let parsedMarkdown = md.render(content);
 
     // Post-process to restore and style LaTeX references
     parsedMarkdown = parsedMarkdown.replace(
