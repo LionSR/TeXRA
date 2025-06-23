@@ -1,3 +1,6 @@
+// Local imports
+import { MODEL_CONFIGS } from '@model/ModelRegistry';
+
 export const EXCLUDED_DIRS = new Set([
   'figs',
   'figures',
@@ -33,9 +36,6 @@ export const TEMP_EXTENSIONS = [
   '-blx.bib',
   'Notes.bib',
 ];
-
-// Auto-generated from ModelRegistry
-import { MODEL_CONFIGS } from '@model/ModelRegistry';
 
 export const MODELS = Object.keys(MODEL_CONFIGS);
 

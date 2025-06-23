@@ -1,6 +1,7 @@
 /**
  * Helper functions for generating replacement patterns
  */
+// Local imports
 import { capitalize } from '@frontend/ui/messageUtils';
 
 // Re-export commonly used constants

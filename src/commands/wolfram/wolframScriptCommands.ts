@@ -1,7 +1,10 @@
+// Third-party imports
 import * as vscode from 'vscode';
+
+// Standard library imports
 import * as path from 'path';
 
-// local import
+// Local imports
 import {
   executeWolframCode,
   executeWolframScriptFile,
