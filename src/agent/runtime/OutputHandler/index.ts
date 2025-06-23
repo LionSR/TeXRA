@@ -20,8 +20,8 @@ import {
 import {
   applyReplacements,
   getReplacementsByCategory,
-} from '@replacement/replacementUtils';
-import replacementManager from '@replacement/replacementManager';
+} from '@replacement/engine';
+import replacementEngine from '@replacement/engine';
 import {
   runLatexdiffForRound,
   runLatexdiffBetweenRounds,
@@ -164,7 +164,7 @@ export class OutputHandler {
 
   /** Processes XML content by filtering tags and applying replacements. */
   public async processXmlContent(content: string): Promise<string> {
-    content = replacementManager.applyNonRegex(content);
+    content = replacementEngine.applyNonRegex(content);
 
     const latexXmlReplacements = getReplacementsByCategory('latex_xml');
     if (latexXmlReplacements) {
