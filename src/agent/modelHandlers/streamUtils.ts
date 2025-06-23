@@ -2,8 +2,20 @@ import { randomUUID } from 'crypto';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import { AgentLogger } from '@logger/AgentLogger';
 
+/**
+ * Create a span element for special log content.
+ * @param content - The text to wrap.
+ * @param type - The message type value.
+ */
+export function createInfoSpan(
+  content: string,
+  type: 'thinking' | 'scratchpad',
+): string {
+  return `<span class="message-info" data-message-type="${type}">${content}</span>`;
+}
+
 const THINKING_TEMPLATE = (content: string) =>
-  `<span class="message-info">Thinking content: ${content}</span>`;
+  createInfoSpan(content, 'thinking');
 
 export async function streamReasoningToProgressView<T>(
   stream: AsyncIterable<T>,
