@@ -10,9 +10,6 @@
     <link rel="stylesheet" href="${commonStyleUri}" />
     <link rel="stylesheet" href="${styleUri}" />
     <link rel="stylesheet" href="${codiconUri}" />
-    <style>
-      /* Removed duplicate log group styles - these are already defined in groups.css */
-    </style>
     <script type="importmap" nonce="${nonce}">
       {
         "imports": {
@@ -62,25 +59,22 @@
             <span class="file-stats"></span>
             <span class="file-actions button-group">
               <button
-                class="vscode-button tiny compare-btn"
+                class="vscode-button compare-btn"
                 title="Compare with base"
               >
                 <i class="codicon codicon-diff"></i>
               </button>
-              <button
-                class="vscode-button tiny accept-btn"
-                title="Accept edits"
-              >
+              <button class="vscode-button accept-btn" title="Accept edits">
                 <i class="codicon codicon-check"></i>
               </button>
-              <button class="vscode-button tiny merge-btn" title="Merge edits">
+              <button class="vscode-button merge-btn" title="Merge edits">
                 <i class="codicon codicon-git-merge"></i>
               </button>
-              <button class="vscode-button tiny diff-btn" title="LaTeXdiff">
+              <button class="vscode-button diff-btn" title="LaTeXdiff">
                 <i class="codicon codicon-diff-single"></i>
               </button>
               <button
-                class="vscode-button tiny prev-btn"
+                class="vscode-button prev-btn"
                 title="Compare with previous round"
               >
                 <i class="codicon codicon-diff-added"></i>
