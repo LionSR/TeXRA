@@ -31,16 +31,24 @@ async function isPandocAvailable(): Promise<boolean> {
   return pandocCheckPromise;
 }
 
-function detectInputFormat(text: string): 'html' | 'latex' | 'markdown' {
-  const htmlRegex = /<[^>]+>/; // this needs to be improved, as we might have some xml tags to separte scratchpad
+export enum outputFormat {
+  HTML = 'html',
+  LaTeX = 'latex',
+  MARKDOWN = 'markdown',
+}
+
+function detectInputFormat(text: string): outputFormat {
+  // const htmlRegex = /<[^>]+>/; // this is wrong, as we might have some xml tags to separte scratchpad
+  const htmlRegex = /<(?:br|p|div|strong|em|code|pre|h[1-6]|ul|ol|li)\b[^>]*>/;
+
   const latexRegex = /\\(?:begin|end|section|subsection|textbf|textit|item)\{/;
 
   if (latexRegex.test(text)) {
-    return 'latex';
+    return outputFormat.LaTeX;
   } else if (htmlRegex.test(text)) {
-    return 'html';
+    return outputFormat.HTML;
   } else {
-    return 'markdown';
+    return outputFormat.MARKDOWN;
   }
 }
 
@@ -51,7 +59,7 @@ async function convertWithPandoc(text: string): Promise<string | null> {
   const format = detectInputFormat(text);
 
   // If already markdown, return as-is
-  if (format === 'markdown') {
+  if (format === outputFormat.MARKDOWN) {
     return text.trim();
   }
 

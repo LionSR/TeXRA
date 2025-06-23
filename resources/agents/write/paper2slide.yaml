@@ -65,6 +65,7 @@ prompts:
     Based on the research paper provided, please create a professional LaTeX Beamer presentation for a scientific audience. The presentation should consist of 10-15 slides that effectively communicate the paper's key findings. In the scratchpad below, outline the structure and key points you plan to include in each section of the presentation.
 
     <scratchpad>
+
     1. [Title slide content]
     2. [Introduction/Motivation]
     3. [Key point 1]
@@ -74,6 +75,7 @@ prompts:
     7. [Results]
     8. [Conclusions]
     9. [Future work]
+
     </scratchpad>
 
     Then, please create the LaTeX Beamer presentation, incorporating the key points outlined in the scratchpad. The presentation should be professional, condensed, and effectively highlight the main aspects of the research paper. Use the following format:
