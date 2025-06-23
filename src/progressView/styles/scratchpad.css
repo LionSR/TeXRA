@@ -33,16 +33,10 @@
   overflow: auto;
 }
 
-/* Chevron icon for toggle state */
+/* Toggle icon styling */
 .special-details summary .toggle-icon {
-  transition: opacity 0.2s ease;
   opacity: var(--opacity-subtle);
   font-size: var(--font-size-sm);
-}
-
-/* Change chevron icon when details is open */
-.special-details[open] summary .toggle-icon::before {
-  content: '\eab4'; /* codicon-chevron-up */
 }
 
 /* Style markdown elements in scratchpad */
