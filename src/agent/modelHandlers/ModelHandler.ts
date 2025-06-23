@@ -17,7 +17,7 @@ import {
 } from '@frontend/media/img';
 import { checkMultipleToolsInstalled } from '@utils/system';
 import { getConfig } from '@utils/config';
-import type { ProviderStopReason } from '../../types/StopReasonTypes';
+import type { ProviderStopReason } from './types/StopReasonTypes';
 import { SecretManager, ApiProvider } from '@frontend/secretManager';
 
 // Local imports - agent components
