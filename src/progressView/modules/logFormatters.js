@@ -120,8 +120,8 @@ function formatSpecialContent(message, content, contentType, logId) {
 
     // Pre-process LaTeX references to protect them from markdown parsing
     content = content.replace(/\\\\ref\{([^}]+)\}/g, '@@LATEX-REF:$1@@');
-    content = content.replace(/\\\\cref\{([^}]+)\}/g, '@@LATEX-REF:$1@@');
-    content = content.replace(/\\\\eqref\{([^}]+)\}/g, '@@LATEX-REF:$1@@');
+    content = content.replace(/\\\\cref\{([^}]+)\}/g, '@@LATEX-CREF:$1@@');
+    content = content.replace(/\\\\eqref\{([^}]+)\}/g, '@@LATEX-EQREF:$1@@');
 
     // Process content as markdown
     let parsedMarkdown = marked.parse(content);
@@ -133,11 +133,11 @@ function formatSpecialContent(message, content, contentType, logId) {
     );
 
     parsedMarkdown = parsedMarkdown.replace(
-      /@@LATEX-REF:([^@]+)@@/g,
+      /@@LATEX-CREF:([^@]+)@@/g,
       '<code class="latex-ref">\\cref{$1}</code>',
     );
     parsedMarkdown = parsedMarkdown.replace(
-      /@@LATEX-REF:([^@]+)@@/g,
+      /@@LATEX-EQREF:([^@]+)@@/g,
       '<code class="latex-ref">\\eqref{$1}</code>',
     );
 
