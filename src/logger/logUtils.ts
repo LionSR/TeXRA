@@ -128,8 +128,10 @@ class VSCodeTransport extends Transport {
       return;
     }
 
-    // Escape HTML tags in message for ProgressView
-    const escapedMessage = escapeHtml(message);
+    const hasInfoSpan = /data-message-type="(?:thinking|scratchpad)"/.test(
+      message,
+    );
+    const processedMessage = hasInfoSpan ? message : escapeHtml(message);
 
     // Detect message type from data-message-type attribute
     const typeMatch = message.match(/data-message-type="(.*?)"/);
@@ -152,7 +154,7 @@ class VSCodeTransport extends Transport {
             .toUpperCase()
             .padEnd(8)}</span> `
         : '') +
-      `<span class="message-${level}">${escapedMessage}</span>` +
+      `<span class="message-${level}">${processedMessage}</span>` +
       `</div>`;
 
     // Write to ProgressView if available (with colors and escaped HTML)
