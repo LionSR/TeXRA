@@ -16,8 +16,8 @@ import { formatProviderError } from '@utils/sdkErrorUtils';
 
 // Local imports - utilities
 import { WorkspaceFS } from '@utils/files';
-import { cleanFileContent } from '@replacement/replacementUtils';
-import replacementManager from '@replacement/replacementManager';
+import { cleanFileContent } from '@replacement/engine';
+import replacementEngine from '@replacement/engine';
 import type { ProviderStopReason } from '../../types/StopReasonTypes';
 import { extractScratchpad } from '@utils/text/xmlUtils';
 
@@ -395,7 +395,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
       newResponse += `\n${endTag}`;
     }
 
-    newResponse = replacementManager.applyAll(newResponse);
+    newResponse = replacementEngine.applyAll(newResponse);
 
     return [newResponse, responseObject.usage, stopReason || 'stop'];
   }
