@@ -1,5 +1,6 @@
 /** Types and utilities for tracking and analyzing model API response usage metrics. */
 
+// Third-party imports
 import type { CompletionUsage } from 'openai/resources/completions';
 import type { Usage as AnthropicUsage } from '@anthropic-ai/sdk/resources/messages';
 // import type { UsageMetadata as GenerateContentResponseUsageMetadata } from '@google/genai';
