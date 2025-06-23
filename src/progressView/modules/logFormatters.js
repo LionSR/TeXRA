@@ -119,7 +119,7 @@ function formatSpecialContent(message, content, contentType) {
       : 'codicon-lightbulb';
 
     return `\
-<details class="special-details">\
+<details class="special-details" open>\
   <summary class="${cssClass}"><i class="codicon codicon-chevron-down toggle-icon"></i> <i class="codicon ${icon}"></i> ${label}</summary>\
   <div class="special-content ${cssClass}">${parsedMarkdown}</div>\
 </details>`;
