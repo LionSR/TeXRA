@@ -5,21 +5,31 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'none'; style-src ${cspSource} vscode-resource: 'unsafe-inline'; script-src 'nonce-${nonce}'; font-src ${cspSource} vscode-resource:; img-src ${cspSource} data: https:;"
+      content="default-src 'none'; style-src ${cspSource} vscode-resource: 'unsafe-inline' https://cdn.jsdelivr.net; script-src 'nonce-${nonce}' https://esm.sh; font-src ${cspSource} vscode-resource: https://cdn.jsdelivr.net; img-src ${cspSource} data: https:;"
     />
     <link rel="stylesheet" href="${commonStyleUri}" />
     <link rel="stylesheet" href="${styleUri}" />
     <link rel="stylesheet" href="${codiconUri}" />
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/contrib/copy-tex.min.css"
+    />
     <script type="importmap" nonce="${nonce}">
       {
         "imports": {
           "split.js": "${splitJsUri}",
           "markdown-it": "https://esm.sh/markdown-it@14.1.0",
+          "@vscode/markdown-it-katex": "https://esm.sh/@vscode/markdown-it-katex@1.1.1",
           "./modules/stateManager.js": "${stateManagerUri}",
           "./modules/messageHandlers.js": "${messageHandlersUri}",
           "./modules/domHandlers.js": "${domHandlersUri}",
           "./modules/constants.js": "${constantsUri}",
           "./modules/logFormatters.js": "${logFormattersUri}",
+          "./modules/katexMacros.js": "${katexMacrosUri}",
           "@common/webviewContext.js": "${webviewContextUri}",
           "@common/webviewState.js": "${webviewStateUri}",
           "@common/templateUtils.js": "${templateUtilsUri}",
@@ -27,6 +37,9 @@
           "@common/stringUtils.js": "${stringUtilsUri}"
         }
       }
+    </script>
+    <script type="module" nonce="${nonce}">
+      import 'https://esm.sh/katex@0.16.22/dist/contrib/copy-tex';
     </script>
     <script type="module" nonce="${nonce}" src="${scriptUri}"></script>
   </head>
@@ -59,25 +72,22 @@
             <span class="file-stats"></span>
             <span class="file-actions button-group">
               <button
-                class="vscode-button tiny compare-btn"
+                class="vscode-button compare-btn"
                 title="Compare with base"
               >
                 <i class="codicon codicon-diff"></i>
               </button>
-              <button
-                class="vscode-button tiny accept-btn"
-                title="Accept edits"
-              >
+              <button class="vscode-button accept-btn" title="Accept edits">
                 <i class="codicon codicon-check"></i>
               </button>
-              <button class="vscode-button tiny merge-btn" title="Merge edits">
+              <button class="vscode-button merge-btn" title="Merge edits">
                 <i class="codicon codicon-git-merge"></i>
               </button>
-              <button class="vscode-button tiny diff-btn" title="LaTeXdiff">
+              <button class="vscode-button diff-btn" title="LaTeXdiff">
                 <i class="codicon codicon-diff-single"></i>
               </button>
               <button
-                class="vscode-button tiny prev-btn"
+                class="vscode-button prev-btn"
                 title="Compare with previous round"
               >
                 <i class="codicon codicon-diff-added"></i>
