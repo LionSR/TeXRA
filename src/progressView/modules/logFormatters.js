@@ -1,4 +1,5 @@
 import { marked } from 'marked';
+import { renderToString } from 'katex';
 import { getLogGroup, setLogGroup } from './stateManager.js';
 import { STATUS } from './constants.js';
 
@@ -21,6 +22,27 @@ marked.setOptions({
   headerIds: false, // Don't add id attributes to headers
   mangle: false, // Don't mangle email addresses
 });
+
+// Render LaTeX formulas using KaTeX
+function renderMath(html) {
+  return (
+    html
+      // Display equations $$...$$ or \[...\]
+      .replace(/\$\$([\s\S]+?)\$\$/g, (_, eq) =>
+        renderToString(eq, { displayMode: true }),
+      )
+      .replace(/\\\[([\s\S]+?)\\\]/g, (_, eq) =>
+        renderToString(eq, { displayMode: true }),
+      )
+      // Inline equations $...$ or \(...\)
+      .replace(/\$(?!\$)([^$]+?)\$/g, (_, eq) =>
+        renderToString(eq, { displayMode: false }),
+      )
+      .replace(/\\\(([^)]+)\\\)/g, (_, eq) =>
+        renderToString(eq, { displayMode: false }),
+      )
+  );
+}
 
 /**
  * Generate a sanitized CSS class string from a content type label
@@ -109,6 +131,7 @@ function formatSpecialContent(message, content, contentType) {
 
     // Remove extra whitespace at start and end of content
     parsedMarkdown = parsedMarkdown.trim();
+    parsedMarkdown = renderMath(parsedMarkdown);
 
     // Create enhanced content element with better formatting
     const cssClass = generateCssClass(contentType);

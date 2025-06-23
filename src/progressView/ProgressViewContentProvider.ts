@@ -50,6 +50,8 @@ export class ProgressViewContentProvider {
       const templateUtilsUri = getCommonUri('modules/templateUtils.js');
       const domUtilsUri = getCommonUri('modules/domUtils.js');
       const stringUtilsUri = getCommonUri('modules/stringUtils.js');
+      const katexJsUri = getNodeModulesUri('katex/dist/katex.mjs');
+      const katexCssUri = getNodeModulesUri('katex/dist/katex.min.css');
 
       const codiconUri = getNodeModulesUri('@vscode/codicons/dist/codicon.css');
       const codiconsFontUri = getNodeModulesUri(
@@ -64,6 +66,8 @@ export class ProgressViewContentProvider {
         splitJsUri,
         codiconUri,
         codiconsFontUri,
+        katexJsUri,
+        katexCssUri,
         webviewStateUri,
         stateManagerUri,
         messageHandlersUri,
