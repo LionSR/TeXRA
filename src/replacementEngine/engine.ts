@@ -8,7 +8,7 @@ import * as logger from '@logger/logUtils';
 // Import vscode workspace configuration
 import { getConfig } from '@utils/config';
 
-const CHANNEL = 'ReplacementUtils';
+const CHANNEL = 'ReplacementEngine';
 logger.initialize(CHANNEL);
 
 import { ReplacementCategory } from './types';
@@ -40,6 +40,28 @@ import {
   INLINE_MATH_REPLACEMENTS,
   EQUATION_STYLE_REPLACEMENTS,
 } from './rulesRegex';
+
+export interface ReplacementEngine {
+  applyNonRegex(text: string): string;
+  applyRegex(text: string): string;
+  applyAll(text: string): string;
+}
+
+class ReplacementEngineImpl implements ReplacementEngine {
+  applyNonRegex(text: string): string {
+    return applyReplacements(text, getAllReplacements()).trim();
+  }
+
+  applyRegex(text: string): string {
+    return applyReplacements(text, getAllReplacementsRegex()).trim();
+  }
+
+  applyAll(text: string): string {
+    let processed = this.applyNonRegex(text);
+    processed = this.applyRegex(processed);
+    return this.applyNonRegex(processed);
+  }
+}
 
 // ===== LaTeX Content Formatting =====
 
@@ -274,31 +296,6 @@ export function cleanFileContent(content: string): string {
 /**
  * Provides high-level APIs for applying text replacement rules.
  */
-export const replacementEngine = {
-  /**
-   * Apply all non-regex replacement rules.
-   */
-  applyNonRegex(text: string): string {
-    return applyReplacements(text, getAllReplacements()).trim();
-  },
-
-  /**
-   * Apply all regex-based replacement rules.
-   */
-  applyRegex(text: string): string {
-    return applyReplacements(text, getAllReplacementsRegex()).trim();
-  },
-
-  /**
-   * Apply the full set of replacement rules. Non-regex replacements are
-   * executed before and after regex replacements to resolve any nested
-   * transformations.
-   */
-  applyAll(text: string): string {
-    let processed = this.applyNonRegex(text);
-    processed = this.applyRegex(processed);
-    return this.applyNonRegex(processed);
-  },
-};
+export const replacementEngine: ReplacementEngine = new ReplacementEngineImpl();
 
 export default replacementEngine;
