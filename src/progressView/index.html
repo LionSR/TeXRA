@@ -10,6 +10,10 @@
     <link rel="stylesheet" href="${commonStyleUri}" />
     <link rel="stylesheet" href="${styleUri}" />
     <link rel="stylesheet" href="${codiconUri}" />
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/katex.min.css"
+    />
     <style>
       /* Removed duplicate log group styles - these are already defined in groups.css */
     </style>
@@ -18,6 +22,7 @@
         "imports": {
           "split.js": "${splitJsUri}",
           "markdown-it": "https://esm.sh/markdown-it@14.1.0",
+          "@vscode/markdown-it-katex": "https://esm.sh/@vscode/markdown-it-katex@1.1.1",
           "./modules/stateManager.js": "${stateManagerUri}",
           "./modules/messageHandlers.js": "${messageHandlersUri}",
           "./modules/domHandlers.js": "${domHandlersUri}",

@@ -1,4 +1,5 @@
 import MarkdownIt from 'markdown-it';
+import markdownItKatex from '@vscode/markdown-it-katex';
 import { getLogGroup, setLogGroup } from './stateManager.js';
 import { STATUS } from './constants.js';
 
@@ -18,7 +19,7 @@ export function formatTokens(tokens) {
 const md = new MarkdownIt({
   breaks: true, // Convert line breaks to <br>
   linkify: true, // Automatically detect links
-});
+}).use(markdownItKatex);
 
 /**
  * Generate a sanitized CSS class string from a content type label
