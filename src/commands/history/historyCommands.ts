@@ -1,4 +1,7 @@
+// Third-party imports
 import * as vscode from 'vscode';
+
+// Local imports
 import { AgentHistoryViewProvider } from '@historyView/AgentHistoryViewProvider';
 
 export const historyCommands = {
