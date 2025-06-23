@@ -1,7 +1,9 @@
 // Utility functions for building user variables for prompts
 
+// Standard library imports
 import * as path from 'path';
 
+// Local imports
 import { AgentLogger } from '@logger/AgentLogger';
 import { WorkspaceFS } from '@utils/files';
 import { setVarFromFile } from '@frontend/files/vars';

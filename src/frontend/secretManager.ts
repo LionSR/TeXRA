@@ -1,3 +1,4 @@
+// Third-party imports
 import * as vscode from 'vscode';
 
 export type ApiProvider = (typeof SecretManager.API_PROVIDERS)[number];

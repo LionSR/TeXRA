@@ -1,4 +1,7 @@
+// Third-party imports
 import * as vscode from 'vscode';
+
+// Local imports
 import { SecretManager, ApiProvider } from '@frontend/secretManager';
 
 export const apiKeyCommands = {
