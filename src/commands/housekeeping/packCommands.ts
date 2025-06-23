@@ -50,7 +50,7 @@ export function registerPackCommands(context: vscode.ExtensionContext) {
   );
 }
 
-async function handlePack(config: any) {
+async function handlePack(config: { streamId?: string; [key: string]: any }) {
   logger.debug(
     CHANNEL,
     `Pack command called with config: ${JSON.stringify(config)}`,
@@ -77,12 +77,9 @@ async function handlePack(config: any) {
 
   const provider = ProgressViewProvider.getInstance();
   if (provider) {
-    const streamId = getStreamId(
-      config.agent,
-      config.model,
-      config.inputFile,
-      outputFiles,
-    );
+    const streamId =
+      config.streamId ||
+      getStreamId(config.agent, config.model, config.inputFile, outputFiles);
     provider.clearOutputFiles(streamId);
     provider.clearTaskOutput(streamId);
   }
