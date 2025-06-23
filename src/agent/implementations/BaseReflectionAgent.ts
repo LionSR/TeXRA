@@ -30,12 +30,9 @@ import {
   writePromptToXml,
 } from '@utils/promptUtils';
 import { loadTexraRules } from '@frontend/files/rules';
-import replacementManager from '@replacement/replacementManager';
+import replacementEngine from '@replacement/engine';
 import { checkForMassiveRepetition } from '@utils/text/repetitionUtils';
-import {
-  extractAndLogScratchpad,
-  formatAndLogContent,
-} from '@utils/text/xmlUtils';
+import xmlUtils from '@utils/text/xmlUtils';
 
 // Local imports - agent components
 import { AgentConfig } from '@agent/core/AgentConfig';
@@ -250,12 +247,8 @@ export abstract class BaseReflectionAgent extends BaseAgent {
 
         // If thinking content was extracted, format and log it first
         if (thinkingContent) {
-          await formatAndLogContent(
-            thinkingContent,
-            this.logger,
-            'Thinking',
-            logGroupId,
-          );
+          const formatted = await xmlUtils.formatContent(thinkingContent);
+          this.logger.info(`Thinking content: ${formatted}`, logGroupId);
 
           // Note: The complete thinking blocks (including signatures) have already been
           // stored in toolState.thinkingBlocks by the processThinkingBlock method
@@ -306,7 +299,7 @@ export abstract class BaseReflectionAgent extends BaseAgent {
         }
 
         // Chain response processing operations
-        const processedResponse = replacementManager.applyAll(newResponse);
+        const processedResponse = replacementEngine.applyAll(newResponse);
 
         toolState.updateLastResponse(processedResponse);
 
@@ -1220,11 +1213,12 @@ export abstract class BaseReflectionAgent extends BaseAgent {
     thinkingTag: string = 'scratchpad',
     groupId?: string,
   ): Promise<void> {
-    await extractAndLogScratchpad(
+    const formatted = await xmlUtils.extractScratchpad(
       outputContent,
-      this.logger,
       thinkingTag,
-      groupId,
     );
+    if (formatted) {
+      this.logger.info(`Scratchpad content: ${formatted}`, groupId);
+    }
   }
 }
