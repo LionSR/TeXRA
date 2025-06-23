@@ -1,3 +1,4 @@
+// Local imports
 import { ReplacementCategory } from './types';
 import {
   generateGroupedBackslashFixes,
