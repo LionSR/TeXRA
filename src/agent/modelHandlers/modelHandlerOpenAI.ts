@@ -8,8 +8,8 @@ import { countTokens } from 'gpt-tokenizer';
 
 // Local imports - utilities
 import { WorkspaceFS } from '@utils/files';
-import { cleanFileContent } from '@replacement/replacementUtils';
-import { extractAndLogScratchpad } from '@utils/text/xmlUtils';
+import { cleanFileContent } from '@replacement/engine';
+import xmlUtils from '@utils/text/xmlUtils';
 import { formatProviderError } from '@utils/sdkErrorUtils';
 
 // Local imports - agent components
@@ -17,7 +17,7 @@ import { AgentConfig } from '../core/AgentConfig';
 import { AgentSetting, hasEndTag } from '../core/AgentDataclass';
 import { AgentStateRound } from '../core/AgentState';
 import { ModelHandler } from './ModelHandler';
-import type { ProviderStopReason } from '../../types/StopReasonTypes';
+import type { ProviderStopReason } from './types/StopReasonTypes';
 import {
   OpenAIAPIResponseUsage,
   ResponseUsageFactory,
@@ -554,13 +554,14 @@ export class ModelHandlerOpenAI extends ModelHandler {
     let fileContent = await WorkspaceFS.readFile(outputFile);
     fileContent = cleanFileContent(fileContent);
 
-    // Extract and log any existing scratchpad content
-    await extractAndLogScratchpad(
+    // Extract any existing scratchpad content
+    const scratchpad = await xmlUtils.extractScratchpad(
       fileContent,
-      this.logger,
       'scratchpad',
-      groupId,
     );
+    if (scratchpad) {
+      this.logger.info(`Scratchpad content: ${scratchpad}`, groupId);
+    }
 
     // Write file content to output file
     await WorkspaceFS.writeFile(outputFile, fileContent);
