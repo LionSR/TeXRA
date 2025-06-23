@@ -19,7 +19,7 @@ export function formatTokens(tokens) {
 const md = new MarkdownIt({
   breaks: true, // Convert line breaks to <br>
   linkify: true, // Automatically detect links
-}).use(markdownItKatex);
+}).use(markdownItKatex, { throwOnError: false, errorColor: ' #cc0000' });
 
 /**
  * Generate a sanitized CSS class string from a content type label
