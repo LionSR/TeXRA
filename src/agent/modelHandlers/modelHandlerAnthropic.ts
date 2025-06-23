@@ -32,6 +32,7 @@ import {
 } from '@agent/core/ResponseUsage';
 import { ToolState } from '@agent/core/ToolState';
 import { MediaEntry } from '@agent/utils/mediaTypes';
+import { createInfoSpan } from './streamUtils';
 import { AgentStateRound } from '@agent/core/AgentState';
 import { K_SLICE } from '@utils/config';
 import { objectToLogString } from '@utils/text/stringUtils';
@@ -505,7 +506,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
       'scratchpad',
     );
     if (scratchpad) {
-      this.logger.info(`Scratchpad content: ${scratchpad}`, groupId);
+      this.logger.info(createInfoSpan(scratchpad, 'scratchpad'), groupId);
     }
 
     await WorkspaceFS.writeFile(outputFile, fileContent);
