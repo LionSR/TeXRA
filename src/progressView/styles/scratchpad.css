@@ -29,8 +29,8 @@
 
 .special-details .special-content {
   padding: var(--spacing-small) 0 var(--spacing-medium) var(--spacing-large);
-  max-height: var(--height-xxlarge);
-  overflow: auto;
+  /* Remove max-height to prevent nested scrollbars */
+  overflow: visible;
 }
 
 /* Toggle icon styling */
