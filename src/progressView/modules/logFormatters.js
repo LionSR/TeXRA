@@ -1,7 +1,11 @@
-import MarkdownIt from 'markdown-it';
-import markdownItKatex from '@vscode/markdown-it-katex';
+// Third-party imports
+import { marked } from 'marked';
+import markedKatex from 'marked-katex-extension';
+// Local imports - state management
 import { getLogGroup, setLogGroup } from './stateManager.js';
+// Local imports - constants
 import { STATUS } from './constants.js';
+// Local imports - KaTeX macros
 import { katexMacros } from './katexMacros.js';
 
 export const BULLET_MARKUP =
@@ -16,26 +20,21 @@ export function formatTokens(tokens) {
   return tokens > 4096 ? `${Math.round(tokens / 1000)}k` : `${tokens}`;
 }
 
-// Initialize Markdown-it parser with KaTeX macros
-const md = new MarkdownIt({
-  // breaks: true, // Convert line breaks to <br>
-  breaks: false, // Convert line breaks to <br>
-  linkify: true, // Automatically detect links
-  html: false, // Disable HTML tags to escape them
-}).use(markdownItKatex, {
-  throwOnError: false,
-  errorColor: ' #cc0000',
-  macros: katexMacros,
+// Configure marked parser with KaTeX extension
+marked.setOptions({
+  breaks: true,
+  gfm: true,
+  mangle: false,
+  headerIds: false,
 });
 
-/**
- * Generate a sanitized CSS class string from a content type label
- * @param {string} contentType - The content type to convert
- * @returns {string} Normalized class name
- */
-function generateCssClass(contentType) {
-  return contentType.toLowerCase().replace(/\s+/g, '-').replace(':', '');
-}
+marked.use(
+  markedKatex({
+    throwOnError: false,
+    errorColor: '#cc0000',
+    macros: katexMacros,
+  }),
+);
 
 /**
  * Format a log entry with Markdown rendering for special content
@@ -97,6 +96,13 @@ function unescapeHtml(text) {
     .replace(/&amp;/g, '&');
 }
 
+function escapeHtml(text) {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
 /**
  * Format special content like scratchpad or thinking with Markdown
  * @param {string} message - The original message
@@ -108,12 +114,17 @@ function formatSpecialContent(message, content, contentType, logId) {
   try {
     // Unescape HTML entities that were escaped during logging
     content = unescapeHtml(content);
+    //
+    // Escape any HTML to prevent rendering
+    // content = escapeHtml(content);
 
     // Pre-process LaTeX references to protect them from markdown parsing
     content = content.replace(/\\\\ref\{([^}]+)\}/g, '@@LATEX-REF:$1@@');
+    content = content.replace(/\\\\cref\{([^}]+)\}/g, '@@LATEX-CREF:$1@@');
+    content = content.replace(/\\\\eqref\{([^}]+)\}/g, '@@LATEX-EQREF:$1@@');
 
     // Process content as markdown
-    let parsedMarkdown = md.render(content);
+    let parsedMarkdown = marked.parse(content);
 
     // Post-process to restore and style LaTeX references
     parsedMarkdown = parsedMarkdown.replace(
@@ -121,14 +132,23 @@ function formatSpecialContent(message, content, contentType, logId) {
       '<code class="latex-ref">\\ref{$1}</code>',
     );
 
+    parsedMarkdown = parsedMarkdown.replace(
+      /@@LATEX-CREF:([^@]+)@@/g,
+      '<code class="latex-ref">\\cref{$1}</code>',
+    );
+    parsedMarkdown = parsedMarkdown.replace(
+      /@@LATEX-EQREF:([^@]+)@@/g,
+      '<code class="latex-ref">\\eqref{$1}</code>',
+    );
+
     // Fix spacing issues that might occur with consecutive paragraph elements
-    parsedMarkdown = parsedMarkdown.replace(/<\/p>\s*<p>/g, '</p><p>');
+    // parsedMarkdown = parsedMarkdown.replace(/<\/p>\s*<p>/g, '</p><p>');
 
     // Remove extra whitespace and newlines between HTML tags
-    parsedMarkdown = parsedMarkdown.replace(/>\s+</g, '><');
+    // parsedMarkdown = parsedMarkdown.replace(/>\s+</g, '><');
 
     // Remove extra whitespace at start and end of content
-    parsedMarkdown = parsedMarkdown.trim();
+    // parsedMarkdown = parsedMarkdown.trim();
 
     // Create enhanced content element with better formatting
     // Return expandable details structure with proper toggle and icon
