@@ -1,4 +1,4 @@
-import { ReplacementCategory } from './replacementTypes';
+import { ReplacementCategory } from './types';
 
 // ===== Regex replacements =====
 
