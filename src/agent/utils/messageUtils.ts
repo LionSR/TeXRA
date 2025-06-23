@@ -2,6 +2,7 @@
  * Utility functions for working with message objects in agent conversations.
  */
 
+// Local imports
 import { MESSAGE_PREVIEW_LENGTH } from '@utils/config';
 
 /**

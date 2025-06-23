@@ -5,7 +5,7 @@
  * such as the text editor tool.
  */
 
-// Import all agents and export them
+// Local imports - agents
 import { XMLValidatorAgent } from './XMLValidatorAgent';
 import { TeXLinterFixAgent } from './TeXLinterFixAgent';
 import { AnthropicToolAgent } from './AnthropicToolAgent';

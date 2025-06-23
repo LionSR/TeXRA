@@ -1,6 +1,10 @@
+// Third-party imports
 import * as vscode from 'vscode';
+
+// Standard library imports
 import { randomUUID } from 'crypto';
 
+// Local imports
 import { AgentConfig } from '@agent/core/AgentConfig';
 import { workspaceSM } from '@utils/stateManager';
 
