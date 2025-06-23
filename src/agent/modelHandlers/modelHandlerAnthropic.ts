@@ -18,7 +18,7 @@ import { formatProviderError } from '@utils/sdkErrorUtils';
 import { WorkspaceFS } from '@utils/files';
 import { cleanFileContent } from '@replacement/engine';
 import replacementEngine from '@replacement/engine';
-import type { ProviderStopReason } from '../../types/StopReasonTypes';
+import type { ProviderStopReason } from './types/StopReasonTypes';
 import xmlUtils from '@utils/text/xmlUtils';
 
 // Local imports - agent components
