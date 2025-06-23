@@ -39,11 +39,15 @@
   font-size: var(--font-size-sm);
 }
 
-/* Style markdown elements in scratchpad */
+/* Style markdown elements in scratchpad and thinking content */
 .scratchpad-content h1,
 .scratchpad-content h2,
 .scratchpad-content h3,
-.scratchpad-content h4 {
+.scratchpad-content h4,
+.thinking-content h1,
+.thinking-content h2,
+.thinking-content h3,
+.thinking-content h4 {
   color: var(--vscode-textLink-foreground, #3794ff);
   margin-top: 1em;
   margin-bottom: 0.5em;
