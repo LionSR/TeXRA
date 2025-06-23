@@ -23,6 +23,15 @@ marked.setOptions({
 });
 
 /**
+ * Generate a sanitized CSS class string from a content type label
+ * @param {string} contentType - The content type to convert
+ * @returns {string} Normalized class name
+ */
+function generateCssClass(contentType) {
+  return contentType.toLowerCase().replace(/\s+/g, '-').replace(':', '');
+}
+
+/**
  * Format a log entry with Markdown rendering for special content
  * @param {Object} logMessage - The log message to format
  * @returns {string} Formatted HTML for the log message
@@ -102,13 +111,18 @@ function formatSpecialContent(message, content, contentType) {
     parsedMarkdown = parsedMarkdown.trim();
 
     // Create enhanced content element with better formatting
-    const cssClass = contentType
-      .toLowerCase()
-      .replace(/\s+/g, '-')
-      .replace(':', '');
+    const cssClass = generateCssClass(contentType);
 
-    // Always return just the special content box, hiding the log line wrapper entirely
-    return `<div class="special-content ${cssClass}">${parsedMarkdown}</div>`;
+    const label = contentType.replace('content:', '').trim();
+    const icon = cssClass.includes('scratchpad')
+      ? 'codicon-pencil'
+      : 'codicon-lightbulb';
+
+    return `\
+<details class="special-details" open>\
+  <summary class="${cssClass}"><i class="codicon codicon-chevron-down toggle-icon"></i> <i class="codicon ${icon}"></i> ${label}</summary>\
+  <div class="special-content ${cssClass}">${parsedMarkdown}</div>\
+</details>`;
   } catch (e) {
     console.error('Error parsing markdown:', e);
     // Fallback to original content
