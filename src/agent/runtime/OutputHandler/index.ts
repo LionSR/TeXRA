@@ -9,14 +9,7 @@ import { AgentLogger } from '@logger/AgentLogger';
 
 // Local imports - utilities
 import { WorkspaceFS, createFileMapping } from '@utils/files';
-import {
-  addCdataToTags,
-  addCdataToTagsMultiple,
-  extractContentFromXMLbyTag,
-  extractTextFromTag,
-  extractContentFromXMLbyTagMultiple,
-  extractMultipleTextFromTag,
-} from '@utils/text/xmlUtils';
+import xmlUtils from '@utils/text/xmlUtils';
 import {
   applyReplacements,
   getReplacementsByCategory,
@@ -410,7 +403,10 @@ export class OutputHandler {
     documentTag: string,
   ): string | null {
     try {
-      const fallbackContent = extractTextFromTag(outputContent, documentTag);
+      const fallbackContent = xmlUtils.extractTextFromTag(
+        outputContent,
+        documentTag,
+      );
       if (fallbackContent) {
         this.logger.info(
           `Successfully extracted ${documentTag} using fallback method`,
@@ -438,7 +434,7 @@ export class OutputHandler {
     documentTag: string,
   ): Array<{ content: string; name: string }> | null {
     try {
-      const fallbackDocuments = extractMultipleTextFromTag(
+      const fallbackDocuments = xmlUtils.extractMultipleTextFromTag(
         outputContent,
         documentTag,
       );
@@ -477,7 +473,7 @@ export class OutputHandler {
     let outputContent = await WorkspaceFS.readFile(outputFile);
 
     const tagsToWrap = [documentTag, thinkingTag];
-    outputContent = addCdataToTags(outputContent, tagsToWrap);
+    outputContent = xmlUtils.addCdataToTags(outputContent, tagsToWrap);
 
     try {
       const parser = new XMLParser({
@@ -489,7 +485,10 @@ export class OutputHandler {
       });
       const root = parser.parse(outputContent);
 
-      const latexDocument = extractContentFromXMLbyTag(root, documentTag);
+      const latexDocument = xmlUtils.extractContentFromXMLbyTag(
+        root,
+        documentTag,
+      );
       if (latexDocument) {
         await WorkspaceFS.writeFile(texFile, latexDocument);
         return texFile;
@@ -538,7 +537,7 @@ export class OutputHandler {
     let outputContent = await WorkspaceFS.readFile(outputFile);
 
     const tagsToWrap = [thinkingTag, 'document'];
-    outputContent = addCdataToTagsMultiple(outputContent, tagsToWrap);
+    outputContent = xmlUtils.addCdataToTagsMultiple(outputContent, tagsToWrap);
 
     try {
       const parser = new XMLParser({
@@ -550,7 +549,10 @@ export class OutputHandler {
       });
       const root = parser.parse(outputContent);
 
-      const documents = extractContentFromXMLbyTagMultiple(root, documentTag);
+      const documents = xmlUtils.extractContentFromXMLbyTagMultiple(
+        root,
+        documentTag,
+      );
       if (documents) {
         return this.processMultipleLatexDocuments(documents, outputFile);
       } else {
