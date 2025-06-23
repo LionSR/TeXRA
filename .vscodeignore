@@ -3,8 +3,11 @@
 .cursor
 .cursor/*
 .cursorignore
+
 .pre-commit-config.yaml
 .DS_Store
+resources/.DS_Store
+
 .vscode/**
 .vscode-test/**
 out/**
@@ -21,7 +24,6 @@ tsconfig.json
 **/*.map
 **/*.ts
 **/.vscode-test.*
-.DS_Store
 venv/**
 docs/**
 prototypes/**
@@ -30,8 +32,10 @@ CLAUDE.md
 
 !node_modules/@vscode/codicons/dist/**
 !node_modules/split.js/**
-.DS_Store
-resources/.DS_Store
+!node_modules/katex/dist/fonts/**
+!node_modules/katex/dist/katex.min.css
+!node_modules/katex/dist/katex.mjs
+
 !resources/**
 !src/webview/*.js
 !src/webview/*.html
