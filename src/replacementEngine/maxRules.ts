@@ -1,4 +1,4 @@
-import { ReplacementCategory } from './replacementTypes';
+import { ReplacementCategory } from './types';
 import {
   generateMathCommandShortcuts,
   generateDecoratedMathShortcuts,
@@ -14,7 +14,7 @@ import {
   generateTextCommandNormalization,
   generateLegacyTextCommandNormalization,
   GREEK_LETTERS,
-} from './replacementHelpers';
+} from './helpers';
 
 // Greek letter shortcut mappings
 export const GREEK_LETTER_SHORTCUTS: { [key: string]: string } = {
