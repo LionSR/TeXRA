@@ -6,12 +6,7 @@ import {
   CHECK_BOXES_TOOL_USE,
   CHECK_BOXES_AUTO_EXTRACT,
 } from './constants.js';
-import {
-  hideEmptyMultipleFileSelects,
-  setMultipleFileSelectVisibility,
-  addFileToList,
-  getSelectedFiles,
-} from './fileHandlers.js';
+import { fileList } from './uiManagers/FileList.js';
 import {
   CHEVRON_UP_CLASS,
   CHEVRON_DOWN_CLASS,
@@ -57,7 +52,7 @@ export class WebviewState {
 
     MULTIPLE_SELECTIONS.forEach((id) => {
       const toggleId = `toggle${capitalize(id)}`;
-      setMultipleFileSelectVisibility(id, toggleId, false);
+      fileList.setVisibility(id, toggleId, false);
       const listDiv = safeGetElementById(id);
       if (listDiv) {
         listDiv.innerHTML = '';
@@ -124,15 +119,15 @@ export class WebviewState {
 
         if (filesArray && filesArray.length > 0) {
           filesArray.forEach((file) => {
-            addFileToList(id, file);
+            fileList.add(id, file);
           });
-          setMultipleFileSelectVisibility(
+          fileList.setVisibility(
             id,
             toggleId,
             isVisible !== undefined ? isVisible : true,
           );
         } else {
-          setMultipleFileSelectVisibility(id, toggleId, false);
+          fileList.setVisibility(id, toggleId, false);
         }
       });
 
@@ -149,7 +144,7 @@ export class WebviewState {
       this.setDefaults();
     }
 
-    hideEmptyMultipleFileSelects();
+    fileList.hideEmpty(MULTIPLE_SELECTIONS);
   }
 
   /** Persist current UI state */
@@ -176,7 +171,7 @@ export class WebviewState {
       const containerDiv = safeGetElementById(`${id}Container`);
       state[`${id}Visible`] =
         containerDiv && containerDiv.style.display === 'block';
-      state[id] = getSelectedFiles(elementDiv);
+      state[id] = fileList.getSelected(elementDiv);
     });
 
     this.stateManager.setState(state);
