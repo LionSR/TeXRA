@@ -133,6 +133,7 @@ class Status {
     };
 
     this.BUTTON_IDS = TOOLBAR_BUTTONS.map((b) => b.id);
+    this._buttonElements = null; // Cache for button elements
   }
 
   /**
@@ -146,7 +147,9 @@ class Status {
       return;
     }
 
-    const buttons = this.BUTTON_IDS.map((id) => document.getElementById(id));
+    const buttons = this._buttonElements ||= this.BUTTON_IDS.map(id => 
+      document.getElementById(id)
+    ).filter(Boolean);
 
     buttons.forEach((b) => {
       if (b) b.disabled = true;
@@ -261,7 +264,10 @@ class UsageGroup {
     }
 
     const groupHeader = document.getElementById(`group-header-${groupId}`);
-    if (!groupHeader) return;
+    if (!groupHeader) {
+      console.warn(`UsageGroup.update: Group header not found for ID: ${groupId}`);
+      return;
+    }
 
     // Find or create usage display element in the group header
     let usageElem = groupHeader.querySelector('.group-usage');
