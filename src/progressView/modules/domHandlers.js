@@ -29,21 +29,35 @@ class StreamTabs {
    * @param {string} activeStream - Currently active stream
    */
   update(streams, activeStream) {
+    if (!Array.isArray(streams)) {
+      console.error('StreamTabs.update: streams must be an array');
+      return;
+    }
     const tabsContainer = document.getElementById('streamTabs');
+    if (!tabsContainer) {
+      console.error('StreamTabs.update: streamTabs container not found');
+      return;
+    }
     tabsContainer.innerHTML = streams
-      .map(
-        (stream) =>
-          `<div class="tab-container ${stream === activeStream ? 'active' : ''}" title="${stream}">
+      .map((stream) => {
+        if (!stream || typeof stream !== 'string') {
+          console.warn('StreamTabs.update: invalid stream value:', stream);
+          return '';
+        }
+        return `<div class="tab-container ${stream === activeStream ? 'active' : ''}" title="${stream}">
             <button class="tab" data-stream="${stream}" title="${stream}">${stream}</button>
             <button class="tab-delete" data-stream="${stream}" title="Delete stream">
               <i class="codicon codicon-close"></i>
             </button>
-          </div>`,
-      )
+          </div>`;
+      })
       .join('');
 
     // Update current stream name
-    document.getElementById('currentStreamName').textContent = activeStream;
+    const streamNameElem = document.getElementById('currentStreamName');
+    if (streamNameElem) {
+      streamNameElem.textContent = activeStream || '';
+    }
   }
 }
 
@@ -127,6 +141,11 @@ class Status {
    */
   update(status) {
     const statusIndicator = document.getElementById('statusIndicator');
+    if (!statusIndicator) {
+      console.error('Status.update: statusIndicator element not found');
+      return;
+    }
+
     const buttons = this.BUTTON_IDS.map((id) => document.getElementById(id));
 
     buttons.forEach((b) => {
@@ -137,6 +156,11 @@ class Status {
     statusIndicator.dataset.status = 'Ready';
 
     if (status) {
+      if (typeof status !== 'string') {
+        console.error('Status.update: status must be a string');
+        return;
+      }
+
       statusIndicator.classList.remove('running', 'error', 'stopped', 'ready');
 
       const cfg = this.STATUS_MAP[status] || {
@@ -162,17 +186,24 @@ class Status {
 }
 
 /**
- * Manages usage and cost display calculations.
+ * Manages usage summary display.
  */
-class Usage {
+class UsageSummary {
+  constructor() {
+    this._summaryElem = null;
+  }
+
   /**
    * Update token and cost summary in the header by aggregating usage from
    * "Round" groups. Falls back to the provided usage if given.
    * @param {Object} [usage] - Optional pre-computed usage totals
    */
-  summary(usage) {
-    const summaryElem = document.getElementById('runSummary');
-    if (!summaryElem) return;
+  update(usage) {
+    // Cache the summary element
+    if (!this._summaryElem) {
+      this._summaryElem = document.getElementById('runSummary');
+    }
+    if (!this._summaryElem) return;
 
     let totals = usage;
 
@@ -189,7 +220,32 @@ class Usage {
     }
 
     // Clear the summary - we're showing total usage in the files section now
-    summaryElem.textContent = '';
+    this._summaryElem.textContent = '';
+  }
+
+  /**
+   * Compute total usage from all groups
+   * @returns {Object} Total usage with inputTokens, outputTokens, and cost
+   */
+  computeTotal() {
+    const totals = { inputTokens: 0, outputTokens: 0, cost: 0 };
+    for (const group of progressViewState.logGroups.getAll().values()) {
+      if (group.usage) {
+        totals.inputTokens += group.usage.inputTokens || 0;
+        totals.outputTokens += group.usage.outputTokens || 0;
+        totals.cost += group.usage.cost || 0;
+      }
+    }
+    return totals;
+  }
+}
+
+/**
+ * Manages usage display for individual groups.
+ */
+class UsageGroup {
+  constructor() {
+    this.usageSummary = new UsageSummary();
   }
 
   /**
@@ -198,7 +254,12 @@ class Usage {
    * @param {Object} usage - Usage data with inputTokens, outputTokens, cost
    * @param {boolean} skipPropagate - Whether to skip propagating to parents
    */
-  group(groupId, usage, skipPropagate = false) {
+  update(groupId, usage, skipPropagate = false) {
+    if (!groupId) {
+      console.error('UsageGroup.update: groupId is required');
+      return;
+    }
+
     const groupHeader = document.getElementById(`group-header-${groupId}`);
     if (!groupHeader) return;
 
@@ -235,7 +296,7 @@ class Usage {
     }
 
     // Refresh the cumulative summary displayed in the header
-    this.summary();
+    this.usageSummary.update();
   }
 
   /**
@@ -273,14 +334,14 @@ class Usage {
       const totals = {
         ...this.computeAggregatedUsage(group.parentGroupId),
       };
-      this.group(group.parentGroupId, totals, true);
+      this.update(group.parentGroupId, totals, true);
       this.propagateUsageToParents(group.parentGroupId);
     } else {
       // This is a top-level group, update it with aggregated usage from its children
       const totals = {
         ...this.computeAggregatedUsage(groupId),
       };
-      this.group(groupId, totals, true);
+      this.update(groupId, totals, true);
     }
   }
 
@@ -374,14 +435,7 @@ class FileList {
     usageHeader.className = 'files-usage-header';
 
     // Calculate total usage from all groups
-    const totals = { inputTokens: 0, outputTokens: 0, cost: 0 };
-    for (const group of progressViewState.logGroups.getAll().values()) {
-      if (group.usage) {
-        totals.inputTokens += group.usage.inputTokens || 0;
-        totals.outputTokens += group.usage.outputTokens || 0;
-        totals.cost += group.usage.cost || 0;
-      }
-    }
+    const totals = progressViewDomHandler.usageSummary.computeTotal();
 
     if (totals.inputTokens || totals.outputTokens || totals.cost) {
       usageHeader.innerHTML = `
@@ -1057,7 +1111,8 @@ export class ProgressViewDomHandler {
     this.streamTabs = new StreamTabs();
     this.toolbar = new Toolbar();
     this.status = new Status();
-    this.usage = new Usage();
+    this.usageSummary = new UsageSummary();
+    this.usageGroup = new UsageGroup();
     this.fileList = new FileList();
     this.logGroups = new LogGroupsDom();
     this.logEntries = new LogEntriesDom();
