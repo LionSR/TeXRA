@@ -7,6 +7,7 @@ import {
   CHECK_BOXES_AUTO_EXTRACT,
 } from './constants.js';
 import { fileList } from './uiManagers/FileList.js';
+import { fileSelect } from './uiManagers/FileSelect.js';
 import {
   CHEVRON_UP_CLASS,
   CHEVRON_DOWN_CLASS,
@@ -65,6 +66,8 @@ export class WebviewState {
       latexdiffsContent.style.display = 'none';
       toggleLatexdiffs.innerHTML = `<i class="${CHEVRON_DOWN_CLASS}"></i>`;
     }
+
+    fileSelect.setAgentDefaultOutputFiles([]);
 
     this.save();
   }
@@ -140,6 +143,10 @@ export class WebviewState {
           visible ? CHEVRON_UP_CLASS : CHEVRON_DOWN_CLASS
         }"></i>`;
       }
+
+      fileSelect.setAgentDefaultOutputFiles(
+        previousState.agentDefaultOutputFiles ?? [],
+      );
     } else {
       this.setDefaults();
     }
@@ -173,6 +180,8 @@ export class WebviewState {
         containerDiv && containerDiv.style.display === 'block';
       state[id] = fileList.getSelected(elementDiv);
     });
+
+    state.agentDefaultOutputFiles = fileSelect.getAgentDefaultOutputFiles();
 
     this.stateManager.setState(state);
   }

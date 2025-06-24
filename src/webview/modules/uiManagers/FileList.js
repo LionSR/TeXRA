@@ -14,7 +14,11 @@ import { capitalize } from '@common/stringUtils.js';
  * Handles multi-file list DOM updates.
  */
 export class FileList {
-  /** Add a file entry to a list container */
+  /**
+   * Add a file entry to a list container
+   * @param {string} containerId - ID of the list element
+   * @param {string} file - File path to add
+   */
   add(containerId, file) {
     const container = safeGetElementById(containerId);
     const toggleIcon = safeGetElementById(`toggle${capitalize(containerId)}`);
@@ -28,17 +32,24 @@ export class FileList {
     const removeButton = fileElement.querySelector('.remove-button');
     if (removeButton) {
       addEventListenerSafely(removeButton, 'click', () => {
-        container.removeChild(fileElement);
-        if (container.children.length === 0) {
-          this.empty(containerId, `toggle${capitalize(containerId)}`);
+        if (container.contains(fileElement)) {
+          container.removeChild(fileElement);
+          if (container.children.length === 0) {
+            this.empty(containerId, `toggle${capitalize(containerId)}`);
+          }
+          webviewState.save();
         }
-        webviewState.save();
       });
     }
     container.appendChild(fileElement);
   }
 
-  /** Update a multi-file list, showing the toggle when files exist */
+  /**
+   * Update a multi-file list, showing the toggle when files exist
+   * @param {string} listId - ID of the list element
+   * @param {string} toggleId - ID of the toggle icon element
+   * @param {string[]} files - Files to display
+   */
   update(listId, toggleId, files) {
     const listDiv = safeGetElementById(listId);
     const toggleIcon = safeGetElementById(toggleId);
@@ -60,27 +71,37 @@ export class FileList {
     webviewState.save();
   }
 
-  /** Return an array of selected file paths */
+  /**
+   * Return an array of selected file paths
+   * @param {HTMLElement} container - Container element
+   * @returns {string[]}
+   */
   getSelected(container) {
     const fileElements = container.querySelectorAll('.file-item');
     return Array.from(fileElements).map((el) => el.dataset.path || '');
   }
 
-  /** Show or hide a file list container */
+  /**
+   * Show or hide a file list container
+   * @param {string} containerId - Base ID of the container
+   * @param {string} toggleId - ID of the toggle icon element
+   * @param {boolean} isVisible - Whether the container should be visible
+   */
   setVisibility(containerId, toggleId, isVisible) {
     const container = safeGetElementById(`${containerId}Container`);
     const toggleIcon = safeGetElementById(toggleId);
-    if (!container || !toggleIcon) {
-      console.error(`Container or toggle icon not found for ${containerId}`);
-      return;
-    }
+    if (!container || !toggleIcon) return;
     container.style.display = isVisible ? 'block' : 'none';
     toggleIcon.innerHTML = `<i class="${
       isVisible ? CHEVRON_UP_CLASS : CHEVRON_DOWN_CLASS
     }"></i>`;
   }
 
-  /** Toggle visibility of a file list container */
+  /**
+   * Toggle visibility of a file list container
+   * @param {string} containerId - Base ID of the container
+   * @param {string} toggleId - ID of the toggle icon element
+   */
   toggle(containerId, toggleId) {
     const container = safeGetElementById(`${containerId}Container`);
     if (!container) return;
@@ -89,7 +110,11 @@ export class FileList {
     webviewState.save();
   }
 
-  /** Empty all files from a container and hide it */
+  /**
+   * Empty all files from a container and hide it
+   * @param {string} containerId - Base ID of the container
+   * @param {string} toggleId - ID of the toggle icon element
+   */
   empty(containerId, toggleId) {
     const listDiv = safeGetElementById(containerId);
     const container = safeGetElementById(`${containerId}Container`);
@@ -104,7 +129,10 @@ export class FileList {
     webviewState.save();
   }
 
-  /** Hide empty lists from the provided id array */
+  /**
+   * Hide empty lists from the provided id array
+   * @param {string[]} ids - IDs of list elements
+   */
   hideEmpty(ids) {
     ids.forEach((id) => {
       const selectDiv = safeGetElementById(id);

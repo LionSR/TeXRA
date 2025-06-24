@@ -2,34 +2,43 @@
 import { vscode } from '@common/webviewContext.js';
 import { safeGetElementById, safeSetElementValue } from '@common/domUtils.js';
 import { capitalize, uncapitalize } from '@common/stringUtils.js';
+import { webviewState } from '../webviewState.js';
 
 /**
  * Handles single-file dropdown updates and commit list logic.
  */
 export class FileSelect {
   constructor() {
-    this._agentDefaults = [];
+    this._agentDefaults = webviewState.get()?.agentDefaultOutputFiles ?? [];
   }
 
   setAgentDefaultOutputFiles(files) {
     this._agentDefaults = Array.isArray(files) ? files : [];
+    webviewState.update({ agentDefaultOutputFiles: this._agentDefaults });
+    webviewState.save();
   }
 
   getAgentDefaultOutputFiles() {
     return this._agentDefaults;
   }
 
+  /**
+   * Update a single-file select element
+   * @param {string} id - The select element ID
+   * @param {string[]} files - Options to populate
+   */
   update(id, files) {
-    const selectDiv = document.getElementById(id);
-    if (!selectDiv) {
-      console.error(`[FileSelect] Element with id '${id}' not found`);
-      return;
-    }
+    const selectDiv = safeGetElementById(id);
+    if (!selectDiv) return;
     selectDiv.innerHTML =
       '<option value="">None</option>' +
       files.map((f) => `<option value="${f}">${f}</option>`).join('');
   }
 
+  /**
+   * Request edited file list when base file changes
+   * @param {string} baseFile - Currently selected base file
+   */
   updateEdited(baseFile) {
     const editedFileDiv = safeGetElementById('editedFile');
     if (!editedFileDiv) return;
@@ -45,6 +54,12 @@ export class FileSelect {
     }
   }
 
+  /**
+   * Append an option element to a select
+   * @param {HTMLSelectElement} select
+   * @param {string} value
+   * @param {string} text
+   */
   addOption(select, value, text) {
     const option = document.createElement('option');
     option.value = value;
@@ -52,6 +67,11 @@ export class FileSelect {
     select.appendChild(option);
   }
 
+  /**
+   * Enable or disable a list of elements
+   * @param {(HTMLElement|string)[]} elements
+   * @param {boolean} disabled
+   */
   setElementsDisabled(elements, disabled) {
     elements.forEach((el) => {
       if (typeof el === 'string') {
@@ -63,6 +83,10 @@ export class FileSelect {
     });
   }
 
+  /**
+   * Populate commit dropdown with recent commits
+   * @param {object} message
+   */
   handleRecentCommits(message) {
     const commitButtons = [
       'packLatexdiffvcButton',
@@ -85,6 +109,12 @@ export class FileSelect {
     }
   }
 
+  /**
+   * Highlight the current file in its dropdown
+   * @param {object} param0
+   * @param {string} param0.fileType
+   * @param {string} param0.filePath
+   */
   handleSetCurrentFile({ fileType, filePath }) {
     const fileId = `${uncapitalize(fileType)}File`;
     const fileDiv = document.getElementById(fileId);
