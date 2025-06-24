@@ -1,184 +1,13 @@
 import { vscode } from '@common/webviewContext.js';
 import { webviewState } from './webviewState.js';
-import { MULTIPLE_SELECTIONS } from './constants.js';
-import {
-  addEventListenerSafely,
-  safeGetElementById,
-  safeSetElementValue,
-} from '@common/domUtils.js';
+import { fileList } from './uiManagers/FileList.js';
+import { fileSelect } from './uiManagers/FileSelect.js';
+import { safeGetElementById } from '@common/domUtils.js';
 import {
   CHEVRON_UP_CLASS,
   CHEVRON_DOWN_CLASS,
 } from '@common/webviewContext.js';
-import { capitalize, uncapitalize } from '@common/stringUtils.js';
-
-// Store default output file names for the currently selected agent
-let agentDefaultOutputFiles = [];
-
-export function setAgentDefaultOutputFiles(files) {
-  agentDefaultOutputFiles = Array.isArray(files) ? files : [];
-}
-
-export function getAgentDefaultOutputFiles() {
-  return agentDefaultOutputFiles;
-}
-
-export function updateFileSelect(id, files) {
-  const selectDiv = document.getElementById(id);
-  if (!selectDiv) {
-    console.error(`[FileHandlers] Element with id '${id}' not found`);
-    return;
-  }
-  selectDiv.innerHTML =
-    '<option value="">None</option>' +
-    files.map((file) => `<option value="${file}">${file}</option>`).join('');
-}
-
-export function updateEditedFileSelect(baseFile) {
-  const editedFileDiv = safeGetElementById('editedFile');
-  if (!editedFileDiv) return;
-
-  if (baseFile) {
-    // Store current edited file selection
-    const currentEditedFile = editedFileDiv.value;
-
-    // Request updated list of edited files
-    vscode.postMessage({
-      command: 'requestEditedFile',
-      baseFile: baseFile,
-      preserveSelection: currentEditedFile, // Pass current selection to preserve it if still valid
-    });
-  } else {
-    // Only clear if there's no base file
-    updateFileSelect('editedFile', []);
-  }
-}
-
-export function addFileToList(containerId, file) {
-  const container = safeGetElementById(containerId);
-  const toggleIcon = safeGetElementById(`toggle${capitalize(containerId)}`);
-  if (!container || !toggleIcon) return;
-
-  const fileElement = document.createElement('div');
-  fileElement.className = 'file-item';
-  fileElement.dataset.path = file;
-  fileElement.innerHTML = `${file} <span class="remove-button">-</span>`;
-
-  const removeButton = fileElement.querySelector('.remove-button');
-  if (removeButton) {
-    addEventListenerSafely(removeButton, 'click', () => {
-      container.removeChild(fileElement);
-      if (container.children.length === 0) {
-        emptyMultipleFiles(containerId, `toggle${capitalize(containerId)}`);
-      }
-      // Save state after removing the file to persist changes
-      webviewState.save();
-    });
-  }
-  container.appendChild(fileElement);
-}
-
-export function updateMultipleFileSelect(selectId, toggleId, files) {
-  const selectDiv = safeGetElementById(selectId);
-  const toggleIcon = safeGetElementById(toggleId);
-  if (!selectDiv || !toggleIcon) return;
-
-  const existingFiles = getSelectedFiles(selectDiv);
-  const newFiles = files.filter((file) => !existingFiles.includes(file));
-
-  if (newFiles.length > 0) {
-    newFiles.forEach((file) => {
-      addFileToList(selectId, file);
-    });
-    selectDiv.style.display = 'block';
-    toggleIcon.innerHTML = `<i class="${CHEVRON_UP_CLASS}"></i>`;
-
-    // Make sure the container is also visible
-    const containerId = `${selectId}Container`;
-    const container = safeGetElementById(containerId);
-    if (container) {
-      container.style.display = 'block';
-    }
-  }
-  webviewState.save();
-}
-
-export function getSelectedFiles(multipleFilesDiv) {
-  const fileElements = multipleFilesDiv.querySelectorAll('.file-item');
-  return Array.from(fileElements).map((el) => el.dataset.path || '');
-}
-
-export function hideEmptyMultipleFileSelects() {
-  MULTIPLE_SELECTIONS.forEach((id) => {
-    const selectDiv = safeGetElementById(id);
-    if (!selectDiv) return;
-    const toggleId = `toggle${capitalize(id)}`;
-    if (selectDiv.children.length === 0) {
-      setMultipleFileSelectVisibility(id, toggleId, false);
-    }
-  });
-}
-
-export function setMultipleFileSelectVisibility(
-  containerId,
-  toggleId,
-  isVisible,
-) {
-  const container = safeGetElementById(`${containerId}Container`);
-  const toggleIcon = safeGetElementById(toggleId);
-  if (!container || !toggleIcon) {
-    console.error(`Container or toggle icon not found for ${containerId}`);
-    return;
-  }
-
-  container.style.display = isVisible ? 'block' : 'none';
-  toggleIcon.innerHTML = `<i class="${
-    isVisible ? CHEVRON_UP_CLASS : CHEVRON_DOWN_CLASS
-  }"></i>`;
-}
-
-export function setElementsDisabled(elements, disabled) {
-  elements.forEach((element) => {
-    if (typeof element === 'string') {
-      const elementDiv = document.getElementById(element);
-      if (elementDiv) {
-        elementDiv.disabled = disabled;
-      }
-    } else {
-      element.disabled = disabled;
-    }
-  });
-}
-
-export function addOptionToSelect(select, value, text) {
-  const option = document.createElement('option');
-  option.value = value;
-  option.textContent = text;
-  select.appendChild(option);
-}
-
-export function handleRecentCommits(message) {
-  const commitButtons = [
-    'packLatexdiffvcButton',
-    'cleanLatexdiffvcButton',
-    'latexdiffvcButton',
-  ];
-  const commitDiv = document.getElementById('commit');
-  commitDiv.innerHTML = '';
-
-  if (message.isGitRepo === false) {
-    addOptionToSelect(commitDiv, '', 'Not a Git repository');
-    setElementsDisabled([commitDiv, ...commitButtons], true);
-  } else {
-    addOptionToSelect(commitDiv, 'HEAD', 'HEAD');
-    message.commits.forEach((commit) => {
-      const [commitHash, ...commitMessageParts] = commit.split(': ');
-      // const commitMessage = commitMessageParts.join(': ');
-      addOptionToSelect(commitDiv, commitHash, commit);
-    });
-    setElementsDisabled([commitDiv, ...commitButtons], false);
-  }
-}
+import { capitalize } from '@common/stringUtils.js';
 
 export function handleCheckboxChange(event) {
   const checkbox = event?.target || this;
@@ -214,30 +43,30 @@ export function initializeOutputFiles() {
 
       // Then add each file
       state.outputFiles.forEach((file) => {
-        addFileToList('outputFiles', file);
+        fileList.add('outputFiles', file);
       });
     } else if (
-      getAgentDefaultOutputFiles().length > 0 &&
+      fileSelect.getAgentDefaultOutputFiles().length > 0 &&
       (!state.outputFiles || state.outputFiles.length === 0)
     ) {
       // Use agent default output files if provided
       outputFilesDiv.innerHTML = '';
-      getAgentDefaultOutputFiles().forEach((file) => {
-        addFileToList('outputFiles', file);
+      fileSelect.getAgentDefaultOutputFiles().forEach((file) => {
+        fileList.add('outputFiles', file);
       });
     } else {
       // Clear the list
       outputFilesDiv.innerHTML = '';
 
       // Add the current input file as output
-      addFileToList('outputFiles', inputFileDiv.value);
+      fileList.add('outputFiles', inputFileDiv.value);
 
       // Also add any input files from the multiple input files list
       if (state.inputFiles && state.inputFiles.length > 0) {
         state.inputFiles.forEach((file) => {
           if (file !== inputFile) {
             // Avoid duplicates
-            addFileToList('outputFiles', file);
+            fileList.add('outputFiles', file);
           }
         });
       }
@@ -250,7 +79,7 @@ export function initializeOutputFiles() {
   // Add opened files to the output files list
   const openedFiles = webviewState.get()?.openedFiles ?? [];
   openedFiles.forEach((file) => {
-    addFileToList('outputFiles', file);
+    fileList.add('outputFiles', file);
   });
 
   // Output filename override removed
@@ -263,54 +92,10 @@ export function toggleOutputFiles() {
     safeGetElementById('outputFilesContainer').style.display !== 'none';
 
   if (containerVisible) {
-    toggleMultipleFiles('outputFiles', 'toggleOutputFiles');
+    fileList.toggle('outputFiles', 'toggleOutputFiles');
   } else {
     initializeOutputFiles();
-    toggleMultipleFiles('outputFiles', 'toggleOutputFiles');
-  }
-}
-
-export function toggleMultipleFiles(containerId, toggleId) {
-  const container = safeGetElementById(`${containerId}Container`);
-  if (!container) return;
-  const isVisible = container.style.display !== 'none';
-  setMultipleFileSelectVisibility(containerId, toggleId, !isVisible);
-  webviewState.save();
-}
-
-export function emptyMultipleFiles(containerId, toggleId) {
-  const listDiv = safeGetElementById(containerId);
-  const container = safeGetElementById(`${containerId}Container`);
-  if (!listDiv || !container) return;
-
-  listDiv.innerHTML = '';
-  container.style.display = 'none';
-  const toggleIconDiv = safeGetElementById(toggleId);
-  if (toggleIconDiv)
-    toggleIconDiv.innerHTML = `<i class="${CHEVRON_DOWN_CLASS}"></i>`;
-
-  // Reset Output Filename override removed
-
-  webviewState.save();
-}
-
-export function handleSetCurrentFile({ fileType, filePath }) {
-  const fileId = `${uncapitalize(fileType)}File`;
-  const fileDiv = document.getElementById(fileId);
-  if (!fileDiv) {
-    console.warn(`Element with id '${fileId}' not found`);
-    return;
-  }
-
-  const options = Array.from(fileDiv.options);
-  if (options.some((option) => option.value === filePath)) {
-    safeSetElementValue(fileId, filePath);
-    fileDiv.dispatchEvent(new Event('change'));
-  } else {
-    vscode.postMessage({
-      command: 'showInformationMessage',
-      text: `The current file is not in the ${fileType} file list: ${filePath}`,
-    });
+    fileList.toggle('outputFiles', 'toggleOutputFiles');
   }
 }
 
