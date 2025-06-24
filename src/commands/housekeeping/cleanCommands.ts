@@ -18,7 +18,10 @@ import {
   runCleanOutput,
 } from '@housekeeping';
 import type { FileOpResult } from '@/types/ResultTypes';
-import { showLoggedErrorMessage, showLoggedMessage } from '@utils/errorHandlingUtils';
+import {
+  showLoggedErrorMessage,
+  showLoggedMessage,
+} from '@utils/errorHandlingUtils';
 
 const CHANNEL = 'cleanCommands';
 logger.initialize(CHANNEL);
@@ -131,10 +134,7 @@ export async function handleClean(config: {
   );
 
   if (!config.agent || !config.inputFile) {
-    await showLoggedMessage(
-      CHANNEL,
-      'Missing required parameters in config',
-    );
+    await showLoggedMessage(CHANNEL, 'Missing required parameters in config');
     return;
   }
 

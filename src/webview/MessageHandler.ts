@@ -10,7 +10,10 @@ import * as logger from '@logger/logUtils';
 
 // Local imports - utils
 import { safeExecuteCommand } from '@utils/system';
-import { showLoggedErrorMessage, showLoggedMessage } from '@utils/errorHandlingUtils';
+import {
+  showLoggedErrorMessage,
+  showLoggedMessage,
+} from '@utils/errorHandlingUtils';
 
 // Local imports - utilities
 import { WorkspaceFS, StorageFS } from '@utils/files';
