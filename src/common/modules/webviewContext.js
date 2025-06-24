@@ -1,13 +1,15 @@
 export const vscode = acquireVsCodeApi();
 
 export function registerMessageHandlers(handlers) {
-  window.addEventListener('message', (event) => {
+  const listener = (event) => {
     const message = event.data;
     const handler = handlers[message.command];
     if (handler) {
       handler(message);
     }
-  });
+  };
+  window.addEventListener('message', listener);
+  return () => window.removeEventListener('message', listener);
 }
 
 export const CHEVRON_UP_CLASS = 'codicon codicon-chevron-up';
