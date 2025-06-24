@@ -1,43 +1,49 @@
 // Local imports - log state
 import { progressViewState } from './progressViewState.js';
-import { progressViewDomHandler } from './domHandlers.js';
-import { formatLogEntry, getMessageTimestamp } from './logFormatters.js';
+import {
+  progressViewDomHandler,
+  LogEntryFormatter,
+  MessageTimestampExtractor,
+} from './domHandlers.js';
 import { COMMANDS, STATUS } from './constants.js';
 import { registerMessageHandlers } from '@common/webviewContext.js';
 
+// Create shorter aliases for internal use
+const state = progressViewState;
+const dom = progressViewDomHandler;
+
+// Create formatter instances
+const entryFormatter = new LogEntryFormatter();
+const timestampExtractor = new MessageTimestampExtractor();
+
 const handlers = {
   [COMMANDS.UPDATE_STREAMS]: (message) => {
-    progressViewState.setCurrentStream(message.currentStream);
-    progressViewDomHandler.streamTabs.update(
-      message.streams,
-      message.currentStream,
-    );
+    state.setCurrentStream(message.currentStream);
+    dom.streamTabs.update(message.streams, message.currentStream);
 
     // Update status based on whether there's an active stream
     if (!message.currentStream) {
-      progressViewDomHandler.status.update(STATUS.READY);
+      dom.status.update(STATUS.READY);
     } else {
-      const streamStatus = progressViewState.streamStatuses.get(
-        message.currentStream,
-      );
-      progressViewDomHandler.status.update(streamStatus || STATUS.STOPPED);
+      const streamStatus = state.streamStatuses.get(message.currentStream);
+      dom.status.update(streamStatus || STATUS.STOPPED);
     }
   },
 
   [COMMANDS.UPDATE_LOGS]: (message) => {
     const logContent = document.getElementById('logContent');
-    if (message.stream === progressViewState.getCurrentStream()) {
+    if (message.stream === state.getCurrentStream()) {
       logContent.innerHTML = '';
-      progressViewState.logGroups.clear();
+      state.taskGroups.clear();
       if (message.groups && message.groups.length > 0) {
         const parentGroups = message.groups.filter((g) => !g.parentGroupId);
         const childGroups = message.groups.filter((g) => g.parentGroupId);
         parentGroups
           .sort((a, b) => a.startTime - b.startTime)
-          .forEach((g) => progressViewDomHandler.logGroups.add(g));
+          .forEach((g) => dom.taskGroups.add(g));
         childGroups
           .sort((a, b) => a.startTime - b.startTime)
-          .forEach((g) => progressViewDomHandler.logGroups.add(g));
+          .forEach((g) => dom.taskGroups.add(g));
       }
       const sortedMessages = [...message.messages].sort((a, b) => {
         if (a.timestamp !== undefined && b.timestamp !== undefined) {
@@ -45,27 +51,27 @@ const handlers = {
         }
         if (a.timestamp !== undefined) return -1;
         if (b.timestamp !== undefined) return 1;
-        const aTs = getMessageTimestamp(a.message);
-        const bTs = getMessageTimestamp(b.message);
+        const aTs = timestampExtractor.extract(a.message);
+        const bTs = timestampExtractor.extract(b.message);
         return aTs.localeCompare(bTs);
       });
       sortedMessages.forEach((msg) => {
         if (msg.groupId) {
-          if (!progressViewDomHandler.logEntries.append(msg)) {
+          if (!dom.logEntries.append(msg)) {
             const el = document.createElement('div');
-            el.innerHTML = formatLogEntry(msg);
+            el.innerHTML = entryFormatter.format(msg);
             logContent.appendChild(el.firstElementChild);
           }
         } else {
           const el = document.createElement('div');
-          el.innerHTML = formatLogEntry(msg);
+          el.innerHTML = entryFormatter.format(msg);
           logContent.appendChild(el.firstElementChild);
         }
       });
       logContent.scrollTop = logContent.scrollHeight;
 
       // Recalculate cumulative usage after loading groups
-      progressViewDomHandler.usageSummary.update();
+      dom.usageSummary.update();
     }
   },
 
@@ -77,19 +83,17 @@ const handlers = {
     for (const el of headers) {
       groupIds.push(el.id.replace('group-header-', ''));
     }
-    progressViewState.logGroups.clear();
-    progressViewState.toggleStates.clear(groupIds);
+    state.taskGroups.clear();
+    state.toggleStates.clear(groupIds);
   },
 
   [COMMANDS.APPEND_LOG]: (message) => {
-    if (message.stream === progressViewState.getCurrentStream()) {
+    if (message.stream === state.getCurrentStream()) {
       const logContent = document.getElementById('logContent');
-      const addedToGroup = progressViewDomHandler.logEntries.append(
-        message.logMessage,
-      );
+      const addedToGroup = dom.logEntries.append(message.logMessage);
       if (!addedToGroup) {
         const el = document.createElement('div');
-        el.innerHTML = formatLogEntry(message.logMessage);
+        el.innerHTML = entryFormatter.format(message.logMessage);
         logContent.appendChild(el.firstElementChild);
       }
       logContent.scrollTop = logContent.scrollHeight;
@@ -97,58 +101,50 @@ const handlers = {
   },
 
   [COMMANDS.UPDATE_LOG]: (message) => {
-    if (message.stream === progressViewState.getCurrentStream()) {
-      progressViewDomHandler.logEntries.update(message.logMessage);
+    if (message.stream === state.getCurrentStream()) {
+      dom.logEntries.update(message.logMessage);
     }
   },
 
   [COMMANDS.ADD_LOG_GROUP]: (message) => {
-    if (message.stream === progressViewState.getCurrentStream()) {
+    if (message.stream === state.getCurrentStream()) {
       const logContent = document.getElementById('logContent');
-      progressViewDomHandler.logGroups.add(message.group);
+      dom.taskGroups.add(message.group);
       logContent.scrollTop = logContent.scrollHeight;
     }
   },
 
   [COMMANDS.UPDATE_LOG_GROUP]: (message) => {
-    if (message.stream === progressViewState.getCurrentStream()) {
-      progressViewState.logGroups.update(
-        message.groupId,
-        message.status,
-        message.endTime,
-      );
-      progressViewDomHandler.logGroups.update(
-        message.groupId,
-        message.status,
-        message.endTime,
-      );
+    if (message.stream === state.getCurrentStream()) {
+      state.taskGroups.update(message.groupId, message.status, message.endTime);
+      dom.taskGroups.update(message.groupId, message.status, message.endTime);
     }
   },
 
   [COMMANDS.UPDATE_STATUS]: (message) => {
-    progressViewDomHandler.status.update(message.status);
+    dom.status.update(message.status);
   },
 
   [COMMANDS.UPDATE_USAGE]: (message) => {
-    progressViewDomHandler.usageSummary.update(message.usage);
+    dom.usageSummary.update(message.usage);
   },
 
   [COMMANDS.UPDATE_GROUP_USAGE]: (message) => {
-    if (message.stream === progressViewState.getCurrentStream()) {
-      progressViewDomHandler.usageGroup.update(message.groupId, message.usage);
+    if (message.stream === state.getCurrentStream()) {
+      dom.usageGroup.update(message.groupId, message.usage);
     }
   },
 
   [COMMANDS.UPDATE_FILES]: (message) => {
-    if (message.stream === progressViewState.getCurrentStream()) {
-      progressViewDomHandler.fileList.update(message.files);
+    if (message.stream === state.getCurrentStream()) {
+      dom.fileList.update(message.files);
     }
   },
 
   [COMMANDS.DELETE_STREAM]: (message) => {
     if (message.stream) {
-      progressViewState.streamStatuses.delete(message.stream);
-      if (message.stream === progressViewState.getCurrentStream()) {
+      state.streamStatuses.delete(message.stream);
+      if (message.stream === state.getCurrentStream()) {
         const groupIds = [];
         const headers = Array.from(
           document.querySelectorAll('.log-group-header'),
@@ -156,13 +152,13 @@ const handlers = {
         for (const el of headers) {
           groupIds.push(el.id.replace('group-header-', ''));
         }
-        progressViewState.toggleStates.clear(groupIds);
+        state.toggleStates.clear(groupIds);
       }
     }
   },
 
   [COMMANDS.DELETE_ALL]: () => {
-    progressViewState.toggleStates.clearAll();
+    state.toggleStates.clearAll();
   },
 };
 
