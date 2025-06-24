@@ -48,14 +48,37 @@ export interface ReplacementEngine {
 }
 
 class ReplacementEngineImpl implements ReplacementEngine {
+  /**
+   * Apply all configured non-regex replacement rules.
+   *
+   * @param text The text to process.
+   * @returns The processed text with non-regex rules applied.
+   * @remarks Reads extension settings to determine enabled categories.
+   */
   applyNonRegex(text: string): string {
     return applyReplacements(text, getAllReplacements()).trim();
   }
 
+  /**
+   * Apply all configured regex-based replacement rules.
+   *
+   * @param text The text to process.
+   * @returns The processed text with regex rules applied.
+   * @remarks Invalid patterns are logged by {@link applyReplacements}.
+   */
   applyRegex(text: string): string {
     return applyReplacements(text, getAllReplacementsRegex()).trim();
   }
 
+  /**
+   * Apply every replacement rule in the recommended order.
+   *
+   * Non-regex replacements run before and after regex replacements to fix
+   * artifacts they may introduce.
+   *
+   * @param text The text to process.
+   * @returns The fully processed text with non-regex and regex rules applied in sequence.
+   */
   applyAll(text: string): string {
     let processed = this.applyNonRegex(text);
     processed = this.applyRegex(processed);
