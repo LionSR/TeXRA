@@ -9,18 +9,34 @@ import {
 } from '../constants.js';
 
 export class ToggleManager {
+  isOptionsVisible(options) {
+    return options.style.display === 'block';
+  }
+
+  hasAnyChecked(checkboxIds) {
+    return checkboxIds.some((id) => safeGetElementChecked(id));
+  }
+
+  setToggleIcon(toggle, icon, visible, active) {
+    toggle.classList.toggle('active', active);
+    toggle.innerHTML = `<i class="codicon codicon-${icon}"></i><i class="${
+      visible ? CHEVRON_UP_CLASS : CHEVRON_DOWN_CLASS
+    }"></i>`;
+  }
+
   updateDropdownToggleState(toggleId, optionsId, checkboxIds, icon) {
     const toggle = safeGetElementById(toggleId);
     const options = safeGetElementById(optionsId);
-    const isVisible = options.style.display === 'block';
-
-    const hasChecked = checkboxIds.some((id) => safeGetElementChecked(id));
-    if (toggle) {
-      toggle.classList.toggle('active', hasChecked);
-      toggle.innerHTML = `<i class="codicon codicon-${icon}"></i><i class="${
-        isVisible ? CHEVRON_UP_CLASS : CHEVRON_DOWN_CLASS
-      }"></i>`;
+    if (!toggle || !options) {
+      console.warn(
+        `[ToggleManager] Missing elements for ${toggleId} or ${optionsId}`,
+      );
+      return;
     }
+
+    const visible = this.isOptionsVisible(options);
+    const hasChecked = this.hasAnyChecked(checkboxIds);
+    this.setToggleIcon(toggle, icon, visible, hasChecked);
   }
 
   updateAutoToggleState() {
