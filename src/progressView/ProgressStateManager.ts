@@ -12,7 +12,7 @@ import { AgentLogger } from '@logger/AgentLogger';
 
 // Types
 import { TokenUsageStats } from '../types/UsageTypes';
-import { LogGroup } from '../logger/LogTypes';
+import { TaskGroup } from '../logger/LogTypes';
 import type { DiffStats } from '../types/DiffTypes';
 
 interface ColoredLogMessage {
@@ -41,7 +41,7 @@ export class ProgressStateManager {
 
   // State collections
   private _logStreams: Map<string, ColoredLogMessage[]> = new Map();
-  private _logGroups: Map<string, Map<string, LogGroup>> = new Map();
+  private _taskGroups: Map<string, Map<string, TaskGroup>> = new Map();
   private _outputFiles: Map<string, { [key: number]: OutputFileInfo[] }> =
     new Map();
   private _taskStates: Map<string, TaskState> = new Map();
@@ -57,8 +57,8 @@ export class ProgressStateManager {
     return this._logStreams;
   }
 
-  get logGroups(): Map<string, Map<string, LogGroup>> {
-    return this._logGroups;
+  get taskGroups(): Map<string, Map<string, TaskGroup>> {
+    return this._taskGroups;
   }
 
   get outputFiles(): Map<string, { [key: number]: OutputFileInfo[] }> {
@@ -94,7 +94,7 @@ export class ProgressStateManager {
    */
   public async loadState(): Promise<void> {
     await this._loadLogStreams();
-    await this._loadLogGroups();
+    await this._loadTaskGroups();
     await this._loadOutputFiles();
     this._loadActiveStream();
     await this._loadTaskStates();
@@ -106,7 +106,7 @@ export class ProgressStateManager {
    */
   public saveState(): void {
     this._saveLogStreams();
-    this._saveLogGroups();
+    this._saveTaskGroups();
     this._saveOutputFiles();
     this._saveActiveStream();
     this._saveTaskStates();
@@ -156,13 +156,13 @@ export class ProgressStateManager {
   /**
    * Load log groups from storage
    */
-  private async _loadLogGroups(): Promise<void> {
+  private async _loadTaskGroups(): Promise<void> {
     const savedGroups = workspaceSM.get<{
-      [key: string]: { [groupId: string]: LogGroup };
-    }>(this._getWorkspaceKey(WorkspaceStateKey.LOG_GROUPS));
+      [key: string]: { [groupId: string]: TaskGroup };
+    }>(this._getWorkspaceKey(WorkspaceStateKey.TASK_GROUPS));
 
     if (savedGroups) {
-      this._logGroups = new Map(
+      this._taskGroups = new Map(
         Object.entries(savedGroups)
           .filter(([channel]) => !shouldUseConsolidatedChannel(channel))
           .map(([streamId, groups]) => [
@@ -188,7 +188,7 @@ export class ProgressStateManager {
           ]),
       );
     } else {
-      this._logGroups.clear();
+      this._taskGroups.clear();
     }
   }
 
@@ -355,8 +355,8 @@ export class ProgressStateManager {
   /**
    * Save log groups to storage
    */
-  private _saveLogGroups(): void {
-    const persistentGroups = Array.from(this._logGroups.entries())
+  private _saveTaskGroups(): void {
+    const persistentGroups = Array.from(this._taskGroups.entries())
       .filter(([channel]) => !shouldUseConsolidatedChannel(channel))
       .map(([streamId, groups]) => [
         streamId,
@@ -364,7 +364,7 @@ export class ProgressStateManager {
       ]);
     const groupsObj = Object.fromEntries(persistentGroups);
     workspaceSM.update(
-      this._getWorkspaceKey(WorkspaceStateKey.LOG_GROUPS),
+      this._getWorkspaceKey(WorkspaceStateKey.TASK_GROUPS),
       groupsObj,
     );
   }
@@ -408,7 +408,7 @@ export class ProgressStateManager {
    */
   public clearStream(stream: string): void {
     this._logStreams.delete(stream);
-    this._logGroups.delete(stream);
+    this._taskGroups.delete(stream);
     this._outputFiles.delete(stream);
     this._taskStates.delete(stream);
     this._usageStats.delete(stream);
@@ -419,7 +419,7 @@ export class ProgressStateManager {
    */
   public clearAll(): void {
     this._logStreams.clear();
-    this._logGroups.clear();
+    this._taskGroups.clear();
     this._outputFiles.clear();
     this._taskStates.clear();
     this._usageStats.clear();
