@@ -10,6 +10,7 @@ import { setDebugMode as applyDebugMode } from './uiHandlers.js';
 
 import { fileList } from './uiManagers/FileList.js';
 import { fileSelect } from './uiManagers/FileSelect.js';
+import { webviewEventBus } from './eventBus.js';
 
 import { FILE_TYPES } from './constants.js';
 
@@ -271,23 +272,23 @@ export function setupMessageHandlers() {
         webviewState.save();
       }
       // Reset recording UI state
-      if (window.updateRecordingUI) {
-        window.updateRecordingUI(false);
-      }
+      webviewEventBus.dispatchEvent(
+        new CustomEvent('recordingUIUpdate', { detail: { recording: false } }),
+      );
       postHandle();
     },
     recordingStarted: () => {
       // Recording has started successfully
-      if (window.updateRecordingUI) {
-        window.updateRecordingUI(true);
-      }
+      webviewEventBus.dispatchEvent(
+        new CustomEvent('recordingUIUpdate', { detail: { recording: true } }),
+      );
       postHandle();
     },
     recordingError: (m) => {
       // Reset UI on error
-      if (window.updateRecordingUI) {
-        window.updateRecordingUI(false);
-      }
+      webviewEventBus.dispatchEvent(
+        new CustomEvent('recordingUIUpdate', { detail: { recording: false } }),
+      );
       postHandle();
     },
     setInputFile: (m) => {
