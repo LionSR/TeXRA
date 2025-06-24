@@ -38,7 +38,7 @@ export class WebviewContentProvider {
       const webviewStateUri = getCommonUri('modules/webviewState.js');
 
       // Get URIs for all modules
-      const stateManagerUri = getWebviewUri('modules/stateManager.js');
+      const webviewStateModuleUri = getWebviewUri('modules/webviewState.js');
       const messageHandlersUri = getWebviewUri('modules/messageHandlers.js');
       const fileHandlersUri = getWebviewUri('modules/fileHandlers.js');
       const uiHandlersUri = getWebviewUri('modules/uiHandlers.js');
@@ -72,7 +72,7 @@ export class WebviewContentProvider {
         domUtilsUri,
         stringUtilsUri,
         webviewStateUri,
-        stateManagerUri,
+        webviewStateModuleUri,
         messageHandlersUri,
         fileHandlersUri,
         uiHandlersUri,

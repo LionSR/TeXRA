@@ -1,7 +1,7 @@
 import { vscode, registerMessageHandlers } from '@common/webviewContext.js';
 import { safeSetElementValue, safeGetElementById } from '@common/domUtils.js';
 import { capitalize, uncapitalize } from '@common/stringUtils.js';
-import { stateManager, restoreState, saveState } from './stateManager.js';
+import { webviewState } from './webviewState.js';
 import {
   CHEVRON_UP_CLASS,
   CHEVRON_DOWN_CLASS,
@@ -180,7 +180,7 @@ function handleStateRestoration(state) {
               });
 
               // Save state to persist changes
-              stateManager.update({
+              webviewState.update({
                 [`${fileType}Files`]: updatedFiles,
               });
             });
@@ -191,11 +191,11 @@ function handleStateRestoration(state) {
   }
 
   // Save the prepared state
-  stateManager.setState(savedState);
+  webviewState.set(savedState);
 
-  // Use the stateManager's restoreState to update UI elements from this state
+  // Restore UI elements from the saved state
   // This will handle setting all form values and updating indicators
-  restoreState();
+  webviewState.restore();
 
   // Let the user know we've restored their configuration
   // vscode.postMessage({
@@ -211,7 +211,7 @@ function postHandle() {
   if (window._skipNextRestoreState) {
     window._skipNextRestoreState = false;
   } else {
-    restoreState();
+    webviewState.restore();
   }
 }
 
@@ -248,7 +248,7 @@ export function setupMessageHandlers() {
           command: 'showInformationMessage',
           text: 'Instruction text has been polished!',
         });
-        saveState();
+        webviewState.save();
       }
       postHandle();
     },
@@ -275,7 +275,7 @@ export function setupMessageHandlers() {
           command: 'showInformationMessage',
           text: 'Instruction text transcribed!',
         });
-        saveState();
+        webviewState.save();
       }
       // Reset recording UI state
       if (window.updateRecordingUI) {
@@ -422,7 +422,7 @@ export function setupMessageHandlers() {
         const currentBaseFile = currentBaseFileDiv.value;
         updateFileSelect('baseFile', m.files);
 
-        const state = stateManager.getState();
+        const state = webviewState.get();
         const storedBaseFile = state?.baseFile;
 
         if (storedBaseFile && m.files.includes(storedBaseFile)) {

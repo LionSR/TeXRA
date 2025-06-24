@@ -1,5 +1,5 @@
 import { vscode } from '@common/webviewContext.js';
-import { saveState, stateManager } from './stateManager.js';
+import { webviewState } from './webviewState.js';
 import { MULTIPLE_SELECTIONS } from './constants.js';
 import {
   addEventListenerSafely,
@@ -72,7 +72,7 @@ export function addFileToList(containerId, file) {
         emptyMultipleFiles(containerId, `toggle${capitalize(containerId)}`);
       }
       // Save state after removing the file to persist changes
-      saveState();
+      webviewState.save();
     });
   }
   container.appendChild(fileElement);
@@ -100,7 +100,7 @@ export function updateMultipleFileSelect(selectId, toggleId, files) {
       container.style.display = 'block';
     }
   }
-  saveState();
+  webviewState.save();
 }
 
 export function getSelectedFiles(multipleFilesDiv) {
@@ -196,7 +196,7 @@ export function handleCheckboxChange(event) {
  */
 export function initializeOutputFiles() {
   // Get the current state
-  const state = stateManager.getState();
+  const state = webviewState.get();
 
   // Get references to the DOM elements
   const inputFileDiv = safeGetElementById('inputFile');
@@ -248,14 +248,14 @@ export function initializeOutputFiles() {
   }
 
   // Add opened files to the output files list
-  const openedFiles = stateManager.getState()?.openedFiles ?? [];
+  const openedFiles = webviewState.get()?.openedFiles ?? [];
   openedFiles.forEach((file) => {
     addFileToList('outputFiles', file);
   });
 
   // Output filename override removed
 
-  saveState();
+  webviewState.save();
 }
 
 export function toggleOutputFiles() {
@@ -275,7 +275,7 @@ export function toggleMultipleFiles(containerId, toggleId) {
   if (!container) return;
   const isVisible = container.style.display !== 'none';
   setMultipleFileSelectVisibility(containerId, toggleId, !isVisible);
-  saveState();
+  webviewState.save();
 }
 
 export function emptyMultipleFiles(containerId, toggleId) {
@@ -291,7 +291,7 @@ export function emptyMultipleFiles(containerId, toggleId) {
 
   // Reset Output Filename override removed
 
-  saveState();
+  webviewState.save();
 }
 
 export function handleSetCurrentFile({ fileType, filePath }) {
@@ -319,7 +319,7 @@ export function initializeOutputContainer() {
   const toggleIcon = safeGetElementById('toggleOutputFiles');
 
   if (container && toggleIcon) {
-    const state = stateManager.getState();
+    const state = webviewState.get();
     const shouldShow = state && state.outputFilesActive;
 
     container.style.display = shouldShow ? 'block' : 'none';
@@ -334,7 +334,7 @@ export function initializeLatexdiffsSection() {
   const toggleIcon = safeGetElementById('toggleLatexdiffs');
 
   if (container && toggleIcon) {
-    const state = stateManager.getState();
+    const state = webviewState.get();
     const shouldShow = state && state.latexdiffsVisible;
 
     container.style.display = shouldShow ? 'block' : 'none';
@@ -363,6 +363,6 @@ export function toggleLatexdiffs() {
     iconElement.className = isVisible ? CHEVRON_DOWN_CLASS : CHEVRON_UP_CLASS;
   }
 
-  stateManager.update({ latexdiffsVisible: !isVisible });
-  saveState();
+  webviewState.update({ latexdiffsVisible: !isVisible });
+  webviewState.save();
 }
