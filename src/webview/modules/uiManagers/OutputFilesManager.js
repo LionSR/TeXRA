@@ -8,6 +8,11 @@ import { webviewState } from '../webviewState.js';
 import { fileList } from './FileList.js';
 import { fileSelect } from './FileSelect.js';
 
+const INPUT_FILE_ID = 'inputFile';
+const OUTPUT_FILES_ID = 'outputFiles';
+const OUTPUT_FILES_CONTAINER_ID = 'outputFilesContainer';
+const TOGGLE_OUTPUT_FILES_ID = 'toggleOutputFiles';
+
 /**
  * Manages output files UI logic.
  */
@@ -21,42 +26,40 @@ export class OutputFilesManager {
   /** Initialize the output files list with the input file */
   initializeOutputFiles() {
     const state = this.state.get();
-    const inputFileDiv = safeGetElementById('inputFile');
-    const outputFilesDiv = safeGetElementById('outputFiles');
+    const inputFileDiv = safeGetElementById(INPUT_FILE_ID);
+    const outputFilesDiv = safeGetElementById(OUTPUT_FILES_ID);
+    if (!outputFilesDiv) return;
+
+    outputFilesDiv.innerHTML = '';
     const inputFile = inputFileDiv?.value;
 
-    if (inputFile && outputFilesDiv) {
+    if (inputFile) {
       if (state.outputFiles && state.outputFiles.length > 0) {
-        outputFilesDiv.innerHTML = '';
         state.outputFiles.forEach((file) => {
-          this.fileList.add('outputFiles', file);
+          this.fileList.add(OUTPUT_FILES_ID, file);
         });
       } else if (
         this.fileSelect.getAgentDefaultOutputFiles().length > 0 &&
         (!state.outputFiles || state.outputFiles.length === 0)
       ) {
-        outputFilesDiv.innerHTML = '';
         this.fileSelect.getAgentDefaultOutputFiles().forEach((file) => {
-          this.fileList.add('outputFiles', file);
+          this.fileList.add(OUTPUT_FILES_ID, file);
         });
       } else {
-        outputFilesDiv.innerHTML = '';
-        this.fileList.add('outputFiles', inputFileDiv.value);
+        this.fileList.add(OUTPUT_FILES_ID, inputFileDiv.value);
         if (state.inputFiles && state.inputFiles.length > 0) {
           state.inputFiles.forEach((file) => {
             if (file !== inputFile) {
-              this.fileList.add('outputFiles', file);
+              this.fileList.add(OUTPUT_FILES_ID, file);
             }
           });
         }
       }
-    } else if (outputFilesDiv) {
-      outputFilesDiv.innerHTML = '';
     }
 
     const openedFiles = this.state.get()?.openedFiles ?? [];
     openedFiles.forEach((file) => {
-      this.fileList.add('outputFiles', file);
+      this.fileList.add(OUTPUT_FILES_ID, file);
     });
 
     this.state.save();
@@ -64,21 +67,22 @@ export class OutputFilesManager {
 
   /** Toggle visibility of the output files container */
   toggleOutputFiles() {
-    const containerVisible =
-      safeGetElementById('outputFilesContainer').style.display !== 'none';
+    const container = safeGetElementById(OUTPUT_FILES_CONTAINER_ID);
+    if (!container) return;
 
-    if (containerVisible) {
-      this.fileList.toggle('outputFiles', 'toggleOutputFiles');
-    } else {
+    const containerVisible = container.style.display === 'block';
+
+    if (!containerVisible) {
       this.initializeOutputFiles();
-      this.fileList.toggle('outputFiles', 'toggleOutputFiles');
     }
+
+    this.fileList.toggle(OUTPUT_FILES_ID, TOGGLE_OUTPUT_FILES_ID);
   }
 
   /** Initialize the output files container based on state */
   initializeOutputContainer() {
-    const container = safeGetElementById('outputFilesContainer');
-    const toggleIcon = safeGetElementById('toggleOutputFiles');
+    const container = safeGetElementById(OUTPUT_FILES_CONTAINER_ID);
+    const toggleIcon = safeGetElementById(TOGGLE_OUTPUT_FILES_ID);
 
     if (container && toggleIcon) {
       const state = this.state.get();
