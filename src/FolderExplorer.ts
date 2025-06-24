@@ -11,7 +11,7 @@ import {
   getCustomAgentsDirectory,
 } from '@frontend/agents/pathUtils';
 import { AbsoluteFS } from '@utils/files';
-import { FileItem } from './explorer/ExplorerOperations';
+import { FileItem } from './explorer/FileItem';
 
 const CHANNEL = 'Webview';
 logger.initialize(CHANNEL);

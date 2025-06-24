@@ -13,10 +13,9 @@ import {
   getCustomAgentsDirectory,
   getOrPromptForCustomAgentsDirectory,
 } from '@frontend/agents/pathUtils';
-import { promptToAddAgentToConfig } from '@frontend/agents/register';
-import { isValidAgentYaml } from '../agent/runtime/agentLoad';
 import { AbsoluteFS } from '@utils/files';
 import { getConfig } from '@utils/config';
+import { FileItem } from './FileItem';
 
 const NEW_AGENT_TEMPLATE = `# --- Agent Inheritance (Optional) ---
 # inherits: base
@@ -198,23 +197,35 @@ export class ExplorerOperations {
     let createdFile: vscode.Uri | undefined;
 
     if (newName && newName !== item.label) {
-      try {
-        const oldPath = item.resourceUri.fsPath;
-        const newPath = path.join(path.dirname(oldPath), newName);
+      const oldPath = item.resourceUri.fsPath;
+      const newPath = path.join(path.dirname(oldPath), newName);
 
-        if (!(await AbsoluteFS.exists(oldPath))) {
-          if (item.collapsibleState === vscode.TreeItemCollapsibleState.None) {
-            const content = newPath.endsWith('.yaml') ? NEW_AGENT_TEMPLATE : '';
-            await AbsoluteFS.write(newPath, content);
-            createdFile = vscode.Uri.file(newPath);
-          } else {
-            await AbsoluteFS.ensureDir(newPath);
+      try {
+        await AbsoluteFS.rename(oldPath, newPath, { overwrite: false });
+      } catch (err: any) {
+        if (err?.code === 'ENOENT') {
+          try {
+            if (
+              item.collapsibleState === vscode.TreeItemCollapsibleState.None
+            ) {
+              const content = newPath.endsWith('.yaml')
+                ? NEW_AGENT_TEMPLATE
+                : '';
+              await AbsoluteFS.write(newPath, content);
+              createdFile = vscode.Uri.file(newPath);
+            } else {
+              await AbsoluteFS.ensureDir(newPath);
+            }
+          } catch (createErr) {
+            await showLoggedErrorMessage(
+              CHANNEL,
+              'Failed to create item',
+              createErr,
+            );
           }
         } else {
-          await AbsoluteFS.rename(oldPath, newPath, { overwrite: false });
+          await showLoggedErrorMessage(CHANNEL, 'Failed to rename item', err);
         }
-      } catch (err) {
-        await showLoggedErrorMessage(CHANNEL, 'Failed to rename item', err);
       }
     }
 
@@ -271,40 +282,6 @@ export class ExplorerOperations {
           err,
         );
       }
-    }
-  }
-}
-
-export class FileItem extends vscode.TreeItem {
-  public editing = false;
-
-  constructor(
-    public readonly label: string,
-    public readonly resourceUri: vscode.Uri,
-    public readonly collapsibleState: vscode.TreeItemCollapsibleState,
-    public readonly command?: vscode.Command,
-    public readonly isBuiltIn = false,
-  ) {
-    super(label, collapsibleState);
-
-    this.tooltip = this.resourceUri.fsPath;
-    this.description = undefined;
-
-    if (collapsibleState === vscode.TreeItemCollapsibleState.None) {
-      this.iconPath = new vscode.ThemeIcon('file');
-    } else {
-      this.iconPath = new vscode.ThemeIcon('folder');
-    }
-
-    if (
-      isBuiltIn &&
-      collapsibleState === vscode.TreeItemCollapsibleState.None
-    ) {
-      this.resourceUri = this.resourceUri.with({
-        scheme: 'file',
-        query: 'readonly',
-      });
-      this.iconPath = new vscode.ThemeIcon('lock');
     }
   }
 }
