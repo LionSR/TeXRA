@@ -2,7 +2,6 @@ import { vscode, registerMessageHandlers } from '@common/webviewContext.js';
 import { safeSetElementValue, safeGetElementById } from '@common/domUtils.js';
 import { capitalize, uncapitalize } from '@common/stringUtils.js';
 import { webviewState } from './webviewState.js';
-const { restore, save } = webviewState;
 import {
   CHEVRON_UP_CLASS,
   CHEVRON_DOWN_CLASS,
@@ -196,7 +195,7 @@ function handleStateRestoration(state) {
 
   // Restore UI elements from the saved state
   // This will handle setting all form values and updating indicators
-  restore();
+  webviewState.restore();
 
   // Let the user know we've restored their configuration
   // vscode.postMessage({
@@ -212,7 +211,7 @@ function postHandle() {
   if (window._skipNextRestoreState) {
     window._skipNextRestoreState = false;
   } else {
-    restore();
+    webviewState.restore();
   }
 }
 
@@ -249,7 +248,7 @@ export function setupMessageHandlers() {
           command: 'showInformationMessage',
           text: 'Instruction text has been polished!',
         });
-        save();
+        webviewState.save();
       }
       postHandle();
     },
@@ -276,7 +275,7 @@ export function setupMessageHandlers() {
           command: 'showInformationMessage',
           text: 'Instruction text transcribed!',
         });
-        save();
+        webviewState.save();
       }
       // Reset recording UI state
       if (window.updateRecordingUI) {
