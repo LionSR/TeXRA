@@ -1,12 +1,12 @@
 /**
  * Utility functions for consistent error logging and formatting across the TeXRA extension.
- * 
+ *
  * This module provides a standardized approach to error handling that:
  * - Ensures consistent error message formatting
  * - Centralizes logging logic
  * - Provides both silent logging and user-visible error display
  * - Handles various error types (Error objects, strings, primitives, etc.)
- * 
+ *
  * @fileoverview Error handling utilities for consistent logging and user feedback
  * @author TeXRA.ai
  */
@@ -19,23 +19,23 @@ import * as logger from '@logger/logUtils';
 
 /**
  * Format an error with a prefix for logging or user messages.
- * 
+ *
  * This is the core formatting function used by all other error handling utilities.
  * It handles various error types consistently:
  * - Error objects: uses the .message property
  * - Primitives (string, number, boolean, null, undefined): converts to string
  * - Objects and arrays: converts to string representation
- * 
+ *
  * @param prefix - The error message prefix (e.g., "Failed to save file", "API request failed")
  * @param err - The error to format (can be Error object, string, or any other type)
  * @returns A formatted error message in the format "prefix: error_detail"
- * 
+ *
  * @example
  * ```typescript
  * const error = new Error("File not found");
  * const formatted = formatError("Failed to read config", error);
  * // Returns: "Failed to read config: File not found"
- * 
+ *
  * const stringError = "Invalid parameter";
  * const formatted2 = formatError("Validation failed", stringError);
  * // Returns: "Validation failed: Invalid parameter"
@@ -48,19 +48,19 @@ export function formatError(prefix: string, err: unknown): string {
 
 /**
  * Log a formatted error message and return the formatted message.
- * 
+ *
  * This function combines error formatting with logging. It:
  * 1. Formats the error using formatError()
  * 2. Logs the formatted message to the specified channel
  * 3. Returns the formatted message for further use
- * 
+ *
  * Use this when you want to log an error but not display it to the user.
- * 
+ *
  * @param channel - The logging channel to use (e.g., "FileSystem", "API", "Validation")
  * @param prefix - The error message prefix describing the operation that failed
  * @param err - The error to format and log
  * @returns The formatted error message that was logged
- * 
+ *
  * @example
  * ```typescript
  * try {
@@ -84,21 +84,21 @@ export function logErrorMessage(
 
 /**
  * Log a formatted error message and display it to the user.
- * 
+ *
  * This is the primary function for handling errors that should be shown to the user.
  * It combines all error handling steps:
  * 1. Formats the error using formatError()
  * 2. Logs the formatted message to the specified channel
  * 3. Displays the error message to the user via VS Code's error notification
  * 4. Returns the formatted message for further use
- * 
+ *
  * Use this when an error occurs that the user should be notified about.
- * 
+ *
  * @param channel - The logging channel to use (e.g., "FileSystem", "API", "Commands")
  * @param prefix - The error message prefix describing what operation failed
  * @param err - The error object, string, or other value to format and display
  * @returns A promise that resolves to the formatted error message that was displayed
- * 
+ *
  * @example
  * ```typescript
  * try {
@@ -124,17 +124,17 @@ export async function showLoggedErrorMessage(
 
 /**
  * Log a pre-formatted message and display it to the user as an error.
- * 
+ *
  * Use this function when you already have a complete, properly formatted error message
  * and don't need additional error object processing. This is useful for:
  * - Validation errors with custom messages
  * - Configuration errors
  * - Messages that don't originate from caught exceptions
- * 
+ *
  * @param channel - The logging channel to use (e.g., "Validation", "Configuration")
  * @param message - The complete error message to log and display to the user
  * @returns A promise that resolves to the message that was displayed
- * 
+ *
  * @example
  * ```typescript
  * // Validation error scenario
@@ -142,7 +142,7 @@ export async function showLoggedErrorMessage(
  *   await showLoggedMessage("Validation", "Missing required parameters: inputFile, agent, and model must be provided");
  *   return;
  * }
- * 
+ *
  * // Configuration error scenario
  * if (!workspacePath) {
  *   await showLoggedMessage("Configuration", "No workspace folder is currently open");

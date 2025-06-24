@@ -13,7 +13,10 @@ import { getStreamId } from '@utils/loggerUtils';
 // Local imports - housekeeping
 import { runPack, runPackSingle, runPackMultiple } from '@housekeeping';
 import type { FileOpResult } from '@/types/ResultTypes';
-import { showLoggedErrorMessage, showLoggedMessage } from '@utils/errorHandlingUtils';
+import {
+  showLoggedErrorMessage,
+  showLoggedMessage,
+} from '@utils/errorHandlingUtils';
 
 const CHANNEL = 'packCommands';
 logger.initialize(CHANNEL);
@@ -58,10 +61,7 @@ async function handlePack(config: { streamId?: string; [key: string]: any }) {
   );
 
   if (!config.agent || !config.inputFile) {
-    await showLoggedMessage(
-      CHANNEL,
-      'Missing required parameters in config',
-    );
+    await showLoggedMessage(CHANNEL, 'Missing required parameters in config');
     return;
   }
 
@@ -135,7 +135,8 @@ async function handlePackMultiple(
 
   if ((!inputFile && !outputFiles.length) || !agent || !model) {
     const missing = [];
-    if (!inputFile && !outputFiles.length) missing.push('inputFile or outputFiles');
+    if (!inputFile && !outputFiles.length)
+      missing.push('inputFile or outputFiles');
     if (!agent) missing.push('agent');
     if (!model) missing.push('model');
     await showLoggedMessage(
