@@ -53,6 +53,9 @@ This document sets the common conventions for contributions. Follow these norms 
 - Update cumulative usage stats with `updateUsageSummary` in `src/progressView/modules/domHandlers.js`.
 - Prefer enums or union types over plain booleans in configuration objects.
 - Build webview URIs through helpers in `src/webview/WebviewContentProvider.ts`.
+- When adding new webview modules (e.g., under `src/webview/modules/uiManagers`),
+  map them in `src/webview/index.html` and expose their URIs via
+  `WebviewContentProvider`.
 - Use `watchConfig` from `src/utils/configUtils.ts` to refresh features when configuration settings change.
 - Build DOM elements with `<template>` blocks and helpers in `src/common/modules/templateUtils.js`.
 - Manipulate webview DOM safely using `addEventListenerSafely` from `src/common/modules/domUtils.js`.
