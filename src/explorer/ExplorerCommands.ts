@@ -2,7 +2,8 @@
 import * as vscode from 'vscode';
 
 // Local imports
-import { ExplorerOperations, FileItem } from './ExplorerOperations';
+import { ExplorerOperations } from './ExplorerOperations';
+import { FileItem } from './FileItem';
 
 export class ExplorerCommands {
   constructor(
