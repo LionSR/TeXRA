@@ -13,7 +13,7 @@ import { getConfig } from '@utils/config';
 import { shouldUseConsolidatedChannel } from '@utils/loggerUtils';
 
 import { TokenUsageStats } from '../types/UsageTypes';
-import { LogGroup } from '../logger/LogTypes';
+import { TaskGroup } from '../logger/LogTypes';
 import type { DiffStats } from '../types/DiffTypes';
 import { randomUUID } from 'crypto';
 
@@ -356,7 +356,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     }
   }
 
-  public addLogGroup(
+  public addTaskGroup(
     stream: string,
     groupId: string,
     groupName: string,
@@ -373,7 +373,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     // Ensure the stream exists so the UI can create a new tab immediately
     // this seems to be the fix for the issue where the progress view panel is not shown when a new stream is created
     if (!this._stateManager.logStreams.has(stream)) {
-      this.logger.debug(`Creating stream from addLogGroup: ${stream}`);
+      this.logger.debug(`Creating stream from addTaskGroup: ${stream}`);
       this._stateManager.logStreams.set(stream, []);
       if (!this._streamStatus.has(stream)) {
         this.updateStreamStatus(stream, STATUS.RUNNING);
@@ -387,11 +387,11 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     }
 
     // Create stream groups mapping if it doesn't exist
-    if (!this._stateManager.logGroups.has(stream)) {
-      this._stateManager.logGroups.set(stream, new Map());
+    if (!this._stateManager.taskGroups.has(stream)) {
+      this._stateManager.taskGroups.set(stream, new Map());
     }
 
-    const streamGroups = this._stateManager.logGroups.get(stream)!;
+    const streamGroups = this._stateManager.taskGroups.get(stream)!;
     streamGroups.set(groupId, {
       id: groupId,
       name: groupName,
@@ -419,7 +419,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     }
   }
 
-  public updateLogGroup(
+  public updateTaskGroup(
     stream: string,
     groupId: string,
     status: StatusType,
@@ -430,7 +430,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       return;
     }
 
-    const streamGroups = this._stateManager.logGroups.get(stream);
+    const streamGroups = this._stateManager.taskGroups.get(stream);
     if (!streamGroups) {
       return;
     }
@@ -480,7 +480,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       : messages.filter((msg) => msg.level !== 'debug');
 
     // Get groups for this stream
-    const groups = this._stateManager.logGroups.get(stream) || new Map();
+    const groups = this._stateManager.taskGroups.get(stream) || new Map();
 
     this._view.webview.postMessage({
       command: COMMANDS.UPDATE_LOGS,
@@ -509,14 +509,14 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     return this._stateManager.logStreams;
   }
 
-  public getLogGroups(): Map<string, Map<string, LogGroup>> {
-    return this._stateManager.logGroups;
+  public getTaskGroups(): Map<string, Map<string, TaskGroup>> {
+    return this._stateManager.taskGroups;
   }
 
   public eraseStream(stream: string) {
     if (this._stateManager.logStreams.has(stream)) {
       this._stateManager.logStreams.get(stream)!.length = 0;
-      this._stateManager.logGroups.delete(stream);
+      this._stateManager.taskGroups.delete(stream);
       this._stateManager.outputFiles.delete(stream);
       this._stateManager.saveState();
       this.updateLogContent(stream);
@@ -633,7 +633,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     groupId: string,
     usage: TokenUsageStats,
   ): void {
-    const streamGroups = this._stateManager.logGroups.get(stream);
+    const streamGroups = this._stateManager.taskGroups.get(stream);
     if (streamGroups) {
       const group = streamGroups.get(groupId);
       if (group) {
@@ -744,14 +744,14 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       );
 
       // Update all active groups for this stream
-      const streamGroups = this._stateManager.logGroups.get(streamId);
+      const streamGroups = this._stateManager.taskGroups.get(streamId);
       if (streamGroups) {
         const activeGroups = Array.from(streamGroups.entries()).filter(
           ([_, group]) => !group.endTime || group.status === STATUS.RUNNING,
         );
 
         for (const [groupId, group] of activeGroups) {
-          this.updateLogGroup(streamId, groupId, STATUS_CANCELLED, endTime);
+          this.updateTaskGroup(streamId, groupId, STATUS_CANCELLED, endTime);
         }
       }
     }
@@ -796,7 +796,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       }
 
       // Check for running groups that need to be marked as interrupted
-      const streamGroups = this._stateManager.logGroups.get(streamId);
+      const streamGroups = this._stateManager.taskGroups.get(streamId);
       if (streamGroups) {
         const activeGroups = Array.from(streamGroups.entries()).filter(
           ([_, group]) => !group.endTime || group.status === STATUS.RUNNING,
@@ -818,7 +818,12 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
 
           // Mark all active groups as interrupted
           for (const [groupId, group] of activeGroups) {
-            this.updateLogGroup(streamId, groupId, STATUS_INTERRUPTED, endTime);
+            this.updateTaskGroup(
+              streamId,
+              groupId,
+              STATUS_INTERRUPTED,
+              endTime,
+            );
             updatedGroups++;
           }
         }
