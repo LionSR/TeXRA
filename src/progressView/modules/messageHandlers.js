@@ -1,11 +1,5 @@
-import {
-  getCurrentStream,
-  setCurrentStream,
-  clearLogGroups,
-  clearGroupToggleStates,
-  deleteStreamStatus,
-  clearAllGroupToggleStates,
-} from './stateManager.js';
+// Local imports - log state
+import { logState } from './webviewLogState.js';
 import {
   updateStreamTabs,
   updateStatus,
@@ -27,15 +21,15 @@ import { registerMessageHandlers } from '@common/webviewContext.js';
 
 const handlers = {
   [COMMANDS.UPDATE_STREAMS]: (message) => {
-    setCurrentStream(message.currentStream);
+    logState.setCurrentStream(message.currentStream);
     updateStreamTabs(message.streams, message.currentStream);
   },
 
   [COMMANDS.UPDATE_LOGS]: (message) => {
     const logContent = document.getElementById('logContent');
-    if (message.stream === getCurrentStream()) {
+    if (message.stream === logState.getCurrentStream()) {
       logContent.innerHTML = '';
-      clearLogGroups();
+      logState.clearLogGroups();
       if (message.groups && message.groups.length > 0) {
         const parentGroups = message.groups.filter((g) => !g.parentGroupId);
         const childGroups = message.groups.filter((g) => g.parentGroupId);
@@ -84,12 +78,12 @@ const handlers = {
     for (const el of headers) {
       groupIds.push(el.id.replace('group-header-', ''));
     }
-    clearLogGroups();
-    clearGroupToggleStates(groupIds);
+    logState.clearLogGroups();
+    logState.clearGroupToggleStates(groupIds);
   },
 
   [COMMANDS.APPEND_LOG]: (message) => {
-    if (message.stream === getCurrentStream()) {
+    if (message.stream === logState.getCurrentStream()) {
       const logContent = document.getElementById('logContent');
       const addedToGroup = appendLogToGroup(message.logMessage);
       if (!addedToGroup) {
@@ -102,13 +96,13 @@ const handlers = {
   },
 
   [COMMANDS.UPDATE_LOG]: (message) => {
-    if (message.stream === getCurrentStream()) {
+    if (message.stream === logState.getCurrentStream()) {
       updateLogEntry(message.logMessage);
     }
   },
 
   [COMMANDS.ADD_LOG_GROUP]: (message) => {
-    if (message.stream === getCurrentStream()) {
+    if (message.stream === logState.getCurrentStream()) {
       const logContent = document.getElementById('logContent');
       addLogGroup(message.group);
       logContent.scrollTop = logContent.scrollHeight;
@@ -116,7 +110,7 @@ const handlers = {
   },
 
   [COMMANDS.UPDATE_LOG_GROUP]: (message) => {
-    if (message.stream === getCurrentStream()) {
+    if (message.stream === logState.getCurrentStream()) {
       updateLogGroup(message.groupId, message.status, message.endTime);
       updateLogGroupUI(message.groupId, message.status, message.endTime);
     }
@@ -131,21 +125,21 @@ const handlers = {
   },
 
   [COMMANDS.UPDATE_GROUP_USAGE]: (message) => {
-    if (message.stream === getCurrentStream()) {
+    if (message.stream === logState.getCurrentStream()) {
       updateGroupUsage(message.groupId, message.usage);
     }
   },
 
   [COMMANDS.UPDATE_FILES]: (message) => {
-    if (message.stream === getCurrentStream()) {
+    if (message.stream === logState.getCurrentStream()) {
       updateFileList(message.files);
     }
   },
 
   [COMMANDS.DELETE_STREAM]: (message) => {
     if (message.stream) {
-      deleteStreamStatus(message.stream);
-      if (message.stream === getCurrentStream()) {
+      logState.deleteStreamStatus(message.stream);
+      if (message.stream === logState.getCurrentStream()) {
         const groupIds = [];
         const headers = Array.from(
           document.querySelectorAll('.log-group-header'),
@@ -153,13 +147,13 @@ const handlers = {
         for (const el of headers) {
           groupIds.push(el.id.replace('group-header-', ''));
         }
-        clearGroupToggleStates(groupIds);
+        logState.clearGroupToggleStates(groupIds);
       }
     }
   },
 
   [COMMANDS.DELETE_ALL]: () => {
-    clearAllGroupToggleStates();
+    logState.clearAllGroupToggleStates();
   },
 };
 

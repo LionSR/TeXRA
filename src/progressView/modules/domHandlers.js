@@ -1,15 +1,6 @@
 import { vscode } from '@common/webviewContext.js';
-import {
-  getCurrentStream,
-  setStreamStatus,
-  getGroupToggleState,
-  setGroupToggleState,
-  setLogGroup,
-  getLogGroup,
-  getLogGroups,
-  getStreamStatus,
-  clearAllGroupToggleStates,
-} from './stateManager.js';
+// Local imports - log state
+import { logState } from './webviewLogState.js';
 import {
   createGroupHeader,
   getMessageTimestamp,
@@ -118,7 +109,7 @@ export function updateStreamTabs(streams, activeStream) {
   if (!activeStream) {
     updateStatus(STATUS.READY);
   } else {
-    const streamStatus = getStreamStatus(activeStream);
+    const streamStatus = logState.getStreamStatus(activeStream);
     updateStatus(streamStatus || STATUS.STOPPED);
   }
 }
@@ -172,9 +163,9 @@ export function updateStatus(status) {
       if (el) el.disabled = false;
     });
 
-    const currentStream = getCurrentStream();
+    const currentStream = logState.getCurrentStream();
     if (currentStream && status !== STATUS.READY) {
-      setStreamStatus(currentStream, status);
+      logState.setStreamStatus(currentStream, status);
     }
   }
 }
@@ -193,7 +184,7 @@ export function updateUsageSummary(usage) {
   // If usage is not provided, compute it from existing log groups
   if (!totals) {
     totals = { inputTokens: 0, outputTokens: 0, cost: 0 };
-    for (const group of getLogGroups().values()) {
+    for (const group of logState.getLogGroups().values()) {
       if (group.usage) {
         totals.inputTokens += group.usage.inputTokens || 0;
         totals.outputTokens += group.usage.outputTokens || 0;
@@ -213,7 +204,7 @@ export function updateUsageSummary(usage) {
  */
 function computeAggregatedUsage(parentId) {
   const totals = { inputTokens: 0, outputTokens: 0, cost: 0 };
-  for (const group of getLogGroups().values()) {
+  for (const group of logState.getLogGroups().values()) {
     if (group.parentGroupId === parentId) {
       if (group.usage) {
         totals.inputTokens += group.usage.inputTokens || 0;
@@ -230,7 +221,7 @@ function computeAggregatedUsage(parentId) {
 }
 
 function propagateUsageToParents(groupId) {
-  const group = getLogGroup(groupId);
+  const group = logState.getLogGroup(groupId);
   if (!group) return;
 
   // If this group has a parent, update the parent with aggregated usage
@@ -310,10 +301,10 @@ export function updateGroupUsage(groupId, usage, skipPropagate = false) {
     `$${cost.toFixed(3)}`;
 
   // Persist usage on the group state so the summary can be computed
-  const group = getLogGroup(groupId);
+  const group = logState.getLogGroup(groupId);
   if (group) {
     group.usage = { inputTokens, outputTokens, cost };
-    setLogGroup(groupId, group);
+    logState.setLogGroup(groupId, group);
   }
   if (!skipPropagate) {
     propagateUsageToParents(groupId);
@@ -350,7 +341,7 @@ export function updateFileList(filesByRound) {
 
   // Calculate total usage from all groups
   const totals = { inputTokens: 0, outputTokens: 0, cost: 0 };
-  for (const group of getLogGroups().values()) {
+  for (const group of logState.getLogGroups().values()) {
     if (group.usage) {
       totals.inputTokens += group.usage.inputTokens || 0;
       totals.outputTokens += group.usage.outputTokens || 0;
@@ -533,9 +524,9 @@ function collapseGroupAndChildren(groupId) {
   if (details) {
     details.open = false;
   }
-  setGroupToggleState(groupId, true);
+  logState.setGroupToggleState(groupId, true);
 
-  for (const [childId, group] of getLogGroups()) {
+  for (const [childId, group] of logState.getLogGroups()) {
     if (group.parentGroupId === groupId) {
       collapseGroupAndChildren(childId);
     }
@@ -547,13 +538,13 @@ function collapseGroupAndChildren(groupId) {
  * @param {string} currentGroupId - ID of the newly started top-level group
  */
 function collapsePreviousTopLevelGroup(currentGroupId) {
-  const current = getLogGroup(currentGroupId);
+  const current = logState.getLogGroup(currentGroupId);
   if (!current) return;
 
   let previousId = null;
   let previousStart = -Infinity;
 
-  for (const [id, group] of getLogGroups()) {
+  for (const [id, group] of logState.getLogGroups()) {
     if (!group.parentGroupId && id !== currentGroupId) {
       if (
         group.startTime < current.startTime &&
@@ -575,7 +566,7 @@ function collapsePreviousTopLevelGroup(currentGroupId) {
  * @param {Object} group - Group data
  */
 export function addLogGroup(group) {
-  setLogGroup(group.id, group);
+  logState.setLogGroup(group.id, group);
   // Create the details container that will manage toggle state
   const detailsElem = document.createElement('details');
   detailsElem.className = 'log-group';
@@ -592,7 +583,7 @@ export function addLogGroup(group) {
   groupContainer.id = `group-content-${group.id}`;
 
   // Check if we have a saved collapsed state for this group
-  const isCollapsed = getGroupToggleState(group.id);
+  const isCollapsed = logState.getGroupToggleState(group.id);
   detailsElem.open = isCollapsed !== true;
 
   detailsElem.appendChild(headerElement);
@@ -600,7 +591,7 @@ export function addLogGroup(group) {
 
   // Update toggle state when the user expands/collapses the details element
   detailsElem.addEventListener('toggle', () => {
-    setGroupToggleState(group.id, !detailsElem.open);
+    logState.setGroupToggleState(group.id, !detailsElem.open);
   });
 
   // Determine where to add this group based on parentGroupId
@@ -651,7 +642,7 @@ export function addLogGroup(group) {
 
           if (timeElem) {
             const otherGroupId = headerEl.id.replace('group-header-', '');
-            const otherGroup = getLogGroup(otherGroupId);
+            const otherGroup = logState.getLogGroup(otherGroupId);
 
             if (otherGroup && otherGroup.startTime) {
               const otherTime = otherGroup.startTime;
@@ -726,7 +717,7 @@ function playSystemSound() {
  * @param {string} endTime - End time (optional)
  */
 export function updateLogGroupUI(groupId, status, endTime) {
-  const group = getLogGroup(groupId);
+  const group = logState.getLogGroup(groupId);
   if (!group) return;
 
   group.status = status;
@@ -812,7 +803,7 @@ export function appendLogToGroup(logMessage) {
           const startTimeElem = headerEl?.querySelector('.group-start-time');
           if (startTimeElem) {
             const groupId = headerEl.id.replace('group-header-', '');
-            const group = getLogGroup(groupId);
+            const group = logState.getLogGroup(groupId);
             if (group && group.startTime) {
               const childTime = group.startTime;
 
@@ -908,9 +899,9 @@ export function updateLogEntry(logMessage) {
  * Apply saved toggle states to any groups already in the DOM
  */
 export function applyGroupToggleStates() {
-  const logGroups = getLogGroups();
+  const logGroups = logState.getLogGroups();
   for (const [groupId, _] of logGroups) {
-    const isCollapsed = getGroupToggleState(groupId);
+    const isCollapsed = logState.getGroupToggleState(groupId);
     const detailsElem = document.getElementById(`group-${groupId}`);
 
     if (detailsElem && isCollapsed !== undefined) {
@@ -940,7 +931,7 @@ export function setupEventListeners() {
     const btn = e.target.closest('button[data-command]');
     if (!btn) return;
     const command = btn.dataset.command;
-    const currentStream = getCurrentStream();
+    const currentStream = logState.getCurrentStream();
     if (currentStream) {
       vscode.postMessage({ command, stream: currentStream });
     }
@@ -948,7 +939,7 @@ export function setupEventListeners() {
 
   // Delete all button click handler
   document.getElementById('deleteAllBtn').addEventListener('click', () => {
-    clearAllGroupToggleStates();
+    logState.clearAllGroupToggleStates();
     vscode.postMessage({ command: COMMANDS.DELETE_ALL });
   });
 
