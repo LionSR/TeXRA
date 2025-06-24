@@ -3,6 +3,7 @@ import { marked } from 'marked';
 import markedKatex from 'marked-katex-extension';
 // Local imports - constants
 import { STATUS } from './constants.js';
+import { CHEVRON_DOWN_CLASS } from '@common/iconConstants.js';
 // Local imports - KaTeX macros
 import { katexMacros } from './katexMacros.js';
 
@@ -141,7 +142,7 @@ function formatSpecialContent(message, content, contentType, logId) {
 
     return `<details class="special-details" open>
       <summary>
-        <i class="codicon codicon-chevron-down toggle-icon"></i>
+        <i class="${CHEVRON_DOWN_CLASS} toggle-icon"></i>
         <i class="codicon ${icon}"></i>
         <span>${labelText}</span>
       </summary>

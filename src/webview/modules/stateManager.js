@@ -15,6 +15,7 @@ import {
   addFileToList,
   getSelectedFiles,
 } from './fileHandlers.js';
+import { CHEVRON_UP_CLASS, CHEVRON_DOWN_CLASS } from '@common/iconConstants.js';
 import {
   safeGetElementValue,
   safeGetElementById,
@@ -30,8 +31,7 @@ export function setDefaultState() {
   const autoExtractOptions = safeGetElementById('autoExtractOptions');
   if (autoExtractToggle && autoExtractOptions) {
     autoExtractToggle.classList.remove('active');
-    autoExtractToggle.innerHTML =
-      '<i class="codicon codicon-wand"></i><i class="codicon codicon-chevron-down"></i>';
+    autoExtractToggle.innerHTML = `<i class="codicon codicon-wand"></i><i class="${CHEVRON_DOWN_CLASS}"></i>`;
     autoExtractOptions.style.display = 'none';
   }
 
@@ -49,7 +49,7 @@ export function setDefaultState() {
   const toggleLatexdiffs = safeGetElementById('toggleLatexdiffs');
   if (latexdiffsContent && toggleLatexdiffs) {
     latexdiffsContent.style.display = 'none';
-    toggleLatexdiffs.innerHTML = '<i class="codicon codicon-chevron-down"></i>';
+    toggleLatexdiffs.innerHTML = `<i class="${CHEVRON_DOWN_CLASS}"></i>`;
   }
 
   saveState();
@@ -79,7 +79,7 @@ export function restoreState() {
     );
     if (autoExtractToggle && autoExtractOptions) {
       autoExtractToggle.classList.toggle('active', hasAutoExtractChecked);
-      autoExtractToggle.innerHTML = `<i class="codicon codicon-wand"></i><i class="codicon codicon-chevron-down"></i>`;
+      autoExtractToggle.innerHTML = `<i class="codicon codicon-wand"></i><i class="${CHEVRON_DOWN_CLASS}"></i>`;
       autoExtractOptions.style.display = 'none';
     }
 
@@ -91,7 +91,7 @@ export function restoreState() {
     );
     if (toggleToolConfig && toolConfigOptions) {
       toggleToolConfig.classList.toggle('active', hasToolConfigChecked);
-      toggleToolConfig.innerHTML = `<i class="codicon codicon-tools"></i><i class="codicon codicon-chevron-down"></i>`;
+      toggleToolConfig.innerHTML = `<i class="codicon codicon-tools"></i><i class="${CHEVRON_DOWN_CLASS}"></i>`;
       toolConfigOptions.style.display = 'none';
     }
 
@@ -127,9 +127,9 @@ export function restoreState() {
     if (latexdiffsContent && toggleLatexdiffs) {
       const visible = previousState.latexdiffsVisible ?? false;
       latexdiffsContent.style.display = visible ? 'block' : 'none';
-      toggleLatexdiffs.innerHTML = visible
-        ? '<i class="codicon codicon-chevron-up"></i>'
-        : '<i class="codicon codicon-chevron-down"></i>';
+      toggleLatexdiffs.innerHTML = `<i class="${
+        visible ? CHEVRON_UP_CLASS : CHEVRON_DOWN_CLASS
+      }"></i>`;
     }
   } else {
     // If there's no previous state, set to default
