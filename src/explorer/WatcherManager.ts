@@ -18,11 +18,19 @@ logger.initialize(CHANNEL);
 
 export class WatcherManager {
   private disposables: vscode.FileSystemWatcher[] = [];
+  private refreshHandle: NodeJS.Timeout | undefined;
 
   constructor(
     private context: vscode.ExtensionContext | undefined,
     private refresh: () => void,
   ) {}
+
+  private triggerRefresh() {
+    if (this.refreshHandle) {
+      clearTimeout(this.refreshHandle);
+    }
+    this.refreshHandle = setTimeout(() => this.refresh(), 200);
+  }
 
   async setup() {
     try {
@@ -47,7 +55,7 @@ export class WatcherManager {
       for (const watchPath of pathsToWatch) {
         if (!watchPath) continue;
 
-        const pattern = new vscode.RelativePattern(watchPath, '**/*');
+        const pattern = new vscode.RelativePattern(watchPath, '**/*.yaml');
         const watcher = vscode.workspace.createFileSystemWatcher(
           pattern,
           false,
@@ -56,12 +64,12 @@ export class WatcherManager {
         );
         this.disposables.push(watcher);
 
-        watcher.onDidCreate(() => this.refresh());
-        watcher.onDidDelete(() => this.refresh());
+        watcher.onDidCreate(() => this.triggerRefresh());
+        watcher.onDidDelete(() => this.triggerRefresh());
 
-        if (watchPath === customAgentsPath) {
+        if (path.resolve(watchPath) === path.resolve(customAgentsPath ?? '')) {
           watcher.onDidChange(async (uri) => {
-            this.refresh();
+            this.triggerRefresh();
 
             const filePath = uri.fsPath;
             if (!filePath.endsWith('.yaml')) {
@@ -89,7 +97,7 @@ export class WatcherManager {
             }
           });
         } else {
-          watcher.onDidChange(() => this.refresh());
+          watcher.onDidChange(() => this.triggerRefresh());
         }
       }
 
