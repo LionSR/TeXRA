@@ -15,7 +15,10 @@ import {
   addFileToList,
   getSelectedFiles,
 } from './fileHandlers.js';
-import { CHEVRON_UP_CLASS, CHEVRON_DOWN_CLASS } from '@common/iconConstants.js';
+import {
+  CHEVRON_UP_CLASS,
+  CHEVRON_DOWN_CLASS,
+} from '@common/webviewContext.js';
 import {
   safeGetElementValue,
   safeGetElementById,
@@ -167,7 +170,7 @@ export function saveState() {
   });
 
   // Log the state being saved for debugging
-  console.log('Saving state:', state);
+  // console.log('Saving state:', state);
 
   stateManager.setState(state);
 }
