@@ -27,6 +27,7 @@ import { capitalize } from '@common/stringUtils.js';
 import { InstructionManager } from './uiManagers/InstructionManager.js';
 import { ToggleManager } from './uiManagers/ToggleManager.js';
 import { RecordingManager } from './uiManagers/RecordingManager.js';
+import { webviewEventBus } from './eventBus.js';
 
 export const instructionManager = new InstructionManager(
   'instruction',
@@ -34,7 +35,7 @@ export const instructionManager = new InstructionManager(
   webviewState,
 );
 export const toggleManager = new ToggleManager();
-export const recordingManager = new RecordingManager(vscode);
+export const recordingManager = new RecordingManager(vscode, webviewEventBus);
 
 let debugMode = false;
 
