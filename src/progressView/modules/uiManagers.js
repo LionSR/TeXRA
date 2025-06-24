@@ -255,6 +255,16 @@ export class FileList {
       const files = filesByRound[round];
       if (!files || files.length === 0) return;
 
+      // Create round group container
+      const roundGroup = document.createElement('div');
+      roundGroup.className = 'round-group';
+
+      // Create round header
+      const roundHeader = document.createElement('div');
+      roundHeader.className = 'round-header';
+      roundHeader.textContent = `r${round}`;
+      roundGroup.appendChild(roundHeader);
+
       files.forEach((file) => {
         // Skip invalid file entries
         if (!file || !file.path) {
@@ -310,8 +320,11 @@ export class FileList {
         // Update existing buttons based on file state
         this.updateFileButtons(clone, file, effectiveBase);
 
-        container.appendChild(clone);
+        roundGroup.appendChild(clone);
       });
+
+      // Append the round group to the container
+      container.appendChild(roundGroup);
     });
   }
 
