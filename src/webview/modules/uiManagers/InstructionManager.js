@@ -27,7 +27,12 @@ export class InstructionManager {
 
   init() {
     const textarea = safeGetElementById(this.textareaId);
-    if (!textarea) return;
+    if (!textarea) {
+      console.warn(
+        `[InstructionManager] Element with id '${this.textareaId}' not found`,
+      );
+      return;
+    }
 
     this.autoResizeTextarea(textarea);
 

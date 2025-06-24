@@ -2,10 +2,12 @@ import {
   addEventListenerSafely,
   safeGetElementById,
 } from '@common/domUtils.js';
+import { webviewEventBus } from '../eventBus.js';
 
 export class RecordingManager {
-  constructor(vscode) {
+  constructor(vscode, eventBus = webviewEventBus) {
     this.vscode = vscode;
+    this.eventBus = eventBus;
     this.isRecording = false;
   }
 
@@ -26,10 +28,11 @@ export class RecordingManager {
   }
 
   setupRecordButton() {
-    const button = safeGetElementById('recordInstructionButton');
+    const buttonId = 'recordInstructionButton';
+    const button = safeGetElementById(buttonId);
     if (!button) return;
 
-    addEventListenerSafely(button, 'click', () => {
+    addEventListenerSafely(buttonId, 'click', () => {
       if (this.isRecording) {
         this.vscode.postMessage({ command: 'stopRecording' });
         this.updateRecordingUI(false);
@@ -39,6 +42,8 @@ export class RecordingManager {
       }
     });
 
-    window.updateRecordingUI = (recording) => this.updateRecordingUI(recording);
+    this.eventBus.addEventListener('recordingUIUpdate', (e) => {
+      this.updateRecordingUI(e.detail.recording);
+    });
   }
 }
