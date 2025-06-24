@@ -667,7 +667,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
 
   public setTaskState(streamId: string, taskState: TaskState): void {
     this.logger.debug(`Setting taskState for stream: ${streamId}`);
-    this.logger.debug(`Task state: ${JSON.stringify(taskState)}`);
+    // this.logger.debug(`Task state: ${JSON.stringify(taskState)}`);
     this._stateManager.taskStates.set(streamId, taskState);
     this.saveTaskStates();
     this.logger.debug(

@@ -2,7 +2,10 @@ import { vscode, registerMessageHandlers } from '@common/webviewContext.js';
 import { safeSetElementValue, safeGetElementById } from '@common/domUtils.js';
 import { capitalize, uncapitalize } from '@common/stringUtils.js';
 import { stateManager, restoreState, saveState } from './stateManager.js';
-import { CHEVRON_UP_CLASS, CHEVRON_DOWN_CLASS } from '@common/iconConstants.js';
+import {
+  CHEVRON_UP_CLASS,
+  CHEVRON_DOWN_CLASS,
+} from '@common/webviewContext.js';
 import { setDebugMode as applyDebugMode } from './uiHandlers.js';
 
 import {
