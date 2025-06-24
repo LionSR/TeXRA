@@ -14,6 +14,9 @@ import { FileLister } from '@frontend/files/fileLister';
 // Local imports - components
 import { ProgressViewProvider } from './progressView/ProgressViewProvider';
 import { FolderExplorer } from './FolderExplorer';
+import { ExplorerOperations } from './explorer/ExplorerOperations';
+import { ExplorerCommands } from './explorer/ExplorerCommands';
+import { WatcherManager } from './explorer/WatcherManager';
 import { registerCommands } from './commands';
 
 export async function activate(context: vscode.ExtensionContext) {
@@ -44,11 +47,20 @@ export async function activate(context: vscode.ExtensionContext) {
   configureLatexSettings();
 
   // Register commands first - this will create and store the TeXRAViewProvider
-  const registeredCommands = registerCommands(context);
+  registerCommands(context);
 
   // Register the folder explorer with context
   const workspaceRoot = vscode.workspace.workspaceFolders?.[0].uri.fsPath;
   const folderExplorer = new FolderExplorer(workspaceRoot, context);
+  const explorerOps = new ExplorerOperations(workspaceRoot, context, () =>
+    folderExplorer.refresh(),
+  );
+  const commandManager = new ExplorerCommands(context, explorerOps);
+  commandManager.register();
+  const watcherManager = new WatcherManager(context, () =>
+    folderExplorer.refresh(),
+  );
+  await watcherManager.setup();
 
   // Register the tree data provider and webview providers
   context.subscriptions.push(
@@ -63,12 +75,12 @@ export async function activate(context: vscode.ExtensionContext) {
       folderExplorer,
     ),
     // Add disposable for cleanup
-    { dispose: () => folderExplorer.dispose() },
+    { dispose: () => watcherManager.dispose() },
   );
 
   // Watch for agents directory changes
   watchConfig(context, 'texra.explorer.agentsDirectory', () => {
-    folderExplorer.setupFileSystemWatcher();
+    watcherManager.setup();
     folderExplorer.refresh();
   });
 }
