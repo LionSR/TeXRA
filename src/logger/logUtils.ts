@@ -13,7 +13,7 @@ import {
   isAgentStream,
   EMOJI_BY_LEVEL as emojis,
 } from '@utils/loggerUtils';
-import { LogGroup } from './LogTypes';
+import { TaskGroup } from './LogTypes';
 
 // Message type for ProgressView entries
 export type MessageType = 'thinking' | 'scratchpad' | 'default';
@@ -79,7 +79,7 @@ class VSCodeTransport extends Transport {
     groupId?: string;
     messageType?: 'default' | 'scratchpad' | 'thinking';
   }[] = [];
-  private groups: Map<string, LogGroup> = new Map();
+  private groups: Map<string, TaskGroup> = new Map();
   private activeGroupId?: string;
 
   constructor(
@@ -310,7 +310,7 @@ class VSCodeTransport extends Transport {
   }
 
   // Get a group by ID
-  getGroup(groupId: string): LogGroup | undefined {
+  getGroup(groupId: string): TaskGroup | undefined {
     return this.groups.get(groupId);
   }
 }
