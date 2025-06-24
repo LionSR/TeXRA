@@ -40,44 +40,12 @@ export function isAgentStream(streamName: string): boolean {
 }
 
 /**
- * Determines if a stream should be excluded from the ProgressView
- * (only shown in consolidated output channel).
- */
-export function shouldExcludeFromProgressView(streamName: string): boolean {
-  // If it's an agent stream, it should be included in the ProgressView
-  if (isAgentStream(streamName)) {
-    return false;
-  }
-
-  // All other streams (including executeAgent) are excluded from ProgressView
-  return true;
-}
-
-/**
  * Determines if a stream should use the consolidated output channel.
  * Agent streams get their own channel, all others (including executeAgent) use the consolidated channel.
  */
 export function shouldUseConsolidatedChannel(streamName: string): boolean {
-  // Special case: executeAgent should use the consolidated channel
-  if (streamName === 'executeAgent') {
-    return true;
-  }
-
-  // Opposite of isAgentStream for all other cases
+  // Only agent streams get dedicated channels and appear in the ProgressView
   return !isAgentStream(streamName);
-}
-
-/**
- * Determines if a stream should be persisted in workspace storage.
- * We only persist streams that are agent streams
- */
-export function shouldPersistStream(streamName: string): boolean {
-  // Don't persist streams excluded from ProgressView
-  if (shouldExcludeFromProgressView(streamName)) {
-    return false;
-  }
-
-  return true;
 }
 
 // Centralised emoji mapping for log levels
