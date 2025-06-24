@@ -86,6 +86,10 @@ adding new code or refactoring existing modules:
 - When submitting a PR, describe any design issues found and how the refactoring
   addresses them. Favor deep modules with minimal, clear APIs.
 - When your refactoring include a large number of renames, use search tools to make sure you are not missing any files or paths where changes need to be made.
+- When creating manager classes that share state, avoid creating separate instances:
+  - Pass shared dependencies through constructors (e.g., `new UsageGroup(this.usageSummary)`)
+  - This prevents inconsistent state across different parts of the UI
+  - Example: UsageGroup should use the same UsageSummary instance as the main handler
 
 ## Documentation
 

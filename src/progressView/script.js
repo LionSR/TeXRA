@@ -10,6 +10,9 @@ progressViewState.initialize();
 // Setup message handlers for VSCode messages
 setupMessageHandlers();
 
+// Make progressViewDomHandler available globally for FileList to access
+window.progressViewDomHandler = progressViewDomHandler;
+
 // Initialize event listeners and state when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
   progressViewDomHandler.toolbar.render();
