@@ -2,9 +2,9 @@
 import { WebviewStateManager } from '@common/webviewState.js';
 
 /**
- * Manages log groups in the progress view.
+ * Manages task groups in the progress view.
  */
-class LogGroups {
+class TaskGroups {
   constructor() {
     this.groups = new Map();
     this._cachedTotals = null;
@@ -12,7 +12,7 @@ class LogGroups {
 
   get(id) {
     if (!id) {
-      console.error('LogGroups.get: id is required');
+      console.error('TaskGroups.get: id is required');
       return null;
     }
     return this.groups.get(id);
@@ -20,11 +20,11 @@ class LogGroups {
 
   set(id, group) {
     if (!id) {
-      console.error('LogGroups.set: id is required');
+      console.error('TaskGroups.set: id is required');
       return;
     }
     if (!group || typeof group !== 'object') {
-      console.error('LogGroups.set: group must be an object');
+      console.error('TaskGroups.set: group must be an object');
       return;
     }
     this.groups.set(id, group);
@@ -48,12 +48,12 @@ class LogGroups {
    */
   update(groupId, status, endTime) {
     if (!groupId) {
-      console.error('LogGroups.update: groupId is required');
+      console.error('TaskGroups.update: groupId is required');
       return;
     }
     const group = this.groups.get(groupId);
     if (!group) {
-      console.error(`LogGroups.update: group not found for id ${groupId}`);
+      console.error(`TaskGroups.update: group not found for id ${groupId}`);
       return;
     }
 
@@ -172,7 +172,7 @@ export class ProgressViewState {
     this.currentStream = '';
 
     // Initialize managers
-    this.logGroups = new LogGroups();
+    this.taskGroups = new TaskGroups();
     this.toggleStates = new ToggleStates(() => this.save());
     this.streamStatuses = new StreamStatuses();
   }

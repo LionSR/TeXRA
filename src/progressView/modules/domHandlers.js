@@ -1,16 +1,11 @@
 import { vscode } from '@common/webviewContext.js';
+// Third-party imports
+import { marked } from 'marked';
+import markedKatex from 'marked-katex-extension';
 // Local imports - log state
 import { progressViewState } from './progressViewState.js';
-import {
-  createGroupHeader,
-  getMessageTimestamp,
-  formatLogEntry,
-  getStatusIcon,
-  formatDuration,
-  formatTokens,
-  getGroupHeaderClass,
-  BULLET_MARKUP,
-} from './logFormatters.js';
+import { katexMacros } from './katexMacros.js';
+import { formatTokens, BULLET_MARKUP } from './logFormatters.js';
 import { STATUS, COMMANDS, SPLIT_SIZES, TOOLBAR_BUTTONS } from './constants.js';
 import { createIconButton } from '@common/templateUtils.js';
 import {
@@ -213,7 +208,7 @@ class UsageSummary {
     // If usage is not provided, compute it from existing log groups
     if (!totals) {
       totals = { inputTokens: 0, outputTokens: 0, cost: 0 };
-      for (const group of progressViewState.logGroups.getAll().values()) {
+      for (const group of progressViewState.taskGroups.getAll().values()) {
         if (group.usage) {
           totals.inputTokens += group.usage.inputTokens || 0;
           totals.outputTokens += group.usage.outputTokens || 0;
@@ -232,7 +227,7 @@ class UsageSummary {
    */
   computeTotal() {
     const totals = { inputTokens: 0, outputTokens: 0, cost: 0 };
-    for (const group of progressViewState.logGroups.getAll().values()) {
+    for (const group of progressViewState.taskGroups.getAll().values()) {
       if (group.usage) {
         totals.inputTokens += group.usage.inputTokens || 0;
         totals.outputTokens += group.usage.outputTokens || 0;
@@ -292,10 +287,10 @@ class UsageGroup {
       `$${cost.toFixed(3)}`;
 
     // Persist usage on the group state so the summary can be computed
-    const group = progressViewState.logGroups.get(groupId);
+    const group = progressViewState.taskGroups.get(groupId);
     if (group) {
       group.usage = { inputTokens, outputTokens, cost };
-      progressViewState.logGroups.set(groupId, group);
+      progressViewState.taskGroups.set(groupId, group);
     }
     if (!skipPropagate) {
       this.propagateUsageToParents(groupId);
@@ -311,7 +306,7 @@ class UsageGroup {
    */
   computeAggregatedUsage(parentId) {
     const totals = { inputTokens: 0, outputTokens: 0, cost: 0 };
-    for (const group of progressViewState.logGroups.getAll().values()) {
+    for (const group of progressViewState.taskGroups.getAll().values()) {
       if (group.parentGroupId === parentId) {
         if (group.usage) {
           totals.inputTokens += group.usage.inputTokens || 0;
@@ -332,7 +327,7 @@ class UsageGroup {
    * @private
    */
   propagateUsageToParents(groupId) {
-    const group = progressViewState.logGroups.get(groupId);
+    const group = progressViewState.taskGroups.get(groupId);
     if (!group) return;
 
     // If this group has a parent, update the parent with aggregated usage
@@ -628,15 +623,296 @@ class FileList {
 }
 
 /**
- * Manages log group DOM operations.
+ * Manages log entry formatting.
  */
-class LogGroupsDom {
+class MessageTimestampExtractor {
+  /**
+   * Extract timestamp from HTML message
+   * @param {string} message - HTML message containing timestamp
+   * @returns {string} Extracted timestamp
+   */
+  extract(message) {
+    // First try to extract the full timestamp from data-full-timestamp attribute
+    const div = document.createElement('div');
+    div.innerHTML = message;
+    const logLine = div.querySelector('.log-line');
+    if (logLine && logLine.dataset.fullTimestamp) {
+      return logLine.dataset.fullTimestamp; // Return the full precise timestamp
+    }
+
+    // Fallback: extract from the message content using regex
+    const match = message.match(/\[(.*?)\]/);
+    return match ? match[1] : ''; // Extract timestamp or empty string
+  }
+}
+
+class LogEntryFormatter {
+  constructor() {
+    this._initializeMarkdown();
+  }
+
+  _initializeMarkdown() {
+    marked.setOptions({
+      breaks: true,
+      gfm: true,
+      mangle: false,
+      headerIds: false,
+    });
+
+    marked.use(
+      markedKatex({
+        throwOnError: false,
+        errorColor: '#cc0000',
+        macros: katexMacros,
+      }),
+    );
+  }
+
+  /**
+   * Format a log entry with Markdown rendering for special content
+   * @param {Object} logMessage - The log message to format
+   * @returns {string} Formatted HTML for the log message
+   */
+  format(logMessage) {
+    const message = logMessage.message;
+
+    let type = logMessage.messageType;
+    if (!type) {
+      const attrMatch = message.match(/data-message-type="(.*?)"/);
+      if (attrMatch) type = attrMatch[1];
+    }
+
+    if (type === 'thinking' || type === 'scratchpad') {
+      const content = this._extractSpecialContent(message, type);
+      if (content) {
+        const label = type === 'thinking' ? 'Thinking' : 'Scratchpad';
+        return this._formatSpecialContent(
+          message,
+          content,
+          label,
+          logMessage.id,
+        );
+      }
+    }
+
+    return message;
+  }
+
+  _extractSpecialContent(message, type) {
+    const regex = new RegExp(
+      `<span class="message-info"[^>]*data-message-type="${type}"[^>]*>(.*?)</span>`,
+      's',
+    );
+    const match = message.match(regex);
+    return match ? match[1] : null;
+  }
+
+  _unescapeHtml(text) {
+    return text
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&#039;/g, "'")
+      .replace(/&amp;/g, '&');
+  }
+
+  _formatSpecialContent(message, content, contentType, logId) {
+    try {
+      // Unescape HTML entities that were escaped during logging
+      content = this._unescapeHtml(content);
+
+      // Pre-process LaTeX references to protect them from markdown parsing
+      content = content.replace(/\\\\ref\{([^}]+)\}/g, '@@LATEX-REF:$1@@');
+      content = content.replace(/\\\\cref\{([^}]+)\}/g, '@@LATEX-CREF:$1@@');
+      content = content.replace(/\\\\eqref\{([^}]+)\}/g, '@@LATEX-EQREF:$1@@');
+
+      // Process content as markdown
+      let parsedMarkdown = marked.parse(content);
+
+      // Post-process to restore and style LaTeX references
+      parsedMarkdown = parsedMarkdown.replace(
+        /@@LATEX-REF:([^@]+)@@/g,
+        '<code class="latex-ref">\\ref{$1}</code>',
+      );
+
+      parsedMarkdown = parsedMarkdown.replace(
+        /@@LATEX-CREF:([^@]+)@@/g,
+        '<code class="latex-ref">\\cref{$1}</code>',
+      );
+      parsedMarkdown = parsedMarkdown.replace(
+        /@@LATEX-EQREF:([^@]+)@@/g,
+        '<code class="latex-ref">\\eqref{$1}</code>',
+      );
+
+      // Create enhanced content element with better formatting
+      const idAttr = logId ? ` data-log-id="${logId}"` : '';
+      // Determine label and icon based on content type
+      const isThinking = contentType.includes('Thinking');
+      const labelText = isThinking ? 'Thinking' : 'Scratchpad';
+      const icon = isThinking ? 'codicon-lightbulb' : 'codicon-pencil';
+
+      return `<details class="special-details" open>
+        <summary>
+          <i class="${CHEVRON_DOWN_CLASS} toggle-icon"></i>
+          <i class="codicon ${icon}"></i>
+          <span>${labelText}</span>
+        </summary>
+        <div class="special-content"${idAttr}>${parsedMarkdown}</div>
+      </details>`;
+    } catch (e) {
+      console.error('Error parsing markdown:', e);
+      // Fallback to original content
+      return message;
+    }
+  }
+}
+
+/**
+ * Manages task group header formatting.
+ */
+class TaskGroupHeaderFormatter {
+  /**
+   * Create a group header HTML
+   * @param {Object} group - Task group data
+   * @returns {string} HTML for group header
+   */
+  create(group) {
+    const startDate = new Date(group.startTime);
+    const isTopLevel = !group.parentGroupId;
+    const formattedStartTime = isTopLevel
+      ? this._formatDateTime(startDate)
+      : this._formatTime(startDate);
+
+    let durationDisplay = '';
+    if (group.endTime) {
+      const durationMs = group.endTime - group.startTime;
+      durationDisplay = `<span class="group-duration">${this._formatDuration(durationMs)}</span>`;
+    }
+
+    // Add indicator based on status
+    const statusIcon = this._getStatusIcon(group.status);
+
+    // Add usage information if available
+    let usageDisplay = '';
+    if (group.usage) {
+      const { inputTokens = 0, outputTokens = 0, cost = 0 } = group.usage;
+      usageDisplay =
+        `<span class="group-usage"><i class="codicon codicon-arrow-up"></i> ${formatTokens(inputTokens)}, ` +
+        `<i class="codicon codicon-arrow-down"></i> ${formatTokens(outputTokens)}, ` +
+        `$${cost.toFixed(3)}</span>`;
+    }
+
+    const titleMarkup = isTopLevel
+      ? ''
+      : `<span class="group-title">${group.name}</span>`;
+    const headerClass = this._getHeaderClass(group);
+
+    const timeMarkup = `
+        <span class="group-time">
+          <span class="group-start-time" data-start="${group.startTime}">
+            <i class="codicon codicon-clock"></i> ${formattedStartTime}
+          </span>
+          ${durationDisplay}
+        </span>`;
+
+    const bulletMarkup = BULLET_MARKUP;
+
+    const headerContents = this._formatHeaderElements(
+      isTopLevel,
+      timeMarkup,
+      usageDisplay,
+      bulletMarkup,
+    );
+
+    return `
+      <summary id="group-header-${group.id}" class="${headerClass}">
+        <span class="group-status-icon">${statusIcon}</span>${titleMarkup}${headerContents}
+      </summary>
+    `;
+  }
+
+  _getHeaderClass(group) {
+    const classes = ['log-group-header', group.status];
+    if (!group.parentGroupId) {
+      classes.push('top-level');
+    }
+    return classes.join(' ');
+  }
+
+  _getStatusIcon(status) {
+    switch (status) {
+      case STATUS.RUNNING:
+        return '<i class="codicon codicon-sync spin"></i>';
+      case STATUS.ERROR:
+        return '<i class="codicon codicon-error"></i>';
+      case STATUS.STOPPED:
+        return '<i class="codicon codicon-check"></i>';
+      default:
+        return '<i class="codicon codicon-circle-outline"></i>';
+    }
+  }
+
+  _formatTime(date) {
+    return date.toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+    });
+  }
+
+  _formatDateTime(date) {
+    const datePart = date.toLocaleDateString('en-CA');
+    return `${datePart} ${this._formatTime(date)}`;
+  }
+
+  _formatDuration(durationMs) {
+    // Handle edge cases
+    if (durationMs < 0) return '0s';
+
+    // For very short durations, show under a second
+    if (durationMs < 1000) {
+      return '<1s';
+    }
+
+    const seconds = Math.floor(durationMs / 1000) % 60;
+    const minutes = Math.floor(durationMs / (1000 * 60));
+
+    if (minutes === 0) {
+      return `${seconds}sec`;
+    } else if (seconds === 0) {
+      return `${minutes}min`;
+    } else {
+      return `${minutes}min, ${seconds}sec`;
+    }
+  }
+
+  _formatHeaderElements(isTopLevel, timeMarkup, usageDisplay, bulletMarkup) {
+    if (isTopLevel) {
+      // For top-level groups: time → bullet → usage
+      return `${timeMarkup}${usageDisplay ? `${bulletMarkup}${usageDisplay}` : ''}`;
+    } else {
+      // For non-top-level groups: usage → bullet → time
+      return `${usageDisplay ? `${usageDisplay}${bulletMarkup}` : ''}${timeMarkup}`;
+    }
+  }
+}
+
+/**
+ * Manages task group DOM operations.
+ */
+class TaskGroupsDom {
+  constructor() {
+    this.headerFormatter = new TaskGroupHeaderFormatter();
+    this.timestampExtractor = new MessageTimestampExtractor();
+  }
+
   /**
    * Adds a log group to the DOM
    * @param {Object} group - Group data
    */
   add(group) {
-    progressViewState.logGroups.set(group.id, group);
+    progressViewState.taskGroups.set(group.id, group);
     // Create the details container that will manage toggle state
     const detailsElem = document.createElement('details');
     detailsElem.className = 'log-group';
@@ -644,7 +920,7 @@ class LogGroupsDom {
 
     // Create the header element as a <summary>
     const headerTemplate = document.createElement('template');
-    headerTemplate.innerHTML = createGroupHeader(group);
+    headerTemplate.innerHTML = this.headerFormatter.create(group);
     const headerElement = headerTemplate.content.firstElementChild;
 
     // Create a container for the group's messages
@@ -708,7 +984,9 @@ class LogGroupsDom {
             msgTime = new Date(msgFullTimestamp);
           } else {
             // Fallback to extracting time from content
-            const msgTimestamp = getMessageTimestamp(child.outerHTML);
+            const msgTimestamp = this.timestampExtractor.extract(
+              child.outerHTML,
+            );
             // Use a dummy date for time-only comparison
             msgTime = msgTimestamp.includes('-')
               ? new Date(msgTimestamp)
@@ -727,7 +1005,7 @@ class LogGroupsDom {
 
           if (timeElem) {
             const otherGroupId = headerEl.id.replace('group-header-', '');
-            const otherGroup = progressViewState.logGroups.get(otherGroupId);
+            const otherGroup = progressViewState.taskGroups.get(otherGroupId);
 
             if (otherGroup && otherGroup.startTime) {
               const otherTime = otherGroup.startTime;
@@ -773,7 +1051,7 @@ class LogGroupsDom {
    * @param {string} endTime - End time (optional)
    */
   update(groupId, status, endTime) {
-    const group = progressViewState.logGroups.get(groupId);
+    const group = progressViewState.taskGroups.get(groupId);
     if (!group) return;
 
     group.status = status;
@@ -784,12 +1062,12 @@ class LogGroupsDom {
     // Update the header in the UI if it exists
     const header = document.getElementById(`group-header-${groupId}`);
     if (header) {
-      header.className = getGroupHeaderClass(group);
+      header.className = this.headerFormatter._getHeaderClass(group);
 
       // Update the status icon
       const statusIconElem = header.querySelector('.group-status-icon');
       if (statusIconElem) {
-        statusIconElem.innerHTML = getStatusIcon(status);
+        statusIconElem.innerHTML = this.headerFormatter._getStatusIcon(status);
       }
 
       // Update or add the duration display when the group finishes
@@ -803,12 +1081,12 @@ class LogGroupsDom {
         // Update or create duration element
         const durationElem = header.querySelector('.group-duration');
         if (durationElem) {
-          durationElem.textContent = `${formatDuration(durationMs)}`;
+          durationElem.textContent = `${this.headerFormatter._formatDuration(durationMs)}`;
           durationElem.style.display = 'inline';
         } else if (timeContainer) {
           const durationSpan = document.createElement('span');
           durationSpan.className = 'group-duration';
-          durationSpan.textContent = `${formatDuration(durationMs)}`;
+          durationSpan.textContent = `${this.headerFormatter._formatDuration(durationMs)}`;
           durationSpan.style.display = 'inline';
           timeContainer.appendChild(durationSpan);
         }
@@ -832,7 +1110,7 @@ class LogGroupsDom {
     }
     progressViewState.toggleStates.set(groupId, true);
 
-    for (const [childId, group] of progressViewState.logGroups.getAll()) {
+    for (const [childId, group] of progressViewState.taskGroups.getAll()) {
       if (group.parentGroupId === groupId) {
         this.collapseGroupAndChildren(childId);
       }
@@ -845,13 +1123,13 @@ class LogGroupsDom {
    * @param {string} currentGroupId - ID of the newly started top-level group
    */
   collapsePreviousTopLevelGroup(currentGroupId) {
-    const current = progressViewState.logGroups.get(currentGroupId);
+    const current = progressViewState.taskGroups.get(currentGroupId);
     if (!current) return;
 
     let previousId = null;
     let previousStart = -Infinity;
 
-    for (const [id, group] of progressViewState.logGroups.getAll()) {
+    for (const [id, group] of progressViewState.taskGroups.getAll()) {
       if (!group.parentGroupId && id !== currentGroupId) {
         if (
           group.startTime < current.startTime &&
@@ -895,6 +1173,11 @@ class LogGroupsDom {
  * Manages individual log entry DOM operations.
  */
 class LogEntriesDom {
+  constructor() {
+    this.entryFormatter = new LogEntryFormatter();
+    this.timestampExtractor = new MessageTimestampExtractor();
+  }
+
   /**
    * Appends a log message to its group or to the main content
    * @param {Object} logMessage - The log message to append
@@ -908,7 +1191,7 @@ class LogEntriesDom {
       );
       if (groupContent) {
         const messageElement = document.createElement('div');
-        messageElement.innerHTML = formatLogEntry(logMessage);
+        messageElement.innerHTML = this.entryFormatter.format(logMessage);
         const logLineElement = messageElement.firstElementChild;
 
         // Extract timestamp from the message for chronological ordering
@@ -916,7 +1199,8 @@ class LogEntriesDom {
           ? new Date(logMessage.timestamp)
           : null;
         const msgTimestamp =
-          msgDate?.toISOString() || getMessageTimestamp(logMessage.message);
+          msgDate?.toISOString() ||
+          this.timestampExtractor.extract(logMessage.message);
 
         // Find where to insert this message chronologically
         let insertPosition = null;
@@ -934,7 +1218,7 @@ class LogEntriesDom {
             const startTimeElem = headerEl?.querySelector('.group-start-time');
             if (startTimeElem) {
               const groupId = headerEl.id.replace('group-header-', '');
-              const group = progressViewState.logGroups.get(groupId);
+              const group = progressViewState.taskGroups.get(groupId);
               if (group && group.startTime) {
                 const childTime = group.startTime;
 
@@ -983,7 +1267,9 @@ class LogEntriesDom {
                 }
               } else {
                 // Fallback to string comparison
-                const childTimestamp = getMessageTimestamp(child.outerHTML);
+                const childTimestamp = this.timestampExtractor.extract(
+                  child.outerHTML,
+                );
                 if (msgTimestamp < childTimestamp) {
                   insertPosition = child;
                   break;
@@ -991,7 +1277,9 @@ class LogEntriesDom {
               }
             } else {
               // Fallback to original behavior
-              const childTimestamp = getMessageTimestamp(child.outerHTML);
+              const childTimestamp = this.timestampExtractor.extract(
+                child.outerHTML,
+              );
               if (msgTimestamp < childTimestamp) {
                 insertPosition = child;
                 break;
@@ -1021,7 +1309,7 @@ class LogEntriesDom {
     const existing = document.querySelector(`[data-log-id="${logMessage.id}"]`);
     if (existing) {
       const wrapper = document.createElement('div');
-      wrapper.innerHTML = formatLogEntry(logMessage);
+      wrapper.innerHTML = this.entryFormatter.format(logMessage);
       existing.replaceWith(wrapper.firstElementChild);
     }
   }
@@ -1035,8 +1323,8 @@ class Events {
    * Apply saved toggle states to any groups already in the DOM
    */
   applyToggleStates() {
-    const logGroups = progressViewState.logGroups.getAll();
-    for (const [groupId, _] of logGroups) {
+    const taskGroups = progressViewState.taskGroups.getAll();
+    for (const [groupId, _] of taskGroups) {
       const isCollapsed = progressViewState.toggleStates.get(groupId);
       const detailsElem = document.getElementById(`group-${groupId}`);
 
@@ -1120,7 +1408,7 @@ export class ProgressViewDomHandler {
     this.usageSummary = new UsageSummary();
     this.usageGroup = new UsageGroup();
     this.fileList = new FileList();
-    this.logGroups = new LogGroupsDom();
+    this.taskGroups = new TaskGroupsDom();
     this.logEntries = new LogEntriesDom();
     this.events = new Events();
   }
@@ -1128,3 +1416,6 @@ export class ProgressViewDomHandler {
 
 // Create singleton instance
 export const progressViewDomHandler = new ProgressViewDomHandler();
+
+// Export formatter classes for reuse
+export { LogEntryFormatter, MessageTimestampExtractor };
