@@ -42,7 +42,9 @@ export class ProgressViewContentProvider {
 
       // Module paths
       const webviewContextUri = getCommonUri('modules/webviewContext.js');
-      const webviewLogStateUri = getWebviewUri('modules/webviewLogState.js');
+      const progressViewStateUri = getWebviewUri(
+        'modules/progressViewState.js',
+      );
       const messageHandlersUri = getWebviewUri('modules/messageHandlers.js');
       const domHandlersUri = getWebviewUri('modules/domHandlers.js');
       const constantsUri = getWebviewUri('modules/constants.js');
@@ -66,7 +68,7 @@ export class ProgressViewContentProvider {
         codiconUri,
         codiconsFontUri,
         webviewStateUri,
-        webviewLogStateUri,
+        progressViewStateUri,
         messageHandlersUri,
         domHandlersUri,
         domUtilsUri,

@@ -4,7 +4,7 @@ import { WebviewStateManager } from '@common/webviewState.js';
 /**
  * Manages progress view state and handles persistence.
  */
-export class WebviewLogState {
+export class ProgressViewState {
   constructor() {
     this.stateManager = new WebviewStateManager();
     this.currentStream = '';
@@ -95,6 +95,23 @@ export class WebviewLogState {
     this.groupToggleStates.clear();
     this.save();
   }
+  /**
+   * Update an existing log group with new status or end time.
+   * @param {string} groupId - ID of the group to update
+   * @param {string} status - New status
+   * @param {number} [endTime] - Optional end time
+   */
+  updateLogGroup(groupId, status, endTime) {
+    const group = this.logGroups.get(groupId);
+    if (!group) return;
+
+    group.status = status;
+    if (endTime) {
+      group.endTime = endTime;
+    }
+
+    this.logGroups.set(groupId, group);
+  }
 }
 
-export const logState = new WebviewLogState();
+export const progressViewState = new ProgressViewState();
