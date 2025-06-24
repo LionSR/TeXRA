@@ -51,7 +51,7 @@ class ReplacementEngineImpl implements ReplacementEngine {
   /**
    * Apply all configured non-regex replacement rules.
    *
-   * @param text - The text to transform.
+   * @param text The text to process.
    * @returns The processed text with non-regex rules applied.
    * @remarks Reads extension settings to determine enabled categories.
    */
@@ -62,7 +62,7 @@ class ReplacementEngineImpl implements ReplacementEngine {
   /**
    * Apply all configured regex-based replacement rules.
    *
-   * @param text - The text to transform.
+   * @param text The text to process.
    * @returns The processed text with regex rules applied.
    * @remarks Invalid patterns are logged by {@link applyReplacements}.
    */
@@ -76,8 +76,8 @@ class ReplacementEngineImpl implements ReplacementEngine {
    * Non-regex replacements run before and after regex replacements to fix
    * artifacts they may introduce.
    *
-   * @param text - The text to transform.
-   * @returns The fully processed text.
+   * @param text The text to process.
+   * @returns The fully processed text with non-regex and regex rules applied in sequence.
    */
   applyAll(text: string): string {
     let processed = this.applyNonRegex(text);
