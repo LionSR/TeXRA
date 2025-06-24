@@ -17,7 +17,7 @@ import { BaseError, ValidationResult } from './types';
 import { WorkspaceFS } from '@utils/files';
 import { SecretManager, ApiProvider } from '@frontend/secretManager';
 import { getConfig } from '@utils/config';
-import { showLoggedErrorMessage } from '@utils/errorHandlingUtils';
+import { showLoggedErrorMessage, showLoggedMessage } from '@utils/errorHandlingUtils';
 
 // Local imports - logging
 import * as logger from '@logger/logUtils';
@@ -85,7 +85,7 @@ export abstract class AnthropicToolAgent<
       // Verify the file exists before starting
       const fileExists = await WorkspaceFS.exists(filePath);
       if (!fileExists) {
-        await showLoggedErrorMessage(CHANNEL, 'File does not exist', filePath);
+        await showLoggedMessage(CHANNEL, `File does not exist: ${filePath}`);
         return false;
       }
 
@@ -149,7 +149,7 @@ export abstract class AnthropicToolAgent<
           CHANNEL,
           `Could not fix all issues. Remaining: ${JSON.stringify(finalValidation.error)}`,
         );
-        await showLoggedErrorMessage(
+        await showLoggedMessage(
           CHANNEL,
           `Could not fix all issues in ${filePath}. See log for details.`,
         );
@@ -203,7 +203,7 @@ export abstract class AnthropicToolAgent<
       // Verify the file exists before starting
       const fileExists = await WorkspaceFS.exists(filePath);
       if (!fileExists) {
-        await showLoggedErrorMessage(CHANNEL, 'File does not exist', filePath);
+        await showLoggedMessage(CHANNEL, `File does not exist: ${filePath}`);
         return new ToolResult({
           error: `File does not exist: ${filePath}`,
           isError: true,

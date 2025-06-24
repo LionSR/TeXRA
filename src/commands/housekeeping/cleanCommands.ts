@@ -18,7 +18,7 @@ import {
   runCleanOutput,
 } from '@housekeeping';
 import type { FileOpResult } from '@/types/ResultTypes';
-import { showLoggedErrorMessage } from '@utils/errorHandlingUtils';
+import { showLoggedErrorMessage, showLoggedMessage } from '@utils/errorHandlingUtils';
 
 const CHANNEL = 'cleanCommands';
 logger.initialize(CHANNEL);
@@ -65,7 +65,7 @@ async function handleCleanSingle(
   );
 
   if (!inputFile || !agent || !model) {
-    await showLoggedErrorMessage(
+    await showLoggedMessage(
       CHANNEL,
       'Missing required parameters for cleanSingle',
     );
@@ -95,7 +95,7 @@ async function handleCleanMultiple(
   logger.debug(CHANNEL, `Additional files: ${outputFiles.join(', ')}`);
 
   if (!inputFile || !agent || !model) {
-    await showLoggedErrorMessage(
+    await showLoggedMessage(
       CHANNEL,
       'Missing required parameters for clean multiple',
     );
@@ -123,7 +123,7 @@ export async function handleClean(config: {
   );
 
   if (!config.agent || !config.inputFile) {
-    await showLoggedErrorMessage(
+    await showLoggedMessage(
       CHANNEL,
       'Missing required parameters in config',
     );

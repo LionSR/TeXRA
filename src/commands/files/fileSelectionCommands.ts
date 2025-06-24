@@ -170,13 +170,7 @@ async function selectOutputFiles(
     );
     return relativePaths;
   } catch (err) {
-    logger.error(
-      CHANNEL,
-      `Error selecting output files: ${err instanceof Error ? err.message : String(err)}`,
-    );
-    vscode.window.showErrorMessage(
-      `Error selecting output files: ${err instanceof Error ? err.message : String(err)}`,
-    );
+    await showLoggedErrorMessage(CHANNEL, 'Error selecting output files', err);
     return null;
   }
 }

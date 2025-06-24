@@ -52,11 +52,10 @@ export async function handleTestConnection(): Promise<void> {
       'Check Debug Console for test results',
     );
   } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : String(err);
     logger.debug(
       CHANNEL,
       `Stack trace: ${err instanceof Error ? err.stack : ''}`,
     );
-    await showLoggedErrorMessage(CHANNEL, 'Test failed', errorMessage);
+    await showLoggedErrorMessage(CHANNEL, 'Test failed', err);
   }
 }
