@@ -1,0 +1,310 @@
+// Standard library imports
+import * as path from 'path';
+
+// Third-party imports
+import * as vscode from 'vscode';
+import * as logger from '@logger/logUtils';
+
+import { showLoggedErrorMessage } from '@utils/errorHandlingUtils';
+
+// Local imports
+import {
+  getBuiltInAgentsDirectory,
+  getCustomAgentsDirectory,
+  getOrPromptForCustomAgentsDirectory,
+} from '@frontend/agents/pathUtils';
+import { promptToAddAgentToConfig } from '@frontend/agents/register';
+import { isValidAgentYaml } from '../agent/runtime/agentLoad';
+import { AbsoluteFS } from '@utils/files';
+import { getConfig } from '@utils/config';
+
+const NEW_AGENT_TEMPLATE = `# --- Agent Inheritance (Optional) ---
+# inherits: base
+
+# --- Agent Settings ---
+settings:
+  agentType: CoT
+  temperature: 0.1
+  isRewrite: true
+  documentTag: document
+  endTag: '</document>'
+  outputExt: tex
+  prefills:
+    - "<document>\n"
+
+# --- Agent Prompts ---
+prompts:
+  systemPrompt: |
+    [Define the AI's role and core instructions]
+
+  userPrefix: |
+    [Provide context using variables like {{ INPUT_CONTENT }}]
+
+  userRequest: |
+    [Define the initial task prompt]
+`;
+
+const CHANNEL = 'Webview';
+logger.initialize(CHANNEL);
+
+export class ExplorerOperations {
+  private builtInAgentsPath = '';
+  private editingItem: FileItem | undefined;
+
+  constructor(
+    private workspaceRoot: string | undefined,
+    private context: vscode.ExtensionContext | undefined,
+    private refresh: () => void,
+  ) {
+    if (this.context) {
+      getBuiltInAgentsDirectory(this.context).then((p) => {
+        this.builtInAgentsPath = p;
+      });
+    }
+  }
+
+  async open(uri: vscode.Uri) {
+    try {
+      const isBuiltIn =
+        this.builtInAgentsPath && uri.fsPath.startsWith(this.builtInAgentsPath);
+
+      const document = await vscode.workspace.openTextDocument(uri);
+      await vscode.window.showTextDocument(document);
+
+      if (isBuiltIn) {
+        await vscode.commands.executeCommand(
+          'workbench.action.files.setActiveEditorReadonlyInSession',
+        );
+        const message =
+          'This is a built-in agent prompt file and should not be modified directly.';
+        const createCustom = 'Create Custom Copy';
+        vscode.window
+          .showWarningMessage(message, createCustom)
+          .then((selection) => {
+            if (selection === createCustom) {
+              this.createCustomCopy(uri);
+            }
+          });
+      }
+    } catch (err) {
+      await showLoggedErrorMessage(CHANNEL, 'Error opening file', err);
+    }
+  }
+
+  private async createCustomCopy(uri: vscode.Uri) {
+    try {
+      const customPath = await getOrPromptForCustomAgentsDirectory();
+      if (!customPath) {
+        return;
+      }
+
+      const relativePath = path.relative(this.builtInAgentsPath, uri.fsPath);
+      const targetPath = path.join(customPath, relativePath);
+
+      const targetDir = path.dirname(targetPath);
+      await AbsoluteFS.ensureDir(targetDir);
+
+      await AbsoluteFS.copy(uri.fsPath, targetPath);
+
+      const newDoc = await vscode.workspace.openTextDocument(
+        vscode.Uri.file(targetPath),
+      );
+      await vscode.window.showTextDocument(newDoc);
+
+      vscode.window.showInformationMessage(
+        `Created custom copy at: ${targetPath}`,
+      );
+    } catch (err) {
+      await showLoggedErrorMessage(CHANNEL, 'Error creating custom copy', err);
+    }
+  }
+
+  async create(node: FileItem | undefined, isFolder: boolean) {
+    try {
+      const customBase = await getOrPromptForCustomAgentsDirectory();
+      if (!customBase) {
+        return;
+      }
+
+      let parentPath = node?.resourceUri.fsPath || customBase;
+
+      if (parentPath.startsWith(this.builtInAgentsPath)) {
+        const relative = path.relative(this.builtInAgentsPath, parentPath);
+        parentPath = path.join(customBase, relative);
+      }
+
+      if (!parentPath) {
+        throw new Error('No valid parent path found');
+      }
+
+      await AbsoluteFS.ensureDir(parentPath);
+
+      const tempName = isFolder ? 'New Folder' : 'new-file.yaml';
+      const resourceUri = vscode.Uri.file(path.join(parentPath, tempName));
+
+      const newItem = new FileItem(
+        tempName,
+        resourceUri,
+        isFolder
+          ? vscode.TreeItemCollapsibleState.Collapsed
+          : vscode.TreeItemCollapsibleState.None,
+      );
+
+      newItem.editing = true;
+      this.editingItem = newItem;
+
+      this.refresh();
+
+      await this.rename(newItem);
+    } catch (err) {
+      await showLoggedErrorMessage(
+        CHANNEL,
+        `Failed to create new ${isFolder ? 'folder' : 'file'}`,
+        err,
+      );
+    }
+  }
+
+  async rename(item: FileItem) {
+    if (!item) {
+      return;
+    }
+
+    if (item.isBuiltIn) {
+      vscode.window.showWarningMessage(
+        'Built-in agent files cannot be renamed. Create a custom copy instead.',
+      );
+      return;
+    }
+
+    this.editingItem = item;
+    item.editing = true;
+    this.refresh();
+
+    const newName = await vscode.window.showInputBox({
+      value: item.label,
+      prompt: `Enter new name for ${item.label}`,
+      validateInput: (value) => {
+        if (!value) {
+          return 'Name cannot be empty';
+        }
+        if (value.includes('/') || value.includes('\\')) {
+          return 'Name cannot contain path separators';
+        }
+        return null;
+      },
+    });
+
+    let createdFile: vscode.Uri | undefined;
+
+    if (newName && newName !== item.label) {
+      try {
+        const oldPath = item.resourceUri.fsPath;
+        const newPath = path.join(path.dirname(oldPath), newName);
+
+        if (!(await AbsoluteFS.exists(oldPath))) {
+          if (item.collapsibleState === vscode.TreeItemCollapsibleState.None) {
+            const content = newPath.endsWith('.yaml') ? NEW_AGENT_TEMPLATE : '';
+            await AbsoluteFS.write(newPath, content);
+            createdFile = vscode.Uri.file(newPath);
+          } else {
+            await AbsoluteFS.ensureDir(newPath);
+          }
+        } else {
+          await AbsoluteFS.rename(oldPath, newPath, { overwrite: false });
+        }
+      } catch (err) {
+        await showLoggedErrorMessage(CHANNEL, 'Failed to rename item', err);
+      }
+    }
+
+    if (createdFile) {
+      const doc = await vscode.workspace.openTextDocument(createdFile);
+      await vscode.window.showTextDocument(doc);
+    }
+
+    this.editingItem = undefined;
+    item.editing = false;
+    this.refresh();
+  }
+
+  async delete(item: FileItem) {
+    if (!item) {
+      return;
+    }
+
+    if (item.isBuiltIn) {
+      vscode.window.showWarningMessage(
+        'Built-in agent files cannot be deleted. Create a custom copy if you need to modify them.',
+      );
+      return;
+    }
+
+    const isFolder =
+      item.collapsibleState === vscode.TreeItemCollapsibleState.Collapsed;
+    const confirmMessage = `Are you sure you want to delete ${isFolder ? 'folder' : 'file'} "${item.label}"?`;
+    const confirmButton = 'Delete';
+
+    const choice = await vscode.window.showWarningMessage(
+      confirmMessage,
+      { modal: true },
+      confirmButton,
+    );
+
+    if (choice === confirmButton) {
+      try {
+        if (isFolder) {
+          await AbsoluteFS.delete(item.resourceUri.fsPath, {
+            recursive: true,
+          });
+        } else {
+          await AbsoluteFS.delete(item.resourceUri.fsPath);
+        }
+        logger.info(
+          CHANNEL,
+          `Successfully deleted ${isFolder ? 'folder' : 'file'}: ${item.resourceUri.fsPath}`,
+        );
+      } catch (err) {
+        await showLoggedErrorMessage(
+          CHANNEL,
+          `Failed to delete ${isFolder ? 'folder' : 'file'}`,
+          err,
+        );
+      }
+    }
+  }
+}
+
+export class FileItem extends vscode.TreeItem {
+  public editing = false;
+
+  constructor(
+    public readonly label: string,
+    public readonly resourceUri: vscode.Uri,
+    public readonly collapsibleState: vscode.TreeItemCollapsibleState,
+    public readonly command?: vscode.Command,
+    public readonly isBuiltIn = false,
+  ) {
+    super(label, collapsibleState);
+
+    this.tooltip = this.resourceUri.fsPath;
+    this.description = undefined;
+
+    if (collapsibleState === vscode.TreeItemCollapsibleState.None) {
+      this.iconPath = new vscode.ThemeIcon('file');
+    } else {
+      this.iconPath = new vscode.ThemeIcon('folder');
+    }
+
+    if (
+      isBuiltIn &&
+      collapsibleState === vscode.TreeItemCollapsibleState.None
+    ) {
+      this.resourceUri = this.resourceUri.with({
+        scheme: 'file',
+        query: 'readonly',
+      });
+      this.iconPath = new vscode.ThemeIcon('lock');
+    }
+  }
+}
