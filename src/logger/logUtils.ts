@@ -226,9 +226,12 @@ class VSCodeTransport extends Transport {
   }
 
   // Create a new log group and make it active
-  startGroup(groupName: string, id?: string, parentGroupId?: string): string {
-    const groupId =
-      id || `group-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  startGroup(
+    groupName: string,
+    id: string = randomUUID(),
+    parentGroupId?: string,
+  ): string {
+    const groupId = id;
     const now = Date.now();
 
     this.groups.set(groupId, {
@@ -381,7 +384,7 @@ function createLoggerForChannel(channel: string): winston.Logger {
 export function startGroup(
   channel: string,
   groupName: string,
-  id?: string,
+  id: string = randomUUID(),
   parentGroupId?: string,
 ): string {
   const transport = channelTransports.get(channel);
