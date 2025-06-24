@@ -4,6 +4,7 @@ import * as vscode from 'vscode';
 // Local imports - log
 import * as logger from '@logger/logUtils';
 import { objectToTaskState } from '@utils/config';
+import { showLoggedErrorMessage } from '@utils/errorHandlingUtils';
 
 const CHANNEL = 'stateRestoreCommand';
 logger.initialize(CHANNEL);
@@ -110,13 +111,7 @@ async function restoreState(config: any) {
     logger.info(CHANNEL, 'Main webview state restoration requested');
     // vscode.window.showInformationMessage('Configuration restored to main view');
   } catch (error) {
-    logger.error(
-      CHANNEL,
-      `Error restoring main webview state: ${error instanceof Error ? error.message : String(error)}`,
-    );
-    vscode.window.showErrorMessage(
-      `Failed to restore state: ${error instanceof Error ? error.message : String(error)}`,
-    );
+    await showLoggedErrorMessage(CHANNEL, 'Failed to restore state', error);
   }
 }
 

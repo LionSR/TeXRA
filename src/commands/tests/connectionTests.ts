@@ -9,6 +9,7 @@ import {
 
 // Local imports - log
 import * as logger from '@logger/logUtils';
+import { showLoggedErrorMessage } from '@utils/errorHandlingUtils';
 
 const CHANNEL = 'TestCommands';
 logger.initialize(CHANNEL);
@@ -52,10 +53,10 @@ export async function handleTestConnection(): Promise<void> {
     );
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : String(err);
-    logger.error(CHANNEL, `Test failed: ${errorMessage}`);
-    if (err instanceof Error && err.stack) {
-      logger.debug(CHANNEL, `Stack trace: ${err.stack}`);
-    }
-    vscode.window.showErrorMessage(`Test failed: ${errorMessage}`);
+    logger.debug(
+      CHANNEL,
+      `Stack trace: ${err instanceof Error ? err.stack : ''}`,
+    );
+    await showLoggedErrorMessage(CHANNEL, 'Test failed', errorMessage);
   }
 }
