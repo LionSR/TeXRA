@@ -1,4 +1,4 @@
-import { restoreState, saveState } from './modules/stateManager.js';
+import { webviewState } from './modules/webviewState.js';
 import { vscode } from '@common/webviewContext.js';
 import {
   setupMessageHandlers,
@@ -26,7 +26,7 @@ window.onload = function () {
   initializeDataRequests();
 
   // Set default state for new folders
-  restoreState();
+  webviewState.restore();
 
   // Setup auto-resize for instruction textarea
   const instruction = document.getElementById('instruction');
@@ -38,7 +38,7 @@ window.onload = function () {
     instruction.addEventListener('input', () => {
       autoResizeTextarea(instruction);
       // Make sure changes to the textarea get saved in the state
-      saveState();
+      webviewState.save();
     });
 
     // Setup paste event listener for image handling
@@ -46,7 +46,7 @@ window.onload = function () {
       instruction,
       vscode,
       autoResizeTextarea,
-      saveState,
+      webviewState.save,
       insertTextAtCursor,
     );
   }
