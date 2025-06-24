@@ -13,6 +13,7 @@ import { getStreamId } from '@utils/loggerUtils';
 // Local imports - housekeeping
 import { runPack, runPackSingle, runPackMultiple } from '@housekeeping';
 import type { FileOpResult } from '@/types/ResultTypes';
+import { showLoggedErrorMessage, showLoggedMessage } from '@utils/errorHandlingUtils';
 
 const CHANNEL = 'packCommands';
 logger.initialize(CHANNEL);
@@ -57,8 +58,10 @@ async function handlePack(config: { streamId?: string; [key: string]: any }) {
   );
 
   if (!config.agent || !config.inputFile) {
-    logger.error(CHANNEL, 'Missing required parameters in config');
-    vscode.window.showErrorMessage('Missing required parameters for pack');
+    await showLoggedMessage(
+      CHANNEL,
+      'Missing required parameters in config',
+    );
     return;
   }
 
@@ -96,12 +99,13 @@ async function handlePackSingle(
   );
 
   if (!inputFile || !agent || !model) {
-    logger.error(
+    const missing = [];
+    if (!inputFile) missing.push('inputFile');
+    if (!agent) missing.push('agent');
+    if (!model) missing.push('model');
+    await showLoggedMessage(
       CHANNEL,
-      `Missing required parameters: inputFile=${inputFile}, agent=${agent}, model=${model}`,
-    );
-    vscode.window.showErrorMessage(
-      'Missing required parameters for packSingle',
+      `Missing required parameters for packSingle: ${missing.join(', ')}`,
     );
     return;
   }
@@ -130,12 +134,13 @@ async function handlePackMultiple(
   logger.debug(CHANNEL, `Additional files: ${outputFiles.join(', ')}`);
 
   if ((!inputFile && !outputFiles.length) || !agent || !model) {
-    logger.error(
+    const missing = [];
+    if (!inputFile && !outputFiles.length) missing.push('inputFile or outputFiles');
+    if (!agent) missing.push('agent');
+    if (!model) missing.push('model');
+    await showLoggedMessage(
       CHANNEL,
-      `Missing required parameters: inputFile=${inputFile}, agent=${agent}, model=${model}`,
-    );
-    vscode.window.showErrorMessage(
-      'Missing required parameters for packMultiple:',
+      `Missing required parameters for packMultiple: ${missing.join(', ')}`,
     );
     return;
   }

@@ -7,6 +7,8 @@ import * as logger from '@logger/logUtils';
 // Local imports - Anthropic Tool
 import { TextEditorTool, ToolCallInput } from '../../AnthropicTool';
 
+import { showLoggedErrorMessage } from '@utils/errorHandlingUtils';
+
 // Local imports - utilities
 import { WorkspaceFS } from '@utils/files';
 
@@ -185,8 +187,11 @@ async function handleTestTextEditor(): Promise<void> {
     const result = await textEditorTool.call(input);
 
     if (result.isError) {
-      logger.error(CHANNEL, `Error from text editor tool: ${result.error}`);
-      vscode.window.showErrorMessage(`Error: ${result.error}`);
+      await showLoggedErrorMessage(
+        CHANNEL,
+        'Error from text editor tool',
+        result.error,
+      );
     } else {
       logger.info(CHANNEL, `Success from text editor tool: ${result.output}`);
 
@@ -201,11 +206,11 @@ async function handleTestTextEditor(): Promise<void> {
       });
     }
   } catch (err) {
-    logger.error(
+    await showLoggedErrorMessage(
       CHANNEL,
-      `Error in testTextEditor command: ${err instanceof Error ? err.message : String(err)}`,
+      'Error in testTextEditor command',
+      err,
     );
-    vscode.window.showErrorMessage('Error testing text editor tool');
   }
 }
 
