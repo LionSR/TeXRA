@@ -46,7 +46,7 @@ window.onload = function () {
       instruction,
       vscode,
       autoResizeTextarea,
-      webviewState.save,
+      () => webviewState.save(),
       insertTextAtCursor,
     );
   }
