@@ -8,6 +8,7 @@ import * as yaml from 'yaml';
 // Local imports - utilities
 import { loadYaml, loadAgentSettingAndPrompts } from '@agent/runtime/agentLoad';
 import * as logger from '@logger/logUtils';
+import { showAndLogErrorMessage } from '@utils/errorHandlingUtils';
 import { getAgentPath } from '@agent/runtime/executeAgent';
 import { AgentType } from '@agent/core/AgentDataclass';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
@@ -192,12 +193,10 @@ export async function handleLoadSpecificAgent(
       `Successfully loaded agent "${agentName}". Check Debug Console for details.`,
     );
   } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : String(err);
-    logger.error(CHANNEL, `Failed to load agent: ${errorMessage}`);
     if (err instanceof Error && err.stack) {
       logger.debug(CHANNEL, `Stack trace: ${err.stack}`);
     }
-    vscode.window.showErrorMessage(`Failed to load agent: ${errorMessage}`);
+    showAndLogErrorMessage(CHANNEL, 'Failed to load agent', err);
   }
 }
 

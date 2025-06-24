@@ -4,6 +4,7 @@ import * as path from 'path';
 // Third-party imports
 import * as vscode from 'vscode';
 import * as logger from '@logger/logUtils';
+import { showAndLogErrorMessage } from '@utils/errorHandlingUtils';
 
 // Local imports
 import {
@@ -142,8 +143,7 @@ export class FolderExplorer implements vscode.TreeDataProvider<FileItem> {
           });
       }
     } catch (err) {
-      logger.error(CHANNEL, `Error opening file: ${err}`);
-      vscode.window.showErrorMessage(`Failed to open file: ${err}`);
+      showAndLogErrorMessage(CHANNEL, 'Failed to open file', err);
     }
   }
 
@@ -178,8 +178,7 @@ export class FolderExplorer implements vscode.TreeDataProvider<FileItem> {
         `Created custom copy at: ${targetPath}`,
       );
     } catch (err) {
-      logger.error(CHANNEL, `Error creating custom copy: ${err}`);
-      vscode.window.showErrorMessage(`Failed to create custom copy: ${err}`);
+      showAndLogErrorMessage(CHANNEL, 'Failed to create custom copy', err);
     }
   }
 
