@@ -10,10 +10,22 @@ class LogGroups {
   }
 
   get(id) {
+    if (!id) {
+      console.error('LogGroups.get: id is required');
+      return null;
+    }
     return this.groups.get(id);
   }
 
   set(id, group) {
+    if (!id) {
+      console.error('LogGroups.set: id is required');
+      return;
+    }
+    if (!group || typeof group !== 'object') {
+      console.error('LogGroups.set: group must be an object');
+      return;
+    }
     this.groups.set(id, group);
   }
 
@@ -32,11 +44,20 @@ class LogGroups {
    * @param {number} [endTime] - Optional end time
    */
   update(groupId, status, endTime) {
+    if (!groupId) {
+      console.error('LogGroups.update: groupId is required');
+      return;
+    }
     const group = this.groups.get(groupId);
-    if (!group) return;
+    if (!group) {
+      console.error(`LogGroups.update: group not found for id ${groupId}`);
+      return;
+    }
 
-    group.status = status;
-    if (endTime) {
+    if (status) {
+      group.status = status;
+    }
+    if (endTime !== undefined && endTime !== null) {
       group.endTime = endTime;
     }
 
@@ -54,8 +75,18 @@ class ToggleStates {
   }
 
   set(id, collapsed) {
+    if (!id) {
+      console.error('ToggleStates.set: id is required');
+      return;
+    }
+    if (typeof collapsed !== 'boolean') {
+      console.error('ToggleStates.set: collapsed must be a boolean');
+      return;
+    }
     this.states.set(id, collapsed);
-    this.saveCallback();
+    if (this.saveCallback) {
+      this.saveCallback();
+    }
   }
 
   get(id) {
@@ -63,8 +94,18 @@ class ToggleStates {
   }
 
   clear(ids) {
-    ids.forEach((id) => this.states.delete(id));
-    this.saveCallback();
+    if (!Array.isArray(ids)) {
+      console.error('ToggleStates.clear: ids must be an array');
+      return;
+    }
+    ids.forEach((id) => {
+      if (id) {
+        this.states.delete(id);
+      }
+    });
+    if (this.saveCallback) {
+      this.saveCallback();
+    }
   }
 
   clearAll() {
@@ -96,7 +137,15 @@ class StreamStatuses {
   }
 
   set(stream, status) {
-    if (stream && status !== 'ready') {
+    if (!stream) {
+      console.error('StreamStatuses.set: stream is required');
+      return;
+    }
+    if (!status) {
+      console.error('StreamStatuses.set: status is required');
+      return;
+    }
+    if (status !== 'ready') {
       this.statuses.set(stream, status);
     }
   }

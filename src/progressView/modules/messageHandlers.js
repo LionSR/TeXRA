@@ -65,7 +65,7 @@ const handlers = {
       logContent.scrollTop = logContent.scrollHeight;
 
       // Recalculate cumulative usage after loading groups
-      progressViewDomHandler.usage.summary();
+      progressViewDomHandler.usageSummary.update();
     }
   },
 
@@ -77,7 +77,7 @@ const handlers = {
     for (const el of headers) {
       groupIds.push(el.id.replace('group-header-', ''));
     }
-    progressViewState.clearLogGroups();
+    progressViewState.logGroups.clear();
     progressViewState.toggleStates.clear(groupIds);
   },
 
@@ -130,12 +130,12 @@ const handlers = {
   },
 
   [COMMANDS.UPDATE_USAGE]: (message) => {
-    progressViewDomHandler.usage.summary(message.usage);
+    progressViewDomHandler.usageSummary.update(message.usage);
   },
 
   [COMMANDS.UPDATE_GROUP_USAGE]: (message) => {
     if (message.stream === progressViewState.getCurrentStream()) {
-      progressViewDomHandler.usage.group(message.groupId, message.usage);
+      progressViewDomHandler.usageGroup.update(message.groupId, message.usage);
     }
   },
 
