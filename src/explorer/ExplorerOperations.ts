@@ -203,7 +203,11 @@ export class ExplorerOperations {
       try {
         await AbsoluteFS.rename(oldPath, newPath, { overwrite: false });
       } catch (err: any) {
-        if (err?.code === 'ENOENT') {
+        const fileNotFound =
+          err?.code === 'ENOENT' ||
+          (err instanceof vscode.FileSystemError &&
+            err.code === 'FileNotFound');
+        if (fileNotFound) {
           try {
             if (
               item.collapsibleState === vscode.TreeItemCollapsibleState.None
