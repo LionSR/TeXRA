@@ -476,11 +476,14 @@ export class Events {
     document
       .getElementById('toolbarContainer')
       .addEventListener('click', (e) => {
-        const button = e.target.closest('button');
-        if (button && button.dataset.command && !button.disabled) {
-          vscode.postMessage({
-            command: button.dataset.command,
-          });
+        const button = e.target.closest('button[data-command]');
+        if (!button || button.disabled) return;
+
+        const command = button.dataset.command;
+        const currentStream = progressViewState.getCurrentStream();
+
+        if (currentStream) {
+          vscode.postMessage({ command, stream: currentStream });
         }
       });
 

@@ -139,7 +139,7 @@ export class ProgressViewMessageHandler {
       return;
     }
     logger.debug(CHANNEL, `Found taskState for stream: ${stream}`);
-    logger.debug(CHANNEL, `Task state: ${JSON.stringify(taskState)}`);
+    // logger.debug(CHANNEL, `Task state: ${JSON.stringify(taskState)}`);
 
     // Convert TaskState to AgentConfig using utility function
     const agentConfig = taskStateToAgentConfig(taskState);
@@ -163,7 +163,7 @@ export class ProgressViewMessageHandler {
       return;
     }
     logger.debug(CHANNEL, `Found taskState for stream: ${stream}`);
-    logger.debug(CHANNEL, `Task state: ${JSON.stringify(taskState)}`);
+    // logger.debug(CHANNEL, `Task state: ${JSON.stringify(taskState)}`);
 
     // Execute the restore state command with the task configuration
     await vscode.commands.executeCommand('texra.restoreState', taskState);
@@ -180,7 +180,7 @@ export class ProgressViewMessageHandler {
       return;
     }
     logger.debug(CHANNEL, `Found taskState for stream: ${stream}`);
-    logger.debug(CHANNEL, `Task state: ${JSON.stringify(taskState)}`);
+    // logger.debug(CHANNEL, `Task state: ${JSON.stringify(taskState)}`);
 
     // Execute the latexdiff command with the task configuration
     await vscode.commands.executeCommand('texra.runLatexdiff', {
