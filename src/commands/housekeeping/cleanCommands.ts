@@ -65,9 +65,13 @@ async function handleCleanSingle(
   );
 
   if (!inputFile || !agent || !model) {
+    const missing = [];
+    if (!inputFile) missing.push('inputFile');
+    if (!agent) missing.push('agent');
+    if (!model) missing.push('model');
     await showLoggedMessage(
       CHANNEL,
-      'Missing required parameters for cleanSingle',
+      `Missing required parameters for cleanSingle: ${missing.join(', ')}`,
     );
     return;
   }
@@ -95,9 +99,13 @@ async function handleCleanMultiple(
   logger.debug(CHANNEL, `Additional files: ${outputFiles.join(', ')}`);
 
   if (!inputFile || !agent || !model) {
+    const missing = [];
+    if (!inputFile) missing.push('inputFile');
+    if (!agent) missing.push('agent');
+    if (!model) missing.push('model');
     await showLoggedMessage(
       CHANNEL,
-      'Missing required parameters for clean multiple',
+      `Missing required parameters for cleanMultiple: ${missing.join(', ')}`,
     );
     return;
   }
