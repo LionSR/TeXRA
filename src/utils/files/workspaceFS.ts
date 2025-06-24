@@ -7,7 +7,10 @@ import * as vscode from 'vscode';
 // Local imports - log
 import * as logger from '@logger/logUtils';
 import { AbsoluteFS } from './absoluteFS';
-import { showLoggedErrorMessage, showLoggedMessage } from '@utils/errorHandlingUtils';
+import {
+  showLoggedErrorMessage,
+  showLoggedMessage,
+} from '@utils/errorHandlingUtils';
 
 const CHANNEL = 'workspaceFS';
 logger.initialize(CHANNEL);
@@ -102,10 +105,17 @@ export class WorkspaceFS {
       logger.debug(CHANNEL, `Deleted: ${filePath}`);
     } catch (err) {
       if (err instanceof vscode.FileSystemError) {
-        logger.warn(CHANNEL, `Unable to delete ${filePath}. It may be in use.`);
-        vscode.window.showWarningMessage(
-          `Unable to delete ${filePath}. It may be in use.`,
-        );
+        if (err.code === 'FileNotFound') {
+          logger.debug(CHANNEL, `File not found when deleting: ${filePath}`);
+        } else {
+          logger.warn(
+            CHANNEL,
+            `Unable to delete ${filePath}. It may be in use.`,
+          );
+          vscode.window.showWarningMessage(
+            `Unable to delete ${filePath}. It may be in use.`,
+          );
+        }
       } else {
         await showLoggedErrorMessage(
           CHANNEL,
