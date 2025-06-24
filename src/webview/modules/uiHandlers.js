@@ -134,7 +134,7 @@ export function setupUIHandlers() {
     if (element) {
       new Sortable(element, {
         animation: 150,
-        onEnd: webviewState.save,
+        onEnd: () => webviewState.save(),
       });
     }
   });
@@ -563,16 +563,16 @@ export function setupUIHandlers() {
 
   ELEMENTS_TO_SAVE.forEach((id) => {
     if (id !== 'instruction') {
-      addEventListenerSafely(id, 'change', webviewState.save);
+      addEventListenerSafely(id, 'change', () => webviewState.save());
     }
   });
 
   // Special case for instruction as it uses 'input' event
-  addEventListenerSafely('instruction', 'input', webviewState.save);
+  addEventListenerSafely('instruction', 'input', () => webviewState.save());
 
   new Sortable(safeGetElementById('outputFiles'), {
     animation: 150,
-    onEnd: webviewState.save,
+    onEnd: () => webviewState.save(),
   });
 
   // Add event listeners for file operations (add opened files, get current file)
