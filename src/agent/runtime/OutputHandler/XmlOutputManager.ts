@@ -1,0 +1,339 @@
+import * as path from 'path';
+import { XMLParser } from 'fast-xml-parser';
+
+import { AgentSetting } from '@agent/core/AgentDataclass';
+import { AgentConfig } from '@agent/core/AgentConfig';
+import { AgentLogger } from '@logger/AgentLogger';
+import { WorkspaceFS } from '@utils/files';
+import xmlUtils from '@utils/text/xmlUtils';
+import {
+  applyReplacements,
+  getReplacementsByCategory,
+} from '@replacement/engine';
+import replacementEngine from '@replacement/engine';
+
+import { NamedOutputFile } from './types';
+
+export class XmlOutputManager {
+  constructor(
+    private readonly agentSetting: AgentSetting,
+    private readonly agentConfig: AgentConfig,
+    private readonly logger: AgentLogger,
+  ) {}
+
+  async processXmlContent(content: string): Promise<string> {
+    content = replacementEngine.applyNonRegex(content);
+
+    const latexXmlReplacements = getReplacementsByCategory('latex_xml');
+    if (latexXmlReplacements) {
+      content = applyReplacements(content, latexXmlReplacements);
+    }
+
+    const scratchpadXmlReplacements =
+      getReplacementsByCategory('scratchpad_xml');
+    if (scratchpadXmlReplacements) {
+      content = applyReplacements(content, scratchpadXmlReplacements);
+    }
+
+    return content;
+  }
+
+  private extractDocumentbyRegex(
+    outputContent: string,
+    documentTag: string,
+  ): string | null {
+    try {
+      const fallbackContent = xmlUtils.extractTextFromTag(
+        outputContent,
+        documentTag,
+      );
+      if (fallbackContent) {
+        this.logger.info(
+          `Successfully extracted ${documentTag} using fallback method`,
+        );
+        return fallbackContent;
+      }
+      this.logger.error(
+        `No ${documentTag} found in output file using fallback method`,
+      );
+      return null;
+    } catch (fallbackErr) {
+      this.logger.error(
+        `Failed fallback extraction: ${fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr)}`,
+      );
+      return null;
+    }
+  }
+
+  private extractMultipleDocumentsbyRegex(
+    outputContent: string,
+    documentTag: string,
+  ): Array<{ content: string; name: string }> | null {
+    try {
+      const fallbackDocuments = xmlUtils.extractMultipleTextFromTag(
+        outputContent,
+        documentTag,
+      );
+      if (fallbackDocuments && fallbackDocuments.length > 0) {
+        this.logger.info(
+          `Successfully extracted multiple ${documentTag} using fallback method`,
+        );
+        return fallbackDocuments;
+      }
+      this.logger.error(
+        `No ${documentTag} found in output file using fallback method`,
+      );
+      return null;
+    } catch (err) {
+      this.logger.error(
+        `Failed fallback extraction: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      return null;
+    }
+  }
+
+  async splitScratchpadOutputXml(
+    outputFile: string,
+    documentTag: string,
+    thinkingTag: string = 'scratchpad',
+  ): Promise<string> {
+    const { dir, name } = path.parse(outputFile);
+    const texFile = path.join(dir, `${name}.tex`);
+
+    let outputContent = await WorkspaceFS.readFile(outputFile);
+    const tagsToWrap = [documentTag, thinkingTag];
+    outputContent = xmlUtils.addCdataToTags(outputContent, tagsToWrap);
+
+    try {
+      const parser = new XMLParser({
+        ignoreAttributes: false,
+        parseTagValue: true,
+        textNodeName: 'content',
+        attributeNamePrefix: '',
+      });
+      const root = parser.parse(outputContent);
+
+      const latexDocument = xmlUtils.extractContentFromXMLbyTag(
+        root,
+        documentTag,
+      );
+      if (latexDocument) {
+        await WorkspaceFS.writeFile(texFile, latexDocument);
+        return texFile;
+      }
+      this.logger.warn(
+        `No ${documentTag} found in parsed XML, attempting fallback extraction...`,
+      );
+      const fallbackContent = this.extractDocumentbyRegex(
+        outputContent,
+        documentTag,
+      );
+      if (fallbackContent) {
+        await WorkspaceFS.writeFile(texFile, fallbackContent);
+        return texFile;
+      }
+      return texFile;
+    } catch (err) {
+      this.logger.warn(
+        `Failed to parse XML content: ${err instanceof Error ? err.message : String(err)}, attempting fallback extraction...`,
+      );
+      const fallbackContent = this.extractDocumentbyRegex(
+        outputContent,
+        documentTag,
+      );
+      if (fallbackContent) {
+        await WorkspaceFS.writeFile(texFile, fallbackContent);
+        return texFile;
+      }
+      throw err;
+    }
+  }
+
+  async splitScratchpadMultipleOutputXml(
+    outputFile: string,
+    documentTag: string,
+    thinkingTag: string = 'scratchpad',
+  ): Promise<NamedOutputFile[]> {
+    let outputContent = await WorkspaceFS.readFile(outputFile);
+
+    const tagsToWrap = [thinkingTag, 'document'];
+    outputContent = xmlUtils.addCdataToTagsMultiple(outputContent, tagsToWrap);
+
+    try {
+      const parser = new XMLParser({
+        ignoreAttributes: false,
+        parseTagValue: true,
+        textNodeName: 'content',
+        attributeNamePrefix: '',
+      });
+      const root = parser.parse(outputContent);
+
+      const documents = xmlUtils.extractContentFromXMLbyTagMultiple(
+        root,
+        documentTag,
+      );
+      if (documents) {
+        return this.processMultipleLatexDocuments(documents, outputFile);
+      }
+      this.logger.warn(
+        `No ${documentTag} found in parsed XML, attempting fallback extraction...`,
+      );
+      const fallbackDocuments = this.extractMultipleDocumentsbyRegex(
+        outputContent,
+        documentTag,
+      );
+      if (fallbackDocuments) {
+        return this.processMultipleLatexDocuments(
+          fallbackDocuments,
+          outputFile,
+        );
+      }
+      return [];
+    } catch (err) {
+      this.logger.warn(
+        `Failed to parse XML content: ${err instanceof Error ? err.message : String(err)}, attempting fallback extraction...`,
+      );
+      const fallbackDocuments = this.extractMultipleDocumentsbyRegex(
+        outputContent,
+        documentTag,
+      );
+      if (fallbackDocuments) {
+        return this.processMultipleLatexDocuments(
+          fallbackDocuments,
+          outputFile,
+        );
+      }
+      throw err;
+    }
+  }
+
+  async processMultipleLatexDocuments(
+    latexDocuments: Array<{ content: string; name: string }>,
+    outputFile: string,
+  ): Promise<NamedOutputFile[]> {
+    const outputFiles: NamedOutputFile[] = [];
+    const outputParts = path.basename(outputFile).split('_');
+    const agent = outputParts.at(-3) ?? '';
+    const model = outputParts.at(-1)?.split('.')[0] ?? '';
+
+    const roundMatch = outputFile.match(/_r(\d+)_/);
+    const currRound = roundMatch ? parseInt(roundMatch[1]) : 0;
+
+    for (const doc of latexDocuments) {
+      if (!doc.name || doc.name === 'unknown' || !doc.content) {
+        this.logger.warn(`Skipping document with empty name or content`);
+        continue;
+      }
+
+      const source = doc.name.trim();
+      if (!source) {
+        this.logger.warn(
+          `Skipping document with empty source name after trimming`,
+        );
+        continue;
+      }
+
+      const { ext } = path.parse(source);
+      const extension = ext.replace('.', '') || 'tex';
+      const texFile = getOutputFileName(
+        source,
+        agent,
+        model,
+        extension,
+        currRound,
+      );
+      await WorkspaceFS.writeFile(texFile, doc.content.trim());
+      outputFiles.push({ source, path: texFile });
+      this.logger.debug(
+        `XML Source: ${source} -> TeX file written: ${texFile}`,
+      );
+    }
+
+    return outputFiles;
+  }
+
+  async processSingleXmlOutput(outputFile: string): Promise<NamedOutputFile> {
+    this.logger.debug(`Splitting scratchpad output XML: ${outputFile}`);
+
+    const processedOutputFile = await this.splitScratchpadOutputXml(
+      outputFile,
+      this.agentSetting.documentTag,
+    );
+
+    const xmlContent = await WorkspaceFS.readFile(outputFile);
+    let original = '';
+    const nameMatch = xmlContent.match(/<document[^>]*name="(.*?)"[^>]*>/);
+    if (nameMatch && nameMatch[1]) {
+      original = nameMatch[1].trim();
+    }
+
+    const content = await WorkspaceFS.readFile(processedOutputFile);
+    await WorkspaceFS.writeFile(processedOutputFile, content);
+
+    return {
+      source: original || this.agentConfig.inputFile,
+      path: processedOutputFile,
+    };
+  }
+
+  async processMultipleXmlOutputs(
+    outputFile: string,
+  ): Promise<NamedOutputFile[]> {
+    this.logger.debug(
+      `Splitting multiple scratchpad output XML: ${outputFile}`,
+    );
+    const processedOutputFiles = await this.splitScratchpadMultipleOutputXml(
+      outputFile,
+      this.agentSetting.documentTag,
+    );
+    return processedOutputFiles;
+  }
+
+  async ensureCorrectXmlStructure(
+    filePath: string,
+    documentTag: string,
+  ): Promise<void> {
+    this.logger.debug(`Ensuring correct XML structure: ${filePath}`);
+    let content = await WorkspaceFS.readFile(filePath);
+
+    content = await this.processXmlContent(content);
+
+    if (!content.endsWith(`</${documentTag}>`)) {
+      if (
+        !content.includes(`</${documentTag}>`) &&
+        content.includes(`<${documentTag}>`)
+      ) {
+        content += `\n</${documentTag}>`;
+      } else {
+        content = content.replace(new RegExp(`</${documentTag}>.*$`, 's'), '');
+        if (content.includes(`<${documentTag}>`)) {
+          content += `\n<${documentTag}>`;
+        }
+      }
+    }
+    await WorkspaceFS.writeFile(filePath, content);
+  }
+}
+
+function getOutputFileName(
+  inputFile: string,
+  agent: string,
+  model: string,
+  outputExt: string,
+  currRound: number,
+  editedFile?: string,
+): string {
+  const { dir, name: fileName } = path.parse(inputFile);
+  const agentFirstNameChunk = agent.split('_')[0];
+
+  let newRound = currRound;
+  if (editedFile) {
+    const match = editedFile.match(/_r(\d+)_/);
+    const editedRound = match ? parseInt(match[1]) : 0;
+    newRound += editedRound + 1;
+  }
+
+  const outputBaseName = `${fileName}_${agentFirstNameChunk}_r${newRound}_${model}.${outputExt}`;
+  const outputFile = path.join(dir, outputBaseName);
+  return outputFile;
+}
