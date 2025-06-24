@@ -9,14 +9,12 @@ import {
   FILE_TYPES,
 } from './constants.js';
 import {
-  updateEditedFileSelect,
-  getSelectedFiles,
   handleCheckboxChange,
-  toggleMultipleFiles,
   toggleOutputFiles,
-  emptyMultipleFiles,
   toggleLatexdiffs,
 } from './fileHandlers.js';
+import { fileList } from './uiManagers/FileList.js';
+import { fileSelect } from './uiManagers/FileSelect.js';
 import {
   safeGetElementById,
   addEventListenerSafely,
@@ -168,7 +166,7 @@ export function setupUIHandlers() {
 
       // Get all files if container is visible
       const filesDiv = safeGetElementById(id);
-      const files = isActive && filesDiv ? getSelectedFiles(filesDiv) : [];
+      const files = isActive && filesDiv ? fileList.getSelected(filesDiv) : [];
 
       // Filter out single file if it exists (except for outputFiles)
       multipleFilesData[id] =
@@ -299,7 +297,7 @@ export function setupUIHandlers() {
 
     // Empty button handler
     addEventListenerSafely(emptyButtonId, 'click', () =>
-      emptyMultipleFiles(id, toggleId),
+      fileList.empty(id, toggleId),
     );
   });
 
@@ -441,7 +439,9 @@ export function setupUIHandlers() {
       const model = safeGetElementValue('model');
 
       // Get output files
-      const outputFiles = getSelectedFiles(safeGetElementById('outputFiles'));
+      const outputFiles = fileList.getSelected(
+        safeGetElementById('outputFiles'),
+      );
 
       // Check if we should use multiple or single mode
       const outputFilesContainer = safeGetElementById('outputFilesContainer');
@@ -606,7 +606,7 @@ export function setupUIHandlers() {
       command: 'requestEditedFile',
       baseFile: baseFile,
     });
-    updateEditedFileSelect(baseFile);
+    fileSelect.updateEdited(baseFile);
   });
 
   MULTIPLE_SELECTIONS.forEach((id) => {
@@ -615,7 +615,7 @@ export function setupUIHandlers() {
       if (id === 'outputFiles') {
         toggleOutputFiles();
       } else {
-        toggleMultipleFiles(id, toggleId);
+        fileList.toggle(id, toggleId);
       }
     });
   });
