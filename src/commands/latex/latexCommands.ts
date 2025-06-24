@@ -12,6 +12,7 @@ import replacementEngine from '@replacement/engine';
 // Local imports - latex utils
 import { runLatexFormatter } from '@latex/texFormatter';
 import { getTeXCount } from '@latex/texcount';
+import { showLoggedErrorMessage } from '@utils/errorHandlingUtils';
 
 // Local imports - commands
 import { fileSelectionCommands } from '../files/fileSelectionCommands';
@@ -113,8 +114,7 @@ async function handleIndentCurrentTeX(): Promise<void> {
       vscode.window.showErrorMessage('Failed to indent LaTeX file');
     }
   } catch (err) {
-    logger.error(CHANNEL, `Error in indentTeX command: ${err}`);
-    vscode.window.showErrorMessage('Error indenting LaTeX file');
+    await showLoggedErrorMessage(CHANNEL, 'Error in indentTeX command', err);
   }
 }
 

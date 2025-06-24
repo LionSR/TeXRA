@@ -10,6 +10,8 @@ import { buildWebviewHtml } from '@frontend/webview/html';
 // Local imports - log
 import * as logger from '@logger/logUtils';
 
+import { showLoggedErrorMessage } from '@utils/errorHandlingUtils';
+
 const CHANNEL = 'AgentHistoryViewProvider';
 logger.initialize(CHANNEL);
 
@@ -233,9 +235,10 @@ export class AgentHistoryViewProvider implements vscode.WebviewViewProvider {
         vscode.window.showErrorMessage(`History item not found`);
       }
     } catch (error) {
-      logger.error(CHANNEL, `Failed to restore configuration: ${error}`);
-      vscode.window.showErrorMessage(
-        `Failed to restore configuration: ${error}`,
+      await showLoggedErrorMessage(
+        CHANNEL,
+        'Failed to restore configuration',
+        error,
       );
     }
   }
@@ -277,8 +280,11 @@ export class AgentHistoryViewProvider implements vscode.WebviewViewProvider {
         );
       }
     } catch (error) {
-      logger.error(CHANNEL, `Failed to delete history item: ${error}`);
-      vscode.window.showErrorMessage(`Failed to delete history item: ${error}`);
+      await showLoggedErrorMessage(
+        CHANNEL,
+        'Failed to delete history item',
+        error,
+      );
     }
   }
 }
