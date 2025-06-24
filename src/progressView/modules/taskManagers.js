@@ -319,31 +319,9 @@ export class LogEntriesDom {
               const startTime = parseInt(groupStartTime, 10);
               // If the message timestamp is earlier than the group start time,
               // insert before this group
-              if (msgDate) {
-                if (msgDate.getTime() < startTime) {
-                  insertPosition = child;
-                  break;
-                }
-              } else {
-                const childTime = startTimeElem.dataset.start
-                  ? parseInt(startTimeElem.dataset.start, 10)
-                  : null;
-
-                if (msgDate && childTime) {
-                  if (msgDate.getTime() < childTime) {
-                    insertPosition = child;
-                    break;
-                  }
-                } else {
-                  const timeText = startTimeElem.textContent.replace(
-                    /^[^0-9]*/,
-                    '',
-                  );
-                  if (msgTimestamp < timeText) {
-                    insertPosition = child;
-                    break;
-                  }
-                }
+              if (msgDate && msgDate.getTime() < startTime) {
+                insertPosition = child;
+                break;
               }
             }
           }
