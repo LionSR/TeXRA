@@ -7,6 +7,7 @@ import { WebviewStateManager } from '@common/webviewState.js';
 class LogGroups {
   constructor() {
     this.groups = new Map();
+    this._cachedTotals = null;
   }
 
   get(id) {
@@ -27,6 +28,7 @@ class LogGroups {
       return;
     }
     this.groups.set(id, group);
+    this._cachedTotals = null; // Invalidate cache
   }
 
   getAll() {
@@ -35,6 +37,7 @@ class LogGroups {
 
   clear() {
     this.groups.clear();
+    this._cachedTotals = null; // Invalidate cache
   }
 
   /**
@@ -62,6 +65,7 @@ class LogGroups {
     }
 
     this.groups.set(groupId, group);
+    this._cachedTotals = null; // Invalidate cache
   }
 }
 
@@ -143,6 +147,10 @@ class StreamStatuses {
     }
     if (!status) {
       console.error('StreamStatuses.set: status is required');
+      return;
+    }
+    if (typeof status !== 'string') {
+      console.error('StreamStatuses.set: status must be a string');
       return;
     }
     if (status !== 'ready') {
