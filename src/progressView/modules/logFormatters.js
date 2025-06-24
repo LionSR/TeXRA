@@ -1,8 +1,6 @@
 // Third-party imports
 import { marked } from 'marked';
 import markedKatex from 'marked-katex-extension';
-// Local imports - log state
-import { logState } from './webviewLogState.js';
 // Local imports - constants
 import { STATUS } from './constants.js';
 // Local imports - KaTeX macros
@@ -345,14 +343,3 @@ export function formatDuration(durationMs) {
  * @param {string} status - New status
  * @param {string} endTime - End time (optional)
  */
-export function updateLogGroup(groupId, status, endTime) {
-  const group = logState.getLogGroup(groupId);
-  if (!group) return;
-
-  group.status = status;
-  if (endTime) {
-    group.endTime = endTime;
-  }
-
-  logState.setLogGroup(groupId, group);
-}

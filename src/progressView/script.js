@@ -1,4 +1,4 @@
-import { logState } from './modules/webviewLogState.js';
+import { progressViewState } from './modules/progressViewState.js';
 import { setupMessageHandlers } from './modules/messageHandlers.js';
 import {
   setupEventListeners,
@@ -9,7 +9,7 @@ import { vscode } from '@common/webviewContext.js';
 import { COMMANDS } from './modules/constants.js';
 
 // Initialize the state when the window loads
-logState.initialize();
+progressViewState.initialize();
 
 // Setup message handlers for VSCode messages
 setupMessageHandlers();
