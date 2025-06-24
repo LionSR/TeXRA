@@ -6,18 +6,17 @@ import {
   toggleManager,
 } from './modules/uiHandlers.js';
 
-// Initialize data requests when window loads
-window.onload = function () {
-  messageHandlers.setup();
+// Register handlers immediately so early messages aren't missed
+messageHandlers.setup();
 
-  // Set default state for new folders
-  webviewState.restore();
-
-  instructionManager.init();
-};
+window.addEventListener('beforeunload', () => {
+  messageHandlers.cleanup();
+});
 
 // Setup UI when DOM is loaded
 document.addEventListener('DOMContentLoaded', function () {
+  webviewState.restore();
+  instructionManager.init();
   setupUIHandlers();
   toggleManager.updateToolConfigToggleState();
   toggleManager.updateAutoToggleState();
