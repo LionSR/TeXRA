@@ -1,10 +1,6 @@
 import { progressViewState } from './modules/progressViewState.js';
 import { setupMessageHandlers } from './modules/messageHandlers.js';
-import {
-  setupEventListeners,
-  applyGroupToggleStates,
-  renderToolbar,
-} from './modules/domHandlers.js';
+import { progressViewDomHandler } from './modules/domHandlers.js';
 import { vscode } from '@common/webviewContext.js';
 import { COMMANDS } from './modules/constants.js';
 
@@ -16,12 +12,12 @@ setupMessageHandlers();
 
 // Initialize event listeners and state when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
-  renderToolbar();
+  progressViewDomHandler.toolbar.render();
   // Setup UI event listeners
-  setupEventListeners();
+  progressViewDomHandler.events.setupEventListeners();
 
   // Apply saved group toggle states to any groups already in the DOM
-  applyGroupToggleStates();
+  progressViewDomHandler.events.applyToggleStates();
 
   // Notify extension that the webview is ready to receive messages
   vscode.postMessage({ command: COMMANDS.WEBVIEW_READY });
