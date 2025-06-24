@@ -9,6 +9,11 @@ document.addEventListener('DOMContentLoaded', () => {
   vscode.postMessage({ command: 'getHistoryData' });
 });
 
+window.addEventListener('unload', () => {
+  historyViewDomHandler.events.dispose();
+  historyViewDomHandler.searchManager.dispose();
+});
+
 registerMessageHandlers({
   updateHistory: (message) => {
     historyViewDomHandler.renderer.render(message.historyItems);
