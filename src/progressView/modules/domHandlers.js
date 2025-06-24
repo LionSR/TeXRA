@@ -13,6 +13,10 @@ import {
 } from './logFormatters.js';
 import { STATUS, COMMANDS, SPLIT_SIZES, TOOLBAR_BUTTONS } from './constants.js';
 import { createIconButton } from '@common/templateUtils.js';
+import {
+  CHEVRON_DOWN_CLASS,
+  CHEVRON_RIGHT_CLASS,
+} from '@common/iconConstants.js';
 // Note: We'll inline the getEffectiveBaseFile function since modules can't use TS aliases
 /**
  * Get the effective base file for comparison operations.
@@ -959,7 +963,9 @@ export function setupEventListeners() {
         const toggleIcon = e.target.querySelector('.toggle-icon');
         if (toggleIcon) {
           const isOpen = e.target.open;
-          toggleIcon.className = `codicon codicon-chevron-${isOpen ? 'down' : 'right'} toggle-icon`;
+          toggleIcon.className = `${
+            isOpen ? CHEVRON_DOWN_CLASS : CHEVRON_RIGHT_CLASS
+          } toggle-icon`;
         }
       }
     },
