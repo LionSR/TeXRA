@@ -201,7 +201,7 @@ export class HistoryRenderer {
   setupItemEventListeners() {
     const container = safeGetElementById('historyContainer');
     if (!container) return;
-    addEventListenerSafely(container, 'click', (e) => {
+    addEventListenerSafely('historyContainer', 'click', (e) => {
       const btn = e.target.closest('button[data-command]');
       if (btn) {
         const command = btn.dataset.command;
