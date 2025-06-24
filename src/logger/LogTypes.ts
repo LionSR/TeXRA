@@ -5,7 +5,7 @@
 // Local imports
 import type { TokenUsageStats } from '../types/UsageTypes';
 
-export interface LogGroup {
+export interface TaskGroup {
   /** Unique identifier for the group */
   id: string;
   /** Display name of the group */
