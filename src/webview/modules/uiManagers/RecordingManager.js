@@ -33,13 +33,15 @@ export class RecordingManager {
     if (!button) return;
 
     addEventListenerSafely(buttonId, 'click', () => {
-      if (this.isRecording) {
-        this.vscode.postMessage({ command: 'stopRecording' });
-        this.updateRecordingUI(false);
-      } else {
-        this.vscode.postMessage({ command: 'startRecording' });
-        this.updateRecordingUI(true);
-      }
+      const nextState = !this.isRecording;
+      this.vscode.postMessage({
+        command: nextState ? 'startRecording' : 'stopRecording',
+      });
+      this.eventBus.dispatchEvent(
+        new CustomEvent('recordingUIUpdate', {
+          detail: { recording: nextState },
+        }),
+      );
     });
 
     this.eventBus.addEventListener('recordingUIUpdate', (e) => {
