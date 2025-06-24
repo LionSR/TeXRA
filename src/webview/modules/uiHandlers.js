@@ -23,6 +23,7 @@ import {
   safeGetElementValue,
   safeGetElementChecked,
 } from '@common/domUtils.js';
+import { CHEVRON_UP_CLASS, CHEVRON_DOWN_CLASS } from '@common/iconConstants.js';
 import { capitalize } from '@common/stringUtils.js';
 
 let debugMode = false;
@@ -65,11 +66,11 @@ function updateDropdownToggleState(toggleId, optionsId, checkboxIds, icon) {
   const isVisible = options.style.display === 'block';
 
   const hasChecked = checkboxIds.some((id) => safeGetElementChecked(id));
-  const direction = isVisible ? 'up' : 'down';
-
   if (toggle) {
     toggle.classList.toggle('active', hasChecked);
-    toggle.innerHTML = `<i class="codicon codicon-${icon}"></i><i class="codicon codicon-chevron-${direction}"></i>`;
+    toggle.innerHTML = `<i class="codicon codicon-${icon}"></i><i class="${
+      isVisible ? CHEVRON_UP_CLASS : CHEVRON_DOWN_CLASS
+    }"></i>`;
   }
 }
 
