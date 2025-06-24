@@ -1,13 +1,16 @@
-import { vscode, registerMessageHandlers } from '@common/webviewContext.js';
-import { safeSetElementValue, safeGetElementById } from '@common/domUtils.js';
-import { capitalize, uncapitalize } from '@common/stringUtils.js';
-import { webviewState } from './webviewState.js';
+// Local imports - webview context
 import {
+  vscode,
+  registerMessageHandlers,
   CHEVRON_UP_CLASS,
   CHEVRON_DOWN_CLASS,
 } from '@common/webviewContext.js';
+import { safeSetElementValue, safeGetElementById } from '@common/domUtils.js';
+import { capitalize, uncapitalize } from '@common/stringUtils.js';
+import { webviewState } from './webviewState.js';
 import { setDebugMode as applyDebugMode } from './uiHandlers.js';
 
+// Local imports - UI managers
 import { fileList } from './uiManagers/FileList.js';
 import { fileSelect } from './uiManagers/FileSelect.js';
 import { webviewEventBus } from './eventBus.js';
@@ -15,420 +18,456 @@ import { webviewEventBus } from './eventBus.js';
 import { FILE_TYPES } from './constants.js';
 
 /**
- * Initialize data requests on window load
+ * Handles messages from the extension and syncs the webview state.
  */
-export function initializeDataRequests() {
-  const dataRequests = [
-    'getTheme',
-    'getDebugMode',
-    'requestInputFile',
-    'requestReferenceFile',
-    'requestAuxiliaryFile',
-    'requestMediaFile',
-    'requestRecentCommits',
-    'requestBaseFile',
-  ];
+export class MessageHandlers {
+  constructor() {
+    this._skipNextRestoreState = false;
+    this._handlers = {
+      // Theme & debug
+      setTheme: (m) => this.handleSetTheme(m),
+      setDebugMode: (m) => this.handleSetDebugMode(m),
+      modelSelected: (m) => this.handleModelSelected(m),
 
-  dataRequests.forEach((request) => {
-    vscode.postMessage({ command: request });
-  });
-}
+      // State restoration
+      restoreState: (m) => this.handleRestoreState(m),
+      checkRestoredBaseFile: () => this.handleCheckRestoredBaseFile(),
 
-/**
- * Handle state restoration from log view
- */
-function handleStateRestoration(state) {
-  console.log('Restoring state:', state);
+      // Instruction updates
+      instructionTextPolished: (m) => this.handleInstructionTextPolished(m),
+      instructionTextTranscribed: (m) =>
+        this.handleInstructionTextTranscribed(m),
 
-  // Restore basic form elements
-  if (state.agent) safeSetElementValue('agent', state.agent);
-  if (state.model) safeSetElementValue('model', state.model);
+      // Recording
+      recordingStarted: () => this.handleRecordingStarted(),
+      recordingError: () => this.handleRecordingError(),
 
-  // Fix instruction restoration - needs to use the correct ID
-  const instructionContent = state.instruction || '';
-  const instruction = safeGetElementById('instruction');
-  if (instruction) {
-    instruction.value = instructionContent;
-    // Also trigger any associated events/validation
-    instruction.dispatchEvent(new Event('input'));
+      // Single file updates
+      setInputFile: (m) => this.handleSetInputFile(m),
+      setReferenceFile: (m) => this.handleSetReferenceFile(m),
+      setAuxiliaryFile: (m) => this.handleSetAuxiliaryFile(m),
+      setMediaFile: (m) => this.handleSetMediaFile(m),
+      setEditedFile: (m) => this.handleSetEditedFile(m),
+      inputFileSelected: (m) => this.handleInputFileSelected(m),
+      referenceFileSelected: (m) => this.handleReferenceFileSelected(m),
+      auxiliaryFileSelected: (m) => this.handleAuxiliaryFileSelected(m),
+      mediaFileSelected: (m) => this.handleMediaFileSelected(m),
+      editedFileSelected: (m) => this.handleEditedFileSelected(m),
+      setDefaultOutputFiles: (m) => this.handleSetDefaultOutputFiles(m),
+
+      // Multi-file updates
+      setInputFiles: (m) => this.handleSetInputFiles(m),
+      setReferenceFiles: (m) => this.handleSetReferenceFiles(m),
+      setAuxiliaryFiles: (m) => this.handleSetAuxiliaryFiles(m),
+      setMediaFiles: (m) => this.handleSetMediaFiles(m),
+      addMediaFile: (m) => this.handleAddMediaFile(m),
+      setOutputFiles: (m) => this.handleSetOutputFiles(m),
+
+      // Misc updates
+      setRecentCommits: (m) => this.handleSetRecentCommits(m),
+      setCurrentFile: (m) => this.handleSetCurrentFile(m),
+      setOpenedFiles: (m) => this.handleSetOpenedFiles(m),
+      setBaseFile: (m) => this.handleSetBaseFile(m),
+    };
   }
 
-  // Restore single file selections
-  if (state.inputFile) safeSetElementValue('inputFile', state.inputFile);
-  if (state.referenceFile)
-    safeSetElementValue('referenceFile', state.referenceFile);
-  if (state.auxiliaryFile)
-    safeSetElementValue('auxiliaryFile', state.auxiliaryFile);
-  if (state.mediaFile) safeSetElementValue('mediaFile', state.mediaFile);
-  // Output filename override removed
+  /** Register handlers and request initial data. */
+  setup() {
+    registerMessageHandlers(this._handlers);
+    this._initializeDataRequests();
+  }
 
-  // Prepare the state to save with all necessary properties
-  const toolConfig = state.toolConfig || {};
-  const savedState = {
-    // Basic properties
-    agent: state.agent,
-    model: state.model,
-    instruction: instructionContent, // Use the resolved instruction content
+  /* ---------- Private helpers ---------- */
+  _initializeDataRequests() {
+    const dataRequests = [
+      'getTheme',
+      'getDebugMode',
+      'requestInputFile',
+      'requestReferenceFile',
+      'requestAuxiliaryFile',
+      'requestMediaFile',
+      'requestRecentCommits',
+      'requestBaseFile',
+    ];
+    dataRequests.forEach((request) => {
+      vscode.postMessage({ command: request });
+    });
+  }
 
-    // File selections
-    inputFile: state.inputFile,
-    referenceFile: state.referenceFile,
-    auxiliaryFile: state.auxiliaryFile,
-    mediaFile: state.mediaFile,
+  _handleStateRestoration(state) {
+    console.log('Restoring state:', state);
 
-    // Tool config settings - flattened from either direct or toolConfig property
-    reflect: state.reflect || (toolConfig ? toolConfig.reflect : false),
-    autoExtractFigure:
-      state.autoExtractFigure ||
-      (toolConfig ? toolConfig.autoExtractFigure : false),
-    autoExtractTikzFigure:
-      state.autoExtractTikzFigure ||
-      (toolConfig ? toolConfig.autoExtractTikzFigure : false),
-    attachTeXCount:
-      state.attachTeXCount || (toolConfig ? toolConfig.attachTeXCount : false),
-    usePrefillFromInput:
-      state.usePrefillFromInput ||
-      (toolConfig ? toolConfig.usePrefillFromInput : false),
-    printInputPrompt:
-      state.printInputPrompt ||
-      (toolConfig ? toolConfig.printInputPrompt : false),
-    autoCompileInputPdf:
-      state.autoCompileInputPdf ||
-      (toolConfig ? toolConfig.autoCompileInputPdf : false),
-  };
+    if (state.agent) safeSetElementValue('agent', state.agent);
+    if (state.model) safeSetElementValue('model', state.model);
 
-  // Process multiple file selections
-  for (const fileType of FILE_TYPES) {
-    // Handle both formats (inputFiles and multipleInputFiles)
-    const filesArray =
-      state[`${fileType}Files`] ||
-      state[`multiple${capitalize(fileType)}Files`] ||
-      [];
-    const isVisible =
-      state[`${fileType}FilesActive`] ||
-      state[`multiple${capitalize(fileType)}FilesActive`] ||
-      false;
-    const toggleId = `toggle${capitalize(fileType)}Files`;
-    const containerId = `${fileType}FilesContainer`;
+    const instructionContent = state.instruction || '';
+    const instruction = safeGetElementById('instruction');
+    if (instruction) {
+      instruction.value = instructionContent;
+      instruction.dispatchEvent(new Event('input'));
+    }
 
-    // Save to the state object for later use by restoreState
-    const targetArrayName = `${fileType}Files`;
-    const visibilityName = `${targetArrayName}Active`;
-    savedState[targetArrayName] = filesArray;
-    savedState[visibilityName] = isVisible;
+    if (state.inputFile) safeSetElementValue('inputFile', state.inputFile);
+    if (state.referenceFile)
+      safeSetElementValue('referenceFile', state.referenceFile);
+    if (state.auxiliaryFile)
+      safeSetElementValue('auxiliaryFile', state.auxiliaryFile);
+    if (state.mediaFile) safeSetElementValue('mediaFile', state.mediaFile);
 
-    // Get current UI state to see if we have existing files
-    const multipleFilesId = `${fileType}Files`;
-    const multipleFiles = safeGetElementById(multipleFilesId);
-    const existingFiles = multipleFiles
-      ? Array.from(multipleFiles.querySelectorAll('.file-item')).map(
-          (item) => item.dataset.path,
-        )
-      : [];
+    const toolConfig = state.toolConfig || {};
+    const savedState = {
+      agent: state.agent,
+      model: state.model,
+      instruction: instructionContent,
+      inputFile: state.inputFile,
+      referenceFile: state.referenceFile,
+      auxiliaryFile: state.auxiliaryFile,
+      mediaFile: state.mediaFile,
+      reflect: state.reflect || (toolConfig ? toolConfig.reflect : false),
+      autoExtractFigure:
+        state.autoExtractFigure ||
+        (toolConfig ? toolConfig.autoExtractFigure : false),
+      autoExtractTikzFigure:
+        state.autoExtractTikzFigure ||
+        (toolConfig ? toolConfig.autoExtractTikzFigure : false),
+      attachTeXCount:
+        state.attachTeXCount ||
+        (toolConfig ? toolConfig.attachTeXCount : false),
+      usePrefillFromInput:
+        state.usePrefillFromInput ||
+        (toolConfig ? toolConfig.usePrefillFromInput : false),
+      printInputPrompt:
+        state.printInputPrompt ||
+        (toolConfig ? toolConfig.printInputPrompt : false),
+      autoCompileInputPdf:
+        state.autoCompileInputPdf ||
+        (toolConfig ? toolConfig.autoCompileInputPdf : false),
+    };
 
-    // Only clear and update if we have files to restore or visibility has changed
-    if (filesArray.length > 0 || isVisible) {
-      // Show or hide the multi file container if visibility is specified
-      const container = safeGetElementById(containerId);
-      if (container) {
-        container.style.display = isVisible ? 'block' : 'none';
-      }
+    for (const fileType of FILE_TYPES) {
+      const filesArray =
+        state[`${fileType}Files`] ||
+        state[`multiple${capitalize(fileType)}Files`] ||
+        [];
+      const isVisible =
+        state[`${fileType}FilesActive`] ||
+        state[`multiple${capitalize(fileType)}FilesActive`] ||
+        false;
+      const toggleId = `toggle${capitalize(fileType)}Files`;
+      const containerId = `${fileType}FilesContainer`;
 
-      // Update the toggle indicator based on visibility
-      const toggleElement = safeGetElementById(toggleId);
-      if (toggleElement) {
-        toggleElement.innerHTML = `<i class="${
-          isVisible ? CHEVRON_UP_CLASS : CHEVRON_DOWN_CLASS
-        }"></i>`;
-      }
+      const targetArrayName = `${fileType}Files`;
+      const visibilityName = `${targetArrayName}Active`;
+      savedState[targetArrayName] = filesArray;
+      savedState[visibilityName] = isVisible;
 
-      // Only update the file list if we have files to restore
-      if (filesArray.length > 0 && multipleFiles) {
-        // Clear existing content
-        multipleFiles.innerHTML = '';
+      const multipleFilesId = `${fileType}Files`;
+      const multipleFiles = safeGetElementById(multipleFilesId);
+      const existingFiles = multipleFiles
+        ? Array.from(multipleFiles.querySelectorAll('.file-item')).map(
+            (item) => item.dataset.path,
+          )
+        : [];
 
-        // Add each file
-        filesArray.forEach((file) => {
-          const fileItem = document.createElement('div');
-          fileItem.className = 'file-item';
-          fileItem.dataset.path = file;
-          fileItem.innerHTML = `${file} <span class="remove-button">-</span>`;
-          multipleFiles.appendChild(fileItem);
+      if (filesArray.length > 0 || isVisible) {
+        const container = safeGetElementById(containerId);
+        if (container) {
+          container.style.display = isVisible ? 'block' : 'none';
+        }
 
-          // Add event listeners for the remove button
-          const removeButton = fileItem.querySelector('.remove-button');
-          if (removeButton) {
-            removeButton.addEventListener('click', (e) => {
-              e.stopPropagation();
-              fileItem.remove();
+        const toggleElement = safeGetElementById(toggleId);
+        if (toggleElement) {
+          toggleElement.innerHTML = `<i class="${
+            isVisible ? CHEVRON_UP_CLASS : CHEVRON_DOWN_CLASS
+          }"></i>`;
+        }
 
-              // Update the state
-              const updatedFiles = Array.from(
-                multipleFiles.querySelectorAll('.file-item'),
-              ).map((item) => item.dataset.path);
+        if (filesArray.length > 0 && multipleFiles) {
+          multipleFiles.innerHTML = '';
+          filesArray.forEach((file) => {
+            const fileItem = document.createElement('div');
+            fileItem.className = 'file-item';
+            fileItem.dataset.path = file;
+            fileItem.innerHTML = `${file} <span class="remove-button">-</span>`;
+            multipleFiles.appendChild(fileItem);
 
-              // Send message to update the state
-              vscode.postMessage({
-                command: `update${capitalize(fileType)}Files`,
-                files: updatedFiles,
+            const removeButton = fileItem.querySelector('.remove-button');
+            if (removeButton) {
+              removeButton.addEventListener('click', (e) => {
+                e.stopPropagation();
+                fileItem.remove();
+                const updatedFiles = Array.from(
+                  multipleFiles.querySelectorAll('.file-item'),
+                ).map((item) => item.dataset.path);
+                vscode.postMessage({
+                  command: `update${capitalize(fileType)}Files`,
+                  files: updatedFiles,
+                });
+                webviewState.update({
+                  [`${fileType}Files`]: updatedFiles,
+                });
               });
-
-              // Save state to persist changes
-              webviewState.update({
-                [`${fileType}Files`]: updatedFiles,
-              });
-            });
-          }
-        });
+            }
+          });
+        }
       }
+    }
+
+    webviewState.set(savedState);
+    webviewState.restore();
+    this._skipNextRestoreState = true;
+  }
+
+  _postHandle() {
+    if (this._skipNextRestoreState) {
+      this._skipNextRestoreState = false;
+    } else {
+      webviewState.restore();
     }
   }
 
-  // Save the prepared state
-  webviewState.set(savedState);
+  /* ---------- Command handlers ---------- */
+  // Theme & debug
+  handleSetTheme(message) {
+    document.body.className = message.theme;
+    this._postHandle();
+  }
 
-  // Restore UI elements from the saved state
-  // This will handle setting all form values and updating indicators
-  webviewState.restore();
+  handleSetDebugMode(message) {
+    applyDebugMode(message.debugMode);
+    this._postHandle();
+  }
 
-  // Let the user know we've restored their configuration
-  // vscode.postMessage({
-  //   command: 'showInformationMessage',
-  //   text: 'Configuration restored from selected task',
-  // });
+  handleModelSelected(message) {
+    safeSetElementValue('model', message.model);
+    this._postHandle();
+  }
 
-  // Prevent the automatic restoreState that would happen at the end of the message handler
-  window._skipNextRestoreState = true;
-}
+  // State restoration
+  handleRestoreState(message) {
+    this._handleStateRestoration(message.state);
+    this._postHandle();
+  }
 
-function postHandle() {
-  if (window._skipNextRestoreState) {
-    window._skipNextRestoreState = false;
-  } else {
-    webviewState.restore();
+  handleCheckRestoredBaseFile() {
+    const restoredBaseFileDiv = safeGetElementById('baseFile');
+    if (restoredBaseFileDiv && restoredBaseFileDiv.value) {
+      fileSelect.updateEdited(restoredBaseFileDiv.value);
+    }
+    this._postHandle();
+  }
+
+  // Instruction updates
+  handleInstructionTextPolished(message) {
+    const instruction = safeGetElementById('instruction');
+    if (instruction && message.text) {
+      instruction.value = message.text;
+      vscode.postMessage({
+        command: 'showInformationMessage',
+        text: 'Instruction text has been polished!',
+      });
+      webviewState.save();
+    }
+    this._postHandle();
+  }
+
+  handleInstructionTextTranscribed(message) {
+    const instruction = safeGetElementById('instruction');
+    if (instruction && message.text) {
+      const startPos = instruction.selectionStart;
+      const endPos = instruction.selectionEnd;
+      const textBefore = instruction.value.substring(0, startPos);
+      const textAfter = instruction.value.substring(endPos);
+      instruction.value = textBefore + message.text + textAfter;
+      const newCursorPos = startPos + message.text.length;
+      instruction.setSelectionRange(newCursorPos, newCursorPos);
+      instruction.focus();
+      vscode.postMessage({
+        command: 'showInformationMessage',
+        text: 'Instruction text transcribed!',
+      });
+      webviewState.save();
+    }
+    webviewEventBus.dispatchEvent(
+      new CustomEvent('recordingUIUpdate', { detail: { recording: false } }),
+    );
+    this._postHandle();
+  }
+
+  // Recording
+  handleRecordingStarted() {
+    webviewEventBus.dispatchEvent(
+      new CustomEvent('recordingUIUpdate', { detail: { recording: true } }),
+    );
+    this._postHandle();
+  }
+
+  handleRecordingError() {
+    webviewEventBus.dispatchEvent(
+      new CustomEvent('recordingUIUpdate', { detail: { recording: false } }),
+    );
+    this._postHandle();
+  }
+
+  // Single file updates
+  handleSetInputFile(message) {
+    fileSelect.update('inputFile', message.files);
+    this._postHandle();
+  }
+
+  handleSetReferenceFile(message) {
+    fileSelect.update('referenceFile', message.files);
+    this._postHandle();
+  }
+
+  handleSetAuxiliaryFile(message) {
+    fileSelect.update('auxiliaryFile', message.files);
+    this._postHandle();
+  }
+
+  handleSetMediaFile(message) {
+    fileSelect.update('mediaFile', message.files);
+    this._postHandle();
+  }
+
+  handleSetEditedFile(message) {
+    fileSelect.update('editedFile', message.files);
+    this._postHandle();
+  }
+
+  handleInputFileSelected(message) {
+    safeSetElementValue('inputFile', message.filePath);
+    this._postHandle();
+  }
+
+  handleReferenceFileSelected(message) {
+    safeSetElementValue('referenceFile', message.filePath);
+    this._postHandle();
+  }
+
+  handleAuxiliaryFileSelected(message) {
+    safeSetElementValue('auxiliaryFile', message.filePath);
+    this._postHandle();
+  }
+
+  handleMediaFileSelected(message) {
+    safeSetElementValue('mediaFile', message.filePath);
+    this._postHandle();
+  }
+
+  handleEditedFileSelected(message) {
+    safeSetElementValue('editedFile', message.filePath);
+    this._postHandle();
+  }
+
+  handleSetDefaultOutputFiles(message) {
+    fileSelect.setAgentDefaultOutputFiles(message.files || []);
+    this._postHandle();
+  }
+
+  // Multi-file updates
+  handleSetInputFiles(message) {
+    fileList.update('inputFiles', 'toggleInputFiles', message.files);
+    this._postHandle();
+  }
+
+  handleSetReferenceFiles(message) {
+    fileList.update('referenceFiles', 'toggleReferenceFiles', message.files);
+    this._postHandle();
+  }
+
+  handleSetAuxiliaryFiles(message) {
+    fileList.update('auxiliaryFiles', 'toggleAuxiliaryFiles', message.files);
+    this._postHandle();
+  }
+
+  handleSetMediaFiles(message) {
+    fileList.update('mediaFiles', 'toggleMediaFiles', message.files);
+    this._postHandle();
+  }
+
+  handleAddMediaFile(message) {
+    const listDiv = safeGetElementById('mediaFiles');
+    const existingFiles = listDiv ? fileList.getSelected(listDiv) : [];
+    fileList.update('mediaFiles', 'toggleMediaFiles', [
+      ...existingFiles,
+      message.file,
+    ]);
+
+    const container = safeGetElementById('mediaFilesContainer');
+    if (container && container.style.display === 'none') {
+      container.style.display = 'block';
+      const toggleIcon = safeGetElementById('toggleMediaFiles');
+      if (toggleIcon) {
+        toggleIcon.innerHTML = `<i class="${CHEVRON_UP_CLASS}"></i>`;
+      }
+    }
+
+    this._postHandle();
+  }
+
+  handleSetOutputFiles(message) {
+    fileList.update('outputFiles', 'toggleOutputFiles', message.files);
+    this._postHandle();
+  }
+
+  // Misc updates
+  handleSetRecentCommits(message) {
+    fileSelect.handleRecentCommits(message);
+    this._postHandle();
+  }
+
+  handleSetCurrentFile(message) {
+    fileSelect.handleSetCurrentFile({
+      fileType: message.fileType,
+      filePath: message.filePath,
+    });
+    this._postHandle();
+  }
+
+  handleSetOpenedFiles(message) {
+    if (message.fileType) {
+      const fileType = message.fileType.replace('Files', '');
+      const singleFileId = `${uncapitalize(fileType)}File`;
+      const multipleFileId = `${uncapitalize(fileType)}Files`;
+      const toggleId = `toggle${capitalize(fileType)}Files`;
+
+      let filesToAdd = message.files ?? [];
+      if (message.shouldFilter) {
+        const singleFileSelect = safeGetElementById(singleFileId);
+        if (singleFileSelect && singleFileSelect.value) {
+          filesToAdd = filesToAdd.filter((f) => f !== singleFileSelect.value);
+        }
+      }
+
+      fileList.update(multipleFileId, toggleId, filesToAdd);
+    }
+    this._postHandle();
+  }
+
+  handleSetBaseFile(message) {
+    const currentBaseFileDiv = safeGetElementById('baseFile');
+    if (currentBaseFileDiv) {
+      const currentBaseFile = currentBaseFileDiv.value;
+      fileSelect.update('baseFile', message.files);
+
+      const state = webviewState.get();
+      const storedBaseFile = state?.baseFile;
+
+      if (storedBaseFile && message.files.includes(storedBaseFile)) {
+        currentBaseFileDiv.value = storedBaseFile;
+      } else if (
+        message.preserveBaseFile &&
+        currentBaseFile &&
+        message.files.includes(currentBaseFile)
+      ) {
+        currentBaseFileDiv.value = currentBaseFile;
+      }
+
+      fileSelect.updateEdited(currentBaseFileDiv.value);
+    }
+    this._postHandle();
   }
 }
 
-export function setupMessageHandlers() {
-  const handlers = {
-    setTheme: (m) => {
-      document.body.className = m.theme;
-      postHandle();
-    },
-    setDebugMode: (m) => {
-      applyDebugMode(m.debugMode);
-      postHandle();
-    },
-    modelSelected: (m) => {
-      safeSetElementValue('model', m.model);
-      postHandle();
-    },
-    restoreState: (m) => {
-      handleStateRestoration(m.state);
-      postHandle();
-    },
-    checkRestoredBaseFile: () => {
-      const restoredBaseFileDiv = safeGetElementById('baseFile');
-      if (restoredBaseFileDiv && restoredBaseFileDiv.value) {
-        fileSelect.updateEdited(restoredBaseFileDiv.value);
-      }
-      postHandle();
-    },
-    instructionTextPolished: (m) => {
-      const instruction = safeGetElementById('instruction');
-      if (instruction && m.text) {
-        instruction.value = m.text;
-        vscode.postMessage({
-          command: 'showInformationMessage',
-          text: 'Instruction text has been polished!',
-        });
-        webviewState.save();
-      }
-      postHandle();
-    },
-    instructionTextTranscribed: (m) => {
-      const instruction = safeGetElementById('instruction');
-      if (instruction && m.text) {
-        // Insert text at cursor position instead of replacing all text
-        const startPos = instruction.selectionStart;
-        const endPos = instruction.selectionEnd;
-        const textBefore = instruction.value.substring(0, startPos);
-        const textAfter = instruction.value.substring(endPos);
-
-        // Insert the transcribed text at cursor position
-        instruction.value = textBefore + m.text + textAfter;
-
-        // Set cursor position after the inserted text
-        const newCursorPos = startPos + m.text.length;
-        instruction.setSelectionRange(newCursorPos, newCursorPos);
-
-        // Focus the instruction field
-        instruction.focus();
-
-        vscode.postMessage({
-          command: 'showInformationMessage',
-          text: 'Instruction text transcribed!',
-        });
-        webviewState.save();
-      }
-      // Reset recording UI state
-      webviewEventBus.dispatchEvent(
-        new CustomEvent('recordingUIUpdate', { detail: { recording: false } }),
-      );
-      postHandle();
-    },
-    recordingStarted: () => {
-      // Recording has started successfully
-      webviewEventBus.dispatchEvent(
-        new CustomEvent('recordingUIUpdate', { detail: { recording: true } }),
-      );
-      postHandle();
-    },
-    recordingError: (m) => {
-      // Reset UI on error
-      webviewEventBus.dispatchEvent(
-        new CustomEvent('recordingUIUpdate', { detail: { recording: false } }),
-      );
-      postHandle();
-    },
-    setInputFile: (m) => {
-      fileSelect.update('inputFile', m.files);
-      postHandle();
-    },
-    setReferenceFile: (m) => {
-      fileSelect.update('referenceFile', m.files);
-      postHandle();
-    },
-    setAuxiliaryFile: (m) => {
-      fileSelect.update('auxiliaryFile', m.files);
-      postHandle();
-    },
-    setMediaFile: (m) => {
-      fileSelect.update('mediaFile', m.files);
-      postHandle();
-    },
-    setEditedFile: (m) => {
-      fileSelect.update('editedFile', m.files);
-      postHandle();
-    },
-    inputFileSelected: (m) => {
-      safeSetElementValue('inputFile', m.filePath);
-      postHandle();
-    },
-    referenceFileSelected: (m) => {
-      safeSetElementValue('referenceFile', m.filePath);
-      postHandle();
-    },
-    auxiliaryFileSelected: (m) => {
-      safeSetElementValue('auxiliaryFile', m.filePath);
-      postHandle();
-    },
-    mediaFileSelected: (m) => {
-      safeSetElementValue('mediaFile', m.filePath);
-      postHandle();
-    },
-    editedFileSelected: (m) => {
-      safeSetElementValue('editedFile', m.filePath);
-      postHandle();
-    },
-    setDefaultOutputFiles: (m) => {
-      fileSelect.setAgentDefaultOutputFiles(m.files || []);
-      postHandle();
-    },
-    setInputFiles: (m) => {
-      fileList.update('inputFiles', 'toggleInputFiles', m.files);
-      postHandle();
-    },
-    setReferenceFiles: (m) => {
-      fileList.update('referenceFiles', 'toggleReferenceFiles', m.files);
-      postHandle();
-    },
-    setAuxiliaryFiles: (m) => {
-      fileList.update('auxiliaryFiles', 'toggleAuxiliaryFiles', m.files);
-      postHandle();
-    },
-    setMediaFiles: (m) => {
-      fileList.update('mediaFiles', 'toggleMediaFiles', m.files);
-      postHandle();
-    },
-    addMediaFile: (m) => {
-      const listDiv = safeGetElementById('mediaFiles');
-      const existingFiles = listDiv ? fileList.getSelected(listDiv) : [];
-      fileList.update('mediaFiles', 'toggleMediaFiles', [
-        ...existingFiles,
-        m.file,
-      ]);
-
-      // Ensure the media files container is visible
-      const container = safeGetElementById('mediaFilesContainer');
-      if (container && container.style.display === 'none') {
-        container.style.display = 'block';
-        const toggleIcon = safeGetElementById('toggleMediaFiles');
-        if (toggleIcon) {
-          toggleIcon.innerHTML = `<i class="${CHEVRON_UP_CLASS}"></i>`;
-        }
-      }
-
-      postHandle();
-    },
-    setOutputFiles: (m) => {
-      fileList.update('outputFiles', 'toggleOutputFiles', m.files);
-      postHandle();
-    },
-    setRecentCommits: (m) => {
-      fileSelect.handleRecentCommits(m);
-      postHandle();
-    },
-    setCurrentFile: (m) => {
-      fileSelect.handleSetCurrentFile({
-        fileType: m.fileType,
-        filePath: m.filePath,
-      });
-      postHandle();
-    },
-    setOpenedFiles: (m) => {
-      if (m.fileType) {
-        const fileType = m.fileType.replace('Files', '');
-        const singleFileId = `${uncapitalize(fileType)}File`;
-        const multipleFileId = `${uncapitalize(fileType)}Files`;
-        const toggleId = `toggle${capitalize(fileType)}Files`;
-
-        let filesToAdd = m.files ?? [];
-        if (m.shouldFilter) {
-          const singleFileSelect = safeGetElementById(singleFileId);
-          if (singleFileSelect && singleFileSelect.value) {
-            filesToAdd = filesToAdd.filter((f) => f !== singleFileSelect.value);
-          }
-        }
-
-        fileList.update(multipleFileId, toggleId, filesToAdd);
-      }
-      postHandle();
-    },
-    setBaseFile: (m) => {
-      const currentBaseFileDiv = safeGetElementById('baseFile');
-      if (currentBaseFileDiv) {
-        const currentBaseFile = currentBaseFileDiv.value;
-        fileSelect.update('baseFile', m.files);
-
-        const state = webviewState.get();
-        const storedBaseFile = state?.baseFile;
-
-        if (storedBaseFile && m.files.includes(storedBaseFile)) {
-          currentBaseFileDiv.value = storedBaseFile;
-        } else if (
-          m.preserveBaseFile &&
-          currentBaseFile &&
-          m.files.includes(currentBaseFile)
-        ) {
-          currentBaseFileDiv.value = currentBaseFile;
-        }
-
-        fileSelect.updateEdited(currentBaseFileDiv.value);
-      }
-      postHandle();
-    },
-  };
-
-  registerMessageHandlers(handlers);
-}
+export const messageHandlers = new MessageHandlers();
