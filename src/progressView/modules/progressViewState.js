@@ -170,6 +170,7 @@ export class ProgressViewState {
   constructor() {
     this.stateManager = new WebviewStateManager();
     this.currentStream = '';
+    this.currentGroupId = null;
 
     // Initialize managers
     this.taskGroups = new TaskGroups();
