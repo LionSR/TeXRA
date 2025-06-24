@@ -10,6 +10,7 @@ import { WorkspaceFS } from '@utils/files';
 import { listInputFiles } from '@frontend/files/fileLister';
 import { getIncludedExtensions } from '@utils/fileTypeUtils';
 import { selectFile, selectFiles } from '@frontend/files/dialog';
+import { showLoggedErrorMessage } from '@utils/errorHandlingUtils';
 const CHANNEL = 'fileSelectionCommands';
 logger.initialize(CHANNEL);
 
@@ -45,9 +46,7 @@ function createPicker<Many extends boolean>(options: PickerOptions<Many>) {
       logger.info(CHANNEL, message);
       return result as any;
     } catch (err) {
-      const msg = `Error selecting files: ${err instanceof Error ? err.message : String(err)}`;
-      logger.error(CHANNEL, msg);
-      showErrorMessage(msg);
+      await showLoggedErrorMessage(CHANNEL, 'Error selecting files', err);
       return null as any;
     }
   };
@@ -171,13 +170,7 @@ async function selectOutputFiles(
     );
     return relativePaths;
   } catch (err) {
-    logger.error(
-      CHANNEL,
-      `Error selecting output files: ${err instanceof Error ? err.message : String(err)}`,
-    );
-    vscode.window.showErrorMessage(
-      `Error selecting output files: ${err instanceof Error ? err.message : String(err)}`,
-    );
+    await showLoggedErrorMessage(CHANNEL, 'Error selecting output files', err);
     return null;
   }
 }
