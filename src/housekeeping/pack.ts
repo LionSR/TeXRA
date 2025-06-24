@@ -143,8 +143,9 @@ export async function runPackSingle(
     filePatterns,
     TEMP_EXTENSIONS,
   );
+  const skip = new Set([...movedFiles, ...copiedFiles]);
   for (const file of tempFiles) {
-    if (file !== inputFile) {
+    if (!skip.has(file)) {
       await WorkspaceFS.delete(file);
     }
   }
