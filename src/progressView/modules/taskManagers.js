@@ -128,6 +128,11 @@ export class TaskGroupsDom {
     } else {
       container.appendChild(detailsElem);
     }
+
+    // For top-level groups, collapse the previous active group
+    if (!group.parentGroupId) {
+      this.collapsePreviousActiveGroup();
+    }
   }
 
   /**
@@ -148,7 +153,8 @@ export class TaskGroupsDom {
     // Update the header in the UI if it exists
     const header = document.getElementById(`group-header-${groupId}`);
     if (header) {
-      header.className = this.headerFormatter._getHeaderClass(group);
+      const level = this.headerFormatter._getGroupLevel(group);
+      header.className = this.headerFormatter._getHeaderClass(group, level);
 
       // Update the status icon
       const statusIconElem = header.querySelector('.group-status-icon');
