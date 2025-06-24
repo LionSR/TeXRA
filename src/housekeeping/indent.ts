@@ -11,6 +11,7 @@ import * as logger from '@logger/logUtils';
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
 import { getConfig } from '@utils/config';
 import { runLatexFormatter } from '@latex/texFormatter';
+import { showLoggedErrorMessage } from '@utils/errorHandlingUtils';
 
 // Local imports - housekeeping
 import { EXCLUDED_DIRS } from './constants';
@@ -144,8 +145,11 @@ export async function indentLatexFilesInDirectory(
     );
     return indentedCount;
   } catch (err) {
-    logger.error(CHANNEL, `Error during indentation process: ${err}`);
-    vscode.window.showErrorMessage(`Error during indentation: ${err}`);
+    await showLoggedErrorMessage(
+      CHANNEL,
+      'Error during indentation process',
+      err,
+    );
     return 0;
   }
 }

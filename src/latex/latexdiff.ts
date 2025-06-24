@@ -12,7 +12,10 @@ import { WorkspaceFS } from '@utils/files';
 import { executeCommand } from '@utils/system';
 import { ExecResult } from '../types/ResultTypes';
 import { getConfig } from '@utils/config';
-import { logErrorMessage } from '@utils/errorHandlingUtils';
+import {
+  logErrorMessage,
+  showLoggedErrorMessage,
+} from '@utils/errorHandlingUtils';
 
 // Local imports - latex utils
 import { runLatexFormatter } from './texFormatter';
@@ -604,8 +607,7 @@ export async function runLatexdiffvcMultiple(
   logger.debug(channel, `Processing multiple files with commit ${commitHash}`);
 
   if (!inputFiles || inputFiles.length === 0) {
-    logger.error(channel, 'No input files provided');
-    vscode.window.showErrorMessage('No input files provided');
+    await showLoggedErrorMessage(channel, 'No input files provided');
     return {
       success: false,
       results: { success: [], failed: [] },
@@ -727,8 +729,8 @@ export async function runLatexdiffMultiple(
     if (inputFiles.length !== editedFiles.length) {
       const message =
         'The number of input files must match the number of edited files. Stopping latexdiff.';
-      logger.error(channel, message);
-      vscode.window.showErrorMessage(
+      await showLoggedErrorMessage(
+        channel,
         'The number of input files must match the number of edited files',
       );
       return {

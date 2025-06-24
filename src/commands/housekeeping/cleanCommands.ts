@@ -18,6 +18,7 @@ import {
   runCleanOutput,
 } from '@housekeeping';
 import type { FileOpResult } from '@/types/ResultTypes';
+import { showLoggedErrorMessage } from '@utils/errorHandlingUtils';
 
 const CHANNEL = 'cleanCommands';
 logger.initialize(CHANNEL);
@@ -64,11 +65,8 @@ async function handleCleanSingle(
   );
 
   if (!inputFile || !agent || !model) {
-    logger.error(
+    await showLoggedErrorMessage(
       CHANNEL,
-      `Missing required parameters: inputFile=${inputFile}, agent=${agent}, model=${model}`,
-    );
-    vscode.window.showErrorMessage(
       'Missing required parameters for cleanSingle',
     );
     return;
@@ -97,11 +95,8 @@ async function handleCleanMultiple(
   logger.debug(CHANNEL, `Additional files: ${outputFiles.join(', ')}`);
 
   if (!inputFile || !agent || !model) {
-    logger.error(
+    await showLoggedErrorMessage(
       CHANNEL,
-      `Missing required parameters: inputFile=${inputFile}, agent=${agent}, model=${model}`,
-    );
-    vscode.window.showErrorMessage(
       'Missing required parameters for clean multiple',
     );
     return;
@@ -128,8 +123,10 @@ export async function handleClean(config: {
   );
 
   if (!config.agent || !config.inputFile) {
-    logger.error(CHANNEL, 'Missing required parameters in config');
-    vscode.window.showErrorMessage('Missing required parameters for clean');
+    await showLoggedErrorMessage(
+      CHANNEL,
+      'Missing required parameters in config',
+    );
     return;
   }
 
