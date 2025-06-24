@@ -15,6 +15,7 @@ import { getConfig } from '@utils/config';
 import {
   logErrorMessage,
   showLoggedErrorMessage,
+  showLoggedMessage,
 } from '@utils/errorHandlingUtils';
 
 // Local imports - latex utils
@@ -607,7 +608,7 @@ export async function runLatexdiffvcMultiple(
   logger.debug(channel, `Processing multiple files with commit ${commitHash}`);
 
   if (!inputFiles || inputFiles.length === 0) {
-    await showLoggedErrorMessage(channel, 'No input files provided');
+    await showLoggedMessage(channel, 'No input files provided');
     return {
       success: false,
       results: { success: [], failed: [] },
@@ -729,7 +730,7 @@ export async function runLatexdiffMultiple(
     if (inputFiles.length !== editedFiles.length) {
       const message =
         'The number of input files must match the number of edited files. Stopping latexdiff.';
-      await showLoggedErrorMessage(
+      await showLoggedMessage(
         channel,
         'The number of input files must match the number of edited files',
       );
