@@ -89,6 +89,10 @@ adding new code or refactoring existing modules:
 - When creating manager classes that share state, avoid creating separate instances:
   - Pass shared dependencies through constructors (e.g., `new UsageGroup(this.usageSummary)`)
   - This prevents inconsistent state across different parts of the UI
+- Avoid circular dependencies and forward references:
+  - Don't use global window references for accessing parent singletons from child components
+  - Instead, pass required dependencies through constructors
+  - This prevents ReferenceError from const declarations and maintains clean architecture
   - Example: UsageGroup should use the same UsageSummary instance as the main handler
 
 ## Documentation

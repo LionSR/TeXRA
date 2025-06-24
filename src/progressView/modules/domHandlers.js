@@ -16,7 +16,7 @@ export class ProgressViewDomHandler {
     this.status = new Status();
     this.usageSummary = new UsageSummary();
     this.usageGroup = new UsageGroup(this.usageSummary); // Pass shared instance
-    this.fileList = new FileList();
+    this.fileList = new FileList(this.usageSummary); // Pass shared instance
     this.taskGroups = new TaskGroupsDom();
     this.logEntries = new LogEntriesDom();
     this.events = new Events();

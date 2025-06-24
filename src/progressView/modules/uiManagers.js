@@ -180,6 +180,9 @@ export class Status {
  * Manages file list rendering.
  */
 export class FileList {
+  constructor(usageSummary = null) {
+    this.usageSummary = usageSummary;
+  }
   /**
    * Get the effective base file for comparison operations.
    * @param {string|null|undefined} base - The explicit base file path
@@ -227,13 +230,11 @@ export class FileList {
     usageHeader.className = 'files-usage-header';
 
     // Calculate total usage from all groups
-    // Access via global since we can't import due to circular dependency
-    const totals =
-      window.progressViewDomHandler?.usageSummary?.computeTotal() || {
-        inputTokens: 0,
-        outputTokens: 0,
-        cost: 0,
-      };
+    const totals = this.usageSummary?.computeTotal() || {
+      inputTokens: 0,
+      outputTokens: 0,
+      cost: 0,
+    };
 
     if (totals.inputTokens || totals.outputTokens || totals.cost) {
       usageHeader.innerHTML = `
@@ -396,27 +397,8 @@ export class Events {
         }
       });
 
-    // File list toggle
-    const filesToggle = document.getElementById('filesToggle');
-    if (filesToggle) {
-      filesToggle.addEventListener('click', () => {
-        const filesPanel = document.getElementById('filesPanel');
-        const chevron = document.querySelector('#filesToggle .chevron');
-        const isVisible = filesPanel.style.display !== 'none';
-
-        filesPanel.style.display = isVisible ? 'none' : 'block';
-        chevron.className = isVisible
-          ? 'codicon codicon-chevron-right chevron'
-          : 'codicon codicon-chevron-down chevron';
-
-        // Update split sizes
-        if (isVisible) {
-          window.progressSplit.setSizes(SPLIT_SIZES.COLLAPSED);
-        } else {
-          window.progressSplit.setSizes(SPLIT_SIZES.DEFAULT);
-        }
-      });
-    }
+    // File list toggle - removed as filesToggle element doesn't exist in the HTML
+    // This appears to be orphaned code from a previous design
 
     // File list button handler
     document.getElementById('generatedFiles').addEventListener(
