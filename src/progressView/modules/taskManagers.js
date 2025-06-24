@@ -313,15 +313,29 @@ export class LogEntriesDom {
         for (const child of childElements) {
           // If this is a log group (nested group)
           if (child.classList.contains('log-group')) {
-            const groupStartTime =
-              child.querySelector('.group-start-time')?.dataset.start;
-            if (groupStartTime) {
-              const startTime = parseInt(groupStartTime, 10);
-              // If the message timestamp is earlier than the group start time,
-              // insert before this group
-              if (msgDate && msgDate.getTime() < startTime) {
-                insertPosition = child;
-                break;
+            const startTimeElem = child.querySelector('.group-start-time');
+            if (startTimeElem) {
+              const groupStartTime = startTimeElem.dataset.start;
+              if (groupStartTime) {
+                const startTime = parseInt(groupStartTime, 10);
+                // If the message timestamp is earlier than the group start time,
+                // insert before this group
+                if (msgDate) {
+                  if (msgDate.getTime() < startTime) {
+                    insertPosition = child;
+                    break;
+                  }
+                } else {
+                  // Fallback to text comparison if no msgDate
+                  const timeText = startTimeElem.textContent.replace(
+                    /^[^0-9]*/,
+                    '',
+                  );
+                  if (msgTimestamp < timeText) {
+                    insertPosition = child;
+                    break;
+                  }
+                }
               }
             }
           }

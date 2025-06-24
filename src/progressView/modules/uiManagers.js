@@ -257,7 +257,7 @@ export class FileList {
 
       files.forEach((file) => {
         // Skip invalid file entries
-        if (!file || !file.current) {
+        if (!file || !file.path) {
           console.warn('FileList.update: Invalid file entry:', file);
           return;
         }
@@ -268,15 +268,17 @@ export class FileList {
         const dirSpan = clone.querySelector('.file-dir');
         const basenameSpan = clone.querySelector('.file-basename');
         const fileActions = clone.querySelector('.file-actions');
+        const statsSpan = clone.querySelector('.file-stats');
 
-        // Parse the file path
-        const parts = file.current.split('/');
+        // Use original name if available, otherwise use generated path
+        const displayPath = file.original || file.path;
+        const parts = displayPath.split('/');
         const basename = parts.pop() || '';
         const dirPath = parts.length > 0 ? parts.join('/') + '/' : '';
 
         // Set file data attributes
         if (fileItem) {
-          fileItem.dataset.file = file.current;
+          fileItem.dataset.file = file.path;
           fileItem.dataset.original = file.original || '';
           fileItem.dataset.base = file.base || '';
           fileItem.dataset.round = round;
@@ -285,13 +287,24 @@ export class FileList {
         // Set the file path display
         if (dirSpan) dirSpan.textContent = dirPath;
         if (basenameSpan) basenameSpan.textContent = basename;
-        if (filePathSpan) filePathSpan.title = file.current;
+        if (filePathSpan) filePathSpan.title = file.path;
+
+        // Handle file stats
+        if (statsSpan) {
+          if (file.added !== undefined && file.removed !== undefined) {
+            statsSpan.innerHTML = `<span class="added">+${file.added}</span><span class="removed">-${file.removed}</span>`;
+          } else if (file.added !== undefined) {
+            statsSpan.innerHTML = `<span class="added">+${file.added}</span>`;
+          } else {
+            statsSpan.remove();
+          }
+        }
 
         // Get effective base file for comparisons
         const effectiveBase = this.getEffectiveBaseFile(
           file.base,
           file.original,
-          file.current,
+          file.path,
         );
 
         // Update existing buttons based on file state
@@ -318,8 +331,8 @@ export class FileList {
       if (effectiveBase) {
         compareBtn.onclick = () => {
           vscode.postMessage({
-            command: 'compareFile',
-            file: file.current,
+            command: 'compareOriginal',
+            file: file.path,
             base: effectiveBase,
           });
         };
@@ -334,7 +347,7 @@ export class FileList {
         acceptBtn.onclick = () => {
           vscode.postMessage({
             command: 'acceptFile',
-            file: file.current,
+            file: file.path,
             base: effectiveBase,
           });
         };
@@ -349,7 +362,7 @@ export class FileList {
         mergeBtn.onclick = () => {
           vscode.postMessage({
             command: 'mergeFile',
-            file: file.current,
+            file: file.path,
             base: effectiveBase,
           });
         };
@@ -363,8 +376,8 @@ export class FileList {
       if (effectiveBase) {
         diffBtn.onclick = () => {
           vscode.postMessage({
-            command: 'latexDiff',
-            file: file.current,
+            command: 'latexdiffFile',
+            file: file.path,
             base: effectiveBase,
           });
         };
@@ -379,7 +392,7 @@ export class FileList {
         prevBtn.onclick = () => {
           vscode.postMessage({
             command: 'comparePrevious',
-            file: file.current,
+            file: file.path,
             prev: file.prev,
           });
         };
@@ -390,11 +403,11 @@ export class FileList {
 
     // Add click handler for the file path
     const filePathSpan = clone.querySelector('.file-path');
-    if (filePathSpan && file.current) {
+    if (filePathSpan && file.path) {
       filePathSpan.onclick = () => {
         vscode.postMessage({
           command: 'openFile',
-          file: file.current,
+          file: file.path,
         });
       };
     }
