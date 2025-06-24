@@ -19,7 +19,7 @@ This document sets the common conventions for contributions. Follow these norms 
 
 ## Coding style
 
-- All code in `src/` is written in TypeScript targeting ES2022.
+- All code in `src/` is written in TypeScript targeting ES2022, except some javascript files in `src/(webview,progressView,historyView)/modules/`.
 - Use the provided ESLint configuration (`eslint.config.mjs`) and Prettier settings (`.prettierrc`). Run `npm run format` before committing.
 - Prefer `const` and `let` over `var`.
 - Group imports by source and prefix each block with a descriptive comment (e.g., `// Third-party imports`, `// Local imports - component`).
@@ -65,6 +65,11 @@ This document sets the common conventions for contributions. Follow these norms 
 - Dispose event listeners and watchers when webviews close to prevent leaks.
 - Maintain provider capabilities and pricing info in `ModelRegistry`.
 - Prefer debug logging for routine events; reserve info and error levels for important messages.
+- When refactoring classes for separation of concerns, avoid backward compatibility pass-through methods. Instead:
+  - Organize functionality into focused manager classes (e.g., `LogGroups`, `StreamTabs`, `FileList`)
+  - Use direct access patterns: `state.logGroups.get()` instead of `state.getLogGroup()`
+  - Keep method names simple - context comes from the class name (`set()`, `get()`, `clear()`)
+  - Follow the pattern seen in `src/progressView/modules/progressViewState.js` and `domHandlers.js`
 
 ## Design and refactoring
 
