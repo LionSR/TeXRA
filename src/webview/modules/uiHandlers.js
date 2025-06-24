@@ -21,11 +21,19 @@ import {
   safeGetElementValue,
   safeGetElementChecked,
 } from '@common/domUtils.js';
-import {
-  CHEVRON_UP_CLASS,
-  CHEVRON_DOWN_CLASS,
-} from '@common/webviewContext.js';
 import { capitalize } from '@common/stringUtils.js';
+import { InstructionManager } from './uiManagers/InstructionManager.js';
+import { ToggleManager } from './uiManagers/ToggleManager.js';
+import { RecordingManager } from './uiManagers/RecordingManager.js';
+import { webviewEventBus } from './eventBus.js';
+
+export const instructionManager = new InstructionManager(
+  'instruction',
+  vscode,
+  webviewState,
+);
+export const toggleManager = new ToggleManager();
+export const recordingManager = new RecordingManager(vscode, webviewEventBus);
 
 let debugMode = false;
 
@@ -42,87 +50,6 @@ function updateDebugButtonVisibility() {
 export function setDebugMode(enabled) {
   debugMode = !!enabled;
   updateDebugButtonVisibility();
-}
-
-// Add this function to handle textarea auto-resize
-export function autoResizeTextarea(textarea) {
-  // Reset height to auto to get the correct scrollHeight
-  textarea.style.height = 'auto';
-  const maxHeight = 400;
-
-  // Calculate the new height
-  const newHeight = Math.min(textarea.scrollHeight, maxHeight);
-
-  // Set new height
-  textarea.style.height = newHeight + 'px';
-
-  // Show/hide scrollbar based on content height
-  textarea.style.overflowY =
-    textarea.scrollHeight > maxHeight ? 'auto' : 'hidden';
-}
-
-function updateDropdownToggleState(toggleId, optionsId, checkboxIds, icon) {
-  const toggle = safeGetElementById(toggleId);
-  const options = safeGetElementById(optionsId);
-  const isVisible = options.style.display === 'block';
-
-  const hasChecked = checkboxIds.some((id) => safeGetElementChecked(id));
-  if (toggle) {
-    toggle.classList.toggle('active', hasChecked);
-    toggle.innerHTML = `<i class="codicon codicon-${icon}"></i><i class="${
-      isVisible ? CHEVRON_UP_CLASS : CHEVRON_DOWN_CLASS
-    }"></i>`;
-  }
-}
-
-export function updateAutoToggleState() {
-  updateDropdownToggleState(
-    'toggleAutoExtract',
-    'autoExtractOptions',
-    CHECK_BOXES_AUTO_EXTRACT,
-    'wand',
-  );
-}
-
-export function updateToolConfigToggleState() {
-  updateDropdownToggleState(
-    'toggleToolConfig',
-    'toolConfigOptions',
-    CHECK_BOXES_TOOL_USE,
-    'tools',
-  );
-}
-
-/**
- * Setup document-level event listeners
- */
-export function setupDocumentListeners() {
-  // Close dropdowns when clicking outside
-  document.addEventListener('click', (e) => {
-    const toolConfigOptions = safeGetElementById('toolConfigOptions');
-    const autoExtractOptions = safeGetElementById('autoExtractOptions');
-    const toggleToolConfig = safeGetElementById('toggleToolConfig');
-    const toggleAutoExtract = safeGetElementById('toggleAutoExtract');
-
-    if (
-      !toggleToolConfig?.contains(e.target) &&
-      !toolConfigOptions?.contains(e.target)
-    ) {
-      if (toolConfigOptions) {
-        toolConfigOptions.style.display = 'none';
-        updateToolConfigToggleState();
-      }
-    }
-    if (
-      !toggleAutoExtract?.contains(e.target) &&
-      !autoExtractOptions?.contains(e.target)
-    ) {
-      if (autoExtractOptions) {
-        autoExtractOptions.style.display = 'none';
-        updateAutoToggleState();
-      }
-    }
-  });
 }
 
 export function setupUIHandlers() {
@@ -184,7 +111,7 @@ export function setupUIHandlers() {
     const isVisible = autoExtractOptions.style.display === 'block';
 
     autoExtractOptions.style.display = isVisible ? 'none' : 'block';
-    updateAutoToggleState();
+    toggleManager.updateAutoToggleState();
   });
 
   addEventListenerSafely('toggleToolConfig', 'click', function (e) {
@@ -193,20 +120,20 @@ export function setupUIHandlers() {
     const isVisible = toolConfigOptions.style.display === 'block';
 
     toolConfigOptions.style.display = isVisible ? 'none' : 'block';
-    updateToolConfigToggleState();
+    toggleManager.updateToolConfigToggleState();
   });
 
   // Add checkbox change listeners for auto-extract options
   CHECK_BOXES_AUTO_EXTRACT.forEach((id) => {
     addEventListenerSafely(id, 'change', function () {
-      updateAutoToggleState();
+      toggleManager.updateAutoToggleState();
       handleCheckboxChange.call(this);
     });
   });
 
   CHECK_BOXES_TOOL_USE.forEach((id) => {
     addEventListenerSafely(id, 'change', function () {
-      updateToolConfigToggleState();
+      toggleManager.updateToolConfigToggleState();
       handleCheckboxChange.call(this);
     });
   });
@@ -322,7 +249,7 @@ export function setupUIHandlers() {
     const instruction = safeGetElementById('instruction');
     if (instruction) {
       instruction.value = '';
-      autoResizeTextarea(instruction);
+      instructionManager.autoResizeTextarea(instruction);
       webviewState.save();
     }
   });
@@ -352,37 +279,7 @@ export function setupUIHandlers() {
     }
   });
 
-  // Recording state management
-  let isRecording = false;
-
-  function updateRecordingUI(recording) {
-    isRecording = recording;
-    const recordButton = safeGetElementById('recordInstructionButton');
-    if (recordButton) {
-      if (recording) {
-        recordButton.innerHTML = '<i class="codicon codicon-stop-circle"></i>';
-        recordButton.title = 'Stop recording';
-        recordButton.classList.add('recording');
-      } else {
-        recordButton.innerHTML = '<i class="codicon codicon-mic"></i>';
-        recordButton.title = 'Record instruction with microphone';
-        recordButton.classList.remove('recording');
-      }
-    }
-  }
-
-  addEventListenerSafely('recordInstructionButton', 'click', function () {
-    if (isRecording) {
-      vscode.postMessage({ command: 'stopRecording' });
-      updateRecordingUI(false);
-    } else {
-      vscode.postMessage({ command: 'startRecording' });
-      updateRecordingUI(true);
-    }
-  });
-
-  // Export the updateRecordingUI function for use in message handlers
-  window.updateRecordingUI = updateRecordingUI;
+  recordingManager.setupRecordButton();
 
   addEventListenerSafely('executeButton', 'click', function () {
     const agent = safeGetElementValue('agent');
