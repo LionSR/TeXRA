@@ -1,5 +1,5 @@
 import { vscode } from '@common/webviewContext.js';
-import { saveState } from './stateManager.js';
+import { webviewState } from './webviewState.js';
 import {
   MULTIPLE_SELECTIONS,
   CHECK_BOXES,
@@ -134,7 +134,7 @@ export function setupUIHandlers() {
     if (element) {
       new Sortable(element, {
         animation: 150,
-        onEnd: saveState,
+        onEnd: webviewState.save,
       });
     }
   });
@@ -228,7 +228,7 @@ export function setupUIHandlers() {
       const selectElement = safeGetElementById(`${type}File`);
       if (selectElement) {
         selectElement.value = '';
-        saveState();
+        webviewState.save();
       }
     });
   });
@@ -248,7 +248,7 @@ export function setupUIHandlers() {
       agent: selectedAgent,
     });
 
-    saveState();
+    webviewState.save();
   });
 
   addEventListenerSafely('model', 'change', function () {
@@ -325,7 +325,7 @@ export function setupUIHandlers() {
     if (instruction) {
       instruction.value = '';
       autoResizeTextarea(instruction);
-      saveState();
+      webviewState.save();
     }
   });
 
@@ -563,16 +563,16 @@ export function setupUIHandlers() {
 
   ELEMENTS_TO_SAVE.forEach((id) => {
     if (id !== 'instruction') {
-      addEventListenerSafely(id, 'change', saveState);
+      addEventListenerSafely(id, 'change', webviewState.save);
     }
   });
 
   // Special case for instruction as it uses 'input' event
-  addEventListenerSafely('instruction', 'input', saveState);
+  addEventListenerSafely('instruction', 'input', webviewState.save);
 
   new Sortable(safeGetElementById('outputFiles'), {
     animation: 150,
-    onEnd: saveState,
+    onEnd: webviewState.save,
   });
 
   // Add event listeners for file operations (add opened files, get current file)
