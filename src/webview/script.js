@@ -1,9 +1,5 @@
 import { webviewState } from './modules/webviewState.js';
-import { vscode } from '@common/webviewContext.js';
-import {
-  setupMessageHandlers,
-  initializeDataRequests,
-} from './modules/messageHandlers.js';
+import { messageHandlers } from './modules/messageHandlers.js';
 import {
   setupUIHandlers,
   instructionManager,
@@ -12,16 +8,13 @@ import {
 
 // Initialize data requests when window loads
 window.onload = function () {
-  initializeDataRequests();
+  messageHandlers.setup();
 
   // Set default state for new folders
   webviewState.restore();
 
   instructionManager.init();
 };
-
-// Setup message handlers
-setupMessageHandlers();
 
 // Setup UI when DOM is loaded
 document.addEventListener('DOMContentLoaded', function () {
