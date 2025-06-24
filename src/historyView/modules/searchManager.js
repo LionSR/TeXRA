@@ -9,9 +9,11 @@ export class SearchManager {
   constructor(state = historyViewState) {
     this.state = state;
     this.markInstance = null;
+    this.container = null;
   }
 
   initialize(container) {
+    this.container = container;
     this.markInstance = new Mark(container);
   }
 
@@ -23,17 +25,19 @@ export class SearchManager {
           this.state.setSearchIndex(-1);
           this.state.setTotalMatches(0);
           this.expandAllCollapsibleSections();
+          let count = 0;
           this.markInstance.mark(term, {
             each: () => {
-              this.state.totalMatches++;
+              count += 1;
             },
             done: () => {
-              if (this.state.totalMatches > 0) {
+              this.state.setTotalMatches(count);
+              if (count > 0) {
                 this.state.setSearchIndex(0);
                 this.scrollToCurrentMatch();
               } else {
+                this.state.setSearchIndex(0);
                 this.updateMatchCountDisplay();
-                this.state.save();
               }
             },
           });
@@ -101,8 +105,16 @@ export class SearchManager {
         if (toggle) {
           toggle.textContent = 'Show less';
         }
-        historyViewState.toggleStates.set(id, true);
+        this.state.toggleStates.set(id, true);
       }
     });
+  }
+
+  dispose() {
+    if (this.markInstance) {
+      this.markInstance.unmark();
+    }
+    this.markInstance = null;
+    this.container = null;
   }
 }
