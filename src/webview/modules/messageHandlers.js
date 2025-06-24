@@ -23,26 +23,54 @@ import { FILE_TYPES } from './constants.js';
 export class MessageHandlers {
   constructor() {
     this._skipNextRestoreState = false;
+    this._cleanupFn = null;
+
+    // Cached DOM elements
+    this._instructionEl = null;
+
     this._handlers = {
-      // Theme & debug
+      ...this._createThemeHandlers(),
+      ...this._createStateHandlers(),
+      ...this._createInstructionHandlers(),
+      ...this._createRecordingHandlers(),
+      ...this._createSingleFileHandlers(),
+      ...this._createMultiFileHandlers(),
+      ...this._createMiscHandlers(),
+    };
+  }
+
+  _createThemeHandlers() {
+    return {
       setTheme: (m) => this.handleSetTheme(m),
       setDebugMode: (m) => this.handleSetDebugMode(m),
       modelSelected: (m) => this.handleModelSelected(m),
+    };
+  }
 
-      // State restoration
+  _createStateHandlers() {
+    return {
       restoreState: (m) => this.handleRestoreState(m),
       checkRestoredBaseFile: () => this.handleCheckRestoredBaseFile(),
+    };
+  }
 
-      // Instruction updates
+  _createInstructionHandlers() {
+    return {
       instructionTextPolished: (m) => this.handleInstructionTextPolished(m),
       instructionTextTranscribed: (m) =>
         this.handleInstructionTextTranscribed(m),
+    };
+  }
 
-      // Recording
+  _createRecordingHandlers() {
+    return {
       recordingStarted: () => this.handleRecordingStarted(),
       recordingError: () => this.handleRecordingError(),
+    };
+  }
 
-      // Single file updates
+  _createSingleFileHandlers() {
+    return {
       setInputFile: (m) => this.handleSetInputFile(m),
       setReferenceFile: (m) => this.handleSetReferenceFile(m),
       setAuxiliaryFile: (m) => this.handleSetAuxiliaryFile(m),
@@ -54,16 +82,22 @@ export class MessageHandlers {
       mediaFileSelected: (m) => this.handleMediaFileSelected(m),
       editedFileSelected: (m) => this.handleEditedFileSelected(m),
       setDefaultOutputFiles: (m) => this.handleSetDefaultOutputFiles(m),
+    };
+  }
 
-      // Multi-file updates
+  _createMultiFileHandlers() {
+    return {
       setInputFiles: (m) => this.handleSetInputFiles(m),
       setReferenceFiles: (m) => this.handleSetReferenceFiles(m),
       setAuxiliaryFiles: (m) => this.handleSetAuxiliaryFiles(m),
       setMediaFiles: (m) => this.handleSetMediaFiles(m),
       addMediaFile: (m) => this.handleAddMediaFile(m),
       setOutputFiles: (m) => this.handleSetOutputFiles(m),
+    };
+  }
 
-      // Misc updates
+  _createMiscHandlers() {
+    return {
       setRecentCommits: (m) => this.handleSetRecentCommits(m),
       setCurrentFile: (m) => this.handleSetCurrentFile(m),
       setOpenedFiles: (m) => this.handleSetOpenedFiles(m),
@@ -73,8 +107,15 @@ export class MessageHandlers {
 
   /** Register handlers and request initial data. */
   setup() {
-    registerMessageHandlers(this._handlers);
+    this._cleanupFn = registerMessageHandlers(this._handlers);
     this._initializeDataRequests();
+  }
+
+  cleanup() {
+    if (this._cleanupFn) {
+      this._cleanupFn();
+      this._cleanupFn = null;
+    }
   }
 
   /* ---------- Private helpers ---------- */
@@ -96,12 +137,22 @@ export class MessageHandlers {
 
   _handleStateRestoration(state) {
     console.log('Restoring state:', state);
+    const savedState = {};
+    this._restoreFormFields(state, savedState);
+    this._restoreFileArrays(state, savedState);
+    webviewState.set(savedState);
+    webviewState.restore();
+    this._skipNextRestoreState = true;
+  }
 
+  _restoreFormFields(state, savedState) {
     if (state.agent) safeSetElementValue('agent', state.agent);
     if (state.model) safeSetElementValue('model', state.model);
 
     const instructionContent = state.instruction || '';
-    const instruction = safeGetElementById('instruction');
+    const instruction =
+      this._instructionEl ||
+      (this._instructionEl = safeGetElementById('instruction'));
     if (instruction) {
       instruction.value = instructionContent;
       instruction.dispatchEvent(new Event('input'));
@@ -115,7 +166,7 @@ export class MessageHandlers {
     if (state.mediaFile) safeSetElementValue('mediaFile', state.mediaFile);
 
     const toolConfig = state.toolConfig || {};
-    const savedState = {
+    Object.assign(savedState, {
       agent: state.agent,
       model: state.model,
       instruction: instructionContent,
@@ -142,8 +193,10 @@ export class MessageHandlers {
       autoCompileInputPdf:
         state.autoCompileInputPdf ||
         (toolConfig ? toolConfig.autoCompileInputPdf : false),
-    };
+    });
+  }
 
+  _restoreFileArrays(state, savedState) {
     for (const fileType of FILE_TYPES) {
       const filesArray =
         state[`${fileType}Files`] ||
@@ -153,8 +206,6 @@ export class MessageHandlers {
         state[`${fileType}FilesActive`] ||
         state[`multiple${capitalize(fileType)}FilesActive`] ||
         false;
-      const toggleId = `toggle${capitalize(fileType)}Files`;
-      const containerId = `${fileType}FilesContainer`;
 
       const targetArrayName = `${fileType}Files`;
       const visibilityName = `${targetArrayName}Active`;
@@ -163,13 +214,10 @@ export class MessageHandlers {
 
       const multipleFilesId = `${fileType}Files`;
       const multipleFiles = safeGetElementById(multipleFilesId);
-      const existingFiles = multipleFiles
-        ? Array.from(multipleFiles.querySelectorAll('.file-item')).map(
-            (item) => item.dataset.path,
-          )
-        : [];
-
       if (filesArray.length > 0 || isVisible) {
+        const containerId = `${fileType}FilesContainer`;
+        const toggleId = `toggle${capitalize(fileType)}Files`;
+
         const container = safeGetElementById(containerId);
         if (container) {
           container.style.display = isVisible ? 'block' : 'none';
@@ -212,10 +260,6 @@ export class MessageHandlers {
         }
       }
     }
-
-    webviewState.set(savedState);
-    webviewState.restore();
-    this._skipNextRestoreState = true;
   }
 
   _postHandle() {
