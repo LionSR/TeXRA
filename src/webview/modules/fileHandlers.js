@@ -6,7 +6,10 @@ import {
   safeGetElementById,
   safeSetElementValue,
 } from '@common/domUtils.js';
-import { CHEVRON_UP_CLASS, CHEVRON_DOWN_CLASS } from '@common/iconConstants.js';
+import {
+  CHEVRON_UP_CLASS,
+  CHEVRON_DOWN_CLASS,
+} from '@common/webviewContext.js';
 import { capitalize, uncapitalize } from '@common/stringUtils.js';
 
 // Store default output file names for the currently selected agent
