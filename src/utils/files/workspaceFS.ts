@@ -7,6 +7,7 @@ import * as vscode from 'vscode';
 // Local imports - log
 import * as logger from '@logger/logUtils';
 import { AbsoluteFS } from './absoluteFS';
+import { showLoggedErrorMessage } from '@utils/errorHandlingUtils';
 
 const CHANNEL = 'workspaceFS';
 logger.initialize(CHANNEL);
@@ -106,11 +107,11 @@ export class WorkspaceFS {
           `Unable to delete ${filePath}. It may be in use.`,
         );
       } else {
-        logger.error(
+        await showLoggedErrorMessage(
           CHANNEL,
-          `Error deleting ${filePath}: ${err instanceof Error ? err.message : String(err)}`,
+          `Error deleting ${filePath}`,
+          err,
         );
-        vscode.window.showErrorMessage(`Error deleting ${filePath}: ${err}`);
       }
     }
   }
@@ -134,11 +135,11 @@ export class WorkspaceFS {
       await vscode.workspace.fs.rename(sourceUri, destUri);
       logger.info(CHANNEL, `Successfully moved: ${source} to ${destination}`);
     } catch (err) {
-      logger.error(
+      await showLoggedErrorMessage(
         CHANNEL,
-        `Error moving file from ${source} to ${destination}: ${err instanceof Error ? err.message : String(err)}`,
+        `Error moving file from ${source} to ${destination}`,
+        err,
       );
-      vscode.window.showErrorMessage(`Error moving file: ${err}`);
     }
   }
 
@@ -164,11 +165,11 @@ export class WorkspaceFS {
         `Successfully copied: source=${source} to destination=${destination}`,
       );
     } catch (err) {
-      logger.error(
+      await showLoggedErrorMessage(
         CHANNEL,
-        `Error copying file from source=${source} to destination=${destination}: ${err instanceof Error ? err.message : String(err)}`,
+        `Error copying file from source=${source} to destination=${destination}`,
+        err,
       );
-      vscode.window.showErrorMessage(`Error copying file: ${err}`);
     }
   }
 
@@ -179,20 +180,18 @@ export class WorkspaceFS {
       logger.debug(CHANNEL, `Created directory: ${relativePath}`);
     } catch (err) {
       if (err instanceof vscode.FileSystemError) {
-        logger.error(
+        await showLoggedErrorMessage(
           CHANNEL,
-          `Unable to create directory ${relativePath}. Permission denied.`,
-        );
-        await vscode.window.showErrorMessage(
           `Unable to create directory ${relativePath}. Permission denied.`,
         );
         throw new Error(
           `Unable to create directory ${relativePath}. Permission denied.`,
         );
       } else {
-        logger.error(
+        await showLoggedErrorMessage(
           CHANNEL,
-          `Error creating directory ${relativePath}: ${err instanceof Error ? err.message : String(err)}`,
+          `Error creating directory ${relativePath}`,
+          err,
         );
         throw err;
       }

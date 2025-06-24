@@ -1,5 +1,8 @@
 // Utility functions for consistent error logging and formatting
 
+// Third-party imports
+import * as vscode from 'vscode';
+
 // Local imports - log
 import * as logger from '@logger/logUtils';
 
@@ -21,5 +24,22 @@ export function logErrorMessage(
 ): string {
   const message = formatError(prefix, err);
   logger.error(channel, message);
+  return message;
+}
+
+/**
+ * Log the formatted error, show it to the user, and return the message.
+ */
+export async function showLoggedErrorMessage(
+  channel: string,
+  prefix: string,
+  err?: unknown,
+): Promise<string> {
+  const message =
+    err !== undefined ? logErrorMessage(channel, prefix, err) : prefix;
+  if (err === undefined) {
+    logger.error(channel, message);
+  }
+  await vscode.window.showErrorMessage(message);
   return message;
 }

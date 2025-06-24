@@ -5,6 +5,8 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import * as logger from '@logger/logUtils';
 
+import { showLoggedErrorMessage } from '@utils/errorHandlingUtils';
+
 // Local imports
 import {
   getBuiltInAgentsDirectory,
@@ -142,8 +144,7 @@ export class FolderExplorer implements vscode.TreeDataProvider<FileItem> {
           });
       }
     } catch (err) {
-      logger.error(CHANNEL, `Error opening file: ${err}`);
-      vscode.window.showErrorMessage(`Failed to open file: ${err}`);
+      await showLoggedErrorMessage(CHANNEL, 'Error opening file', err);
     }
   }
 
@@ -178,8 +179,7 @@ export class FolderExplorer implements vscode.TreeDataProvider<FileItem> {
         `Created custom copy at: ${targetPath}`,
       );
     } catch (err) {
-      logger.error(CHANNEL, `Error creating custom copy: ${err}`);
-      vscode.window.showErrorMessage(`Failed to create custom copy: ${err}`);
+      await showLoggedErrorMessage(CHANNEL, 'Error creating custom copy', err);
     }
   }
 
@@ -228,12 +228,10 @@ export class FolderExplorer implements vscode.TreeDataProvider<FileItem> {
       // Start the rename process immediately
       this.startRename(newItem);
     } catch (err) {
-      logger.error(
+      await showLoggedErrorMessage(
         CHANNEL,
-        `Error creating new ${isFolder ? 'folder' : 'file'}: ${err}`,
-      );
-      vscode.window.showErrorMessage(
         `Failed to create new ${isFolder ? 'folder' : 'file'}`,
+        err,
       );
     }
   }
@@ -294,8 +292,7 @@ export class FolderExplorer implements vscode.TreeDataProvider<FileItem> {
           await AbsoluteFS.rename(oldPath, newPath, { overwrite: false });
         }
       } catch (err) {
-        logger.error(CHANNEL, `Error renaming item: ${err}`);
-        vscode.window.showErrorMessage('Failed to rename item');
+        await showLoggedErrorMessage(CHANNEL, 'Failed to rename item', err);
       }
     }
 
@@ -593,12 +590,10 @@ export class FolderExplorer implements vscode.TreeDataProvider<FileItem> {
           `Successfully deleted ${isFolder ? 'folder' : 'file'}: ${item.resourceUri.fsPath}`,
         );
       } catch (err) {
-        logger.error(
+        await showLoggedErrorMessage(
           CHANNEL,
-          `Error deleting ${isFolder ? 'folder' : 'file'}: ${err}`,
-        );
-        vscode.window.showErrorMessage(
           `Failed to delete ${isFolder ? 'folder' : 'file'}`,
+          err,
         );
       }
     }
