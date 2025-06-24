@@ -7,7 +7,7 @@ import * as vscode from 'vscode';
 // Local imports - log
 import * as logger from '@logger/logUtils';
 import { AbsoluteFS } from './absoluteFS';
-import { showLoggedErrorMessage } from '@utils/errorHandlingUtils';
+import { showLoggedErrorMessage, showLoggedMessage } from '@utils/errorHandlingUtils';
 
 const CHANNEL = 'workspaceFS';
 logger.initialize(CHANNEL);
@@ -180,7 +180,7 @@ export class WorkspaceFS {
       logger.debug(CHANNEL, `Created directory: ${relativePath}`);
     } catch (err) {
       if (err instanceof vscode.FileSystemError) {
-        await showLoggedErrorMessage(
+        await showLoggedMessage(
           CHANNEL,
           `Unable to create directory ${relativePath}. Permission denied.`,
         );

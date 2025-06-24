@@ -14,7 +14,7 @@ import { findFilesFromPatterns } from './utils';
 
 // Local imports - housekeeping
 import { TEMP_EXTENSIONS } from './constants';
-import { showLoggedErrorMessage } from '@utils/errorHandlingUtils';
+import { showLoggedErrorMessage, showLoggedMessage } from '@utils/errorHandlingUtils';
 
 const CHANNEL = 'Housekeeping';
 logger.initialize(CHANNEL);
@@ -131,7 +131,7 @@ export async function runPackLatexdiffvcMultiple(
   logger.debug(CHANNEL, `Input files: ${inputFiles.join(', ')}`);
 
   if (!inputFiles || inputFiles.length === 0) {
-    await showLoggedErrorMessage(
+    await showLoggedMessage(
       CHANNEL,
       'No input files provided for multiple LaTeX diff packing',
     );
@@ -199,7 +199,7 @@ export async function runCleanLatexdiffvcMultiple(
   logger.debug(CHANNEL, `Input files: ${inputFiles.join(', ')}`);
 
   if (!inputFiles || inputFiles.length === 0) {
-    await showLoggedErrorMessage(
+    await showLoggedMessage(
       CHANNEL,
       'No input files provided for multiple LaTeX diff cleaning',
     );

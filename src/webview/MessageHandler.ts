@@ -10,7 +10,7 @@ import * as logger from '@logger/logUtils';
 
 // Local imports - utils
 import { safeExecuteCommand } from '@utils/system';
-import { showLoggedErrorMessage } from '@utils/errorHandlingUtils';
+import { showLoggedErrorMessage, showLoggedMessage } from '@utils/errorHandlingUtils';
 
 // Local imports - utilities
 import { WorkspaceFS, StorageFS } from '@utils/files';
@@ -730,7 +730,7 @@ export class WebviewMessageHandler {
   ): Promise<string[] | null> {
     const workspacePath = WorkspaceFS.getPath();
     if (!workspacePath) {
-      await showLoggedErrorMessage(CHANNEL, 'No workspace folder open');
+      await showLoggedMessage(CHANNEL, 'No workspace folder open');
       return null;
     }
 
