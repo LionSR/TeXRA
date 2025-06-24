@@ -10,29 +10,19 @@ import * as path from 'path';
 import {
   extractAndCompileTikzPicturesWithLabels,
   extractFigurePathsFromLatex,
-  bestConnectionMethod,
   getTeXCountStats,
   compileLatex2Pdf,
 } from '@latex';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
-import { diff_match_patch } from 'diff-match-patch';
-import type { DiffStats } from '@/types/DiffTypes';
 
 // Local imports - utilities
-import {
-  WorkspaceFS,
-  createFileMapping,
-  replaceInputCommands,
-} from '@utils/files';
+import { WorkspaceFS } from '@utils/files';
 import {
   renderPrompt,
   getFirstKCharsFromDocument,
   writePromptToXml,
 } from '@utils/promptUtils';
 import { loadTexraRules } from '@frontend/files/rules';
-import replacementEngine from '@replacement/engine';
-import { checkForMassiveRepetition } from '@utils/text/repetitionUtils';
-import xmlUtils from '@utils/text/xmlUtils';
 
 // Local imports - agent components
 import { AgentConfig } from '@agent/core/AgentConfig';
@@ -44,17 +34,15 @@ import {
 import { AgentStateRound, AgentStateGlobal } from '@agent/core/AgentState';
 import { ToolState } from '@agent/core/ToolState';
 import { ModelHandler } from '@agent/modelHandlers';
-import { OutputHandler, NamedOutputFile } from '@agent/runtime/OutputHandler';
-import { messageToSkeleton } from '@agent/utils/messageUtils';
+import { OutputHandler } from '@agent/runtime/OutputHandler';
 import { BaseAgent } from '@agent/implementations/BaseAgent';
-import { createInfoSpan } from '@agent/modelHandlers/streamUtils';
 
 // System imports - common utilities
 import { getConfig } from '@utils/config';
-import { getEffectiveBaseFile } from '@utils/files/baseFileUtils';
+import { ResponseProcessor, FileHandler, RoundManager } from '@agent/runtime';
 
 // Shared constants
-import { K_SLICE, REPETITION_DETECTION_THRESHOLD } from '@utils/config';
+import { K_SLICE } from '@utils/config';
 
 /**
  * Abstract base class for agents that support multi-turn reflection and refinement.
@@ -70,6 +58,9 @@ export abstract class BaseReflectionAgent extends BaseAgent {
   protected logId: number = 0;
   /** Handler for output file processing and validation. */
   protected outputHandler: OutputHandler;
+  protected responseProcessor: ResponseProcessor;
+  protected fileHandler: FileHandler;
+  protected roundManager: RoundManager;
 
   constructor(
     modelHandler: ModelHandler,
@@ -112,6 +103,24 @@ export abstract class BaseReflectionAgent extends BaseAgent {
       this.baseFiles,
       this.logger,
     );
+
+    this.fileHandler = new FileHandler(
+      this.outputHandler,
+      this.agentSetting,
+      this.agentConfig,
+      this.modelHandler,
+      this.logger,
+      this.baseFiles,
+    );
+    this.responseProcessor = new ResponseProcessor(
+      this.modelHandler,
+      this.agentConfig,
+      this.agentSetting,
+      this.logger,
+      this.getSystemPromptWithRules.bind(this),
+      () => this.checkInterruption(),
+    );
+    this.roundManager = new RoundManager(this.logger, this.fileHandler);
   }
 
   /**
@@ -148,284 +157,6 @@ export abstract class BaseReflectionAgent extends BaseAgent {
    * @param roundGroupId Optional parent round group ID
    * @returns Updated states and completion flag
    */
-  private async processResponseCycle(
-    messages: any[],
-    stateRound: AgentStateRound,
-    stateGlobal: AgentStateGlobal,
-    toolState: ToolState,
-    outputFile: string,
-    roundGroupId?: string,
-  ): Promise<[AgentStateRound, AgentStateGlobal, ToolState, boolean]> {
-    // Use the round group identifier for logging this cycle
-    const logGroupId = roundGroupId;
-
-    try {
-      let endTurn = false;
-      while (!endTurn) {
-        // Check for interruption before each cycle
-        if (await this.checkInterruption()) {
-          break;
-        }
-
-        const exists = await WorkspaceFS.exists(outputFile);
-        const startTime = Date.now();
-        const systemPrompt = await this.getSystemPromptWithRules();
-
-        // Save message object to file for debugging if enabled in settings
-        const shouldSaveMessageObjects = getConfig(
-          'debug.saveMessageObjects',
-          false,
-        );
-        if (shouldSaveMessageObjects) {
-          const outputFileBaseName = outputFile.replace('.xml', '');
-          const debugFilePath = `${outputFileBaseName}_cont${stateRound.continuationCount}.json`;
-          try {
-            await WorkspaceFS.writeFile(
-              debugFilePath,
-              JSON.stringify(messages, null, 2),
-            );
-            this.logger.info(
-              `Saved message object to ${debugFilePath}`,
-              logGroupId,
-            );
-          } catch (error) {
-            this.logger.error(
-              `Failed to save message object: ${error}`,
-              logGroupId,
-            );
-          }
-        }
-
-        this.abortController = new AbortController();
-        let responseObject;
-        try {
-          responseObject = await this.modelHandler.createResponse(
-            this.client,
-            messages,
-            this.agentSetting.temperature || 0.0,
-            systemPrompt,
-            this.agentSetting.endTag,
-            this.abortController.signal,
-          );
-        } finally {
-          this.abortController = null;
-        }
-        if (!responseObject) {
-          this.logger.warn(
-            'Model response was aborted or returned no data; output may be incomplete.',
-            logGroupId,
-          );
-          break;
-        }
-        const responseTime = (Date.now() - startTime) / 1000;
-        stateRound.updateResponseTime(responseTime);
-        this.logger.debug(
-          `Response time: ${responseTime.toFixed(2)}s`,
-          logGroupId,
-        );
-
-        // Extract and validate response
-        const [newResponse, responseUsage, stopReason] =
-          this.modelHandler.extractResponse(
-            responseObject,
-            this.agentSetting.endTag,
-          );
-
-        this.logger.debug(`Stop reason: ${stopReason}`, logGroupId);
-        this.logger.debug(
-          `Token usage: ${JSON.stringify(responseUsage)}`,
-          logGroupId,
-        );
-
-        // Extract thinking blocks directly from the response object
-        // This updates toolState with all thinking/redacted_thinking blocks
-        // and returns content of the first thinking block for logging (if any)
-        const thinkingContent = this.modelHandler.processThinkingBlock(
-          responseObject,
-          logGroupId,
-          toolState,
-        );
-
-        // If thinking content was extracted, format and log it first
-        if (thinkingContent) {
-          const formatted = await xmlUtils.formatContent(thinkingContent);
-          this.logger.info(createInfoSpan(formatted, 'thinking'), logGroupId);
-
-          // Note: The complete thinking blocks (including signatures) have already been
-          // stored in toolState.thinkingBlocks by the processThinkingBlock method
-        }
-
-        // Extract scratchpad content directly from the response text
-        const scratchpad = await xmlUtils.extractScratchpad(
-          newResponse,
-          'scratchpad',
-        );
-        if (scratchpad) {
-          this.logger.info(
-            createInfoSpan(scratchpad, 'scratchpad'),
-            logGroupId,
-          );
-        }
-        // this has a potential bug if <scratchpad> is included in the prefill
-
-        // Compute statistics and update states
-        const APIUsage = this.modelHandler.computeResponseUsage(
-          responseUsage,
-          responseTime,
-        );
-
-        stateRound.updateTokenCounts(APIUsage);
-        stateGlobal.updateFromCurrRound(stateRound);
-
-        // Early exit for repetition
-        const repetitionResult = checkForMassiveRepetition(
-          toolState.lastResponse,
-          newResponse,
-        );
-        if (repetitionResult.massiveRepetitionDetected) {
-          this.logger.error(
-            `The new response is (first ${REPETITION_DETECTION_THRESHOLD} chars): ${newResponse.substring(0, REPETITION_DETECTION_THRESHOLD)}`,
-            logGroupId,
-          );
-          this.logger.error(
-            `Massive repetition detected - skipping this response`,
-            logGroupId,
-          );
-
-          // Debug information - print message skeleton to help diagnose the problem
-          this.logger.error(
-            `Message structure when repetition detected:`,
-            logGroupId,
-          );
-          this.logger.error(
-            JSON.stringify(messageToSkeleton(messages), null, 2),
-            logGroupId,
-          );
-          break;
-        }
-
-        // Chain response processing operations
-        const processedResponse = replacementEngine.applyAll(newResponse);
-
-        toolState.updateLastResponse(processedResponse);
-
-        // Process response connection with proper slicing
-        const result = await bestConnectionMethod(
-          toolState.lastResponse.slice(-K_SLICE),
-          processedResponse.slice(0, K_SLICE),
-        );
-        const bestConnector = result.connector;
-
-        // Update state and file atomically
-        toolState.updateAccumulatedOutput(
-          toolState.accumulatedOutput + bestConnector + processedResponse,
-        );
-
-        // Write or append to output file
-        if (!exists) {
-          this.logger.debug(`Creating new file: ${outputFile}`, logGroupId);
-          await WorkspaceFS.writeFile(outputFile, processedResponse);
-        } else {
-          this.logger.debug(
-            `Appending to existing file: ${outputFile}`,
-            logGroupId,
-          );
-          await WorkspaceFS.appendFile(
-            outputFile,
-            bestConnector + processedResponse,
-          );
-        }
-
-        // Log response boundaries
-        this.logger.debug(`Response preview:`, logGroupId);
-        this.logger.debug(
-          `First ${K_SLICE} chars:\n${processedResponse.slice(0, K_SLICE)}`,
-          logGroupId,
-        );
-        this.logger.debug(
-          `Last ${K_SLICE} chars:\n${processedResponse.slice(-K_SLICE)}`,
-          logGroupId,
-        );
-
-        // Update message content
-        // maybe we should separate this into the case of with or without support for assistant prefill since they have different logic...
-        if (this.modelHandler.capabilities.supportsAssistantPrefill) {
-          this.modelHandler.updateMessageContentWithPrefill(
-            messages,
-            bestConnector,
-            processedResponse,
-            toolState,
-          );
-        } else {
-          this.modelHandler.updateMessageContentWithoutPrefill(
-            messages,
-            bestConnector,
-            processedResponse,
-            toolState,
-          );
-        }
-
-        // Check stop conditions
-        const [shouldEndTurn, shouldStop] =
-          this.modelHandler.checkStopConditions(
-            stopReason,
-            processedResponse,
-            stateRound,
-            stateGlobal,
-            this.agentSetting,
-          );
-        endTurn = shouldEndTurn;
-        if (shouldStop) {
-          break;
-        }
-
-        // Handle continuation
-        stateRound.incrementContinuation();
-        this.logger.info(
-          `Starting continuation #${stateRound.continuationCount}`,
-          logGroupId,
-        );
-
-        // Check if model should continue generating
-        // why is this not included in the checkStopConditions function?
-        if (
-          this.modelHandler.shouldContinue(
-            stopReason,
-            processedResponse,
-            this.agentSetting,
-          )
-        ) {
-          this.logger.debug(
-            `Should continue - adding continuation message to conversation`,
-            logGroupId,
-          );
-          if (this.modelHandler.capabilities.supportsAssistantPrefill) {
-            this.modelHandler.addContinueMessageWithPrefill(
-              messages,
-              stateRound,
-              toolState,
-              this.agentSetting,
-              this.agentConfig,
-            );
-            continue;
-          } else {
-            this.modelHandler.addContinueMessageWithoutPrefill(
-              messages,
-              stateRound,
-              toolState,
-              this.agentSetting,
-              this.agentConfig,
-            );
-            continue;
-          }
-        }
-      }
-
-      return [stateRound, stateGlobal, toolState, endTurn];
-    } catch (error) {
-      throw error;
-    }
-  }
 
   /**
    * Gets prefill content for specified round.
@@ -438,145 +169,6 @@ export abstract class BaseReflectionAgent extends BaseAgent {
     return prefill;
   }
 
-  // Helper function to consistently count lines in text
-  private countLines(text: string): number {
-    if (text.length === 0) return 0;
-    // Handle trailing newlines consistently: subtract 1 if text ends with newline
-    return text.endsWith('\n')
-      ? text.split('\n').length - 1
-      : text.split('\n').length;
-  }
-
-  private async computeDiffStats(
-    baseFile: string | null,
-    outputFile: string,
-  ): Promise<DiffStats> {
-    try {
-      if (!baseFile) {
-        const outContent = await WorkspaceFS.readFile(outputFile);
-        const added = this.countLines(outContent);
-        // For new files, only return added count (removed should be undefined for UI)
-        return { added };
-      }
-
-      const [baseContent, outContent] = await Promise.all([
-        WorkspaceFS.readFile(baseFile),
-        WorkspaceFS.readFile(outputFile),
-      ]);
-
-      const dmp = new diff_match_patch();
-      const diffs = dmp.diff_main(baseContent, outContent);
-      let added = 0;
-      let removed = 0;
-
-      for (const [op, text] of diffs) {
-        if (op === 1) {
-          added += this.countLines(text);
-        } else if (op === -1) {
-          removed += this.countLines(text);
-        }
-      }
-
-      return { added, removed };
-    } catch {
-      return {};
-    }
-  }
-
-  /**
-   * Processes completion of conversation round.
-   */
-  private async handleRoundCompletion(
-    stateRound: AgentStateRound,
-    stateGlobal: AgentStateGlobal,
-    outputFile: string,
-    endTurn: boolean,
-    currRound: number,
-    roundGroupId?: string,
-  ): Promise<void> {
-    try {
-      // Instead of creating a new group, use the round group directly
-      this.logger.debug(
-        `State global: ${JSON.stringify(stateGlobal)}`,
-        roundGroupId,
-      );
-
-      await this.handleOutput(
-        stateRound,
-        stateGlobal,
-        outputFile,
-        endTurn,
-        currRound,
-        roundGroupId,
-      );
-
-      const inputInfo = `inputFile ${this.agentConfig.inputFile} and/or inputFiles ${this.agentConfig.inputFiles}`;
-      // this.logger.debug(
-      //   `Processed ${inputInfo}. The round ${currRound} output was saved as ${outputFile}`,
-      //   roundGroupId,
-      // );
-      this.logger.debug(`Completed round ${currRound}`, roundGroupId);
-    } catch (error) {
-      throw error;
-    }
-
-    const provider = ProgressViewProvider.getInstance();
-    if (provider) {
-      const roundOutputs = this.outputHandler.outputFiles[currRound] || [];
-
-      // Map output files to their original base files
-      const baseMap = createFileMapping(
-        this.baseFiles,
-        roundOutputs,
-        'contains',
-      );
-
-      // Map output files to previous round files if available
-      const prevMap =
-        currRound > 0
-          ? createFileMapping(
-              this.outputHandler.outputFiles[currRound - 1] || [],
-              roundOutputs,
-              'basename',
-              true,
-            )
-          : new Map<string, string>();
-
-      const fileInfos = [] as any[];
-      const originMap = new Map(
-        (this.outputHandler.outputMappings[currRound] || []).map((p) => [
-          p.path,
-          p.source,
-        ]),
-      );
-      for (const file of roundOutputs) {
-        const baseFile =
-          Array.from(baseMap.entries()).find(([, out]) => out === file)?.[0] ||
-          null;
-        const prevFile =
-          Array.from(prevMap.entries()).find(([, out]) => out === file)?.[0] ||
-          null;
-        const originalFile = originMap.get(file) || null;
-
-        // Use utility to determine effective base for diff computation
-        const diffBase = getEffectiveBaseFile(baseFile, originalFile, file);
-        const stats = await this.computeDiffStats(diffBase, file);
-
-        fileInfos.push({
-          path: file,
-          base: baseFile,
-          prev: prevFile,
-          original: originalFile,
-          ...stats,
-        });
-      }
-
-      provider.addOutputFiles(this.logger.channelId, {
-        [currRound]: fileInfos,
-      });
-    }
-  }
-
   /**
    * Processes output files for current round.
    * This method orchestrates the overall output processing flow with clear separation of concerns:
@@ -587,43 +179,6 @@ export abstract class BaseReflectionAgent extends BaseAgent {
    *
    * @returns Array of processed output file paths
    */
-  protected async handleOutput(
-    stateRound: AgentStateRound,
-    stateGlobal: AgentStateGlobal,
-    outputFile: string,
-    endTurn: boolean,
-    currRound: number = 0,
-    processGroupId?: string,
-  ): Promise<string[]> {
-    // Print statistics at the end of each round
-    await this.outputHandler.printStatistics(stateGlobal, processGroupId);
-
-    // If this is the end of a turn, handle latexdiff operations as a separate step
-    if (
-      endTurn &&
-      this.outputHandler.outputFiles[currRound] &&
-      this.outputHandler.outputFiles[currRound].length > 0
-    ) {
-      const existingBase = await Promise.all(
-        this.baseFiles.map(async (f) => await WorkspaceFS.exists(f)),
-      );
-
-      if (existingBase.some((e) => e)) {
-        // Pass the process group ID to maintain proper nesting in the log hierarchy
-        await this.outputHandler.handleLatexdiffofOutput(
-          currRound,
-          processGroupId,
-        );
-      } else {
-        this.logger.debug(
-          `Skipping latexdiff for round ${currRound} - base files missing`,
-          processGroupId,
-        );
-      }
-    }
-
-    return this.outputHandler.outputFiles[currRound] || [];
-  }
 
   /**
    * Processes initial conversation round.
@@ -788,24 +343,25 @@ export abstract class BaseReflectionAgent extends BaseAgent {
           updatedStateGlobal,
           updatedToolState,
           newEndTurn,
-        ] = await this.processResponseCycle(
+        ] = await this.responseProcessor.process(
+          this.client,
           updatedMessages,
           stateRound,
           stateGlobal,
           toolState,
           this.outputFile[currRound],
-          round0GroupId, // Pass the round group ID to processResponseCycle
+          round0GroupId,
         );
         finalEndTurn = newEndTurn;
 
         // Handle output and logging
-        await this.handleRoundCompletion(
+        await this.roundManager.completeRound(
           updatedStateRound,
           updatedStateGlobal,
           this.outputFile[currRound],
           finalEndTurn,
           currRound,
-          round0GroupId, // Pass the round group ID
+          round0GroupId,
         );
 
         this.logger.debug(
@@ -826,13 +382,13 @@ export abstract class BaseReflectionAgent extends BaseAgent {
       }
 
       // Handle output and logging for early termination
-      await this.handleRoundCompletion(
+      await this.roundManager.completeRound(
         stateRound,
         stateGlobal,
         this.outputFile[currRound],
         finalEndTurn,
         currRound,
-        round0GroupId, // Pass the round group ID
+        round0GroupId,
       );
 
       // End the round group
@@ -874,18 +430,15 @@ export abstract class BaseReflectionAgent extends BaseAgent {
     try {
       // Handle output file processing
       if (this.agentConfig.outputFiles) {
-        await this._handleToolStateForOutput(
+        await this.fileHandler.handleToolStateForOutput(
           this.agentConfig.outputFiles,
-          currRound,
           toolState,
         );
       } else {
-        // Handle single output file from previous round
         const outputFiles = this.outputHandler.outputFiles[currRound - 1];
         if (outputFiles && outputFiles.length > 0) {
-          await this._handleToolStateForOutput(
+          await this.fileHandler.handleToolStateForOutput(
             [outputFiles[0]],
-            currRound,
             toolState,
           );
         }
@@ -944,7 +497,8 @@ export abstract class BaseReflectionAgent extends BaseAgent {
           updatedStateGlobal,
           updatedToolState,
           newEndTurn,
-        ] = await this.processResponseCycle(
+        ] = await this.responseProcessor.process(
+          this.client,
           updatedMessages,
           stateRound,
           stateGlobal,
@@ -954,7 +508,7 @@ export abstract class BaseReflectionAgent extends BaseAgent {
         );
 
         // Handle output and logging
-        await this.handleRoundCompletion(
+        await this.roundManager.completeRound(
           updatedStateRound,
           updatedStateGlobal,
           this.outputFile[currRound],
@@ -973,7 +527,7 @@ export abstract class BaseReflectionAgent extends BaseAgent {
       }
 
       // Handle output and logging for early termination
-      await this.handleRoundCompletion(
+      await this.roundManager.completeRound(
         stateRound,
         stateGlobal,
         this.outputFile[currRound],
@@ -1033,183 +587,6 @@ export abstract class BaseReflectionAgent extends BaseAgent {
     } finally {
       // Always clean up, whether execution completed or was interrupted
       this.cleanup();
-    }
-  }
-
-  /**
-   * Updates tool state based on output files.
-   */
-  private async _handleToolStateForOutput(
-    outputFiles: string[],
-    currRound: number,
-    toolState: ToolState,
-  ): Promise<void> {
-    if (this.agentConfig.toolConfig.attachTeXCount) {
-      toolState.texcountStats = await getTeXCountStats(outputFiles);
-    }
-
-    if (
-      this.modelHandler.capabilities.supportsVision &&
-      this.agentConfig.toolConfig.autoExtractTikzFigure
-    ) {
-      for (const outputFile of outputFiles) {
-        this.logger.debug(`Extracting TikZ figures from ${outputFile}`);
-        const extractedTikzFigures =
-          await extractAndCompileTikzPicturesWithLabels(outputFile);
-        if (extractedTikzFigures) {
-          toolState.addMediaFiles(extractedTikzFigures);
-        }
-      }
-    }
-
-    if (
-      this.modelHandler.capabilities.supportsVision &&
-      this.agentConfig.toolConfig.autoCompileInputPdf
-    ) {
-      for (const outputFile of outputFiles) {
-        if (!outputFile.toLowerCase().endsWith('.tex')) {
-          continue;
-        }
-        const buildDir = path.join(path.dirname(outputFile), 'build');
-        const compiled = await compileLatex2Pdf(
-          outputFile,
-          undefined,
-          buildDir,
-        );
-        if (compiled) {
-          const pdfFile = path.join(
-            buildDir,
-            path.basename(outputFile).replace(/\.tex$/, '.pdf'),
-          );
-          if (await WorkspaceFS.exists(pdfFile)) {
-            this.logger.info(
-              `Compiled PDF for ${outputFile}: ${pdfFile}`,
-              this.logger.getActiveGroupId(),
-            );
-            toolState.addMediaFiles([pdfFile]);
-          }
-        }
-      }
-    }
-  }
-
-  /**
-   * Processes output files from XML or direct input.
-   * This method focuses solely on extracting and processing output files.
-   * It does NOT perform any latexdiff operations - those are handled separately
-   * in the handleOutput method via handleLatexdiffofOutput.
-   *
-   * @param outputFile Path to the output file to process
-   * @param currRound Current round number
-   * @param processGroupId Optional process group ID for logging
-   */
-  protected async processOutputFiles(
-    outputFile: string,
-    currRound: number,
-    processGroupId?: string,
-  ): Promise<void> {
-    // Use provided process group ID or get the active group ID for proper nesting
-    const activeGroupId = processGroupId || this.logger.getActiveGroupId();
-
-    if (
-      Array.isArray(this.agentConfig.outputFiles) &&
-      this.agentConfig.outputFiles.length > 0
-    ) {
-      // Multiple output files case
-      this.logger.debug(
-        `Processing multiple outputs for ${outputFile}; outputFiles: ${this.agentConfig.outputFiles}`,
-        activeGroupId,
-      );
-
-      // if the agentType is CoT, we need to process the output files
-      // Then I realize that in fact it does not make sense to have multiple output files
-      // while to extract it from a single tex file. So in this case, we really need to
-      // use XML and use XML splitting to get the output files.
-      // Which would be different than the single output file case below.
-
-      try {
-        const processedPairs =
-          await this.outputHandler.processMultipleXmlOutputs(outputFile);
-
-        if (processedPairs && processedPairs.length > 0) {
-          const processedFiles = processedPairs.map((p) => p.path);
-          await this.outputHandler.indentLatexFiles(processedFiles);
-          this.logger.debug(
-            `Indented multiple output files: ${processedFiles.join(',')}`,
-            activeGroupId,
-          );
-
-          this.outputHandler.outputFiles[currRound] = processedFiles;
-          this.outputHandler.outputMappings[currRound] = processedPairs;
-
-          // Only attempt to replace input commands if we have valid base files
-          if (this.baseFiles && this.baseFiles.length > 0) {
-            await replaceInputCommands(
-              this.baseFiles,
-              processedFiles,
-              this.logger,
-            );
-          }
-        } else {
-          this.logger.warn(
-            `No processed files were generated from ${outputFile}`,
-            activeGroupId,
-          );
-          this.outputHandler.outputFiles[currRound] = [];
-          this.outputHandler.outputMappings[currRound] = [];
-        }
-      } catch (err) {
-        this.logger.error(
-          `Error processing output files: ${err instanceof Error ? err.message : String(err)}`,
-          activeGroupId,
-        );
-        // Ensure we have an empty array at minimum to prevent undefined errors
-        this.outputHandler.outputFiles[currRound] = [];
-        this.outputHandler.outputMappings[currRound] = [];
-      }
-    } else {
-      // Single output file case
-      this.logger.debug(
-        `Processing single output for ${outputFile}`,
-        activeGroupId,
-      );
-
-      try {
-        let processed: NamedOutputFile = {
-          source: outputFile,
-          path: outputFile,
-        };
-        if (this.agentSetting.agentType === AgentType.CoT) {
-          processed =
-            await this.outputHandler.processSingleXmlOutput(outputFile);
-        }
-
-        if (processed && processed.path) {
-          // Process output file - indent LaTeX file directly
-          await this.outputHandler.indentLatexFile(processed.path);
-          this.logger.debug(
-            `Indented single output file: ${processed.path}`,
-            activeGroupId,
-          );
-
-          this.outputHandler.outputFiles[currRound] = [processed.path];
-          this.outputHandler.outputMappings[currRound] = [processed];
-        } else {
-          this.logger.warn(
-            `No processed file was generated from ${outputFile}`,
-            activeGroupId,
-          );
-          this.outputHandler.outputFiles[currRound] = [];
-          this.outputHandler.outputMappings[currRound] = [];
-        }
-      } catch (err) {
-        this.logger.error(
-          `Error processing output file: ${err instanceof Error ? err.message : String(err)}`,
-          activeGroupId,
-        );
-        this.outputHandler.outputFiles[currRound] = [];
-        this.outputHandler.outputMappings[currRound] = [];
-      }
     }
   }
 }

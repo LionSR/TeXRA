@@ -62,8 +62,8 @@ export class DirectAgent extends BaseReflectionAgent {
           outputProcessGroupId,
         );
 
-        // Process output files using the parent class method
-        await this.processOutputFiles(
+        // Process output files using helper
+        await this.fileHandler.processOutputFiles(
           outputFile,
           currRound,
           outputProcessGroupId,
@@ -77,13 +77,13 @@ export class DirectAgent extends BaseReflectionAgent {
       }
 
       // Finally handle statistics in base class (but pass our group ID)
-      const result = await super.handleOutput(
+      const result = await this.fileHandler.handleOutput(
         stateRound,
         stateGlobal,
         outputFile,
         endTurn,
         currRound,
-        outputProcessGroupId, // The statistics will be a subgroup of our output processing group
+        outputProcessGroupId,
       );
 
       // Only end the processing group if we created it
