@@ -444,7 +444,7 @@ export class Events {
 
       if (tabButton && tabButton.dataset.stream) {
         vscode.postMessage({
-          command: 'selectStream',
+          command: 'switchStream',
           stream: tabButton.dataset.stream,
         });
       } else if (deleteButton && deleteButton.dataset.stream) {
