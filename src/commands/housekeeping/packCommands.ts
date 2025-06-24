@@ -99,9 +99,13 @@ async function handlePackSingle(
   );
 
   if (!inputFile || !agent || !model) {
+    const missing = [];
+    if (!inputFile) missing.push('inputFile');
+    if (!agent) missing.push('agent');
+    if (!model) missing.push('model');
     await showLoggedMessage(
       CHANNEL,
-      'Missing required parameters for packSingle',
+      `Missing required parameters for packSingle: ${missing.join(', ')}`,
     );
     return;
   }
@@ -130,9 +134,13 @@ async function handlePackMultiple(
   logger.debug(CHANNEL, `Additional files: ${outputFiles.join(', ')}`);
 
   if ((!inputFile && !outputFiles.length) || !agent || !model) {
+    const missing = [];
+    if (!inputFile && !outputFiles.length) missing.push('inputFile or outputFiles');
+    if (!agent) missing.push('agent');
+    if (!model) missing.push('model');
     await showLoggedMessage(
       CHANNEL,
-      'Missing required parameters for packMultiple:',
+      `Missing required parameters for packMultiple: ${missing.join(', ')}`,
     );
     return;
   }

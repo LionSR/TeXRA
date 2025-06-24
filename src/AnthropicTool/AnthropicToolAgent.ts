@@ -159,7 +159,7 @@ export abstract class AnthropicToolAgent<
       await showLoggedErrorMessage(
         CHANNEL,
         'Error in fixIssues',
-        this.formatErrorMessage(err),
+        err,
       );
       return false;
     }
