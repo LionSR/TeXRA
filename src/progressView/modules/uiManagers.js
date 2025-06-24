@@ -3,8 +3,7 @@ import { progressViewState } from './progressViewState.js';
 import { formatTokens } from './formatters.js';
 import { STATUS, TOOLBAR_BUTTONS, SPLIT_SIZES } from './constants.js';
 import { createIconButton } from '@common/templateUtils.js';
-import { CHEVRON_RIGHT_CLASS } from '@common/webviewContext.js';
-import { vscode } from '@common/webviewContext.js';
+import { CHEVRON_RIGHT_CLASS, vscode } from '@common/webviewContext.js';
 import Split from 'split.js';
 
 /**
@@ -259,16 +258,26 @@ export class FileList {
       files.forEach((file) => {
         const clone = template.content.cloneNode(true);
         const fileItem = clone.querySelector('.file-item');
-        const displayName = clone.querySelector('.display-name');
-        const buttons = clone.querySelector('.buttons');
+        const filePathSpan = clone.querySelector('.file-path');
+        const dirSpan = clone.querySelector('.file-dir');
+        const basenameSpan = clone.querySelector('.file-basename');
+        const fileActions = clone.querySelector('.file-actions');
 
+        // Parse the file path
+        const parts = file.current.split('/');
+        const basename = parts.pop();
+        const dirPath = parts.length > 0 ? parts.join('/') + '/' : '';
+
+        // Set file data attributes
         fileItem.dataset.file = file.current;
         fileItem.dataset.original = file.original || '';
         fileItem.dataset.base = file.base || '';
         fileItem.dataset.round = round;
 
-        displayName.textContent = file.current;
-        displayName.title = file.current;
+        // Set the file path display
+        if (dirSpan) dirSpan.textContent = dirPath;
+        if (basenameSpan) basenameSpan.textContent = basename;
+        if (filePathSpan) filePathSpan.title = file.current;
 
         // Get effective base file for comparisons
         const effectiveBase = this.getEffectiveBaseFile(
@@ -277,13 +286,8 @@ export class FileList {
           file.current,
         );
 
-        // Create buttons
-        this.createButtons(buttons, file, effectiveBase);
-
-        // Add the chevron
-        const chevron = document.createElement('i');
-        chevron.className = `${CHEVRON_RIGHT_CLASS} chevron`;
-        fileItem.appendChild(chevron);
+        // Update existing buttons based on file state
+        this.updateFileButtons(clone, file, effectiveBase);
 
         container.appendChild(clone);
       });
@@ -291,56 +295,101 @@ export class FileList {
   }
 
   /**
-   * Create action buttons for a file item
+   * Update action buttons for a file item based on file state
    * @private
    */
-  createButtons(container, file, effectiveBase) {
-    // Open button
-    const openBtn = createIconButton({
-      icon: 'go-to-file',
-      title: 'Open',
-      dataset: { command: 'openFile', file: file.current },
-    });
-    container.appendChild(openBtn);
+  updateFileButtons(clone, file, effectiveBase) {
+    const compareBtn = clone.querySelector('.compare-btn');
+    const acceptBtn = clone.querySelector('.accept-btn');
+    const mergeBtn = clone.querySelector('.merge-btn');
+    const diffBtn = clone.querySelector('.diff-btn');
+    const prevBtn = clone.querySelector('.prev-btn');
 
-    if (file.original) {
-      const openOriginalBtn = createIconButton({
-        icon: 'source-control',
-        title: 'Open Original',
-        dataset: { command: 'openFile', file: file.original },
-      });
-      container.appendChild(openOriginalBtn);
+    // Compare button - show only if there's a base file
+    if (compareBtn) {
+      if (effectiveBase) {
+        compareBtn.onclick = () => {
+          vscode.postMessage({
+            command: 'compareFile',
+            file: file.current,
+            base: effectiveBase,
+          });
+        };
+      } else {
+        compareBtn.style.display = 'none';
+      }
     }
 
-    // Diff button
-    if (effectiveBase) {
-      const diffBtn = createIconButton({
-        icon: 'diff',
-        title: `Diff with ${effectiveBase}`,
-        dataset: {
-          command: 'diffFile',
+    // Accept button - show only if there's a base file
+    if (acceptBtn) {
+      if (effectiveBase) {
+        acceptBtn.onclick = () => {
+          vscode.postMessage({
+            command: 'acceptFile',
+            file: file.current,
+            base: effectiveBase,
+          });
+        };
+      } else {
+        acceptBtn.style.display = 'none';
+      }
+    }
+
+    // Merge button - show only if there's a base file
+    if (mergeBtn) {
+      if (effectiveBase) {
+        mergeBtn.onclick = () => {
+          vscode.postMessage({
+            command: 'mergeFile',
+            file: file.current,
+            base: effectiveBase,
+          });
+        };
+      } else {
+        mergeBtn.style.display = 'none';
+      }
+    }
+
+    // LaTeX diff button - show only if there's a base file
+    if (diffBtn) {
+      if (effectiveBase) {
+        diffBtn.onclick = () => {
+          vscode.postMessage({
+            command: 'latexDiff',
+            file: file.current,
+            base: effectiveBase,
+          });
+        };
+      } else {
+        diffBtn.style.display = 'none';
+      }
+    }
+
+    // Previous round comparison button - show only if there's a previous version
+    if (prevBtn) {
+      if (file.prev) {
+        prevBtn.onclick = () => {
+          vscode.postMessage({
+            command: 'comparePrevious',
+            file: file.current,
+            prev: file.prev,
+          });
+        };
+      } else {
+        prevBtn.style.display = 'none';
+      }
+    }
+
+    // Add click handler for the file path
+    const filePathSpan = clone.querySelector('.file-path');
+    if (filePathSpan) {
+      filePathSpan.onclick = () => {
+        vscode.postMessage({
+          command: 'openFile',
           file: file.current,
-          base: effectiveBase,
-        },
-      });
-      container.appendChild(diffBtn);
+        });
+      };
     }
-
-    // Output button
-    const setOutputBtn = createIconButton({
-      icon: 'export',
-      title: 'Set as Output',
-      dataset: { command: 'setOutput', file: file.current },
-    });
-    container.appendChild(setOutputBtn);
-
-    // Run Again button
-    const runAgainBtn = createIconButton({
-      icon: 'debug-restart',
-      title: 'Run Again',
-      dataset: { command: 'runAgain', file: file.current },
-    });
-    container.appendChild(runAgainBtn);
   }
 }
 
