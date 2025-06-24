@@ -2,7 +2,6 @@
 
 declare global {
   interface Window {
-    updateRecordingUI?: (recording: boolean) => void;
     _skipNextRestoreState?: boolean;
   }
 }
