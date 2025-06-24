@@ -1,11 +1,5 @@
-import {
-  getCurrentStream,
-  setCurrentStream,
-  clearLogGroups,
-  clearGroupToggleStates,
-  deleteStreamStatus,
-  clearAllGroupToggleStates,
-} from './stateManager.js';
+// Local imports - log state
+import { progressViewState } from './progressViewState.js';
 import {
   updateStreamTabs,
   updateStatus,
@@ -17,25 +11,21 @@ import {
   updateUsageSummary,
   updateGroupUsage,
 } from './domHandlers.js';
-import {
-  formatLogEntry,
-  getMessageTimestamp,
-  updateLogGroup,
-} from './logFormatters.js';
+import { formatLogEntry, getMessageTimestamp } from './logFormatters.js';
 import { COMMANDS } from './constants.js';
 import { registerMessageHandlers } from '@common/webviewContext.js';
 
 const handlers = {
   [COMMANDS.UPDATE_STREAMS]: (message) => {
-    setCurrentStream(message.currentStream);
+    progressViewState.setCurrentStream(message.currentStream);
     updateStreamTabs(message.streams, message.currentStream);
   },
 
   [COMMANDS.UPDATE_LOGS]: (message) => {
     const logContent = document.getElementById('logContent');
-    if (message.stream === getCurrentStream()) {
+    if (message.stream === progressViewState.getCurrentStream()) {
       logContent.innerHTML = '';
-      clearLogGroups();
+      progressViewState.clearLogGroups();
       if (message.groups && message.groups.length > 0) {
         const parentGroups = message.groups.filter((g) => !g.parentGroupId);
         const childGroups = message.groups.filter((g) => g.parentGroupId);
@@ -84,12 +74,12 @@ const handlers = {
     for (const el of headers) {
       groupIds.push(el.id.replace('group-header-', ''));
     }
-    clearLogGroups();
-    clearGroupToggleStates(groupIds);
+    progressViewState.clearLogGroups();
+    progressViewState.clearGroupToggleStates(groupIds);
   },
 
   [COMMANDS.APPEND_LOG]: (message) => {
-    if (message.stream === getCurrentStream()) {
+    if (message.stream === progressViewState.getCurrentStream()) {
       const logContent = document.getElementById('logContent');
       const addedToGroup = appendLogToGroup(message.logMessage);
       if (!addedToGroup) {
@@ -102,13 +92,13 @@ const handlers = {
   },
 
   [COMMANDS.UPDATE_LOG]: (message) => {
-    if (message.stream === getCurrentStream()) {
+    if (message.stream === progressViewState.getCurrentStream()) {
       updateLogEntry(message.logMessage);
     }
   },
 
   [COMMANDS.ADD_LOG_GROUP]: (message) => {
-    if (message.stream === getCurrentStream()) {
+    if (message.stream === progressViewState.getCurrentStream()) {
       const logContent = document.getElementById('logContent');
       addLogGroup(message.group);
       logContent.scrollTop = logContent.scrollHeight;
@@ -116,8 +106,12 @@ const handlers = {
   },
 
   [COMMANDS.UPDATE_LOG_GROUP]: (message) => {
-    if (message.stream === getCurrentStream()) {
-      updateLogGroup(message.groupId, message.status, message.endTime);
+    if (message.stream === progressViewState.getCurrentStream()) {
+      progressViewState.updateLogGroup(
+        message.groupId,
+        message.status,
+        message.endTime,
+      );
       updateLogGroupUI(message.groupId, message.status, message.endTime);
     }
   },
@@ -131,21 +125,21 @@ const handlers = {
   },
 
   [COMMANDS.UPDATE_GROUP_USAGE]: (message) => {
-    if (message.stream === getCurrentStream()) {
+    if (message.stream === progressViewState.getCurrentStream()) {
       updateGroupUsage(message.groupId, message.usage);
     }
   },
 
   [COMMANDS.UPDATE_FILES]: (message) => {
-    if (message.stream === getCurrentStream()) {
+    if (message.stream === progressViewState.getCurrentStream()) {
       updateFileList(message.files);
     }
   },
 
   [COMMANDS.DELETE_STREAM]: (message) => {
     if (message.stream) {
-      deleteStreamStatus(message.stream);
-      if (message.stream === getCurrentStream()) {
+      progressViewState.deleteStreamStatus(message.stream);
+      if (message.stream === progressViewState.getCurrentStream()) {
         const groupIds = [];
         const headers = Array.from(
           document.querySelectorAll('.log-group-header'),
@@ -153,13 +147,13 @@ const handlers = {
         for (const el of headers) {
           groupIds.push(el.id.replace('group-header-', ''));
         }
-        clearGroupToggleStates(groupIds);
+        progressViewState.clearGroupToggleStates(groupIds);
       }
     }
   },
 
   [COMMANDS.DELETE_ALL]: () => {
-    clearAllGroupToggleStates();
+    progressViewState.clearAllGroupToggleStates();
   },
 };
 
