@@ -4,6 +4,9 @@ import * as vscode from 'vscode';
 // Local imports - log
 import * as logger from '@logger/logUtils';
 
+// Local imports - utilities
+import { showLoggedErrorMessage } from '@utils/errorHandlingUtils';
+
 const CHANNEL = 'commandUtils';
 logger.initialize(CHANNEL);
 
@@ -21,9 +24,11 @@ export async function safeExecuteCommand<T>(
   try {
     return await vscode.commands.executeCommand<T>(command, ...args);
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    logger.error(channel, `Error executing command ${command}: ${message}`);
-    vscode.window.showErrorMessage(`Failed to execute command: ${command}`);
+    await showLoggedErrorMessage(
+      channel,
+      `Error executing command ${command}`,
+      err,
+    );
     return undefined;
   }
 }
