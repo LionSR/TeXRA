@@ -8,15 +8,8 @@ import {
 } from '@common/webviewContext.js';
 import { setDebugMode as applyDebugMode } from './uiHandlers.js';
 
-import {
-  updateFileSelect,
-  updateEditedFileSelect,
-  updateMultipleFileSelect,
-  getSelectedFiles,
-  handleRecentCommits,
-  handleSetCurrentFile,
-  setAgentDefaultOutputFiles,
-} from './fileHandlers.js';
+import { fileList } from './uiManagers/FileList.js';
+import { fileSelect } from './uiManagers/FileSelect.js';
 import { webviewEventBus } from './eventBus.js';
 
 import { FILE_TYPES } from './constants.js';
@@ -237,7 +230,7 @@ export function setupMessageHandlers() {
     checkRestoredBaseFile: () => {
       const restoredBaseFileDiv = safeGetElementById('baseFile');
       if (restoredBaseFileDiv && restoredBaseFileDiv.value) {
-        updateEditedFileSelect(restoredBaseFileDiv.value);
+        fileSelect.updateEdited(restoredBaseFileDiv.value);
       }
       postHandle();
     },
@@ -299,23 +292,23 @@ export function setupMessageHandlers() {
       postHandle();
     },
     setInputFile: (m) => {
-      updateFileSelect('inputFile', m.files);
+      fileSelect.update('inputFile', m.files);
       postHandle();
     },
     setReferenceFile: (m) => {
-      updateFileSelect('referenceFile', m.files);
+      fileSelect.update('referenceFile', m.files);
       postHandle();
     },
     setAuxiliaryFile: (m) => {
-      updateFileSelect('auxiliaryFile', m.files);
+      fileSelect.update('auxiliaryFile', m.files);
       postHandle();
     },
     setMediaFile: (m) => {
-      updateFileSelect('mediaFile', m.files);
+      fileSelect.update('mediaFile', m.files);
       postHandle();
     },
     setEditedFile: (m) => {
-      updateFileSelect('editedFile', m.files);
+      fileSelect.update('editedFile', m.files);
       postHandle();
     },
     inputFileSelected: (m) => {
@@ -339,37 +332,29 @@ export function setupMessageHandlers() {
       postHandle();
     },
     setDefaultOutputFiles: (m) => {
-      setAgentDefaultOutputFiles(m.files || []);
+      fileSelect.setAgentDefaultOutputFiles(m.files || []);
       postHandle();
     },
     setInputFiles: (m) => {
-      updateMultipleFileSelect('inputFiles', 'toggleInputFiles', m.files);
+      fileList.update('inputFiles', 'toggleInputFiles', m.files);
       postHandle();
     },
     setReferenceFiles: (m) => {
-      updateMultipleFileSelect(
-        'referenceFiles',
-        'toggleReferenceFiles',
-        m.files,
-      );
+      fileList.update('referenceFiles', 'toggleReferenceFiles', m.files);
       postHandle();
     },
     setAuxiliaryFiles: (m) => {
-      updateMultipleFileSelect(
-        'auxiliaryFiles',
-        'toggleAuxiliaryFiles',
-        m.files,
-      );
+      fileList.update('auxiliaryFiles', 'toggleAuxiliaryFiles', m.files);
       postHandle();
     },
     setMediaFiles: (m) => {
-      updateMultipleFileSelect('mediaFiles', 'toggleMediaFiles', m.files);
+      fileList.update('mediaFiles', 'toggleMediaFiles', m.files);
       postHandle();
     },
     addMediaFile: (m) => {
       const listDiv = safeGetElementById('mediaFiles');
-      const existingFiles = listDiv ? getSelectedFiles(listDiv) : [];
-      updateMultipleFileSelect('mediaFiles', 'toggleMediaFiles', [
+      const existingFiles = listDiv ? fileList.getSelected(listDiv) : [];
+      fileList.update('mediaFiles', 'toggleMediaFiles', [
         ...existingFiles,
         m.file,
       ]);
@@ -387,15 +372,18 @@ export function setupMessageHandlers() {
       postHandle();
     },
     setOutputFiles: (m) => {
-      updateMultipleFileSelect('outputFiles', 'toggleOutputFiles', m.files);
+      fileList.update('outputFiles', 'toggleOutputFiles', m.files);
       postHandle();
     },
     setRecentCommits: (m) => {
-      handleRecentCommits(m);
+      fileSelect.handleRecentCommits(m);
       postHandle();
     },
     setCurrentFile: (m) => {
-      handleSetCurrentFile({ fileType: m.fileType, filePath: m.filePath });
+      fileSelect.handleSetCurrentFile({
+        fileType: m.fileType,
+        filePath: m.filePath,
+      });
       postHandle();
     },
     setOpenedFiles: (m) => {
@@ -413,7 +401,7 @@ export function setupMessageHandlers() {
           }
         }
 
-        updateMultipleFileSelect(multipleFileId, toggleId, filesToAdd);
+        fileList.update(multipleFileId, toggleId, filesToAdd);
       }
       postHandle();
     },
@@ -421,7 +409,7 @@ export function setupMessageHandlers() {
       const currentBaseFileDiv = safeGetElementById('baseFile');
       if (currentBaseFileDiv) {
         const currentBaseFile = currentBaseFileDiv.value;
-        updateFileSelect('baseFile', m.files);
+        fileSelect.update('baseFile', m.files);
 
         const state = webviewState.get();
         const storedBaseFile = state?.baseFile;
@@ -436,7 +424,7 @@ export function setupMessageHandlers() {
           currentBaseFileDiv.value = currentBaseFile;
         }
 
-        updateEditedFileSelect(currentBaseFileDiv.value);
+        fileSelect.updateEdited(currentBaseFileDiv.value);
       }
       postHandle();
     },
