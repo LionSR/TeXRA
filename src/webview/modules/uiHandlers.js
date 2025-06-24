@@ -23,7 +23,10 @@ import {
   safeGetElementValue,
   safeGetElementChecked,
 } from '@common/domUtils.js';
-import { CHEVRON_UP_CLASS, CHEVRON_DOWN_CLASS } from '@common/iconConstants.js';
+import {
+  CHEVRON_UP_CLASS,
+  CHEVRON_DOWN_CLASS,
+} from '@common/webviewContext.js';
 import { capitalize } from '@common/stringUtils.js';
 
 let debugMode = false;
