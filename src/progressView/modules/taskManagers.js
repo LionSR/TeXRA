@@ -13,6 +13,7 @@ export class TaskGroupsDom {
   constructor() {
     this.headerFormatter = new TaskGroupHeaderFormatter();
     this.timestampExtractor = new MessageTimestampExtractor();
+    this.previousActiveGroupId = null;
   }
 
   /**
@@ -129,8 +130,9 @@ export class TaskGroupsDom {
       container.appendChild(detailsElem);
     }
 
-    // For top-level groups, collapse the previous active group
+    // For top-level groups, update current group and collapse the previous active group
     if (!group.parentGroupId) {
+      progressViewState.currentGroupId = group.id;
       this.collapsePreviousActiveGroup();
     }
   }
@@ -241,16 +243,18 @@ export class TaskGroupsDom {
    * Used to keep only the current task group expanded.
    */
   collapsePreviousActiveGroup() {
-    const previousId = this.previousActiveGroupId;
     const currentId = this.findCurrentActiveGroup();
 
-    if (currentId !== previousId) {
-      this.previousActiveGroupId = currentId;
+    // Collapse the previous group if it's different from current
+    if (
+      this.previousActiveGroupId &&
+      this.previousActiveGroupId !== currentId
+    ) {
+      this.collapseGroupAndChildren(this.previousActiveGroupId);
     }
 
-    if (previousId) {
-      this.collapseGroupAndChildren(previousId);
-    }
+    // Update the previous ID to current for next time
+    this.previousActiveGroupId = currentId;
   }
 
   /**

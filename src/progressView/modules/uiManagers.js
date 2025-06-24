@@ -1,9 +1,13 @@
 // Local imports
 import { progressViewState } from './progressViewState.js';
 import { formatTokens } from './formatters.js';
-import { STATUS, TOOLBAR_BUTTONS, SPLIT_SIZES } from './constants.js';
+import { STATUS, TOOLBAR_BUTTONS, SPLIT_SIZES, COMMANDS } from './constants.js';
 import { createIconButton } from '@common/templateUtils.js';
-import { CHEVRON_RIGHT_CLASS, vscode } from '@common/webviewContext.js';
+import {
+  CHEVRON_RIGHT_CLASS,
+  CHEVRON_DOWN_CLASS,
+  vscode,
+} from '@common/webviewContext.js';
 import Split from 'split.js';
 
 /**
@@ -344,7 +348,7 @@ export class FileList {
       if (effectiveBase) {
         compareBtn.onclick = () => {
           vscode.postMessage({
-            command: 'compareOriginal',
+            command: COMMANDS.COMPARE_ORIGINAL,
             file: file.path,
             base: effectiveBase,
           });
@@ -359,7 +363,7 @@ export class FileList {
       if (effectiveBase) {
         acceptBtn.onclick = () => {
           vscode.postMessage({
-            command: 'acceptFile',
+            command: COMMANDS.ACCEPT_FILE,
             file: file.path,
             base: effectiveBase,
           });
@@ -374,7 +378,7 @@ export class FileList {
       if (effectiveBase) {
         mergeBtn.onclick = () => {
           vscode.postMessage({
-            command: 'mergeFile',
+            command: COMMANDS.MERGE_FILE,
             file: file.path,
             base: effectiveBase,
           });
@@ -389,7 +393,7 @@ export class FileList {
       if (effectiveBase) {
         diffBtn.onclick = () => {
           vscode.postMessage({
-            command: 'latexdiffFile',
+            command: COMMANDS.LATEXDIFF_FILE,
             file: file.path,
             base: effectiveBase,
           });
@@ -404,7 +408,7 @@ export class FileList {
       if (file.prev) {
         prevBtn.onclick = () => {
           vscode.postMessage({
-            command: 'comparePrevious',
+            command: COMMANDS.COMPARE_PREVIOUS,
             file: file.path,
             prev: file.prev,
           });
@@ -419,7 +423,7 @@ export class FileList {
     if (filePathSpan && file.path) {
       filePathSpan.onclick = () => {
         vscode.postMessage({
-          command: 'openFile',
+          command: COMMANDS.OPEN_FILE,
           file: file.path,
         });
       };
@@ -457,12 +461,12 @@ export class Events {
 
       if (tabButton && tabButton.dataset.stream) {
         vscode.postMessage({
-          command: 'switchStream',
+          command: COMMANDS.SWITCH_STREAM,
           stream: tabButton.dataset.stream,
         });
       } else if (deleteButton && deleteButton.dataset.stream) {
         vscode.postMessage({
-          command: 'deleteStream',
+          command: COMMANDS.DELETE_STREAM,
           stream: deleteButton.dataset.stream,
         });
       }
@@ -493,6 +497,39 @@ export class Events {
           if (button.dataset.file) data.file = button.dataset.file;
           if (button.dataset.base) data.base = button.dataset.base;
           vscode.postMessage(data);
+        }
+      },
+      true,
+    );
+
+    // Delete all button handler
+    const deleteAllBtn = document.getElementById('deleteAllBtn');
+    if (deleteAllBtn) {
+      deleteAllBtn.addEventListener('click', () => {
+        vscode.postMessage({ command: COMMANDS.DELETE_ALL });
+      });
+    }
+
+    // Initialize split view
+    Split(['.content-area', '.tabs'], {
+      sizes: [SPLIT_SIZES.CONTENT, SPLIT_SIZES.TABS],
+      minSize: [200, 100],
+      gutterSize: 5,
+      cursor: 'col-resize',
+    });
+
+    // Handle special-details toggle events
+    document.addEventListener(
+      'toggle',
+      (e) => {
+        if (e.target && e.target.classList.contains('special-details')) {
+          const toggleIcon = e.target.querySelector('.toggle-icon');
+          if (toggleIcon) {
+            const isOpen = e.target.open;
+            toggleIcon.className = `${
+              isOpen ? CHEVRON_DOWN_CLASS : CHEVRON_RIGHT_CLASS
+            } toggle-icon`;
+          }
         }
       },
       true,
