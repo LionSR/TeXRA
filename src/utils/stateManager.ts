@@ -5,7 +5,7 @@ import * as vscode from 'vscode';
 export enum WorkspaceStateKey {
   AGENT_HISTORY = 'texra.agentHistory',
   LOG_STREAMS = 'texra.logStreams',
-  LOG_GROUPS = 'texra.logGroups',
+  TASK_GROUPS = 'texra.taskGroups',
   OUTPUT_FILES = 'texra.outputFiles',
   ACTIVE_LOG_STREAM = 'texra.activeLogStream',
   TASK_STATES = 'texra.taskStates',
