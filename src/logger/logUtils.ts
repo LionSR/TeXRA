@@ -4,8 +4,8 @@ import * as winston from 'winston';
 import Transport from 'winston-transport';
 import { randomUUID } from 'crypto';
 
-// Local imports - progressView
-import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
+// Local imports - events
+import { eventBus } from '@events';
 import { getConfig } from '@utils/config';
 import {
   shouldUseConsolidatedChannel,
@@ -68,17 +68,8 @@ function getMainOutputChannel(): vscode.OutputChannel {
 // Create VSCode output channel transport
 class VSCodeTransport extends Transport {
   private channel: vscode.OutputChannel;
-  private progressViewProvider?: ProgressViewProvider;
   private streamName: string;
   private useConsolidatedChannel: boolean;
-  private messageBuffer: {
-    id: string;
-    level: string;
-    message: string;
-    timestamp: number;
-    groupId?: string;
-    messageType?: 'default' | 'scratchpad' | 'thinking';
-  }[] = [];
   private groups: Map<string, LogGroup> = new Map();
   private activeGroupId?: string;
 
@@ -86,14 +77,12 @@ class VSCodeTransport extends Transport {
     channel: vscode.OutputChannel,
     streamName: string,
     useConsolidatedChannel: boolean,
-    progressViewProvider?: ProgressViewProvider,
     opts?: Transport.TransportStreamOptions,
   ) {
     super(opts);
     this.channel = channel;
     this.streamName = streamName;
     this.useConsolidatedChannel = useConsolidatedChannel;
-    this.progressViewProvider = progressViewProvider;
   }
 
   log(info: any, callback: () => void) {
@@ -161,68 +150,19 @@ class VSCodeTransport extends Transport {
       `<span class="message-${level}">${processedMessage}</span>` +
       `</div>`;
 
-    // Write to ProgressView if available (with colors and escaped HTML)
+    // Emit log message event
     const numericTimestamp = new Date(timestamp).getTime();
-    if (this.progressViewProvider) {
-      this.progressViewProvider.addLogMessage(
-        this.streamName,
-        coloredFormattedMessage,
-        level as 'error' | 'warn' | 'info' | 'debug',
-        groupId,
-        numericTimestamp,
-        messageType,
-        id,
-      );
-    } else {
-      // Buffer the message if ProgressViewProvider is not available
-      this.messageBuffer.push({
-        id,
-        level,
-        message: coloredFormattedMessage,
-        timestamp: numericTimestamp,
-        groupId,
-        messageType,
-      });
-    }
+    eventBus.emit('logMessage', {
+      stream: this.streamName,
+      message: coloredFormattedMessage,
+      level: level as 'error' | 'warn' | 'info' | 'debug',
+      groupId,
+      timestamp: numericTimestamp,
+      messageType,
+      id,
+    });
 
     callback();
-  }
-
-  // Method to replay buffered messages when ProgressViewProvider becomes available
-  replayBufferedMessages(progressViewProvider: ProgressViewProvider) {
-    this.progressViewProvider = progressViewProvider;
-
-    // Skip replay for consolidated channels
-    if (this.useConsolidatedChannel) {
-      return;
-    }
-
-    // First replay any groups
-    for (const group of this.groups.values()) {
-      this.progressViewProvider.addLogGroup(
-        this.streamName,
-        group.id,
-        group.name,
-        group.startTime,
-        group.status,
-        group.endTime,
-      );
-    }
-
-    // Then replay messages, which will be associated with their groups
-    for (const msg of this.messageBuffer) {
-      this.progressViewProvider.addLogMessage(
-        this.streamName,
-        msg.message,
-        msg.level as 'error' | 'warn' | 'info' | 'debug',
-        msg.groupId,
-        msg.timestamp,
-        msg.messageType ?? 'default',
-        msg.id,
-      );
-    }
-
-    this.messageBuffer = []; // Clear buffer after replay
   }
 
   // Create a new log group and make it active
@@ -246,18 +186,16 @@ class VSCodeTransport extends Transport {
       return groupId;
     }
 
-    // Log a message to mark the group start
-    if (this.progressViewProvider) {
-      this.progressViewProvider.addLogGroup(
-        this.streamName,
-        groupId,
-        groupName,
-        now,
-        'running',
-        undefined, // No end time for a new group
-        parentGroupId, // Pass the parent group ID
-      );
-    }
+    // Emit group start event
+    eventBus.emit('addLogGroup', {
+      stream: this.streamName,
+      groupId,
+      groupName,
+      startTime: now,
+      status: 'running',
+      endTime: undefined,
+      parentGroupId,
+    });
 
     return groupId;
   }
@@ -278,14 +216,12 @@ class VSCodeTransport extends Transport {
       return;
     }
 
-    if (this.progressViewProvider) {
-      this.progressViewProvider.updateLogGroup(
-        this.streamName,
-        groupId,
-        status,
-        group.endTime,
-      );
-    }
+    eventBus.emit('updateLogGroup', {
+      stream: this.streamName,
+      groupId,
+      status,
+      endTime: group.endTime,
+    });
 
     if (this.activeGroupId === groupId) {
       // If this group has a parent, set that as the active group
@@ -315,17 +251,6 @@ class VSCodeTransport extends Transport {
 // Map to store loggers for different categories
 const channelLoggers = new Map<string, winston.Logger>();
 const channelTransports = new Map<string, VSCodeTransport>();
-
-let globalProgressViewProvider: ProgressViewProvider | undefined;
-
-export function setProgressViewProvider(provider: ProgressViewProvider) {
-  globalProgressViewProvider = provider;
-
-  // Replay buffered messages for all existing transports
-  for (const transport of channelTransports.values()) {
-    transport.replayBufferedMessages(provider);
-  }
-}
 
 export function initialize(defaultChannel: string): void {
   // Create default logger if it doesn't exist
@@ -358,7 +283,6 @@ function createLoggerForChannel(channel: string): winston.Logger {
     outputChannel,
     channel,
     useConsolidatedChannel,
-    globalProgressViewProvider,
   );
   channelTransports.set(channel, transport);
 

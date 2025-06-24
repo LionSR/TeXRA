@@ -3,7 +3,10 @@ import * as path from 'path';
 
 // Local imports
 import { WorkspaceFS } from './workspaceFS';
-import { AgentLogger } from '@logger/AgentLogger';
+import * as log from '@logger/logUtils';
+
+const CHANNEL = 'fileMappingUtils';
+log.initialize(CHANNEL);
 
 /**
  * Create a mapping between two file lists based on name similarity.
@@ -83,26 +86,25 @@ export function createFileMapping(
  *
  * @param baseFiles Base file paths
  * @param outputFiles Output file paths
- * @param logger Optional logger for debug messages
  */
 export async function replaceInputCommands(
   baseFiles: string[],
   outputFiles: string[],
-  logger?: AgentLogger,
 ): Promise<void> {
   if (!baseFiles?.length || !outputFiles?.length) {
-    logger?.debug('No files to process for input command replacement');
+    log.debug(CHANNEL, 'No files to process for input command replacement');
     return;
   }
 
   const baseToOutputMap = createFileMapping(baseFiles, outputFiles, 'contains');
 
   if (baseToOutputMap.size === 0) {
-    logger?.debug('No valid file mappings for input command replacement');
+    log.debug(CHANNEL, 'No valid file mappings for input command replacement');
     return;
   }
 
-  logger?.debug(
+  log.debug(
+    CHANNEL,
     `File mappings for input replacement: ${Array.from(
       baseToOutputMap.entries(),
     )
@@ -131,10 +133,11 @@ export async function replaceInputCommands(
 
       if (newContent !== content) {
         await WorkspaceFS.writeFile(outputFile, newContent);
-        logger?.debug(`Updated input commands in ${outputFile}`);
+        log.debug(CHANNEL, `Updated input commands in ${outputFile}`);
       }
     } catch (err) {
-      logger?.warn(
+      log.warn(
+        CHANNEL,
         `Error processing input commands in ${outputFile}: ${err instanceof Error ? err.message : String(err)}`,
       );
     }

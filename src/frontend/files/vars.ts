@@ -2,7 +2,10 @@
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
 
 // Local imports - log
-import { AgentLogger } from '@logger/AgentLogger';
+import * as log from '@logger/logUtils';
+
+const CHANNEL = 'frontend.vars';
+log.initialize(CHANNEL);
 
 /**
  * Reads a file and populates user variable fields with its path and content.
@@ -11,7 +14,6 @@ import { AgentLogger } from '@logger/AgentLogger';
  * @param filePath - Path to the file
  * @param varName - Variable name prefix (without _FILE or _CONTENT)
  * @param userVars - Object to store the populated variables
- * @param logger - Logger instance used for logging
  * @param source - String describing the origin of the file (for log messages)
  * @param absolute - Interpret filePath as absolute rather than workspace-relative
  * @returns True if the file was read successfully, false otherwise
@@ -20,7 +22,6 @@ export async function setVarFromFile(
   filePath: string,
   varName: string,
   userVars: Record<string, any>,
-  logger: AgentLogger,
   source: string,
   absolute: boolean = false,
 ): Promise<boolean> {
@@ -30,10 +31,10 @@ export async function setVarFromFile(
       : await WorkspaceFS.readFile(filePath);
     userVars[`${varName}_FILE`] = filePath;
     userVars[`${varName}_CONTENT`] = fileContent;
-    logger.info(`[${source}] Found [VAR '${varName}']: ${filePath}`);
+    log.info(CHANNEL, `[${source}] Found [VAR '${varName}']: ${filePath}`);
     return true;
   } catch (err) {
-    logger.warn(`[${source}] [VAR '${varName}'] not found: ${filePath}`);
+    log.warn(CHANNEL, `[${source}] [VAR '${varName}'] not found: ${filePath}`);
     return false;
   }
 }

@@ -128,13 +128,7 @@ async function getRequiredFileVars(
       agentSetting.requiredFiles,
     )) {
       if (filePath) {
-        await setVarFromFile(
-          filePath,
-          varName,
-          userVars,
-          logger,
-          'requiredFiles',
-        );
+        await setVarFromFile(filePath, varName, userVars, 'requiredFiles');
       }
     }
   }
@@ -148,7 +142,6 @@ async function getRequiredFileVars(
         fullPath,
         varName,
         userVars,
-        logger,
         'requiredFilesInternal',
         true,
       );
@@ -180,7 +173,6 @@ async function getPatternBasedFileVars(
               categoryValue,
               varName,
               userVars,
-              logger,
               `Pattern '${pattern}'`,
             );
           }
@@ -192,7 +184,6 @@ async function getPatternBasedFileVars(
                   file,
                   varName,
                   userVars,
-                  logger,
                   `Pattern '${pattern}'`,
                 );
                 if (success) {

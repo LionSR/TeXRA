@@ -1147,7 +1147,6 @@ export abstract class BaseReflectionAgent extends BaseAgent {
             await replaceInputCommands(
               this.baseFiles,
               processedFiles,
-              this.logger,
             );
           }
         } else {

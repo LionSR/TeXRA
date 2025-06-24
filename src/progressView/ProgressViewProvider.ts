@@ -16,6 +16,12 @@ import { TokenUsageStats } from '../types/UsageTypes';
 import { LogGroup } from '../logger/LogTypes';
 import type { DiffStats } from '../types/DiffTypes';
 import { randomUUID } from 'crypto';
+import {
+  eventBus,
+  LogMessageEvent,
+  LogGroupEvent,
+  UpdateLogGroupEvent,
+} from '@events';
 
 // @ts-ignore - Import JavaScript module
 import { STATUS, COMMANDS } from './modules/constants.js';
@@ -78,6 +84,40 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
 
     // Set instance
     ProgressViewProvider._instance = this;
+
+    // Subscribe to logging events
+    eventBus.on('logMessage', (e: LogMessageEvent) => {
+      this.addLogMessage(
+        e.stream,
+        e.message,
+        e.level,
+        e.groupId,
+        e.timestamp,
+        e.messageType,
+        e.id,
+      );
+    });
+
+    eventBus.on('addLogGroup', (e: LogGroupEvent) => {
+      this.addLogGroup(
+        e.stream,
+        e.groupId,
+        e.groupName,
+        e.startTime,
+        e.status as StatusType,
+        e.endTime,
+        e.parentGroupId,
+      );
+    });
+
+    eventBus.on('updateLogGroup', (e: UpdateLogGroupEvent) => {
+      this.updateLogGroup(
+        e.stream,
+        e.groupId,
+        e.status as StatusType,
+        e.endTime,
+      );
+    });
 
     // Listen for workspace folder changes
     this._disposables.push(
