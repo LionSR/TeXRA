@@ -2,6 +2,7 @@ import { vscode, registerMessageHandlers } from '@common/webviewContext.js';
 import { safeSetElementValue, safeGetElementById } from '@common/domUtils.js';
 import { capitalize, uncapitalize } from '@common/stringUtils.js';
 import { stateManager, restoreState, saveState } from './stateManager.js';
+import { CHEVRON_UP_CLASS, CHEVRON_DOWN_CLASS } from '@common/iconConstants.js';
 import { setDebugMode as applyDebugMode } from './uiHandlers.js';
 
 import {
@@ -139,9 +140,9 @@ function handleStateRestoration(state) {
       // Update the toggle indicator based on visibility
       const toggleElement = safeGetElementById(toggleId);
       if (toggleElement) {
-        toggleElement.innerHTML = isVisible
-          ? '<i class="codicon codicon-chevron-up"></i>'
-          : '<i class="codicon codicon-chevron-down"></i>';
+        toggleElement.innerHTML = `<i class="${
+          isVisible ? CHEVRON_UP_CLASS : CHEVRON_DOWN_CLASS
+        }"></i>`;
       }
 
       // Only update the file list if we have files to restore
@@ -375,7 +376,7 @@ export function setupMessageHandlers() {
         container.style.display = 'block';
         const toggleIcon = safeGetElementById('toggleMediaFiles');
         if (toggleIcon) {
-          toggleIcon.innerHTML = '<i class="codicon codicon-chevron-up"></i>';
+          toggleIcon.innerHTML = `<i class="${CHEVRON_UP_CLASS}"></i>`;
         }
       }
 

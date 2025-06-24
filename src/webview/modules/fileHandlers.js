@@ -6,6 +6,7 @@ import {
   safeGetElementById,
   safeSetElementValue,
 } from '@common/domUtils.js';
+import { CHEVRON_UP_CLASS, CHEVRON_DOWN_CLASS } from '@common/iconConstants.js';
 import { capitalize, uncapitalize } from '@common/stringUtils.js';
 
 // Store default output file names for the currently selected agent
@@ -87,7 +88,7 @@ export function updateMultipleFileSelect(selectId, toggleId, files) {
       addFileToList(selectId, file);
     });
     selectDiv.style.display = 'block';
-    toggleIcon.innerHTML = '<i class="codicon codicon-chevron-up"></i>';
+    toggleIcon.innerHTML = `<i class="${CHEVRON_UP_CLASS}"></i>`;
 
     // Make sure the container is also visible
     const containerId = `${selectId}Container`;
@@ -128,9 +129,9 @@ export function setMultipleFileSelectVisibility(
   }
 
   container.style.display = isVisible ? 'block' : 'none';
-  toggleIcon.innerHTML = isVisible
-    ? '<i class="codicon codicon-chevron-up"></i>'
-    : '<i class="codicon codicon-chevron-down"></i>';
+  toggleIcon.innerHTML = `<i class="${
+    isVisible ? CHEVRON_UP_CLASS : CHEVRON_DOWN_CLASS
+  }"></i>`;
 }
 
 export function setElementsDisabled(elements, disabled) {
@@ -283,7 +284,7 @@ export function emptyMultipleFiles(containerId, toggleId) {
   container.style.display = 'none';
   const toggleIconDiv = safeGetElementById(toggleId);
   if (toggleIconDiv)
-    toggleIconDiv.innerHTML = '<i class="codicon codicon-chevron-down"></i>';
+    toggleIconDiv.innerHTML = `<i class="${CHEVRON_DOWN_CLASS}"></i>`;
 
   // Reset Output Filename override removed
 
@@ -319,9 +320,9 @@ export function initializeOutputContainer() {
     const shouldShow = state && state.outputFilesActive;
 
     container.style.display = shouldShow ? 'block' : 'none';
-    toggleIcon.innerHTML = shouldShow
-      ? '<i class="codicon codicon-chevron-up"></i>'
-      : '<i class="codicon codicon-chevron-down"></i>';
+    toggleIcon.innerHTML = `<i class="${
+      shouldShow ? CHEVRON_UP_CLASS : CHEVRON_DOWN_CLASS
+    }"></i>`;
   }
 }
 
@@ -339,8 +340,8 @@ export function initializeLatexdiffsSection() {
     const iconElement = toggleIcon.querySelector('i');
     if (iconElement) {
       iconElement.className = shouldShow
-        ? 'codicon codicon-chevron-up'
-        : 'codicon codicon-chevron-down';
+        ? CHEVRON_UP_CLASS
+        : CHEVRON_DOWN_CLASS;
     }
   }
 }
@@ -356,9 +357,7 @@ export function toggleLatexdiffs() {
   // Update the icon class instead of replacing innerHTML to preserve the title
   const iconElement = toggleIcon.querySelector('i');
   if (iconElement) {
-    iconElement.className = isVisible
-      ? 'codicon codicon-chevron-down'
-      : 'codicon codicon-chevron-up';
+    iconElement.className = isVisible ? CHEVRON_DOWN_CLASS : CHEVRON_UP_CLASS;
   }
 
   stateManager.update({ latexdiffsVisible: !isVisible });
