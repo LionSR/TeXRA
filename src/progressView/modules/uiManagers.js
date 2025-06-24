@@ -256,6 +256,12 @@ export class FileList {
       if (!files || files.length === 0) return;
 
       files.forEach((file) => {
+        // Skip invalid file entries
+        if (!file || !file.current) {
+          console.warn('FileList.update: Invalid file entry:', file);
+          return;
+        }
+
         const clone = template.content.cloneNode(true);
         const fileItem = clone.querySelector('.file-item');
         const filePathSpan = clone.querySelector('.file-path');
@@ -265,14 +271,16 @@ export class FileList {
 
         // Parse the file path
         const parts = file.current.split('/');
-        const basename = parts.pop();
+        const basename = parts.pop() || '';
         const dirPath = parts.length > 0 ? parts.join('/') + '/' : '';
 
         // Set file data attributes
-        fileItem.dataset.file = file.current;
-        fileItem.dataset.original = file.original || '';
-        fileItem.dataset.base = file.base || '';
-        fileItem.dataset.round = round;
+        if (fileItem) {
+          fileItem.dataset.file = file.current;
+          fileItem.dataset.original = file.original || '';
+          fileItem.dataset.base = file.base || '';
+          fileItem.dataset.round = round;
+        }
 
         // Set the file path display
         if (dirSpan) dirSpan.textContent = dirPath;
@@ -382,7 +390,7 @@ export class FileList {
 
     // Add click handler for the file path
     const filePathSpan = clone.querySelector('.file-path');
-    if (filePathSpan) {
+    if (filePathSpan && file.current) {
       filePathSpan.onclick = () => {
         vscode.postMessage({
           command: 'openFile',
