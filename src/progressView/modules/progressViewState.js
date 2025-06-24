@@ -2,15 +2,122 @@
 import { WebviewStateManager } from '@common/webviewState.js';
 
 /**
+ * Manages log groups in the progress view.
+ */
+class LogGroups {
+  constructor() {
+    this.groups = new Map();
+  }
+
+  get(id) {
+    return this.groups.get(id);
+  }
+
+  set(id, group) {
+    this.groups.set(id, group);
+  }
+
+  getAll() {
+    return this.groups;
+  }
+
+  clear() {
+    this.groups.clear();
+  }
+
+  /**
+   * Update an existing log group with new status or end time.
+   * @param {string} groupId - ID of the group to update
+   * @param {string} status - New status
+   * @param {number} [endTime] - Optional end time
+   */
+  update(groupId, status, endTime) {
+    const group = this.groups.get(groupId);
+    if (!group) return;
+
+    group.status = status;
+    if (endTime) {
+      group.endTime = endTime;
+    }
+
+    this.groups.set(groupId, group);
+  }
+}
+
+/**
+ * Manages group toggle states with persistence.
+ */
+class ToggleStates {
+  constructor(saveCallback) {
+    this.states = new Map();
+    this.saveCallback = saveCallback;
+  }
+
+  set(id, collapsed) {
+    this.states.set(id, collapsed);
+    this.saveCallback();
+  }
+
+  get(id) {
+    return this.states.get(id);
+  }
+
+  clear(ids) {
+    ids.forEach((id) => this.states.delete(id));
+    this.saveCallback();
+  }
+
+  clearAll() {
+    this.states.clear();
+    this.saveCallback();
+  }
+
+  /** Get all entries for serialization */
+  entries() {
+    return [...this.states.entries()];
+  }
+
+  /** Load from serialized data */
+  load(data) {
+    this.states = new Map(data);
+  }
+}
+
+/**
+ * Manages stream status information.
+ */
+class StreamStatuses {
+  constructor() {
+    this.statuses = new Map();
+  }
+
+  get(stream) {
+    return this.statuses.get(stream);
+  }
+
+  set(stream, status) {
+    if (stream && status !== 'ready') {
+      this.statuses.set(stream, status);
+    }
+  }
+
+  delete(stream) {
+    this.statuses.delete(stream);
+  }
+}
+
+/**
  * Manages progress view state and handles persistence.
  */
 export class ProgressViewState {
   constructor() {
     this.stateManager = new WebviewStateManager();
     this.currentStream = '';
-    this.streamStatuses = new Map();
-    this.logGroups = new Map();
-    this.groupToggleStates = new Map();
+
+    // Initialize managers
+    this.logGroups = new LogGroups();
+    this.toggleStates = new ToggleStates(() => this.save());
+    this.streamStatuses = new StreamStatuses();
   }
 
   /** Load saved state from VS Code storage. */
@@ -18,9 +125,8 @@ export class ProgressViewState {
     const previous = this.stateManager.getState();
     if (previous.groupToggleStates) {
       try {
-        this.groupToggleStates = new Map(
-          JSON.parse(previous.groupToggleStates),
-        );
+        const data = JSON.parse(previous.groupToggleStates);
+        this.toggleStates.load(data);
       } catch (e) {
         console.error('Failed to restore group toggle states:', e);
       }
@@ -30,87 +136,20 @@ export class ProgressViewState {
   /** Persist the current group toggle states. */
   save() {
     try {
-      const serialized = JSON.stringify([...this.groupToggleStates.entries()]);
+      const serialized = JSON.stringify(this.toggleStates.entries());
       this.stateManager.update({ groupToggleStates: serialized });
     } catch (e) {
       console.error('Failed to save state:', e);
     }
   }
 
-  // --- stream operations ---
+  // --- Current stream operations ---
   getCurrentStream() {
     return this.currentStream;
   }
 
   setCurrentStream(stream) {
     this.currentStream = stream;
-  }
-
-  getStreamStatus(stream) {
-    return this.streamStatuses.get(stream);
-  }
-
-  setStreamStatus(stream, status) {
-    if (stream && status !== 'ready') {
-      this.streamStatuses.set(stream, status);
-    }
-  }
-
-  deleteStreamStatus(stream) {
-    this.streamStatuses.delete(stream);
-  }
-
-  // --- group operations ---
-  getLogGroup(id) {
-    return this.logGroups.get(id);
-  }
-
-  setLogGroup(id, group) {
-    this.logGroups.set(id, group);
-  }
-
-  getLogGroups() {
-    return this.logGroups;
-  }
-
-  clearLogGroups() {
-    this.logGroups.clear();
-  }
-
-  setGroupToggleState(id, collapsed) {
-    this.groupToggleStates.set(id, collapsed);
-    this.save();
-  }
-
-  getGroupToggleState(id) {
-    return this.groupToggleStates.get(id);
-  }
-
-  clearGroupToggleStates(ids) {
-    ids.forEach((id) => this.groupToggleStates.delete(id));
-    this.save();
-  }
-
-  clearAllGroupToggleStates() {
-    this.groupToggleStates.clear();
-    this.save();
-  }
-  /**
-   * Update an existing log group with new status or end time.
-   * @param {string} groupId - ID of the group to update
-   * @param {string} status - New status
-   * @param {number} [endTime] - Optional end time
-   */
-  updateLogGroup(groupId, status, endTime) {
-    const group = this.logGroups.get(groupId);
-    if (!group) return;
-
-    group.status = status;
-    if (endTime) {
-      group.endTime = endTime;
-    }
-
-    this.logGroups.set(groupId, group);
   }
 }
 
