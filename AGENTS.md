@@ -48,6 +48,8 @@ This document sets the common conventions for contributions. Follow these norms 
 - Use `setupPasteListener` from `src/webview/modules/pasteHandler.js` to enable clipboard image pasting in text areas.
 - Implement agents using the `IAgent` interface (`src/agent/IAgent.ts`) for a consistent lifecycle.
 - Track log groups with numeric timestamps using `addLogMessage` in `src/logger/logUtils.ts`.
+- Only agent streams appear in the ProgressView and get their own output channels. Other logs share the
+  consolidated `TeXRA` channel and are not persisted across sessions.
 - Update cumulative usage stats with `updateUsageSummary` in `src/progressView/modules/domHandlers.js`.
 - Prefer enums or union types over plain booleans in configuration objects.
 - Build webview URIs through helpers in `src/webview/WebviewContentProvider.ts`.
