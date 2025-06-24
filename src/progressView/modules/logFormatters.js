@@ -337,10 +337,3 @@ export function formatDuration(durationMs) {
     return `${minutes}min, ${seconds}sec`;
   }
 }
-
-/**
- * Update log group with new status or end time
- * @param {string} groupId - ID of the group to update
- * @param {string} status - New status
- * @param {string} endTime - End time (optional)
- */
