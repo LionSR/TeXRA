@@ -14,7 +14,10 @@ import { findFilesFromPatterns } from './utils';
 
 // Local imports - housekeeping
 import { TEMP_EXTENSIONS } from './constants';
-import { showLoggedErrorMessage, showLoggedMessage } from '@utils/errorHandlingUtils';
+import {
+  showLoggedErrorMessage,
+  showLoggedMessage,
+} from '@utils/errorHandlingUtils';
 
 const CHANNEL = 'Housekeeping';
 logger.initialize(CHANNEL);

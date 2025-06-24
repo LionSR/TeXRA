@@ -17,7 +17,10 @@ import { BaseError, ValidationResult } from './types';
 import { WorkspaceFS } from '@utils/files';
 import { SecretManager, ApiProvider } from '@frontend/secretManager';
 import { getConfig } from '@utils/config';
-import { showLoggedErrorMessage, showLoggedMessage } from '@utils/errorHandlingUtils';
+import {
+  showLoggedErrorMessage,
+  showLoggedMessage,
+} from '@utils/errorHandlingUtils';
 
 // Local imports - logging
 import * as logger from '@logger/logUtils';
@@ -156,11 +159,7 @@ export abstract class AnthropicToolAgent<
         return false;
       }
     } catch (err) {
-      await showLoggedErrorMessage(
-        CHANNEL,
-        'Error in fixIssues',
-        err,
-      );
+      await showLoggedErrorMessage(CHANNEL, 'Error in fixIssues', err);
       return false;
     }
   }
