@@ -160,6 +160,16 @@ const handlers = {
   [COMMANDS.DELETE_ALL]: () => {
     state.toggleStates.clearAll();
   },
+
+  [COMMANDS.UPDATE_FILE_LOADING_STATUS]: (message) => {
+    if (message.stream === state.getCurrentStream() && window.fileLoadingStatus) {
+      if (message.clear) {
+        window.fileLoadingStatus.clearStatuses();
+      } else if (message.fileStatuses) {
+        window.fileLoadingStatus.handleStatusUpdates(message.fileStatuses);
+      }
+    }
+  },
 };
 
 /**

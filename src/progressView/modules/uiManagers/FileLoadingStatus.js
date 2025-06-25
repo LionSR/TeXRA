@@ -3,77 +3,46 @@ import { COMMANDS } from '../constants.js';
 import { vscode } from '@common/webviewContext.js';
 
 /**
- * Manages file loading status display with a cleaner UI.
+ * Manages file loading status display with native structured data.
  */
 export class FileLoadingStatus {
   constructor() {
-    this.fileStatuses = new Map();
+    this.fileStatuses = new Map(); // Map<string, FileStatusData>
     this.isVisible = false;
   }
 
   /**
-   * Parse a log message to extract file loading status information
-   * @param {string} message - The log message to parse
-   * @returns {Object|null} Parsed file status or null if not a file status message
+   * Add or update a file status using structured data
+   * @param {Object} fileStatusData - Structured file status data
+   * @param {string} fileStatusData.variable - Variable name (e.g., 'COVER_LETTER')
+   * @param {string} fileStatusData.filePath - File path
+   * @param {string} fileStatusData.source - Source category (e.g., 'requiredFiles')
+   * @param {boolean} fileStatusData.found - Whether the file was found
+   * @param {string} [fileStatusData.patternName] - Pattern name if from pattern matching
    */
-  parseFileStatusMessage(message) {
-    // Pattern for file status messages
-    const patterns = {
-      notFound: /🟡.*?\[([^\]]+)\].*?\[VAR '([^']+)'\] not found: (.+)/,
-      found: /🟢.*?\[([^\]]+)\].*?\[VAR '([^']+)'\]: (.+)/,
-      patternFound: /🟢.*?\[Pattern '([^']+)'\].*?\[VAR '([^']+)'\]: (.+)/
+  updateFileStatus(fileStatusData) {
+    if (!fileStatusData || !fileStatusData.variable) return;
+
+    const statusEntry = {
+      type: fileStatusData.found ? 'found' : 'missing',
+      variable: fileStatusData.variable,
+      path: fileStatusData.filePath,
+      category: fileStatusData.patternName 
+        ? `Pattern '${fileStatusData.patternName}'`
+        : fileStatusData.source,
+      timestamp: Date.now()
     };
 
-    for (const [type, pattern] of Object.entries(patterns)) {
-      const match = message.match(pattern);
-      if (match) {
-        let category, variable, path;
-        
-        if (type === 'patternFound') {
-          category = `Pattern '${match[1]}'`;
-          variable = match[2];
-          path = match[3];
-        } else {
-          category = match[1];
-          variable = match[2];
-          path = match[3];
-        }
-
-        return {
-          type: type === 'notFound' ? 'missing' : 'found',
-          category,
-          variable,
-          path,
-          rawMessage: message
-        };
-      }
-    }
-
-    return null;
-  }
-
-  /**
-   * Add or update a file status
-   * @param {Object} fileStatus - Parsed file status object
-   */
-  updateFileStatus(fileStatus) {
-    if (!fileStatus) return;
-
-    this.fileStatuses.set(fileStatus.variable, fileStatus);
+    this.fileStatuses.set(fileStatusData.variable, statusEntry);
     this.updateDisplay();
   }
 
   /**
-   * Process a log message and update file status if applicable
-   * @param {string} message - The log message
+   * Clear all file statuses (e.g., when starting a new task)
    */
-  processLogMessage(message) {
-    const fileStatus = this.parseFileStatusMessage(message);
-    if (fileStatus) {
-      this.updateFileStatus(fileStatus);
-      return true; // Indicates this message was processed as file status
-    }
-    return false;
+  clearStatuses() {
+    this.fileStatuses.clear();
+    this.updateDisplay();
   }
 
   /**
@@ -319,11 +288,14 @@ export class FileLoadingStatus {
   }
 
   /**
-   * Check if a message should be hidden because it's handled by this component
-   * @param {string} message - The log message
-   * @returns {boolean} True if message should be hidden from normal log display
+   * Handle file loading status updates from the extension
+   * @param {Array} fileStatusUpdates - Array of file status data objects
    */
-  shouldHideMessage(message) {
-    return this.parseFileStatusMessage(message) !== null;
+  handleStatusUpdates(fileStatusUpdates) {
+    if (!Array.isArray(fileStatusUpdates)) return;
+    
+    for (const update of fileStatusUpdates) {
+      this.updateFileStatus(update);
+    }
   }
 }

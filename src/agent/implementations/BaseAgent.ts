@@ -80,6 +80,7 @@ export abstract class BaseAgent implements IAgent {
       this.agentPath,
       this.modelHandler,
       this.logger,
+      this.getTaskId(),
     );
   }
 

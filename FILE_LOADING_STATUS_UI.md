@@ -45,24 +45,30 @@ The File Loading Status UI component provides a cleaner, more organized way to d
 
 ## How It Works
 
-### 1. **Message Parsing**
-The component automatically detects file loading status messages in the log stream using regex patterns:
+### 1. **Native Data Collection**
+The component receives structured data directly from the file loading process:
 
-```javascript
-// Detects patterns like:
-// 🟡 [requiredFiles] [VAR 'COVER_LETTER'] not found: replies/cover_letter.tex
-// 🟢 [requiredFiles] Found [VAR 'REFEREE_REPORT_A']: replies/report_a.txt
-// 🟢 [Pattern 'main'] Found [VAR 'MAIN']: journal_main.tex
+```typescript
+interface FileStatusUpdate {
+  variable: string;      // Variable name like 'COVER_LETTER'
+  filePath: string;      // Path to the file
+  source: string;        // Source category like 'requiredFiles' 
+  found: boolean;        // Whether the file was found
+  patternName?: string;  // Pattern name if from pattern matching
+}
 ```
 
 ### 2. **Real-time Updates**
-As new file status messages arrive, the component:
-- Updates the file status map
-- Refreshes the UI display
-- Maintains the current expanded/collapsed state
+As files are processed during agent initialization:
+- File status data is collected in `setVarFromFile`
+- Batch updates are sent to the progress view via `updateFileLoadingStatus`
+- The UI instantly updates with the latest status information
 
-### 3. **Smart Filtering**
-The component can optionally hide the verbose log messages from the main log view, keeping only the clean status display.
+### 3. **Clean Integration**
+The component integrates seamlessly with the existing progress view:
+- No message parsing or regex required
+- Structured data ensures reliability
+- Maintains compatibility with existing log messages
 
 ## Integration
 
@@ -81,27 +87,71 @@ The component can optionally hide the verbose log messages from the main log vie
    - Component initialization
    - Global instance creation
 
-4. **`src/progressView/modules/taskManagers.js`**
-   - Integration with log message processing
-   - Automatic status detection and updates
+4. **`src/progressView/modules/messageHandlers.js`**
+   - Message handler for `UPDATE_FILE_LOADING_STATUS` command
+   - Integration with webview messaging system
 
-5. **`src/progressView/index.html`**
+5. **`src/progressView/ProgressViewProvider.ts`**
+   - `updateFileLoadingStatus()` method for sending structured data
+   - Integration with backend file loading process
+
+6. **`src/frontend/files/vars.ts`**
+   - Updated `setVarFromFile()` function to collect file status data
+   - `FileStatusUpdate` interface definition
+
+7. **`src/agent/utils/userVars.ts`**
+   - Modified to collect and batch file status updates
+   - Integration with progress view provider
+
+8. **`src/agent/implementations/BaseAgent.ts`**
+   - Updated to pass stream ID to `buildUserVars()`
+
+9. **`src/progressView/index.html`** & **`src/progressView/ProgressViewContentProvider.ts`**
    - CSS and JavaScript module imports
-
-6. **`src/progressView/ProgressViewContentProvider.ts`**
    - Asset URI configuration
 
 ## Usage Examples
 
-### Basic Usage
+### Backend Integration
+```typescript
+// File status data is automatically collected during setVarFromFile calls
+const fileStatusUpdates: FileStatusUpdate[] = [];
+
+await setVarFromFile(
+  'replies/cover_letter.tex',
+  'COVER_LETTER',
+  userVars,
+  logger,
+  'requiredFiles',
+  false,
+  fileStatusUpdates  // Updates collected here
+);
+
+// Batch send to progress view
+const progressViewProvider = ProgressViewProvider.getInstance();
+if (progressViewProvider && streamId) {
+  progressViewProvider.updateFileLoadingStatus(streamId, fileStatusUpdates);
+}
+```
+
+### Frontend Usage
 ```javascript
 // The component is automatically initialized as window.fileLoadingStatus
-// It processes log messages automatically when integrated with taskManagers
+// It receives structured data via the UPDATE_FILE_LOADING_STATUS command
 
-// Manual usage:
-const status = new FileLoadingStatus();
-status.processLogMessage("🟡 [requiredFiles] [VAR 'COVER_LETTER'] not found: replies/cover_letter.tex");
-status.processLogMessage("🟢 [requiredFiles] Found [VAR 'REFEREE_REPORT_A']: replies/report_a.txt");
+// Manual status updates
+window.fileLoadingStatus.updateFileStatus({
+  variable: 'COVER_LETTER',
+  filePath: 'replies/cover_letter.tex',
+  source: 'requiredFiles',
+  found: false
+});
+
+// Handle batch updates (used internally)
+window.fileLoadingStatus.handleStatusUpdates([
+  { variable: 'REPORT_A', filePath: 'replies/report_a.txt', source: 'requiredFiles', found: true },
+  { variable: 'REPORT_B', filePath: 'replies/report_b.txt', source: 'requiredFiles', found: true }
+]);
 ```
 
 ### Getting Status Summary
@@ -112,14 +162,11 @@ console.log(`Total: ${summary.total}, Found: ${summary.found}, Missing: ${summar
 
 ### Programmatic Control
 ```javascript
-// Clear all statuses
-window.fileLoadingStatus.clear();
+// Clear all statuses (e.g., when starting a new task)
+window.fileLoadingStatus.clearStatuses();
 
 // Show/hide the component
 window.fileLoadingStatus.setVisible(false);
-
-// Check if a message would be processed
-const isFileStatus = window.fileLoadingStatus.shouldHideMessage(logMessage);
 ```
 
 ## Benefits
@@ -136,16 +183,35 @@ const isFileStatus = window.fileLoadingStatus.shouldHideMessage(logMessage);
 ...
 ```
 
-### After (Clean UI Component)
+### After (Native UI Component)
 - **Compact summary**: "12 found, 2 missing" instead of 14 verbose lines
 - **Organized sections**: Missing files highlighted at the top
 - **Quick access**: Click to open found files
-- **Less clutter**: Optional hiding of verbose messages from main log
+- **Reliable data**: No parsing errors or missed updates
+- **Real-time updates**: Instant status updates as files are processed
+- **Structured approach**: Type-safe data flow from backend to frontend
+
+## Key Advantages of Native Approach
+
+### **🔧 Technical Benefits**
+- **No regex parsing**: Eliminates fragile pattern matching
+- **Type safety**: Full TypeScript interface definitions
+- **Performance**: Direct data transfer without string processing
+- **Reliability**: No missed updates due to format changes
+- **Maintainability**: Clean separation of concerns
+
+### **🎯 User Experience**
+- **Instant updates**: Status appears as soon as files are checked
+- **Accurate information**: Guaranteed synchronization with actual file loading
+- **Better organization**: Structured data enables smart grouping and sorting
+- **Future-proof**: Easy to extend with additional file metadata
 
 ## Future Enhancements
 
 - **Progress indicators**: Show loading state during file scanning
-- **File type icons**: Different icons for `.tex`, `.txt`, `.pdf` files
-- **Search/filter**: Filter files by name or status
+- **File type icons**: Different icons for `.tex`, `.txt`, `.pdf` files  
+- **File metadata**: Show file size, modification date, etc.
+- **Search/filter**: Filter files by name, status, or category
 - **Export options**: Copy file list or generate reports
 - **Drag & drop**: Create missing files by dropping them onto the component
+- **Auto-refresh**: Detect when missing files are created and update status

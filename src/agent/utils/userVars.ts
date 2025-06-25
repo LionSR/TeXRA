@@ -6,11 +6,12 @@ import * as path from 'path';
 // Local imports
 import { AgentLogger } from '@logger/AgentLogger';
 import { WorkspaceFS } from '@utils/files';
-import { setVarFromFile } from '@frontend/files/vars';
+import { setVarFromFile, FileStatusUpdate } from '@frontend/files/vars';
 import { getXmlFormatFromFiles, getListOfFiles } from '@utils/promptUtils';
 import { AgentConfig } from '../core/AgentConfig';
 import { AgentSetting } from '../core/AgentDataclass';
 import type { IModelHandler } from '@agent/modelHandlers';
+import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 
 /**
  * Build all user variables needed for prompt rendering.
@@ -21,20 +22,32 @@ export async function buildUserVars(
   agentPath: string,
   modelHandler: IModelHandler,
   logger: AgentLogger,
+  streamId?: string,
 ): Promise<Record<string, any>> {
   const userVars: Record<string, any> = {};
+  const fileStatusUpdates: FileStatusUpdate[] = [];
+
   Object.assign(userVars, getBasicVars(agentConfig, modelHandler));
   Object.assign(userVars, await getFileVars(agentConfig));
   Object.assign(
     userVars,
-    await getRequiredFileVars(agentSetting, agentPath, logger),
+    await getRequiredFileVars(agentSetting, agentPath, logger, fileStatusUpdates),
   );
   Object.assign(
     userVars,
-    await getPatternBasedFileVars(agentConfig, agentSetting, logger),
+    await getPatternBasedFileVars(agentConfig, agentSetting, logger, fileStatusUpdates),
   );
   Object.assign(userVars, getOutputFilesOrder(agentConfig, agentSetting));
   Object.assign(userVars, getToolFlags(agentConfig, agentSetting));
+
+  // Send file status updates to progress view if we have a stream ID and updates
+  if (streamId && fileStatusUpdates.length > 0) {
+    const progressViewProvider = ProgressViewProvider.getInstance();
+    if (progressViewProvider) {
+      progressViewProvider.updateFileLoadingStatus(streamId, fileStatusUpdates);
+    }
+  }
+
   return userVars;
 }
 
@@ -120,6 +133,7 @@ async function getRequiredFileVars(
   agentSetting: AgentSetting,
   agentPath: string,
   logger: AgentLogger,
+  fileStatusUpdates: FileStatusUpdate[],
 ): Promise<Record<string, any>> {
   const userVars: Record<string, any> = {};
 
@@ -134,6 +148,8 @@ async function getRequiredFileVars(
           userVars,
           logger,
           'requiredFiles',
+          false,
+          fileStatusUpdates,
         );
       }
     }
@@ -151,6 +167,7 @@ async function getRequiredFileVars(
         logger,
         'requiredFilesInternal',
         true,
+        fileStatusUpdates,
       );
     }
   }
@@ -162,6 +179,7 @@ async function getPatternBasedFileVars(
   agentConfig: AgentConfig,
   agentSetting: AgentSetting,
   logger: AgentLogger,
+  fileStatusUpdates: FileStatusUpdate[],
 ): Promise<Record<string, any>> {
   const userVars: Record<string, any> = {};
 
@@ -182,6 +200,9 @@ async function getPatternBasedFileVars(
               userVars,
               logger,
               `Pattern '${pattern}'`,
+              false,
+              fileStatusUpdates,
+              pattern,
             );
           }
         } else if (category.endsWith('Files')) {
@@ -194,6 +215,9 @@ async function getPatternBasedFileVars(
                   userVars,
                   logger,
                   `Pattern '${pattern}'`,
+                  false,
+                  fileStatusUpdates,
+                  pattern,
                 );
                 if (success) {
                   break;

@@ -839,4 +839,33 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   public isViewVisible(): boolean {
     return !!this._view && this._view.visible;
   }
+
+  /**
+   * Send file loading status updates to the progress view
+   * @param stream Stream ID
+   * @param fileStatuses Array of file status data
+   * @param clear Whether to clear existing statuses first
+   */
+  public updateFileLoadingStatus(
+    stream: string,
+    fileStatuses: Array<{
+      variable: string;
+      filePath: string;
+      source: string;
+      found: boolean;
+      patternName?: string;
+    }>,
+    clear: boolean = false,
+  ): void {
+    if (!this._view || shouldUseConsolidatedChannel(stream)) {
+      return;
+    }
+
+    this._view.webview.postMessage({
+      command: COMMANDS.UPDATE_FILE_LOADING_STATUS,
+      stream,
+      fileStatuses,
+      clear,
+    });
+  }
 }

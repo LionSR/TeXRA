@@ -44,6 +44,7 @@ export const COMMANDS = {
   ACCEPT_FILE: 'acceptFile',
   MERGE_FILE: 'mergeFile',
   LATEXDIFF_FILE: 'latexdiffFile',
+  UPDATE_FILE_LOADING_STATUS: 'updateFileLoadingStatus',
   WEBVIEW_READY: 'webviewReady',
 };
 
