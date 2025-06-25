@@ -2,7 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports - progress view
-import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
+import { emitProgress } from '@eventBus/ProgressEventBus';
 
 // Local imports - log
 import * as logger from '@logger/logUtils';
@@ -81,12 +81,9 @@ async function handleCleanSingle(
   const result = await runCleanSingle(model, inputFile, agent);
   showCleanResult(result, inputFile);
 
-  const provider = ProgressViewProvider.getInstance();
-  if (provider) {
-    const streamId = getStreamId(agent, model, inputFile);
-    provider.clearOutputFiles(streamId);
-    provider.clearTaskOutput(streamId);
-  }
+  const streamId = getStreamId(agent, model, inputFile);
+  emitProgress('clearOutputFiles', streamId);
+  emitProgress('clearTaskOutput', streamId);
 }
 
 async function handleCleanMultiple(
@@ -116,12 +113,9 @@ async function handleCleanMultiple(
   const result = await runCleanMultiple(model, inputFile, agent, outputFiles);
   showCleanResult(result, inputFile);
 
-  const provider = ProgressViewProvider.getInstance();
-  if (provider) {
-    const streamId = getStreamId(agent, model, inputFile, outputFiles);
-    provider.clearOutputFiles(streamId);
-    provider.clearTaskOutput(streamId);
-  }
+  const streamId = getStreamId(agent, model, inputFile, outputFiles);
+  emitProgress('clearOutputFiles', streamId);
+  emitProgress('clearTaskOutput', streamId);
 }
 
 export async function handleClean(config: {
@@ -164,14 +158,11 @@ export async function handleClean(config: {
     showCleanResult(result, config.inputFile);
   }
 
-  const provider = ProgressViewProvider.getInstance();
-  if (provider) {
-    const streamId =
-      config.streamId ||
-      getStreamId(config.agent, config.model, config.inputFile, outputFiles);
-    provider.clearOutputFiles(streamId);
-    provider.clearTaskOutput(streamId);
-  }
+  const streamId =
+    config.streamId ||
+    getStreamId(config.agent, config.model, config.inputFile, outputFiles);
+  emitProgress('clearOutputFiles', streamId);
+  emitProgress('clearTaskOutput', streamId);
 }
 
 export const cleanCommands = {
