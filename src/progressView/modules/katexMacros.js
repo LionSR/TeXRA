@@ -1,6 +1,6 @@
 /**
  * KaTeX macros for LaTeX shortcuts in the progress view
- * Based on patterns from src/replacementEngine/maxRules.ts
+ * Based on patterns from src/replacement/maxRules.ts
  */
 
 export const katexMacros = {
