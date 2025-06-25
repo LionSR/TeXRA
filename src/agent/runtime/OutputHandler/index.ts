@@ -14,6 +14,7 @@ import { getOutputFileName } from '@utils/outputFileUtils';
 import { AgentConfig } from '@agent/core/AgentConfig';
 import { AgentSetting } from '@agent/core/AgentDataclass';
 import { AgentStateGlobal, AgentStateRound } from '@agent/core/AgentState';
+import type { IModelHandler } from '@agent/modelHandlers';
 
 // Local imports - types
 
@@ -21,7 +22,7 @@ import { AgentStateGlobal, AgentStateRound } from '@agent/core/AgentState';
 export class OutputHandler {
   public agentSetting: AgentSetting;
   public agentConfig: AgentConfig;
-  public modelHandler: any;
+  public modelHandler: IModelHandler;
   public logId: number;
   public outputFiles: { [key: number]: string[] };
   public outputMappings: { [key: number]: NamedOutputFile[] };
@@ -36,7 +37,7 @@ export class OutputHandler {
   constructor(
     agentSetting: AgentSetting,
     agentConfig: AgentConfig,
-    modelHandler: any,
+    modelHandler: IModelHandler,
     logId: number,
     baseFiles: string[] = [],
     logger?: AgentLogger,

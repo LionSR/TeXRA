@@ -2,6 +2,7 @@
 
 // Base class
 export { ModelHandler } from './ModelHandler';
+export type { IModelHandler } from './types/IModelHandler';
 
 // Specific model handler implementations
 export { ModelHandlerAnthropic } from './modelHandlerAnthropic';
