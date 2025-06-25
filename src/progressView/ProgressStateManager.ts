@@ -1,19 +1,17 @@
 // Third-party imports
 import * as vscode from 'vscode';
-import { randomUUID } from 'crypto';
 
 // Local imports
 import { WorkspaceStateKey, workspaceSM } from '@utils/stateManager';
-import { WorkspaceFS } from '@utils/files';
-import { objectToTaskState } from '@utils/config';
-import { shouldUseConsolidatedChannel } from '@utils/loggerUtils';
-import { TaskState } from '@logger/TaskState';
 import { AgentLogger } from '@logger/AgentLogger';
+import { StreamTabs } from './managers/StreamTabs';
+import { TaskGroups } from './managers/TaskGroups';
+import { OutputFiles } from './managers/OutputFiles';
+import { TaskStates } from './managers/TaskStates';
+import { UsageStats } from './managers/UsageStats';
 
 // Types
 import { TokenUsageStats } from '../types/UsageTypes';
-import { TaskGroup } from '../logger/LogTypes';
-import type { DiffStats } from '../types/DiffTypes';
 
 interface ColoredLogMessage {
   id: string;
@@ -22,13 +20,6 @@ interface ColoredLogMessage {
   timestamp: number;
   groupId?: string;
   messageType?: 'default' | 'scratchpad' | 'thinking';
-}
-
-interface OutputFileInfo extends DiffStats {
-  path: string;
-  base?: string | null;
-  prev?: string | null;
-  original?: string;
 }
 
 /**
@@ -40,12 +31,11 @@ export class ProgressStateManager {
   private readonly logger: AgentLogger;
 
   // State collections
-  private _logStreams: Map<string, ColoredLogMessage[]> = new Map();
-  private _taskGroups: Map<string, Map<string, TaskGroup>> = new Map();
-  private _outputFiles: Map<string, { [key: number]: OutputFileInfo[] }> =
-    new Map();
-  private _taskStates: Map<string, TaskState> = new Map();
-  private _usageStats: Map<string, TokenUsageStats> = new Map();
+  private _streamTabs: StreamTabs = new StreamTabs();
+  private _taskGroups: TaskGroups = new TaskGroups();
+  private _outputFiles: OutputFiles = new OutputFiles();
+  private _taskStates: TaskStates = new TaskStates();
+  private _usageStats: UsageStats = new UsageStats();
   private _activeStream: string = '';
 
   constructor() {
@@ -53,23 +43,23 @@ export class ProgressStateManager {
   }
 
   // Getters for state collections
-  get logStreams(): Map<string, ColoredLogMessage[]> {
-    return this._logStreams;
+  get streamTabs(): StreamTabs {
+    return this._streamTabs;
   }
 
-  get taskGroups(): Map<string, Map<string, TaskGroup>> {
+  get taskGroups(): TaskGroups {
     return this._taskGroups;
   }
 
-  get outputFiles(): Map<string, { [key: number]: OutputFileInfo[] }> {
+  get outputFiles(): OutputFiles {
     return this._outputFiles;
   }
 
-  get taskStates(): Map<string, TaskState> {
+  get taskStates(): TaskStates {
     return this._taskStates;
   }
 
-  get usageStats(): Map<string, TokenUsageStats> {
+  get usageStats(): UsageStats {
     return this._usageStats;
   }
 
@@ -113,180 +103,22 @@ export class ProgressStateManager {
     this._saveUsageStats();
   }
 
-  /**
-   * Load log streams from storage
-   */
   private async _loadLogStreams(): Promise<void> {
-    const savedState = workspaceSM.get<{
-      [key: string]: ColoredLogMessage[];
-    }>(this._getWorkspaceKey(WorkspaceStateKey.LOG_STREAMS));
-
-    if (savedState) {
-      // Only load channels that should be persisted
-      this._logStreams = new Map(
-        Object.entries(savedState)
-          .filter(([channel]) => !shouldUseConsolidatedChannel(channel))
-          .map(([stream, messages]) => [
-            stream,
-            messages.map((msg) => {
-              if (!msg.id) {
-                msg.id = randomUUID();
-              }
-              if (msg.timestamp === undefined) {
-                const attrMatch = msg.message.match(
-                  /data-full-timestamp="([^"]+)"/,
-                );
-                const timeString =
-                  attrMatch?.[1] || (msg.message.match(/\[(.*?)\]/)?.[1] ?? '');
-                const timestamp = new Date(timeString).getTime();
-                msg.timestamp = isNaN(timestamp) ? Date.now() : timestamp;
-              }
-              if (!msg.messageType) {
-                msg.messageType = 'default';
-              }
-              return msg;
-            }),
-          ]),
-      );
-    } else {
-      this._logStreams.clear();
-    }
+    await this._streamTabs.load();
   }
 
   /**
    * Load log groups from storage
    */
   private async _loadTaskGroups(): Promise<void> {
-    let savedGroups = workspaceSM.get<{
-      [key: string]: { [groupId: string]: TaskGroup };
-    }>(this._getWorkspaceKey(WorkspaceStateKey.TASK_GROUPS));
-
-    // Migrate data stored under the old key if needed
-    if (!savedGroups) {
-      const oldGroups = workspaceSM.get<{
-        [key: string]: { [groupId: string]: TaskGroup };
-      }>(this._getWorkspaceKey('texra.logGroups'));
-      if (oldGroups) {
-        savedGroups = oldGroups;
-        await workspaceSM.update(
-          this._getWorkspaceKey('texra.logGroups'),
-          undefined,
-        );
-        this.logger.debug('Migrated log groups to task groups');
-      }
-    }
-
-    if (savedGroups) {
-      this._taskGroups = new Map(
-        Object.entries(savedGroups)
-          .filter(([channel]) => !shouldUseConsolidatedChannel(channel))
-          .map(([streamId, groups]) => [
-            streamId,
-            new Map(
-              Object.entries(groups).map(([id, g]) => [
-                id,
-                {
-                  ...g,
-                  startTime:
-                    typeof g.startTime === 'string'
-                      ? new Date(g.startTime).getTime()
-                      : g.startTime,
-                  endTime:
-                    g.endTime !== undefined
-                      ? typeof g.endTime === 'string'
-                        ? new Date(g.endTime).getTime()
-                        : g.endTime
-                      : undefined,
-                },
-              ]),
-            ),
-          ]),
-      );
-    } else {
-      this._taskGroups.clear();
-    }
+    await this._taskGroups.load();
   }
 
   /**
    * Load output files and clean up any that no longer exist
    */
   private async _loadOutputFiles(): Promise<void> {
-    const savedFiles = workspaceSM.get<{
-      [key: string]: { [key: number]: OutputFileInfo[] };
-    }>(this._getWorkspaceKey(WorkspaceStateKey.OUTPUT_FILES));
-
-    if (savedFiles) {
-      const cleaned: [string, { [key: number]: OutputFileInfo[] }][] = [];
-      let totalFilesProcessed = 0;
-      let totalFilesRemoved = 0;
-
-      for (const [streamId, rounds] of Object.entries(savedFiles)) {
-        if (shouldUseConsolidatedChannel(streamId)) {
-          continue;
-        }
-
-        const roundMap: { [key: number]: OutputFileInfo[] } = {};
-        const streamFilesProcessed = Object.values(rounds).reduce(
-          (sum, files) => sum + files.length,
-          0,
-        );
-        totalFilesProcessed += streamFilesProcessed;
-
-        for (const [roundStr, infos] of Object.entries(rounds)) {
-          const roundNum = parseInt(roundStr, 10);
-          this.logger.debug(
-            `Checking ${infos.length} files in stream ${streamId}, round ${roundNum}`,
-          );
-
-          try {
-            const filtered = await WorkspaceFS.filterExistingFiles(infos);
-            const removedCount = infos.length - filtered.length;
-
-            if (removedCount > 0) {
-              this.logger.debug(
-                `Removed ${removedCount} missing file(s) from stream ${streamId}, round ${roundNum}`,
-              );
-              totalFilesRemoved += removedCount;
-
-              // Log which files were removed for debugging
-              const removedFiles = infos.filter(
-                (info) => !filtered.find((f) => f.path === info.path),
-              );
-              removedFiles.forEach((file) => {
-                this.logger.debug(`  - Removed missing file: ${file.path}`);
-              });
-            }
-
-            // Always preserve round structure, even if empty (for UI consistency)
-            // Only skip rounds that had no files to begin with
-            if (infos.length > 0) {
-              roundMap[roundNum] = filtered;
-            }
-          } catch (error) {
-            this.logger.warn(
-              `Error checking files in stream ${streamId}, round ${roundNum}: ${error instanceof Error ? error.message : String(error)}`,
-            );
-            // On error, preserve the original files to avoid data loss
-            roundMap[roundNum] = infos;
-          }
-        }
-
-        // Always preserve streams that had any rounds (even if they become empty)
-        if (Object.keys(rounds).length > 0) {
-          cleaned.push([streamId, roundMap]);
-        }
-      }
-
-      this._outputFiles = new Map(cleaned);
-
-      if (totalFilesRemoved > 0) {
-        this.logger.info(
-          `File cleanup completed: processed ${totalFilesProcessed} files, removed ${totalFilesRemoved} missing files`,
-        );
-      }
-    } else {
-      this._outputFiles.clear();
-    }
+    await this._outputFiles.load();
   }
 
   /**
@@ -296,10 +128,10 @@ export class ProgressStateManager {
     const savedActiveStream = workspaceSM.get<string>(
       WorkspaceStateKey.ACTIVE_LOG_STREAM,
     );
-    if (savedActiveStream && this._logStreams.has(savedActiveStream)) {
+    if (savedActiveStream && this._streamTabs.has(savedActiveStream)) {
       this._activeStream = savedActiveStream;
     } else {
-      this._activeStream = Array.from(this._logStreams.keys())[0] ?? '';
+      this._activeStream = Array.from(this._streamTabs.keys())[0] ?? '';
     }
   }
 
@@ -307,92 +139,35 @@ export class ProgressStateManager {
    * Load task states
    */
   private async _loadTaskStates(): Promise<void> {
-    const savedTaskStates = workspaceSM.get<
-      { [key: string]: Record<string, any> } | [string, Record<string, any>][]
-    >(WorkspaceStateKey.TASK_STATES);
-
-    if (savedTaskStates) {
-      if (Array.isArray(savedTaskStates)) {
-        // Backwards compatibility: convert from array format if encountered
-        this._taskStates = new Map(
-          savedTaskStates.map(([stream, state]) => [
-            stream,
-            objectToTaskState(state),
-          ]),
-        );
-      } else {
-        this._taskStates = new Map(
-          Object.entries(savedTaskStates).map(([stream, state]) => [
-            stream,
-            objectToTaskState(state),
-          ]),
-        );
-      }
-    } else {
-      this._taskStates.clear();
-    }
+    await this._taskStates.load();
   }
 
   /**
    * Load usage statistics
    */
   private async _loadUsageStats(): Promise<void> {
-    const savedUsage = workspaceSM.get<{
-      [key: string]: {
-        inputTokens: number;
-        outputTokens: number;
-        cost: number;
-      };
-    }>(WorkspaceStateKey.USAGE_STATS);
-
-    if (savedUsage) {
-      this._usageStats = new Map(Object.entries(savedUsage));
-    } else {
-      this._usageStats.clear();
-    }
+    await this._usageStats.load();
   }
 
   /**
    * Save log streams to storage
    */
   private _saveLogStreams(): void {
-    // Only save channels that should be persisted
-    const persistentStreams = Array.from(this._logStreams.entries()).filter(
-      ([channel]) => !shouldUseConsolidatedChannel(channel),
-    );
-    const stateObj = Object.fromEntries(persistentStreams);
-    workspaceSM.update(
-      this._getWorkspaceKey(WorkspaceStateKey.LOG_STREAMS),
-      stateObj,
-    );
+    this._streamTabs.save();
   }
 
   /**
    * Save log groups to storage
    */
   private _saveTaskGroups(): void {
-    const persistentGroups = Array.from(this._taskGroups.entries())
-      .filter(([channel]) => !shouldUseConsolidatedChannel(channel))
-      .map(([streamId, groups]) => [
-        streamId,
-        Object.fromEntries(groups.entries()),
-      ]);
-    const groupsObj = Object.fromEntries(persistentGroups);
-    workspaceSM.update(
-      this._getWorkspaceKey(WorkspaceStateKey.TASK_GROUPS),
-      groupsObj,
-    );
+    this._taskGroups.save();
   }
 
   /**
    * Save output files to storage
    */
   private _saveOutputFiles(): void {
-    const filesObj = Object.fromEntries(this._outputFiles.entries());
-    workspaceSM.update(
-      this._getWorkspaceKey(WorkspaceStateKey.OUTPUT_FILES),
-      filesObj,
-    );
+    this._outputFiles.save();
   }
 
   /**
@@ -406,23 +181,21 @@ export class ProgressStateManager {
    * Save task states
    */
   private _saveTaskStates(): void {
-    const taskStatesObj = Object.fromEntries(this._taskStates.entries());
-    workspaceSM.update(WorkspaceStateKey.TASK_STATES, taskStatesObj);
+    this._taskStates.save();
   }
 
   /**
    * Save usage statistics
    */
   private _saveUsageStats(): void {
-    const usageObj = Object.fromEntries(this._usageStats.entries());
-    workspaceSM.update(WorkspaceStateKey.USAGE_STATS, usageObj);
+    this._usageStats.save();
   }
 
   /**
    * Clear all state for a specific stream
    */
   public clearStream(stream: string): void {
-    this._logStreams.delete(stream);
+    this._streamTabs.delete(stream);
     this._taskGroups.delete(stream);
     this._outputFiles.delete(stream);
     this._taskStates.delete(stream);
@@ -433,7 +206,7 @@ export class ProgressStateManager {
    * Clear all state
    */
   public clearAll(): void {
-    this._logStreams.clear();
+    this._streamTabs.clear();
     this._taskGroups.clear();
     this._outputFiles.clear();
     this._taskStates.clear();
