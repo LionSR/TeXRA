@@ -70,7 +70,7 @@ export class OutputFilesManager {
     const container = safeGetElementById(OUTPUT_FILES_CONTAINER_ID);
     if (!container) return;
 
-    const containerVisible = container.style.display === 'block';
+    const containerVisible = container.style.display !== 'none';
 
     if (!containerVisible) {
       this.initializeOutputFiles();
