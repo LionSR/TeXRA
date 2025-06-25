@@ -1,7 +1,7 @@
 import { webviewState } from './modules/webviewState.js';
 import { messageHandlers } from './modules/messageHandlers.js';
 import {
-  setupUIHandlers,
+  initializeUI,
   instructionManager,
   toggleManager,
 } from './modules/uiHandlers.js';
@@ -17,7 +17,7 @@ window.addEventListener('beforeunload', () => {
 document.addEventListener('DOMContentLoaded', function () {
   webviewState.restore();
   instructionManager.init();
-  setupUIHandlers();
+  initializeUI();
   toggleManager.updateToolConfigToggleState();
   toggleManager.updateAutoToggleState();
   toggleManager.setupDocumentListeners();
