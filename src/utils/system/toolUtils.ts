@@ -65,6 +65,12 @@ const PANDOC_INSTRUCTIONS =
   '- Ubuntu: sudo apt-get install pandoc\n' +
   '- Windows: Download from https://pandoc.org/installing.html';
 
+const PDFLATEX_INSTRUCTIONS =
+  'Installation instructions:\n' +
+  '- Mac: brew install texlive\n' +
+  '- Ubuntu: sudo apt-get install texlive-full\n' +
+  '- Windows: Install through MiKTeX or TeX Live package manager';
+
 // All tool configurations in one place
 const TOOL_CONFIGS: Record<string, ToolConfig> = {
   // ImageMagick tools
@@ -121,11 +127,17 @@ const TOOL_CONFIGS: Record<string, ToolConfig> = {
       TEXCOUNT_INSTRUCTIONS,
     openDocsCommand: 'texra.openDoc,installation',
   },
+  pdflatex: {
+    errorMessage:
+      'pdflatex is not installed. Please install it to use this feature.\n' +
+      PDFLATEX_INSTRUCTIONS,
+    openDocsCommand: 'texra.openDoc,installation',
+  },
 
   // Document conversion tools
   pandoc: {
     errorMessage:
-      'pandoc is not installed. Please install it to use enhanced document conversion.\n' +
+      'pandoc is not installed. Please install it to use this feature.\n' +
       PANDOC_INSTRUCTIONS,
   },
 };
