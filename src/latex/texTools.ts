@@ -8,7 +8,7 @@ import * as vscode from 'vscode';
 import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
-import { executeCommand } from '@utils/system';
+import { executeCommand, checkToolInstalled } from '@utils/system';
 import { getConfig } from '@utils/config';
 import { WorkspaceFS } from '@utils/files';
 // No additional imports needed
@@ -30,6 +30,11 @@ export async function compileLatex2Pdf(
   channel: string = CHANNEL,
   outputDirectory?: string,
 ): Promise<boolean> {
+  // Ensure pdflatex is available before attempting compilation
+  if (!(await checkToolInstalled('pdflatex'))) {
+    return false;
+  }
+
   try {
     const outDir = outputDirectory || path.dirname(latexFile);
     await WorkspaceFS.createDir(outDir);
