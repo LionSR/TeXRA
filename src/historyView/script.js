@@ -1,24 +1,24 @@
 import { vscode, registerMessageHandlers } from '@common/webviewContext.js';
-import {
-  renderHistoryItems,
-  setupEventListeners,
-} from './modules/domHandlers.js';
+import { historyViewDomHandler } from './modules/domHandlers.js';
+import { historyViewState } from './modules/historyViewState.js';
 
-// Initialize the webview when the DOM is loaded
+historyViewState.initialize();
+
 document.addEventListener('DOMContentLoaded', () => {
-  // Request history data from the extension
+  historyViewDomHandler.events.setupEventListeners();
   vscode.postMessage({ command: 'getHistoryData' });
-
-  // Set up event listeners
-  setupEventListeners();
 });
 
-// Handle messages from the extension
+window.addEventListener('unload', () => {
+  historyViewDomHandler.events.dispose();
+  historyViewDomHandler.searchManager.dispose();
+});
+
 registerMessageHandlers({
   updateHistory: (message) => {
-    renderHistoryItems(message.historyItems);
+    historyViewDomHandler.renderer.render(message.historyItems);
   },
   historyCleared: () => {
-    renderHistoryItems([]);
+    historyViewDomHandler.renderer.render([]);
   },
 });
