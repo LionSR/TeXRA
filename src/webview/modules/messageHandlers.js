@@ -27,6 +27,7 @@ export class MessageHandlers {
 
     // Cached DOM elements
     this._instructionEl = null;
+    this._elementCache = new Map();
     // Track file list event handlers for cleanup
     this._fileListHandlers = {};
 
@@ -107,9 +108,16 @@ export class MessageHandlers {
     };
   }
 
-  /** Register handlers and request initial data. */
-  setup() {
+  /** Register handlers and optionally request initial data. */
+  setup(options = {}) {
+    const { requestData = true } = options;
     this._cleanupFn = registerMessageHandlers(this._handlers);
+    if (requestData) {
+      this._initializeDataRequests();
+    }
+  }
+
+  requestInitialData() {
     this._initializeDataRequests();
   }
 
@@ -123,6 +131,7 @@ export class MessageHandlers {
     });
     this._fileListHandlers = {};
     this._instructionEl = null;
+    this._elementCache.clear();
   }
 
   /* ---------- Private helpers ---------- */
@@ -132,6 +141,18 @@ export class MessageHandlers {
     const icon = document.createElement('i');
     icon.className = isVisible ? CHEVRON_UP_CLASS : CHEVRON_DOWN_CLASS;
     element.appendChild(icon);
+  }
+
+  _createFileItem(file) {
+    const fileItem = document.createElement('div');
+    fileItem.className = 'file-item';
+    fileItem.dataset.path = file;
+    fileItem.textContent = file;
+    const removeButton = document.createElement('span');
+    removeButton.className = 'remove-button';
+    removeButton.textContent = '-';
+    fileItem.appendChild(removeButton);
+    return fileItem;
   }
 
   _setupFileListHandler(fileType, container) {
@@ -158,6 +179,13 @@ export class MessageHandlers {
     };
     container.addEventListener('click', handler);
     this._fileListHandlers[fileType] = { container, handler };
+  }
+
+  _getElement(id) {
+    if (!this._elementCache.has(id)) {
+      this._elementCache.set(id, safeGetElementById(id));
+    }
+    return this._elementCache.get(id);
   }
 
   _initializeDataRequests() {
@@ -193,7 +221,7 @@ export class MessageHandlers {
     const instructionContent = state.instruction || '';
     const instruction =
       this._instructionEl ||
-      (this._instructionEl = safeGetElementById('instruction'));
+      (this._instructionEl = this._getElement('instruction'));
     if (instruction) {
       instruction.value = instructionContent;
       instruction.dispatchEvent(new Event('input'));
@@ -254,27 +282,23 @@ export class MessageHandlers {
       savedState[visibilityName] = isVisible;
 
       const multipleFilesId = `${fileType}Files`;
-      const multipleFiles = safeGetElementById(multipleFilesId);
+      const multipleFiles = this._getElement(multipleFilesId);
       if (filesArray.length > 0 || isVisible) {
         const containerId = `${fileType}FilesContainer`;
         const toggleId = `toggle${capitalize(fileType)}Files`;
 
-        const container = safeGetElementById(containerId);
+        const container = this._getElement(containerId);
         if (container) {
           container.style.display = isVisible ? 'block' : 'none';
         }
 
-        const toggleElement = safeGetElementById(toggleId);
+        const toggleElement = this._getElement(toggleId);
         this._setToggleIcon(toggleElement, isVisible);
 
         if (filesArray.length > 0 && multipleFiles) {
           multipleFiles.innerHTML = '';
           filesArray.forEach((file) => {
-            const fileItem = document.createElement('div');
-            fileItem.className = 'file-item';
-            fileItem.dataset.path = file;
-            fileItem.innerHTML = `${file} <span class="remove-button">-</span>`;
-            multipleFiles.appendChild(fileItem);
+            multipleFiles.appendChild(this._createFileItem(file));
           });
           this._setupFileListHandler(fileType, multipleFiles);
         }
@@ -318,7 +342,7 @@ export class MessageHandlers {
   }
 
   handleCheckRestoredBaseFile() {
-    const restoredBaseFileDiv = safeGetElementById('baseFile');
+    const restoredBaseFileDiv = this._getElement('baseFile');
     if (restoredBaseFileDiv && restoredBaseFileDiv.value) {
       fileSelect.updateEdited(restoredBaseFileDiv.value);
     }
@@ -327,7 +351,7 @@ export class MessageHandlers {
 
   // Instruction updates
   handleInstructionTextPolished(message) {
-    const instruction = safeGetElementById('instruction');
+    const instruction = this._getElement('instruction');
     if (instruction && message.text) {
       instruction.value = message.text;
       vscode.postMessage({
@@ -340,7 +364,7 @@ export class MessageHandlers {
   }
 
   handleInstructionTextTranscribed(message) {
-    const instruction = safeGetElementById('instruction');
+    const instruction = this._getElement('instruction');
     if (instruction && message.text) {
       const startPos = instruction.selectionStart;
       const endPos = instruction.selectionEnd;
@@ -436,36 +460,30 @@ export class MessageHandlers {
   // Multi-file updates
   handleSetInputFiles(message) {
     fileList.update('inputFiles', 'toggleInputFiles', message.files);
-    this._setupFileListHandler('input', safeGetElementById('inputFiles'));
+    this._setupFileListHandler('input', this._getElement('inputFiles'));
     this._postHandle();
   }
 
   handleSetReferenceFiles(message) {
     fileList.update('referenceFiles', 'toggleReferenceFiles', message.files);
-    this._setupFileListHandler(
-      'reference',
-      safeGetElementById('referenceFiles'),
-    );
+    this._setupFileListHandler('reference', this._getElement('referenceFiles'));
     this._postHandle();
   }
 
   handleSetAuxiliaryFiles(message) {
     fileList.update('auxiliaryFiles', 'toggleAuxiliaryFiles', message.files);
-    this._setupFileListHandler(
-      'auxiliary',
-      safeGetElementById('auxiliaryFiles'),
-    );
+    this._setupFileListHandler('auxiliary', this._getElement('auxiliaryFiles'));
     this._postHandle();
   }
 
   handleSetMediaFiles(message) {
     fileList.update('mediaFiles', 'toggleMediaFiles', message.files);
-    this._setupFileListHandler('media', safeGetElementById('mediaFiles'));
+    this._setupFileListHandler('media', this._getElement('mediaFiles'));
     this._postHandle();
   }
 
   handleAddMediaFile(message) {
-    const listDiv = safeGetElementById('mediaFiles');
+    const listDiv = this._getElement('mediaFiles');
     const existingFiles = listDiv ? fileList.getSelected(listDiv) : [];
     fileList.update('mediaFiles', 'toggleMediaFiles', [
       ...existingFiles,
@@ -473,10 +491,10 @@ export class MessageHandlers {
     ]);
     this._setupFileListHandler('media', listDiv);
 
-    const container = safeGetElementById('mediaFilesContainer');
+    const container = this._getElement('mediaFilesContainer');
     if (container && container.style.display === 'none') {
       container.style.display = 'block';
-      const toggleIcon = safeGetElementById('toggleMediaFiles');
+      const toggleIcon = this._getElement('toggleMediaFiles');
       this._setToggleIcon(toggleIcon, true);
     }
 
@@ -485,7 +503,7 @@ export class MessageHandlers {
 
   handleSetOutputFiles(message) {
     fileList.update('outputFiles', 'toggleOutputFiles', message.files);
-    this._setupFileListHandler('output', safeGetElementById('outputFiles'));
+    this._setupFileListHandler('output', this._getElement('outputFiles'));
     this._postHandle();
   }
 
@@ -512,7 +530,7 @@ export class MessageHandlers {
 
       let filesToAdd = message.files ?? [];
       if (message.shouldFilter) {
-        const singleFileSelect = safeGetElementById(singleFileId);
+        const singleFileSelect = this._getElement(singleFileId);
         if (singleFileSelect && singleFileSelect.value) {
           filesToAdd = filesToAdd.filter((f) => f !== singleFileSelect.value);
         }
@@ -524,7 +542,7 @@ export class MessageHandlers {
   }
 
   handleSetBaseFile(message) {
-    const currentBaseFileDiv = safeGetElementById('baseFile');
+    const currentBaseFileDiv = this._getElement('baseFile');
     if (currentBaseFileDiv) {
       const currentBaseFile = currentBaseFileDiv.value;
       fileSelect.update('baseFile', message.files);

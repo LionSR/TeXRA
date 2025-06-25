@@ -7,7 +7,7 @@ import {
 } from './modules/uiHandlers.js';
 
 // Register handlers immediately so early messages aren't missed
-messageHandlers.setup();
+messageHandlers.setup({ requestData: false });
 
 window.addEventListener('beforeunload', () => {
   messageHandlers.cleanup();
@@ -21,4 +21,5 @@ document.addEventListener('DOMContentLoaded', function () {
   toggleManager.updateToolConfigToggleState();
   toggleManager.updateAutoToggleState();
   toggleManager.setupDocumentListeners();
+  messageHandlers.requestInitialData();
 });
