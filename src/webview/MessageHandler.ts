@@ -37,10 +37,9 @@ import {
   FileContext,
 } from '@utils/text/textEnhancementUtils';
 import { sleep } from '@utils/helpers';
-import {
-  startRecording,
-  stopRecordingAndTranscribe,
-} from '@frontend/media/audio';
+// Local imports - managers
+import { SettingsManager } from './handlers/SettingsManager';
+import { RecordingManager } from './handlers/RecordingManager';
 
 // Local imports - agent
 import { ToolConfig } from '@agent/core/ToolConfig';
@@ -55,8 +54,12 @@ export class WebviewMessageHandler {
     string,
     (message: any, webviewView: vscode.WebviewView) => unknown
   >;
+  private readonly settingsManager: SettingsManager;
+  private readonly recordingManager: RecordingManager;
 
   constructor(private readonly context: vscode.ExtensionContext) {
+    this.settingsManager = new SettingsManager();
+    this.recordingManager = new RecordingManager(context);
     // Defer the cleanup operation to avoid potential race conditions
     // This gives time for StorageFS to be properly initialized
     setTimeout(() => {
@@ -160,12 +163,12 @@ export class WebviewMessageHandler {
         this.handlePolishInstructionText(message, view),
       transcribeInstruction: (_m, view) =>
         this.handleTranscribeInstruction(view),
-      startRecording: (_m, view) => this.handleStartRecording(view),
-      stopRecording: (_m, view) => this.handleStopRecording(view),
+      startRecording: (_m, view) => this.recordingManager.start(view),
+      stopRecording: (_m, view) => this.recordingManager.stop(view),
       showAgentHistory: () => this.handleShowAgentHistory(),
-      openSettings: () => this.handleOpenSettings(),
-      openAgentSettings: () => this.handleOpenAgentSettings(),
-      openModelSettings: () => this.handleOpenModelSettings(),
+      openSettings: () => this.settingsManager.openExtensionSettings(),
+      openAgentSettings: () => this.settingsManager.openAgentSettings(),
+      openModelSettings: () => this.settingsManager.openModelSettings(),
       clipboardImage: (message, view) =>
         this.handleClipboardImage(message, view),
     };
@@ -178,33 +181,6 @@ export class WebviewMessageHandler {
     if (handler) {
       return handler(message, webviewView);
     }
-  }
-
-  /**
-   * Handle opening the extension settings
-   */
-  private async handleOpenSettings() {
-    await safeExecuteCommand(
-      'workbench.action.openSettings',
-      ['@ext:texra-ai.texra'],
-      CHANNEL,
-    );
-  }
-
-  private async handleOpenAgentSettings() {
-    await safeExecuteCommand(
-      'workbench.action.openSettings',
-      ['@ext:texra-ai.texra agents'],
-      CHANNEL,
-    );
-  }
-
-  private async handleOpenModelSettings() {
-    await safeExecuteCommand(
-      'workbench.action.openSettings',
-      ['@ext:texra-ai.texra models'],
-      CHANNEL,
-    );
   }
 
   private async handleInfoMessage(message: any) {
@@ -903,74 +879,6 @@ export class WebviewMessageHandler {
     vscode.window.showInformationMessage(
       'Please use the new recording interface with start/stop controls.',
     );
-  }
-
-  private async handleStartRecording(webviewView: vscode.WebviewView) {
-    try {
-      const result = await startRecording(this.context);
-      if (result.success) {
-        webviewView.webview.postMessage({
-          command: 'recordingStarted',
-        });
-      } else if (result.error) {
-        vscode.window.showErrorMessage(result.error);
-        webviewView.webview.postMessage({
-          command: 'recordingError',
-          error: result.error,
-        });
-      }
-    } catch (error) {
-      vscode.window.showErrorMessage(
-        `Error starting recording: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      );
-      logger.error(
-        CHANNEL,
-        `Error in handleStartRecording: ${error instanceof Error ? error.message : String(error)}`,
-      );
-      webviewView.webview.postMessage({
-        command: 'recordingError',
-        error: error instanceof Error ? error.message : 'Unknown error',
-      });
-    }
-  }
-
-  private async handleStopRecording(webviewView: vscode.WebviewView) {
-    try {
-      await vscode.window.withProgress(
-        {
-          location: vscode.ProgressLocation.Notification,
-          title: 'Transcribing instruction',
-          cancellable: false,
-        },
-        async () => {
-          const result = await stopRecordingAndTranscribe(this.context);
-          if (result.success) {
-            webviewView.webview.postMessage({
-              command: 'instructionTextTranscribed',
-              text: result.text,
-            });
-          } else if (result.error) {
-            vscode.window.showErrorMessage(result.error);
-            webviewView.webview.postMessage({
-              command: 'recordingError',
-              error: result.error,
-            });
-          }
-        },
-      );
-    } catch (error) {
-      vscode.window.showErrorMessage(
-        `Error stopping recording: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      );
-      logger.error(
-        CHANNEL,
-        `Error in handleStopRecording: ${error instanceof Error ? error.message : String(error)}`,
-      );
-      webviewView.webview.postMessage({
-        command: 'recordingError',
-        error: error instanceof Error ? error.message : 'Unknown error',
-      });
-    }
   }
 
   private async handleUpdateFiles(
