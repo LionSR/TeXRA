@@ -73,6 +73,12 @@ This document sets the common conventions for contributions. Follow these norms 
   - Use direct access patterns: `state.logGroups.get()` instead of `state.getLogGroup()`
   - Keep method names simple - context comes from the class name (`set()`, `get()`, `clear()`)
   - Follow the pattern seen in `src/progressView/modules/progressViewState.js` and `domHandlers.js`
+- When modularizing webview code, ALL module dependencies must be explicitly mapped in the import map:
+  - Each module imported by ANY module in the dependency tree needs its own URI and import map entry
+  - This includes transitive dependencies (modules imported by imported modules)
+  - Generate URIs using appropriate helpers (`getHistoryViewUri`, `getCommonUri`, etc.)
+  - Pass all URIs to the HTML template and map them in the importmap script tag
+  - Without complete import mapping, ES modules will fail to resolve in the webview's sandboxed environment
 
 ## Design and refactoring
 
