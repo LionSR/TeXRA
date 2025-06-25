@@ -157,9 +157,19 @@ export class AgentHistoryViewProvider implements vscode.WebviewViewProvider {
       const htmlPath = getHistoryViewPath('index.html');
       const scriptUri = getHistoryViewUri('script.js');
       const styleUri = getHistoryViewUri('style.css');
+
       const domHandlersUri = getHistoryViewUri('modules/domHandlers.js');
+      const historyEventsUri = getHistoryViewUri('modules/historyEvents.js');
+      const historyRendererUri = getHistoryViewUri(
+        'modules/historyRenderer.js',
+      );
+      const historyViewStateUri = getHistoryViewUri(
+        'modules/historyViewState.js',
+      );
+      const searchManagerUri = getHistoryViewUri('modules/searchManager.js');
 
       // Common module URIs
+      const domUtilsUri = getCommonUri('modules/domUtils.js');
       const webviewContextUri = getCommonUri('modules/webviewContext.js');
       const commonStyleUri = getCommonUri('styles/common.css');
 
@@ -171,8 +181,13 @@ export class AgentHistoryViewProvider implements vscode.WebviewViewProvider {
         styleUri,
         commonStyleUri,
         webviewContextUri,
-        domHandlersUri,
         codiconUri,
+        domHandlersUri,
+        historyEventsUri,
+        historyRendererUri,
+        historyViewStateUri,
+        searchManagerUri,
+        domUtilsUri,
       });
     } catch (error) {
       console.error('Error generating HTML content:', error);
@@ -189,6 +204,7 @@ export class AgentHistoryViewProvider implements vscode.WebviewViewProvider {
         await AgentHistoryManager.getHistoryItemById(historyId);
 
       if (historyItem) {
+        // Check: do we need to send a taskID or is it included in the config?
         vscode.window.showInformationMessage(`Rerunning agent from history`);
         await executeCommand.executeCommand(historyItem.config, this.context);
       } else {
