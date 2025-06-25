@@ -496,10 +496,10 @@ export abstract class BaseReflectionAgent extends BaseAgent {
   ): Promise<void> {
     try {
       // Instead of creating a new group, use the round group directly
-      this.logger.debug(
-        `State global: ${JSON.stringify(stateGlobal)}`,
-        roundGroupId,
-      );
+      // this.logger.debug(
+      //   `State global: ${JSON.stringify(stateGlobal)}`,
+      //   roundGroupId,
+      // );
 
       await this.handleOutput(
         stateRound,
@@ -510,11 +510,6 @@ export abstract class BaseReflectionAgent extends BaseAgent {
         roundGroupId,
       );
 
-      const inputInfo = `inputFile ${this.agentConfig.inputFile} and/or inputFiles ${this.agentConfig.inputFiles}`;
-      // this.logger.debug(
-      //   `Processed ${inputInfo}. The round ${currRound} output was saved as ${outputFile}`,
-      //   roundGroupId,
-      // );
       this.logger.debug(`Completed round ${currRound}`, roundGroupId);
     } catch (error) {
       throw error;
