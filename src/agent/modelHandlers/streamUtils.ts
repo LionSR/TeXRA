@@ -2,7 +2,7 @@
 import { randomUUID } from 'crypto';
 
 // Local imports
-import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
+import { emitProgress } from '@eventBus/ProgressEventBus';
 import { AgentLogger } from '@logger/AgentLogger';
 import { escapeHtml } from '@logger/logUtils';
 
@@ -32,7 +32,6 @@ const THINKING_TEMPLATE = (content: string) =>
 export async function streamReasoningToProgressView<T>(
   stream: AsyncIterable<T>,
   extract: (chunk: T) => string,
-  provider: ProgressViewProvider,
   logger: AgentLogger,
   streamId: string,
   groupId?: string,
@@ -40,24 +39,24 @@ export async function streamReasoningToProgressView<T>(
   const id = randomUUID();
   let content = '';
 
-  provider.addLogMessage(
-    streamId,
-    THINKING_TEMPLATE(content),
-    'info',
+  emitProgress('addLogMessage', {
+    stream: streamId,
+    message: THINKING_TEMPLATE(content),
+    level: 'info',
     groupId,
-    Date.now(),
-    'thinking',
+    timestamp: Date.now(),
+    messageType: 'thinking',
     id,
-  );
+  });
 
   for await (const chunk of stream) {
     content += extract(chunk);
-    provider.updateLogMessage(
-      streamId,
+    emitProgress('updateLogMessage', {
+      stream: streamId,
       id,
-      THINKING_TEMPLATE(content),
-      'thinking',
-    );
+      message: THINKING_TEMPLATE(content),
+      messageType: 'thinking',
+    });
   }
 
   logger.debug(`Final reasoning length: ${content.length}`, groupId);
