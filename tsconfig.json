@@ -24,7 +24,8 @@
       "@historyView/*": ["src/historyView/*"],
       "@replacement/*": ["src/replacement/*"],
       "@tools/*": ["src/tools/*"],
-      "@types/*": ["src/types/*"]
+      "@types/*": ["src/types/*"],
+      "@eventBus/*": ["src/eventBus/*"]
     },
     "moduleResolution": "node",
     "strict": true /* enable all strict type-checking options */,
