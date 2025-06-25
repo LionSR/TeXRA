@@ -9,6 +9,9 @@ The ProgressBoard typically appears in the **Panel area** at the bottom of your 
 - **Automatic**: It often opens automatically when you execute an agent.
 - **Manual**: If it's closed, you can open it via the Command Palette (`Ctrl+Shift+P` or `Cmd+Shift+P`) by searching for `View: Show TeXRA ProgressBoard`, or press `Ctrl+Alt+P` (`Cmd+Option+P` on macOS).
 
+Only logs produced by **agents** are shown in the ProgressBoard. Other output
+goes to the consolidated `TeXRA` channel and is not saved across sessions.
+
 ![ProgressBoard Layout Placeholder](/images/progress-board-layout.png)
 
 ## Layout Overview
