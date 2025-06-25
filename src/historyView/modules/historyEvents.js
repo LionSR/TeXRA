@@ -1,0 +1,81 @@
+import { addEventListenerSafely } from '@common/domUtils.js';
+
+/**
+ * Registers global event listeners for the history view.
+ */
+export class HistoryEvents {
+  constructor(searchManager) {
+    this.searchManager = searchManager;
+    this.handlers = [];
+  }
+
+  _debounce(fn, delay) {
+    let timeout;
+    return (...args) => {
+      clearTimeout(timeout);
+      timeout = setTimeout(() => fn(...args), delay);
+    };
+  }
+
+  setupEventListeners() {
+    const searchInput = document.getElementById('searchInput');
+    const searchHandler = this._debounce((e) => {
+      const term = e.target.value.trim();
+      this.searchManager.search(term);
+    }, 300);
+    addEventListenerSafely('searchInput', 'input', searchHandler);
+    if (searchInput) {
+      this.handlers.push({
+        element: searchInput,
+        type: 'input',
+        handler: searchHandler,
+      });
+    }
+
+    const prevHandler = () => this.searchManager.navigatePrev();
+    addEventListenerSafely('prevMatch', 'click', prevHandler);
+    const prevEl = document.getElementById('prevMatch');
+    if (prevEl)
+      this.handlers.push({
+        element: prevEl,
+        type: 'click',
+        handler: prevHandler,
+      });
+
+    const nextHandler = () => this.searchManager.navigateNext();
+    addEventListenerSafely('nextMatch', 'click', nextHandler);
+    const nextEl = document.getElementById('nextMatch');
+    if (nextEl)
+      this.handlers.push({
+        element: nextEl,
+        type: 'click',
+        handler: nextHandler,
+      });
+
+    const keyHandler = (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        if (e.shiftKey) {
+          this.searchManager.navigatePrev();
+        } else {
+          this.searchManager.navigateNext();
+        }
+      }
+    };
+    addEventListenerSafely('searchInput', 'keydown', keyHandler);
+    if (searchInput) {
+      this.handlers.push({
+        element: searchInput,
+        type: 'keydown',
+        handler: keyHandler,
+      });
+    }
+  }
+
+  dispose() {
+    this.handlers.forEach(({ element, type, handler }) => {
+      element.removeEventListener(type, handler);
+    });
+    this.handlers = [];
+  }
+}
