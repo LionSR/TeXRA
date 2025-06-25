@@ -5,20 +5,20 @@ import { AgentLogger } from '@logger/AgentLogger';
 import { createFileMapping } from '@utils/files';
 import { compileLatex2Pdf } from '@latex/texTools';
 import { checkToolInstalled } from '@utils/system';
-import {
-  runLatexdiffForRound,
-  runLatexdiffBetweenRounds,
-  LaTeXdiffResult,
-} from '@latex/latexdiff';
+import { LatexdiffRunner, LaTeXdiffResult } from '@latex/latexdiffRunner';
 
 export class LatexDiffManager {
+  private readonly runner: LatexdiffRunner;
+
   constructor(
     private readonly agentSetting: AgentSetting,
     private readonly outputFiles: { [key: number]: string[] },
     private readonly baseFiles: string[],
     private readonly logger: AgentLogger,
     private readonly channel: string,
-  ) {}
+  ) {
+    this.runner = new LatexdiffRunner(this.channel);
+  }
 
   private logLatexdiffResult(
     result: LaTeXdiffResult,
@@ -92,7 +92,7 @@ export class LatexDiffManager {
           diffProcessGroupId,
         );
         for (const [baseFile, outputFile] of baseToOutputMap.entries()) {
-          const result = await runLatexdiffForRound(
+          const result = await this.runner.runDiffForRound(
             baseFile,
             outputFile,
             currRound,
@@ -138,7 +138,7 @@ export class LatexDiffManager {
           prevOutputFile,
           currOutputFile,
         ] of prevToCurrentMap.entries()) {
-          const result = await runLatexdiffBetweenRounds(
+          const result = await this.runner.runDiffBetweenRounds(
             prevOutputFile,
             currOutputFile,
           );
