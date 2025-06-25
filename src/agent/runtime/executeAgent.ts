@@ -13,18 +13,22 @@ import { agentConfigToTaskState } from '@utils/config';
 import { AgentConfig, createAgentConfig } from '@agent/core/AgentConfig';
 import { AgentSetting, AgentPrompt } from '@agent/core/AgentDataclass';
 import { loadAgentSettingAndPrompts } from '@agent/runtime/agentLoad';
+
 import { MODEL_CONFIGS } from '@model/ModelRegistry';
 import { ModelFactory } from '@agent/runtime/ModelFactory';
-import { DirectAgent } from '@agent/implementations/DirectAgent';
-import { CoTAgent } from '@agent/implementations/CoTAgent';
-import { MergeAgent } from '@agent/implementations/MergeAgent';
-import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
+
+import { DirectAgent, CoTAgent, MergeAgent } from '@agent/implementations';
+
 import { AgentLogger } from '@logger/AgentLogger';
+
+import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
+
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import {
   checkExpectedOutputs,
   showInstructionWithSuppress,
 } from '@frontend/ui/instruction';
+
 import { getStreamId } from '@utils/loggerUtils';
 import { IAgent } from '@agent/core/IAgent';
 
