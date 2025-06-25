@@ -13,14 +13,12 @@ const CHANNEL = 'Housekeeping';
 logger.initialize(CHANNEL);
 
 export function getAgentFirstNameChunk(agent: string): string {
-  logger.debug(CHANNEL, `Getting agent first name chunk for: ${agent}`);
   let result: string;
   if (agent.startsWith('write-')) {
     result = agent.split('-')[1];
   } else {
     result = agent.includes('_') ? agent.split('_')[0] : agent.split('-')[0];
   }
-  logger.debug(CHANNEL, `Agent first name chunk resolved to: ${result}`);
   return result;
 }
 
