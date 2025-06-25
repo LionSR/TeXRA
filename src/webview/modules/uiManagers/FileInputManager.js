@@ -1,11 +1,7 @@
 // Local imports
 import { vscode } from '@common/webviewContext.js';
 import Sortable from 'sortablejs';
-import {
-  safeGetElementById,
-  addEventListenerSafely,
-  safeGetElementValue,
-} from '@common/domUtils.js';
+import { safeGetElementById, safeGetElementValue } from '@common/domUtils.js';
 import { capitalize } from '@common/stringUtils.js';
 import {
   MULTIPLE_SELECTIONS,
@@ -35,12 +31,12 @@ export class FileInputManager {
   }
 
   _addListener(elementOrId, event, handler) {
-    addEventListenerSafely(elementOrId, event, handler);
     const element =
       typeof elementOrId === 'string'
         ? safeGetElementById(elementOrId)
         : elementOrId;
     if (element) {
+      element.addEventListener(event, handler);
       this._listeners.push({ element, event, handler });
     }
   }
@@ -56,12 +52,6 @@ export class FileInputManager {
         this._sortables.push(sortable);
       }
     });
-
-    const outputSortable = new Sortable(safeGetElementById('outputFiles'), {
-      animation: 150,
-      onEnd: () => this.state.save(),
-    });
-    this._sortables.push(outputSortable);
   }
 
   _setupSingleFileSelectors() {
@@ -201,6 +191,9 @@ export class FileInputManager {
 
   _setupSaveListeners() {
     ELEMENTS_TO_SAVE.forEach((id) => {
+      if (id === 'agent' || id === 'model') {
+        return; // handled by SettingsButtonManager
+      }
       if (id !== 'instruction') {
         this._addListener(id, 'change', () => this.state.save());
       }
@@ -225,5 +218,3 @@ export class FileInputManager {
     this._sortables = [];
   }
 }
-
-export const fileInputManager = new FileInputManager();
