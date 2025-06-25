@@ -1,7 +1,6 @@
 // Local imports
 import { vscode } from '@common/webviewContext.js';
 import {
-  addEventListenerSafely,
   safeGetElementById,
   safeGetElementValue,
   safeGetElementChecked,
@@ -19,12 +18,12 @@ export class ActionButtonManager {
   }
 
   _addListener(elementOrId, event, handler) {
-    addEventListenerSafely(elementOrId, event, handler);
     const element =
       typeof elementOrId === 'string'
         ? safeGetElementById(elementOrId)
         : elementOrId;
     if (element) {
+      element.addEventListener(event, handler);
       this._listeners.push({ element, event, handler });
     }
   }
