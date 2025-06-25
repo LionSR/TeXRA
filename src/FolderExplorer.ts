@@ -6,10 +6,7 @@ import * as vscode from 'vscode';
 import * as logger from '@logger/logUtils';
 
 // Local imports
-import {
-  getBuiltInAgentsDirectory,
-  getCustomAgentsDirectory,
-} from '@frontend/agents/pathUtils';
+import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { AbsoluteFS } from '@utils/files';
 import { FileItem } from './explorer/FileItem';
 
@@ -30,7 +27,7 @@ export class FolderExplorer implements vscode.TreeDataProvider<FileItem> {
     private context?: vscode.ExtensionContext,
   ) {
     if (this.context) {
-      getBuiltInAgentsDirectory(this.context).then((p) => {
+      agentDirectories.builtIn(this.context).then((p) => {
         this.builtInAgentsPath = p;
       });
     }
@@ -69,7 +66,7 @@ export class FolderExplorer implements vscode.TreeDataProvider<FileItem> {
       }
 
       const items: FileItem[] = [];
-      const builtInPath = await getBuiltInAgentsDirectory(this.context);
+      const builtInPath = await agentDirectories.builtIn(this.context);
       items.push(
         new FileItem(
           'Built-in Agents',
@@ -78,7 +75,7 @@ export class FolderExplorer implements vscode.TreeDataProvider<FileItem> {
         ),
       );
 
-      const customPath = await getCustomAgentsDirectory();
+      const customPath = await agentDirectories.custom();
       if (customPath) {
         items.push(
           new FileItem(
