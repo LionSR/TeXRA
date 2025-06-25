@@ -1,32 +1,25 @@
 import { webviewState } from './modules/webviewState.js';
-import { vscode } from '@common/webviewContext.js';
-import {
-  setupMessageHandlers,
-  initializeDataRequests,
-} from './modules/messageHandlers.js';
+import { messageHandlers } from './modules/messageHandlers.js';
 import {
   setupUIHandlers,
   instructionManager,
   toggleManager,
 } from './modules/uiHandlers.js';
 
-// Initialize data requests when window loads
-window.onload = function () {
-  initializeDataRequests();
+// Register handlers immediately so early messages aren't missed
+messageHandlers.setup({ requestData: false });
 
-  // Set default state for new folders
-  webviewState.restore();
-
-  instructionManager.init();
-};
-
-// Setup message handlers
-setupMessageHandlers();
+window.addEventListener('beforeunload', () => {
+  messageHandlers.cleanup();
+});
 
 // Setup UI when DOM is loaded
 document.addEventListener('DOMContentLoaded', function () {
+  webviewState.restore();
+  instructionManager.init();
   setupUIHandlers();
   toggleManager.updateToolConfigToggleState();
   toggleManager.updateAutoToggleState();
   toggleManager.setupDocumentListeners();
+  messageHandlers.requestInitialData();
 });
