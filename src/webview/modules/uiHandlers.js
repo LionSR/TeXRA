@@ -73,14 +73,14 @@ export function initializeUI() {
 export function cleanupUI() {
   if (fileInputManager) {
     fileInputManager.cleanup();
-    fileInputManager = undefined;
+    fileInputManager = null;
   }
   if (actionButtonManager) {
     actionButtonManager.cleanup();
-    actionButtonManager = undefined;
+    actionButtonManager = null;
   }
   if (settingsButtonManager) {
     settingsButtonManager.cleanup();
-    settingsButtonManager = undefined;
+    settingsButtonManager = null;
   }
 }
