@@ -8,11 +8,7 @@ import * as logger from '@logger/logUtils';
 import { showLoggedErrorMessage } from '@utils/errorHandlingUtils';
 
 // Local imports
-import {
-  getBuiltInAgentsDirectory,
-  getCustomAgentsDirectory,
-  getOrPromptForCustomAgentsDirectory,
-} from '@frontend/agents/pathUtils';
+import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { AbsoluteFS } from '@utils/files';
 import { getConfig } from '@utils/config';
 import { FileItem } from './FileItem';
@@ -56,7 +52,7 @@ export class ExplorerOperations {
     private refresh: () => void,
   ) {
     if (this.context) {
-      getBuiltInAgentsDirectory(this.context).then((p) => {
+      agentDirectories.builtIn(this.context).then((p) => {
         this.builtInAgentsPath = p;
       });
     }
@@ -92,7 +88,7 @@ export class ExplorerOperations {
 
   private async createCustomCopy(uri: vscode.Uri) {
     try {
-      const customPath = await getOrPromptForCustomAgentsDirectory();
+      const customPath = await agentDirectories.ensureCustom();
       if (!customPath) {
         return;
       }
@@ -120,7 +116,7 @@ export class ExplorerOperations {
 
   async create(node: FileItem | undefined, isFolder: boolean) {
     try {
-      const customBase = await getOrPromptForCustomAgentsDirectory();
+      const customBase = await agentDirectories.ensureCustom();
       if (!customBase) {
         return;
       }

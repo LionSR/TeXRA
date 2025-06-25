@@ -5,10 +5,7 @@ import * as vscode from 'vscode';
 import * as logger from '@logger/logUtils';
 
 // Local imports
-import {
-  getBuiltInAgentsDirectory,
-  getCustomAgentsDirectory,
-} from '@frontend/agents/pathUtils';
+import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { isValidAgentYaml } from '../agent/runtime/agentLoad';
 import { promptToAddAgentToConfig } from '@frontend/agents/register';
 import { getConfig } from '@utils/config';
@@ -44,8 +41,8 @@ export class WatcherManager {
 
       this.dispose();
 
-      const builtInAgentsPath = await getBuiltInAgentsDirectory(this.context);
-      const customAgentsPath = await getCustomAgentsDirectory();
+      const builtInAgentsPath = await agentDirectories.builtIn(this.context);
+      const customAgentsPath = await agentDirectories.custom();
 
       const pathsToWatch = [builtInAgentsPath];
       if (customAgentsPath) {
