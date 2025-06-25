@@ -6,7 +6,7 @@ import * as logger from '@logger/logUtils';
 
 // Local imports - agent
 import { BaseAgent } from '@agent/implementations/BaseAgent';
-import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
+import { emitProgress } from '@eventBus/ProgressEventBus';
 
 const CHANNEL = 'AgentCommands';
 logger.initialize(CHANNEL);
@@ -26,10 +26,7 @@ async function handleStopAgent(stream: string) {
   }
 
   // Update the UI status
-  const progressViewProvider = ProgressViewProvider.getInstance();
-  if (progressViewProvider) {
-    progressViewProvider.updateStreamStatus(stream, 'stopped');
-  }
+  emitProgress('updateStreamStatus', { stream, status: 'stopped' });
 }
 
 export const agentCommands = {
