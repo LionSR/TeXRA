@@ -48,6 +48,7 @@ const extensionConfig = {
       '@replacement': path.resolve(__dirname, 'src/replacement'),
       '@tools': path.resolve(__dirname, 'src/tools'),
       '@types': path.resolve(__dirname, 'src/types'),
+      '@eventBus': path.resolve(__dirname, 'src/eventBus'),
     },
     fallback: {
       fs: false,

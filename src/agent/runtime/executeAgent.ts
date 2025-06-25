@@ -21,6 +21,7 @@ import { DirectAgent, CoTAgent, MergeAgent } from '@agent/implementations';
 
 import { AgentLogger } from '@logger/AgentLogger';
 
+import { emitProgress } from '@eventBus/ProgressEventBus';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
@@ -145,12 +146,6 @@ async function executeAgentWithLogging<T extends IAgent>(
   context: vscode.ExtensionContext,
 ): Promise<void> {
   try {
-    // Get logger instance
-    const progressViewProvider = ProgressViewProvider.getInstance();
-    if (!progressViewProvider) {
-      throw new Error('ProgressViewProvider not initialized');
-    }
-
     // Create agent to get config for stream ID
     const agent = await createAgentFn();
 
@@ -159,10 +154,10 @@ async function executeAgentWithLogging<T extends IAgent>(
     const fullStreamId = getStreamId(agentName, config.model, config.inputFile);
 
     // Check if this stream is already running
-    const currentStatus = progressViewProvider.getStreamStatus(fullStreamId);
+    const provider = ProgressViewProvider.getInstance();
+    const currentStatus = provider?.getStreamStatus(fullStreamId);
     if (currentStatus === 'running') {
       const errorMsg = `Task "${fullStreamId}" is already running. Please wait for it to complete or stop it first.`;
-      // vscode.window.showErrorMessage(errorMsg);
       throw new Error(errorMsg);
     }
 
@@ -200,40 +195,42 @@ async function executeAgentWithLogging<T extends IAgent>(
         );
 
         // Switch to this stream and set its status to running
-        progressViewProvider.setActiveStream(fullStreamId);
-        progressViewProvider.updateStreamStatus(fullStreamId, 'running');
+        emitProgress('setActiveStream', fullStreamId);
+        emitProgress('updateStreamStatus', {
+          stream: fullStreamId,
+          status: 'running',
+        });
 
-        // If the ProgressBoard isn't visible, try to show it
-        if (!progressViewProvider.isViewVisible()) {
+        const viewVisible = provider?.isViewVisible() ?? false;
+        if (!viewVisible) {
           await vscode.commands.executeCommand('texra.showProgressView');
+        }
 
-          // Prompt the user only if it remains hidden after trying to show it
-          if (!progressViewProvider.isViewVisible()) {
-            const inputFileName = path.basename(config.inputFile);
-            const outputInfo = config.outputFiles?.length
-              ? `to ${
-                  config.outputFiles.length > 1
-                    ? config.outputFiles.length + ' files'
-                    : path.basename(config.outputFiles[0])
-                }`
-              : '';
+        if (!provider?.isViewVisible()) {
+          const inputFileName = path.basename(config.inputFile);
+          const outputInfo = config.outputFiles?.length
+            ? `to ${
+                config.outputFiles.length > 1
+                  ? config.outputFiles.length + ' files'
+                  : path.basename(config.outputFiles[0])
+              }`
+            : '';
 
-            vscode.window
-              .showInformationMessage(
-                `TeXRA Agent Started: "${agentName}" is processing ${inputFileName} with ${config.model} ${outputInfo}. View in ProgressBoard for progress.`,
-                {
-                  modal: false,
-                  detail:
-                    'TeXRA agents run in the background and their progress can be tracked in the ProgressBoard.',
-                },
-                'Show ProgressBoard',
-              )
-              .then((selection) => {
-                if (selection === 'Show ProgressBoard') {
-                  vscode.commands.executeCommand('texra.showProgressView');
-                }
-              });
-          }
+          vscode.window
+            .showInformationMessage(
+              `TeXRA Agent Started: "${agentName}" is processing ${inputFileName} with ${config.model} ${outputInfo}. View in ProgressBoard for progress.`,
+              {
+                modal: false,
+                detail:
+                  'TeXRA agents run in the background and their progress can be tracked in the ProgressBoard.',
+              },
+              'Show ProgressBoard',
+            )
+            .then((selection) => {
+              if (selection === 'Show ProgressBoard') {
+                vscode.commands.executeCommand('texra.showProgressView');
+              }
+            });
         }
 
         // Store taskState
@@ -250,10 +247,10 @@ async function executeAgentWithLogging<T extends IAgent>(
         logger.endGroup(taskDetailsGroupId, 'stopped');
 
         // Convert AgentConfig to TaskState using utility function
-        progressViewProvider.setTaskState(
-          fullStreamId,
-          agentConfigToTaskState(config),
-        );
+        emitProgress('setTaskState', {
+          streamId: fullStreamId,
+          taskState: agentConfigToTaskState(config),
+        });
         logger.debug(
           `Task state stored for stream: ${fullStreamId}`,
           mainTaskGroupId,
@@ -271,7 +268,10 @@ async function executeAgentWithLogging<T extends IAgent>(
           logger.debug(`Task completed successfully`, mainTaskGroupId);
           logger.endGroup(mainTaskGroupId, 'stopped');
           // Update status to stopped on successful completion
-          progressViewProvider.updateStreamStatus(fullStreamId, 'stopped');
+          emitProgress('updateStreamStatus', {
+            stream: fullStreamId,
+            status: 'stopped',
+          });
 
           const generated: string[] = Object.values(
             (agent as any).outputHandler?.outputFiles || {},
@@ -289,7 +289,10 @@ async function executeAgentWithLogging<T extends IAgent>(
           );
           logger.endGroup(mainTaskGroupId, 'error');
           // Update status to error if agent run fails
-          progressViewProvider.updateStreamStatus(fullStreamId, 'error');
+          emitProgress('updateStreamStatus', {
+            stream: fullStreamId,
+            status: 'error',
+          });
           throw err;
         }
       } catch (err) {
