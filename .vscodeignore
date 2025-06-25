@@ -42,6 +42,7 @@ CLAUDE.md
 !src/webview/styles/*.css
 !src/webview/modules/*.js
 !src/webview/modules/uiManagers/*.js
+
 !src/common/styles/*.css
 !src/common/webviewState.js
 !src/common/modules/*.js
@@ -52,6 +53,7 @@ CLAUDE.md
 !src/historyView/*.css
 !src/historyView/*.js
 
+!src/progressView/modules/uiManagers/*.js
 !src/progressView/modules/*.js
 !src/progressView/styles/*.css
 
