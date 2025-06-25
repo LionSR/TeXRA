@@ -339,7 +339,7 @@ export class LatexdiffRunner {
   async runDiffForRound(
     baseFile: string,
     outputFile: string,
-    _round: number,
+    round: number,
   ): Promise<LaTeXdiffResult> {
     try {
       if (
@@ -349,7 +349,7 @@ export class LatexdiffRunner {
         return await this.runDiff(baseFile, outputFile, '_diff', false);
       }
 
-      const message = `Could not generate latexdiff. Files not found: ${baseFile} or ${outputFile}`;
+      const message = `Could not generate latexdiff for round ${round}. Files not found: ${baseFile} or ${outputFile}`;
       logger.warn(this.channel, message);
       return { success: false, message };
     } catch (err) {

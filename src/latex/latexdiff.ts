@@ -2,7 +2,6 @@
 import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
-import { WorkspaceFS } from '@utils/files';
 import { logErrorMessage, showLoggedMessage } from '@utils/errorHandlingUtils';
 
 // Local imports - runner
@@ -43,6 +42,14 @@ export async function runLatexdiffvcMultiple(
   channel: string = CHANNEL,
 ): Promise<LaTeXdiffMultipleResult> {
   const runner = new LatexdiffRunner(channel);
+  if (!inputFiles || inputFiles.length === 0) {
+    await showLoggedMessage(channel, 'No input files provided');
+    return {
+      success: false,
+      results: { success: [], failed: [] },
+      message: 'No input files provided',
+    };
+  }
   const results: { success: string[]; failed: string[] } = {
     success: [],
     failed: [],
@@ -89,16 +96,8 @@ export async function runLatexdiffForRound(
   channel: string = CHANNEL,
 ): Promise<LaTeXdiffResult> {
   try {
-    if (
-      (await WorkspaceFS.exists(baseFile)) &&
-      (await WorkspaceFS.exists(outputFile))
-    ) {
-      const runner = new LatexdiffRunner(channel);
-      return await runner.runDiffForRound(baseFile, outputFile, _round);
-    }
-    const message = `Could not generate latexdiff. Files not found: ${baseFile} or ${outputFile}`;
-    logger.warn(channel, message);
-    return { success: false, message };
+    const runner = new LatexdiffRunner(channel);
+    return await runner.runDiffForRound(baseFile, outputFile, _round);
   } catch (err) {
     const message = logErrorMessage(
       channel,
@@ -115,16 +114,8 @@ export async function runLatexdiffBetweenRounds(
   channel: string = CHANNEL,
 ): Promise<LaTeXdiffResult> {
   try {
-    if (
-      (await WorkspaceFS.exists(outputFile1)) &&
-      (await WorkspaceFS.exists(outputFile2))
-    ) {
-      const runner = new LatexdiffRunner(channel);
-      return await runner.runDiffBetweenRounds(outputFile1, outputFile2);
-    }
-    const message = `Could not generate latexdiff between rounds. Files not found: ${outputFile1} or ${outputFile2}`;
-    logger.warn(channel, message);
-    return { success: false, message };
+    const runner = new LatexdiffRunner(channel);
+    return await runner.runDiffBetweenRounds(outputFile1, outputFile2);
   } catch (err) {
     const message = logErrorMessage(
       channel,
