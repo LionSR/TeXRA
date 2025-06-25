@@ -1,5 +1,4 @@
 // Standard library imports
-import * as path from 'path';
 // Local imports - log
 import { AgentLogger } from '@logger/AgentLogger';
 
@@ -9,6 +8,7 @@ import { XmlOutputManager } from './XmlOutputManager';
 import { LatexDiffManager } from './LatexDiffManager';
 import { StatisticsReporter } from './StatisticsReporter';
 import { NamedOutputFile } from './types';
+import { getOutputFileName } from '@utils/outputFileUtils';
 
 // Local imports - agent components
 import { AgentConfig } from '@agent/core/AgentConfig';
@@ -16,30 +16,6 @@ import { AgentSetting } from '@agent/core/AgentDataclass';
 import { AgentStateGlobal, AgentStateRound } from '@agent/core/AgentState';
 
 // Local imports - types
-
-/** Generates output filename incorporating model and round information. */
-export function getOutputFileName(
-  inputFile: string,
-  agent: string,
-  model: string,
-  outputExt: string,
-  currRound: number,
-  editedFile?: string,
-): string {
-  const { dir, name: fileName } = path.parse(inputFile);
-  const agentFirstNameChunk = agent.split('_')[0];
-
-  let newRound = currRound;
-  if (editedFile) {
-    const match = editedFile.match(/_r(\d+)_/);
-    const editedRound = match ? parseInt(match[1]) : 0;
-    newRound += editedRound + 1;
-  }
-
-  const outputBaseName = `${fileName}_${agentFirstNameChunk}_r${newRound}_${model}.${outputExt}`;
-  const outputFile = path.join(dir, outputBaseName);
-  return outputFile;
-}
 
 /** Handles output file processing and validation for agent responses. */
 export class OutputHandler {
@@ -226,3 +202,4 @@ export class OutputHandler {
 }
 
 export { NamedOutputFile };
+export { getOutputFileName } from '@utils/outputFileUtils';
