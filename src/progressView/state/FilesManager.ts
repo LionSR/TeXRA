@@ -1,11 +1,11 @@
 // Third-party imports
-import * as vscode from 'vscode';
 
 // Local imports
 import { WorkspaceStateKey, workspaceSM } from '@utils/stateManager';
 import { WorkspaceFS } from '@utils/files';
 import { shouldUseConsolidatedChannel } from '@utils/loggerUtils';
 import { AgentLogger } from '@logger/AgentLogger';
+import { BaseStateManager } from './BaseStateManager';
 
 // Types
 import type { DiffStats } from '../../types/DiffTypes';
@@ -20,15 +20,10 @@ interface OutputFileInfo extends DiffStats {
 /**
  * Manages generated output files for streams.
  */
-export class FilesManager {
+export class FilesManager extends BaseStateManager {
   public readonly map: Map<string, { [key: number]: OutputFileInfo[] }> =
     new Map();
   private readonly logger = new AgentLogger('FilesManager');
-
-  private _getWorkspaceKey(key: WorkspaceStateKey | string): string {
-    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-    return workspaceFolder ? `${key}.${workspaceFolder.uri.fsPath}` : key;
-  }
 
   async load(): Promise<void> {
     const savedFiles = workspaceSM.get<{

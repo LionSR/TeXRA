@@ -1,10 +1,10 @@
 // Third-party imports
-import * as vscode from 'vscode';
 
 // Local imports
 import { WorkspaceStateKey, workspaceSM } from '@utils/stateManager';
 import { shouldUseConsolidatedChannel } from '@utils/loggerUtils';
 import { AgentLogger } from '@logger/AgentLogger';
+import { BaseStateManager } from './BaseStateManager';
 
 // Types
 import type { TaskGroup } from '../../logger/LogTypes';
@@ -12,14 +12,9 @@ import type { TaskGroup } from '../../logger/LogTypes';
 /**
  * Manages task group information for log streams.
  */
-export class GroupsManager {
+export class GroupsManager extends BaseStateManager {
   public readonly map: Map<string, Map<string, TaskGroup>> = new Map();
   private readonly logger = new AgentLogger('GroupsManager');
-
-  private _getWorkspaceKey(key: WorkspaceStateKey | string): string {
-    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-    return workspaceFolder ? `${key}.${workspaceFolder.uri.fsPath}` : key;
-  }
 
   async load(): Promise<void> {
     let savedGroups = workspaceSM.get<{

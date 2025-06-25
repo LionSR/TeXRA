@@ -1,9 +1,9 @@
 // Third-party imports
-import * as vscode from 'vscode';
 
 // Local imports
 import { WorkspaceStateKey, workspaceSM } from '@utils/stateManager';
 import { AgentLogger } from '@logger/AgentLogger';
+import { BaseStateManager } from './BaseStateManager';
 
 // Types
 import type { TokenUsageStats } from '../../types/UsageTypes';
@@ -11,14 +11,9 @@ import type { TokenUsageStats } from '../../types/UsageTypes';
 /**
  * Manages token usage statistics for streams.
  */
-export class UsageManager {
+export class UsageManager extends BaseStateManager {
   public readonly map: Map<string, TokenUsageStats> = new Map();
   private readonly logger = new AgentLogger('UsageManager');
-
-  private _getWorkspaceKey(key: WorkspaceStateKey | string): string {
-    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-    return workspaceFolder ? `${key}.${workspaceFolder.uri.fsPath}` : key;
-  }
 
   async load(): Promise<void> {
     const savedUsage = workspaceSM.get<{
@@ -27,7 +22,7 @@ export class UsageManager {
         outputTokens: number;
         cost: number;
       };
-    }>(WorkspaceStateKey.USAGE_STATS);
+    }>(this._getWorkspaceKey(WorkspaceStateKey.USAGE_STATS));
 
     if (savedUsage) {
       this.map.clear();
@@ -41,7 +36,7 @@ export class UsageManager {
 
   save(): void {
     workspaceSM.update(
-      WorkspaceStateKey.USAGE_STATS,
+      this._getWorkspaceKey(WorkspaceStateKey.USAGE_STATS),
       Object.fromEntries(this.map.entries()),
     );
   }

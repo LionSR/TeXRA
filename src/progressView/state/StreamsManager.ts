@@ -1,11 +1,11 @@
 // Third-party imports
-import * as vscode from 'vscode';
 import { randomUUID } from 'crypto';
 
 // Local imports
 import { WorkspaceStateKey, workspaceSM } from '@utils/stateManager';
 import { shouldUseConsolidatedChannel } from '@utils/loggerUtils';
 import { AgentLogger } from '@logger/AgentLogger';
+import { BaseStateManager } from './BaseStateManager';
 
 // Types
 
@@ -21,15 +21,10 @@ interface ColoredLogMessage {
 /**
  * Manages log streams and the active stream.
  */
-export class StreamsManager {
+export class StreamsManager extends BaseStateManager {
   public readonly map: Map<string, ColoredLogMessage[]> = new Map();
   private _active = '';
   private readonly logger = new AgentLogger('StreamsManager');
-
-  private _getWorkspaceKey(key: WorkspaceStateKey | string): string {
-    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-    return workspaceFolder ? `${key}.${workspaceFolder.uri.fsPath}` : key;
-  }
 
   get active(): string {
     return this._active;
@@ -97,9 +92,6 @@ export class StreamsManager {
 
   clear(stream: string): void {
     this.map.delete(stream);
-    if (this._active === stream) {
-      this._active = '';
-    }
   }
 
   clearAll(): void {
