@@ -8,16 +8,12 @@
 // Local imports - agents
 import { XMLValidatorAgent } from './XMLValidatorAgent';
 import { TeXLinterFixAgent } from './TeXLinterFixAgent';
-import { AnthropicToolAgent } from './AnthropicToolAgent';
+import { BaseToolUseAgent } from './BaseToolUseAgent';
 
 // Export individual classes
-export { XMLValidatorAgent, TeXLinterFixAgent, AnthropicToolAgent };
+export { XMLValidatorAgent, TeXLinterFixAgent, BaseToolUseAgent };
 
-// Export type definitions
-export * from './types';
-
-// Export base tools
-export * from './base';
-
-// Export tool implementations
-export * from './TextEditorTool';
+// Export shared tool implementations and types
+export * from '@tools/anthropic/TextEditorTool';
+export * from '@tools/anthropic/types';
+export * from '@tools/anthropic/base';

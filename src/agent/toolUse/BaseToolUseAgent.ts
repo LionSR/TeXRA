@@ -9,9 +9,9 @@ import type { MessageCreateParams } from '@anthropic-ai/sdk/resources/messages';
 import { getSdkErrorMessage } from '@utils/sdkErrorUtils';
 
 // Local imports - core
-import { TextEditorTool } from './TextEditorTool';
-import { ToolResult } from './base';
-import { BaseError, ValidationResult } from './types';
+import { TextEditorTool } from '@tools/anthropic/TextEditorTool';
+import { ToolResult } from '@tools/anthropic/base';
+import { BaseError, ValidationResult } from '@tools/anthropic/types';
 
 // Local imports - utils
 import { WorkspaceFS } from '@utils/files';
@@ -25,13 +25,13 @@ import {
 // Local imports - logging
 import * as logger from '@logger/logUtils';
 
-const CHANNEL = 'AnthropicToolAgent';
+const CHANNEL = 'BaseToolUseAgent';
 logger.initialize(CHANNEL);
 
 /**
  * Abstract base class for agents that use Claude to fix issues in files
  */
-export abstract class AnthropicToolAgent<
+export abstract class BaseToolUseAgent<
   ErrorType extends BaseError | BaseError[],
 > {
   // Constants used throughout the class
@@ -44,9 +44,9 @@ export abstract class AnthropicToolAgent<
   protected model: string = 'claude-3-7-sonnet-latest';
   protected readonly agentName: string;
   protected readonly configKey: string;
-  protected maxIterations: number = AnthropicToolAgent.DEFAULT_ITERATIONS;
-  protected contextLines: number = AnthropicToolAgent.DEFAULT_CONTEXT_LINES;
-  protected maxTokens: number = AnthropicToolAgent.DEFAULT_MAX_TOKENS;
+  protected maxIterations: number = BaseToolUseAgent.DEFAULT_ITERATIONS;
+  protected contextLines: number = BaseToolUseAgent.DEFAULT_CONTEXT_LINES;
+  protected maxTokens: number = BaseToolUseAgent.DEFAULT_MAX_TOKENS;
 
   constructor() {
     // Use different text editor tool for Claude 4 models vs older models
@@ -71,7 +71,7 @@ export abstract class AnthropicToolAgent<
     // Initialize maxIterations from config
     this.maxIterations = getConfig(
       this.configKey,
-      AnthropicToolAgent.DEFAULT_ITERATIONS,
+      BaseToolUseAgent.DEFAULT_ITERATIONS,
     );
   }
 
