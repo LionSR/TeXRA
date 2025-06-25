@@ -1,0 +1,159 @@
+// Local imports - log
+import type { AgentLogger } from '@logger/AgentLogger';
+
+// Local imports - agent components
+import { AgentConfig } from '../../core/AgentConfig';
+import { AgentSetting } from '../../core/AgentDataclass';
+import { AgentStateRound, AgentStateGlobal } from '../../core/AgentState';
+import { ToolState } from '../../core/ToolState';
+import type { MediaEntry } from '../../utils/mediaTypes';
+import type { ModelConfig, ModelCapabilities } from '@model/ModelConfig';
+import type { ProviderStopReason } from './StopReasonTypes';
+
+/**
+ * Common interface implemented by all model handlers.
+ */
+export interface IModelHandler {
+  /** Model configuration used by the handler. */
+  config: ModelConfig;
+
+  /** Capabilities supported by the model. */
+  capabilities: ModelCapabilities;
+
+  /** Indicates if the model uses the OpenAI API. */
+  readonly isOpenai: boolean;
+
+  /** Indicates if the model is served by Anthropic. */
+  readonly isAnthropic: boolean;
+
+  /** Indicates if the model is served by Google. */
+  readonly isGoogle: boolean;
+
+  /** Checks if the provider implements the OpenAI API. */
+  readonly isOpenaiCompatible: boolean;
+
+  /** Set the logger instance for the handler. */
+  setLogger(logger: AgentLogger): void;
+
+  /** Retrieve an authenticated client instance. */
+  getClient(): Promise<any>;
+
+  /**
+   * Generate a response from the model.
+   * @param client Provider client instance
+   * @param messages Conversation messages
+   * @param temperature Sampling temperature
+   * @param systemPrompt Optional system prompt
+   * @param endTag Optional stop sequence
+   * @param signal Optional abort signal
+   */
+  createResponse(
+    client: any,
+    messages: any[],
+    temperature: number,
+    systemPrompt?: string,
+    endTag?: string,
+    signal?: AbortSignal,
+  ): Promise<any>;
+
+  /** Initialize the conversation for the first round. */
+  initializeMessages(
+    userPrefix: string,
+    userRequest: string,
+    mediaFiles?: string[],
+    systemPrompt?: string,
+  ): Promise<any[]>;
+
+  /** Create messages for a follow-up round. */
+  createRoundMessages(
+    messages: any[],
+    userMessage: string,
+    mediaFiles?: string[],
+  ): Promise<any[]>;
+
+  /** Format media content for provider APIs. */
+  createMediaContent(mediaMessage: MediaEntry[]): any[];
+
+  /** Extract the response text and usage from the provider response. */
+  extractResponse(
+    responseObject: any,
+    endTag: string,
+  ): [string, any, ProviderStopReason];
+
+  /** Handle continuation for models supporting prefill. */
+  addContinueMessageWithPrefill(
+    messages: any[],
+    stateRound: AgentStateRound,
+    toolState: ToolState,
+    agentSetting: AgentSetting,
+    agentConfig: AgentConfig,
+  ): void;
+
+  /** Handle continuation for models without prefill. */
+  addContinueMessageWithoutPrefill(
+    messages: any[],
+    stateRound: AgentStateRound,
+    toolState: ToolState,
+    agentSetting: AgentSetting,
+    agentConfig: AgentConfig,
+  ): void;
+
+  /** Prepare output files and prefill content. */
+  initializeOutputAndPrefill(
+    agentConfig: AgentConfig,
+    agentSetting: AgentSetting,
+    messages: any[],
+    toolState: ToolState,
+    outputFile: string,
+    prefill: string,
+    groupId?: string,
+  ): Promise<[boolean, any[]]>;
+
+  /** Compute the cost for a response. */
+  computePrice(responseUsage: any): number;
+
+  /** Compute detailed usage metrics. */
+  computeResponseUsage(responseUsage: any, responseTime: number): any;
+
+  /** Update messages when prefill is supported. */
+  updateMessageContentWithPrefill(
+    messages: any[],
+    bestConnector: string,
+    newResponse: string,
+    toolState: ToolState,
+  ): void;
+
+  /** Update messages when prefill is not supported. */
+  updateMessageContentWithoutPrefill(
+    messages: any[],
+    bestConnector: string,
+    newResponse: string,
+    toolState: ToolState,
+  ): void;
+
+  /** Determine whether generation should continue. */
+  shouldContinue(
+    stopReason: ProviderStopReason,
+    newResponse: string,
+    agentSetting: AgentSetting,
+  ): boolean;
+
+  /**
+   * Evaluate whether to end the turn and/or stop generation.
+   * @returns Tuple of [endTurn, shouldStop]
+   */
+  checkStopConditions(
+    stopReason: ProviderStopReason,
+    newResponse: string,
+    stateRound: AgentStateRound,
+    stateGlobal: AgentStateGlobal,
+    agentSetting: AgentSetting,
+  ): [boolean, boolean];
+
+  /** Extract intermediate "thinking" content from a response. */
+  processThinkingBlock(
+    responseObject: any,
+    groupId?: string,
+    toolState?: ToolState,
+  ): string | null;
+}
