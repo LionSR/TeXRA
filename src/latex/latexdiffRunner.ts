@@ -258,6 +258,73 @@ export class LatexdiffRunner {
     }
   }
 
+  async runDiffVcMultiple(
+    inputFiles: string[],
+    commitHash: string,
+  ): Promise<LaTeXdiffMultipleResult> {
+    try {
+      if (!inputFiles || inputFiles.length === 0) {
+        await showLoggedMessage(this.channel, 'No input files provided');
+        return {
+          success: false,
+          results: { success: [], failed: [] },
+          message: 'No input files provided',
+        };
+      }
+
+      const results: { success: string[]; failed: string[] } = {
+        success: [],
+        failed: [],
+      };
+
+      for (const inputFile of inputFiles) {
+        try {
+          const result = await this.runDiffVc(inputFile, commitHash);
+          if (result.success) {
+            results.success.push(inputFile);
+          } else {
+            results.failed.push(inputFile);
+          }
+        } catch (err) {
+          results.failed.push(inputFile);
+          logger.error(
+            this.channel,
+            `Error processing ${inputFile}: ${err instanceof Error ? err.message : String(err)}`,
+          );
+        }
+      }
+
+      const summary = [
+        'LaTeX diff operations completed:',
+        results.success.length > 0
+          ? `\nSuccessful:\n${results.success.join('\n')}`
+          : '',
+        results.failed.length > 0
+          ? `\nFailed:\n${results.failed.join('\n')}`
+          : '',
+      ].join('');
+
+      logger.info(this.channel, summary);
+
+      return {
+        success: results.failed.length === 0,
+        results,
+        message: summary,
+      };
+    } catch (err) {
+      const message = logErrorMessage(
+        this.channel,
+        'Error in runLatexdiffvcMultiple',
+        err,
+      );
+      return {
+        success: false,
+        results: { success: [], failed: [] },
+        message,
+      };
+    }
+  }
+
   async runDiffMultiple(
     inputFiles: string[],
     editedFiles: string[],
