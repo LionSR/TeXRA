@@ -1,5 +1,8 @@
 import { EventEmitter } from 'events';
 
+// Maximum number of events to buffer when no listeners are registered
+const MAX_BUFFER_SIZE = 1000;
+
 export type ProgressEvent =
   | 'addLogMessage'
   | 'updateLogMessage'
@@ -21,12 +24,15 @@ class ProgressEventBus {
   emit(event: ProgressEvent, payload: any): void {
     if (this.emitter.listenerCount(event) === 0) {
       this.buffer.push({ event, payload });
+      if (this.buffer.length > MAX_BUFFER_SIZE) {
+        this.buffer.shift();
+      }
     } else {
       this.emitter.emit(event, payload);
     }
   }
 
-  on(event: ProgressEvent, listener: (payload: any) => void): void {
+  on(event: ProgressEvent, listener: (payload: any) => void): () => void {
     this.emitter.on(event, listener);
     const remaining: typeof this.buffer = [];
     for (const item of this.buffer) {
@@ -37,6 +43,7 @@ class ProgressEventBus {
       }
     }
     this.buffer = remaining;
+    return () => this.emitter.off(event, listener);
   }
 }
 
@@ -49,6 +56,6 @@ export const emitProgress = (event: ProgressEvent, payload: any): void => {
 export const onProgress = (
   event: ProgressEvent,
   listener: (payload: any) => void,
-): void => {
-  bus.on(event, listener);
+): (() => void) => {
+  return bus.on(event, listener);
 };
