@@ -70,7 +70,6 @@ class VSCodeTransport extends Transport {
   private channel: vscode.OutputChannel;
   private progressViewProvider?: ProgressViewProvider;
   private streamName: string;
-  private useConsolidatedChannel: boolean;
   private messageBuffer: {
     id: string;
     level: string;
@@ -85,14 +84,12 @@ class VSCodeTransport extends Transport {
   constructor(
     channel: vscode.OutputChannel,
     streamName: string,
-    useConsolidatedChannel: boolean,
     progressViewProvider?: ProgressViewProvider,
     opts?: Transport.TransportStreamOptions,
   ) {
     super(opts);
     this.channel = channel;
     this.streamName = streamName;
-    this.useConsolidatedChannel = useConsolidatedChannel;
     this.progressViewProvider = progressViewProvider;
   }
 
@@ -108,9 +105,9 @@ class VSCodeTransport extends Transport {
     const timeDisplay = timestamp.split(' ')[1].split('.')[0]; // Drop milliseconds for UI display
 
     // For consolidated channel, include the source channel in the message
-    const channelPrefix = this.useConsolidatedChannel
-      ? `[${this.streamName}] `
-      : '';
+    const channelPrefix = isAgentChannel(this.streamName)
+      ? ''
+      : `[${this.streamName}] `;
 
     // Plain format for output channel - no escaping needed but include better formatting
     // const formattedMessage = `${emoji} [${timestamp}] ${level.toUpperCase().padEnd(7)} ${channelPrefix}${message}`;
@@ -126,7 +123,7 @@ class VSCodeTransport extends Transport {
     }
 
     // Skip progress view updates for consolidated channels
-    if (this.useConsolidatedChannel) {
+    if (!isAgentChannel(this.streamName)) {
       callback();
       return;
     }
@@ -189,7 +186,7 @@ class VSCodeTransport extends Transport {
     this.progressViewProvider = progressViewProvider;
 
     // Skip replay for consolidated channels
-    if (this.useConsolidatedChannel) {
+    if (!isAgentChannel(this.streamName)) {
       return;
     }
 
@@ -241,7 +238,7 @@ class VSCodeTransport extends Transport {
     this.activeGroupId = groupId;
 
     // Skip progress view updates for consolidated channels
-    if (this.useConsolidatedChannel) {
+    if (!isAgentChannel(this.streamName)) {
       return groupId;
     }
 
@@ -273,7 +270,7 @@ class VSCodeTransport extends Transport {
     group.status = status;
 
     // Skip progress view updates for consolidated channels
-    if (this.useConsolidatedChannel) {
+    if (!isAgentChannel(this.streamName)) {
       return;
     }
 
@@ -346,24 +343,14 @@ function createLoggerForChannel(
     registerAgentChannel(channel);
   }
 
-  const useConsolidatedChannel = !isAgentChannel(channel);
-
-  let outputChannel: vscode.OutputChannel;
-
-  if (useConsolidatedChannel) {
-    // Use the main TeXRA output channel for non-agent channels
-    outputChannel = getMainOutputChannel();
-  } else {
-    // Create a separate channel with the TeXRA prefix for agent channels
-    const channelName = 'TeXRA ' + channel;
-    outputChannel = vscode.window.createOutputChannel(channelName);
-  }
+  const outputChannel = isAgentChannel(channel)
+    ? vscode.window.createOutputChannel('TeXRA ' + channel)
+    : getMainOutputChannel();
 
   // Create transport
   const transport = new VSCodeTransport(
     outputChannel,
     channel,
-    useConsolidatedChannel,
     globalProgressViewProvider,
   );
   channelTransports.set(channel, transport);

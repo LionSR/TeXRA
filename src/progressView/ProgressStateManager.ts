@@ -7,6 +7,7 @@ import { WorkspaceStateKey, workspaceSM } from '@utils/stateManager';
 import { WorkspaceFS } from '@utils/files';
 import { objectToTaskState } from '@utils/config';
 import { isAgentChannel } from '@utils/loggerUtils';
+import { registerAgentChannel } from '@utils/loggerUtils';
 import { TaskState } from '@logger/TaskState';
 import { AgentLogger } from '@logger/AgentLogger';
 
@@ -93,12 +94,28 @@ export class ProgressStateManager {
    * Load all state from workspace storage
    */
   public async loadState(): Promise<void> {
+    this._registerSavedAgentChannels();
     await this._loadLogStreams();
     await this._loadTaskGroups();
     await this._loadOutputFiles();
     this._loadActiveStream();
     await this._loadTaskStates();
     await this._loadUsageStats();
+  }
+
+  /**
+   * Register channels found in persisted log streams so that they
+   * can be loaded before any loggers are created.
+   */
+  private _registerSavedAgentChannels(): void {
+    const saved = workspaceSM.get<{ [key: string]: unknown }>(
+      this._getWorkspaceKey(WorkspaceStateKey.LOG_STREAMS),
+    );
+    if (saved) {
+      for (const channel of Object.keys(saved)) {
+        registerAgentChannel(channel);
+      }
+    }
   }
 
   /**
