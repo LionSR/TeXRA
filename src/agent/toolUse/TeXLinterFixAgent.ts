@@ -1,10 +1,10 @@
 // Standard library imports - (none)
 
 // Local imports - core
-import { AnthropicToolAgent } from './AnthropicToolAgent';
+import { BaseToolUseAgent } from './BaseToolUseAgent';
 
 // Local imports - types
-import { ValidationResult } from './types';
+import { ValidationResult } from '@tools/anthropic/types';
 import { LinterMessage } from '@frontend/latex/linter';
 
 // Local imports - utils
@@ -19,7 +19,7 @@ logger.initialize(CHANNEL);
 /**
  * Agent that fixes linter issues in TeX files using Claude
  */
-export class TeXLinterFixAgent extends AnthropicToolAgent<LinterMessage[]> {
+export class TeXLinterFixAgent extends BaseToolUseAgent<LinterMessage[]> {
   /**
    * Validate if the file has any linter issues
    * Implementation of abstract method from base class
