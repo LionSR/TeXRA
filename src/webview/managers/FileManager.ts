@@ -182,7 +182,7 @@ export class FileManager {
 
     try {
       if (fileType === 'OutputFiles') {
-        selectedFiles = await this.selectOutputFiles(message.inputFile);
+        selectedFiles = await this.selectOutputFiles(message.currentFile);
       } else {
         const currentFileForMultiple = message.currentFile;
         const baseType = fileType.replace('Files', '');
