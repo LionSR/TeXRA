@@ -73,16 +73,16 @@ export class SettingsButtonManager {
 
   setupCheckboxes() {
     CHECK_BOXES_AUTO_EXTRACT.forEach((id) => {
-      addEventListenerSafely(id, 'change', () => {
+      addEventListenerSafely(id, 'change', (e) => {
         this.toggleManager.updateAutoToggleState();
-        handleCheckboxChange.call(null, { target: safeGetElementById(id) });
+        handleCheckboxChange(e);
       });
     });
 
     CHECK_BOXES_TOOL_USE.forEach((id) => {
-      addEventListenerSafely(id, 'change', () => {
+      addEventListenerSafely(id, 'change', (e) => {
         this.toggleManager.updateToolConfigToggleState();
-        handleCheckboxChange.call(null, { target: safeGetElementById(id) });
+        handleCheckboxChange(e);
       });
     });
   }

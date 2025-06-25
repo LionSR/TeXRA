@@ -52,6 +52,7 @@ export function initializeUI() {
   fileInputManager.setup();
   settingsButtonManager.setup();
   actionButtonManager.setup();
+  instructionManager.setupEraseButton();
   recordingManager.setupRecordButton();
 
   ELEMENTS_TO_SAVE.forEach((id) => {

@@ -1,5 +1,8 @@
 import { setupPasteListener } from '../pasteHandler.js';
-import { safeGetElementById } from '@common/domUtils.js';
+import {
+  addEventListenerSafely,
+  safeGetElementById,
+} from '@common/domUtils.js';
 
 export class InstructionManager {
   constructor(textareaId, vscode, state) {
@@ -48,5 +51,20 @@ export class InstructionManager {
       () => this.state?.save(),
       (ta, text) => this.insertTextAtCursor(ta, text),
     );
+  }
+
+  setupEraseButton() {
+    const buttonId = 'eraseInstructionButton';
+    const button = safeGetElementById(buttonId);
+    if (!button) return;
+
+    addEventListenerSafely(buttonId, 'click', () => {
+      const instruction = safeGetElementById(this.textareaId);
+      if (instruction) {
+        instruction.value = '';
+        this.autoResizeTextarea(instruction);
+        this.state?.save();
+      }
+    });
   }
 }

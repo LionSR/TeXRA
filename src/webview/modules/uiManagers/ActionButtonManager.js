@@ -51,6 +51,8 @@ export class ActionButtonManager {
     this.setupLatexdiff();
     this.setupLatexdiffvc();
     this.setupLatexdiffvcPackClean();
+    this.setupCompare();
+    this.setupAccept();
   }
 
   setupMagicPolish() {
@@ -231,6 +233,46 @@ export class ActionButtonManager {
           text: `${capitalize(action)}ing LaTeX diff with version control: ${baseFile} at commit ${commitHash}`,
         });
       });
+    });
+  }
+
+  setupCompare() {
+    addEventListenerSafely('compareButton', 'click', () => {
+      const baseFile = safeGetElementValue('baseFile');
+      const editedFile = safeGetElementValue('editedFile');
+
+      if (baseFile && editedFile) {
+        this.vscode.postMessage({
+          command: 'compare',
+          baseFile,
+          editedFile,
+        });
+      } else {
+        this.vscode.postMessage({
+          command: 'showInformationMessage',
+          text: 'Please select both base and edited files to compare',
+        });
+      }
+    });
+  }
+
+  setupAccept() {
+    addEventListenerSafely('acceptButton', 'click', () => {
+      const baseFile = safeGetElementValue('baseFile');
+      const editedFile = safeGetElementValue('editedFile');
+
+      if (baseFile && editedFile) {
+        this.vscode.postMessage({
+          command: 'acceptEdited',
+          baseFile,
+          editedFile,
+        });
+      } else {
+        this.vscode.postMessage({
+          command: 'showInformationMessage',
+          text: 'Please select both base and edited files to accept changes',
+        });
+      }
     });
   }
 }
