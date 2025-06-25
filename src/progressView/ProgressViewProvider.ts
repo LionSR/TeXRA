@@ -10,7 +10,7 @@ import { TaskState } from '@logger/TaskState';
 import { AgentLogger } from '@logger/AgentLogger';
 
 import { getConfig } from '@utils/config';
-import { shouldUseConsolidatedChannel } from '@utils/loggerUtils';
+import { isAgentChannel } from '@utils/loggerUtils';
 
 import { TokenUsageStats } from '../types/UsageTypes';
 import { TaskGroup } from '../logger/LogTypes';
@@ -266,7 +266,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     id: string = randomUUID(),
   ) {
     // Skip if this stream should be excluded from the progress view
-    if (shouldUseConsolidatedChannel(stream)) {
+    if (!isAgentChannel(stream)) {
       return;
     }
 
@@ -366,7 +366,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     parentGroupId?: string,
   ) {
     // Skip if this stream should be excluded from the progress view
-    if (shouldUseConsolidatedChannel(stream)) {
+    if (!isAgentChannel(stream)) {
       return;
     }
 
@@ -426,7 +426,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     endTime?: number,
   ) {
     // Skip if this stream should be excluded from the progress view
-    if (shouldUseConsolidatedChannel(stream)) {
+    if (!isAgentChannel(stream)) {
       return;
     }
 
@@ -559,7 +559,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
 
   public updateStreamStatus(stream: string, status: StreamStatusType) {
     // Don't track status for excluded streams
-    if (shouldUseConsolidatedChannel(stream)) {
+    if (!isAgentChannel(stream)) {
       return;
     }
 

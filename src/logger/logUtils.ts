@@ -8,10 +8,10 @@ import { randomUUID } from 'crypto';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import { getConfig } from '@utils/config';
 import {
-  shouldUseConsolidatedChannel,
   getColorForLevel,
-  isAgentStream,
+  isAgentChannel,
   EMOJI_BY_LEVEL as emojis,
+  registerAgentChannel,
 } from '@utils/loggerUtils';
 import { TaskGroup } from './LogTypes';
 
@@ -116,12 +116,8 @@ class VSCodeTransport extends Transport {
     // const formattedMessage = `${emoji} [${timestamp}] ${level.toUpperCase().padEnd(7)} ${channelPrefix}${message}`;
     const formattedMessage = `${emoji} [${timestamp}] ${channelPrefix}${message}`;
 
-    // Key behavior change: For agent streams, we ONLY write to their dedicated channel
-    // For non-agent streams, we write to the consolidated channel
-    // This prevents duplicate output in both places
-    if (this.useConsolidatedChannel || !isAgentStream(this.streamName)) {
-      this.channel.appendLine(formattedMessage);
-    }
+    // Write to the appropriate output channel (agent or consolidated)
+    this.channel.appendLine(formattedMessage);
 
     // Skip debug messages in ProgressView if debug mode is disabled
     if (level === 'debug' && !getConfig<boolean>('logger.debugMode', false)) {
@@ -330,20 +326,27 @@ export function setProgressViewProvider(provider: ProgressViewProvider) {
   }
 }
 
-export function initialize(defaultChannel: string): void {
+export function initialize(defaultChannel: string, isAgent = false): void {
   // Create default logger if it doesn't exist
   if (!channelLoggers.has(defaultChannel)) {
-    createLoggerForChannel(defaultChannel);
+    createLoggerForChannel(defaultChannel, isAgent);
   }
 }
 
-function createLoggerForChannel(channel: string): winston.Logger {
+function createLoggerForChannel(
+  channel: string,
+  isAgent = false,
+): winston.Logger {
   // Check if channel already exists
   if (channelLoggers.has(channel)) {
     return channelLoggers.get(channel)!;
   }
 
-  const useConsolidatedChannel = shouldUseConsolidatedChannel(channel);
+  if (isAgent) {
+    registerAgentChannel(channel);
+  }
+
+  const useConsolidatedChannel = !isAgentChannel(channel);
 
   let outputChannel: vscode.OutputChannel;
 
