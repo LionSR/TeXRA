@@ -44,7 +44,11 @@ import {
 import { AgentStateRound, AgentStateGlobal } from '@agent/core/AgentState';
 import { ToolState } from '@agent/core/ToolState';
 import { ModelHandler } from '@agent/modelHandlers';
-import { OutputHandler, NamedOutputFile } from '@agent/runtime/OutputHandler';
+import {
+  OutputHandler,
+  NamedOutputFile,
+  IOutputHandler,
+} from '@agent/runtime/OutputHandler';
 import { messageToSkeleton } from '@agent/utils/messageUtils';
 import { BaseAgent } from '@agent/implementations/BaseAgent';
 import { createInfoSpan } from '@agent/modelHandlers/streamUtils';
@@ -69,7 +73,7 @@ export abstract class BaseReflectionAgent extends BaseAgent {
   protected useScratchpad: boolean = false;
   protected logId: number = 0;
   /** Handler for output file processing and validation. */
-  protected outputHandler: OutputHandler;
+  protected outputHandler: IOutputHandler;
 
   constructor(
     modelHandler: ModelHandler,

@@ -8,20 +8,22 @@ import { XmlOutputManager } from './XmlOutputManager';
 import { LatexDiffManager } from './LatexDiffManager';
 import { StatisticsReporter } from './StatisticsReporter';
 import { NamedOutputFile } from './types';
+import type { IOutputHandler } from './IOutputHandler';
 import { getOutputFileName } from '@utils/outputFileUtils';
 
 // Local imports - agent components
 import { AgentConfig } from '@agent/core/AgentConfig';
 import { AgentSetting } from '@agent/core/AgentDataclass';
 import { AgentStateGlobal, AgentStateRound } from '@agent/core/AgentState';
+import type { IModelHandler } from '@agent/modelHandlers';
 
 // Local imports - types
 
 /** Handles output file processing and validation for agent responses. */
-export class OutputHandler {
+export class OutputHandler implements IOutputHandler {
   public agentSetting: AgentSetting;
   public agentConfig: AgentConfig;
-  public modelHandler: any;
+  public modelHandler: IModelHandler;
   public logId: number;
   public outputFiles: { [key: number]: string[] };
   public outputMappings: { [key: number]: NamedOutputFile[] };
@@ -36,7 +38,7 @@ export class OutputHandler {
   constructor(
     agentSetting: AgentSetting,
     agentConfig: AgentConfig,
-    modelHandler: any,
+    modelHandler: IModelHandler,
     logId: number,
     baseFiles: string[] = [],
     logger?: AgentLogger,
@@ -203,3 +205,4 @@ export class OutputHandler {
 
 export { NamedOutputFile };
 export { getOutputFileName } from '@utils/outputFileUtils';
+export type { IOutputHandler } from './IOutputHandler';
