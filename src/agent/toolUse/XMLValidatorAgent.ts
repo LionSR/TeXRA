@@ -4,13 +4,13 @@
 import { XMLValidator } from 'fast-xml-parser';
 
 // Local imports - core
-import { AnthropicToolAgent } from './AnthropicToolAgent';
+import { BaseToolUseAgent } from './BaseToolUseAgent';
 
 // Local imports - utils
 import { WorkspaceFS } from '@utils/files';
 
 // Local imports - types
-import { XMLValidationError, ValidationResult } from './types';
+import { XMLValidationError, ValidationResult } from '@tools/anthropic/types';
 
 // Local imports - Logging
 import * as logger from '@logger/logUtils';
@@ -21,7 +21,7 @@ logger.initialize(CHANNEL);
 /**
  * Agent that validates XML files and fixes validation errors using Claude
  */
-export class XMLValidatorAgent extends AnthropicToolAgent<XMLValidationError> {
+export class XMLValidatorAgent extends BaseToolUseAgent<XMLValidationError> {
   /**
    * Validate XML file
    * Implementation of abstract method from base class
