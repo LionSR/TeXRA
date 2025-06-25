@@ -142,7 +142,7 @@ export class WorkspaceFS {
         return;
       }
 
-      await vscode.workspace.fs.rename(sourceUri, destUri);
+      await vscode.workspace.fs.rename(sourceUri, destUri, { overwrite: true });
       logger.info(CHANNEL, `Successfully moved: ${source} to ${destination}`);
     } catch (err) {
       await showLoggedErrorMessage(
