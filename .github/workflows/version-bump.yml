@@ -34,23 +34,23 @@ jobs:
         run: |
           # Get current version
           CURRENT_VERSION=$(node -p "require('./package.json').version")
-          
+
           # Split version into parts
           IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT_VERSION"
-          
+
           # Increment patch, but if it reaches 11, increment minor and reset patch to 0
           PATCH=$((PATCH + 1))
           if [ $PATCH -gt 10 ]; then
             MINOR=$((MINOR + 1))
             PATCH=0
           fi
-          
+
           # Construct new version
           NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}"
-          
+
           # Update package.json
           npm version $NEW_VERSION --no-git-tag-version --allow-same-version
-          
+
           echo "NEW_VERSION=$NEW_VERSION" >> $GITHUB_OUTPUT
 
       - name: Create Pull Request
