@@ -295,6 +295,12 @@ export class LogEntriesDom {
    * @returns {boolean} Whether the message was appended to a group
    */
   append(logMessage) {
+    // Check if this is a file loading status message and process it
+    if (window.fileLoadingStatus) {
+      const wasProcessed = window.fileLoadingStatus.processLogMessage(logMessage.message);
+      // If it was processed as a file status message, we can optionally hide it from the log
+      // For now, we'll let it show in the log but also display in the UI component
+    }
     // If the message has a group ID, append it to the right group
     if (logMessage.groupId) {
       const groupContent = document.getElementById(

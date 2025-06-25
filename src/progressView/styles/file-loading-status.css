@@ -1,0 +1,271 @@
+/* File Loading Status Component Styles */
+
+.file-loading-status {
+  background: var(--vscode-editor-background);
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 6px;
+  margin: 12px 0;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.file-status-header {
+  padding: 12px 16px;
+  background: var(--vscode-titleBar-activeBackground);
+  border-bottom: 1px solid var(--vscode-panel-border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.file-status-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--vscode-foreground);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.file-status-title .codicon {
+  color: var(--vscode-symbolIcon-folderForeground);
+}
+
+.file-status-summary {
+  display: flex;
+  gap: 16px;
+  font-size: 12px;
+}
+
+.status-count {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-weight: 500;
+}
+
+.status-count.found {
+  background: var(--vscode-testing-iconPassed);
+  color: var(--vscode-button-foreground);
+}
+
+.status-count.missing {
+  background: var(--vscode-testing-iconFailed);
+  color: var(--vscode-button-foreground);
+}
+
+.status-count .codicon {
+  font-size: 12px;
+}
+
+/* File Sections */
+.file-section {
+  border: none;
+  margin: 0;
+}
+
+.file-section[open] .file-section-header .codicon-chevron-down {
+  transform: rotate(0deg);
+}
+
+.file-section .file-section-header .codicon-chevron-down {
+  transform: rotate(-90deg);
+  transition: transform 0.2s ease;
+}
+
+.file-section-header {
+  padding: 12px 16px;
+  background: var(--vscode-list-hoverBackground);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--vscode-foreground);
+  border-bottom: 1px solid var(--vscode-panel-border);
+  transition: background-color 0.2s ease;
+}
+
+.file-section-header:hover {
+  background: var(--vscode-list-activeSelectionBackground);
+}
+
+.file-section-header .codicon-chevron-down {
+  color: var(--vscode-foreground);
+  font-size: 12px;
+}
+
+.section-title {
+  flex: 1;
+}
+
+.section-count {
+  color: var(--vscode-descriptionForeground);
+  font-size: 12px;
+  font-weight: normal;
+}
+
+.file-section-content {
+  padding: 8px 0;
+}
+
+/* File Category Headers */
+.file-category-header {
+  padding: 8px 16px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--vscode-descriptionForeground);
+  background: var(--vscode-sideBar-background);
+  border-bottom: 1px solid var(--vscode-widget-border);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* File Lists */
+.file-list {
+  padding: 0;
+}
+
+.file-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--vscode-panel-border);
+  transition: background-color 0.2s ease;
+}
+
+.file-item:last-child {
+  border-bottom: none;
+}
+
+.file-item:hover {
+  background: var(--vscode-list-hoverBackground);
+}
+
+.file-item.clickable {
+  cursor: pointer;
+}
+
+.file-item.clickable:hover {
+  background: var(--vscode-list-activeSelectionBackground);
+}
+
+.file-status-icon {
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.file-status-icon.found {
+  color: var(--vscode-testing-iconPassed);
+}
+
+.file-status-icon.missing {
+  color: var(--vscode-testing-iconFailed);
+}
+
+.file-info {
+  flex: 1;
+  min-width: 0; /* Allow text to truncate */
+}
+
+.file-path {
+  display: flex;
+  align-items: baseline;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.file-dir {
+  color: var(--vscode-descriptionForeground);
+  margin-right: 2px;
+}
+
+.file-name {
+  color: var(--vscode-foreground);
+  font-weight: 500;
+}
+
+.file-variable {
+  margin-top: 2px;
+  font-size: 11px;
+}
+
+.file-variable code {
+  background: var(--vscode-textCodeBlock-background);
+  color: var(--vscode-textPreformat-foreground);
+  padding: 2px 4px;
+  border-radius: 3px;
+  font-family: var(--vscode-editor-font-family);
+  font-size: 10px;
+}
+
+/* Specific styling for different section types */
+.file-section-missing .file-section-header {
+  border-left: 3px solid var(--vscode-testing-iconFailed);
+}
+
+.file-section-found .file-section-header {
+  border-left: 3px solid var(--vscode-testing-iconPassed);
+}
+
+/* Compact mode for when there are many files */
+.file-loading-status.compact .file-item {
+  padding: 6px 16px;
+}
+
+.file-loading-status.compact .file-path {
+  font-size: 12px;
+}
+
+.file-loading-status.compact .file-variable {
+  font-size: 10px;
+}
+
+/* Dark theme adjustments */
+.vscode-dark .file-loading-status,
+.vscode-high-contrast .file-loading-status {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+/* Animation for status updates */
+.file-item.newly-added {
+  animation: highlight 0.5s ease-out;
+}
+
+@keyframes highlight {
+  0% {
+    background: var(--vscode-editor-findMatchHighlightBackground);
+  }
+  100% {
+    background: transparent;
+  }
+}
+
+/* Responsive design for narrow panels */
+@media (max-width: 400px) {
+  .file-status-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  
+  .file-status-summary {
+    align-self: stretch;
+    justify-content: space-between;
+  }
+  
+  .file-path {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  .file-dir {
+    font-size: 11px;
+    margin-bottom: 2px;
+  }
+}

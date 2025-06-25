@@ -36,6 +36,7 @@ export class ProgressViewContentProvider {
       const htmlPath = getWebviewPath('index.html');
       const styleUri = getWebviewUri('styles/index.css');
       const commonStyleUri = getCommonUri('styles/common.css');
+      const fileLoadingStatusStyleUri = getWebviewUri('styles/file-loading-status.css');
       const scriptUri = getWebviewUri('script.js');
       const splitJsUri = getNodeModulesUri('split.js/dist/split.es.js');
       const webviewStateUri = getCommonUri('modules/webviewState.js');
@@ -54,6 +55,7 @@ export class ProgressViewContentProvider {
       const toolbarUri = getWebviewUri('modules/uiManagers/Toolbar.js');
       const statusUri = getWebviewUri('modules/uiManagers/Status.js');
       const fileListUri = getWebviewUri('modules/uiManagers/FileList.js');
+      const fileLoadingStatusUri = getWebviewUri('modules/uiManagers/FileLoadingStatus.js');
       const eventsUri = getWebviewUri('modules/uiManagers/Events.js');
       const constantsUri = getWebviewUri('modules/constants.js');
       const katexMacrosUri = getWebviewUri('modules/katexMacros.js');
@@ -70,6 +72,7 @@ export class ProgressViewContentProvider {
       return buildWebviewHtml(webview, htmlPath, {
         commonStyleUri,
         styleUri,
+        fileLoadingStatusStyleUri,
         scriptUri,
         splitJsUri,
         codiconUri,
@@ -91,6 +94,7 @@ export class ProgressViewContentProvider {
         toolbarUri,
         statusUri,
         fileListUri,
+        fileLoadingStatusUri,
         eventsUri,
       });
     } catch (err) {

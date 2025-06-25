@@ -1,11 +1,15 @@
 import { progressViewState } from './modules/progressViewState.js';
 import { setupMessageHandlers } from './modules/messageHandlers.js';
 import { progressViewDomHandler } from './modules/domHandlers.js';
+import { FileLoadingStatus } from './modules/uiManagers/FileLoadingStatus.js';
 import { vscode } from '@common/webviewContext.js';
 import { COMMANDS } from './modules/constants.js';
 
 // Initialize the state when the window loads
 progressViewState.initialize();
+
+// Initialize file loading status component
+window.fileLoadingStatus = new FileLoadingStatus();
 
 // Setup message handlers for VSCode messages
 setupMessageHandlers();
