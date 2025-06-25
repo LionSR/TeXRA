@@ -6,10 +6,7 @@ import * as vscode from 'vscode';
 import { glob } from 'glob';
 
 // Local imports - utilities
-import {
-  getBuiltInAgentsDirectory,
-  getCustomAgentsDirectory,
-} from '@frontend/agents/pathUtils';
+import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { agentConfigToTaskState } from '@utils/config';
 
 // Local imports - agent components
@@ -56,7 +53,7 @@ export async function getAgentPath(
 ): Promise<string> {
   try {
     // First check custom agents directory
-    const customDir = await getCustomAgentsDirectory();
+    const customDir = await agentDirectories.custom();
     if (customDir) {
       const customMatches = await glob(`**/${agentName}.yaml`, {
         cwd: customDir,
@@ -71,7 +68,7 @@ export async function getAgentPath(
     }
 
     // If not found in custom directory, check built-in directory
-    const builtInDir = await getBuiltInAgentsDirectory(context);
+    const builtInDir = await agentDirectories.builtIn(context);
     const builtInMatches = await glob(`**/${agentName}.yaml`, {
       cwd: builtInDir,
       dot: false,
