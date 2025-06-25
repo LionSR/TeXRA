@@ -1,0 +1,6 @@
+export { RecordingManager } from './RecordingManager';
+export { SettingsManager } from './SettingsManager';
+export { FileManager } from './FileManager';
+export { ExecutionManager } from './ExecutionManager';
+export { DiffManager } from './DiffManager';
+export { InstructionManager } from './InstructionManager';
