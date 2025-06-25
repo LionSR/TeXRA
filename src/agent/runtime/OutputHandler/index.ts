@@ -1,67 +1,21 @@
 // Standard library imports
-import * as path from 'path';
-
-// Third-party imports
-import { XMLParser } from 'fast-xml-parser';
-
 // Local imports - log
 import { AgentLogger } from '@logger/AgentLogger';
 
 // Local imports - utilities
-import { WorkspaceFS, createFileMapping } from '@utils/files';
-import xmlUtils from '@utils/text/xmlUtils';
-import {
-  applyReplacements,
-  getReplacementsByCategory,
-} from '@replacement/engine';
-import replacementEngine from '@replacement/engine';
-import {
-  runLatexdiffForRound,
-  runLatexdiffBetweenRounds,
-  LaTeXdiffResult,
-} from '@latex/latexdiff';
-import { compileLatex2Pdf } from '@latex/texTools';
-import { checkToolInstalled } from '@utils/system';
 import { runLatexFormatter } from '@latex/texFormatter';
+import { XmlOutputManager } from './XmlOutputManager';
+import { LatexDiffManager } from './LatexDiffManager';
+import { StatisticsReporter } from './StatisticsReporter';
+import { NamedOutputFile } from './types';
+import { getOutputFileName } from '@utils/outputFileUtils';
 
 // Local imports - agent components
 import { AgentConfig } from '@agent/core/AgentConfig';
 import { AgentSetting } from '@agent/core/AgentDataclass';
 import { AgentStateGlobal, AgentStateRound } from '@agent/core/AgentState';
-import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 
 // Local imports - types
-import { TokenUsageStats } from '@/types/UsageTypes';
-
-/** Generates output filename incorporating model and round information. */
-export function getOutputFileName(
-  inputFile: string,
-  agent: string,
-  model: string,
-  outputExt: string,
-  currRound: number,
-  editedFile?: string,
-): string {
-  const { dir, name: fileName } = path.parse(inputFile);
-  const agentFirstNameChunk = agent.split('_')[0];
-
-  let newRound = currRound;
-  if (editedFile) {
-    const match = editedFile.match(/_r(\d+)_/);
-    const editedRound = match ? parseInt(match[1]) : 0;
-    newRound += editedRound + 1;
-  }
-
-  const outputBaseName = `${fileName}_${agentFirstNameChunk}_r${newRound}_${model}.${outputExt}`;
-  const outputFile = path.join(dir, outputBaseName);
-  return outputFile;
-}
-
-/** Pair of original source name and generated output path. */
-export interface NamedOutputFile {
-  source: string;
-  path: string;
-}
 
 /** Handles output file processing and validation for agent responses. */
 export class OutputHandler {
@@ -75,6 +29,9 @@ export class OutputHandler {
   public processGroupId?: string;
   protected logger: AgentLogger;
   protected channel: string;
+  private xmlManager: XmlOutputManager;
+  private diffManager: LatexDiffManager;
+  private statsReporter: StatisticsReporter;
 
   constructor(
     agentSetting: AgentSetting,
@@ -93,6 +50,24 @@ export class OutputHandler {
     this.baseFiles = baseFiles;
     this.logger = logger || new AgentLogger('OutputHandler');
     this.channel = this.logger.channelId;
+
+    this.xmlManager = new XmlOutputManager(
+      this.agentSetting,
+      this.agentConfig,
+      this.logger,
+    );
+    this.diffManager = new LatexDiffManager(
+      this.agentSetting,
+      this.outputFiles,
+      this.baseFiles,
+      this.logger,
+      this.channel,
+    );
+    this.statsReporter = new StatisticsReporter(
+      this.modelHandler,
+      this.channel,
+      this.logger,
+    );
   }
 
   /**
@@ -157,20 +132,7 @@ export class OutputHandler {
 
   /** Processes XML content by filtering tags and applying replacements. */
   public async processXmlContent(content: string): Promise<string> {
-    content = replacementEngine.applyNonRegex(content);
-
-    const latexXmlReplacements = getReplacementsByCategory('latex_xml');
-    if (latexXmlReplacements) {
-      content = applyReplacements(content, latexXmlReplacements);
-    }
-
-    const scratchpadXmlReplacements =
-      getReplacementsByCategory('scratchpad_xml');
-    if (scratchpadXmlReplacements) {
-      content = applyReplacements(content, scratchpadXmlReplacements);
-    }
-
-    return content;
+    return this.xmlManager.processXmlContent(content);
   }
 
   /**
@@ -179,23 +141,6 @@ export class OutputHandler {
    * @param operation Description of the operation being performed
    * @param groupId The group ID for logging context
    */
-  private logLatexdiffResult(
-    result: LaTeXdiffResult,
-    operation: string = 'latexdiff',
-    groupId?: string,
-  ): void {
-    if (result.success) {
-      this.logger.debug(
-        `Successfully generated ${operation} file: ${result.diffFileName}`,
-        groupId,
-      );
-    } else {
-      this.logger.warn(
-        `Failed to generate ${operation}: ${result.message}`,
-        groupId,
-      );
-    }
-  }
 
   /**
    * Runs all latexdiff comparisons for the current round.
@@ -210,465 +155,27 @@ export class OutputHandler {
     currRound: number,
     groupId?: string,
   ): Promise<void> {
-    const diffProcessGroupId = groupId ?? this.logger.getActiveGroupId();
-
-    try {
-      // Check if latexdiff is installed before proceeding
-      if (!(await checkToolInstalled('latexdiff'))) {
-        this.logger.warn(
-          'Skipping latexdiff operations - latexdiff not installed',
-          diffProcessGroupId,
-        );
-        return;
-      }
-
-      // Ensure we have output files for the current round
-      const outputFiles = this.outputFiles[currRound] || [];
-      if (outputFiles.length === 0) {
-        this.logger.warn(
-          `No output files found for round ${currRound}, skipping latexdiff operations`,
-          diffProcessGroupId,
-        );
-        return;
-      }
-
-      // Log debugging information within the group
-      this.logger.debug(`Base files: ${this.baseFiles}`, diffProcessGroupId);
-      this.logger.debug(
-        `r${currRound} output files: ${outputFiles}`,
-        diffProcessGroupId,
-      );
-
-      // Create a mapping between base files and output files
-      const baseToOutputMap = createFileMapping(
-        this.baseFiles,
-        outputFiles,
-        'contains',
-      );
-
-      this.logger.debug(
-        `Matched base files to output files: ${Array.from(
-          baseToOutputMap.entries(),
-        )
-          .map(
-            ([base, output]) =>
-              `${path.basename(base)} -> ${path.basename(output)}`,
-          )
-          .join(', ')}`,
-        diffProcessGroupId,
-      );
-
-      // 1. ROUND DIFFS: Comparing original input to current output (only in rewrite mode)
-      if (this.agentSetting.isRewrite) {
-        this.logger.debug(
-          `Running round-based latexdiff operations`,
-          diffProcessGroupId,
-        );
-
-        // Generate diffs based on our matched file pairs
-        for (const [baseFile, outputFile] of baseToOutputMap.entries()) {
-          // Call latexdiff specialized for rounds
-          const result = await runLatexdiffForRound(
-            baseFile,
-            outputFile,
-            currRound,
-          );
-
-          this.logLatexdiffResult(result, 'round-diff', diffProcessGroupId);
-
-          if (result.success && result.diffFileName) {
-            const diffPath = path.join(
-              path.dirname(baseFile),
-              result.diffFileName,
-            );
-            const buildDir = path.join(path.dirname(diffPath), 'build');
-            await compileLatex2Pdf(diffPath, this.channel, buildDir);
-          }
-        }
-      }
-
-      // 2. SEQUENTIAL ROUND DIFFS: Comparing previous round to current round
-      if (currRound > 0) {
-        this.logger.debug(
-          `Running between-rounds latexdiff operations`,
-          diffProcessGroupId,
-        );
-
-        const prevOutputFiles = this.outputFiles[currRound - 1] || [];
-
-        // Create a mapping between previous round files and current round files
-        const prevToCurrentMap = createFileMapping(
-          prevOutputFiles,
-          outputFiles,
-          'basename',
-          true, // Enable round-aware matching
-        );
-
-        this.logger.debug(
-          `Matched previous round files to current round files: ${Array.from(
-            prevToCurrentMap.entries(),
-          )
-            .map(
-              ([prev, curr]) =>
-                `${path.basename(prev)} -> ${path.basename(curr)}`,
-            )
-            .join(', ')}`,
-          diffProcessGroupId,
-        );
-
-        // Generate diffs based on our matched file pairs between rounds
-        for (const [
-          prevOutputFile,
-          currOutputFile,
-        ] of prevToCurrentMap.entries()) {
-          // Call latexdiff specialized for between-rounds
-          const result = await runLatexdiffBetweenRounds(
-            prevOutputFile,
-            currOutputFile,
-          );
-
-          this.logLatexdiffResult(
-            result,
-            'between-rounds-diff',
-            diffProcessGroupId,
-          );
-
-          if (result.success && result.diffFileName) {
-            const diffPath = path.join(
-              path.dirname(prevOutputFile),
-              result.diffFileName,
-            );
-            const buildDir = path.join(path.dirname(diffPath), 'build');
-            await compileLatex2Pdf(diffPath, this.channel, buildDir);
-          }
-        }
-      }
-    } catch (err) {
-      this.logger.error(
-        `Error during latexdiff processing: ${err instanceof Error ? err.message : String(err)}`,
-        diffProcessGroupId,
-      );
-    }
+    await this.diffManager.handleLatexdiffofOutput(currRound, groupId);
   }
 
   /** Processes single output file with XML splitting and filtering. */
   public async processSingleXmlOutput(
     outputFile: string,
   ): Promise<NamedOutputFile> {
-    this.logger.debug(`Splitting scratchpad output XML: ${outputFile}`);
-
-    const processedOutputFile = await this.splitScratchpadOutputXml(
-      outputFile,
-      this.agentSetting.documentTag,
-    );
-
-    const xmlContent = await WorkspaceFS.readFile(outputFile);
-    let original = '';
-    const nameMatch = xmlContent.match(/<document[^>]*name="(.*?)"[^>]*>/);
-    if (nameMatch && nameMatch[1]) {
-      original = nameMatch[1].trim();
-    }
-
-    const content = await WorkspaceFS.readFile(processedOutputFile);
-    await WorkspaceFS.writeFile(processedOutputFile, content);
-
-    // Use the extracted document name when available. Otherwise use the
-    // input file path for consistent display with multiple file outputs.
-    return {
-      source: original || this.agentConfig.inputFile,
-      path: processedOutputFile,
-    };
+    return this.xmlManager.processSingleXmlOutput(outputFile);
   }
 
   /** Processes multiple output files with XML splitting and filtering. */
   public async processMultipleXmlOutputs(
     outputFile: string,
   ): Promise<NamedOutputFile[]> {
-    this.logger.debug(
-      `Splitting multiple scratchpad output XML: ${outputFile}`,
-    );
-    const processedOutputFiles = await this.splitScratchpadMultipleOutputXml(
-      outputFile,
-      this.agentSetting.documentTag,
-    );
-    return processedOutputFiles;
+    return this.xmlManager.processMultipleXmlOutputs(outputFile);
   }
-
-  /**
-   * Fallback extraction for single document case using regex when XML parsing fails
-   * @private
-   */
-  private extractDocumentbyRegex(
-    outputContent: string,
-    documentTag: string,
-  ): string | null {
-    try {
-      const fallbackContent = xmlUtils.extractTextFromTag(
-        outputContent,
-        documentTag,
-      );
-      if (fallbackContent) {
-        this.logger.info(
-          `Successfully extracted ${documentTag} using fallback method`,
-        );
-        return fallbackContent;
-      }
-      this.logger.error(
-        `No ${documentTag} found in output file using fallback method`,
-      );
-      return null;
-    } catch (fallbackErr) {
-      this.logger.error(
-        `Failed fallback extraction: ${fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr)}`,
-      );
-      return null;
-    }
-  }
-
-  /**
-   * Fallback extraction for multiple documents case using regex when XML parsing fails
-   * @private
-   */
-  private extractMultipleDocumentsbyRegex(
-    outputContent: string,
-    documentTag: string,
-  ): Array<{ content: string; name: string }> | null {
-    try {
-      const fallbackDocuments = xmlUtils.extractMultipleTextFromTag(
-        outputContent,
-        documentTag,
-      );
-
-      if (fallbackDocuments.length > 0) {
-        this.logger.info(
-          `Successfully extracted ${fallbackDocuments.length} documents using fallback method`,
-        );
-        return fallbackDocuments;
-      }
-
-      this.logger.error(
-        `No documents found in output file using fallback method`,
-      );
-      return null;
-    } catch (fallbackErr) {
-      this.logger.error(
-        `Failed fallback extraction: ${fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr)}`,
-      );
-      return null;
-    }
-  }
-
-  /**
-   * Splits XML output into separate files for document and scratchpad content.
-   * Handles CDATA wrapping and XML parsing.
-   */
-  async splitScratchpadOutputXml(
-    outputFile: string,
-    documentTag: string,
-    thinkingTag: string = 'scratchpad',
-  ): Promise<string> {
-    const { dir, name, ext } = path.parse(outputFile);
-    const texFile = path.join(dir, `${name}.tex`);
-
-    let outputContent = await WorkspaceFS.readFile(outputFile);
-
-    const tagsToWrap = [documentTag, thinkingTag];
-    outputContent = xmlUtils.addCdataToTags(outputContent, tagsToWrap);
-
-    try {
-      const parser = new XMLParser({
-        ignoreAttributes: false,
-        // preserveOrder: true,
-        parseTagValue: true,
-        textNodeName: 'content',
-        attributeNamePrefix: '',
-      });
-      const root = parser.parse(outputContent);
-
-      const latexDocument = xmlUtils.extractContentFromXMLbyTag(
-        root,
-        documentTag,
-      );
-      if (latexDocument) {
-        await WorkspaceFS.writeFile(texFile, latexDocument);
-        return texFile;
-      } else {
-        this.logger.warn(
-          `No ${documentTag} found in parsed XML, attempting fallback extraction...`,
-        );
-        // Try fallback extraction using regex method
-        const fallbackContent = this.extractDocumentbyRegex(
-          outputContent,
-          documentTag,
-        );
-        if (fallbackContent) {
-          await WorkspaceFS.writeFile(texFile, fallbackContent);
-          return texFile;
-        }
-        return texFile;
-      }
-    } catch (err) {
-      this.logger.warn(
-        `Failed to parse XML content: ${err instanceof Error ? err.message : String(err)}, attempting fallback extraction...`,
-      );
-      // Try fallback extraction if XML parsing fails
-      const fallbackContent = this.extractDocumentbyRegex(
-        outputContent,
-        documentTag,
-      );
-      if (fallbackContent) {
-        await WorkspaceFS.writeFile(texFile, fallbackContent);
-        return texFile;
-      }
-      // Re-throw the original error if fallback also failed
-      throw err;
-    }
-  }
-
-  /**
-   * Splits XML output containing multiple documents into separate files.
-   * Handles CDATA wrapping and XML parsing for each document.
-   */
-  async splitScratchpadMultipleOutputXml(
-    outputFile: string,
-    documentTag: string,
-    thinkingTag: string = 'scratchpad',
-  ): Promise<NamedOutputFile[]> {
-    let outputContent = await WorkspaceFS.readFile(outputFile);
-
-    const tagsToWrap = [thinkingTag, 'document'];
-    outputContent = xmlUtils.addCdataToTagsMultiple(outputContent, tagsToWrap);
-
-    try {
-      const parser = new XMLParser({
-        ignoreAttributes: false,
-        // preserveOrder: false,
-        parseTagValue: true,
-        textNodeName: 'content',
-        attributeNamePrefix: '',
-      });
-      const root = parser.parse(outputContent);
-
-      const documents = xmlUtils.extractContentFromXMLbyTagMultiple(
-        root,
-        documentTag,
-      );
-      if (documents) {
-        return this.processMultipleLatexDocuments(documents, outputFile);
-      } else {
-        this.logger.warn(
-          `No ${documentTag} found in parsed XML, attempting fallback extraction...`,
-        );
-        // Try fallback extraction using regex for the document container
-        const fallbackDocuments = this.extractMultipleDocumentsbyRegex(
-          outputContent,
-          documentTag,
-        );
-        if (fallbackDocuments) {
-          return this.processMultipleLatexDocuments(
-            fallbackDocuments,
-            outputFile,
-          );
-        }
-        return [];
-      }
-    } catch (err) {
-      this.logger.warn(
-        `Failed to parse XML content: ${err instanceof Error ? err.message : String(err)}, attempting fallback extraction...`,
-      );
-      const fallbackDocuments = this.extractMultipleDocumentsbyRegex(
-        outputContent,
-        documentTag,
-      );
-      if (fallbackDocuments) {
-        return this.processMultipleLatexDocuments(
-          fallbackDocuments,
-          outputFile,
-        );
-      }
-      // Re-throw the original error if fallback also failed
-      throw err;
-    }
-  }
-
-  /** Processes LaTeX documents into separate output files. */
-  async processMultipleLatexDocuments(
-    latexDocuments: Array<{ content: string; name: string }>,
-    outputFile: string,
-  ): Promise<NamedOutputFile[]> {
-    const outputFiles: NamedOutputFile[] = [];
-    const outputParts = path.basename(outputFile).split('_');
-    const agent = outputParts.at(-3) ?? '';
-    const model = outputParts.at(-1)?.split('.')[0] ?? '';
-
-    const roundMatch = outputFile.match(/_r(\d+)_/);
-    const currRound = roundMatch ? parseInt(roundMatch[1]) : 0;
-
-    for (const doc of latexDocuments) {
-      // Skip documents with empty/undefined name or content
-      if (!doc.name || doc.name === 'unknown' || !doc.content) {
-        this.logger.warn(`Skipping document with empty name or content`);
-        continue;
-      }
-
-      const source = doc.name.trim();
-      // Skip if source is empty after trimming
-      if (!source) {
-        this.logger.warn(
-          `Skipping document with empty source name after trimming`,
-        );
-        continue;
-      }
-
-      const { ext } = path.parse(source);
-      const extension = ext.replace('.', '') || 'tex';
-      const texFile = getOutputFileName(
-        source,
-        agent,
-        model,
-        extension,
-        currRound,
-      );
-      await WorkspaceFS.writeFile(texFile, doc.content.trim());
-      outputFiles.push({ source, path: texFile });
-      this.logger.debug(
-        `XML Source: ${source} -> TeX file written: ${texFile}`,
-      );
-    }
-
-    return outputFiles;
-  }
-
-  /** Validates and fixes XML structure in output file. */
-  // TODO: use XML.Validator in the future [this function is a bit outdated]
   async ensureCorrectXmlStructure(
     filePath: string,
     documentTag: string,
   ): Promise<void> {
-    this.logger.debug(`Ensuring correct XML structure: ${filePath}`);
-    let content = await WorkspaceFS.readFile(filePath);
-
-    content = await this.processXmlContent(content);
-
-    // if (
-    //   content.startsWith('<scratchpad>') ||
-    //   content.startsWith('<rebuttal_package>')
-    // ) {
-
-    if (!content.endsWith(`</${documentTag}>`)) {
-      if (
-        !content.includes(`</${documentTag}>`) &&
-        content.includes(`<${documentTag}>`)
-      ) {
-        content += `\n</${documentTag}>`;
-      } else {
-        content = content.replace(new RegExp(`</${documentTag}>.*$`, 's'), '');
-        if (content.includes(`<${documentTag}>`)) {
-          content += `\n<${documentTag}>`;
-        }
-      }
-    }
-    await WorkspaceFS.writeFile(filePath, content);
+    await this.xmlManager.ensureCorrectXmlStructure(filePath, documentTag);
   }
 
   /** Prints statistics about token usage and costs */
@@ -676,144 +183,7 @@ export class OutputHandler {
     stateGlobal: AgentStateGlobal,
     groupId?: string,
   ): Promise<void> {
-    const statsGroupId = groupId ?? this.logger.getActiveGroupId();
-
-    try {
-      this.logger.debug('=== Task Statistics ===', statsGroupId);
-
-      // Token usage statistics
-      this.logger.debug(
-        `Total input tokens  : ${stateGlobal.totalInputTokens}`,
-        statsGroupId,
-      );
-      this.logger.debug(
-        `Total output tokens : ${stateGlobal.totalOutputTokens}`,
-        statsGroupId,
-      );
-
-      // Calculate caching statistics if model supports either type of caching
-      if (
-        this.modelHandler.capabilities.supportsPromptCaching ||
-        this.modelHandler.capabilities.supportsAutoPromptCaching
-      ) {
-        this.logger.debug(
-          `Total input tokens (cache read): ${stateGlobal.totalCacheReadInputTokens}`,
-          statsGroupId,
-        );
-
-        // Only show cache creation for Anthropic models (which use explicit caching)
-        if (this.modelHandler.capabilities.supportsPromptCaching) {
-          this.logger.debug(
-            `Total input tokens (cache create): ${stateGlobal.totalCacheCreationInputTokens}`,
-            statsGroupId,
-          );
-        }
-
-        // Calculate percentage cached
-        let totalCacheableTokens: number;
-        if (this.modelHandler.capabilities.supportsPromptCaching) {
-          // For Anthropic: include both read and creation tokens
-          totalCacheableTokens =
-            stateGlobal.totalCacheCreationInputTokens +
-            stateGlobal.totalCacheReadInputTokens;
-        } else {
-          // For OpenAI auto-caching: only use input tokens as base
-          totalCacheableTokens = stateGlobal.totalInputTokens;
-        }
-
-        const percentageCached =
-          totalCacheableTokens > 0
-            ? (stateGlobal.totalCacheReadInputTokens / totalCacheableTokens) *
-              100
-            : 0;
-        this.logger.debug(
-          `Percentage cached: ${percentageCached.toFixed(2)}%`,
-          statsGroupId,
-        );
-      }
-
-      // Print reasoning tokens if model supports it
-      if (this.modelHandler.capabilities.supportsReasoning) {
-        this.logger.debug(
-          `Total reasoning tokens: ${stateGlobal.totalReasoningTokens}`,
-          statsGroupId,
-        );
-      }
-
-      if (stateGlobal.totalToolUseTokens > 0) {
-        this.logger.debug(
-          `Total tool use tokens: ${stateGlobal.totalToolUseTokens}`,
-          statsGroupId,
-        );
-      }
-
-      // Format token usage reporting by model provider
-      let responseUsage: any = {};
-      if (this.modelHandler.isOpenai) {
-        if (this.modelHandler.capabilities.supportsAutoPromptCaching) {
-          responseUsage = {
-            prompt_tokens: stateGlobal.totalInputTokens,
-            completion_tokens: stateGlobal.totalOutputTokens,
-            // Note: OpenAI doesn't provide tool_use_tokens in their API
-            prompt_tokens_details: {
-              cached_tokens: stateGlobal.totalCacheReadInputTokens,
-            },
-            completion_tokens_details: {
-              reasoning_tokens: stateGlobal.totalReasoningTokens,
-            },
-          };
-        } else {
-          responseUsage = {
-            prompt_tokens: stateGlobal.totalInputTokens,
-            completion_tokens: stateGlobal.totalOutputTokens,
-            // Note: OpenAI doesn't provide tool_use_tokens in their API
-            reasoning_tokens: stateGlobal.totalReasoningTokens,
-            cached_tokens: stateGlobal.totalCacheReadInputTokens,
-          };
-        }
-      } else if (this.modelHandler.isAnthropic) {
-        responseUsage = {
-          input_tokens: stateGlobal.totalInputTokens,
-          output_tokens: stateGlobal.totalOutputTokens,
-          // Note: Anthropic doesn't provide tool_use_tokens in their API
-          cache_read_input_tokens: stateGlobal.totalCacheReadInputTokens,
-          cache_creation_input_tokens:
-            stateGlobal.totalCacheCreationInputTokens,
-        };
-      } else if (this.modelHandler.isGoogle) {
-        responseUsage = {
-          promptTokens: stateGlobal.totalInputTokens,
-          completionTokens: stateGlobal.totalOutputTokens,
-          toolUseTokenCount: stateGlobal.totalToolUseTokens,
-        };
-      }
-
-      const cost = this.modelHandler.computePrice(responseUsage);
-
-      const provider = ProgressViewProvider.getInstance();
-      if (provider && statsGroupId) {
-        // Update group-level usage stats instead of stream-level
-        provider.updateGroupUsage(this.channel, statsGroupId, {
-          inputTokens:
-            stateGlobal.totalInputTokens +
-            (stateGlobal.totalCacheCreationInputTokens ?? 0),
-          outputTokens: stateGlobal.totalOutputTokens,
-          cost,
-        });
-      }
-
-      this.logger.debug(
-        `Total response time : ${stateGlobal.totalResponseTime.toFixed(1)} seconds`,
-        statsGroupId,
-      );
-      this.logger.debug(
-        `Total cost          : ${cost.toFixed(3)} USD`,
-        statsGroupId,
-      );
-      this.logger.debug('=======================', statsGroupId);
-    } catch (error) {
-      this.logger.error(`Error printing statistics: ${error}`, statsGroupId);
-    }
+    await this.statsReporter.printStatistics(stateGlobal, groupId);
   }
   /** Processes output files for current round. */
   protected async handleOutput(
@@ -830,3 +200,6 @@ export class OutputHandler {
     return this.outputFiles[currRound] || [];
   }
 }
+
+export { NamedOutputFile };
+export { getOutputFileName } from '@utils/outputFileUtils';
