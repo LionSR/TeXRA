@@ -47,7 +47,7 @@ import {
 } from '@agent/core/AgentDataclass';
 import { AgentStateRound, AgentStateGlobal } from '@agent/core/AgentState';
 import { ToolState } from '@agent/core/ToolState';
-import { ModelHandler } from '@agent/modelHandlers';
+import type { IModelHandler } from '@agent/modelHandlers';
 import { OutputHandler, NamedOutputFile } from '@agent/runtime/OutputHandler';
 import { messageToSkeleton } from '@agent/utils/messageUtils';
 import { BaseAgent } from '@agent/implementations/BaseAgent';
@@ -76,7 +76,7 @@ export abstract class BaseReflectionAgent extends BaseAgent {
   protected outputHandler: OutputHandler;
 
   constructor(
-    modelHandler: ModelHandler,
+    modelHandler: IModelHandler,
     agentConfig: AgentConfig,
     agentSetting: AgentSetting,
     agentPrompt: AgentPrompt,

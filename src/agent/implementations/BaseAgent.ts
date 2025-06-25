@@ -8,7 +8,7 @@ import { AgentLogger } from '@logger/AgentLogger';
 import { AgentConfig } from '../core/AgentConfig';
 import { AgentPrompt, AgentSetting } from '../core/AgentDataclass';
 import { IAgent } from '../core/IAgent';
-import { ModelHandler } from '../modelHandlers';
+import type { IModelHandler } from '../modelHandlers';
 import { buildUserVars } from '../utils/userVars';
 
 // Local imports - utilities
@@ -19,7 +19,7 @@ import { sleep } from '@utils/helpers';
  * Minimal abstract base class providing shared setup and interruption logic.
  */
 export abstract class BaseAgent implements IAgent {
-  protected modelHandler: ModelHandler;
+  protected modelHandler: IModelHandler;
   protected agentConfig: AgentConfig;
   protected agentSetting: AgentSetting;
   protected agentPrompt: AgentPrompt;
@@ -38,7 +38,7 @@ export abstract class BaseAgent implements IAgent {
   }
 
   constructor(
-    modelHandler: ModelHandler,
+    modelHandler: IModelHandler,
     agentConfig: AgentConfig,
     agentSetting: AgentSetting,
     agentPrompt: AgentPrompt,
