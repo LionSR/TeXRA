@@ -205,7 +205,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       return;
     }
 
-    const streams = Array.from(this._stateManager.logStreams.keys());
+    const streams = Array.from(this._stateManager.streams.map.keys());
 
     // Use stored active stream, fallback to first stream if active stream doesn't exist
     if (!streams.includes(this._stateManager.activeStream)) {
@@ -221,14 +221,14 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
 
     // Send output files for current stream
     const files =
-      this._stateManager.outputFiles.get(this._stateManager.activeStream) || {};
+      this._stateManager.files.map.get(this._stateManager.activeStream) || {};
     this._view.webview.postMessage({
       command: COMMANDS.UPDATE_FILES,
       stream: this._stateManager.activeStream,
       files,
     });
 
-    const usage = this._stateManager.usageStats.get(
+    const usage = this._stateManager.usage.map.get(
       this._stateManager.activeStream,
     );
     this._view.webview.postMessage({
@@ -276,9 +276,9 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     }
 
     // Create stream if it doesn't exist
-    if (!this._stateManager.logStreams.has(stream)) {
+    if (!this._stateManager.streams.map.has(stream)) {
       this.logger.debug(`Adding new stream to ProgressView: ${stream}`);
-      this._stateManager.logStreams.set(stream, []);
+      this._stateManager.streams.map.set(stream, []);
 
       // Set initial status to running for new streams
       if (!this._streamStatus.has(stream)) {
@@ -312,7 +312,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       messageType,
     };
 
-    const messages = this._stateManager.logStreams.get(stream)!;
+    const messages = this._stateManager.streams.map.get(stream)!;
     messages.push(logMessage);
 
     if (messages.length > 1000) {
@@ -336,7 +336,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     message: string,
     messageType: 'default' | 'scratchpad' | 'thinking' = 'default',
   ): void {
-    const messages = this._stateManager.logStreams.get(stream);
+    const messages = this._stateManager.streams.map.get(stream);
     if (!messages) {
       return;
     }
@@ -372,9 +372,9 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
 
     // Ensure the stream exists so the UI can create a new tab immediately
     // this seems to be the fix for the issue where the progress view panel is not shown when a new stream is created
-    if (!this._stateManager.logStreams.has(stream)) {
+    if (!this._stateManager.streams.map.has(stream)) {
       this.logger.debug(`Creating stream from addLogGroup: ${stream}`);
-      this._stateManager.logStreams.set(stream, []);
+      this._stateManager.streams.map.set(stream, []);
       if (!this._streamStatus.has(stream)) {
         this.updateStreamStatus(stream, STATUS.RUNNING);
       }
@@ -387,11 +387,11 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     }
 
     // Create stream groups mapping if it doesn't exist
-    if (!this._stateManager.taskGroups.has(stream)) {
-      this._stateManager.taskGroups.set(stream, new Map());
+    if (!this._stateManager.groups.map.has(stream)) {
+      this._stateManager.groups.map.set(stream, new Map());
     }
 
-    const streamGroups = this._stateManager.taskGroups.get(stream)!;
+    const streamGroups = this._stateManager.groups.map.get(stream)!;
     streamGroups.set(groupId, {
       id: groupId,
       name: groupName,
@@ -430,7 +430,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       return;
     }
 
-    const streamGroups = this._stateManager.taskGroups.get(stream);
+    const streamGroups = this._stateManager.groups.map.get(stream);
     if (!streamGroups) {
       return;
     }
@@ -464,23 +464,23 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     }
 
     // If no stream is provided or stream doesn't exist, use the first available stream
-    if (!stream || !this._stateManager.logStreams.has(stream)) {
-      const streams = Array.from(this._stateManager.logStreams.keys());
+    if (!stream || !this._stateManager.streams.map.has(stream)) {
+      const streams = Array.from(this._stateManager.streams.map.keys());
       stream = streams[0] ?? '';
     }
 
-    if (!this._stateManager.logStreams.has(stream)) {
+    if (!this._stateManager.streams.map.has(stream)) {
       return;
     }
 
-    const messages = this._stateManager.logStreams.get(stream)!;
+    const messages = this._stateManager.streams.map.get(stream)!;
     // Filter debug messages if debug mode is disabled
     const displayMessages = getConfig<boolean>('logger.debugMode', false)
       ? messages
       : messages.filter((msg) => msg.level !== 'debug');
 
     // Get groups for this stream
-    const groups = this._stateManager.taskGroups.get(stream) || new Map();
+    const groups = this._stateManager.groups.map.get(stream) || new Map();
 
     this._view.webview.postMessage({
       command: COMMANDS.UPDATE_LOGS,
@@ -497,7 +497,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     });
 
     // Send output files for this stream
-    const files = this._stateManager.outputFiles.get(stream) || {};
+    const files = this._stateManager.files.map.get(stream) || {};
     this._view.webview.postMessage({
       command: COMMANDS.UPDATE_FILES,
       stream: stream,
@@ -506,18 +506,18 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   }
 
   public getLogStreams(): Map<string, ColoredLogMessage[]> {
-    return this._stateManager.logStreams;
+    return this._stateManager.streams.map;
   }
 
   public getTaskGroups(): Map<string, Map<string, TaskGroup>> {
-    return this._stateManager.taskGroups;
+    return this._stateManager.groups.map;
   }
 
   public eraseStream(stream: string) {
-    if (this._stateManager.logStreams.has(stream)) {
-      this._stateManager.logStreams.get(stream)!.length = 0;
-      this._stateManager.taskGroups.delete(stream);
-      this._stateManager.outputFiles.delete(stream);
+    if (this._stateManager.streams.map.has(stream)) {
+      this._stateManager.streams.map.get(stream)!.length = 0;
+      this._stateManager.groups.map.delete(stream);
+      this._stateManager.files.map.delete(stream);
       this._stateManager.saveState();
       this.updateLogContent(stream);
     }
@@ -533,8 +533,8 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   }
 
   public deleteStream(stream: string) {
-    if (this._stateManager.logStreams.has(stream)) {
-      const streams = Array.from(this._stateManager.logStreams.keys());
+    if (this._stateManager.streams.map.has(stream)) {
+      const streams = Array.from(this._stateManager.streams.map.keys());
 
       // Case: This is the last stream - erase it first
       if (streams.length === 1) {
@@ -547,7 +547,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       // If the deleted stream was the active one, switch to another stream if available
       if (stream === this._stateManager.activeStream) {
         const remainingStreams = Array.from(
-          this._stateManager.logStreams.keys(),
+          this._stateManager.streams.map.keys(),
         );
         this._stateManager.activeStream = remainingStreams[0] ?? '';
       }
@@ -563,7 +563,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       return;
     }
 
-    if (!this._stateManager.logStreams.has(stream)) {
+    if (!this._stateManager.streams.map.has(stream)) {
       return;
     }
 
@@ -584,9 +584,9 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     stream: string,
     filesByRound: { [key: number]: OutputFileInfo[] },
   ): void {
-    const existing = this._stateManager.outputFiles.get(stream) || {};
+    const existing = this._stateManager.files.map.get(stream) || {};
     const merged = { ...existing, ...filesByRound };
-    this._stateManager.outputFiles.set(stream, merged);
+    this._stateManager.files.map.set(stream, merged);
     this._stateManager.saveState();
     if (this._view && stream === this._stateManager.activeStream) {
       this._view.webview.postMessage({
@@ -600,12 +600,12 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   public getOutputFiles(
     stream: string,
   ): { [key: number]: OutputFileInfo[] } | undefined {
-    return this._stateManager.outputFiles.get(stream);
+    return this._stateManager.files.map.get(stream);
   }
 
   public clearOutputFiles(stream: string): void {
-    if (this._stateManager.outputFiles.has(stream)) {
-      this._stateManager.outputFiles.delete(stream);
+    if (this._stateManager.files.map.has(stream)) {
+      this._stateManager.files.map.delete(stream);
       this._stateManager.saveState();
       if (this._view && stream === this._stateManager.activeStream) {
         this._view.webview.postMessage({
@@ -618,7 +618,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   }
 
   public updateStreamUsage(stream: string, usage: TokenUsageStats): void {
-    this._stateManager.usageStats.set(stream, usage);
+    this._stateManager.usage.map.set(stream, usage);
     this._stateManager.saveState();
     if (this._view && stream === this._stateManager.activeStream) {
       this._view.webview.postMessage({
@@ -633,7 +633,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     groupId: string,
     usage: TokenUsageStats,
   ): void {
-    const streamGroups = this._stateManager.taskGroups.get(stream);
+    const streamGroups = this._stateManager.groups.map.get(stream);
     if (streamGroups) {
       const group = streamGroups.get(groupId);
       if (group) {
@@ -654,11 +654,11 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   }
 
   public getStreamUsage(stream: string): TokenUsageStats | undefined {
-    return this._stateManager.usageStats.get(stream);
+    return this._stateManager.usage.map.get(stream);
   }
 
   public setActiveStream(stream: string) {
-    if (this._stateManager.logStreams.has(stream)) {
+    if (this._stateManager.streams.map.has(stream)) {
       this._stateManager.activeStream = stream;
       this._stateManager.saveState();
       this._updateWebview();
@@ -744,7 +744,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       );
 
       // Update all active groups for this stream
-      const streamGroups = this._stateManager.taskGroups.get(streamId);
+      const streamGroups = this._stateManager.groups.map.get(streamId);
       if (streamGroups) {
         const activeGroups = Array.from(streamGroups.entries()).filter(
           ([_, group]) => !group.endTime || group.status === STATUS.RUNNING,
@@ -777,7 +777,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     let updatedGroups = 0;
 
     // Check all streams for inconsistencies
-    for (const streamId of this._stateManager.logStreams.keys()) {
+    for (const streamId of this._stateManager.streams.map.keys()) {
       let wasUpdated = false;
 
       // Check if stream is running and mark as interrupted
@@ -796,7 +796,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       }
 
       // Check for running groups that need to be marked as interrupted
-      const streamGroups = this._stateManager.taskGroups.get(streamId);
+      const streamGroups = this._stateManager.groups.map.get(streamId);
       if (streamGroups) {
         const activeGroups = Array.from(streamGroups.entries()).filter(
           ([_, group]) => !group.endTime || group.status === STATUS.RUNNING,
