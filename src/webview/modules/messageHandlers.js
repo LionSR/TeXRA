@@ -27,6 +27,8 @@ export class MessageHandlers {
 
     // Cached DOM elements
     this._instructionEl = null;
+    // Track file list event handlers for cleanup
+    this._fileListHandlers = {};
 
     this._handlers = {
       ...this._createThemeHandlers(),
@@ -116,9 +118,48 @@ export class MessageHandlers {
       this._cleanupFn();
       this._cleanupFn = null;
     }
+    Object.values(this._fileListHandlers).forEach(({ container, handler }) => {
+      container.removeEventListener('click', handler);
+    });
+    this._fileListHandlers = {};
+    this._instructionEl = null;
   }
 
   /* ---------- Private helpers ---------- */
+  _setToggleIcon(element, isVisible) {
+    if (!element) return;
+    element.innerHTML = '';
+    const icon = document.createElement('i');
+    icon.className = isVisible ? CHEVRON_UP_CLASS : CHEVRON_DOWN_CLASS;
+    element.appendChild(icon);
+  }
+
+  _setupFileListHandler(fileType, container) {
+    if (!container || this._fileListHandlers[fileType]) return;
+    const handler = (e) => {
+      if (
+        e.target instanceof HTMLElement &&
+        e.target.classList.contains('remove-button')
+      ) {
+        e.stopPropagation();
+        const item = e.target.closest('.file-item');
+        if (item) {
+          item.remove();
+          const updated = Array.from(
+            container.querySelectorAll('.file-item'),
+          ).map((el) => el.dataset.path);
+          vscode.postMessage({
+            command: `update${capitalize(fileType)}Files`,
+            files: updated,
+          });
+          webviewState.update({ [`${fileType}Files`]: updated });
+        }
+      }
+    };
+    container.addEventListener('click', handler);
+    this._fileListHandlers[fileType] = { container, handler };
+  }
+
   _initializeDataRequests() {
     const dataRequests = [
       'getTheme',
@@ -224,11 +265,7 @@ export class MessageHandlers {
         }
 
         const toggleElement = safeGetElementById(toggleId);
-        if (toggleElement) {
-          toggleElement.innerHTML = `<i class="${
-            isVisible ? CHEVRON_UP_CLASS : CHEVRON_DOWN_CLASS
-          }"></i>`;
-        }
+        this._setToggleIcon(toggleElement, isVisible);
 
         if (filesArray.length > 0 && multipleFiles) {
           multipleFiles.innerHTML = '';
@@ -238,25 +275,8 @@ export class MessageHandlers {
             fileItem.dataset.path = file;
             fileItem.innerHTML = `${file} <span class="remove-button">-</span>`;
             multipleFiles.appendChild(fileItem);
-
-            const removeButton = fileItem.querySelector('.remove-button');
-            if (removeButton) {
-              removeButton.addEventListener('click', (e) => {
-                e.stopPropagation();
-                fileItem.remove();
-                const updatedFiles = Array.from(
-                  multipleFiles.querySelectorAll('.file-item'),
-                ).map((item) => item.dataset.path);
-                vscode.postMessage({
-                  command: `update${capitalize(fileType)}Files`,
-                  files: updatedFiles,
-                });
-                webviewState.update({
-                  [`${fileType}Files`]: updatedFiles,
-                });
-              });
-            }
           });
+          this._setupFileListHandler(fileType, multipleFiles);
         }
       }
     }
@@ -273,6 +293,10 @@ export class MessageHandlers {
   /* ---------- Command handlers ---------- */
   // Theme & debug
   handleSetTheme(message) {
+    if (!message || typeof message.theme !== 'string') {
+      console.warn('Invalid theme message:', message);
+      return;
+    }
     document.body.className = message.theme;
     this._postHandle();
   }
@@ -412,21 +436,31 @@ export class MessageHandlers {
   // Multi-file updates
   handleSetInputFiles(message) {
     fileList.update('inputFiles', 'toggleInputFiles', message.files);
+    this._setupFileListHandler('input', safeGetElementById('inputFiles'));
     this._postHandle();
   }
 
   handleSetReferenceFiles(message) {
     fileList.update('referenceFiles', 'toggleReferenceFiles', message.files);
+    this._setupFileListHandler(
+      'reference',
+      safeGetElementById('referenceFiles'),
+    );
     this._postHandle();
   }
 
   handleSetAuxiliaryFiles(message) {
     fileList.update('auxiliaryFiles', 'toggleAuxiliaryFiles', message.files);
+    this._setupFileListHandler(
+      'auxiliary',
+      safeGetElementById('auxiliaryFiles'),
+    );
     this._postHandle();
   }
 
   handleSetMediaFiles(message) {
     fileList.update('mediaFiles', 'toggleMediaFiles', message.files);
+    this._setupFileListHandler('media', safeGetElementById('mediaFiles'));
     this._postHandle();
   }
 
@@ -437,14 +471,13 @@ export class MessageHandlers {
       ...existingFiles,
       message.file,
     ]);
+    this._setupFileListHandler('media', listDiv);
 
     const container = safeGetElementById('mediaFilesContainer');
     if (container && container.style.display === 'none') {
       container.style.display = 'block';
       const toggleIcon = safeGetElementById('toggleMediaFiles');
-      if (toggleIcon) {
-        toggleIcon.innerHTML = `<i class="${CHEVRON_UP_CLASS}"></i>`;
-      }
+      this._setToggleIcon(toggleIcon, true);
     }
 
     this._postHandle();
@@ -452,6 +485,7 @@ export class MessageHandlers {
 
   handleSetOutputFiles(message) {
     fileList.update('outputFiles', 'toggleOutputFiles', message.files);
+    this._setupFileListHandler('output', safeGetElementById('outputFiles'));
     this._postHandle();
   }
 
