@@ -5,7 +5,7 @@ import {
   cleanupUI,
   instructionManager,
   toggleManager,
-} from './modules/uiHandlers.js';
+} from './modules/domHandlers.js';
 
 // Register handlers immediately so early messages aren't missed
 messageHandlers.setup({ requestData: false });
