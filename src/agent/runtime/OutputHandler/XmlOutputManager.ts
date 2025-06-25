@@ -6,6 +6,7 @@ import { AgentConfig } from '@agent/core/AgentConfig';
 import { AgentLogger } from '@logger/AgentLogger';
 import { WorkspaceFS } from '@utils/files';
 import xmlUtils from '@utils/text/xmlUtils';
+import { getOutputFileName } from '@utils/outputFileUtils';
 import {
   applyReplacements,
   getReplacementsByCategory,
@@ -110,6 +111,8 @@ export class XmlOutputManager {
         parseTagValue: true,
         textNodeName: 'content',
         attributeNamePrefix: '',
+        processEntities: false,
+        ignoreDeclaration: true,
       });
       const root = parser.parse(outputContent);
 
@@ -132,7 +135,9 @@ export class XmlOutputManager {
         await WorkspaceFS.writeFile(texFile, fallbackContent);
         return texFile;
       }
-      return texFile;
+      throw new Error(
+        `Failed to extract <${documentTag}> from ${path.basename(outputFile)}`,
+      );
     } catch (err) {
       this.logger.warn(
         `Failed to parse XML content: ${err instanceof Error ? err.message : String(err)}, attempting fallback extraction...`,
@@ -165,6 +170,8 @@ export class XmlOutputManager {
         parseTagValue: true,
         textNodeName: 'content',
         attributeNamePrefix: '',
+        processEntities: false,
+        ignoreDeclaration: true,
       });
       const root = parser.parse(outputContent);
 
@@ -267,9 +274,6 @@ export class XmlOutputManager {
       original = nameMatch[1].trim();
     }
 
-    const content = await WorkspaceFS.readFile(processedOutputFile);
-    await WorkspaceFS.writeFile(processedOutputFile, content);
-
     return {
       source: original || this.agentConfig.inputFile,
       path: processedOutputFile,
@@ -307,33 +311,10 @@ export class XmlOutputManager {
       } else {
         content = content.replace(new RegExp(`</${documentTag}>.*$`, 's'), '');
         if (content.includes(`<${documentTag}>`)) {
-          content += `\n<${documentTag}>`;
+          content += `\n</${documentTag}>`;
         }
       }
     }
     await WorkspaceFS.writeFile(filePath, content);
   }
-}
-
-function getOutputFileName(
-  inputFile: string,
-  agent: string,
-  model: string,
-  outputExt: string,
-  currRound: number,
-  editedFile?: string,
-): string {
-  const { dir, name: fileName } = path.parse(inputFile);
-  const agentFirstNameChunk = agent.split('_')[0];
-
-  let newRound = currRound;
-  if (editedFile) {
-    const match = editedFile.match(/_r(\d+)_/);
-    const editedRound = match ? parseInt(match[1]) : 0;
-    newRound += editedRound + 1;
-  }
-
-  const outputBaseName = `${fileName}_${agentFirstNameChunk}_r${newRound}_${model}.${outputExt}`;
-  const outputFile = path.join(dir, outputBaseName);
-  return outputFile;
 }
