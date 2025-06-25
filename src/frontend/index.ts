@@ -10,7 +10,7 @@ export * from './ui/instruction';
 export * from './ui/diffView';
 export * from './webview/html';
 export * from './terminal';
-export * from './agents/pathUtils';
+export * from './agents/AgentDirectoryManager';
 export * from './agents/register';
 export * from './secretManager';
 export * from './setup';
