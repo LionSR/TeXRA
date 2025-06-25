@@ -85,3 +85,5 @@ export class ToggleManager {
     });
   }
 }
+
+export const toggleManager = new ToggleManager();

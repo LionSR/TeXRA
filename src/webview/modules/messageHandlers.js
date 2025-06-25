@@ -6,11 +6,11 @@ import {
   CHEVRON_UP_CLASS,
   CHEVRON_DOWN_CLASS,
 } from '@common/webviewContext.js';
-import { setDebugMode as applyDebugMode } from './uiHandlers.js';
+import { settingsButtonManager } from './uiManagers/SettingsButtonManager.js';
 
+import { webviewEventBus } from './eventBus.js';
 import { fileList } from './uiManagers/FileList.js';
 import { fileSelect } from './uiManagers/FileSelect.js';
-import { webviewEventBus } from './eventBus.js';
 
 import { FILE_TYPES } from './constants.js';
 
@@ -216,7 +216,7 @@ export function setupMessageHandlers() {
       postHandle();
     },
     setDebugMode: (m) => {
-      applyDebugMode(m.debugMode);
+      settingsButtonManager.setDebugMode(m.debugMode);
       postHandle();
     },
     modelSelected: (m) => {
