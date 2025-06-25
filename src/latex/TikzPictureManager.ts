@@ -21,31 +21,31 @@ logger.initialize(CHANNEL);
 // Configure nunjucks
 nunjucks.configure({ autoescape: false });
 
-/**
- * Get the TikZ template from configuration or use default
- * @returns The TikZ template string
- */
-function getTikzTemplate(): string {
-  return getConfig<string>(
-    'latex.tikzTemplate',
-    `
-\\documentclass[tikz,border=10pt]{standalone}
-\\usepackage{tikz}
-\\usepackage{pgfplots}
-\\usetikzlibrary{positioning}
-\\usetikzlibrary{patterns}
-\\usetikzlibrary{arrows.meta, shapes.geometric, matrix, calc, decorations.pathreplacing}
-\\usetikzlibrary{shapes, arrows}
-
-\\begin{document}
-{{ tikzpicture }}
-\\end{document}
-`,
-  );
-}
-
 export class TikzPictureManager {
   constructor(private readonly channel: string = CHANNEL) {}
+
+  /**
+   * Get the TikZ template from configuration or use default
+   * @returns The TikZ template string
+   */
+  private getTikzTemplate(): string {
+    return getConfig<string>(
+      'latex.tikzTemplate',
+      `
+  \\documentclass[tikz,border=10pt]{standalone}
+  \\usepackage{tikz}
+  \\usepackage{pgfplots}
+  \\usetikzlibrary{positioning}
+  \\usetikzlibrary{patterns}
+  \\usetikzlibrary{arrows.meta, shapes.geometric, matrix, calc, decorations.pathreplacing}
+  \\usetikzlibrary{shapes, arrows}
+
+  \\begin{document}
+  {{ tikzpicture }}
+  \\end{document}
+  `,
+    );
+  }
 
   /**
    * Extract TikZ pictures with their labels from a LaTeX file
@@ -110,7 +110,7 @@ export class TikzPictureManager {
     channel: string = this.channel,
   ): Promise<string> {
     try {
-      const standaloneContent = await renderPrompt(getTikzTemplate(), {
+      const standaloneContent = await renderPrompt(this.getTikzTemplate(), {
         tikzpicture: tikzpictures,
       });
 
