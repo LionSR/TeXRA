@@ -42,51 +42,7 @@ export async function runLatexdiffvcMultiple(
   channel: string = CHANNEL,
 ): Promise<LaTeXdiffMultipleResult> {
   const runner = new LatexdiffRunner(channel);
-  if (!inputFiles || inputFiles.length === 0) {
-    await showLoggedMessage(channel, 'No input files provided');
-    return {
-      success: false,
-      results: { success: [], failed: [] },
-      message: 'No input files provided',
-    };
-  }
-  const results: { success: string[]; failed: string[] } = {
-    success: [],
-    failed: [],
-  };
-
-  for (const inputFile of inputFiles) {
-    try {
-      const result = await runner.runDiffVc(inputFile, commitHash);
-      if (result.success) {
-        results.success.push(inputFile);
-      } else {
-        results.failed.push(inputFile);
-      }
-    } catch (err) {
-      results.failed.push(inputFile);
-      logger.error(
-        channel,
-        `Error processing ${inputFile}: ${err instanceof Error ? err.message : String(err)}`,
-      );
-    }
-  }
-
-  const summary = [
-    'LaTeX diff operations completed:',
-    results.success.length > 0
-      ? `\nSuccessful:\n${results.success.join('\n')}`
-      : '',
-    results.failed.length > 0 ? `\nFailed:\n${results.failed.join('\n')}` : '',
-  ].join('');
-
-  logger.info(channel, summary);
-
-  return {
-    success: results.failed.length === 0,
-    results,
-    message: summary,
-  };
+  return runner.runDiffVcMultiple(inputFiles, commitHash);
 }
 
 export async function runLatexdiffForRound(
@@ -124,13 +80,4 @@ export async function runLatexdiffBetweenRounds(
     );
     return { success: false, message };
   }
-}
-
-export async function runLatexdiffMultiple(
-  inputFiles: string[],
-  editedFiles: string[],
-  channel: string = CHANNEL,
-): Promise<LaTeXdiffMultipleResult> {
-  const runner = new LatexdiffRunner(channel);
-  return runner.runDiffMultiple(inputFiles, editedFiles);
 }
