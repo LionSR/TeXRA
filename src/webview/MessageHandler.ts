@@ -41,7 +41,7 @@ export class WebviewMessageHandler {
     this.settingsManager = new SettingsManager();
     this.recordingManager = new RecordingManager(context);
     this.fileManager = new FileManager(context);
-    this.executionManager = new ExecutionManager(this.fileManager);
+    this.executionManager = new ExecutionManager();
     this.diffManager = new DiffManager();
     this.instructionManager = new InstructionManager(context);
     this.handlers = {

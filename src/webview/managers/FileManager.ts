@@ -7,6 +7,8 @@ import { workspace } from 'vscode';
 
 // Local imports - log
 import * as logger from '@logger/logUtils';
+import { uncapitalize } from '@frontend/ui/messageUtils';
+import { showLoggedMessage } from '@utils/errorHandlingUtils';
 
 // Local imports - utilities
 import { WorkspaceFS } from '@utils/files';
@@ -42,7 +44,7 @@ export class FileManager {
     if (file) {
       logger.debug(CHANNEL, `Selected ${singleFileType}: ${file}`);
       webviewView.webview.postMessage({
-        command: `${singleFileType.charAt(0).toLowerCase()}${singleFileType.slice(1)}Selected`,
+        command: `${uncapitalize(singleFileType)}Selected`,
         filePath: file,
       });
     }
@@ -180,7 +182,7 @@ export class FileManager {
 
     try {
       if (fileType === 'OutputFiles') {
-        selectedFiles = await this.selectOutputFiles(message.currentFile);
+        selectedFiles = await this.selectOutputFiles(message.inputFile);
       } else {
         const currentFileForMultiple = message.currentFile;
         const baseType = fileType.replace('Files', '');
@@ -189,7 +191,8 @@ export class FileManager {
           currentFileForMultiple,
         );
         if (selectedFiles === undefined) {
-          console.warn(
+          logger.warn(
+            CHANNEL,
             `Command texra.select${baseType}Files returned undefined`,
           );
           selectedFiles = null;
@@ -310,7 +313,7 @@ export class FileManager {
   async selectOutputFiles(currentInputFile: string): Promise<string[] | null> {
     const workspacePath = WorkspaceFS.getPath();
     if (!workspacePath) {
-      await vscode.window.showInformationMessage('No workspace folder open');
+      await showLoggedMessage(CHANNEL, 'No workspace folder open');
       return null;
     }
 
