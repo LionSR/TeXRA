@@ -10,7 +10,7 @@ import { WorkspaceFS } from '@utils/files';
 import { sleep } from '@utils/helpers';
 
 // Local imports - core
-import { TeXLinterFixAgent } from '../../AnthropicTool';
+import { TeXLinterFixAgent } from '@agent/toolUse';
 
 const CHANNEL = 'LinterCommands';
 logger.initialize(CHANNEL);
