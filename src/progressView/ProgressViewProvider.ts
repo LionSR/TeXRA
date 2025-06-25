@@ -16,6 +16,7 @@ import { TokenUsageStats } from '../types/UsageTypes';
 import { TaskGroup } from '../logger/LogTypes';
 import type { DiffStats } from '../types/DiffTypes';
 import { randomUUID } from 'crypto';
+import { onProgress } from '@eventBus/ProgressEventBus';
 
 // @ts-ignore - Import JavaScript module
 import { STATUS, COMMANDS } from './modules/constants.js';
@@ -93,6 +94,126 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
    */
   public async initialize(): Promise<void> {
     await this._stateManager.loadState();
+    this._disposables.push(
+      new vscode.Disposable(
+        onProgress('setActiveStream', (stream: string) =>
+          this.setActiveStream(stream),
+        ),
+      ),
+      new vscode.Disposable(
+        onProgress(
+          'updateStreamStatus',
+          (p: { stream: string; status: StreamStatusType }) =>
+            this.updateStreamStatus(p.stream, p.status),
+        ),
+      ),
+      new vscode.Disposable(
+        onProgress(
+          'addOutputFiles',
+          (p: { stream: string; filesByRound: { [key: number]: any[] } }) =>
+            this.addOutputFiles(p.stream, p.filesByRound),
+        ),
+      ),
+      new vscode.Disposable(
+        onProgress('clearOutputFiles', (stream: string) =>
+          this.clearOutputFiles(stream),
+        ),
+      ),
+      new vscode.Disposable(
+        onProgress(
+          'setTaskState',
+          (p: { streamId: string; taskState: TaskState }) =>
+            this.setTaskState(p.streamId, p.taskState),
+        ),
+      ),
+      new vscode.Disposable(
+        onProgress(
+          'updateGroupUsage',
+          (p: { stream: string; groupId: string; usage: TokenUsageStats }) =>
+            this.updateGroupUsage(p.stream, p.groupId, p.usage),
+        ),
+      ),
+      new vscode.Disposable(
+        onProgress('clearTaskOutput', (streamId: string) =>
+          this.clearTaskOutput(streamId),
+        ),
+      ),
+      new vscode.Disposable(
+        onProgress(
+          'updateStreamUsage',
+          (p: { stream: string; usage: TokenUsageStats }) =>
+            this.updateStreamUsage(p.stream, p.usage),
+        ),
+      ),
+      new vscode.Disposable(
+        onProgress(
+          'addLogMessage',
+          (p: {
+            stream: string;
+            message: string;
+            level: 'error' | 'warn' | 'info' | 'debug';
+            groupId?: string;
+            timestamp: number;
+            messageType: 'default' | 'scratchpad' | 'thinking';
+            id: string;
+          }) =>
+            this.addLogMessage(
+              p.stream,
+              p.message,
+              p.level,
+              p.groupId,
+              p.timestamp,
+              p.messageType,
+              p.id,
+            ),
+        ),
+      ),
+      new vscode.Disposable(
+        onProgress(
+          'updateLogMessage',
+          (p: {
+            stream: string;
+            id: string;
+            message: string;
+            messageType: 'default' | 'scratchpad' | 'thinking';
+          }) => this.updateLogMessage(p.stream, p.id, p.message, p.messageType),
+        ),
+      ),
+      new vscode.Disposable(
+        onProgress(
+          'addLogGroup',
+          (p: {
+            stream: string;
+            groupId: string;
+            groupName: string;
+            startTime: number;
+            status: StatusType;
+            endTime?: number;
+            parentGroupId?: string;
+          }) =>
+            this.addLogGroup(
+              p.stream,
+              p.groupId,
+              p.groupName,
+              p.startTime,
+              p.status,
+              p.endTime,
+              p.parentGroupId,
+            ),
+        ),
+      ),
+      new vscode.Disposable(
+        onProgress(
+          'updateLogGroup',
+          (p: {
+            stream: string;
+            groupId: string;
+            status: StatusType;
+            endTime?: number;
+          }) => this.updateLogGroup(p.stream, p.groupId, p.status, p.endTime),
+        ),
+      ),
+    );
   }
 
   public static getInstance(): ProgressViewProvider | undefined {

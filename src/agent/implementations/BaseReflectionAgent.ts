@@ -15,7 +15,7 @@ import {
   tikzPictureManager,
 } from '@latex';
 
-import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
+import { emitProgress } from '@eventBus/ProgressEventBus';
 
 import { diff_match_patch } from 'diff-match-patch';
 import type { DiffStats } from '@/types/DiffTypes';
@@ -519,61 +519,55 @@ export abstract class BaseReflectionAgent extends BaseAgent {
       throw error;
     }
 
-    const provider = ProgressViewProvider.getInstance();
-    if (provider) {
-      const roundOutputs = this.outputHandler.outputFiles[currRound] || [];
+    const roundOutputs = this.outputHandler.outputFiles[currRound] || [];
 
-      // Map output files to their original base files
-      const baseMap = createFileMapping(
-        this.baseFiles,
-        roundOutputs,
-        'contains',
-      );
+    // Map output files to their original base files
+    const baseMap = createFileMapping(this.baseFiles, roundOutputs, 'contains');
 
-      // Map output files to previous round files if available
-      const prevMap =
-        currRound > 0
-          ? createFileMapping(
-              this.outputHandler.outputFiles[currRound - 1] || [],
-              roundOutputs,
-              'basename',
-              true,
-            )
-          : new Map<string, string>();
+    // Map output files to previous round files if available
+    const prevMap =
+      currRound > 0
+        ? createFileMapping(
+            this.outputHandler.outputFiles[currRound - 1] || [],
+            roundOutputs,
+            'basename',
+            true,
+          )
+        : new Map<string, string>();
 
-      const fileInfos = [] as any[];
-      const originMap = new Map(
-        (this.outputHandler.outputMappings[currRound] || []).map((p) => [
-          p.path,
-          p.source,
-        ]),
-      );
-      for (const file of roundOutputs) {
-        const baseFile =
-          Array.from(baseMap.entries()).find(([, out]) => out === file)?.[0] ||
-          null;
-        const prevFile =
-          Array.from(prevMap.entries()).find(([, out]) => out === file)?.[0] ||
-          null;
-        const originalFile = originMap.get(file) || null;
+    const fileInfos = [] as any[];
+    const originMap = new Map(
+      (this.outputHandler.outputMappings[currRound] || []).map((p) => [
+        p.path,
+        p.source,
+      ]),
+    );
+    for (const file of roundOutputs) {
+      const baseFile =
+        Array.from(baseMap.entries()).find(([, out]) => out === file)?.[0] ||
+        null;
+      const prevFile =
+        Array.from(prevMap.entries()).find(([, out]) => out === file)?.[0] ||
+        null;
+      const originalFile = originMap.get(file) || null;
 
-        // Use utility to determine effective base for diff computation
-        const diffBase = getEffectiveBaseFile(baseFile, originalFile, file);
-        const stats = await this.computeDiffStats(diffBase, file);
+      // Use utility to determine effective base for diff computation
+      const diffBase = getEffectiveBaseFile(baseFile, originalFile, file);
+      const stats = await this.computeDiffStats(diffBase, file);
 
-        fileInfos.push({
-          path: file,
-          base: baseFile,
-          prev: prevFile,
-          original: originalFile,
-          ...stats,
-        });
-      }
-
-      provider.addOutputFiles(this.logger.channelId, {
-        [currRound]: fileInfos,
+      fileInfos.push({
+        path: file,
+        base: baseFile,
+        prev: prevFile,
+        original: originalFile,
+        ...stats,
       });
     }
+
+    emitProgress('addOutputFiles', {
+      stream: this.logger.channelId,
+      filesByRound: { [currRound]: fileInfos },
+    });
   }
 
   /**
