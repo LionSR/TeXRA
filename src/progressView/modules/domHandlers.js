@@ -3,7 +3,11 @@ import { progressViewState } from './progressViewState.js';
 import { LogEntryFormatter, MessageTimestampExtractor } from './formatters.js';
 import { TaskGroupsDom, LogEntriesDom } from './taskManagers.js';
 import { UsageSummary, UsageGroup } from './usageManagers.js';
-import { StreamTabs, Toolbar, Status, FileList, Events } from './uiManagers.js';
+import { StreamTabs } from './uiManagers/StreamTabs.js';
+import { Toolbar } from './uiManagers/Toolbar.js';
+import { Status } from './uiManagers/Status.js';
+import { FileList } from './uiManagers/FileList.js';
+import { Events } from './uiManagers/Events.js';
 
 /**
  * Manages all DOM operations for the progress view.
