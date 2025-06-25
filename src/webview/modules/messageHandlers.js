@@ -8,7 +8,7 @@ import {
 import { safeSetElementValue, safeGetElementById } from '@common/domUtils.js';
 import { capitalize, uncapitalize } from '@common/stringUtils.js';
 import { webviewState } from './webviewState.js';
-import { setDebugMode as applyDebugMode } from './uiHandlers.js';
+import { setDebugMode as applyDebugMode } from './domHandlers.js';
 
 // Local imports - UI managers
 import { fileList } from './uiManagers/FileList.js';
