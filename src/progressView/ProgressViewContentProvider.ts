@@ -50,7 +50,11 @@ export class ProgressViewContentProvider {
       const formattersUri = getWebviewUri('modules/formatters.js');
       const taskManagersUri = getWebviewUri('modules/taskManagers.js');
       const usageManagersUri = getWebviewUri('modules/usageManagers.js');
-      const uiManagersUri = getWebviewUri('modules/uiManagers.js');
+      const streamTabsUri = getWebviewUri('modules/uiManagers/StreamTabs.js');
+      const toolbarUri = getWebviewUri('modules/uiManagers/Toolbar.js');
+      const statusUri = getWebviewUri('modules/uiManagers/Status.js');
+      const fileListUri = getWebviewUri('modules/uiManagers/FileList.js');
+      const eventsUri = getWebviewUri('modules/uiManagers/Events.js');
       const constantsUri = getWebviewUri('modules/constants.js');
       const katexMacrosUri = getWebviewUri('modules/katexMacros.js');
       const templateUtilsUri = getCommonUri('modules/templateUtils.js');
@@ -83,7 +87,11 @@ export class ProgressViewContentProvider {
         formattersUri,
         taskManagersUri,
         usageManagersUri,
-        uiManagersUri,
+        streamTabsUri,
+        toolbarUri,
+        statusUri,
+        fileListUri,
+        eventsUri,
       });
     } catch (err) {
       logger.error(
