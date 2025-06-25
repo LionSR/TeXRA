@@ -14,7 +14,9 @@ import {
   compileLatex2Pdf,
   tikzPictureManager,
 } from '@latex';
+
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
+
 import { diff_match_patch } from 'diff-match-patch';
 import type { DiffStats } from '@/types/DiffTypes';
 
@@ -29,7 +31,9 @@ import {
   getFirstKCharsFromDocument,
   writePromptToXml,
 } from '@utils/promptUtils';
+
 import { loadTexraRules } from '@frontend/files/rules';
+
 import replacementEngine from '@replacement/engine';
 import { checkForMassiveRepetition } from '@utils/text/repetitionUtils';
 import xmlUtils from '@utils/text/xmlUtils';
