@@ -4,6 +4,7 @@ import { safeGetElementById } from '@common/domUtils.js';
 import {
   CHECK_BOXES_AUTO_EXTRACT,
   CHECK_BOXES_TOOL_USE,
+  CHECK_BOXES,
 } from '../constants.js';
 import { handleCheckboxChange } from '../fileHandlers.js';
 import { webviewState } from '../webviewState.js';
@@ -34,35 +35,40 @@ export class SettingsButtonManager {
   }
 
   _setupToggles() {
-    const settingsBtnMgr = this;
     this._addListener('toggleAutoExtract', 'click', (e) => {
       e.stopPropagation();
-      const options = document.getElementById('autoExtractOptions');
-      const visible = options.style.display === 'block';
-      options.style.display = visible ? 'none' : 'block';
+      const options = safeGetElementById('autoExtractOptions');
+      if (options) {
+        const visible = options.style.display === 'block';
+        options.style.display = visible ? 'none' : 'block';
+      }
       this.toggleManager.updateAutoToggleState();
     });
 
     this._addListener('toggleToolConfig', 'click', (e) => {
       e.stopPropagation();
-      const options = document.getElementById('toolConfigOptions');
-      const visible = options.style.display === 'block';
-      options.style.display = visible ? 'none' : 'block';
+      const options = safeGetElementById('toolConfigOptions');
+      if (options) {
+        const visible = options.style.display === 'block';
+        options.style.display = visible ? 'none' : 'block';
+      }
       this.toggleManager.updateToolConfigToggleState();
     });
 
     CHECK_BOXES_AUTO_EXTRACT.forEach((id) => {
-      this._addListener(id, 'change', function () {
-        settingsBtnMgr.toggleManager.updateAutoToggleState();
-        handleCheckboxChange.call(this);
+      this._addListener(id, 'change', () => {
+        this.toggleManager.updateAutoToggleState();
       });
     });
 
     CHECK_BOXES_TOOL_USE.forEach((id) => {
-      this._addListener(id, 'change', function () {
-        settingsBtnMgr.toggleManager.updateToolConfigToggleState();
-        handleCheckboxChange.call(this);
+      this._addListener(id, 'change', () => {
+        this.toggleManager.updateToolConfigToggleState();
       });
+    });
+
+    CHECK_BOXES.forEach((id) => {
+      this._addListener(id, 'change', handleCheckboxChange);
     });
 
     this._addListener('toggleLatexdiffs', 'click', () => {
@@ -83,7 +89,7 @@ export class SettingsButtonManager {
   _setupDropdowns() {
     this._addListener('agent', 'change', (e) => {
       const selectedAgent = e.target.value;
-      const reflectCheckbox = document.getElementById('reflect');
+      const reflectCheckbox = safeGetElementById('reflect');
       if (reflectCheckbox) {
         reflectCheckbox.checked = !selectedAgent.startsWith('correct');
       }
