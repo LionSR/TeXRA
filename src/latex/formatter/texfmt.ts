@@ -1,10 +1,8 @@
-// Third-party imports
-import * as vscode from 'vscode';
-
 // Local imports - log
 import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
+import { getConfig } from '@utils/config';
 import { executeCommand, checkToolInstalled } from '@utils/system';
 
 const CHANNEL = 'LaTeXCommands';
@@ -16,8 +14,7 @@ export async function runTexFmt(filePath: string): Promise<boolean> {
       return false;
     }
 
-    const config = vscode.workspace.getConfiguration('texra.latex');
-    const texfmtConfig = config.get<string>('texfmtConfig');
+    const texfmtConfig = getConfig<string>('latex.texfmtConfig');
 
     const command = ['tex-fmt'];
     if (texfmtConfig) {
