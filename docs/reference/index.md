@@ -86,7 +86,7 @@ Documentation of TeXRA's internal APIs:
 
 - Command API
 - Extension API
-- Model handler APIs
+- Model handler APIs (`IModelHandler` interface)
 - Agent framework interfaces
 
 ## Additional Resources

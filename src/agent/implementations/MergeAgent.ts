@@ -4,7 +4,7 @@ import * as path from 'path';
 // Local imports - agent components
 import { DirectAgent } from './DirectAgent';
 import { AgentStateRound, AgentStateGlobal } from '../core/AgentState';
-import { ModelHandler } from '@agent/modelHandlers';
+import type { IModelHandler } from '@agent/modelHandlers';
 import { AgentConfig } from '../core/AgentConfig';
 import { AgentSetting, AgentPrompt } from '../core/AgentDataclass';
 
@@ -14,7 +14,7 @@ import { AgentSetting, AgentPrompt } from '../core/AgentDataclass';
  */
 export class MergeAgent extends DirectAgent {
   constructor(
-    modelHandler: ModelHandler,
+    modelHandler: IModelHandler,
     agentConfig: AgentConfig,
     agentSetting: AgentSetting,
     agentPrompt: AgentPrompt,

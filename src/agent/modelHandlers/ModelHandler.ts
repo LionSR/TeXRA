@@ -18,6 +18,7 @@ import {
 import { checkMultipleToolsInstalled } from '@utils/system';
 import { getConfig } from '@utils/config';
 import type { ProviderStopReason } from './types/StopReasonTypes';
+import type { IModelHandler } from './types/IModelHandler';
 import { SecretManager, ApiProvider } from '@frontend/secretManager';
 
 // Local imports - agent components
@@ -55,7 +56,7 @@ interface MarkerFlags {
 /**
  * Abstract base class for model-specific handlers that manage API interactions, message processing, and response handling.
  */
-export abstract class ModelHandler {
+export abstract class ModelHandler implements IModelHandler {
   public config: ModelConfig;
   public capabilities: ModelCapabilities;
   public continueLimit: number;

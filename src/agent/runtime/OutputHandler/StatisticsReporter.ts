@@ -1,10 +1,11 @@
 import { AgentLogger } from '@logger/AgentLogger';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import { AgentStateGlobal } from '@agent/core/AgentState';
+import type { IModelHandler } from '@agent/modelHandlers';
 
 export class StatisticsReporter {
   constructor(
-    private readonly modelHandler: any,
+    private readonly modelHandler: IModelHandler,
     private readonly channel: string,
     private readonly logger: AgentLogger,
   ) {}
