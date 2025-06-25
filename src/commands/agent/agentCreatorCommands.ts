@@ -5,7 +5,7 @@ import type { MessageCreateParams } from '@anthropic-ai/sdk/resources/messages';
 
 // Local imports - utils
 import { SecretManager } from '@frontend/secretManager';
-import { getOrPromptForCustomAgentsDirectory } from '@frontend/agents/pathUtils';
+import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { promptToAddAgentToConfig } from '@frontend/agents/register';
 import * as logger from '@logger/logUtils';
 import { ANTHROPIC_MODELS } from '@model/providers/anthropicModels';
@@ -208,7 +208,7 @@ async function handleCreateAgentWithAI(context: vscode.ExtensionContext) {
       outputFilesYaml = files.map((f) => `    - ${f}`).join('\n');
     }
 
-    const targetDir = await getOrPromptForCustomAgentsDirectory();
+    const targetDir = await agentDirectories.ensureCustom();
     if (!targetDir) {
       return;
     }
