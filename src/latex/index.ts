@@ -1,9 +1,5 @@
 // Export TikZ-related functionality
-export {
-  extractTikzPicturesWithLabels,
-  createStandaloneLatexWithLabels,
-  extractAndCompileTikzPicturesWithLabels,
-} from './tikzpicture';
+export { TikzPictureManager, tikzPictureManager } from './TikzPictureManager';
 
 // Export figure extraction functionality
 export { extractFigurePathsFromLatex } from './extractFigure';
