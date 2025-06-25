@@ -1,5 +1,5 @@
 import { AgentLogger } from '@logger/AgentLogger';
-import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
+import { emitProgress } from '@eventBus/ProgressEventBus';
 import { AgentStateGlobal } from '@agent/core/AgentState';
 import type { IModelHandler } from '@agent/modelHandlers';
 
@@ -116,14 +116,17 @@ export class StatisticsReporter {
 
       const cost = this.modelHandler.computePrice(responseUsage);
 
-      const provider = ProgressViewProvider.getInstance();
-      if (provider && statsGroupId) {
-        provider.updateGroupUsage(this.channel, statsGroupId, {
-          inputTokens:
-            stateGlobal.totalInputTokens +
-            (stateGlobal.totalCacheCreationInputTokens ?? 0),
-          outputTokens: stateGlobal.totalOutputTokens,
-          cost,
+      if (statsGroupId) {
+        emitProgress('updateGroupUsage', {
+          stream: this.channel,
+          groupId: statsGroupId,
+          usage: {
+            inputTokens:
+              stateGlobal.totalInputTokens +
+              (stateGlobal.totalCacheCreationInputTokens ?? 0),
+            outputTokens: stateGlobal.totalOutputTokens,
+            cost,
+          },
         });
       }
 
