@@ -13,11 +13,10 @@ import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 
 // Local imports - latex utils
 import {
-  runLatexdiff,
-  runLatexdiffvc,
   runLatexdiffForRound,
   runLatexdiffBetweenRounds,
 } from '@latex/latexdiff';
+import { LatexdiffRunner } from '@latex/latexdiffRunner';
 import { checkToolInstalled } from '@utils/system';
 
 // Local imports - housekeeping
@@ -34,6 +33,7 @@ import { getAgentFirstNameChunk } from '@housekeeping/utils';
 const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);
 
+const runner = new LatexdiffRunner(CHANNEL);
 export function registerLatexdiffCommands(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand('texra.latexdiff', handleLatexdiff),
@@ -79,8 +79,8 @@ async function handleLatexdiff(
       return;
     }
 
-    // Get the result from runLatexdiff
-    const result = await runLatexdiff(fileToUse, editedFile, '_diff', false);
+    // Get the result from LatexdiffRunner
+    const result = await runner.runDiff(fileToUse, editedFile, '_diff', false);
 
     if (!result.success || !result.diffFileName) {
       throw new Error(result.message || 'Failed to generate diff file');
@@ -118,8 +118,8 @@ async function handleLatexdiffvc(
       return;
     }
 
-    // Get the result from runLatexdiffvc
-    const result = await runLatexdiffvc(fileToUse, commitHash);
+    // Get the result from LatexdiffRunner
+    const result = await runner.runDiffVc(fileToUse, commitHash);
 
     if (!result.success || !result.diffFileName) {
       throw new Error(result.message || 'Failed to generate diff file');
