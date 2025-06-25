@@ -156,7 +156,7 @@ export class AgentHistoryViewProvider implements vscode.WebviewViewProvider {
 
       const htmlPath = getHistoryViewPath('index.html');
       const scriptUri = getHistoryViewUri('script.js');
-      const styleUri = getHistoryViewUri('style.css');
+      const styleUri = getHistoryViewUri('styles/style.css');
 
       const domHandlersUri = getHistoryViewUri('modules/domHandlers.js');
       const historyEventsUri = getHistoryViewUri('modules/historyEvents.js');
