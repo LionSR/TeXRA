@@ -8,10 +8,10 @@ import { randomUUID } from 'crypto';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import { getConfig } from '@utils/config';
 import {
-  shouldUseConsolidatedChannel,
   getColorForLevel,
-  isAgentStream,
+  isAgentChannel,
   EMOJI_BY_LEVEL as emojis,
+  registerAgentChannel,
 } from '@utils/loggerUtils';
 import { TaskGroup } from './LogTypes';
 
@@ -70,7 +70,6 @@ class VSCodeTransport extends Transport {
   private channel: vscode.OutputChannel;
   private progressViewProvider?: ProgressViewProvider;
   private streamName: string;
-  private useConsolidatedChannel: boolean;
   private messageBuffer: {
     id: string;
     level: string;
@@ -85,14 +84,12 @@ class VSCodeTransport extends Transport {
   constructor(
     channel: vscode.OutputChannel,
     streamName: string,
-    useConsolidatedChannel: boolean,
     progressViewProvider?: ProgressViewProvider,
     opts?: Transport.TransportStreamOptions,
   ) {
     super(opts);
     this.channel = channel;
     this.streamName = streamName;
-    this.useConsolidatedChannel = useConsolidatedChannel;
     this.progressViewProvider = progressViewProvider;
   }
 
@@ -108,20 +105,16 @@ class VSCodeTransport extends Transport {
     const timeDisplay = timestamp.split(' ')[1].split('.')[0]; // Drop milliseconds for UI display
 
     // For consolidated channel, include the source channel in the message
-    const channelPrefix = this.useConsolidatedChannel
-      ? `[${this.streamName}] `
-      : '';
+    const channelPrefix = isAgentChannel(this.streamName)
+      ? ''
+      : `[${this.streamName}] `;
 
     // Plain format for output channel - no escaping needed but include better formatting
     // const formattedMessage = `${emoji} [${timestamp}] ${level.toUpperCase().padEnd(7)} ${channelPrefix}${message}`;
     const formattedMessage = `${emoji} [${timestamp}] ${channelPrefix}${message}`;
 
-    // Key behavior change: For agent streams, we ONLY write to their dedicated channel
-    // For non-agent streams, we write to the consolidated channel
-    // This prevents duplicate output in both places
-    if (this.useConsolidatedChannel || !isAgentStream(this.streamName)) {
-      this.channel.appendLine(formattedMessage);
-    }
+    // Write to the appropriate output channel (agent or consolidated)
+    this.channel.appendLine(formattedMessage);
 
     // Skip debug messages in ProgressView if debug mode is disabled
     if (level === 'debug' && !getConfig<boolean>('logger.debugMode', false)) {
@@ -130,7 +123,7 @@ class VSCodeTransport extends Transport {
     }
 
     // Skip progress view updates for consolidated channels
-    if (this.useConsolidatedChannel) {
+    if (!isAgentChannel(this.streamName)) {
       callback();
       return;
     }
@@ -193,7 +186,7 @@ class VSCodeTransport extends Transport {
     this.progressViewProvider = progressViewProvider;
 
     // Skip replay for consolidated channels
-    if (this.useConsolidatedChannel) {
+    if (!isAgentChannel(this.streamName)) {
       return;
     }
 
@@ -245,7 +238,7 @@ class VSCodeTransport extends Transport {
     this.activeGroupId = groupId;
 
     // Skip progress view updates for consolidated channels
-    if (this.useConsolidatedChannel) {
+    if (!isAgentChannel(this.streamName)) {
       return groupId;
     }
 
@@ -277,7 +270,7 @@ class VSCodeTransport extends Transport {
     group.status = status;
 
     // Skip progress view updates for consolidated channels
-    if (this.useConsolidatedChannel) {
+    if (!isAgentChannel(this.streamName)) {
       return;
     }
 
@@ -330,37 +323,34 @@ export function setProgressViewProvider(provider: ProgressViewProvider) {
   }
 }
 
-export function initialize(defaultChannel: string): void {
+export function initialize(defaultChannel: string, isAgent = false): void {
   // Create default logger if it doesn't exist
   if (!channelLoggers.has(defaultChannel)) {
-    createLoggerForChannel(defaultChannel);
+    createLoggerForChannel(defaultChannel, isAgent);
   }
 }
 
-function createLoggerForChannel(channel: string): winston.Logger {
+function createLoggerForChannel(
+  channel: string,
+  isAgent = false,
+): winston.Logger {
   // Check if channel already exists
   if (channelLoggers.has(channel)) {
     return channelLoggers.get(channel)!;
   }
 
-  const useConsolidatedChannel = shouldUseConsolidatedChannel(channel);
-
-  let outputChannel: vscode.OutputChannel;
-
-  if (useConsolidatedChannel) {
-    // Use the main TeXRA output channel for non-agent channels
-    outputChannel = getMainOutputChannel();
-  } else {
-    // Create a separate channel with the TeXRA prefix for agent channels
-    const channelName = 'TeXRA ' + channel;
-    outputChannel = vscode.window.createOutputChannel(channelName);
+  if (isAgent) {
+    registerAgentChannel(channel);
   }
+
+  const outputChannel = isAgentChannel(channel)
+    ? vscode.window.createOutputChannel('TeXRA ' + channel)
+    : getMainOutputChannel();
 
   // Create transport
   const transport = new VSCodeTransport(
     outputChannel,
     channel,
-    useConsolidatedChannel,
     globalProgressViewProvider,
   );
   channelTransports.set(channel, transport);

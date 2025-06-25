@@ -2,50 +2,24 @@
 import * as path from 'path';
 
 // Local imports
-import { getConfig } from './config';
+
+// Track channels explicitly registered as agent loggers
+const agentChannels = new Set<string>();
 
 /**
- * Determines if a stream name corresponds to an agent or contains agent information.
- * Agent streams are displayed in both the ProgressView and their own output channels.
- * Non-agent streams are consolidated into a single output channel.
+ * Register a channel as an agent logger. Agent loggers stream to
+ * the progress view and get their own output channel.
  */
-export function isAgentStream(streamName: string): boolean {
-  // Special cases that are always treated as agent streams
-  if (streamName.includes('merge')) {
-    return true;
-  }
-
-  // Get the list of agents from config
-  const agents = getConfig<string[]>('agents', [
-    'correct',
-    'polish',
-    'draw',
-    'ocr',
-    'paper2slide',
-    'paper2poster',
-    'transcribe_audio',
-    'merge',
-  ]);
-
-  // Check if the stream name starts with any agent name followed by '@' (agent@model: file format)
-  for (const agent of agents) {
-    if (
-      streamName.startsWith(`${agent}@`) ||
-      streamName.startsWith(`${agent}_multiple@`)
-    ) {
-      return true;
-    }
-  }
-  return false;
+export function registerAgentChannel(channel: string): void {
+  agentChannels.add(channel);
 }
 
 /**
- * Determines if a stream should use the consolidated output channel.
- * Agent streams get their own channel, all others (including executeAgent) use the consolidated channel.
+ * Determines if a stream corresponds to an agent logger.
+ * Channels are registered via {@link registerAgentChannel} when the logger is created.
  */
-export function shouldUseConsolidatedChannel(streamName: string): boolean {
-  // Only agent streams get dedicated channels and appear in the ProgressView
-  return !isAgentStream(streamName);
+export function isAgentChannel(channel: string): boolean {
+  return agentChannels.has(channel);
 }
 
 // Centralised emoji mapping for log levels

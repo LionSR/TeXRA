@@ -6,7 +6,8 @@ import { randomUUID } from 'crypto';
 import { WorkspaceStateKey, workspaceSM } from '@utils/stateManager';
 import { WorkspaceFS } from '@utils/files';
 import { objectToTaskState } from '@utils/config';
-import { shouldUseConsolidatedChannel } from '@utils/loggerUtils';
+import { isAgentChannel } from '@utils/loggerUtils';
+import { registerAgentChannel } from '@utils/loggerUtils';
 import { TaskState } from '@logger/TaskState';
 import { AgentLogger } from '@logger/AgentLogger';
 
@@ -93,12 +94,28 @@ export class ProgressStateManager {
    * Load all state from workspace storage
    */
   public async loadState(): Promise<void> {
+    this._registerSavedAgentChannels();
     await this._loadLogStreams();
     await this._loadTaskGroups();
     await this._loadOutputFiles();
     this._loadActiveStream();
     await this._loadTaskStates();
     await this._loadUsageStats();
+  }
+
+  /**
+   * Register channels found in persisted log streams so that they
+   * can be loaded before any loggers are created.
+   */
+  private _registerSavedAgentChannels(): void {
+    const saved = workspaceSM.get<{ [key: string]: unknown }>(
+      this._getWorkspaceKey(WorkspaceStateKey.LOG_STREAMS),
+    );
+    if (saved) {
+      for (const channel of Object.keys(saved)) {
+        registerAgentChannel(channel);
+      }
+    }
   }
 
   /**
@@ -125,7 +142,7 @@ export class ProgressStateManager {
       // Only load channels that should be persisted
       this._logStreams = new Map(
         Object.entries(savedState)
-          .filter(([channel]) => !shouldUseConsolidatedChannel(channel))
+          .filter(([channel]) => isAgentChannel(channel))
           .map(([stream, messages]) => [
             stream,
             messages.map((msg) => {
@@ -179,7 +196,7 @@ export class ProgressStateManager {
     if (savedGroups) {
       this._taskGroups = new Map(
         Object.entries(savedGroups)
-          .filter(([channel]) => !shouldUseConsolidatedChannel(channel))
+          .filter(([channel]) => isAgentChannel(channel))
           .map(([streamId, groups]) => [
             streamId,
             new Map(
@@ -221,7 +238,7 @@ export class ProgressStateManager {
       let totalFilesRemoved = 0;
 
       for (const [streamId, rounds] of Object.entries(savedFiles)) {
-        if (shouldUseConsolidatedChannel(streamId)) {
+        if (!isAgentChannel(streamId)) {
           continue;
         }
 
@@ -358,7 +375,7 @@ export class ProgressStateManager {
   private _saveLogStreams(): void {
     // Only save channels that should be persisted
     const persistentStreams = Array.from(this._logStreams.entries()).filter(
-      ([channel]) => !shouldUseConsolidatedChannel(channel),
+      ([channel]) => isAgentChannel(channel),
     );
     const stateObj = Object.fromEntries(persistentStreams);
     workspaceSM.update(
@@ -372,7 +389,7 @@ export class ProgressStateManager {
    */
   private _saveTaskGroups(): void {
     const persistentGroups = Array.from(this._taskGroups.entries())
-      .filter(([channel]) => !shouldUseConsolidatedChannel(channel))
+      .filter(([channel]) => isAgentChannel(channel))
       .map(([streamId, groups]) => [
         streamId,
         Object.fromEntries(groups.entries()),
