@@ -5,7 +5,7 @@ import {
   initializeDataRequests,
 } from './modules/messageHandlers.js';
 import {
-  setupUIHandlers,
+  initializeUI,
   instructionManager,
   toggleManager,
 } from './modules/uiHandlers.js';
@@ -25,7 +25,7 @@ setupMessageHandlers();
 
 // Setup UI when DOM is loaded
 document.addEventListener('DOMContentLoaded', function () {
-  setupUIHandlers();
+  initializeUI();
   toggleManager.updateToolConfigToggleState();
   toggleManager.updateAutoToggleState();
   toggleManager.setupDocumentListeners();

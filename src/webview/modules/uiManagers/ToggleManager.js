@@ -64,19 +64,22 @@ export class ToggleManager {
       const toggleToolConfig = safeGetElementById('toggleToolConfig');
       const toggleAutoExtract = safeGetElementById('toggleAutoExtract');
 
-      if (
-        !toggleToolConfig?.contains(e.target) &&
-        !toolConfigOptions?.contains(e.target)
-      ) {
+      const toolConfigTargetInsideToggle =
+        toggleToolConfig && toggleToolConfig.contains(e.target);
+      const toolConfigTargetInsideOptions =
+        toolConfigOptions && toolConfigOptions.contains(e.target);
+      if (!toolConfigTargetInsideToggle && !toolConfigTargetInsideOptions) {
         if (toolConfigOptions) {
           toolConfigOptions.style.display = 'none';
           this.updateToolConfigToggleState();
         }
       }
-      if (
-        !toggleAutoExtract?.contains(e.target) &&
-        !autoExtractOptions?.contains(e.target)
-      ) {
+
+      const autoExtractTargetInsideToggle =
+        toggleAutoExtract && toggleAutoExtract.contains(e.target);
+      const autoExtractTargetInsideOptions =
+        autoExtractOptions && autoExtractOptions.contains(e.target);
+      if (!autoExtractTargetInsideToggle && !autoExtractTargetInsideOptions) {
         if (autoExtractOptions) {
           autoExtractOptions.style.display = 'none';
           this.updateAutoToggleState();
