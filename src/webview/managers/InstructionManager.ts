@@ -34,84 +34,138 @@ export class InstructionManager {
     }, 100);
   }
 
+  /**
+   * Validate that the given file path is a non-empty value.
+   */
+  private _isValidFile(file?: string): boolean {
+    return !!file && file !== 'None' && file !== '';
+  }
+
+  /**
+   * Add a single file to the context when it passes validation.
+   */
+  private _addSingleFileIfValid(
+    context: FileContext,
+    contextKey: keyof FileContext,
+    file?: string,
+  ): void {
+    if (this._isValidFile(file)) {
+      (context as any)[contextKey] = file;
+    }
+  }
+
+  /**
+   * Add a list of files to the context when they are enabled and present.
+   */
+  private _addMultipleFilesIfValid(
+    context: FileContext,
+    contextKey: keyof FileContext,
+    active: boolean,
+    files?: string[],
+  ): void {
+    if (active && files && Array.isArray(files) && files.length > 0) {
+      (context as any)[contextKey] = files;
+    }
+  }
+
+  /**
+   * Call the text enhancement utility without any progress handling.
+   */
+  private async _polishInstructionText(
+    text: string,
+    context: FileContext,
+  ): Promise<{ success: boolean; text: string; error?: string }> {
+    return polishTextWithAI(text, context);
+  }
+
+  /**
+   * Show progress while polishing the instruction text.
+   */
+  private async _polishWithProgress(
+    text: string,
+    context: FileContext,
+    webviewView: vscode.WebviewView,
+  ): Promise<void> {
+    await vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: 'Polishing your instruction text',
+        cancellable: false,
+      },
+      async (progress) => {
+        try {
+          progress.report({ message: 'Preparing text and context...' });
+          await sleep(300);
+          progress.report({
+            message: 'Sending to AI for polishing...',
+            increment: 30,
+          });
+          const result = await this._polishInstructionText(text, context);
+          progress.report({ message: 'Applying changes...', increment: 60 });
+          await sleep(300);
+          if (result.success) {
+            webviewView.webview.postMessage({
+              command: 'instructionTextPolished',
+              text: result.text,
+            });
+          } else {
+            vscode.window.showErrorMessage(
+              result.error || 'Error polishing text',
+            );
+          }
+        } catch (error) {
+          vscode.window.showErrorMessage(
+            `Error polishing text: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          );
+          logger.error(
+            CHANNEL,
+            `Error in handlePolishInstructionText: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        }
+      },
+    );
+  }
+
   async handlePolishInstructionText(
     message: any,
     webviewView: vscode.WebviewView,
   ): Promise<void> {
     try {
       const fileContext: FileContext = { agent: message.agent || undefined };
-      const isValidFile = (file?: string): boolean =>
-        !!file && file !== 'None' && file !== '';
-      const addSingleFileIfValid = (
-        contextKey: keyof FileContext,
-        messageKey: string,
-      ) => {
-        if (isValidFile(message[messageKey])) {
-          (fileContext as any)[contextKey] = message[messageKey];
-        }
-      };
-      const addMultipleFilesIfValid = (
-        contextKey: keyof FileContext,
-        toggleKey: string,
-      ) => {
-        if (
-          message[toggleKey] &&
-          message[contextKey] &&
-          Array.isArray(message[contextKey]) &&
-          message[contextKey].length > 0
-        ) {
-          (fileContext as any)[contextKey] = message[contextKey];
-        }
-      };
 
-      addSingleFileIfValid('inputFile', 'inputFile');
-      addSingleFileIfValid('referenceFile', 'referenceFile');
-      addSingleFileIfValid('auxiliaryFile', 'auxiliaryFile');
-      addSingleFileIfValid('mediaFile', 'mediaFile');
-      addMultipleFilesIfValid('inputFiles', 'inputFilesActive');
-      addMultipleFilesIfValid('referenceFiles', 'referenceFilesActive');
-      addMultipleFilesIfValid('auxiliaryFiles', 'auxiliaryFilesActive');
-      addMultipleFilesIfValid('mediaFiles', 'mediaFilesActive');
-      addMultipleFilesIfValid('outputFiles', 'outputFilesActive');
+      const singleFileMap: Array<[keyof FileContext, keyof typeof message]> = [
+        ['inputFile', 'inputFile'],
+        ['referenceFile', 'referenceFile'],
+        ['auxiliaryFile', 'auxiliaryFile'],
+        ['mediaFile', 'mediaFile'],
+      ];
+      for (const [contextKey, messageKey] of singleFileMap) {
+        this._addSingleFileIfValid(
+          fileContext,
+          contextKey,
+          (message as any)[messageKey],
+        );
+      }
 
-      vscode.window.withProgress(
-        {
-          location: vscode.ProgressLocation.Notification,
-          title: 'Polishing your instruction text',
-          cancellable: false,
-        },
-        async (progress) => {
-          try {
-            progress.report({ message: 'Preparing text and context...' });
-            await sleep(300);
-            progress.report({
-              message: 'Sending to AI for polishing...',
-              increment: 30,
-            });
-            const result = await polishTextWithAI(message.text, fileContext);
-            progress.report({ message: 'Applying changes...', increment: 60 });
-            await sleep(300);
-            if (result.success) {
-              webviewView.webview.postMessage({
-                command: 'instructionTextPolished',
-                text: result.text,
-              });
-            } else {
-              vscode.window.showErrorMessage(
-                result.error || 'Error polishing text',
-              );
-            }
-          } catch (error) {
-            vscode.window.showErrorMessage(
-              `Error polishing text: ${error instanceof Error ? error.message : 'Unknown error'}`,
-            );
-            logger.error(
-              CHANNEL,
-              `Error in handlePolishInstructionText: ${error instanceof Error ? error.message : String(error)}`,
-            );
-          }
-        },
-      );
+      const multiFileMap: Array<
+        [keyof FileContext, keyof typeof message, keyof typeof message]
+      > = [
+        ['inputFiles', 'inputFilesActive', 'inputFiles'],
+        ['referenceFiles', 'referenceFilesActive', 'referenceFiles'],
+        ['auxiliaryFiles', 'auxiliaryFilesActive', 'auxiliaryFiles'],
+        ['mediaFiles', 'mediaFilesActive', 'mediaFiles'],
+        ['outputFiles', 'outputFilesActive', 'outputFiles'],
+      ];
+      for (const [contextKey, toggleKey, messageKey] of multiFileMap) {
+        this._addMultipleFilesIfValid(
+          fileContext,
+          contextKey,
+          (message as any)[toggleKey],
+          (message as any)[messageKey],
+        );
+      }
+
+      await this._polishWithProgress(message.text, fileContext, webviewView);
     } catch (error) {
       vscode.window.showErrorMessage(
         `Error setting up text polishing: ${error instanceof Error ? error.message : 'Unknown error'}`,
