@@ -24,16 +24,28 @@ import {
 const CHANNEL = 'Housekeeping';
 logger.initialize(CHANNEL);
 
+/**
+ * Pack files related to a single input file into an output directory.
+ *
+ * @param model - The model name used for packing
+ * @param inputFile - The primary file to pack
+ * @param agent - The agent name used for naming patterns
+ * @param outputFolder - Optional destination folder
+ * @param processedNames - Optional set tracking already processed filenames
+ */
 export async function runPackSingle(
   model: string,
   inputFile: string,
   agent: string,
   outputFolder?: string,
+  processedNames?: Set<string>,
 ): Promise<FileOpResult> {
   logger.info(
     CHANNEL,
     `Starting packing with model=${model}, inputFile=${inputFile}, agent=${agent}, outputFolder=${outputFolder}`,
   );
+
+  const destNames = processedNames ?? new Set<string>();
 
   if (!inputFile || !model || !agent) {
     logger.error(
@@ -109,12 +121,36 @@ export async function runPackSingle(
       // Move and copy files
       const operations: string[] = [];
       for (const file of movedFiles) {
-        const destination = path.join(outputFolder, path.basename(file));
+        const destName = path.basename(file);
+        const destination = path.join(outputFolder, destName);
+        if (
+          destNames.has(destName) ||
+          (await WorkspaceFS.exists(destination))
+        ) {
+          logger.debug(
+            CHANNEL,
+            `Skipping move for duplicate destination: ${destination}`,
+          );
+          continue;
+        }
+        destNames.add(destName);
         operations.push(`Moving: ${file} -> ${destination}`);
         await WorkspaceFS.move(file, destination);
       }
       for (const file of copiedFiles) {
-        const destination = path.join(outputFolder, path.basename(file));
+        const destName = path.basename(file);
+        const destination = path.join(outputFolder, destName);
+        if (
+          destNames.has(destName) ||
+          (await WorkspaceFS.exists(destination))
+        ) {
+          logger.debug(
+            CHANNEL,
+            `Skipping copy for duplicate destination: ${destination}`,
+          );
+          continue;
+        }
+        destNames.add(destName);
         operations.push(`Copying: ${file} -> ${destination}`);
         await WorkspaceFS.copy(file, destination);
       }
@@ -153,6 +189,14 @@ export async function runPackSingle(
   return result;
 }
 
+/**
+ * Pack multiple files into a common directory.
+ *
+ * @param model - The model name used for packing
+ * @param inputFile - Primary file used to derive naming
+ * @param agent - The agent name used for naming patterns
+ * @param inputFiles - Additional files to pack
+ */
 export async function runPackMultiple(
   model: string,
   inputFile: string,
@@ -177,6 +221,8 @@ export async function runPackMultiple(
   );
   logger.debug(CHANNEL, `Common output folder: ${commonOutputFolder}`);
 
+  const destNames = new Set<string>();
+
   try {
     let anyFilesPacked = false;
 
@@ -186,6 +232,7 @@ export async function runPackMultiple(
       fileToPack,
       agent,
       commonOutputFolder,
+      destNames,
     );
     if (singleResult.status === 'success') {
       anyFilesPacked = true;
@@ -193,12 +240,12 @@ export async function runPackMultiple(
     // Pack additional files
     if (inputFiles && inputFiles.length > 0) {
       for (const file of inputFiles) {
-        // logger.debug(CHANNEL, `Packing input file: ${file}`);
         const additionalResult = await runPackSingle(
           model,
           file,
           agent,
           commonOutputFolder,
+          destNames,
         );
         if (additionalResult.status === 'success') {
           anyFilesPacked = true;
@@ -215,15 +262,21 @@ export async function runPackMultiple(
 
     for (const pattern of additionalPatterns) {
       const filePath = path.join(outputDir, pattern);
+      const destination = path.join(commonOutputFolder, pattern);
       if (await WorkspaceFS.exists(filePath)) {
+        if (destNames.has(pattern) || (await WorkspaceFS.exists(destination))) {
+          logger.debug(
+            CHANNEL,
+            `Skipping move for duplicate destination: ${destination}`,
+          );
+          continue;
+        }
         if (!anyFilesPacked) {
           await WorkspaceFS.createDir(commonOutputFolder);
         }
         logger.debug(CHANNEL, `Found additional XML file: ${filePath}`);
-        await WorkspaceFS.move(
-          filePath,
-          path.join(commonOutputFolder, pattern),
-        );
+        await WorkspaceFS.move(filePath, destination);
+        destNames.add(pattern);
         anyFilesPacked = true;
       }
     }
@@ -247,6 +300,14 @@ export async function runPackMultiple(
   }
 }
 
+/**
+ * Pack files using either single or multiple mode depending on provided files.
+ *
+ * @param model - The model name used for packing
+ * @param inputFile - Primary file to pack
+ * @param agent - The agent name used for naming patterns
+ * @param outputFiles - Additional files when packing multiple
+ */
 export async function runPack(
   model: string,
   inputFile: string,
