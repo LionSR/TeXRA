@@ -44,7 +44,7 @@ export class LatexdiffManager {
     const toggleIcon = safeGetElementById(TOGGLE_LATEXDIFFS_ID);
     if (!container || !toggleIcon) return;
 
-    const isVisible = container.style.display === 'block';
+    const isVisible = container.style.display !== 'none';
     container.style.display = isVisible ? 'none' : 'block';
 
     const iconElement = toggleIcon.querySelector(ICON_SELECTOR);
