@@ -1,0 +1,399 @@
+// Standard library imports
+import * as path from 'path';
+
+// Third-party imports
+import * as vscode from 'vscode';
+import { workspace } from 'vscode';
+
+// Local imports - log
+import * as logger from '@logger/logUtils';
+
+// Local imports - utilities
+import { WorkspaceFS } from '@utils/files';
+import { getConfig } from '@utils/config';
+import {
+  listInputFiles,
+  listReferenceFiles,
+  listAuxiliaryFiles,
+  listMediaFiles,
+  listEditedFiles,
+} from '@frontend/files/fileLister';
+
+// Local imports - agent
+import { getAgentPath } from '@agent/runtime/executeAgent';
+import { loadAgentSettingAndPrompts } from '@agent/runtime/agentLoad';
+
+const CHANNEL = 'FileManager';
+logger.initialize(CHANNEL);
+
+export class FileManager {
+  constructor(private readonly context: vscode.ExtensionContext) {}
+
+  async handleFileSelection(
+    message: any,
+    webviewView: vscode.WebviewView,
+  ): Promise<void> {
+    const singleFileType = message.command.replace('select', '');
+    logger.debug(CHANNEL, `Selecting ${singleFileType}`);
+
+    const file = await vscode.commands.executeCommand<string>(
+      `texra.${message.command}`,
+    );
+    if (file) {
+      logger.debug(CHANNEL, `Selected ${singleFileType}: ${file}`);
+      webviewView.webview.postMessage({
+        command: `${singleFileType.charAt(0).toLowerCase()}${singleFileType.slice(1)}Selected`,
+        filePath: file,
+      });
+    }
+  }
+
+  async handleEditedFileSelection(
+    webviewView: vscode.WebviewView,
+  ): Promise<void> {
+    const editedFile = await vscode.commands.executeCommand<string>(
+      'texra.selectEditedFile',
+    );
+    if (editedFile) {
+      webviewView.webview.postMessage({
+        command: 'editedFileSelected',
+        filePath: editedFile,
+      });
+    }
+  }
+
+  async handleInputFileSelected(
+    message: any,
+    webviewView: vscode.WebviewView,
+  ): Promise<void> {
+    const baseFileNameForInput = path.basename(
+      message.filePath,
+      path.extname(message.filePath),
+    );
+    const filteredEditedFiles = await listEditedFiles(baseFileNameForInput);
+    this.postFileUpdate(webviewView, 'Edited', filteredEditedFiles);
+  }
+
+  handleGenericFileSelected(message: any): void {
+    vscode.window.showInformationMessage(
+      `${message.command}: ${message.filePath}`,
+    );
+  }
+
+  async handleRequestInputFile(webviewView: vscode.WebviewView): Promise<void> {
+    const refreshedInputFiles =
+      (await vscode.commands.executeCommand<string[]>(
+        'texra.refreshInputFiles',
+      )) || [];
+    this.postFileUpdate(webviewView, 'Input', refreshedInputFiles);
+  }
+
+  async handleRequestFile(
+    message: any,
+    webviewView: vscode.WebviewView,
+  ): Promise<void> {
+    const fileType = message.command.replace('request', '').replace('File', '');
+    const files = await (async () => {
+      switch (fileType) {
+        case 'Reference':
+          return await listReferenceFiles();
+        case 'Auxiliary':
+          return await listAuxiliaryFiles();
+        case 'Media':
+          return await listMediaFiles();
+        default:
+          return [];
+      }
+    })();
+    this.postFileUpdate(webviewView, fileType, files);
+  }
+
+  async handleRequestEditedFile(
+    message: any,
+    webviewView: vscode.WebviewView,
+  ): Promise<void> {
+    let allEditedFiles: string[] = [];
+    if (message.baseFile) {
+      const baseFileNameForEdited = path.basename(
+        message.baseFile,
+        path.extname(message.baseFile),
+      );
+      allEditedFiles = await listEditedFiles(baseFileNameForEdited);
+    }
+    this.postFileUpdate(webviewView, 'Edited', allEditedFiles);
+  }
+
+  async handleRequestBaseFile(webviewView: vscode.WebviewView): Promise<void> {
+    this.postFileUpdate(webviewView, 'Base', await listInputFiles());
+  }
+
+  async handleRequestDefaultOutputFiles(
+    message: any,
+    webviewView: vscode.WebviewView,
+  ): Promise<void> {
+    const agent = message.agent;
+    if (!agent) {
+      webviewView.webview.postMessage({
+        command: 'setDefaultOutputFiles',
+        files: [],
+      });
+      return;
+    }
+
+    try {
+      const agentPath = await getAgentPath(agent, this.context);
+      const [settings] = await loadAgentSettingAndPrompts(agentPath, agent);
+      const files = Array.isArray(settings?.defaultOutputFiles)
+        ? settings.defaultOutputFiles
+        : [];
+      webviewView.webview.postMessage({
+        command: 'setDefaultOutputFiles',
+        files,
+      });
+    } catch (err) {
+      logger.error(
+        CHANNEL,
+        `Error requesting default output files: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      webviewView.webview.postMessage({
+        command: 'setDefaultOutputFiles',
+        files: [],
+      });
+    }
+  }
+
+  handleSetMultipleFiles(message: any, webviewView: vscode.WebviewView): void {
+    if (message.files?.length > 0) {
+      webviewView.webview.postMessage({
+        command: message.command,
+        files: message.files,
+      });
+    }
+  }
+
+  async handleSelectMultipleFiles(
+    message: any,
+    webviewView: vscode.WebviewView,
+  ): Promise<void> {
+    const fileType = message.fileType;
+    let selectedFiles: string[] | null = null;
+
+    try {
+      if (fileType === 'OutputFiles') {
+        selectedFiles = await this.selectOutputFiles(message.currentFile);
+      } else {
+        const currentFileForMultiple = message.currentFile;
+        const baseType = fileType.replace('Files', '');
+        selectedFiles = await vscode.commands.executeCommand<string[]>(
+          `texra.select${baseType}Files`,
+          currentFileForMultiple,
+        );
+        if (selectedFiles === undefined) {
+          console.warn(
+            `Command texra.select${baseType}Files returned undefined`,
+          );
+          selectedFiles = null;
+        }
+      }
+
+      if (selectedFiles) {
+        webviewView.webview.postMessage({
+          command: `set${fileType}`,
+          files: selectedFiles,
+        });
+      }
+    } catch (error) {
+      logger.error(
+        CHANNEL,
+        `Error in handleSelectMultipleFiles: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      vscode.window.showErrorMessage(
+        `Error selecting ${fileType}: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
+    }
+  }
+
+  async handleRefreshAllFiles(webviewView: vscode.WebviewView): Promise<void> {
+    const refreshedFiles = {
+      input: await listInputFiles(),
+      reference: await listReferenceFiles(),
+      auxiliary: await listAuxiliaryFiles(),
+      media: await listMediaFiles(),
+    };
+
+    Object.entries(refreshedFiles).forEach(([type, files]) => {
+      this.postFileUpdate(
+        webviewView,
+        type.charAt(0).toUpperCase() + type.slice(1),
+        files,
+      );
+    });
+
+    await this.updateBaseFileSelect(webviewView);
+  }
+
+  async handleGetCurrentFile(
+    message: any,
+    webviewView: vscode.WebviewView,
+  ): Promise<void> {
+    const fileType = message.fileType || 'input';
+    const currentOpenFile = await vscode.commands.executeCommand<string>(
+      'texra.getCurrentFile',
+    );
+    if (currentOpenFile) {
+      if (fileType === 'edited') {
+        const baseFile = message.baseFile;
+        if (baseFile) {
+          const baseFileName = path.basename(baseFile, path.extname(baseFile));
+          const currentFileName = path.basename(
+            currentOpenFile,
+            path.extname(currentOpenFile),
+          );
+          if (
+            currentFileName.startsWith(baseFileName) &&
+            currentFileName !== baseFileName
+          ) {
+            webviewView.webview.postMessage({
+              command: 'setCurrentFile',
+              filePath: currentOpenFile,
+              fileType,
+            });
+          } else {
+            vscode.window.showInformationMessage(
+              'The current file is not a valid edited version of the base file.',
+            );
+          }
+        } else {
+          vscode.window.showInformationMessage(
+            'Please select a base file first.',
+          );
+        }
+      } else {
+        webviewView.webview.postMessage({
+          command: 'setCurrentFile',
+          filePath: currentOpenFile,
+          fileType,
+        });
+      }
+    } else {
+      vscode.window.showInformationMessage(
+        'No file is currently open or the file is not part of the workspace.',
+      );
+    }
+  }
+
+  async handleAddOpenedFiles(
+    fileType: string,
+    webviewView: vscode.WebviewView,
+  ): Promise<void> {
+    const openedFiles = await this.getOpenedFiles();
+    webviewView.webview.postMessage({
+      command: 'setOpenedFiles',
+      files: openedFiles,
+      fileType,
+      shouldFilter: true,
+    });
+  }
+
+  async handleUpdateFiles(
+    message: any,
+    webviewView: vscode.WebviewView,
+  ): Promise<void> {
+    const command = message.command;
+    const fileType = command.replace('update', '');
+    const files = message.files || [];
+
+    logger.debug(CHANNEL, `Updating ${fileType} with ${files.length} files`);
+    webviewView.webview.postMessage({ command: `set${fileType}`, files });
+  }
+
+  async selectOutputFiles(currentInputFile: string): Promise<string[] | null> {
+    const workspacePath = WorkspaceFS.getPath();
+    if (!workspacePath) {
+      await vscode.window.showInformationMessage('No workspace folder open');
+      return null;
+    }
+
+    const defaultUri = currentInputFile
+      ? vscode.Uri.file(
+          path.dirname(path.join(workspacePath, currentInputFile)),
+        )
+      : vscode.Uri.file(workspacePath);
+
+    try {
+      const fileUris = await vscode.window.showOpenDialog({
+        canSelectMany: true,
+        openLabel: 'Select Output Files',
+        canSelectFiles: true,
+        canSelectFolders: false,
+        defaultUri,
+        filters: { 'Text files': ['tex', 'txt', 'md'] },
+      });
+
+      if (!fileUris || fileUris.length === 0) {
+        return null;
+      }
+
+      const relativePaths = fileUris.map((uri) =>
+        WorkspaceFS.relativePath(uri.fsPath),
+      );
+      logger.info(
+        CHANNEL,
+        `Selected output files: ${relativePaths.join(', ')}`,
+      );
+      vscode.window.showInformationMessage(
+        `Selected output files: ${relativePaths.join(', ')}`,
+      );
+      return relativePaths;
+    } catch (err) {
+      logger.error(
+        CHANNEL,
+        `Error selecting output files: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      vscode.window.showErrorMessage(
+        `Error selecting output files: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      return null;
+    }
+  }
+
+  private async postFileUpdate(
+    webviewView: vscode.WebviewView,
+    fileType: string,
+    files: string[],
+  ): Promise<void> {
+    webviewView.webview.postMessage({ command: `set${fileType}File`, files });
+  }
+
+  private async updateBaseFileSelect(
+    webviewView: vscode.WebviewView,
+  ): Promise<void> {
+    const baseFiles = await listInputFiles();
+    webviewView.webview.postMessage({
+      command: 'setBaseFile',
+      files: baseFiles,
+      preserveBaseFile: true,
+    });
+  }
+
+  private async getOpenedFiles(): Promise<string[]> {
+    const workspacePath = WorkspaceFS.getPath();
+    if (!workspacePath) {
+      logger.warn(CHANNEL, 'No workspace path found for opened files');
+      return [];
+    }
+
+    const modelNames = getConfig<string[]>('models', []);
+    const openedDocuments = workspace.textDocuments;
+    const relevantFiles = openedDocuments
+      .filter((doc) => doc.uri.scheme === 'file')
+      .map((doc) => workspace.asRelativePath(doc.uri.fsPath, false))
+      .filter((filePath) => {
+        const fileName = path.basename(filePath);
+        return !modelNames.some((model) => fileName.includes(`_${model}`));
+      });
+
+    logger.debug(CHANNEL, `Found opened files: ${relevantFiles.join(', ')}`);
+    return relevantFiles;
+  }
+}
