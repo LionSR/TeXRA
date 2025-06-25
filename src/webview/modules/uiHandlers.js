@@ -8,11 +8,9 @@ import {
   CHECK_BOXES_TOOL_USE,
   FILE_TYPES,
 } from './constants.js';
-import {
-  handleCheckboxChange,
-  toggleOutputFiles,
-  toggleLatexdiffs,
-} from './fileHandlers.js';
+import { handleCheckboxChange } from './fileHandlers.js';
+import { outputFilesManager } from './uiManagers/OutputFilesManager.js';
+import { latexdiffManager } from './uiManagers/LatexdiffManager.js';
 import { fileList } from './uiManagers/FileList.js';
 import { fileSelect } from './uiManagers/FileSelect.js';
 import {
@@ -84,7 +82,7 @@ export function setupUIHandlers() {
     MULTIPLE_SELECTIONS.forEach((id) => {
       // Check if container is visible
       const container = safeGetElementById(`${id}Container`);
-      const isActive = container?.style.display === 'block';
+      const isActive = container?.style.display !== 'none';
       multipleFilesData[`${id}Active`] = isActive;
 
       // Get the matching single file (if it exists)
@@ -344,7 +342,7 @@ export function setupUIHandlers() {
       const outputFilesContainer = safeGetElementById('outputFilesContainer');
       const useMultiple =
         outputFilesContainer &&
-        outputFilesContainer.style.display === 'block' &&
+        outputFilesContainer.style.display !== 'none' &&
         outputFiles.length > 0;
 
       if (useMultiple) {
@@ -510,7 +508,7 @@ export function setupUIHandlers() {
     const toggleId = `toggle${capitalize(id)}`;
     addEventListenerSafely(toggleId, 'click', () => {
       if (id === 'outputFiles') {
-        toggleOutputFiles();
+        outputFilesManager.toggleOutputFiles();
       } else {
         fileList.toggle(id, toggleId);
       }
@@ -518,7 +516,7 @@ export function setupUIHandlers() {
   });
 
   addEventListenerSafely('toggleLatexdiffs', 'click', () => {
-    toggleLatexdiffs();
+    latexdiffManager.toggleLatexdiffs();
   });
 
   // Open agent and model settings directly from footer icons
