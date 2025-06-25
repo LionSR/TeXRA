@@ -24,7 +24,8 @@ This document sets the common conventions for contributions. Follow these norms 
 - Prefer `const` and `let` over `var`.
 - Group imports by source and prefix each block with a descriptive comment (e.g., `// Third-party imports`, `// Local imports - component`).
 - Document functions with concise comments. Use JSDoc style for public APIs.
-- Keep functions small and focused; extract helpers when logic becomes complex.
+- Keep functions small and focused; extract helpers or modules when logic becomes complex.
+- Keep the directory structure aligned among different webviews (webviews, historyView, progressView). Use the same folder names for modules of the same type and functionality but in different webviews.
 
 ### Patterns across the codebase
 
