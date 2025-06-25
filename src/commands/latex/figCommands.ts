@@ -12,10 +12,7 @@ import { WorkspaceFS } from '@utils/files';
 
 // Local imports - latex utils
 import { extractFigurePathsFromLatex } from '@latex/extractFigure';
-import {
-  extractTikzPicturesWithLabels,
-  extractAndCompileTikzPicturesWithLabels,
-} from '@latex/tikzpicture';
+import { tikzPictureManager } from '@latex/TikzPictureManager';
 
 const CHANNEL = 'TestCommands';
 logger.initialize(CHANNEL);
@@ -109,7 +106,7 @@ async function handleExtractTikzFigures(): Promise<void> {
     );
 
     // Extract TikZ pictures with labels
-    const labeledTikzPictures = await extractTikzPicturesWithLabels(filePath);
+    const labeledTikzPictures = await tikzPictureManager.extract(filePath);
 
     if (labeledTikzPictures.length > 0) {
       // Create QuickPick items from the labels
@@ -182,8 +179,7 @@ async function handleCompileTikzFigures(): Promise<void> {
         });
 
         // Extract and compile TikZ pictures
-        const compiledFiles =
-          await extractAndCompileTikzPicturesWithLabels(filePath);
+        const compiledFiles = await tikzPictureManager.compile(filePath);
 
         if (compiledFiles.length > 0) {
           // Create QuickPick items from the compiled files

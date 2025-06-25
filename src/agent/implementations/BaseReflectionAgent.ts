@@ -8,11 +8,11 @@ import * as path from 'path';
 
 // Local imports - latex utils
 import {
-  extractAndCompileTikzPicturesWithLabels,
   extractFigurePathsFromLatex,
   bestConnectionMethod,
   getTeXCountStats,
   compileLatex2Pdf,
+  tikzPictureManager,
 } from '@latex';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import { diff_match_patch } from 'diff-match-patch';
@@ -694,7 +694,7 @@ export abstract class BaseReflectionAgent extends BaseAgent {
         if (this.agentConfig.toolConfig.autoExtractTikzFigure) {
           for (const inputFile of inputFiles) {
             const extractedTikzFigures =
-              await extractAndCompileTikzPicturesWithLabels(inputFile);
+              await tikzPictureManager.compile(inputFile);
             if (extractedTikzFigures) {
               toolState.addMediaFiles(extractedTikzFigures);
             }
@@ -1055,7 +1055,7 @@ export abstract class BaseReflectionAgent extends BaseAgent {
       for (const outputFile of outputFiles) {
         this.logger.debug(`Extracting TikZ figures from ${outputFile}`);
         const extractedTikzFigures =
-          await extractAndCompileTikzPicturesWithLabels(outputFile);
+          await tikzPictureManager.compile(outputFile);
         if (extractedTikzFigures) {
           toolState.addMediaFiles(extractedTikzFigures);
         }
