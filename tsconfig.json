@@ -22,7 +22,7 @@
       "@housekeeping/*": ["src/housekeeping/*"],
       "@progressView/*": ["src/progressView/*"],
       "@historyView/*": ["src/historyView/*"],
-      "@replacement/*": ["src/replacementEngine/*"],
+      "@replacement/*": ["src/replacement/*"],
       "@tools/*": ["src/tools/*"],
       "@types/*": ["src/types/*"]
     },
