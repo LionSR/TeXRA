@@ -59,10 +59,11 @@ export interface AgentSetting {
 export function validateAgentSetting(settings: AgentSetting): void {
   if (
     settings.agentType !== AgentType.CoT &&
-    settings.agentType !== AgentType.Direct
+    settings.agentType !== AgentType.Direct &&
+    settings.agentType !== AgentType.ToolUse
   ) {
     throw new Error(
-      `Invalid agentType: ${settings.agentType}. Must be '${AgentType.CoT}' or '${AgentType.Direct}'`,
+      `Invalid agentType: ${settings.agentType}. Must be '${AgentType.CoT}', '${AgentType.Direct}' or '${AgentType.ToolUse}'`,
     );
   }
 
