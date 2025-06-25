@@ -20,11 +20,7 @@ const CHANNEL = 'ExecutionManager';
 logger.initialize(CHANNEL);
 
 export class ExecutionManager {
-  constructor(
-    private readonly fileManager: {
-      selectOutputFiles(currentInputFile: string): Promise<string[] | null>;
-    },
-  ) {}
+  constructor() {}
 
   async handleExecute(message: any): Promise<void> {
     if (!message.inputFile) {
@@ -129,19 +125,12 @@ export class ExecutionManager {
       `${capitalize(operation)} multiple files: ${message.inputFile}, ${outputFilesStr}`,
     );
 
-    let outputFiles = message.outputFiles as string[] | null;
-    if (!outputFiles || outputFiles.length === 0) {
-      outputFiles = await this.fileManager.selectOutputFiles(
-        message.currentFile,
-      );
-    }
-
     vscode.commands.executeCommand(
       `texra.${message.command}`,
       message.inputFile,
       message.agent,
       message.model,
-      outputFiles,
+      message.outputFiles,
     );
   }
 }
