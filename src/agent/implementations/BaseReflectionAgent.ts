@@ -118,7 +118,7 @@ export abstract class BaseReflectionAgent extends BaseAgent {
       this.agentSetting,
       this.logger,
       this.getSystemPromptWithRules.bind(this),
-      () => this.checkInterruption(),
+      async () => this.checkInterruption(),
     );
     this.roundManager = new RoundManager(this.logger, this.fileHandler);
   }

@@ -29,7 +29,7 @@ export class ResponseProcessor {
     private agentSetting: AgentSetting,
     private logger: AgentLogger,
     private getSystemPrompt: () => Promise<string>,
-    private checkInterruption: () => boolean,
+    private checkInterruption: () => Promise<boolean>,
   ) {}
 
   /**
@@ -48,7 +48,7 @@ export class ResponseProcessor {
     let endTurn = false;
 
     while (!endTurn) {
-      if (this.checkInterruption()) {
+      if (await this.checkInterruption()) {
         break;
       }
 
