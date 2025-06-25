@@ -52,6 +52,15 @@ export class WebviewContentProvider {
       const instructionManagerUri = getWebviewUri(
         'modules/uiManagers/InstructionManager.js',
       );
+      const fileInputManagerUri = getWebviewUri(
+        'modules/uiManagers/FileInputManager.js',
+      );
+      const actionButtonManagerUri = getWebviewUri(
+        'modules/uiManagers/ActionButtonManager.js',
+      );
+      const settingsButtonManagerUri = getWebviewUri(
+        'modules/uiManagers/SettingsButtonManager.js',
+      );
       const uiHandlersUri = getWebviewUri('modules/uiHandlers.js');
       const templateUtilsUri = getCommonUri('modules/templateUtils.js');
       const domUtilsUri = getCommonUri('modules/domUtils.js');
@@ -91,6 +100,9 @@ export class WebviewContentProvider {
         toggleManagerUri,
         recordingManagerUri,
         instructionManagerUri,
+        fileInputManagerUri,
+        actionButtonManagerUri,
+        settingsButtonManagerUri,
         uiHandlersUri,
         templateUtilsUri,
         webviewContextUri,
