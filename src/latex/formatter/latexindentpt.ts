@@ -2,7 +2,6 @@
 import * as path from 'path';
 
 // Third-party imports
-import * as vscode from 'vscode';
 import { sync as globSync } from 'glob';
 
 // Local imports - log
@@ -10,6 +9,7 @@ import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
 import { WorkspaceFS } from '@utils/files';
+import { getConfig } from '@utils/config';
 import { executeCommand } from '@utils/system';
 import { sleep } from '@utils/helpers';
 import { checkToolInstalled } from '@utils/system';
@@ -31,8 +31,7 @@ export async function runLatexIndent(filePath: string): Promise<boolean> {
     }
 
     // Get latexindent config from settings
-    const config = vscode.workspace.getConfiguration('texra.latex');
-    const latexindentConfig = config.get<string>('latexindentConfig');
+    const latexindentConfig = getConfig<string>('latex.latexindentConfig');
 
     // Build command array - note we're using -w (overwrite) and -s (silent)
     const command = ['latexindent', '-w', '-s'];
