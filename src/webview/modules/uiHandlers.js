@@ -82,7 +82,7 @@ export function setupUIHandlers() {
     MULTIPLE_SELECTIONS.forEach((id) => {
       // Check if container is visible
       const container = safeGetElementById(`${id}Container`);
-      const isActive = container?.style.display === 'block';
+      const isActive = container?.style.display !== 'none';
       multipleFilesData[`${id}Active`] = isActive;
 
       // Get the matching single file (if it exists)
@@ -342,7 +342,7 @@ export function setupUIHandlers() {
       const outputFilesContainer = safeGetElementById('outputFilesContainer');
       const useMultiple =
         outputFilesContainer &&
-        outputFilesContainer.style.display === 'block' &&
+        outputFilesContainer.style.display !== 'none' &&
         outputFiles.length > 0;
 
       if (useMultiple) {

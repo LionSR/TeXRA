@@ -46,7 +46,7 @@ export class OutputFilesManager {
           this.fileList.add(OUTPUT_FILES_ID, file);
         });
       } else {
-        this.fileList.add(OUTPUT_FILES_ID, inputFileDiv.value);
+        this.fileList.add(OUTPUT_FILES_ID, inputFileDiv?.value);
         if (state.inputFiles && state.inputFiles.length > 0) {
           state.inputFiles.forEach((file) => {
             if (file !== inputFile) {
