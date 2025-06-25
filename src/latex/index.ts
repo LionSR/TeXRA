@@ -16,3 +16,6 @@ export { compileLatex2Pdf } from './texTools';
 
 // Export texcount functionality
 export { getTeXCountStats } from './texcount';
+
+// Export latexdiff runner
+export { LatexdiffRunner } from './latexdiffRunner';
