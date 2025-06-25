@@ -22,6 +22,7 @@ import { DirectAgent, CoTAgent, MergeAgent } from '@agent/implementations';
 import { AgentLogger } from '@logger/AgentLogger';
 
 import { emitProgress } from '@eventBus/ProgressEventBus';
+import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import {
@@ -152,6 +153,14 @@ async function executeAgentWithLogging<T extends IAgent>(
     const config = agent.config;
     const fullStreamId = getStreamId(agentName, config.model, config.inputFile);
 
+    // Check if this stream is already running
+    const provider = ProgressViewProvider.getInstance();
+    const currentStatus = provider?.getStreamStatus(fullStreamId);
+    if (currentStatus === 'running') {
+      const errorMsg = `Task "${fullStreamId}" is already running. Please wait for it to complete or stop it first.`;
+      throw new Error(errorMsg);
+    }
+
     // Create a main task group for the entire execution
     const mainTaskGroupId = await logger.startGroup(
       `Task: ${agentName}@${config.model}`,
@@ -192,32 +201,37 @@ async function executeAgentWithLogging<T extends IAgent>(
           status: 'running',
         });
 
-        await vscode.commands.executeCommand('texra.showProgressView');
+        const viewVisible = provider?.isViewVisible() ?? false;
+        if (!viewVisible) {
+          await vscode.commands.executeCommand('texra.showProgressView');
+        }
 
-        const inputFileName = path.basename(config.inputFile);
-        const outputInfo = config.outputFiles?.length
-          ? `to ${
-              config.outputFiles.length > 1
-                ? config.outputFiles.length + ' files'
-                : path.basename(config.outputFiles[0])
-            }`
-          : '';
+        if (!provider?.isViewVisible()) {
+          const inputFileName = path.basename(config.inputFile);
+          const outputInfo = config.outputFiles?.length
+            ? `to ${
+                config.outputFiles.length > 1
+                  ? config.outputFiles.length + ' files'
+                  : path.basename(config.outputFiles[0])
+              }`
+            : '';
 
-        vscode.window
-          .showInformationMessage(
-            `TeXRA Agent Started: "${agentName}" is processing ${inputFileName} with ${config.model} ${outputInfo}. View in ProgressBoard for progress.`,
-            {
-              modal: false,
-              detail:
-                'TeXRA agents run in the background and their progress can be tracked in the ProgressBoard.',
-            },
-            'Show ProgressBoard',
-          )
-          .then((selection) => {
-            if (selection === 'Show ProgressBoard') {
-              vscode.commands.executeCommand('texra.showProgressView');
-            }
-          });
+          vscode.window
+            .showInformationMessage(
+              `TeXRA Agent Started: "${agentName}" is processing ${inputFileName} with ${config.model} ${outputInfo}. View in ProgressBoard for progress.`,
+              {
+                modal: false,
+                detail:
+                  'TeXRA agents run in the background and their progress can be tracked in the ProgressBoard.',
+              },
+              'Show ProgressBoard',
+            )
+            .then((selection) => {
+              if (selection === 'Show ProgressBoard') {
+                vscode.commands.executeCommand('texra.showProgressView');
+              }
+            });
+        }
 
         // Store taskState
         logger.debug(
