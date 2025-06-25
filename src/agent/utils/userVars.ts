@@ -10,7 +10,7 @@ import { setVarFromFile } from '@frontend/files/vars';
 import { getXmlFormatFromFiles, getListOfFiles } from '@utils/promptUtils';
 import { AgentConfig } from '../core/AgentConfig';
 import { AgentSetting } from '../core/AgentDataclass';
-import { ModelHandler } from '@agent/modelHandlers';
+import type { IModelHandler } from '@agent/modelHandlers';
 
 /**
  * Build all user variables needed for prompt rendering.
@@ -19,7 +19,7 @@ export async function buildUserVars(
   agentConfig: AgentConfig,
   agentSetting: AgentSetting,
   agentPath: string,
-  modelHandler: ModelHandler,
+  modelHandler: IModelHandler,
   logger: AgentLogger,
 ): Promise<Record<string, any>> {
   const userVars: Record<string, any> = {};
@@ -40,7 +40,7 @@ export async function buildUserVars(
 
 function getBasicVars(
   agentConfig: AgentConfig,
-  modelHandler: ModelHandler,
+  modelHandler: IModelHandler,
 ): Record<string, any> {
   return {
     MODEL: agentConfig.model,
