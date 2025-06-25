@@ -36,15 +36,17 @@ export class SearchManager {
                 this.state.setSearchIndex(0);
                 this.scrollToCurrentMatch();
               } else {
-                this.state.setSearchIndex(0);
+                this.state.setSearchIndex(-1);
+                this.applySavedToggleStates();
                 this.updateMatchCountDisplay();
               }
             },
           });
         } else {
-          this.state.setSearchIndex(0);
+          this.state.setSearchIndex(-1);
           this.state.setTotalMatches(0);
           this.updateMatchCountDisplay();
+          this.applySavedToggleStates();
         }
       },
     });
@@ -105,7 +107,21 @@ export class SearchManager {
         if (toggle) {
           toggle.textContent = 'Show less';
         }
-        this.state.toggleStates.set(id, true);
+      }
+    });
+  }
+
+  applySavedToggleStates() {
+    document.querySelectorAll('.collapsible').forEach((section) => {
+      const id = section.id.replace('content-', '');
+      const expanded = this.state.toggleStates.get(id);
+      const toggle = document.querySelector(`.toggle-button[data-id="${id}"]`);
+      if (expanded) {
+        section.classList.add('expanded');
+        if (toggle) toggle.textContent = 'Show less';
+      } else {
+        section.classList.remove('expanded');
+        if (toggle) toggle.textContent = 'Show more';
       }
     });
   }
