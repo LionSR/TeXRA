@@ -9,8 +9,6 @@ import * as logger from '@logger/logUtils';
 import { safeExecuteCommand } from '@utils/system';
 import { getConfig } from '@utils/config';
 
-// Local imports - utilities
-import { capitalize, uncapitalize } from '@frontend/ui/messageUtils';
 // Local imports - managers
 import {
   SettingsManager,
