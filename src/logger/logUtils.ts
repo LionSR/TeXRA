@@ -14,12 +14,12 @@ import {
   EMOJI_BY_LEVEL as emojis,
 } from '@utils/loggerUtils';
 import { TaskGroup } from './LogTypes';
+import { MESSAGE_TYPES, type MessageType } from './messageTypes';
 
-// Message type for ProgressView entries
-export type MessageType = 'thinking' | 'scratchpad' | 'default';
-
-function isValidMessageType(type: string): type is 'thinking' | 'scratchpad' {
-  return type === 'thinking' || type === 'scratchpad';
+function isValidMessageType(
+  type: unknown,
+): type is typeof MESSAGE_TYPES.THINKING | typeof MESSAGE_TYPES.SCRATCHPAD {
+  return type === MESSAGE_TYPES.THINKING || type === MESSAGE_TYPES.SCRATCHPAD;
 }
 
 const { combine, timestamp } = winston.format;
@@ -86,7 +86,7 @@ class VSCodeTransport extends Transport {
   }
 
   log(info: any, callback: () => void) {
-    const { level, message, timestamp } = info;
+    const { level, message, timestamp, messageType } = info;
     // Use the provided groupId or fall back to the activeGroupId if available
     const groupId = info.groupId || this.activeGroupId;
 
@@ -124,15 +124,11 @@ class VSCodeTransport extends Transport {
       return;
     }
 
-    const hasInfoSpan = /data-message-type="(?:thinking|scratchpad)"/.test(
-      message,
-    );
-    const processedMessage = hasInfoSpan ? message : escapeHtml(message);
+    const processedMessage = escapeHtml(message);
 
-    // Detect message type from data-message-type attribute
-    const typeMatch = message.match(/data-message-type="(.*?)"/);
-    const messageType: MessageType =
-      typeMatch && isValidMessageType(typeMatch[1]) ? typeMatch[1] : 'default';
+    const msgType: MessageType = isValidMessageType(messageType)
+      ? messageType
+      : MESSAGE_TYPES.DEFAULT;
 
     // Colored format for ProgressView using CSS classes, but with shorter timestamp display
     const isVerbose = getConfig<boolean>('logger.debugMode', false);
@@ -157,7 +153,7 @@ class VSCodeTransport extends Transport {
       level: level as 'error' | 'warn' | 'info' | 'debug',
       groupId,
       timestamp: numericTimestamp,
-      messageType,
+      messageType: msgType,
       id,
     });
 
@@ -354,6 +350,7 @@ function logWithGroup(
   level: string,
   message: string,
   groupId?: string,
+  messageType?: MessageType,
 ): void {
   const logger = getOrCreateLogger(channel);
   const transport = channelTransports.get(channel);
@@ -362,7 +359,7 @@ function logWithGroup(
   const actualGroupId = groupId || transport?.getActiveGroupId();
 
   // @ts-ignore - We're adding a custom property to the winston log
-  logger[level](message, { groupId: actualGroupId });
+  logger[level](message, { groupId: actualGroupId, messageType });
 }
 
 // Simplified logging methods that use channel as channel name
@@ -370,32 +367,36 @@ export const debug = (
   channel: string,
   message: string,
   groupId?: string,
+  messageType?: MessageType,
 ): void => {
-  logWithGroup(channel, 'debug', message, groupId);
+  logWithGroup(channel, 'debug', message, groupId, messageType);
 };
 
 export const info = (
   channel: string,
   message: string,
   groupId?: string,
+  messageType?: MessageType,
 ): void => {
-  logWithGroup(channel, 'info', message, groupId);
+  logWithGroup(channel, 'info', message, groupId, messageType);
 };
 
 export const warn = (
   channel: string,
   message: string,
   groupId?: string,
+  messageType?: MessageType,
 ): void => {
-  logWithGroup(channel, 'warn', message, groupId);
+  logWithGroup(channel, 'warn', message, groupId, messageType);
 };
 
 export const error = (
   channel: string,
   message: string,
   groupId?: string,
+  messageType?: MessageType,
 ): void => {
-  logWithGroup(channel, 'error', message, groupId);
+  logWithGroup(channel, 'error', message, groupId, messageType);
 };
 
 function getOrCreateLogger(channel: string): winston.Logger {
