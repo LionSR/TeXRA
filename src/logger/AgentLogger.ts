@@ -24,19 +24,43 @@ export class AgentLogger {
   }
 
   debug(message: string, groupId?: string, messageType?: MessageType): void {
-    logger.debug(this.channelId, message, groupId, messageType);
+    logger.debug(
+      this.channelId,
+      message,
+      groupId,
+      messageType,
+      this.isAgentLogger,
+    );
   }
 
   info(message: string, groupId?: string, messageType?: MessageType): void {
-    logger.info(this.channelId, message, groupId, messageType);
+    logger.info(
+      this.channelId,
+      message,
+      groupId,
+      messageType,
+      this.isAgentLogger,
+    );
   }
 
   warn(message: string, groupId?: string, messageType?: MessageType): void {
-    logger.warn(this.channelId, message, groupId, messageType);
+    logger.warn(
+      this.channelId,
+      message,
+      groupId,
+      messageType,
+      this.isAgentLogger,
+    );
   }
 
   error(message: string, groupId?: string, messageType?: MessageType): void {
-    logger.error(this.channelId, message, groupId, messageType);
+    logger.error(
+      this.channelId,
+      message,
+      groupId,
+      messageType,
+      this.isAgentLogger,
+    );
   }
 
   /**
@@ -53,7 +77,13 @@ export class AgentLogger {
   ): Promise<string> {
     // brief delay to ensure log order
     await sleep(SHORT_SLEEP_MS);
-    return logger.startGroup(this.channelId, groupName, id, parentGroupId);
+    return logger.startGroup(
+      this.channelId,
+      groupName,
+      id,
+      parentGroupId,
+      this.isAgentLogger,
+    );
   }
 
   /**

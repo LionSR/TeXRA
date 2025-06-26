@@ -283,10 +283,11 @@ export function startGroup(
   groupName: string,
   id: string = randomUUID(),
   parentGroupId?: string,
+  isAgent = false,
 ): string {
   const transport = channelTransports.get(channel);
   if (!transport) {
-    const logger = createLoggerForChannel(channel, false);
+    createLoggerForChannel(channel, isAgent);
     const newTransport = channelTransports.get(channel)!;
     return newTransport.startGroup(groupName, id, parentGroupId);
   }
@@ -330,8 +331,9 @@ function logWithGroup(
   message: string,
   groupId?: string,
   messageType?: MessageType,
+  isAgent = false,
 ): void {
-  const logger = getOrCreateLogger(channel);
+  const logger = getOrCreateLogger(channel, isAgent);
   const transport = channelTransports.get(channel);
 
   // If no groupId provided, use the active group
@@ -347,8 +349,9 @@ export const debug = (
   message: string,
   groupId?: string,
   messageType?: MessageType,
+  isAgent = false,
 ): void => {
-  logWithGroup(channel, 'debug', message, groupId, messageType);
+  logWithGroup(channel, 'debug', message, groupId, messageType, isAgent);
 };
 
 export const info = (
@@ -356,8 +359,9 @@ export const info = (
   message: string,
   groupId?: string,
   messageType?: MessageType,
+  isAgent = false,
 ): void => {
-  logWithGroup(channel, 'info', message, groupId, messageType);
+  logWithGroup(channel, 'info', message, groupId, messageType, isAgent);
 };
 
 export const warn = (
@@ -365,8 +369,9 @@ export const warn = (
   message: string,
   groupId?: string,
   messageType?: MessageType,
+  isAgent = false,
 ): void => {
-  logWithGroup(channel, 'warn', message, groupId, messageType);
+  logWithGroup(channel, 'warn', message, groupId, messageType, isAgent);
 };
 
 export const error = (
@@ -374,13 +379,14 @@ export const error = (
   message: string,
   groupId?: string,
   messageType?: MessageType,
+  isAgent = false,
 ): void => {
-  logWithGroup(channel, 'error', message, groupId, messageType);
+  logWithGroup(channel, 'error', message, groupId, messageType, isAgent);
 };
 
-function getOrCreateLogger(channel: string): winston.Logger {
+function getOrCreateLogger(channel: string, isAgent = false): winston.Logger {
   if (!channelLoggers.has(channel)) {
-    return createLoggerForChannel(channel, false);
+    return createLoggerForChannel(channel, isAgent);
   }
   return channelLoggers.get(channel)!;
 }
