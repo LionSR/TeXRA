@@ -92,7 +92,6 @@ class VSCodeTransport extends Transport {
 
     // Extract parts of the timestamp for display formatting
     // Full format is: YYYY-MM-DD HH:mm:ss.SSS
-    const timeDisplay = timestamp.split(' ')[1].split('.')[0]; // Drop milliseconds for UI display
 
     // For non-agent channels include the source name in the message
     const channelPrefix = this.isAgentChannel ? '' : `[${this.streamName}] `;
@@ -122,31 +121,23 @@ class VSCodeTransport extends Transport {
       ? messageType
       : MESSAGE_TYPES.DEFAULT;
 
-    // Colored format for ProgressView using CSS classes, but with shorter timestamp display
     const isVerbose = getConfig<boolean>('logger.debugMode', false);
     const id = randomUUID();
-    const coloredFormattedMessage =
-      `<div class="log-line" data-log-id="${id}" ${groupId ? `data-group-id="${groupId}"` : ''} data-full-timestamp="${timestamp}">` +
-      `<span class="timestamp" title="${timestamp}">${emoji}${
-        isVerbose ? ` [${timeDisplay}]` : ''
-      }</span> ` +
-      (isVerbose
-        ? `<span class="level-${level}">${level
-            .toUpperCase()
-            .padEnd(8)}</span> `
-        : '') +
-      `<span class="message-${level}">${processedMessage}</span>` +
-      `</div>`;
-
     const numericTimestamp = new Date(timestamp).getTime();
+
+    const logMessage = {
+      id,
+      text: processedMessage,
+      level: level as 'error' | 'warn' | 'info' | 'debug',
+      timestamp: numericTimestamp,
+      groupId,
+      messageType: msgType,
+      verbose: isVerbose,
+    } satisfies import('./LogTypes').LogMessageData;
+
     emitProgress('addLogMessage', {
       stream: this.streamName,
-      message: coloredFormattedMessage,
-      level: level as 'error' | 'warn' | 'info' | 'debug',
-      groupId,
-      timestamp: numericTimestamp,
-      messageType: msgType,
-      id,
+      logMessage,
     });
 
     callback();
