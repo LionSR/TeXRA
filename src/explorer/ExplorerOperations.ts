@@ -16,6 +16,8 @@ import { FileItem } from './FileItem';
 const NEW_AGENT_TEMPLATE = `# --- Agent Inheritance (Optional) ---
 # inherits: base
 
+name: my_agent
+
 # --- Agent Settings ---
 settings:
   agentType: CoT
