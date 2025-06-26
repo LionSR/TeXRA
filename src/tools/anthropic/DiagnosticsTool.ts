@@ -7,10 +7,7 @@ import { BaseAnthropicTool, ToolError, ToolResult } from './base';
 import { BetaToolUnionParam } from './types';
 
 // Local imports - utils
-import {
-  getLinterMessages,
-  countDiagnosticsBySeverity,
-} from '@frontend/latex/linter';
+import { getLinterMessages } from '@frontend/latex/linter';
 import * as logger from '@logger/logUtils';
 
 const CHANNEL = 'DiagnosticsTool';
@@ -44,7 +41,24 @@ export class DiagnosticsTool extends BaseAnthropicTool {
           return new ToolResult({ output: JSON.stringify(messages) });
         }
         case 'count': {
-          const counts = countDiagnosticsBySeverity(path);
+          const messages = await getLinterMessages(path);
+          const counts = { errors: 0, warnings: 0, info: 0, hints: 0 };
+          messages.forEach((m) => {
+            switch (m.severity) {
+              case 'error':
+                counts.errors++;
+                break;
+              case 'warning':
+                counts.warnings++;
+                break;
+              case 'info':
+                counts.info++;
+                break;
+              case 'hint':
+                counts.hints++;
+                break;
+            }
+          });
           return new ToolResult({ output: JSON.stringify(counts) });
         }
         default:
