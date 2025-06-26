@@ -3,7 +3,7 @@
 
 // Local imports - log
 import * as logger from './logUtils';
-import type { MessageType } from './logUtils';
+import type { MessageType } from './messageTypes';
 import { sleep } from '@utils/helpers';
 import { SHORT_SLEEP_MS } from '@utils/config';
 

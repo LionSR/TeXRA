@@ -36,6 +36,7 @@ import { AgentStateRound } from '@agent/core/AgentState';
 import { K_SLICE } from '@utils/config';
 import { objectToLogString } from '@utils/text/stringUtils';
 import { calculateTokenPrice } from '@utils/priceUtils';
+import { MESSAGE_TYPES } from '@logger/messageTypes';
 
 /**
  * Anthropic-specific model handler implementation for managing API interactions and message processing.
@@ -505,7 +506,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
       'scratchpad',
     );
     if (scratchpad) {
-      this.logger.info(scratchpad, groupId, 'scratchpad');
+      this.logger.info(scratchpad, groupId, MESSAGE_TYPES.SCRATCHPAD);
     }
 
     await WorkspaceFS.writeFile(outputFile, fileContent);
