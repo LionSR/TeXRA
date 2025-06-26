@@ -18,7 +18,6 @@ import {
 
 // Local imports - agent components
 import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
-import { createInfoSpan } from './streamUtils';
 import { AgentConfig } from '@agent/core/AgentConfig';
 import { AgentSetting, hasEndTag } from '@agent/core/AgentDataclass';
 import { AgentStateRound, AgentStateGlobal } from '@agent/core/AgentState';
@@ -823,7 +822,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
       'scratchpad',
     );
     if (scratchpad) {
-      this.logger.info(createInfoSpan(scratchpad, 'scratchpad'), groupId);
+      this.logger.info(scratchpad, groupId, 'scratchpad');
     }
 
     await WorkspaceFS.writeFile(outputFile, fileContent);

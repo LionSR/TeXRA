@@ -28,7 +28,6 @@ import { K_SLICE } from '@utils/config';
 import { objectToLogString } from '@utils/text/stringUtils';
 import { calculateTokenPrice } from '@utils/priceUtils';
 import { MediaEntry } from '@agent/utils/mediaTypes';
-import { createInfoSpan } from './streamUtils';
 
 /**
  * OpenAI-specific handlers.
@@ -561,7 +560,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
       'scratchpad',
     );
     if (scratchpad) {
-      this.logger.info(createInfoSpan(scratchpad, 'scratchpad'), groupId);
+      this.logger.info(scratchpad, groupId, 'scratchpad');
     }
 
     // Write file content to output file
