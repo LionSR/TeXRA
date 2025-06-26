@@ -115,10 +115,18 @@ export class LogEntryFormatter {
 
     if (type === 'thinking' || type === 'scratchpad') {
       const label = type === 'thinking' ? 'Thinking' : 'Scratchpad';
-      return this._formatSpecialContent(message, message, label, logMessage.id);
+      const content = this._extractContent(message);
+      return this._formatSpecialContent(message, content, label, logMessage.id);
     }
 
     return message;
+  }
+
+  _extractContent(message) {
+    const match = message.match(
+      /<span class="message-[^"]*">([\s\S]*?)<\/span>/,
+    );
+    return match ? match[1] : message;
   }
 
   _unescapeHtml(text) {
