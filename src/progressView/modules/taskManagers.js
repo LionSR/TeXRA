@@ -1,10 +1,6 @@
 // Local imports
 import { progressViewState } from './progressViewState.js';
-import {
-  TaskGroupHeaderFormatter,
-  LogEntryFormatter,
-  MessageTimestampExtractor,
-} from './formatters.js';
+import { TaskGroupHeaderFormatter, LogEntryFormatter } from './formatters.js';
 
 /**
  * Manages task group DOM operations.
@@ -12,7 +8,6 @@ import {
 export class TaskGroupsDom {
   constructor() {
     this.headerFormatter = new TaskGroupHeaderFormatter();
-    this.timestampExtractor = new MessageTimestampExtractor();
     this.previousActiveGroupId = null;
   }
 
@@ -77,20 +72,9 @@ export class TaskGroupsDom {
           else if (sibling.classList.contains('log-line')) {
             // Extract full timestamp from data attribute if available
             const msgFullTimestamp = sibling.dataset.fullTimestamp;
-            let msgTime;
-
-            if (msgFullTimestamp) {
-              msgTime = new Date(msgFullTimestamp);
-            } else {
-              // Fallback to extracting time from content
-              const msgTimestamp = this.timestampExtractor.extract(
-                sibling.outerHTML,
-              );
-              // Use a dummy date for time-only comparison
-              msgTime = msgTimestamp.includes('-')
-                ? new Date(msgTimestamp)
-                : new Date(`2000-01-01 ${msgTimestamp}`);
-            }
+            const msgTime = msgFullTimestamp
+              ? new Date(msgFullTimestamp)
+              : new Date();
 
             if (group.startTime < msgTime.getTime()) {
               insertPosition = sibling;
@@ -286,7 +270,6 @@ export class TaskGroupsDom {
 export class LogEntriesDom {
   constructor() {
     this.entryFormatter = new LogEntryFormatter();
-    this.timestampExtractor = new MessageTimestampExtractor();
   }
 
   /**
@@ -306,12 +289,7 @@ export class LogEntriesDom {
         const logLineElement = messageElement.firstElementChild;
 
         // Extract timestamp from the message for chronological ordering
-        const msgDate = logMessage.timestamp
-          ? new Date(logMessage.timestamp)
-          : null;
-        const msgTimestamp =
-          msgDate?.toISOString() ||
-          this.timestampExtractor.extract(logMessage.message);
+        const msgDate = new Date(logMessage.timestamp);
 
         // Find where to insert this message chronologically
         let insertPosition = null;
@@ -330,21 +308,9 @@ export class LogEntriesDom {
                 const startTime = parseInt(groupStartTime, 10);
                 // If the message timestamp is earlier than the group start time,
                 // insert before this group
-                if (msgDate) {
-                  if (msgDate.getTime() < startTime) {
-                    insertPosition = child;
-                    break;
-                  }
-                } else {
-                  // Fallback to text comparison if no msgDate
-                  const timeText = startTimeElem.textContent.replace(
-                    /^[^0-9]*/,
-                    '',
-                  );
-                  if (msgTimestamp < timeText) {
-                    insertPosition = child;
-                    break;
-                  }
+                if (msgDate.getTime() < startTime) {
+                  insertPosition = child;
+                  break;
                 }
               }
             }
@@ -353,31 +319,9 @@ export class LogEntriesDom {
           else if (child.classList.contains('log-line')) {
             // Try to get the full timestamp from data attribute
             const childFullTimestamp = child.dataset.fullTimestamp;
-
             if (childFullTimestamp) {
               const childDate = new Date(childFullTimestamp);
-
-              if (msgDate && childDate) {
-                if (msgDate < childDate) {
-                  insertPosition = child;
-                  break;
-                }
-              } else {
-                // Fallback to string comparison
-                const childTimestamp = this.timestampExtractor.extract(
-                  child.outerHTML,
-                );
-                if (msgTimestamp < childTimestamp) {
-                  insertPosition = child;
-                  break;
-                }
-              }
-            } else {
-              // Fallback to original behavior
-              const childTimestamp = this.timestampExtractor.extract(
-                child.outerHTML,
-              );
-              if (msgTimestamp < childTimestamp) {
+              if (msgDate < childDate) {
                 insertPosition = child;
                 break;
               }
