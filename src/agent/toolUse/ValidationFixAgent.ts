@@ -85,12 +85,12 @@ export class ValidationFixAgent<
     filePath: string,
   ): Promise<ValidationResult<ErrorFor<T>>> {
     if (this.validator === 'latexLinter') {
-      return (await this.validateLatexFile(filePath)) as ValidationResult<
-        ErrorFor<T>
+      return this.validateLatexFile(filePath) as Promise<
+        ValidationResult<ErrorFor<T>>
       >;
     }
-    return (await this.validateXmlFile(filePath)) as ValidationResult<
-      ErrorFor<T>
+    return this.validateXmlFile(filePath) as Promise<
+      ValidationResult<ErrorFor<T>>
     >;
   }
 
@@ -125,13 +125,13 @@ export class ValidationFixAgent<
   protected getErrorContext(content: string, error: ErrorFor<T>): string {
     let line = 1;
     if (this.validator === 'latexLinter' && Array.isArray(error)) {
-      const first = error.find((e) => (e as any).line);
-      line = (first as any)?.line ?? 1;
-    } else if (
-      this.validator === 'xmlValidator' &&
-      (error as XMLValidationError).line
-    ) {
-      line = (error as XMLValidationError).line!;
+      const first = (error as LinterMessage[]).find((e) => e.line);
+      line = first?.line ?? 1;
+    } else if (this.validator === 'xmlValidator') {
+      const xmlErr = error as XMLValidationError;
+      if (xmlErr.line) {
+        line = xmlErr.line;
+      }
     }
     return this.getContentAroundLine(content, line, this.contextLines);
   }
