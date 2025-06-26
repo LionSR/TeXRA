@@ -31,14 +31,7 @@ type StreamStatusType =
   | typeof STATUS.ERROR
   | typeof STATUS.STOPPED;
 
-interface ColoredLogMessage {
-  id: string;
-  message: string;
-  level: 'error' | 'warn' | 'info' | 'debug';
-  timestamp: number;
-  groupId?: string;
-  messageType?: 'default' | 'scratchpad' | 'thinking';
-}
+import type { LogMessageData } from '../logger/LogTypes';
 
 // Channels that should not be persisted in workspace storage
 
@@ -147,35 +140,15 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       new vscode.Disposable(
         onProgress(
           'addLogMessage',
-          (p: {
-            stream: string;
-            message: string;
-            level: 'error' | 'warn' | 'info' | 'debug';
-            groupId?: string;
-            timestamp: number;
-            messageType: 'default' | 'scratchpad' | 'thinking';
-            id: string;
-          }) =>
-            this.addLogMessage(
-              p.stream,
-              p.message,
-              p.level,
-              p.groupId,
-              p.timestamp,
-              p.messageType,
-              p.id,
-            ),
+          (p: { stream: string; logMessage: LogMessageData }) =>
+            this.addLogMessage(p.stream, p.logMessage),
         ),
       ),
       new vscode.Disposable(
         onProgress(
           'updateLogMessage',
-          (p: {
-            stream: string;
-            id: string;
-            message: string;
-            messageType: 'default' | 'scratchpad' | 'thinking';
-          }) => this.updateLogMessage(p.stream, p.id, p.message, p.messageType),
+          (p: { stream: string; logMessage: LogMessageData }) =>
+            this.updateLogMessage(p.stream, p.logMessage),
         ),
       ),
       new vscode.Disposable(
@@ -376,17 +349,12 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     this._pendingUpdate = false;
   }
 
-  public addLogMessage(
-    stream: string,
-    message: string,
-    level: 'error' | 'warn' | 'info' | 'debug' = 'info',
-    groupId?: string,
-    timestamp: number = Date.now(),
-    messageType: 'default' | 'scratchpad' | 'thinking' = 'default',
-    id: string = randomUUID(),
-  ) {
+  public addLogMessage(stream: string, log: LogMessageData) {
     // Skip debug messages if debug mode is disabled
-    if (level === 'debug' && !getConfig<boolean>('logger.debugMode', false)) {
+    if (
+      log.level === 'debug' &&
+      !getConfig<boolean>('logger.debugMode', false)
+    ) {
       return;
     }
 
@@ -418,17 +386,8 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       }
     }
 
-    const logMessage: ColoredLogMessage = {
-      id,
-      message,
-      level,
-      timestamp,
-      groupId,
-      messageType,
-    };
-
     const messages = this._stateManager.logStreams.get(stream)!;
-    messages.push(logMessage);
+    messages.push(log);
 
     if (messages.length > 1000) {
       messages.splice(0, messages.length - 1000);
@@ -440,27 +399,26 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       this._view.webview.postMessage({
         command: COMMANDS.APPEND_LOG,
         stream: stream,
-        logMessage,
+        logMessage: log,
       });
     }
   }
 
-  public updateLogMessage(
-    stream: string,
-    id: string,
-    message: string,
-    messageType: 'default' | 'scratchpad' | 'thinking' = 'default',
-  ): void {
+  public updateLogMessage(stream: string, log: LogMessageData): void {
     const messages = this._stateManager.logStreams.get(stream);
     if (!messages) {
       return;
     }
-    const existing = messages.find((m) => m.id === id);
+    const existing = messages.find((m) => m.id === log.id);
     if (!existing) {
       return;
     }
-    existing.message = message;
-    existing.messageType = messageType;
+    if (log.text !== undefined) {
+      existing.text = log.text;
+    }
+    if (log.messageType) {
+      existing.messageType = log.messageType;
+    }
     this._stateManager.saveState();
     if (this._view && stream === this._stateManager.activeStream) {
       this._view.webview.postMessage({
@@ -610,7 +568,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     });
   }
 
-  public getLogStreams(): Map<string, ColoredLogMessage[]> {
+  public getLogStreams(): Map<string, LogMessageData[]> {
     return this._stateManager.logStreams;
   }
 
@@ -834,14 +792,13 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     for (const streamId of runningStreams) {
       // Mark stream as cancelled
       this._streamStatus.set(streamId, STATUS_CANCELLED);
-      this.addLogMessage(
-        streamId,
-        'Task cancelled due to extension deactivation.',
-        'warn',
-        undefined,
-        Date.now(),
-        'default',
-      );
+      this.addLogMessage(streamId, {
+        id: randomUUID(),
+        text: 'Task cancelled due to extension deactivation.',
+        level: 'warn',
+        timestamp: Date.now(),
+        messageType: 'default',
+      });
 
       // Update all active groups for this stream
       const streamGroups = this._stateManager.taskGroups.get(streamId);
@@ -883,14 +840,13 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       // Check if stream is running and mark as interrupted
       if (this._streamStatus.get(streamId) === STATUS.RUNNING) {
         this._streamStatus.set(streamId, STATUS_INTERRUPTED);
-        this.addLogMessage(
-          streamId,
-          'Task was interrupted due to extension restart.',
-          'warn',
-          undefined,
-          Date.now(),
-          'default',
-        );
+        this.addLogMessage(streamId, {
+          id: randomUUID(),
+          text: 'Task was interrupted due to extension restart.',
+          level: 'warn',
+          timestamp: Date.now(),
+          messageType: 'default',
+        });
         wasUpdated = true;
         updatedStreams++;
       }
@@ -905,14 +861,15 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
         if (activeGroups.length > 0) {
           // Log inconsistent state if stream wasn't running but has running groups
           if (!wasUpdated) {
-            this.addLogMessage(
-              streamId,
-              `Found inconsistent state: stream status is ${this._streamStatus.get(streamId)} but has running groups.`,
-              'warn',
-              undefined,
-              Date.now(),
-              'default',
-            );
+            this.addLogMessage(streamId, {
+              id: randomUUID(),
+              text: `Found inconsistent state: stream status is ${this._streamStatus.get(
+                streamId,
+              )} but has running groups.`,
+              level: 'warn',
+              timestamp: Date.now(),
+              messageType: 'default',
+            });
             updatedStreams++;
           }
 
