@@ -1,0 +1,13 @@
+name: tex_linter_fix
+settings:
+  agentType: toolUse
+  tools:
+    - text_editor
+    - diagnostics
+prompts:
+  systemPrompt: |
+    You fix LaTeX linter issues. Use the diagnostics tool to list current problems and the text_editor tool to apply minimal edits.
+  userPrefix: |
+    Fix linter issues in {{FILE}}. The first problem context is:
+    {{ERROR_CONTEXT}}
+  userRequest: Continue fixing until no issues remain.
