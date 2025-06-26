@@ -27,7 +27,7 @@ export class DiagnosticsTool extends BaseAnthropicTool {
   toParams(): BetaToolUnionParam {
     return {
       name: 'diagnostics',
-      type: 'custom',
+      type: 'function',
       description:
         'Retrieve linter diagnostics. Use `list` for full messages or `count` for a summary.',
       input_schema: {
