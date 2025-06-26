@@ -85,10 +85,18 @@ export class WatcherManager {
         watcher.onDidCreate((uri) => {
           this.triggerRefresh();
           if (path.extname(uri.fsPath) === '.yaml') {
-            const handle = setTimeout(
-              () => void this.validateYaml(uri.fsPath),
-              WatcherManager.VALIDATION_DELAY,
-            );
+            const handle = setTimeout(async () => {
+              try {
+                await this.validateYaml(uri.fsPath);
+              } catch (error) {
+                logger.error(CHANNEL, `Error validating YAML: ${error}`);
+              } finally {
+                this.validationHandles = this.validationHandles.filter(
+                  (h) => h !== handle,
+                );
+              }
+            }, WatcherManager.VALIDATION_DELAY);
+
             this.validationHandles.push(handle);
           }
         });
