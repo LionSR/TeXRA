@@ -1,6 +1,6 @@
 // Local imports - agent components
 import { AgentStateRound, AgentStateGlobal } from '../core/AgentState';
-import { getOutputFileName } from '../runtime/OutputHandler';
+import { getOutputFileName } from '@agent/output';
 import { BaseReflectionAgent } from './BaseReflectionAgent';
 
 /**
