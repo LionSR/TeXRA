@@ -28,6 +28,7 @@ import { K_SLICE } from '@utils/config';
 import { objectToLogString } from '@utils/text/stringUtils';
 import { calculateTokenPrice } from '@utils/priceUtils';
 import { MediaEntry } from '@agent/utils/mediaTypes';
+import { MESSAGE_TYPES } from '@logger/messageTypes';
 
 /**
  * OpenAI-specific handlers.
@@ -560,7 +561,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
       'scratchpad',
     );
     if (scratchpad) {
-      this.logger.info(scratchpad, groupId, 'scratchpad');
+      this.logger.info(scratchpad, groupId, MESSAGE_TYPES.SCRATCHPAD);
     }
 
     // Write file content to output file
