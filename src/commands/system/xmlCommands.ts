@@ -6,7 +6,7 @@ import { XMLParser } from 'fast-xml-parser';
 import * as logger from '@logger/logUtils';
 
 // Local imports - core
-import { XMLValidatorAgent } from '@agent/toolUse';
+import { ValidationFixAgent } from '@agent/toolUse';
 
 // Local imports - utils
 import { WorkspaceFS } from '@utils/files';
@@ -108,7 +108,7 @@ export async function handleValidateAndFixXml(
     }
 
     // Initialize the validator agent
-    const validator = await XMLValidatorAgent.create('xmlValidator', context);
+    const validator = await ValidationFixAgent.create('xmlValidator', context);
 
     // Save the file first to make sure we're working with the latest content
     await editor.document.save();
