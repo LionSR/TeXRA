@@ -130,7 +130,7 @@ export class ProgressStateManager {
                 const timeString =
                   attrMatch?.[1] || (rawText.match(/\[(.*?)\]/)?.[1] ?? '');
                 const parsed = new Date(timeString).getTime();
-                ts = isNaN(parsed) ? 0 : parsed;
+                ts = isNaN(parsed) ? Date.now() : parsed;
               }
               return {
                 id: msg.id ?? randomUUID(),

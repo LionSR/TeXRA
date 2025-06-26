@@ -330,7 +330,7 @@ export class LogEntriesDom {
                 const startTime = parseInt(groupStartTime, 10);
                 // If the message timestamp is earlier than the group start time,
                 // insert before this group
-                if (msgDate.getTime() < startTime) {
+                if (msgDate && msgDate.getTime() < startTime) {
                   insertPosition = child;
                   break;
                 }
