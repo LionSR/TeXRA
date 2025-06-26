@@ -111,35 +111,14 @@ export class LogEntryFormatter {
   format(logMessage) {
     const message = logMessage.message;
 
-    let type = logMessage.messageType;
-    if (!type) {
-      const attrMatch = message.match(/data-message-type="(.*?)"/);
-      if (attrMatch) type = attrMatch[1];
-    }
+    const type = logMessage.messageType;
 
     if (type === 'thinking' || type === 'scratchpad') {
-      const content = this._extractSpecialContent(message, type);
-      if (content) {
-        const label = type === 'thinking' ? 'Thinking' : 'Scratchpad';
-        return this._formatSpecialContent(
-          message,
-          content,
-          label,
-          logMessage.id,
-        );
-      }
+      const label = type === 'thinking' ? 'Thinking' : 'Scratchpad';
+      return this._formatSpecialContent(message, message, label, logMessage.id);
     }
 
     return message;
-  }
-
-  _extractSpecialContent(message, type) {
-    const regex = new RegExp(
-      `<span class="message-info"[^>]*data-message-type="${type}"[^>]*>(.*?)</span>`,
-      's',
-    );
-    const match = message.match(regex);
-    return match ? match[1] : null;
   }
 
   _unescapeHtml(text) {
