@@ -16,6 +16,8 @@ logger.initialize(CHANNEL);
 export class WatcherManager {
   private disposables: vscode.FileSystemWatcher[] = [];
   private refreshHandle: NodeJS.Timeout | undefined;
+  private validationHandles: NodeJS.Timeout[] = [];
+  private static readonly VALIDATION_DELAY = 300;
 
   constructor(
     private context: vscode.ExtensionContext | undefined,
@@ -27,6 +29,25 @@ export class WatcherManager {
       clearTimeout(this.refreshHandle);
     }
     this.refreshHandle = setTimeout(() => this.refresh(), 200);
+  }
+
+  private async validateYaml(filePath: string) {
+    const validationResult = await isValidAgentYaml(filePath);
+    if (validationResult) {
+      const filenameBase = path.basename(filePath, '.yaml');
+      const internalName = validationResult.name;
+      if (filenameBase !== internalName) {
+        vscode.window.showWarningMessage(
+          `Agent file '${filenameBase}.yaml' has a different internal name '${internalName}' defined in its YAML. ` +
+            `Consider renaming the file or updating the internal name in the YAML for consistency.`,
+        );
+      } else {
+        const configuredAgents = getConfig<string[]>('texra.agents', []);
+        if (!configuredAgents.includes(filenameBase)) {
+          await promptToAddAgentToConfig(filenameBase);
+        }
+      }
+    }
   }
 
   async setup() {
@@ -52,7 +73,7 @@ export class WatcherManager {
       for (const watchPath of pathsToWatch) {
         if (!watchPath) continue;
 
-        const pattern = new vscode.RelativePattern(watchPath, '**/*.yaml');
+        const pattern = new vscode.RelativePattern(watchPath, '**/*');
         const watcher = vscode.workspace.createFileSystemWatcher(
           pattern,
           false,
@@ -61,36 +82,31 @@ export class WatcherManager {
         );
         this.disposables.push(watcher);
 
-        watcher.onDidCreate(() => this.triggerRefresh());
+        watcher.onDidCreate((uri) => {
+          this.triggerRefresh();
+          if (path.extname(uri.fsPath) === '.yaml') {
+            const handle = setTimeout(async () => {
+              try {
+                await this.validateYaml(uri.fsPath);
+              } catch (error) {
+                logger.error(CHANNEL, `Error validating YAML: ${error}`);
+              } finally {
+                this.validationHandles = this.validationHandles.filter(
+                  (h) => h !== handle,
+                );
+              }
+            }, WatcherManager.VALIDATION_DELAY);
+
+            this.validationHandles.push(handle);
+          }
+        });
         watcher.onDidDelete(() => this.triggerRefresh());
 
         if (path.resolve(watchPath) === path.resolve(customAgentsPath ?? '')) {
           watcher.onDidChange(async (uri) => {
             this.triggerRefresh();
-
-            const filePath = uri.fsPath;
-            if (!filePath.endsWith('.yaml')) {
-              return;
-            }
-
-            const validationResult = await isValidAgentYaml(filePath);
-            if (validationResult) {
-              const filenameBase = path.basename(filePath, '.yaml');
-              const internalName = validationResult.name;
-              if (filenameBase !== internalName) {
-                vscode.window.showWarningMessage(
-                  `Agent file '${filenameBase}.yaml' has a different internal name '${internalName}' defined in its YAML. ` +
-                    `Consider renaming the file or updating the internal name in the YAML for consistency.`,
-                );
-              } else {
-                const configuredAgents = getConfig<string[]>(
-                  'texra.agents',
-                  [],
-                );
-                if (!configuredAgents.includes(filenameBase)) {
-                  await promptToAddAgentToConfig(filenameBase);
-                }
-              }
+            if (path.extname(uri.fsPath) === '.yaml') {
+              await this.validateYaml(uri.fsPath);
             }
           });
         } else {
@@ -108,6 +124,12 @@ export class WatcherManager {
   }
 
   dispose() {
+    if (this.refreshHandle) {
+      clearTimeout(this.refreshHandle);
+      this.refreshHandle = undefined;
+    }
+    this.validationHandles.forEach((h) => clearTimeout(h));
+    this.validationHandles = [];
     this.disposables.forEach((d) => d.dispose());
     this.disposables = [];
   }
