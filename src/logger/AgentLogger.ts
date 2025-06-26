@@ -12,8 +12,14 @@ import { SHORT_SLEEP_MS } from '@utils/config';
  * Uses the updated consolidated logger system.
  */
 export class AgentLogger {
-  constructor(public channelId: string) {
-    logger.initialize(this.channelId);
+  public readonly isAgentLogger: boolean;
+
+  constructor(
+    public channelId: string,
+    isAgentLogger = false,
+  ) {
+    this.isAgentLogger = isAgentLogger;
+    logger.initialize(this.channelId, this.isAgentLogger);
     this.channelId = channelId;
   }
 

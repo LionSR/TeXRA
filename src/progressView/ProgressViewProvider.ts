@@ -10,7 +10,6 @@ import { TaskState } from '@logger/TaskState';
 import { AgentLogger } from '@logger/AgentLogger';
 
 import { getConfig } from '@utils/config';
-import { shouldUseConsolidatedChannel } from '@utils/loggerUtils';
 
 import { TokenUsageStats } from '../types/UsageTypes';
 import { TaskGroup } from '../logger/LogTypes';
@@ -386,11 +385,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     messageType: 'default' | 'scratchpad' | 'thinking' = 'default',
     id: string = randomUUID(),
   ) {
-    // Skip if this stream should be excluded from the progress view
-    if (shouldUseConsolidatedChannel(stream)) {
-      return;
-    }
-
     // Skip debug messages if debug mode is disabled
     if (level === 'debug' && !getConfig<boolean>('logger.debugMode', false)) {
       return;
@@ -486,11 +480,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     endTime?: number,
     parentGroupId?: string,
   ) {
-    // Skip if this stream should be excluded from the progress view
-    if (shouldUseConsolidatedChannel(stream)) {
-      return;
-    }
-
     // Ensure the stream exists so the UI can create a new tab immediately
     // this seems to be the fix for the issue where the progress view panel is not shown when a new stream is created
     if (!this._stateManager.logStreams.has(stream)) {
@@ -546,11 +535,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     status: StatusType,
     endTime?: number,
   ) {
-    // Skip if this stream should be excluded from the progress view
-    if (shouldUseConsolidatedChannel(stream)) {
-      return;
-    }
-
     const streamGroups = this._stateManager.taskGroups.get(stream);
     if (!streamGroups) {
       return;
@@ -679,11 +663,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   }
 
   public updateStreamStatus(stream: string, status: StreamStatusType) {
-    // Don't track status for excluded streams
-    if (shouldUseConsolidatedChannel(stream)) {
-      return;
-    }
-
     if (!this._stateManager.logStreams.has(stream)) {
       return;
     }
