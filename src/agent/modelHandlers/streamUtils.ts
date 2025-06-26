@@ -26,21 +26,25 @@ export async function streamReasoningToProgressView<T>(
 
   emitProgress('addLogMessage', {
     stream: streamId,
-    message: escapeContent(content),
-    level: 'info',
-    groupId,
-    timestamp: Date.now(),
-    messageType: MESSAGE_TYPES.THINKING,
-    id,
+    logMessage: {
+      id,
+      text: escapeContent(content),
+      level: 'info',
+      timestamp: Date.now(),
+      groupId,
+      messageType: MESSAGE_TYPES.THINKING,
+    },
   });
 
   for await (const chunk of stream) {
     content += extract(chunk);
     emitProgress('updateLogMessage', {
       stream: streamId,
-      id,
-      message: escapeContent(content),
-      messageType: MESSAGE_TYPES.THINKING,
+      logMessage: {
+        id,
+        text: escapeContent(content),
+        messageType: MESSAGE_TYPES.THINKING,
+      },
     });
   }
 
