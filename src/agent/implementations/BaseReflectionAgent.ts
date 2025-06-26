@@ -51,7 +51,7 @@ import type { IModelHandler } from '@agent/modelHandlers';
 import { OutputHandler, NamedOutputFile } from '@agent/runtime/OutputHandler';
 import { messageToSkeleton } from '@agent/utils/messageUtils';
 import { BaseAgent } from '@agent/implementations/BaseAgent';
-import { createInfoSpan } from '@agent/modelHandlers/streamUtils';
+import { MESSAGE_TYPES } from '@logger/messageTypes';
 
 // System imports - common utilities
 import { getConfig } from '@utils/config';
@@ -253,7 +253,7 @@ export abstract class BaseReflectionAgent extends BaseAgent {
         // If thinking content was extracted, format and log it first
         if (thinkingContent) {
           const formatted = await xmlUtils.formatContent(thinkingContent);
-          this.logger.info(createInfoSpan(formatted, 'thinking'), logGroupId);
+          this.logger.info(formatted, logGroupId, MESSAGE_TYPES.THINKING);
 
           // Note: The complete thinking blocks (including signatures) have already been
           // stored in toolState.thinkingBlocks by the processThinkingBlock method
@@ -265,10 +265,7 @@ export abstract class BaseReflectionAgent extends BaseAgent {
           'scratchpad',
         );
         if (scratchpad) {
-          this.logger.info(
-            createInfoSpan(scratchpad, 'scratchpad'),
-            logGroupId,
-          );
+          this.logger.info(scratchpad, logGroupId, MESSAGE_TYPES.SCRATCHPAD);
         }
         // this has a potential bug if <scratchpad> is included in the prefill
 
