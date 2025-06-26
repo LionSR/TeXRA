@@ -1,7 +1,7 @@
 // Local imports - agent components
 import { BaseReflectionAgent } from './BaseReflectionAgent';
 import { AgentStateRound, AgentStateGlobal } from '../core/AgentState';
-import { getOutputFileName } from '../runtime/OutputHandler';
+import { getOutputFileName } from '@agent/output';
 
 /**
  * Direct agent implementation that processes requests in a single pass.
