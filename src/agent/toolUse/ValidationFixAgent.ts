@@ -10,8 +10,12 @@ import { BaseToolUseAgent } from './BaseToolUseAgent';
 import { loadAgentSettingAndPrompts } from '@agent/runtime/agentLoad';
 
 // Local imports - types
-import { AgentPrompt } from '@agent/core/AgentDataclass';
-import { ValidationResult, BaseError } from '@tools/anthropic/types';
+import { AgentPrompt, AgentSetting } from '@agent/core/AgentDataclass';
+import {
+  ValidationResult,
+  BaseError,
+  XMLValidationError,
+} from '@tools/anthropic/types';
 import { LinterMessage } from '@frontend/latex/linter';
 import { WorkspaceFS } from '@utils/files';
 import * as linterUtils from '@frontend/latex/linter';
@@ -31,6 +35,7 @@ export class ValidationFixAgent<
     userRequest: '',
     userReflect: '',
   };
+  private settings: AgentSetting | null = null;
   private validator: ValidatorType;
 
   protected constructor(type: ValidatorType) {
@@ -48,11 +53,15 @@ export class ValidationFixAgent<
       'resources',
       'tool_use_agents',
     );
-    const [, prompts] = await loadAgentSettingAndPrompts(
+    const [settings, prompts] = await loadAgentSettingAndPrompts(
       agentPath,
       agent.getYamlName(),
     );
     agent.prompts = prompts;
+    agent.settings = settings;
+    const defaultTools =
+      type === 'latexLinter' ? ['text_editor', 'diagnostics'] : ['text_editor'];
+    agent.setConfiguredTools((settings as any).tools || defaultTools);
     return agent;
   }
 
@@ -66,11 +75,25 @@ export class ValidationFixAgent<
     filePath: string,
   ): Promise<ValidationResult<ErrorType>> {
     if (this.validator === 'latexLinter') {
-      const issues = await linterUtils.getLinterMessages(filePath);
-      return issues.length === 0
-        ? { isValid: true }
-        : { isValid: false, error: issues as unknown as ErrorType };
+      const result = await this.validateLatexFile(filePath);
+      return result as unknown as ValidationResult<ErrorType>;
     }
+    const result = await this.validateXmlFile(filePath);
+    return result as unknown as ValidationResult<ErrorType>;
+  }
+
+  private async validateLatexFile(
+    filePath: string,
+  ): Promise<ValidationResult<LinterMessage[]>> {
+    const issues = await linterUtils.getLinterMessages(filePath);
+    return issues.length === 0
+      ? { isValid: true }
+      : { isValid: false, error: issues };
+  }
+
+  private async validateXmlFile(
+    filePath: string,
+  ): Promise<ValidationResult<XMLValidationError>> {
     const content = await WorkspaceFS.readFile(filePath);
     const result = XMLValidator.validate(content, {
       allowBooleanAttributes: true,
@@ -78,21 +101,32 @@ export class ValidationFixAgent<
     if (result === true) {
       return { isValid: true };
     }
-    const error = {
+    const error: XMLValidationError = {
       message: result.err.msg,
       line: result.err.line,
       code: 'xml-validation-error',
       data: result,
-    } as unknown as ErrorType;
+    };
     return { isValid: false, error };
   }
 
-  protected getErrorContext(content: string, error: any): string {
-    const line = error?.line || 1;
+  protected getErrorContext(content: string, error: ErrorType): string {
+    let line = 1;
+    if (this.validator === 'latexLinter' && Array.isArray(error)) {
+      const first = error.find((e) => (e as any).line);
+      line = (first as any)?.line ?? 1;
+    } else if (
+      this.validator === 'xmlValidator' &&
+      (error as XMLValidationError).line
+    ) {
+      line = (error as XMLValidationError).line!;
+    }
     return this.getContentAroundLine(content, line, this.contextLines);
   }
 
-  protected createSystemMessage(): string {
+  protected createSystemMessage(
+    _validation: ValidationResult<ErrorType>,
+  ): string {
     return this.prompts.systemPrompt;
   }
 
@@ -109,6 +143,7 @@ export class ValidationFixAgent<
   protected createFollowUpMessage(
     _validation: ValidationResult<ErrorType>,
     isFixed: boolean,
+    _currentIteration: number,
   ): string {
     return isFixed ? 'All issues fixed.' : this.prompts.userRequest;
   }
