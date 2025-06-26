@@ -8,11 +8,9 @@ import { randomUUID } from 'crypto';
 import { emitProgress } from '@eventBus/ProgressEventBus';
 import { getConfig } from '@utils/config';
 import {
-  shouldUseConsolidatedChannel,
   getColorForLevel,
-  isAgentStream,
   EMOJI_BY_LEVEL as emojis,
-} from '@utils/loggerUtils';
+} from '@/logger/loggerUtils';
 import { TaskGroup } from './LogTypes';
 import { MESSAGE_TYPES, type MessageType } from './messageTypes';
 
@@ -69,20 +67,20 @@ function getMainOutputChannel(): vscode.OutputChannel {
 class VSCodeTransport extends Transport {
   private channel: vscode.OutputChannel;
   private streamName: string;
-  private useConsolidatedChannel: boolean;
+  private isAgentChannel: boolean;
   private groups: Map<string, TaskGroup> = new Map();
   private activeGroupId?: string;
 
   constructor(
     channel: vscode.OutputChannel,
     streamName: string,
-    useConsolidatedChannel: boolean,
+    isAgentChannel: boolean,
     opts?: Transport.TransportStreamOptions,
   ) {
     super(opts);
     this.channel = channel;
     this.streamName = streamName;
-    this.useConsolidatedChannel = useConsolidatedChannel;
+    this.isAgentChannel = isAgentChannel;
   }
 
   log(info: any, callback: () => void) {
@@ -96,21 +94,15 @@ class VSCodeTransport extends Transport {
     // Full format is: YYYY-MM-DD HH:mm:ss.SSS
     const timeDisplay = timestamp.split(' ')[1].split('.')[0]; // Drop milliseconds for UI display
 
-    // For consolidated channel, include the source channel in the message
-    const channelPrefix = this.useConsolidatedChannel
-      ? `[${this.streamName}] `
-      : '';
+    // For non-agent channels include the source name in the message
+    const channelPrefix = this.isAgentChannel ? '' : `[${this.streamName}] `;
 
     // Plain format for output channel - no escaping needed but include better formatting
     // const formattedMessage = `${emoji} [${timestamp}] ${level.toUpperCase().padEnd(7)} ${channelPrefix}${message}`;
     const formattedMessage = `${emoji} [${timestamp}] ${channelPrefix}${message}`;
 
-    // Key behavior change: For agent streams, we ONLY write to their dedicated channel
-    // For non-agent streams, we write to the consolidated channel
-    // This prevents duplicate output in both places
-    if (this.useConsolidatedChannel || !isAgentStream(this.streamName)) {
-      this.channel.appendLine(formattedMessage);
-    }
+    // Always write to the configured output channel
+    this.channel.appendLine(formattedMessage);
 
     // Skip debug messages in ProgressView if debug mode is disabled
     if (level === 'debug' && !getConfig<boolean>('logger.debugMode', false)) {
@@ -118,8 +110,8 @@ class VSCodeTransport extends Transport {
       return;
     }
 
-    // Skip progress view updates for consolidated channels
-    if (this.useConsolidatedChannel) {
+    // Skip progress view updates for non-agent channels
+    if (!this.isAgentChannel) {
       callback();
       return;
     }
@@ -179,8 +171,8 @@ class VSCodeTransport extends Transport {
 
     this.activeGroupId = groupId;
 
-    // Skip progress view updates for consolidated channels
-    if (this.useConsolidatedChannel) {
+    // Skip progress view updates for non-agent channels
+    if (!this.isAgentChannel) {
       return groupId;
     }
 
@@ -208,8 +200,8 @@ class VSCodeTransport extends Transport {
     group.endTime = now;
     group.status = status;
 
-    // Skip progress view updates for consolidated channels
-    if (this.useConsolidatedChannel) {
+    // Skip progress view updates for non-agent channels
+    if (!this.isAgentChannel) {
       return;
     }
 
@@ -249,38 +241,28 @@ class VSCodeTransport extends Transport {
 const channelLoggers = new Map<string, winston.Logger>();
 const channelTransports = new Map<string, VSCodeTransport>();
 
-export function initialize(defaultChannel: string): void {
+export function initialize(defaultChannel: string, isAgent = false): void {
   // Create default logger if it doesn't exist
   if (!channelLoggers.has(defaultChannel)) {
-    createLoggerForChannel(defaultChannel);
+    createLoggerForChannel(defaultChannel, isAgent);
   }
 }
 
-function createLoggerForChannel(channel: string): winston.Logger {
+function createLoggerForChannel(
+  channel: string,
+  isAgent = false,
+): winston.Logger {
   // Check if channel already exists
   if (channelLoggers.has(channel)) {
     return channelLoggers.get(channel)!;
   }
 
-  const useConsolidatedChannel = shouldUseConsolidatedChannel(channel);
-
-  let outputChannel: vscode.OutputChannel;
-
-  if (useConsolidatedChannel) {
-    // Use the main TeXRA output channel for non-agent channels
-    outputChannel = getMainOutputChannel();
-  } else {
-    // Create a separate channel with the TeXRA prefix for agent channels
-    const channelName = 'TeXRA ' + channel;
-    outputChannel = vscode.window.createOutputChannel(channelName);
-  }
+  const outputChannel: vscode.OutputChannel = isAgent
+    ? vscode.window.createOutputChannel('TeXRA ' + channel)
+    : getMainOutputChannel();
 
   // Create transport
-  const transport = new VSCodeTransport(
-    outputChannel,
-    channel,
-    useConsolidatedChannel,
-  );
+  const transport = new VSCodeTransport(outputChannel, channel, isAgent);
   channelTransports.set(channel, transport);
 
   const logger = winston.createLogger({
@@ -304,10 +286,11 @@ export function startGroup(
   groupName: string,
   id: string = randomUUID(),
   parentGroupId?: string,
+  isAgent = false,
 ): string {
   const transport = channelTransports.get(channel);
   if (!transport) {
-    const logger = createLoggerForChannel(channel);
+    createLoggerForChannel(channel, isAgent);
     const newTransport = channelTransports.get(channel)!;
     return newTransport.startGroup(groupName, id, parentGroupId);
   }
@@ -351,8 +334,9 @@ function logWithGroup(
   message: string,
   groupId?: string,
   messageType?: MessageType,
+  isAgent = false,
 ): void {
-  const logger = getOrCreateLogger(channel);
+  const logger = getOrCreateLogger(channel, isAgent);
   const transport = channelTransports.get(channel);
 
   // If no groupId provided, use the active group
@@ -368,8 +352,9 @@ export const debug = (
   message: string,
   groupId?: string,
   messageType?: MessageType,
+  isAgent = false,
 ): void => {
-  logWithGroup(channel, 'debug', message, groupId, messageType);
+  logWithGroup(channel, 'debug', message, groupId, messageType, isAgent);
 };
 
 export const info = (
@@ -377,8 +362,9 @@ export const info = (
   message: string,
   groupId?: string,
   messageType?: MessageType,
+  isAgent = false,
 ): void => {
-  logWithGroup(channel, 'info', message, groupId, messageType);
+  logWithGroup(channel, 'info', message, groupId, messageType, isAgent);
 };
 
 export const warn = (
@@ -386,8 +372,9 @@ export const warn = (
   message: string,
   groupId?: string,
   messageType?: MessageType,
+  isAgent = false,
 ): void => {
-  logWithGroup(channel, 'warn', message, groupId, messageType);
+  logWithGroup(channel, 'warn', message, groupId, messageType, isAgent);
 };
 
 export const error = (
@@ -395,13 +382,14 @@ export const error = (
   message: string,
   groupId?: string,
   messageType?: MessageType,
+  isAgent = false,
 ): void => {
-  logWithGroup(channel, 'error', message, groupId, messageType);
+  logWithGroup(channel, 'error', message, groupId, messageType, isAgent);
 };
 
-function getOrCreateLogger(channel: string): winston.Logger {
+function getOrCreateLogger(channel: string, isAgent = false): winston.Logger {
   if (!channelLoggers.has(channel)) {
-    return createLoggerForChannel(channel);
+    return createLoggerForChannel(channel, isAgent);
   }
   return channelLoggers.get(channel)!;
 }
