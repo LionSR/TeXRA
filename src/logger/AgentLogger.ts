@@ -3,6 +3,7 @@
 
 // Local imports - log
 import * as logger from './logUtils';
+import type { MessageType } from './logUtils';
 import { sleep } from '@utils/helpers';
 import { SHORT_SLEEP_MS } from '@utils/config';
 
@@ -16,20 +17,20 @@ export class AgentLogger {
     this.channelId = channelId;
   }
 
-  debug(message: string, groupId?: string): void {
-    logger.debug(this.channelId, message, groupId);
+  debug(message: string, groupId?: string, messageType?: MessageType): void {
+    logger.debug(this.channelId, message, groupId, messageType);
   }
 
-  info(message: string, groupId?: string): void {
-    logger.info(this.channelId, message, groupId);
+  info(message: string, groupId?: string, messageType?: MessageType): void {
+    logger.info(this.channelId, message, groupId, messageType);
   }
 
-  warn(message: string, groupId?: string): void {
-    logger.warn(this.channelId, message, groupId);
+  warn(message: string, groupId?: string, messageType?: MessageType): void {
+    logger.warn(this.channelId, message, groupId, messageType);
   }
 
-  error(message: string, groupId?: string): void {
-    logger.error(this.channelId, message, groupId);
+  error(message: string, groupId?: string, messageType?: MessageType): void {
+    logger.error(this.channelId, message, groupId, messageType);
   }
 
   /**
