@@ -6,7 +6,6 @@ import { randomUUID } from 'crypto';
 import { WorkspaceStateKey, workspaceSM } from '@utils/stateManager';
 import { WorkspaceFS } from '@utils/files';
 import { objectToTaskState } from '@utils/config';
-import { shouldUseConsolidatedChannel } from '@utils/loggerUtils';
 import { TaskState } from '@logger/TaskState';
 import { AgentLogger } from '@logger/AgentLogger';
 
@@ -122,31 +121,29 @@ export class ProgressStateManager {
     }>(this._getWorkspaceKey(WorkspaceStateKey.LOG_STREAMS));
 
     if (savedState) {
-      // Only load channels that should be persisted
+      // Only load persisted channels
       this._logStreams = new Map(
-        Object.entries(savedState)
-          .filter(([channel]) => !shouldUseConsolidatedChannel(channel))
-          .map(([stream, messages]) => [
-            stream,
-            messages.map((msg) => {
-              if (!msg.id) {
-                msg.id = randomUUID();
-              }
-              if (msg.timestamp === undefined) {
-                const attrMatch = msg.message.match(
-                  /data-full-timestamp="([^"]+)"/,
-                );
-                const timeString =
-                  attrMatch?.[1] || (msg.message.match(/\[(.*?)\]/)?.[1] ?? '');
-                const timestamp = new Date(timeString).getTime();
-                msg.timestamp = isNaN(timestamp) ? Date.now() : timestamp;
-              }
-              if (!msg.messageType) {
-                msg.messageType = 'default';
-              }
-              return msg;
-            }),
-          ]),
+        Object.entries(savedState).map(([stream, messages]) => [
+          stream,
+          messages.map((msg) => {
+            if (!msg.id) {
+              msg.id = randomUUID();
+            }
+            if (msg.timestamp === undefined) {
+              const attrMatch = msg.message.match(
+                /data-full-timestamp="([^"]+)"/,
+              );
+              const timeString =
+                attrMatch?.[1] || (msg.message.match(/\[(.*?)\]/)?.[1] ?? '');
+              const timestamp = new Date(timeString).getTime();
+              msg.timestamp = isNaN(timestamp) ? Date.now() : timestamp;
+            }
+            if (!msg.messageType) {
+              msg.messageType = 'default';
+            }
+            return msg;
+          }),
+        ]),
       );
     } else {
       this._logStreams.clear();
@@ -178,29 +175,27 @@ export class ProgressStateManager {
 
     if (savedGroups) {
       this._taskGroups = new Map(
-        Object.entries(savedGroups)
-          .filter(([channel]) => !shouldUseConsolidatedChannel(channel))
-          .map(([streamId, groups]) => [
-            streamId,
-            new Map(
-              Object.entries(groups).map(([id, g]) => [
-                id,
-                {
-                  ...g,
-                  startTime:
-                    typeof g.startTime === 'string'
-                      ? new Date(g.startTime).getTime()
-                      : g.startTime,
-                  endTime:
-                    g.endTime !== undefined
-                      ? typeof g.endTime === 'string'
-                        ? new Date(g.endTime).getTime()
-                        : g.endTime
-                      : undefined,
-                },
-              ]),
-            ),
-          ]),
+        Object.entries(savedGroups).map(([streamId, groups]) => [
+          streamId,
+          new Map(
+            Object.entries(groups).map(([id, g]) => [
+              id,
+              {
+                ...g,
+                startTime:
+                  typeof g.startTime === 'string'
+                    ? new Date(g.startTime).getTime()
+                    : g.startTime,
+                endTime:
+                  g.endTime !== undefined
+                    ? typeof g.endTime === 'string'
+                      ? new Date(g.endTime).getTime()
+                      : g.endTime
+                    : undefined,
+              },
+            ]),
+          ),
+        ]),
       );
     } else {
       this._taskGroups.clear();
@@ -221,10 +216,6 @@ export class ProgressStateManager {
       let totalFilesRemoved = 0;
 
       for (const [streamId, rounds] of Object.entries(savedFiles)) {
-        if (shouldUseConsolidatedChannel(streamId)) {
-          continue;
-        }
-
         const roundMap: { [key: number]: OutputFileInfo[] } = {};
         const streamFilesProcessed = Object.values(rounds).reduce(
           (sum, files) => sum + files.length,
@@ -356,10 +347,7 @@ export class ProgressStateManager {
    * Save log streams to storage
    */
   private _saveLogStreams(): void {
-    // Only save channels that should be persisted
-    const persistentStreams = Array.from(this._logStreams.entries()).filter(
-      ([channel]) => !shouldUseConsolidatedChannel(channel),
-    );
+    const persistentStreams = Array.from(this._logStreams.entries());
     const stateObj = Object.fromEntries(persistentStreams);
     workspaceSM.update(
       this._getWorkspaceKey(WorkspaceStateKey.LOG_STREAMS),
@@ -371,12 +359,9 @@ export class ProgressStateManager {
    * Save log groups to storage
    */
   private _saveTaskGroups(): void {
-    const persistentGroups = Array.from(this._taskGroups.entries())
-      .filter(([channel]) => !shouldUseConsolidatedChannel(channel))
-      .map(([streamId, groups]) => [
-        streamId,
-        Object.fromEntries(groups.entries()),
-      ]);
+    const persistentGroups = Array.from(this._taskGroups.entries()).map(
+      ([streamId, groups]) => [streamId, Object.fromEntries(groups.entries())],
+    );
     const groupsObj = Object.fromEntries(persistentGroups);
     workspaceSM.update(
       this._getWorkspaceKey(WorkspaceStateKey.TASK_GROUPS),

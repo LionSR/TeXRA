@@ -30,7 +30,7 @@ import {
   showInstructionWithSuppress,
 } from '@frontend/ui/instruction';
 
-import { getStreamId } from '@utils/loggerUtils';
+import { getStreamId } from '@/logger/loggerUtils';
 import { IAgent } from '@agent/core/IAgent';
 
 const CHANNEL = 'executeAgent';
