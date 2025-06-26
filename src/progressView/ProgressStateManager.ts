@@ -14,15 +14,7 @@ import { AgentLogger } from '@logger/AgentLogger';
 import { TokenUsageStats } from '../types/UsageTypes';
 import { TaskGroup } from '../logger/LogTypes';
 import type { DiffStats } from '../types/DiffTypes';
-
-interface ColoredLogMessage {
-  id: string;
-  message: string;
-  level: 'error' | 'warn' | 'info' | 'debug';
-  timestamp: number;
-  groupId?: string;
-  messageType?: 'default' | 'scratchpad' | 'thinking';
-}
+import type { LogMessageData } from '../logger/LogTypes';
 
 interface OutputFileInfo extends DiffStats {
   path: string;
@@ -40,7 +32,7 @@ export class ProgressStateManager {
   private readonly logger: AgentLogger;
 
   // State collections
-  private _logStreams: Map<string, ColoredLogMessage[]> = new Map();
+  private _logStreams: Map<string, LogMessageData[]> = new Map();
   private _taskGroups: Map<string, Map<string, TaskGroup>> = new Map();
   private _outputFiles: Map<string, { [key: number]: OutputFileInfo[] }> =
     new Map();
@@ -53,7 +45,7 @@ export class ProgressStateManager {
   }
 
   // Getters for state collections
-  get logStreams(): Map<string, ColoredLogMessage[]> {
+  get logStreams(): Map<string, LogMessageData[]> {
     return this._logStreams;
   }
 
@@ -118,7 +110,7 @@ export class ProgressStateManager {
    */
   private async _loadLogStreams(): Promise<void> {
     const savedState = workspaceSM.get<{
-      [key: string]: ColoredLogMessage[];
+      [key: string]: LogMessageData[];
     }>(this._getWorkspaceKey(WorkspaceStateKey.LOG_STREAMS));
 
     if (savedState) {
@@ -128,24 +120,15 @@ export class ProgressStateManager {
           .filter(([channel]) => !shouldUseConsolidatedChannel(channel))
           .map(([stream, messages]) => [
             stream,
-            messages.map((msg) => {
-              if (!msg.id) {
-                msg.id = randomUUID();
-              }
-              if (msg.timestamp === undefined) {
-                const attrMatch = msg.message.match(
-                  /data-full-timestamp="([^"]+)"/,
-                );
-                const timeString =
-                  attrMatch?.[1] || (msg.message.match(/\[(.*?)\]/)?.[1] ?? '');
-                const timestamp = new Date(timeString).getTime();
-                msg.timestamp = isNaN(timestamp) ? Date.now() : timestamp;
-              }
-              if (!msg.messageType) {
-                msg.messageType = 'default';
-              }
-              return msg;
-            }),
+            messages.map((msg) => ({
+              id: msg.id ?? randomUUID(),
+              text: (msg as any).text ?? (msg as any).message ?? '',
+              level: msg.level,
+              timestamp:
+                typeof msg.timestamp === 'number' ? msg.timestamp : Date.now(),
+              groupId: msg.groupId,
+              messageType: msg.messageType ?? 'default',
+            })),
           ]),
       );
     } else {

@@ -13,7 +13,7 @@ import {
   isAgentStream,
   EMOJI_BY_LEVEL as emojis,
 } from '@utils/loggerUtils';
-import { TaskGroup } from './LogTypes';
+import { TaskGroup, LogMessageData } from './LogTypes';
 import { MESSAGE_TYPES, type MessageType } from './messageTypes';
 
 function isValidMessageType(
@@ -124,37 +124,24 @@ class VSCodeTransport extends Transport {
       return;
     }
 
-    const processedMessage = escapeHtml(message);
-
     const msgType: MessageType = isValidMessageType(messageType)
       ? messageType
       : MESSAGE_TYPES.DEFAULT;
 
-    // Colored format for ProgressView using CSS classes, but with shorter timestamp display
-    const isVerbose = getConfig<boolean>('logger.debugMode', false);
     const id = randomUUID();
-    const coloredFormattedMessage =
-      `<div class="log-line" data-log-id="${id}" ${groupId ? `data-group-id="${groupId}"` : ''} data-full-timestamp="${timestamp}">` +
-      `<span class="timestamp" title="${timestamp}">${emoji}${
-        isVerbose ? ` [${timeDisplay}]` : ''
-      }</span> ` +
-      (isVerbose
-        ? `<span class="level-${level}">${level
-            .toUpperCase()
-            .padEnd(8)}</span> `
-        : '') +
-      `<span class="message-${level}">${processedMessage}</span>` +
-      `</div>`;
-
     const numericTimestamp = new Date(timestamp).getTime();
+    const logData: LogMessageData = {
+      id,
+      text: message,
+      level: level as 'error' | 'warn' | 'info' | 'debug',
+      timestamp: numericTimestamp,
+      groupId,
+      messageType: msgType,
+    };
+
     emitProgress('addLogMessage', {
       stream: this.streamName,
-      message: coloredFormattedMessage,
-      level: level as 'error' | 'warn' | 'info' | 'debug',
-      groupId,
-      timestamp: numericTimestamp,
-      messageType: msgType,
-      id,
+      message: logData,
     });
 
     callback();

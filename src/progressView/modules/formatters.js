@@ -81,6 +81,22 @@ export class MessageTimestampExtractor {
 /**
  * Handles log entry formatting with markdown support.
  */
+const EMOJI_BY_LEVEL = {
+  error: '🔴',
+  warn: '🟡',
+  info: '🟢',
+  debug: '🔍',
+};
+
+function escapeHtml(text) {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
 export class LogEntryFormatter {
   constructor() {
     this._initializeMarkdown();
@@ -109,44 +125,30 @@ export class LogEntryFormatter {
    * @returns {string} Formatted HTML for the log message
    */
   format(logMessage) {
-    const message = logMessage.message;
-
-    const type = logMessage.messageType;
-
-    if (type === 'thinking' || type === 'scratchpad') {
-      const label = type === 'thinking' ? 'Thinking' : 'Scratchpad';
-      const content = this._extractContent(message);
-      return this._formatSpecialContent(message, content, label, logMessage.id);
+    const { id, text, level, timestamp, groupId, messageType } = logMessage;
+    if (messageType === 'thinking' || messageType === 'scratchpad') {
+      const label = messageType === 'thinking' ? 'Thinking' : 'Scratchpad';
+      return this._formatSpecialContent(text, label, id, timestamp, groupId);
     }
 
-    return message;
-  }
-
-  _extractContent(message) {
-    const match = message.match(
-      /<span class="message-[^"]*">([\s\S]*?)<\/span>/,
+    const emoji = EMOJI_BY_LEVEL[level] || '•';
+    const fullTs = new Date(timestamp).toISOString();
+    const timeDisplay = fullTs.split('T')[1].split('.')[0];
+    const escaped = escapeHtml(text);
+    const groupAttr = groupId ? ` data-group-id="${groupId}"` : '';
+    return (
+      `<div class="log-line" data-log-id="${id}"${groupAttr} data-full-timestamp="${fullTs}">` +
+      `<span class="timestamp" title="${fullTs}">${emoji} [${timeDisplay}]</span> ` +
+      `<span class="message-${level}">${escaped}</span>` +
+      `</div>`
     );
-    return match ? match[1] : message;
   }
 
-  _unescapeHtml(text) {
-    return text
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>')
-      .replace(/&quot;/g, '"')
-      .replace(/&#039;/g, "'")
-      .replace(/&amp;/g, '&');
-  }
-
-  _formatSpecialContent(message, content, contentType, logId) {
+  _formatSpecialContent(content, contentType, logId, timestamp, groupId) {
     try {
-      // Unescape HTML entities that were escaped during logging
-      content = this._unescapeHtml(content);
-
-      // Pre-process LaTeX references to protect them from markdown parsing
-      content = content.replace(/\\\\ref\{([^}]+)\}/g, '@@LATEX-REF:$1@@');
-      content = content.replace(/\\\\cref\{([^}]+)\}/g, '@@LATEX-CREF:$1@@');
-      content = content.replace(/\\\\eqref\{([^}]+)\}/g, '@@LATEX-EQREF:$1@@');
+      content = content.replace(/\\ref\{([^}]+)\}/g, '@@LATEX-REF:$1@@');
+      content = content.replace(/\\cref\{([^}]+)\}/g, '@@LATEX-CREF:$1@@');
+      content = content.replace(/\\eqref\{([^}]+)\}/g, '@@LATEX-EQREF:$1@@');
 
       // Process content as markdown
       let parsedMarkdown = marked.parse(content);
@@ -168,12 +170,13 @@ export class LogEntryFormatter {
 
       // Create enhanced content element with better formatting
       const idAttr = logId ? ` data-log-id="${logId}"` : '';
-      // Determine label and icon based on content type
+      const groupAttr = groupId ? ` data-group-id="${groupId}"` : '';
+      const fullTs = new Date(timestamp).toISOString();
       const isThinking = contentType.includes('Thinking');
       const labelText = isThinking ? 'Thinking' : 'Scratchpad';
       const icon = isThinking ? 'codicon-lightbulb' : 'codicon-pencil';
 
-      return `<details class="special-details" open>
+      return `<details class="special-details log-line"${groupAttr} data-full-timestamp="${fullTs}" open>
         <summary>
           <i class="${CHEVRON_DOWN_CLASS} toggle-icon"></i>
           <i class="codicon ${icon}"></i>
@@ -184,7 +187,7 @@ export class LogEntryFormatter {
     } catch (e) {
       console.error('Error parsing markdown:', e);
       // Fallback to original content
-      return message;
+      return escapeHtml(content);
     }
   }
 }

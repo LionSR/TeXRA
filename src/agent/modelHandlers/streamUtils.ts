@@ -4,15 +4,8 @@ import { randomUUID } from 'crypto';
 // Local imports
 import { emitProgress } from '@eventBus/ProgressEventBus';
 import { AgentLogger } from '@logger/AgentLogger';
-import { escapeHtml } from '@logger/logUtils';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
-
-/**
- * Create a span element for special log content.
- * @param content - The text to wrap.
- * @param type - The message type value.
- */
-const escapeContent = (content: string): string => escapeHtml(content);
+import type { LogMessageData } from '@logger/LogTypes';
 
 export async function streamReasoningToProgressView<T>(
   stream: AsyncIterable<T>,
@@ -24,23 +17,25 @@ export async function streamReasoningToProgressView<T>(
   const id = randomUUID();
   let content = '';
 
+  const baseData: LogMessageData = {
+    id,
+    text: content,
+    level: 'info',
+    timestamp: Date.now(),
+    groupId,
+    messageType: MESSAGE_TYPES.THINKING,
+  };
+
   emitProgress('addLogMessage', {
     stream: streamId,
-    message: escapeContent(content),
-    level: 'info',
-    groupId,
-    timestamp: Date.now(),
-    messageType: MESSAGE_TYPES.THINKING,
-    id,
+    message: baseData,
   });
 
   for await (const chunk of stream) {
     content += extract(chunk);
     emitProgress('updateLogMessage', {
       stream: streamId,
-      id,
-      message: escapeContent(content),
-      messageType: MESSAGE_TYPES.THINKING,
+      message: { ...baseData, text: content },
     });
   }
 

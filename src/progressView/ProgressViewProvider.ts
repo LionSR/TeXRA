@@ -13,7 +13,7 @@ import { getConfig } from '@utils/config';
 import { shouldUseConsolidatedChannel } from '@utils/loggerUtils';
 
 import { TokenUsageStats } from '../types/UsageTypes';
-import { TaskGroup } from '../logger/LogTypes';
+import { TaskGroup, LogMessageData } from '../logger/LogTypes';
 import type { DiffStats } from '../types/DiffTypes';
 import { randomUUID } from 'crypto';
 import { onProgress } from '@eventBus/ProgressEventBus';
@@ -31,15 +31,6 @@ type StreamStatusType =
   | typeof STATUS.RUNNING
   | typeof STATUS.ERROR
   | typeof STATUS.STOPPED;
-
-interface ColoredLogMessage {
-  id: string;
-  message: string;
-  level: 'error' | 'warn' | 'info' | 'debug';
-  timestamp: number;
-  groupId?: string;
-  messageType?: 'default' | 'scratchpad' | 'thinking';
-}
 
 // Channels that should not be persisted in workspace storage
 
@@ -148,35 +139,28 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       new vscode.Disposable(
         onProgress(
           'addLogMessage',
-          (p: {
-            stream: string;
-            message: string;
-            level: 'error' | 'warn' | 'info' | 'debug';
-            groupId?: string;
-            timestamp: number;
-            messageType: 'default' | 'scratchpad' | 'thinking';
-            id: string;
-          }) =>
+          (p: { stream: string; message: LogMessageData }) =>
             this.addLogMessage(
               p.stream,
-              p.message,
-              p.level,
-              p.groupId,
-              p.timestamp,
-              p.messageType,
-              p.id,
+              p.message.text,
+              p.message.level,
+              p.message.groupId,
+              p.message.timestamp,
+              p.message.messageType,
+              p.message.id,
             ),
         ),
       ),
       new vscode.Disposable(
         onProgress(
           'updateLogMessage',
-          (p: {
-            stream: string;
-            id: string;
-            message: string;
-            messageType: 'default' | 'scratchpad' | 'thinking';
-          }) => this.updateLogMessage(p.stream, p.id, p.message, p.messageType),
+          (p: { stream: string; message: LogMessageData }) =>
+            this.updateLogMessage(
+              p.stream,
+              p.message.id,
+              p.message.text,
+              p.message.messageType,
+            ),
         ),
       ),
       new vscode.Disposable(
@@ -424,9 +408,9 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       }
     }
 
-    const logMessage: ColoredLogMessage = {
+    const logMessage: LogMessageData = {
       id,
-      message,
+      text: message,
       level,
       timestamp,
       groupId,
@@ -465,7 +449,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     if (!existing) {
       return;
     }
-    existing.message = message;
+    existing.text = message;
     existing.messageType = messageType;
     this._stateManager.saveState();
     if (this._view && stream === this._stateManager.activeStream) {
@@ -626,7 +610,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     });
   }
 
-  public getLogStreams(): Map<string, ColoredLogMessage[]> {
+  public getLogStreams(): Map<string, LogMessageData[]> {
     return this._stateManager.logStreams;
   }
 

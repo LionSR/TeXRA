@@ -21,3 +21,18 @@ export interface TaskGroup {
   /** Optional usage stats attached to the group */
   usage?: TokenUsageStats;
 }
+
+export interface LogMessageData {
+  /** Unique identifier for this log entry */
+  id: string;
+  /** Raw message text */
+  text: string;
+  /** Severity level */
+  level: 'error' | 'warn' | 'info' | 'debug';
+  /** Unix timestamp (ms) */
+  timestamp: number;
+  /** Optional group association */
+  groupId?: string;
+  /** Optional message category */
+  messageType?: 'default' | 'scratchpad' | 'thinking';
+}
