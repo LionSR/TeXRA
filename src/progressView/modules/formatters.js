@@ -10,6 +10,13 @@ import { STATUS } from './constants.js';
 export const BULLET_MARKUP =
   '<i class="codicon codicon-circle-small-filled group-bullet"></i>';
 
+export const EMOJI_BY_LEVEL = {
+  error: '🔴',
+  warn: '🟡',
+  info: '🟢',
+  debug: '🔍',
+};
+
 /**
  * Represents different task group hierarchy levels with associated behaviors
  */
@@ -109,24 +116,38 @@ export class LogEntryFormatter {
    * @returns {string} Formatted HTML for the log message
    */
   format(logMessage) {
-    const message = logMessage.message;
+    const { id, text, level, timestamp, groupId, messageType, verbose } =
+      logMessage;
 
-    const type = logMessage.messageType;
+    const emoji = EMOJI_BY_LEVEL[level] || '•';
+    const date = new Date(timestamp);
+    const timeDisplay = date
+      .toISOString()
+      .split('T')[1]
+      .replace('Z', '')
+      .split('.')[0];
+    const fullTimestamp = date.toISOString();
 
-    if (type === 'thinking' || type === 'scratchpad') {
-      const label = type === 'thinking' ? 'Thinking' : 'Scratchpad';
-      const content = this._extractContent(message);
-      return this._formatSpecialContent(message, content, label, logMessage.id);
+    const prefix = `<div class="log-line" data-log-id="${id}" ${
+      groupId ? `data-group-id="${groupId}"` : ''
+    } data-full-timestamp="${fullTimestamp}">`;
+    const levelMarkup = verbose
+      ? `<span class="level-${level}">${level.toUpperCase().padEnd(8)}</span> `
+      : '';
+    const htmlMessage =
+      prefix +
+      `<span class="timestamp" title="${fullTimestamp}">${emoji}${
+        verbose ? ` [${timeDisplay}]` : ''
+      }</span> ` +
+      levelMarkup +
+      `<span class="message-${level}">${text}</span>` +
+      `</div>`;
+    if (messageType === 'thinking' || messageType === 'scratchpad') {
+      const label = messageType === 'thinking' ? 'Thinking' : 'Scratchpad';
+      return this._formatSpecialContent(htmlMessage, text, label, id);
     }
 
-    return message;
-  }
-
-  _extractContent(message) {
-    const match = message.match(
-      /<span class="message-[^"]*">([\s\S]*?)<\/span>/,
-    );
-    return match ? match[1] : message;
+    return htmlMessage;
   }
 
   _unescapeHtml(text) {
