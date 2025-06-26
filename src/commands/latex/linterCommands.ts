@@ -142,7 +142,9 @@ export async function handleCountLinterMessages(): Promise<void> {
 /**
  * Fix linter issues in the current file using Claude
  */
-export async function handleFixLinterIssues(): Promise<void> {
+export async function handleFixLinterIssues(
+  context: vscode.ExtensionContext,
+): Promise<void> {
   try {
     // Get active editor
     const editor = vscode.window.activeTextEditor;
@@ -178,7 +180,7 @@ export async function handleFixLinterIssues(): Promise<void> {
     );
 
     // Create the agent
-    const linterFixAgent = new TeXLinterFixAgent();
+    const linterFixAgent = new TeXLinterFixAgent(context);
 
     // Show progress indicator
     await vscode.window.withProgress(
@@ -225,9 +227,8 @@ export function registerLinterCommands(context: vscode.ExtensionContext) {
       linterCommands.countLinterMessages,
       handleCountLinterMessages,
     ),
-    vscode.commands.registerCommand(
-      linterCommands.fixLinterIssues,
-      handleFixLinterIssues,
+    vscode.commands.registerCommand(linterCommands.fixLinterIssues, () =>
+      handleFixLinterIssues(context),
     ),
   );
   return linterCommands;

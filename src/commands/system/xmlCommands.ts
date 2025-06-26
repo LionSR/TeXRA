@@ -84,7 +84,9 @@ export async function handleParseXml(): Promise<void> {
 /**
  * Validate and fix XML errors using Claude
  */
-export async function handleValidateAndFixXml(): Promise<void> {
+export async function handleValidateAndFixXml(
+  context: vscode.ExtensionContext,
+): Promise<void> {
   try {
     // Get active editor
     const editor = vscode.window.activeTextEditor;
@@ -106,7 +108,7 @@ export async function handleValidateAndFixXml(): Promise<void> {
     }
 
     // Initialize the validator agent
-    const validator = new XMLValidatorAgent();
+    const validator = new XMLValidatorAgent(context);
 
     // Save the file first to make sure we're working with the latest content
     await editor.document.save();
@@ -153,9 +155,8 @@ export async function handleValidateAndFixXml(): Promise<void> {
 export function registerXmlCommands(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand(xmlCommands.parseXml, handleParseXml),
-    vscode.commands.registerCommand(
-      xmlCommands.validateAndFixXml,
-      handleValidateAndFixXml,
+    vscode.commands.registerCommand(xmlCommands.validateAndFixXml, () =>
+      handleValidateAndFixXml(context),
     ),
   );
   return xmlCommands;

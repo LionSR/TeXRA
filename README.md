@@ -20,6 +20,7 @@ See [texra.ai](https://texra.ai). For detailed guides and usage instructions, vi
   - Automatic document indentation
   - Word and element counting (text, headers, captions, math)
   - Smart merging of included files
+  - DiagnosticsTool for listing linter diagnostics
 - YAML and XML configuration support
 - Git integration for version control
 - ProgressBoard view for detailed logs and re-running tasks
