@@ -120,15 +120,27 @@ export class ProgressStateManager {
           .filter(([channel]) => !shouldUseConsolidatedChannel(channel))
           .map(([stream, messages]) => [
             stream,
-            messages.map((msg) => ({
-              id: msg.id ?? randomUUID(),
-              text: (msg as any).text ?? (msg as any).message ?? '',
-              level: msg.level,
-              timestamp:
-                typeof msg.timestamp === 'number' ? msg.timestamp : Date.now(),
-              groupId: msg.groupId,
-              messageType: msg.messageType ?? 'default',
-            })),
+            messages.map((msg) => {
+              const rawText = (msg as any).text ?? (msg as any).message ?? '';
+              let ts = msg.timestamp;
+              if (ts === undefined) {
+                const attrMatch = rawText.match(
+                  /data-full-timestamp="([^"]+)"/,
+                );
+                const timeString =
+                  attrMatch?.[1] || (rawText.match(/\[(.*?)\]/)?.[1] ?? '');
+                const parsed = new Date(timeString).getTime();
+                ts = isNaN(parsed) ? 0 : parsed;
+              }
+              return {
+                id: msg.id ?? randomUUID(),
+                text: rawText,
+                level: msg.level,
+                timestamp: ts,
+                groupId: msg.groupId,
+                messageType: msg.messageType ?? 'default',
+              } as LogMessageData;
+            }),
           ]),
       );
     } else {

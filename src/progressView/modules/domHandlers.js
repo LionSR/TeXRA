@@ -1,6 +1,6 @@
 // Local imports
 import { progressViewState } from './progressViewState.js';
-import { LogEntryFormatter } from './formatters.js';
+import { LogEntryFormatter, MessageTimestampExtractor } from './formatters.js';
 import { TaskGroupsDom, LogEntriesDom } from './taskManagers.js';
 import { UsageSummary, UsageGroup } from './usageManagers.js';
 import { StreamTabs } from './uiManagers/StreamTabs.js';
@@ -31,4 +31,4 @@ export class ProgressViewDomHandler {
 export const progressViewDomHandler = new ProgressViewDomHandler();
 
 // Export formatter classes for reuse
-export { LogEntryFormatter };
+export { LogEntryFormatter, MessageTimestampExtractor };

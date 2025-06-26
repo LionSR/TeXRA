@@ -1,6 +1,10 @@
 // Local imports
 import { progressViewState } from './progressViewState.js';
-import { TaskGroupHeaderFormatter, LogEntryFormatter } from './formatters.js';
+import {
+  TaskGroupHeaderFormatter,
+  LogEntryFormatter,
+  MessageTimestampExtractor,
+} from './formatters.js';
 
 /**
  * Manages task group DOM operations.
@@ -8,6 +12,7 @@ import { TaskGroupHeaderFormatter, LogEntryFormatter } from './formatters.js';
 export class TaskGroupsDom {
   constructor() {
     this.headerFormatter = new TaskGroupHeaderFormatter();
+    this.timestampExtractor = new MessageTimestampExtractor();
     this.previousActiveGroupId = null;
   }
 
@@ -71,9 +76,18 @@ export class TaskGroupsDom {
           // If sibling is a log message, check if group should come before it
           else if (sibling.classList.contains('log-line')) {
             const msgFullTimestamp = sibling.dataset.fullTimestamp;
-            const msgTime = msgFullTimestamp
-              ? new Date(msgFullTimestamp)
-              : new Date(0);
+            let msgTime;
+
+            if (msgFullTimestamp) {
+              msgTime = new Date(msgFullTimestamp);
+            } else {
+              const msgTimestamp = this.timestampExtractor.extract(
+                sibling.outerHTML,
+              );
+              msgTime = msgTimestamp.includes('-')
+                ? new Date(msgTimestamp)
+                : new Date(`2000-01-01 ${msgTimestamp}`);
+            }
 
             if (group.startTime < msgTime.getTime()) {
               insertPosition = sibling;
@@ -269,6 +283,7 @@ export class TaskGroupsDom {
 export class LogEntriesDom {
   constructor() {
     this.entryFormatter = new LogEntryFormatter();
+    this.timestampExtractor = new MessageTimestampExtractor();
   }
 
   /**
@@ -288,8 +303,15 @@ export class LogEntriesDom {
         const logLineElement = messageElement.firstElementChild;
 
         // Extract timestamp from the message for chronological ordering
-        const msgDate = new Date(logMessage.timestamp);
-        const msgTimestamp = msgDate.toISOString();
+        const msgDate =
+          typeof logMessage.timestamp === 'number'
+            ? new Date(logMessage.timestamp)
+            : null;
+        const msgTimestamp =
+          msgDate?.toISOString() ||
+          this.timestampExtractor.extract(
+            logMessage.text || logMessage.message,
+          );
 
         // Find where to insert this message chronologically
         let insertPosition = null;
@@ -320,7 +342,23 @@ export class LogEntriesDom {
             const childFullTimestamp = child.dataset.fullTimestamp;
             if (childFullTimestamp) {
               const childDate = new Date(childFullTimestamp);
-              if (msgDate < childDate) {
+              if (msgDate && msgDate < childDate) {
+                insertPosition = child;
+                break;
+              } else if (!msgDate) {
+                const childTimestamp = this.timestampExtractor.extract(
+                  child.outerHTML,
+                );
+                if (msgTimestamp < childTimestamp) {
+                  insertPosition = child;
+                  break;
+                }
+              }
+            } else {
+              const childTimestamp = this.timestampExtractor.extract(
+                child.outerHTML,
+              );
+              if (msgTimestamp < childTimestamp) {
                 insertPosition = child;
                 break;
               }

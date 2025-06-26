@@ -1,6 +1,10 @@
 // Local imports - log state
 import { progressViewState } from './progressViewState.js';
-import { progressViewDomHandler, LogEntryFormatter } from './domHandlers.js';
+import {
+  progressViewDomHandler,
+  LogEntryFormatter,
+  MessageTimestampExtractor,
+} from './domHandlers.js';
 import { COMMANDS, STATUS } from './constants.js';
 import { registerMessageHandlers } from '@common/webviewContext.js';
 
@@ -10,6 +14,7 @@ const dom = progressViewDomHandler;
 
 // Create formatter instances
 const entryFormatter = new LogEntryFormatter();
+const timestampExtractor = new MessageTimestampExtractor();
 
 const handlers = {
   [COMMANDS.UPDATE_STREAMS]: (message) => {
@@ -40,9 +45,16 @@ const handlers = {
           .sort((a, b) => a.startTime - b.startTime)
           .forEach((g) => dom.taskGroups.add(g));
       }
-      const sortedMessages = [...message.messages].sort(
-        (a, b) => a.timestamp - b.timestamp,
-      );
+      const sortedMessages = [...message.messages].sort((a, b) => {
+        if (a.timestamp !== undefined && b.timestamp !== undefined) {
+          return a.timestamp - b.timestamp;
+        }
+        if (a.timestamp !== undefined) return -1;
+        if (b.timestamp !== undefined) return 1;
+        const aTs = timestampExtractor.extract(a.text || a.message);
+        const bTs = timestampExtractor.extract(b.text || b.message);
+        return aTs.localeCompare(bTs);
+      });
       sortedMessages.forEach((msg) => {
         if (msg.groupId) {
           if (!dom.logEntries.append(msg)) {

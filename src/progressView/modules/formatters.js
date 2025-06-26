@@ -97,6 +97,15 @@ function escapeHtml(text) {
     .replace(/'/g, '&#039;');
 }
 
+function unescapeHtml(text) {
+  return text
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#039;/g, "'")
+    .replace(/&amp;/g, '&');
+}
+
 export class LogEntryFormatter {
   constructor() {
     this._initializeMarkdown();
@@ -146,9 +155,10 @@ export class LogEntryFormatter {
 
   _formatSpecialContent(content, contentType, logId, timestamp, groupId) {
     try {
-      content = content.replace(/\\ref\{([^}]+)\}/g, '@@LATEX-REF:$1@@');
-      content = content.replace(/\\cref\{([^}]+)\}/g, '@@LATEX-CREF:$1@@');
-      content = content.replace(/\\eqref\{([^}]+)\}/g, '@@LATEX-EQREF:$1@@');
+      content = unescapeHtml(content);
+      content = content.replace(/\\\\ref\{([^}]+)\}/g, '@@LATEX-REF:$1@@');
+      content = content.replace(/\\\\cref\{([^}]+)\}/g, '@@LATEX-CREF:$1@@');
+      content = content.replace(/\\\\eqref\{([^}]+)\}/g, '@@LATEX-EQREF:$1@@');
 
       // Process content as markdown
       let parsedMarkdown = marked.parse(content);
