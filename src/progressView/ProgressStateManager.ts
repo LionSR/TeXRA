@@ -11,17 +11,8 @@ import { AgentLogger } from '@logger/AgentLogger';
 
 // Types
 import { TokenUsageStats } from '../types/UsageTypes';
-import { TaskGroup } from '../logger/LogTypes';
+import { TaskGroup, LogMessageData } from '../logger/LogTypes';
 import type { DiffStats } from '../types/DiffTypes';
-
-interface ColoredLogMessage {
-  id: string;
-  message: string;
-  level: 'error' | 'warn' | 'info' | 'debug';
-  timestamp: number;
-  groupId?: string;
-  messageType?: 'default' | 'scratchpad' | 'thinking';
-}
 
 interface OutputFileInfo extends DiffStats {
   path: string;
@@ -39,7 +30,7 @@ export class ProgressStateManager {
   private readonly logger: AgentLogger;
 
   // State collections
-  private _logStreams: Map<string, ColoredLogMessage[]> = new Map();
+  private _logStreams: Map<string, LogMessageData[]> = new Map();
   private _taskGroups: Map<string, Map<string, TaskGroup>> = new Map();
   private _outputFiles: Map<string, { [key: number]: OutputFileInfo[] }> =
     new Map();
@@ -52,7 +43,7 @@ export class ProgressStateManager {
   }
 
   // Getters for state collections
-  get logStreams(): Map<string, ColoredLogMessage[]> {
+  get logStreams(): Map<string, LogMessageData[]> {
     return this._logStreams;
   }
 
@@ -117,7 +108,7 @@ export class ProgressStateManager {
    */
   private async _loadLogStreams(): Promise<void> {
     const savedState = workspaceSM.get<{
-      [key: string]: ColoredLogMessage[];
+      [key: string]: LogMessageData[] | any[];
     }>(this._getWorkspaceKey(WorkspaceStateKey.LOG_STREAMS));
 
     if (savedState) {
@@ -125,23 +116,30 @@ export class ProgressStateManager {
       this._logStreams = new Map(
         Object.entries(savedState).map(([stream, messages]) => [
           stream,
-          messages.map((msg) => {
+          messages.map((msg: any) => {
             if (!msg.id) {
               msg.id = randomUUID();
             }
+            if (msg.text === undefined && msg.message !== undefined) {
+              msg.text = msg.message;
+            }
             if (msg.timestamp === undefined) {
-              const attrMatch = msg.message.match(
-                /data-full-timestamp="([^"]+)"/,
-              );
+              const attrMatch =
+                typeof msg.text === 'string'
+                  ? msg.text.match(/data-full-timestamp="([^"]+)"/)
+                  : null;
               const timeString =
-                attrMatch?.[1] || (msg.message.match(/\[(.*?)\]/)?.[1] ?? '');
+                attrMatch?.[1] ||
+                (typeof msg.text === 'string'
+                  ? (msg.text.match(/\[(.*?)\]/)?.[1] ?? '')
+                  : '');
               const timestamp = new Date(timeString).getTime();
               msg.timestamp = isNaN(timestamp) ? Date.now() : timestamp;
             }
             if (!msg.messageType) {
               msg.messageType = 'default';
             }
-            return msg;
+            return msg as LogMessageData;
           }),
         ]),
       );
