@@ -51,7 +51,7 @@ export abstract class BaseAgent implements IAgent {
     this.agentPath = agentPath;
 
     const channelId = this.getTaskId();
-    this.logger = new AgentLogger(channelId);
+    this.logger = new AgentLogger(channelId, true);
     this.modelHandler.setLogger(this.logger);
   }
 
