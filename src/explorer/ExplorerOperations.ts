@@ -27,7 +27,7 @@ settings:
   endTag: '</document>'
   outputExt: tex
   prefills:
-    - "<document>\n"
+    - "<document>"
 
 # --- Agent Prompts ---
 prompts:
