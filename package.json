@@ -919,7 +919,7 @@
       },
       {
         "command": "texra.fixLinterIssues",
-        "title": "Fix Linter Issues with Claude",
+        "title": "Fix Validation Issues with Claude",
         "category": "TeXRA",
         "icon": "$(fix-all)"
       },
