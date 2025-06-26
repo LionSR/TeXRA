@@ -33,17 +33,27 @@ export class ValidationFixAgent<
   };
   private validator: ValidatorType;
 
-  constructor(type: ValidatorType, context: vscode.ExtensionContext) {
+  protected constructor(type: ValidatorType) {
     super();
     this.validator = type;
+  }
+
+  public static async create<T extends BaseError | BaseError[]>(
+    type: ValidatorType,
+    context: vscode.ExtensionContext,
+  ): Promise<ValidationFixAgent<T>> {
+    const agent = new ValidationFixAgent<T>(type);
     const agentPath = path.join(
       context.extensionPath,
       'resources',
       'tool_use_agents',
     );
-    loadAgentSettingAndPrompts(agentPath, this.getYamlName()).then(([, p]) => {
-      this.prompts = p;
-    });
+    const [, prompts] = await loadAgentSettingAndPrompts(
+      agentPath,
+      agent.getYamlName(),
+    );
+    agent.prompts = prompts;
+    return agent;
   }
 
   private getYamlName(): string {
