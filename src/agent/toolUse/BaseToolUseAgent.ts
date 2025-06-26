@@ -10,8 +10,13 @@ import { getSdkErrorMessage } from '@utils/sdkErrorUtils';
 
 // Local imports - core
 import { TextEditorTool } from '@tools/anthropic/TextEditorTool';
+import { DiagnosticsTool } from '@tools/anthropic/DiagnosticsTool';
 import { ToolResult } from '@tools/anthropic/base';
-import { BaseError, ValidationResult } from '@tools/anthropic/types';
+import {
+  BaseError,
+  ValidationResult,
+  BetaToolUnionParam,
+} from '@tools/anthropic/types';
 
 // Local imports - utils
 import { WorkspaceFS } from '@utils/files';
@@ -41,6 +46,8 @@ export abstract class BaseToolUseAgent<
   protected static readonly DEFAULT_MAX_TOKENS: number = 1024;
 
   protected textEditorTool: TextEditorTool;
+  protected diagnosticsTool: DiagnosticsTool;
+  protected configuredTools: string[] = ['text_editor'];
   protected model: string = 'claude-3-7-sonnet-latest';
   protected readonly agentName: string;
   protected readonly configKey: string;
@@ -57,6 +64,7 @@ export abstract class BaseToolUseAgent<
       ? 'text_editor_20250429'
       : 'text_editor_20250124';
     this.textEditorTool = new TextEditorTool(textEditorType);
+    this.diagnosticsTool = new DiagnosticsTool();
 
     // Derive agent name from class name
     this.agentName = this.constructor.name;
@@ -73,6 +81,30 @@ export abstract class BaseToolUseAgent<
       this.configKey,
       BaseToolUseAgent.DEFAULT_ITERATIONS,
     );
+  }
+
+  /**
+   * Set the list of tools allowed for this agent.
+   */
+  public setConfiguredTools(tools: string[]): void {
+    if (Array.isArray(tools) && tools.length > 0) {
+      this.configuredTools = tools;
+    }
+  }
+
+  /**
+   * Get tool parameters for the current configuration.
+   */
+  protected getConfiguredToolParams(): BetaToolUnionParam[] {
+    const params: BetaToolUnionParam[] = [];
+    for (const name of this.configuredTools) {
+      if (name === 'text_editor') {
+        params.push(this.textEditorTool.toParams() as any);
+      } else if (name === 'diagnostics') {
+        params.push(this.diagnosticsTool.toParams() as any);
+      }
+    }
+    return params;
   }
 
   /**
@@ -272,9 +304,9 @@ export abstract class BaseToolUseAgent<
           max_tokens: this.maxTokens,
           system: systemMessage,
           messages,
-          tools: [this.textEditorTool.toParams() as any], // Type assertion needed for Claude 4 compatibility
+          tools: this.getConfiguredToolParams() as any,
         };
-        const response = await client.messages.create(params);
+        const response: any = await client.messages.create(params);
 
         logger.debug(
           CHANNEL,
@@ -283,7 +315,7 @@ export abstract class BaseToolUseAgent<
 
         // Process tool use in Claude's response
         const toolUseContent = response.content.find(
-          (c) => c.type === 'tool_use',
+          (c: any) => c.type === 'tool_use',
         );
         if (!toolUseContent || toolUseContent.type !== 'tool_use') {
           logger.warn(
@@ -298,16 +330,32 @@ export abstract class BaseToolUseAgent<
         // Extract tool parameters
         const toolInput = toolUseContent.input as any;
 
-        // Execute the tool
-        const toolResult = await this.textEditorTool.call({
-          command: toolInput.command,
-          path: toolInput.path || filePath,
-          old_str: toolInput.old_str,
-          new_str: toolInput.new_str,
-          view_range: toolInput.view_range,
-          insert_line: toolInput.insert_line,
-          file_text: toolInput.file_text,
-        });
+        // Execute the appropriate tool based on name
+        let toolResult: ToolResult;
+        if (toolUseContent.name === this.textEditorTool.toParams().name) {
+          toolResult = await this.textEditorTool.call({
+            command: toolInput.command,
+            path: toolInput.path || filePath,
+            old_str: toolInput.old_str,
+            new_str: toolInput.new_str,
+            view_range: toolInput.view_range,
+            insert_line: toolInput.insert_line,
+            file_text: toolInput.file_text,
+          });
+        } else if (
+          toolUseContent.name === this.diagnosticsTool.toParams().name
+        ) {
+          toolResult = await this.diagnosticsTool.call({
+            command: toolInput.command,
+            path: toolInput.path || filePath,
+          });
+        } else {
+          logger.warn(CHANNEL, `Unknown tool: ${toolUseContent.name}`);
+          toolResult = new ToolResult({
+            error: `Unknown tool: ${toolUseContent.name}`,
+            isError: true,
+          });
+        }
 
         // Save the most recent tool result
         lastToolResult = toolResult;
