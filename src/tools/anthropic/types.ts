@@ -5,10 +5,17 @@
 /**
  * Union type for tool parameters in Anthropic API
  */
-export type BetaToolUnionParam = {
+export interface BetaToolUnionParam {
   name: string;
   type: string;
-};
+  description?: string;
+  input_schema?: {
+    type: 'object';
+    properties?: Record<string, unknown>;
+    required?: string[];
+    [k: string]: unknown;
+  };
+}
 
 /**
  * Type for the text editor tool parameters
