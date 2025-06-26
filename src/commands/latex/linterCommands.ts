@@ -10,7 +10,7 @@ import { WorkspaceFS } from '@utils/files';
 import { sleep } from '@utils/helpers';
 
 // Local imports - core
-import { TeXLinterFixAgent } from '@agent/toolUse';
+import { ValidationFixAgent } from '@agent/toolUse';
 
 const CHANNEL = 'LinterCommands';
 logger.initialize(CHANNEL);
@@ -180,7 +180,7 @@ export async function handleFixLinterIssues(
     );
 
     // Create the agent
-    const linterFixAgent = await TeXLinterFixAgent.create(
+    const linterFixAgent = await ValidationFixAgent.create(
       'latexLinter',
       context,
     );
