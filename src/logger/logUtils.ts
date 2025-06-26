@@ -7,7 +7,10 @@ import { randomUUID } from 'crypto';
 // Local imports - progressView
 import { emitProgress } from '@eventBus/ProgressEventBus';
 import { getConfig } from '@utils/config';
-import { getColorForLevel, EMOJI_BY_LEVEL as emojis } from '@utils/loggerUtils';
+import {
+  getColorForLevel,
+  EMOJI_BY_LEVEL as emojis,
+} from '@/logger/loggerUtils';
 import { TaskGroup } from './LogTypes';
 import { MESSAGE_TYPES, type MessageType } from './messageTypes';
 
