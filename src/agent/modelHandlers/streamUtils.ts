@@ -5,29 +5,14 @@ import { randomUUID } from 'crypto';
 import { emitProgress } from '@eventBus/ProgressEventBus';
 import { AgentLogger } from '@logger/AgentLogger';
 import { escapeHtml } from '@logger/logUtils';
+import { MESSAGE_TYPES } from '@logger/messageTypes';
 
 /**
  * Create a span element for special log content.
  * @param content - The text to wrap.
  * @param type - The message type value.
  */
-export function createInfoSpan(
-  content: string,
-  type: 'thinking' | 'scratchpad',
-): string {
-  if (!content || typeof content !== 'string') {
-    throw new Error('Content must be a non-empty string');
-  }
-  if (type !== 'thinking' && type !== 'scratchpad') {
-    throw new Error('Type must be either "thinking" or "scratchpad"');
-  }
-
-  const safeContent = escapeHtml(content);
-  return `<span class="message-info" data-message-type="${type}">${safeContent}</span>`;
-}
-
-const THINKING_TEMPLATE = (content: string) =>
-  createInfoSpan(content, 'thinking');
+const escapeContent = (content: string): string => escapeHtml(content);
 
 export async function streamReasoningToProgressView<T>(
   stream: AsyncIterable<T>,
@@ -41,11 +26,11 @@ export async function streamReasoningToProgressView<T>(
 
   emitProgress('addLogMessage', {
     stream: streamId,
-    message: THINKING_TEMPLATE(content),
+    message: escapeContent(content),
     level: 'info',
     groupId,
     timestamp: Date.now(),
-    messageType: 'thinking',
+    messageType: MESSAGE_TYPES.THINKING,
     id,
   });
 
@@ -54,8 +39,8 @@ export async function streamReasoningToProgressView<T>(
     emitProgress('updateLogMessage', {
       stream: streamId,
       id,
-      message: THINKING_TEMPLATE(content),
-      messageType: 'thinking',
+      message: escapeContent(content),
+      messageType: MESSAGE_TYPES.THINKING,
     });
   }
 
