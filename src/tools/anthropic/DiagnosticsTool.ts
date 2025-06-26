@@ -25,7 +25,24 @@ export interface DiagnosticsToolInput {
  */
 export class DiagnosticsTool extends BaseAnthropicTool {
   toParams(): BetaToolUnionParam {
-    return { name: 'diagnostics', type: 'diagnostics' };
+    return {
+      name: 'diagnostics',
+      type: 'custom',
+      description:
+        'Retrieve linter diagnostics. Use `list` for full messages or `count` for a summary.',
+      input_schema: {
+        type: 'object',
+        properties: {
+          command: {
+            type: 'string',
+            description: 'Either "list" or "count"',
+            enum: ['list', 'count'],
+          },
+          path: { type: 'string', description: 'Relative file path' },
+        },
+        required: ['command', 'path'],
+      },
+    };
   }
 
   async call(input: DiagnosticsToolInput): Promise<ToolResult> {
