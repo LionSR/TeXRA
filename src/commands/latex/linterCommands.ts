@@ -180,7 +180,10 @@ export async function handleFixLinterIssues(
     );
 
     // Create the agent
-    const linterFixAgent = new TeXLinterFixAgent(context);
+    const linterFixAgent = await TeXLinterFixAgent.create(
+      'latexLinter',
+      context,
+    );
 
     // Show progress indicator
     await vscode.window.withProgress(
