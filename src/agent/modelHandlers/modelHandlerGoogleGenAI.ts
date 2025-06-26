@@ -36,6 +36,7 @@ import { WorkspaceFS, AbsoluteFS } from '@utils/files';
 import { formatProviderError } from '@utils/sdkErrorUtils';
 import xmlUtils from '@utils/text/xmlUtils';
 import { calculateTokenPrice } from '@utils/priceUtils';
+import { MESSAGE_TYPES } from '@logger/messageTypes';
 
 import { cleanFileContent } from '@replacement/engine';
 import replacementEngine from '@replacement/engine';
@@ -822,7 +823,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
       'scratchpad',
     );
     if (scratchpad) {
-      this.logger.info(scratchpad, groupId, 'scratchpad');
+      this.logger.info(scratchpad, groupId, MESSAGE_TYPES.SCRATCHPAD);
     }
 
     await WorkspaceFS.writeFile(outputFile, fileContent);

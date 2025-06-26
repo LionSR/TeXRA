@@ -14,12 +14,12 @@ import {
   EMOJI_BY_LEVEL as emojis,
 } from '@utils/loggerUtils';
 import { TaskGroup } from './LogTypes';
+import { MESSAGE_TYPES, type MessageType } from './messageTypes';
 
-// Message type for ProgressView entries
-export type MessageType = 'thinking' | 'scratchpad' | 'default';
-
-function isValidMessageType(type: unknown): type is 'thinking' | 'scratchpad' {
-  return type === 'thinking' || type === 'scratchpad';
+function isValidMessageType(
+  type: unknown,
+): type is typeof MESSAGE_TYPES.THINKING | typeof MESSAGE_TYPES.SCRATCHPAD {
+  return type === MESSAGE_TYPES.THINKING || type === MESSAGE_TYPES.SCRATCHPAD;
 }
 
 const { combine, timestamp } = winston.format;
@@ -128,7 +128,7 @@ class VSCodeTransport extends Transport {
 
     const msgType: MessageType = isValidMessageType(messageType)
       ? messageType
-      : 'default';
+      : MESSAGE_TYPES.DEFAULT;
 
     // Colored format for ProgressView using CSS classes, but with shorter timestamp display
     const isVerbose = getConfig<boolean>('logger.debugMode', false);
