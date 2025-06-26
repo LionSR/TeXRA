@@ -16,6 +16,8 @@ logger.initialize(CHANNEL);
 export class WatcherManager {
   private disposables: vscode.FileSystemWatcher[] = [];
   private refreshHandle: NodeJS.Timeout | undefined;
+  private validationHandles: NodeJS.Timeout[] = [];
+  private static readonly VALIDATION_DELAY = 300;
 
   constructor(
     private context: vscode.ExtensionContext | undefined,
@@ -83,16 +85,20 @@ export class WatcherManager {
         watcher.onDidCreate((uri) => {
           this.triggerRefresh();
           if (path.extname(uri.fsPath) === '.yaml') {
-            setTimeout(() => this.validateYaml(uri.fsPath), 300);
+            const handle = setTimeout(
+              () => void this.validateYaml(uri.fsPath),
+              WatcherManager.VALIDATION_DELAY,
+            );
+            this.validationHandles.push(handle);
           }
         });
         watcher.onDidDelete(() => this.triggerRefresh());
 
         if (path.resolve(watchPath) === path.resolve(customAgentsPath ?? '')) {
-          watcher.onDidChange((uri) => {
+          watcher.onDidChange(async (uri) => {
             this.triggerRefresh();
             if (path.extname(uri.fsPath) === '.yaml') {
-              this.validateYaml(uri.fsPath);
+              await this.validateYaml(uri.fsPath);
             }
           });
         } else {
@@ -110,6 +116,12 @@ export class WatcherManager {
   }
 
   dispose() {
+    if (this.refreshHandle) {
+      clearTimeout(this.refreshHandle);
+      this.refreshHandle = undefined;
+    }
+    this.validationHandles.forEach((h) => clearTimeout(h));
+    this.validationHandles = [];
     this.disposables.forEach((d) => d.dispose());
     this.disposables = [];
   }
