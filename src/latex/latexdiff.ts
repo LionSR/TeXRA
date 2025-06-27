@@ -7,15 +7,9 @@ import * as logger from '@logger/logUtils';
 // Local imports - utilities
 import { logErrorMessage } from '@utils/errorHandlingUtils';
 import { WorkspaceFS } from '@utils/files';
-import { executeCommand } from '@utils/system';
-import { getConfig } from '@utils/config';
-import { ExecResult } from '../types/ResultTypes';
 
 // Local imports - latex utils
 import { runLatexFormatter } from './texFormatter';
-
-// Local imports - replacement utils
-import replacementEngine from '@replacement/engine';
 
 // Local imports - managers
 import { DiffFileNameManager } from './diffFileNameManager';
