@@ -35,7 +35,7 @@ import { MediaEntry } from '@agent/utils/mediaTypes';
 import { AgentStateRound } from '@agent/core/AgentState';
 import { K_SLICE } from '@utils/config';
 import { objectToLogString } from '@utils/text/stringUtils';
-import { calculateTokenPrice } from '@utils/priceUtils';
+import { calculateTokenPrice } from '@agent/utils/priceUtils';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 
 /**
