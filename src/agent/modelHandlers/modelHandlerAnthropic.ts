@@ -37,6 +37,8 @@ import { K_SLICE } from '@utils/config';
 import { objectToLogString } from '@utils/text/stringUtils';
 import { calculateTokenPrice } from '@agent/utils/priceUtils';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
+import type { ToolDefinition } from '@model';
+import { toAnthropicTools } from './toolConversion';
 
 /**
  * Anthropic-specific model handler implementation for managing API interactions and message processing.
@@ -63,6 +65,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     systemPrompt?: string,
     endTag?: string,
     signal?: AbortSignal,
+    tools?: ToolDefinition[],
   ): Promise<BetaMessage> {
     // Get streaming config
     const useStreaming = this.getStreamingConfig();
@@ -76,6 +79,11 @@ export class ModelHandlerAnthropic extends ModelHandler<
       stop_sequences: endTag ? [endTag] : undefined,
       system: systemPrompt,
     };
+
+    if (tools && tools.length > 0) {
+      options.tools = toAnthropicTools(tools) as any;
+      (options as any).tool_choice = 'auto';
+    }
 
     // Enable thinking for any models that support reasoning
     if (this.capabilities.supportsReasoning) {
