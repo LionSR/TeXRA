@@ -9,7 +9,7 @@ import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
 import { WorkspaceFS } from '@utils/files';
-import { renderPrompt } from '@utils/promptUtils';
+import { renderPrompt } from '@agent/utils/promptUtils';
 import { getConfig } from '@utils/config';
 
 // Local imports - latex utils
