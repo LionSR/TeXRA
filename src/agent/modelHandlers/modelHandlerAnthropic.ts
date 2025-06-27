@@ -43,7 +43,10 @@ import { MESSAGE_TYPES } from '@logger/messageTypes';
  */
 
 // The new implicit prompt caching is worth checking out (can eliminate many controls of previous caching)
-export class ModelHandlerAnthropic extends ModelHandler {
+export class ModelHandlerAnthropic extends ModelHandler<
+  AnthropicUsage,
+  AnthropicAPIResponseUsage
+> {
   /** Initializes an Anthropic API client using the configured API key. */
   async getClient(): Promise<Anthropic> {
     const apiKey = await this.getApiKey();
