@@ -146,7 +146,10 @@ function convertMessagesToGoogleContentHistory(
 /**
  * Handler for Google models using the native @google/genai SDK and Chat API.
  */
-export class ModelHandlerGoogleGenAI extends ModelHandler {
+export class ModelHandlerGoogleGenAI extends ModelHandler<
+  GenerateContentResponseUsageMetadata | null,
+  OpenAIAPIResponseUsage
+> {
   private googleClient: GoogleGenAI | null = null;
 
   async getClient(): Promise<GoogleGenAI> {
