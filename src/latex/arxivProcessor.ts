@@ -1,0 +1,196 @@
+// Standard library imports
+import * as path from 'path';
+import * as https from 'https';
+
+// Third-party imports
+import * as arxivIdentifiers from 'identifiers-arxiv';
+
+// Local imports - log
+import * as logger from '@logger/logUtils';
+
+// Local imports - utilities
+import { WorkspaceFS, AbsoluteFS } from '@utils/files';
+import { executeCommand } from '@utils/system';
+import { indentLatexFilesInDirectory } from '@housekeeping/indent';
+
+export interface ExtractResult {
+  success: boolean;
+  error?: string;
+}
+
+export interface ExtractOptions {
+  timeout?: number;
+  channel?: string;
+}
+
+export class ArxivSourceProcessor {
+  constructor(private readonly channel: string = 'arxivProcessor') {
+    logger.initialize(this.channel);
+  }
+
+  public isValidId(id: string): boolean {
+    const extractedIds = arxivIdentifiers.extract(id);
+    return extractedIds.length > 0 && extractedIds.includes(id);
+  }
+
+  public validateId(id: string): string | null {
+    if (!id) {
+      return 'arXiv ID is required';
+    }
+
+    if (!this.isValidId(id)) {
+      return 'Invalid arXiv ID format. Please provide a valid arXiv ID like YYMM.NNNNN, YYMM.NNNNNvN, or category/YYMM.NNNNN';
+    }
+
+    return null;
+  }
+
+  public downloadFile(url: string, destPath: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const file = AbsoluteFS.createWriteStream(destPath);
+
+      https
+        .get(url, (response) => {
+          if (response.statusCode === 404) {
+            reject(new Error('Source not available for this arXiv ID'));
+            return;
+          }
+
+          if (response.statusCode !== 200) {
+            reject(
+              new Error(`Failed to download: HTTP ${response.statusCode}`),
+            );
+            return;
+          }
+
+          response.pipe(file);
+
+          file.on('finish', () => {
+            file.close();
+            resolve();
+          });
+        })
+        .on('error', (err) => {
+          AbsoluteFS.unlink(destPath, () => {});
+          reject(err);
+        });
+    });
+  }
+
+  public async extractTarFile(
+    tarPath: string,
+    destDir: string,
+    options: ExtractOptions = {},
+  ): Promise<ExtractResult> {
+    logger.debug(
+      options.channel ?? this.channel,
+      `Extracting tar file: ${tarPath} to ${destDir}`,
+    );
+
+    const tarCommand = `tar -xf "${tarPath}" -C "${destDir}"`;
+
+    const result = await executeCommand(tarCommand, {
+      channel: options.channel ?? this.channel,
+      timeout: options.timeout,
+      truncate: true,
+    });
+
+    if (!result.success) {
+      logger.error(
+        options.channel ?? this.channel,
+        `Failed to extract tar file: ${result.stderr}`,
+      );
+      return {
+        success: false,
+        error: result.stderr || 'Unknown error during extraction',
+      };
+    }
+
+    return { success: true };
+  }
+
+  public async downloadSource(
+    id: string,
+    progressCallback?: (msg: string, increment?: number) => void,
+    autoIndent = true,
+  ): Promise<string> {
+    logger.info(this.channel, `Downloading arXiv source for ID: ${id}`);
+
+    const validationError = this.validateId(id);
+    if (validationError) {
+      throw new Error(validationError);
+    }
+
+    const workspacePath = WorkspaceFS.getPath();
+    if (!workspacePath) {
+      throw new Error('No workspace folder is open');
+    }
+
+    const papersExDir = 'PapersEx';
+    if (!(await WorkspaceFS.exists(papersExDir))) {
+      await WorkspaceFS.createDir(papersExDir);
+    }
+
+    const paperDirRelative = path.join(papersExDir, id.replace(/\//g, '_'));
+    if (!(await WorkspaceFS.exists(paperDirRelative))) {
+      await WorkspaceFS.createDir(paperDirRelative);
+    }
+
+    const paperDirFull = WorkspaceFS.fullPath(paperDirRelative);
+    const tarFileName = `${id.replace(/\//g, '_')}.tar.gz`;
+    const tarFilePath = path.join(paperDirFull, tarFileName);
+
+    if (progressCallback) {
+      progressCallback(`Downloading arXiv source for ${id}...`, 20);
+    }
+
+    const downloadUrl = `https://arxiv.org/src/${id}`;
+    await this.downloadFile(downloadUrl, tarFilePath);
+
+    if (progressCallback) {
+      progressCallback('Extracting source files...', 60);
+    }
+
+    const extractResult = await this.extractTarFile(tarFilePath, paperDirFull, {
+      timeout: 30000,
+    });
+
+    if (!extractResult.success) {
+      throw new Error(`Failed to extract arXiv source: ${extractResult.error}`);
+    }
+
+    if (progressCallback) {
+      progressCallback('Cleaning up...', 80);
+    }
+
+    await WorkspaceFS.delete(path.join(paperDirRelative, tarFileName));
+
+    if (autoIndent) {
+      if (progressCallback) {
+        progressCallback('Formatting LaTeX files...', 85);
+      }
+
+      const indentedCount = await indentLatexFilesInDirectory(
+        paperDirRelative,
+        progressCallback,
+      );
+
+      if (progressCallback) {
+        progressCallback(`Formatted ${indentedCount} LaTeX files`, 95);
+      }
+    }
+
+    if (progressCallback) {
+      progressCallback('arXiv source downloaded successfully!', 100);
+    }
+
+    logger.info(
+      this.channel,
+      `arXiv source downloaded and extracted to: ${paperDirFull}`,
+    );
+
+    return paperDirFull;
+  }
+}
+
+export const arxivProcessor = new ArxivSourceProcessor();
