@@ -17,7 +17,7 @@ export { compileLatex2Pdf } from './texTools';
 // Export texcount functionality
 export { getTeXCountStats } from './texcount';
 
-// Export latexdiff runner
-export { LatexdiffRunner } from './latexdiffRunner';
+// Export latexdiff service
+export { LaTeXdiffService } from './latexdiff';
 
 export { ArxivSourceProcessor, arxivProcessor } from './arxivProcessor';
