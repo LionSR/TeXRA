@@ -13,9 +13,12 @@ import { getOutputFileName } from '@agent/utils/outputFileUtils';
 
 // Local imports - agent components
 import { AgentConfig } from '@agent/core/AgentConfig';
-import { AgentSetting } from '@agent/core/AgentDataclass';
+import { AgentSetting, AgentType } from '@agent/core/AgentDataclass';
 import { AgentStateGlobal, AgentStateRound } from '@agent/core/AgentState';
 import type { IModelHandler } from '@agent/modelHandlers';
+
+// Local imports - utilities
+import { replaceInputCommands } from '@utils/files';
 
 // Local imports - types
 
@@ -186,6 +189,108 @@ export class OutputHandler implements IOutputHandler {
     groupId?: string,
   ): Promise<void> {
     await this.statsReporter.printStatistics(stateGlobal, groupId);
+  }
+
+  /**
+   * Processes output files from XML or direct input.
+   * Mirrors the previous logic in BaseReflectionAgent.processOutputFiles.
+   */
+  public async processOutputFiles(
+    outputFile: string,
+    currRound: number,
+    groupId?: string,
+  ): Promise<void> {
+    const activeGroupId = groupId || this.logger.getActiveGroupId();
+
+    if (
+      Array.isArray(this.agentConfig.outputFiles) &&
+      this.agentConfig.outputFiles.length > 0
+    ) {
+      // Multiple output files case
+      this.logger.debug(
+        `Processing multiple outputs for ${outputFile}; outputFiles: ${this.agentConfig.outputFiles}`,
+        activeGroupId,
+      );
+
+      try {
+        const processedPairs = await this.processMultipleXmlOutputs(outputFile);
+
+        if (processedPairs && processedPairs.length > 0) {
+          const processedFiles = processedPairs.map((p) => p.path);
+          await this.indentLatexFiles(processedFiles);
+          this.logger.debug(
+            `Indented multiple output files: ${processedFiles.join(',')}`,
+            activeGroupId,
+          );
+
+          this.outputFiles[currRound] = processedFiles;
+          this.outputMappings[currRound] = processedPairs;
+
+          if (this.baseFiles && this.baseFiles.length > 0) {
+            await replaceInputCommands(
+              this.baseFiles,
+              processedFiles,
+              this.logger,
+            );
+          }
+        } else {
+          this.logger.warn(
+            `No processed files were generated from ${outputFile}`,
+            activeGroupId,
+          );
+          this.outputFiles[currRound] = [];
+          this.outputMappings[currRound] = [];
+        }
+      } catch (err) {
+        this.logger.error(
+          `Error processing output files: ${err instanceof Error ? err.message : String(err)}`,
+          activeGroupId,
+        );
+        this.outputFiles[currRound] = [];
+        this.outputMappings[currRound] = [];
+      }
+    } else {
+      // Single output file case
+      this.logger.debug(
+        `Processing single output for ${outputFile}`,
+        activeGroupId,
+      );
+
+      try {
+        let processed: NamedOutputFile = {
+          source: outputFile,
+          path: outputFile,
+        };
+        if (this.agentSetting.agentType === AgentType.CoT) {
+          processed = await this.processSingleXmlOutput(outputFile);
+        }
+
+        if (processed && processed.path) {
+          await this.indentLatexFile(processed.path);
+          this.logger.debug(
+            `Indented single output file: ${processed.path}`,
+            activeGroupId,
+          );
+
+          this.outputFiles[currRound] = [processed.path];
+          this.outputMappings[currRound] = [processed];
+        } else {
+          this.logger.warn(
+            `No processed file was generated from ${outputFile}`,
+            activeGroupId,
+          );
+          this.outputFiles[currRound] = [];
+          this.outputMappings[currRound] = [];
+        }
+      } catch (err) {
+        this.logger.error(
+          `Error processing output file: ${err instanceof Error ? err.message : String(err)}`,
+          activeGroupId,
+        );
+        this.outputFiles[currRound] = [];
+        this.outputMappings[currRound] = [];
+      }
+    }
   }
   /** Processes output files for current round. */
   protected async handleOutput(
