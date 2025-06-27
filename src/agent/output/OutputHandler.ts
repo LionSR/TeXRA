@@ -9,7 +9,7 @@ import { LatexDiffManager } from './LatexDiffManager';
 import { StatisticsReporter } from './StatisticsReporter';
 import { NamedOutputFile } from './types';
 import type { IOutputHandler } from './IOutputHandler';
-import { getOutputFileName } from '@utils/outputFileUtils';
+import { getOutputFileName } from '@agent/utils/outputFileUtils';
 
 // Local imports - agent components
 import { AgentConfig } from '@agent/core/AgentConfig';
@@ -204,4 +204,4 @@ export class OutputHandler implements IOutputHandler {
 }
 
 export { NamedOutputFile };
-export { getOutputFileName } from '@utils/outputFileUtils';
+export { getOutputFileName } from '@agent/utils/outputFileUtils';
