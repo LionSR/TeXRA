@@ -96,7 +96,7 @@ export class LaTeXdiffService {
         editedFile,
         suffix,
       );
-      const outputPath = `${path.dirname(inputFile)}/${diffFileName}`;
+      const outputPath = path.join(path.dirname(inputFile), diffFileName);
 
       // Execute latexdiff command
       const result = await this.commandExecutor.executeDiff(
@@ -136,7 +136,10 @@ export class LaTeXdiffService {
       }
 
       const diffFileName = inputFile.replace('.tex', `-diff${commitHash}.tex`);
-      const outputPath = `${path.dirname(inputFile)}/${path.basename(diffFileName)}`;
+      const outputPath = path.join(
+        path.dirname(inputFile),
+        path.basename(diffFileName),
+      );
 
       await this.commandExecutor.executeDiffVc(inputFile, commitHash);
       await this.fileProcessor.processDiffFile(outputPath);
