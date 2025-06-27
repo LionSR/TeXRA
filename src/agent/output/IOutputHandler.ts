@@ -39,4 +39,11 @@ export interface IOutputHandler {
     stateGlobal: AgentStateGlobal,
     groupId?: string,
   ): Promise<void>;
+
+  /** Process output files from XML or direct input. */
+  processOutputFiles(
+    outputFile: string,
+    currRound: number,
+    groupId?: string,
+  ): Promise<void>;
 }
