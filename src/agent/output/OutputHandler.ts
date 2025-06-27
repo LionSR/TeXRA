@@ -7,6 +7,7 @@ import { runLatexFormatter } from '@latex/texFormatter';
 import { XmlOutputManager } from './XmlOutputManager';
 import { LatexDiffManager } from './LatexDiffManager';
 import { StatisticsReporter } from './StatisticsReporter';
+import { DiffStatsManager } from './DiffStatsManager';
 import { NamedOutputFile } from './types';
 import type { IOutputHandler } from './IOutputHandler';
 import { getOutputFileName } from '@agent/utils/outputFileUtils';
@@ -18,7 +19,8 @@ import { AgentStateGlobal, AgentStateRound } from '@agent/core/AgentState';
 import type { IModelHandler } from '@agent/modelHandlers';
 
 // Local imports - utilities
-import { replaceInputCommands } from '@utils/files';
+import { replaceInputCommands, createFileMapping } from '@utils/files';
+import { getEffectiveBaseFile } from '@utils/files/baseFileUtils';
 
 // Local imports - types
 
@@ -37,6 +39,7 @@ export class OutputHandler implements IOutputHandler {
   private xmlManager: XmlOutputManager;
   private diffManager: LatexDiffManager;
   private statsReporter: StatisticsReporter;
+  private diffStatsManager: DiffStatsManager;
 
   constructor(
     agentSetting: AgentSetting,
@@ -73,6 +76,7 @@ export class OutputHandler implements IOutputHandler {
       this.channel,
       this.logger,
     );
+    this.diffStatsManager = new DiffStatsManager();
   }
 
   /**
@@ -161,6 +165,59 @@ export class OutputHandler implements IOutputHandler {
     groupId?: string,
   ): Promise<void> {
     await this.diffManager.handleLatexdiffofOutput(currRound, groupId);
+  }
+
+  /**
+   * Gather mapping and diff statistics for output files of a round.
+   */
+  public async gatherOutputFileInfo(currRound: number): Promise<
+    {
+      path: string;
+      base: string | null;
+      prev: string | null;
+      original: string | null;
+      added?: number;
+      removed?: number;
+    }[]
+  > {
+    const roundOutputs = this.outputFiles[currRound] || [];
+    const baseMap = createFileMapping(this.baseFiles, roundOutputs, 'contains');
+    const prevMap =
+      currRound > 0
+        ? createFileMapping(
+            this.outputFiles[currRound - 1] || [],
+            roundOutputs,
+            'basename',
+            true,
+          )
+        : new Map<string, string>();
+    const originMap = new Map(
+      (this.outputMappings[currRound] || []).map((p) => [p.path, p.source]),
+    );
+
+    const infos = [] as any[];
+    for (const file of roundOutputs) {
+      const baseFile =
+        Array.from(baseMap.entries()).find(([, out]) => out === file)?.[0] ||
+        null;
+      const prevFile =
+        Array.from(prevMap.entries()).find(([, out]) => out === file)?.[0] ||
+        null;
+      const originalFile = originMap.get(file) || null;
+      const diffBase = getEffectiveBaseFile(baseFile, originalFile, file);
+      const stats = await this.diffStatsManager.computeDiffStats(
+        diffBase,
+        file,
+      );
+      infos.push({
+        path: file,
+        base: baseFile,
+        prev: prevFile,
+        original: originalFile,
+        ...stats,
+      });
+    }
+    return infos;
   }
 
   /** Processes single output file with XML splitting and filtering. */
