@@ -30,12 +30,12 @@ import {
   renderPrompt,
   getFirstKCharsFromDocument,
   writePromptToXml,
-} from '@utils/promptUtils';
+} from '@agent/utils/promptUtils';
 
 import { loadTexraRules } from '@frontend/files/rules';
 
 import replacementEngine from '@replacement/engine';
-import { checkForMassiveRepetition } from '@utils/text/repetitionUtils';
+import { checkForMassiveRepetition } from '@agent/utils/text/repetitionUtils';
 import xmlUtils from '@utils/text/xmlUtils';
 
 // Local imports - agent components

@@ -7,7 +7,10 @@ import * as path from 'path';
 import { AgentLogger } from '@logger/AgentLogger';
 import { WorkspaceFS } from '@utils/files';
 import { setVarFromFile } from '@frontend/files/vars';
-import { getXmlFormatFromFiles, getListOfFiles } from '@utils/promptUtils';
+import {
+  getXmlFormatFromFiles,
+  getListOfFiles,
+} from '@agent/utils/promptUtils';
 import { AgentConfig } from '../core/AgentConfig';
 import { AgentSetting } from '../core/AgentDataclass';
 import type { IModelHandler } from '@agent/modelHandlers';
