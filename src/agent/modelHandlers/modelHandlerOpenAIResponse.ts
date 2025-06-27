@@ -15,7 +15,7 @@ import type {
 // Local imports - base handler
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 import { ResponseUsageFactory } from '../core/ResponseUsage';
-import { calculateTokenPrice } from '@utils/priceUtils';
+import { calculateTokenPrice } from '@agent/utils/priceUtils';
 import { ToolState } from '../core/ToolState';
 import { K_SLICE } from '@utils/config';
 import type { ProviderStopReason } from './types/StopReasonTypes';
