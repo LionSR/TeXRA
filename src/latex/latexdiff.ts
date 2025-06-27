@@ -1,83 +1,281 @@
+// Standard library imports
+import * as path from 'path';
+
 // Local imports - log
 import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
-import { logErrorMessage, showLoggedMessage } from '@utils/errorHandlingUtils';
+import { logErrorMessage } from '@utils/errorHandlingUtils';
+import { WorkspaceFS } from '@utils/files';
+import { executeCommand } from '@utils/system';
+import { getConfig } from '@utils/config';
+import { ExecResult } from '../types/ResultTypes';
 
-// Local imports - runner
-import {
-  LatexdiffRunner,
-  LaTeXdiffResult,
-  LaTeXdiffMultipleResult,
-} from './latexdiffRunner';
+// Local imports - latex utils
+import { runLatexFormatter } from './texFormatter';
+
+// Local imports - replacement utils
+import replacementEngine from '@replacement/engine';
+
+// Local imports - managers
+import { DiffFileNameManager } from './diffFileNameManager';
+import { DiffFileProcessor } from './diffFileProcessor';
+import { DiffCommandExecutor } from './diffCommandExecutor';
+
+export interface LaTeXdiffResult {
+  success: boolean;
+  diffFileName?: string;
+  message?: string;
+}
+
+export interface LaTeXdiffMultipleResult {
+  success: boolean;
+  results: {
+    success: string[];
+    failed: string[];
+  };
+  message?: string;
+}
 
 const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);
 
-export { LaTeXdiffResult, LaTeXdiffMultipleResult } from './latexdiffRunner';
+const LATEXDIFF_TIMEOUT_MS = 10000;
 
-export async function runLatexdiff(
-  inputFile: string,
-  editedFile: string,
-  suffix = '_diff',
-  runIndent = true,
-  channel: string = CHANNEL,
-): Promise<LaTeXdiffResult> {
-  const runner = new LatexdiffRunner(channel);
-  return runner.runDiff(inputFile, editedFile, suffix, runIndent);
-}
+export class LaTeXdiffService {
+  private readonly fileNameManager: DiffFileNameManager;
+  private readonly fileProcessor: DiffFileProcessor;
+  private readonly commandExecutor: DiffCommandExecutor;
 
-export async function runLatexdiffvc(
-  inputFile: string,
-  commitHash: string,
-  channel: string = CHANNEL,
-): Promise<LaTeXdiffResult> {
-  const runner = new LatexdiffRunner(channel);
-  return runner.runDiffVc(inputFile, commitHash);
-}
-
-export async function runLatexdiffvcMultiple(
-  inputFiles: string[],
-  commitHash: string,
-  channel: string = CHANNEL,
-): Promise<LaTeXdiffMultipleResult> {
-  const runner = new LatexdiffRunner(channel);
-  return runner.runDiffVcMultiple(inputFiles, commitHash);
-}
-
-export async function runLatexdiffForRound(
-  baseFile: string,
-  outputFile: string,
-  _round: number,
-  channel: string = CHANNEL,
-): Promise<LaTeXdiffResult> {
-  try {
-    const runner = new LatexdiffRunner(channel);
-    return await runner.runDiffForRound(baseFile, outputFile, _round);
-  } catch (err) {
-    const message = logErrorMessage(
+  constructor(private readonly channel: string = CHANNEL) {
+    this.fileNameManager = new DiffFileNameManager();
+    this.fileProcessor = new DiffFileProcessor(channel);
+    this.commandExecutor = new DiffCommandExecutor(
       channel,
-      'Error in runLatexdiffForRound',
-      err,
+      LATEXDIFF_TIMEOUT_MS,
     );
+  }
+
+  async runDiff(
+    inputFile: string,
+    editedFile: string,
+    suffix = '_diff',
+    runIndent = true,
+  ): Promise<LaTeXdiffResult> {
+    try {
+      // Validate inputs
+      if (!inputFile) {
+        logger.warn(this.channel, 'Input file is empty or undefined');
+        return { success: false, message: 'Input file is empty or undefined' };
+      }
+
+      if (
+        !(await WorkspaceFS.exists(inputFile)) ||
+        !(await WorkspaceFS.exists(editedFile))
+      ) {
+        const message = `One or both files do not exist. Input: ${inputFile}, Edited: ${editedFile}`;
+        logger.warn(this.channel, message);
+        return { success: false, message };
+      }
+
+      // Validate document structure
+      if (!(await this.validateDocumentStructure(inputFile, editedFile))) {
+        return {
+          success: false,
+          message: 'Files missing document environment',
+        };
+      }
+
+      logger.info(
+        this.channel,
+        `Running latexdiff for ${inputFile} and ${editedFile}`,
+      );
+
+      // Format files if requested
+      if (runIndent) {
+        await this.formatFiles([inputFile, editedFile]);
+      }
+
+      // Generate output filename
+      const diffFileName = this.fileNameManager.generateDiffFileName(
+        inputFile,
+        editedFile,
+        suffix,
+      );
+      const outputPath = `${path.dirname(inputFile)}/${diffFileName}`;
+
+      // Execute latexdiff command
+      const result = await this.commandExecutor.executeDiff(
+        inputFile,
+        editedFile,
+      );
+      if (!result.stdout) {
+        throw new Error('Latexdiff produced no output');
+      }
+
+      // Write and process output
+      await WorkspaceFS.writeFile(outputPath, result.stdout);
+      await this.fileProcessor.processDiffFile(outputPath);
+
+      return {
+        success: true,
+        diffFileName,
+        message: `LaTeXdiff completed successfully: ${diffFileName}`,
+      };
+    } catch (err) {
+      const message = logErrorMessage(
+        this.channel,
+        'Error running LaTeX diff',
+        err,
+      );
+      return { success: false, message };
+    }
+  }
+
+  async runDiffVc(
+    inputFile: string,
+    commitHash: string,
+  ): Promise<LaTeXdiffResult> {
+    try {
+      if (!(await this.validateDocumentStructure(inputFile))) {
+        return { success: false, message: 'File missing document environment' };
+      }
+
+      const diffFileName = inputFile.replace('.tex', `-diff${commitHash}.tex`);
+      const outputPath = `${path.dirname(inputFile)}/${path.basename(diffFileName)}`;
+
+      await this.commandExecutor.executeDiffVc(inputFile, commitHash);
+      await this.fileProcessor.processDiffFile(outputPath);
+
+      return {
+        success: true,
+        diffFileName: path.basename(diffFileName),
+        message: `LaTeXdiff VC completed successfully: ${path.basename(diffFileName)}`,
+      };
+    } catch (err) {
+      const message = logErrorMessage(
+        this.channel,
+        'Error running LaTeX diff VC',
+        err,
+      );
+      return { success: false, message };
+    }
+  }
+
+  async runDiffVcMultiple(
+    inputFiles: string[],
+    commitHash: string,
+  ): Promise<LaTeXdiffMultipleResult> {
+    const results = { success: [] as string[], failed: [] as string[] };
+
+    for (const inputFile of inputFiles) {
+      try {
+        const result = await this.runDiffVc(inputFile, commitHash);
+        if (result.success) {
+          results.success.push(inputFile);
+        } else {
+          results.failed.push(inputFile);
+        }
+      } catch (err) {
+        results.failed.push(inputFile);
+        logger.error(
+          this.channel,
+          `Error processing ${inputFile}: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    }
+
+    const summary = [
+      'LaTeX diff operations completed:',
+      results.success.length > 0
+        ? `\nSuccessful:\n${results.success.join('\n')}`
+        : '',
+      results.failed.length > 0
+        ? `\nFailed:\n${results.failed.join('\n')}`
+        : '',
+    ].join('');
+
+    logger.info(this.channel, summary);
+
+    return {
+      success: results.failed.length === 0,
+      results,
+      message: summary,
+    };
+  }
+
+  async runDiffForRound(
+    baseFile: string,
+    outputFile: string,
+    _round: number,
+  ): Promise<LaTeXdiffResult> {
+    if (
+      (await WorkspaceFS.exists(baseFile)) &&
+      (await WorkspaceFS.exists(outputFile))
+    ) {
+      return await this.runDiff(baseFile, outputFile, '_diff', false);
+    }
+
+    const message = `Could not generate latexdiff for round ${_round}. Files not found: ${baseFile} or ${outputFile}`;
+    logger.warn(this.channel, message);
     return { success: false, message };
   }
-}
 
-export async function runLatexdiffBetweenRounds(
-  outputFile1: string,
-  outputFile2: string,
-  channel: string = CHANNEL,
-): Promise<LaTeXdiffResult> {
-  try {
-    const runner = new LatexdiffRunner(channel);
-    return await runner.runDiffBetweenRounds(outputFile1, outputFile2);
-  } catch (err) {
-    const message = logErrorMessage(
-      channel,
-      'Error in runLatexdiffBetweenRounds',
-      err,
-    );
+  async runDiffBetweenRounds(
+    outputFile1: string,
+    outputFile2: string,
+  ): Promise<LaTeXdiffResult> {
+    if (
+      (await WorkspaceFS.exists(outputFile1)) &&
+      (await WorkspaceFS.exists(outputFile2))
+    ) {
+      const firstRoundMatch = outputFile1.match(/_r(\d+)_/);
+      const secondRoundMatch = outputFile2.match(/_r(\d+)_/);
+
+      if (!firstRoundMatch || !secondRoundMatch) {
+        const message = 'Could not extract round numbers from file names';
+        logger.warn(this.channel, message);
+        return { success: false, message };
+      }
+
+      const firstRound = firstRoundMatch[1];
+      const secondRound = secondRoundMatch[1];
+      const diffSuffix = `_diffr${secondRound}r${firstRound}`;
+      return await this.runDiff(outputFile1, outputFile2, diffSuffix, false);
+    }
+
+    const message = `Could not generate latexdiff between rounds. Files not found: ${outputFile1} or ${outputFile2}`;
+    logger.warn(this.channel, message);
     return { success: false, message };
+  }
+
+  private async validateDocumentStructure(
+    ...files: string[]
+  ): Promise<boolean> {
+    for (const file of files) {
+      const content = await WorkspaceFS.readFile(file);
+      if (
+        !content.includes('\\begin{document}') ||
+        !content.includes('\\end{document}')
+      ) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  private async formatFiles(files: string[]): Promise<void> {
+    const failedFiles: string[] = [];
+    for (const file of files) {
+      if (!(await runLatexFormatter(file))) {
+        failedFiles.push(file);
+      }
+    }
+    if (failedFiles.length > 0) {
+      logger.warn(
+        this.channel,
+        `Failed to indent files:\n${failedFiles.join('\n')}\nProceeding with latexdiff anyway.`,
+      );
+    }
   }
 }

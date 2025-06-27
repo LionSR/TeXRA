@@ -12,11 +12,7 @@ import { WorkspaceFS } from '@utils/files';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 
 // Local imports - latex utils
-import {
-  runLatexdiffForRound,
-  runLatexdiffBetweenRounds,
-} from '@latex/latexdiff';
-import { LatexdiffRunner } from '@latex/latexdiffRunner';
+import { LaTeXdiffService } from '@latex/latexdiff';
 import { checkToolInstalled } from '@utils/system';
 
 // Local imports - housekeeping
@@ -33,7 +29,8 @@ import { getAgentFirstNameChunk } from '@housekeeping/utils';
 const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);
 
-const runner = new LatexdiffRunner(CHANNEL);
+const service = new LaTeXdiffService(CHANNEL);
+
 export function registerLatexdiffCommands(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand('texra.latexdiff', handleLatexdiff),
@@ -79,8 +76,8 @@ async function handleLatexdiff(
       return;
     }
 
-    // Get the result from LatexdiffRunner
-    const result = await runner.runDiff(fileToUse, editedFile, '_diff', false);
+    // Get the result from LaTeXdiffService
+    const result = await service.runDiff(fileToUse, editedFile, '_diff', false);
 
     if (!result.success || !result.diffFileName) {
       throw new Error(result.message || 'Failed to generate diff file');
@@ -118,8 +115,8 @@ async function handleLatexdiffvc(
       return;
     }
 
-    // Get the result from LatexdiffRunner
-    const result = await runner.runDiffVc(fileToUse, commitHash);
+    // Get the result from LaTeXdiffService
+    const result = await service.runDiffVc(fileToUse, commitHash);
 
     if (!result.success || !result.diffFileName) {
       throw new Error(result.message || 'Failed to generate diff file');
@@ -416,11 +413,10 @@ async function handleRunLatexdiff(config: any) {
             );
 
             // Use the specialized function for round-based diffs
-            const result = await runLatexdiffForRound(
+            const result = await service.runDiffForRound(
               inputFile,
               outputFile,
               round,
-              CHANNEL,
             );
 
             results.push({
@@ -453,10 +449,9 @@ async function handleRunLatexdiff(config: any) {
               );
 
               // Use the specialized function for between-rounds diffs
-              const result = await runLatexdiffBetweenRounds(
+              const result = await service.runDiffBetweenRounds(
                 currentFile,
                 nextFile,
-                CHANNEL,
               );
 
               results.push({
