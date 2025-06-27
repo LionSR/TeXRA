@@ -26,9 +26,12 @@ export async function compileLatex2Pdf(
   latexFile: string,
   channel: string = CHANNEL,
   outputDirectory?: string,
+  useLatexmk: boolean = false,
 ): Promise<boolean> {
-  // Ensure pdflatex is available before attempting compilation
-  if (!(await checkToolInstalled('pdflatex'))) {
+  const useLatexmkInstalled = useLatexmk
+    ? await checkToolInstalled('latexmk', false)
+    : false;
+  if (!useLatexmkInstalled && !(await checkToolInstalled('pdflatex'))) {
     return false;
   }
 
@@ -78,12 +81,20 @@ export async function compileLatex2Pdf(
       logger.debug(channel, `Setting TEXINPUTS to: ${texInputs}`);
     }
 
-    const command = [
-      'pdflatex',
-      '-interaction=nonstopmode',
-      `-output-directory="${outDir}"`,
-      `"${latexFile}"`,
-    ];
+    const command = useLatexmkInstalled
+      ? [
+          'latexmk',
+          '-pdf',
+          '-interaction=nonstopmode',
+          `-output-directory="${outDir}"`,
+          `"${latexFile}"`,
+        ]
+      : [
+          'pdflatex',
+          '-interaction=nonstopmode',
+          `-output-directory="${outDir}"`,
+          `"${latexFile}"`,
+        ];
 
     const result = await executeCommand(command, { channel, env });
     if (result.success) {
