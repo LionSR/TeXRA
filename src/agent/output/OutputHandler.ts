@@ -7,9 +7,12 @@ import { runLatexFormatter } from '@latex/texFormatter';
 import { XmlOutputManager } from './XmlOutputManager';
 import { LatexDiffManager } from './LatexDiffManager';
 import { StatisticsReporter } from './StatisticsReporter';
+import DiffStatsManager from './DiffStatsManager';
 import { NamedOutputFile } from './types';
+import type { OutputFileInfo } from '@/types/DiffTypes';
 import type { IOutputHandler } from './IOutputHandler';
 import { getOutputFileName } from '@agent/utils/outputFileUtils';
+import { createFileMapping, getEffectiveBaseFile } from '@utils/files';
 
 // Local imports - agent components
 import { AgentConfig } from '@agent/core/AgentConfig';
@@ -34,6 +37,7 @@ export class OutputHandler implements IOutputHandler {
   private xmlManager: XmlOutputManager;
   private diffManager: LatexDiffManager;
   private statsReporter: StatisticsReporter;
+  private diffStatsManager: DiffStatsManager;
 
   constructor(
     agentSetting: AgentSetting,
@@ -70,6 +74,7 @@ export class OutputHandler implements IOutputHandler {
       this.channel,
       this.logger,
     );
+    this.diffStatsManager = new DiffStatsManager();
   }
 
   /**
@@ -186,6 +191,59 @@ export class OutputHandler implements IOutputHandler {
     groupId?: string,
   ): Promise<void> {
     await this.statsReporter.printStatistics(stateGlobal, groupId);
+  }
+
+  /**
+   * Gather information about output files for a given round.
+   * Maps each generated file to its base and previous versions and
+   * computes line diff statistics.
+   */
+  public async gatherOutputFileInfo(
+    currRound: number,
+  ): Promise<OutputFileInfo[]> {
+    const roundOutputs = this.outputFiles[currRound] || [];
+
+    const baseMap = createFileMapping(this.baseFiles, roundOutputs, 'contains');
+    const prevMap =
+      currRound > 0
+        ? createFileMapping(
+            this.outputFiles[currRound - 1] || [],
+            roundOutputs,
+            'basename',
+            true,
+          )
+        : new Map<string, string>();
+
+    const originMap = new Map(
+      (this.outputMappings[currRound] || []).map((p) => [p.path, p.source]),
+    );
+
+    const fileInfos: OutputFileInfo[] = [];
+    for (const file of roundOutputs) {
+      const baseFile =
+        Array.from(baseMap.entries()).find(([, out]) => out === file)?.[0] ||
+        null;
+      const prevFile =
+        Array.from(prevMap.entries()).find(([, out]) => out === file)?.[0] ||
+        null;
+      const originalFile = originMap.get(file) || null;
+
+      const diffBase = getEffectiveBaseFile(baseFile, originalFile, file);
+      const stats = await this.diffStatsManager.computeDiffStats(
+        diffBase,
+        file,
+      );
+
+      fileInfos.push({
+        path: file,
+        base: baseFile,
+        prev: prevFile,
+        original: originalFile,
+        ...stats,
+      });
+    }
+
+    return fileInfos;
   }
   /** Processes output files for current round. */
   protected async handleOutput(

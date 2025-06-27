@@ -12,14 +12,7 @@ import { AgentLogger } from '@logger/AgentLogger';
 // Types
 import { TokenUsageStats } from '../types/UsageTypes';
 import { TaskGroup, LogMessageData } from '../logger/LogTypes';
-import type { DiffStats } from '../types/DiffTypes';
-
-interface OutputFileInfo extends DiffStats {
-  path: string;
-  base?: string | null;
-  prev?: string | null;
-  original?: string;
-}
+import type { DiffStats, OutputFileInfo } from '../types/DiffTypes';
 
 /**
  * Manages persistence of progress view state to workspace storage.

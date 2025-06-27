@@ -39,4 +39,9 @@ export interface IOutputHandler {
     stateGlobal: AgentStateGlobal,
     groupId?: string,
   ): Promise<void>;
+
+  /**
+   * Collect info about output files including diff statistics.
+   */
+  gatherOutputFileInfo(currRound: number): Promise<import('@/types/DiffTypes').OutputFileInfo[]>;
 }

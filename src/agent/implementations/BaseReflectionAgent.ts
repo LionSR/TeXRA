@@ -17,15 +17,8 @@ import {
 
 import { emitProgress } from '@eventBus/ProgressEventBus';
 
-import { diff_match_patch } from 'diff-match-patch';
-import type { DiffStats } from '@/types/DiffTypes';
-
 // Local imports - utilities
-import {
-  WorkspaceFS,
-  createFileMapping,
-  replaceInputCommands,
-} from '@utils/files';
+import { WorkspaceFS, replaceInputCommands } from '@utils/files';
 import {
   renderPrompt,
   getFirstKCharsFromDocument,
@@ -58,7 +51,6 @@ import { MESSAGE_TYPES } from '@logger/messageTypes';
 
 // System imports - common utilities
 import { getConfig } from '@utils/config';
-import { getEffectiveBaseFile } from '@utils/files/baseFileUtils';
 
 // Shared constants
 import { K_SLICE, REPETITION_DETECTION_THRESHOLD } from '@utils/config';
@@ -422,51 +414,6 @@ export abstract class BaseReflectionAgent extends BaseAgent {
     }
   }
 
-  // Helper function to consistently count lines in text
-  private countLines(text: string): number {
-    if (text.length === 0) return 0;
-    // Handle trailing newlines consistently: subtract 1 if text ends with newline
-    return text.endsWith('\n')
-      ? text.split('\n').length - 1
-      : text.split('\n').length;
-  }
-
-  private async computeDiffStats(
-    baseFile: string | null,
-    outputFile: string,
-  ): Promise<DiffStats> {
-    try {
-      if (!baseFile) {
-        const outContent = await WorkspaceFS.readFile(outputFile);
-        const added = this.countLines(outContent);
-        // For new files, only return added count (removed should be undefined for UI)
-        return { added };
-      }
-
-      const [baseContent, outContent] = await Promise.all([
-        WorkspaceFS.readFile(baseFile),
-        WorkspaceFS.readFile(outputFile),
-      ]);
-
-      const dmp = new diff_match_patch();
-      const diffs = dmp.diff_main(baseContent, outContent);
-      let added = 0;
-      let removed = 0;
-
-      for (const [op, text] of diffs) {
-        if (op === 1) {
-          added += this.countLines(text);
-        } else if (op === -1) {
-          removed += this.countLines(text);
-        }
-      }
-
-      return { added, removed };
-    } catch {
-      return {};
-    }
-  }
-
   /**
    * Processes completion of conversation round.
    */
@@ -499,50 +446,7 @@ export abstract class BaseReflectionAgent extends BaseAgent {
       throw error;
     }
 
-    const roundOutputs = this.outputHandler.outputFiles[currRound] || [];
-
-    // Map output files to their original base files
-    const baseMap = createFileMapping(this.baseFiles, roundOutputs, 'contains');
-
-    // Map output files to previous round files if available
-    const prevMap =
-      currRound > 0
-        ? createFileMapping(
-            this.outputHandler.outputFiles[currRound - 1] || [],
-            roundOutputs,
-            'basename',
-            true,
-          )
-        : new Map<string, string>();
-
-    const fileInfos = [] as any[];
-    const originMap = new Map(
-      (this.outputHandler.outputMappings[currRound] || []).map((p) => [
-        p.path,
-        p.source,
-      ]),
-    );
-    for (const file of roundOutputs) {
-      const baseFile =
-        Array.from(baseMap.entries()).find(([, out]) => out === file)?.[0] ||
-        null;
-      const prevFile =
-        Array.from(prevMap.entries()).find(([, out]) => out === file)?.[0] ||
-        null;
-      const originalFile = originMap.get(file) || null;
-
-      // Use utility to determine effective base for diff computation
-      const diffBase = getEffectiveBaseFile(baseFile, originalFile, file);
-      const stats = await this.computeDiffStats(diffBase, file);
-
-      fileInfos.push({
-        path: file,
-        base: baseFile,
-        prev: prevFile,
-        original: originalFile,
-        ...stats,
-      });
-    }
+    const fileInfos = await this.outputHandler.gatherOutputFileInfo(currRound);
 
     emitProgress('addOutputFiles', {
       stream: this.logger.channelId,

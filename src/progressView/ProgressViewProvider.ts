@@ -13,7 +13,7 @@ import { getConfig } from '@utils/config';
 
 import { TokenUsageStats } from '../types/UsageTypes';
 import { TaskGroup } from '../logger/LogTypes';
-import type { DiffStats } from '../types/DiffTypes';
+import type { DiffStats, OutputFileInfo } from '../types/DiffTypes';
 import { randomUUID } from 'crypto';
 import { onProgress } from '@eventBus/ProgressEventBus';
 
@@ -32,15 +32,6 @@ type StreamStatusType =
   | typeof STATUS.STOPPED;
 
 import type { LogMessageData } from '../logger/LogTypes';
-
-// Channels that should not be persisted in workspace storage
-
-interface OutputFileInfo extends DiffStats {
-  path: string;
-  base?: string | null;
-  prev?: string | null;
-  original?: string;
-}
 
 export class ProgressViewProvider implements vscode.WebviewViewProvider {
   private static _instance: ProgressViewProvider | undefined;
