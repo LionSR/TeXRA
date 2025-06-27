@@ -10,7 +10,7 @@ import { ToolState } from '../core/ToolState';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 
 // Local imports - utilities
-import { convertContentToString } from '@utils/text/messageUtils';
+import { convertContentToString } from '@agent/utils/messageUtils';
 import { K_SLICE, MESSAGE_PREVIEW_LENGTH } from '@utils/config';
 
 /**
