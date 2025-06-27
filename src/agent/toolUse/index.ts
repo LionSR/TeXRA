@@ -8,9 +8,11 @@
 // Local imports - agents
 import { ValidationFixAgent } from './ValidationFixAgent';
 import { BaseToolUseAgent } from './BaseToolUseAgent';
+import type { IToolUseAgent } from './IToolUseAgent';
 
 // Export individual classes
 export { ValidationFixAgent, BaseToolUseAgent };
+export type { IToolUseAgent };
 
 // Export shared tool implementations and types
 export * from '@tools/anthropic/TextEditorTool';
