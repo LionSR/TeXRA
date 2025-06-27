@@ -21,3 +21,6 @@ export { getTeXCountStats } from './texcount';
 export { LaTeXdiffService } from './latexdiff';
 
 export { ArxivSourceProcessor, arxivProcessor } from './arxivProcessor';
+
+// Export media manager
+export { LatexMediaManager } from './LatexMediaManager';
