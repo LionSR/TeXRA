@@ -13,7 +13,7 @@ import type { ProviderStopReason } from './StopReasonTypes';
 /**
  * Common interface implemented by all model handlers.
  */
-export interface IModelHandler {
+export interface IModelHandler<U = any, R = any> {
   /** Model configuration used by the handler. */
   config: ModelConfig;
 
@@ -110,10 +110,10 @@ export interface IModelHandler {
   ): Promise<[boolean, any[]]>;
 
   /** Compute the cost for a response. */
-  computePrice(responseUsage: any): number;
+  computePrice(responseUsage: U): number;
 
   /** Compute detailed usage metrics. */
-  computeResponseUsage(responseUsage: any, responseTime: number): any;
+  computeResponseUsage(responseUsage: U, responseTime: number): R;
 
   /** Update messages when prefill is supported. */
   updateMessageContentWithPrefill(
