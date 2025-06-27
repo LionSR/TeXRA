@@ -1065,6 +1065,7 @@ export abstract class BaseReflectionAgent extends BaseAgent {
           outputFile,
           undefined,
           buildDir,
+          true,
         );
         if (compiled) {
           const pdfFile = path.join(
