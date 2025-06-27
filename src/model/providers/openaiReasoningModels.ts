@@ -31,6 +31,7 @@ export const OPENAI_REASONING_MODELS: Record<string, ModelConfig> = {
     capabilities: {
       ...OPENAI_REASONING_DEFAULT_CAPABILITIES,
       cacheDiscountFactor: 0.25,
+      supportsNativeWebSearch: true,
       supportsNativeMCPServer: true,
       supportsNativeCodeExecution: true,
       supportsNativePdf: true,
@@ -49,6 +50,7 @@ export const OPENAI_REASONING_MODELS: Record<string, ModelConfig> = {
     outputPrice: 80.0,
     capabilities: {
       ...OPENAI_REASONING_DEFAULT_CAPABILITIES,
+      supportsNativeWebSearch: true,
       supportsNativeMCPServer: true,
       supportsAutoPromptCaching: false,
       supportsNativePdf: true,
@@ -68,6 +70,7 @@ export const OPENAI_REASONING_MODELS: Record<string, ModelConfig> = {
     capabilities: {
       ...OPENAI_REASONING_DEFAULT_CAPABILITIES,
       cacheDiscountFactor: 0.25,
+      supportsNativeWebSearch: true,
       supportsNativeMCPServer: true,
       supportsNativeCodeExecution: true,
       supportsNativePdf: true,
