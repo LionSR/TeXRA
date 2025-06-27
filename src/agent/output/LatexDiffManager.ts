@@ -104,7 +104,12 @@ export class LatexDiffManager {
               result.diffFileName,
             );
             const buildDir = path.join(path.dirname(diffPath), 'build');
-            await compileLatex2Pdf(diffPath, this.channel, buildDir);
+            await compileLatex2Pdf(
+              diffPath,
+              this.channel,
+              buildDir,
+              true, // prefer latexmk when available
+            );
           }
         }
       }
@@ -153,7 +158,12 @@ export class LatexDiffManager {
               result.diffFileName,
             );
             const buildDir = path.join(path.dirname(diffPath), 'build');
-            await compileLatex2Pdf(diffPath, this.channel, buildDir);
+            await compileLatex2Pdf(
+              diffPath,
+              this.channel,
+              buildDir,
+              true, // prefer latexmk when available
+            );
           }
         }
       }
