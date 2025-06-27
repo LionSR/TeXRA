@@ -4,7 +4,7 @@ import * as logger from '@logger/logUtils';
 // Local imports - utilities
 import { executeCommand } from '@utils/system';
 import { getConfig } from '@utils/config';
-import { ExecResult } from '../types/ResultTypes';
+import { ExecResult } from '../../types/ResultTypes';
 
 const DEFAULT_PICTURE_ENVS =
   '(?:picture|tikzpicture|scope|DIFnomarkup)[\\w\\d*@]*';
