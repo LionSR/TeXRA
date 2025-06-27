@@ -19,10 +19,7 @@ import {
 import { LinterMessage } from '@frontend/latex/linter';
 import { WorkspaceFS } from '@utils/files';
 import * as linterUtils from '@frontend/latex/linter';
-import * as logger from '@logger/logUtils';
-
-const CHANNEL = 'ValidationFixAgent';
-logger.initialize(CHANNEL);
+import type { IToolUseAgent } from './IToolUseAgent';
 
 export type ValidatorType = 'latexLinter' | 'xmlValidator';
 
@@ -30,9 +27,10 @@ type ErrorFor<T extends ValidatorType> = T extends 'latexLinter'
   ? LinterMessage[]
   : XMLValidationError;
 
-export class ValidationFixAgent<
-  T extends ValidatorType,
-> extends BaseToolUseAgent<ErrorFor<T>> {
+export class ValidationFixAgent<T extends ValidatorType>
+  extends BaseToolUseAgent<ErrorFor<T>>
+  implements IToolUseAgent<ErrorFor<T>>
+{
   private prompts: AgentPrompt = {
     systemPrompt: '',
     userPrefix: '',
