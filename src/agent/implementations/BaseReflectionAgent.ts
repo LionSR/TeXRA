@@ -30,12 +30,12 @@ import {
   renderPrompt,
   getFirstKCharsFromDocument,
   writePromptToXml,
-} from '@utils/promptUtils';
+} from '@agent/utils/promptUtils';
 
 import { loadTexraRules } from '@frontend/files/rules';
 
 import replacementEngine from '@replacement/engine';
-import { checkForMassiveRepetition } from '@utils/text/repetitionUtils';
+import { checkForMassiveRepetition } from '@agent/utils/repetitionUtils';
 import xmlUtils from '@utils/text/xmlUtils';
 
 // Local imports - agent components
@@ -49,7 +49,7 @@ import { AgentStateRound, AgentStateGlobal } from '@agent/core/AgentState';
 import { ToolState } from '@agent/core/ToolState';
 import type { IModelHandler } from '@agent/modelHandlers';
 import { OutputHandler, NamedOutputFile, IOutputHandler } from '@agent/output';
-import { messageToSkeleton } from '@agent/utils/messageUtils';
+import { messageToSkeleton } from '@agent/utils/messageSkeletonUtils';
 import { BaseAgent } from '@agent/implementations/BaseAgent';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 
