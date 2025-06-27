@@ -32,7 +32,10 @@ import {
   writePromptToXml,
 } from '@agent/utils/promptUtils';
 
-import { loadTexraRules } from '@frontend/files/rules';
+import {
+  getSystemPromptWithRules,
+  getPrefillForRound,
+} from '@agent/utils/promptHelpers';
 
 import replacementEngine from '@replacement/engine';
 import { checkForMassiveRepetition } from '@agent/utils/text/repetitionUtils';
@@ -131,18 +134,6 @@ export abstract class BaseReflectionAgent extends BaseAgent {
   }
 
   /**
-   * Combines the base system prompt with additional rules from `.texrarules`.
-   */
-  protected async getSystemPromptWithRules(): Promise<string> {
-    const basePrompt = await renderPrompt(
-      this.agentPrompt.systemPrompt,
-      this.userVars,
-    );
-    const rules = await loadTexraRules();
-    return rules ? `${basePrompt}\n${rules}` : basePrompt;
-  }
-
-  /**
    * Manages single response cycle with model interaction.
    * @param messages Current conversation messages
    * @param stateRound Current round state
@@ -173,7 +164,10 @@ export abstract class BaseReflectionAgent extends BaseAgent {
 
         const exists = await WorkspaceFS.exists(outputFile);
         const startTime = Date.now();
-        const systemPrompt = await this.getSystemPromptWithRules();
+        const systemPrompt = await getSystemPromptWithRules(
+          this.agentPrompt.systemPrompt,
+          this.userVars,
+        );
 
         // Save message object to file for debugging if enabled in settings
         const shouldSaveMessageObjects = getConfig(
@@ -426,17 +420,6 @@ export abstract class BaseReflectionAgent extends BaseAgent {
     } catch (error) {
       throw error;
     }
-  }
-
-  /**
-   * Gets prefill content for specified round.
-   */
-  private getPrefillForRound(currRound: number): string {
-    const prefill =
-      currRound < (this.agentSetting.prefills?.length || 0)
-        ? this.agentSetting.prefills![currRound]
-        : this.agentSetting.prefills?.[0] || '';
-    return prefill;
   }
 
   // Helper function to consistently count lines in text
@@ -724,7 +707,7 @@ export abstract class BaseReflectionAgent extends BaseAgent {
 
       // Set up initial prompts
       const [systemPrompt, userRequest, userPrefix] = await Promise.all([
-        this.getSystemPromptWithRules(),
+        getSystemPromptWithRules(this.agentPrompt.systemPrompt, this.userVars),
         renderPrompt(this.agentPrompt.userRequest, this.userVars),
         renderPrompt(this.agentPrompt.userPrefix, this.userVars),
       ]);
@@ -755,7 +738,7 @@ export abstract class BaseReflectionAgent extends BaseAgent {
       messages.push(...initialMessages);
 
       // Handle prefill
-      const prefill = this.getPrefillForRound(currRound);
+      const prefill = getPrefillForRound(this.agentSetting.prefills, currRound);
       toolState.updateAccumulatedOutput(prefill);
 
       // Initialize output and handle prefill
@@ -915,7 +898,7 @@ export abstract class BaseReflectionAgent extends BaseAgent {
       );
 
       // Handle prefill for round
-      const prefill = this.getPrefillForRound(currRound);
+      const prefill = getPrefillForRound(this.agentSetting.prefills, currRound);
       toolState.updateAccumulatedOutput(prefill);
 
       const [endTurn, updatedMessages] =
