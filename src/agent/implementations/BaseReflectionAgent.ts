@@ -701,6 +701,7 @@ export abstract class BaseReflectionAgent extends BaseAgent {
               inputFile,
               undefined,
               buildDir,
+              true, // prefer latexmk when available
             );
             if (compiled) {
               const pdfFile = path.join(
@@ -1065,6 +1066,7 @@ export abstract class BaseReflectionAgent extends BaseAgent {
           outputFile,
           undefined,
           buildDir,
+          true,
         );
         if (compiled) {
           const pdfFile = path.join(
