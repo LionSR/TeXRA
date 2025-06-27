@@ -8,7 +8,7 @@ import * as nunjucks from 'nunjucks';
 import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
-import { WorkspaceFS } from './files';
+import { WorkspaceFS } from '@utils/files';
 import { getAgentFirstNameChunk } from '@housekeeping/utils';
 
 const CHANNEL = 'promptUtils';
