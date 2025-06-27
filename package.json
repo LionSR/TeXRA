@@ -536,6 +536,14 @@
       {
         "title": "LaTeXdiff",
         "properties": {
+          "texra.latexdiff.timeoutMs": {
+            "type": "number",
+            "default": 10000,
+            "minimum": 1000,
+            "maximum": 60000,
+            "description": "Timeout in milliseconds for latexdiff operations",
+            "order": 1
+          },
           "texra.latexdiff.mathMarkup": {
             "type": "string",
             "default": "coarse",
@@ -552,13 +560,13 @@
               "Detect small changes in equations and mark up at fine granularity."
             ],
             "description": "Determine granularity of markup in displayed math environments for latexdiff",
-            "order": 1
+            "order": 2
           },
           "texra.latexdiff.pictureEnvironments": {
             "type": "string",
             "default": "(?:picture|tikzpicture|scope|DIFnomarkup)[\\w\\d*@]*",
             "description": "Regular expression pattern for environments to be treated as pictures. These environments will be processed as a unit without internal differencing.",
-            "order": 2
+            "order": 3
           }
         }
       },
