@@ -12,10 +12,6 @@ import { WorkspaceFS } from '@utils/files';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 
 // Local imports - latex utils
-import {
-  runLatexdiffForRound,
-  runLatexdiffBetweenRounds,
-} from '@latex/latexdiff';
 import { LatexdiffRunner } from '@latex/latexdiffRunner';
 import { checkToolInstalled } from '@utils/system';
 
@@ -416,11 +412,10 @@ async function handleRunLatexdiff(config: any) {
             );
 
             // Use the specialized function for round-based diffs
-            const result = await runLatexdiffForRound(
+            const result = await runner.runDiffForRound(
               inputFile,
               outputFile,
               round,
-              CHANNEL,
             );
 
             results.push({
@@ -453,10 +448,9 @@ async function handleRunLatexdiff(config: any) {
               );
 
               // Use the specialized function for between-rounds diffs
-              const result = await runLatexdiffBetweenRounds(
+              const result = await runner.runDiffBetweenRounds(
                 currentFile,
                 nextFile,
-                CHANNEL,
               );
 
               results.push({
