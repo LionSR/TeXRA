@@ -8,6 +8,8 @@ import OpenAI from 'openai';
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 import { ToolState } from '../core/ToolState';
 import { K_SLICE } from '@utils/config';
+import type { ToolDefinition } from '@model';
+import { toOpenAITools } from './toolConversion';
 
 /**
  * Handler for models accessed through OpenRouter.
@@ -32,6 +34,7 @@ export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
     systemPrompt?: string,
     endTag?: string,
     signal?: AbortSignal,
+    tools?: ToolDefinition[],
   ): Promise<any> {
     // Get streaming config
     const useStreaming = this.getStreamingConfig();
@@ -58,6 +61,11 @@ export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
         };
         kwargs.include_reasoning = true;
       }
+    }
+
+    if (tools && tools.length > 0) {
+      kwargs.tools = toOpenAITools(tools);
+      kwargs.tool_choice = 'auto';
     }
 
     if (endTag) {
