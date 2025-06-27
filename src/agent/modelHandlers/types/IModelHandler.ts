@@ -7,7 +7,7 @@ import { AgentSetting } from '../../core/AgentDataclass';
 import { AgentStateRound, AgentStateGlobal } from '../../core/AgentState';
 import { ToolState } from '../../core/ToolState';
 import type { MediaEntry } from '../../utils/mediaTypes';
-import type { ModelConfig, ModelCapabilities } from '@model/ModelConfig';
+import type { ModelConfig, ModelCapabilities, ToolDefinition } from '@model';
 import type { ProviderStopReason } from './StopReasonTypes';
 
 /**
@@ -54,6 +54,7 @@ export interface IModelHandler<U = any, R = any> {
     systemPrompt?: string,
     endTag?: string,
     signal?: AbortSignal,
+    tools?: ToolDefinition[],
   ): Promise<any>;
 
   /** Initialize the conversation for the first round. */

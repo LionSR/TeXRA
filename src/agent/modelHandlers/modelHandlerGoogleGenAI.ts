@@ -30,6 +30,8 @@ import {
 } from '@agent/core/ResponseUsage';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import { AgentLogger } from '@logger/AgentLogger';
+import type { ToolDefinition } from '@model';
+import { toGoogleTools } from './toolConversion';
 
 // Local imports - utilities
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
@@ -169,6 +171,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     systemPrompt?: string,
     endTag?: string,
     signal?: AbortSignal,
+    tools?: ToolDefinition[],
   ): Promise<GenerateContentResponse> {
     if (messages.length === 0) {
       this.logger.error('Cannot create response from empty messages array.');
@@ -223,6 +226,10 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         systemInstruction: { role: 'system', parts: [{ text: systemPrompt }] },
       }),
     };
+
+    if (tools && tools.length > 0) {
+      (chatParams.config as any).tools = toGoogleTools(tools);
+    }
 
     if (this.capabilities.supportsTokenCounting) {
       try {

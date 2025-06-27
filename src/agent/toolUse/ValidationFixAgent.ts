@@ -70,7 +70,10 @@ export class ValidationFixAgent<T extends ValidatorType>
       this.validator === 'latexLinter'
         ? ['text_editor', 'diagnostics']
         : ['text_editor'];
-    this.setConfiguredTools((settings as any).tools || defaultTools);
+    const configured = settings.tools
+      ? settings.tools.map((t) => t.name)
+      : defaultTools;
+    this.setConfiguredTools(configured);
   }
 
   private getYamlName(): string {
