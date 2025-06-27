@@ -7,6 +7,7 @@ import OpenAI from 'openai';
 // Local imports - agent components
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 import { ToolState } from '../core/ToolState';
+import type { ToolDefinition } from '@model';
 
 // Local imports - utilities
 import { convertContentToString } from '@agent/utils/text/messageUtils';
@@ -216,6 +217,7 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI {
     systemPrompt?: string,
     endTag?: string,
     signal?: AbortSignal,
+    tools?: ToolDefinition[],
   ): Promise<any> {
     // Preprocess messages to merge consecutive messages and convert content to strings
     const processedMessages = this.preprocessMessages(messages);
@@ -243,6 +245,7 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI {
       systemPrompt,
       endTag,
       signal,
+      tools,
     );
   }
 }
