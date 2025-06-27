@@ -56,7 +56,9 @@ interface MarkerFlags {
 /**
  * Abstract base class for model-specific handlers that manage API interactions, message processing, and response handling.
  */
-export abstract class ModelHandler implements IModelHandler {
+export abstract class ModelHandler<U = any, R = any>
+  implements IModelHandler<U, R>
+{
   public config: ModelConfig;
   public capabilities: ModelCapabilities;
   public continueLimit: number;
@@ -691,13 +693,13 @@ export abstract class ModelHandler implements IModelHandler {
    * Calculates API usage cost based on token counts and provider pricing.
    * @returns Total cost in provider's currency units
    */
-  abstract computePrice(responseUsage: any): number;
+  abstract computePrice(responseUsage: U): number;
 
   /**
    * Computes detailed usage metrics from model response.
    * @returns Provider-specific response usage object
    */
-  abstract computeResponseUsage(responseUsage: any, responseTime: number): any;
+  abstract computeResponseUsage(responseUsage: U, responseTime: number): R;
 
   /**
    * Updates model message content with response for models with prefill support.
