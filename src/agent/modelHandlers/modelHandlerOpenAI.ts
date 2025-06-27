@@ -33,7 +33,10 @@ import { MESSAGE_TYPES } from '@logger/messageTypes';
 /**
  * OpenAI-specific handlers.
  */
-export class ModelHandlerOpenAI extends ModelHandler {
+export class ModelHandlerOpenAI extends ModelHandler<
+  ExtendedCompletionUsage | null,
+  OpenAIAPIResponseUsage
+> {
   /** Returns OpenAI client with configured API key. */
   async getClient(): Promise<OpenAI> {
     const apiKey = await this.getApiKey();

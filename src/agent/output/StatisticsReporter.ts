@@ -2,6 +2,13 @@ import { AgentLogger } from '@logger/AgentLogger';
 import { emitProgress } from '@eventBus/ProgressEventBus';
 import { AgentStateGlobal } from '@agent/core/AgentState';
 import type { IModelHandler } from '@agent/modelHandlers';
+import {
+  ExtendedCompletionUsage,
+  AnthropicUsage,
+  GenerateContentResponseUsageMetadata,
+} from '@agent/core/ResponseUsage';
+import { ResponseUsage } from 'openai/resources/responses/responses';
+import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/modelHandlerOpenAIResponse';
 
 export class StatisticsReporter {
   constructor(
@@ -77,12 +84,32 @@ export class StatisticsReporter {
         );
       }
 
-      let responseUsage: any = {};
-      if (this.modelHandler.isOpenai) {
+      let responseUsage:
+        | ExtendedCompletionUsage
+        | AnthropicUsage
+        | GenerateContentResponseUsageMetadata
+        | ResponseUsage = {} as any;
+
+      if (this.modelHandler instanceof ModelHandlerOpenAIResponse) {
+        responseUsage = {
+          input_tokens: stateGlobal.totalInputTokens,
+          output_tokens: stateGlobal.totalOutputTokens,
+          total_tokens:
+            stateGlobal.totalInputTokens + stateGlobal.totalOutputTokens,
+          input_tokens_details: {
+            cached_tokens: stateGlobal.totalCacheReadInputTokens,
+          },
+          output_tokens_details: {
+            reasoning_tokens: stateGlobal.totalReasoningTokens,
+          },
+        };
+      } else if (this.modelHandler.isOpenai) {
         if (this.modelHandler.capabilities.supportsAutoPromptCaching) {
           responseUsage = {
             prompt_tokens: stateGlobal.totalInputTokens,
             completion_tokens: stateGlobal.totalOutputTokens,
+            total_tokens:
+              stateGlobal.totalInputTokens + stateGlobal.totalOutputTokens,
             prompt_tokens_details: {
               cached_tokens: stateGlobal.totalCacheReadInputTokens,
             },
@@ -94,9 +121,11 @@ export class StatisticsReporter {
           responseUsage = {
             prompt_tokens: stateGlobal.totalInputTokens,
             completion_tokens: stateGlobal.totalOutputTokens,
+            total_tokens:
+              stateGlobal.totalInputTokens + stateGlobal.totalOutputTokens,
             reasoning_tokens: stateGlobal.totalReasoningTokens,
             cached_tokens: stateGlobal.totalCacheReadInputTokens,
-          };
+          } as ExtendedCompletionUsage;
         }
       } else if (this.modelHandler.isAnthropic) {
         responseUsage = {
@@ -105,12 +134,16 @@ export class StatisticsReporter {
           cache_read_input_tokens: stateGlobal.totalCacheReadInputTokens,
           cache_creation_input_tokens:
             stateGlobal.totalCacheCreationInputTokens,
+          server_tool_use: null,
+          service_tier: null,
         };
       } else if (this.modelHandler.isGoogle) {
         responseUsage = {
-          promptTokens: stateGlobal.totalInputTokens,
-          completionTokens: stateGlobal.totalOutputTokens,
-          toolUseTokenCount: stateGlobal.totalToolUseTokens,
+          promptTokenCount: stateGlobal.totalInputTokens,
+          candidatesTokenCount: stateGlobal.totalOutputTokens,
+          toolUsePromptTokenCount: stateGlobal.totalToolUseTokens,
+          thoughtsTokenCount: stateGlobal.totalReasoningTokens,
+          cachedContentTokenCount: stateGlobal.totalCacheReadInputTokens,
         };
       }
 
