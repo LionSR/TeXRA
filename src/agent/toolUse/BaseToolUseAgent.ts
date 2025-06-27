@@ -28,10 +28,7 @@ import {
 } from '@utils/errorHandlingUtils';
 
 // Local imports - logging
-import * as logger from '@logger/logUtils';
-
-const CHANNEL = 'BaseToolUseAgent';
-logger.initialize(CHANNEL);
+import { AgentLogger } from '@logger/AgentLogger';
 
 /**
  * Abstract base class for agents that use Claude to fix issues in files
@@ -51,6 +48,7 @@ export abstract class BaseToolUseAgent<
   protected model: string = 'claude-3-7-sonnet-latest';
   protected readonly agentName: string;
   protected readonly configKey: string;
+  protected readonly logger: AgentLogger;
   protected maxIterations: number = BaseToolUseAgent.DEFAULT_ITERATIONS;
   protected contextLines: number = BaseToolUseAgent.DEFAULT_CONTEXT_LINES;
   protected maxTokens: number = BaseToolUseAgent.DEFAULT_MAX_TOKENS;
@@ -73,8 +71,8 @@ export abstract class BaseToolUseAgent<
     const baseName = this.agentName.replace(/Agent$/, '');
     this.configKey = `${baseName.charAt(0).toLowerCase() + baseName.slice(1)}.maxIterations`;
 
-    // Use agent name as log channel
-    logger.initialize(CHANNEL);
+    // Initialize logger with agent name
+    this.logger = new AgentLogger(this.agentName, true);
 
     // Initialize maxIterations from config
     this.maxIterations = getConfig(
@@ -114,13 +112,16 @@ export abstract class BaseToolUseAgent<
    * @returns Whether the fixing was successful
    */
   public async fixIssues(filePath: string): Promise<boolean> {
-    logger.info(CHANNEL, `Starting issue fixing for ${filePath}`);
+    this.logger.info(`Starting issue fixing for ${filePath}`);
 
     try {
       // Verify the file exists before starting
       const fileExists = await WorkspaceFS.exists(filePath);
       if (!fileExists) {
-        await showLoggedMessage(CHANNEL, `File does not exist: ${filePath}`);
+        await showLoggedMessage(
+          this.logger.channelId,
+          `File does not exist: ${filePath}`,
+        );
         return false;
       }
 
@@ -128,21 +129,19 @@ export abstract class BaseToolUseAgent<
       const validationResult = await this.validateFile(filePath);
 
       // Log validation result for debugging
-      logger.debug(
-        CHANNEL,
+      this.logger.debug(
         `Validation result: ${JSON.stringify(validationResult)}`,
       );
 
       // If content is already valid, no need to fix anything
       if (validationResult.isValid) {
-        logger.info(CHANNEL, `No issues found in ${filePath}`);
+        this.logger.info(`No issues found in ${filePath}`);
         vscode.window.showInformationMessage(`No issues found in ${filePath}`);
         return true;
       }
 
       // Log the issues
-      logger.warn(
-        CHANNEL,
+      this.logger.warn(
         `Validation failed: ${JSON.stringify(validationResult.error)}`,
       );
 
@@ -174,24 +173,27 @@ export abstract class BaseToolUseAgent<
       const finalValidation = await this.validateFile(filePath);
 
       if (finalValidation.isValid) {
-        logger.info(CHANNEL, `Successfully fixed all issues in ${filePath}`);
+        this.logger.info(`Successfully fixed all issues in ${filePath}`);
         vscode.window.showInformationMessage(
           `Successfully fixed all issues in ${filePath}`,
         );
         return true;
       } else {
-        logger.warn(
-          CHANNEL,
+        this.logger.warn(
           `Could not fix all issues. Remaining: ${JSON.stringify(finalValidation.error)}`,
         );
         await showLoggedMessage(
-          CHANNEL,
+          this.logger.channelId,
           `Could not fix all issues in ${filePath}. See log for details.`,
         );
         return false;
       }
     } catch (err) {
-      await showLoggedErrorMessage(CHANNEL, 'Error in fixIssues', err);
+      await showLoggedErrorMessage(
+        this.logger.channelId,
+        'Error in fixIssues',
+        err,
+      );
       return false;
     }
   }
@@ -203,8 +205,7 @@ export abstract class BaseToolUseAgent<
     try {
       return await SecretManager.getApiKey('anthropic' as ApiProvider);
     } catch (err) {
-      logger.error(
-        CHANNEL,
+      this.logger.error(
         `Error getting Anthropic API key: ${this.formatErrorMessage(err)}`,
       );
       throw new Error(
@@ -234,7 +235,10 @@ export abstract class BaseToolUseAgent<
       // Verify the file exists before starting
       const fileExists = await WorkspaceFS.exists(filePath);
       if (!fileExists) {
-        await showLoggedMessage(CHANNEL, `File does not exist: ${filePath}`);
+        await showLoggedMessage(
+          this.logger.channelId,
+          `File does not exist: ${filePath}`,
+        );
         return new ToolResult({
           error: `File does not exist: ${filePath}`,
           isError: true,
@@ -252,7 +256,7 @@ export abstract class BaseToolUseAgent<
 
       // If already valid, we're done
       if (validationResult.isValid) {
-        logger.info(CHANNEL, `File is already valid: ${filePath}`);
+        this.logger.info(`File is already valid: ${filePath}`);
         vscode.window.showInformationMessage(
           `File is already valid: ${filePath}`,
         );
@@ -290,10 +294,7 @@ export abstract class BaseToolUseAgent<
       // Continue the conversation until we fix the issues or reach max iterations
       while (currentIteration < this.maxIterations && !isFixed) {
         currentIteration++;
-        logger.info(
-          CHANNEL,
-          `Iteration ${currentIteration}/${this.maxIterations}`,
-        );
+        this.logger.info(`Iteration ${currentIteration}/${this.maxIterations}`);
 
         // Make the system message with current validation error
         const systemMessage = createSystemMessage(validationResult);
@@ -308,8 +309,7 @@ export abstract class BaseToolUseAgent<
         };
         const response: any = await client.messages.create(params);
 
-        logger.debug(
-          CHANNEL,
+        this.logger.debug(
           `Claude response (iteration ${currentIteration}): ${JSON.stringify(response)}`,
         );
 
@@ -318,14 +318,13 @@ export abstract class BaseToolUseAgent<
           (c: any) => c.type === 'tool_use',
         );
         if (!toolUseContent || toolUseContent.type !== 'tool_use') {
-          logger.warn(
-            CHANNEL,
+          this.logger.warn(
             `Claude didn't use any tools in iteration ${currentIteration}`,
           );
           break;
         }
 
-        logger.info(CHANNEL, `Processing tool use: ${toolUseContent.name}.`);
+        this.logger.info(`Processing tool use: ${toolUseContent.name}.`);
 
         // Extract tool parameters
         const toolInput = toolUseContent.input as any;
@@ -350,7 +349,7 @@ export abstract class BaseToolUseAgent<
             path: toolInput.path || filePath,
           });
         } else {
-          logger.warn(CHANNEL, `Unknown tool: ${toolUseContent.name}`);
+          this.logger.warn(`Unknown tool: ${toolUseContent.name}`);
           toolResult = new ToolResult({
             error: `Unknown tool: ${toolUseContent.name}`,
             isError: true,
@@ -365,10 +364,7 @@ export abstract class BaseToolUseAgent<
           toolInput.command === 'str_replace' ||
           toolInput.command === 'insert'
         ) {
-          logger.info(
-            CHANNEL,
-            `Claude applied a fix with ${toolInput.command}`,
-          );
+          this.logger.info(`Claude applied a fix with ${toolInput.command}`);
 
           // Re-validate the file
           const newValidationResult = await validateFix(filePath);
@@ -378,14 +374,12 @@ export abstract class BaseToolUseAgent<
 
           // Check if file is now valid
           if (newValidationResult.isValid) {
-            logger.info(
-              CHANNEL,
+            this.logger.info(
               `File is now valid after ${currentIteration} iterations`,
             );
             isFixed = true;
           } else {
-            logger.info(
-              CHANNEL,
+            this.logger.info(
               `File still has issues after fix: ${JSON.stringify(newValidationResult.error)}`,
             );
 
@@ -436,8 +430,7 @@ export abstract class BaseToolUseAgent<
       }
 
       // No action was taken by Claude
-      logger.warn(
-        CHANNEL,
+      this.logger.warn(
         `Claude did not make any changes to fix the file after ${this.maxIterations} iterations`,
       );
       return new ToolResult({
@@ -445,8 +438,7 @@ export abstract class BaseToolUseAgent<
         isError: true,
       });
     } catch (err) {
-      logger.error(
-        CHANNEL,
+      this.logger.error(
         `Error calling Claude API: ${this.formatErrorMessage(err)}`,
       );
 
