@@ -23,7 +23,7 @@ TeXRA can use `texcount` (often included with LaTeX) to provide document statist
 Processing visual elements for analysis and inclusion.
 
 - **Extraction:** TeXRA can automatically find figure references (`\includegraphics`) and extract TikZ environments from your LaTeX source. See the [TikZ Figures guide](./tikz-figures.md) and the "Auto Extract" options in the UI ([File Management guide](./file-management.md#auto-extraction-features)).
-- **Conversion/Compilation:** Tools like `pdflatex`, `GraphicsMagick`/`ImageMagick`, and `Ghostscript` are used behind the scenes to compile extracted TikZ code and convert PDFs/images into formats suitable for the LLM (previews for you, data for the AI). Installation of these external dependencies is covered in the [Installation guide](./installation.md). Configuration options are in [VS Code Settings](./configuration.md#latex-configuration).
+- **Conversion/Compilation:** Tools like `latexmk` (preferred when available) or `pdflatex`, along with `GraphicsMagick`/`ImageMagick` and `Ghostscript`, are used behind the scenes to compile extracted TikZ code and convert PDFs/images into formats suitable for the LLM (previews for you, data for the AI). Installation of these external dependencies is covered in the [Installation guide](./installation.md). Configuration options are in [VS Code Settings](./configuration.md#latex-configuration).
 
 ### 3. Document Analysis
 

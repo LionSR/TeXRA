@@ -71,6 +71,12 @@ const PDFLATEX_INSTRUCTIONS =
   '- Ubuntu: sudo apt-get install texlive-full\n' +
   '- Windows: Install through MiKTeX or TeX Live package manager';
 
+const LATEXMK_INSTRUCTIONS =
+  'Installation instructions:\n' +
+  '- Mac: brew install latexmk\n' +
+  '- Ubuntu: sudo apt-get install latexmk\n' +
+  '- Windows: Install through MiKTeX or TeX Live package manager';
+
 // All tool configurations in one place
 const TOOL_CONFIGS: Record<string, ToolConfig> = {
   // ImageMagick tools
@@ -125,6 +131,12 @@ const TOOL_CONFIGS: Record<string, ToolConfig> = {
     errorMessage:
       'texcount is not installed. Please install it to use this feature.\n' +
       TEXCOUNT_INSTRUCTIONS,
+    openDocsCommand: 'texra.openDoc,installation',
+  },
+  latexmk: {
+    errorMessage:
+      'latexmk is not installed. Please install it to use this feature.\n' +
+      LATEXMK_INSTRUCTIONS,
     openDocsCommand: 'texra.openDoc,installation',
   },
   pdflatex: {
