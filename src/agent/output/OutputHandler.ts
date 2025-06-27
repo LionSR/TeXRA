@@ -8,6 +8,7 @@ import { XmlOutputManager } from './XmlOutputManager';
 import { LatexDiffManager } from './LatexDiffManager';
 import { StatisticsReporter } from './StatisticsReporter';
 import { NamedOutputFile } from './types';
+import type { IOutputHandler } from './IOutputHandler';
 import { getOutputFileName } from '@utils/outputFileUtils';
 
 // Local imports - agent components
@@ -19,7 +20,7 @@ import type { IModelHandler } from '@agent/modelHandlers';
 // Local imports - types
 
 /** Handles output file processing and validation for agent responses. */
-export class OutputHandler {
+export class OutputHandler implements IOutputHandler {
   public agentSetting: AgentSetting;
   public agentConfig: AgentConfig;
   public modelHandler: IModelHandler;
