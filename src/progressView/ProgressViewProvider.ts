@@ -42,6 +42,11 @@ interface OutputFileInfo extends DiffStats {
   original?: string;
 }
 
+interface MissingOutputInfo {
+  file: string;
+  xml: string;
+}
+
 export class ProgressViewProvider implements vscode.WebviewViewProvider {
   private static _instance: ProgressViewProvider | undefined;
   private _view?: vscode.WebviewView;
@@ -53,6 +58,8 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   private readonly _viewTitle: string;
   private _viewDisposables: vscode.Disposable[] = [];
   private _streamStatus: Map<string, StreamStatusType> = new Map();
+  private _missingOutputs: Map<string, { [key: number]: MissingOutputInfo[] }> =
+    new Map();
   private _webviewReady = false;
   private _pendingUpdate = false;
   private readonly logger: AgentLogger;
@@ -185,6 +192,15 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
           }) => this.updateLogGroup(p.stream, p.groupId, p.status, p.endTime),
         ),
       ),
+      new vscode.Disposable(
+        onProgress(
+          'addMissingOutputs',
+          (p: {
+            stream: string;
+            filesByRound: { [key: number]: MissingOutputInfo[] };
+          }) => this.addMissingOutputs(p.stream, p.filesByRound),
+        ),
+      ),
     );
   }
 
@@ -315,10 +331,13 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     // Send output files for current stream
     const files =
       this._stateManager.outputFiles.get(this._stateManager.activeStream) || {};
+    const missing =
+      this._missingOutputs.get(this._stateManager.activeStream) || {};
     this._view.webview.postMessage({
       command: COMMANDS.UPDATE_FILES,
       stream: this._stateManager.activeStream,
       files,
+      missing,
     });
 
     const usage = this._stateManager.usageStats.get(
@@ -561,10 +580,12 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
 
     // Send output files for this stream
     const files = this._stateManager.outputFiles.get(stream) || {};
+    const missing = this._missingOutputs.get(stream) || {};
     this._view.webview.postMessage({
       command: COMMANDS.UPDATE_FILES,
       stream: stream,
       files,
+      missing,
     });
   }
 
@@ -651,6 +672,27 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
         command: COMMANDS.UPDATE_FILES,
         stream,
         files: merged,
+        missing: this._missingOutputs.get(stream) || {},
+      });
+    }
+  }
+
+  public addMissingOutputs(
+    stream: string,
+    filesByRound: { [key: number]: MissingOutputInfo[] },
+  ): void {
+    const existing = this._missingOutputs.get(stream) || {};
+    const merged = { ...existing };
+    for (const [r, infos] of Object.entries(filesByRound)) {
+      const round = parseInt(r, 10);
+      merged[round] = (merged[round] || []).concat(infos);
+    }
+    this._missingOutputs.set(stream, merged);
+    if (this._view && stream === this._stateManager.activeStream) {
+      this._view.webview.postMessage({
+        command: COMMANDS.ADD_MISSING_OUTPUTS,
+        stream,
+        missing: merged,
       });
     }
   }
@@ -664,12 +706,14 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   public clearOutputFiles(stream: string): void {
     if (this._stateManager.outputFiles.has(stream)) {
       this._stateManager.outputFiles.delete(stream);
+      this._missingOutputs.delete(stream);
       this._stateManager.saveState();
       if (this._view && stream === this._stateManager.activeStream) {
         this._view.webview.postMessage({
           command: COMMANDS.UPDATE_FILES,
           stream,
           files: {},
+          missing: {},
         });
       }
     }

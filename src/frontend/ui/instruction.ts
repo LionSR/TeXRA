@@ -7,6 +7,7 @@ import * as path from 'path';
 // Local imports
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
 import { INSTRUCTION_PREFIX, globalSM } from '@utils/stateManager';
+import { emitProgress } from '@eventBus/ProgressEventBus';
 
 /**
  * Show an instruction message that can be permanently dismissed.
@@ -51,18 +52,18 @@ export async function checkExpectedOutputs(
   expectedFiles: string[] | null | undefined,
   context: vscode.ExtensionContext,
   agent?: unknown,
+  streamId?: string,
 ): Promise<void> {
   if (!expectedFiles || expectedFiles.length === 0) {
     return;
   }
+  const missing: { round: number; file: string; xml: string }[] = [];
 
   for (const file of expectedFiles) {
     const exists = path.isAbsolute(file)
       ? await AbsoluteFS.exists(file)
       : await WorkspaceFS.exists(file);
     if (!exists) {
-      const openBtn = 'Open XML';
-
       let xmlPath: string | undefined;
       const outputs: string[] = [];
 
@@ -89,40 +90,50 @@ export async function checkExpectedOutputs(
         xmlPath = file.replace(/\.[^.]+$/, '.xml');
       }
 
-      await showInstructionWithSuppress(
-        'xmlOutputMismatch',
-        `Expected output "${path.basename(
-          file,
-        )}" was not generated. Open the XML file to check tag consistency, then run again.`,
-        [
-          {
-            title: openBtn,
-            callback: async () => {
-              if (!xmlPath) {
-                vscode.window.showWarningMessage('XML file path not found');
-                return;
-              }
-
-              const xmlExists = path.isAbsolute(xmlPath)
-                ? await AbsoluteFS.exists(xmlPath)
-                : await WorkspaceFS.exists(xmlPath);
-              if (!xmlExists) {
-                vscode.window.showWarningMessage(
-                  `XML file not found: ${path.basename(xmlPath)}`,
-                );
-                return;
-              }
-              const uri = path.isAbsolute(xmlPath)
-                ? vscode.Uri.file(xmlPath)
-                : vscode.Uri.file(WorkspaceFS.fullPath(xmlPath));
-              const doc = await vscode.workspace.openTextDocument(uri);
-              await vscode.window.showTextDocument(doc, { preview: false });
-            },
-          },
-        ],
-        false,
-      );
-      break;
+      const match = file.match(/_r(\d+)/);
+      const round = match ? parseInt(match[1], 10) : 0;
+      missing.push({ round, file: path.basename(file), xml: xmlPath });
     }
+  }
+
+  if (missing.length === 0) {
+    return;
+  }
+
+  const first = missing[0];
+  await showInstructionWithSuppress(
+    'xmlOutputMismatch',
+    `Expected output "${first.file}" was not generated. Open the XML file to check tag consistency, then run again.`,
+    [
+      {
+        title: 'Open XML',
+        callback: async () => {
+          const xmlExists = path.isAbsolute(first.xml)
+            ? await AbsoluteFS.exists(first.xml)
+            : await WorkspaceFS.exists(first.xml);
+          if (!xmlExists) {
+            vscode.window.showWarningMessage(
+              `XML file not found: ${path.basename(first.xml)}`,
+            );
+            return;
+          }
+          const uri = path.isAbsolute(first.xml)
+            ? vscode.Uri.file(first.xml)
+            : vscode.Uri.file(WorkspaceFS.fullPath(first.xml));
+          const doc = await vscode.workspace.openTextDocument(uri);
+          await vscode.window.showTextDocument(doc, { preview: false });
+        },
+      },
+    ],
+    false,
+  );
+
+  if (streamId) {
+    const map: Record<number, { file: string; xml: string }[]> = {};
+    for (const item of missing) {
+      if (!map[item.round]) map[item.round] = [];
+      map[item.round].push({ file: item.file, xml: item.xml });
+    }
+    emitProgress('addMissingOutputs', { stream: streamId, filesByRound: map });
   }
 }

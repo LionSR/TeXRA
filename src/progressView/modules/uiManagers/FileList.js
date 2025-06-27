@@ -9,6 +9,8 @@ import { vscode } from '@common/webviewContext.js';
 export class FileList {
   constructor(usageSummary = null) {
     this.usageSummary = usageSummary;
+    this.filesByRound = {};
+    this.missingByRound = {};
   }
   /**
    * Get the effective base file for comparison operations.
@@ -35,19 +37,23 @@ export class FileList {
    * Update the generated files list
    * @param {Object} filesByRound - Files organized by round
    */
-  update(filesByRound) {
+  update(filesByRound, missingByRound = {}) {
+    this.filesByRound = filesByRound || {};
+    this.missingByRound = missingByRound || {};
+
     const container = document.getElementById('generatedFiles');
     if (!container) return;
 
     container.innerHTML = '';
 
     const template = document.getElementById('fileItemTemplate');
-    if (!template) {
+    const missingTemplate = document.getElementById('missingItemTemplate');
+    if (!template || !missingTemplate) {
       console.error('File item template not found');
       return;
     }
 
-    if (!filesByRound || Object.keys(filesByRound).length === 0) {
+    if (!this.filesByRound || Object.keys(this.filesByRound).length === 0) {
       container.textContent = 'No generated files';
       return;
     }
@@ -75,13 +81,14 @@ export class FileList {
       container.appendChild(usageHeader);
     }
 
-    const rounds = Object.keys(filesByRound)
+    const rounds = Object.keys(this.filesByRound)
       .map((r) => parseInt(r, 10))
       .sort((a, b) => a - b);
 
     rounds.forEach((round) => {
-      const files = filesByRound[round];
-      if (!files || files.length === 0) return;
+      const files = this.filesByRound[round] || [];
+      const missing = this.missingByRound[round] || [];
+      if (files.length === 0 && missing.length === 0) return;
 
       // Create round group container
       const roundGroup = document.createElement('div');
@@ -149,6 +156,19 @@ export class FileList {
         this.updateFileButtons(clone, file, effectiveBase);
 
         roundGroup.appendChild(clone);
+      });
+
+      // Render missing outputs for this round
+      missing.forEach((item) => {
+        const mClone = missingTemplate.content.cloneNode(true);
+        const textSpan = mClone.querySelector('.missing-text');
+        const openBtn = mClone.querySelector('.open-xml-btn');
+        if (textSpan) textSpan.textContent = `Missing: ${item.file}`;
+        if (openBtn) {
+          openBtn.dataset.command = COMMANDS.OPEN_FILE;
+          openBtn.dataset.file = item.xml;
+        }
+        roundGroup.appendChild(mClone);
       });
 
       // Append the round group to the container
@@ -252,5 +272,19 @@ export class FileList {
         });
       };
     }
+  }
+
+  /**
+   * Add missing outputs and re-render
+   * @param {Object} missingByRound - Missing files organized by round
+   */
+  addMissing(missingByRound) {
+    for (const [r, list] of Object.entries(missingByRound || {})) {
+      const round = parseInt(r, 10);
+      this.missingByRound[round] = (this.missingByRound[round] || []).concat(
+        list,
+      );
+    }
+    this.update(this.filesByRound, this.missingByRound);
   }
 }

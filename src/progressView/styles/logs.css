@@ -273,6 +273,16 @@
   font-size: var(--font-size-sm);
 }
 
+/* Missing output entry */
+.missing-item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-tiny);
+  color: var(--vscode-inputValidation-infoForeground);
+  font-size: var(--font-size-sm);
+  padding: 1px 0;
+}
+
 /* Group usage display styling */
 .group-usage {
   color: var(--vscode-descriptionForeground);
