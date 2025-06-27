@@ -71,8 +71,8 @@ export class CoTAgent extends BaseReflectionAgent {
           this.agentSetting.documentTag,
         );
 
-        // Then process output files using the parent class method
-        await super.processOutputFiles(
+        // Then process output files using the output handler
+        await this.outputHandler.processOutputFiles(
           outputFile,
           currRound,
           outputProcessGroupId,
