@@ -6,7 +6,7 @@ import * as path from 'path';
 
 // Local imports
 import * as logger from '@logger/logUtils';
-import { downloadArxivSource, validateArxivId } from '@utils/arXivUtils';
+import { downloadArxivSource, validateArxivId } from '@latex/arXivUtils';
 
 const CHANNEL = 'arXivCommands';
 

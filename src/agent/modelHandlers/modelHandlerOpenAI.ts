@@ -26,7 +26,7 @@ import {
 import { ToolState } from '../core/ToolState';
 import { K_SLICE } from '@utils/config';
 import { objectToLogString } from '@utils/text/stringUtils';
-import { calculateTokenPrice } from '@utils/priceUtils';
+import { calculateTokenPrice } from '@agent/utils/priceUtils';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 
