@@ -20,10 +20,5 @@ export { getTeXCountStats } from './texcount';
 // Export latexdiff runner
 export { LatexdiffRunner } from './latexdiffRunner';
 
-// Export arXiv utilities
-export {
-  isValidArxivId,
-  validateArxivId,
-  downloadArxivSource,
-} from './arXivUtils';
-
+// Export arXiv source processor
+export { ArxivSourceProcessor, arxivProcessor } from './arxivProcessor';
