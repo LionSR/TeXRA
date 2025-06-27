@@ -7,8 +7,8 @@ import * as arxivIdentifiers from 'identifiers-arxiv';
 import * as logger from '@logger/logUtils';
 
 // Local imports - utils
-import { WorkspaceFS, AbsoluteFS } from './files';
-import { executeCommand } from './system';
+import { WorkspaceFS, AbsoluteFS } from '@utils/files';
+import { executeCommand } from '@utils/system';
 import { indentLatexFilesInDirectory } from '@housekeeping/indent';
 
 const CHANNEL = 'arXivUtils';

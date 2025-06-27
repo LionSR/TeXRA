@@ -6,7 +6,7 @@ import { AgentConfig } from '@agent/core/AgentConfig';
 import { AgentLogger } from '@logger/AgentLogger';
 import { WorkspaceFS } from '@utils/files';
 import xmlUtils from '@utils/text/xmlUtils';
-import { getOutputFileName } from '@utils/outputFileUtils';
+import { getOutputFileName } from '@agent/utils/outputFileUtils';
 import {
   applyReplacements,
   getReplacementsByCategory,
