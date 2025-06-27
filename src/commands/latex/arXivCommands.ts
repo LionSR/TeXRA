@@ -6,7 +6,7 @@ import * as path from 'path';
 
 // Local imports
 import * as logger from '@logger/logUtils';
-import { downloadArxivSource, validateArxivId } from '@latex/arXivUtils';
+import { arxivProcessor } from '@latex/arxivProcessor';
 
 const CHANNEL = 'arXivCommands';
 
@@ -32,7 +32,7 @@ export function registerArXivCommands(context: vscode.ExtensionContext) {
         const arxivId = await vscode.window.showInputBox({
           placeHolder: 'e.g., 2404.12175',
           prompt: 'Enter arXiv ID',
-          validateInput: validateArxivId,
+          validateInput: arxivProcessor.validateId.bind(arxivProcessor),
         });
 
         if (!arxivId) {
@@ -71,7 +71,7 @@ export function registerArXivCommands(context: vscode.ExtensionContext) {
             };
 
             // Download and extract source
-            extractedPath = await downloadArxivSource(
+            extractedPath = await arxivProcessor.downloadSource(
               arxivId,
               progressCallback,
               autoIndent,
