@@ -7,10 +7,6 @@ import { randomUUID } from 'crypto';
 // Local imports - progressView
 import { emitProgress } from '@eventBus/ProgressEventBus';
 import { getConfig } from '@utils/config';
-import {
-  getColorForLevel,
-  EMOJI_BY_LEVEL as emojis,
-} from '@/logger/loggerUtils';
 import { TaskGroup } from './LogTypes';
 import { MESSAGE_TYPES, type MessageType } from './messageTypes';
 
@@ -29,6 +25,22 @@ const logLevels = {
   info: 2,
   debug: 3,
 };
+
+// Centralised emoji mapping for log levels
+export const EMOJI_BY_LEVEL: Record<string, string> = {
+  error: '🔴', // Red dot
+  warn: '🟡', // Yellow dot
+  info: '🟢', // Green dot
+  debug: '🔍', // Magnifying glass
+};
+
+/**
+ * Returns the emoji icon associated with a log level.
+ * Falls back to a bullet if the level is not recognised.
+ */
+export function getColorForLevel(level: string): string {
+  return EMOJI_BY_LEVEL[level.toLowerCase()] ?? '•';
+}
 
 // Group State
 
@@ -399,6 +411,3 @@ export function getTimestamp(): string {
     })
     .replace(',', '');
 }
-
-// Re-export central emoji mapping for backward compatibility
-export { emojis };

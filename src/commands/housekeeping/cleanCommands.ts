@@ -8,7 +8,7 @@ import { emitProgress } from '@eventBus/ProgressEventBus';
 import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
-import { getStreamId } from '@/logger/loggerUtils';
+import { getStreamId } from '@/logger/streamUtils';
 
 // Local imports - housekeeping
 import {
