@@ -19,3 +19,6 @@ export { getTeXCountStats } from './texcount';
 
 // Export latexdiff runner
 export { LatexdiffRunner } from './latexdiffRunner';
+
+// Export arXiv utilities
+export * from './arXivUtils';
