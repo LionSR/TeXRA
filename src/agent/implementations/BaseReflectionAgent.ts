@@ -35,7 +35,7 @@ import {
 import { loadTexraRules } from '@frontend/files/rules';
 
 import replacementEngine from '@replacement/engine';
-import { checkForMassiveRepetition } from '@agent/utils/repetitionUtils';
+import { checkForMassiveRepetition } from '@agent/utils/text/repetitionUtils';
 import xmlUtils from '@utils/text/xmlUtils';
 
 // Local imports - agent components

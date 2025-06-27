@@ -5,4 +5,5 @@ export * from './mediaTypes';
 export * from './promptUtils';
 export * from './outputFileUtils';
 export * from './priceUtils';
+export * from './text';
 export * from './repetitionUtils';
