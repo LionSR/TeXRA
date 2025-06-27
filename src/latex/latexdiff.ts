@@ -13,9 +13,9 @@ import { getConfig } from '@utils/config';
 import { runLatexFormatter } from './texFormatter';
 
 // Local imports - managers
-import { DiffFileNameManager } from './diffFileNameManager';
-import { DiffFileProcessor } from './diffFileProcessor';
-import { DiffCommandExecutor } from './diffCommandExecutor';
+import { DiffFileNameManager } from './latexdiff/diffFileNameManager';
+import { DiffFileProcessor } from './latexdiff/diffFileProcessor';
+import { DiffCommandExecutor } from './latexdiff/diffCommandExecutor';
 
 export interface LaTeXdiffResult {
   success: boolean;
