@@ -196,16 +196,19 @@ If any component is missing, TeXRA will typically show an error message indicati
 ### Common Installation Issues
 
 1. **Extension Not Loading**:
+
    - Check VS Code's minimum version requirement (1.94.2+)
    - Look for errors in the Output panel (select "TeXRA" in the dropdown)
    - Try reinstalling the extension
 
 2. **LaTeX Processing Errors**:
    - Verify LaTeX is in your system PATH
-   - Run `pdflatex --version` in terminal to confirm installation
-   - Check if required LaTeX packages are installed
+
+- Run `latexmk --version` (or `pdflatex --version`) in terminal to confirm installation
+- Check if required LaTeX packages are installed
 
 3. **Image Processing Errors**:
+
    - Confirm GraphicsMagick/ImageMagick is properly installed
    - Verify Ghostscript is installed and accessible
    - Check PATH environment variables
