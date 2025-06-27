@@ -1,0 +1,11 @@
+name: diagnostics_example
+settings:
+  agentType: toolUse
+  tools:
+    - diagnostics
+prompts:
+  systemPrompt: |
+    Use the diagnostics tool to inspect the provided file.
+  userPrefix: |
+    The file of interest is {{FILE}}.
+  userRequest: Report any issues you find using the tool.

@@ -1,0 +1,9 @@
+name: basic_tool_use
+settings:
+  agentType: toolUse
+prompts:
+  systemPrompt: |
+    You can request external tools to help answer questions.
+  userPrefix: |
+    Analyze {{FILE}} and decide what tool actions are needed.
+  userRequest: Provide your analysis and requested tool calls.
