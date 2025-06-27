@@ -7,6 +7,7 @@ import * as logger from '@logger/logUtils';
 // Local imports - utilities
 import { logErrorMessage } from '@utils/errorHandlingUtils';
 import { WorkspaceFS } from '@utils/files';
+import { getConfig } from '@utils/config';
 
 // Local imports - latex utils
 import { runLatexFormatter } from './texFormatter';
@@ -34,7 +35,7 @@ export interface LaTeXdiffMultipleResult {
 const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);
 
-const LATEXDIFF_TIMEOUT_MS = 10000;
+const DEFAULT_LATEXDIFF_TIMEOUT_MS = 10000;
 
 export class LaTeXdiffService {
   private readonly fileNameManager: DiffFileNameManager;
@@ -46,7 +47,14 @@ export class LaTeXdiffService {
     this.fileProcessor = new DiffFileProcessor(channel);
     this.commandExecutor = new DiffCommandExecutor(
       channel,
-      LATEXDIFF_TIMEOUT_MS,
+      this.getLatexdiffTimeout(),
+    );
+  }
+
+  private getLatexdiffTimeout(): number {
+    return getConfig<number>(
+      'latexdiff.timeoutMs',
+      DEFAULT_LATEXDIFF_TIMEOUT_MS,
     );
   }
 
