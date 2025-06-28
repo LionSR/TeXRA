@@ -535,15 +535,14 @@ export abstract class BaseReflectionAgent extends BaseAgent {
       }
 
       const extraMedia: string[] = [];
-      if (
-        this.modelHandler.capabilities.supportsVision &&
-        this.agentConfig.mediaFile &&
-        !toolState.mediaFiles.includes(this.agentConfig.mediaFile)
-      ) {
-        extraMedia.push(this.agentConfig.mediaFile);
-      }
-      if (this.agentConfig.mediaFiles) {
-        extraMedia.push(...this.agentConfig.mediaFiles);
+      if (this.modelHandler.capabilities.supportsVision) {
+        if (this.agentConfig.mediaFile &&
+          !toolState.mediaFiles.includes(this.agentConfig.mediaFile)) {
+          extraMedia.push(this.agentConfig.mediaFile);
+        }
+        if (this.agentConfig.mediaFiles) {
+          extraMedia.push(...this.agentConfig.mediaFiles);
+        }
       }
 
       await this.latexMediaManager.processInputFiles(
