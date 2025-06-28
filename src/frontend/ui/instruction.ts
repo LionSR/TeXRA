@@ -49,7 +49,6 @@ export async function showInstructionWithSuppress(
  */
 export async function checkExpectedOutputs(
   expectedFiles: string[] | null | undefined,
-  context: vscode.ExtensionContext,
   agent?: unknown,
 ): Promise<void> {
   if (!expectedFiles || expectedFiles.length === 0) {
