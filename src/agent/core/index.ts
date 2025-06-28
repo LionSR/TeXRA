@@ -5,3 +5,6 @@ export * from './ToolConfig';
 export * from './ToolState';
 export * from './ResponseUsage';
 export * from './IAgent';
+
+// Response processing components
+export * from './ResponseProcessor';

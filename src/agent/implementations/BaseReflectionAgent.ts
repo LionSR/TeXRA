@@ -7,7 +7,7 @@
 // Local imports - log
 
 // Local imports - latex utils
-import { bestConnectionMethod, LatexMediaManager } from '@latex';
+import { LatexMediaManager } from '@latex';
 
 import { emitProgress } from '@eventBus/ProgressEventBus';
 
@@ -27,10 +27,6 @@ import {
 // Local imports - UI
 import { checkExpectedOutputs } from '@frontend/ui/instruction';
 
-import replacementEngine from '@replacement/engine';
-import { checkForMassiveRepetition } from '@agent/utils/text/repetitionUtils';
-import xmlUtils from '@utils/text/xmlUtils';
-
 // Local imports - agent components
 import { AgentConfig } from '@agent/core/AgentConfig';
 import {
@@ -43,15 +39,19 @@ import { ToolState } from '@agent/core/ToolState';
 import type { IModelHandler } from '@agent/modelHandlers';
 import type { ToolDefinition } from '@model';
 import { OutputHandler, NamedOutputFile, IOutputHandler } from '@agent/output';
-import { messageToSkeleton } from '@agent/utils/messageSkeletonUtils';
-import { BaseAgent } from '@agent/implementations/BaseAgent';
-import { MESSAGE_TYPES } from '@logger/messageTypes';
 
+import { BaseAgent } from '@agent/implementations/BaseAgent';
+import {
+  ResponseProcessor,
+  ResponseRequest,
+  ProcessingContext,
+  ResponseResult,
+} from '@agent/core/ResponseProcessor';
 // System imports - common utilities
 import { getConfig } from '@utils/config';
 
 // Shared constants
-import { K_SLICE, REPETITION_DETECTION_THRESHOLD } from '@utils/config';
+import { K_SLICE } from '@utils/config';
 
 /**
  * Abstract base class for agents that support multi-turn reflection and refinement.
@@ -68,6 +68,8 @@ export abstract class BaseReflectionAgent extends BaseAgent {
   /** Handler for output file processing and validation. */
   protected outputHandler: IOutputHandler;
   protected latexMediaManager: LatexMediaManager;
+  /** Core response processor shared across agent types. */
+  protected responseProcessor: ResponseProcessor;
 
   constructor(
     modelHandler: IModelHandler,
@@ -112,6 +114,7 @@ export abstract class BaseReflectionAgent extends BaseAgent {
     );
 
     this.latexMediaManager = new LatexMediaManager(this.logger);
+    this.responseProcessor = new ResponseProcessor(this.modelHandler, this.logger);
   }
 
   /**
@@ -127,7 +130,7 @@ export abstract class BaseReflectionAgent extends BaseAgent {
   }
 
   /**
-   * Manages single response cycle with model interaction.
+   * Manages single response cycle with model interaction using the ResponseProcessor.
    * @param messages Current conversation messages
    * @param stateRound Current round state
    * @param stateGlobal Global conversation state
@@ -144,278 +147,37 @@ export abstract class BaseReflectionAgent extends BaseAgent {
     outputFile: string,
     roundGroupId?: string,
   ): Promise<[AgentStateRound, AgentStateGlobal, ToolState, boolean]> {
-    // Use the round group identifier for logging this cycle
-    const logGroupId = roundGroupId;
+    // Create the request object for the ResponseProcessor
+    const request: ResponseRequest = {
+      messages,
+      outputFile,
+      systemPrompt: this.agentPrompt.systemPrompt,
+      userVars: this.userVars,
+      client: this.client,
+      agentSetting: this.agentSetting,
+      agentConfig: this.agentConfig,
+      logGroupId: roundGroupId,
+    };
 
-    try {
-      let endTurn = false;
-      while (!endTurn) {
-        // Check for interruption before each cycle
-        if (await this.checkInterruption()) {
-          break;
-        }
+    // Create the processing context
+    const context: ProcessingContext = {
+      checkInterruption: () => this.checkInterruption(),
+      setAbortController: (controller: AbortController | null) => {
+        this.abortController = controller;
+      },
+      logger: this.logger,
+    };
 
-        const exists = await WorkspaceFS.exists(outputFile);
-        const startTime = Date.now();
-        const systemPrompt = await getSystemPromptWithRules(
-          this.agentPrompt.systemPrompt,
-          this.userVars,
-        );
+    // Use the ResponseProcessor to handle the core response logic
+    const result = await this.responseProcessor.processResponseCycle(
+      request,
+      context,
+      stateRound,
+      stateGlobal,
+      toolState,
+    );
 
-        // Save message object to file for debugging if enabled in settings
-        const shouldSaveMessageObjects = getConfig(
-          'debug.saveMessageObjects',
-          false,
-        );
-        if (shouldSaveMessageObjects) {
-          const outputFileBaseName = outputFile.replace('.xml', '');
-          const debugFilePath = `${outputFileBaseName}_cont${stateRound.continuationCount}.json`;
-          try {
-            await WorkspaceFS.writeFile(
-              debugFilePath,
-              JSON.stringify(messages, null, 2),
-            );
-            this.logger.info(
-              `Saved message object to ${debugFilePath}`,
-              logGroupId,
-            );
-          } catch (error) {
-            this.logger.error(
-              `Failed to save message object: ${error}`,
-              logGroupId,
-            );
-          }
-        }
-
-        this.abortController = new AbortController();
-        let responseObject;
-        try {
-          responseObject = await this.modelHandler.createResponse(
-            this.client,
-            messages,
-            this.agentSetting.temperature || 0.0,
-            systemPrompt,
-            this.agentSetting.endTag,
-            this.abortController.signal,
-            this.modelHandler.capabilities.supportsFunctionCalling
-              ? this.agentSetting.tools
-              : undefined,
-          );
-        } finally {
-          this.abortController = null;
-        }
-        if (!responseObject) {
-          this.logger.warn(
-            'Model response was aborted or returned no data; output may be incomplete.',
-            logGroupId,
-          );
-          break;
-        }
-        const responseTime = (Date.now() - startTime) / 1000;
-        stateRound.updateResponseTime(responseTime);
-        this.logger.debug(
-          `Response time: ${responseTime.toFixed(2)}s`,
-          logGroupId,
-        );
-
-        // Extract and validate response
-        const [newResponse, responseUsage, stopReason] =
-          this.modelHandler.extractResponse(
-            responseObject,
-            this.agentSetting.endTag,
-          );
-
-        this.logger.debug(`Stop reason: ${stopReason}`, logGroupId);
-        this.logger.debug(
-          `Token usage: ${JSON.stringify(responseUsage)}`,
-          logGroupId,
-        );
-
-        // Extract thinking blocks directly from the response object
-        // This updates toolState with all thinking/redacted_thinking blocks
-        // and returns content of the first thinking block for logging (if any)
-        const thinkingContent = this.modelHandler.processThinkingBlock(
-          responseObject,
-          logGroupId,
-          toolState,
-        );
-
-        // If thinking content was extracted, format and log it first
-        if (thinkingContent) {
-          const formatted = await xmlUtils.formatContent(thinkingContent);
-          this.logger.info(formatted, logGroupId, MESSAGE_TYPES.THINKING);
-
-          // Note: The complete thinking blocks (including signatures) have already been
-          // stored in toolState.thinkingBlocks by the processThinkingBlock method
-        }
-
-        // Extract scratchpad content directly from the response text
-        const scratchpad = await xmlUtils.extractScratchpad(
-          newResponse,
-          'scratchpad',
-        );
-        if (scratchpad) {
-          this.logger.info(scratchpad, logGroupId, MESSAGE_TYPES.SCRATCHPAD);
-        }
-        // this has a potential bug if <scratchpad> is included in the prefill
-
-        // Compute statistics and update states
-        const APIUsage = this.modelHandler.computeResponseUsage(
-          responseUsage,
-          responseTime,
-        );
-
-        stateRound.updateTokenCounts(APIUsage);
-        stateGlobal.updateFromCurrRound(stateRound);
-
-        // Early exit for repetition
-        const repetitionResult = checkForMassiveRepetition(
-          toolState.lastResponse,
-          newResponse,
-        );
-        if (repetitionResult.massiveRepetitionDetected) {
-          this.logger.error(
-            `The new response is (first ${REPETITION_DETECTION_THRESHOLD} chars): ${newResponse.substring(0, REPETITION_DETECTION_THRESHOLD)}`,
-            logGroupId,
-          );
-          this.logger.error(
-            `Massive repetition detected - skipping this response`,
-            logGroupId,
-          );
-
-          // Debug information - print message skeleton to help diagnose the problem
-          this.logger.error(
-            `Message structure when repetition detected:`,
-            logGroupId,
-          );
-          this.logger.error(
-            JSON.stringify(messageToSkeleton(messages), null, 2),
-            logGroupId,
-          );
-          break;
-        }
-
-        // Chain response processing operations
-        const processedResponse = replacementEngine.applyAll(newResponse);
-
-        toolState.updateLastResponse(processedResponse);
-
-        // Process response connection with proper slicing
-        const result = await bestConnectionMethod(
-          toolState.lastResponse.slice(-K_SLICE),
-          processedResponse.slice(0, K_SLICE),
-        );
-        const bestConnector = result.connector;
-
-        // Update state and file atomically
-        toolState.updateAccumulatedOutput(
-          toolState.accumulatedOutput + bestConnector + processedResponse,
-        );
-
-        // Write or append to output file
-        if (!exists) {
-          this.logger.debug(`Creating new file: ${outputFile}`, logGroupId);
-          await WorkspaceFS.writeFile(outputFile, processedResponse);
-        } else {
-          this.logger.debug(
-            `Appending to existing file: ${outputFile}`,
-            logGroupId,
-          );
-          await WorkspaceFS.appendFile(
-            outputFile,
-            bestConnector + processedResponse,
-          );
-        }
-
-        // Log response boundaries
-        this.logger.debug(`Response preview:`, logGroupId);
-        this.logger.debug(
-          `First ${K_SLICE} chars:\n${processedResponse.slice(0, K_SLICE)}`,
-          logGroupId,
-        );
-        this.logger.debug(
-          `Last ${K_SLICE} chars:\n${processedResponse.slice(-K_SLICE)}`,
-          logGroupId,
-        );
-
-        // Update message content
-        // maybe we should separate this into the case of with or without support for assistant prefill since they have different logic...
-        if (this.modelHandler.capabilities.supportsAssistantPrefill) {
-          this.modelHandler.updateMessageContentWithPrefill(
-            messages,
-            bestConnector,
-            processedResponse,
-            toolState,
-          );
-        } else {
-          this.modelHandler.updateMessageContentWithoutPrefill(
-            messages,
-            bestConnector,
-            processedResponse,
-            toolState,
-          );
-        }
-
-        // Check stop conditions
-        const [shouldEndTurn, shouldStop] =
-          this.modelHandler.checkStopConditions(
-            stopReason,
-            processedResponse,
-            stateRound,
-            stateGlobal,
-            this.agentSetting,
-          );
-        endTurn = shouldEndTurn;
-        if (shouldStop) {
-          break;
-        }
-
-        // Handle continuation
-        stateRound.incrementContinuation();
-        this.logger.info(
-          `Starting continuation #${stateRound.continuationCount}`,
-          logGroupId,
-        );
-
-        // Check if model should continue generating
-        // why is this not included in the checkStopConditions function?
-        if (
-          this.modelHandler.shouldContinue(
-            stopReason,
-            processedResponse,
-            this.agentSetting,
-          )
-        ) {
-          this.logger.debug(
-            `Should continue - adding continuation message to conversation`,
-            logGroupId,
-          );
-          if (this.modelHandler.capabilities.supportsAssistantPrefill) {
-            this.modelHandler.addContinueMessageWithPrefill(
-              messages,
-              stateRound,
-              toolState,
-              this.agentSetting,
-              this.agentConfig,
-            );
-            continue;
-          } else {
-            this.modelHandler.addContinueMessageWithoutPrefill(
-              messages,
-              stateRound,
-              toolState,
-              this.agentSetting,
-              this.agentConfig,
-            );
-            continue;
-          }
-        }
-      }
-
-      return [stateRound, stateGlobal, toolState, endTurn];
-    } catch (error) {
-      throw error;
-    }
+    return [result.stateRound, result.stateGlobal, result.toolState, result.endTurn];
   }
 
   /**
