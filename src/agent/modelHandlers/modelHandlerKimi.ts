@@ -8,6 +8,7 @@ import OpenAI from 'openai';
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 import { ToolState } from '../core/ToolState';
 import { MediaEntry } from '@agent/utils/mediaTypes';
+import type { ToolDefinition } from '@model';
 
 // Local imports - utilities
 import { convertContentToString } from '@agent/utils/text/messageUtils';
@@ -138,6 +139,7 @@ export class ModelHandlerKimi extends ModelHandlerOpenAI {
     systemPrompt?: string,
     endTag?: string,
     signal?: AbortSignal,
+    tools?: ToolDefinition[],
   ): Promise<any> {
     // Preprocess messages for Kimi compatibility
     const processedMessages = this.preprocessMessages(messages);
@@ -200,6 +202,7 @@ export class ModelHandlerKimi extends ModelHandlerOpenAI {
       systemPrompt,
       endTag,
       signal,
+      tools,
     );
   }
 

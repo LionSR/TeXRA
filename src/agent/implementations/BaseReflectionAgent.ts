@@ -38,7 +38,8 @@ import {
 import { AgentStateRound, AgentStateGlobal } from '@agent/core/AgentState';
 import { ToolState } from '@agent/core/ToolState';
 import type { IModelHandler } from '@agent/modelHandlers';
-import { OutputHandler, IOutputHandler } from '@agent/output';
+import type { ToolDefinition } from '@model';
+import { OutputHandler, NamedOutputFile, IOutputHandler } from '@agent/output';
 import { messageToSkeleton } from '@agent/utils/messageSkeletonUtils';
 import { BaseAgent } from '@agent/implementations/BaseAgent';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
@@ -193,6 +194,9 @@ export abstract class BaseReflectionAgent extends BaseAgent {
             systemPrompt,
             this.agentSetting.endTag,
             this.abortController.signal,
+            this.modelHandler.capabilities.supportsFunctionCalling
+              ? this.agentSetting.tools
+              : undefined,
           );
         } finally {
           this.abortController = null;
