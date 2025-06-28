@@ -5,12 +5,10 @@ import * as path from 'path';
 import { AgentLogger } from '@logger/AgentLogger';
 
 // Local imports - latex utils
-import {
-  extractFigurePathsFromLatex,
-  tikzPictureManager,
-  compileLatex2Pdf,
-  getTeXCountStats,
-} from '@latex';
+import { extractFigurePathsFromLatex } from './extractFigure';
+import { tikzPictureManager } from './TikzPictureManager';
+import { compileLatex2Pdf } from './texTools';
+import { getTeXCountStats } from './texcount';
 
 // Local imports - agent components
 import { ToolState } from '@agent/core/ToolState';
@@ -31,6 +29,47 @@ export class LatexMediaManager {
     if (cfg.attachTeXCount && files.length > 0) {
       toolState.texcountStats = await getTeXCountStats(files);
     }
+  }
+
+  /**
+   * Compile LaTeX files to PDF and add them to the tool state.
+   */
+  private async compilePdfs(
+    files: string[],
+    toolState: ToolState,
+    groupId?: string,
+  ): Promise<void> {
+    const texFiles = files.filter((file) =>
+      file.toLowerCase().endsWith('.tex'),
+    );
+    const compileResults = await Promise.allSettled(
+      texFiles.map(async (file) => {
+        const buildDir = path.join(path.dirname(file), 'build');
+        await WorkspaceFS.ensureDir(buildDir);
+        const compiled = await compileLatex2Pdf(
+          file,
+          undefined,
+          buildDir,
+          true,
+        );
+        if (compiled) {
+          const pdfFile = path.join(
+            buildDir,
+            path.basename(file).replace(/\.tex$/, '.pdf'),
+          );
+          if (await WorkspaceFS.exists(pdfFile)) {
+            this.logger.info(`Compiled PDF for ${file}: ${pdfFile}`, groupId);
+            return pdfFile;
+          }
+        }
+        return undefined;
+      }),
+    );
+    compileResults.forEach((result) => {
+      if (result.status === 'fulfilled' && result.value) {
+        toolState.addMediaFiles([result.value]);
+      }
+    });
   }
 
   /**
@@ -109,37 +148,7 @@ export class LatexMediaManager {
     }
 
     if (cfg.autoCompileInputPdf) {
-      const texFiles = existingFiles.filter((file) =>
-        file.toLowerCase().endsWith('.tex'),
-      );
-      const compileResults = await Promise.allSettled(
-        texFiles.map(async (file) => {
-          const buildDir = path.join(path.dirname(file), 'build');
-          await WorkspaceFS.ensureDir(buildDir);
-          const compiled = await compileLatex2Pdf(
-            file,
-            undefined,
-            buildDir,
-            true,
-          );
-          if (compiled) {
-            const pdfFile = path.join(
-              buildDir,
-              path.basename(file).replace(/\.tex$/, '.pdf'),
-            );
-            if (await WorkspaceFS.exists(pdfFile)) {
-              this.logger.info(`Compiled PDF for ${file}: ${pdfFile}`, groupId);
-              return pdfFile;
-            }
-          }
-          return undefined;
-        }),
-      );
-      compileResults.forEach((result) => {
-        if (result.status === 'fulfilled' && result.value) {
-          toolState.addMediaFiles([result.value]);
-        }
-      });
+      await this.compilePdfs(existingFiles, toolState, groupId);
     }
   }
 
@@ -189,37 +198,7 @@ export class LatexMediaManager {
     }
 
     if (supportsVision && cfg.autoCompileInputPdf) {
-      const texFiles = existingFiles.filter((file) =>
-        file.toLowerCase().endsWith('.tex'),
-      );
-      const compileResults = await Promise.allSettled(
-        texFiles.map(async (file) => {
-          const buildDir = path.join(path.dirname(file), 'build');
-          await WorkspaceFS.ensureDir(buildDir);
-          const compiled = await compileLatex2Pdf(
-            file,
-            undefined,
-            buildDir,
-            true,
-          );
-          if (compiled) {
-            const pdfFile = path.join(
-              buildDir,
-              path.basename(file).replace(/\.tex$/, '.pdf'),
-            );
-            if (await WorkspaceFS.exists(pdfFile)) {
-              this.logger.info(`Compiled PDF for ${file}: ${pdfFile}`, groupId);
-              return pdfFile;
-            }
-          }
-          return undefined;
-        }),
-      );
-      compileResults.forEach((result) => {
-        if (result.status === 'fulfilled' && result.value) {
-          toolState.addMediaFiles([result.value]);
-        }
-      });
+      await this.compilePdfs(existingFiles, toolState, groupId);
     }
   }
 }
