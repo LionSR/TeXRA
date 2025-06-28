@@ -19,6 +19,7 @@ import { calculateTokenPrice } from '@agent/utils/priceUtils';
 import { ToolState } from '../core/ToolState';
 import { K_SLICE } from '@utils/config';
 import type { ProviderStopReason } from './types/StopReasonTypes';
+import type { ToolDefinition } from '@model';
 
 // import { ResponseCreateParams } from 'openai/src/resources/responses/response';
 // this is incorrect now, but would be nice to use
@@ -73,6 +74,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
     systemPrompt?: string,
     endTag?: string,
     signal?: AbortSignal,
+    _tools?: ToolDefinition[],
   ): Promise<Response> {
     const useStreaming = this.getStreamingConfig();
 

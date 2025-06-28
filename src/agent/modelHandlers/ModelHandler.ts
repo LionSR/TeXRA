@@ -30,6 +30,7 @@ import {
   ModelProvider,
   ModelCapabilities,
 } from '@model/ModelConfig';
+import type { ToolDefinition } from '@model';
 import { ToolState } from '../core/ToolState';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 
@@ -611,6 +612,7 @@ export abstract class ModelHandler<U = any, R = any>
     systemPrompt?: string,
     endTag?: string,
     signal?: AbortSignal,
+    tools?: ToolDefinition[],
   ): Promise<any>;
 
   /**

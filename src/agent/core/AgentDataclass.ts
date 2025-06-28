@@ -1,3 +1,6 @@
+// Local imports - model types
+import type { ToolDefinition } from '@model';
+
 /** Enum defining possible agent types */
 export enum AgentType {
   CoT = 'CoT',
@@ -18,6 +21,7 @@ export const DEFAULT_AGENT_SETTINGS: AgentSetting = {
   requiredFilesInternal: {},
   defaultOutputFiles: [],
   filePatternsContain: [],
+  tools: undefined,
   isRewrite: true,
 };
 
@@ -50,6 +54,9 @@ export interface AgentSetting {
   requiredFilesInternal: Record<string, string>;
   defaultOutputFiles: string[];
   filePatternsContain: Array<Record<string, string>>;
+
+  /** Tool definitions available to the agent */
+  tools?: ToolDefinition[];
 }
 
 /**
