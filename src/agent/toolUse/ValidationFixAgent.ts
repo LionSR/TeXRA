@@ -20,6 +20,7 @@ import { LinterMessage } from '@frontend/latex/linter';
 import { WorkspaceFS } from '@utils/files';
 import * as linterUtils from '@frontend/latex/linter';
 import type { IToolUseAgent } from './IToolUseAgent';
+import type { ToolDefinition } from '@model';
 
 export type ValidatorType = 'latexLinter' | 'xmlValidator';
 
@@ -70,9 +71,14 @@ export class ValidationFixAgent<T extends ValidatorType>
       this.validator === 'latexLinter'
         ? ['text_editor', 'diagnostics']
         : ['text_editor'];
-    const configured = settings.tools
-      ? settings.tools.map((t) => t.name)
-      : defaultTools;
+    let configured: string[] = defaultTools;
+      if (Array.isArray(settings.tools) && settings.tools.length > 0) {
+        if (typeof settings.tools[0] === 'string') {
+          configured = settings.tools as unknown as string[];
+        } else {
+          configured = (settings.tools as ToolDefinition[]).map((t) => t.name);
+        }
+      }
     this.setConfiguredTools(configured);
   }
 

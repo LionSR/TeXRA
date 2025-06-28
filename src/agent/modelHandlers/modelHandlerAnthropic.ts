@@ -81,8 +81,8 @@ export class ModelHandlerAnthropic extends ModelHandler<
     };
 
     if (tools && tools.length > 0) {
-      options.tools = toAnthropicTools(tools) as any;
-      (options as any).tool_choice = 'auto';
+      options.tools = toAnthropicTools(tools);
+      (options as MessageCreateParams).tool_choice = { type: 'auto' };
     }
 
     // Enable thinking for any models that support reasoning
