@@ -62,8 +62,8 @@ export class DirectAgent extends BaseReflectionAgent {
           outputProcessGroupId,
         );
 
-        // Process output files using the parent class method
-        await this.processOutputFiles(
+        // Process output files using the output handler
+        await this.outputHandler.processOutputFiles(
           outputFile,
           currRound,
           outputProcessGroupId,
