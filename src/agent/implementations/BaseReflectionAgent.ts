@@ -1,5 +1,5 @@
 // Standard library imports
-import * as path from 'path';
+// (none needed)
 
 // Third-party imports
 // (none needed)
@@ -7,13 +7,7 @@ import * as path from 'path';
 // Local imports - log
 
 // Local imports - latex utils
-import {
-  extractFigurePathsFromLatex,
-  bestConnectionMethod,
-  getTeXCountStats,
-  compileLatex2Pdf,
-  tikzPictureManager,
-} from '@latex';
+import { bestConnectionMethod, LatexMediaManager } from '@latex';
 
 import { emitProgress } from '@eventBus/ProgressEventBus';
 
@@ -69,6 +63,7 @@ export abstract class BaseReflectionAgent extends BaseAgent {
   protected logId: number = 0;
   /** Handler for output file processing and validation. */
   protected outputHandler: IOutputHandler;
+  protected latexMediaManager: LatexMediaManager;
 
   constructor(
     modelHandler: IModelHandler,
@@ -111,6 +106,8 @@ export abstract class BaseReflectionAgent extends BaseAgent {
       this.baseFiles,
       this.logger,
     );
+
+    this.latexMediaManager = new LatexMediaManager(this.logger);
   }
 
   /**
@@ -529,11 +526,6 @@ export abstract class BaseReflectionAgent extends BaseAgent {
     );
 
     try {
-      // Handle tex count if enabled
-      if (this.agentConfig.toolConfig.attachTeXCount) {
-        toolState.texcountStats = await getTeXCountStats(inputFiles);
-      }
-
       // Handle prefill from input if enabled
       if (this.agentConfig.toolConfig.usePrefillFromInput) {
         toolState.firstKCharsFromInput = await getFirstKCharsFromDocument(
@@ -542,69 +534,25 @@ export abstract class BaseReflectionAgent extends BaseAgent {
         );
       }
 
-      // Handle figure extraction for vision-capable models
+      const extraMedia: string[] = [];
       if (this.modelHandler.capabilities.supportsVision) {
-        if (
-          this.agentConfig.mediaFile &&
-          !toolState.mediaFiles.includes(this.agentConfig.mediaFile)
-        ) {
-          toolState.addMediaFiles([this.agentConfig.mediaFile]);
+        if (this.agentConfig.mediaFile &&
+          !toolState.mediaFiles.includes(this.agentConfig.mediaFile)) {
+          extraMedia.push(this.agentConfig.mediaFile);
         }
         if (this.agentConfig.mediaFiles) {
-          toolState.addMediaFiles(this.agentConfig.mediaFiles);
-        }
-
-        if (this.agentConfig.toolConfig.autoExtractFigure) {
-          const extractedFigures = await extractFigurePathsFromLatex(
-            this.agentConfig.inputFile,
-          );
-          if (extractedFigures) {
-            this.logger.info(
-              `Extracted ${extractedFigures.length} figures from ${this.agentConfig.inputFile}. Figures: ${extractedFigures.join(', ')}`,
-              round0GroupId,
-            );
-            toolState.addMediaFiles(extractedFigures);
-          }
-        }
-
-        if (this.agentConfig.toolConfig.autoExtractTikzFigure) {
-          for (const inputFile of inputFiles) {
-            const extractedTikzFigures =
-              await tikzPictureManager.compile(inputFile);
-            if (extractedTikzFigures) {
-              toolState.addMediaFiles(extractedTikzFigures);
-            }
-          }
-        }
-
-        if (this.agentConfig.toolConfig.autoCompileInputPdf) {
-          for (const inputFile of inputFiles) {
-            if (!inputFile.toLowerCase().endsWith('.tex')) {
-              continue;
-            }
-            const buildDir = path.join(path.dirname(inputFile), 'build');
-            const compiled = await compileLatex2Pdf(
-              inputFile,
-              undefined,
-              buildDir,
-              true, // prefer latexmk when available
-            );
-            if (compiled) {
-              const pdfFile = path.join(
-                buildDir,
-                path.basename(inputFile).replace(/\.tex$/, '.pdf'),
-              );
-              if (await WorkspaceFS.exists(pdfFile)) {
-                this.logger.info(
-                  `Compiled PDF for ${inputFile}: ${pdfFile}`,
-                  round0GroupId,
-                );
-                toolState.addMediaFiles([pdfFile]);
-              }
-            }
-          }
+          extraMedia.push(...this.agentConfig.mediaFiles);
         }
       }
+
+      await this.latexMediaManager.processInputFiles(
+        inputFiles,
+        toolState,
+        this.agentConfig.toolConfig,
+        this.modelHandler.capabilities.supportsVision,
+        extraMedia,
+        round0GroupId,
+      );
 
       const messages: any[] = [];
 
@@ -921,54 +869,13 @@ export abstract class BaseReflectionAgent extends BaseAgent {
     currRound: number,
     toolState: ToolState,
   ): Promise<void> {
-    if (this.agentConfig.toolConfig.attachTeXCount) {
-      toolState.texcountStats = await getTeXCountStats(outputFiles);
-    }
-
-    if (
-      this.modelHandler.capabilities.supportsVision &&
-      this.agentConfig.toolConfig.autoExtractTikzFigure
-    ) {
-      for (const outputFile of outputFiles) {
-        this.logger.debug(`Extracting TikZ figures from ${outputFile}`);
-        const extractedTikzFigures =
-          await tikzPictureManager.compile(outputFile);
-        if (extractedTikzFigures) {
-          toolState.addMediaFiles(extractedTikzFigures);
-        }
-      }
-    }
-
-    if (
-      this.modelHandler.capabilities.supportsVision &&
-      this.agentConfig.toolConfig.autoCompileInputPdf
-    ) {
-      for (const outputFile of outputFiles) {
-        if (!outputFile.toLowerCase().endsWith('.tex')) {
-          continue;
-        }
-        const buildDir = path.join(path.dirname(outputFile), 'build');
-        const compiled = await compileLatex2Pdf(
-          outputFile,
-          undefined,
-          buildDir,
-          true,
-        );
-        if (compiled) {
-          const pdfFile = path.join(
-            buildDir,
-            path.basename(outputFile).replace(/\.tex$/, '.pdf'),
-          );
-          if (await WorkspaceFS.exists(pdfFile)) {
-            this.logger.info(
-              `Compiled PDF for ${outputFile}: ${pdfFile}`,
-              this.logger.getActiveGroupId(),
-            );
-            toolState.addMediaFiles([pdfFile]);
-          }
-        }
-      }
-    }
+    await this.latexMediaManager.processOutputFiles(
+      outputFiles,
+      toolState,
+      this.agentConfig.toolConfig,
+      this.modelHandler.capabilities.supportsVision,
+      this.logger.getActiveGroupId(),
+    );
   }
 
   /**
