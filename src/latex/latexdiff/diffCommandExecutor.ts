@@ -144,7 +144,7 @@ export class DiffCommandExecutor {
           throw new Error(ERROR_MESSAGES.FAILED_BOTH(commandType));
         }
 
-        logger.info(
+        logger.debug(
           this.channel,
           `${commandType} completed successfully (without --flatten)`,
         );
@@ -152,7 +152,7 @@ export class DiffCommandExecutor {
         throw new Error(ERROR_MESSAGES.FAILED_GENERAL(commandType));
       }
     } else {
-      logger.info(
+      logger.debug(
         this.channel,
         `${commandType} completed successfully (with --flatten)`,
       );
