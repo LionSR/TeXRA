@@ -10,7 +10,7 @@ import {
   FinishReason,
   File,
   createPartFromUri,
-  GenerationConfig,
+  GenerateContentConfig,
   type CreateChatParameters,
   type SendMessageParameters,
   type UploadFileParameters,
@@ -30,6 +30,8 @@ import {
 } from '@agent/core/ResponseUsage';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import { AgentLogger } from '@logger/AgentLogger';
+import type { ToolDefinition } from '@model';
+import { toGoogleTools } from './toolConversion';
 
 // Local imports - utilities
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
@@ -169,6 +171,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     systemPrompt?: string,
     endTag?: string,
     signal?: AbortSignal,
+    tools?: ToolDefinition[],
   ): Promise<GenerateContentResponse> {
     if (messages.length === 0) {
       this.logger.error('Cannot create response from empty messages array.');
@@ -202,7 +205,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       throw new Error('Last message conversion resulted in empty parts.');
     }
 
-    const generationConfig: GenerationConfig = {
+    const generationConfig: GenerateContentConfig = {
       temperature: temperature,
       maxOutputTokens: this.config.maxOutputTokens ?? 8192,
       ...(endTag && { stopSequences: [endTag] }),
@@ -213,6 +216,10 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       this.config.fullName.includes('2.5-flash')
     ) {
       generationConfig.thinkingConfig = { includeThoughts: true };
+    }
+
+    if (tools && tools.length > 0) {
+      generationConfig.tools = toGoogleTools(tools);
     }
 
     const chatParams: CreateChatParameters = {

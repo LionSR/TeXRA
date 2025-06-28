@@ -18,6 +18,8 @@ import { AgentSetting, hasEndTag } from '../core/AgentDataclass';
 import { AgentStateRound } from '../core/AgentState';
 import { ModelHandler } from './ModelHandler';
 import type { ProviderStopReason } from './types/StopReasonTypes';
+import { toOpenAITools } from './toolConversion';
+import type { ToolDefinition } from '@model';
 import {
   OpenAIAPIResponseUsage,
   ResponseUsageFactory,
@@ -55,6 +57,7 @@ export class ModelHandlerOpenAI extends ModelHandler<
     systemPrompt?: string,
     endTag?: string,
     signal?: AbortSignal,
+    tools?: ToolDefinition[],
   ): Promise<any> {
     // Get streaming config
     const useStreaming = this.getStreamingConfig();
@@ -81,6 +84,10 @@ export class ModelHandlerOpenAI extends ModelHandler<
           this.config.capabilities.reasoningEffort,
         ) as any; // Cast to any for compatibility with different API providers
       }
+    }
+    if (tools && tools.length > 0) {
+      kwargs.tools = toOpenAITools(tools);
+      kwargs.tool_choice = 'auto';
     }
     if (this.config.fullName.includes('deepseek-chat')) {
       // for deepseek models,  this and context window are not the same for openrouter models and the official api. so we need to set max_tokens manually if the official api is used
