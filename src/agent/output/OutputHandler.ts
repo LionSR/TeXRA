@@ -250,7 +250,6 @@ export class OutputHandler implements IOutputHandler {
 
   /**
    * Processes output files from XML or direct input.
-   * Mirrors the previous logic in BaseReflectionAgent.processOutputFiles.
    */
   public async processOutputFiles(
     outputFile: string,
