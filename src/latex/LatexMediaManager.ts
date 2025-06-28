@@ -23,6 +23,16 @@ import { WorkspaceFS } from '@utils/files';
 export class LatexMediaManager {
   constructor(private readonly logger: AgentLogger) {}
 
+  private async attachTeXCount(
+    files: string[],
+    toolState: ToolState,
+    cfg: ToolConfig,
+  ): Promise<void> {
+    if (cfg.attachTeXCount && files.length > 0) {
+      toolState.texcountStats = await getTeXCountStats(files);
+    }
+  }
+
   /**
    * Process input files to extract figures, compile TikZ pictures and PDFs.
    * Adds resulting media paths to the provided ToolState.
@@ -35,9 +45,25 @@ export class LatexMediaManager {
     extraMediaFiles: string[] = [],
     groupId?: string,
   ): Promise<void> {
-    if (cfg.attachTeXCount) {
-      toolState.texcountStats = await getTeXCountStats(inputFiles);
+    if (!inputFiles || inputFiles.length === 0) {
+      return;
     }
+
+    const existingFilesInfo = await Promise.all(
+      inputFiles.map(async (file) => ({
+        file,
+        exists: await WorkspaceFS.exists(file),
+      })),
+    );
+    const existingFiles = existingFilesInfo
+      .filter((f) => f.exists)
+      .map((f) => f.file);
+
+    if (existingFiles.length === 0) {
+      return;
+    }
+
+    await this.attachTeXCount(existingFiles, toolState, cfg);
 
     if (!supportsVision) {
       return;
@@ -48,50 +74,72 @@ export class LatexMediaManager {
     }
 
     if (cfg.autoExtractFigure) {
-      for (const file of inputFiles) {
-        const extracted = await extractFigurePathsFromLatex(file);
-        if (extracted && extracted.length > 0) {
+      const figureResults = await Promise.allSettled(
+        existingFiles.map((file) => extractFigurePathsFromLatex(file)),
+      );
+      figureResults.forEach((result, idx) => {
+        if (
+          result.status === 'fulfilled' &&
+          result.value &&
+          result.value.length > 0
+        ) {
+          const file = existingFiles[idx];
           this.logger.info(
-            `Extracted ${extracted.length} figures from ${file}`,
+            `Extracted ${result.value.length} figures from ${file}`,
             groupId,
           );
-          toolState.addMediaFiles(extracted);
+          toolState.addMediaFiles(result.value);
         }
-      }
+      });
     }
 
     if (cfg.autoExtractTikzFigure) {
-      for (const file of inputFiles) {
-        const tikzFigures = await tikzPictureManager.compile(file);
-        if (tikzFigures && tikzFigures.length > 0) {
-          toolState.addMediaFiles(tikzFigures);
+      const tikzResults = await Promise.allSettled(
+        existingFiles.map((file) => tikzPictureManager.compile(file)),
+      );
+      tikzResults.forEach((result) => {
+        if (
+          result.status === 'fulfilled' &&
+          result.value &&
+          result.value.length > 0
+        ) {
+          toolState.addMediaFiles(result.value);
         }
-      }
+      });
     }
 
     if (cfg.autoCompileInputPdf) {
-      for (const file of inputFiles) {
-        if (!file.toLowerCase().endsWith('.tex')) {
-          continue;
-        }
-        const buildDir = path.join(path.dirname(file), 'build');
-        const compiled = await compileLatex2Pdf(
-          file,
-          undefined,
-          buildDir,
-          true,
-        );
-        if (compiled) {
-          const pdfFile = path.join(
+      const texFiles = existingFiles.filter((file) =>
+        file.toLowerCase().endsWith('.tex'),
+      );
+      const compileResults = await Promise.allSettled(
+        texFiles.map(async (file) => {
+          const buildDir = path.join(path.dirname(file), 'build');
+          await WorkspaceFS.ensureDir(buildDir);
+          const compiled = await compileLatex2Pdf(
+            file,
+            undefined,
             buildDir,
-            path.basename(file).replace(/\.tex$/, '.pdf'),
+            true,
           );
-          if (await WorkspaceFS.exists(pdfFile)) {
-            this.logger.info(`Compiled PDF for ${file}: ${pdfFile}`, groupId);
-            toolState.addMediaFiles([pdfFile]);
+          if (compiled) {
+            const pdfFile = path.join(
+              buildDir,
+              path.basename(file).replace(/\.tex$/, '.pdf'),
+            );
+            if (await WorkspaceFS.exists(pdfFile)) {
+              this.logger.info(`Compiled PDF for ${file}: ${pdfFile}`, groupId);
+              return pdfFile;
+            }
           }
+          return undefined;
+        }),
+      );
+      compileResults.forEach((result) => {
+        if (result.status === 'fulfilled' && result.value) {
+          toolState.addMediaFiles([result.value]);
         }
-      }
+      });
     }
   }
 
@@ -105,45 +153,73 @@ export class LatexMediaManager {
     supportsVision: boolean,
     groupId?: string,
   ): Promise<void> {
-    if (cfg.attachTeXCount) {
-      toolState.texcountStats = await getTeXCountStats(outputFiles);
+    if (!outputFiles || outputFiles.length === 0) {
+      return;
     }
 
+    const existingFilesInfo = await Promise.all(
+      outputFiles.map(async (file) => ({
+        file,
+        exists: await WorkspaceFS.exists(file),
+      })),
+    );
+    const existingFiles = existingFilesInfo
+      .filter((f) => f.exists)
+      .map((f) => f.file);
+
+    if (existingFiles.length === 0) {
+      return;
+    }
+
+    await this.attachTeXCount(existingFiles, toolState, cfg);
+
     if (supportsVision && cfg.autoExtractTikzFigure) {
-      for (const outputFile of outputFiles) {
-        const tikzFigures = await tikzPictureManager.compile(outputFile);
-        if (tikzFigures && tikzFigures.length > 0) {
-          toolState.addMediaFiles(tikzFigures);
+      const tikzResults = await Promise.allSettled(
+        existingFiles.map((file) => tikzPictureManager.compile(file)),
+      );
+      tikzResults.forEach((result) => {
+        if (
+          result.status === 'fulfilled' &&
+          result.value &&
+          result.value.length > 0
+        ) {
+          toolState.addMediaFiles(result.value);
         }
-      }
+      });
     }
 
     if (supportsVision && cfg.autoCompileInputPdf) {
-      for (const outputFile of outputFiles) {
-        if (!outputFile.toLowerCase().endsWith('.tex')) {
-          continue;
-        }
-        const buildDir = path.join(path.dirname(outputFile), 'build');
-        const compiled = await compileLatex2Pdf(
-          outputFile,
-          undefined,
-          buildDir,
-          true,
-        );
-        if (compiled) {
-          const pdfFile = path.join(
+      const texFiles = existingFiles.filter((file) =>
+        file.toLowerCase().endsWith('.tex'),
+      );
+      const compileResults = await Promise.allSettled(
+        texFiles.map(async (file) => {
+          const buildDir = path.join(path.dirname(file), 'build');
+          await WorkspaceFS.ensureDir(buildDir);
+          const compiled = await compileLatex2Pdf(
+            file,
+            undefined,
             buildDir,
-            path.basename(outputFile).replace(/\.tex$/, '.pdf'),
+            true,
           );
-          if (await WorkspaceFS.exists(pdfFile)) {
-            this.logger.info(
-              `Compiled PDF for ${outputFile}: ${pdfFile}`,
-              groupId,
+          if (compiled) {
+            const pdfFile = path.join(
+              buildDir,
+              path.basename(file).replace(/\.tex$/, '.pdf'),
             );
-            toolState.addMediaFiles([pdfFile]);
+            if (await WorkspaceFS.exists(pdfFile)) {
+              this.logger.info(`Compiled PDF for ${file}: ${pdfFile}`, groupId);
+              return pdfFile;
+            }
           }
+          return undefined;
+        }),
+      );
+      compileResults.forEach((result) => {
+        if (result.status === 'fulfilled' && result.value) {
+          toolState.addMediaFiles([result.value]);
         }
-      }
+      });
     }
   }
 }
