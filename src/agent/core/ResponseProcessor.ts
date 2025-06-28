@@ -217,14 +217,16 @@ export class ResponseProcessor {
           break;
         }
 
-        // Handle continuation if needed
+        // Handle continuation
+        stateRound.incrementContinuation();
+        this.logger.info(
+          `Starting continuation #${stateRound.continuationCount}`,
+          logGroupId,
+        );
+
+        // Check if model should continue generating
         if (this.shouldContinueGeneration(stopReason, processedResponse, agentSetting)) {
-          stateRound.incrementContinuation();
-          this.logger.info(
-            `Starting continuation #${stateRound.continuationCount}`,
-            logGroupId,
-          );
-          this.addContinuationMessage(messages, stateRound, toolState, agentSetting, agentConfig);
+          this.addContinuationMessage(messages, stateRound, toolState, agentSetting, agentConfig, logGroupId);
           continue;
         }
       }
@@ -390,6 +392,7 @@ export class ResponseProcessor {
     toolState: ToolState,
     agentSetting: AgentSetting,
     agentConfig: AgentConfig,
+    logGroupId?: string,
   ): void {
     const continuationParams: ContinuationParams = {
       stateRound,
@@ -397,6 +400,6 @@ export class ResponseProcessor {
       agentSetting,
       agentConfig,
     };
-    this.messageManager.addContinuationMessage(messages, continuationParams);
+    this.messageManager.addContinuationMessage(messages, continuationParams, logGroupId);
   }
 }

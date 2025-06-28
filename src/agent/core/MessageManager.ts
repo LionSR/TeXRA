@@ -116,9 +116,11 @@ export class MessageManager {
   addContinuationMessage(
     messages: any[],
     params: ContinuationParams,
+    logGroupId?: string,
   ): void {
     this.logger.debug(
       `Adding continuation message to conversation`,
+      logGroupId,
     );
     
     if (this.modelHandler.capabilities.supportsAssistantPrefill) {
