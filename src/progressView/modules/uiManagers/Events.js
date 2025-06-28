@@ -83,6 +83,20 @@ export class Events {
       true,
     );
 
+    document.getElementById('inputStatus').addEventListener(
+      'click',
+      (e) => {
+        const el = e.target.closest('.input-status-file');
+        if (el && el.dataset.file) {
+          vscode.postMessage({
+            command: COMMANDS.OPEN_FILE,
+            file: el.dataset.file,
+          });
+        }
+      },
+      true,
+    );
+
     // Delete all button handler
     const deleteAllBtn = document.getElementById('deleteAllBtn');
     if (deleteAllBtn) {

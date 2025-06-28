@@ -7,6 +7,8 @@ import * as path from 'path';
 import { AgentLogger } from '@logger/AgentLogger';
 import { WorkspaceFS } from '@utils/files';
 import { setVarFromFile } from '@frontend/files/vars';
+import { emitProgress } from '@eventBus/ProgressEventBus';
+import type { InputStatus, RequiredFileStatus } from '@types/InputStatus';
 import {
   getXmlFormatFromFiles,
   getListOfFiles,
@@ -28,10 +30,10 @@ export async function buildUserVars(
   const userVars: Record<string, any> = {};
   Object.assign(userVars, getBasicVars(agentConfig, modelHandler));
   Object.assign(userVars, await getFileVars(agentConfig));
-  Object.assign(
-    userVars,
-    await getRequiredFileVars(agentSetting, agentPath, logger),
-  );
+  const req = await getRequiredFileVars(agentSetting, agentPath, logger);
+  Object.assign(userVars, req.userVars);
+  const status: InputStatus = { required: req.status, figures: [] };
+  emitProgress('updateInputStatus', { stream: logger.channelId, status });
   Object.assign(
     userVars,
     await getPatternBasedFileVars(agentConfig, agentSetting, logger),
@@ -123,21 +125,23 @@ async function getRequiredFileVars(
   agentSetting: AgentSetting,
   agentPath: string,
   logger: AgentLogger,
-): Promise<Record<string, any>> {
+): Promise<{ userVars: Record<string, any>; status: RequiredFileStatus[] }> {
   const userVars: Record<string, any> = {};
+  const status: RequiredFileStatus[] = [];
 
   if (agentSetting.requiredFiles) {
     for (const [varName, filePath] of Object.entries(
       agentSetting.requiredFiles,
     )) {
       if (filePath) {
-        await setVarFromFile(
+        const found = await setVarFromFile(
           filePath,
           varName,
           userVars,
           logger,
           'requiredFiles',
         );
+        status.push({ path: filePath, varName, found });
       }
     }
   }
@@ -147,7 +151,7 @@ async function getRequiredFileVars(
       agentSetting.requiredFilesInternal,
     )) {
       const fullPath = path.join(agentPath, filePath);
-      await setVarFromFile(
+      const found = await setVarFromFile(
         fullPath,
         varName,
         userVars,
@@ -155,10 +159,11 @@ async function getRequiredFileVars(
         'requiredFilesInternal',
         true,
       );
+      status.push({ path: fullPath, varName, found });
     }
   }
 
-  return userVars;
+  return { userVars, status };
 }
 
 async function getPatternBasedFileVars(

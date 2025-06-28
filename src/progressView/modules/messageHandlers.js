@@ -123,6 +123,12 @@ const handlers = {
     }
   },
 
+  [COMMANDS.UPDATE_INPUT_STATUS]: (message) => {
+    if (message.stream === state.getCurrentStream()) {
+      dom.inputStatus.update(message.status);
+    }
+  },
+
   [COMMANDS.UPDATE_FILES]: (message) => {
     if (message.stream === state.getCurrentStream()) {
       dom.fileList.update(message.files);

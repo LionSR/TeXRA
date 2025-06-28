@@ -33,6 +33,8 @@ import {
 import type { ToolDefinition } from '@model';
 import { ToolState } from '../core/ToolState';
 import { MediaEntry } from '@agent/utils/mediaTypes';
+import { emitProgress } from '@eventBus/ProgressEventBus';
+import type { InputStatus } from '@types/InputStatus';
 
 // Default continuation limits
 const DEFAULT_CONTINUE_LIMIT = 10;
@@ -512,6 +514,17 @@ export abstract class ModelHandler<U = any, R = any>
         );
         this.logger.info(`Added: ${simplifiedMedia}`);
       }
+    }
+
+    if (addedMedia.length > 0) {
+      const status: InputStatus = {
+        required: [],
+        figures: addedMedia.map((p) => ({ path: p })),
+      };
+      emitProgress('updateInputStatus', {
+        stream: this.logger.channelId,
+        status,
+      });
     }
 
     return this.createMediaContent(mediaMessage);

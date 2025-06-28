@@ -7,6 +7,7 @@ export enum WorkspaceStateKey {
   LOG_STREAMS = 'texra.logStreams',
   TASK_GROUPS = 'texra.taskGroups',
   OUTPUT_FILES = 'texra.outputFiles',
+  INPUT_STATUS = 'texra.inputStatus',
   ACTIVE_LOG_STREAM = 'texra.activeLogStream',
   TASK_STATES = 'texra.taskStates',
   USAGE_STATS = 'texra.usageStats',

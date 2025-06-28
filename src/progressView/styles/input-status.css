@@ -1,0 +1,19 @@
+#inputStatus {
+  padding: var(--spacing-small);
+  border-top: 1px solid var(--vscode-panel-border);
+  font-size: var(--vscode-editor-font-size);
+  overflow-y: auto;
+  max-height: var(--height-medium);
+  flex-shrink: 0;
+}
+
+.input-status-file {
+  cursor: pointer;
+  color: var(--vscode-textLink-foreground);
+  white-space: nowrap;
+}
+
+.input-status-file:hover {
+  color: var(--vscode-textLink-activeForeground);
+  text-decoration: underline;
+}

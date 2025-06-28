@@ -15,7 +15,8 @@ export type ProgressEvent =
   | 'setTaskState'
   | 'updateGroupUsage'
   | 'clearTaskOutput'
-  | 'updateStreamUsage';
+  | 'updateStreamUsage'
+  | 'updateInputStatus';
 
 class ProgressEventBus {
   private emitter = new EventEmitter();

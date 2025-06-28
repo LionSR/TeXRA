@@ -63,3 +63,9 @@ This scrollable area displays the detailed, timestamped logs for the selected ag
 Understanding the log content is key to diagnosing problems and seeing how TeXRA and the AI models process your requests. Refer to the [Troubleshooting](../reference/troubleshooting.md) guide for more tips on using logs.
 
 At the bottom of the tab list, there is a "Delete All" button (<i class="codicon codicon-close-all"></i>) that allows you to clear all streams and their associated logs from the ProgressBoard view.
+
+### File Loading Status
+
+Below the log output, a **File Loading Status** section summarizes which required files and figures were successfully loaded for the active stream. Missing files are listed separately so you can quickly spot configuration problems. File names are clickable and open the file in VS Code.
+
+![File Loading Status](/images/progress-board-layout.png)
