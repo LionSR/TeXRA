@@ -47,6 +47,11 @@ import {
   ProcessingContext,
   ResponseResult,
 } from '@agent/core/ResponseProcessor';
+import { 
+  MessageManager, 
+  MessageInitParams, 
+  RoundMessageParams 
+} from '@agent/core/MessageManager';
 // System imports - common utilities
 import { getConfig } from '@utils/config';
 
@@ -70,6 +75,8 @@ export abstract class BaseReflectionAgent extends BaseAgent {
   protected latexMediaManager: LatexMediaManager;
   /** Core response processor shared across agent types. */
   protected responseProcessor: ResponseProcessor;
+  /** Message manager for handling message lifecycle. */
+  protected messageManager: MessageManager;
 
   constructor(
     modelHandler: IModelHandler,
@@ -114,7 +121,8 @@ export abstract class BaseReflectionAgent extends BaseAgent {
     );
 
     this.latexMediaManager = new LatexMediaManager(this.logger);
-    this.responseProcessor = new ResponseProcessor(this.modelHandler, this.logger);
+    this.messageManager = new MessageManager(this.modelHandler, this.logger);
+    this.responseProcessor = new ResponseProcessor(this.modelHandler, this.messageManager, this.logger);
   }
 
   /**
@@ -351,12 +359,13 @@ export abstract class BaseReflectionAgent extends BaseAgent {
       }
 
       // Initialize messages with prompts
-      const initialMessages = await this.modelHandler.initializeMessages(
-        prefixWithStats,
+      const initParams: MessageInitParams = {
+        userPrefix: prefixWithStats,
         userRequest,
-        toolState.mediaFiles,
+        mediaFiles: toolState.mediaFiles,
         systemPrompt,
-      );
+      };
+      const initialMessages = await this.messageManager.initializeMessages(initParams);
       messages.push(...initialMessages);
 
       // Handle prefill
@@ -513,11 +522,11 @@ export abstract class BaseReflectionAgent extends BaseAgent {
         return [stateRound, stateGlobal, messages, true];
       }
 
-      const roundMessages = await this.modelHandler.createRoundMessages(
-        messages,
+      const roundParams: RoundMessageParams = {
         userMessage,
-        toolState.mediaFiles,
-      );
+        mediaFiles: toolState.mediaFiles,
+      };
+      const roundMessages = await this.messageManager.addRoundMessage(messages, roundParams);
 
       // Handle prefill for round
       const prefill = getPrefillForRound(this.agentSetting.prefills, currRound);

@@ -11,6 +11,11 @@ import { AgentSetting } from './AgentDataclass';
 import { AgentStateRound, AgentStateGlobal } from './AgentState';
 import { ToolState } from './ToolState';
 import type { IModelHandler } from '../modelHandlers';
+import { 
+  MessageManager, 
+  ResponseUpdateParams, 
+  ContinuationParams 
+} from './MessageManager';
 
 // Local imports - utilities
 import { WorkspaceFS } from '@utils/files';
@@ -66,6 +71,7 @@ export interface ResponseResult {
 export class ResponseProcessor {
   constructor(
     private modelHandler: IModelHandler,
+    private messageManager: MessageManager,
     private logger: AgentLogger,
   ) {}
 
@@ -358,21 +364,12 @@ export class ResponseProcessor {
     processedResponse: string,
     toolState: ToolState,
   ): void {
-    if (this.modelHandler.capabilities.supportsAssistantPrefill) {
-      this.modelHandler.updateMessageContentWithPrefill(
-        messages,
-        bestConnector,
-        processedResponse,
-        toolState,
-      );
-    } else {
-      this.modelHandler.updateMessageContentWithoutPrefill(
-        messages,
-        bestConnector,
-        processedResponse,
-        toolState,
-      );
-    }
+    const updateParams: ResponseUpdateParams = {
+      bestConnector,
+      newResponse: processedResponse,
+      toolState,
+    };
+    this.messageManager.updateWithResponse(messages, updateParams);
   }
 
   private shouldContinueGeneration(
@@ -380,7 +377,7 @@ export class ResponseProcessor {
     processedResponse: string,
     agentSetting: AgentSetting,
   ): boolean {
-    return this.modelHandler.shouldContinue(
+    return this.messageManager.shouldContinueGeneration(
       stopReason,
       processedResponse,
       agentSetting,
@@ -394,26 +391,12 @@ export class ResponseProcessor {
     agentSetting: AgentSetting,
     agentConfig: AgentConfig,
   ): void {
-    this.logger.debug(
-      `Should continue - adding continuation message to conversation`,
-    );
-    
-    if (this.modelHandler.capabilities.supportsAssistantPrefill) {
-      this.modelHandler.addContinueMessageWithPrefill(
-        messages,
-        stateRound,
-        toolState,
-        agentSetting,
-        agentConfig,
-      );
-    } else {
-      this.modelHandler.addContinueMessageWithoutPrefill(
-        messages,
-        stateRound,
-        toolState,
-        agentSetting,
-        agentConfig,
-      );
-    }
+    const continuationParams: ContinuationParams = {
+      stateRound,
+      toolState,
+      agentSetting,
+      agentConfig,
+    };
+    this.messageManager.addContinuationMessage(messages, continuationParams);
   }
 }

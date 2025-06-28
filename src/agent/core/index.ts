@@ -8,3 +8,6 @@ export * from './IAgent';
 
 // Response processing components
 export * from './ResponseProcessor';
+
+// Message management components
+export * from './MessageManager';
