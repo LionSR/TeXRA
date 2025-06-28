@@ -10,7 +10,7 @@ import {
   FinishReason,
   File,
   createPartFromUri,
-  GenerationConfig,
+  GenerateContentConfig,
   type CreateChatParameters,
   type SendMessageParameters,
   type UploadFileParameters,
@@ -205,7 +205,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       throw new Error('Last message conversion resulted in empty parts.');
     }
 
-    const generationConfig: GenerationConfig = {
+    const generationConfig: GenerateContentConfig = {
       temperature: temperature,
       maxOutputTokens: this.config.maxOutputTokens ?? 8192,
       ...(endTag && { stopSequences: [endTag] }),
@@ -218,6 +218,10 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       generationConfig.thinkingConfig = { includeThoughts: true };
     }
 
+    if (tools && tools.length > 0) {
+      generationConfig.tools = toGoogleTools(tools);
+    }
+
     const chatParams: CreateChatParameters = {
       model: this.config.fullName,
       history: chatHistory,
@@ -226,10 +230,6 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         systemInstruction: { role: 'system', parts: [{ text: systemPrompt }] },
       }),
     };
-
-    if (tools && tools.length > 0) {
-      (chatParams.config as any).tools = toGoogleTools(tools);
-    }
 
     if (this.capabilities.supportsTokenCounting) {
       try {
