@@ -10,3 +10,4 @@ releases/
 .cursor/rules
 **/.claude/settings.local.json
 webview-common/
+.vscode-test/
