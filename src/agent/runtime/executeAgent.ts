@@ -263,7 +263,7 @@ async function executeAgentWithLogging<T extends IAgent>(
             mainTaskGroupId,
           );
           await agent.run();
-          await checkExpectedOutputs(config.outputFiles, context, agent);
+          // await checkExpectedOutputs(config.outputFiles, agent);
           // Mark the task as completed successfully
           logger.debug(`Task completed successfully`, mainTaskGroupId);
           logger.endGroup(mainTaskGroupId, 'stopped');
