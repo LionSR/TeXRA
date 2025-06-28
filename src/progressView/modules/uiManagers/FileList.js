@@ -35,7 +35,7 @@ export class FileList {
    * Update the generated files list
    * @param {Object} filesByRound - Files organized by round
    */
-  update(filesByRound) {
+  update(filesByRound, missingOutputs = {}) {
     const container = document.getElementById('generatedFiles');
     if (!container) return;
 
@@ -92,6 +92,25 @@ export class FileList {
       roundHeader.className = 'round-header';
       roundHeader.textContent = `r${round}`;
       roundGroup.appendChild(roundHeader);
+
+      const missingPath = missingOutputs[round];
+      if (missingPath) {
+        const warn = document.createElement('div');
+        warn.className = 'missing-output-warning';
+        warn.innerHTML =
+          '<i class="codicon codicon-warning"></i> Expected output missing';
+        const btn = document.createElement('button');
+        btn.className = 'vscode-button';
+        btn.textContent = 'Open XML';
+        btn.onclick = () => {
+          vscode.postMessage({
+            command: COMMANDS.OPEN_FILE,
+            file: missingPath,
+          });
+        };
+        warn.appendChild(btn);
+        roundGroup.appendChild(warn);
+      }
 
       files.forEach((file) => {
         // Skip invalid file entries

@@ -261,6 +261,19 @@
   border-radius: var(--border-radius-small);
 }
 
+.missing-output-warning {
+  padding: var(--spacing-small);
+  background-color: var(
+    --vscode-inputValidation-warningBackground,
+    rgba(255, 200, 0, 0.2)
+  );
+  color: var(--vscode-inputValidation-warningForeground);
+  margin-bottom: var(--spacing-small);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-small);
+}
+
 .added {
   color: var(--vscode-charts-green, green);
   margin-left: var(--spacing-small);

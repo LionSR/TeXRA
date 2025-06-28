@@ -63,3 +63,7 @@ This scrollable area displays the detailed, timestamped logs for the selected ag
 Understanding the log content is key to diagnosing problems and seeing how TeXRA and the AI models process your requests. Refer to the [Troubleshooting](../reference/troubleshooting.md) guide for more tips on using logs.
 
 At the bottom of the tab list, there is a "Delete All" button (<i class="codicon codicon-close-all"></i>) that allows you to clear all streams and their associated logs from the ProgressBoard view.
+
+### Generated Files
+
+When a round generates `.tex` output, the files appear under a header like `r0` or `r1`. If an expected file is missing, the round section shows a yellow warning with an **Open XML** button. Clicking the button opens the XML file so you can inspect tag issues that prevented generation.

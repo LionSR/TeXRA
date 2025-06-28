@@ -11,6 +11,7 @@ export type ProgressEvent =
   | 'setActiveStream'
   | 'updateStreamStatus'
   | 'addOutputFiles'
+  | 'addMissingOutput'
   | 'clearOutputFiles'
   | 'setTaskState'
   | 'updateGroupUsage'

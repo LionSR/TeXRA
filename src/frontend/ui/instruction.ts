@@ -7,6 +7,7 @@ import * as path from 'path';
 // Local imports
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
 import { INSTRUCTION_PREFIX, globalSM } from '@utils/stateManager';
+import { emitProgress } from '@eventBus/ProgressEventBus';
 
 /**
  * Show an instruction message that can be permanently dismissed.
@@ -51,12 +52,13 @@ export async function checkExpectedOutputs(
   expectedFiles: string[] | null | undefined,
   context: vscode.ExtensionContext,
   agent?: unknown,
+  streamId?: string,
 ): Promise<void> {
   if (!expectedFiles || expectedFiles.length === 0) {
     return;
   }
 
-  for (const file of expectedFiles) {
+  for (const [idx, file] of expectedFiles.entries()) {
     const exists = path.isAbsolute(file)
       ? await AbsoluteFS.exists(file)
       : await WorkspaceFS.exists(file);
@@ -122,6 +124,15 @@ export async function checkExpectedOutputs(
         ],
         false,
       );
+      if (streamId && xmlPath) {
+        const match = /_r(\d+)/.exec(file) || /_r(\d+)/.exec(xmlPath);
+        const round = match ? parseInt(match[1], 10) : idx;
+        emitProgress('addMissingOutput', {
+          stream: streamId,
+          round,
+          xmlPath,
+        });
+      }
       break;
     }
   }

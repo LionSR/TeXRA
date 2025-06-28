@@ -125,7 +125,7 @@ const handlers = {
 
   [COMMANDS.UPDATE_FILES]: (message) => {
     if (message.stream === state.getCurrentStream()) {
-      dom.fileList.update(message.files);
+      dom.fileList.update(message.files, message.missingOutputs);
     }
   },
 
