@@ -72,13 +72,13 @@ export class ValidationFixAgent<T extends ValidatorType>
         ? ['text_editor', 'diagnostics']
         : ['text_editor'];
     let configured: string[] = defaultTools;
-      if (Array.isArray(settings.tools) && settings.tools.length > 0) {
-        if (typeof settings.tools[0] === 'string') {
-          configured = settings.tools as unknown as string[];
-        } else {
-          configured = (settings.tools as ToolDefinition[]).map((t) => t.name);
-        }
+    if (Array.isArray(settings.tools) && settings.tools.length > 0) {
+      if (typeof settings.tools[0] === 'string') {
+        configured = settings.tools as unknown as string[];
+      } else {
+        configured = (settings.tools as ToolDefinition[]).map((t) => t.name);
       }
+    }
     this.setConfiguredTools(configured);
   }
 
