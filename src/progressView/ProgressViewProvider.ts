@@ -107,6 +107,13 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
         ),
       ),
       new vscode.Disposable(
+        onProgress(
+          'addMissingOutput',
+          (p: { stream: string; round: number; xmlPath: string }) =>
+            this.addMissingOutput(p.stream, p.round, p.xmlPath),
+        ),
+      ),
+      new vscode.Disposable(
         onProgress('clearOutputFiles', (stream: string) =>
           this.clearOutputFiles(stream),
         ),
@@ -319,6 +326,15 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       command: COMMANDS.UPDATE_FILES,
       stream: this._stateManager.activeStream,
       files,
+    });
+
+    const missing =
+      this._stateManager.missingOutputs.get(this._stateManager.activeStream) ||
+      new Map();
+    this._view.webview.postMessage({
+      command: COMMANDS.UPDATE_MISSING_OUTPUTS,
+      stream: this._stateManager.activeStream,
+      missing: Object.fromEntries(missing.entries()),
     });
 
     const usage = this._stateManager.usageStats.get(
@@ -566,6 +582,13 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       stream: stream,
       files,
     });
+
+    const missing = this._stateManager.missingOutputs.get(stream) || new Map();
+    this._view.webview.postMessage({
+      command: COMMANDS.UPDATE_MISSING_OUTPUTS,
+      stream,
+      missing: Object.fromEntries(missing.entries()),
+    });
   }
 
   public getLogStreams(): Map<string, LogMessageData[]> {
@@ -655,21 +678,49 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     }
   }
 
+  public addMissingOutput(
+    stream: string,
+    round: number,
+    xmlPath: string,
+  ): void {
+    const existing = this._stateManager.missingOutputs.get(stream) || new Map();
+    existing.set(round, xmlPath);
+    this._stateManager.missingOutputs.set(stream, existing);
+    this._stateManager.saveState();
+    if (this._view && stream === this._stateManager.activeStream) {
+      this._view.webview.postMessage({
+        command: COMMANDS.UPDATE_MISSING_OUTPUTS,
+        stream,
+        missing: Object.fromEntries(existing.entries()),
+      });
+    }
+  }
+
   public getOutputFiles(
     stream: string,
   ): { [key: number]: OutputFileInfo[] } | undefined {
     return this._stateManager.outputFiles.get(stream);
   }
 
+  public getMissingOutputs(stream: string): Map<number, string> | undefined {
+    return this._stateManager.missingOutputs.get(stream);
+  }
+
   public clearOutputFiles(stream: string): void {
     if (this._stateManager.outputFiles.has(stream)) {
       this._stateManager.outputFiles.delete(stream);
+      this._stateManager.missingOutputs.delete(stream);
       this._stateManager.saveState();
       if (this._view && stream === this._stateManager.activeStream) {
         this._view.webview.postMessage({
           command: COMMANDS.UPDATE_FILES,
           stream,
           files: {},
+        });
+        this._view.webview.postMessage({
+          command: COMMANDS.UPDATE_MISSING_OUTPUTS,
+          stream,
+          missing: {},
         });
       }
     }

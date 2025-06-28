@@ -9,6 +9,8 @@ import { vscode } from '@common/webviewContext.js';
 export class FileList {
   constructor(usageSummary = null) {
     this.usageSummary = usageSummary;
+    this.missingOutputs = {};
+    this.currentFiles = {};
   }
   /**
    * Get the effective base file for comparison operations.
@@ -36,6 +38,7 @@ export class FileList {
    * @param {Object} filesByRound - Files organized by round
    */
   update(filesByRound) {
+    this.currentFiles = filesByRound || {};
     const container = document.getElementById('generatedFiles');
     if (!container) return;
 
@@ -92,6 +95,24 @@ export class FileList {
       roundHeader.className = 'round-header';
       roundHeader.textContent = `r${round}`;
       roundGroup.appendChild(roundHeader);
+
+      const missingPath = this.missingOutputs[round];
+      if (missingPath) {
+        const warn = document.createElement('div');
+        warn.className = 'missing-output-warning';
+        warn.innerHTML = `<i class="codicon codicon-warning"></i> Missing output`;
+        const btn = document.createElement('button');
+        btn.className = 'vscode-button';
+        btn.textContent = 'Open XML';
+        btn.onclick = () => {
+          vscode.postMessage({
+            command: COMMANDS.OPEN_FILE,
+            file: missingPath,
+          });
+        };
+        warn.appendChild(btn);
+        roundGroup.appendChild(warn);
+      }
 
       files.forEach((file) => {
         // Skip invalid file entries
@@ -252,5 +273,14 @@ export class FileList {
         });
       };
     }
+  }
+
+  /**
+   * Update missing output mapping and refresh list
+   * @param {Object} missingByRound
+   */
+  updateMissingOutputs(missingByRound) {
+    this.missingOutputs = missingByRound || {};
+    this.update(this.currentFiles);
   }
 }

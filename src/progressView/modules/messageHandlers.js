@@ -129,6 +129,12 @@ const handlers = {
     }
   },
 
+  [COMMANDS.UPDATE_MISSING_OUTPUTS]: (message) => {
+    if (message.stream === state.getCurrentStream()) {
+      dom.fileList.updateMissingOutputs(message.missing);
+    }
+  },
+
   [COMMANDS.DELETE_STREAM]: (message) => {
     if (message.stream) {
       state.streamStatuses.delete(message.stream);

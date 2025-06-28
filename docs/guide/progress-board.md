@@ -63,3 +63,7 @@ This scrollable area displays the detailed, timestamped logs for the selected ag
 Understanding the log content is key to diagnosing problems and seeing how TeXRA and the AI models process your requests. Refer to the [Troubleshooting](../reference/troubleshooting.md) guide for more tips on using logs.
 
 At the bottom of the tab list, there is a "Delete All" button (<i class="codicon codicon-close-all"></i>) that allows you to clear all streams and their associated logs from the ProgressBoard view.
+
+### Generated Files
+
+Below the log output, each round shows the files produced by the agent. If an expected file was not created, a warning appears for that round with a button to open the corresponding XML source. Inspect the XML to fix tag issues and re-run the agent.

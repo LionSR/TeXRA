@@ -311,3 +311,20 @@
     margin-left: auto;
   }
 }
+
+/* Warning for missing outputs */
+.missing-output-warning {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-small);
+  padding: var(--spacing-tiny) var(--spacing-small);
+  margin-bottom: var(--spacing-small);
+  color: var(--vscode-inputValidation-warningForeground, #cca700);
+  background-color: var(
+    --vscode-inputValidation-warningBackground,
+    transparent
+  );
+  border: 1px solid var(--vscode-inputValidation-warningBorder, transparent);
+  border-radius: var(--border-radius-small);
+  font-size: var(--font-size-sm);
+}
