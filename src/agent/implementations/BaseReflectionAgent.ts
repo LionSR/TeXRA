@@ -540,8 +540,10 @@ export abstract class BaseReflectionAgent extends BaseAgent {
 
       const extraMedia: string[] = [];
       if (this.modelHandler.capabilities.supportsVision) {
-        if (this.agentConfig.mediaFile &&
-          !toolState.mediaFiles.includes(this.agentConfig.mediaFile)) {
+        if (
+          this.agentConfig.mediaFile &&
+          !toolState.mediaFiles.includes(this.agentConfig.mediaFile)
+        ) {
           extraMedia.push(this.agentConfig.mediaFile);
         }
         if (this.agentConfig.mediaFiles) {
