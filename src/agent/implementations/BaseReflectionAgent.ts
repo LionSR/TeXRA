@@ -17,15 +17,8 @@ import {
 
 import { emitProgress } from '@eventBus/ProgressEventBus';
 
-import { diff_match_patch } from 'diff-match-patch';
-import type { DiffStats } from '@/types/DiffTypes';
-
 // Local imports - utilities
-import {
-  WorkspaceFS,
-  createFileMapping,
-  replaceInputCommands,
-} from '@utils/files';
+import { WorkspaceFS } from '@utils/files';
 import {
   renderPrompt,
   getFirstKCharsFromDocument,
@@ -59,7 +52,6 @@ import { MESSAGE_TYPES } from '@logger/messageTypes';
 
 // System imports - common utilities
 import { getConfig } from '@utils/config';
-import { getEffectiveBaseFile } from '@utils/files/baseFileUtils';
 
 // Shared constants
 import { K_SLICE, REPETITION_DETECTION_THRESHOLD } from '@utils/config';
@@ -426,51 +418,6 @@ export abstract class BaseReflectionAgent extends BaseAgent {
     }
   }
 
-  // Helper function to consistently count lines in text
-  private countLines(text: string): number {
-    if (text.length === 0) return 0;
-    // Handle trailing newlines consistently: subtract 1 if text ends with newline
-    return text.endsWith('\n')
-      ? text.split('\n').length - 1
-      : text.split('\n').length;
-  }
-
-  private async computeDiffStats(
-    baseFile: string | null,
-    outputFile: string,
-  ): Promise<DiffStats> {
-    try {
-      if (!baseFile) {
-        const outContent = await WorkspaceFS.readFile(outputFile);
-        const added = this.countLines(outContent);
-        // For new files, only return added count (removed should be undefined for UI)
-        return { added };
-      }
-
-      const [baseContent, outContent] = await Promise.all([
-        WorkspaceFS.readFile(baseFile),
-        WorkspaceFS.readFile(outputFile),
-      ]);
-
-      const dmp = new diff_match_patch();
-      const diffs = dmp.diff_main(baseContent, outContent);
-      let added = 0;
-      let removed = 0;
-
-      for (const [op, text] of diffs) {
-        if (op === 1) {
-          added += this.countLines(text);
-        } else if (op === -1) {
-          removed += this.countLines(text);
-        }
-      }
-
-      return { added, removed };
-    } catch {
-      return {};
-    }
-  }
-
   /**
    * Processes completion of conversation round.
    */
@@ -503,51 +450,7 @@ export abstract class BaseReflectionAgent extends BaseAgent {
       throw error;
     }
 
-    const roundOutputs = this.outputHandler.outputFiles[currRound] || [];
-
-    // Map output files to their original base files
-    const baseMap = createFileMapping(this.baseFiles, roundOutputs, 'contains');
-
-    // Map output files to previous round files if available
-    const prevMap =
-      currRound > 0
-        ? createFileMapping(
-            this.outputHandler.outputFiles[currRound - 1] || [],
-            roundOutputs,
-            'basename',
-            true,
-          )
-        : new Map<string, string>();
-
-    const fileInfos = [] as any[];
-    const originMap = new Map(
-      (this.outputHandler.outputMappings[currRound] || []).map((p) => [
-        p.path,
-        p.source,
-      ]),
-    );
-    for (const file of roundOutputs) {
-      const baseFile =
-        Array.from(baseMap.entries()).find(([, out]) => out === file)?.[0] ||
-        null;
-      const prevFile =
-        Array.from(prevMap.entries()).find(([, out]) => out === file)?.[0] ||
-        null;
-      const originalFile = originMap.get(file) || null;
-
-      // Use utility to determine effective base for diff computation
-      const diffBase = getEffectiveBaseFile(baseFile, originalFile, file);
-      const stats = await this.computeDiffStats(diffBase, file);
-
-      fileInfos.push({
-        path: file,
-        base: baseFile,
-        prev: prevFile,
-        original: originalFile,
-        ...stats,
-      });
-    }
-
+    const fileInfos = await this.outputHandler.gatherOutputFileInfo(currRound);
     emitProgress('addOutputFiles', {
       stream: this.logger.channelId,
       filesByRound: { [currRound]: fileInfos },
@@ -1082,113 +985,4 @@ export abstract class BaseReflectionAgent extends BaseAgent {
    * @param currRound Current round number
    * @param processGroupId Optional process group ID for logging
    */
-  protected async processOutputFiles(
-    outputFile: string,
-    currRound: number,
-    processGroupId?: string,
-  ): Promise<void> {
-    // Use provided process group ID or get the active group ID for proper nesting
-    const activeGroupId = processGroupId || this.logger.getActiveGroupId();
-
-    if (
-      Array.isArray(this.agentConfig.outputFiles) &&
-      this.agentConfig.outputFiles.length > 0
-    ) {
-      // Multiple output files case
-      this.logger.debug(
-        `Processing multiple outputs for ${outputFile}; outputFiles: ${this.agentConfig.outputFiles}`,
-        activeGroupId,
-      );
-
-      // if the agentType is CoT, we need to process the output files
-      // Then I realize that in fact it does not make sense to have multiple output files
-      // while to extract it from a single tex file. So in this case, we really need to
-      // use XML and use XML splitting to get the output files.
-      // Which would be different than the single output file case below.
-
-      try {
-        const processedPairs =
-          await this.outputHandler.processMultipleXmlOutputs(outputFile);
-
-        if (processedPairs && processedPairs.length > 0) {
-          const processedFiles = processedPairs.map((p) => p.path);
-          await this.outputHandler.indentLatexFiles(processedFiles);
-          this.logger.debug(
-            `Indented multiple output files: ${processedFiles.join(',')}`,
-            activeGroupId,
-          );
-
-          this.outputHandler.outputFiles[currRound] = processedFiles;
-          this.outputHandler.outputMappings[currRound] = processedPairs;
-
-          // Only attempt to replace input commands if we have valid base files
-          if (this.baseFiles && this.baseFiles.length > 0) {
-            await replaceInputCommands(
-              this.baseFiles,
-              processedFiles,
-              this.logger,
-            );
-          }
-        } else {
-          this.logger.warn(
-            `No processed files were generated from ${outputFile}`,
-            activeGroupId,
-          );
-          this.outputHandler.outputFiles[currRound] = [];
-          this.outputHandler.outputMappings[currRound] = [];
-        }
-      } catch (err) {
-        this.logger.error(
-          `Error processing output files: ${err instanceof Error ? err.message : String(err)}`,
-          activeGroupId,
-        );
-        // Ensure we have an empty array at minimum to prevent undefined errors
-        this.outputHandler.outputFiles[currRound] = [];
-        this.outputHandler.outputMappings[currRound] = [];
-      }
-    } else {
-      // Single output file case
-      this.logger.debug(
-        `Processing single output for ${outputFile}`,
-        activeGroupId,
-      );
-
-      try {
-        let processed: NamedOutputFile = {
-          source: outputFile,
-          path: outputFile,
-        };
-        if (this.agentSetting.agentType === AgentType.CoT) {
-          processed =
-            await this.outputHandler.processSingleXmlOutput(outputFile);
-        }
-
-        if (processed && processed.path) {
-          // Process output file - indent LaTeX file directly
-          await this.outputHandler.indentLatexFile(processed.path);
-          this.logger.debug(
-            `Indented single output file: ${processed.path}`,
-            activeGroupId,
-          );
-
-          this.outputHandler.outputFiles[currRound] = [processed.path];
-          this.outputHandler.outputMappings[currRound] = [processed];
-        } else {
-          this.logger.warn(
-            `No processed file was generated from ${outputFile}`,
-            activeGroupId,
-          );
-          this.outputHandler.outputFiles[currRound] = [];
-          this.outputHandler.outputMappings[currRound] = [];
-        }
-      } catch (err) {
-        this.logger.error(
-          `Error processing output file: ${err instanceof Error ? err.message : String(err)}`,
-          activeGroupId,
-        );
-        this.outputHandler.outputFiles[currRound] = [];
-        this.outputHandler.outputMappings[currRound] = [];
-      }
-    }
-  }
 }

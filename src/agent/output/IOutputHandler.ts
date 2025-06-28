@@ -1,6 +1,6 @@
 // Local imports - types
 import { AgentStateGlobal } from '@agent/core/AgentState';
-import { NamedOutputFile } from './types';
+import { NamedOutputFile, OutputFileInfo } from './types';
 
 /** Interface describing OutputHandler behavior used by agents. */
 export interface IOutputHandler {
@@ -39,4 +39,14 @@ export interface IOutputHandler {
     stateGlobal: AgentStateGlobal,
     groupId?: string,
   ): Promise<void>;
+
+  /** Process output files from XML or direct input. */
+  processOutputFiles(
+    outputFile: string,
+    currRound: number,
+    groupId?: string,
+  ): Promise<void>;
+
+  /** Gather mapping and diff stats for output files of a round. */
+  gatherOutputFileInfo(currRound: number): Promise<OutputFileInfo[]>;
 }
