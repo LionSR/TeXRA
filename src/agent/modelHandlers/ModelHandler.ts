@@ -34,6 +34,9 @@ import type { ToolDefinition } from '@model';
 import { ToolState } from '../core/ToolState';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 
+// Local imports - input status collection
+import { getInputStatusCollector } from '@agent/utils/InputStatusCollector';
+
 // Default continuation limits
 const DEFAULT_CONTINUE_LIMIT = 10;
 
@@ -497,6 +500,11 @@ export abstract class ModelHandler<U = any, R = any>
       }
     }
 
+    // Record media files using deep module interface
+    if (addedMedia.length > 0) {
+      getInputStatusCollector().recordMediaFiles(addedMedia);
+    }
+
     if (mediaFiles.length > 0) {
       this.logger.debug(`Trying to load media: ${mediaFiles}`);
 
@@ -506,7 +514,7 @@ export abstract class ModelHandler<U = any, R = any>
           // TODO: we should just show the files that were not loaded.
         );
       } else {
-        // Show simplified paths in logs
+        // Show simplified paths in logs - keep existing log messages for backward compatibility
         const simplifiedMedia = addedMedia.map((m) =>
           getPastedImageDisplayName(m),
         );

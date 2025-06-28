@@ -45,6 +45,17 @@ export const COMMANDS = {
   MERGE_FILE: 'mergeFile',
   LATEXDIFF_FILE: 'latexdiffFile',
   WEBVIEW_READY: 'webviewReady',
+  UPDATE_INPUT_STATUS: 'updateInputStatus',
+  OPEN_INPUT_FILE: 'openInputFile',
+};
+
+// Input status specific constants
+export const INPUT_STATUS = {
+  TYPES: {
+    REQUIRED: 'required',
+    MEDIA: 'media',
+  },
+  MESSAGE_TYPE: 'inputStatus',
 };
 
 export const TOOLBAR_BUTTONS = [

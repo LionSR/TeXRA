@@ -4,7 +4,8 @@ import markedKatex from 'marked-katex-extension';
 // Local imports
 import { katexMacros } from './katexMacros.js';
 import { CHEVRON_DOWN_CLASS } from '@common/webviewContext.js';
-import { STATUS } from './constants.js';
+import { STATUS, INPUT_STATUS } from './constants.js';
+import { inputStatusManager } from './uiManagers/InputStatusManager.js';
 
 // Constants
 export const BULLET_MARKUP =
@@ -119,6 +120,11 @@ export class LogEntryFormatter {
     const { id, text, level, timestamp, groupId, messageType, verbose } =
       logMessage;
 
+    // Handle input status messages with specialized formatting
+    if (messageType === INPUT_STATUS.MESSAGE_TYPE) {
+      return this._formatInputStatusMessage(logMessage);
+    }
+
     const emoji = EMOJI_BY_LEVEL[level] || '•';
     const date = new Date(timestamp);
     const timeDisplay = date
@@ -142,12 +148,34 @@ export class LogEntryFormatter {
       levelMarkup +
       `<span class="message-${level}">${text}</span>` +
       `</div>`;
+
+    // Handle other special message types
     if (messageType === 'thinking' || messageType === 'scratchpad') {
       const label = messageType === 'thinking' ? 'Thinking' : 'Scratchpad';
       return this._formatSpecialContent(htmlMessage, text, label, id);
     }
 
     return htmlMessage;
+  }
+
+  _formatInputStatusMessage(logMessage) {
+    const { text, level, timestamp, id } = logMessage;
+
+    // Delegate to manager for clickable paths
+    const processedText = inputStatusManager.makePathsClickable(text);
+
+    // Use specialized styling for input status
+    const emoji = level === 'warn' ? '🟡' : '🟢';
+    const fullTimestamp = new Date(timestamp).toISOString();
+
+    const prefix = `<div class="log-line input-status-line" data-log-id="${id}" data-full-timestamp="${fullTimestamp}">`;
+
+    return (
+      prefix +
+      `<span class="timestamp" title="${fullTimestamp}">${emoji}</span> ` +
+      `<span class="message-${level} input-status-message">${processedText}</span>` +
+      `</div>`
+    );
   }
 
   _unescapeHtml(text) {

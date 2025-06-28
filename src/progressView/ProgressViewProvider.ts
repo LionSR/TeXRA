@@ -16,9 +16,16 @@ import { TaskGroup } from '../logger/LogTypes';
 import type { DiffStats } from '../types/DiffTypes';
 import { randomUUID } from 'crypto';
 import { onProgress } from '@eventBus/ProgressEventBus';
+import type { InputStatusPayload } from '@eventBus/ProgressEventBus';
 
 // @ts-ignore - Import JavaScript module
 import { STATUS, COMMANDS } from './modules/constants.js';
+
+// @ts-ignore - Import JavaScript module
+import { inputStatusManager } from './modules/uiManagers/InputStatusManager.js';
+
+// Local imports - utilities
+import { logErrorMessage } from '@utils/errorHandlingUtils';
 
 // Type aliases for status values
 type StatusType =
@@ -86,6 +93,10 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
    */
   public async initialize(): Promise<void> {
     await this._stateManager.loadState();
+
+    // Initialize input status manager
+    inputStatusManager.initialize();
+
     this._disposables.push(
       new vscode.Disposable(
         onProgress('setActiveStream', (stream: string) =>
@@ -183,6 +194,12 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
             status: StatusType;
             endTime?: number;
           }) => this.updateLogGroup(p.stream, p.groupId, p.status, p.endTime),
+        ),
+      ),
+      // NEW: Handle input status updates using manager
+      new vscode.Disposable(
+        onProgress('updateInputStatus', (payload: InputStatusPayload) =>
+          this.handleInputStatus(payload),
         ),
       ),
     );
@@ -895,5 +912,19 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
    */
   public isViewVisible(): boolean {
     return !!this._view && this._view.visible;
+  }
+
+  private handleInputStatus(payload: InputStatusPayload): void {
+    try {
+      // Delegate to manager - simple interface hides complexity
+      const logMessage = inputStatusManager.processUpdate(payload);
+      this.addLogMessage(payload.stream, logMessage);
+    } catch (error) {
+      logErrorMessage(
+        'ProgressViewProvider',
+        'Failed to process input status',
+        error,
+      );
+    }
   }
 }

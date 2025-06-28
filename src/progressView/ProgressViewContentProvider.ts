@@ -61,6 +61,17 @@ export class ProgressViewContentProvider {
       const domUtilsUri = getCommonUri('modules/domUtils.js');
       const stringUtilsUri = getCommonUri('modules/stringUtils.js');
 
+      // Input status module paths
+      const inputStatusManagerUri = getWebviewUri(
+        'modules/uiManagers/InputStatusManager.js',
+      );
+      const inputStatusFormatterUri = getWebviewUri(
+        'modules/uiManagers/InputStatusFormatter.js',
+      );
+      const inputStatusInteractionHandlerUri = getWebviewUri(
+        'modules/uiManagers/InputStatusInteractionHandler.js',
+      );
+
       const codiconUri = getNodeModulesUri('@vscode/codicons/dist/codicon.css');
       const codiconsFontUri = getNodeModulesUri(
         '@vscode/codicons/dist/codicon.ttf',
@@ -92,6 +103,9 @@ export class ProgressViewContentProvider {
         statusUri,
         fileListUri,
         eventsUri,
+        inputStatusManagerUri,
+        inputStatusFormatterUri,
+        inputStatusInteractionHandlerUri,
       });
     } catch (err) {
       logger.error(

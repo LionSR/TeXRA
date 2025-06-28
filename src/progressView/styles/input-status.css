@@ -1,0 +1,44 @@
+/**
+ * Input Status styles for ProgressView
+ * Styling for file loading status messages and clickable file paths
+ */
+
+/* Input status message styling following established patterns */
+.input-status-line {
+  border-left: 3px solid var(--vscode-charts-blue);
+  padding-left: var(--spacing-small);
+  margin: calc(var(--spacing-tiny) / 2) 0;
+  background-color: rgba(var(--vscode-charts-blue-rgb), 0.05);
+}
+
+.input-status-message {
+  font-family: var(--vscode-editor-font-family);
+  white-space: pre-line;
+}
+
+.clickable-file-path {
+  color: var(--vscode-textLink-foreground);
+  cursor: pointer;
+  text-decoration: none;
+  font-family: var(--vscode-editor-font-family);
+  border-bottom: 1px dotted var(--vscode-textLink-foreground);
+  padding: 1px 2px;
+  border-radius: 2px;
+}
+
+.clickable-file-path:hover {
+  color: var(--vscode-textLink-activeForeground);
+  background-color: rgba(var(--vscode-textLink-activeForeground-rgb), 0.1);
+  border-bottom-style: solid;
+}
+
+.round-indicator {
+  background: var(--vscode-badge-background);
+  color: var(--vscode-badge-foreground);
+  padding: 1px 4px;
+  border-radius: 2px;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  margin-right: var(--spacing-tiny);
+  font-family: var(--vscode-font-family);
+}

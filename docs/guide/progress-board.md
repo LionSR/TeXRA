@@ -63,3 +63,94 @@ This scrollable area displays the detailed, timestamped logs for the selected ag
 Understanding the log content is key to diagnosing problems and seeing how TeXRA and the AI models process your requests. Refer to the [Troubleshooting](../reference/troubleshooting.md) guide for more tips on using logs.
 
 At the bottom of the tab list, there is a "Delete All" button (<i class="codicon codicon-close-all"></i>) that allows you to clear all streams and their associated logs from the ProgressBoard view.
+
+## Features
+
+### Stream Management
+- **Multiple Streams**: Monitor multiple concurrent agent executions
+- **Stream Switching**: Click between different agent streams  
+- **Stream Controls**: Stop, re-run, diff, pack, clean, and delete operations
+
+### Structured Logging
+- **Hierarchical Groups**: Nested log groups for different execution phases
+- **Message Types**: Differentiated styling for info, warning, error, debug messages
+- **Special Content**: Formatted thinking blocks and scratchpad content
+- **Timestamps**: Detailed timing information for all operations
+
+### File Loading Status (NEW)
+The Progress Board now displays structured file loading information chronologically as special log messages:
+
+#### Required Files
+Shows the status of required files loaded via `setVarFromFile`:
+```
+[r0] Required Files: ✓ 2 found, ⚠ 1 missing
+    Found: lecture.cls, command.tex
+    Missing: missing_file.tex
+```
+
+#### Media Files  
+Displays media files loaded for vision-enabled models:
+```
+[r0] Added Media: 3 files
+    Fig1.pdf, Fig8.pdf, illustration.png
+```
+
+#### Features
+- **Chronological Display**: Files appear exactly when loaded during execution
+- **Round Separation**: Each round (r0, r1) shows separate file loading events
+- **Clickable Files**: Click on file paths to open them in VS Code
+- **Status Indicators**: Clear visual indicators for found/missing files
+- **Round Indicators**: [r0], [r1] badges show which execution round loaded the files
+
+#### File Types Supported
+- **Required Files**: LaTeX documents, style files, bibliographies
+- **Media Files**: PDFs, images (PNG, JPG, etc.) for vision models
+- **Workspace Files**: Clickable workspace-relative paths
+- **Absolute Files**: System paths (not clickable for security)
+
+### Output File Management
+- **Generated Files**: Track all files created by agents
+- **File Actions**: Open, compare, accept, merge, and diff operations
+- **Latexdiff Integration**: Visual comparison between file versions
+- **Round Tracking**: Separate file lists for each execution round
+
+### Performance Monitoring
+- **Token Usage**: Real-time tracking of input/output tokens and costs
+- **Response Times**: Monitor model response latency
+- **Resource Usage**: Cache usage and API consumption metrics
+- **Group Statistics**: Aggregated statistics for log groups
+
+### Interactive Controls
+- **File Operations**: Click to open, compare, or process generated files
+- **Stream Actions**: Toolbar buttons for common stream operations
+- **State Management**: Restore previous execution states
+- **Export Functions**: Pack and clean operations for file management
+
+## Usage
+
+### Basic Monitoring
+1. **Start an Agent**: Execute any agent to create a new stream
+2. **Monitor Progress**: Watch real-time logs and file loading status
+3. **Review Files**: Click on file paths to open them in VS Code
+4. **Track Status**: Monitor execution status and resource usage
+
+### File Loading Insights
+- **Required File Issues**: Quickly identify missing dependencies
+- **Media Loading**: Verify which figures/images are processed
+- **Round Progression**: See how file loading differs between rounds
+- **Debugging**: Use file status to troubleshoot execution issues
+
+### Advanced Operations
+- **Stream Comparison**: Use diff operations to compare streams
+- **State Restoration**: Resume interrupted or modified executions  
+- **Bulk Operations**: Pack or clean multiple files at once
+- **History Access**: Review previous execution logs and states
+
+The Progress Board provides comprehensive visibility into agent execution, making it easier to debug issues, track progress, and manage the generated files.
+
+## Configuration
+
+Progress Board behavior can be customized through VS Code settings:
+- **Debug Mode**: Enable detailed logging for troubleshooting
+- **Auto-focus**: Control when the Progress Board gains focus
+- **File Limits**: Configure maximum files displayed per stream

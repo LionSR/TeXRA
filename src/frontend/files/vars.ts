@@ -4,6 +4,9 @@ import { WorkspaceFS, AbsoluteFS } from '@utils/files';
 // Local imports - log
 import { AgentLogger } from '@logger/AgentLogger';
 
+// Local imports - input status collection
+import { getInputStatusCollector } from '@agent/utils/InputStatusCollector';
+
 /**
  * Reads a file and populates user variable fields with its path and content.
  * Logs informative messages on success or warnings on failure.
@@ -28,11 +31,29 @@ export async function setVarFromFile(
     const fileContent = absolute
       ? await AbsoluteFS.read(filePath)
       : await WorkspaceFS.readFile(filePath);
+
     userVars[`${varName}_FILE`] = filePath;
     userVars[`${varName}_CONTENT`] = fileContent;
+
+    // Record successful file loading
+    getInputStatusCollector().recordRequiredFile(
+      filePath,
+      varName,
+      true,
+      absolute,
+    );
+
     logger.info(`[${source}] Found [VAR '${varName}']: ${filePath}`);
     return true;
   } catch (err) {
+    // Record failed file loading
+    getInputStatusCollector().recordRequiredFile(
+      filePath,
+      varName,
+      false,
+      absolute,
+    );
+
     logger.warn(`[${source}] [VAR '${varName}'] not found: ${filePath}`);
     return false;
   }

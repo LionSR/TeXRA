@@ -10,6 +10,11 @@ import { taskStateToAgentConfig } from '@utils/config';
 // @ts-ignore - Import JavaScript module
 import { COMMANDS } from './modules/constants.js';
 
+// Local imports - utils
+import { safeExecuteCommand } from '@utils/system/commandUtils';
+import { logErrorMessage } from '@utils/errorHandlingUtils';
+import { WorkspaceFS } from '@utils/files';
+
 const CHANNEL = 'MessageHandler';
 
 export class ProgressViewMessageHandler {
@@ -68,6 +73,7 @@ export class ProgressViewMessageHandler {
           m.base,
           m.file,
         ),
+      [COMMANDS.OPEN_INPUT_FILE]: (m) => this.handleOpenInputFile(m, null),
     };
   }
 
@@ -190,5 +196,30 @@ export class ProgressViewMessageHandler {
       outputFiles: taskState.outputFiles,
       outputFilesActive: taskState.activeFiles.output,
     });
+  }
+
+  private async handleOpenInputFile(
+    message: any,
+    webviewView: vscode.WebviewView,
+  ): Promise<void> {
+    try {
+      const { file } = message;
+      if (!file) {
+        logger.warn(CHANNEL, 'No file provided for openInputFile command');
+        return;
+      }
+
+      // Open the file in VS Code
+      await safeExecuteCommand(
+        'vscode.open',
+        vscode.Uri.file(WorkspaceFS.fullPath(file)),
+      );
+    } catch (error) {
+      logErrorMessage(
+        'ProgressViewMessageHandler',
+        'Failed to open input file',
+        error,
+      );
+    }
   }
 }

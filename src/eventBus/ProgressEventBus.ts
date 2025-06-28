@@ -15,7 +15,24 @@ export type ProgressEvent =
   | 'setTaskState'
   | 'updateGroupUsage'
   | 'clearTaskOutput'
-  | 'updateStreamUsage';
+  | 'updateStreamUsage'
+  | 'updateInputStatus';
+
+// Deep module interface - hides internal complexity
+export interface InputStatusPayload {
+  stream: string;
+  timestamp: number;
+  round: number; // r0, r1, etc.
+  type: 'required' | 'media';
+  files: InputFileInfo[];
+}
+
+export interface InputFileInfo {
+  path: string;
+  varName?: string; // For required files only
+  found: boolean;
+  isClickable: boolean; // Whether file can be opened in VS Code
+}
 
 class ProgressEventBus {
   private emitter = new EventEmitter();

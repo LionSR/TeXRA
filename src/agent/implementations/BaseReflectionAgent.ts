@@ -1,8 +1,8 @@
 // Standard library imports
-// (none needed)
+import * as path from 'path';
 
 // Third-party imports
-// (none needed)
+import * as vscode from 'vscode';
 
 // Local imports - log
 
@@ -52,6 +52,9 @@ import { getConfig } from '@utils/config';
 
 // Shared constants
 import { K_SLICE, REPETITION_DETECTION_THRESHOLD } from '@utils/config';
+
+// Local imports - input status collection
+import { getInputStatusCollector } from '@agent/utils/InputStatusCollector';
 
 /**
  * Abstract base class for agents that support multi-turn reflection and refinement.
@@ -525,6 +528,9 @@ export abstract class BaseReflectionAgent extends BaseAgent {
 
     this.logger.debug(`Processing round ${currRound}`);
 
+    // Set collector context for round 0
+    getInputStatusCollector().setContext(this.logger.channelId, currRound);
+
     // Create a dedicated group for Round 0, as a child of the main run group
     const round0GroupId = await this.logger.startGroup(
       `r${currRound}`,
@@ -698,6 +704,9 @@ export abstract class BaseReflectionAgent extends BaseAgent {
   ): Promise<[AgentStateRound, AgentStateGlobal, any[], boolean]> {
     this.logger.debug(`Processing round ${currRound}`);
 
+    // Set collector context for round 1
+    getInputStatusCollector().setContext(this.logger.channelId, currRound);
+
     // Create a dedicated group for round 1, as a child of the main run group
     const round1GroupId = await this.logger.startGroup(
       `r${currRound}`,
@@ -849,7 +858,10 @@ export abstract class BaseReflectionAgent extends BaseAgent {
       if (endTurn && this.agentConfig.outputFiles) {
         try {
           await checkExpectedOutputs(this.agentConfig.outputFiles, this);
-          this.logger.debug(`Expected outputs validated for round 0`, this.runGroupId);
+          this.logger.debug(
+            `Expected outputs validated for round 0`,
+            this.runGroupId,
+          );
         } catch (error) {
           this.logger.error(
             `Expected output validation failed after round 0: ${error instanceof Error ? error.message : String(error)}`,
@@ -873,7 +885,10 @@ export abstract class BaseReflectionAgent extends BaseAgent {
         if (this.agentConfig.outputFiles) {
           try {
             await checkExpectedOutputs(this.agentConfig.outputFiles, this);
-            this.logger.debug(`Expected outputs validated for round 1`, this.runGroupId);
+            this.logger.debug(
+              `Expected outputs validated for round 1`,
+              this.runGroupId,
+            );
           } catch (error) {
             this.logger.error(
               `Expected output validation failed after round 1: ${error instanceof Error ? error.message : String(error)}`,
