@@ -34,7 +34,7 @@ import type { ToolDefinition } from '@model';
 import { ToolState } from '../core/ToolState';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import { emitProgress } from '@eventBus/ProgressEventBus';
-import type { InputStatus } from '@types/InputStatus';
+import type { InputStatus } from '@/types/InputStatus';
 
 // Default continuation limits
 const DEFAULT_CONTINUE_LIMIT = 10;

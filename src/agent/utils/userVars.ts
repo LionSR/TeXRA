@@ -8,7 +8,7 @@ import { AgentLogger } from '@logger/AgentLogger';
 import { WorkspaceFS } from '@utils/files';
 import { setVarFromFile } from '@frontend/files/vars';
 import { emitProgress } from '@eventBus/ProgressEventBus';
-import type { InputStatus, RequiredFileStatus } from '@types/InputStatus';
+import type { InputStatus, RequiredFileStatus } from '@/types/InputStatus';
 import {
   getXmlFormatFromFiles,
   getListOfFiles,
