@@ -10,6 +10,7 @@ export enum WorkspaceStateKey {
   ACTIVE_LOG_STREAM = 'texra.activeLogStream',
   TASK_STATES = 'texra.taskStates',
   USAGE_STATS = 'texra.usageStats',
+  INPUT_STATUS = 'texra.inputStatus',
 }
 
 export enum GlobalStateKey {

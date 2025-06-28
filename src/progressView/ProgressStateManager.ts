@@ -13,6 +13,7 @@ import { AgentLogger } from '@logger/AgentLogger';
 import { TokenUsageStats } from '../types/UsageTypes';
 import { TaskGroup, LogMessageData } from '../logger/LogTypes';
 import type { DiffStats } from '../types/DiffTypes';
+import type { InputStatus } from '../types/InputStatus';
 
 interface OutputFileInfo extends DiffStats {
   path: string;
@@ -36,6 +37,7 @@ export class ProgressStateManager {
     new Map();
   private _taskStates: Map<string, TaskState> = new Map();
   private _usageStats: Map<string, TokenUsageStats> = new Map();
+  private _inputStatus: Map<string, InputStatus> = new Map();
   private _activeStream: string = '';
 
   constructor() {
@@ -61,6 +63,10 @@ export class ProgressStateManager {
 
   get usageStats(): Map<string, TokenUsageStats> {
     return this._usageStats;
+  }
+
+  get inputStatus(): Map<string, InputStatus> {
+    return this._inputStatus;
   }
 
   get activeStream(): string {
@@ -89,6 +95,7 @@ export class ProgressStateManager {
     this._loadActiveStream();
     await this._loadTaskStates();
     await this._loadUsageStats();
+    await this._loadInputStatus();
   }
 
   /**
@@ -101,6 +108,7 @@ export class ProgressStateManager {
     this._saveActiveStream();
     this._saveTaskStates();
     this._saveUsageStats();
+    this._saveInputStatus();
   }
 
   /**
@@ -341,6 +349,17 @@ export class ProgressStateManager {
     }
   }
 
+  private async _loadInputStatus(): Promise<void> {
+    const saved = workspaceSM.get<{ [key: string]: InputStatus }>(
+      this._getWorkspaceKey(WorkspaceStateKey.INPUT_STATUS),
+    );
+    if (saved) {
+      this._inputStatus = new Map(Object.entries(saved));
+    } else {
+      this._inputStatus.clear();
+    }
+  }
+
   /**
    * Save log streams to storage
    */
@@ -401,6 +420,14 @@ export class ProgressStateManager {
     workspaceSM.update(WorkspaceStateKey.USAGE_STATS, usageObj);
   }
 
+  private _saveInputStatus(): void {
+    const statusObj = Object.fromEntries(this._inputStatus.entries());
+    workspaceSM.update(
+      this._getWorkspaceKey(WorkspaceStateKey.INPUT_STATUS),
+      statusObj,
+    );
+  }
+
   /**
    * Clear all state for a specific stream
    */
@@ -410,6 +437,7 @@ export class ProgressStateManager {
     this._outputFiles.delete(stream);
     this._taskStates.delete(stream);
     this._usageStats.delete(stream);
+    this._inputStatus.delete(stream);
   }
 
   /**
@@ -421,6 +449,7 @@ export class ProgressStateManager {
     this._outputFiles.clear();
     this._taskStates.clear();
     this._usageStats.clear();
+    this._inputStatus.clear();
     this._activeStream = '';
   }
 }

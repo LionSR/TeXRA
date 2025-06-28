@@ -1,0 +1,20 @@
+.input-status {
+  padding: var(--spacing-small);
+  border-top: 1px solid var(--vscode-panel-border);
+  font-size: var(--vscode-editor-font-size);
+}
+
+.input-summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-small);
+}
+
+.input-summary .input-label {
+  font-weight: 600;
+}
+
+.input-summary .input-counts {
+  opacity: var(--opacity-subtle);
+}

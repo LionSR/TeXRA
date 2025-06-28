@@ -7,6 +7,7 @@ import { StreamTabs } from './uiManagers/StreamTabs.js';
 import { Toolbar } from './uiManagers/Toolbar.js';
 import { Status } from './uiManagers/Status.js';
 import { FileList } from './uiManagers/FileList.js';
+import { InputStatus } from './uiManagers/InputStatus.js';
 import { Events } from './uiManagers/Events.js';
 
 /**
@@ -21,6 +22,7 @@ export class ProgressViewDomHandler {
     this.usageSummary = new UsageSummary();
     this.usageGroup = new UsageGroup(this.usageSummary); // Pass shared instance
     this.fileList = new FileList(this.usageSummary); // Pass shared instance
+    this.inputStatus = new InputStatus();
     this.taskGroups = new TaskGroupsDom();
     this.logEntries = new LogEntriesDom();
     this.events = new Events();

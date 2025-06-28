@@ -20,6 +20,7 @@ import { getConfig } from '@utils/config';
 import type { ProviderStopReason } from './types/StopReasonTypes';
 import type { IModelHandler } from './types/IModelHandler';
 import { SecretManager, ApiProvider } from '@frontend/secretManager';
+import { emitProgress } from '@eventBus/ProgressEventBus';
 
 // Local imports - agent components
 import { AgentConfig } from '../core/AgentConfig';
@@ -508,6 +509,10 @@ export abstract class ModelHandler implements IModelHandler {
           getPastedImageDisplayName(m),
         );
         this.logger.info(`Added: ${simplifiedMedia}`);
+        emitProgress('updateInputStatus', {
+          stream: this.logger.channelId,
+          status: { figures: simplifiedMedia },
+        });
       }
     }
 

@@ -14,6 +14,7 @@ import { getConfig } from '@utils/config';
 import { TokenUsageStats } from '../types/UsageTypes';
 import { TaskGroup } from '../logger/LogTypes';
 import type { DiffStats } from '../types/DiffTypes';
+import type { InputStatus } from '../types/InputStatus';
 import { randomUUID } from 'crypto';
 import { onProgress } from '@eventBus/ProgressEventBus';
 
@@ -135,6 +136,13 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
           'updateStreamUsage',
           (p: { stream: string; usage: TokenUsageStats }) =>
             this.updateStreamUsage(p.stream, p.usage),
+        ),
+      ),
+      new vscode.Disposable(
+        onProgress(
+          'updateInputStatus',
+          (p: { stream: string; status: InputStatus }) =>
+            this.updateInputStatus(p.stream, p.status),
         ),
       ),
       new vscode.Disposable(
@@ -327,6 +335,15 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     this._view.webview.postMessage({
       command: COMMANDS.UPDATE_USAGE,
       usage,
+    });
+
+    const inputStatus = this._stateManager.inputStatus.get(
+      this._stateManager.activeStream,
+    );
+    this._view.webview.postMessage({
+      command: COMMANDS.UPDATE_INPUT_STATUS,
+      stream: this._stateManager.activeStream,
+      status: inputStatus,
     });
 
     // Update status for current stream
@@ -566,6 +583,13 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       stream: stream,
       files,
     });
+
+    const inputStatus = this._stateManager.inputStatus.get(stream);
+    this._view.webview.postMessage({
+      command: COMMANDS.UPDATE_INPUT_STATUS,
+      stream,
+      status: inputStatus,
+    });
   }
 
   public getLogStreams(): Map<string, LogMessageData[]> {
@@ -682,6 +706,28 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       this._view.webview.postMessage({
         command: COMMANDS.UPDATE_USAGE,
         usage,
+      });
+    }
+  }
+
+  public updateInputStatus(stream: string, status: InputStatus): void {
+    const existing = this._stateManager.inputStatus.get(stream) || {
+      required: [],
+      figures: [],
+    };
+    const merged = {
+      required: status.required ?? existing.required,
+      figures: Array.from(
+        new Set([...(existing.figures || []), ...(status.figures || [])]),
+      ),
+    };
+    this._stateManager.inputStatus.set(stream, merged);
+    this._stateManager.saveState();
+    if (this._view && stream === this._stateManager.activeStream) {
+      this._view.webview.postMessage({
+        command: COMMANDS.UPDATE_INPUT_STATUS,
+        stream,
+        status: merged,
       });
     }
   }

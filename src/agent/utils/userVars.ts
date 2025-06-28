@@ -14,6 +14,8 @@ import {
 import { AgentConfig } from '../core/AgentConfig';
 import { AgentSetting } from '../core/AgentDataclass';
 import type { IModelHandler } from '@agent/modelHandlers';
+import type { InputStatus, RequiredFileStatus } from '../../types/InputStatus';
+import { emitProgress } from '@eventBus/ProgressEventBus';
 
 /**
  * Build all user variables needed for prompt rendering.
@@ -26,18 +28,23 @@ export async function buildUserVars(
   logger: AgentLogger,
 ): Promise<Record<string, any>> {
   const userVars: Record<string, any> = {};
+  const inputStatus: InputStatus = { required: [], figures: [] };
   Object.assign(userVars, getBasicVars(agentConfig, modelHandler));
   Object.assign(userVars, await getFileVars(agentConfig));
-  Object.assign(
-    userVars,
-    await getRequiredFileVars(agentSetting, agentPath, logger),
-  );
+  const req = await getRequiredFileVars(agentSetting, agentPath, logger);
+  Object.assign(userVars, req.vars);
+  inputStatus.required.push(...req.status);
   Object.assign(
     userVars,
     await getPatternBasedFileVars(agentConfig, agentSetting, logger),
   );
   Object.assign(userVars, getOutputFilesOrder(agentConfig, agentSetting));
   Object.assign(userVars, getToolFlags(agentConfig, agentSetting));
+
+  emitProgress('updateInputStatus', {
+    stream: logger.channelId,
+    status: inputStatus,
+  });
   return userVars;
 }
 
@@ -123,21 +130,23 @@ async function getRequiredFileVars(
   agentSetting: AgentSetting,
   agentPath: string,
   logger: AgentLogger,
-): Promise<Record<string, any>> {
+): Promise<{ vars: Record<string, any>; status: RequiredFileStatus[] }> {
   const userVars: Record<string, any> = {};
+  const status: RequiredFileStatus[] = [];
 
   if (agentSetting.requiredFiles) {
     for (const [varName, filePath] of Object.entries(
       agentSetting.requiredFiles,
     )) {
       if (filePath) {
-        await setVarFromFile(
+        const found = await setVarFromFile(
           filePath,
           varName,
           userVars,
           logger,
           'requiredFiles',
         );
+        status.push({ path: filePath, varName, found });
       }
     }
   }
@@ -147,7 +156,7 @@ async function getRequiredFileVars(
       agentSetting.requiredFilesInternal,
     )) {
       const fullPath = path.join(agentPath, filePath);
-      await setVarFromFile(
+      const found = await setVarFromFile(
         fullPath,
         varName,
         userVars,
@@ -155,10 +164,11 @@ async function getRequiredFileVars(
         'requiredFilesInternal',
         true,
       );
+      status.push({ path: fullPath, varName, found });
     }
   }
 
-  return userVars;
+  return { vars: userVars, status };
 }
 
 async function getPatternBasedFileVars(
