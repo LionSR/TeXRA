@@ -68,6 +68,8 @@ export class ProgressViewMessageHandler {
           m.base,
           m.file,
         ),
+      [COMMANDS.OPEN_RESOURCE]: (m) =>
+        vscode.commands.executeCommand('texra.openResource', m.file),
     };
   }
 

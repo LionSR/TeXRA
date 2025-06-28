@@ -129,6 +129,16 @@ const handlers = {
     }
   },
 
+  [COMMANDS.UPDATE_INPUT_STATUS]: (message) => {
+    if (message.stream === state.getCurrentStream()) {
+      // Store the payload in progressViewState
+      state.setInputStatus(message.logId, message.status);
+
+      // Call dom.inputStatus.update() when either the log or status arrives
+      dom.inputStatus.update(message.logId, message.status);
+    }
+  },
+
   [COMMANDS.DELETE_STREAM]: (message) => {
     if (message.stream) {
       state.streamStatuses.delete(message.stream);

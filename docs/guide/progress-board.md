@@ -60,6 +60,17 @@ This scrollable area displays the detailed, timestamped logs for the selected ag
 - **Agent Thinking**: The log highlights model reasoning in purple **Thinking** blocks. These sections are flagged internally with a `thinking` type so you can easily spot when the AI is exploring ideas.
 - **Errors**: Errors are highlighted, often providing clues if something went wrong.
 
+### File Loading Status
+
+The ProgressBoard now displays detailed information about file loading during agent execution:
+
+- **Required Files**: Shows which files were successfully loaded for agent variables and which ones are missing. Missing files are highlighted with a red error icon and strikethrough text.
+- **Figures**: Displays all image and media files that were processed and included in the conversation with the AI model.
+- **Interactive**: Click on any file path to open it directly in VS Code without triggering LaTeX compilation, making it easy to check or edit referenced files.
+- **Expandable Sections**: File loading status entries can be expanded/collapsed to show detailed lists of all processed files.
+
+This feature helps you quickly identify file dependency issues and understand exactly which files the agent processed during execution.
+
 Understanding the log content is key to diagnosing problems and seeing how TeXRA and the AI models process your requests. Refer to the [Troubleshooting](../reference/troubleshooting.md) guide for more tips on using logs.
 
 At the bottom of the tab list, there is a "Delete All" button (<i class="codicon codicon-close-all"></i>) that allows you to clear all streams and their associated logs from the ProgressBoard view.

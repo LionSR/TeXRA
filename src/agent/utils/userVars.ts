@@ -2,11 +2,12 @@
 
 // Standard library imports
 import * as path from 'path';
+import { randomUUID } from 'crypto';
 
 // Local imports
 import { AgentLogger } from '@logger/AgentLogger';
 import { WorkspaceFS } from '@utils/files';
-import { setVarFromFile } from '@frontend/files/vars';
+import { setVarFromFile, FileLoadResult } from '@frontend/files/vars';
 import {
   getXmlFormatFromFiles,
   getListOfFiles,
@@ -14,6 +15,8 @@ import {
 import { AgentConfig } from '../core/AgentConfig';
 import { AgentSetting } from '../core/AgentDataclass';
 import type { IModelHandler } from '@agent/modelHandlers';
+import { emitProgress } from '@eventBus/ProgressEventBus';
+import type { InputStatus } from '../../types/InputStatus';
 
 /**
  * Build all user variables needed for prompt rendering.
@@ -26,19 +29,68 @@ export async function buildUserVars(
   logger: AgentLogger,
 ): Promise<Record<string, any>> {
   const userVars: Record<string, any> = {};
+  const allFileResults: FileLoadResult[] = [];
+
   Object.assign(userVars, getBasicVars(agentConfig, modelHandler));
   Object.assign(userVars, await getFileVars(agentConfig));
-  Object.assign(
-    userVars,
-    await getRequiredFileVars(agentSetting, agentPath, logger),
+
+  const requiredFileResults = await getRequiredFileVars(
+    agentSetting,
+    agentPath,
+    logger,
   );
-  Object.assign(
-    userVars,
-    await getPatternBasedFileVars(agentConfig, agentSetting, logger),
+  Object.assign(userVars, requiredFileResults.userVars);
+  allFileResults.push(...requiredFileResults.fileResults);
+
+  const patternFileResults = await getPatternBasedFileVars(
+    agentConfig,
+    agentSetting,
+    logger,
   );
+  Object.assign(userVars, patternFileResults.userVars);
+  allFileResults.push(...patternFileResults.fileResults);
+
   Object.assign(userVars, getOutputFilesOrder(agentConfig, agentSetting));
   Object.assign(userVars, getToolFlags(agentConfig, agentSetting));
+
+  // Emit input status event after processing all required files
+  if (allFileResults.length > 0) {
+    await emitInputStatusEvent(logger, allFileResults);
+  }
+
   return userVars;
+}
+
+async function emitInputStatusEvent(
+  logger: AgentLogger,
+  fileResults: FileLoadResult[],
+): Promise<void> {
+  const stream = logger.channelId;
+  const logId = randomUUID();
+
+  const status: InputStatus = {
+    required: fileResults.map((result) => ({
+      path: result.path,
+      varName: result.varName,
+      found: result.found,
+    })),
+    figures: [], // Will be populated by ModelHandler.createMediaMessage
+  };
+
+  // Emit log message first
+  emitProgress('addLogMessage', {
+    stream,
+    logMessage: {
+      id: logId,
+      text: 'Loading files',
+      level: 'info',
+      timestamp: Date.now(),
+      messageType: 'inputStatus',
+    },
+  });
+
+  // Then emit input status
+  emitProgress('updateInputStatus', { stream, logId, status });
 }
 
 function getBasicVars(
@@ -123,21 +175,23 @@ async function getRequiredFileVars(
   agentSetting: AgentSetting,
   agentPath: string,
   logger: AgentLogger,
-): Promise<Record<string, any>> {
+): Promise<{ userVars: Record<string, any>; fileResults: FileLoadResult[] }> {
   const userVars: Record<string, any> = {};
+  const fileResults: FileLoadResult[] = [];
 
   if (agentSetting.requiredFiles) {
     for (const [varName, filePath] of Object.entries(
       agentSetting.requiredFiles,
     )) {
       if (filePath) {
-        await setVarFromFile(
+        const result = await setVarFromFile(
           filePath,
           varName,
           userVars,
           logger,
           'requiredFiles',
         );
+        fileResults.push(result);
       }
     }
   }
@@ -147,7 +201,7 @@ async function getRequiredFileVars(
       agentSetting.requiredFilesInternal,
     )) {
       const fullPath = path.join(agentPath, filePath);
-      await setVarFromFile(
+      const result = await setVarFromFile(
         fullPath,
         varName,
         userVars,
@@ -155,18 +209,20 @@ async function getRequiredFileVars(
         'requiredFilesInternal',
         true,
       );
+      fileResults.push(result);
     }
   }
 
-  return userVars;
+  return { userVars, fileResults };
 }
 
 async function getPatternBasedFileVars(
   agentConfig: AgentConfig,
   agentSetting: AgentSetting,
   logger: AgentLogger,
-): Promise<Record<string, any>> {
+): Promise<{ userVars: Record<string, any>; fileResults: FileLoadResult[] }> {
   const userVars: Record<string, any> = {};
+  const fileResults: FileLoadResult[] = [];
 
   if (agentSetting.filePatternsContain) {
     for (const patternConfig of agentSetting.filePatternsContain) {
@@ -179,26 +235,28 @@ async function getPatternBasedFileVars(
 
         if (category.endsWith('File')) {
           if (categoryValue && categoryValue.toLowerCase().includes(pattern)) {
-            await setVarFromFile(
+            const result = await setVarFromFile(
               categoryValue,
               varName,
               userVars,
               logger,
               `Pattern '${pattern}'`,
             );
+            fileResults.push(result);
           }
         } else if (category.endsWith('Files')) {
           if (categoryValue) {
             for (const file of categoryValue) {
               if (file.toLowerCase().includes(pattern)) {
-                const success = await setVarFromFile(
+                const result = await setVarFromFile(
                   file,
                   varName,
                   userVars,
                   logger,
                   `Pattern '${pattern}'`,
                 );
-                if (success) {
+                fileResults.push(result);
+                if (result.found) {
                   break;
                 }
               }
@@ -209,7 +267,7 @@ async function getPatternBasedFileVars(
     }
   }
 
-  return userVars;
+  return { userVars, fileResults };
 }
 
 function getOutputFilesOrder(

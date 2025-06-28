@@ -14,6 +14,7 @@ import { getConfig } from '@utils/config';
 import { TokenUsageStats } from '../types/UsageTypes';
 import { TaskGroup } from '../logger/LogTypes';
 import type { DiffStats } from '../types/DiffTypes';
+import type { InputStatus } from '../types/InputStatus';
 import { randomUUID } from 'crypto';
 import { onProgress } from '@eventBus/ProgressEventBus';
 
@@ -183,6 +184,13 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
             status: StatusType;
             endTime?: number;
           }) => this.updateLogGroup(p.stream, p.groupId, p.status, p.endTime),
+        ),
+      ),
+      new vscode.Disposable(
+        onProgress(
+          'updateInputStatus',
+          (p: { stream: string; logId: string; status: InputStatus }) =>
+            this.updateInputStatus(p.stream, p.logId, p.status),
         ),
       ),
     );
@@ -566,6 +574,17 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       stream: stream,
       files,
     });
+
+    // Resend stored input status entries for this stream
+    const inputStatus = this._stateManager.inputStatus.get(stream) || {};
+    for (const [logId, status] of Object.entries(inputStatus)) {
+      this._view.webview.postMessage({
+        command: COMMANDS.UPDATE_INPUT_STATUS,
+        stream,
+        logId,
+        status,
+      });
+    }
   }
 
   public getLogStreams(): Map<string, LogMessageData[]> {
@@ -895,5 +914,30 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
    */
   public isViewVisible(): boolean {
     return !!this._view && this._view.visible;
+  }
+
+  public updateInputStatus(
+    stream: string,
+    logId: string,
+    status: InputStatus,
+  ): void {
+    // Store the status via ProgressStateManager
+    if (!this._stateManager.inputStatus.has(stream)) {
+      this._stateManager.inputStatus.set(stream, {});
+    }
+    const streamStatus = this._stateManager.inputStatus.get(stream)!;
+    streamStatus[logId] = status;
+
+    this._stateManager.saveState();
+
+    // If the affected stream is active, forward to the webview
+    if (this._view && stream === this._stateManager.activeStream) {
+      this._view.webview.postMessage({
+        command: COMMANDS.UPDATE_INPUT_STATUS,
+        stream,
+        logId,
+        status,
+      });
+    }
   }
 }

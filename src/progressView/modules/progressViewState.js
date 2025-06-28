@@ -176,6 +176,7 @@ export class ProgressViewState {
     this.taskGroups = new TaskGroups();
     this.toggleStates = new ToggleStates(() => this.save());
     this.streamStatuses = new StreamStatuses();
+    this.inputStatuses = new Map(); // logId -> InputStatus
   }
 
   /** Load saved state from VS Code storage. */
@@ -208,6 +209,23 @@ export class ProgressViewState {
 
   setCurrentStream(stream) {
     this.currentStream = stream;
+  }
+
+  // --- Input status operations ---
+  setInputStatus(logId, status) {
+    if (!logId) {
+      console.error('ProgressViewState.setInputStatus: logId is required');
+      return;
+    }
+    this.inputStatuses.set(logId, status);
+  }
+
+  getInputStatus(logId) {
+    return this.inputStatuses.get(logId);
+  }
+
+  clearInputStatuses() {
+    this.inputStatuses.clear();
   }
 }
 

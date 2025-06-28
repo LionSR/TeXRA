@@ -8,6 +8,7 @@ import { Toolbar } from './uiManagers/Toolbar.js';
 import { Status } from './uiManagers/Status.js';
 import { FileList } from './uiManagers/FileList.js';
 import { Events } from './uiManagers/Events.js';
+import { InputStatus } from './uiManagers/InputStatus.js';
 
 /**
  * Manages all DOM operations for the progress view.
@@ -24,6 +25,7 @@ export class ProgressViewDomHandler {
     this.taskGroups = new TaskGroupsDom();
     this.logEntries = new LogEntriesDom();
     this.events = new Events();
+    this.inputStatus = new InputStatus();
   }
 }
 

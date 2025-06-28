@@ -13,6 +13,7 @@ import { AgentLogger } from '@logger/AgentLogger';
 import { TokenUsageStats } from '../types/UsageTypes';
 import { TaskGroup, LogMessageData } from '../logger/LogTypes';
 import type { DiffStats } from '../types/DiffTypes';
+import type { InputStatus } from '../types/InputStatus';
 
 interface OutputFileInfo extends DiffStats {
   path: string;
@@ -36,6 +37,8 @@ export class ProgressStateManager {
     new Map();
   private _taskStates: Map<string, TaskState> = new Map();
   private _usageStats: Map<string, TokenUsageStats> = new Map();
+  private _inputStatus: Map<string, { [logId: string]: InputStatus }> =
+    new Map();
   private _activeStream: string = '';
 
   constructor() {
@@ -61,6 +64,10 @@ export class ProgressStateManager {
 
   get usageStats(): Map<string, TokenUsageStats> {
     return this._usageStats;
+  }
+
+  get inputStatus(): Map<string, { [logId: string]: InputStatus }> {
+    return this._inputStatus;
   }
 
   get activeStream(): string {
@@ -89,6 +96,7 @@ export class ProgressStateManager {
     this._loadActiveStream();
     await this._loadTaskStates();
     await this._loadUsageStats();
+    await this._loadInputStatus();
   }
 
   /**
@@ -101,6 +109,7 @@ export class ProgressStateManager {
     this._saveActiveStream();
     this._saveTaskStates();
     this._saveUsageStats();
+    this._saveInputStatus();
   }
 
   /**
@@ -342,6 +351,21 @@ export class ProgressStateManager {
   }
 
   /**
+   * Load input status from storage
+   */
+  private async _loadInputStatus(): Promise<void> {
+    const savedInputStatus = workspaceSM.get<{
+      [key: string]: { [logId: string]: InputStatus };
+    }>(this._getWorkspaceKey('texra.inputStatus'));
+
+    if (savedInputStatus) {
+      this._inputStatus = new Map(Object.entries(savedInputStatus));
+    } else {
+      this._inputStatus.clear();
+    }
+  }
+
+  /**
    * Save log streams to storage
    */
   private _saveLogStreams(): void {
@@ -402,6 +426,17 @@ export class ProgressStateManager {
   }
 
   /**
+   * Save input status to storage
+   */
+  private _saveInputStatus(): void {
+    const inputStatusObj = Object.fromEntries(this._inputStatus.entries());
+    workspaceSM.update(
+      this._getWorkspaceKey('texra.inputStatus'),
+      inputStatusObj,
+    );
+  }
+
+  /**
    * Clear all state for a specific stream
    */
   public clearStream(stream: string): void {
@@ -410,6 +445,7 @@ export class ProgressStateManager {
     this._outputFiles.delete(stream);
     this._taskStates.delete(stream);
     this._usageStats.delete(stream);
+    this._inputStatus.delete(stream);
   }
 
   /**
@@ -421,6 +457,7 @@ export class ProgressStateManager {
     this._outputFiles.clear();
     this._taskStates.clear();
     this._usageStats.clear();
+    this._inputStatus.clear();
     this._activeStream = '';
   }
 }

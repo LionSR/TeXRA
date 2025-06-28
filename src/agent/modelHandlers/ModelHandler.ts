@@ -1,5 +1,7 @@
 // Standard library imports
 import * as path from 'path';
+import { randomUUID } from 'crypto';
+import { emitProgress } from '@eventBus/ProgressEventBus';
 
 // Third-party imports
 // (none needed)
@@ -33,6 +35,7 @@ import {
 import type { ToolDefinition } from '@model';
 import { ToolState } from '../core/ToolState';
 import { MediaEntry } from '@agent/utils/mediaTypes';
+import type { InputStatus } from '../../types/InputStatus';
 
 // Default continuation limits
 const DEFAULT_CONTINUE_LIMIT = 10;
@@ -512,9 +515,42 @@ export abstract class ModelHandler<U = any, R = any>
         );
         this.logger.info(`Added: ${simplifiedMedia}`);
       }
+
+      // Emit input status event for figures
+      if (addedMedia.length > 0) {
+        await this.emitFigureStatusEvent(addedMedia);
+      }
     }
 
     return this.createMediaContent(mediaMessage);
+  }
+
+  /**
+   * Emit input status event for added figures
+   */
+  private async emitFigureStatusEvent(addedMedia: string[]): Promise<void> {
+    const stream = this.logger.channelId;
+    const logId = randomUUID();
+
+    const status: InputStatus = {
+      required: [], // Empty for figure events
+      figures: addedMedia.map((path) => ({ path })),
+    };
+
+    // Emit log message first
+    emitProgress('addLogMessage', {
+      stream,
+      logMessage: {
+        id: logId,
+        text: 'Loading figures',
+        level: 'info',
+        timestamp: Date.now(),
+        messageType: 'inputStatus',
+      },
+    });
+
+    // Then emit input status
+    emitProgress('updateInputStatus', { stream, logId, status });
   }
 
   /** Calculates token-based stop flags. */

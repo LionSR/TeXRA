@@ -55,6 +55,7 @@ export class ProgressViewContentProvider {
       const statusUri = getWebviewUri('modules/uiManagers/Status.js');
       const fileListUri = getWebviewUri('modules/uiManagers/FileList.js');
       const eventsUri = getWebviewUri('modules/uiManagers/Events.js');
+      const inputStatusUri = getWebviewUri('modules/uiManagers/InputStatus.js');
       const constantsUri = getWebviewUri('modules/constants.js');
       const katexMacrosUri = getWebviewUri('modules/katexMacros.js');
       const templateUtilsUri = getCommonUri('modules/templateUtils.js');
@@ -92,6 +93,7 @@ export class ProgressViewContentProvider {
         statusUri,
         fileListUri,
         eventsUri,
+        inputStatusUri,
       });
     } catch (err) {
       logger.error(

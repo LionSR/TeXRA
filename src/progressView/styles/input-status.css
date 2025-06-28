@@ -1,0 +1,175 @@
+/**
+ * Input Status Component Styles
+ */
+
+.input-status-container {
+  margin: 8px 0;
+  border-top: 1px solid var(--vscode-panel-border);
+  padding-top: 8px;
+}
+
+.input-status-entry {
+  margin-bottom: 8px;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 4px;
+  background: var(--vscode-editorWidget-background);
+}
+
+.input-status-header {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  cursor: pointer;
+  user-select: none;
+  background: var(--vscode-editorWidget-background);
+  border-radius: 4px 4px 0 0;
+}
+
+.input-status-header:hover {
+  background: var(--vscode-list-hoverBackground);
+}
+
+.input-status-icon {
+  margin-right: 8px;
+  color: var(--vscode-foreground);
+  transition: transform 0.2s;
+}
+
+.input-status-title {
+  flex: 1;
+  font-weight: 500;
+  color: var(--vscode-foreground);
+}
+
+.input-status-badge {
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+}
+
+.input-status-badge.success {
+  background: var(--vscode-terminal-ansiGreen);
+  color: var(--vscode-terminal-background);
+}
+
+.input-status-badge.error {
+  background: var(--vscode-errorForeground);
+  color: var(--vscode-editor-background);
+}
+
+.input-status-content {
+  padding: 0 12px 12px;
+  background: var(--vscode-editor-background);
+  border-radius: 0 0 4px 4px;
+}
+
+.input-status-section {
+  margin-bottom: 16px;
+}
+
+.input-status-section:last-child {
+  margin-bottom: 0;
+}
+
+.input-status-section h4 {
+  margin: 0 0 8px 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--vscode-descriptionForeground);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.input-status-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.input-status-item {
+  display: flex;
+  align-items: center;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+.input-status-item:last-child {
+  border-bottom: none;
+}
+
+.input-status-item .codicon {
+  margin-right: 8px;
+  flex-shrink: 0;
+}
+
+.input-status-item.found .codicon {
+  color: var(--vscode-terminal-ansiGreen);
+}
+
+.input-status-item.missing .codicon {
+  color: var(--vscode-errorForeground);
+}
+
+.file-info {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.file-name {
+  cursor: pointer;
+  color: var(--vscode-textLink-foreground);
+  text-decoration: none;
+  font-family: var(--vscode-editor-font-family);
+  font-size: var(--vscode-editor-font-size);
+}
+
+.file-name:hover {
+  text-decoration: underline;
+  color: var(--vscode-textLink-activeForeground);
+}
+
+.var-name {
+  color: var(--vscode-descriptionForeground);
+  font-size: 11px;
+  font-style: italic;
+}
+
+.input-status-item.missing .file-name {
+  color: var(--vscode-errorForeground);
+  text-decoration: line-through;
+}
+
+.input-status-item.missing .var-name {
+  color: var(--vscode-errorForeground);
+}
+
+/* Animation for expand/collapse */
+.input-status-content {
+  transition: all 0.2s ease-out;
+  overflow: hidden;
+}
+
+.input-status-icon {
+  transition: transform 0.2s ease-out;
+}
+
+/* Responsive adjustments */
+@media (max-width: 600px) {
+  .input-status-header {
+    padding: 6px 8px;
+  }
+
+  .input-status-content {
+    padding: 0 8px 8px;
+  }
+
+  .file-info {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+  }
+}

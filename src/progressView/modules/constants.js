@@ -45,6 +45,8 @@ export const COMMANDS = {
   MERGE_FILE: 'mergeFile',
   LATEXDIFF_FILE: 'latexdiffFile',
   WEBVIEW_READY: 'webviewReady',
+  UPDATE_INPUT_STATUS: 'updateInputStatus',
+  OPEN_RESOURCE: 'openResource',
 };
 
 export const TOOLBAR_BUTTONS = [
