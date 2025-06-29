@@ -87,7 +87,7 @@
   min-width: 0;
 }
 
-#currentStreamName,
+#activeStreamName,
 #runSummary {
   overflow: hidden;
   text-overflow: ellipsis;
