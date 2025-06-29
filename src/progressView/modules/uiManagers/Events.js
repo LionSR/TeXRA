@@ -99,11 +99,15 @@ export class Events {
       cursor: 'col-resize',
     });
 
-    // Handle special-details toggle events
+    // Handle special-details and file-list-details toggle events
     document.addEventListener(
       'toggle',
       (e) => {
-        if (e.target && e.target.classList.contains('special-details')) {
+        if (
+          e.target &&
+          (e.target.classList.contains('special-details') ||
+            e.target.classList.contains('file-list-details'))
+        ) {
           const toggleIcon = e.target.querySelector('.toggle-icon');
           if (toggleIcon) {
             const isOpen = e.target.open;
@@ -115,5 +119,16 @@ export class Events {
       },
       true,
     );
+
+    // Handle clicks on file links inside file-list-details blocks
+    document.addEventListener('click', (e) => {
+      const link = e.target.closest('.file-link');
+      if (link && link.dataset.file) {
+        vscode.postMessage({
+          command: COMMANDS.OPEN_FILE,
+          file: link.dataset.file,
+        });
+      }
+    });
   }
 }
