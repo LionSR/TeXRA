@@ -36,6 +36,7 @@ export const COMMANDS = {
   UPDATE_LOG_GROUP: 'updateLogGroup',
   UPDATE_STATUS: 'updateStatus',
   UPDATE_FILES: 'updateFiles',
+  UPDATE_OUTPUT_STATUS: 'updateOutputStatus',
   UPDATE_USAGE: 'updateUsage',
   UPDATE_GROUP_USAGE: 'updateGroupUsage',
   OPEN_FILE: 'openFile',

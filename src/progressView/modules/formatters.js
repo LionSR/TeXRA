@@ -151,6 +151,10 @@ export class LogEntryFormatter {
       return this._formatFileList(htmlMessage, text, id);
     }
 
+    if (messageType === 'outputStatus') {
+      return this._formatOutputStatus(htmlMessage, text, id);
+    }
+
     return htmlMessage;
   }
 
@@ -293,6 +297,40 @@ export class LogEntryFormatter {
       </details>`;
     } catch (e) {
       console.error('Error parsing file list:', e);
+      return message;
+    }
+  }
+
+  _formatOutputStatus(message, content, logId) {
+    try {
+      const idAttr = logId ? ` data-log-id="${logId}"` : '';
+      const parsed = JSON.parse(this._unescapeHtml(content));
+      if (!Array.isArray(parsed)) {
+        throw new Error('Invalid output status');
+      }
+      let items = '';
+      parsed.forEach((o) => {
+        if (!o || !o.file) return;
+        const fileName = o.file.split('/').pop() || o.file;
+        const escaped = this._escapeHtml(fileName);
+        const link = o.xml
+          ? ` <span class="xml-link clickable-link" data-file="${this._escapeHtml(
+              o.xml,
+            )}">Open XML</span>`
+          : '';
+        items += `<li><i class="codicon codicon-warning"></i> ${escaped}${link}</li>`;
+      });
+
+      return `<details class="file-list-details" open>
+        <summary>
+          <i class="${CHEVRON_DOWN_CLASS} toggle-icon"></i>
+          <i class="codicon codicon-alert"></i>
+          <span>Missing Outputs</span>
+        </summary>
+        <ul class="file-list-content"${idAttr}>${items}</ul>
+      </details>`;
+    } catch (e) {
+      console.error('Error parsing output status:', e);
       return message;
     }
   }

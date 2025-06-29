@@ -321,6 +321,15 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       files,
     });
 
+    const checks =
+      this._stateManager.outputChecks.get(this._stateManager.activeStream) ||
+      {};
+    this._view.webview.postMessage({
+      command: COMMANDS.UPDATE_OUTPUT_STATUS,
+      stream: this._stateManager.activeStream,
+      checks,
+    });
+
     const usage = this._stateManager.usageStats.get(
       this._stateManager.activeStream,
     );
@@ -388,6 +397,22 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
 
     const messages = this._stateManager.logStreams.get(stream)!;
     messages.push(log);
+
+    if (log.messageType === 'outputStatus' && log.groupId) {
+      const groups = this._stateManager.taskGroups.get(stream);
+      const round = groups?.get(log.groupId)?.name?.match(/^r(\d+)$/);
+      const roundNum = round ? parseInt(round[1], 10) : undefined;
+      if (roundNum !== undefined) {
+        try {
+          const parsed = JSON.parse(log.text);
+          if (Array.isArray(parsed)) {
+            this.addOutputChecks(stream, roundNum, parsed);
+          }
+        } catch (e) {
+          // ignore parse errors
+        }
+      }
+    }
 
     if (messages.length > 1000) {
       messages.splice(0, messages.length - 1000);
@@ -581,6 +606,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       this._stateManager.logStreams.get(stream)!.length = 0;
       this._stateManager.taskGroups.delete(stream);
       this._stateManager.outputFiles.delete(stream);
+      this._stateManager.outputChecks.delete(stream);
       this._stateManager.saveState();
       this.updateLogContent(stream);
     }
@@ -655,21 +681,59 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     }
   }
 
+  public addOutputChecks(stream: string, round: number, checks: any[]): void {
+    const existing = this._stateManager.outputChecks.get(stream) || {};
+    existing[round] = checks;
+    this._stateManager.outputChecks.set(stream, existing);
+    this._stateManager.saveState();
+    if (this._view && stream === this._stateManager.activeStream) {
+      this._view.webview.postMessage({
+        command: COMMANDS.UPDATE_OUTPUT_STATUS,
+        stream,
+        checks: existing,
+      });
+    }
+  }
+
   public getOutputFiles(
     stream: string,
   ): { [key: number]: OutputFileInfo[] } | undefined {
     return this._stateManager.outputFiles.get(stream);
   }
 
+  public getOutputChecks(stream: string): { [key: number]: any[] } | undefined {
+    return this._stateManager.outputChecks.get(stream);
+  }
+
+  public clearOutputChecks(stream: string): void {
+    if (this._stateManager.outputChecks.has(stream)) {
+      this._stateManager.outputChecks.delete(stream);
+      this._stateManager.saveState();
+      if (this._view && stream === this._stateManager.activeStream) {
+        this._view.webview.postMessage({
+          command: COMMANDS.UPDATE_OUTPUT_STATUS,
+          stream,
+          checks: {},
+        });
+      }
+    }
+  }
+
   public clearOutputFiles(stream: string): void {
     if (this._stateManager.outputFiles.has(stream)) {
       this._stateManager.outputFiles.delete(stream);
+      this._stateManager.outputChecks.delete(stream);
       this._stateManager.saveState();
       if (this._view && stream === this._stateManager.activeStream) {
         this._view.webview.postMessage({
           command: COMMANDS.UPDATE_FILES,
           stream,
           files: {},
+        });
+        this._view.webview.postMessage({
+          command: COMMANDS.UPDATE_OUTPUT_STATUS,
+          stream,
+          checks: {},
         });
       }
     }

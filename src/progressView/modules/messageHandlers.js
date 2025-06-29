@@ -129,6 +129,12 @@ const handlers = {
     }
   },
 
+  [COMMANDS.UPDATE_OUTPUT_STATUS]: (message) => {
+    if (message.stream === state.getCurrentStream()) {
+      dom.outputStatus.update(message.checks);
+    }
+  },
+
   [COMMANDS.DELETE_STREAM]: (message) => {
     if (message.stream) {
       state.streamStatuses.delete(message.stream);

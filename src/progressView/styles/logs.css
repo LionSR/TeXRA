@@ -173,6 +173,25 @@
   flex-shrink: 0;
 }
 
+.output-status-container {
+  padding: var(--spacing-small);
+  border-top: 1px solid var(--vscode-panel-border);
+  font-size: var(--vscode-editor-font-size);
+  overflow-y: auto;
+  max-height: var(--height-small);
+  flex-shrink: 0;
+}
+
+.output-status-header {
+  font-weight: bold;
+  margin-top: var(--spacing-small);
+  margin-bottom: var(--spacing-tiny);
+}
+.output-status-list {
+  margin-left: var(--spacing-small);
+  margin-bottom: var(--spacing-small);
+}
+
 /* Files usage header */
 .files-usage-header {
   display: flex;

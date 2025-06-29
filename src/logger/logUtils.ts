@@ -15,11 +15,13 @@ function isValidMessageType(
 ): type is
   | typeof MESSAGE_TYPES.THINKING
   | typeof MESSAGE_TYPES.SCRATCHPAD
-  | typeof MESSAGE_TYPES.FILE_LIST {
+  | typeof MESSAGE_TYPES.FILE_LIST
+  | typeof MESSAGE_TYPES.OUTPUT_STATUS {
   return (
     type === MESSAGE_TYPES.THINKING ||
     type === MESSAGE_TYPES.SCRATCHPAD ||
-    type === MESSAGE_TYPES.FILE_LIST
+    type === MESSAGE_TYPES.FILE_LIST ||
+    type === MESSAGE_TYPES.OUTPUT_STATUS
   );
 }
 
@@ -119,8 +121,11 @@ class VSCodeTransport extends Transport {
     // const formattedMessage = `${emoji} [${timestamp}] ${level.toUpperCase().padEnd(7)} ${channelPrefix}${message}`;
     const formattedMessage = `${emoji} [${timestamp}] ${channelPrefix}${message}`;
 
-    // Skip output channel logging for FILE_LIST messages - they have their own UI
-    if (messageType !== MESSAGE_TYPES.FILE_LIST) {
+    // Skip output channel logging for FILE_LIST and OUTPUT_STATUS messages - they have their own UI
+    if (
+      messageType !== MESSAGE_TYPES.FILE_LIST &&
+      messageType !== MESSAGE_TYPES.OUTPUT_STATUS
+    ) {
       // Always write to the configured output channel
       this.channel.appendLine(formattedMessage);
     }

@@ -34,6 +34,7 @@ export class ProgressStateManager {
   private _taskGroups: Map<string, Map<string, TaskGroup>> = new Map();
   private _outputFiles: Map<string, { [key: number]: OutputFileInfo[] }> =
     new Map();
+  private _outputChecks: Map<string, { [key: number]: any[] }> = new Map();
   private _taskStates: Map<string, TaskState> = new Map();
   private _usageStats: Map<string, TokenUsageStats> = new Map();
   private _activeStream: string = '';
@@ -53,6 +54,10 @@ export class ProgressStateManager {
 
   get outputFiles(): Map<string, { [key: number]: OutputFileInfo[] }> {
     return this._outputFiles;
+  }
+
+  get outputChecks(): Map<string, { [key: number]: any[] }> {
+    return this._outputChecks;
   }
 
   get taskStates(): Map<string, TaskState> {
@@ -86,6 +91,7 @@ export class ProgressStateManager {
     await this._loadLogStreams();
     await this._loadTaskGroups();
     await this._loadOutputFiles();
+    await this._loadOutputChecks();
     this._loadActiveStream();
     await this._loadTaskStates();
     await this._loadUsageStats();
@@ -98,6 +104,7 @@ export class ProgressStateManager {
     this._saveLogStreams();
     this._saveTaskGroups();
     this._saveOutputFiles();
+    this._saveOutputChecks();
     this._saveActiveStream();
     this._saveTaskStates();
     this._saveUsageStats();
@@ -278,6 +285,18 @@ export class ProgressStateManager {
     }
   }
 
+  private async _loadOutputChecks(): Promise<void> {
+    const saved = workspaceSM.get<{
+      [key: string]: { [key: number]: any[] };
+    }>(this._getWorkspaceKey('texra.outputChecks'));
+
+    if (saved) {
+      this._outputChecks = new Map(Object.entries(saved));
+    } else {
+      this._outputChecks.clear();
+    }
+  }
+
   /**
    * Load active stream
    */
@@ -378,6 +397,11 @@ export class ProgressStateManager {
     );
   }
 
+  private _saveOutputChecks(): void {
+    const checksObj = Object.fromEntries(this._outputChecks.entries());
+    workspaceSM.update(this._getWorkspaceKey('texra.outputChecks'), checksObj);
+  }
+
   /**
    * Save active stream
    */
@@ -408,6 +432,7 @@ export class ProgressStateManager {
     this._logStreams.delete(stream);
     this._taskGroups.delete(stream);
     this._outputFiles.delete(stream);
+    this._outputChecks.delete(stream);
     this._taskStates.delete(stream);
     this._usageStats.delete(stream);
   }
@@ -419,6 +444,7 @@ export class ProgressStateManager {
     this._logStreams.clear();
     this._taskGroups.clear();
     this._outputFiles.clear();
+    this._outputChecks.clear();
     this._taskStates.clear();
     this._usageStats.clear();
     this._activeStream = '';

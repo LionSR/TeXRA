@@ -129,6 +129,13 @@ export class Events {
           file: link.dataset.file,
         });
       }
+      const xml = e.target.closest('.xml-link');
+      if (xml && xml.dataset.file) {
+        vscode.postMessage({
+          command: COMMANDS.OPEN_FILE,
+          file: xml.dataset.file,
+        });
+      }
     });
   }
 }

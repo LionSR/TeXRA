@@ -7,6 +7,8 @@ import * as path from 'path';
 // Local imports
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
 import { INSTRUCTION_PREFIX, globalSM } from '@utils/stateManager';
+import { AgentLogger } from '@logger/AgentLogger';
+import { MESSAGE_TYPES } from '@logger/messageTypes';
 
 /**
  * Show an instruction message that can be permanently dismissed.
@@ -55,13 +57,13 @@ export async function checkExpectedOutputs(
     return;
   }
 
+  const missing: { file: string; xml?: string }[] = [];
+
   for (const file of expectedFiles) {
     const exists = path.isAbsolute(file)
       ? await AbsoluteFS.exists(file)
       : await WorkspaceFS.exists(file);
     if (!exists) {
-      const openBtn = 'Open XML';
-
       let xmlPath: string | undefined;
       const outputs: string[] = [];
 
@@ -88,40 +90,16 @@ export async function checkExpectedOutputs(
         xmlPath = file.replace(/\.[^.]+$/, '.xml');
       }
 
-      await showInstructionWithSuppress(
-        'xmlOutputMismatch',
-        `Expected output "${path.basename(
-          file,
-        )}" was not generated. Open the XML file to check tag consistency, then run again.`,
-        [
-          {
-            title: openBtn,
-            callback: async () => {
-              if (!xmlPath) {
-                vscode.window.showWarningMessage('XML file path not found');
-                return;
-              }
-
-              const xmlExists = path.isAbsolute(xmlPath)
-                ? await AbsoluteFS.exists(xmlPath)
-                : await WorkspaceFS.exists(xmlPath);
-              if (!xmlExists) {
-                vscode.window.showWarningMessage(
-                  `XML file not found: ${path.basename(xmlPath)}`,
-                );
-                return;
-              }
-              const uri = path.isAbsolute(xmlPath)
-                ? vscode.Uri.file(xmlPath)
-                : vscode.Uri.file(WorkspaceFS.fullPath(xmlPath));
-              const doc = await vscode.workspace.openTextDocument(uri);
-              await vscode.window.showTextDocument(doc, { preview: false });
-            },
-          },
-        ],
-        false,
-      );
-      break;
+      missing.push({ file, xml: xmlPath });
     }
+  }
+
+  if (missing.length > 0) {
+    const logger: AgentLogger | undefined = (agent as any)?.logger;
+    logger?.info(
+      JSON.stringify(missing),
+      undefined,
+      MESSAGE_TYPES.OUTPUT_STATUS,
+    );
   }
 }
