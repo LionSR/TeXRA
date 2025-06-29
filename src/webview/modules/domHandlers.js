@@ -1,5 +1,5 @@
 import { vscode } from '@common/webviewContext.js';
-import { webviewState } from './webviewState.js';
+import { mainViewState } from './mainViewState.js';
 import { fileList } from './uiManagers/FileList.js';
 import { fileSelect } from './uiManagers/FileSelect.js';
 import { outputFilesManager } from './uiManagers/OutputFilesManager.js';
