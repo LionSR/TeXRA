@@ -1,7 +1,7 @@
 // Local imports
 import { progressViewState } from './progressViewState.js';
 import { LogEntryFormatter } from './formatters.js';
-import { TaskGroupsDom, LogEntriesDom } from './taskManagers.js';
+import { TaskGroupManager, LogEntryManager } from './taskManagers.js';
 import { UsageSummary, UsageGroup } from './usageManagers.js';
 import { StreamTabs } from './uiManagers/StreamTabs.js';
 import { Toolbar } from './uiManagers/Toolbar.js';
@@ -21,8 +21,8 @@ export class ProgressViewDomHandler {
     this.usageSummary = new UsageSummary();
     this.usageGroup = new UsageGroup(this.usageSummary); // Pass shared instance
     this.fileList = new FileList(this.usageSummary); // Pass shared instance
-    this.taskGroups = new TaskGroupsDom();
-    this.logEntries = new LogEntriesDom();
+    this.taskGroups = new TaskGroupManager();
+    this.logEntries = new LogEntryManager();
     this.events = new Events();
   }
 }
