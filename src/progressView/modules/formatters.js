@@ -230,20 +230,44 @@ export class LogEntryFormatter {
         throw new Error('Invalid file list');
       }
 
-      const items = parsed
-        .map((f) => {
+      // Group files by source for better organization
+      const filesBySource = {};
+      parsed.forEach((f) => {
+        const source = f.source || 'unknown';
+        if (!filesBySource[source]) {
+          filesBySource[source] = [];
+        }
+        filesBySource[source].push(f);
+      });
+
+      let items = '';
+      Object.entries(filesBySource).forEach(([source, files]) => {
+        files.forEach((f) => {
           const icon = f.ok ? 'codicon-check' : 'codicon-warning';
           const filePath = String(f.path ?? '');
           const escaped = this._escapeHtml(filePath);
-          return `<li><i class="codicon ${icon}"></i> <span class="file-link clickable-link" data-file="${escaped}">${escaped}</span></li>`;
-        })
-        .join('');
+          const varName = f.varName ? ` [VAR '${f.varName}']` : '';
+          const sourceLabel = f.internal ? ' (internal)' : '';
+          const sourceInfo = ` [${source}]`;
+          items += `<li><i class="codicon ${icon}"></i> <span class="file-link clickable-link" data-file="${escaped}">${escaped}</span>${varName}${sourceInfo}${sourceLabel}</li>`;
+        });
+      });
+
+      const totalFiles = parsed.length;
+      const loadedFiles = parsed.filter((f) => f.ok).length;
+      const failedFiles = totalFiles - loadedFiles;
+
+      let summary = `Files (${loadedFiles}/${totalFiles} loaded`;
+      if (failedFiles > 0) {
+        summary += `, ${failedFiles} not found`;
+      }
+      summary += ')';
 
       return `<details class="file-list-details" open>
         <summary>
           <i class="${CHEVRON_DOWN_CLASS} toggle-icon"></i>
           <i class="codicon codicon-list-tree"></i>
-          <span>Files</span>
+          <span>${summary}</span>
         </summary>
         <ul class="file-list-content"${idAttr}>${items}</ul>
       </details>`;
