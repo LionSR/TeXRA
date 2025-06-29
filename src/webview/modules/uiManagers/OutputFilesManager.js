@@ -4,7 +4,7 @@ import {
   CHEVRON_UP_CLASS,
   CHEVRON_DOWN_CLASS,
 } from '@common/webviewContext.js';
-import { webviewState } from '../webviewState.js';
+import { mainViewState } from '../mainViewState.js';
 import { fileList } from './FileList.js';
 import { fileSelect } from './FileSelect.js';
 
