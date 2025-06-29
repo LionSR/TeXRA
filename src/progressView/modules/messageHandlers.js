@@ -13,21 +13,21 @@ const entryFormatter = new LogEntryFormatter();
 
 const handlers = {
   [COMMANDS.UPDATE_STREAMS]: (message) => {
-    state.setCurrentStream(message.currentStream);
-    dom.streamTabs.update(message.streams, message.currentStream);
+    state.setActiveStream(message.activeStream);
+    dom.streamTabs.update(message.streams, message.activeStream);
 
     // Update status based on whether there's an active stream
-    if (!message.currentStream) {
+    if (!message.activeStream) {
       dom.status.update(STATUS.READY);
     } else {
-      const streamStatus = state.streamStatuses.get(message.currentStream);
+      const streamStatus = state.streamStatuses.get(message.activeStream);
       dom.status.update(streamStatus || STATUS.STOPPED);
     }
   },
 
   [COMMANDS.UPDATE_LOGS]: (message) => {
     const logContent = document.getElementById('logContent');
-    if (message.stream === state.getCurrentStream()) {
+    if (message.stream === state.getActiveStream()) {
       logContent.innerHTML = '';
       state.taskGroups.clear();
       if (message.groups && message.groups.length > 0) {
@@ -76,7 +76,7 @@ const handlers = {
   },
 
   [COMMANDS.APPEND_LOG]: (message) => {
-    if (message.stream === state.getCurrentStream()) {
+    if (message.stream === state.getActiveStream()) {
       const logContent = document.getElementById('logContent');
       const addedToGroup = dom.logEntries.append(message.logMessage);
       if (!addedToGroup) {
@@ -89,13 +89,13 @@ const handlers = {
   },
 
   [COMMANDS.UPDATE_LOG]: (message) => {
-    if (message.stream === state.getCurrentStream()) {
+    if (message.stream === state.getActiveStream()) {
       dom.logEntries.update(message.logMessage);
     }
   },
 
   [COMMANDS.ADD_LOG_GROUP]: (message) => {
-    if (message.stream === state.getCurrentStream()) {
+    if (message.stream === state.getActiveStream()) {
       const logContent = document.getElementById('logContent');
       dom.taskGroups.add(message.group);
       logContent.scrollTop = logContent.scrollHeight;
@@ -103,7 +103,7 @@ const handlers = {
   },
 
   [COMMANDS.UPDATE_LOG_GROUP]: (message) => {
-    if (message.stream === state.getCurrentStream()) {
+    if (message.stream === state.getActiveStream()) {
       state.taskGroups.update(message.groupId, message.status, message.endTime);
       dom.taskGroups.update(message.groupId, message.status, message.endTime);
     }
@@ -118,13 +118,13 @@ const handlers = {
   },
 
   [COMMANDS.UPDATE_GROUP_USAGE]: (message) => {
-    if (message.stream === state.getCurrentStream()) {
+    if (message.stream === state.getActiveStream()) {
       dom.usageGroup.update(message.groupId, message.usage);
     }
   },
 
   [COMMANDS.UPDATE_FILES]: (message) => {
-    if (message.stream === state.getCurrentStream()) {
+    if (message.stream === state.getActiveStream()) {
       dom.fileList.update(message.files);
     }
   },
@@ -132,7 +132,7 @@ const handlers = {
   [COMMANDS.DELETE_STREAM]: (message) => {
     if (message.stream) {
       state.streamStatuses.delete(message.stream);
-      if (message.stream === state.getCurrentStream()) {
+      if (message.stream === state.getActiveStream()) {
         const groupIds = [];
         const headers = Array.from(
           document.querySelectorAll('.log-group-header'),

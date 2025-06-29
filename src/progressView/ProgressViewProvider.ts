@@ -308,7 +308,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     this._view.webview.postMessage({
       command: COMMANDS.UPDATE_STREAMS,
       streams,
-      currentStream: this._stateManager.activeStream,
+      activeStream: this._stateManager.activeStream,
     });
     this.updateLogContent(this._stateManager.activeStream);
 
