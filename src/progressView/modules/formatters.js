@@ -147,7 +147,20 @@ export class LogEntryFormatter {
       return this._formatSpecialContent(htmlMessage, text, label, id);
     }
 
+    if (messageType === 'fileList') {
+      return this._formatFileList(htmlMessage, text, id);
+    }
+
     return htmlMessage;
+  }
+
+  _escapeHtml(text) {
+    return text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
   }
 
   _unescapeHtml(text) {
@@ -205,6 +218,81 @@ export class LogEntryFormatter {
     } catch (e) {
       console.error('Error parsing markdown:', e);
       // Fallback to original content
+      return message;
+    }
+  }
+
+  _formatFileList(message, content, logId) {
+    try {
+      const idAttr = logId ? ` data-log-id="${logId}"` : '';
+      const parsed = JSON.parse(this._unescapeHtml(content));
+      if (!Array.isArray(parsed)) {
+        throw new Error('Invalid file list');
+      }
+
+      // Group files by source for better organization
+      const filesBySource = {};
+      parsed.forEach((f) => {
+        const source = f.source || 'unknown';
+        if (!filesBySource[source]) {
+          filesBySource[source] = [];
+        }
+        filesBySource[source].push(f);
+      });
+
+      let items = '';
+      Object.entries(filesBySource).forEach(([source, files]) => {
+        files.forEach((f) => {
+          const icon = f.ok ? 'codicon-check' : 'codicon-warning';
+          const filePath = String(f.path ?? '');
+          const escaped = this._escapeHtml(filePath);
+
+          // Extract just the filename for display
+          const fileName = filePath.split('/').pop() || filePath;
+          const fileNameEscaped = this._escapeHtml(fileName);
+
+          // Build metadata string
+          let metadata = '';
+          if (f.varName) {
+            metadata += `<span class="file-var">[${f.varName}]</span>`;
+          }
+          if (source && source !== 'unknown') {
+            // Simplify source display
+            const sourceDisplay = source
+              .replace('requiredFiles', 'required')
+              .replace('Pattern ', '')
+              .replace(/'/g, '');
+            if (f.internal) {
+              metadata += ` <span class="file-source">(${sourceDisplay}, internal)</span>`;
+            } else {
+              metadata += ` <span class="file-source">(${sourceDisplay})</span>`;
+            }
+          }
+
+          items += `<li title="${escaped}"><i class="codicon ${icon}"></i> <span class="file-link clickable-link" data-file="${escaped}">${fileNameEscaped}</span> ${metadata}</li>`;
+        });
+      });
+
+      const totalFiles = parsed.length;
+      const loadedFiles = parsed.filter((f) => f.ok).length;
+      const failedFiles = totalFiles - loadedFiles;
+
+      let summary = `Files (${loadedFiles}/${totalFiles} loaded`;
+      if (failedFiles > 0) {
+        summary += `, ${failedFiles} not found`;
+      }
+      summary += ')';
+
+      return `<details class="file-list-details" open>
+        <summary>
+          <i class="${CHEVRON_DOWN_CLASS} toggle-icon"></i>
+          <i class="codicon codicon-list-tree"></i>
+          <span>${summary}</span>
+        </summary>
+        <ul class="file-list-content"${idAttr}>${items}</ul>
+      </details>`;
+    } catch (e) {
+      console.error('Error parsing file list:', e);
       return message;
     }
   }
