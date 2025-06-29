@@ -1,5 +1,5 @@
 import { progressViewState } from './modules/progressViewState.js';
-import { setupMessageHandlers } from './modules/messageHandlers.js';
+import { messageHandlers } from './modules/messageHandlers.js';
 import { progressViewDomHandler } from './modules/domHandlers.js';
 import { vscode } from '@common/webviewContext.js';
 import { COMMANDS } from './modules/constants.js';
@@ -7,8 +7,12 @@ import { COMMANDS } from './modules/constants.js';
 // Initialize the state when the window loads
 progressViewState.initialize();
 
-// Setup message handlers for VSCode messages
-setupMessageHandlers();
+// Register handlers for VSCode messages
+messageHandlers.setup();
+
+window.addEventListener('beforeunload', () => {
+  messageHandlers.cleanup();
+});
 
 // Initialize event listeners and state when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
