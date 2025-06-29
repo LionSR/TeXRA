@@ -24,10 +24,10 @@ export const executeCommand = {
   ) => {
     try {
       // Save the agent configuration to history (silently)
-      await AgentHistoryManager.addToHistory(config);
+      const taskId = await AgentHistoryManager.addToHistory(config);
 
       // Run the agent directly
-      await executeAgent(config, context);
+      await executeAgent(config, context, taskId);
     } catch (err) {
       throw err;
     }

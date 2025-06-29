@@ -144,6 +144,7 @@ async function executeAgentWithLogging<T extends IAgent>(
   agentName: string,
   createAgentFn: () => Promise<T>,
   context: vscode.ExtensionContext,
+  taskId?: string,
 ): Promise<void> {
   try {
     // Create agent to get config for stream ID
@@ -249,6 +250,7 @@ async function executeAgentWithLogging<T extends IAgent>(
         // Convert AgentConfig to TaskState using utility function
         emitProgress('setTaskState', {
           streamId: fullStreamId,
+          taskId,
           taskState: agentConfigToTaskState(config),
         });
         logger.debug(
@@ -352,6 +354,7 @@ async function executeAgentWithLogging<T extends IAgent>(
 export async function executeAgent(
   agentConfig: Partial<AgentConfig>,
   context: vscode.ExtensionContext,
+  taskId?: string,
 ): Promise<void> {
   // Ensure required fields
   if (!agentConfig.model || !agentConfig.agent) {
@@ -412,6 +415,7 @@ export async function executeAgent(
       );
     },
     context,
+    taskId,
   );
 }
 
@@ -423,6 +427,7 @@ export async function executeMergeAgent(
   inputFile: string,
   editedFile: string,
   context: vscode.ExtensionContext,
+  taskId?: string,
 ): Promise<void> {
   const agentName = 'merge';
 
@@ -469,5 +474,6 @@ export async function executeMergeAgent(
       );
     },
     context,
+    taskId,
   );
 }

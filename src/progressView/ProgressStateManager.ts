@@ -35,6 +35,7 @@ export class ProgressStateManager {
   private _outputFiles: Map<string, { [key: number]: OutputFileInfo[] }> =
     new Map();
   private _taskStates: Map<string, TaskState> = new Map();
+  private _taskIds: Map<string, string> = new Map();
   private _usageStats: Map<string, TokenUsageStats> = new Map();
   private _activeStream: string = '';
 
@@ -57,6 +58,10 @@ export class ProgressStateManager {
 
   get taskStates(): Map<string, TaskState> {
     return this._taskStates;
+  }
+
+  get taskIds(): Map<string, string> {
+    return this._taskIds;
   }
 
   get usageStats(): Map<string, TokenUsageStats> {
@@ -88,6 +93,7 @@ export class ProgressStateManager {
     await this._loadOutputFiles();
     this._loadActiveStream();
     await this._loadTaskStates();
+    this._loadTaskIds();
     await this._loadUsageStats();
   }
 
@@ -100,6 +106,7 @@ export class ProgressStateManager {
     this._saveOutputFiles();
     this._saveActiveStream();
     this._saveTaskStates();
+    this._saveTaskIds();
     this._saveUsageStats();
   }
 
@@ -322,6 +329,17 @@ export class ProgressStateManager {
     }
   }
 
+  private _loadTaskIds(): void {
+    const saved = workspaceSM.get<{ [key: string]: string }>(
+      WorkspaceStateKey.TASK_IDS,
+    );
+    if (saved) {
+      this._taskIds = new Map(Object.entries(saved));
+    } else {
+      this._taskIds.clear();
+    }
+  }
+
   /**
    * Load usage statistics
    */
@@ -393,6 +411,11 @@ export class ProgressStateManager {
     workspaceSM.update(WorkspaceStateKey.TASK_STATES, taskStatesObj);
   }
 
+  private _saveTaskIds(): void {
+    const idsObj = Object.fromEntries(this._taskIds.entries());
+    workspaceSM.update(WorkspaceStateKey.TASK_IDS, idsObj);
+  }
+
   /**
    * Save usage statistics
    */
@@ -409,6 +432,7 @@ export class ProgressStateManager {
     this._taskGroups.delete(stream);
     this._outputFiles.delete(stream);
     this._taskStates.delete(stream);
+    this._taskIds.delete(stream);
     this._usageStats.delete(stream);
   }
 
@@ -420,6 +444,7 @@ export class ProgressStateManager {
     this._taskGroups.clear();
     this._outputFiles.clear();
     this._taskStates.clear();
+    this._taskIds.clear();
     this._usageStats.clear();
     this._activeStream = '';
   }
