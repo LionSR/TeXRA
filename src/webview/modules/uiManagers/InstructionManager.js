@@ -25,7 +25,7 @@ export class InstructionManager {
     textarea.selectionStart = textarea.selectionEnd = start + text.length;
   }
 
-  init() {
+  setup() {
     const textarea = safeGetElementById(this.textareaId);
     if (!textarea) {
       console.warn(
