@@ -7,7 +7,7 @@ import {
 } from '@common/webviewContext.js';
 import { safeSetElementValue, safeGetElementById } from '@common/domUtils.js';
 import { capitalize, uncapitalize } from '@common/stringUtils.js';
-import { webviewState } from './webviewState.js';
+import { mainViewState } from './mainViewState.js';
 import { webviewDomHandler } from './domHandlers.js';
 
 // Local imports - UI managers
@@ -16,6 +16,9 @@ import { fileSelect } from './uiManagers/FileSelect.js';
 import { webviewEventBus } from './eventBus.js';
 
 import { FILE_TYPES } from './constants.js';
+
+// Import standardized commands
+import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
 
 /**
  * Handles messages from the extension and syncs the webview state.
@@ -173,7 +176,7 @@ export class MessageHandlers {
             command: `update${capitalize(fileType)}Files`,
             files: updated,
           });
-          webviewState.update({ [`${fileType}Files`]: updated });
+          mainViewState.update({ [`${fileType}Files`]: updated });
         }
       }
     };
@@ -209,8 +212,8 @@ export class MessageHandlers {
     const savedState = {};
     this._restoreFormFields(state, savedState);
     this._restoreFileArrays(state, savedState);
-    webviewState.set(savedState);
-    webviewState.restore();
+    mainViewState.set(savedState);
+    mainViewState.restore();
     this._skipNextRestoreState = true;
   }
 
@@ -310,7 +313,7 @@ export class MessageHandlers {
     if (this._skipNextRestoreState) {
       this._skipNextRestoreState = false;
     } else {
-      webviewState.restore();
+      mainViewState.restore();
     }
   }
 
@@ -358,7 +361,7 @@ export class MessageHandlers {
         command: 'showInformationMessage',
         text: 'Instruction text has been polished!',
       });
-      webviewState.save();
+      mainViewState.save();
     }
     this._postHandle();
   }
@@ -378,7 +381,7 @@ export class MessageHandlers {
         command: 'showInformationMessage',
         text: 'Instruction text transcribed!',
       });
-      webviewState.save();
+      mainViewState.save();
     }
     webviewEventBus.dispatchEvent(
       new CustomEvent('recordingUIUpdate', { detail: { recording: false } }),
@@ -547,7 +550,7 @@ export class MessageHandlers {
       const currentBaseFile = currentBaseFileDiv.value;
       fileSelect.update('baseFile', message.files);
 
-      const state = webviewState.get();
+      const state = mainViewState.get();
       const storedBaseFile = state?.baseFile;
 
       if (storedBaseFile && message.files.includes(storedBaseFile)) {

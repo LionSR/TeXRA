@@ -12,10 +12,13 @@ import * as logger from '@logger/logUtils';
 
 import { showLoggedErrorMessage } from '@utils/errorHandlingUtils';
 
-const CHANNEL = 'AgentHistoryViewProvider';
+// Import standardized commands
+import { HISTORY_VIEW_COMMANDS } from '@common/webview/commands';
+
+const CHANNEL = 'HistoryViewProvider';
 logger.initialize(CHANNEL);
 
-export class AgentHistoryViewProvider implements vscode.WebviewViewProvider {
+export class HistoryViewProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'texra.historyView';
   private _view?: vscode.WebviewPanel;
 
@@ -41,7 +44,7 @@ export class AgentHistoryViewProvider implements vscode.WebviewViewProvider {
 
     // Otherwise, create a new panel
     this._view = vscode.window.createWebviewPanel(
-      AgentHistoryViewProvider.viewType,
+      HistoryViewProvider.viewType,
       'TeXRA History',
       vscode.ViewColumn.One,
       {
@@ -90,11 +93,11 @@ export class AgentHistoryViewProvider implements vscode.WebviewViewProvider {
    * Handle messages from the webview
    */
   private handlers: Record<string, (message: any) => Promise<void> | void> = {
-    getHistoryData: () => this.sendHistoryData(),
-    rerunAgent: (m) => this.rerunAgent(m.historyId),
-    restoreAgent: (m) => this.restoreAgent(m.historyId),
-    deleteAgent: (m) => this.deleteHistoryItem(m.historyId),
-    clearHistory: () => this.clearHistory(),
+    [HISTORY_VIEW_COMMANDS.GET_HISTORY_DATA]: () => this.sendHistoryData(),
+    [HISTORY_VIEW_COMMANDS.RERUN_AGENT]: (m: any) => this.rerunAgent(m.historyId),
+    [HISTORY_VIEW_COMMANDS.RESTORE_AGENT]: (m: any) => this.restoreAgent(m.historyId),
+    [HISTORY_VIEW_COMMANDS.DELETE_AGENT]: (m: any) => this.deleteHistoryItem(m.historyId),
+    [HISTORY_VIEW_COMMANDS.CLEAR_HISTORY]: () => this.clearHistory(),
   };
 
   private async handleWebviewMessage(message: any) {
@@ -113,7 +116,7 @@ export class AgentHistoryViewProvider implements vscode.WebviewViewProvider {
     // Send data to the webview
     if (this._view) {
       this._view.webview.postMessage({
-        command: 'updateHistory',
+        command: HISTORY_VIEW_COMMANDS.UPDATE_HISTORY,
         historyItems: history,
       });
     }
@@ -275,7 +278,9 @@ export class AgentHistoryViewProvider implements vscode.WebviewViewProvider {
 
       // Notify the webview
       if (this._view) {
-        this._view.webview.postMessage({ command: 'historyCleared' });
+        this._view.webview.postMessage({ 
+          command: HISTORY_VIEW_COMMANDS.HISTORY_CLEARED 
+        });
       }
     } catch (error) {
       vscode.window.showErrorMessage(`Failed to clear history: ${error}`);
