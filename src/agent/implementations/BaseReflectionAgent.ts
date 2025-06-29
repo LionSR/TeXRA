@@ -849,7 +849,10 @@ export abstract class BaseReflectionAgent extends BaseAgent {
       if (endTurn && this.agentConfig.outputFiles) {
         try {
           await checkExpectedOutputs(this.agentConfig.outputFiles, this);
-          this.logger.debug(`Expected outputs validated for round 0`, this.runGroupId);
+          this.logger.debug(
+            `Expected outputs validated for round 0`,
+            this.runGroupId,
+          );
         } catch (error) {
           this.logger.error(
             `Expected output validation failed after round 0: ${error instanceof Error ? error.message : String(error)}`,
@@ -873,7 +876,10 @@ export abstract class BaseReflectionAgent extends BaseAgent {
         if (this.agentConfig.outputFiles) {
           try {
             await checkExpectedOutputs(this.agentConfig.outputFiles, this);
-            this.logger.debug(`Expected outputs validated for round 1`, this.runGroupId);
+            this.logger.debug(
+              `Expected outputs validated for round 1`,
+              this.runGroupId,
+            );
           } catch (error) {
             this.logger.error(
               `Expected output validation failed after round 1: ${error instanceof Error ? error.message : String(error)}`,
