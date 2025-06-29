@@ -1,0 +1,105 @@
+import * as vscode from 'vscode';
+import * as logger from '@logger/logUtils';
+import { buildWebviewHtml } from '@frontend/webview/html';
+
+/**
+ * Base class for all webview content providers.
+ * Eliminates code duplication and provides consistent patterns.
+ */
+export abstract class BaseViewContentProvider {
+  protected readonly logger: any;
+
+  constructor(
+    protected readonly context: vscode.ExtensionContext,
+    protected readonly viewName: string
+  ) {
+    this.logger = logger;
+    logger.initialize(`${viewName}ContentProvider`);
+  }
+
+  /**
+   * Subclasses must provide the relative path to their view directory
+   */
+  protected abstract getViewPath(): string;
+
+  /**
+   * Subclasses must provide their specific module URIs
+   */
+  protected abstract getModuleUris(webview: vscode.Webview): Record<string, vscode.Uri>;
+
+  /**
+   * Optional: Override to provide additional template variables
+   */
+  protected getTemplateVariables(): Record<string, any> {
+    return {};
+  }
+
+  /**
+   * Common method to get webview paths
+   */
+  protected getWebviewPath(filePath: string): vscode.Uri {
+    return vscode.Uri.joinPath(
+      this.context.extensionUri,
+      'src',
+      this.getViewPath(),
+      filePath
+    );
+  }
+
+  protected getWebviewUri(webview: vscode.Webview, path: string): vscode.Uri {
+    return webview.asWebviewUri(this.getWebviewPath(path));
+  }
+
+  protected getCommonUri(webview: vscode.Webview, path: string): vscode.Uri {
+    return webview.asWebviewUri(
+      vscode.Uri.joinPath(this.context.extensionUri, 'src', 'common', path)
+    );
+  }
+
+  protected getNodeModulesUri(webview: vscode.Webview, path: string): vscode.Uri {
+    return webview.asWebviewUri(
+      vscode.Uri.joinPath(this.context.extensionUri, 'node_modules', path)
+    );
+  }
+
+  /**
+   * Standard implementation that subclasses can override if needed
+   */
+  public getHtmlContent(webview: vscode.Webview): string {
+    try {
+      const htmlPath = this.getWebviewPath('index.html');
+      const commonUris = this.getCommonModuleUris(webview);
+      const specificUris = this.getModuleUris(webview);
+      const templateVariables = this.getTemplateVariables();
+      
+      this.logger.debug(`Generated HTML content for ${this.viewName}`);
+      
+      return buildWebviewHtml(webview, htmlPath, {
+        ...commonUris,
+        ...specificUris,
+        ...templateVariables
+      });
+    } catch (err) {
+      this.logger.error(
+        `Error generating HTML content: ${err instanceof Error ? err.message : String(err)}`
+      );
+      return '<html><body>Error loading content</body></html>';
+    }
+  }
+
+  /**
+   * Common URIs used by all views
+   */
+  private getCommonModuleUris(webview: vscode.Webview): Record<string, vscode.Uri> {
+    return {
+      commonStyleUri: this.getCommonUri(webview, 'styles/common.css'),
+      webviewStateUri: this.getCommonUri(webview, 'modules/webviewState.js'),
+      webviewContextUri: this.getCommonUri(webview, 'modules/webviewContext.js'),
+      templateUtilsUri: this.getCommonUri(webview, 'modules/templateUtils.js'),
+      domUtilsUri: this.getCommonUri(webview, 'modules/domUtils.js'),
+      stringUtilsUri: this.getCommonUri(webview, 'modules/stringUtils.js'),
+      codiconUri: this.getNodeModulesUri(webview, '@vscode/codicons/dist/codicon.css'),
+      codiconsFontUri: this.getNodeModulesUri(webview, '@vscode/codicons/dist/codicon.ttf'),
+    };
+  }
+}

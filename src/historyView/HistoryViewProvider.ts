@@ -1,19 +1,11 @@
 import * as vscode from 'vscode';
-
-// Local imports - core
 import { AgentHistoryManager } from './AgentHistoryManager';
 import { executeCommand } from '@commands/agent/executeCommand';
-
 import { agentConfigToTaskState } from '@utils/config';
-import { buildWebviewHtml } from '@frontend/webview/html';
-
-// Local imports - log
-import * as logger from '@logger/logUtils';
-
 import { showLoggedErrorMessage } from '@utils/errorHandlingUtils';
-
-// Import standardized commands
 import { HISTORY_VIEW_COMMANDS } from '@common/webview/commands';
+import { HistoryViewContentProvider } from './HistoryViewContentProvider';
+import * as logger from '@logger/logUtils';
 
 const CHANNEL = 'HistoryViewProvider';
 logger.initialize(CHANNEL);
@@ -21,8 +13,11 @@ logger.initialize(CHANNEL);
 export class HistoryViewProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'texra.historyView';
   private _view?: vscode.WebviewPanel;
+  private readonly contentProvider: HistoryViewContentProvider;
 
-  constructor(private readonly context: vscode.ExtensionContext) {}
+  constructor(private readonly context: vscode.ExtensionContext) {
+    this.contentProvider = new HistoryViewContentProvider(context);
+  }
 
   /**
    * This is required for the WebviewViewProvider interface but we won't use it
@@ -127,80 +122,10 @@ export class HistoryViewProvider implements vscode.WebviewViewProvider {
    */
   private async updateWebviewContent() {
     if (this._view) {
-      this._view.webview.html = this.getWebviewContent();
+      this._view.webview.html = this.contentProvider.getHtmlContent(this._view.webview);
 
       // Send history data after a short delay to ensure the webview is ready
       setTimeout(() => this.sendHistoryData(), 100);
-    }
-  }
-
-  /**
-   * Generate the HTML content for the webview by loading the HTML file
-   */
-  private getWebviewContent(): string {
-    try {
-      const getHistoryViewPath = (path: string) =>
-        vscode.Uri.joinPath(
-          this.context.extensionUri,
-          'src',
-          'historyView',
-          path,
-        );
-      const getHistoryViewUri = (path: string) =>
-        this._view!.webview.asWebviewUri(getHistoryViewPath(path));
-      const getCommonUri = (path: string) =>
-        this._view!.webview.asWebviewUri(
-          vscode.Uri.joinPath(this.context.extensionUri, 'src', 'common', path),
-        );
-      const getNodeModulesUri = (path: string) =>
-        this._view!.webview.asWebviewUri(
-          vscode.Uri.joinPath(this.context.extensionUri, 'node_modules', path),
-        );
-
-      const htmlPath = getHistoryViewPath('index.html');
-      const scriptUri = getHistoryViewUri('script.js');
-      const styleUri = getHistoryViewUri('styles/style.css');
-
-      const domHandlersUri = getHistoryViewUri('modules/domHandlers.js');
-      const historyEventsUri = getHistoryViewUri('modules/historyEvents.js');
-      const historyRendererUri = getHistoryViewUri(
-        'modules/historyRenderer.js',
-      );
-      const historyViewStateUri = getHistoryViewUri(
-        'modules/historyViewState.js',
-      );
-      const searchManagerUri = getHistoryViewUri('modules/searchManager.js');
-      const messageHandlersUri = getHistoryViewUri(
-        'modules/messageHandlers.js',
-      );
-
-      // Common module URIs
-      const domUtilsUri = getCommonUri('modules/domUtils.js');
-      const webviewStateUri = getCommonUri('modules/webviewState.js');
-      const webviewContextUri = getCommonUri('modules/webviewContext.js');
-      const commonStyleUri = getCommonUri('styles/common.css');
-
-      // Node modules URIs
-      const codiconUri = getNodeModulesUri('@vscode/codicons/dist/codicon.css');
-
-      return buildWebviewHtml(this._view!.webview, htmlPath, {
-        scriptUri,
-        styleUri,
-        commonStyleUri,
-        webviewStateUri,
-        webviewContextUri,
-        codiconUri,
-        domHandlersUri,
-        historyEventsUri,
-        historyRendererUri,
-        historyViewStateUri,
-        searchManagerUri,
-        messageHandlersUri,
-        domUtilsUri,
-      });
-    } catch (error) {
-      console.error('Error generating HTML content:', error);
-      return `<html><body><h1>Error loading history view</h1><p>${error}</p></body></html>`;
     }
   }
 
