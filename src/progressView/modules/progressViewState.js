@@ -169,7 +169,7 @@ class StreamStatuses {
 export class ProgressViewState {
   constructor() {
     this.stateManager = new WebviewStateManager();
-    this.currentStream = '';
+    this.activeStream = '';
     this.currentGroupId = null;
 
     // Initialize managers
@@ -201,13 +201,13 @@ export class ProgressViewState {
     }
   }
 
-  // --- Current stream operations ---
-  getCurrentStream() {
-    return this.currentStream;
+  // --- Active stream operations ---
+  getActiveStream() {
+    return this.activeStream;
   }
 
-  setCurrentStream(stream) {
-    this.currentStream = stream;
+  setActiveStream(stream) {
+    this.activeStream = stream;
   }
 }
 
