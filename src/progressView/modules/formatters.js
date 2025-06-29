@@ -246,11 +246,11 @@ export class LogEntryFormatter {
           const icon = f.ok ? 'codicon-check' : 'codicon-warning';
           const filePath = String(f.path ?? '');
           const escaped = this._escapeHtml(filePath);
-          
+
           // Extract just the filename for display
           const fileName = filePath.split('/').pop() || filePath;
           const fileNameEscaped = this._escapeHtml(fileName);
-          
+
           // Build metadata string
           let metadata = '';
           if (f.varName) {
@@ -258,16 +258,17 @@ export class LogEntryFormatter {
           }
           if (source && source !== 'unknown') {
             // Simplify source display
-            const sourceDisplay = source.replace('requiredFiles', 'required')
-                                       .replace('Pattern ', '')
-                                       .replace(/'/g, '');
+            const sourceDisplay = source
+              .replace('requiredFiles', 'required')
+              .replace('Pattern ', '')
+              .replace(/'/g, '');
             if (f.internal) {
               metadata += ` <span class="file-source">(${sourceDisplay}, internal)</span>`;
             } else {
               metadata += ` <span class="file-source">(${sourceDisplay})</span>`;
             }
           }
-          
+
           items += `<li title="${escaped}"><i class="codicon ${icon}"></i> <span class="file-link clickable-link" data-file="${escaped}">${fileNameEscaped}</span> ${metadata}</li>`;
         });
       });
