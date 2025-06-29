@@ -34,7 +34,7 @@ export interface LogMessageData {
   /** Optional group association */
   groupId?: string;
   /** Optional message category */
-  messageType?: 'default' | 'scratchpad' | 'thinking';
+  messageType?: 'default' | 'scratchpad' | 'thinking' | 'fileList';
   /** Whether verbose details should be displayed */
   verbose?: boolean;
 }

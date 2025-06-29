@@ -147,6 +147,10 @@ export class LogEntryFormatter {
       return this._formatSpecialContent(htmlMessage, text, label, id);
     }
 
+    if (messageType === 'fileList') {
+      return this._formatFileList(htmlMessage, text, id);
+    }
+
     return htmlMessage;
   }
 
@@ -205,6 +209,32 @@ export class LogEntryFormatter {
     } catch (e) {
       console.error('Error parsing markdown:', e);
       // Fallback to original content
+      return message;
+    }
+  }
+
+  _formatFileList(message, content, logId) {
+    try {
+      const idAttr = logId ? ` data-log-id="${logId}"` : '';
+      const files = JSON.parse(this._unescapeHtml(content));
+      const items = files
+        .map((f) => {
+          const icon = f.ok ? 'codicon-check' : 'codicon-warning';
+          const filePath = this._unescapeHtml(f.path);
+          return `<li><i class="codicon ${icon}"></i> <span class="file-link clickable-link" data-file="${filePath}">${filePath}</span></li>`;
+        })
+        .join('');
+
+      return `<details class="file-list-details" open>
+        <summary>
+          <i class="${CHEVRON_DOWN_CLASS} toggle-icon"></i>
+          <i class="codicon codicon-list-tree"></i>
+          <span>Files</span>
+        </summary>
+        <ul class="file-list-content"${idAttr}>${items}</ul>
+      </details>`;
+    } catch (e) {
+      console.error('Error parsing file list:', e);
       return message;
     }
   }
