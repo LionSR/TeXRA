@@ -509,12 +509,12 @@ export class MessageHandlers {
 
   // Misc updates
   handleSetRecentCommits(message) {
-    fileSelect.handleRecentCommits(message);
+    fileSelect._handleRecentCommits(message);
     this._postHandle();
   }
 
   handleSetCurrentFile(message) {
-    fileSelect.handleSetCurrentFile({
+    fileSelect._handleSetCurrentFile({
       fileType: message.fileType,
       filePath: message.filePath,
     });

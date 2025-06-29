@@ -24,7 +24,7 @@ export class OutputFilesManager {
   }
 
   /** Initialize the output files list with the input file */
-  initializeOutputFiles() {
+  _initializeOutputFiles() {
     const state = this.state.get();
     const inputFileDiv = safeGetElementById(INPUT_FILE_ID);
     const outputFilesDiv = safeGetElementById(OUTPUT_FILES_ID);
@@ -73,14 +73,14 @@ export class OutputFilesManager {
     const containerVisible = container.style.display !== 'none';
 
     if (!containerVisible) {
-      this.initializeOutputFiles();
+      this._initializeOutputFiles();
     }
 
     this.fileList.toggle(OUTPUT_FILES_ID, TOGGLE_OUTPUT_FILES_ID);
   }
 
   /** Initialize the output files container based on state */
-  initializeOutputContainer() {
+  _initializeOutputContainer() {
     const container = safeGetElementById(OUTPUT_FILES_CONTAINER_ID);
     const toggleIcon = safeGetElementById(TOGGLE_OUTPUT_FILES_ID);
 

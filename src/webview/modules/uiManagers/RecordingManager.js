@@ -11,7 +11,7 @@ export class RecordingManager {
     this.isRecording = false;
   }
 
-  updateRecordingUI(recording) {
+  _updateRecordingUI(recording) {
     this.isRecording = recording;
     const recordButton = safeGetElementById('recordInstructionButton');
     if (recordButton) {
@@ -45,7 +45,7 @@ export class RecordingManager {
     });
 
     this.eventBus.addEventListener('recordingUIUpdate', (e) => {
-      this.updateRecordingUI(e.detail.recording);
+      this._updateRecordingUI(e.detail.recording);
     });
   }
 }

@@ -63,7 +63,7 @@ export class ActionButtonManager {
       const instruction = safeGetElementById('instruction');
       if (instruction) {
         instruction.value = '';
-        this.instructionManager.autoResizeTextarea(instruction);
+        this.instructionManager._autoResizeTextarea(instruction);
         this.state.save();
       }
     });

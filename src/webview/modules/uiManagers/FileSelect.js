@@ -45,14 +45,14 @@ export class FileSelect {
     }
   }
 
-  addOption(select, value, text) {
+  _addOption(select, value, text) {
     const option = document.createElement('option');
     option.value = value;
     option.textContent = text;
     select.appendChild(option);
   }
 
-  setElementsDisabled(elements, disabled) {
+  _setElementsDisabled(elements, disabled) {
     elements.forEach((el) => {
       if (typeof el === 'string') {
         const elem = document.getElementById(el);
@@ -63,7 +63,7 @@ export class FileSelect {
     });
   }
 
-  handleRecentCommits(message) {
+  _handleRecentCommits(message) {
     const commitButtons = [
       'packLatexdiffvcButton',
       'cleanLatexdiffvcButton',
@@ -73,19 +73,19 @@ export class FileSelect {
     commitDiv.innerHTML = '';
 
     if (message.isGitRepo === false) {
-      this.addOption(commitDiv, '', 'Not a Git repository');
-      this.setElementsDisabled([commitDiv, ...commitButtons], true);
+      this._addOption(commitDiv, '', 'Not a Git repository');
+      this._setElementsDisabled([commitDiv, ...commitButtons], true);
     } else {
-      this.addOption(commitDiv, 'HEAD', 'HEAD');
+      this._addOption(commitDiv, 'HEAD', 'HEAD');
       message.commits.forEach((commit) => {
         const [commitHash] = commit.split(': ');
-        this.addOption(commitDiv, commitHash, commit);
+        this._addOption(commitDiv, commitHash, commit);
       });
-      this.setElementsDisabled([commitDiv, ...commitButtons], false);
+      this._setElementsDisabled([commitDiv, ...commitButtons], false);
     }
   }
 
-  handleSetCurrentFile({ fileType, filePath }) {
+  _handleSetCurrentFile({ fileType, filePath }) {
     const fileId = `${uncapitalize(fileType)}File`;
     const fileDiv = document.getElementById(fileId);
     if (!fileDiv) {

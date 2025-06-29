@@ -8,7 +8,7 @@ export class InstructionManager {
     this.state = state;
   }
 
-  autoResizeTextarea(textarea) {
+  _autoResizeTextarea(textarea) {
     textarea.style.height = 'auto';
     const maxHeight = 400;
     const newHeight = Math.min(textarea.scrollHeight, maxHeight);
@@ -17,7 +17,7 @@ export class InstructionManager {
       textarea.scrollHeight > maxHeight ? 'auto' : 'hidden';
   }
 
-  insertTextAtCursor(textarea, text) {
+  _insertTextAtCursor(textarea, text) {
     const start = textarea.selectionStart;
     const end = textarea.selectionEnd;
     const original = textarea.value;
@@ -34,19 +34,19 @@ export class InstructionManager {
       return;
     }
 
-    this.autoResizeTextarea(textarea);
+    this._autoResizeTextarea(textarea);
 
     textarea.addEventListener('input', () => {
-      this.autoResizeTextarea(textarea);
+      this._autoResizeTextarea(textarea);
       this.state?.save();
     });
 
     setupPasteListener(
       textarea,
       this.vscode,
-      (ta) => this.autoResizeTextarea(ta),
+      (ta) => this._autoResizeTextarea(ta),
       () => this.state?.save(),
-      (ta, text) => this.insertTextAtCursor(ta, text),
+      (ta, text) => this._insertTextAtCursor(ta, text),
     );
   }
 }
