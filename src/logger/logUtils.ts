@@ -12,8 +12,15 @@ import { MESSAGE_TYPES, type MessageType } from './messageTypes';
 
 function isValidMessageType(
   type: unknown,
-): type is typeof MESSAGE_TYPES.THINKING | typeof MESSAGE_TYPES.SCRATCHPAD {
-  return type === MESSAGE_TYPES.THINKING || type === MESSAGE_TYPES.SCRATCHPAD;
+): type is
+  | typeof MESSAGE_TYPES.THINKING
+  | typeof MESSAGE_TYPES.SCRATCHPAD
+  | typeof MESSAGE_TYPES.FILE_LIST {
+  return (
+    type === MESSAGE_TYPES.THINKING ||
+    type === MESSAGE_TYPES.SCRATCHPAD ||
+    type === MESSAGE_TYPES.FILE_LIST
+  );
 }
 
 const { combine, timestamp } = winston.format;

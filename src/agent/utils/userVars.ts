@@ -11,6 +11,7 @@ import {
   getXmlFormatFromFiles,
   getListOfFiles,
 } from '@agent/utils/promptUtils';
+import { MESSAGE_TYPES } from '@logger/messageTypes';
 import { AgentConfig } from '../core/AgentConfig';
 import { AgentSetting } from '../core/AgentDataclass';
 import type { IModelHandler } from '@agent/modelHandlers';
@@ -125,19 +126,21 @@ async function getRequiredFileVars(
   logger: AgentLogger,
 ): Promise<Record<string, any>> {
   const userVars: Record<string, any> = {};
+  const results: { path: string; ok: boolean }[] = [];
 
   if (agentSetting.requiredFiles) {
     for (const [varName, filePath] of Object.entries(
       agentSetting.requiredFiles,
     )) {
       if (filePath) {
-        await setVarFromFile(
+        const ok = await setVarFromFile(
           filePath,
           varName,
           userVars,
           logger,
           'requiredFiles',
         );
+        results.push({ path: filePath, ok });
       }
     }
   }
@@ -147,7 +150,7 @@ async function getRequiredFileVars(
       agentSetting.requiredFilesInternal,
     )) {
       const fullPath = path.join(agentPath, filePath);
-      await setVarFromFile(
+      const ok = await setVarFromFile(
         fullPath,
         varName,
         userVars,
@@ -155,7 +158,12 @@ async function getRequiredFileVars(
         'requiredFilesInternal',
         true,
       );
+      results.push({ path: fullPath, ok });
     }
+  }
+
+  if (results.length > 0) {
+    logger.info(JSON.stringify(results), undefined, MESSAGE_TYPES.FILE_LIST);
   }
 
   return userVars;
