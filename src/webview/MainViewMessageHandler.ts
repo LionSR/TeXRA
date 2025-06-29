@@ -19,11 +19,12 @@ import {
   InstructionManager,
 } from './managers';
 
-// Local imports - agent
+// Import standardized commands
+import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
 
-const CHANNEL = 'MessageHandler';
+const CHANNEL = 'MainViewMessageHandler';
 
-export class WebviewMessageHandler {
+export class MainViewMessageHandler {
   private handlers: Record<
     string,
     (message: any, webviewView: vscode.WebviewView) => unknown
@@ -43,52 +44,52 @@ export class WebviewMessageHandler {
     this.diffManager = new DiffManager();
     this.instructionManager = new InstructionManager(context);
     this.handlers = {
-      showInformationMessage: (message) => this.handleInfoMessage(message),
-      getTheme: (_m, view) => this.handleThemeRequest(view),
-      getDebugMode: (_m, view) => this.handleDebugModeRequest(view),
-      modelSelected: (message, view) =>
+      [MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE]: (message) => this.handleInfoMessage(message),
+      [MAIN_VIEW_COMMANDS.GET_THEME]: (_m, view) => this.handleThemeRequest(view),
+      [MAIN_VIEW_COMMANDS.GET_DEBUG_MODE]: (_m, view) => this.handleDebugModeRequest(view),
+      [MAIN_VIEW_COMMANDS.MODEL_SELECTED]: (message, view) =>
         this.handleModelSelection(message, view),
-      execute: (message) => this.executionManager.handleExecute(message),
-      merge: (message) => this.executionManager.handleMerge(message),
-      compare: (message) => this.executionManager.handleCompare(message),
+      [MAIN_VIEW_COMMANDS.EXECUTE]: (message) => this.executionManager.handleExecute(message),
+      [MAIN_VIEW_COMMANDS.MERGE]: (message) => this.executionManager.handleMerge(message),
+      [MAIN_VIEW_COMMANDS.COMPARE]: (message) => this.executionManager.handleCompare(message),
       acceptEdited: (message) =>
         this.executionManager.handleAcceptEdited(message),
       // File selection cases
-      selectInputFile: (message, view) =>
+      [MAIN_VIEW_COMMANDS.SELECT_INPUT_FILE]: (message, view) =>
         this.fileManager.handleFileSelection(message, view),
-      selectReferenceFile: (message, view) =>
+      [MAIN_VIEW_COMMANDS.SELECT_REFERENCE_FILE]: (message, view) =>
         this.fileManager.handleFileSelection(message, view),
-      selectAuxiliaryFile: (message, view) =>
+      [MAIN_VIEW_COMMANDS.SELECT_AUXILIARY_FILE]: (message, view) =>
         this.fileManager.handleFileSelection(message, view),
-      selectMediaFile: (message, view) =>
+      [MAIN_VIEW_COMMANDS.SELECT_MEDIA_FILE]: (message, view) =>
         this.fileManager.handleFileSelection(message, view),
-      selectEditedFile: (_m, view) =>
+      [MAIN_VIEW_COMMANDS.SELECT_EDITED_FILE]: (_m, view) =>
         this.fileManager.handleEditedFileSelection(view),
       // File selected cases
-      inputFileSelected: (message, view) =>
+      [MAIN_VIEW_COMMANDS.INPUT_FILE_SELECTED]: (message, view) =>
         this.fileManager.handleInputFileSelected(message, view),
-      referenceFileSelected: (message) =>
+      [MAIN_VIEW_COMMANDS.REFERENCE_FILE_SELECTED]: (message) =>
         this.fileManager.handleGenericFileSelected(message),
-      auxiliaryFileSelected: (message) =>
+      [MAIN_VIEW_COMMANDS.AUXILIARY_FILE_SELECTED]: (message) =>
         this.fileManager.handleGenericFileSelected(message),
-      mediaFileSelected: (message) =>
+      [MAIN_VIEW_COMMANDS.MEDIA_FILE_SELECTED]: (message) =>
         this.fileManager.handleGenericFileSelected(message),
-      editedFileSelected: (message) =>
+      [MAIN_VIEW_COMMANDS.EDITED_FILE_SELECTED]: (message) =>
         this.fileManager.handleGenericFileSelected(message),
       // Request file cases
-      requestInputFile: (_m, view) =>
+      [MAIN_VIEW_COMMANDS.REQUEST_INPUT_FILE]: (_m, view) =>
         this.fileManager.handleRequestInputFile(view),
-      requestReferenceFile: (message, view) =>
+      [MAIN_VIEW_COMMANDS.REQUEST_REFERENCE_FILE]: (message, view) =>
         this.fileManager.handleRequestFile(message, view),
-      requestAuxiliaryFile: (message, view) =>
+      [MAIN_VIEW_COMMANDS.REQUEST_AUXILIARY_FILE]: (message, view) =>
         this.fileManager.handleRequestFile(message, view),
-      requestMediaFile: (message, view) =>
+      [MAIN_VIEW_COMMANDS.REQUEST_MEDIA_FILE]: (message, view) =>
         this.fileManager.handleRequestFile(message, view),
-      requestEditedFile: (message, view) =>
+      [MAIN_VIEW_COMMANDS.REQUEST_EDITED_FILE]: (message, view) =>
         this.fileManager.handleRequestEditedFile(message, view),
-      requestBaseFile: (_m, view) =>
+      [MAIN_VIEW_COMMANDS.REQUEST_BASE_FILE]: (_m, view) =>
         this.fileManager.handleRequestBaseFile(view),
-      requestDefaultOutputFiles: (message, view) =>
+      [MAIN_VIEW_COMMANDS.REQUEST_DEFAULT_OUTPUT_FILES]: (message, view) =>
         this.fileManager.handleRequestDefaultOutputFiles(message, view),
       // Handle file list updates from webview
       updateInputFiles: (message, view) =>
@@ -102,15 +103,15 @@ export class WebviewMessageHandler {
       updateOutputFiles: (message, view) =>
         this.fileManager.handleUpdateFiles(message, view),
       // Multiple file selection cases
-      setInputFiles: (message, view) =>
+      [MAIN_VIEW_COMMANDS.SET_INPUT_FILES]: (message, view) =>
         this.fileManager.handleSetMultipleFiles(message, view),
-      setReferenceFiles: (message, view) =>
+      [MAIN_VIEW_COMMANDS.SET_REFERENCE_FILES]: (message, view) =>
         this.fileManager.handleSetMultipleFiles(message, view),
-      setAuxiliaryFiles: (message, view) =>
+      [MAIN_VIEW_COMMANDS.SET_AUXILIARY_FILES]: (message, view) =>
         this.fileManager.handleSetMultipleFiles(message, view),
-      setMediaFiles: (message, view) =>
+      [MAIN_VIEW_COMMANDS.SET_MEDIA_FILES]: (message, view) =>
         this.fileManager.handleSetMultipleFiles(message, view),
-      selectMultipleFiles: (message, view) =>
+      [MAIN_VIEW_COMMANDS.SELECT_MULTIPLE_FILES]: (message, view) =>
         this.fileManager.handleSelectMultipleFiles(message, view),
       refreshAllFiles: (_m, view) =>
         this.fileManager.handleRefreshAllFiles(view),
@@ -139,21 +140,21 @@ export class WebviewMessageHandler {
       cleanLatexdiffvc: (message) =>
         this.diffManager.handleLatexdiffvcOperation(message),
       // VS Code logic cases
-      getCurrentFile: (message, view) =>
+      [MAIN_VIEW_COMMANDS.GET_CURRENT_FILE]: (message, view) =>
         this.fileManager.handleGetCurrentFile(message, view),
-      addOpenedFiles: (message, view) =>
+      [MAIN_VIEW_COMMANDS.ADD_OPENED_FILES]: (message, view) =>
         this.fileManager.handleAddOpenedFiles(message.fileType, view),
-      polishInstructionText: (message, view) =>
+      [MAIN_VIEW_COMMANDS.POLISH_INSTRUCTION_TEXT]: (message, view) =>
         this.instructionManager.handlePolishInstructionText(message, view),
-      transcribeInstruction: (_m, view) =>
+      [MAIN_VIEW_COMMANDS.TRANSCRIBE_INSTRUCTION]: (_m, view) =>
         this.instructionManager.handleTranscribeInstruction(view),
-      startRecording: (_m, view) => this.recordingManager.start(view),
-      stopRecording: (_m, view) => this.recordingManager.stop(view),
-      showAgentHistory: () => this.handleShowAgentHistory(),
+      [MAIN_VIEW_COMMANDS.START_RECORDING]: (_m, view) => this.recordingManager.start(view),
+      [MAIN_VIEW_COMMANDS.STOP_RECORDING]: (_m, view) => this.recordingManager.stop(view),
+      [MAIN_VIEW_COMMANDS.SHOW_AGENT_HISTORY]: () => this.handleShowAgentHistory(),
       openSettings: () => this.settingsManager.openSettings(),
-      openAgentSettings: () => this.settingsManager.openAgentSettings(),
-      openModelSettings: () => this.settingsManager.openModelSettings(),
-      clipboardImage: (message, view) =>
+      [MAIN_VIEW_COMMANDS.OPEN_AGENT_SETTINGS]: () => this.settingsManager.openAgentSettings(),
+      [MAIN_VIEW_COMMANDS.OPEN_MODEL_SETTINGS]: () => this.settingsManager.openModelSettings(),
+      [MAIN_VIEW_COMMANDS.CLIPBOARD_IMAGE]: (message, view) =>
         this.instructionManager.handleClipboardImage(message, view),
     };
   }

@@ -50,13 +50,11 @@ export class ProgressViewContentProvider {
       const formattersUri = getWebviewUri('modules/formatters.js');
       const taskManagersUri = getWebviewUri('modules/taskManagers.js');
       const usageManagersUri = getWebviewUri('modules/usageManagers.js');
-      const streamTabsUri = getWebviewUri('modules/uiManagers/StreamTabs.js');
-      const toolbarUri = getWebviewUri('modules/uiManagers/Toolbar.js');
-      const statusUri = getWebviewUri('modules/uiManagers/Status.js');
-      const fileListUri = getWebviewUri('modules/uiManagers/FileList.js');
-      const eventsUri = getWebviewUri('modules/uiManagers/Events.js');
       const constantsUri = getWebviewUri('modules/constants.js');
       const katexMacrosUri = getWebviewUri('modules/katexMacros.js');
+      
+      // Consolidated UI manager (replaces individual UI managers)
+      const uiManagerUri = getWebviewUri('modules/ProgressViewUIManager.js');
       const templateUtilsUri = getCommonUri('modules/templateUtils.js');
       const domUtilsUri = getCommonUri('modules/domUtils.js');
       const stringUtilsUri = getCommonUri('modules/stringUtils.js');
@@ -87,11 +85,7 @@ export class ProgressViewContentProvider {
         formattersUri,
         taskManagersUri,
         usageManagersUri,
-        streamTabsUri,
-        toolbarUri,
-        statusUri,
-        fileListUri,
-        eventsUri,
+        uiManagerUri,
       });
     } catch (err) {
       logger.error(

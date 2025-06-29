@@ -2,14 +2,14 @@
 import * as vscode from 'vscode';
 
 // Local imports - webview
-import { WebviewMessageHandler } from './webview/MessageHandler';
-import { WebviewContentProvider } from './webview/WebviewContentProvider';
+import { MainViewMessageHandler } from './webview/MainViewMessageHandler';
+import { MainViewContentProvider } from './webview/MainViewContentProvider';
 import { SecretManager } from '@frontend/secretManager';
 import { watchConfig } from '@utils/config';
 
 export class TeXRAViewProvider implements vscode.WebviewViewProvider {
-  private messageHandler: WebviewMessageHandler;
-  private contentProvider: WebviewContentProvider;
+  private messageHandler: MainViewMessageHandler;
+  private contentProvider: MainViewContentProvider;
   private fileWatcher: vscode.FileSystemWatcher | undefined;
   private webviewView: vscode.WebviewView | undefined;
 
@@ -19,8 +19,8 @@ export class TeXRAViewProvider implements vscode.WebviewViewProvider {
   private static apiKeyNotificationShown = false;
 
   constructor(private readonly context: vscode.ExtensionContext) {
-    this.messageHandler = new WebviewMessageHandler(context);
-    this.contentProvider = new WebviewContentProvider(context);
+    this.messageHandler = new MainViewMessageHandler(context);
+    this.contentProvider = new MainViewContentProvider(context);
     this.setupFileWatcher();
     this.setupConfigurationWatcher();
     this.registerCommandHandlers();

@@ -15,37 +15,11 @@ export const SPLIT_SIZES = {
 // Constants for layout configuration
 export const MAX_HEIGHT = 400;
 
-// Commands for stream management
-export const COMMANDS = {
-  SWITCH_STREAM: 'switchStream',
-  DELETE_STREAM: 'deleteStream',
-  STOP_STREAM: 'stopStream',
-  RUN_AGAIN: 'runAgain',
-  RESTORE_STATE: 'restoreState',
-  DIFF_STREAM: 'diffStream',
-  PACK_STREAM: 'packStream',
-  CLEAN_STREAM: 'cleanStream',
-  ERASE_STREAM: 'eraseStream',
-  DELETE_ALL: 'deleteAll',
-  UPDATE_STREAMS: 'updateStreams',
-  UPDATE_LOGS: 'updateLogs',
-  CLEAR_LOGS: 'clearLogs',
-  APPEND_LOG: 'appendLog',
-  UPDATE_LOG: 'updateLog',
-  ADD_LOG_GROUP: 'addLogGroup',
-  UPDATE_LOG_GROUP: 'updateLogGroup',
-  UPDATE_STATUS: 'updateStatus',
-  UPDATE_FILES: 'updateFiles',
-  UPDATE_USAGE: 'updateUsage',
-  UPDATE_GROUP_USAGE: 'updateGroupUsage',
-  OPEN_FILE: 'openFile',
-  COMPARE_ORIGINAL: 'compareOriginal',
-  COMPARE_PREVIOUS: 'comparePrevious',
-  ACCEPT_FILE: 'acceptFile',
-  MERGE_FILE: 'mergeFile',
-  LATEXDIFF_FILE: 'latexdiffFile',
-  WEBVIEW_READY: 'webviewReady',
-};
+// Import standardized commands
+import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands.js';
+
+// Use standardized commands
+export const COMMANDS = PROGRESS_VIEW_COMMANDS;
 
 export const TOOLBAR_BUTTONS = [
   {

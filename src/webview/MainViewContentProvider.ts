@@ -10,10 +10,10 @@ import * as logger from '@logger/logUtils';
 import { getConfig } from '@utils/config';
 import { buildWebviewHtml } from '@frontend/webview/html';
 
-const CHANNEL = 'Webview';
+const CHANNEL = 'MainView';
 logger.initialize(CHANNEL);
 
-export class WebviewContentProvider {
+export class MainViewContentProvider {
   constructor(private readonly context: vscode.ExtensionContext) {}
 
   getHtmlContent(webview: vscode.Webview): string {
@@ -38,7 +38,7 @@ export class WebviewContentProvider {
       const webviewStateUri = getCommonUri('modules/webviewState.js');
 
       // Get URIs for all modules
-      const webviewStateModuleUri = getWebviewUri('modules/webviewState.js');
+      const webviewStateModuleUri = getWebviewUri('modules/mainViewState.js');
       const messageHandlersUri = getWebviewUri('modules/messageHandlers.js');
       const fileHandlersUri = getWebviewUri('modules/fileHandlers.js');
       const fileListUri = getWebviewUri('modules/uiManagers/FileList.js');
@@ -82,7 +82,7 @@ export class WebviewContentProvider {
         .map((model) => `<option value="${model}">${model}</option>`)
         .join('\n');
 
-      logger.debug(CHANNEL, 'Generated HTML content for webview');
+      logger.debug(CHANNEL, 'Generated HTML content for main webview');
       return buildWebviewHtml(webview, htmlPath, {
         commonStyleUri,
         styleUri,
