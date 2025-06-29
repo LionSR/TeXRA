@@ -5,7 +5,7 @@ import { TaskGroupHeaderFormatter, LogEntryFormatter } from './formatters.js';
 /**
  * Manages task group DOM operations.
  */
-export class TaskGroupsDom {
+export class TaskGroupManager {
   constructor() {
     this.headerFormatter = new TaskGroupHeaderFormatter();
     this.previousActiveGroupId = null;
@@ -267,7 +267,7 @@ export class TaskGroupsDom {
 /**
  * Manages individual log entry DOM operations.
  */
-export class LogEntriesDom {
+export class LogEntryManager {
   constructor() {
     this.entryFormatter = new LogEntryFormatter();
   }
