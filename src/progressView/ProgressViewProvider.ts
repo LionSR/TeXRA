@@ -114,8 +114,8 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       new vscode.Disposable(
         onProgress(
           'setTaskState',
-          (p: { streamId: string; taskState: TaskState }) =>
-            this.setTaskState(p.streamId, p.taskState),
+          (p: { streamId: string; taskId?: string; taskState: TaskState }) =>
+            this.setTaskState(p.streamId, p.taskState, p.taskId),
         ),
       ),
       new vscode.Disposable(
@@ -723,14 +723,25 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     }
   }
 
-  public setTaskState(streamId: string, taskState: TaskState): void {
+  public setTaskState(
+    streamId: string,
+    taskState: TaskState,
+    taskId?: string,
+  ): void {
     this.logger.debug(`Setting taskState for stream: ${streamId}`);
     // this.logger.debug(`Task state: ${JSON.stringify(taskState)}`);
     this._stateManager.taskStates.set(streamId, taskState);
+    if (taskId) {
+      this._stateManager.taskIds.set(streamId, taskId);
+    }
     this.saveTaskStates();
     this.logger.debug(
       `Current taskStates: ${JSON.stringify(Array.from(this._stateManager.taskStates.entries()))}`,
     );
+  }
+
+  public getTaskId(streamId: string): string | undefined {
+    return this._stateManager.taskIds.get(streamId);
   }
 
   public getTaskState(streamId: string): TaskState | undefined {
