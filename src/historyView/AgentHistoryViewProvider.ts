@@ -167,6 +167,9 @@ export class AgentHistoryViewProvider implements vscode.WebviewViewProvider {
         'modules/historyViewState.js',
       );
       const searchManagerUri = getHistoryViewUri('modules/searchManager.js');
+      const messageHandlersUri = getHistoryViewUri(
+        'modules/messageHandlers.js',
+      );
 
       // Common module URIs
       const domUtilsUri = getCommonUri('modules/domUtils.js');
@@ -189,6 +192,7 @@ export class AgentHistoryViewProvider implements vscode.WebviewViewProvider {
         historyRendererUri,
         historyViewStateUri,
         searchManagerUri,
+        messageHandlersUri,
         domUtilsUri,
       });
     } catch (error) {
