@@ -1,98 +1,33 @@
-// Standard library imports
-
-// Third-party imports
 import * as vscode from 'vscode';
+import { BaseViewContentProvider } from '@common/webview/BaseViewContentProvider';
 
-// Local imports - log
-import * as logger from '@logger/logUtils';
-import { buildWebviewHtml } from '@frontend/webview/html';
+export class ProgressViewContentProvider extends BaseViewContentProvider {
+  constructor(context: vscode.ExtensionContext) {
+    super(context, 'ProgressView');
+  }
 
-const CHANNEL = 'Webview';
-logger.initialize(CHANNEL);
+  protected getViewPath(): string {
+    return 'progressView';
+  }
 
-export class ProgressViewContentProvider {
-  constructor(private readonly context: vscode.ExtensionContext) {}
-
-  getHtmlContent(webview: vscode.Webview): string {
-    try {
-      const getWebviewPath = (filePath: string) =>
-        vscode.Uri.joinPath(
-          this.context.extensionUri,
-          'src',
-          'progressView',
-          filePath,
-        );
-      const getWebviewUri = (path: string) =>
-        webview.asWebviewUri(getWebviewPath(path));
-      const getCommonUri = (path: string) =>
-        webview.asWebviewUri(
-          vscode.Uri.joinPath(this.context.extensionUri, 'src', 'common', path),
-        );
-      const getNodeModulesUri = (path: string) =>
-        webview.asWebviewUri(
-          vscode.Uri.joinPath(this.context.extensionUri, 'node_modules', path),
-        );
-
-      const htmlPath = getWebviewPath('index.html');
-      const styleUri = getWebviewUri('styles/index.css');
-      const commonStyleUri = getCommonUri('styles/common.css');
-      const scriptUri = getWebviewUri('script.js');
-      const splitJsUri = getNodeModulesUri('split.js/dist/split.es.js');
-      const webviewStateUri = getCommonUri('modules/webviewState.js');
-
-      // Module paths
-      const webviewContextUri = getCommonUri('modules/webviewContext.js');
-      const progressViewStateUri = getWebviewUri(
-        'modules/progressViewState.js',
-      );
-      const messageHandlersUri = getWebviewUri('modules/messageHandlers.js');
-      const domHandlersUri = getWebviewUri('modules/domHandlers.js');
-      const formattersUri = getWebviewUri('modules/formatters.js');
-      const taskManagersUri = getWebviewUri('modules/taskManagers.js');
-      const usageManagersUri = getWebviewUri('modules/usageManagers.js');
-      const constantsUri = getWebviewUri('modules/constants.js');
-      const katexMacrosUri = getWebviewUri('modules/katexMacros.js');
+  protected getModuleUris(webview: vscode.Webview): Record<string, vscode.Uri> {
+    return {
+      styleUri: this.getWebviewUri(webview, 'styles/index.css'),
+      scriptUri: this.getWebviewUri(webview, 'script.js'),
+      splitJsUri: this.getNodeModulesUri(webview, 'split.js/dist/split.es.js'),
       
-      // Consolidated UI manager (replaces individual UI managers)
-      const uiManagerUri = getWebviewUri('modules/ProgressViewUIManager.js');
-      const templateUtilsUri = getCommonUri('modules/templateUtils.js');
-      const domUtilsUri = getCommonUri('modules/domUtils.js');
-      const stringUtilsUri = getCommonUri('modules/stringUtils.js');
-
-      const codiconUri = getNodeModulesUri('@vscode/codicons/dist/codicon.css');
-      const codiconsFontUri = getNodeModulesUri(
-        '@vscode/codicons/dist/codicon.ttf',
-      );
-
-      logger.debug(CHANNEL, 'Generated HTML content for ProgressView');
-      return buildWebviewHtml(webview, htmlPath, {
-        commonStyleUri,
-        styleUri,
-        scriptUri,
-        splitJsUri,
-        codiconUri,
-        codiconsFontUri,
-        webviewStateUri,
-        progressViewStateUri,
-        messageHandlersUri,
-        domHandlersUri,
-        domUtilsUri,
-        stringUtilsUri,
-        templateUtilsUri,
-        webviewContextUri,
-        constantsUri,
-        katexMacrosUri,
-        formattersUri,
-        taskManagersUri,
-        usageManagersUri,
-        uiManagerUri,
-      });
-    } catch (err) {
-      logger.error(
-        CHANNEL,
-        `Error generating HTML content: ${err instanceof Error ? err.message : String(err)}`,
-      );
-      return '<html><body>Error loading content</body></html>';
-    }
+      // Progress view specific modules
+      progressViewStateUri: this.getWebviewUri(webview, 'modules/progressViewState.js'),
+      messageHandlersUri: this.getWebviewUri(webview, 'modules/messageHandlers.js'),
+      domHandlersUri: this.getWebviewUri(webview, 'modules/domHandlers.js'),
+      formattersUri: this.getWebviewUri(webview, 'modules/formatters.js'),
+      taskManagersUri: this.getWebviewUri(webview, 'modules/taskManagers.js'),
+      usageManagersUri: this.getWebviewUri(webview, 'modules/usageManagers.js'),
+      constantsUri: this.getWebviewUri(webview, 'modules/constants.js'),
+      katexMacrosUri: this.getWebviewUri(webview, 'modules/katexMacros.js'),
+      
+      // Consolidated UI manager
+      uiManagerUri: this.getWebviewUri(webview, 'modules/ProgressViewUIManager.js'),
+    };
   }
 }
