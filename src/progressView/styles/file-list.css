@@ -43,3 +43,18 @@
   opacity: var(--opacity-subtle);
   font-size: var(--font-size-sm);
 }
+
+/* File metadata styling */
+.file-list-content .file-var {
+  color: var(--vscode-descriptionForeground);
+  opacity: 0.8;
+  font-size: 0.9em;
+  margin-left: var(--spacing-tiny);
+}
+
+.file-list-content .file-source {
+  color: var(--vscode-descriptionForeground);
+  opacity: 0.6;
+  font-size: 0.85em;
+  font-style: italic;
+}
