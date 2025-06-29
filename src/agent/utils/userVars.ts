@@ -11,6 +11,7 @@ import {
   getXmlFormatFromFiles,
   getListOfFiles,
 } from '@agent/utils/promptUtils';
+import { MESSAGE_TYPES } from '@logger/messageTypes';
 import { AgentConfig } from '../core/AgentConfig';
 import { AgentSetting } from '../core/AgentDataclass';
 import type { IModelHandler } from '@agent/modelHandlers';
@@ -26,18 +27,39 @@ export async function buildUserVars(
   logger: AgentLogger,
 ): Promise<Record<string, any>> {
   const userVars: Record<string, any> = {};
+  const allLoadedFiles: {
+    path: string;
+    ok: boolean;
+    varName: string;
+    source: string;
+    internal?: boolean;
+  }[] = [];
+
   Object.assign(userVars, getBasicVars(agentConfig, modelHandler));
   Object.assign(userVars, await getFileVars(agentConfig));
-  Object.assign(
-    userVars,
-    await getRequiredFileVars(agentSetting, agentPath, logger),
-  );
-  Object.assign(
-    userVars,
-    await getPatternBasedFileVars(agentConfig, agentSetting, logger),
-  );
+
+  const { vars: requiredVars, files: requiredFiles } =
+    await getRequiredFileVars(agentSetting, agentPath, logger);
+  Object.assign(userVars, requiredVars);
+  allLoadedFiles.push(...requiredFiles);
+
+  const { vars: patternVars, files: patternFiles } =
+    await getPatternBasedFileVars(agentConfig, agentSetting, logger);
+  Object.assign(userVars, patternVars);
+  allLoadedFiles.push(...patternFiles);
+
   Object.assign(userVars, getOutputFilesOrder(agentConfig, agentSetting));
   Object.assign(userVars, getToolFlags(agentConfig, agentSetting));
+
+  // Emit aggregated file list if any files were loaded
+  if (allLoadedFiles.length > 0) {
+    logger.info(
+      JSON.stringify(allLoadedFiles),
+      undefined,
+      MESSAGE_TYPES.FILE_LIST,
+    );
+  }
+
   return userVars;
 }
 
@@ -123,21 +145,38 @@ async function getRequiredFileVars(
   agentSetting: AgentSetting,
   agentPath: string,
   logger: AgentLogger,
-): Promise<Record<string, any>> {
+): Promise<{
+  vars: Record<string, any>;
+  files: Array<{
+    path: string;
+    ok: boolean;
+    varName: string;
+    source: string;
+    internal?: boolean;
+  }>;
+}> {
   const userVars: Record<string, any> = {};
+  const files: {
+    path: string;
+    ok: boolean;
+    varName: string;
+    source: string;
+    internal?: boolean;
+  }[] = [];
 
   if (agentSetting.requiredFiles) {
     for (const [varName, filePath] of Object.entries(
       agentSetting.requiredFiles,
     )) {
       if (filePath) {
-        await setVarFromFile(
+        const ok = await setVarFromFile(
           filePath,
           varName,
           userVars,
           logger,
           'requiredFiles',
         );
+        files.push({ path: filePath, ok, varName, source: 'requiredFiles' });
       }
     }
   }
@@ -147,7 +186,7 @@ async function getRequiredFileVars(
       agentSetting.requiredFilesInternal,
     )) {
       const fullPath = path.join(agentPath, filePath);
-      await setVarFromFile(
+      const ok = await setVarFromFile(
         fullPath,
         varName,
         userVars,
@@ -155,18 +194,41 @@ async function getRequiredFileVars(
         'requiredFilesInternal',
         true,
       );
+      files.push({
+        path: fullPath,
+        ok,
+        varName,
+        source: 'requiredFilesInternal',
+        internal: true,
+      });
     }
   }
 
-  return userVars;
+  return { vars: userVars, files };
 }
 
 async function getPatternBasedFileVars(
   agentConfig: AgentConfig,
   agentSetting: AgentSetting,
   logger: AgentLogger,
-): Promise<Record<string, any>> {
+): Promise<{
+  vars: Record<string, any>;
+  files: Array<{
+    path: string;
+    ok: boolean;
+    varName: string;
+    source: string;
+    internal?: boolean;
+  }>;
+}> {
   const userVars: Record<string, any> = {};
+  const files: {
+    path: string;
+    ok: boolean;
+    varName: string;
+    source: string;
+    internal?: boolean;
+  }[] = [];
 
   if (agentSetting.filePatternsContain) {
     for (const patternConfig of agentSetting.filePatternsContain) {
@@ -179,26 +241,38 @@ async function getPatternBasedFileVars(
 
         if (category.endsWith('File')) {
           if (categoryValue && categoryValue.toLowerCase().includes(pattern)) {
-            await setVarFromFile(
+            const ok = await setVarFromFile(
               categoryValue,
               varName,
               userVars,
               logger,
               `Pattern '${pattern}'`,
             );
+            files.push({
+              path: categoryValue,
+              ok,
+              varName,
+              source: `Pattern '${pattern}'`,
+            });
           }
         } else if (category.endsWith('Files')) {
           if (categoryValue) {
             for (const file of categoryValue) {
               if (file.toLowerCase().includes(pattern)) {
-                const success = await setVarFromFile(
+                const ok = await setVarFromFile(
                   file,
                   varName,
                   userVars,
                   logger,
                   `Pattern '${pattern}'`,
                 );
-                if (success) {
+                files.push({
+                  path: file,
+                  ok,
+                  varName,
+                  source: `Pattern '${pattern}'`,
+                });
+                if (ok) {
                   break;
                 }
               }
@@ -209,7 +283,7 @@ async function getPatternBasedFileVars(
     }
   }
 
-  return userVars;
+  return { vars: userVars, files };
 }
 
 function getOutputFilesOrder(
