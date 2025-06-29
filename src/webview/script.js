@@ -17,7 +17,7 @@ window.addEventListener('beforeunload', () => {
 // Setup UI when DOM is loaded
 document.addEventListener('DOMContentLoaded', function () {
   webviewState.restore();
-  instructionManager.init();
+  instructionManager.setup();
   webviewDomHandler.initializeUI();
   toggleManager.updateToolConfigToggleState();
   toggleManager.updateAutoToggleState();
