@@ -154,6 +154,15 @@ export class LogEntryFormatter {
     return htmlMessage;
   }
 
+  _escapeHtml(text) {
+    return text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
   _unescapeHtml(text) {
     return text
       .replace(/&lt;/g, '<')
@@ -216,12 +225,17 @@ export class LogEntryFormatter {
   _formatFileList(message, content, logId) {
     try {
       const idAttr = logId ? ` data-log-id="${logId}"` : '';
-      const files = JSON.parse(this._unescapeHtml(content));
-      const items = files
+      const parsed = JSON.parse(this._unescapeHtml(content));
+      if (!Array.isArray(parsed)) {
+        throw new Error('Invalid file list');
+      }
+
+      const items = parsed
         .map((f) => {
           const icon = f.ok ? 'codicon-check' : 'codicon-warning';
-          const filePath = this._unescapeHtml(f.path);
-          return `<li><i class="codicon ${icon}"></i> <span class="file-link clickable-link" data-file="${filePath}">${filePath}</span></li>`;
+          const filePath = String(f.path ?? '');
+          const escaped = this._escapeHtml(filePath);
+          return `<li><i class="codicon ${icon}"></i> <span class="file-link clickable-link" data-file="${escaped}">${escaped}</span></li>`;
         })
         .join('');
 
