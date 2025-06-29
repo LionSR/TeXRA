@@ -34,8 +34,8 @@ export class StreamTabs {
       })
       .join('');
 
-    // Update current stream name
-    const streamNameElem = document.getElementById('currentStreamName');
+    // Update active stream name
+    const streamNameElem = document.getElementById('activeStreamName');
     if (streamNameElem) {
       streamNameElem.textContent = activeStream || '';
     }
