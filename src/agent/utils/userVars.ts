@@ -163,7 +163,7 @@ async function getRequiredFileVars(
   }
 
   if (results.length > 0) {
-    logger.debug(JSON.stringify(results), undefined, MESSAGE_TYPES.FILE_LIST);
+    logger.info(JSON.stringify(results), undefined, MESSAGE_TYPES.FILE_LIST);
   }
 
   return userVars;
