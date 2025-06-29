@@ -246,10 +246,29 @@ export class LogEntryFormatter {
           const icon = f.ok ? 'codicon-check' : 'codicon-warning';
           const filePath = String(f.path ?? '');
           const escaped = this._escapeHtml(filePath);
-          const varName = f.varName ? ` [VAR '${f.varName}']` : '';
-          const sourceLabel = f.internal ? ' (internal)' : '';
-          const sourceInfo = ` [${source}]`;
-          items += `<li><i class="codicon ${icon}"></i> <span class="file-link clickable-link" data-file="${escaped}">${escaped}</span>${varName}${sourceInfo}${sourceLabel}</li>`;
+          
+          // Extract just the filename for display
+          const fileName = filePath.split('/').pop() || filePath;
+          const fileNameEscaped = this._escapeHtml(fileName);
+          
+          // Build metadata string
+          let metadata = '';
+          if (f.varName) {
+            metadata += `<span class="file-var">[${f.varName}]</span>`;
+          }
+          if (source && source !== 'unknown') {
+            // Simplify source display
+            const sourceDisplay = source.replace('requiredFiles', 'required')
+                                       .replace('Pattern ', '')
+                                       .replace(/'/g, '');
+            if (f.internal) {
+              metadata += ` <span class="file-source">(${sourceDisplay}, internal)</span>`;
+            } else {
+              metadata += ` <span class="file-source">(${sourceDisplay})</span>`;
+            }
+          }
+          
+          items += `<li title="${escaped}"><i class="codicon ${icon}"></i> <span class="file-link clickable-link" data-file="${escaped}">${fileNameEscaped}</span> ${metadata}</li>`;
         });
       });
 
