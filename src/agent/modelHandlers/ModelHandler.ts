@@ -9,7 +9,7 @@ import { AgentLogger } from '@logger/AgentLogger';
 
 // Local imports - utilities
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
-import { getPastedImageDisplayName } from '@utils/files/pastedImageUtils';
+import { MESSAGE_TYPES } from '@logger/messageTypes';
 import {
   getBase64EncodedMedia,
   countPdfPages,
@@ -420,7 +420,7 @@ export abstract class ModelHandler<U = any, R = any>
    */
   public async createMediaMessage(mediaFiles: string[]): Promise<any[]> {
     const mediaMessage: MediaEntry[] = [];
-    const addedMedia: string[] = [];
+    const mediaFileResults: Array<{ path: string; ok: boolean }> = [];
 
     for (const mediaFile of mediaFiles) {
       // Check if this is an absolute path (for pasted images in storage)
@@ -431,6 +431,7 @@ export abstract class ModelHandler<U = any, R = any>
 
       if (!fileExistsResult) {
         this.logger.error(`File not found: ${mediaFile}`);
+        mediaFileResults.push({ path: mediaFile, ok: false });
         continue;
       }
 
@@ -459,7 +460,7 @@ export abstract class ModelHandler<U = any, R = any>
             media_category: mediaCategory,
           };
           mediaMessage.push(imageEntry);
-          addedMedia.push(mediaFile);
+          mediaFileResults.push({ path: mediaFile, ok: true });
           this.logger.debug(`Added native PDF: ${mediaFile}`);
           continue;
         }
@@ -476,8 +477,8 @@ export abstract class ModelHandler<U = any, R = any>
               media_category: mediaCategory,
             };
             mediaMessage.push(mediaEntry);
-            addedMedia.push(`${mediaFile}_page_${i + 1}`);
           }
+          mediaFileResults.push({ path: mediaFile, ok: true });
         } else {
           this.logger.debug(
             `Adding single part to the media contents: ${mediaFile}`,
@@ -489,29 +490,24 @@ export abstract class ModelHandler<U = any, R = any>
             media_category: mediaCategory,
           };
           mediaMessage.push(mediaEntry);
-          addedMedia.push(mediaFile);
+          mediaFileResults.push({ path: mediaFile, ok: true });
         }
       } catch (err) {
         this.logger.error(`Failed to process media ${mediaFile}: ${err}`);
+        mediaFileResults.push({ path: mediaFile, ok: false });
         continue;
       }
     }
 
-    if (mediaFiles.length > 0) {
-      this.logger.debug(`Trying to load media: ${mediaFiles}`);
-
-      if (addedMedia.length < mediaFiles.length) {
-        this.logger.warn(
-          `Requested ${mediaFiles.length} media files but loaded ${addedMedia.length}: ${addedMedia}`,
-          // TODO: we should just show the files that were not loaded.
-        );
-      } else {
-        // Show simplified paths in logs
-        const simplifiedMedia = addedMedia.map((m) =>
-          getPastedImageDisplayName(m),
-        );
-        this.logger.info(`Added: ${simplifiedMedia}`);
+    if (mediaFileResults.length > 0) {
+      if (mediaFileResults.some((r) => !r.ok)) {
+        this.logger.warn('Some media files failed to load');
       }
+      this.logger.info(
+        JSON.stringify(mediaFileResults),
+        undefined,
+        MESSAGE_TYPES.FILE_LIST,
+      );
     }
 
     return this.createMediaContent(mediaMessage);
