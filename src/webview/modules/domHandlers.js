@@ -20,67 +20,75 @@ export const instructionManager = new InstructionManager(
 export const toggleManager = new ToggleManager();
 export const recordingManager = new RecordingManager(vscode, webviewEventBus);
 
-let fileInputManager;
-let actionButtonManager;
-let settingsButtonManager;
+/**
+ * Coordinates UI managers for the main webview.
+ */
+export class WebviewDomHandler {
+  constructor() {
+    this.fileInputManager = null;
+    this.actionButtonManager = null;
+    this.settingsButtonManager = null;
+    this.debugMode = false;
+  }
 
-let debugMode = false;
+  _updateDebugButtonVisibility() {
+    const packBtn = document.getElementById('packButton');
+    const cleanBtn = document.getElementById('cleanButton');
+    [packBtn, cleanBtn].forEach((btn) => {
+      if (btn) {
+        btn.style.display = this.debugMode ? '' : 'none';
+      }
+    });
+  }
 
-function updateDebugButtonVisibility() {
-  const packBtn = document.getElementById('packButton');
-  const cleanBtn = document.getElementById('cleanButton');
-  [packBtn, cleanBtn].forEach((btn) => {
-    if (btn) {
-      btn.style.display = debugMode ? '' : 'none';
+  setDebugMode(enabled) {
+    this.debugMode = !!enabled;
+    this._updateDebugButtonVisibility();
+  }
+
+  initializeUI() {
+    this._updateDebugButtonVisibility();
+
+    this.fileInputManager = new FileInputManager(
+      vscode,
+      webviewState,
+      fileList,
+      fileSelect,
+      outputFilesManager,
+    );
+    this.actionButtonManager = new ActionButtonManager(
+      vscode,
+      fileList,
+      webviewState,
+      instructionManager,
+    );
+    this.settingsButtonManager = new SettingsButtonManager(
+      vscode,
+      toggleManager,
+      latexdiffManager,
+      webviewState,
+    );
+
+    this.fileInputManager.setup();
+    this.actionButtonManager.setup();
+    this.settingsButtonManager.setup();
+    recordingManager.setupRecordButton();
+  }
+
+  cleanupUI() {
+    if (this.fileInputManager) {
+      this.fileInputManager.cleanup();
+      this.fileInputManager = null;
     }
-  });
-}
-
-export function setDebugMode(enabled) {
-  debugMode = !!enabled;
-  updateDebugButtonVisibility();
-}
-
-export function initializeUI() {
-  updateDebugButtonVisibility();
-
-  fileInputManager = new FileInputManager(
-    vscode,
-    webviewState,
-    fileList,
-    fileSelect,
-    outputFilesManager,
-  );
-  actionButtonManager = new ActionButtonManager(
-    vscode,
-    fileList,
-    webviewState,
-    instructionManager,
-  );
-  settingsButtonManager = new SettingsButtonManager(
-    vscode,
-    toggleManager,
-    latexdiffManager,
-    webviewState,
-  );
-
-  fileInputManager.setup();
-  actionButtonManager.setup();
-  settingsButtonManager.setup();
-  recordingManager.setupRecordButton();
-}
-
-export function cleanupUI() {
-  if (fileInputManager) {
-    fileInputManager.cleanup();
-    fileInputManager = null;
-  }
-  if (actionButtonManager) {
-    actionButtonManager.cleanup();
-    actionButtonManager = null;
-  }
-  if (settingsButtonManager) {
-    settingsButtonManager.cleanup();
-    settingsButtonManager = null;
+    if (this.actionButtonManager) {
+      this.actionButtonManager.cleanup();
+      this.actionButtonManager = null;
+    }
+    if (this.settingsButtonManager) {
+      this.settingsButtonManager.cleanup();
+      this.settingsButtonManager = null;
+    }
   }
 }
+
+export const webviewDomHandler = new WebviewDomHandler();
