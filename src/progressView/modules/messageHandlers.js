@@ -47,21 +47,21 @@ export class ProgressMessageHandlers {
   }
 
   handleUpdateStreams(message) {
-    state.setCurrentStream(message.currentStream);
-    dom.streamTabs.update(message.streams, message.currentStream);
+    state.setActiveStream(message.activeStream);
+    dom.streamTabs.update(message.streams, message.activeStream);
 
     // Update status based on whether there's an active stream
-    if (!message.currentStream) {
+    if (!message.activeStream) {
       dom.status.update(STATUS.READY);
     } else {
-      const streamStatus = state.streamStatuses.get(message.currentStream);
+      const streamStatus = state.streamStatuses.get(message.activeStream);
       dom.status.update(streamStatus || STATUS.STOPPED);
     }
   }
 
   handleUpdateLogs(message) {
     const logContent = document.getElementById('logContent');
-    if (message.stream === state.getCurrentStream()) {
+    if (message.stream === state.getActiveStream()) {
       logContent.innerHTML = '';
       state.taskGroups.clear();
       if (message.groups && message.groups.length > 0) {
@@ -110,7 +110,7 @@ export class ProgressMessageHandlers {
   }
 
   handleAppendLog(message) {
-    if (message.stream === state.getCurrentStream()) {
+    if (message.stream === state.getActiveStream()) {
       const logContent = document.getElementById('logContent');
       const addedToGroup = dom.logEntries.append(message.logMessage);
       if (!addedToGroup) {
@@ -123,13 +123,13 @@ export class ProgressMessageHandlers {
   }
 
   handleUpdateLog(message) {
-    if (message.stream === state.getCurrentStream()) {
+    if (message.stream === state.getActiveStream()) {
       dom.logEntries.update(message.logMessage);
     }
   }
 
   handleAddLogGroup(message) {
-    if (message.stream === state.getCurrentStream()) {
+    if (message.stream === state.getActiveStream()) {
       const logContent = document.getElementById('logContent');
       dom.taskGroups.add(message.group);
       logContent.scrollTop = logContent.scrollHeight;
@@ -137,7 +137,7 @@ export class ProgressMessageHandlers {
   }
 
   handleUpdateLogGroup(message) {
-    if (message.stream === state.getCurrentStream()) {
+    if (message.stream === state.getActiveStream()) {
       state.taskGroups.update(message.groupId, message.status, message.endTime);
       dom.taskGroups.update(message.groupId, message.status, message.endTime);
     }
@@ -152,13 +152,13 @@ export class ProgressMessageHandlers {
   }
 
   handleUpdateGroupUsage(message) {
-    if (message.stream === state.getCurrentStream()) {
+    if (message.stream === state.getActiveStream()) {
       dom.usageGroup.update(message.groupId, message.usage);
     }
   }
 
   handleUpdateFiles(message) {
-    if (message.stream === state.getCurrentStream()) {
+    if (message.stream === state.getActiveStream()) {
       dom.fileList.update(message.files);
     }
   }
@@ -166,7 +166,7 @@ export class ProgressMessageHandlers {
   handleDeleteStream(message) {
     if (message.stream) {
       state.streamStatuses.delete(message.stream);
-      if (message.stream === state.getCurrentStream()) {
+      if (message.stream === state.getActiveStream()) {
         const groupIds = [];
         const headers = Array.from(
           document.querySelectorAll('.log-group-header'),
