@@ -11,7 +11,7 @@ import {
 import { fileList } from './FileList.js';
 import { fileSelect } from './FileSelect.js';
 import { outputFilesManager } from './OutputFilesManager.js';
-import { webviewState } from '../webviewState.js';
+import { mainViewState } from '../mainViewState.js';
 
 export class FileInputManager {
   constructor(
