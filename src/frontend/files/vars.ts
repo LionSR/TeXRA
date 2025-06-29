@@ -30,10 +30,10 @@ export async function setVarFromFile(
       : await WorkspaceFS.readFile(filePath);
     userVars[`${varName}_FILE`] = filePath;
     userVars[`${varName}_CONTENT`] = fileContent;
-    logger.info(`[${source}] Found [VAR '${varName}']: ${filePath}`);
+    // No logging here - will be aggregated in buildUserVars
     return true;
   } catch (err) {
-    logger.warn(`[${source}] [VAR '${varName}'] not found: ${filePath}`);
+    // No logging here - will be aggregated in buildUserVars
     return false;
   }
 }
