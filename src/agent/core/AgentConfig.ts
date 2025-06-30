@@ -1,26 +1,6 @@
 // Local imports - agent components
 import { ToolConfig } from './ToolConfig';
 
-/**
- * Default configuration for task execution and tool usage
- */
-export const DEFAULT_AGENT_CONFIG: AgentConfig = {
-  model: 'sonnet37',
-  agent: 'correct',
-  instruction: '',
-  inputFile: '',
-  inputFiles: [],
-  referenceFile: null,
-  referenceFiles: [],
-  auxiliaryFile: null,
-  auxiliaryFiles: [],
-  mediaFile: null,
-  mediaFiles: [],
-  outputFiles: null,
-  editedFile: null,
-  toolConfig: {} as ToolConfig,
-};
-
 /** Configuration interface for controlling agent execution and file handling. */
 export interface AgentConfig {
   // Core configuration
@@ -43,6 +23,26 @@ export interface AgentConfig {
   // Tool configuration
   toolConfig: ToolConfig;
 }
+
+/**
+ * Default configuration for task execution and tool usage
+ */
+export const DEFAULT_AGENT_CONFIG: AgentConfig = {
+  model: 'sonnet37',
+  agent: 'correct',
+  instruction: '',
+  inputFile: '',
+  inputFiles: [],
+  referenceFile: null,
+  referenceFiles: [],
+  auxiliaryFile: null,
+  auxiliaryFiles: [],
+  mediaFile: null,
+  mediaFiles: [],
+  outputFiles: null,
+  editedFile: null,
+  toolConfig: {} as ToolConfig,
+};
 
 /**
  * Creates a complete AgentConfig by merging partial config with defaults.
