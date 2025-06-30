@@ -15,7 +15,7 @@ import { webviewEventBus } from './eventBus.js';
 export const instructionManager = new InstructionManager(
   'instruction',
   vscode,
-  webviewState,
+  mainViewState,
 );
 export const toggleManager = new ToggleManager();
 export const recordingManager = new RecordingManager(vscode, webviewEventBus);
@@ -51,7 +51,7 @@ export class WebviewDomHandler {
 
     this.fileInputManager = new FileInputManager(
       vscode,
-      webviewState,
+      mainViewState,
       fileList,
       fileSelect,
       outputFilesManager,
@@ -59,14 +59,14 @@ export class WebviewDomHandler {
     this.actionButtonManager = new ActionButtonManager(
       vscode,
       fileList,
-      webviewState,
+      mainViewState,
       instructionManager,
     );
     this.settingsButtonManager = new SettingsButtonManager(
       vscode,
       toggleManager,
       latexdiffManager,
-      webviewState,
+      mainViewState,
     );
 
     this.fileInputManager.setup();
