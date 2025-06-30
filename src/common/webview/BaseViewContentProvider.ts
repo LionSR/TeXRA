@@ -8,13 +8,15 @@ import { buildWebviewHtml } from '@frontend/webview/html';
  */
 export abstract class BaseViewContentProvider {
   protected readonly logger: any;
+  protected readonly channel: string;
 
   constructor(
     protected readonly context: vscode.ExtensionContext,
     protected readonly viewName: string,
   ) {
     this.logger = logger;
-    logger.initialize(`${viewName}ContentProvider`);
+    this.channel = `${viewName}ContentProvider`;
+    logger.initialize(this.channel);
   }
 
   /**
@@ -77,7 +79,10 @@ export abstract class BaseViewContentProvider {
       const specificUris = this.getModuleUris(webview);
       const templateVariables = this.getTemplateVariables();
 
-      this.logger.debug(`Generated HTML content for ${this.viewName}`);
+      this.logger.debug(
+        this.channel,
+        `Generated HTML content for ${this.viewName}`,
+      );
 
       return buildWebviewHtml(webview, htmlPath, {
         ...commonUris,
@@ -86,6 +91,7 @@ export abstract class BaseViewContentProvider {
       });
     } catch (err) {
       this.logger.error(
+        this.channel,
         `Error generating HTML content: ${err instanceof Error ? err.message : String(err)}`,
       );
       return '<html><body>Error loading content</body></html>';
