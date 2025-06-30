@@ -83,6 +83,7 @@ async function handleCleanSingle(
 
   const streamId = getStreamId(agent, model, inputFile);
   emitProgress('clearOutputFiles', streamId);
+  emitProgress('clearMissingOutputs', streamId);
   emitProgress('clearTaskOutput', streamId);
 }
 
@@ -115,6 +116,7 @@ async function handleCleanMultiple(
 
   const streamId = getStreamId(agent, model, inputFile, outputFiles);
   emitProgress('clearOutputFiles', streamId);
+  emitProgress('clearMissingOutputs', streamId);
   emitProgress('clearTaskOutput', streamId);
 }
 
@@ -162,6 +164,7 @@ export async function handleClean(config: {
     config.streamId ||
     getStreamId(config.agent, config.model, config.inputFile, outputFiles);
   emitProgress('clearOutputFiles', streamId);
+  emitProgress('clearMissingOutputs', streamId);
   emitProgress('clearTaskOutput', streamId);
 }
 
