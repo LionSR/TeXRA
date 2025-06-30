@@ -7,12 +7,13 @@ import { randomUUID } from 'crypto';
 // Local imports
 import { AgentConfig } from '@agent/core/AgentConfig';
 import { workspaceSM } from '@utils/stateManager';
+import type { ExecutionId } from '../types/IdentifierTypes';
+import type { WithEntityId } from '../types/EntityTypes';
 
 /**
  * Represents a historical agent execution
  */
-export interface AgentHistoryItem {
-  id: string;
+export interface AgentHistoryItem extends WithEntityId<ExecutionId> {
   timestamp: string;
   config: AgentConfig;
 }

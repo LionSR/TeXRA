@@ -4,10 +4,9 @@
 
 // Local imports
 import type { TokenUsageStats } from '../types/UsageTypes';
+import type { TaskGroupId, LogMessageId, WithEntityId } from '../types/EntityTypes';
 
-export interface TaskGroup {
-  /** Unique identifier for the group */
-  id: string;
+export interface TaskGroup extends WithEntityId<TaskGroupId> {
   /** Display name of the group */
   name: string;
   /** Unix timestamp (ms) when the group started */
@@ -17,14 +16,12 @@ export interface TaskGroup {
   /** Current status of the group */
   status: 'running' | 'error' | 'stopped' | 'ready';
   /** Parent group ID for nested groups */
-  parentGroupId?: string;
+  parentGroupId?: TaskGroupId;
   /** Optional usage stats attached to the group */
   usage?: TokenUsageStats;
 }
 
-export interface LogMessageData {
-  /** Unique identifier for this log entry */
-  id: string;
+export interface LogMessageData extends WithEntityId<LogMessageId> {
   /** Raw message text */
   text: string;
   /** Severity level */
@@ -32,7 +29,7 @@ export interface LogMessageData {
   /** Unix timestamp (ms) */
   timestamp: number;
   /** Optional group association */
-  groupId?: string;
+  groupId?: TaskGroupId;
   /** Optional message category */
   messageType?:
     | 'default'

@@ -1,28 +1,9 @@
 // Local imports - agent components
 import { ToolConfig } from './ToolConfig';
-
-/**
- * Default configuration for task execution and tool usage
- */
-export const DEFAULT_AGENT_CONFIG: AgentConfig = {
-  model: 'sonnet37',
-  agent: 'correct',
-  instruction: '',
-  inputFile: '',
-  inputFiles: [],
-  referenceFile: null,
-  referenceFiles: [],
-  auxiliaryFile: null,
-  auxiliaryFiles: [],
-  mediaFile: null,
-  mediaFiles: [],
-  outputFiles: null,
-  editedFile: null,
-  toolConfig: {} as ToolConfig,
-};
+import type { AgentConfigId, WithEntityId, CreatableEntity, generateEntityId } from '../../types/EntityTypes';
 
 /** Configuration interface for controlling agent execution and file handling. */
-export interface AgentConfig {
+export interface AgentConfig extends WithEntityId<AgentConfigId> {
   // Core configuration
   model: string;
   agent: string;
@@ -45,13 +26,40 @@ export interface AgentConfig {
 }
 
 /**
+ * Default configuration template for task execution and tool usage
+ */
+const DEFAULT_AGENT_CONFIG_TEMPLATE: Omit<AgentConfig, 'id'> = {
+  model: 'sonnet37',
+  agent: 'correct',
+  instruction: '',
+  inputFile: '',
+  inputFiles: [],
+  referenceFile: null,
+  referenceFiles: [],
+  auxiliaryFile: null,
+  auxiliaryFiles: [],
+  mediaFile: null,
+  mediaFiles: [],
+  outputFiles: null,
+  editedFile: null,
+  toolConfig: {} as ToolConfig,
+};
+
+/**
  * Creates a complete AgentConfig by merging partial config with defaults.
  * @param config Partial configuration to merge with defaults
  * @returns Complete AgentConfig with all fields populated
  */
 export function createAgentConfig(config: Partial<AgentConfig>): AgentConfig {
+  // Generate ID if not provided
+  const id = config.id || generateEntityId<AgentConfigId>();
+  
   // Merge provided config with defaults
-  return { ...DEFAULT_AGENT_CONFIG, ...config };
+  return { 
+    id,
+    ...DEFAULT_AGENT_CONFIG_TEMPLATE, 
+    ...config 
+  };
 }
 
 /**
