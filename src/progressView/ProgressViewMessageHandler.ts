@@ -1,110 +1,222 @@
-// Third-party imports
 import * as vscode from 'vscode';
-
-// Local imports - log
-import * as logger from '@logger/logUtils';
+import {
+  BaseViewMessageHandler,
+  MessageHandler,
+} from '@common/webview/BaseViewMessageHandler';
 import { ProgressViewProvider } from './ProgressViewProvider';
-
 import { taskStateToAgentConfig } from '@utils/config';
-
 // @ts-ignore - Import JavaScript module
-import { COMMANDS } from './modules/constants.js';
+import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 
-const CHANNEL = 'MessageHandler';
-
-export class ProgressViewMessageHandler {
-  private handlers: Record<
-    string,
-    (message: any, webviewView: vscode.WebviewView) => Promise<void> | void
-  >;
-
+export class ProgressViewMessageHandler extends BaseViewMessageHandler {
   constructor(private readonly provider: ProgressViewProvider) {
-    this.handlers = {
-      [COMMANDS.SWITCH_STREAM]: (m) => this.provider.setActiveStream(m.stream),
-      [COMMANDS.ERASE_STREAM]: (m) => this.provider.eraseStream(m.stream),
-      [COMMANDS.DELETE_STREAM]: (m) => this.provider.deleteStream(m.stream),
-      [COMMANDS.DELETE_ALL]: () => this.provider.deleteAllStreams(),
-      [COMMANDS.STOP_STREAM]: (m) =>
-        vscode.commands.executeCommand('texra.stopAgent', m.stream),
-      [COMMANDS.DIFF_STREAM]: (m) => this.handleDiffStream(m.stream),
-      [COMMANDS.PACK_STREAM]: (m) => this.handlePackStream(m.stream),
-      [COMMANDS.CLEAN_STREAM]: (m) => this.handleCleanStream(m.stream),
-      [COMMANDS.RUN_AGAIN]: (m) => this.handleRunAgain(m.stream),
-      [COMMANDS.RESTORE_STATE]: (m) => this.handleRestoreState(m.stream),
-      [COMMANDS.OPEN_FILE]: (m) =>
-        vscode.commands.executeCommand('texra.openFileCompile', m.file),
-      [COMMANDS.COMPARE_ORIGINAL]: (m) =>
-        vscode.commands.executeCommand(
-          'texra.compare',
-          undefined,
-          m.base,
-          m.file,
-        ),
-      [COMMANDS.COMPARE_PREVIOUS]: (m) =>
-        vscode.commands.executeCommand(
-          'texra.compare',
-          undefined,
-          m.prev,
-          m.file,
-        ),
-      [COMMANDS.ACCEPT_FILE]: (m) =>
-        vscode.commands.executeCommand(
-          'texra.acceptEdited',
-          undefined,
-          m.base,
-          m.file,
-        ),
-      [COMMANDS.MERGE_FILE]: (m) =>
-        vscode.commands.executeCommand(
-          'texra.merge',
-          undefined,
-          m.base,
-          m.file,
-        ),
-      [COMMANDS.LATEXDIFF_FILE]: (m) =>
-        vscode.commands.executeCommand(
-          'texra.latexdiff',
-          undefined,
-          m.base,
-          m.file,
-        ),
+    super('ProgressView');
+  }
+
+  protected createHandlers(): Record<string, MessageHandler> {
+    return {
+      // Common handlers
+      [PROGRESS_VIEW_COMMANDS.THEME_SET]: this.handleTheme.bind(this),
+      [PROGRESS_VIEW_COMMANDS.DEBUG_MODE_SET]: this.handleDebugMode.bind(this),
+      [PROGRESS_VIEW_COMMANDS.WEBVIEW_READY]:
+        this.handleWebviewReady.bind(this),
+
+      // Stream management
+      [PROGRESS_VIEW_COMMANDS.SWITCH_STREAM]:
+        this.handleSwitchStream.bind(this),
+      [PROGRESS_VIEW_COMMANDS.DELETE_STREAM]:
+        this.handleDeleteStream.bind(this),
+      [PROGRESS_VIEW_COMMANDS.ERASE_STREAM]: this.handleEraseStream.bind(this),
+      [PROGRESS_VIEW_COMMANDS.DELETE_ALL]: this.handleDeleteAll.bind(this),
+      [PROGRESS_VIEW_COMMANDS.STOP_STREAM]: this.handleStopStream.bind(this),
+
+      // Actions
+      [PROGRESS_VIEW_COMMANDS.RUN_AGAIN]: this.handleRunAgain.bind(this),
+      [PROGRESS_VIEW_COMMANDS.DIFF_STREAM]: this.handleDiffStream.bind(this),
+      [PROGRESS_VIEW_COMMANDS.PACK_STREAM]: this.handlePackStream.bind(this),
+      [PROGRESS_VIEW_COMMANDS.CLEAN_STREAM]: this.handleCleanStream.bind(this),
+      [PROGRESS_VIEW_COMMANDS.RESTORE_STATE]:
+        this.handleRestoreState.bind(this),
+
+      // File operations
+      [PROGRESS_VIEW_COMMANDS.OPEN_FILE]: this.handleOpenFile.bind(this),
+      [PROGRESS_VIEW_COMMANDS.COMPARE_ORIGINAL]:
+        this.handleCompareOriginal.bind(this),
+      [PROGRESS_VIEW_COMMANDS.COMPARE_PREVIOUS]:
+        this.handleComparePrevious.bind(this),
+      [PROGRESS_VIEW_COMMANDS.ACCEPT_FILE]: this.handleAcceptFile.bind(this),
+      [PROGRESS_VIEW_COMMANDS.MERGE_FILE]: this.handleMergeFile.bind(this),
+      [PROGRESS_VIEW_COMMANDS.LATEXDIFF_FILE]:
+        this.handleLatexdiffFile.bind(this),
     };
   }
 
-  async handleMessage(
+  // Handler implementations
+  private async handleSwitchStream(
     message: any,
     webviewView: vscode.WebviewView,
   ): Promise<void> {
-    logger.debug(CHANNEL, `Received message: ${message.command}`);
+    this.provider.setActiveStream(message.stream);
+  }
 
-    const handler = this.handlers[message.command];
-    if (handler) {
-      await handler(message, webviewView);
-    } else {
-      logger.warn(CHANNEL, `Unknown command: ${message.command}`);
+  private async handleDeleteStream(
+    message: any,
+    webviewView: vscode.WebviewView,
+  ): Promise<void> {
+    this.provider.deleteStream(message.stream);
+  }
+
+  private async handleEraseStream(
+    message: any,
+    webviewView: vscode.WebviewView,
+  ): Promise<void> {
+    this.provider.eraseStream(message.stream);
+  }
+
+  private async handleDeleteAll(
+    message: any,
+    webviewView: vscode.WebviewView,
+  ): Promise<void> {
+    this.provider.deleteAllStreams();
+  }
+
+  private async handleStopStream(
+    message: any,
+    webviewView: vscode.WebviewView,
+  ): Promise<void> {
+    await vscode.commands.executeCommand('texra.stopAgent', message.stream);
+  }
+
+  private async handleRunAgain(
+    message: any,
+    webviewView: vscode.WebviewView,
+  ): Promise<void> {
+    const taskState = this.provider.getTaskState(message.stream);
+    if (taskState) {
+      const agentConfig = taskStateToAgentConfig(taskState);
+      await vscode.commands.executeCommand('texra.execute', agentConfig);
     }
+  }
+
+  private async handleDiffStream(
+    message: any,
+    webviewView: vscode.WebviewView,
+  ): Promise<void> {
+    const taskState = this.provider.getTaskState(message.stream);
+    if (taskState) {
+      await vscode.commands.executeCommand('texra.runLatexdiff', {
+        agent: taskState.agent,
+        model: taskState.model,
+        inputFile: taskState.inputFile,
+        outputFiles: taskState.outputFiles,
+        outputFilesActive: taskState.activeFiles.output,
+      });
+    }
+  }
+
+  private async handlePackStream(
+    message: any,
+    webviewView: vscode.WebviewView,
+  ): Promise<void> {
+    await this.handleFileOperation(message.stream, 'texra.pack');
+  }
+
+  private async handleCleanStream(
+    message: any,
+    webviewView: vscode.WebviewView,
+  ): Promise<void> {
+    await this.handleFileOperation(message.stream, 'texra.clean');
+  }
+
+  private async handleRestoreState(
+    message: any,
+    webviewView: vscode.WebviewView,
+  ): Promise<void> {
+    const taskState = this.provider.getTaskState(message.stream);
+    if (taskState) {
+      await vscode.commands.executeCommand('texra.restoreState', taskState);
+    }
+  }
+
+  private async handleOpenFile(
+    message: any,
+    webviewView: vscode.WebviewView,
+  ): Promise<void> {
+    await vscode.commands.executeCommand('texra.openFileCompile', message.file);
+  }
+
+  private async handleCompareOriginal(
+    message: any,
+    webviewView: vscode.WebviewView,
+  ): Promise<void> {
+    await vscode.commands.executeCommand(
+      'texra.compare',
+      undefined,
+      message.base,
+      message.file,
+    );
+  }
+
+  private async handleComparePrevious(
+    message: any,
+    webviewView: vscode.WebviewView,
+  ): Promise<void> {
+    await vscode.commands.executeCommand(
+      'texra.compare',
+      undefined,
+      message.prev,
+      message.file,
+    );
+  }
+
+  private async handleAcceptFile(
+    message: any,
+    webviewView: vscode.WebviewView,
+  ): Promise<void> {
+    await vscode.commands.executeCommand(
+      'texra.acceptEdited',
+      undefined,
+      message.base,
+      message.file,
+    );
+  }
+
+  private async handleMergeFile(
+    message: any,
+    webviewView: vscode.WebviewView,
+  ): Promise<void> {
+    await vscode.commands.executeCommand(
+      'texra.merge',
+      undefined,
+      message.base,
+      message.file,
+    );
+  }
+
+  private async handleLatexdiffFile(
+    message: any,
+    webviewView: vscode.WebviewView,
+  ): Promise<void> {
+    await vscode.commands.executeCommand(
+      'texra.latexdiff',
+      undefined,
+      message.base,
+      message.file,
+    );
   }
 
   private async handleFileOperation(
     stream: string,
     command: 'texra.pack' | 'texra.clean',
-  ) {
-    const verb = command === 'texra.pack' ? 'pack' : 'clean';
-    logger.debug(CHANNEL, `Attempting to ${verb} stream with ID: ${stream}`);
-
+  ): Promise<void> {
     const taskState = this.provider.getTaskState(stream);
-    if (!taskState) {
-      logger.warn(CHANNEL, `No taskState found for stream: ${stream}`);
-      return;
-    }
-    // logger.debug(CHANNEL, `Found taskState for stream: ${stream}`);
-    // logger.debug(CHANNEL, `Task state: ${JSON.stringify(taskState)}`);
+    if (!taskState) return;
 
     const generated = this.provider.getOutputFiles(stream);
     const allFiles = new Set<string>(taskState.outputFiles || []);
     if (generated) {
-      Object.values(generated).forEach((infos) =>
-        infos.forEach((info) => {
+      Object.values(generated).forEach((infos: any) =>
+        infos.forEach((info: any) => {
           allFiles.add(info.path);
           if (info.original) {
             allFiles.add(info.original);
@@ -114,7 +226,6 @@ export class ProgressViewMessageHandler {
     }
 
     const outputFilesArray = Array.from(allFiles);
-
     await vscode.commands.executeCommand(command, {
       streamId: stream,
       agent: taskState.agent,
@@ -124,71 +235,6 @@ export class ProgressViewMessageHandler {
       activeFiles: {
         output: outputFilesArray.length > 0,
       },
-    });
-  }
-
-  private async handlePackStream(stream: string) {
-    await this.handleFileOperation(stream, 'texra.pack');
-  }
-
-  private async handleRunAgain(stream: string) {
-    logger.debug(CHANNEL, `Attempting to re-run stream with ID: ${stream}`);
-    const taskState = this.provider.getTaskState(stream);
-    if (!taskState) {
-      logger.warn(CHANNEL, `No taskState found for stream: ${stream}`);
-      return;
-    }
-    logger.debug(CHANNEL, `Found taskState for stream: ${stream}`);
-    // logger.debug(CHANNEL, `Task state: ${JSON.stringify(taskState)}`);
-
-    // Convert TaskState to AgentConfig using utility function
-    const agentConfig = taskStateToAgentConfig(taskState);
-
-    // Execute the agent with the restored config
-    await vscode.commands.executeCommand('texra.execute', agentConfig);
-  }
-
-  private async handleCleanStream(stream: string) {
-    await this.handleFileOperation(stream, 'texra.clean');
-  }
-
-  private async handleRestoreState(stream: string) {
-    logger.debug(
-      CHANNEL,
-      `Attempting to restore state from stream with ID: ${stream}`,
-    );
-    const taskState = this.provider.getTaskState(stream);
-    if (!taskState) {
-      logger.warn(CHANNEL, `No taskState found for stream: ${stream}`);
-      return;
-    }
-    logger.debug(CHANNEL, `Found taskState for stream: ${stream}`);
-    // logger.debug(CHANNEL, `Task state: ${JSON.stringify(taskState)}`);
-
-    // Execute the restore state command with the task configuration
-    await vscode.commands.executeCommand('texra.restoreState', taskState);
-  }
-
-  private async handleDiffStream(stream: string) {
-    logger.debug(
-      CHANNEL,
-      `Attempting to run latexdiff for stream with ID: ${stream}`,
-    );
-    const taskState = this.provider.getTaskState(stream);
-    if (!taskState) {
-      logger.warn(CHANNEL, `No taskState found for stream: ${stream}`);
-      return;
-    }
-    logger.debug(CHANNEL, `Found taskState for stream: ${stream}`);
-    // logger.debug(CHANNEL, `Task state: ${JSON.stringify(taskState)}`);
-
-    // Execute the latexdiff command with the task configuration
-    await vscode.commands.executeCommand('texra.runLatexdiff', {
-      agent: taskState.agent,
-      model: taskState.model,
-      inputFile: taskState.inputFile,
-      outputFiles: taskState.outputFiles,
-      outputFilesActive: taskState.activeFiles.output,
     });
   }
 }

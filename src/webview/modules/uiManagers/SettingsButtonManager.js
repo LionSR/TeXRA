@@ -7,14 +7,14 @@ import {
   CHECK_BOXES,
 } from '../constants.js';
 import { handleCheckboxChange } from '../fileHandlers.js';
-import { webviewState } from '../webviewState.js';
+import { mainViewState } from '../mainViewState.js';
 
 export class SettingsButtonManager {
   constructor(
     vscodeInstance = vscode,
     toggleManager,
     latexdiffManager,
-    state = webviewState,
+    state = mainViewState,
   ) {
     this.vscode = vscodeInstance;
     this.toggleManager = toggleManager;

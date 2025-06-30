@@ -9,6 +9,8 @@
     "paths": {
       "@/*": ["src/*"],
       "~/*": ["src/*"],
+      "@common/*": ["src/common/*"],
+      "@webview/*": ["src/webview/*"],
       "@agent/*": ["src/agent/*"],
       "@frontend/*": ["src/frontend/*"],
       "@utils/*": ["src/utils/*"],
