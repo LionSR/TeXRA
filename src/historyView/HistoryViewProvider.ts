@@ -4,7 +4,7 @@ import { executeCommand } from '@commands/agent/executeCommand';
 import { agentConfigToTaskState } from '@utils/config';
 import { showLoggedErrorMessage } from '@utils/errorHandlingUtils';
 // @ts-ignore - Import JavaScript module
-import { HISTORY_VIEW_COMMANDS } from '@common/webview/commands.js';
+import { HISTORY_VIEW_COMMANDS } from '@common/webview/commands';
 import { HistoryViewContentProvider } from './HistoryViewContentProvider';
 import * as logger from '@logger/logUtils';
 
@@ -59,6 +59,12 @@ export class HistoryViewProvider implements vscode.WebviewViewProvider {
             'src',
             'common',
             'modules',
+          ),
+          vscode.Uri.joinPath(
+            this.context.extensionUri,
+            'src',
+            'common',
+            'webview',
           ),
           vscode.Uri.joinPath(
             this.context.extensionUri,

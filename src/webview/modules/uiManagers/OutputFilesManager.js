@@ -97,7 +97,7 @@ export class OutputFilesManager {
 }
 
 export const outputFilesManager = new OutputFilesManager(
-  webviewState,
+  mainViewState,
   fileList,
   fileSelect,
 );
