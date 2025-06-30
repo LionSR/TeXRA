@@ -130,9 +130,9 @@ export const PROGRESS_VIEW_COMMANDS = {
   APPEND_LOG: 'appendLog',
   UPDATE_LOG: 'updateLog',
 
-  // Groups
-  ADD_LOG_GROUP: 'addLogGroup',
-  UPDATE_LOG_GROUP: 'updateLogGroup',
+  // Task Groups
+  ADD_TASK_GROUP: 'addTaskGroup',
+  UPDATE_TASK_GROUP: 'updateTaskGroup',
 
   // Status and files
   UPDATE_STATUS: 'updateStatus',
