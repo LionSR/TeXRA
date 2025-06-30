@@ -16,7 +16,7 @@ export const SPLIT_SIZES = {
 export const MAX_HEIGHT = 400;
 
 // Import standardized commands
-import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands.ts';
+import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands.js';
 
 // Use standardized commands
 export const COMMANDS = PROGRESS_VIEW_COMMANDS;
