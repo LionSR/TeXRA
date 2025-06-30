@@ -236,15 +236,14 @@ export class OutputHandler implements IOutputHandler {
       return;
     }
 
-    const missing: string[] = [];
-    for (const file of expected) {
-      const exists = path.isAbsolute(file)
+    const checks = expected.map(async (file) => ({
+      file,
+      exists: path.isAbsolute(file)
         ? await AbsoluteFS.exists(file)
-        : await WorkspaceFS.exists(file);
-      if (!exists) {
-        missing.push(file);
-      }
-    }
+        : await WorkspaceFS.exists(file),
+    }));
+    const results = await Promise.all(checks);
+    const missing = results.filter((r) => !r.exists).map((r) => r.file);
 
     emitProgress('updateMissingOutputs', {
       stream: this.channel,
@@ -253,9 +252,7 @@ export class OutputHandler implements IOutputHandler {
 
     if (missing.length > 0) {
       const openBtn = 'Open XML';
-      let xmlPath = this.outputFiles[round]?.find(
-        (p) => p.endsWith('.xml') || p.endsWith('.tex'),
-      );
+      let xmlPath = this.outputFiles[round]?.find((p) => p.endsWith('.xml'));
       if (!xmlPath) {
         xmlPath = missing[0].replace(/\.[^.]+$/, '.xml');
       }
