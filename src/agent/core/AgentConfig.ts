@@ -25,9 +25,9 @@ export interface AgentConfig {
 }
 
 /**
- * Default configuration template for task execution and tool usage
+ * Default configuration for task execution and tool usage
  */
-const DEFAULT_AGENT_CONFIG_TEMPLATE: Omit<AgentConfig, 'id'> = {
+export const DEFAULT_AGENT_CONFIG: AgentConfig = {
   model: 'sonnet37',
   agent: 'correct',
   instruction: '',
@@ -50,15 +50,8 @@ const DEFAULT_AGENT_CONFIG_TEMPLATE: Omit<AgentConfig, 'id'> = {
  * @returns Complete AgentConfig with all fields populated
  */
 export function createAgentConfig(config: Partial<AgentConfig>): AgentConfig {
-  // Generate ID if not provided
-  const id = config.id || generateEntityId<AgentConfigId>();
-  
   // Merge provided config with defaults
-  return { 
-    id,
-    ...DEFAULT_AGENT_CONFIG_TEMPLATE, 
-    ...config 
-  };
+  return { ...DEFAULT_AGENT_CONFIG, ...config };
 }
 
 /**
