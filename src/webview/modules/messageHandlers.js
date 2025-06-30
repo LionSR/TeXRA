@@ -205,6 +205,15 @@ export class MessageHandlers {
     dataRequests.forEach((request) => {
       vscode.postMessage({ command: request });
     });
+
+    // Also request default output files for the current agent
+    const agentElement = this._getElement('agent');
+    if (agentElement && agentElement.value) {
+      vscode.postMessage({
+        command: 'requestDefaultOutputFiles',
+        agent: agentElement.value,
+      });
+    }
   }
 
   _handleStateRestoration(state) {
