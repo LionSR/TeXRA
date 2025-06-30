@@ -1,4 +1,4 @@
-m# Repository Guidelines: TeXRA
+# Repository Guidelines: TeXRA
 
 This document sets the common conventions for contributions. Follow these norms when working anywhere in this repository.
 
