@@ -9,17 +9,21 @@ Following the successful migration from `logStreams` to `StreamTabs`, this propo
 ### ✅ Already Aligned (Recent Changes)
 - `logStreams` → `StreamTabs` (completed in both TS and JS)
 
-### 🔄 Identified Misalignments
+### 🔄 MAJOR INCONSISTENCIES IDENTIFIED
 
 ## 1. Core Entity Naming Inconsistencies
 
-### A. Log Groups vs Task Groups
+### A. Log Groups vs Task Groups - **CRITICAL MISALIGNMENT**
 **Current State:**
-- **TypeScript**: Uses `taskGroups` (ProgressStateManager.ts)
+- **Documentation (AGENTS.md)**: Specifies `LogGroups` as the intended pattern
+- **TypeScript Storage**: Uses `taskGroups` (ProgressStateManager.ts)
+- **TypeScript Methods**: Uses `addLogGroup`, `updateLogGroup` (ProgressViewProvider.ts)
 - **JavaScript**: Uses `taskGroups` (domHandlers.js, TaskGroupManager)
-- **Legacy**: Old references to `logGroups` in storage migration code
+- **JavaScript Handlers**: Uses `handleAddLogGroup`, `handleUpdateLogGroup`
+- **Commands**: Uses `ADD_LOG_GROUP`, `UPDATE_LOG_GROUP`
+- **Event Bus**: Uses `addLogGroup`, `updateLogGroup`
 
-**Status**: ✅ **ALIGNED** - Both sides use `taskGroups`
+**Status**: ❌ **MAJOR INCONSISTENCY** - Mixed usage of both `logGroup` and `taskGroup` patterns
 
 ### B. Usage Management
 **Current State:**
@@ -128,8 +132,80 @@ export class HistoryMessageHandlers   // Missing "View"
 
 ## 📋 RECOMMENDATIONS
 
-### Priority 1: Critical Alignment Issues
-**None identified** - The major alignment issue (`logStreams` → `StreamTabs`) has been resolved.
+### Priority 1: CRITICAL - Log Groups vs Task Groups Alignment
+
+**Decision Required**: Choose one consistent naming pattern:
+
+#### Option A: Standardize on `LogGroups` (Following AGENTS.md documentation)
+**Pros:**
+- Matches documented architecture pattern
+- More descriptive of actual function (logging/progress tracking)
+- Consistent with existing event/command naming
+
+**Changes Required:**
+1. **TypeScript Storage & Properties:**
+   ```typescript
+   // ProgressStateManager.ts
+   - private _taskGroups: Map<string, Map<string, TaskGroup>>
+   + private _logGroups: Map<string, Map<string, LogGroup>>
+   
+   - get taskGroups(): Map<string, Map<string, TaskGroup>>
+   + get logGroups(): Map<string, Map<string, LogGroup>>
+   ```
+
+2. **JavaScript Classes & Instances:**
+   ```javascript
+   // domHandlers.js
+   - this.taskGroups = new TaskGroupManager();
+   + this.logGroups = new LogGroupManager();
+   
+   // Rename TaskGroupManager → LogGroupManager
+   ```
+
+3. **Storage Keys:**
+   ```typescript
+   // stateManager.ts
+   - TASK_GROUPS = 'texra.taskGroups'
+   + LOG_GROUPS = 'texra.logGroups'
+   ```
+
+#### Option B: Standardize on `TaskGroups` (Current implementation)
+**Pros:**
+- Less changes to existing storage/state management
+- Matches current TypeScript implementation
+
+**Changes Required:**
+1. **Commands & Events:**
+   ```typescript
+   // commands.ts/js
+   - ADD_LOG_GROUP: 'addLogGroup'
+   + ADD_TASK_GROUP: 'addTaskGroup'
+   
+   - UPDATE_LOG_GROUP: 'updateLogGroup'  
+   + UPDATE_TASK_GROUP: 'updateTaskGroup'
+   ```
+
+2. **TypeScript Methods:**
+   ```typescript
+   // ProgressViewProvider.ts
+   - public addLogGroup(...)
+   + public addTaskGroup(...)
+   
+   - public updateLogGroup(...)
+   + public updateTaskGroup(...)
+   ```
+
+3. **JavaScript Handlers:**
+   ```javascript
+   // messageHandlers.js
+   - handleAddLogGroup(message)
+   + handleAddTaskGroup(message)
+   
+   - handleUpdateLogGroup(message)
+   + handleUpdateTaskGroup(message)
+   ```
+
+4. **Update AGENTS.md documentation**
 
 ### Priority 2: Consistency Improvements
 
@@ -170,14 +246,121 @@ All instance properties follow camelCase convention - **no changes needed**.
 
 ## 🔧 IMPLEMENTATION PLAN
 
-### Phase 1: Backup Strategy
+### Phase 1: CRITICAL - Workspace Storage Backup Strategy
+
+**⚠️ BACKUP REQUIRED** - This involves changing storage keys that may contain user data.
+
+#### Recommended Approach: Follow the `logStreams` → `streamTabs` Migration Pattern
+
+The ProgressStateManager already has migration logic for the `logStreams` → `streamTabs` transition. We should follow the same pattern:
+
 ```typescript
-// No workspace storage changes needed - all keys are already aligned
-// Current storage keys are consistent between TS and JS usage
+// Example migration logic (already exists in ProgressStateManager.ts):
+private async _loadTaskGroups(): Promise<void> {
+  let savedGroups = workspaceSM.get<{
+    [key: string]: { [groupId: string]: TaskGroup };
+  }>(this._getWorkspaceKey(WorkspaceStateKey.TASK_GROUPS));
+
+  // Migrate from old key if needed
+  if (!savedGroups) {
+    const oldGroups = workspaceSM.get<{
+      [key: string]: { [groupId: string]: TaskGroup };
+    }>(this._getWorkspaceKey('texra.logGroups'));
+    if (oldGroups) {
+      savedGroups = oldGroups;
+      await workspaceSM.update(
+        this._getWorkspaceKey('texra.logGroups'),
+        undefined,
+      );
+      this.logger.debug('Migrated log groups to task groups');
+    }
+  }
+  // ... rest of loading logic
+}
 ```
 
-### Phase 2: Message Handler Renaming (Optional)
-If desired for consistency:
+#### Recommended Decision: **Option A - Standardize on LogGroups**
+
+**Rationale:**
+1. Matches documented architecture (AGENTS.md)
+2. Consistent with existing command/event naming
+3. More semantically correct (these are logging/progress groups, not task execution groups)
+4. Migration path already exists in codebase
+
+### Phase 2: Implementation Steps for LogGroups Standardization
+
+#### Step 1: Update Storage Keys and Migration Logic
+```typescript
+// src/utils/stateManager.ts
+export enum WorkspaceStateKey {
+- TASK_GROUPS = 'texra.taskGroups',
++ LOG_GROUPS = 'texra.logGroups',
+}
+
+// src/progressView/ProgressStateManager.ts
+- private _taskGroups: Map<string, Map<string, TaskGroup>> = new Map();
++ private _logGroups: Map<string, Map<string, LogGroup>> = new Map();
+
+- get taskGroups(): Map<string, Map<string, TaskGroup>> {
++ get logGroups(): Map<string, Map<string, LogGroup>> {
+- return this._taskGroups;
++ return this._logGroups;
+}
+
+// Update migration logic to handle taskGroups → logGroups transition
+private async _loadLogGroups(): Promise<void> {
+  let savedGroups = workspaceSM.get<{
+    [key: string]: { [groupId: string]: LogGroup };
+  }>(this._getWorkspaceKey(WorkspaceStateKey.LOG_GROUPS));
+
+  // Migrate from taskGroups if needed
+  if (!savedGroups) {
+    const taskGroups = workspaceSM.get<{
+      [key: string]: { [groupId: string]: LogGroup };
+    }>(this._getWorkspaceKey('texra.taskGroups'));
+    if (taskGroups) {
+      savedGroups = taskGroups;
+      await workspaceSM.update(
+        this._getWorkspaceKey('texra.taskGroups'),
+        undefined,
+      );
+      this.logger.debug('Migrated taskGroups to logGroups');
+    }
+  }
+  // ... rest of loading logic
+}
+```
+
+#### Step 2: Update JavaScript Classes and Instances
+```javascript
+// src/progressView/modules/taskManagers.js → logManagers.js
+- export class TaskGroupManager {
++ export class LogGroupManager {
+
+// src/progressView/modules/domHandlers.js
+- this.taskGroups = new TaskGroupManager();
++ this.logGroups = new LogGroupManager();
+
+// Update all references in messageHandlers.js
+- dom.taskGroups.add(g);
++ dom.logGroups.add(g);
+```
+
+#### Step 3: Update All Method References
+```typescript
+// src/progressView/ProgressViewProvider.ts
+// No changes needed - addLogGroup, updateLogGroup already correct
+
+// src/progressView/modules/messageHandlers.js  
+// No changes needed - handleAddLogGroup, handleUpdateLogGroup already correct
+
+// Update state manager method calls:
+- this._stateManager.taskGroups
++ this._stateManager.logGroups
+```
+
+### Phase 3: Optional Message Handler Class Naming
+After LogGroups alignment, optionally standardize message handler names:
 
 1. **progressView/modules/messageHandlers.js**:
    ```javascript
@@ -197,21 +380,44 @@ If desired for consistency:
    + export class HistoryViewMessageHandlers
    ```
 
-4. Update all import statements accordingly.
-
-### Phase 3: Validation
-- All storage keys already use consistent naming
-- No breaking changes to storage format
-- All functional naming is already aligned
+### Phase 4: Validation & Testing
+- Test workspace storage migration from `texra.taskGroups` → `texra.logGroups`
+- Verify all UI functionality works with renamed classes
+- Ensure no references to old `taskGroups` remain
 
 ## 🎯 CONCLUSION
 
-**Good News**: The codebase is already well-aligned! The major inconsistency (`logStreams` vs `StreamTabs`) has been resolved. 
+**Critical Issue Identified**: Major naming inconsistency between `logGroups` (documentation/commands) and `taskGroups` (storage/state).
 
-**Remaining Issues**: 
-- Minor: Message handler class names could be more consistent with TypeScript naming conventions
-- All storage keys and functional naming are already properly aligned
+**Recommendation**: 
+1. **Priority 1**: Implement LogGroups standardization with proper migration
+2. **Priority 2**: Optional message handler class renaming for consistency
 
-**Recommendation**: The current state is functionally correct. The optional message handler renaming could improve consistency but is not critical for functionality.
+**Workspace Storage**: **BACKUP REQUIRED** - Storage key changes need migration logic to preserve user data.
 
-**Workspace Storage**: No backup needed - all storage keys are already consistent and no breaking changes are required.
+**Impact**: This is a significant refactoring that will improve code consistency and align implementation with documentation, but requires careful migration handling.
+
+## 📝 Additional Naming Patterns Analysis
+
+### ✅ Confirmed Consistent Patterns
+After thorough analysis, these patterns are already properly aligned:
+
+1. **LogEntry/LogEntryManager**: ✅ Consistent usage across TS/JS
+2. **LogMessage/LogMessageData**: ✅ Consistent usage across TS/JS  
+3. **StreamTabs**: ✅ Successfully migrated from logStreams
+4. **UsageSummary vs UsageStats**: ✅ Correctly different (UI computation vs persistent data)
+5. **FileList vs OutputFiles**: ✅ Correctly different (UI management vs storage)
+
+### 🔍 Summary of All Findings
+
+| Entity | TypeScript | JavaScript | Status | Action Required |
+|--------|------------|------------|--------|-----------------|
+| Stream Tabs | `streamTabs` | `StreamTabs` | ✅ Aligned | None |
+| **Log Groups** | `taskGroups` (storage)<br>`addLogGroup` (methods) | `taskGroups` (instance)<br>`handleAddLogGroup` (handlers) | ❌ **CRITICAL** | **Standardize on LogGroups** |
+| Log Entries | `LogEntryManager` | `LogEntryManager` | ✅ Aligned | None |
+| Log Messages | `LogMessageData` | `logMessage` | ✅ Aligned | None |
+| Usage Data | `usageStats` | `usageSummary` | ✅ Different by design | None |
+| File Management | `outputFiles` | `fileList` | ✅ Different by design | None |
+| Message Handlers | `[Domain]ViewMessageHandler` | `[Domain]MessageHandlers` | ⚠️ Minor | Optional standardization |
+
+**Primary Issue**: The LogGroups vs TaskGroups inconsistency is the main alignment problem that needs addressing.
