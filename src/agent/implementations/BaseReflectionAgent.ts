@@ -450,6 +450,28 @@ export abstract class BaseReflectionAgent extends BaseAgent {
     }
 
     const fileInfos = await this.outputHandler.gatherOutputFileInfo(currRound);
+
+    // Validate expected outputs if this is the end of the turn
+    if (endTurn) {
+      try {
+        await this.outputHandler.validateExpectedOutputs(
+          outputFile,
+          currRound,
+          roundGroupId,
+        );
+        this.logger.debug(
+          `Expected outputs validated for round ${currRound}`,
+          roundGroupId,
+        );
+      } catch (error) {
+        this.logger.error(
+          `Expected output validation failed after round ${currRound}: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+          roundGroupId,
+        );
+      }
+    }
     emitProgress('addOutputFiles', {
       stream: this.logger.channelId,
       filesByRound: { [currRound]: fileInfos },
@@ -844,27 +866,6 @@ export abstract class BaseReflectionAgent extends BaseAgent {
         await this.process();
       this.logger.debug(`Round 0 completed\n`, this.runGroupId);
 
-      // Check expected outputs after round 0 completes
-      if (endTurn) {
-        try {
-          await this.outputHandler.validateExpectedOutputs(
-            this.outputFile[0],
-            0,
-          );
-          this.logger.debug(
-            `Expected outputs validated for round 0`,
-            this.runGroupId,
-          );
-        } catch (error) {
-          this.logger.error(
-            `Expected output validation failed after round 0: ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            this.runGroupId,
-          );
-        }
-      }
-
       // Check for interruption before next round
       if (
         !this.isInterrupted &&
@@ -874,25 +875,6 @@ export abstract class BaseReflectionAgent extends BaseAgent {
         const toolStateReflection = new ToolState();
         await this.reflect(stateGlobal, messages, toolStateReflection);
         this.logger.debug(`Round 1 completed\n`, this.runGroupId);
-
-        // Check expected outputs after round 1 completes
-        try {
-          await this.outputHandler.validateExpectedOutputs(
-            this.outputFile[1],
-            1,
-          );
-          this.logger.debug(
-            `Expected outputs validated for round 1`,
-            this.runGroupId,
-          );
-        } catch (error) {
-          this.logger.error(
-            `Expected output validation failed after round 1: ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            this.runGroupId,
-          );
-        }
       }
 
       // End the run group with success status
