@@ -9,14 +9,16 @@ We have successfully implemented a consistent argument order pattern across all 
 **Container → ID → Data → Optional Parameters**
 
 This follows the logical flow:
+
 1. **Where** to find it (container/stream)
-2. **Which** specific item (ID) 
+2. **Which** specific item (ID)
 3. **What** to do with it (data/action)
 4. **How** to modify the action (optional parameters)
 
 ## 🔄 **Before vs After**
 
 ### ❌ **Before (Inconsistent)**
+
 ```typescript
 // Mixed order - confusing!
 addLogGroup(stream, groupId, groupName, startTime, status, endTime?, parentGroupId?)
@@ -25,33 +27,38 @@ setTaskState(streamTabId, taskState, executionId?)
 ```
 
 ### ✅ **After (Consistent)**
+
 ```typescript
 // Clear navigation pattern!
 addLogGroup(stream, groupId, groupData)
-updateLogGroup(stream, groupId, updates)  
+updateLogGroup(stream, groupId, updates)
 setTaskState(streamTabId, taskState, options?)
 ```
 
 ## 📁 **Functions Refactored**
 
-### **1. addLogGroup** 
+### **1. addLogGroup**
+
 - **Before**: `(stream, groupId, groupName, startTime, status, endTime?, parentGroupId?)`
 - **After**: `(stream, groupId, groupData: { name, startTime, status, endTime?, parentGroupId? })`
 - **Benefit**: All group data grouped together, clear separation of concerns
 
 ### **2. updateLogGroup**
-- **Before**: `(stream, groupId, status, endTime?)`  
+
+- **Before**: `(stream, groupId, status, endTime?)`
 - **After**: `(stream, groupId, updates: { status, endTime? })`
 - **Benefit**: Extensible updates object, consistent with addLogGroup
 
 ### **3. setTaskState**
+
 - **Before**: `(streamTabId, taskState, executionId?)`
 - **After**: `(streamTabId, taskState, options?: { executionId? })`
 - **Benefit**: Optional parameters clearly grouped, extensible
 
 ### **4. Functions Already Following Pattern** ✅
+
 - `addLogMessage(stream, log)` - Container → Data
-- `updateLogMessage(stream, log)` - Container → Data  
+- `updateLogMessage(stream, log)` - Container → Data
 - `updateGroupUsage(stream, groupId, usage)` - Container → ID → Data
 - `getHistoryItemById(id)` - ID only (correct)
 - `deleteHistoryItemById(id)` - ID only (correct)
@@ -59,43 +66,48 @@ setTaskState(streamTabId, taskState, options?)
 ## 🎯 **Key Benefits Achieved**
 
 ### **1. Predictable API**
+
 ```typescript
 // Always follows the same pattern
 someFunction(container, id?, data, options?)
 ```
 
 ### **2. Better Grouping**
+
 ```typescript
 // Related parameters grouped together
 addLogGroup(stream, groupId, {
   name: 'Task Details',
   startTime: Date.now(),
   status: 'running',
-  parentGroupId: mainGroupId
-})
+  parentGroupId: mainGroupId,
+});
 ```
 
 ### **3. Extensible Design**
+
 ```typescript
 // Easy to add new update fields
 updateLogGroup(stream, groupId, {
   status: 'stopped',
   endTime: Date.now(),
   // Future: usage?, description?, etc.
-})
+});
 ```
 
 ### **4. Type Safety**
+
 ```typescript
 // Clear parameter structure with IntelliSense
 setTaskState(streamTabId, taskState, {
-  executionId: uuid // Optional and clearly typed
-})
+  executionId: uuid, // Optional and clearly typed
+});
 ```
 
 ## 🔧 **Technical Implementation**
 
 ### **Event Handler Compatibility**
+
 The event bus still receives data in the original format, but event handlers transform it to the new function signatures:
 
 ```typescript
@@ -106,11 +118,12 @@ onProgress('addLogGroup', (p) =>
     status: p.status,
     endTime: p.endTime,
     parentGroupId: p.parentGroupId,
-  })
-)
+  }),
+);
 ```
 
 ### **Backward Compatibility**
+
 - Event emission format unchanged (no breaking changes)
 - Internal function calls updated to new signatures
 - All existing functionality preserved
@@ -144,4 +157,4 @@ The "Navigate to the specific item, then act on it" principle is now consistentl
 
 ---
 
-*"Consistency is the foundation of maintainable code."* ✨
+_"Consistency is the foundation of maintainable code."_ ✨
