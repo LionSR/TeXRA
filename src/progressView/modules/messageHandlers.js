@@ -30,6 +30,8 @@ export class ProgressMessageHandlers {
       [COMMANDS.UPDATE_USAGE]: (m) => this.handleUpdateUsage(m),
       [COMMANDS.UPDATE_GROUP_USAGE]: (m) => this.handleUpdateGroupUsage(m),
       [COMMANDS.UPDATE_FILES]: (m) => this.handleUpdateFiles(m),
+      [COMMANDS.UPDATE_MISSING_OUTPUTS]: (m) =>
+        this.handleUpdateMissingOutputs(m),
       [COMMANDS.DELETE_STREAM]: (m) => this.handleDeleteStream(m),
       [COMMANDS.DELETE_ALL]: () => this.handleDeleteAll(),
     };
@@ -161,6 +163,10 @@ export class ProgressMessageHandlers {
     if (message.stream === state.getActiveStream()) {
       dom.fileList.update(message.files);
     }
+  }
+
+  handleUpdateMissingOutputs(message) {
+    // State handled by ProgressStateManager - no direct DOM updates needed
   }
 
   handleDeleteStream(message) {
