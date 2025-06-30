@@ -19,14 +19,4 @@ export function getStreamTabId(
   return `${agentName}@${model}: ${path.basename(inputFile)}`;
 }
 
-/**
- * @deprecated Use getStreamTabId instead
- */
-export function getStreamId(
-  agent: string,
-  model: string,
-  inputFile: string,
-  outputFiles?: string[],
-): string {
-  return getStreamTabId(agent, model, inputFile, outputFiles);
-}
+
