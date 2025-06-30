@@ -5,3 +5,4 @@ export { RelativeFS } from './relativeFS';
 export * from './pastedImageUtils';
 export * from './baseFileUtils';
 export * from './fileMappingUtils';
+export * from './pathUtils';
