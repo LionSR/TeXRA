@@ -137,6 +137,7 @@ export const PROGRESS_VIEW_COMMANDS = {
   // Status and files
   UPDATE_STATUS: 'updateStatus',
   UPDATE_FILES: 'updateFiles',
+  UPDATE_MISSING_OUTPUTS: 'updateMissingOutputs',
 
   // Usage
   UPDATE_USAGE: 'updateUsage',

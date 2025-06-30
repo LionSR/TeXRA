@@ -151,6 +151,10 @@ export class LogEntryFormatter {
       return this._formatFileList(htmlMessage, text, id);
     }
 
+    if (messageType === 'missingOutputs') {
+      return this._formatMissingOutputs(htmlMessage, text, id);
+    }
+
     return htmlMessage;
   }
 
@@ -293,6 +297,66 @@ export class LogEntryFormatter {
       </details>`;
     } catch (e) {
       console.error('Error parsing file list:', e);
+      return message;
+    }
+  }
+
+  _formatMissingOutputs(message, content, logId) {
+    try {
+      const idAttr = logId ? ` data-log-id="${logId}"` : '';
+      const parsed = JSON.parse(this._unescapeHtml(content));
+
+      // Handle both old format (array) and new format (object with missing and xmlFile)
+      let missingFiles = [];
+      let xmlFile = null;
+
+      if (Array.isArray(parsed)) {
+        // Old format: just an array of missing files
+        missingFiles = parsed;
+      } else if (parsed && typeof parsed === 'object') {
+        // New format: object with missing files and XML file
+        missingFiles = parsed.missing || [];
+        xmlFile = parsed.xmlFile;
+      } else {
+        throw new Error('Invalid missing outputs format');
+      }
+
+      const items = missingFiles
+        .map((f) => {
+          const filePath = String(f);
+          const escaped = this._escapeHtml(filePath);
+          const fileName = filePath.split('/').pop() || filePath;
+          const fileNameEscaped = this._escapeHtml(fileName);
+          return `<li title="${escaped}"><i class="codicon codicon-warning"></i> <span class="file-link clickable-link" data-file="${escaped}">${fileNameEscaped}</span></li>`;
+        })
+        .join('');
+
+      // Add XML file link if available
+      let xmlLink = '';
+      if (xmlFile) {
+        const xmlEscaped = this._escapeHtml(xmlFile);
+        const xmlFileName = xmlFile.split('/').pop() || xmlFile;
+        const xmlFileNameEscaped = this._escapeHtml(xmlFileName);
+        xmlLink = `<div class="xml-link-container">
+          <i class="codicon codicon-file-code"></i>
+          <span>Open XML to check tag consistency:</span>
+          <span class="file-link clickable-link" data-file="${xmlEscaped}">${xmlFileNameEscaped}</span>
+        </div>`;
+      }
+
+      const summary = `Missing outputs (${missingFiles.length})`;
+
+      return `<details class="file-list-details" open>
+        <summary>
+          <i class="${CHEVRON_DOWN_CLASS} toggle-icon"></i>
+          <i class="codicon codicon-warning"></i>
+          <span>${summary}</span>
+        </summary>
+        <ul class="file-list-content"${idAttr}>${items}</ul>
+        ${xmlLink}
+      </details>`;
+    } catch (e) {
+      console.error('Error parsing missing outputs:', e);
       return message;
     }
   }
