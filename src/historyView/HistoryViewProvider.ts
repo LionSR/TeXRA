@@ -3,7 +3,8 @@ import { AgentHistoryManager } from './AgentHistoryManager';
 import { executeCommand } from '@commands/agent/executeCommand';
 import { agentConfigToTaskState } from '@utils/config';
 import { showLoggedErrorMessage } from '@utils/errorHandlingUtils';
-import { HISTORY_VIEW_COMMANDS } from '@common/webview/commands';
+// @ts-ignore - Import JavaScript module
+import { HISTORY_VIEW_COMMANDS } from '@common/webview/commands.js';
 import { HistoryViewContentProvider } from './HistoryViewContentProvider';
 import * as logger from '@logger/logUtils';
 

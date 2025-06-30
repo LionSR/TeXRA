@@ -1,8 +1,9 @@
 import * as vscode from 'vscode';
-import { BaseViewMessageHandler, MessageHandler } from '../common/webview/BaseViewMessageHandler';
+import { BaseViewMessageHandler, MessageHandler } from '@common/webview/BaseViewMessageHandler';
 import { ProgressViewProvider } from './ProgressViewProvider';
 import { taskStateToAgentConfig } from '@utils/config';
-import { PROGRESS_VIEW_COMMANDS } from '../common/webview/commands';
+// @ts-ignore - Import JavaScript module
+import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands.js';
 
 export class ProgressViewMessageHandler extends BaseViewMessageHandler {
   constructor(private readonly provider: ProgressViewProvider) {
