@@ -1,9 +1,8 @@
 // Local imports - constants
 import type { FileType } from '@utils/config';
-import type { TaskStateId, WithEntityId } from '../types/EntityTypes';
 
 /** Interface for storing task execution state */
-export interface TaskState extends WithEntityId<TaskStateId> {
+export interface TaskState {
   // Basic task info
   agent: string;
   model: string;
