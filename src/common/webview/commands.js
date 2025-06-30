@@ -17,30 +17,30 @@ export const MAIN_VIEW_COMMANDS = {
   FILE_SELECT: 'selectFile',
   FILE_SELECTED: 'fileSelected',
   FILES_UPDATE: 'updateFiles',
-  
+
   // Execution
   EXECUTE: 'execute',
   MERGE: 'merge',
   COMPARE: 'compare',
-  
+
   // Settings
   MODEL_SELECTED: 'modelSelected',
   SETTINGS_OPEN: 'openSettings',
-  
+
   // File selection cases
   SELECT_INPUT_FILE: 'selectInputFile',
   SELECT_REFERENCE_FILE: 'selectReferenceFile',
   SELECT_AUXILIARY_FILE: 'selectAuxiliaryFile',
   SELECT_MEDIA_FILE: 'selectMediaFile',
   SELECT_EDITED_FILE: 'selectEditedFile',
-  
+
   // File selected cases
   INPUT_FILE_SELECTED: 'inputFileSelected',
   REFERENCE_FILE_SELECTED: 'referenceFileSelected',
   AUXILIARY_FILE_SELECTED: 'auxiliaryFileSelected',
   MEDIA_FILE_SELECTED: 'mediaFileSelected',
   EDITED_FILE_SELECTED: 'editedFileSelected',
-  
+
   // Request file cases
   REQUEST_INPUT_FILE: 'requestInputFile',
   REQUEST_REFERENCE_FILE: 'requestReferenceFile',
@@ -49,14 +49,14 @@ export const MAIN_VIEW_COMMANDS = {
   REQUEST_EDITED_FILE: 'requestEditedFile',
   REQUEST_BASE_FILE: 'requestBaseFile',
   REQUEST_DEFAULT_OUTPUT_FILES: 'requestDefaultOutputFiles',
-  
+
   // Multiple file operations
   SET_INPUT_FILES: 'setInputFiles',
   SET_REFERENCE_FILES: 'setReferenceFiles',
   SET_AUXILIARY_FILES: 'setAuxiliaryFiles',
   SET_MEDIA_FILES: 'setMediaFiles',
   SELECT_MULTIPLE_FILES: 'selectMultipleFiles',
-  
+
   // Other operations
   SHOW_INFORMATION_MESSAGE: 'showInformationMessage',
   GET_THEME: 'getTheme',
@@ -73,7 +73,7 @@ export const MAIN_VIEW_COMMANDS = {
   CLIPBOARD_IMAGE: 'clipboardImage',
 };
 
-// Progress view specific commands  
+// Progress view specific commands
 export const PROGRESS_VIEW_COMMANDS = {
   ...COMMON_COMMANDS,
   // Stream management
@@ -83,32 +83,32 @@ export const PROGRESS_VIEW_COMMANDS = {
   ERASE_STREAM: 'eraseStream',
   UPDATE_STREAMS: 'updateStreams',
   DELETE_ALL: 'deleteAll',
-  
+
   // Logging
   UPDATE_LOGS: 'updateLogs',
   CLEAR_LOGS: 'clearLogs',
   APPEND_LOG: 'appendLog',
   UPDATE_LOG: 'updateLog',
-  
+
   // Groups
   ADD_LOG_GROUP: 'addLogGroup',
   UPDATE_LOG_GROUP: 'updateLogGroup',
-  
+
   // Status and files
   UPDATE_STATUS: 'updateStatus',
   UPDATE_FILES: 'updateFiles',
-  
+
   // Usage
   UPDATE_USAGE: 'updateUsage',
   UPDATE_GROUP_USAGE: 'updateGroupUsage',
-  
+
   // Actions
   RUN_AGAIN: 'runAgain',
   DIFF_STREAM: 'diffStream',
   PACK_STREAM: 'packStream',
   CLEAN_STREAM: 'cleanStream',
   RESTORE_STATE: 'restoreState',
-  
+
   // File operations
   OPEN_FILE: 'openFile',
   COMPARE_ORIGINAL: 'compareOriginal',

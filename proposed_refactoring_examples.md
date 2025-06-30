@@ -16,7 +16,7 @@ export abstract class BaseViewContentProvider {
 
   constructor(
     protected readonly context: vscode.ExtensionContext,
-    protected readonly viewName: string
+    protected readonly viewName: string,
   ) {
     this.logger = logger.getLogger(`${viewName}ContentProvider`);
   }
@@ -29,7 +29,9 @@ export abstract class BaseViewContentProvider {
   /**
    * Subclasses must provide their specific module URIs
    */
-  protected abstract getModuleUris(webview: vscode.Webview): Record<string, vscode.Uri>;
+  protected abstract getModuleUris(
+    webview: vscode.Webview,
+  ): Record<string, vscode.Uri>;
 
   /**
    * Common method to get webview paths
@@ -39,7 +41,7 @@ export abstract class BaseViewContentProvider {
       this.context.extensionUri,
       'src',
       this.getViewPath(),
-      filePath
+      filePath,
     );
   }
 
@@ -49,13 +51,16 @@ export abstract class BaseViewContentProvider {
 
   protected getCommonUri(webview: vscode.Webview, path: string): vscode.Uri {
     return webview.asWebviewUri(
-      vscode.Uri.joinPath(this.context.extensionUri, 'src', 'common', path)
+      vscode.Uri.joinPath(this.context.extensionUri, 'src', 'common', path),
     );
   }
 
-  protected getNodeModulesUri(webview: vscode.Webview, path: string): vscode.Uri {
+  protected getNodeModulesUri(
+    webview: vscode.Webview,
+    path: string,
+  ): vscode.Uri {
     return webview.asWebviewUri(
-      vscode.Uri.joinPath(this.context.extensionUri, 'node_modules', path)
+      vscode.Uri.joinPath(this.context.extensionUri, 'node_modules', path),
     );
   }
 
@@ -67,16 +72,16 @@ export abstract class BaseViewContentProvider {
       const htmlPath = this.getWebviewPath('index.html');
       const commonUris = this.getCommonModuleUris(webview);
       const specificUris = this.getModuleUris(webview);
-      
+
       this.logger.debug(`Generated HTML content for ${this.viewName}`);
-      
+
       return buildWebviewHtml(webview, htmlPath, {
         ...commonUris,
-        ...specificUris
+        ...specificUris,
       });
     } catch (err) {
       this.logger.error(
-        `Error generating HTML content: ${err instanceof Error ? err.message : String(err)}`
+        `Error generating HTML content: ${err instanceof Error ? err.message : String(err)}`,
       );
       return '<html><body>Error loading content</body></html>';
     }
@@ -85,16 +90,27 @@ export abstract class BaseViewContentProvider {
   /**
    * Common URIs used by all views
    */
-  private getCommonModuleUris(webview: vscode.Webview): Record<string, vscode.Uri> {
+  private getCommonModuleUris(
+    webview: vscode.Webview,
+  ): Record<string, vscode.Uri> {
     return {
       commonStyleUri: this.getCommonUri(webview, 'styles/common.css'),
       webviewStateUri: this.getCommonUri(webview, 'modules/webviewState.js'),
-      webviewContextUri: this.getCommonUri(webview, 'modules/webviewContext.js'),
+      webviewContextUri: this.getCommonUri(
+        webview,
+        'modules/webviewContext.js',
+      ),
       templateUtilsUri: this.getCommonUri(webview, 'modules/templateUtils.js'),
       domUtilsUri: this.getCommonUri(webview, 'modules/domUtils.js'),
       stringUtilsUri: this.getCommonUri(webview, 'modules/stringUtils.js'),
-      codiconUri: this.getNodeModulesUri(webview, '@vscode/codicons/dist/codicon.css'),
-      codiconsFontUri: this.getNodeModulesUri(webview, '@vscode/codicons/dist/codicon.ttf'),
+      codiconUri: this.getNodeModulesUri(
+        webview,
+        '@vscode/codicons/dist/codicon.css',
+      ),
+      codiconsFontUri: this.getNodeModulesUri(
+        webview,
+        '@vscode/codicons/dist/codicon.ttf',
+      ),
     };
   }
 }
@@ -121,16 +137,25 @@ export class ProgressViewContentProvider extends BaseViewContentProvider {
       styleUri: this.getWebviewUri(webview, 'styles/index.css'),
       scriptUri: this.getWebviewUri(webview, 'script.js'),
       splitJsUri: this.getNodeModulesUri(webview, 'split.js/dist/split.es.js'),
-      
+
       // Progress view specific modules
-      progressViewStateUri: this.getWebviewUri(webview, 'modules/progressViewState.js'),
-      messageHandlersUri: this.getWebviewUri(webview, 'modules/messageHandlers.js'),
+      progressViewStateUri: this.getWebviewUri(
+        webview,
+        'modules/progressViewState.js',
+      ),
+      messageHandlersUri: this.getWebviewUri(
+        webview,
+        'modules/messageHandlers.js',
+      ),
       domHandlersUri: this.getWebviewUri(webview, 'modules/domHandlers.js'),
       formattersUri: this.getWebviewUri(webview, 'modules/formatters.js'),
       constantsUri: this.getWebviewUri(webview, 'modules/constants.js'),
-      
+
       // UI managers - consolidated into single manager
-      uiManagerUri: this.getWebviewUri(webview, 'modules/ProgressViewUIManager.js'),
+      uiManagerUri: this.getWebviewUri(
+        webview,
+        'modules/ProgressViewUIManager.js',
+      ),
     };
   }
 }
@@ -195,13 +220,13 @@ class StreamTabsManager {
       console.error('StreamTabsManager.update: streams must be an array');
       return;
     }
-    
+
     const tabsContainer = document.getElementById('streamTabs');
     if (!tabsContainer) {
       console.error('StreamTabsManager.update: streamTabs container not found');
       return;
     }
-    
+
     tabsContainer.innerHTML = streams
       .map(stream => this.createTabHTML(stream, activeStream))
       .join('');
@@ -268,7 +293,7 @@ class FileListManager {
     if (!fileListElement) return;
 
     fileListElement.innerHTML = '';
-    
+
     Object.entries(files || {}).forEach(([round, roundFiles]) => {
       if (roundFiles && roundFiles.length > 0) {
         const roundElement = this.createRoundElement(round, roundFiles);
@@ -386,18 +411,18 @@ export const MAIN_VIEW_COMMANDS = {
   FILE_SELECT: 'selectFile',
   FILE_SELECTED: 'fileSelected',
   FILES_UPDATE: 'updateFiles',
-  
+
   // Execution
   EXECUTE: 'execute',
   MERGE: 'merge',
   COMPARE: 'compare',
-  
+
   // Settings
   MODEL_SELECTED: 'modelSelected',
   SETTINGS_OPEN: 'openSettings',
 };
 
-// Progress view specific commands  
+// Progress view specific commands
 export const PROGRESS_VIEW_COMMANDS = {
   ...COMMON_COMMANDS,
   // Stream management
@@ -407,31 +432,31 @@ export const PROGRESS_VIEW_COMMANDS = {
   STREAM_ERASE: 'eraseStream',
   STREAMS_UPDATE: 'updateStreams',
   STREAMS_DELETE_ALL: 'deleteAll',
-  
+
   // Logging
   LOGS_UPDATE: 'updateLogs',
   LOGS_CLEAR: 'clearLogs',
   LOG_APPEND: 'appendLog',
   LOG_UPDATE: 'updateLog',
-  
+
   // Groups
   GROUP_ADD: 'addLogGroup',
   GROUP_UPDATE: 'updateLogGroup',
-  
+
   // Status and files
   STATUS_UPDATE: 'updateStatus',
   FILES_UPDATE: 'updateFiles',
-  
+
   // Usage
   USAGE_UPDATE: 'updateUsage',
   GROUP_USAGE_UPDATE: 'updateGroupUsage',
-  
+
   // Actions
   RUN_AGAIN: 'runAgain',
   DIFF_STREAM: 'diffStream',
   PACK_STREAM: 'packStream',
   CLEAN_STREAM: 'cleanStream',
-  
+
   // File operations
   FILE_OPEN: 'openFile',
   FILE_COMPARE_ORIGINAL: 'compareOriginal',
@@ -471,8 +496,8 @@ import * as vscode from 'vscode';
 import * as logger from '@logger/logUtils';
 
 export type MessageHandler = (
-  message: any, 
-  webviewView: vscode.WebviewView
+  message: any,
+  webviewView: vscode.WebviewView,
 ) => Promise<void>;
 
 export abstract class BaseViewMessageHandler {
@@ -493,8 +518,8 @@ export abstract class BaseViewMessageHandler {
    * Standard message handling with consistent error handling and logging
    */
   public async handleMessage(
-    message: any, 
-    webviewView: vscode.WebviewView
+    message: any,
+    webviewView: vscode.WebviewView,
   ): Promise<void> {
     if (!message?.command) {
       this.logger.warn('Received message without command');
@@ -515,9 +540,9 @@ export abstract class BaseViewMessageHandler {
       this.logger.error(
         `Error handling command ${message.command}: ${
           error instanceof Error ? error.message : String(error)
-        }`
+        }`,
       );
-      
+
       // Optionally notify the webview of the error
       webviewView.webview.postMessage({
         command: 'error',
@@ -530,14 +555,14 @@ export abstract class BaseViewMessageHandler {
    * Helper method for common theme handling
    */
   protected async handleTheme(
-    message: any, 
-    webviewView: vscode.WebviewView
+    message: any,
+    webviewView: vscode.WebviewView,
   ): Promise<void> {
     if (!message?.theme) {
       this.logger.warn('Invalid theme message:', message);
       return;
     }
-    
+
     webviewView.webview.postMessage({
       command: 'setTheme',
       theme: message.theme,
@@ -548,8 +573,8 @@ export abstract class BaseViewMessageHandler {
    * Helper method for common debug mode handling
    */
   protected async handleDebugMode(
-    message: any, 
-    webviewView: vscode.WebviewView
+    message: any,
+    webviewView: vscode.WebviewView,
   ): Promise<void> {
     webviewView.webview.postMessage({
       command: 'setDebugMode',
@@ -563,7 +588,10 @@ export abstract class BaseViewMessageHandler {
 
 ```typescript
 // src/progressView/ProgressViewMessageHandler.ts
-import { BaseViewMessageHandler, MessageHandler } from '@common/webview/BaseViewMessageHandler';
+import {
+  BaseViewMessageHandler,
+  MessageHandler,
+} from '@common/webview/BaseViewMessageHandler';
 import { ProgressViewProvider } from './ProgressViewProvider';
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 import * as vscode from 'vscode';
@@ -578,28 +606,35 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
       // Common handlers
       [PROGRESS_VIEW_COMMANDS.THEME_SET]: this.handleTheme.bind(this),
       [PROGRESS_VIEW_COMMANDS.DEBUG_MODE_SET]: this.handleDebugMode.bind(this),
-      
+
       // Stream management
-      [PROGRESS_VIEW_COMMANDS.STREAM_SWITCH]: this.handleSwitchStream.bind(this),
-      [PROGRESS_VIEW_COMMANDS.STREAM_DELETE]: this.handleDeleteStream.bind(this),
+      [PROGRESS_VIEW_COMMANDS.STREAM_SWITCH]:
+        this.handleSwitchStream.bind(this),
+      [PROGRESS_VIEW_COMMANDS.STREAM_DELETE]:
+        this.handleDeleteStream.bind(this),
       [PROGRESS_VIEW_COMMANDS.STREAM_ERASE]: this.handleEraseStream.bind(this),
-      [PROGRESS_VIEW_COMMANDS.STREAMS_DELETE_ALL]: this.handleDeleteAllStreams.bind(this),
+      [PROGRESS_VIEW_COMMANDS.STREAMS_DELETE_ALL]:
+        this.handleDeleteAllStreams.bind(this),
       [PROGRESS_VIEW_COMMANDS.STREAM_STOP]: this.handleStopStream.bind(this),
-      
+
       // Actions
       [PROGRESS_VIEW_COMMANDS.RUN_AGAIN]: this.handleRunAgain.bind(this),
       [PROGRESS_VIEW_COMMANDS.DIFF_STREAM]: this.handleDiffStream.bind(this),
       [PROGRESS_VIEW_COMMANDS.PACK_STREAM]: this.handlePackStream.bind(this),
       [PROGRESS_VIEW_COMMANDS.CLEAN_STREAM]: this.handleCleanStream.bind(this),
-      [PROGRESS_VIEW_COMMANDS.STATE_RESTORE]: this.handleRestoreState.bind(this),
-      
+      [PROGRESS_VIEW_COMMANDS.STATE_RESTORE]:
+        this.handleRestoreState.bind(this),
+
       // File operations
       [PROGRESS_VIEW_COMMANDS.FILE_OPEN]: this.handleOpenFile.bind(this),
-      [PROGRESS_VIEW_COMMANDS.FILE_COMPARE_ORIGINAL]: this.handleCompareOriginal.bind(this),
-      [PROGRESS_VIEW_COMMANDS.FILE_COMPARE_PREVIOUS]: this.handleComparePrevious.bind(this),
+      [PROGRESS_VIEW_COMMANDS.FILE_COMPARE_ORIGINAL]:
+        this.handleCompareOriginal.bind(this),
+      [PROGRESS_VIEW_COMMANDS.FILE_COMPARE_PREVIOUS]:
+        this.handleComparePrevious.bind(this),
       [PROGRESS_VIEW_COMMANDS.FILE_ACCEPT]: this.handleAcceptFile.bind(this),
       [PROGRESS_VIEW_COMMANDS.FILE_MERGE]: this.handleMergeFile.bind(this),
-      [PROGRESS_VIEW_COMMANDS.FILE_LATEXDIFF]: this.handleLatexdiffFile.bind(this),
+      [PROGRESS_VIEW_COMMANDS.FILE_LATEXDIFF]:
+        this.handleLatexdiffFile.bind(this),
     };
   }
 
@@ -642,15 +677,15 @@ import { WebviewStateManager } from '@common/webviewState.js';
 export class ProgressViewState {
   constructor() {
     this.stateManager = new WebviewStateManager();
-    
+
     // Core state properties
     this.activeStream = '';
     this.currentGroupId = null;
-    
+
     // Direct Map usage for simple state
     this.streamStatuses = new Map();
     this.taskGroups = new Map();
-    
+
     // Only use specialized classes where they add real value
     this.toggleStates = new ToggleStateManager(() => this.save());
   }
@@ -679,7 +714,9 @@ export class ProgressViewState {
   // Stream status methods with validation
   setStreamStatus(stream, status) {
     if (!stream || !status) {
-      console.error('ProgressViewState.setStreamStatus: stream and status are required');
+      console.error(
+        'ProgressViewState.setStreamStatus: stream and status are required',
+      );
       return;
     }
     this.streamStatuses.set(stream, status);
@@ -696,7 +733,9 @@ export class ProgressViewState {
   // Task group methods with validation
   setTaskGroup(groupId, group) {
     if (!groupId || !group) {
-      console.error('ProgressViewState.setTaskGroup: groupId and group are required');
+      console.error(
+        'ProgressViewState.setTaskGroup: groupId and group are required',
+      );
       return;
     }
     this.taskGroups.set(groupId, group);
@@ -711,10 +750,12 @@ export class ProgressViewState {
       console.error('ProgressViewState.updateTaskGroup: groupId is required');
       return;
     }
-    
+
     const group = this.taskGroups.get(groupId);
     if (!group) {
-      console.error(`ProgressViewState.updateTaskGroup: group not found for id ${groupId}`);
+      console.error(
+        `ProgressViewState.updateTaskGroup: group not found for id ${groupId}`,
+      );
       return;
     }
 
@@ -747,7 +788,9 @@ class ToggleStateManager {
 
   set(id, collapsed) {
     if (!id || typeof collapsed !== 'boolean') {
-      console.error('ToggleStateManager.set: id and boolean collapsed are required');
+      console.error(
+        'ToggleStateManager.set: id and boolean collapsed are required',
+      );
       return;
     }
     this.states.set(id, collapsed);
@@ -765,7 +808,7 @@ class ToggleStateManager {
       console.error('ToggleStateManager.clear: ids must be an array');
       return;
     }
-    ids.forEach(id => {
+    ids.forEach((id) => {
       if (id) this.states.delete(id);
     });
     if (this.saveCallback) {

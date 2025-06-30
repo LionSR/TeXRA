@@ -15,22 +15,52 @@ export class MainViewContentProvider extends BaseViewContentProvider {
     return {
       styleUri: this.getWebviewUri(webview, 'styles/index.css'),
       scriptUri: this.getWebviewUri(webview, 'script.js'),
-      
+
       // Main view specific modules
-      webviewStateModuleUri: this.getWebviewUri(webview, 'modules/mainViewState.js'),
-      messageHandlersUri: this.getWebviewUri(webview, 'modules/messageHandlers.js'),
+      webviewStateModuleUri: this.getWebviewUri(
+        webview,
+        'modules/mainViewState.js',
+      ),
+      messageHandlersUri: this.getWebviewUri(
+        webview,
+        'modules/messageHandlers.js',
+      ),
       fileHandlersUri: this.getWebviewUri(webview, 'modules/fileHandlers.js'),
       domHandlersUri: this.getWebviewUri(webview, 'modules/domHandlers.js'),
-      
+
       // UI managers
-      fileListUri: this.getWebviewUri(webview, 'modules/uiManagers/FileList.js'),
-      fileSelectUri: this.getWebviewUri(webview, 'modules/uiManagers/FileSelect.js'),
-      toggleManagerUri: this.getWebviewUri(webview, 'modules/uiManagers/ToggleManager.js'),
-      fileInputManagerUri: this.getWebviewUri(webview, 'modules/uiManagers/FileInputManager.js'),
-      actionButtonManagerUri: this.getWebviewUri(webview, 'modules/uiManagers/ActionButtonManager.js'),
-      settingsButtonManagerUri: this.getWebviewUri(webview, 'modules/uiManagers/SettingsButtonManager.js'),
-      recordingManagerUri: this.getWebviewUri(webview, 'modules/uiManagers/RecordingManager.js'),
-      instructionManagerUri: this.getWebviewUri(webview, 'modules/uiManagers/InstructionManager.js'),
+      fileListUri: this.getWebviewUri(
+        webview,
+        'modules/uiManagers/FileList.js',
+      ),
+      fileSelectUri: this.getWebviewUri(
+        webview,
+        'modules/uiManagers/FileSelect.js',
+      ),
+      toggleManagerUri: this.getWebviewUri(
+        webview,
+        'modules/uiManagers/ToggleManager.js',
+      ),
+      fileInputManagerUri: this.getWebviewUri(
+        webview,
+        'modules/uiManagers/FileInputManager.js',
+      ),
+      actionButtonManagerUri: this.getWebviewUri(
+        webview,
+        'modules/uiManagers/ActionButtonManager.js',
+      ),
+      settingsButtonManagerUri: this.getWebviewUri(
+        webview,
+        'modules/uiManagers/SettingsButtonManager.js',
+      ),
+      recordingManagerUri: this.getWebviewUri(
+        webview,
+        'modules/uiManagers/RecordingManager.js',
+      ),
+      instructionManagerUri: this.getWebviewUri(
+        webview,
+        'modules/uiManagers/InstructionManager.js',
+      ),
     };
   }
 
