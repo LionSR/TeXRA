@@ -23,14 +23,14 @@ interface OutputFileInfo extends DiffStats {
 
 /**
  * Manages persistence of progress view state to workspace storage.
- * Handles loading and saving of log streams, groups, output files,
+ * Handles loading and saving of stream tabs, groups, output files,
  * task states, and usage statistics.
  */
 export class ProgressStateManager {
   private readonly logger: AgentLogger;
 
   // State collections
-  private _logStreams: Map<string, LogMessageData[]> = new Map();
+  private _streamTabs: Map<string, LogMessageData[]> = new Map();
   private _taskGroups: Map<string, Map<string, TaskGroup>> = new Map();
   private _outputFiles: Map<string, { [key: number]: OutputFileInfo[] }> =
     new Map();
@@ -45,8 +45,8 @@ export class ProgressStateManager {
   }
 
   // Getters for state collections
-  get logStreams(): Map<string, LogMessageData[]> {
-    return this._logStreams;
+  get streamTabs(): Map<string, LogMessageData[]> {
+    return this._streamTabs;
   }
 
   get taskGroups(): Map<string, Map<string, TaskGroup>> {
@@ -93,7 +93,7 @@ export class ProgressStateManager {
    * Load all state from workspace storage
    */
   public async loadState(): Promise<void> {
-    await this._loadLogStreams();
+    await this._loadStreamTabs();
     await this._loadTaskGroups();
     await this._loadOutputFiles();
     await this._loadMissingOutputs();
@@ -107,7 +107,7 @@ export class ProgressStateManager {
    * Save all state to workspace storage
    */
   public saveState(): void {
-    this._saveLogStreams();
+    this._saveStreamTabs();
     this._saveTaskGroups();
     this._saveOutputFiles();
     this._saveMissingOutputs();
@@ -118,16 +118,28 @@ export class ProgressStateManager {
   }
 
   /**
-   * Load log streams from storage
+   * Load stream tabs from storage
    */
-  private async _loadLogStreams(): Promise<void> {
-    const savedState = workspaceSM.get<{
+  private async _loadStreamTabs(): Promise<void> {
+    let savedState = workspaceSM.get<{
       [key: string]: LogMessageData[] | any[];
-    }>(this._getWorkspaceKey(WorkspaceStateKey.LOG_STREAMS));
+    }>(this._getWorkspaceKey(WorkspaceStateKey.STREAM_TABS));
+
+    if (!savedState) {
+      const legacyKey = this._getWorkspaceKey('texra.logStreams');
+      const legacyState = workspaceSM.get<{ [key: string]: LogMessageData[] }>(
+        legacyKey,
+      );
+      if (legacyState) {
+        savedState = legacyState;
+        await workspaceSM.update(legacyKey, undefined);
+        this.logger.debug('Migrated logStreams to streamTabs');
+      }
+    }
 
     if (savedState) {
       // Only load persisted channels
-      this._logStreams = new Map(
+      this._streamTabs = new Map(
         Object.entries(savedState).map(([stream, messages]) => [
           stream,
           messages.map((msg: any) => {
@@ -158,7 +170,7 @@ export class ProgressStateManager {
         ]),
       );
     } else {
-      this._logStreams.clear();
+      this._streamTabs.clear();
     }
   }
 
@@ -319,12 +331,12 @@ export class ProgressStateManager {
    */
   private _loadActiveStream(): void {
     const savedActiveStream = workspaceSM.get<string>(
-      WorkspaceStateKey.ACTIVE_LOG_STREAM,
+      WorkspaceStateKey.ACTIVE_STREAM_TAB,
     );
-    if (savedActiveStream && this._logStreams.has(savedActiveStream)) {
+    if (savedActiveStream && this._streamTabs.has(savedActiveStream)) {
       this._activeStream = savedActiveStream;
     } else {
-      this._activeStream = Array.from(this._logStreams.keys())[0] ?? '';
+      this._activeStream = Array.from(this._streamTabs.keys())[0] ?? '';
     }
   }
 
@@ -392,13 +404,13 @@ export class ProgressStateManager {
   }
 
   /**
-   * Save log streams to storage
+   * Save stream tabs to storage
    */
-  private _saveLogStreams(): void {
-    const persistentStreams = Array.from(this._logStreams.entries());
+  private _saveStreamTabs(): void {
+    const persistentStreams = Array.from(this._streamTabs.entries());
     const stateObj = Object.fromEntries(persistentStreams);
     workspaceSM.update(
-      this._getWorkspaceKey(WorkspaceStateKey.LOG_STREAMS),
+      this._getWorkspaceKey(WorkspaceStateKey.STREAM_TABS),
       stateObj,
     );
   }
@@ -440,7 +452,7 @@ export class ProgressStateManager {
    * Save active stream
    */
   private _saveActiveStream(): void {
-    workspaceSM.update(WorkspaceStateKey.ACTIVE_LOG_STREAM, this._activeStream);
+    workspaceSM.update(WorkspaceStateKey.ACTIVE_STREAM_TAB, this._activeStream);
   }
 
   /**
@@ -474,7 +486,7 @@ export class ProgressStateManager {
    * Clear all state for a specific stream
    */
   public clearStream(stream: string): void {
-    this._logStreams.delete(stream);
+    this._streamTabs.delete(stream);
     this._taskGroups.delete(stream);
     this._outputFiles.delete(stream);
     this._missingOutputs.delete(stream);
@@ -487,7 +499,7 @@ export class ProgressStateManager {
    * Clear all state
    */
   public clearAll(): void {
-    this._logStreams.clear();
+    this._streamTabs.clear();
     this._taskGroups.clear();
     this._outputFiles.clear();
     this._missingOutputs.clear();

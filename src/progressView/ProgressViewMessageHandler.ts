@@ -40,6 +40,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
 
       // File operations
       [PROGRESS_VIEW_COMMANDS.OPEN_FILE]: this.handleOpenFile.bind(this),
+      [PROGRESS_VIEW_COMMANDS.OPEN_FILE_COMPILE]:
+        this.handleOpenFileCompile.bind(this),
       [PROGRESS_VIEW_COMMANDS.COMPARE_ORIGINAL]:
         this.handleCompareOriginal.bind(this),
       [PROGRESS_VIEW_COMMANDS.COMPARE_PREVIOUS]:
@@ -139,6 +141,13 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
   }
 
   private async handleOpenFile(
+    message: any,
+    webviewView: vscode.WebviewView,
+  ): Promise<void> {
+    await vscode.commands.executeCommand('texra.openFile', message.file);
+  }
+
+  private async handleOpenFileCompile(
     message: any,
     webviewView: vscode.WebviewView,
   ): Promise<void> {
