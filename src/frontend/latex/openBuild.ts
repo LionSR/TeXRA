@@ -14,9 +14,6 @@ import {
   LATEX_VIEWER_REFRESH_DELAY_MS,
 } from '@utils/config';
 
-const VIEWER_DELAY_MS = 5000;
-const REFRESH_DELAY_MS = 5000;
-
 const CHANNEL = 'OpenBuildUtils';
 logger.initialize(CHANNEL);
 
@@ -82,9 +79,9 @@ export async function openBuildDisplayIfTex(
         await vscode.commands.executeCommand('latex-workshop.view');
         setTimeout(
           () => vscode.commands.executeCommand('latex-workshop.refresh-viewer'),
-          REFRESH_DELAY_MS,
+          LATEX_VIEWER_REFRESH_DELAY_MS,
         );
-      }, VIEWER_DELAY_MS);
+      }, LATEX_VIEWER_OPEN_DELAY_MS);
     } catch (err) {
       logger.warn(CHANNEL, `Viewer display failed: ${err}`);
     }
