@@ -164,6 +164,13 @@ The "Clean" button (<i class="codicon codicon-trash"></i>) removes output files 
 
 Use this to clean up your workspace after reviewing the results.
 
+### Opening Generated Files
+
+Click the file names listed in the ProgressBoard to view the outputs. Non\-TeX
+files open with VS Code's default viewer. When clicking a `.tex` file, TeXRA
+automatically runs a LaTeX build and displays the resulting PDF (requires
+LaTeX Workshop). Absolute file paths are supported.
+
 ## Working with LaTeX Projects
 
 For complex LaTeX projects with many files and dependencies:
