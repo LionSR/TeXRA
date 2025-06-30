@@ -1,9 +1,10 @@
 // Third-party imports
 import * as vscode from 'vscode';
+import * as path from 'path';
 
 // Local imports - log
 import * as logger from '@logger/logUtils';
-import { WorkspaceFS } from '@utils/files';
+import { WorkspaceFS, AbsoluteFS } from '@utils/files';
 
 const CHANNEL = 'OpenBuildUtils';
 logger.initialize(CHANNEL);
@@ -19,24 +20,32 @@ export async function openAndBuildIfTex(
   options: { preserveFocus?: boolean } = {},
 ): Promise<void> {
   try {
-    if (!(await WorkspaceFS.exists(file))) {
+    const isAbsolute = path.isAbsolute(file);
+    const exists = isAbsolute
+      ? await AbsoluteFS.exists(file)
+      : await WorkspaceFS.exists(file);
+    if (!exists) {
       vscode.window.showErrorMessage(`File not found: ${file}`);
       return;
     }
 
-    const uri = vscode.Uri.file(WorkspaceFS.fullPath(file));
-    const doc = await vscode.workspace.openTextDocument(uri);
-    await vscode.window.showTextDocument(doc, {
-      preview: false,
-      preserveFocus: options.preserveFocus ?? false,
-    });
+    const fullPath = isAbsolute ? file : WorkspaceFS.fullPath(file);
+    const uri = vscode.Uri.file(fullPath);
 
     if (file.toLowerCase().endsWith('.tex')) {
+      const doc = await vscode.workspace.openTextDocument(uri);
+      await vscode.window.showTextDocument(doc, {
+        preview: false,
+        preserveFocus: options.preserveFocus ?? false,
+      });
+
       try {
         await vscode.commands.executeCommand('latex-workshop.build', uri);
       } catch (err) {
         logger.warn(CHANNEL, `LaTeX Workshop build failed: ${err}`);
       }
+    } else {
+      await vscode.commands.executeCommand('vscode.open', uri);
     }
   } catch (err) {
     logger.error(CHANNEL, `Error opening file: ${err}`);
