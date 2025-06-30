@@ -847,7 +847,10 @@ export abstract class BaseReflectionAgent extends BaseAgent {
       // Check expected outputs after round 0 completes
       if (endTurn) {
         try {
-          await this.outputHandler.validateExpectedOutputs(0);
+          await this.outputHandler.validateExpectedOutputs(
+            this.outputFile[0],
+            0,
+          );
           this.logger.debug(
             `Expected outputs validated for round 0`,
             this.runGroupId,
@@ -874,7 +877,10 @@ export abstract class BaseReflectionAgent extends BaseAgent {
 
         // Check expected outputs after round 1 completes
         try {
-          await this.outputHandler.validateExpectedOutputs(1);
+          await this.outputHandler.validateExpectedOutputs(
+            this.outputFile[1],
+            1,
+          );
           this.logger.debug(
             `Expected outputs validated for round 1`,
             this.runGroupId,
