@@ -1,8 +1,10 @@
 import * as vscode from 'vscode';
 import { safeExecuteCommand } from '@utils/system';
 import { getConfig } from '@utils/config';
-import { BaseViewMessageHandler, MessageHandler } from '@common/webview/BaseViewMessageHandler';
-import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
+// @ts-ignore - Import TypeScript base class that may not be compiled yet
+import { BaseViewMessageHandler, MessageHandler } from '../../common/webview/BaseViewMessageHandler';
+// @ts-ignore - Import JavaScript module
+import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
 import {
   SettingsManager,
   RecordingManager,
