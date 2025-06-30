@@ -229,6 +229,7 @@ export class OutputHandler implements IOutputHandler {
   public async validateExpectedOutputs(
     outputFile: string,
     currRound: number,
+    groupId?: string,
   ): Promise<void> {
     const expected = this.agentConfig.outputFiles;
     if (!expected || expected.length === 0) {
@@ -248,13 +249,8 @@ export class OutputHandler implements IOutputHandler {
     const results = await Promise.all(checks);
     const missing = results.filter((r) => !r.exists).map((r) => r.file);
 
-    emitProgress('updateMissingOutputs', {
-      stream: this.channel,
-      filesByRound: { [currRound]: missing },
-    });
-
+    // Include XML file path with missing outputs if there are any missing files
     if (missing.length > 0) {
-      const openBtn = 'Open XML';
       let xmlPath: string;
 
       if (outputFile) {
@@ -271,43 +267,28 @@ export class OutputHandler implements IOutputHandler {
         );
       }
 
-      const missingFilesList = missing.map((f) => path.basename(f)).join(', ');
-      await showInstructionWithSuppress(
-        'xmlOutputMismatch',
-        `Expected outputs not generated: ${missingFilesList}. Open the XML file to check tag consistency, then run again.`,
-        [
-          {
-            title: openBtn,
-            callback: async () => {
-              if (!xmlPath) {
-                vscode.window.showWarningMessage('XML file path not found');
-                return;
-              }
-              const xmlExists = path.isAbsolute(xmlPath)
-                ? await AbsoluteFS.exists(xmlPath)
-                : await WorkspaceFS.exists(xmlPath);
-              if (!xmlExists) {
-                vscode.window.showWarningMessage(
-                  `XML file not found: ${path.basename(xmlPath)}`,
-                );
-                return;
-              }
-              const uri = path.isAbsolute(xmlPath)
-                ? vscode.Uri.file(xmlPath)
-                : vscode.Uri.file(WorkspaceFS.fullPath(xmlPath));
-              const doc = await vscode.workspace.openTextDocument(uri);
-              await vscode.window.showTextDocument(doc, { preview: false });
-            },
-          },
-        ],
-        false,
-      );
+      // Check if XML file exists
+      const xmlExists = path.isAbsolute(xmlPath)
+        ? await AbsoluteFS.exists(xmlPath)
+        : await WorkspaceFS.exists(xmlPath);
+
+      // Log missing outputs with XML file info
+      const missingOutputsData = {
+        missing,
+        xmlFile: xmlExists ? xmlPath : null,
+      };
+
       this.logger.info(
-        JSON.stringify(missing),
-        undefined,
+        JSON.stringify(missingOutputsData),
+        groupId,
         MESSAGE_TYPES.MISSING_OUTPUTS,
       );
     }
+
+    emitProgress('updateMissingOutputs', {
+      stream: this.channel,
+      filesByRound: { [currRound]: missing },
+    });
   }
 
   /** Processes single output file with XML splitting and filtering. */

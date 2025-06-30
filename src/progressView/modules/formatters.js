@@ -305,11 +305,23 @@ export class LogEntryFormatter {
     try {
       const idAttr = logId ? ` data-log-id="${logId}"` : '';
       const parsed = JSON.parse(this._unescapeHtml(content));
-      if (!Array.isArray(parsed)) {
-        throw new Error('Invalid file list');
+
+      // Handle both old format (array) and new format (object with missing and xmlFile)
+      let missingFiles = [];
+      let xmlFile = null;
+
+      if (Array.isArray(parsed)) {
+        // Old format: just an array of missing files
+        missingFiles = parsed;
+      } else if (parsed && typeof parsed === 'object') {
+        // New format: object with missing files and XML file
+        missingFiles = parsed.missing || [];
+        xmlFile = parsed.xmlFile;
+      } else {
+        throw new Error('Invalid missing outputs format');
       }
 
-      const items = parsed
+      const items = missingFiles
         .map((f) => {
           const filePath = String(f);
           const escaped = this._escapeHtml(filePath);
@@ -319,7 +331,19 @@ export class LogEntryFormatter {
         })
         .join('');
 
-      const summary = `Missing outputs (${parsed.length})`;
+      // Add XML file link if available
+      let xmlLink = '';
+      if (xmlFile) {
+        const xmlEscaped = this._escapeHtml(xmlFile);
+        const xmlFileName = xmlFile.split('/').pop() || xmlFile;
+        const xmlFileNameEscaped = this._escapeHtml(xmlFileName);
+        xmlLink = `<div class="xml-link-container" style="margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--vscode-widget-border);">
+          <i class="codicon codicon-file-code"></i> Open XML to check tag consistency: 
+          <span class="file-link clickable-link" data-file="${xmlEscaped}" style="font-weight: 500;">${xmlFileNameEscaped}</span>
+        </div>`;
+      }
+
+      const summary = `Missing outputs (${missingFiles.length})`;
 
       return `<details class="file-list-details" open>
         <summary>
@@ -328,6 +352,7 @@ export class LogEntryFormatter {
           <span>${summary}</span>
         </summary>
         <ul class="file-list-content"${idAttr}>${items}</ul>
+        ${xmlLink}
       </details>`;
     } catch (e) {
       console.error('Error parsing missing outputs:', e);
