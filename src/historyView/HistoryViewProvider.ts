@@ -1,25 +1,24 @@
 import * as vscode from 'vscode';
-
-// Local imports - core
 import { AgentHistoryManager } from './AgentHistoryManager';
 import { executeCommand } from '@commands/agent/executeCommand';
-
 import { agentConfigToTaskState } from '@utils/config';
-import { buildWebviewHtml } from '@frontend/webview/html';
-
-// Local imports - log
+import { showLoggedErrorMessage } from '@utils/errorHandlingUtils';
+// @ts-ignore - Import JavaScript module
+import { HISTORY_VIEW_COMMANDS } from '@common/webview/commands';
+import { HistoryViewContentProvider } from './HistoryViewContentProvider';
 import * as logger from '@logger/logUtils';
 
-import { showLoggedErrorMessage } from '@utils/errorHandlingUtils';
-
-const CHANNEL = 'AgentHistoryViewProvider';
+const CHANNEL = 'HistoryViewProvider';
 logger.initialize(CHANNEL);
 
-export class AgentHistoryViewProvider implements vscode.WebviewViewProvider {
+export class HistoryViewProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'texra.historyView';
   private _view?: vscode.WebviewPanel;
+  private readonly contentProvider: HistoryViewContentProvider;
 
-  constructor(private readonly context: vscode.ExtensionContext) {}
+  constructor(private readonly context: vscode.ExtensionContext) {
+    this.contentProvider = new HistoryViewContentProvider(context);
+  }
 
   /**
    * This is required for the WebviewViewProvider interface but we won't use it
@@ -41,7 +40,7 @@ export class AgentHistoryViewProvider implements vscode.WebviewViewProvider {
 
     // Otherwise, create a new panel
     this._view = vscode.window.createWebviewPanel(
-      AgentHistoryViewProvider.viewType,
+      HistoryViewProvider.viewType,
       'TeXRA History',
       vscode.ViewColumn.One,
       {
@@ -60,6 +59,12 @@ export class AgentHistoryViewProvider implements vscode.WebviewViewProvider {
             'src',
             'common',
             'modules',
+          ),
+          vscode.Uri.joinPath(
+            this.context.extensionUri,
+            'src',
+            'common',
+            'webview',
           ),
           vscode.Uri.joinPath(
             this.context.extensionUri,
@@ -90,11 +95,14 @@ export class AgentHistoryViewProvider implements vscode.WebviewViewProvider {
    * Handle messages from the webview
    */
   private handlers: Record<string, (message: any) => Promise<void> | void> = {
-    getHistoryData: () => this.sendHistoryData(),
-    rerunAgent: (m) => this.rerunAgent(m.historyId),
-    restoreAgent: (m) => this.restoreAgent(m.historyId),
-    deleteAgent: (m) => this.deleteHistoryItem(m.historyId),
-    clearHistory: () => this.clearHistory(),
+    [HISTORY_VIEW_COMMANDS.GET_HISTORY_DATA]: () => this.sendHistoryData(),
+    [HISTORY_VIEW_COMMANDS.RERUN_AGENT]: (m: any) =>
+      this.rerunAgent(m.historyId),
+    [HISTORY_VIEW_COMMANDS.RESTORE_AGENT]: (m: any) =>
+      this.restoreAgent(m.historyId),
+    [HISTORY_VIEW_COMMANDS.DELETE_AGENT]: (m: any) =>
+      this.deleteHistoryItem(m.historyId),
+    [HISTORY_VIEW_COMMANDS.CLEAR_HISTORY]: () => this.clearHistory(),
   };
 
   private async handleWebviewMessage(message: any) {
@@ -113,7 +121,7 @@ export class AgentHistoryViewProvider implements vscode.WebviewViewProvider {
     // Send data to the webview
     if (this._view) {
       this._view.webview.postMessage({
-        command: 'updateHistory',
+        command: HISTORY_VIEW_COMMANDS.UPDATE_HISTORY,
         historyItems: history,
       });
     }
@@ -124,80 +132,12 @@ export class AgentHistoryViewProvider implements vscode.WebviewViewProvider {
    */
   private async updateWebviewContent() {
     if (this._view) {
-      this._view.webview.html = this.getWebviewContent();
+      this._view.webview.html = this.contentProvider.getHtmlContent(
+        this._view.webview,
+      );
 
       // Send history data after a short delay to ensure the webview is ready
       setTimeout(() => this.sendHistoryData(), 100);
-    }
-  }
-
-  /**
-   * Generate the HTML content for the webview by loading the HTML file
-   */
-  private getWebviewContent(): string {
-    try {
-      const getHistoryViewPath = (path: string) =>
-        vscode.Uri.joinPath(
-          this.context.extensionUri,
-          'src',
-          'historyView',
-          path,
-        );
-      const getHistoryViewUri = (path: string) =>
-        this._view!.webview.asWebviewUri(getHistoryViewPath(path));
-      const getCommonUri = (path: string) =>
-        this._view!.webview.asWebviewUri(
-          vscode.Uri.joinPath(this.context.extensionUri, 'src', 'common', path),
-        );
-      const getNodeModulesUri = (path: string) =>
-        this._view!.webview.asWebviewUri(
-          vscode.Uri.joinPath(this.context.extensionUri, 'node_modules', path),
-        );
-
-      const htmlPath = getHistoryViewPath('index.html');
-      const scriptUri = getHistoryViewUri('script.js');
-      const styleUri = getHistoryViewUri('styles/style.css');
-
-      const domHandlersUri = getHistoryViewUri('modules/domHandlers.js');
-      const historyEventsUri = getHistoryViewUri('modules/historyEvents.js');
-      const historyRendererUri = getHistoryViewUri(
-        'modules/historyRenderer.js',
-      );
-      const historyViewStateUri = getHistoryViewUri(
-        'modules/historyViewState.js',
-      );
-      const searchManagerUri = getHistoryViewUri('modules/searchManager.js');
-      const messageHandlersUri = getHistoryViewUri(
-        'modules/messageHandlers.js',
-      );
-
-      // Common module URIs
-      const domUtilsUri = getCommonUri('modules/domUtils.js');
-      const webviewStateUri = getCommonUri('modules/webviewState.js');
-      const webviewContextUri = getCommonUri('modules/webviewContext.js');
-      const commonStyleUri = getCommonUri('styles/common.css');
-
-      // Node modules URIs
-      const codiconUri = getNodeModulesUri('@vscode/codicons/dist/codicon.css');
-
-      return buildWebviewHtml(this._view!.webview, htmlPath, {
-        scriptUri,
-        styleUri,
-        commonStyleUri,
-        webviewStateUri,
-        webviewContextUri,
-        codiconUri,
-        domHandlersUri,
-        historyEventsUri,
-        historyRendererUri,
-        historyViewStateUri,
-        searchManagerUri,
-        messageHandlersUri,
-        domUtilsUri,
-      });
-    } catch (error) {
-      console.error('Error generating HTML content:', error);
-      return `<html><body><h1>Error loading history view</h1><p>${error}</p></body></html>`;
     }
   }
 
@@ -275,7 +215,9 @@ export class AgentHistoryViewProvider implements vscode.WebviewViewProvider {
 
       // Notify the webview
       if (this._view) {
-        this._view.webview.postMessage({ command: 'historyCleared' });
+        this._view.webview.postMessage({
+          command: HISTORY_VIEW_COMMANDS.HISTORY_CLEARED,
+        });
       }
     } catch (error) {
       vscode.window.showErrorMessage(`Failed to clear history: ${error}`);

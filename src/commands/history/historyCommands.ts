@@ -2,7 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports
-import { AgentHistoryViewProvider } from '@historyView/AgentHistoryViewProvider';
+import { HistoryViewProvider } from '@historyView/HistoryViewProvider';
 
 export const historyCommands = {
   showHistory: 'texra.showAgentHistory',
@@ -13,7 +13,7 @@ export const historyCommands = {
  */
 export function registerHistoryCommands(context: vscode.ExtensionContext) {
   // Create history view provider
-  const historyViewProvider = new AgentHistoryViewProvider(context);
+  const historyViewProvider = new HistoryViewProvider(context);
 
   // Register show history command
   const showHistoryCommand = vscode.commands.registerCommand(

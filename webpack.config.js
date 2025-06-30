@@ -35,6 +35,8 @@ const extensionConfig = {
     alias: {
       '@': path.resolve(__dirname, 'src'),
       '~': path.resolve(__dirname, 'src'),
+      '@common': path.resolve(__dirname, 'src/common'),
+      '@webview': path.resolve(__dirname, 'src/webview'),
       '@agent': path.resolve(__dirname, 'src/agent'),
       '@frontend': path.resolve(__dirname, 'src/frontend'),
       '@utils': path.resolve(__dirname, 'src/utils'),

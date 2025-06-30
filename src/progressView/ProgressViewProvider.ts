@@ -226,6 +226,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
         vscode.Uri.joinPath(this._extensionUri, 'src', 'progressView'),
         vscode.Uri.joinPath(this._extensionUri, 'src', 'common', 'styles'),
         vscode.Uri.joinPath(this._extensionUri, 'src', 'common', 'modules'),
+        vscode.Uri.joinPath(this._extensionUri, 'src', 'common', 'webview'),
         vscode.Uri.joinPath(this._extensionUri, 'node_modules', 'split.js'),
         vscode.Uri.joinPath(
           this._extensionUri,
