@@ -14,7 +14,7 @@ export class SettingsButtonManager {
     vscodeInstance = vscode,
     toggleManager,
     latexdiffManager,
-    state = webviewState,
+    state = mainViewState,
   ) {
     this.vscode = vscodeInstance;
     this.toggleManager = toggleManager;
