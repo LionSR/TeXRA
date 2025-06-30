@@ -2,25 +2,24 @@
 import * as vscode from 'vscode';
 
 // Local imports - webview
-import { WebviewMessageHandler } from './webview/MessageHandler';
-import { WebviewContentProvider } from './webview/WebviewContentProvider';
+import { MainViewMessageHandler } from './webview/MainViewMessageHandler';
+import { MainViewContentProvider } from './webview/MainViewContentProvider';
 import { SecretManager } from '@frontend/secretManager';
 import { watchConfig } from '@utils/config';
+import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
 
 export class TeXRAViewProvider implements vscode.WebviewViewProvider {
-  private messageHandler: WebviewMessageHandler;
-  private contentProvider: WebviewContentProvider;
+  private messageHandler: MainViewMessageHandler;
+  private contentProvider: MainViewContentProvider;
   private fileWatcher: vscode.FileSystemWatcher | undefined;
   private webviewView: vscode.WebviewView | undefined;
 
   // Static flag to track if commands have been registered
   private static commandsRegistered = false;
-  // Static flag to track if API key notification has been shown
-  private static apiKeyNotificationShown = false;
 
   constructor(private readonly context: vscode.ExtensionContext) {
-    this.messageHandler = new WebviewMessageHandler(context);
-    this.contentProvider = new WebviewContentProvider(context);
+    this.messageHandler = new MainViewMessageHandler(context);
+    this.contentProvider = new MainViewContentProvider(context);
     this.setupFileWatcher();
     this.setupConfigurationWatcher();
     this.registerCommandHandlers();
@@ -63,10 +62,12 @@ export class TeXRAViewProvider implements vscode.WebviewViewProvider {
       vscode.window.onDidChangeActiveTextEditor(() => {
         if (this.webviewView) {
           // Notify the webview that the active editor has changed
+          // TODO: This command is sent but not handled in the webview (no handler in messageHandlers.js)
+          // This appears to be an incomplete implementation from commit bb28ecbf
           const activeEditor = vscode.window.activeTextEditor;
           if (activeEditor && activeEditor.document) {
             this.webviewView.webview.postMessage({
-              command: 'activeEditorChanged',
+              command: MAIN_VIEW_COMMANDS.ACTIVE_EDITOR_CHANGED,
               file: activeEditor.document.fileName,
             });
           }
@@ -109,7 +110,7 @@ export class TeXRAViewProvider implements vscode.WebviewViewProvider {
   private async refreshFiles() {
     if (this.webviewView) {
       await this.messageHandler.handleMessage(
-        { command: 'refreshAllFiles' },
+        { command: MAIN_VIEW_COMMANDS.REFRESH_ALL_FILES },
         this.webviewView,
       );
     }
@@ -135,6 +136,12 @@ export class TeXRAViewProvider implements vscode.WebviewViewProvider {
         ),
         vscode.Uri.joinPath(
           this.context.extensionUri,
+          'src',
+          'common',
+          'webview',
+        ),
+        vscode.Uri.joinPath(
+          this.context.extensionUri,
           'node_modules',
           '@vscode',
           'codicons',
@@ -154,11 +161,13 @@ export class TeXRAViewProvider implements vscode.WebviewViewProvider {
     this.setupInitialState(webviewView);
 
     // Check if any API keys are set and display notification if needed
-    this.checkApiKeys();
+    SecretManager.checkAndNotifyMissingApiKeys();
   }
 
   private async setupInitialState(webviewView: vscode.WebviewView) {
-    webviewView.webview.postMessage({ command: 'requestBaseFile' });
+    webviewView.webview.postMessage({
+      command: MAIN_VIEW_COMMANDS.REQUEST_BASE_FILE,
+    });
 
     // Check if there's state to restore from the command
     const hasStateToRestore = await vscode.commands.executeCommand(
@@ -178,7 +187,7 @@ export class TeXRAViewProvider implements vscode.WebviewViewProvider {
 
           // Send the state to the webview
           webviewView.webview.postMessage({
-            command: 'restoreState',
+            command: MAIN_VIEW_COMMANDS.STATE_RESTORE,
             state,
           });
 
@@ -199,36 +208,6 @@ export class TeXRAViewProvider implements vscode.WebviewViewProvider {
       } catch (error) {
         console.error('Error restoring state from context:', error);
       }
-    }
-  }
-
-  /**
-   * Check if any API keys exist and show a notification if none do
-   */
-  private async checkApiKeys() {
-    // Only show the notification once per session
-    if (TeXRAViewProvider.apiKeyNotificationShown) {
-      return;
-    }
-
-    try {
-      const exists = await SecretManager.anyApiKeyExists();
-      if (!exists) {
-        const setKey = 'Set API Key';
-        const result = await vscode.window.showErrorMessage(
-          'No API keys found. TeXRA requires an API key to function properly.',
-          { modal: true },
-          setKey,
-        );
-
-        if (result === setKey) {
-          vscode.commands.executeCommand('texra.setApiKey');
-        }
-
-        TeXRAViewProvider.apiKeyNotificationShown = true;
-      }
-    } catch (error) {
-      console.error('Error checking API keys:', error);
     }
   }
 }

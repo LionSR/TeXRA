@@ -4,7 +4,7 @@ import {
   CHEVRON_UP_CLASS,
   CHEVRON_DOWN_CLASS,
 } from '@common/webviewContext.js';
-import { webviewState } from '../webviewState.js';
+import { mainViewState } from '../mainViewState.js';
 
 const LATEXDIFF_CONTENT_ID = 'latexdiffsContent';
 const TOGGLE_LATEXDIFFS_ID = 'toggleLatexdiffs';
@@ -57,4 +57,4 @@ export class LatexdiffManager {
   }
 }
 
-export const latexdiffManager = new LatexdiffManager(webviewState);
+export const latexdiffManager = new LatexdiffManager(mainViewState);
