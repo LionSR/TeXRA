@@ -9,21 +9,25 @@ This analysis examines the webview implementations across three main views (webv
 ### 1. Naming Convention Inconsistencies
 
 #### Provider Classes
+
 - **Main Webview**: `WebviewContentProvider`, `WebviewMessageHandler`
 - **Progress View**: `ProgressViewContentProvider`, `ProgressViewMessageHandler`, `ProgressViewProvider`
 - **History View**: `AgentHistoryViewProvider`
 
 **Issues:**
+
 - Inconsistent use of "View" suffix
 - Mixed naming patterns (some include domain, others don't)
 - Different levels of specificity
 
 #### JavaScript Modules
+
 - **Main Webview**: `webviewState.js`, `messageHandlers.js`
 - **Progress View**: `progressViewState.js`, `messageHandlers.js`
 - **History View**: `historyViewState.js`, `messageHandlers.js`
 
 **Issues:**
+
 - Inconsistent prefixing (some have view-specific prefixes, others don't)
 - Same filename conflicts between directories
 
@@ -32,32 +36,41 @@ This analysis examines the webview implementations across three main views (webv
 #### TypeScript Class Organization
 
 **Main Webview Structure:**
+
 ```typescript
 export class WebviewContentProvider {
   constructor(private readonly context: vscode.ExtensionContext) {}
-  getHtmlContent(webview: vscode.Webview): string
+  getHtmlContent(webview: vscode.Webview): string;
 }
 
 export class WebviewMessageHandler {
-  private handlers: Record<string, (message: any, webviewView: vscode.WebviewView) => unknown>
+  private handlers: Record<
+    string,
+    (message: any, webviewView: vscode.WebviewView) => unknown
+  >;
   // Uses manager instances for delegation
 }
 ```
 
 **Progress View Structure:**
+
 ```typescript
 export class ProgressViewContentProvider {
   constructor(private readonly context: vscode.ExtensionContext) {}
-  getHtmlContent(webview: vscode.Webview): string
+  getHtmlContent(webview: vscode.Webview): string;
 }
 
 export class ProgressViewMessageHandler {
-  private handlers: Record<string, (message: any, webviewView: vscode.WebviewView) => Promise<void> | void>
+  private handlers: Record<
+    string,
+    (message: any, webviewView: vscode.WebviewView) => Promise<void> | void
+  >;
   // Direct implementation without managers
 }
 ```
 
 **Inconsistencies:**
+
 - Different delegation patterns (managers vs direct implementation)
 - Inconsistent return types (`unknown` vs `Promise<void> | void`)
 - Different error handling approaches
@@ -65,6 +78,7 @@ export class ProgressViewMessageHandler {
 #### JavaScript Module Patterns
 
 **Main Webview:**
+
 ```javascript
 export class MessageHandlers {
   constructor() {
@@ -78,12 +92,13 @@ export class MessageHandlers {
 ```
 
 **Progress View:**
+
 ```javascript
 export class ProgressMessageHandlers {
   constructor() {
     this._handlers = this._createHandlers();
   }
-  
+
   _createHandlers() {
     return {
       [COMMANDS.UPDATE_STREAMS]: (m) => this.handleUpdateStreams(m),
@@ -94,6 +109,7 @@ export class ProgressMessageHandlers {
 ```
 
 **Inconsistencies:**
+
 - Different handler organization strategies
 - Inconsistent use of command constants vs string literals
 - Different initialization patterns
@@ -101,6 +117,7 @@ export class ProgressMessageHandlers {
 ### 3. State Management Inconsistencies
 
 #### Main Webview State:
+
 ```javascript
 export class WebviewState {
   constructor() {
@@ -111,6 +128,7 @@ export class WebviewState {
 ```
 
 #### Progress View State:
+
 ```javascript
 export class ProgressViewState {
   constructor() {
@@ -124,6 +142,7 @@ export class ProgressViewState {
 ```
 
 **Issues:**
+
 - Different levels of complexity and specialization
 - Inconsistent persistence strategies
 - Mixed responsibilities
@@ -131,11 +150,13 @@ export class ProgressViewState {
 ### 4. Abstraction Layer Issues
 
 #### Empty/Thin Layers
+
 1. **Content Providers**: All three content providers have nearly identical structure but slight differences in path handling
 2. **DOM Handlers**: Some contain minimal logic that could be inlined
 3. **State Managers**: Some wrapper classes add little value over direct Map usage
 
 #### Over-Abstraction
+
 1. **UI Managers**: Progress view has many small UI manager classes that could be consolidated
 2. **Separate Classes for Simple Operations**: Some functionality is split across classes unnecessarily
 
@@ -144,6 +165,7 @@ export class ProgressViewState {
 ### 1. Standardize Naming Conventions
 
 #### Recommendation: Adopt consistent naming pattern
+
 ```typescript
 // Standard pattern: [Domain][Component][Type]
 // Examples:
@@ -165,10 +187,12 @@ historyViewState.js -> historyViewState.js     // ✓ Already correct
 // Base content provider
 export abstract class BaseViewContentProvider {
   constructor(protected readonly context: vscode.ExtensionContext) {}
-  
+
   protected abstract getViewPath(): string;
-  protected abstract getModuleUris(webview: vscode.Webview): Record<string, vscode.Uri>;
-  
+  protected abstract getModuleUris(
+    webview: vscode.Webview,
+  ): Record<string, vscode.Uri>;
+
   getHtmlContent(webview: vscode.Webview): string {
     // Common implementation with template method pattern
   }
@@ -177,8 +201,11 @@ export abstract class BaseViewContentProvider {
 // Base message handler
 export abstract class BaseViewMessageHandler {
   protected abstract createHandlers(): Record<string, MessageHandler>;
-  
-  async handleMessage(message: any, webviewView: vscode.WebviewView): Promise<void> {
+
+  async handleMessage(
+    message: any,
+    webviewView: vscode.WebviewView,
+  ): Promise<void> {
     // Common error handling and logging
   }
 }
@@ -188,7 +215,10 @@ export abstract class BaseViewMessageHandler {
 
 ```typescript
 // Consistent handler signature
-type MessageHandler = (message: any, webviewView: vscode.WebviewView) => Promise<void>;
+type MessageHandler = (
+  message: any,
+  webviewView: vscode.WebviewView,
+) => Promise<void>;
 
 // Consistent handler organization
 export class StandardMessageHandler extends BaseViewMessageHandler {
@@ -206,16 +236,18 @@ export class StandardMessageHandler extends BaseViewMessageHandler {
 ### 3. Consolidate UI Management
 
 #### Before (Progress View - Fragmented):
+
 ```javascript
 // Separate files for each UI component
-StreamTabs.js
-Status.js  
-FileList.js
-Toolbar.js
-Events.js
+StreamTabs.js;
+Status.js;
+FileList.js;
+Toolbar.js;
+Events.js;
 ```
 
 #### After (Consolidated):
+
 ```javascript
 // Single UI manager with clear sections
 export class ProgressViewUIManager {
@@ -225,7 +257,7 @@ export class ProgressViewUIManager {
     this.fileList = new FileListManager();
     this.toolbar = new ToolbarManager();
   }
-  
+
   // Coordinated updates
   updateView(state) {
     this.streamTabs.update(state.streams, state.activeStream);
@@ -241,16 +273,17 @@ export class ProgressViewUIManager {
 #### Example: Remove Unnecessary Wrappers
 
 **Before:**
+
 ```javascript
 class StreamStatuses {
   constructor() {
     this.statuses = new Map();
   }
-  
+
   get(stream) {
     return this.statuses.get(stream);
   }
-  
+
   set(stream, status) {
     // Validation logic
     this.statuses.set(stream, status);
@@ -259,6 +292,7 @@ class StreamStatuses {
 ```
 
 **After (if validation is minimal):**
+
 ```javascript
 // Use Map directly with validation functions
 const streamStatuses = new Map();
@@ -272,6 +306,7 @@ function setStreamStatus(stream, status) {
 ### 5. Standardize Constants and Commands
 
 #### Create Unified Command System
+
 ```javascript
 // commands/webviewCommands.js
 export const WEBVIEW_COMMANDS = {
@@ -279,29 +314,30 @@ export const WEBVIEW_COMMANDS = {
   THEME_SET: 'setTheme',
   DEBUG_MODE_SET: 'setDebugMode',
   STATE_RESTORE: 'restoreState',
-  
+
   // View-specific namespaced commands
   MAIN_VIEW: {
     FILE_SELECT: 'mainView.selectFile',
     EXECUTE: 'mainView.execute',
   },
-  
+
   PROGRESS_VIEW: {
     SWITCH_STREAM: 'progressView.switchStream',
     DELETE_STREAM: 'progressView.deleteStream',
     UPDATE_LOGS: 'progressView.updateLogs',
   },
-  
+
   HISTORY_VIEW: {
     GET_HISTORY: 'historyView.getHistory',
     RERUN_AGENT: 'historyView.rerunAgent',
-  }
+  },
 };
 ```
 
 ### 6. Specific Recommendations for Progress View
 
 #### Consolidate Related UI Managers
+
 ```javascript
 // Instead of separate StreamTabs.js, Status.js, Toolbar.js
 export class ProgressViewControlsManager {
@@ -310,7 +346,7 @@ export class ProgressViewControlsManager {
     this.updateStatus(status);
     this.updateToolbar(activeStream, status);
   }
-  
+
   private updateStreamTabs(streams, activeStream) { /* ... */ }
   private updateStatus(status) { /* ... */ }
   private updateToolbar(activeStream, status) { /* ... */ }
@@ -318,6 +354,7 @@ export class ProgressViewControlsManager {
 ```
 
 #### Simplify State Management
+
 ```javascript
 // Combine related state managers
 export class ProgressViewState {
@@ -336,16 +373,19 @@ export class ProgressViewState {
 ## Implementation Priority
 
 ### High Priority (Immediate Impact)
+
 1. **Standardize naming conventions** across all view providers and handlers
 2. **Consolidate fragmented UI managers** in progress view
 3. **Create consistent command constants** system
 
-### Medium Priority (Architectural Improvements)  
+### Medium Priority (Architectural Improvements)
+
 1. **Implement base classes** for common patterns
 2. **Standardize message handler signatures** and error handling
 3. **Eliminate thin abstraction layers**
 
 ### Low Priority (Nice to Have)
+
 1. **Create shared utility functions** for common operations
 2. **Implement consistent logging patterns**
 3. **Add TypeScript interfaces** for better type safety

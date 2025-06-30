@@ -56,15 +56,15 @@ class StreamTabsManager {
       console.error('StreamTabsManager.update: streams must be an array');
       return;
     }
-    
+
     const tabsContainer = document.getElementById('streamTabs');
     if (!tabsContainer) {
       console.error('StreamTabsManager.update: streamTabs container not found');
       return;
     }
-    
+
     tabsContainer.innerHTML = streams
-      .map(stream => this.createTabHTML(stream, activeStream))
+      .map((stream) => this.createTabHTML(stream, activeStream))
       .join('');
 
     this.updateActiveStreamName(activeStream);
@@ -101,7 +101,7 @@ class StatusManager {
     // Remove all status classes
     statusElement.className = statusElement.className
       .split(' ')
-      .filter(cls => !cls.startsWith('status-'))
+      .filter((cls) => !cls.startsWith('status-'))
       .join(' ');
 
     // Add current status class
@@ -114,7 +114,7 @@ class StatusManager {
       [STATUS.RUNNING]: 'Running...',
       [STATUS.ERROR]: 'Error',
       [STATUS.STOPPED]: 'Stopped',
-      [STATUS.READY]: 'Ready'
+      [STATUS.READY]: 'Ready',
     };
     return statusTexts[status] || status;
   }
@@ -129,7 +129,7 @@ class FileListManager {
     if (!fileListElement) return;
 
     fileListElement.innerHTML = '';
-    
+
     Object.entries(files || {}).forEach(([round, roundFiles]) => {
       if (roundFiles && roundFiles.length > 0) {
         const roundElement = this.createRoundElement(round, roundFiles);
@@ -144,7 +144,7 @@ class FileListManager {
     roundDiv.innerHTML = `
       <div class="round-header">Round ${round}</div>
       <div class="round-files">
-        ${files.map(file => this.createFileElement(file)).join('')}
+        ${files.map((file) => this.createFileElement(file)).join('')}
       </div>
     `;
     return roundDiv;
