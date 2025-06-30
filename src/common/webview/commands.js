@@ -71,6 +71,43 @@ export const MAIN_VIEW_COMMANDS = {
   OPEN_AGENT_SETTINGS: 'openAgentSettings',
   OPEN_MODEL_SETTINGS: 'openModelSettings',
   CLIPBOARD_IMAGE: 'clipboardImage',
+
+  // File refresh and update operations
+  REFRESH_ALL_FILES: 'refreshAllFiles',
+  UPDATE_INPUT_FILES: 'updateInputFiles',
+  UPDATE_REFERENCE_FILES: 'updateReferenceFiles',
+  UPDATE_AUXILIARY_FILES: 'updateAuxiliaryFiles',
+  UPDATE_MEDIA_FILES: 'updateMediaFiles',
+  UPDATE_OUTPUT_FILES: 'updateOutputFiles',
+
+  // Git/diff operations
+  REQUEST_RECENT_COMMITS: 'requestRecentCommits',
+  REFRESH_COMMITS: 'refreshCommits',
+  LATEXDIFF: 'latexdiff',
+  LATEXDIFFVC: 'latexdiffvc',
+  PACK_LATEXDIFFVC: 'packLatexdiffvc',
+  CLEAN_LATEXDIFFVC: 'cleanLatexdiffvc',
+
+  // Housekeeping operations
+  CLEAN_OUTPUT: 'cleanOutput',
+  CLEAN_BUILD: 'cleanBuild',
+  INDENT_TEX: 'indentTeX',
+  PACK_SINGLE: 'packSingle',
+  CLEAN_SINGLE: 'cleanSingle',
+  PACK_MULTIPLE: 'packMultiple',
+  CLEAN_MULTIPLE: 'cleanMultiple',
+
+  // Checkbox update operations
+  UPDATE_REFLECT: 'updateReflect',
+  UPDATE_ATTACH_TEX_COUNT: 'updateAttachTeXCount',
+  UPDATE_AUTO_EXTRACT_FIGURE: 'updateAutoExtractFigure',
+  UPDATE_AUTO_EXTRACT_TIKZ_FIGURE: 'updateAutoExtractTikzFigure',
+  UPDATE_AUTO_COMPILE_INPUT_PDF: 'updateAutoCompileInputPdf',
+  UPDATE_USE_PREFILL_FROM_INPUT: 'updateUsePrefillFromInput',
+  UPDATE_PRINT_INPUT_PROMPT: 'updatePrintInputPrompt',
+
+  // Other operations
+  ACCEPT_EDITED: 'acceptEdited',
 };
 
 // Progress view specific commands
