@@ -1,6 +1,8 @@
 // Standard library imports
 // Local imports - log
 import { AgentLogger } from '@logger/AgentLogger';
+import * as path from 'path';
+import * as vscode from 'vscode';
 
 // Local imports - utilities
 import { runLatexFormatter } from '@latex/texFormatter';
@@ -20,7 +22,11 @@ import type { IModelHandler } from '@agent/modelHandlers';
 
 // Local imports - utilities
 import { replaceInputCommands, createFileMapping } from '@utils/files';
+import { WorkspaceFS, AbsoluteFS } from '@utils/files';
 import { getEffectiveBaseFile } from '@utils/files/baseFileUtils';
+import { emitProgress } from '@eventBus/ProgressEventBus';
+import { MESSAGE_TYPES } from '@logger/messageTypes';
+import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 
 // Local imports - types
 
@@ -218,6 +224,78 @@ export class OutputHandler implements IOutputHandler {
       });
     }
     return infos;
+  }
+
+  public async validateExpectedOutputs(round: number): Promise<void> {
+    const expected = this.agentConfig.outputFiles;
+    if (!expected || expected.length === 0) {
+      emitProgress('updateMissingOutputs', {
+        stream: this.channel,
+        filesByRound: { [round]: [] },
+      });
+      return;
+    }
+
+    const missing: string[] = [];
+    for (const file of expected) {
+      const exists = path.isAbsolute(file)
+        ? await AbsoluteFS.exists(file)
+        : await WorkspaceFS.exists(file);
+      if (!exists) {
+        missing.push(file);
+      }
+    }
+
+    emitProgress('updateMissingOutputs', {
+      stream: this.channel,
+      filesByRound: { [round]: missing },
+    });
+
+    if (missing.length > 0) {
+      const openBtn = 'Open XML';
+      let xmlPath = this.outputFiles[round]?.find(
+        (p) => p.endsWith('.xml') || p.endsWith('.tex'),
+      );
+      if (!xmlPath) {
+        xmlPath = missing[0].replace(/\.[^.]+$/, '.xml');
+      }
+
+      await showInstructionWithSuppress(
+        'xmlOutputMismatch',
+        `Expected output "${path.basename(missing[0])}" was not generated. Open the XML file to check tag consistency, then run again.`,
+        [
+          {
+            title: openBtn,
+            callback: async () => {
+              if (!xmlPath) {
+                vscode.window.showWarningMessage('XML file path not found');
+                return;
+              }
+              const xmlExists = path.isAbsolute(xmlPath)
+                ? await AbsoluteFS.exists(xmlPath)
+                : await WorkspaceFS.exists(xmlPath);
+              if (!xmlExists) {
+                vscode.window.showWarningMessage(
+                  `XML file not found: ${path.basename(xmlPath)}`,
+                );
+                return;
+              }
+              const uri = path.isAbsolute(xmlPath)
+                ? vscode.Uri.file(xmlPath)
+                : vscode.Uri.file(WorkspaceFS.fullPath(xmlPath));
+              const doc = await vscode.workspace.openTextDocument(uri);
+              await vscode.window.showTextDocument(doc, { preview: false });
+            },
+          },
+        ],
+        false,
+      );
+      this.logger.info(
+        JSON.stringify(missing),
+        undefined,
+        MESSAGE_TYPES.MISSING_OUTPUTS,
+      );
+    }
   }
 
   /** Processes single output file with XML splitting and filtering. */
