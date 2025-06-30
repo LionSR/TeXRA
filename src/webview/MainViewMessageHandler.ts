@@ -175,6 +175,29 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         this.executionManager.handleMultipleOperation(m),
       cleanMultiple: async (m) =>
         this.executionManager.handleMultipleOperation(m),
+
+      // Checkbox update commands - handled client-side, empty handlers to prevent warnings
+      updateReflect: async () => {
+        /* State saved client-side */
+      },
+      updateAttachTeXCount: async () => {
+        /* State saved client-side */
+      },
+      updateAutoExtractFigure: async () => {
+        /* State saved client-side */
+      },
+      updateAutoExtractTikzFigure: async () => {
+        /* State saved client-side */
+      },
+      updateAutoCompileInputPdf: async () => {
+        /* State saved client-side */
+      },
+      updateUsePrefillFromInput: async () => {
+        /* State saved client-side */
+      },
+      updatePrintInputPrompt: async () => {
+        /* State saved client-side */
+      },
     };
   }
 
