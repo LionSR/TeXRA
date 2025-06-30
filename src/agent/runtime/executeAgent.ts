@@ -25,10 +25,7 @@ import { emitProgress } from '@eventBus/ProgressEventBus';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
-import {
-  checkExpectedOutputs,
-  showInstructionWithSuppress,
-} from '@frontend/ui/instruction';
+import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 
 import { getStreamId } from '@/logger/streamUtils';
 import { IAgent } from '@agent/core/IAgent';
