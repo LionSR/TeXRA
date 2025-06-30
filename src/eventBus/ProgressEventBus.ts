@@ -6,8 +6,8 @@ const MAX_BUFFER_SIZE = 1000;
 export type ProgressEvent =
   | 'addLogMessage'
   | 'updateLogMessage'
-  | 'addLogGroup'
-  | 'updateLogGroup'
+  | 'addTaskGroup'
+  | 'updateTaskGroup'
   | 'setActiveStream'
   | 'updateStreamStatus'
   | 'addOutputFiles'
