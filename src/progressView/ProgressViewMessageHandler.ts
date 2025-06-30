@@ -6,7 +6,7 @@ import {
 import { ProgressViewProvider } from './ProgressViewProvider';
 import { taskStateToAgentConfig } from '@utils/config';
 // @ts-ignore - Import JavaScript module
-import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands.js';
+import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 
 export class ProgressViewMessageHandler extends BaseViewMessageHandler {
   constructor(private readonly provider: ProgressViewProvider) {
