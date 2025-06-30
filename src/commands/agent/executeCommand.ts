@@ -25,7 +25,8 @@ export const executeCommand = {
   ) => {
     try {
       // Save the agent configuration to history (silently)
-      const executionId: ExecutionId = await AgentHistoryManager.addToHistory(config);
+      const executionId: ExecutionId =
+        await AgentHistoryManager.addToHistory(config);
 
       // Run the agent directly, passing through the execution ID
       await executeAgent(config, context, executionId);

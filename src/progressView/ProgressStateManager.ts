@@ -35,7 +35,8 @@ export class ProgressStateManager {
   private _taskGroups: Map<StreamTabId, Map<string, TaskGroup>> = new Map();
   private _outputFiles: Map<StreamTabId, { [key: number]: OutputFileInfo[] }> =
     new Map();
-  private _missingOutputs: Map<StreamTabId, { [key: number]: string[] }> = new Map();
+  private _missingOutputs: Map<StreamTabId, { [key: number]: string[] }> =
+    new Map();
   private _taskStates: Map<StreamTabId, TaskState> = new Map();
   private _executionIds: Map<StreamTabId, ExecutionId> = new Map();
   private _usageStats: Map<StreamTabId, TokenUsageStats> = new Map();
@@ -69,8 +70,6 @@ export class ProgressStateManager {
   get executionIds(): Map<StreamTabId, ExecutionId> {
     return this._executionIds;
   }
-
-
 
   get usageStats(): Map<StreamTabId, TokenUsageStats> {
     return this._usageStats;
@@ -381,7 +380,7 @@ export class ProgressStateManager {
     let savedIds = workspaceSM.get<{ [key: string]: string }>(
       this._getWorkspaceKey(WorkspaceStateKey.EXECUTION_IDS),
     );
-    
+
     if (!savedIds) {
       // Migrate from old key
       savedIds = workspaceSM.get<{ [key: string]: string }>(
@@ -389,11 +388,14 @@ export class ProgressStateManager {
       );
       if (savedIds) {
         // Clear old key after migration
-        workspaceSM.update(this._getWorkspaceKey(WorkspaceStateKey.TASK_IDS), undefined);
+        workspaceSM.update(
+          this._getWorkspaceKey(WorkspaceStateKey.TASK_IDS),
+          undefined,
+        );
         this.logger.debug('Migrated execution IDs from old storage key');
       }
     }
-    
+
     if (savedIds) {
       this._executionIds = new Map(Object.entries(savedIds));
     } else {

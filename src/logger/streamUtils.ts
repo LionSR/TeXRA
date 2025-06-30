@@ -18,5 +18,3 @@ export function getStreamTabId(
     outputFiles && outputFiles.length > 1 ? `${agent}_multiple` : agent;
   return `${agentName}@${model}: ${path.basename(inputFile)}`;
 }
-
-

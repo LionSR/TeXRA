@@ -150,7 +150,11 @@ async function executeAgentWithLogging<T extends IAgent>(
 
     // Get the full stream tab ID
     const config = agent.config;
-    const streamTabId = getStreamTabId(agentName, config.model, config.inputFile);
+    const streamTabId = getStreamTabId(
+      agentName,
+      config.model,
+      config.inputFile,
+    );
 
     // Check if this stream is already running
     const provider = ProgressViewProvider.getInstance();
