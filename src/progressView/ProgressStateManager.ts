@@ -13,6 +13,7 @@ import { AgentLogger } from '@logger/AgentLogger';
 import { TokenUsageStats } from '../types/UsageTypes';
 import { TaskGroup, LogMessageData } from '../logger/LogTypes';
 import type { DiffStats } from '../types/DiffTypes';
+import type { StreamTabId, ExecutionId } from '../types/IdentifierTypes';
 
 interface OutputFileInfo extends DiffStats {
   path: string;
@@ -30,54 +31,56 @@ export class ProgressStateManager {
   private readonly logger: AgentLogger;
 
   // State collections
-  private _streamTabs: Map<string, LogMessageData[]> = new Map();
-  private _taskGroups: Map<string, Map<string, TaskGroup>> = new Map();
-  private _outputFiles: Map<string, { [key: number]: OutputFileInfo[] }> =
+  private _streamTabs: Map<StreamTabId, LogMessageData[]> = new Map();
+  private _taskGroups: Map<StreamTabId, Map<string, TaskGroup>> = new Map();
+  private _outputFiles: Map<StreamTabId, { [key: number]: OutputFileInfo[] }> =
     new Map();
-  private _missingOutputs: Map<string, { [key: number]: string[] }> = new Map();
-  private _taskStates: Map<string, TaskState> = new Map();
-  private _taskIds: Map<string, string> = new Map();
-  private _usageStats: Map<string, TokenUsageStats> = new Map();
-  private _activeStream: string = '';
+  private _missingOutputs: Map<StreamTabId, { [key: number]: string[] }> = new Map();
+  private _taskStates: Map<StreamTabId, TaskState> = new Map();
+  private _executionIds: Map<StreamTabId, ExecutionId> = new Map();
+  private _usageStats: Map<StreamTabId, TokenUsageStats> = new Map();
+  private _activeStream: StreamTabId = '';
 
   constructor() {
     this.logger = new AgentLogger('ProgressStateManager');
   }
 
   // Getters for state collections
-  get streamTabs(): Map<string, LogMessageData[]> {
+  get streamTabs(): Map<StreamTabId, LogMessageData[]> {
     return this._streamTabs;
   }
 
-  get taskGroups(): Map<string, Map<string, TaskGroup>> {
+  get taskGroups(): Map<StreamTabId, Map<string, TaskGroup>> {
     return this._taskGroups;
   }
 
-  get outputFiles(): Map<string, { [key: number]: OutputFileInfo[] }> {
+  get outputFiles(): Map<StreamTabId, { [key: number]: OutputFileInfo[] }> {
     return this._outputFiles;
   }
 
-  get missingOutputs(): Map<string, { [key: number]: string[] }> {
+  get missingOutputs(): Map<StreamTabId, { [key: number]: string[] }> {
     return this._missingOutputs;
   }
 
-  get taskStates(): Map<string, TaskState> {
+  get taskStates(): Map<StreamTabId, TaskState> {
     return this._taskStates;
   }
 
-  get taskIds(): Map<string, string> {
-    return this._taskIds;
+  get executionIds(): Map<StreamTabId, ExecutionId> {
+    return this._executionIds;
   }
 
-  get usageStats(): Map<string, TokenUsageStats> {
+
+
+  get usageStats(): Map<StreamTabId, TokenUsageStats> {
     return this._usageStats;
   }
 
-  get activeStream(): string {
+  get activeStream(): StreamTabId {
     return this._activeStream;
   }
 
-  set activeStream(stream: string) {
+  set activeStream(stream: StreamTabId) {
     this._activeStream = stream;
   }
 
@@ -99,7 +102,7 @@ export class ProgressStateManager {
     await this._loadMissingOutputs();
     this._loadActiveStream();
     await this._loadTaskStates();
-    await this._loadTaskIds();
+    await this._loadExecutionIds();
     await this._loadUsageStats();
   }
 
@@ -113,7 +116,7 @@ export class ProgressStateManager {
     this._saveMissingOutputs();
     this._saveActiveStream();
     this._saveTaskStates();
-    this._saveTaskIds();
+    this._saveExecutionIds();
     this._saveUsageStats();
   }
 
@@ -371,16 +374,30 @@ export class ProgressStateManager {
   }
 
   /**
-   * Load task IDs
+   * Load execution IDs
    */
-  private async _loadTaskIds(): Promise<void> {
-    const savedIds = workspaceSM.get<{ [key: string]: string }>(
-      this._getWorkspaceKey(WorkspaceStateKey.TASK_IDS),
+  private async _loadExecutionIds(): Promise<void> {
+    // Try new key first, then fall back to old key for migration
+    let savedIds = workspaceSM.get<{ [key: string]: string }>(
+      this._getWorkspaceKey(WorkspaceStateKey.EXECUTION_IDS),
     );
+    
+    if (!savedIds) {
+      // Migrate from old key
+      savedIds = workspaceSM.get<{ [key: string]: string }>(
+        this._getWorkspaceKey(WorkspaceStateKey.TASK_IDS),
+      );
+      if (savedIds) {
+        // Clear old key after migration
+        workspaceSM.update(this._getWorkspaceKey(WorkspaceStateKey.TASK_IDS), undefined);
+        this.logger.debug('Migrated execution IDs from old storage key');
+      }
+    }
+    
     if (savedIds) {
-      this._taskIds = new Map(Object.entries(savedIds));
+      this._executionIds = new Map(Object.entries(savedIds));
     } else {
-      this._taskIds.clear();
+      this._executionIds.clear();
     }
   }
 
@@ -464,13 +481,13 @@ export class ProgressStateManager {
   }
 
   /**
-   * Save task IDs
+   * Save execution IDs
    */
-  private _saveTaskIds(): void {
-    const taskIdsObj = Object.fromEntries(this._taskIds.entries());
+  private _saveExecutionIds(): void {
+    const executionIdsObj = Object.fromEntries(this._executionIds.entries());
     workspaceSM.update(
-      this._getWorkspaceKey(WorkspaceStateKey.TASK_IDS),
-      taskIdsObj,
+      this._getWorkspaceKey(WorkspaceStateKey.EXECUTION_IDS),
+      executionIdsObj,
     );
   }
 
@@ -485,13 +502,13 @@ export class ProgressStateManager {
   /**
    * Clear all state for a specific stream
    */
-  public clearStream(stream: string): void {
+  public clearStream(stream: StreamTabId): void {
     this._streamTabs.delete(stream);
     this._taskGroups.delete(stream);
     this._outputFiles.delete(stream);
     this._missingOutputs.delete(stream);
     this._taskStates.delete(stream);
-    this._taskIds.delete(stream);
+    this._executionIds.delete(stream);
     this._usageStats.delete(stream);
   }
 
@@ -504,7 +521,7 @@ export class ProgressStateManager {
     this._outputFiles.clear();
     this._missingOutputs.clear();
     this._taskStates.clear();
-    this._taskIds.clear();
+    this._executionIds.clear();
     this._usageStats.clear();
     this._activeStream = '';
   }
