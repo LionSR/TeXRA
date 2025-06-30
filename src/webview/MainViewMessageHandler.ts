@@ -6,7 +6,7 @@ import {
   MessageHandler,
 } from '@common/webview/BaseViewMessageHandler';
 // @ts-ignore - Import JavaScript module
-import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
+import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
 import {
   SettingsManager,
   RecordingManager,

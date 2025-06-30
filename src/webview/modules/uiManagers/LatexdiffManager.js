@@ -57,4 +57,4 @@ export class LatexdiffManager {
   }
 }
 
-export const latexdiffManager = new LatexdiffManager(webviewState);
+export const latexdiffManager = new LatexdiffManager(mainViewState);
