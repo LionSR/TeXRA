@@ -32,11 +32,18 @@ export class ProgressViewContentProvider extends BaseViewContentProvider {
       constantsUri: this.getWebviewUri(webview, 'modules/constants.js'),
       katexMacrosUri: this.getWebviewUri(webview, 'modules/katexMacros.js'),
 
-      // Consolidated UI manager
-      uiManagerUri: this.getWebviewUri(
+      // UI managers
+      streamTabsUri: this.getWebviewUri(
         webview,
-        'modules/ProgressViewUIManager.js',
+        'modules/uiManagers/StreamTabs.js',
       ),
+      toolbarUri: this.getWebviewUri(webview, 'modules/uiManagers/Toolbar.js'),
+      statusUri: this.getWebviewUri(webview, 'modules/uiManagers/Status.js'),
+      fileListUri: this.getWebviewUri(
+        webview,
+        'modules/uiManagers/FileList.js',
+      ),
+      eventsUri: this.getWebviewUri(webview, 'modules/uiManagers/Events.js'),
     };
   }
 }

@@ -53,7 +53,128 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         this.handleShowAgentHistory.bind(this),
 
       // Delegate to managers for specific functionality
-      // File operations will be handled by managers
+      // File selection commands
+      [MAIN_VIEW_COMMANDS.SELECT_INPUT_FILE]: async (m, w) =>
+        this.fileManager.handleFileSelection(m, w),
+      [MAIN_VIEW_COMMANDS.SELECT_REFERENCE_FILE]: async (m, w) =>
+        this.fileManager.handleFileSelection(m, w),
+      [MAIN_VIEW_COMMANDS.SELECT_AUXILIARY_FILE]: async (m, w) =>
+        this.fileManager.handleFileSelection(m, w),
+      [MAIN_VIEW_COMMANDS.SELECT_MEDIA_FILE]: async (m, w) =>
+        this.fileManager.handleFileSelection(m, w),
+      [MAIN_VIEW_COMMANDS.SELECT_EDITED_FILE]: async (_m, w) =>
+        this.fileManager.handleEditedFileSelection(w),
+
+      // File selected commands
+      [MAIN_VIEW_COMMANDS.INPUT_FILE_SELECTED]: async (m, w) =>
+        this.fileManager.handleInputFileSelected(m, w),
+      [MAIN_VIEW_COMMANDS.REFERENCE_FILE_SELECTED]: async (m) =>
+        this.fileManager.handleGenericFileSelected(m),
+      [MAIN_VIEW_COMMANDS.AUXILIARY_FILE_SELECTED]: async (m) =>
+        this.fileManager.handleGenericFileSelected(m),
+      [MAIN_VIEW_COMMANDS.MEDIA_FILE_SELECTED]: async (m) =>
+        this.fileManager.handleGenericFileSelected(m),
+      [MAIN_VIEW_COMMANDS.EDITED_FILE_SELECTED]: async (m) =>
+        this.fileManager.handleGenericFileSelected(m),
+
+      // Request file commands
+      [MAIN_VIEW_COMMANDS.REQUEST_INPUT_FILE]: async (_m, w) =>
+        this.fileManager.handleRequestInputFile(w),
+      [MAIN_VIEW_COMMANDS.REQUEST_REFERENCE_FILE]: async (m, w) =>
+        this.fileManager.handleRequestFile(m, w),
+      [MAIN_VIEW_COMMANDS.REQUEST_AUXILIARY_FILE]: async (m, w) =>
+        this.fileManager.handleRequestFile(m, w),
+      [MAIN_VIEW_COMMANDS.REQUEST_MEDIA_FILE]: async (m, w) =>
+        this.fileManager.handleRequestFile(m, w),
+      [MAIN_VIEW_COMMANDS.REQUEST_EDITED_FILE]: async (m, w) =>
+        this.fileManager.handleRequestEditedFile(m, w),
+      [MAIN_VIEW_COMMANDS.REQUEST_BASE_FILE]: async (_m, w) =>
+        this.fileManager.handleRequestBaseFile(w),
+      [MAIN_VIEW_COMMANDS.REQUEST_DEFAULT_OUTPUT_FILES]: async (m, w) =>
+        this.fileManager.handleRequestDefaultOutputFiles(m, w),
+
+      // Multiple file operations
+      [MAIN_VIEW_COMMANDS.SET_INPUT_FILES]: async (m, w) =>
+        this.fileManager.handleSetMultipleFiles(m, w),
+      [MAIN_VIEW_COMMANDS.SET_REFERENCE_FILES]: async (m, w) =>
+        this.fileManager.handleSetMultipleFiles(m, w),
+      [MAIN_VIEW_COMMANDS.SET_AUXILIARY_FILES]: async (m, w) =>
+        this.fileManager.handleSetMultipleFiles(m, w),
+      [MAIN_VIEW_COMMANDS.SET_MEDIA_FILES]: async (m, w) =>
+        this.fileManager.handleSetMultipleFiles(m, w),
+      [MAIN_VIEW_COMMANDS.SELECT_MULTIPLE_FILES]: async (m, w) =>
+        this.fileManager.handleSelectMultipleFiles(m, w),
+
+      // Other file operations
+      [MAIN_VIEW_COMMANDS.GET_CURRENT_FILE]: async (m, w) =>
+        this.fileManager.handleGetCurrentFile(m, w),
+      [MAIN_VIEW_COMMANDS.ADD_OPENED_FILES]: async (m, w) =>
+        this.fileManager.handleAddOpenedFiles(m.fileType, w),
+
+      // Execution commands
+      [MAIN_VIEW_COMMANDS.MERGE]: async (m) =>
+        this.executionManager.handleMerge(m),
+      [MAIN_VIEW_COMMANDS.COMPARE]: async (m) =>
+        this.executionManager.handleCompare(m),
+
+      // Settings commands
+      [MAIN_VIEW_COMMANDS.SETTINGS_OPEN]: async () =>
+        this.settingsManager.openSettings(),
+      [MAIN_VIEW_COMMANDS.OPEN_AGENT_SETTINGS]: async () =>
+        this.settingsManager.openAgentSettings(),
+      [MAIN_VIEW_COMMANDS.OPEN_MODEL_SETTINGS]: async () =>
+        this.settingsManager.openModelSettings(),
+
+      // Instruction commands
+      [MAIN_VIEW_COMMANDS.POLISH_INSTRUCTION_TEXT]: async (m, w) =>
+        this.instructionManager.handlePolishInstructionText(m, w),
+      [MAIN_VIEW_COMMANDS.TRANSCRIBE_INSTRUCTION]: async (_m, w) =>
+        this.instructionManager.handleTranscribeInstruction(w),
+      [MAIN_VIEW_COMMANDS.CLIPBOARD_IMAGE]: async (m, w) =>
+        this.instructionManager.handleClipboardImage(m, w),
+
+      // Recording commands
+      [MAIN_VIEW_COMMANDS.START_RECORDING]: async (_m, w) =>
+        this.recordingManager.start(w),
+      [MAIN_VIEW_COMMANDS.STOP_RECORDING]: async (_m, w) =>
+        this.recordingManager.stop(w),
+
+      // Additional commands that might not be in MAIN_VIEW_COMMANDS yet
+      refreshAllFiles: async (_m, w) =>
+        this.fileManager.handleRefreshAllFiles(w),
+      requestRecentCommits: async (_m, w) =>
+        this.diffManager.handleRequestRecentCommits(w),
+      refreshCommits: async (_m, w) => this.diffManager.handleRefreshCommits(w),
+      acceptEdited: async (m) => this.executionManager.handleAcceptEdited(m),
+      latexdiff: async (m) => this.diffManager.handleLatexdiff(m),
+      latexdiffvc: async (m) => this.diffManager.handleLatexdiffvc(m),
+      packLatexdiffvc: async (m) =>
+        this.diffManager.handleLatexdiffvcOperation(m),
+      cleanLatexdiffvc: async (m) =>
+        this.diffManager.handleLatexdiffvcOperation(m),
+
+      // Update file commands
+      updateInputFiles: async (m, w) =>
+        this.fileManager.handleUpdateFiles(m, w),
+      updateReferenceFiles: async (m, w) =>
+        this.fileManager.handleUpdateFiles(m, w),
+      updateAuxiliaryFiles: async (m, w) =>
+        this.fileManager.handleUpdateFiles(m, w),
+      updateMediaFiles: async (m, w) =>
+        this.fileManager.handleUpdateFiles(m, w),
+      updateOutputFiles: async (m, w) =>
+        this.fileManager.handleUpdateFiles(m, w),
+
+      // Housekeeping commands
+      cleanOutput: async (m) => this.executionManager.handleHousekeeping(m),
+      cleanBuild: async (m) => this.executionManager.handleHousekeeping(m),
+      indentTeX: async (m) => this.executionManager.handleHousekeeping(m),
+      packSingle: async (m) => this.executionManager.handleSingleOperation(m),
+      cleanSingle: async (m) => this.executionManager.handleSingleOperation(m),
+      packMultiple: async (m) =>
+        this.executionManager.handleMultipleOperation(m),
+      cleanMultiple: async (m) =>
+        this.executionManager.handleMultipleOperation(m),
     };
   }
 
