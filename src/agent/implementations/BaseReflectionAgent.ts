@@ -145,7 +145,7 @@ export abstract class BaseReflectionAgent extends BaseAgent {
     roundGroupId?: string,
   ): Promise<[AgentStateRound, AgentStateGlobal, ToolState, boolean]> {
     // Use the round group identifier for logging this cycle
-    const logGroupId = roundGroupId;
+    const taskGroupId = roundGroupId;
 
     try {
       let endTurn = false;
@@ -177,12 +177,12 @@ export abstract class BaseReflectionAgent extends BaseAgent {
             );
             this.logger.info(
               `Saved message object to ${debugFilePath}`,
-              logGroupId,
+              taskGroupId,
             );
           } catch (error) {
             this.logger.error(
               `Failed to save message object: ${error}`,
-              logGroupId,
+              taskGroupId,
             );
           }
         }
@@ -207,7 +207,7 @@ export abstract class BaseReflectionAgent extends BaseAgent {
         if (!responseObject) {
           this.logger.warn(
             'Model response was aborted or returned no data; output may be incomplete.',
-            logGroupId,
+            taskGroupId,
           );
           break;
         }
@@ -215,7 +215,7 @@ export abstract class BaseReflectionAgent extends BaseAgent {
         stateRound.updateResponseTime(responseTime);
         this.logger.debug(
           `Response time: ${responseTime.toFixed(2)}s`,
-          logGroupId,
+          taskGroupId,
         );
 
         // Extract and validate response
@@ -225,10 +225,10 @@ export abstract class BaseReflectionAgent extends BaseAgent {
             this.agentSetting.endTag,
           );
 
-        this.logger.debug(`Stop reason: ${stopReason}`, logGroupId);
+        this.logger.debug(`Stop reason: ${stopReason}`, taskGroupId);
         this.logger.debug(
           `Token usage: ${JSON.stringify(responseUsage)}`,
-          logGroupId,
+          taskGroupId,
         );
 
         // Extract thinking blocks directly from the response object
@@ -236,14 +236,14 @@ export abstract class BaseReflectionAgent extends BaseAgent {
         // and returns content of the first thinking block for logging (if any)
         const thinkingContent = this.modelHandler.processThinkingBlock(
           responseObject,
-          logGroupId,
+          taskGroupId,
           toolState,
         );
 
         // If thinking content was extracted, format and log it first
         if (thinkingContent) {
           const formatted = await xmlUtils.formatContent(thinkingContent);
-          this.logger.info(formatted, logGroupId, MESSAGE_TYPES.THINKING);
+          this.logger.info(formatted, taskGroupId, MESSAGE_TYPES.THINKING);
 
           // Note: The complete thinking blocks (including signatures) have already been
           // stored in toolState.thinkingBlocks by the processThinkingBlock method
@@ -255,7 +255,7 @@ export abstract class BaseReflectionAgent extends BaseAgent {
           'scratchpad',
         );
         if (scratchpad) {
-          this.logger.info(scratchpad, logGroupId, MESSAGE_TYPES.SCRATCHPAD);
+          this.logger.info(scratchpad, taskGroupId, MESSAGE_TYPES.SCRATCHPAD);
         }
         // this has a potential bug if <scratchpad> is included in the prefill
 
@@ -276,21 +276,21 @@ export abstract class BaseReflectionAgent extends BaseAgent {
         if (repetitionResult.massiveRepetitionDetected) {
           this.logger.error(
             `The new response is (first ${REPETITION_DETECTION_THRESHOLD} chars): ${newResponse.substring(0, REPETITION_DETECTION_THRESHOLD)}`,
-            logGroupId,
+            taskGroupId,
           );
           this.logger.error(
             `Massive repetition detected - skipping this response`,
-            logGroupId,
+            taskGroupId,
           );
 
           // Debug information - print message skeleton to help diagnose the problem
           this.logger.error(
             `Message structure when repetition detected:`,
-            logGroupId,
+            taskGroupId,
           );
           this.logger.error(
             JSON.stringify(messageToSkeleton(messages), null, 2),
-            logGroupId,
+            taskGroupId,
           );
           break;
         }
@@ -314,12 +314,12 @@ export abstract class BaseReflectionAgent extends BaseAgent {
 
         // Write or append to output file
         if (!exists) {
-          this.logger.debug(`Creating new file: ${outputFile}`, logGroupId);
+          this.logger.debug(`Creating new file: ${outputFile}`, taskGroupId);
           await WorkspaceFS.writeFile(outputFile, processedResponse);
         } else {
           this.logger.debug(
             `Appending to existing file: ${outputFile}`,
-            logGroupId,
+            taskGroupId,
           );
           await WorkspaceFS.appendFile(
             outputFile,
@@ -328,14 +328,14 @@ export abstract class BaseReflectionAgent extends BaseAgent {
         }
 
         // Log response boundaries
-        this.logger.debug(`Response preview:`, logGroupId);
+        this.logger.debug(`Response preview:`, taskGroupId);
         this.logger.debug(
           `First ${K_SLICE} chars:\n${processedResponse.slice(0, K_SLICE)}`,
-          logGroupId,
+          taskGroupId,
         );
         this.logger.debug(
           `Last ${K_SLICE} chars:\n${processedResponse.slice(-K_SLICE)}`,
-          logGroupId,
+          taskGroupId,
         );
 
         // Update message content
@@ -374,7 +374,7 @@ export abstract class BaseReflectionAgent extends BaseAgent {
         stateRound.incrementContinuation();
         this.logger.info(
           `Starting continuation #${stateRound.continuationCount}`,
-          logGroupId,
+          taskGroupId,
         );
 
         // Check if model should continue generating
@@ -388,7 +388,7 @@ export abstract class BaseReflectionAgent extends BaseAgent {
         ) {
           this.logger.debug(
             `Should continue - adding continuation message to conversation`,
-            logGroupId,
+            taskGroupId,
           );
           if (this.modelHandler.capabilities.supportsAssistantPrefill) {
             this.modelHandler.addContinueMessageWithPrefill(
