@@ -127,8 +127,14 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       new vscode.Disposable(
         onProgress(
           'setTaskState',
-          (p: { streamTabId: StreamTabId; executionId?: ExecutionId; taskState: TaskState }) =>
-            this.setTaskState(p.streamTabId, p.taskState, { executionId: p.executionId }),
+          (p: {
+            streamTabId: StreamTabId;
+            executionId?: ExecutionId;
+            taskState: TaskState;
+          }) =>
+            this.setTaskState(p.streamTabId, p.taskState, {
+              executionId: p.executionId,
+            }),
         ),
       ),
       new vscode.Disposable(
@@ -193,7 +199,11 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
             groupId: string;
             status: StatusType;
             endTime?: number;
-          }) => this.updateTaskGroup(p.stream, p.groupId, { status: p.status, endTime: p.endTime }),
+          }) =>
+            this.updateTaskGroup(p.stream, p.groupId, {
+              status: p.status,
+              endTime: p.endTime,
+            }),
         ),
       ),
     );
@@ -816,8 +826,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     return this._stateManager.executionIds.get(streamTabId);
   }
 
-
-
   public getTaskState(streamTabId: StreamTabId): TaskState | undefined {
     this.logger.debug(`Getting taskState for stream: ${streamTabId}`);
     const taskState = this._stateManager.taskStates.get(streamTabId);
@@ -893,7 +901,10 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
         );
 
         for (const [groupId, group] of activeGroups) {
-          this.updateTaskGroup(streamId, groupId, { status: STATUS_CANCELLED, endTime });
+          this.updateTaskGroup(streamId, groupId, {
+            status: STATUS_CANCELLED,
+            endTime,
+          });
         }
       }
     }
@@ -960,7 +971,10 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
 
           // Mark all active groups as interrupted
           for (const [groupId, group] of activeGroups) {
-            this.updateTaskGroup(streamId, groupId, { status: STATUS_INTERRUPTED, endTime });
+            this.updateTaskGroup(streamId, groupId, {
+              status: STATUS_INTERRUPTED,
+              endTime,
+            });
             updatedGroups++;
           }
         }
