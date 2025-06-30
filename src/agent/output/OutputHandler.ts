@@ -226,12 +226,15 @@ export class OutputHandler implements IOutputHandler {
     return infos;
   }
 
-  public async validateExpectedOutputs(round: number): Promise<void> {
+  public async validateExpectedOutputs(
+    outputFile: string,
+    currRound: number,
+  ): Promise<void> {
     const expected = this.agentConfig.outputFiles;
     if (!expected || expected.length === 0) {
       emitProgress('updateMissingOutputs', {
         stream: this.channel,
-        filesByRound: { [round]: [] },
+        filesByRound: { [currRound]: [] },
       });
       return;
     }
@@ -247,19 +250,31 @@ export class OutputHandler implements IOutputHandler {
 
     emitProgress('updateMissingOutputs', {
       stream: this.channel,
-      filesByRound: { [round]: missing },
+      filesByRound: { [currRound]: missing },
     });
 
     if (missing.length > 0) {
       const openBtn = 'Open XML';
-      let xmlPath = this.outputFiles[round]?.find((p) => p.endsWith('.xml'));
-      if (!xmlPath) {
-        xmlPath = missing[0].replace(/\.[^.]+$/, '.xml');
+      let xmlPath: string;
+
+      if (outputFile) {
+        // Use the provided outputFile parameter which contains the actual XML file path
+        xmlPath = outputFile;
+      } else {
+        // Fallback: construct the expected XML file path using the same naming convention
+        xmlPath = getOutputFileName(
+          this.agentConfig.inputFile,
+          this.agentConfig.agent,
+          this.agentConfig.model,
+          'xml',
+          currRound,
+        );
       }
 
+      const missingFilesList = missing.map((f) => path.basename(f)).join(', ');
       await showInstructionWithSuppress(
         'xmlOutputMismatch',
-        `Expected output "${path.basename(missing[0])}" was not generated. Open the XML file to check tag consistency, then run again.`,
+        `Expected outputs not generated: ${missingFilesList}. Open the XML file to check tag consistency, then run again.`,
         [
           {
             title: openBtn,

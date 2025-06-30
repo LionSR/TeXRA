@@ -51,5 +51,5 @@ export interface IOutputHandler {
   gatherOutputFileInfo(currRound: number): Promise<OutputFileInfo[]>;
 
   /** Validate expected output files for the given round. */
-  validateExpectedOutputs(round: number): Promise<void>;
+  validateExpectedOutputs(outputFile: string, currRound: number): Promise<void>;
 }
