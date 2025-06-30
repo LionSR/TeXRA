@@ -34,6 +34,7 @@ export class ProgressStateManager {
   private _taskGroups: Map<string, Map<string, TaskGroup>> = new Map();
   private _outputFiles: Map<string, { [key: number]: OutputFileInfo[] }> =
     new Map();
+  private _missingOutputs: Map<string, { [key: number]: string[] }> = new Map();
   private _taskStates: Map<string, TaskState> = new Map();
   private _taskIds: Map<string, string> = new Map();
   private _usageStats: Map<string, TokenUsageStats> = new Map();
@@ -54,6 +55,10 @@ export class ProgressStateManager {
 
   get outputFiles(): Map<string, { [key: number]: OutputFileInfo[] }> {
     return this._outputFiles;
+  }
+
+  get missingOutputs(): Map<string, { [key: number]: string[] }> {
+    return this._missingOutputs;
   }
 
   get taskStates(): Map<string, TaskState> {
@@ -91,6 +96,7 @@ export class ProgressStateManager {
     await this._loadStreamTabs();
     await this._loadTaskGroups();
     await this._loadOutputFiles();
+    await this._loadMissingOutputs();
     this._loadActiveStream();
     await this._loadTaskStates();
     await this._loadTaskIds();
@@ -104,6 +110,7 @@ export class ProgressStateManager {
     this._saveStreamTabs();
     this._saveTaskGroups();
     this._saveOutputFiles();
+    this._saveMissingOutputs();
     this._saveActiveStream();
     this._saveTaskStates();
     this._saveTaskIds();
@@ -297,6 +304,28 @@ export class ProgressStateManager {
     }
   }
 
+  private async _loadMissingOutputs(): Promise<void> {
+    const saved = workspaceSM.get<{
+      [key: string]: { [key: number]: string[] };
+    }>(this._getWorkspaceKey(WorkspaceStateKey.MISSING_OUTPUTS));
+
+    if (saved) {
+      this._missingOutputs = new Map(
+        Object.entries(saved).map(([stream, rounds]) => [
+          stream,
+          Object.fromEntries(
+            Object.entries(rounds).map(([r, files]) => [
+              parseInt(r, 10),
+              files,
+            ]),
+          ),
+        ]),
+      );
+    } else {
+      this._missingOutputs.clear();
+    }
+  }
+
   /**
    * Load active stream
    */
@@ -411,6 +440,14 @@ export class ProgressStateManager {
     );
   }
 
+  private _saveMissingOutputs(): void {
+    const obj = Object.fromEntries(this._missingOutputs.entries());
+    workspaceSM.update(
+      this._getWorkspaceKey(WorkspaceStateKey.MISSING_OUTPUTS),
+      obj,
+    );
+  }
+
   /**
    * Save active stream
    */
@@ -452,6 +489,7 @@ export class ProgressStateManager {
     this._streamTabs.delete(stream);
     this._taskGroups.delete(stream);
     this._outputFiles.delete(stream);
+    this._missingOutputs.delete(stream);
     this._taskStates.delete(stream);
     this._taskIds.delete(stream);
     this._usageStats.delete(stream);
@@ -464,6 +502,7 @@ export class ProgressStateManager {
     this._streamTabs.clear();
     this._taskGroups.clear();
     this._outputFiles.clear();
+    this._missingOutputs.clear();
     this._taskStates.clear();
     this._taskIds.clear();
     this._usageStats.clear();
