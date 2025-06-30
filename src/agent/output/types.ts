@@ -1,11 +1,12 @@
-export interface NamedOutputFile {
+import type { DiffStats } from '@/types/DiffTypes';
+import type { OutputFileId, WithEntityId } from '../../types/EntityTypes';
+
+export interface NamedOutputFile extends WithEntityId<OutputFileId> {
   source: string;
   path: string;
 }
 
-import type { DiffStats } from '@/types/DiffTypes';
-
-export interface OutputFileInfo extends DiffStats {
+export interface OutputFileInfo extends WithEntityId<OutputFileId>, DiffStats {
   path: string;
   base?: string | null;
   prev?: string | null;
