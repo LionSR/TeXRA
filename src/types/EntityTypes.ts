@@ -35,40 +35,16 @@ export type TaskGroupId = EntityId;
 export type LogMessageId = EntityId;
 
 /**
- * Task State UUID - identifies a specific task state configuration
- * Format: UUID v4
- * Example: "c3d4e5f6-g7h8-9012-cdef-345678901234"
- * 
- * Purpose:
- * - Unique identifier for each task state
- * - Enables updating task configuration
- * - Supports task state versioning and history
- */
-export type TaskStateId = EntityId;
-
-/**
  * Output File UUID - identifies a specific output file entry
  * Format: UUID v4
  * Example: "d4e5f6g7-h8i9-0123-def4-456789012345"
  * 
  * Purpose:
- * - Unique identifier for each output file
+ * - Unique identifier for each output file entry in streams
  * - Enables updating file status, diff stats, metadata
- * - Supports file relationship tracking
+ * - Supports file relationship tracking across rounds
  */
 export type OutputFileId = EntityId;
-
-/**
- * Agent Configuration UUID - identifies a specific agent config instance
- * Format: UUID v4
- * Example: "e5f6g7h8-i9j0-1234-ef56-567890123456"
- * 
- * Purpose:
- * - Unique identifier for each agent configuration
- * - Enables config versioning and comparison
- * - Supports config template management
- */
-export type AgentConfigId = EntityId;
 
 /**
  * Stream Session UUID - identifies a specific stream session
