@@ -73,10 +73,7 @@ export abstract class BaseAgent implements IAgent {
     return `${agentName}@${this.agentConfig.model}: ${baseName}`;
   }
 
-  /** @deprecated Use getStreamTabId instead */
-  protected getTaskId(): string {
-    return this.getStreamTabId();
-  }
+
 
   /** Gather variables used for prompt rendering. */
   protected async getUserVars(): Promise<Record<string, any>> {

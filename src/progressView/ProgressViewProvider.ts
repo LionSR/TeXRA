@@ -812,10 +812,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     return this._stateManager.executionIds.get(streamTabId);
   }
 
-  /** @deprecated Use getExecutionId instead */
-  public getTaskId(streamId: string): string | undefined {
-    return this._stateManager.taskIds.get(streamId);
-  }
+
 
   public getTaskState(streamTabId: StreamTabId): TaskState | undefined {
     this.logger.debug(`Getting taskState for stream: ${streamTabId}`);

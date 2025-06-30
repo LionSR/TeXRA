@@ -22,6 +22,3 @@ export type StreamTabId = string;
  */
 export type ExecutionId = string;
 
-// Temporary backwards compatibility - will be removed in future version
-/** @deprecated Use ExecutionId instead */
-export type TaskId = ExecutionId;
