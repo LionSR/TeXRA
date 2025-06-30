@@ -90,9 +90,12 @@ export class HistoryViewProvider implements vscode.WebviewViewProvider {
    */
   private handlers: Record<string, (message: any) => Promise<void> | void> = {
     [HISTORY_VIEW_COMMANDS.GET_HISTORY_DATA]: () => this.sendHistoryData(),
-    [HISTORY_VIEW_COMMANDS.RERUN_AGENT]: (m: any) => this.rerunAgent(m.historyId),
-    [HISTORY_VIEW_COMMANDS.RESTORE_AGENT]: (m: any) => this.restoreAgent(m.historyId),
-    [HISTORY_VIEW_COMMANDS.DELETE_AGENT]: (m: any) => this.deleteHistoryItem(m.historyId),
+    [HISTORY_VIEW_COMMANDS.RERUN_AGENT]: (m: any) =>
+      this.rerunAgent(m.historyId),
+    [HISTORY_VIEW_COMMANDS.RESTORE_AGENT]: (m: any) =>
+      this.restoreAgent(m.historyId),
+    [HISTORY_VIEW_COMMANDS.DELETE_AGENT]: (m: any) =>
+      this.deleteHistoryItem(m.historyId),
     [HISTORY_VIEW_COMMANDS.CLEAR_HISTORY]: () => this.clearHistory(),
   };
 
@@ -123,7 +126,9 @@ export class HistoryViewProvider implements vscode.WebviewViewProvider {
    */
   private async updateWebviewContent() {
     if (this._view) {
-      this._view.webview.html = this.contentProvider.getHtmlContent(this._view.webview);
+      this._view.webview.html = this.contentProvider.getHtmlContent(
+        this._view.webview,
+      );
 
       // Send history data after a short delay to ensure the webview is ready
       setTimeout(() => this.sendHistoryData(), 100);
@@ -204,8 +209,8 @@ export class HistoryViewProvider implements vscode.WebviewViewProvider {
 
       // Notify the webview
       if (this._view) {
-        this._view.webview.postMessage({ 
-          command: HISTORY_VIEW_COMMANDS.HISTORY_CLEARED 
+        this._view.webview.postMessage({
+          command: HISTORY_VIEW_COMMANDS.HISTORY_CLEARED,
         });
       }
     } catch (error) {
