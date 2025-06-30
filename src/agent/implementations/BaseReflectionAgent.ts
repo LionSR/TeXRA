@@ -25,7 +25,6 @@ import {
 } from '@agent/utils/promptHelpers';
 
 // Local imports - UI
-import { checkExpectedOutputs } from '@frontend/ui/instruction';
 
 import replacementEngine from '@replacement/engine';
 import { checkForMassiveRepetition } from '@agent/utils/text/repetitionUtils';
@@ -846,19 +845,20 @@ export abstract class BaseReflectionAgent extends BaseAgent {
       this.logger.debug(`Round 0 completed\n`, this.runGroupId);
 
       // Check expected outputs after round 0 completes
-      if (endTurn && this.agentConfig.outputFiles) {
+      if (endTurn) {
         try {
-          await checkExpectedOutputs(this.agentConfig.outputFiles, this);
+          await this.outputHandler.validateExpectedOutputs(0);
           this.logger.debug(
             `Expected outputs validated for round 0`,
             this.runGroupId,
           );
         } catch (error) {
           this.logger.error(
-            `Expected output validation failed after round 0: ${error instanceof Error ? error.message : String(error)}`,
+            `Expected output validation failed after round 0: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
             this.runGroupId,
           );
-          // Continue execution even if validation fails, but log the issue
         }
       }
 
@@ -873,20 +873,19 @@ export abstract class BaseReflectionAgent extends BaseAgent {
         this.logger.debug(`Round 1 completed\n`, this.runGroupId);
 
         // Check expected outputs after round 1 completes
-        if (this.agentConfig.outputFiles) {
-          try {
-            await checkExpectedOutputs(this.agentConfig.outputFiles, this);
-            this.logger.debug(
-              `Expected outputs validated for round 1`,
-              this.runGroupId,
-            );
-          } catch (error) {
-            this.logger.error(
-              `Expected output validation failed after round 1: ${error instanceof Error ? error.message : String(error)}`,
-              this.runGroupId,
-            );
-            // Continue execution even if validation fails, but log the issue
-          }
+        try {
+          await this.outputHandler.validateExpectedOutputs(1);
+          this.logger.debug(
+            `Expected outputs validated for round 1`,
+            this.runGroupId,
+          );
+        } catch (error) {
+          this.logger.error(
+            `Expected output validation failed after round 1: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            this.runGroupId,
+          );
         }
       }
 
