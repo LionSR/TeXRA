@@ -152,6 +152,7 @@ export const PROGRESS_VIEW_COMMANDS = {
 
   // File operations
   OPEN_FILE: 'openFile',
+  OPEN_FILE_COMPILE: 'openFileCompile',
   COMPARE_ORIGINAL: 'compareOriginal',
   COMPARE_PREVIOUS: 'comparePrevious',
   ACCEPT_FILE: 'acceptFile',
