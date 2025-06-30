@@ -21,9 +21,9 @@ import {
 import { capitalize } from '@common/stringUtils.js';
 
 /**
- * Manages persistent state for the webview.
+ * Manages persistent state for the main webview.
  */
-export class WebviewState {
+export class MainViewState {
   constructor() {
     this.stateManager = new WebviewStateManager();
   }
@@ -178,5 +178,5 @@ export class WebviewState {
   }
 }
 
-export const webviewState = new WebviewState();
-fileList.setSaveFn(() => webviewState.save());
+export const mainViewState = new MainViewState();
+fileList.setSaveFn(() => mainViewState.save());
