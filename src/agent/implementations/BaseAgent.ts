@@ -73,8 +73,6 @@ export abstract class BaseAgent implements IAgent {
     return `${agentName}@${this.agentConfig.model}: ${baseName}`;
   }
 
-
-
   /** Gather variables used for prompt rendering. */
   protected async getUserVars(): Promise<Record<string, any>> {
     return buildUserVars(
@@ -136,7 +134,9 @@ export abstract class BaseAgent implements IAgent {
     return false;
   }
 
-  public static getRunningAgent(streamTabId: StreamTabId): BaseAgent | undefined {
+  public static getRunningAgent(
+    streamTabId: StreamTabId,
+  ): BaseAgent | undefined {
     return BaseAgent.runningAgents.get(streamTabId);
   }
 
