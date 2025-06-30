@@ -8,7 +8,7 @@ import { emitProgress } from '@eventBus/ProgressEventBus';
 import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
-import { getStreamId } from '@/logger/streamUtils';
+import { getStreamTabId } from '@/logger/streamUtils';
 
 // Local imports - housekeeping
 import {
@@ -81,7 +81,7 @@ async function handleCleanSingle(
   const result = await runCleanSingle(model, inputFile, agent);
   showCleanResult(result, inputFile);
 
-  const streamId = getStreamId(agent, model, inputFile);
+  const streamId = getStreamTabId(agent, model, inputFile);
   emitProgress('clearOutputFiles', streamId);
   emitProgress('clearMissingOutputs', streamId);
   emitProgress('clearTaskOutput', streamId);
@@ -114,7 +114,7 @@ async function handleCleanMultiple(
   const result = await runCleanMultiple(model, inputFile, agent, outputFiles);
   showCleanResult(result, inputFile);
 
-  const streamId = getStreamId(agent, model, inputFile, outputFiles);
+  const streamId = getStreamTabId(agent, model, inputFile, outputFiles);
   emitProgress('clearOutputFiles', streamId);
   emitProgress('clearMissingOutputs', streamId);
   emitProgress('clearTaskOutput', streamId);
@@ -162,7 +162,7 @@ export async function handleClean(config: {
 
   const streamId =
     config.streamId ||
-    getStreamId(config.agent, config.model, config.inputFile, outputFiles);
+    getStreamTabId(config.agent, config.model, config.inputFile, outputFiles);
   emitProgress('clearOutputFiles', streamId);
   emitProgress('clearMissingOutputs', streamId);
   emitProgress('clearTaskOutput', streamId);
