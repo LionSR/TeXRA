@@ -15,6 +15,7 @@ import { TokenUsageStats } from '../types/UsageTypes';
 import { TaskGroup } from '../logger/LogTypes';
 import type { DiffStats } from '../types/DiffTypes';
 import { randomUUID } from 'crypto';
+import type { StreamTabId, ExecutionId } from '../types/IdentifierTypes';
 import { onProgress } from '@eventBus/ProgressEventBus';
 
 // @ts-ignore - Import JavaScript module
@@ -126,8 +127,8 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       new vscode.Disposable(
         onProgress(
           'setTaskState',
-          (p: { streamId: string; taskId?: string; taskState: TaskState }) =>
-            this.setTaskState(p.streamId, p.taskState, p.taskId),
+          (p: { streamTabId: StreamTabId; executionId?: ExecutionId; taskState: TaskState }) =>
+            this.setTaskState(p.streamTabId, p.taskState, p.executionId),
         ),
       ),
       new vscode.Disposable(
@@ -138,8 +139,8 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
         ),
       ),
       new vscode.Disposable(
-        onProgress('clearTaskOutput', (streamId: string) =>
-          this.clearTaskOutput(streamId),
+        onProgress('clearTaskOutput', (streamTabId: StreamTabId) =>
+          this.clearTaskOutput(streamTabId),
         ),
       ),
       new vscode.Disposable(
@@ -791,15 +792,15 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   }
 
   public setTaskState(
-    streamId: string,
+    streamTabId: StreamTabId,
     taskState: TaskState,
-    taskId?: string,
+    executionId?: ExecutionId,
   ): void {
-    this.logger.debug(`Setting taskState for stream: ${streamId}`);
+    this.logger.debug(`Setting taskState for stream: ${streamTabId}`);
     // this.logger.debug(`Task state: ${JSON.stringify(taskState)}`);
-    this._stateManager.taskStates.set(streamId, taskState);
-    if (taskId) {
-      this._stateManager.taskIds.set(streamId, taskId);
+    this._stateManager.taskStates.set(streamTabId, taskState);
+    if (executionId) {
+      this._stateManager.executionIds.set(streamTabId, executionId);
     }
     this.saveTaskStates();
     this.logger.debug(
@@ -807,15 +808,20 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     );
   }
 
+  public getExecutionId(streamTabId: StreamTabId): ExecutionId | undefined {
+    return this._stateManager.executionIds.get(streamTabId);
+  }
+
+  /** @deprecated Use getExecutionId instead */
   public getTaskId(streamId: string): string | undefined {
     return this._stateManager.taskIds.get(streamId);
   }
 
-  public getTaskState(streamId: string): TaskState | undefined {
-    this.logger.debug(`Getting taskState for stream: ${streamId}`);
-    const taskState = this._stateManager.taskStates.get(streamId);
+  public getTaskState(streamTabId: StreamTabId): TaskState | undefined {
+    this.logger.debug(`Getting taskState for stream: ${streamTabId}`);
+    const taskState = this._stateManager.taskStates.get(streamTabId);
     if (!taskState) {
-      this.logger.warn(`No taskState found for stream: ${streamId}`);
+      this.logger.warn(`No taskState found for stream: ${streamTabId}`);
     } else {
       this.logger.debug(`Found taskState: ${JSON.stringify(taskState)}`);
     }
@@ -824,16 +830,16 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
 
   /**
    * Clears output file information from the stored task state
-   * @param streamId Stream identifier
+   * @param streamTabId Stream tab identifier
    */
-  public clearTaskOutput(streamId: string): void {
-    const state = this._stateManager.taskStates.get(streamId);
+  public clearTaskOutput(streamTabId: StreamTabId): void {
+    const state = this._stateManager.taskStates.get(streamTabId);
     if (state) {
       state.outputFiles = [];
       if (state.activeFiles) {
         state.activeFiles.output = false;
       }
-      this._stateManager.taskStates.set(streamId, state);
+      this._stateManager.taskStates.set(streamTabId, state);
       this.saveTaskStates();
     }
   }
