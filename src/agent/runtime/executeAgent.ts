@@ -27,7 +27,8 @@ import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 
-import { getStreamId } from '@/logger/streamUtils';
+import { getStreamTabId } from '@/logger/streamUtils';
+import type { StreamTabId, ExecutionId } from '../../types/IdentifierTypes';
 import { IAgent } from '@agent/core/IAgent';
 
 const CHANNEL = 'executeAgent';
@@ -141,21 +142,21 @@ async function executeAgentWithLogging<T extends IAgent>(
   agentName: string,
   createAgentFn: () => Promise<T>,
   context: vscode.ExtensionContext,
-  taskId?: string,
+  executionId?: ExecutionId,
 ): Promise<void> {
   try {
     // Create agent to get config for stream ID
     const agent = await createAgentFn();
 
-    // Get the full stream ID
+    // Get the full stream tab ID
     const config = agent.config;
-    const fullStreamId = getStreamId(agentName, config.model, config.inputFile);
+    const streamTabId = getStreamTabId(agentName, config.model, config.inputFile);
 
     // Check if this stream is already running
     const provider = ProgressViewProvider.getInstance();
-    const currentStatus = provider?.getStreamStatus(fullStreamId);
+    const currentStatus = provider?.getStreamStatus(streamTabId);
     if (currentStatus === 'running') {
-      const errorMsg = `Task "${fullStreamId}" is already running. Please wait for it to complete or stop it first.`;
+      const errorMsg = `Task "${streamTabId}" is already running. Please wait for it to complete or stop it first.`;
       throw new Error(errorMsg);
     }
 
@@ -173,14 +174,14 @@ async function executeAgentWithLogging<T extends IAgent>(
       );
 
       logger.info(
-        `Starting task execution for ${fullStreamId}`,
+        `Starting task execution for ${streamTabId}`,
         taskDetailsGroupId,
       );
       logger.info(`Input file: ${config.inputFile}`, taskDetailsGroupId);
 
       try {
         logger.debug(
-          `Creating stream with ID: ${fullStreamId}`,
+          `Creating stream with ID: ${streamTabId}`,
           taskDetailsGroupId,
         );
         logger.debug(
@@ -193,9 +194,9 @@ async function executeAgentWithLogging<T extends IAgent>(
         );
 
         // Switch to this stream and set its status to running
-        emitProgress('setActiveStream', fullStreamId);
+        emitProgress('setActiveStream', streamTabId);
         emitProgress('updateStreamStatus', {
-          stream: fullStreamId,
+          stream: streamTabId,
           status: 'running',
         });
 
@@ -233,7 +234,7 @@ async function executeAgentWithLogging<T extends IAgent>(
 
         // Store taskState
         logger.debug(
-          `Storing taskState for stream: ${fullStreamId}`,
+          `Storing taskState for stream: ${streamTabId}`,
           taskDetailsGroupId,
         );
         logger.debug(
@@ -246,12 +247,12 @@ async function executeAgentWithLogging<T extends IAgent>(
 
         // Convert AgentConfig to TaskState using utility function
         emitProgress('setTaskState', {
-          streamId: fullStreamId,
-          taskId,
+          streamTabId: streamTabId,
+          executionId,
           taskState: agentConfigToTaskState(config),
         });
         logger.debug(
-          `Task state stored for stream: ${fullStreamId}`,
+          `Task state stored for stream: ${streamTabId}`,
           mainTaskGroupId,
         );
 
@@ -268,7 +269,7 @@ async function executeAgentWithLogging<T extends IAgent>(
           logger.endGroup(mainTaskGroupId, 'stopped');
           // Update status to stopped on successful completion
           emitProgress('updateStreamStatus', {
-            stream: fullStreamId,
+            stream: streamTabId,
             status: 'stopped',
           });
 
@@ -289,7 +290,7 @@ async function executeAgentWithLogging<T extends IAgent>(
           logger.endGroup(mainTaskGroupId, 'error');
           // Update status to error if agent run fails
           emitProgress('updateStreamStatus', {
-            stream: fullStreamId,
+            stream: streamTabId,
             status: 'error',
           });
           throw err;
@@ -351,7 +352,7 @@ async function executeAgentWithLogging<T extends IAgent>(
 export async function executeAgent(
   agentConfig: Partial<AgentConfig>,
   context: vscode.ExtensionContext,
-  taskId?: string,
+  executionId?: ExecutionId,
 ): Promise<void> {
   // Ensure required fields
   if (!agentConfig.model || !agentConfig.agent) {
@@ -412,7 +413,7 @@ export async function executeAgent(
       );
     },
     context,
-    taskId,
+    executionId,
   );
 }
 
