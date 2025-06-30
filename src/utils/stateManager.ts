@@ -4,11 +4,11 @@ import * as vscode from 'vscode';
 // Simple enums for commonly used state keys
 export enum WorkspaceStateKey {
   AGENT_HISTORY = 'texra.agentHistory',
-  LOG_STREAMS = 'texra.logStreams',
+  STREAM_TABS = 'texra.streamTabs',
   TASK_GROUPS = 'texra.taskGroups',
   OUTPUT_FILES = 'texra.outputFiles',
   MISSING_OUTPUTS = 'texra.missingOutputs',
-  ACTIVE_LOG_STREAM = 'texra.activeLogStream',
+  ACTIVE_STREAM_TAB = 'texra.activeStreamTab',
   TASK_STATES = 'texra.taskStates',
   TASK_IDS = 'texra.taskIds',
   USAGE_STATS = 'texra.usageStats',
