@@ -4,9 +4,11 @@
 
 // Local imports
 import type { TokenUsageStats } from '../types/UsageTypes';
-import type { TaskGroupId, LogMessageId, WithEntityId } from '../types/EntityTypes';
+import type { TaskGroupId, LogMessageId } from '../types/EntityTypes';
 
-export interface TaskGroup extends WithEntityId<TaskGroupId> {
+export interface TaskGroup {
+  /** Unique identifier for the group */
+  id: TaskGroupId;
   /** Display name of the group */
   name: string;
   /** Unix timestamp (ms) when the group started */
@@ -21,7 +23,9 @@ export interface TaskGroup extends WithEntityId<TaskGroupId> {
   usage?: TokenUsageStats;
 }
 
-export interface LogMessageData extends WithEntityId<LogMessageId> {
+export interface LogMessageData {
+  /** Unique identifier for this log entry */
+  id: LogMessageId;
   /** Raw message text */
   text: string;
   /** Severity level */
