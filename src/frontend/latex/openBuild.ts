@@ -1,10 +1,18 @@
 // Third-party imports
 import * as vscode from 'vscode';
 import * as path from 'path';
-
 // Local imports - log
 import * as logger from '@logger/logUtils';
-import { WorkspaceFS, AbsoluteFS } from '@utils/files';
+import {
+  WorkspaceFS,
+  AbsoluteFS,
+  resolveFilePath,
+  isTexFile,
+} from '@utils/files';
+import {
+  LATEX_VIEWER_OPEN_DELAY_MS,
+  LATEX_VIEWER_REFRESH_DELAY_MS,
+} from '@utils/config';
 
 const CHANNEL = 'OpenBuildUtils';
 logger.initialize(CHANNEL);
@@ -29,10 +37,10 @@ export async function openAndBuildIfTex(
       return;
     }
 
-    const fullPath = isAbsolute ? file : WorkspaceFS.fullPath(file);
+    const fullPath = resolveFilePath(file);
     const uri = vscode.Uri.file(fullPath);
 
-    if (file.toLowerCase().endsWith('.tex')) {
+    if (isTexFile(file)) {
       const doc = await vscode.workspace.openTextDocument(uri);
       await vscode.window.showTextDocument(doc, {
         preview: false,
@@ -65,15 +73,15 @@ export async function openBuildDisplayIfTex(
 ): Promise<void> {
   await openAndBuildIfTex(file, options);
 
-  if (file.toLowerCase().endsWith('.tex')) {
+  if (isTexFile(file)) {
     try {
       setTimeout(async () => {
         await vscode.commands.executeCommand('latex-workshop.view');
         setTimeout(
           () => vscode.commands.executeCommand('latex-workshop.refresh-viewer'),
-          5000,
+          LATEX_VIEWER_REFRESH_DELAY_MS,
         );
-      }, 5000);
+      }, LATEX_VIEWER_OPEN_DELAY_MS);
     } catch (err) {
       logger.warn(CHANNEL, `Viewer display failed: ${err}`);
     }
