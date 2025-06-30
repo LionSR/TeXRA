@@ -166,10 +166,10 @@ Use this to clean up your workspace after reviewing the results.
 
 ### Opening Generated Files
 
-Click the file names listed in the ProgressBoard to view the outputs. Non\-TeX
-files open with VS Code's default viewer. When clicking a `.tex` file, TeXRA
-automatically runs a LaTeX build and displays the resulting PDF (requires
-LaTeX Workshop). Absolute file paths are supported.
+Click the file names listed in the ProgressBoard to view the outputs. Files now
+open using VS Code's default viewer, so PDFs and images display correctly while
+`.tex` documents open in the editor. Absolute paths are also handled
+properly.
 
 ## Working with LaTeX Projects
 
