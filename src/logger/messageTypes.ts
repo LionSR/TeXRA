@@ -2,6 +2,7 @@ export const MESSAGE_TYPES = {
   THINKING: 'thinking',
   SCRATCHPAD: 'scratchpad',
   FILE_LIST: 'fileList',
+  OUTPUT_REMINDER: 'outputReminder',
   DEFAULT: 'default',
 } as const;
 

@@ -151,6 +151,10 @@ export class LogEntryFormatter {
       return this._formatFileList(htmlMessage, text, id);
     }
 
+    if (messageType === 'outputReminder') {
+      return this._formatOutputReminder(htmlMessage, text, id);
+    }
+
     return htmlMessage;
   }
 
@@ -293,6 +297,41 @@ export class LogEntryFormatter {
       </details>`;
     } catch (e) {
       console.error('Error parsing file list:', e);
+      return message;
+    }
+  }
+
+  _formatOutputReminder(message, content, logId) {
+    try {
+      const idAttr = logId ? ` data-log-id="${logId}"` : '';
+      const parsed = JSON.parse(this._unescapeHtml(content));
+      if (!parsed || !Array.isArray(parsed.missing)) {
+        throw new Error('Invalid output reminder');
+      }
+
+      const items = parsed.missing
+        .map((f) => `<li>${this._escapeHtml(f)}</li>`)
+        .join('');
+      const link = parsed.xmlPath
+        ? `<span class="file-link clickable-link" data-file="${this._escapeHtml(
+            parsed.xmlPath,
+          )}">Open XML</span>`
+        : '';
+
+      return `<details class="output-reminder-details" open>
+        <summary>
+          <i class="${CHEVRON_DOWN_CLASS} toggle-icon"></i>
+          <i class="codicon codicon-warning"></i>
+          <span>Missing output</span>
+        </summary>
+        <div class="output-reminder-content"${idAttr}>
+          <p>Expected output file(s) not generated:</p>
+          <ul>${items}</ul>
+          ${link}
+        </div>
+      </details>`;
+    } catch (e) {
+      console.error('Error parsing output reminder:', e);
       return message;
     }
   }

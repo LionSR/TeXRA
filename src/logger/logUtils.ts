@@ -15,11 +15,13 @@ function isValidMessageType(
 ): type is
   | typeof MESSAGE_TYPES.THINKING
   | typeof MESSAGE_TYPES.SCRATCHPAD
-  | typeof MESSAGE_TYPES.FILE_LIST {
+  | typeof MESSAGE_TYPES.FILE_LIST
+  | typeof MESSAGE_TYPES.OUTPUT_REMINDER {
   return (
     type === MESSAGE_TYPES.THINKING ||
     type === MESSAGE_TYPES.SCRATCHPAD ||
-    type === MESSAGE_TYPES.FILE_LIST
+    type === MESSAGE_TYPES.FILE_LIST ||
+    type === MESSAGE_TYPES.OUTPUT_REMINDER
   );
 }
 
