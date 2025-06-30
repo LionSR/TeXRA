@@ -8,7 +8,7 @@ export const COMMON_COMMANDS = {
   DEBUG_MODE_SET: 'setDebugMode',
   STATE_RESTORE: 'restoreState',
   WEBVIEW_READY: 'webviewReady',
-} as const;
+};
 
 // Main view specific commands
 export const MAIN_VIEW_COMMANDS = {
@@ -71,7 +71,7 @@ export const MAIN_VIEW_COMMANDS = {
   OPEN_AGENT_SETTINGS: 'openAgentSettings',
   OPEN_MODEL_SETTINGS: 'openModelSettings',
   CLIPBOARD_IMAGE: 'clipboardImage',
-} as const;
+};
 
 // Progress view specific commands  
 export const PROGRESS_VIEW_COMMANDS = {
@@ -116,7 +116,7 @@ export const PROGRESS_VIEW_COMMANDS = {
   ACCEPT_FILE: 'acceptFile',
   MERGE_FILE: 'mergeFile',
   LATEXDIFF_FILE: 'latexdiffFile',
-} as const;
+};
 
 // History view specific commands
 export const HISTORY_VIEW_COMMANDS = {
@@ -128,7 +128,7 @@ export const HISTORY_VIEW_COMMANDS = {
   RERUN_AGENT: 'rerunAgent',
   RESTORE_AGENT: 'restoreAgent',
   DELETE_AGENT: 'deleteAgent',
-} as const;
+};
 
 // Export all commands in a single object for convenience
 export const WEBVIEW_COMMANDS = {
@@ -136,11 +136,4 @@ export const WEBVIEW_COMMANDS = {
   MAIN_VIEW: MAIN_VIEW_COMMANDS,
   PROGRESS_VIEW: PROGRESS_VIEW_COMMANDS,
   HISTORY_VIEW: HISTORY_VIEW_COMMANDS,
-} as const;
-
-// Type definitions for better type safety
-export type CommonCommand = typeof COMMON_COMMANDS[keyof typeof COMMON_COMMANDS];
-export type MainViewCommand = typeof MAIN_VIEW_COMMANDS[keyof typeof MAIN_VIEW_COMMANDS];
-export type ProgressViewCommand = typeof PROGRESS_VIEW_COMMANDS[keyof typeof PROGRESS_VIEW_COMMANDS];
-export type HistoryViewCommand = typeof HISTORY_VIEW_COMMANDS[keyof typeof HISTORY_VIEW_COMMANDS];
-export type WebviewCommand = CommonCommand | MainViewCommand | ProgressViewCommand | HistoryViewCommand;
+};
