@@ -49,4 +49,11 @@ export interface IOutputHandler {
 
   /** Gather mapping and diff stats for output files of a round. */
   gatherOutputFileInfo(currRound: number): Promise<OutputFileInfo[]>;
+
+  /** Validate expected output files for the given round. */
+  validateExpectedOutputs(
+    outputFile: string,
+    currRound: number,
+    groupId?: string,
+  ): Promise<void>;
 }
