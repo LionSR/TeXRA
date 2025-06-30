@@ -1,4 +1,4 @@
-import { webviewState } from './modules/webviewState.js';
+import { mainViewState } from './modules/mainViewState.js';
 import { messageHandlers } from './modules/messageHandlers.js';
 import {
   webviewDomHandler,
@@ -16,7 +16,7 @@ window.addEventListener('beforeunload', () => {
 
 // Setup UI when DOM is loaded
 document.addEventListener('DOMContentLoaded', function () {
-  webviewState.restore();
+  mainViewState.restore();
   instructionManager.setup();
   webviewDomHandler.initializeUI();
   toggleManager.updateToolConfigToggleState();

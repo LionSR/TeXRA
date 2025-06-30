@@ -54,10 +54,10 @@ This document sets the common conventions for contributions. Follow these norms 
   consolidated `TeXRA` channel and are not persisted across sessions.
 - Update cumulative usage stats with `updateUsageSummary` in `src/progressView/modules/domHandlers.js`.
 - Prefer enums or union types over plain booleans in configuration objects.
-- Build webview URIs through helpers in `src/webview/WebviewContentProvider.ts`.
+- Build webview URIs through helpers in `src/webview/MainViewContentProvider.ts`.
 - When adding new webview modules (e.g., under `src/webview/modules/uiManagers`),
   map them in `src/webview/index.html` and expose their URIs via
-  `WebviewContentProvider`.
+  `MainViewContentProvider`.
 - Use `watchConfig` from `src/utils/configUtils.ts` to refresh features when configuration settings change.
 - Build DOM elements with `<template>` blocks and helpers in `src/common/modules/templateUtils.js`.
 - Manipulate webview DOM safely using `addEventListenerSafely` from `src/common/modules/domUtils.js`.
@@ -81,6 +81,16 @@ This document sets the common conventions for contributions. Follow these norms 
   - Generate URIs using appropriate helpers (`getHistoryViewUri`, `getCommonUri`, etc.)
   - Pass all URIs to the HTML template and map them in the importmap script tag
   - Without complete import mapping, ES modules will fail to resolve in the webview's sandboxed environment
+
+### Webview Consistency Patterns
+
+- **Base Classes**: All webviews extend `BaseViewContentProvider` and `BaseViewMessageHandler` for consistent error handling, logging, and URI generation
+- **Naming Convention**: Follow `[Domain]View[Component]` pattern (e.g., `MainViewContentProvider`, `HistoryViewMessageHandler`)
+- **Command Constants**: Define all commands in `src/common/webview/commands.js` and `.ts` - use constants, not string literals
+- **Message Handlers**: Delegate to domain-specific manager classes (FileManager, SettingsManager, etc.) for separation of concerns
+- **Client-Side State**: Add empty handlers with `/* State saved client-side */` comment for checkbox/toggle operations
+- **Resource Access**: Include all common module paths in `localResourceRoots` to prevent 401 errors
+- **Module Structure**: Keep UI managers modular and focused on single responsibilities - avoid large consolidated classes
 
 ## Design and refactoring
 
