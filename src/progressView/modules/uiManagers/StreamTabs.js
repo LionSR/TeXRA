@@ -21,13 +21,13 @@ export class StreamTabs {
     }
     tabsContainer.innerHTML = streams
       .map((stream) => {
-        if (!stream || typeof stream !== 'string') {
+        if (!stream || typeof stream !== 'object') {
           console.warn('StreamTabs.update: invalid stream value:', stream);
           return '';
         }
-        return `<div class="tab-container ${stream === activeStream ? 'active' : ''}" title="${stream}">
-            <button class="tab" data-stream="${stream}" title="${stream}">${stream}</button>
-            <button class="tab-delete" data-stream="${stream}" title="Delete stream">
+        return `<div class="tab-container ${stream.id === activeStream ? 'active' : ''}" title="${stream.name}">
+            <button class="tab" data-stream="${stream.id}" title="${stream.name}">${stream.name}</button>
+            <button class="tab-delete" data-stream="${stream.id}" title="Delete stream">
               <i class="codicon codicon-close"></i>
             </button>
           </div>`;
@@ -37,7 +37,8 @@ export class StreamTabs {
     // Update current stream name
     const streamNameElem = document.getElementById('currentStreamName');
     if (streamNameElem) {
-      streamNameElem.textContent = activeStream || '';
+      const active = streams.find((s) => s.id === activeStream);
+      streamNameElem.textContent = active ? active.name : '';
     }
   }
 }

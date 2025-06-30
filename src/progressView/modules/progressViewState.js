@@ -176,6 +176,7 @@ export class ProgressViewState {
     this.taskGroups = new TaskGroups();
     this.toggleStates = new ToggleStates(() => this.save());
     this.streamStatuses = new StreamStatuses();
+    this.streamNames = new Map();
   }
 
   /** Load saved state from VS Code storage. */

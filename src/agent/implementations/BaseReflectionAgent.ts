@@ -75,8 +75,16 @@ export abstract class BaseReflectionAgent extends BaseAgent {
     agentSetting: AgentSetting,
     agentPrompt: AgentPrompt,
     agentPath: string,
+    taskId: string,
   ) {
-    super(modelHandler, agentConfig, agentSetting, agentPrompt, agentPath);
+    super(
+      modelHandler,
+      agentConfig,
+      agentSetting,
+      agentPrompt,
+      agentPath,
+      taskId,
+    );
 
     // Initialize basic attributes
     const numRounds = this.getNumberOfRounds();

@@ -86,6 +86,7 @@ function getMainOutputChannel(): vscode.OutputChannel {
 class VSCodeTransport extends Transport {
   private channel: vscode.OutputChannel;
   private streamName: string;
+  private taskId: string;
   private isAgentChannel: boolean;
   private groups: Map<string, TaskGroup> = new Map();
   private activeGroupId?: string;
@@ -93,12 +94,14 @@ class VSCodeTransport extends Transport {
   constructor(
     channel: vscode.OutputChannel,
     streamName: string,
+    taskId: string,
     isAgentChannel: boolean,
     opts?: Transport.TransportStreamOptions,
   ) {
     super(opts);
     this.channel = channel;
     this.streamName = streamName;
+    this.taskId = taskId;
     this.isAgentChannel = isAgentChannel;
   }
 
@@ -158,7 +161,7 @@ class VSCodeTransport extends Transport {
     } satisfies import('./LogTypes').LogMessageData;
 
     emitProgress('addLogMessage', {
-      stream: this.streamName,
+      stream: this.taskId,
       logMessage,
     });
 
@@ -190,7 +193,7 @@ class VSCodeTransport extends Transport {
     }
 
     emitProgress('addLogGroup', {
-      stream: this.streamName,
+      stream: this.taskId,
       groupId,
       groupName,
       startTime: now,
@@ -219,7 +222,7 @@ class VSCodeTransport extends Transport {
     }
 
     emitProgress('updateLogGroup', {
-      stream: this.streamName,
+      stream: this.taskId,
       groupId,
       status,
       endTime: group.endTime,
@@ -254,16 +257,21 @@ class VSCodeTransport extends Transport {
 const channelLoggers = new Map<string, winston.Logger>();
 const channelTransports = new Map<string, VSCodeTransport>();
 
-export function initialize(defaultChannel: string, isAgent = false): void {
+export function initialize(
+  defaultChannel: string,
+  isAgent = false,
+  taskId?: string,
+): void {
   // Create default logger if it doesn't exist
   if (!channelLoggers.has(defaultChannel)) {
-    createLoggerForChannel(defaultChannel, isAgent);
+    createLoggerForChannel(defaultChannel, isAgent, taskId);
   }
 }
 
 function createLoggerForChannel(
   channel: string,
   isAgent = false,
+  taskId?: string,
 ): winston.Logger {
   // Check if channel already exists
   if (channelLoggers.has(channel)) {
@@ -275,7 +283,12 @@ function createLoggerForChannel(
     : getMainOutputChannel();
 
   // Create transport
-  const transport = new VSCodeTransport(outputChannel, channel, isAgent);
+  const transport = new VSCodeTransport(
+    outputChannel,
+    channel,
+    taskId ?? channel,
+    isAgent,
+  );
   channelTransports.set(channel, transport);
 
   const logger = winston.createLogger({

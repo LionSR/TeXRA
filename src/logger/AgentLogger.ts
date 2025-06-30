@@ -17,9 +17,10 @@ export class AgentLogger {
   constructor(
     public channelId: string,
     isAgentLogger = false,
+    taskId?: string,
   ) {
     this.isAgentLogger = isAgentLogger;
-    logger.initialize(this.channelId, this.isAgentLogger);
+    logger.initialize(this.channelId, this.isAgentLogger, taskId);
     this.channelId = channelId;
   }
 

@@ -19,8 +19,16 @@ export class MergeAgent extends DirectAgent {
     agentSetting: AgentSetting,
     agentPrompt: AgentPrompt,
     agentPath: string,
+    taskId: string,
   ) {
-    super(modelHandler, agentConfig, agentSetting, agentPrompt, agentPath);
+    super(
+      modelHandler,
+      agentConfig,
+      agentSetting,
+      agentPrompt,
+      agentPath,
+      taskId,
+    );
     this.outputFile = [this.getOutputFile(0), this.getOutputFile(1)];
   }
 

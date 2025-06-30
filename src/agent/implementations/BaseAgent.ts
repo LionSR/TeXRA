@@ -31,6 +31,8 @@ export abstract class BaseAgent implements IAgent {
   protected isInterrupted = false;
   protected abortController: AbortController | null = null;
 
+  protected taskId: string;
+
   private static runningAgents: Map<string, BaseAgent> = new Map();
 
   public get config(): AgentConfig {
@@ -43,15 +45,17 @@ export abstract class BaseAgent implements IAgent {
     agentSetting: AgentSetting,
     agentPrompt: AgentPrompt,
     agentPath: string,
+    taskId: string,
   ) {
     this.modelHandler = modelHandler;
     this.agentConfig = agentConfig;
     this.agentSetting = agentSetting;
     this.agentPrompt = agentPrompt;
     this.agentPath = agentPath;
+    this.taskId = taskId;
 
     const channelId = this.getTaskId();
-    this.logger = new AgentLogger(channelId, true);
+    this.logger = new AgentLogger(channelId, true, taskId);
     this.modelHandler.setLogger(this.logger);
   }
 
@@ -105,7 +109,7 @@ export abstract class BaseAgent implements IAgent {
       );
 
       this.userVars = await this.getUserVars();
-      BaseAgent.runningAgents.set(this.getTaskId(), this);
+      BaseAgent.runningAgents.set(this.taskId, this);
       this.logger.endGroup(initGroupId, 'stopped');
     } catch (error) {
       this.logger.endGroup(initGroupId, 'error');
@@ -138,8 +142,7 @@ export abstract class BaseAgent implements IAgent {
   }
 
   protected cleanup(): void {
-    const channelId = this.getTaskId();
-    BaseAgent.runningAgents.delete(channelId);
+    BaseAgent.runningAgents.delete(this.taskId);
   }
 
   abstract run(): Promise<void>;

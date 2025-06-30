@@ -14,6 +14,9 @@ const entryFormatter = new LogEntryFormatter();
 const handlers = {
   [COMMANDS.UPDATE_STREAMS]: (message) => {
     state.setCurrentStream(message.currentStream);
+    if (Array.isArray(message.streams)) {
+      state.streamNames = new Map(message.streams.map((s) => [s.id, s.name]));
+    }
     dom.streamTabs.update(message.streams, message.currentStream);
 
     // Update status based on whether there's an active stream

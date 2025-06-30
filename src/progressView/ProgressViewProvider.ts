@@ -16,6 +16,7 @@ import { TaskGroup } from '../logger/LogTypes';
 import type { DiffStats } from '../types/DiffTypes';
 import { randomUUID } from 'crypto';
 import { onProgress } from '@eventBus/ProgressEventBus';
+import { getStreamId } from '@logger/streamUtils';
 
 // @ts-ignore - Import JavaScript module
 import { STATUS, COMMANDS } from './modules/constants.js';
@@ -298,11 +299,26 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       return;
     }
 
-    const streams = Array.from(this._stateManager.logStreams.keys());
+    const streams = Array.from(this._stateManager.logStreams.keys()).map(
+      (id) => {
+        const state = this._stateManager.taskStates.get(id);
+        const name = state
+          ? getStreamId(
+              state.agent,
+              state.model,
+              state.inputFile,
+              state.outputFiles,
+            )
+          : id;
+        return { id, name };
+      },
+    );
+
+    const streamIds = streams.map((s) => s.id);
 
     // Use stored active stream, fallback to first stream if active stream doesn't exist
-    if (!streams.includes(this._stateManager.activeStream)) {
-      this._stateManager.activeStream = streams[0] ?? '';
+    if (!streamIds.includes(this._stateManager.activeStream)) {
+      this._stateManager.activeStream = streamIds[0] ?? '';
     }
 
     this._view.webview.postMessage({

@@ -1,6 +1,7 @@
 // Standard library imports
 import * as path from 'path';
 import * as vscode from 'vscode';
+import { randomUUID } from 'crypto';
 
 // Third-party imports
 import { glob } from 'glob';
@@ -46,6 +47,7 @@ type AgentConstructor = {
     agentSetting: AgentSetting,
     agentPrompt: AgentPrompt,
     agentPath: string,
+    taskId: string,
   ): IAgent;
 };
 
@@ -144,6 +146,7 @@ async function executeAgentWithLogging<T extends IAgent>(
   agentName: string,
   createAgentFn: () => Promise<T>,
   context: vscode.ExtensionContext,
+  taskId: string,
 ): Promise<void> {
   try {
     // Create agent to get config for stream ID
@@ -151,13 +154,14 @@ async function executeAgentWithLogging<T extends IAgent>(
 
     // Get the full stream ID
     const config = agent.config;
-    const fullStreamId = getStreamId(agentName, config.model, config.inputFile);
+    const streamName = getStreamId(agentName, config.model, config.inputFile);
+    const streamId = taskId;
 
     // Check if this stream is already running
     const provider = ProgressViewProvider.getInstance();
-    const currentStatus = provider?.getStreamStatus(fullStreamId);
+    const currentStatus = provider?.getStreamStatus(streamId);
     if (currentStatus === 'running') {
-      const errorMsg = `Task "${fullStreamId}" is already running. Please wait for it to complete or stop it first.`;
+      const errorMsg = `Task "${streamName}" is already running. Please wait for it to complete or stop it first.`;
       throw new Error(errorMsg);
     }
 
@@ -175,14 +179,14 @@ async function executeAgentWithLogging<T extends IAgent>(
       );
 
       logger.info(
-        `Starting task execution for ${fullStreamId}`,
+        `Starting task execution for ${streamName}`,
         taskDetailsGroupId,
       );
       logger.info(`Input file: ${config.inputFile}`, taskDetailsGroupId);
 
       try {
         logger.debug(
-          `Creating stream with ID: ${fullStreamId}`,
+          `Creating stream with ID: ${streamId} (${streamName})`,
           taskDetailsGroupId,
         );
         logger.debug(
@@ -195,9 +199,9 @@ async function executeAgentWithLogging<T extends IAgent>(
         );
 
         // Switch to this stream and set its status to running
-        emitProgress('setActiveStream', fullStreamId);
+        emitProgress('setActiveStream', streamId);
         emitProgress('updateStreamStatus', {
-          stream: fullStreamId,
+          stream: streamId,
           status: 'running',
         });
 
@@ -235,7 +239,7 @@ async function executeAgentWithLogging<T extends IAgent>(
 
         // Store taskState
         logger.debug(
-          `Storing taskState for stream: ${fullStreamId}`,
+          `Storing taskState for stream: ${streamName}`,
           taskDetailsGroupId,
         );
         logger.debug(
@@ -248,11 +252,11 @@ async function executeAgentWithLogging<T extends IAgent>(
 
         // Convert AgentConfig to TaskState using utility function
         emitProgress('setTaskState', {
-          streamId: fullStreamId,
+          streamId: streamId,
           taskState: agentConfigToTaskState(config),
         });
         logger.debug(
-          `Task state stored for stream: ${fullStreamId}`,
+          `Task state stored for stream: ${streamName}`,
           mainTaskGroupId,
         );
 
@@ -269,7 +273,7 @@ async function executeAgentWithLogging<T extends IAgent>(
           logger.endGroup(mainTaskGroupId, 'stopped');
           // Update status to stopped on successful completion
           emitProgress('updateStreamStatus', {
-            stream: fullStreamId,
+            stream: streamId,
             status: 'stopped',
           });
 
@@ -290,7 +294,7 @@ async function executeAgentWithLogging<T extends IAgent>(
           logger.endGroup(mainTaskGroupId, 'error');
           // Update status to error if agent run fails
           emitProgress('updateStreamStatus', {
-            stream: fullStreamId,
+            stream: streamId,
             status: 'error',
           });
           throw err;
@@ -352,6 +356,7 @@ async function executeAgentWithLogging<T extends IAgent>(
 export async function executeAgent(
   agentConfig: Partial<AgentConfig>,
   context: vscode.ExtensionContext,
+  taskId: string,
 ): Promise<void> {
   // Ensure required fields
   if (!agentConfig.model || !agentConfig.agent) {
@@ -409,9 +414,11 @@ export async function executeAgent(
         agentSetting,
         agentPrompt,
         agentPath,
+        taskId,
       );
     },
     context,
+    taskId,
   );
 }
 
@@ -425,6 +432,7 @@ export async function executeMergeAgent(
   context: vscode.ExtensionContext,
 ): Promise<void> {
   const agentName = 'merge';
+  const taskId = randomUUID();
 
   await executeAgentWithLogging(
     agentName,
@@ -466,8 +474,10 @@ export async function executeMergeAgent(
         agentSetting,
         agentPrompt,
         agentPath,
+        taskId,
       );
     },
     context,
+    taskId,
   );
 }
