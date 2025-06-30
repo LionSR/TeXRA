@@ -21,7 +21,7 @@ import {
 
 // Local imports - agent
 
-const CHANNEL = 'MessageHandler';
+const CHANNEL = 'WebviewMessageHandler';
 
 export class WebviewMessageHandler {
   private handlers: Record<
@@ -164,6 +164,8 @@ export class WebviewMessageHandler {
     const handler = this.handlers[message.command];
     if (handler) {
       return handler(message, webviewView);
+    } else {
+      logger.warn(CHANNEL, `Unknown command: ${message.command}`);
     }
   }
 

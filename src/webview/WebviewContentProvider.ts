@@ -83,7 +83,11 @@ export class WebviewContentProvider {
         .join('\n');
 
       logger.debug(CHANNEL, 'Generated HTML content for webview');
-      return buildWebviewHtml(webview, htmlPath, {
+      
+      // Debug: Log the URIs being passed to template
+      logger.debug(CHANNEL, `Generated URIs: fileListUri=${fileListUri}, messageHandlersUri=${messageHandlersUri}`);
+      
+      const htmlContent = buildWebviewHtml(webview, htmlPath, {
         commonStyleUri,
         styleUri,
         scriptUri,
@@ -108,7 +112,17 @@ export class WebviewContentProvider {
         webviewContextUri,
         codiconUri,
         codiconsFontUri,
+        // Add missing URIs that might be referenced (set to empty to avoid errors)
+        streamTabsUri: '',
+        toolbarUri: '',
+        statusUri: '',
+        eventsUri: '',
       });
+      
+      // Debug: Log a snippet of the generated HTML
+      logger.debug(CHANNEL, `Generated HTML snippet: ${htmlContent.substring(0, 500)}...`);
+      
+      return htmlContent;
     } catch (err) {
       logger.error(
         CHANNEL,

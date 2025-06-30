@@ -7,6 +7,12 @@ import { WebviewContentProvider } from './webview/WebviewContentProvider';
 import { SecretManager } from '@frontend/secretManager';
 import { watchConfig } from '@utils/config';
 
+// Local imports - log
+import * as logger from '@logger/logUtils';
+
+const CHANNEL = 'TeXRAViewProvider';
+logger.initialize(CHANNEL);
+
 export class TeXRAViewProvider implements vscode.WebviewViewProvider {
   private messageHandler: WebviewMessageHandler;
   private contentProvider: WebviewContentProvider;
@@ -148,6 +154,7 @@ export class TeXRAViewProvider implements vscode.WebviewViewProvider {
     );
 
     webviewView.webview.onDidReceiveMessage(async (message) => {
+      logger.debug(CHANNEL, `Main webview received message: ${message.command}`);
       await this.messageHandler.handleMessage(message, webviewView);
     });
 

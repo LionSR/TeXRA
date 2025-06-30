@@ -269,6 +269,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     // Handle webview messages
     this._viewDisposables.push(
       webviewView.webview.onDidReceiveMessage(async (message) => {
+        this.logger.debug(`ProgressView received message: ${message.command}`);
         if (message.command === COMMANDS.WEBVIEW_READY) {
           this._webviewReady = true;
           if (this._pendingUpdate) {
