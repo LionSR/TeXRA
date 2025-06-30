@@ -1,9 +1,8 @@
 // Local imports - agent components
 import { ToolConfig } from './ToolConfig';
-import type { AgentConfigId, WithEntityId, CreatableEntity, generateEntityId } from '../../types/EntityTypes';
 
 /** Configuration interface for controlling agent execution and file handling. */
-export interface AgentConfig extends WithEntityId<AgentConfigId> {
+export interface AgentConfig {
   // Core configuration
   model: string;
   agent: string;
