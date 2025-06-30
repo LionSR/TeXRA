@@ -139,63 +139,74 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
       [MAIN_VIEW_COMMANDS.STOP_RECORDING]: async (_m, w) =>
         this.recordingManager.stop(w),
 
-      // Additional commands that might not be in MAIN_VIEW_COMMANDS yet
-      refreshAllFiles: async (_m, w) =>
+      // File refresh and update operations
+      [MAIN_VIEW_COMMANDS.REFRESH_ALL_FILES]: async (_m, w) =>
         this.fileManager.handleRefreshAllFiles(w),
-      requestRecentCommits: async (_m, w) =>
+      [MAIN_VIEW_COMMANDS.UPDATE_INPUT_FILES]: async (m, w) =>
+        this.fileManager.handleUpdateFiles(m, w),
+      [MAIN_VIEW_COMMANDS.UPDATE_REFERENCE_FILES]: async (m, w) =>
+        this.fileManager.handleUpdateFiles(m, w),
+      [MAIN_VIEW_COMMANDS.UPDATE_AUXILIARY_FILES]: async (m, w) =>
+        this.fileManager.handleUpdateFiles(m, w),
+      [MAIN_VIEW_COMMANDS.UPDATE_MEDIA_FILES]: async (m, w) =>
+        this.fileManager.handleUpdateFiles(m, w),
+      [MAIN_VIEW_COMMANDS.UPDATE_OUTPUT_FILES]: async (m, w) =>
+        this.fileManager.handleUpdateFiles(m, w),
+
+      // Git/diff operations
+      [MAIN_VIEW_COMMANDS.REQUEST_RECENT_COMMITS]: async (_m, w) =>
         this.diffManager.handleRequestRecentCommits(w),
-      refreshCommits: async (_m, w) => this.diffManager.handleRefreshCommits(w),
-      acceptEdited: async (m) => this.executionManager.handleAcceptEdited(m),
-      latexdiff: async (m) => this.diffManager.handleLatexdiff(m),
-      latexdiffvc: async (m) => this.diffManager.handleLatexdiffvc(m),
-      packLatexdiffvc: async (m) =>
+      [MAIN_VIEW_COMMANDS.REFRESH_COMMITS]: async (_m, w) =>
+        this.diffManager.handleRefreshCommits(w),
+      [MAIN_VIEW_COMMANDS.LATEXDIFF]: async (m) =>
+        this.diffManager.handleLatexdiff(m),
+      [MAIN_VIEW_COMMANDS.LATEXDIFFVC]: async (m) =>
+        this.diffManager.handleLatexdiffvc(m),
+      [MAIN_VIEW_COMMANDS.PACK_LATEXDIFFVC]: async (m) =>
         this.diffManager.handleLatexdiffvcOperation(m),
-      cleanLatexdiffvc: async (m) =>
+      [MAIN_VIEW_COMMANDS.CLEAN_LATEXDIFFVC]: async (m) =>
         this.diffManager.handleLatexdiffvcOperation(m),
 
-      // Update file commands
-      updateInputFiles: async (m, w) =>
-        this.fileManager.handleUpdateFiles(m, w),
-      updateReferenceFiles: async (m, w) =>
-        this.fileManager.handleUpdateFiles(m, w),
-      updateAuxiliaryFiles: async (m, w) =>
-        this.fileManager.handleUpdateFiles(m, w),
-      updateMediaFiles: async (m, w) =>
-        this.fileManager.handleUpdateFiles(m, w),
-      updateOutputFiles: async (m, w) =>
-        this.fileManager.handleUpdateFiles(m, w),
-
-      // Housekeeping commands
-      cleanOutput: async (m) => this.executionManager.handleHousekeeping(m),
-      cleanBuild: async (m) => this.executionManager.handleHousekeeping(m),
-      indentTeX: async (m) => this.executionManager.handleHousekeeping(m),
-      packSingle: async (m) => this.executionManager.handleSingleOperation(m),
-      cleanSingle: async (m) => this.executionManager.handleSingleOperation(m),
-      packMultiple: async (m) =>
+      // Housekeeping operations
+      [MAIN_VIEW_COMMANDS.CLEAN_OUTPUT]: async (m) =>
+        this.executionManager.handleHousekeeping(m),
+      [MAIN_VIEW_COMMANDS.CLEAN_BUILD]: async (m) =>
+        this.executionManager.handleHousekeeping(m),
+      [MAIN_VIEW_COMMANDS.INDENT_TEX]: async (m) =>
+        this.executionManager.handleHousekeeping(m),
+      [MAIN_VIEW_COMMANDS.PACK_SINGLE]: async (m) =>
+        this.executionManager.handleSingleOperation(m),
+      [MAIN_VIEW_COMMANDS.CLEAN_SINGLE]: async (m) =>
+        this.executionManager.handleSingleOperation(m),
+      [MAIN_VIEW_COMMANDS.PACK_MULTIPLE]: async (m) =>
         this.executionManager.handleMultipleOperation(m),
-      cleanMultiple: async (m) =>
+      [MAIN_VIEW_COMMANDS.CLEAN_MULTIPLE]: async (m) =>
         this.executionManager.handleMultipleOperation(m),
 
-      // Checkbox update commands - handled client-side, empty handlers to prevent warnings
-      updateReflect: async () => {
+      // Other operations
+      [MAIN_VIEW_COMMANDS.ACCEPT_EDITED]: async (m) =>
+        this.executionManager.handleAcceptEdited(m),
+
+      // Checkbox update operations - handled client-side, empty handlers to prevent warnings
+      [MAIN_VIEW_COMMANDS.UPDATE_REFLECT]: async () => {
         /* State saved client-side */
       },
-      updateAttachTeXCount: async () => {
+      [MAIN_VIEW_COMMANDS.UPDATE_ATTACH_TEX_COUNT]: async () => {
         /* State saved client-side */
       },
-      updateAutoExtractFigure: async () => {
+      [MAIN_VIEW_COMMANDS.UPDATE_AUTO_EXTRACT_FIGURE]: async () => {
         /* State saved client-side */
       },
-      updateAutoExtractTikzFigure: async () => {
+      [MAIN_VIEW_COMMANDS.UPDATE_AUTO_EXTRACT_TIKZ_FIGURE]: async () => {
         /* State saved client-side */
       },
-      updateAutoCompileInputPdf: async () => {
+      [MAIN_VIEW_COMMANDS.UPDATE_AUTO_COMPILE_INPUT_PDF]: async () => {
         /* State saved client-side */
       },
-      updateUsePrefillFromInput: async () => {
+      [MAIN_VIEW_COMMANDS.UPDATE_USE_PREFILL_FROM_INPUT]: async () => {
         /* State saved client-side */
       },
-      updatePrintInputPrompt: async () => {
+      [MAIN_VIEW_COMMANDS.UPDATE_PRINT_INPUT_PROMPT]: async () => {
         /* State saved client-side */
       },
     };
