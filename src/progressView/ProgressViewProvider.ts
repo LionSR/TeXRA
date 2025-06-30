@@ -299,7 +299,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       return;
     }
 
-    const streams = Array.from(this._stateManager.logStreams.keys());
+    const streams = Array.from(this._stateManager.streamTabs.keys());
 
     // Use stored active stream, fallback to first stream if active stream doesn't exist
     if (!streams.includes(this._stateManager.activeStream)) {
@@ -360,9 +360,9 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     }
 
     // Create stream if it doesn't exist
-    if (!this._stateManager.logStreams.has(stream)) {
+    if (!this._stateManager.streamTabs.has(stream)) {
       this.logger.debug(`Adding new stream to ProgressView: ${stream}`);
-      this._stateManager.logStreams.set(stream, []);
+      this._stateManager.streamTabs.set(stream, []);
 
       // Set initial status to running for new streams
       if (!this._streamStatus.has(stream)) {
@@ -387,7 +387,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       }
     }
 
-    const messages = this._stateManager.logStreams.get(stream)!;
+    const messages = this._stateManager.streamTabs.get(stream)!;
     messages.push(log);
 
     if (messages.length > 1000) {
@@ -406,7 +406,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   }
 
   public updateLogMessage(stream: string, log: LogMessageData): void {
-    const messages = this._stateManager.logStreams.get(stream);
+    const messages = this._stateManager.streamTabs.get(stream);
     if (!messages) {
       return;
     }
@@ -441,9 +441,9 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   ) {
     // Ensure the stream exists so the UI can create a new tab immediately
     // this seems to be the fix for the issue where the progress view panel is not shown when a new stream is created
-    if (!this._stateManager.logStreams.has(stream)) {
+    if (!this._stateManager.streamTabs.has(stream)) {
       this.logger.debug(`Creating stream from addLogGroup: ${stream}`);
-      this._stateManager.logStreams.set(stream, []);
+      this._stateManager.streamTabs.set(stream, []);
       if (!this._streamStatus.has(stream)) {
         this.updateStreamStatus(stream, STATUS.RUNNING);
       }
@@ -528,16 +528,16 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     }
 
     // If no stream is provided or stream doesn't exist, use the first available stream
-    if (!stream || !this._stateManager.logStreams.has(stream)) {
-      const streams = Array.from(this._stateManager.logStreams.keys());
+    if (!stream || !this._stateManager.streamTabs.has(stream)) {
+      const streams = Array.from(this._stateManager.streamTabs.keys());
       stream = streams[0] ?? '';
     }
 
-    if (!this._stateManager.logStreams.has(stream)) {
+    if (!this._stateManager.streamTabs.has(stream)) {
       return;
     }
 
-    const messages = this._stateManager.logStreams.get(stream)!;
+    const messages = this._stateManager.streamTabs.get(stream)!;
     // Filter debug messages if debug mode is disabled
     const displayMessages = getConfig<boolean>('logger.debugMode', false)
       ? messages
@@ -569,8 +569,8 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     });
   }
 
-  public getLogStreams(): Map<string, LogMessageData[]> {
-    return this._stateManager.logStreams;
+  public getStreamTabs(): Map<string, LogMessageData[]> {
+    return this._stateManager.streamTabs;
   }
 
   public getTaskGroups(): Map<string, Map<string, TaskGroup>> {
@@ -578,8 +578,8 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   }
 
   public eraseStream(stream: string) {
-    if (this._stateManager.logStreams.has(stream)) {
-      this._stateManager.logStreams.get(stream)!.length = 0;
+    if (this._stateManager.streamTabs.has(stream)) {
+      this._stateManager.streamTabs.get(stream)!.length = 0;
       this._stateManager.taskGroups.delete(stream);
       this._stateManager.outputFiles.delete(stream);
       this._stateManager.saveState();
@@ -597,8 +597,8 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   }
 
   public deleteStream(stream: string) {
-    if (this._stateManager.logStreams.has(stream)) {
-      const streams = Array.from(this._stateManager.logStreams.keys());
+    if (this._stateManager.streamTabs.has(stream)) {
+      const streams = Array.from(this._stateManager.streamTabs.keys());
 
       // Case: This is the last stream - erase it first
       if (streams.length === 1) {
@@ -611,7 +611,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       // If the deleted stream was the active one, switch to another stream if available
       if (stream === this._stateManager.activeStream) {
         const remainingStreams = Array.from(
-          this._stateManager.logStreams.keys(),
+          this._stateManager.streamTabs.keys(),
         );
         this._stateManager.activeStream = remainingStreams[0] ?? '';
       }
@@ -622,7 +622,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   }
 
   public updateStreamStatus(stream: string, status: StreamStatusType) {
-    if (!this._stateManager.logStreams.has(stream)) {
+    if (!this._stateManager.streamTabs.has(stream)) {
       return;
     }
 
@@ -717,7 +717,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   }
 
   public setActiveStream(stream: string) {
-    if (this._stateManager.logStreams.has(stream)) {
+    if (this._stateManager.streamTabs.has(stream)) {
       this._stateManager.activeStream = stream;
       this._stateManager.saveState();
       this._updateWebview();
@@ -846,7 +846,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     let updatedGroups = 0;
 
     // Check all streams for inconsistencies
-    for (const streamId of this._stateManager.logStreams.keys()) {
+    for (const streamId of this._stateManager.streamTabs.keys()) {
       let wasUpdated = false;
 
       // Check if stream is running and mark as interrupted
