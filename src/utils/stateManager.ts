@@ -10,7 +10,7 @@ export enum WorkspaceStateKey {
   MISSING_OUTPUTS = 'texra.missingOutputs',
   ACTIVE_STREAM_TAB = 'texra.activeStreamTab',
   TASK_STATES = 'texra.taskStates',
-  TASK_IDS = 'texra.taskIds', // @deprecated - use EXECUTION_IDS
+  TASK_IDS = 'texra.taskIds', // Legacy key for migration
   EXECUTION_IDS = 'texra.executionIds',
   USAGE_STATS = 'texra.usageStats',
 }
