@@ -12,11 +12,13 @@ export type MessageHandler = (
  */
 export abstract class BaseViewMessageHandler {
   protected readonly logger: any;
+  protected readonly channel: string;
   protected readonly handlers: Record<string, MessageHandler>;
 
   constructor(protected readonly viewName: string) {
     this.logger = logger;
-    logger.initialize(`${viewName}MessageHandler`);
+    this.channel = `${viewName}MessageHandler`;
+    logger.initialize(this.channel);
     this.handlers = this.createHandlers();
   }
 
@@ -33,15 +35,15 @@ export abstract class BaseViewMessageHandler {
     webviewView: vscode.WebviewView,
   ): Promise<void> {
     if (!message?.command) {
-      this.logger.warn('Received message without command');
+      this.logger.warn(this.channel, 'Received message without command');
       return;
     }
 
-    this.logger.debug(`Received message: ${message.command}`);
+    this.logger.debug(this.channel, `Received message: ${message.command}`);
 
     const handler = this.handlers[message.command];
     if (!handler) {
-      this.logger.warn(`Unknown command: ${message.command}`);
+      this.logger.warn(this.channel, `Unknown command: ${message.command}`);
       return;
     }
 
@@ -49,6 +51,7 @@ export abstract class BaseViewMessageHandler {
       await handler(message, webviewView);
     } catch (error) {
       this.logger.error(
+        this.channel,
         `Error handling command ${message.command}: ${
           error instanceof Error ? error.message : String(error)
         }`,
