@@ -71,8 +71,8 @@ This document sets the common conventions for contributions. Follow these norms 
 - Maintain provider capabilities and pricing info in `ModelRegistry`.
 - Prefer debug logging for routine events; reserve info and error levels for important messages.
 - When refactoring classes for separation of concerns, avoid backward compatibility pass-through methods. Instead:
-  - Organize functionality into focused manager classes (e.g., `LogGroups`, `StreamTabs`, `FileList`)
-  - Use direct access patterns: `state.logGroups.get()` instead of `state.getLogGroup()`
+  - Organize functionality into focused manager classes (e.g., `TaskGroups`, `StreamTabs`, `FileList`)
+  - Use direct access patterns: `state.taskGroups.get()` instead of `state.getTaskGroup()`
   - Keep method names simple - context comes from the class name (`set()`, `get()`, `clear()`)
   - Follow the pattern seen in `src/progressView/modules/progressViewState.js` and `domHandlers.js`
 - When modularizing webview code, ALL module dependencies must be explicitly mapped in the import map:
