@@ -24,8 +24,8 @@ export class ProgressMessageHandlers {
       [COMMANDS.CLEAR_LOGS]: () => this.handleClearLogs(),
       [COMMANDS.APPEND_LOG]: (m) => this.handleAppendLog(m),
       [COMMANDS.UPDATE_LOG]: (m) => this.handleUpdateLog(m),
-      [COMMANDS.ADD_LOG_GROUP]: (m) => this.handleAddLogGroup(m),
-      [COMMANDS.UPDATE_LOG_GROUP]: (m) => this.handleUpdateLogGroup(m),
+      [COMMANDS.ADD_TASK_GROUP]: (m) => this.handleAddTaskGroup(m),
+      [COMMANDS.UPDATE_TASK_GROUP]: (m) => this.handleUpdateTaskGroup(m),
       [COMMANDS.UPDATE_STATUS]: (m) => this.handleUpdateStatus(m),
       [COMMANDS.UPDATE_USAGE]: (m) => this.handleUpdateUsage(m),
       [COMMANDS.UPDATE_GROUP_USAGE]: (m) => this.handleUpdateGroupUsage(m),
@@ -130,7 +130,7 @@ export class ProgressMessageHandlers {
     }
   }
 
-  handleAddLogGroup(message) {
+  handleAddTaskGroup(message) {
     if (message.stream === state.getActiveStream()) {
       const logContent = document.getElementById('logContent');
       dom.taskGroups.add(message.group);
@@ -138,7 +138,7 @@ export class ProgressMessageHandlers {
     }
   }
 
-  handleUpdateLogGroup(message) {
+  handleUpdateTaskGroup(message) {
     if (message.stream === state.getActiveStream()) {
       state.taskGroups.update(message.groupId, message.status, message.endTime);
       dom.taskGroups.update(message.groupId, message.status, message.endTime);
