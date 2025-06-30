@@ -1,4 +1,4 @@
-# Repository Guidelines: TeXRA
+m# Repository Guidelines: TeXRA
 
 This document sets the common conventions for contributions. Follow these norms when working anywhere in this repository.
 
@@ -81,6 +81,16 @@ This document sets the common conventions for contributions. Follow these norms 
   - Generate URIs using appropriate helpers (`getHistoryViewUri`, `getCommonUri`, etc.)
   - Pass all URIs to the HTML template and map them in the importmap script tag
   - Without complete import mapping, ES modules will fail to resolve in the webview's sandboxed environment
+
+### Webview Consistency Patterns
+
+- **Base Classes**: All webviews extend `BaseViewContentProvider` and `BaseViewMessageHandler` for consistent error handling, logging, and URI generation
+- **Naming Convention**: Follow `[Domain]View[Component]` pattern (e.g., `MainViewContentProvider`, `HistoryViewMessageHandler`)
+- **Command Constants**: Define all commands in `src/common/webview/commands.js` and `.ts` - use constants, not string literals
+- **Message Handlers**: Delegate to domain-specific manager classes (FileManager, SettingsManager, etc.) for separation of concerns
+- **Client-Side State**: Add empty handlers with `/* State saved client-side */` comment for checkbox/toggle operations
+- **Resource Access**: Include all common module paths in `localResourceRoots` to prevent 401 errors
+- **Module Structure**: Keep UI managers modular and focused on single responsibilities - avoid large consolidated classes
 
 ## Design and refactoring
 
