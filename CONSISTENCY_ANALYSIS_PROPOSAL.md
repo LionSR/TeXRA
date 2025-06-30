@@ -2,27 +2,35 @@
 
 ## Executive Summary
 
-This document analyzes the structural consistency across the `utils`, `commands`, `agent/utils`, and `webview` directories, identifying inconsistencies in naming patterns, class structures, and abstraction layers. The analysis follows the principle from "A Philosophy of Software Design" that consistency creates cognitive leverage.
+This document analyzes the structural consistency across the `utils`, `commands`, `agent/utils`, and `webview` directories, identifying inconsistencies in naming patterns, class structures, and abstraction layers. The analysis follows the principle from "A Philosophy of Software Design" that consistency creates cognitive leverage, while adhering to the TeXRA project norms outlined in AGENTS.md.
 
 ## Current State Analysis
 
 ### 1. Directory Structure Overview
 
+**Current Structure (Fragmented):**
 ```
 src/
-├── utils/
+├── utils/              # 6 subdirectories
 │   ├── files/          # File system utilities
 │   ├── text/           # Text processing utilities  
 │   ├── config/         # Configuration utilities
 │   └── system/         # System/command utilities
-├── commands/
+├── commands/           # 11 subdirectories (!!)
 │   ├── files/          # File selection commands
 │   ├── agent/          # Agent execution commands
 │   ├── system/         # System commands
-│   └── [various]/      # Domain-specific commands
+│   ├── latex/          # LaTeX commands
+│   ├── progress/       # Progress commands
+│   ├── tests/          # Test commands
+│   ├── wolfram/        # Wolfram commands
+│   ├── api/            # API commands
+│   ├── git/            # Git commands
+│   ├── history/        # History commands
+│   └── housekeeping/   # Housekeeping commands
 ├── agent/
 │   └── utils/
-│       ├── text/       # Text processing (duplicate functionality)
+│       ├── text/       # Text processing (DUPLICATE)
 │       └── [files]     # Prompt and agent-specific utilities
 └── webview/
     ├── managers/       # UI state managers
@@ -30,65 +38,49 @@ src/
     └── [files]         # Webview providers and handlers
 ```
 
+**Problem**: Too many scattered subdirectories create cognitive overhead
+
 ### 2. Identified Inconsistencies
 
 #### 2.1 Naming Patterns
 
-**File Naming Inconsistencies:**
-- `utils/`: Suffix pattern (`fileTypeUtils.ts`, `errorHandlingUtils.ts`)
-- `agent/utils/`: Mixed patterns (`promptUtils.ts`, `userVars.ts`, `messageSkeletonUtils.ts`)
-- `webview/managers/`: Clear naming (`FileManager.ts`, `ExecutionManager.ts`)
-- `commands/`: Mixed patterns (`fileSelectionCommands.ts`, `testCommands.ts`)
+**File Naming Issues:**
+- `utils/`: `fileTypeUtils.ts`, `errorHandlingUtils.ts` (verbose)
+- `agent/utils/`: `promptUtils.ts`, `userVars.ts`, `messageSkeletonUtils.ts` (inconsistent)
+- `webview/managers/`: `FileManager.ts`, `ExecutionManager.ts` (good)
+- `commands/`: `fileSelectionCommands.ts`, `testCommands.ts` (mixed)
 
-**Function Naming Inconsistencies:**
-- Utils: Mix of `export function` and class methods
-- Commands: Consistent `register*Commands` pattern
-- Managers: Consistent `handle*` method pattern
+**Function Patterns:**
+- Utils: Mix of functions and static classes
+- Commands: Consistent `register*Commands` 
+- Managers: Consistent `handle*` methods
 
-#### 2.2 Class Structure Patterns
+#### 2.2 Structural Issues
 
-**Three Different Patterns Observed:**
+**Three Inconsistent Patterns:**
+1. **Static Classes**: `WorkspaceFS.readFile()` 
+2. **Instance Managers**: `new FileManager(context)`
+3. **Pure Functions**: `export function capitalize()`
 
-1. **Static Utility Classes** (e.g., `WorkspaceFS`)
-```typescript
-export class WorkspaceFS {
-  public static readFile(filePath: string): Promise<string>
-  public static writeFile(filePath: string, content: string): Promise<void>
-}
-```
+**Logging Issues:**
+- Utils functions incorrectly use `AgentLogger` in some places
+- Per AGENTS.md: Utils should use regular `logger`, not agent-specific logging
+- Agent functions should use `AgentLogger`, utils should use `logger`
 
-2. **Instance-based Managers** (e.g., `FileManager`, `ExecutionManager`)
-```typescript
-export class FileManager {
-  constructor(private readonly context: vscode.ExtensionContext) {}
-  async handleFileSelection(message: any, webviewView: vscode.WebviewView): Promise<void>
-}
-```
+**Directory Fragmentation:**
+- 11 command subdirectories (too many)
+- Duplicate text processing in `utils/text/` and `agent/utils/text/`
 
-3. **Pure Function Exports** (e.g., `promptUtils`, `stringUtils`)
-```typescript
-export async function getXmlFormatFromFile(file: string): Promise<string>
-export function capitalize(str: string): string
-```
+#### 2.3 Major Problems
 
-#### 2.3 Webview Interaction Patterns
+**Webview Inconsistency:**
+- Mixed handler patterns (managers vs functions)
+- Inconsistent error handling and logging
 
-**Inconsistent Message Handling:**
-- Some handlers in dedicated manager classes
-- Some handlers as standalone functions
-- Mixed error handling approaches
-- Inconsistent logging patterns
-
-#### 2.4 Duplicate Functionality
-
-**Text Processing Duplication:**
-- `src/utils/text/` contains general text utilities
-- `src/agent/utils/text/` contains agent-specific text utilities
-- Overlapping functionality without clear separation
-
-**File Operations Duplication:**
-- Multiple file system abstractions (`WorkspaceFS`, `AbsoluteFS`, `RelativeFS`)
-- Similar file selection logic in commands and managers
+**Duplicate Code:**
+- Text processing in both `utils/text/` and `agent/utils/text/`
+- File system abstractions: `WorkspaceFS`, `AbsoluteFS`, `RelativeFS`
+- File selection logic scattered across commands and managers
 
 ### 3. Empty/Thin Abstractions
 
@@ -114,206 +106,164 @@ export * from './messageUtils';
 
 ## Proposed Improvements
 
-### 4. Naming Standardization
+### 4. Concise Naming & Structure
 
-#### 4.1 File Naming Convention
+#### 4.1 File Names (Shorter!)
 ```
-Pattern: [domain][Purpose][Type].ts
-
-Examples:
-- fileSystemUtils.ts (instead of workspaceFS.ts)
-- promptRenderingUtils.ts (instead of promptUtils.ts)
-- webviewMessageHandler.ts (instead of MessageHandler.ts)
-- fileSelectionCommands.ts ✓ (already good)
+Current → Proposed
+fileTypeUtils.ts → fileTypes.ts
+errorHandlingUtils.ts → errors.ts
+messageSkeletonUtils.ts → skeleton.ts
+WebviewContentProvider.ts → content.ts
+fileSelectionCommands.ts → files.ts (in commands/)
 ```
 
-#### 4.2 Function Naming Convention
+#### 4.2 Function Names (Keep Simple)  
 ```typescript
-// Utility functions: verb + noun + descriptor
-export function readWorkspaceFile(path: string): Promise<string>
-export function renderPromptTemplate(template: string, vars: object): Promise<string>
+// Current (verbose)
+export function getXmlFormatFromFile() 
+export function renderPromptTemplate()
 
-// Handler methods: handle + action + entity
-async handleFileSelection(message: FileSelectionMessage): Promise<void>
-async handlePromptRendering(request: PromptRequest): Promise<string>
+// Proposed (concise)
+export function formatAsXml()
+export function render()
 
-// Command registration: register + domain + commands
-export function registerFileCommands(context: vscode.ExtensionContext): void
-export function registerAgentCommands(context: vscode.ExtensionContext): void
+// Keep context from module/class name
+FileManager.select() // not FileManager.handleFileSelection()
+TextUtils.enhance()  // not TextUtils.polishTextWithAI()
 ```
 
-### 5. Structural Reorganization
+### 5. Balanced Directory Structure
 
-#### 5.1 Consolidate File System Operations
-
-**Current fragmented structure:**
+#### 5.1 Consolidate Commands (11 → 4 directories)
 ```
-utils/files/
-├── workspaceFS.ts    # Workspace-relative operations
-├── absoluteFS.ts     # Absolute path operations  
-├── relativeFS.ts     # Abstract relative operations
-└── storageFS.ts      # Extension storage operations
+Current: 11 scattered directories
+commands/
+├── agent/          ├── latex/         ├── git/
+├── api/            ├── progress/      ├── history/  
+├── files/          ├── system/        ├── housekeeping/
+├── tests/          └── wolfram/
+
+Proposed: 4 focused directories  
+commands/
+├── core/           # agent, files, system
+├── tools/          # latex, wolfram, git
+├── ui/             # progress, history
+└── dev/            # tests, housekeeping
 ```
 
-**Proposed unified structure:**
+#### 5.2 Unified File Operations
 ```typescript
-// src/utils/fileSystem/
-export class FileSystemManager {
-  // Workspace operations
-  static workspace = {
-    readFile: (path: string) => Promise<string>,
-    writeFile: (path: string, content: string) => Promise<void>,
+// src/utils/fs.ts (single file!)
+export const fs = {
+  workspace: {
+    read: (path: string) => Promise<string>,
+    write: (path: string, content: string) => Promise<void>,
     exists: (path: string) => Promise<boolean>
-  }
-  
-  // Storage operations  
-  static storage = {
-    readFile: (path: string) => Promise<string>,
-    writeFile: (path: string, content: string) => Promise<void>
-  }
-  
-  // Absolute operations
-  static absolute = {
-    readFile: (path: string) => Promise<string>,
-    writeFile: (path: string, content: string) => Promise<void>
+  },
+  storage: {
+    read: (path: string) => Promise<string>,
+    write: (path: string, content: string) => Promise<void>
   }
 }
 ```
 
-#### 5.2 Consolidate Text Processing
+#### 5.3 Merge Text Utils
+```
+Current:
+utils/text/ + agent/utils/text/ (duplicated)
 
-**Merge duplicate text utilities:**
+Proposed:
+utils/text.ts (single file with all functions)
+```
+
+#### 5.4 Fix Logging Patterns
 ```typescript
-// src/utils/textProcessing/
-├── stringUtils.ts        # Basic string operations
-├── xmlUtils.ts          # XML processing
-├── templateUtils.ts     # Template rendering (from agent/utils)
-├── repetitionUtils.ts   # Repetition detection (from agent/utils)  
-└── index.ts            # Unified exports
+// Utils: Use regular logger (not AgentLogger)
+import * as logger from '@logger/logUtils'
+logger.initialize(CHANNEL)
+
+// Agent: Use AgentLogger
+import { AgentLogger } from '@logger/AgentLogger'
 ```
 
-#### 5.3 Standardize Webview Management
-
-**Current scattered approach:**
-- Managers handle UI state
-- MessageHandler routes messages
-- Commands execute business logic
-
-**Proposed unified pattern:**
-```typescript
-// src/webview/handlers/
-export abstract class WebviewHandler {
-  abstract canHandle(message: WebviewMessage): boolean
-  abstract handle(message: WebviewMessage, view: vscode.WebviewView): Promise<void>
-}
-
-export class FileOperationHandler extends WebviewHandler {
-  canHandle(message: WebviewMessage): boolean {
-    return message.type === 'file-operation'
-  }
-  
-  async handle(message: WebviewMessage, view: vscode.WebviewView): Promise<void> {
-    // Unified file operation handling
-  }
-}
-```
-
-### 6. Eliminate Empty Abstractions
+### 6. Remove Empty Abstractions
 
 #### 6.1 Remove StateManager Wrapper
 ```typescript
-// Instead of wrapping vscode.Memento, use it directly
-import * as vscode from 'vscode'
-
-// Direct usage with typed helpers
-export class TypedMemento {
-  static get<T>(memento: vscode.Memento, key: string, defaultValue?: T): T {
-    return memento.get(key, defaultValue)
-  }
-  
-  static update<T>(memento: vscode.Memento, key: string, value: T): Thenable<void> {
-    return memento.update(key, value)
-  }
+// Current: Unnecessary wrapper
+class StateManagerImpl {
+  get<T>(key: string): T | undefined { return this.memento.get<T>(key); }
 }
+
+// Proposed: Use vscode.Memento directly
+context.workspaceState.get<T>(key)
+context.globalState.update<T>(key, value)
 ```
 
-#### 6.2 Flatten Unnecessary Hierarchies
+#### 6.2 Flatten Deep Hierarchies
 ```typescript
-// Instead of src/agent/utils/text/index.ts -> repetitionUtils.ts
-// Directly export from src/utils/textProcessing/repetitionUtils.ts
+// Current: Needless nesting
+src/agent/utils/text/index.ts → repetitionUtils.ts
 
-// Consolidate related functionality
-export class TextAnalyzer {
-  static checkRepetition(text: string): RepetitionResult
-  static enhanceText(text: string): Promise<string>  
-  static parseXml(xml: string): ParsedXml
-}
+// Proposed: Direct access
+src/utils/text.ts (all text functions in one file)
 ```
 
-### 7. Implementation Roadmap
+### 7. Implementation Plan
 
-#### Phase 1: Naming Standardization (Low Risk)
-1. Rename files to follow consistent patterns
-2. Update import statements
-3. Standardize function naming conventions
+#### Phase 1: Structure (Low Risk)
+1. Reorganize commands: 11 directories → 4 directories
+2. Merge text utilities: 2 directories → 1 file
+3. Consolidate file operations: 4 files → 1 file
 
-#### Phase 2: Consolidate Utilities (Medium Risk)
-1. Merge duplicate text processing utilities
-2. Unify file system operations
-3. Update all imports and references
+#### Phase 2: Naming (Low Risk)  
+1. Rename files: `fileTypeUtils.ts` → `fileTypes.ts`
+2. Shorten function names: `getXmlFormatFromFile` → `formatAsXml`
+3. Update imports across codebase
 
-#### Phase 3: Restructure Webview Handling (High Risk)
-1. Implement unified handler pattern
-2. Migrate existing managers to new structure
-3. Test webview functionality thoroughly
+#### Phase 3: Fix Logging (Medium Risk)
+1. Replace `AgentLogger` with `logger` in utils
+2. Ensure agent code uses `AgentLogger`
+3. Test logging functionality
 
-#### Phase 4: Remove Empty Abstractions (Low Risk)
-1. Eliminate unnecessary wrapper classes
-2. Simplify direct API usage
-3. Update documentation
+#### Phase 4: Remove Abstractions (Low Risk)
+1. Eliminate `StateManagerImpl` wrapper
+2. Use `vscode.Memento` directly
+3. Remove empty index files
 
-### 8. Benefits of Proposed Changes
+### 8. Key Benefits
 
-#### 8.1 Cognitive Load Reduction
-- **Single mental model**: One pattern for file operations, text processing, webview handling
-- **Predictable structure**: Developers can immediately understand where functionality lives
-- **Reduced context switching**: Related functionality grouped together
+**Reduced Cognitive Load:**
+- 4 command directories instead of 11
+- Single file for text operations  
+- Consistent naming patterns
 
-#### 8.2 Maintenance Improvements
-- **Reduced duplication**: Single source of truth for common operations
-- **Easier testing**: Consolidated utilities easier to unit test
-- **Better discoverability**: Clear naming makes functionality easier to find
+**Easier Maintenance:**
+- No duplicate code
+- Shorter, clearer function names
+- Proper logging separation
 
-#### 8.3 Performance Benefits  
-- **Fewer abstractions**: Direct API usage reduces call overhead
-- **Better tree shaking**: Cleaner exports enable better dead code elimination
-- **Reduced bundle size**: Elimination of duplicate functionality
+**Better Performance:**
+- Fewer file loads
+- Direct API usage
+- Smaller bundle size
 
-### 9. Risk Assessment
+### 9. Success Metrics
 
-#### Low Risk Changes
-- File and function renaming
-- Removing empty abstractions
-- Documentation updates
-
-#### Medium Risk Changes  
-- Consolidating utilities
-- Merging duplicate functionality
-- Updating import paths
-
-#### High Risk Changes
-- Restructuring webview handling
-- Major architectural changes
-- Breaking changes to public APIs
-
-### 10. Success Metrics
-
-- **Reduced file count**: Target 20% reduction in utility files
-- **Improved discoverability**: New developers can find functionality in < 30 seconds
-- **Fewer duplicate functions**: Eliminate all duplicate text/file processing functions
-- **Consistent patterns**: 100% adherence to naming conventions
-- **Reduced cognitive overhead**: Single pattern for each type of operation
+- **30% fewer files** in utils and commands
+- **Consistent naming** across all modules  
+- **No duplicate functions** between utils and agent/utils
+- **Proper logging separation** (utils vs agent)
 
 ## Conclusion
 
-The proposed changes will create a more consistent, maintainable codebase that follows the principle of cognitive leverage through consistency. By standardizing patterns and eliminating redundancies, developers will be able to leverage their knowledge of one part of the system to immediately understand other parts, significantly reducing the time needed to become productive and make changes.
+This proposal significantly reduces cognitive overhead by:
+
+1. **Consolidating 11 command directories into 4** (less mental mapping)
+2. **Using concise, consistent naming** (`fileTypes.ts` not `fileTypeUtils.ts`)
+3. **Merging duplicate functionality** (single text utilities file)
+4. **Fixing logging patterns** (utils use `logger`, agents use `AgentLogger`)
+5. **Removing empty abstractions** (direct vscode API usage)
+
+The result: A simpler, more predictable codebase that follows TeXRA project norms and reduces the time needed to find and modify functionality. Developers can leverage their knowledge of one part to immediately understand others, creating true cognitive leverage through consistency.
