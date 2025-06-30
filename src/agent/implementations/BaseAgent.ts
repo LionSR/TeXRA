@@ -14,6 +14,7 @@ import { buildUserVars } from '../utils/userVars';
 // Local imports - utilities
 import { SHORT_SLEEP_MS } from '@utils/config';
 import { sleep } from '@utils/helpers';
+import type { StreamTabId } from '../../types/IdentifierTypes';
 
 /**
  * Minimal abstract base class providing shared setup and interruption logic.
@@ -50,8 +51,8 @@ export abstract class BaseAgent implements IAgent {
     this.agentPrompt = agentPrompt;
     this.agentPath = agentPath;
 
-    const channelId = this.getTaskId();
-    this.logger = new AgentLogger(channelId, true);
+    const streamTabId = this.getStreamTabId();
+    this.logger = new AgentLogger(streamTabId, true);
     this.modelHandler.setLogger(this.logger);
   }
 
@@ -61,8 +62,8 @@ export abstract class BaseAgent implements IAgent {
     await sleep(SHORT_SLEEP_MS);
   }
 
-  /** Compute a unique task identifier for logging. */
-  protected getTaskId(): string {
+  /** Compute the stream tab identifier for this agent execution. */
+  protected getStreamTabId(): StreamTabId {
     const baseName = path.basename(this.agentConfig.inputFile);
     const agentName =
       Array.isArray(this.agentConfig.outputFiles) &&
@@ -70,6 +71,11 @@ export abstract class BaseAgent implements IAgent {
         ? `${this.agentConfig.agent}_multiple`
         : this.agentConfig.agent;
     return `${agentName}@${this.agentConfig.model}: ${baseName}`;
+  }
+
+  /** @deprecated Use getStreamTabId instead */
+  protected getTaskId(): string {
+    return this.getStreamTabId();
   }
 
   /** Gather variables used for prompt rendering. */
@@ -105,7 +111,7 @@ export abstract class BaseAgent implements IAgent {
       );
 
       this.userVars = await this.getUserVars();
-      BaseAgent.runningAgents.set(this.getTaskId(), this);
+      BaseAgent.runningAgents.set(this.getStreamTabId(), this);
       this.logger.endGroup(initGroupId, 'stopped');
     } catch (error) {
       this.logger.endGroup(initGroupId, 'error');
@@ -133,13 +139,13 @@ export abstract class BaseAgent implements IAgent {
     return false;
   }
 
-  public static getRunningAgent(streamId: string): BaseAgent | undefined {
-    return BaseAgent.runningAgents.get(streamId);
+  public static getRunningAgent(streamTabId: StreamTabId): BaseAgent | undefined {
+    return BaseAgent.runningAgents.get(streamTabId);
   }
 
   protected cleanup(): void {
-    const channelId = this.getTaskId();
-    BaseAgent.runningAgents.delete(channelId);
+    const streamTabId = this.getStreamTabId();
+    BaseAgent.runningAgents.delete(streamTabId);
   }
 
   abstract run(): Promise<void>;
