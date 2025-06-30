@@ -247,7 +247,7 @@ export class FileList {
     if (filePathSpan && file.path) {
       filePathSpan.onclick = () => {
         vscode.postMessage({
-          command: COMMANDS.OPEN_FILE,
+          command: COMMANDS.OPEN_FILE_COMPILE,
           file: file.path,
         });
       };
