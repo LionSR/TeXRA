@@ -18,7 +18,7 @@ import { webviewEventBus } from './eventBus.js';
 import { FILE_TYPES } from './constants.js';
 
 // Import standardized commands
-import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
+import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.ts';
 
 /**
  * Handles messages from the extension and syncs the webview state.

@@ -16,7 +16,7 @@ import { mainViewState } from '../mainViewState.js';
 export class FileInputManager {
   constructor(
     vscodeInstance = vscode,
-    state = webviewState,
+    state = mainViewState,
     list = fileList,
     select = fileSelect,
     outputMgr = outputFilesManager,

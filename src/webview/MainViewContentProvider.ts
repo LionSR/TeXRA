@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { getConfig } from '@utils/config';
-import { BaseViewContentProvider } from '@common/webview/BaseViewContentProvider';
+import { BaseViewContentProvider } from '../common/webview/BaseViewContentProvider';
 
 export class MainViewContentProvider extends BaseViewContentProvider {
   constructor(context: vscode.ExtensionContext) {
