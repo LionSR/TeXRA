@@ -194,7 +194,7 @@ class VSCodeTransport extends Transport {
       return groupId;
     }
 
-    emitProgress('addLogGroup', {
+    emitProgress('addTaskGroup', {
       stream: this.streamName,
       groupId,
       groupName,
@@ -223,7 +223,7 @@ class VSCodeTransport extends Transport {
       return;
     }
 
-    emitProgress('updateLogGroup', {
+    emitProgress('updateTaskGroup', {
       stream: this.streamName,
       groupId,
       status,
