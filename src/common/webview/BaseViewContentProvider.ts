@@ -11,7 +11,7 @@ export abstract class BaseViewContentProvider {
 
   constructor(
     protected readonly context: vscode.ExtensionContext,
-    protected readonly viewName: string
+    protected readonly viewName: string,
   ) {
     this.logger = logger;
     logger.initialize(`${viewName}ContentProvider`);
@@ -25,7 +25,9 @@ export abstract class BaseViewContentProvider {
   /**
    * Subclasses must provide their specific module URIs
    */
-  protected abstract getModuleUris(webview: vscode.Webview): Record<string, vscode.Uri>;
+  protected abstract getModuleUris(
+    webview: vscode.Webview,
+  ): Record<string, vscode.Uri>;
 
   /**
    * Optional: Override to provide additional template variables
@@ -42,7 +44,7 @@ export abstract class BaseViewContentProvider {
       this.context.extensionUri,
       'src',
       this.getViewPath(),
-      filePath
+      filePath,
     );
   }
 
@@ -52,13 +54,16 @@ export abstract class BaseViewContentProvider {
 
   protected getCommonUri(webview: vscode.Webview, path: string): vscode.Uri {
     return webview.asWebviewUri(
-      vscode.Uri.joinPath(this.context.extensionUri, 'src', 'common', path)
+      vscode.Uri.joinPath(this.context.extensionUri, 'src', 'common', path),
     );
   }
 
-  protected getNodeModulesUri(webview: vscode.Webview, path: string): vscode.Uri {
+  protected getNodeModulesUri(
+    webview: vscode.Webview,
+    path: string,
+  ): vscode.Uri {
     return webview.asWebviewUri(
-      vscode.Uri.joinPath(this.context.extensionUri, 'node_modules', path)
+      vscode.Uri.joinPath(this.context.extensionUri, 'node_modules', path),
     );
   }
 
@@ -71,17 +76,17 @@ export abstract class BaseViewContentProvider {
       const commonUris = this.getCommonModuleUris(webview);
       const specificUris = this.getModuleUris(webview);
       const templateVariables = this.getTemplateVariables();
-      
+
       this.logger.debug(`Generated HTML content for ${this.viewName}`);
-      
+
       return buildWebviewHtml(webview, htmlPath, {
         ...commonUris,
         ...specificUris,
-        ...templateVariables
+        ...templateVariables,
       });
     } catch (err) {
       this.logger.error(
-        `Error generating HTML content: ${err instanceof Error ? err.message : String(err)}`
+        `Error generating HTML content: ${err instanceof Error ? err.message : String(err)}`,
       );
       return '<html><body>Error loading content</body></html>';
     }
@@ -90,16 +95,27 @@ export abstract class BaseViewContentProvider {
   /**
    * Common URIs used by all views
    */
-  private getCommonModuleUris(webview: vscode.Webview): Record<string, vscode.Uri> {
+  private getCommonModuleUris(
+    webview: vscode.Webview,
+  ): Record<string, vscode.Uri> {
     return {
       commonStyleUri: this.getCommonUri(webview, 'styles/common.css'),
       webviewStateUri: this.getCommonUri(webview, 'modules/webviewState.js'),
-      webviewContextUri: this.getCommonUri(webview, 'modules/webviewContext.js'),
+      webviewContextUri: this.getCommonUri(
+        webview,
+        'modules/webviewContext.js',
+      ),
       templateUtilsUri: this.getCommonUri(webview, 'modules/templateUtils.js'),
       domUtilsUri: this.getCommonUri(webview, 'modules/domUtils.js'),
       stringUtilsUri: this.getCommonUri(webview, 'modules/stringUtils.js'),
-      codiconUri: this.getNodeModulesUri(webview, '@vscode/codicons/dist/codicon.css'),
-      codiconsFontUri: this.getNodeModulesUri(webview, '@vscode/codicons/dist/codicon.ttf'),
+      codiconUri: this.getNodeModulesUri(
+        webview,
+        '@vscode/codicons/dist/codicon.css',
+      ),
+      codiconsFontUri: this.getNodeModulesUri(
+        webview,
+        '@vscode/codicons/dist/codicon.ttf',
+      ),
     };
   }
 }

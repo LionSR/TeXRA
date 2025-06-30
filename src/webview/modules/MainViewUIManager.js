@@ -48,7 +48,7 @@ export class MainViewUIManager {
 class FileManagementManager {
   updateFileState(state) {
     // Update all file selects and lists based on state
-    Object.keys(state).forEach(key => {
+    Object.keys(state).forEach((key) => {
       if (key.endsWith('Files') && Array.isArray(state[key])) {
         this.updateFileList(key.replace('Files', ''), state[key]);
       } else if (key.endsWith('File') && typeof state[key] === 'string') {
@@ -58,7 +58,11 @@ class FileManagementManager {
   }
 
   updateFileList(fileType, files) {
-    fileList.update(`${fileType}Files`, `toggle${this.capitalize(fileType)}Files`, files);
+    fileList.update(
+      `${fileType}Files`,
+      `toggle${this.capitalize(fileType)}Files`,
+      files,
+    );
   }
 
   updateSelectedFile(fileType, file) {
@@ -91,10 +95,10 @@ class SettingsManager {
       'attachTeXCount',
       'usePrefillFromInput',
       'printInputPrompt',
-      'reflect'
+      'reflect',
     ];
 
-    checkboxes.forEach(id => {
+    checkboxes.forEach((id) => {
       const element = document.getElementById(id);
       if (element && typeof state[id] === 'boolean') {
         element.checked = state[id];
@@ -103,7 +107,7 @@ class SettingsManager {
   }
 
   updateSelects(state) {
-    ['agent', 'model'].forEach(id => {
+    ['agent', 'model'].forEach((id) => {
       const element = document.getElementById(id);
       if (element && state[id]) {
         element.value = state[id];
@@ -114,7 +118,7 @@ class SettingsManager {
   updateDebugMode(debugMode) {
     // Update debug mode specific UI elements
     const debugElements = document.querySelectorAll('.debug-only');
-    debugElements.forEach(element => {
+    debugElements.forEach((element) => {
       element.style.display = debugMode ? 'block' : 'none';
     });
   }
@@ -127,12 +131,12 @@ class RecordingManager {
   updateRecordingState(isRecording) {
     const recordButton = document.getElementById('recordButton');
     const stopButton = document.getElementById('stopRecordButton');
-    
+
     if (recordButton) {
       recordButton.disabled = isRecording;
       recordButton.classList.toggle('recording', isRecording);
     }
-    
+
     if (stopButton) {
       stopButton.disabled = !isRecording;
       stopButton.style.display = isRecording ? 'block' : 'none';
@@ -169,8 +173,8 @@ class ToolbarManager {
   updateExecuteButton(state) {
     const executeButton = document.getElementById('executeButton');
     if (executeButton) {
-      const canExecute = state.agent && state.model && 
-                        (state.inputFile || state.instruction);
+      const canExecute =
+        state.agent && state.model && (state.inputFile || state.instruction);
       executeButton.disabled = !canExecute;
     }
   }
@@ -178,8 +182,8 @@ class ToolbarManager {
   updateFileButtons(state) {
     const hasInputFile = Boolean(state.inputFile);
     const buttons = ['compareButton', 'mergeButton', 'latexdiffButton'];
-    
-    buttons.forEach(buttonId => {
+
+    buttons.forEach((buttonId) => {
       const button = document.getElementById(buttonId);
       if (button) {
         button.disabled = !hasInputFile;
