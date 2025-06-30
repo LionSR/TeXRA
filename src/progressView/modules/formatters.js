@@ -337,9 +337,10 @@ export class LogEntryFormatter {
         const xmlEscaped = this._escapeHtml(xmlFile);
         const xmlFileName = xmlFile.split('/').pop() || xmlFile;
         const xmlFileNameEscaped = this._escapeHtml(xmlFileName);
-        xmlLink = `<div class="xml-link-container" style="margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--vscode-widget-border);">
-          <i class="codicon codicon-file-code"></i> Open XML to check tag consistency: 
-          <span class="file-link clickable-link" data-file="${xmlEscaped}" style="font-weight: 500;">${xmlFileNameEscaped}</span>
+        xmlLink = `<div class="xml-link-container">
+          <i class="codicon codicon-file-code"></i>
+          <span>Open XML to check tag consistency:</span>
+          <span class="file-link clickable-link" data-file="${xmlEscaped}">${xmlFileNameEscaped}</span>
         </div>`;
       }
 
