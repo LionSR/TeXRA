@@ -1,9 +1,9 @@
+import type { DiffStats } from '@/types/DiffTypes';
+
 export interface NamedOutputFile {
   source: string;
   path: string;
 }
-
-import type { DiffStats } from '@/types/DiffTypes';
 
 export interface OutputFileInfo extends DiffStats {
   path: string;
