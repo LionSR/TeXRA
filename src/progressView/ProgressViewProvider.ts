@@ -128,7 +128,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
         onProgress(
           'setTaskState',
           (p: { streamTabId: StreamTabId; executionId?: ExecutionId; taskState: TaskState }) =>
-            this.setTaskState(p.streamTabId, p.taskState, p.executionId),
+            this.setTaskState(p.streamTabId, p.taskState, { executionId: p.executionId }),
         ),
       ),
       new vscode.Disposable(
@@ -176,15 +176,13 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
             endTime?: number;
             parentGroupId?: string;
           }) =>
-            this.addLogGroup(
-              p.stream,
-              p.groupId,
-              p.groupName,
-              p.startTime,
-              p.status,
-              p.endTime,
-              p.parentGroupId,
-            ),
+            this.addLogGroup(p.stream, p.groupId, {
+              name: p.groupName,
+              startTime: p.startTime,
+              status: p.status,
+              endTime: p.endTime,
+              parentGroupId: p.parentGroupId,
+            }),
         ),
       ),
       new vscode.Disposable(
@@ -195,7 +193,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
             groupId: string;
             status: StatusType;
             endTime?: number;
-          }) => this.updateLogGroup(p.stream, p.groupId, p.status, p.endTime),
+          }) => this.updateLogGroup(p.stream, p.groupId, { status: p.status, endTime: p.endTime }),
         ),
       ),
     );
@@ -455,11 +453,13 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   public addLogGroup(
     stream: string,
     groupId: string,
-    groupName: string,
-    startTime: number,
-    status: StatusType,
-    endTime?: number,
-    parentGroupId?: string,
+    groupData: {
+      name: string;
+      startTime: number;
+      status: StatusType;
+      endTime?: number;
+      parentGroupId?: string;
+    },
   ) {
     // Ensure the stream exists so the UI can create a new tab immediately
     // this seems to be the fix for the issue where the progress view panel is not shown when a new stream is created
@@ -485,11 +485,11 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     const streamGroups = this._stateManager.taskGroups.get(stream)!;
     streamGroups.set(groupId, {
       id: groupId,
-      name: groupName,
-      startTime,
-      endTime,
-      status,
-      parentGroupId,
+      name: groupData.name,
+      startTime: groupData.startTime,
+      endTime: groupData.endTime,
+      status: groupData.status,
+      parentGroupId: groupData.parentGroupId,
     });
 
     this._stateManager.saveState();
@@ -500,11 +500,11 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
         stream,
         group: {
           id: groupId,
-          name: groupName,
-          startTime,
-          endTime,
-          status,
-          parentGroupId,
+          name: groupData.name,
+          startTime: groupData.startTime,
+          endTime: groupData.endTime,
+          status: groupData.status,
+          parentGroupId: groupData.parentGroupId,
         },
       });
     }
@@ -513,8 +513,10 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   public updateLogGroup(
     stream: string,
     groupId: string,
-    status: StatusType,
-    endTime?: number,
+    updates: {
+      status: StatusType;
+      endTime?: number;
+    },
   ) {
     const streamGroups = this._stateManager.taskGroups.get(stream);
     if (!streamGroups) {
@@ -526,9 +528,9 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       return;
     }
 
-    group.status = status;
-    if (endTime) {
-      group.endTime = endTime;
+    group.status = updates.status;
+    if (updates.endTime) {
+      group.endTime = updates.endTime;
     }
 
     this._stateManager.saveState();
@@ -538,8 +540,8 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
         command: COMMANDS.UPDATE_LOG_GROUP,
         stream,
         groupId,
-        status,
-        endTime,
+        status: updates.status,
+        endTime: updates.endTime,
       });
     }
   }
@@ -794,13 +796,15 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   public setTaskState(
     streamTabId: StreamTabId,
     taskState: TaskState,
-    executionId?: ExecutionId,
+    options?: {
+      executionId?: ExecutionId;
+    },
   ): void {
     this.logger.debug(`Setting taskState for stream: ${streamTabId}`);
     // this.logger.debug(`Task state: ${JSON.stringify(taskState)}`);
     this._stateManager.taskStates.set(streamTabId, taskState);
-    if (executionId) {
-      this._stateManager.executionIds.set(streamTabId, executionId);
+    if (options?.executionId) {
+      this._stateManager.executionIds.set(streamTabId, options.executionId);
     }
     this.saveTaskStates();
     this.logger.debug(
@@ -889,7 +893,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
         );
 
         for (const [groupId, group] of activeGroups) {
-          this.updateLogGroup(streamId, groupId, STATUS_CANCELLED, endTime);
+          this.updateLogGroup(streamId, groupId, { status: STATUS_CANCELLED, endTime });
         }
       }
     }
@@ -956,7 +960,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
 
           // Mark all active groups as interrupted
           for (const [groupId, group] of activeGroups) {
-            this.updateLogGroup(streamId, groupId, STATUS_INTERRUPTED, endTime);
+            this.updateLogGroup(streamId, groupId, { status: STATUS_INTERRUPTED, endTime });
             updatedGroups++;
           }
         }
