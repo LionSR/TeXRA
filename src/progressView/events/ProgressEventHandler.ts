@@ -9,10 +9,10 @@ import { getConfig } from '@utils/config';
 import { onProgress } from '@eventBus/ProgressEventBus';
 
 // Types
-import { TokenUsageStats } from '../../types/UsageTypes';
+import { TokenUsageStats } from '@agent/types/UsageTypes';
 import { TaskState } from '@logger/TaskState';
-import { LogMessageData, TaskGroup } from '../../logger/LogTypes';
-import type { StreamTabId, ExecutionId } from '../../types/IdentifierTypes';
+import { LogMessageData, TaskGroup } from '@logger/LogTypes';
+import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
 
 // @ts-ignore - Import JavaScript module
 import { STATUS } from '../modules/constants.js';
