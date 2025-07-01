@@ -11,7 +11,7 @@ export class Status {
       [STATUS.RUNNING]: {
         className: 'running',
         label: 'Running',
-        enable: ['stopStreamBtn', 'restoreStateBtn', 'eraseStreamBtn'],
+        enable: ['stopStreamBtn', 'restoreStateBtn'],
       },
       [STATUS.ERROR]: {
         className: 'error',
