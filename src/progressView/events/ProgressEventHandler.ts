@@ -311,6 +311,11 @@ export class ProgressEventHandler {
     };
 
     this.state.taskGroups.addGroup(stream, groupId, group);
+
+    // Send webview update for the active stream
+    if (this.webviewUpdater.isAvailable() && stream === this.state.activeStream) {
+      this.webviewUpdater.addTaskGroup(stream, group);
+    }
   }
 
   /**
@@ -328,6 +333,11 @@ export class ProgressEventHandler {
       status,
       endTime,
     });
+
+    // Send webview update for the active stream
+    if (this.webviewUpdater.isAvailable() && stream === this.state.activeStream) {
+      this.webviewUpdater.updateTaskGroup(stream, groupId, status, endTime);
+    }
   }
 
   /**
@@ -352,8 +362,8 @@ export class ProgressEventHandler {
     const usage = this.state.usageStats.getStreamUsage(stream);
     this.webviewUpdater.updateUsage(usage);
 
-    // Update status for current stream
-    const status = this._streamStatus.get(stream) || STATUS.READY;
+    // Update status for current stream - default to STOPPED when stream exists but no status is set
+    const status = this._streamStatus.get(stream) || STATUS.STOPPED;
     this.webviewUpdater.updateStatus(status);
   }
 

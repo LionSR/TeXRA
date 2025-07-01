@@ -140,6 +140,36 @@ export class WebviewUpdater {
   }
 
   /**
+   * Add a task group to the webview
+   */
+  addTaskGroup(stream: StreamTabId, group: any): void {
+    const webview = this.getWebview();
+    if (!webview) return;
+
+    webview.postMessage({
+      command: COMMANDS.ADD_TASK_GROUP,
+      stream,
+      group,
+    });
+  }
+
+  /**
+   * Update a task group in the webview
+   */
+  updateTaskGroup(stream: StreamTabId, groupId: string, status: StatusType, endTime?: number): void {
+    const webview = this.getWebview();
+    if (!webview) return;
+
+    webview.postMessage({
+      command: COMMANDS.UPDATE_TASK_GROUP,
+      stream,
+      groupId,
+      status,
+      endTime,
+    });
+  }
+
+  /**
    * Update all webview content based on current state
    */
   updateAll(state: ProgressViewState): void {
