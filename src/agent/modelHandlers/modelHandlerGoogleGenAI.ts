@@ -380,11 +380,14 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       this.logger.debug(
         `Uploading ${mediaFiles.length} media files via native SDK...`,
       );
+      const mediaFileResults: Array<{ path: string; ok: boolean }> = [];
+
       for (const mediaFile of mediaFiles) {
         try {
           const absolutePath = WorkspaceFS.fullPath(mediaFile);
           if (!(await AbsoluteFS.exists(absolutePath))) {
             this.logger.error(`File does not exist: ${absolutePath}`);
+            mediaFileResults.push({ path: mediaFile, ok: false });
             continue;
           }
 
@@ -394,6 +397,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
             this.logger.error(
               `Cannot determine mime type for ${mediaFile}. Skipping file.`,
             );
+            mediaFileResults.push({ path: mediaFile, ok: false });
             continue;
           }
 
@@ -421,6 +425,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
             uri: uploadResult.uri,
             mimeType: uploadResult.mimeType,
           });
+          mediaFileResults.push({ path: mediaFile, ok: true });
         } catch (error) {
           this.logger.error(
             formatProviderError(
@@ -428,7 +433,19 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
               error,
             ),
           );
+          mediaFileResults.push({ path: mediaFile, ok: false });
         }
+      }
+
+      if (mediaFileResults.length > 0) {
+        if (mediaFileResults.some((r) => !r.ok)) {
+          this.logger.warn('Some media files failed to load');
+        }
+        this.logger.info(
+          JSON.stringify(mediaFileResults),
+          undefined,
+          MESSAGE_TYPES.FILE_LIST,
+        );
       }
     }
 
@@ -498,11 +515,14 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       this.logger.debug(
         `Uploading ${mediaFiles.length} media files for reflection via native SDK...`,
       );
+      const mediaFileResults: Array<{ path: string; ok: boolean }> = [];
+
       for (const mediaFile of mediaFiles) {
         try {
           const absolutePath = WorkspaceFS.fullPath(mediaFile);
           if (!(await AbsoluteFS.exists(absolutePath))) {
             this.logger.error(`File does not exist: ${absolutePath}`);
+            mediaFileResults.push({ path: mediaFile, ok: false });
             continue;
           }
 
@@ -512,6 +532,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
             this.logger.error(
               `Cannot determine mime type for file ${mediaFile}. Skipping file.`,
             );
+            mediaFileResults.push({ path: mediaFile, ok: false });
             continue;
           }
 
@@ -535,6 +556,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
             this.logger.error(
               `Upload result for file ${mediaFile} missing URI or MimeType. API might have failed inference. Skipping file.`,
             );
+            mediaFileResults.push({ path: mediaFile, ok: false });
             continue;
           }
 
@@ -547,6 +569,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
             uri: uploadResult.uri,
             mimeType: uploadResult.mimeType,
           });
+          mediaFileResults.push({ path: mediaFile, ok: true });
         } catch (error) {
           this.logger.error(
             formatProviderError(
@@ -554,7 +577,19 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
               error,
             ),
           );
+          mediaFileResults.push({ path: mediaFile, ok: false });
         }
+      }
+
+      if (mediaFileResults.length > 0) {
+        if (mediaFileResults.some((r) => !r.ok)) {
+          this.logger.warn('Some media files failed to load');
+        }
+        this.logger.info(
+          JSON.stringify(mediaFileResults),
+          undefined,
+          MESSAGE_TYPES.FILE_LIST,
+        );
       }
     }
 
