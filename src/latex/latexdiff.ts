@@ -6,6 +6,7 @@ import * as vscode from 'vscode';
 
 // Local imports - log
 import * as logger from '@logger/logUtils';
+import { MESSAGE_TYPES } from '@logger/messageTypes';
 
 // Local imports - utilities
 import { logErrorMessage } from '@common/errors/errorHandlingUtils';
@@ -67,6 +68,8 @@ export class LaTeXdiffService {
     suffix = '_diff',
     runIndent = true,
   ): Promise<LaTeXdiffResult> {
+    let diffFileName = '';
+    let outputPath = '';
     try {
       // Validate inputs
       if (!inputFile) {
@@ -91,23 +94,29 @@ export class LaTeXdiffService {
         };
       }
 
+      diffFileName = this.fileNameManager.generateDiffFileName(
+        inputFile,
+        editedFile,
+        suffix,
+      );
+      outputPath = path.join(path.dirname(inputFile), diffFileName);
+
       logger.info(
         this.channel,
-        `Running latexdiff for ${inputFile} and ${editedFile}`,
+        JSON.stringify({
+          base: inputFile,
+          revised: editedFile,
+          output: outputPath,
+          status: 'running',
+        }),
+        undefined,
+        MESSAGE_TYPES.LATEXDIFF,
       );
 
       // Format files if requested
       if (runIndent) {
         await this.formatFiles([inputFile, editedFile]);
       }
-
-      // Generate output filename
-      const diffFileName = this.fileNameManager.generateDiffFileName(
-        inputFile,
-        editedFile,
-        suffix,
-      );
-      const outputPath = path.join(path.dirname(inputFile), diffFileName);
 
       // Execute latexdiff command
       const result = await this.commandExecutor.executeDiff(
@@ -122,6 +131,18 @@ export class LaTeXdiffService {
       await WorkspaceFS.writeFile(outputPath, result.stdout);
       await this.fileProcessor.processDiffFile(outputPath);
 
+      logger.info(
+        this.channel,
+        JSON.stringify({
+          base: inputFile,
+          revised: editedFile,
+          output: outputPath,
+          status: 'success',
+        }),
+        undefined,
+        MESSAGE_TYPES.LATEXDIFF,
+      );
+
       return {
         success: true,
         diffFileName,
@@ -132,6 +153,17 @@ export class LaTeXdiffService {
         this.channel,
         'Error running LaTeX diff',
         err,
+      );
+      logger.error(
+        this.channel,
+        JSON.stringify({
+          base: inputFile,
+          revised: editedFile,
+          output: outputPath,
+          status: 'error',
+        }),
+        undefined,
+        MESSAGE_TYPES.LATEXDIFF,
       );
       return { success: false, message };
     }
