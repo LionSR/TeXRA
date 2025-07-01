@@ -245,8 +245,8 @@ export class ProgressViewProvider
    * Erase a stream (legacy compatibility)
    */
   public eraseStream(stream: string): void {
-    this.state.clearStream(stream);
-    this.updateWebview();
+    this.state.eraseStreamContent(stream);
+    this.updateLogContent(stream);
   }
 
   /**

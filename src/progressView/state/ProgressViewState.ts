@@ -120,6 +120,21 @@ export class ProgressViewState {
     this.saveExecutionIds();
   }
 
+  // Stream content erasure (clear content but keep the stream tab)
+  eraseStreamContent(stream: StreamTabId): void {
+    // Clear stream content but keep the stream tab
+    this._streamTabs.clearContent(stream);
+    // Delete related data
+    this._taskGroups.deleteStream(stream);
+    this._outputFiles.deleteStream(stream);
+    this._usageStats.deleteStream(stream);
+    this._taskStates.delete(stream);
+    this._executionIds.delete(stream);
+
+    this.saveTaskStates();
+    this.saveExecutionIds();
+  }
+
   clearAll(): void {
     this._streamTabs.clear();
     this._taskGroups.clear();
