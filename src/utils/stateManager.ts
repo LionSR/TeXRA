@@ -7,9 +7,11 @@ export enum WorkspaceStateKey {
   STREAM_TABS = 'texra.streamTabs',
   TASK_GROUPS = 'texra.taskGroups',
   OUTPUT_FILES = 'texra.outputFiles',
+  MISSING_OUTPUTS = 'texra.missingOutputs',
   ACTIVE_STREAM_TAB = 'texra.activeStreamTab',
   TASK_STATES = 'texra.taskStates',
-  TASK_IDS = 'texra.taskIds',
+  TASK_IDS = 'texra.taskIds', // Legacy key for migration
+  EXECUTION_IDS = 'texra.executionIds',
   USAGE_STATS = 'texra.usageStats',
 }
 
