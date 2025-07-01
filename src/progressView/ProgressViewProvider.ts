@@ -362,13 +362,37 @@ export class ProgressViewProvider
 
   /**
    * Update log content for a stream (used by message handler)
+   * Matches original comprehensive behavior - updates logs, groups, status, files, etc.
    */
   public updateLogContent(stream: string): void {
     if (!this.webviewUpdater.isAvailable()) return;
 
+    // If no stream is provided or stream doesn't exist, use the first available stream
+    if (!stream || !this.state.streamTabs.has(stream)) {
+      const streams = this.state.streamTabs.keys();
+      stream = streams[0] ?? '';
+    }
+
+    if (!this.state.streamTabs.has(stream)) {
+      return;
+    }
+
+    // Update everything for this stream (matching original comprehensive behavior)
     const messages = this.state.streamTabs.get(stream) || [];
     const groups = Array.from(this.state.taskGroups.getStreamGroups(stream).values());
     this.webviewUpdater.updateLogContent(stream, messages, groups);
+
+    // Update status for this stream
+    const status = this.eventHandler.getStreamStatus(stream) || STATUS.STOPPED;
+    this.webviewUpdater.updateStatus(status);
+
+    // Update files for this stream
+    const files = this.state.outputFiles.getFiles(stream) || {};
+    this.webviewUpdater.updateFiles(stream, files);
+
+    // Update missing outputs for this stream
+    const missing = this.state.outputFiles.getMissingOutputs(stream) || {};
+    this.webviewUpdater.updateMissingOutputs(stream, missing);
   }
 
   /**
