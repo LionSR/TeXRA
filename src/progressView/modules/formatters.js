@@ -369,7 +369,15 @@ export class LogEntryFormatter {
     try {
       const idAttr = logId ? ` data-log-id="${logId}"` : '';
       const parsed = JSON.parse(this._unescapeHtml(content));
-      const entries = Array.isArray(parsed) ? parsed : [parsed];
+      const entries = Array.isArray(parsed)
+        ? parsed
+        : parsed && typeof parsed === 'object'
+          ? [parsed]
+          : [];
+
+      if (entries.length === 0) {
+        return message;
+      }
 
       let items = '';
       entries.forEach((d) => {
@@ -384,7 +392,12 @@ export class LogEntryFormatter {
         const baseName = basePath.split('/').pop() || basePath;
         const revisedName = revisedPath.split('/').pop() || revisedPath;
 
-        const icon = d.status === 'success' ? 'codicon-check' : 'codicon-error';
+        let icon = 'codicon-question';
+        if (d.status === 'success') {
+          icon = 'codicon-check';
+        } else if (d.status === 'error') {
+          icon = 'codicon-error';
+        }
 
         items += `<li><i class="codicon ${icon}"></i> <span class="file-link clickable-link" data-file="${baseEsc}">${this._escapeHtml(
           baseName,

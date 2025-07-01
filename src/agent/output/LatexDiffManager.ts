@@ -3,6 +3,7 @@ import * as path from 'path';
 import { AgentSetting } from '@agent/core/AgentDataclass';
 import { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
+import { objectToLogString } from '@utils/text/stringUtils';
 import { createFileMapping } from '@utils/files';
 import { compileLatex2Pdf } from '@latex/texTools';
 import { checkToolInstalled } from '@utils/system';
@@ -100,7 +101,7 @@ export class LatexDiffManager {
           );
           this.logLatexdiffResult(result, 'round-diff', diffProcessGroupId);
           this.logger.info(
-            JSON.stringify({
+            objectToLogString({
               base: baseFile,
               revised: outputFile,
               output: result.diffFileName
@@ -166,7 +167,7 @@ export class LatexDiffManager {
             diffProcessGroupId,
           );
           this.logger.info(
-            JSON.stringify({
+            objectToLogString({
               base: prevOutputFile,
               revised: currOutputFile,
               output: result.diffFileName
