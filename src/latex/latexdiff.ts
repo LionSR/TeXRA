@@ -102,16 +102,9 @@ export class LaTeXdiffService {
       );
       outputPath = path.join(path.dirname(inputFile), diffFileName);
 
-      logger.info(
+      logger.debug(
         this.channel,
-        objectToLogString({
-          base: inputFile,
-          revised: editedFile,
-          output: outputPath,
-          status: 'running',
-        }),
-        undefined,
-        MESSAGE_TYPES.LATEXDIFF,
+        `Running latexdiff for ${inputFile} and ${editedFile}`,
       );
 
       // Format files if requested
@@ -132,16 +125,9 @@ export class LaTeXdiffService {
       await WorkspaceFS.writeFile(outputPath, result.stdout);
       await this.fileProcessor.processDiffFile(outputPath);
 
-      logger.info(
+      logger.debug(
         this.channel,
-        objectToLogString({
-          base: inputFile,
-          revised: editedFile,
-          output: outputPath,
-          status: 'success',
-        }),
-        undefined,
-        MESSAGE_TYPES.LATEXDIFF,
+        `Latexdiff succeeded: ${inputFile} -> ${editedFile}`,
       );
 
       return {
@@ -155,16 +141,9 @@ export class LaTeXdiffService {
         'Error running LaTeX diff',
         err,
       );
-      logger.error(
+      logger.debug(
         this.channel,
-        objectToLogString({
-          base: inputFile,
-          revised: editedFile,
-          output: outputPath,
-          status: 'error',
-        }),
-        undefined,
-        MESSAGE_TYPES.LATEXDIFF,
+        `Latexdiff failed: ${inputFile} -> ${editedFile}`,
       );
       return { success: false, message };
     }
