@@ -3,7 +3,7 @@ import { marked } from 'marked';
 import markedKatex from 'marked-katex-extension';
 // Local imports
 import { katexMacros } from './katexMacros.js';
-import { CHEVRON_DOWN_CLASS } from '@common/webviewContext.js';
+import { CHEVRON_RIGHT_CLASS } from '@common/webviewContext.js';
 import { STATUS } from './constants.js';
 
 // Constants
@@ -211,9 +211,9 @@ export class LogEntryFormatter {
       const labelText = isThinking ? 'Thinking' : 'Scratchpad';
       const icon = isThinking ? 'codicon-lightbulb' : 'codicon-pencil';
 
-      return `<details class="special-details" open>
+      return `<details class="special-details">
         <summary>
-          <i class="${CHEVRON_DOWN_CLASS} toggle-icon"></i>
+          <i class="${CHEVRON_RIGHT_CLASS} toggle-icon"></i>
           <i class="codicon ${icon}"></i>
           <span>${labelText}</span>
         </summary>
@@ -287,9 +287,9 @@ export class LogEntryFormatter {
       }
       summary += ')';
 
-      return `<details class="file-list-details" open>
+      return `<details class="file-list-details">
         <summary>
-          <i class="${CHEVRON_DOWN_CLASS} toggle-icon"></i>
+          <i class="${CHEVRON_RIGHT_CLASS} toggle-icon"></i>
           <i class="codicon codicon-list-tree"></i>
           <span>${summary}</span>
         </summary>
@@ -346,9 +346,9 @@ export class LogEntryFormatter {
 
       const summary = `Missing outputs (${missingFiles.length})`;
 
-      return `<details class="file-list-details" open>
+      return `<details class="file-list-details">
         <summary>
-          <i class="${CHEVRON_DOWN_CLASS} toggle-icon"></i>
+          <i class="${CHEVRON_RIGHT_CLASS} toggle-icon"></i>
           <i class="codicon codicon-warning"></i>
           <span>${summary}</span>
         </summary>
