@@ -1,6 +1,8 @@
 // Standard library imports
 // Local imports - log
 import { AgentLogger } from '@logger/AgentLogger';
+import * as path from 'path';
+import * as vscode from 'vscode';
 
 // Local imports - utilities
 import { runLatexFormatter } from '@latex/texFormatter';
@@ -20,7 +22,11 @@ import type { IModelHandler } from '@agent/modelHandlers';
 
 // Local imports - utilities
 import { replaceInputCommands, createFileMapping } from '@utils/files';
+import { WorkspaceFS, AbsoluteFS } from '@utils/files';
 import { getEffectiveBaseFile } from '@utils/files/baseFileUtils';
+import { emitProgress } from '@eventBus/ProgressEventBus';
+import { MESSAGE_TYPES } from '@logger/messageTypes';
+import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 
 // Local imports - types
 
@@ -218,6 +224,71 @@ export class OutputHandler implements IOutputHandler {
       });
     }
     return infos;
+  }
+
+  public async validateExpectedOutputs(
+    outputFile: string,
+    currRound: number,
+    groupId?: string,
+  ): Promise<void> {
+    const expected = this.agentConfig.outputFiles;
+    if (!expected || expected.length === 0) {
+      emitProgress('updateMissingOutputs', {
+        stream: this.channel,
+        filesByRound: { [currRound]: [] },
+      });
+      return;
+    }
+
+    const checks = expected.map(async (file) => ({
+      file,
+      exists: path.isAbsolute(file)
+        ? await AbsoluteFS.exists(file)
+        : await WorkspaceFS.exists(file),
+    }));
+    const results = await Promise.all(checks);
+    const missing = results.filter((r) => !r.exists).map((r) => r.file);
+
+    // Include XML file path with missing outputs if there are any missing files
+    if (missing.length > 0) {
+      let xmlPath: string;
+
+      if (outputFile) {
+        // Use the provided outputFile parameter which contains the actual XML file path
+        xmlPath = outputFile;
+      } else {
+        // Fallback: construct the expected XML file path using the same naming convention
+        xmlPath = getOutputFileName(
+          this.agentConfig.inputFile,
+          this.agentConfig.agent,
+          this.agentConfig.model,
+          'xml',
+          currRound,
+        );
+      }
+
+      // Check if XML file exists
+      const xmlExists = path.isAbsolute(xmlPath)
+        ? await AbsoluteFS.exists(xmlPath)
+        : await WorkspaceFS.exists(xmlPath);
+
+      // Log missing outputs with XML file info
+      const missingOutputsData = {
+        missing,
+        xmlFile: xmlExists ? xmlPath : null,
+      };
+
+      this.logger.info(
+        JSON.stringify(missingOutputsData),
+        groupId,
+        MESSAGE_TYPES.MISSING_OUTPUTS,
+      );
+    }
+
+    emitProgress('updateMissingOutputs', {
+      stream: this.channel,
+      filesByRound: { [currRound]: missing },
+    });
   }
 
   /** Processes single output file with XML splitting and filtering. */
