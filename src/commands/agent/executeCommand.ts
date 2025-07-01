@@ -7,6 +7,7 @@ import { executeAgent } from '@agent/runtime/executeAgent';
 
 // Local imports - history
 import { AgentHistoryManager } from '@historyView/AgentHistoryManager';
+import type { ExecutionId } from '../../types/IdentifierTypes';
 
 // Add the registration function
 export function registerExecuteCommand(context: vscode.ExtensionContext) {
@@ -24,10 +25,11 @@ export const executeCommand = {
   ) => {
     try {
       // Save the agent configuration to history (silently)
-      const taskId = await AgentHistoryManager.addToHistory(config);
+      const executionId: ExecutionId =
+        await AgentHistoryManager.addToHistory(config);
 
-      // Run the agent directly, passing through the task ID
-      await executeAgent(config, context, taskId);
+      // Run the agent directly, passing through the execution ID
+      await executeAgent(config, context, executionId);
     } catch (err) {
       throw err;
     }

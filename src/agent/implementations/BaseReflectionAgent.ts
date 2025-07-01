@@ -25,7 +25,6 @@ import {
 } from '@agent/utils/promptHelpers';
 
 // Local imports - UI
-import { checkExpectedOutputs } from '@frontend/ui/instruction';
 
 import replacementEngine from '@replacement/engine';
 import { checkForMassiveRepetition } from '@agent/utils/text/repetitionUtils';
@@ -451,6 +450,28 @@ export abstract class BaseReflectionAgent extends BaseAgent {
     }
 
     const fileInfos = await this.outputHandler.gatherOutputFileInfo(currRound);
+
+    // Validate expected outputs if this is the end of the turn
+    if (endTurn) {
+      try {
+        await this.outputHandler.validateExpectedOutputs(
+          outputFile,
+          currRound,
+          roundGroupId,
+        );
+        this.logger.debug(
+          `Expected outputs validated for round ${currRound}`,
+          roundGroupId,
+        );
+      } catch (error) {
+        this.logger.error(
+          `Expected output validation failed after round ${currRound}: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+          roundGroupId,
+        );
+      }
+    }
     emitProgress('addOutputFiles', {
       stream: this.logger.channelId,
       filesByRound: { [currRound]: fileInfos },
@@ -845,23 +866,6 @@ export abstract class BaseReflectionAgent extends BaseAgent {
         await this.process();
       this.logger.debug(`Round 0 completed\n`, this.runGroupId);
 
-      // Check expected outputs after round 0 completes
-      if (endTurn && this.agentConfig.outputFiles) {
-        try {
-          await checkExpectedOutputs(this.agentConfig.outputFiles, this);
-          this.logger.debug(
-            `Expected outputs validated for round 0`,
-            this.runGroupId,
-          );
-        } catch (error) {
-          this.logger.error(
-            `Expected output validation failed after round 0: ${error instanceof Error ? error.message : String(error)}`,
-            this.runGroupId,
-          );
-          // Continue execution even if validation fails, but log the issue
-        }
-      }
-
       // Check for interruption before next round
       if (
         !this.isInterrupted &&
@@ -871,23 +875,6 @@ export abstract class BaseReflectionAgent extends BaseAgent {
         const toolStateReflection = new ToolState();
         await this.reflect(stateGlobal, messages, toolStateReflection);
         this.logger.debug(`Round 1 completed\n`, this.runGroupId);
-
-        // Check expected outputs after round 1 completes
-        if (this.agentConfig.outputFiles) {
-          try {
-            await checkExpectedOutputs(this.agentConfig.outputFiles, this);
-            this.logger.debug(
-              `Expected outputs validated for round 1`,
-              this.runGroupId,
-            );
-          } catch (error) {
-            this.logger.error(
-              `Expected output validation failed after round 1: ${error instanceof Error ? error.message : String(error)}`,
-              this.runGroupId,
-            );
-            // Continue execution even if validation fails, but log the issue
-          }
-        }
       }
 
       // End the run group with success status

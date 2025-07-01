@@ -15,6 +15,7 @@ import { TokenUsageStats } from '../types/UsageTypes';
 import { TaskGroup } from '../logger/LogTypes';
 import type { DiffStats } from '../types/DiffTypes';
 import { randomUUID } from 'crypto';
+import type { StreamTabId, ExecutionId } from '../types/IdentifierTypes';
 import { onProgress } from '@eventBus/ProgressEventBus';
 
 // @ts-ignore - Import JavaScript module
@@ -107,6 +108,18 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
         ),
       ),
       new vscode.Disposable(
+        onProgress(
+          'updateMissingOutputs',
+          (p: { stream: string; filesByRound: { [key: number]: string[] } }) =>
+            this.updateMissingOutputs(p.stream, p.filesByRound),
+        ),
+      ),
+      new vscode.Disposable(
+        onProgress('clearMissingOutputs', (stream: string) =>
+          this.clearMissingOutputs(stream),
+        ),
+      ),
+      new vscode.Disposable(
         onProgress('clearOutputFiles', (stream: string) =>
           this.clearOutputFiles(stream),
         ),
@@ -114,8 +127,14 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       new vscode.Disposable(
         onProgress(
           'setTaskState',
-          (p: { streamId: string; taskId?: string; taskState: TaskState }) =>
-            this.setTaskState(p.streamId, p.taskState, p.taskId),
+          (p: {
+            streamTabId: StreamTabId;
+            executionId?: ExecutionId;
+            taskState: TaskState;
+          }) =>
+            this.setTaskState(p.streamTabId, p.taskState, {
+              executionId: p.executionId,
+            }),
         ),
       ),
       new vscode.Disposable(
@@ -126,8 +145,8 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
         ),
       ),
       new vscode.Disposable(
-        onProgress('clearTaskOutput', (streamId: string) =>
-          this.clearTaskOutput(streamId),
+        onProgress('clearTaskOutput', (streamTabId: StreamTabId) =>
+          this.clearTaskOutput(streamTabId),
         ),
       ),
       new vscode.Disposable(
@@ -153,7 +172,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       ),
       new vscode.Disposable(
         onProgress(
-          'addLogGroup',
+          'addTaskGroup',
           (p: {
             stream: string;
             groupId: string;
@@ -163,26 +182,28 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
             endTime?: number;
             parentGroupId?: string;
           }) =>
-            this.addLogGroup(
-              p.stream,
-              p.groupId,
-              p.groupName,
-              p.startTime,
-              p.status,
-              p.endTime,
-              p.parentGroupId,
-            ),
+            this.addTaskGroup(p.stream, p.groupId, {
+              name: p.groupName,
+              startTime: p.startTime,
+              status: p.status,
+              endTime: p.endTime,
+              parentGroupId: p.parentGroupId,
+            }),
         ),
       ),
       new vscode.Disposable(
         onProgress(
-          'updateLogGroup',
+          'updateTaskGroup',
           (p: {
             stream: string;
             groupId: string;
             status: StatusType;
             endTime?: number;
-          }) => this.updateLogGroup(p.stream, p.groupId, p.status, p.endTime),
+          }) =>
+            this.updateTaskGroup(p.stream, p.groupId, {
+              status: p.status,
+              endTime: p.endTime,
+            }),
         ),
       ),
     );
@@ -322,6 +343,15 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       files,
     });
 
+    const missing =
+      this._stateManager.missingOutputs.get(this._stateManager.activeStream) ||
+      {};
+    this._view.webview.postMessage({
+      command: COMMANDS.UPDATE_MISSING_OUTPUTS,
+      stream: this._stateManager.activeStream,
+      files: missing,
+    });
+
     const usage = this._stateManager.usageStats.get(
       this._stateManager.activeStream,
     );
@@ -430,19 +460,21 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     }
   }
 
-  public addLogGroup(
+  public addTaskGroup(
     stream: string,
     groupId: string,
-    groupName: string,
-    startTime: number,
-    status: StatusType,
-    endTime?: number,
-    parentGroupId?: string,
+    groupData: {
+      name: string;
+      startTime: number;
+      status: StatusType;
+      endTime?: number;
+      parentGroupId?: string;
+    },
   ) {
     // Ensure the stream exists so the UI can create a new tab immediately
     // this seems to be the fix for the issue where the progress view panel is not shown when a new stream is created
     if (!this._stateManager.streamTabs.has(stream)) {
-      this.logger.debug(`Creating stream from addLogGroup: ${stream}`);
+      this.logger.debug(`Creating stream from addTaskGroup: ${stream}`);
       this._stateManager.streamTabs.set(stream, []);
       if (!this._streamStatus.has(stream)) {
         this.updateStreamStatus(stream, STATUS.RUNNING);
@@ -463,36 +495,38 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     const streamGroups = this._stateManager.taskGroups.get(stream)!;
     streamGroups.set(groupId, {
       id: groupId,
-      name: groupName,
-      startTime,
-      endTime,
-      status,
-      parentGroupId,
+      name: groupData.name,
+      startTime: groupData.startTime,
+      endTime: groupData.endTime,
+      status: groupData.status,
+      parentGroupId: groupData.parentGroupId,
     });
 
     this._stateManager.saveState();
 
     if (this._view && stream === this._stateManager.activeStream) {
       this._view.webview.postMessage({
-        command: COMMANDS.ADD_LOG_GROUP,
+        command: COMMANDS.ADD_TASK_GROUP,
         stream,
         group: {
           id: groupId,
-          name: groupName,
-          startTime,
-          endTime,
-          status,
-          parentGroupId,
+          name: groupData.name,
+          startTime: groupData.startTime,
+          endTime: groupData.endTime,
+          status: groupData.status,
+          parentGroupId: groupData.parentGroupId,
         },
       });
     }
   }
 
-  public updateLogGroup(
+  public updateTaskGroup(
     stream: string,
     groupId: string,
-    status: StatusType,
-    endTime?: number,
+    updates: {
+      status: StatusType;
+      endTime?: number;
+    },
   ) {
     const streamGroups = this._stateManager.taskGroups.get(stream);
     if (!streamGroups) {
@@ -504,20 +538,20 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       return;
     }
 
-    group.status = status;
-    if (endTime) {
-      group.endTime = endTime;
+    group.status = updates.status;
+    if (updates.endTime) {
+      group.endTime = updates.endTime;
     }
 
     this._stateManager.saveState();
 
     if (this._view && stream === this._stateManager.activeStream) {
       this._view.webview.postMessage({
-        command: COMMANDS.UPDATE_LOG_GROUP,
+        command: COMMANDS.UPDATE_TASK_GROUP,
         stream,
         groupId,
-        status,
-        endTime,
+        status: updates.status,
+        endTime: updates.endTime,
       });
     }
   }
@@ -566,6 +600,13 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       command: COMMANDS.UPDATE_FILES,
       stream: stream,
       files,
+    });
+
+    const missing = this._stateManager.missingOutputs.get(stream) || {};
+    this._view.webview.postMessage({
+      command: COMMANDS.UPDATE_MISSING_OUTPUTS,
+      stream: stream,
+      files: missing,
     });
   }
 
@@ -656,6 +697,43 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     }
   }
 
+  public updateMissingOutputs(
+    stream: string,
+    filesByRound: { [key: number]: string[] },
+  ): void {
+    const existing = this._stateManager.missingOutputs.get(stream) || {};
+    const merged = { ...existing, ...filesByRound };
+    this._stateManager.missingOutputs.set(stream, merged);
+    this._stateManager.saveState();
+    if (this._view && stream === this._stateManager.activeStream) {
+      this._view.webview.postMessage({
+        command: COMMANDS.UPDATE_MISSING_OUTPUTS,
+        stream,
+        files: merged,
+      });
+    }
+  }
+
+  public getMissingOutputs(
+    stream: string,
+  ): { [key: number]: string[] } | undefined {
+    return this._stateManager.missingOutputs.get(stream);
+  }
+
+  public clearMissingOutputs(stream: string): void {
+    if (this._stateManager.missingOutputs.has(stream)) {
+      this._stateManager.missingOutputs.delete(stream);
+      this._stateManager.saveState();
+      if (this._view && stream === this._stateManager.activeStream) {
+        this._view.webview.postMessage({
+          command: COMMANDS.UPDATE_MISSING_OUTPUTS,
+          stream,
+          files: {},
+        });
+      }
+    }
+  }
+
   public getOutputFiles(
     stream: string,
   ): { [key: number]: OutputFileInfo[] } | undefined {
@@ -674,6 +752,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
         });
       }
     }
+    this.clearMissingOutputs(stream);
   }
 
   public updateStreamUsage(stream: string, usage: TokenUsageStats): void {
@@ -725,15 +804,17 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   }
 
   public setTaskState(
-    streamId: string,
+    streamTabId: StreamTabId,
     taskState: TaskState,
-    taskId?: string,
+    options?: {
+      executionId?: ExecutionId;
+    },
   ): void {
-    this.logger.debug(`Setting taskState for stream: ${streamId}`);
+    this.logger.debug(`Setting taskState for stream: ${streamTabId}`);
     // this.logger.debug(`Task state: ${JSON.stringify(taskState)}`);
-    this._stateManager.taskStates.set(streamId, taskState);
-    if (taskId) {
-      this._stateManager.taskIds.set(streamId, taskId);
+    this._stateManager.taskStates.set(streamTabId, taskState);
+    if (options?.executionId) {
+      this._stateManager.executionIds.set(streamTabId, options.executionId);
     }
     this.saveTaskStates();
     this.logger.debug(
@@ -741,15 +822,15 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     );
   }
 
-  public getTaskId(streamId: string): string | undefined {
-    return this._stateManager.taskIds.get(streamId);
+  public getExecutionId(streamTabId: StreamTabId): ExecutionId | undefined {
+    return this._stateManager.executionIds.get(streamTabId);
   }
 
-  public getTaskState(streamId: string): TaskState | undefined {
-    this.logger.debug(`Getting taskState for stream: ${streamId}`);
-    const taskState = this._stateManager.taskStates.get(streamId);
+  public getTaskState(streamTabId: StreamTabId): TaskState | undefined {
+    this.logger.debug(`Getting taskState for stream: ${streamTabId}`);
+    const taskState = this._stateManager.taskStates.get(streamTabId);
     if (!taskState) {
-      this.logger.warn(`No taskState found for stream: ${streamId}`);
+      this.logger.warn(`No taskState found for stream: ${streamTabId}`);
     } else {
       this.logger.debug(`Found taskState: ${JSON.stringify(taskState)}`);
     }
@@ -758,16 +839,16 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
 
   /**
    * Clears output file information from the stored task state
-   * @param streamId Stream identifier
+   * @param streamTabId Stream tab identifier
    */
-  public clearTaskOutput(streamId: string): void {
-    const state = this._stateManager.taskStates.get(streamId);
+  public clearTaskOutput(streamTabId: StreamTabId): void {
+    const state = this._stateManager.taskStates.get(streamTabId);
     if (state) {
       state.outputFiles = [];
       if (state.activeFiles) {
         state.activeFiles.output = false;
       }
-      this._stateManager.taskStates.set(streamId, state);
+      this._stateManager.taskStates.set(streamTabId, state);
       this.saveTaskStates();
     }
   }
@@ -820,7 +901,10 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
         );
 
         for (const [groupId, group] of activeGroups) {
-          this.updateLogGroup(streamId, groupId, STATUS_CANCELLED, endTime);
+          this.updateTaskGroup(streamId, groupId, {
+            status: STATUS_CANCELLED,
+            endTime,
+          });
         }
       }
     }
@@ -887,7 +971,10 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
 
           // Mark all active groups as interrupted
           for (const [groupId, group] of activeGroups) {
-            this.updateLogGroup(streamId, groupId, STATUS_INTERRUPTED, endTime);
+            this.updateTaskGroup(streamId, groupId, {
+              status: STATUS_INTERRUPTED,
+              endTime,
+            });
             updatedGroups++;
           }
         }
