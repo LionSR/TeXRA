@@ -3,13 +3,13 @@ import {
   BaseViewMessageHandler,
   MessageHandler,
 } from '@common/webview/BaseViewMessageHandler';
-import { ProgressViewProvider } from './ProgressViewProvider';
+import { IProgressViewProvider } from './interfaces/IProgressViewProvider';
 import { taskStateToAgentConfig } from '@utils/config';
 // @ts-ignore - Import JavaScript module
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 
 export class ProgressViewMessageHandler extends BaseViewMessageHandler {
-  constructor(private readonly provider: ProgressViewProvider) {
+  constructor(private readonly provider: IProgressViewProvider) {
     super('ProgressView');
   }
 

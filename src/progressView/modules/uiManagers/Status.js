@@ -40,7 +40,7 @@ export class Status {
       [STATUS.READY]: {
         className: 'ready',
         label: 'Ready',
-        enable: ['restoreStateBtn'],
+        enable: ['restoreStateBtn', 'eraseStreamBtn'],
       },
     };
 
@@ -66,6 +66,10 @@ export class Status {
     buttons.forEach((b) => {
       if (b) b.disabled = true;
     });
+
+    // Always enable the erase button regardless of status
+    const eraseBtn = document.getElementById('eraseStreamBtn');
+    if (eraseBtn) eraseBtn.disabled = false;
 
     statusIndicator.className = 'status-indicator';
     statusIndicator.dataset.status = 'Ready';

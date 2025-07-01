@@ -1,0 +1,229 @@
+// Third-party imports
+import * as vscode from 'vscode';
+
+// Local imports
+import { ProgressViewState } from '../state/ProgressViewState';
+import { AgentLogger } from '@logger/AgentLogger';
+
+// Types
+import { TokenUsageStats } from '../../types/UsageTypes';
+import { LogMessageData } from '../../logger/LogTypes';
+import type { StreamTabId } from '../../types/IdentifierTypes';
+
+// @ts-ignore - Import JavaScript module
+import { COMMANDS } from '../modules/constants.js';
+
+// Type aliases for status values
+type StatusType = 'running' | 'error' | 'stopped' | 'ready';
+
+/**
+ * Manages webview updates for the progress view.
+ * Provides a clean interface for updating different parts of the webview
+ * without coupling business logic to DOM operations.
+ */
+export class WebviewUpdater {
+  private readonly logger: AgentLogger;
+
+  constructor(private getWebview: () => vscode.Webview | undefined) {
+    this.logger = new AgentLogger('WebviewUpdater');
+  }
+
+  /**
+   * Update stream tabs in the webview
+   */
+  updateStreams(streams: StreamTabId[], activeStream: StreamTabId): void {
+    const webview = this.getWebview();
+    if (!webview) return;
+
+    webview.postMessage({
+      command: COMMANDS.UPDATE_STREAMS,
+      streams,
+      activeStream,
+    });
+  }
+
+  /**
+   * Update log content for a specific stream
+   */
+  updateLogContent(
+    stream: StreamTabId,
+    messages: LogMessageData[],
+    groups?: any[],
+  ): void {
+    const webview = this.getWebview();
+    if (!webview) return;
+
+    webview.postMessage({
+      command: COMMANDS.UPDATE_LOGS,
+      stream,
+      messages,
+      groups: groups || [],
+    });
+  }
+
+  /**
+   * Append a single log message to a stream
+   */
+  appendLogMessage(stream: StreamTabId, logMessage: LogMessageData): void {
+    const webview = this.getWebview();
+    if (!webview) return;
+
+    webview.postMessage({
+      command: COMMANDS.APPEND_LOG,
+      stream,
+      logMessage,
+    });
+  }
+
+  /**
+   * Update an existing log message
+   */
+  updateLogMessage(stream: StreamTabId, logMessage: LogMessageData): void {
+    const webview = this.getWebview();
+    if (!webview) return;
+
+    webview.postMessage({
+      command: COMMANDS.UPDATE_LOG,
+      stream,
+      logMessage,
+    });
+  }
+
+  /**
+   * Update output files for a stream
+   */
+  updateFiles(stream: StreamTabId, files: { [key: number]: any[] }): void {
+    const webview = this.getWebview();
+    if (!webview) return;
+
+    webview.postMessage({
+      command: COMMANDS.UPDATE_FILES,
+      stream,
+      files,
+    });
+  }
+
+  /**
+   * Update missing outputs for a stream
+   */
+  updateMissingOutputs(
+    stream: StreamTabId,
+    files: { [key: number]: string[] },
+  ): void {
+    const webview = this.getWebview();
+    if (!webview) return;
+
+    webview.postMessage({
+      command: COMMANDS.UPDATE_MISSING_OUTPUTS,
+      stream,
+      files,
+    });
+  }
+
+  /**
+   * Update usage statistics
+   */
+  updateUsage(usage?: TokenUsageStats): void {
+    const webview = this.getWebview();
+    if (!webview) return;
+
+    webview.postMessage({
+      command: COMMANDS.UPDATE_USAGE,
+      usage,
+    });
+  }
+
+  /**
+   * Update stream status
+   */
+  updateStatus(status: StatusType): void {
+    const webview = this.getWebview();
+    if (!webview) return;
+
+    webview.postMessage({
+      command: COMMANDS.UPDATE_STATUS,
+      status,
+    });
+  }
+
+  /**
+   * Add a task group to the webview
+   */
+  addTaskGroup(stream: StreamTabId, group: any): void {
+    const webview = this.getWebview();
+    if (!webview) return;
+
+    webview.postMessage({
+      command: COMMANDS.ADD_TASK_GROUP,
+      stream,
+      group,
+    });
+  }
+
+  /**
+   * Update a task group in the webview
+   */
+  updateTaskGroup(
+    stream: StreamTabId,
+    groupId: string,
+    status: StatusType,
+    endTime?: number,
+  ): void {
+    const webview = this.getWebview();
+    if (!webview) return;
+
+    webview.postMessage({
+      command: COMMANDS.UPDATE_TASK_GROUP,
+      stream,
+      groupId,
+      status,
+      endTime,
+    });
+  }
+
+  /**
+   * Update all webview content based on current state
+   */
+  updateAll(state: ProgressViewState): void {
+    const webview = this.getWebview();
+    if (!webview) return;
+
+    const streams = state.streamTabs.keys();
+    const activeStream = state.activeStream;
+
+    // Update streams and active stream
+    this.updateStreams(streams, activeStream);
+
+    if (activeStream) {
+      // Update log content for active stream
+      const messages = state.streamTabs.get(activeStream) || [];
+      const groups = Array.from(
+        state.taskGroups.getStreamGroups(activeStream).values(),
+      );
+      this.updateLogContent(activeStream, messages, groups);
+
+      // Update files for active stream
+      const files = state.outputFiles.getFiles(activeStream) || {};
+      this.updateFiles(activeStream, files);
+
+      // Update missing outputs for active stream
+      const missing = state.outputFiles.getMissingOutputs(activeStream) || {};
+      this.updateMissingOutputs(activeStream, missing);
+
+      // Update usage for active stream
+      const usage = state.usageStats.getStreamUsage(activeStream);
+      this.updateUsage(usage);
+    }
+
+    this.logger.debug(
+      `Updated webview with ${streams.length} streams, active: ${activeStream}`,
+    );
+  }
+
+  /**
+   * Check if webview is available
+   */
+  isAvailable(): boolean {
+    return this.getWebview() !== undefined;
+  }
+}
