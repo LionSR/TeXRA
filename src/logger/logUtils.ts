@@ -16,12 +16,14 @@ function isValidMessageType(
   | typeof MESSAGE_TYPES.THINKING
   | typeof MESSAGE_TYPES.SCRATCHPAD
   | typeof MESSAGE_TYPES.FILE_LIST
-  | typeof MESSAGE_TYPES.MISSING_OUTPUTS {
+  | typeof MESSAGE_TYPES.MISSING_OUTPUTS
+  | typeof MESSAGE_TYPES.LATEXDIFF {
   return (
     type === MESSAGE_TYPES.THINKING ||
     type === MESSAGE_TYPES.SCRATCHPAD ||
     type === MESSAGE_TYPES.FILE_LIST ||
-    type === MESSAGE_TYPES.MISSING_OUTPUTS
+    type === MESSAGE_TYPES.MISSING_OUTPUTS ||
+    type === MESSAGE_TYPES.LATEXDIFF
   );
 }
 
@@ -124,7 +126,8 @@ class VSCodeTransport extends Transport {
     // Skip output channel logging for special structured messages
     if (
       messageType !== MESSAGE_TYPES.FILE_LIST &&
-      messageType !== MESSAGE_TYPES.MISSING_OUTPUTS
+      messageType !== MESSAGE_TYPES.MISSING_OUTPUTS &&
+      messageType !== MESSAGE_TYPES.LATEXDIFF
     ) {
       // Always write to the configured output channel
       this.channel.appendLine(formattedMessage);

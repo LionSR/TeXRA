@@ -155,6 +155,10 @@ export class LogEntryFormatter {
       return this._formatMissingOutputs(htmlMessage, text, id);
     }
 
+    if (messageType === 'latexdiff') {
+      return this._formatLatexdiff(htmlMessage, text, id);
+    }
+
     return htmlMessage;
   }
 
@@ -357,6 +361,53 @@ export class LogEntryFormatter {
       </details>`;
     } catch (e) {
       console.error('Error parsing missing outputs:', e);
+      return message;
+    }
+  }
+
+  _formatLatexdiff(message, content, logId) {
+    try {
+      const idAttr = logId ? ` data-log-id="${logId}"` : '';
+      const parsed = JSON.parse(this._unescapeHtml(content));
+      const entries = Array.isArray(parsed) ? parsed : [parsed];
+
+      let items = '';
+      entries.forEach((d) => {
+        const basePath = String(d.base ?? '');
+        const revisedPath = String(d.revised ?? '');
+        const outputPath = String(d.output ?? '');
+
+        const baseEsc = this._escapeHtml(basePath);
+        const revisedEsc = this._escapeHtml(revisedPath);
+        const outputEsc = this._escapeHtml(outputPath);
+
+        const baseName = basePath.split('/').pop() || basePath;
+        const revisedName = revisedPath.split('/').pop() || revisedPath;
+
+        const icon = d.status === 'success' ? 'codicon-check' : 'codicon-error';
+
+        items += `<li><i class="codicon ${icon}"></i> <span class="file-link clickable-link" data-file="${baseEsc}">${this._escapeHtml(
+          baseName,
+        )}</span> &rarr; <span class="file-link clickable-link" data-file="${revisedEsc}">${this._escapeHtml(
+          revisedName,
+        )}</span> (<span class="file-link clickable-link" data-file="${outputEsc}">diff</span>)</li>`;
+      });
+
+      const summary =
+        entries.length === 1
+          ? 'Latexdiff result'
+          : `Latexdiff results (${entries.length})`;
+
+      return `<details class="latexdiff-details" open>
+        <summary>
+          <i class="${CHEVRON_DOWN_CLASS} toggle-icon"></i>
+          <i class="codicon codicon-diff"></i>
+          <span>${summary}</span>
+        </summary>
+        <ul class="latexdiff-content"${idAttr}>${items}</ul>
+      </details>`;
+    } catch (e) {
+      console.error('Error parsing latexdiff entry:', e);
       return message;
     }
   }
