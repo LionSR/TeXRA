@@ -3,17 +3,17 @@ import * as vscode from 'vscode';
 import { randomUUID } from 'crypto';
 
 // Local imports
-import { WorkspaceStateKey, workspaceSM } from '@common/state/stateManager';
+import { WorkspaceStateKey, workspaceSM } from '@utils/stateManager';
 import { WorkspaceFS } from '@utils/files';
 import { objectToTaskState } from '@utils/config';
 import { TaskState } from '@logger/TaskState';
 import { AgentLogger } from '@logger/AgentLogger';
 
 // Types
-import { TokenUsageStats } from '@agent/types/UsageTypes';
+import { TokenUsageStats } from '../types/UsageTypes';
 import { TaskGroup, LogMessageData } from '../logger/LogTypes';
-import type { DiffStats } from '@agent/types/DiffTypes';
-import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
+import type { DiffStats } from '../types/DiffTypes';
+import type { StreamTabId, ExecutionId } from '../types/IdentifierTypes';
 
 interface OutputFileInfo extends DiffStats {
   path: string;

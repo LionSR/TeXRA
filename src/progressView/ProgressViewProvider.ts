@@ -11,11 +11,11 @@ import { AgentLogger } from '@logger/AgentLogger';
 
 import { getConfig } from '@utils/config';
 
-import { TokenUsageStats } from '@agent/types/UsageTypes';
+import { TokenUsageStats } from '../types/UsageTypes';
 import { TaskGroup } from '../logger/LogTypes';
-import type { DiffStats } from '@agent/types/DiffTypes';
+import type { DiffStats } from '../types/DiffTypes';
 import { randomUUID } from 'crypto';
-import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
+import type { StreamTabId, ExecutionId } from '../types/IdentifierTypes';
 import { onProgress } from '@eventBus/ProgressEventBus';
 
 // @ts-ignore - Import JavaScript module
