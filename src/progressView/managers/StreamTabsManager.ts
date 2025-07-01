@@ -78,6 +78,16 @@ export class StreamTabsManager {
   }
 
   /**
+   * Clear content of a specific stream (but keep the stream)
+   */
+  clearContent(stream: StreamTabId): void {
+    if (this._tabs.has(stream)) {
+      this._tabs.get(stream)!.length = 0;
+      this.save();
+    }
+  }
+
+  /**
    * Get all stream IDs
    */
   keys(): StreamTabId[] {
