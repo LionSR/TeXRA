@@ -200,7 +200,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider, IProgre
 
     // Update status for current stream
     if (this.state.activeStream) {
-      const status = this.eventHandler.getStreamStatus(this.state.activeStream) || STATUS.READY;
+      const status = this.eventHandler.getStreamStatus(this.state.activeStream) || STATUS.STOPPED;
       this.webviewUpdater.updateStatus(status);
     } else {
       this.webviewUpdater.updateStatus(STATUS.READY);
