@@ -1,8 +1,8 @@
 // Types
 import { TaskState } from '@logger/TaskState';
-import { TokenUsageStats } from '../../types/UsageTypes';
-import { LogMessageData } from '../../logger/LogTypes';
-import type { StreamTabId, ExecutionId } from '../../types/IdentifierTypes';
+import { TokenUsageStats } from '@agent/types/UsageTypes';
+import { LogMessageData } from '@logger/LogTypes';
+import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
 
 /**
  * Interface for ProgressViewProvider implementations.
