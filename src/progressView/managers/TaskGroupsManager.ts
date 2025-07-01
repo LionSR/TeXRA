@@ -1,11 +1,11 @@
 // Local imports
 import { StatePersistenceManager } from '../persistence/StatePersistenceManager';
-import { WorkspaceStateKey } from '@utils/stateManager';
+import { WorkspaceStateKey } from '@common/state/stateManager';
 import { AgentLogger } from '@logger/AgentLogger';
 
 // Types
-import { TaskGroup } from '../../logger/LogTypes';
-import type { StreamTabId } from '../../types/IdentifierTypes';
+import { TaskGroup } from '@logger/LogTypes';
+import type { StreamTabId } from '@agent/types/IdentifierTypes';
 
 /**
  * Manages task groups collection with persistence.

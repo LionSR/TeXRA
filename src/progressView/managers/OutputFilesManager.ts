@@ -1,12 +1,12 @@
 // Local imports
 import { StatePersistenceManager } from '../persistence/StatePersistenceManager';
-import { WorkspaceStateKey } from '@utils/stateManager';
+import { WorkspaceStateKey } from '@common/state/stateManager';
 import { WorkspaceFS } from '@utils/files';
 import { AgentLogger } from '@logger/AgentLogger';
 
 // Types
-import type { DiffStats } from '../../types/DiffTypes';
-import type { StreamTabId } from '../../types/IdentifierTypes';
+import type { DiffStats } from '@agent/types/DiffTypes';
+import type { StreamTabId } from '@agent/types/IdentifierTypes';
 
 interface OutputFileInfo extends DiffStats {
   path: string;

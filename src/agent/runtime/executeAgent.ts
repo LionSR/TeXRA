@@ -28,7 +28,7 @@ import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 
 import { getStreamTabId } from '@/logger/streamUtils';
-import type { StreamTabId, ExecutionId } from '../../types/IdentifierTypes';
+import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
 import { IAgent } from '@agent/core/IAgent';
 
 const CHANNEL = 'executeAgent';

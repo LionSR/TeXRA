@@ -29,7 +29,7 @@ import {
 } from '@anthropic-ai/sdk';
 
 // Local imports
-import { getConfig } from './config';
+import { getConfig } from '@utils/config';
 
 // Google GenAI errors are still not exported as of v1.5.1 of the SDK,
 // but the runtime uses the names `ClientError` and `ServerError`.

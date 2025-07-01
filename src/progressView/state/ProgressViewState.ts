@@ -4,13 +4,13 @@ import { StreamTabsManager } from '../managers/StreamTabsManager';
 import { TaskGroupsManager } from '../managers/TaskGroupsManager';
 import { OutputFilesManager } from '../managers/OutputFilesManager';
 import { UsageStatsManager } from '../managers/UsageStatsManager';
-import { WorkspaceStateKey } from '@utils/stateManager';
+import { WorkspaceStateKey } from '@common/state/stateManager';
 import { objectToTaskState } from '@utils/config';
 import { AgentLogger } from '@logger/AgentLogger';
 
 // Types
 import { TaskState } from '@logger/TaskState';
-import type { StreamTabId, ExecutionId } from '../../types/IdentifierTypes';
+import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
 
 /**
  * Core state management for the progress view.

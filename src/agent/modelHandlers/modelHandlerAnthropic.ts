@@ -12,7 +12,7 @@ import {
 import type { BetaMessage } from '@anthropic-ai/sdk/resources/beta/messages';
 
 // Local imports - error utils
-import { formatProviderError } from '@utils/sdkErrorUtils';
+import { formatProviderError } from '@common/errors/sdkErrorUtils';
 
 // Local imports - utilities
 import { WorkspaceFS } from '@utils/files';
