@@ -6,6 +6,8 @@ import * as vscode from 'vscode';
 
 // Local imports - log
 import * as logger from '@logger/logUtils';
+import { MESSAGE_TYPES } from '@logger/messageTypes';
+import { objectToLogString } from '@utils/text/stringUtils';
 
 // Local imports - utilities
 import { logErrorMessage } from '@common/errors/errorHandlingUtils';
@@ -67,6 +69,8 @@ export class LaTeXdiffService {
     suffix = '_diff',
     runIndent = true,
   ): Promise<LaTeXdiffResult> {
+    let diffFileName = '';
+    let outputPath = '';
     try {
       // Validate inputs
       if (!inputFile) {
@@ -91,7 +95,14 @@ export class LaTeXdiffService {
         };
       }
 
-      logger.info(
+      diffFileName = this.fileNameManager.generateDiffFileName(
+        inputFile,
+        editedFile,
+        suffix,
+      );
+      outputPath = path.join(path.dirname(inputFile), diffFileName);
+
+      logger.debug(
         this.channel,
         `Running latexdiff for ${inputFile} and ${editedFile}`,
       );
@@ -100,14 +111,6 @@ export class LaTeXdiffService {
       if (runIndent) {
         await this.formatFiles([inputFile, editedFile]);
       }
-
-      // Generate output filename
-      const diffFileName = this.fileNameManager.generateDiffFileName(
-        inputFile,
-        editedFile,
-        suffix,
-      );
-      const outputPath = path.join(path.dirname(inputFile), diffFileName);
 
       // Execute latexdiff command
       const result = await this.commandExecutor.executeDiff(
@@ -122,6 +125,11 @@ export class LaTeXdiffService {
       await WorkspaceFS.writeFile(outputPath, result.stdout);
       await this.fileProcessor.processDiffFile(outputPath);
 
+      logger.debug(
+        this.channel,
+        `Latexdiff succeeded: ${inputFile} -> ${editedFile}`,
+      );
+
       return {
         success: true,
         diffFileName,
@@ -132,6 +140,10 @@ export class LaTeXdiffService {
         this.channel,
         'Error running LaTeX diff',
         err,
+      );
+      logger.debug(
+        this.channel,
+        `Latexdiff failed: ${inputFile} -> ${editedFile}`,
       );
       return { success: false, message };
     }
