@@ -5,13 +5,15 @@
 ### Summary of Changes Made
 
 **Phase 1: Created New Directory Structure**
+
 - ✅ `src/common/errors/` - For backend-only error handling utilities
-- ✅ `src/common/state/` - For backend-only state management utilities  
+- ✅ `src/common/state/` - For backend-only state management utilities
 - ✅ `src/common/files/` - For backend-only file utilities
 - ✅ `src/agent/types/` - For agent-specific type definitions
 - ✅ `src/logger/types/` - For logger-specific type definitions
 
 **Phase 2: Moved Files and Updated All Imports**
+
 - ✅ Moved `src/utils/errorHandlingUtils.ts` → `src/common/errors/errorHandlingUtils.ts`
 - ✅ Moved `src/utils/sdkErrorUtils.ts` → `src/common/errors/sdkErrorUtils.ts`
 - ✅ Moved `src/utils/stateManager.ts` → `src/common/state/stateManager.ts`
@@ -28,6 +30,7 @@
 ### Current State After Reorganization
 
 #### `src/utils/` - Now Contains Only Truly Shared Utilities
+
 ```
 src/utils/
 ├── helpers.ts                     ✅ Shared utilities (sleep, etc.)
@@ -50,6 +53,7 @@ src/utils/
 ```
 
 #### `src/types/` - Now Contains Only Truly Shared Types
+
 ```
 src/types/
 ├── node-pandoc.d.ts              ✅ Shared type declarations
@@ -57,6 +61,7 @@ src/types/
 ```
 
 #### `src/common/` - New Backend-Only Utilities
+
 ```
 src/common/
 ├── errors/
@@ -69,6 +74,7 @@ src/common/
 ```
 
 #### Domain-Specific Types Moved to Their Modules
+
 ```
 src/agent/types/                   ✅ Agent-specific types
 ├── DiffTypes.ts
@@ -90,16 +96,19 @@ src/logger/types/                  ✅ Logger-specific types
 ## Benefits Achieved
 
 ### 1. **Clear Separation of Concerns**
+
 - ✅ **Shared utilities** remain in `src/utils/` (truly used by both frontend & backend)
 - ✅ **Backend-specific utilities** moved to appropriate `src/common/` modules
 - ✅ **Types** are co-located with their usage domains
 
 ### 2. **Improved Maintainability**
+
 - ✅ Easier to find related code (types near their domain logic)
 - ✅ Clear boundaries between shared and domain-specific code
 - ✅ Reduced coupling between unrelated modules
 
 ### 3. **Better Developer Experience**
+
 - ✅ Clearer import paths that indicate scope (`@common/errors/` vs `@utils/`)
 - ✅ Less confusion about what's shared vs. domain-specific
 - ✅ Easier to understand dependencies
@@ -109,6 +118,7 @@ src/logger/types/                  ✅ Logger-specific types
 The following reorganization could be done in the future to further improve organization:
 
 #### Move Domain-Specific Commands Closer to Their Modules:
+
 ```
 src/commands/latex/               → src/latex/commands/
 src/commands/wolfram/             → src/tools/wolfram/commands/
@@ -118,6 +128,7 @@ src/commands/housekeeping/        → src/housekeeping/commands/
 ```
 
 #### Keep General Commands in `src/commands/`:
+
 ```
 src/commands/
 ├── system/                       # System-level commands
@@ -131,6 +142,7 @@ src/commands/
 ## Conclusion
 
 The reorganization has been successfully completed with proper separation of concerns:
+
 - **Shared utilities** (used by both frontend and backend) remain in `src/utils/`
 - **Backend-only utilities** moved to `src/common/` subdirectories
 - **Domain-specific types** moved to their respective modules
