@@ -7,7 +7,7 @@ import type { MessageCreateParams } from '@anthropic-ai/sdk/resources/messages';
 import * as vscode from 'vscode';
 
 // Local imports - error utils
-import { formatProviderError } from '../sdkErrorUtils';
+import { formatProviderError } from '@common/errors/sdkErrorUtils';
 
 // Local imports - log
 import * as logger from '@logger/logUtils';

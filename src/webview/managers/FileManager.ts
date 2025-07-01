@@ -8,7 +8,7 @@ import { workspace } from 'vscode';
 // Local imports - log
 import * as logger from '@logger/logUtils';
 import { uncapitalize } from '@frontend/ui/messageUtils';
-import { showLoggedMessage } from '@utils/errorHandlingUtils';
+import { showLoggedMessage } from '@common/errors/errorHandlingUtils';
 
 // Local imports - utilities
 import { WorkspaceFS } from '@utils/files';

@@ -1,7 +1,7 @@
 // Local imports
 import { WorkspaceFS } from '@utils/files';
 import { diff_match_patch } from 'diff-match-patch';
-import type { DiffStats } from '@/types/DiffTypes';
+import type { DiffStats } from '@agent/types/DiffTypes';
 
 export class DiffStatsManager {
   private countLines(text: string): number {
@@ -45,4 +45,4 @@ export class DiffStatsManager {
   }
 }
 
-export type { DiffStats } from '@/types/DiffTypes';
+export type { DiffStats } from '@agent/types/DiffTypes';
