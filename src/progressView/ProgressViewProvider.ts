@@ -23,26 +23,31 @@ import { LogMessageData } from '../logger/LogTypes';
 import { STATUS, COMMANDS } from './modules/constants.js';
 
 // Type aliases for status values
-type StreamStatusType = typeof STATUS.RUNNING | typeof STATUS.ERROR | typeof STATUS.STOPPED;
+type StreamStatusType =
+  | typeof STATUS.RUNNING
+  | typeof STATUS.ERROR
+  | typeof STATUS.STOPPED;
 
 /**
  * Refactored ProgressViewProvider using the new modular architecture.
  * This class now focuses on orchestration and delegation to focused managers,
  * following the design principles from AGENTS.md.
  */
-export class ProgressViewProvider implements vscode.WebviewViewProvider, IProgressViewProvider {
+export class ProgressViewProvider
+  implements vscode.WebviewViewProvider, IProgressViewProvider
+{
   private static _instance: ProgressViewProvider | undefined;
   private _view?: vscode.WebviewView;
-  
+
   // New modular architecture components
   private readonly state: ProgressViewState;
   private readonly eventHandler: ProgressEventHandler;
   private readonly webviewUpdater: WebviewUpdater;
-  
+
   // Existing components (will be gradually updated)
   private readonly contentProvider: ProgressViewContentProvider;
   private readonly messageHandler: ProgressViewMessageHandler;
-  
+
   // Infrastructure
   private _disposables: vscode.Disposable[] = [];
   private _viewDisposables: vscode.Disposable[] = [];
@@ -61,10 +66,15 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider, IProgre
     this.logger = new AgentLogger('ProgressViewProviderNew');
 
     // Initialize new modular architecture
-    const persistenceManager = new StatePersistenceManager(context.workspaceState);
+    const persistenceManager = new StatePersistenceManager(
+      context.workspaceState,
+    );
     this.state = new ProgressViewState(persistenceManager);
     this.webviewUpdater = new WebviewUpdater(() => this._view?.webview);
-    this.eventHandler = new ProgressEventHandler(this.state, this.webviewUpdater);
+    this.eventHandler = new ProgressEventHandler(
+      this.state,
+      this.webviewUpdater,
+    );
 
     // Initialize existing components
     this.contentProvider = new ProgressViewContentProvider(context);
@@ -87,11 +97,13 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider, IProgre
    */
   public async initialize(): Promise<void> {
     await this.state.load();
-    
+
     // Setup event listeners using the new architecture
     this._disposables.push(...this.eventHandler.setupEventListeners());
-    
-    this.logger.debug('ProgressViewProvider initialized with new modular architecture');
+
+    this.logger.debug(
+      'ProgressViewProvider initialized with new modular architecture',
+    );
   }
 
   public static getInstance(): ProgressViewProvider | undefined {
@@ -148,7 +160,9 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider, IProgre
     webviewView.title = this._viewTitle;
 
     // Set initial HTML content
-    webviewView.webview.html = this.contentProvider.getHtmlContent(webviewView.webview);
+    webviewView.webview.html = this.contentProvider.getHtmlContent(
+      webviewView.webview,
+    );
 
     // Setup event handlers
     this._viewDisposables.push(
@@ -200,7 +214,9 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider, IProgre
 
     // Update status for current stream
     if (this.state.activeStream) {
-      const status = this.eventHandler.getStreamStatus(this.state.activeStream) || STATUS.STOPPED;
+      const status =
+        this.eventHandler.getStreamStatus(this.state.activeStream) ||
+        STATUS.STOPPED;
       this.webviewUpdater.updateStatus(status);
     } else {
       this.webviewUpdater.updateStatus(STATUS.READY);
@@ -210,7 +226,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider, IProgre
   }
 
   // Public API methods - these delegate to the new architecture
-  
+
   /**
    * Get stream tabs (legacy compatibility)
    */
@@ -266,7 +282,9 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider, IProgre
   /**
    * Get missing outputs for a stream (legacy compatibility)
    */
-  public getMissingOutputs(stream: string): { [key: number]: string[] } | undefined {
+  public getMissingOutputs(
+    stream: string,
+  ): { [key: number]: string[] } | undefined {
     return this.state.outputFiles.getMissingOutputs(stream);
   }
 
@@ -283,7 +301,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider, IProgre
   public setTaskState(
     streamTabId: StreamTabId,
     taskState: TaskState,
-    options?: { executionId?: ExecutionId }
+    options?: { executionId?: ExecutionId },
   ): void {
     this.state.setTaskState(streamTabId, taskState);
     if (options?.executionId) {
@@ -347,7 +365,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider, IProgre
    */
   public updateLogContent(stream: string): void {
     if (!this.webviewUpdater.isAvailable()) return;
-    
+
     const messages = this.state.streamTabs.get(stream) || [];
     this.webviewUpdater.updateLogContent(stream, messages);
   }

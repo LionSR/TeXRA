@@ -131,7 +131,7 @@ export class UsageStatsManager {
 
     if (savedUsage && Object.keys(savedUsage).length > 0) {
       const processedUsage = new Map<StreamTabId, TokenUsageStats>();
-      
+
       for (const [stream, usage] of Object.entries(savedUsage)) {
         // Ensure all required fields are present
         const normalizedUsage: TokenUsageStats = {
@@ -139,12 +139,14 @@ export class UsageStatsManager {
           outputTokens: usage.outputTokens || 0,
           cost: usage.cost || 0,
         };
-        
+
         processedUsage.set(stream, normalizedUsage);
       }
-      
+
       this._usageStats = processedUsage;
-      this.logger.debug(`Loaded usage statistics for ${this._usageStats.size} streams`);
+      this.logger.debug(
+        `Loaded usage statistics for ${this._usageStats.size} streams`,
+      );
     } else {
       this._usageStats.clear();
     }

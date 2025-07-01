@@ -51,11 +51,11 @@ export class StatePersistenceManager {
   async loadWithMigration<T>(
     newKey: string,
     legacyKey: string,
-    defaultValue: T
+    defaultValue: T,
   ): Promise<T> {
     // Try new key first
     let value = await this.load(newKey, undefined as any);
-    
+
     if (value === undefined) {
       // Try legacy key
       value = await this.load(legacyKey, defaultValue);
@@ -65,7 +65,7 @@ export class StatePersistenceManager {
         await this.delete(legacyKey);
       }
     }
-    
+
     return value !== undefined ? value : defaultValue;
   }
 }

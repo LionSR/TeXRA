@@ -31,7 +31,7 @@ export class ProgressViewState {
   constructor(persistence: StatePersistenceManager) {
     this.persistence = persistence;
     this.logger = new AgentLogger('ProgressViewState');
-    
+
     // Initialize focused managers
     this._streamTabs = new StreamTabsManager(persistence);
     this._taskGroups = new TaskGroupsManager(persistence);
@@ -108,14 +108,14 @@ export class ProgressViewState {
     this._usageStats.deleteStream(stream);
     this._taskStates.delete(stream);
     this._executionIds.delete(stream);
-    
+
     // Update active stream if necessary
     if (this._activeStream === stream) {
       const remainingStreams = this._streamTabs.keys();
       this._activeStream = remainingStreams[0] || '';
       this.saveActiveStream();
     }
-    
+
     this.saveTaskStates();
     this.saveExecutionIds();
   }
@@ -154,9 +154,9 @@ export class ProgressViewState {
   private async loadActiveStream(): Promise<void> {
     const savedActiveStream = await this.persistence.load<string>(
       WorkspaceStateKey.ACTIVE_STREAM_TAB,
-      ''
+      '',
     );
-    
+
     if (savedActiveStream && this._streamTabs.has(savedActiveStream)) {
       this._activeStream = savedActiveStream;
     } else {
@@ -174,7 +174,7 @@ export class ProgressViewState {
 
     if (savedTaskStates) {
       const processedStates = new Map<StreamTabId, TaskState>();
-      
+
       if (Array.isArray(savedTaskStates)) {
         // Backwards compatibility: convert from array format if encountered
         for (const [stream, state] of savedTaskStates) {
@@ -185,9 +185,11 @@ export class ProgressViewState {
           processedStates.set(stream, objectToTaskState(state));
         }
       }
-      
+
       this._taskStates = processedStates;
-      this.logger.debug(`Loaded task states for ${this._taskStates.size} streams`);
+      this.logger.debug(
+        `Loaded task states for ${this._taskStates.size} streams`,
+      );
     } else {
       this._taskStates.clear();
     }
@@ -197,15 +199,15 @@ export class ProgressViewState {
    * Load execution IDs from persistence
    */
   private async loadExecutionIds(): Promise<void> {
-    const savedIds = await this.persistence.loadWithMigration<{ [key: string]: string }>(
-      WorkspaceStateKey.EXECUTION_IDS,
-      WorkspaceStateKey.TASK_IDS,
-      {}
-    );
+    const savedIds = await this.persistence.loadWithMigration<{
+      [key: string]: string;
+    }>(WorkspaceStateKey.EXECUTION_IDS, WorkspaceStateKey.TASK_IDS, {});
 
     if (savedIds && Object.keys(savedIds).length > 0) {
       this._executionIds = new Map(Object.entries(savedIds));
-      this.logger.debug(`Loaded execution IDs for ${this._executionIds.size} streams`);
+      this.logger.debug(
+        `Loaded execution IDs for ${this._executionIds.size} streams`,
+      );
     } else {
       this._executionIds.clear();
     }
@@ -215,7 +217,10 @@ export class ProgressViewState {
    * Save active stream to persistence
    */
   private saveActiveStream(): void {
-    this.persistence.save(WorkspaceStateKey.ACTIVE_STREAM_TAB, this._activeStream);
+    this.persistence.save(
+      WorkspaceStateKey.ACTIVE_STREAM_TAB,
+      this._activeStream,
+    );
   }
 
   /**
