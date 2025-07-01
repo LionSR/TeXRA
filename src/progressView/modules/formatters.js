@@ -3,7 +3,10 @@ import { marked } from 'marked';
 import markedKatex from 'marked-katex-extension';
 // Local imports
 import { katexMacros } from './katexMacros.js';
-import { CHEVRON_RIGHT_CLASS } from '@common/webviewContext.js';
+import {
+  CHEVRON_RIGHT_CLASS,
+  CHEVRON_DOWN_CLASS,
+} from '@common/webviewContext.js';
 import { STATUS } from './constants.js';
 
 // Constants
