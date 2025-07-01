@@ -54,12 +54,12 @@ export class XmlOutputManager {
         );
         return fallbackContent;
       }
-      this.logger.error(
+      this.logger.debug(
         `No ${documentTag} found in output file using fallback method`,
       );
       return null;
     } catch (fallbackErr) {
-      this.logger.error(
+      this.logger.debug(
         `Failed fallback extraction: ${fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr)}`,
       );
       return null;
@@ -124,7 +124,7 @@ export class XmlOutputManager {
         await WorkspaceFS.writeFile(texFile, latexDocument);
         return texFile;
       }
-      this.logger.warn(
+      this.logger.debug(
         `No ${documentTag} found in parsed XML, attempting fallback extraction...`,
       );
       const fallbackContent = this.extractDocumentbyRegex(
@@ -139,7 +139,7 @@ export class XmlOutputManager {
         `Failed to extract <${documentTag}> from ${path.basename(outputFile)}`,
       );
     } catch (err) {
-      this.logger.warn(
+      this.logger.debug(
         `Failed to parse XML content: ${err instanceof Error ? err.message : String(err)}, attempting fallback extraction...`,
       );
       const fallbackContent = this.extractDocumentbyRegex(
@@ -182,7 +182,7 @@ export class XmlOutputManager {
       if (documents) {
         return this.processMultipleLatexDocuments(documents, outputFile);
       }
-      this.logger.warn(
+      this.logger.debug(
         `No ${documentTag} found in parsed XML, attempting fallback extraction...`,
       );
       const fallbackDocuments = this.extractMultipleDocumentsbyRegex(
@@ -197,7 +197,7 @@ export class XmlOutputManager {
       }
       return [];
     } catch (err) {
-      this.logger.warn(
+      this.logger.debug(
         `Failed to parse XML content: ${err instanceof Error ? err.message : String(err)}, attempting fallback extraction...`,
       );
       const fallbackDocuments = this.extractMultipleDocumentsbyRegex(
@@ -228,13 +228,13 @@ export class XmlOutputManager {
 
     for (const doc of latexDocuments) {
       if (!doc.name || doc.name === 'unknown' || !doc.content) {
-        this.logger.warn(`Skipping document with empty name or content`);
+        this.logger.debug(`Skipping document with empty name or content`);
         continue;
       }
 
       const source = doc.name.trim();
       if (!source) {
-        this.logger.warn(
+        this.logger.debug(
           `Skipping document with empty source name after trimming`,
         );
         continue;
