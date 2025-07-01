@@ -465,4 +465,24 @@ export class ProgressEventHandler {
       }
     }
   }
+
+  /**
+   * Reset running tasks to ERROR status (used during webview reload)
+   * Returns the list of affected streams for further processing
+   */
+  resetRunningTasksToError(): string[] {
+    const affectedStreams: string[] = [];
+
+    for (const [stream, status] of this._streamStatus.entries()) {
+      if (status === STATUS.RUNNING) {
+        this._streamStatus.set(stream, STATUS.ERROR);
+        affectedStreams.push(stream);
+        this.logger.debug(
+          `Stream ${stream} set to ERROR due to webview reload`,
+        );
+      }
+    }
+
+    return affectedStreams;
+  }
 }
