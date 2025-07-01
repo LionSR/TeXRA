@@ -6,7 +6,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import type { MessageCreateParams } from '@anthropic-ai/sdk/resources/messages';
 
 // Local imports - error utils
-import { getSdkErrorMessage } from '@utils/sdkErrorUtils';
+import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
 
 // Local imports - core
 import { TextEditorTool } from '@tools/anthropic/TextEditorTool';
@@ -25,7 +25,7 @@ import { getConfig } from '@utils/config';
 import {
   showLoggedErrorMessage,
   showLoggedMessage,
-} from '@utils/errorHandlingUtils';
+} from '@common/errors/errorHandlingUtils';
 
 // Local imports - logging
 import { AgentLogger } from '@logger/AgentLogger';

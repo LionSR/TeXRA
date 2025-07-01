@@ -10,7 +10,7 @@ import { AbsoluteFS } from './absoluteFS';
 import {
   showLoggedErrorMessage,
   showLoggedMessage,
-} from '@utils/errorHandlingUtils';
+} from '@common/errors/errorHandlingUtils';
 
 const CHANNEL = 'workspaceFS';
 logger.initialize(CHANNEL);
