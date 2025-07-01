@@ -1,0 +1,468 @@
+// Third-party imports
+import * as vscode from 'vscode';
+
+// Local imports
+import { ProgressViewState } from '../state/ProgressViewState';
+import { WebviewUpdater } from '../webview/WebviewUpdater';
+import { AgentLogger } from '@logger/AgentLogger';
+import { getConfig } from '@utils/config';
+import { onProgress } from '@eventBus/ProgressEventBus';
+
+// Types
+import { TokenUsageStats } from '../../types/UsageTypes';
+import { TaskState } from '@logger/TaskState';
+import { LogMessageData, TaskGroup } from '../../logger/LogTypes';
+import type { StreamTabId, ExecutionId } from '../../types/IdentifierTypes';
+
+// @ts-ignore - Import JavaScript module
+import { STATUS } from '../modules/constants.js';
+
+// Type aliases for status values
+type StatusType =
+  | typeof STATUS.RUNNING
+  | typeof STATUS.ERROR
+  | typeof STATUS.STOPPED
+  | typeof STATUS.READY;
+type StreamStatusType =
+  | typeof STATUS.RUNNING
+  | typeof STATUS.ERROR
+  | typeof STATUS.STOPPED;
+type StreamStatusOrReadyType = StreamStatusType | typeof STATUS.READY;
+
+/**
+ * Handles progress event bus subscriptions for the progress view.
+ * Provides a clean separation between event handling and business logic
+ * by delegating to the state manager and webview updater.
+ */
+export class ProgressEventHandler {
+  private readonly logger: AgentLogger;
+  private _streamStatus: Map<string, StreamStatusType> = new Map();
+
+  constructor(
+    private state: ProgressViewState,
+    private webviewUpdater: WebviewUpdater,
+  ) {
+    this.logger = new AgentLogger('ProgressEventHandler');
+  }
+
+  /**
+   * Setup all event bus listeners
+   */
+  setupEventListeners(): vscode.Disposable[] {
+    return [
+      new vscode.Disposable(
+        onProgress('setActiveStream', this.handleSetActiveStream.bind(this)),
+      ),
+      new vscode.Disposable(
+        onProgress(
+          'updateStreamStatus',
+          this.handleUpdateStreamStatus.bind(this),
+        ),
+      ),
+      new vscode.Disposable(
+        onProgress('addOutputFiles', this.handleAddOutputFiles.bind(this)),
+      ),
+      new vscode.Disposable(
+        onProgress(
+          'updateMissingOutputs',
+          this.handleUpdateMissingOutputs.bind(this),
+        ),
+      ),
+      new vscode.Disposable(
+        onProgress(
+          'clearMissingOutputs',
+          this.handleClearMissingOutputs.bind(this),
+        ),
+      ),
+      new vscode.Disposable(
+        onProgress('clearOutputFiles', this.handleClearOutputFiles.bind(this)),
+      ),
+      new vscode.Disposable(
+        onProgress('setTaskState', this.handleSetTaskState.bind(this)),
+      ),
+      new vscode.Disposable(
+        onProgress('updateGroupUsage', this.handleUpdateGroupUsage.bind(this)),
+      ),
+      new vscode.Disposable(
+        onProgress('clearTaskOutput', this.handleClearTaskOutput.bind(this)),
+      ),
+      new vscode.Disposable(
+        onProgress(
+          'updateStreamUsage',
+          this.handleUpdateStreamUsage.bind(this),
+        ),
+      ),
+      new vscode.Disposable(
+        onProgress('addLogMessage', this.handleAddLogMessage.bind(this)),
+      ),
+      new vscode.Disposable(
+        onProgress('updateLogMessage', this.handleUpdateLogMessage.bind(this)),
+      ),
+      new vscode.Disposable(
+        onProgress('addTaskGroup', this.handleAddTaskGroup.bind(this)),
+      ),
+      new vscode.Disposable(
+        onProgress('updateTaskGroup', this.handleUpdateTaskGroup.bind(this)),
+      ),
+    ];
+  }
+
+  /**
+   * Handle setting active stream
+   */
+  private handleSetActiveStream(stream: string): void {
+    this.state.activeStream = stream;
+
+    if (this.webviewUpdater.isAvailable()) {
+      const streams = this.state.streamTabs.keys();
+      this.webviewUpdater.updateStreams(streams, stream);
+      this.updateLogContentForStream(stream);
+    }
+  }
+
+  /**
+   * Handle stream status updates
+   */
+  private handleUpdateStreamStatus(data: {
+    stream: string;
+    status: StreamStatusOrReadyType;
+  }): void {
+    const { stream, status } = data;
+
+    if (status !== STATUS.READY) {
+      this._streamStatus.set(stream, status as StreamStatusType);
+    } else {
+      this._streamStatus.delete(stream);
+    }
+
+    if (
+      this.webviewUpdater.isAvailable() &&
+      stream === this.state.activeStream
+    ) {
+      this.webviewUpdater.updateStatus(status);
+    }
+  }
+
+  /**
+   * Handle adding output files
+   */
+  private handleAddOutputFiles(data: {
+    stream: string;
+    filesByRound: { [key: number]: any[] };
+  }): void {
+    const { stream, filesByRound } = data;
+    this.state.outputFiles.addFiles(stream, filesByRound);
+
+    if (
+      this.webviewUpdater.isAvailable() &&
+      stream === this.state.activeStream
+    ) {
+      const files = this.state.outputFiles.getFiles(stream) || {};
+      this.webviewUpdater.updateFiles(stream, files);
+    }
+  }
+
+  /**
+   * Handle updating missing outputs
+   */
+  private handleUpdateMissingOutputs(data: {
+    stream: string;
+    filesByRound: { [key: number]: string[] };
+  }): void {
+    const { stream, filesByRound } = data;
+    this.state.outputFiles.updateMissingOutputs(stream, filesByRound);
+
+    if (
+      this.webviewUpdater.isAvailable() &&
+      stream === this.state.activeStream
+    ) {
+      const missing = this.state.outputFiles.getMissingOutputs(stream) || {};
+      this.webviewUpdater.updateMissingOutputs(stream, missing);
+    }
+  }
+
+  /**
+   * Handle clearing missing outputs
+   */
+  private handleClearMissingOutputs(stream: string): void {
+    this.state.outputFiles.clearMissingOutputs(stream);
+
+    if (
+      this.webviewUpdater.isAvailable() &&
+      stream === this.state.activeStream
+    ) {
+      this.webviewUpdater.updateMissingOutputs(stream, {});
+    }
+  }
+
+  /**
+   * Handle clearing output files
+   */
+  private handleClearOutputFiles(stream: string): void {
+    this.state.outputFiles.clearFiles(stream);
+
+    if (
+      this.webviewUpdater.isAvailable() &&
+      stream === this.state.activeStream
+    ) {
+      this.webviewUpdater.updateFiles(stream, {});
+    }
+  }
+
+  /**
+   * Handle setting task state
+   */
+  private handleSetTaskState(data: {
+    streamTabId: StreamTabId;
+    executionId?: ExecutionId;
+    taskState: TaskState;
+  }): void {
+    const { streamTabId, executionId, taskState } = data;
+
+    this.state.setTaskState(streamTabId, taskState);
+
+    if (executionId) {
+      this.state.setExecutionId(streamTabId, executionId);
+    }
+  }
+
+  /**
+   * Handle updating group usage
+   */
+  private handleUpdateGroupUsage(data: {
+    stream: string;
+    groupId: string;
+    usage: TokenUsageStats;
+  }): void {
+    const { stream, groupId, usage } = data;
+
+    // Update the group with usage information
+    const group = this.state.taskGroups.getGroup(stream, groupId);
+    if (group) {
+      this.state.taskGroups.updateGroup(stream, groupId, { usage });
+    }
+  }
+
+  /**
+   * Handle clearing task output
+   */
+  private handleClearTaskOutput(streamTabId: StreamTabId): void {
+    const taskState = this.state.getTaskState(streamTabId);
+    if (taskState) {
+      // Only clear output-related fields, preserve other task state data
+      taskState.outputFiles = [];
+      if (taskState.activeFiles) {
+        taskState.activeFiles.output = false;
+      }
+      this.state.setTaskState(streamTabId, taskState);
+    }
+  }
+
+  /**
+   * Handle updating stream usage
+   */
+  private handleUpdateStreamUsage(data: {
+    stream: string;
+    usage: TokenUsageStats;
+  }): void {
+    const { stream, usage } = data;
+    this.state.usageStats.updateStreamUsage(stream, usage);
+
+    if (
+      this.webviewUpdater.isAvailable() &&
+      stream === this.state.activeStream
+    ) {
+      this.webviewUpdater.updateUsage(usage);
+    }
+  }
+
+  /**
+   * Handle adding log message
+   */
+  private handleAddLogMessage(data: {
+    stream: string;
+    logMessage: LogMessageData;
+  }): void {
+    const { stream, logMessage } = data;
+
+    // Skip debug messages if debug mode is disabled
+    if (
+      logMessage.level === 'debug' &&
+      !getConfig<boolean>('logger.debugMode', false)
+    ) {
+      return;
+    }
+
+    // Create stream if it doesn't exist
+    if (!this.state.streamTabs.has(stream)) {
+      this.logger.debug(`Adding new stream to ProgressView: ${stream}`);
+
+      // Set initial status to running for new streams
+      if (!this._streamStatus.has(stream)) {
+        this.handleUpdateStreamStatus({ stream, status: STATUS.RUNNING });
+      }
+
+      // Auto-focus new agent streams
+      this.handleSetActiveStream(stream);
+    }
+
+    this.state.streamTabs.add(stream, logMessage);
+
+    if (this.webviewUpdater.isAvailable()) {
+      this.webviewUpdater.appendLogMessage(stream, logMessage);
+    }
+  }
+
+  /**
+   * Handle updating log message
+   */
+  private handleUpdateLogMessage(data: {
+    stream: string;
+    logMessage: LogMessageData;
+  }): void {
+    const { stream, logMessage } = data;
+
+    const messages = this.state.streamTabs.get(stream);
+    if (!messages) return;
+
+    const existing = messages.find((m) => m.id === logMessage.id);
+    if (!existing) return;
+
+    if (logMessage.text !== undefined) {
+      existing.text = logMessage.text;
+    }
+    if (logMessage.messageType) {
+      existing.messageType = logMessage.messageType;
+    }
+
+    if (
+      this.webviewUpdater.isAvailable() &&
+      stream === this.state.activeStream
+    ) {
+      this.webviewUpdater.updateLogMessage(stream, existing);
+    }
+  }
+
+  /**
+   * Handle adding task group
+   */
+  private handleAddTaskGroup(data: {
+    stream: string;
+    groupId: string;
+    groupName: string;
+    startTime: number;
+    status: StatusType;
+    endTime?: number;
+    parentGroupId?: string;
+  }): void {
+    const {
+      stream,
+      groupId,
+      groupName,
+      startTime,
+      status,
+      endTime,
+      parentGroupId,
+    } = data;
+
+    // Ensure the stream exists
+    if (!this.state.streamTabs.has(stream)) {
+      this.logger.debug(`Creating stream from addTaskGroup: ${stream}`);
+      if (!this._streamStatus.has(stream)) {
+        this.handleUpdateStreamStatus({ stream, status: STATUS.RUNNING });
+      }
+      this.handleSetActiveStream(stream);
+    }
+
+    const group: TaskGroup = {
+      id: groupId,
+      name: groupName,
+      startTime,
+      endTime,
+      status,
+      parentGroupId,
+    };
+
+    this.state.taskGroups.addGroup(stream, groupId, group);
+
+    // Send webview update for the active stream
+    if (
+      this.webviewUpdater.isAvailable() &&
+      stream === this.state.activeStream
+    ) {
+      this.webviewUpdater.addTaskGroup(stream, group);
+    }
+  }
+
+  /**
+   * Handle updating task group
+   */
+  private handleUpdateTaskGroup(data: {
+    stream: string;
+    groupId: string;
+    status: StatusType;
+    endTime?: number;
+  }): void {
+    const { stream, groupId, status, endTime } = data;
+
+    this.state.taskGroups.updateGroup(stream, groupId, {
+      status,
+      endTime,
+    });
+
+    // Send webview update for the active stream
+    if (
+      this.webviewUpdater.isAvailable() &&
+      stream === this.state.activeStream
+    ) {
+      this.webviewUpdater.updateTaskGroup(stream, groupId, status, endTime);
+    }
+  }
+
+  /**
+   * Update log content for a specific stream
+   */
+  private updateLogContentForStream(stream: string): void {
+    if (!this.webviewUpdater.isAvailable()) return;
+
+    const messages = this.state.streamTabs.get(stream) || [];
+    const groups = Array.from(
+      this.state.taskGroups.getStreamGroups(stream).values(),
+    );
+    this.webviewUpdater.updateLogContent(stream, messages, groups);
+
+    // Send output files for current stream
+    const files = this.state.outputFiles.getFiles(stream) || {};
+    this.webviewUpdater.updateFiles(stream, files);
+
+    // Send missing outputs for current stream
+    const missing = this.state.outputFiles.getMissingOutputs(stream) || {};
+    this.webviewUpdater.updateMissingOutputs(stream, missing);
+
+    // Send usage for current stream
+    const usage = this.state.usageStats.getStreamUsage(stream);
+    this.webviewUpdater.updateUsage(usage);
+
+    // Update status for current stream - default to STOPPED when stream exists but no status is set
+    const status = this._streamStatus.get(stream) || STATUS.STOPPED;
+    this.webviewUpdater.updateStatus(status);
+  }
+
+  /**
+   * Get current stream status
+   */
+  getStreamStatus(stream: string): StreamStatusType | undefined {
+    return this._streamStatus.get(stream);
+  }
+
+  /**
+   * Mark all running tasks as cancelled (used during restart)
+   */
+  markAllRunningTasksAsCancelled(): void {
+    for (const [stream, status] of this._streamStatus.entries()) {
+      if (status === STATUS.RUNNING) {
+        this._streamStatus.set(stream, STATUS.STOPPED);
+      }
+    }
+  }
+}
