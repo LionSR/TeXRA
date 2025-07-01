@@ -37,20 +37,9 @@ export class OutputFilesManager {
     stream: StreamTabId,
     filesByRound: { [key: number]: OutputFileInfo[] },
   ): void {
-    if (!this._outputFiles.has(stream)) {
-      this._outputFiles.set(stream, {});
-    }
-
-    const streamFiles = this._outputFiles.get(stream)!;
-
-    for (const [round, files] of Object.entries(filesByRound)) {
-      const roundNum = parseInt(round, 10);
-      if (!streamFiles[roundNum]) {
-        streamFiles[roundNum] = [];
-      }
-      streamFiles[roundNum].push(...files);
-    }
-
+    const existing = this._outputFiles.get(stream) || {};
+    const merged = { ...existing, ...filesByRound };
+    this._outputFiles.set(stream, merged);
     this.save();
   }
 
