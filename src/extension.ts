@@ -8,7 +8,7 @@ import { SecretManager } from '@frontend/secretManager';
 import { copyDefaultAgents, configureLatexSettings } from '@frontend/setup';
 import { disposeDiffRefresh } from '@frontend/ui/diffView';
 import { StorageFS } from '@utils/files';
-import { initializeStateManagers } from '@utils/stateManager';
+import { initializeStateManagers } from '@common/state/stateManager';
 import { FileLister } from '@frontend/files/fileLister';
 
 // Local imports - components

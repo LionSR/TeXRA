@@ -9,7 +9,7 @@ import {
 
 // Local imports - log
 import * as logger from '@logger/logUtils';
-import { showLoggedErrorMessage } from '@utils/errorHandlingUtils';
+import { showLoggedErrorMessage } from '@common/errors/errorHandlingUtils';
 
 const CHANNEL = 'TestCommands';
 logger.initialize(CHANNEL);
