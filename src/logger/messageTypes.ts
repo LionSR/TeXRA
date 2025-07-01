@@ -3,6 +3,7 @@ export const MESSAGE_TYPES = {
   SCRATCHPAD: 'scratchpad',
   FILE_LIST: 'fileList',
   MISSING_OUTPUTS: 'missingOutputs',
+  LATEXDIFF: 'latexdiff',
   DEFAULT: 'default',
 } as const;
 
