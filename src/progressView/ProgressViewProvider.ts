@@ -352,7 +352,8 @@ export class ProgressViewProvider
    * Cleanup tasks after restart (legacy compatibility)
    */
   public cleanupTasksAfterRestart(): void {
-    this.eventHandler.markAllRunningTasksAsCancelled();
+    // Use the same logic as webview reload to mark all running tasks/groups as ERROR
+    this.resetRunningStreamStatuses();
     this.updateWebview();
   }
 
@@ -371,11 +372,12 @@ export class ProgressViewProvider
     // Get affected streams and set their status to ERROR
     const affectedStreams = this.eventHandler.resetRunningTasksToError();
 
-    // Update any running log groups within affected streams
-    for (const streamId of affectedStreams) {
-      const streamGroups = this.state.taskGroups.getStreamGroups(streamId);
-      if (streamGroups.size > 0) {
-        for (const [groupId, group] of streamGroups.entries()) {
+    // Also check ALL streams for running groups, not just affected streams
+    // This ensures we catch any groups that might be running even if stream status is not
+    for (const [streamId, groups] of this.state.taskGroups.getAll().entries()) {
+      if (groups.size > 0) {
+        let groupsUpdated = false;
+        for (const [groupId, group] of groups.entries()) {
           if (group.status === STATUS.RUNNING) {
             // Update the group to ERROR status with current end time
             const endTime = Date.now();
@@ -387,12 +389,21 @@ export class ProgressViewProvider
             this.logger.debug(
               `Group ${groupId} in stream ${streamId} set to ERROR due to webview reload`,
             );
+            groupsUpdated = true;
           }
+        }
+
+        // If we updated groups but the stream wasn't in affected streams,
+        // we should still ensure the webview updates
+        if (groupsUpdated && !affectedStreams.includes(streamId)) {
+          this.logger.debug(
+            `Stream ${streamId} had running groups but wasn't marked as affected`,
+          );
         }
       }
     }
 
-    // Save state is handled automatically by the state managers
+    // The TaskGroupsManager.updateGroup() method automatically saves state
   }
 
   /**
