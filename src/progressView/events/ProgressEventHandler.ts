@@ -20,6 +20,7 @@ import { STATUS } from '../modules/constants.js';
 // Type aliases for status values
 type StatusType = typeof STATUS.RUNNING | typeof STATUS.ERROR | typeof STATUS.STOPPED | typeof STATUS.READY;
 type StreamStatusType = typeof STATUS.RUNNING | typeof STATUS.ERROR | typeof STATUS.STOPPED;
+type StreamStatusOrReadyType = StreamStatusType | typeof STATUS.READY;
 
 /**
  * Handles progress event bus subscriptions for the progress view.
@@ -103,11 +104,11 @@ export class ProgressEventHandler {
   /**
    * Handle stream status updates
    */
-  private handleUpdateStreamStatus(data: { stream: string; status: StreamStatusType }): void {
+  private handleUpdateStreamStatus(data: { stream: string; status: StreamStatusOrReadyType }): void {
     const { stream, status } = data;
     
-    if (status !== 'ready') {
-      this._streamStatus.set(stream, status);
+    if (status !== STATUS.READY) {
+      this._streamStatus.set(stream, status as StreamStatusType);
     } else {
       this._streamStatus.delete(stream);
     }
@@ -199,8 +200,15 @@ export class ProgressEventHandler {
    * Handle clearing task output
    */
   private handleClearTaskOutput(streamTabId: StreamTabId): void {
-    this.state.clearTaskState(streamTabId);
-    this.state.clearExecutionId(streamTabId);
+    const taskState = this.state.getTaskState(streamTabId);
+    if (taskState) {
+      // Only clear output-related fields, preserve other task state data
+      taskState.outputFiles = [];
+      if (taskState.activeFiles) {
+        taskState.activeFiles.output = false;
+      }
+      this.state.setTaskState(streamTabId, taskState);
+    }
   }
 
   /**
@@ -329,7 +337,8 @@ export class ProgressEventHandler {
     if (!this.webviewUpdater.isAvailable()) return;
     
     const messages = this.state.streamTabs.get(stream) || [];
-    this.webviewUpdater.updateLogContent(stream, messages);
+    const groups = Array.from(this.state.taskGroups.getStreamGroups(stream).values());
+    this.webviewUpdater.updateLogContent(stream, messages, groups);
 
     // Send output files for current stream
     const files = this.state.outputFiles.getFiles(stream) || {};
