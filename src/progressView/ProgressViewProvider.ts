@@ -126,6 +126,9 @@ export class ProgressViewProvider
   public resolveWebviewView(webviewView: vscode.WebviewView): void {
     this.cleanupView();
 
+    // Mark all running tasks as cancelled since they will lose contact when webview reloads
+    this.resetRunningStreamStatuses();
+
     this._webviewReady = false;
     this._pendingUpdate = false;
     this._view = webviewView;
@@ -358,6 +361,38 @@ export class ProgressViewProvider
    */
   public isViewVisible(): boolean {
     return this._view?.visible ?? false;
+  }
+
+  /**
+   * Reset running stream statuses when webview reloads
+   * Sets all running streams and their groups to ERROR status
+   */
+  private resetRunningStreamStatuses(): void {
+    // Get affected streams and set their status to ERROR
+    const affectedStreams = this.eventHandler.resetRunningTasksToError();
+
+    // Update any running log groups within affected streams
+    for (const streamId of affectedStreams) {
+      const streamGroups = this.state.taskGroups.getStreamGroups(streamId);
+      if (streamGroups.size > 0) {
+        for (const [groupId, group] of streamGroups.entries()) {
+          if (group.status === STATUS.RUNNING) {
+            // Update the group to ERROR status with current end time
+            const endTime = Date.now();
+            this.state.taskGroups.updateGroup(streamId, groupId, {
+              status: STATUS.ERROR,
+              endTime,
+            });
+
+            this.logger.debug(
+              `Group ${groupId} in stream ${streamId} set to ERROR due to webview reload`,
+            );
+          }
+        }
+      }
+    }
+
+    // Save state is handled automatically by the state managers
   }
 
   /**
