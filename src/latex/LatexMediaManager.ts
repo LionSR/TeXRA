@@ -20,7 +20,16 @@ import { WorkspaceFS } from '@utils/files';
  * Handles LaTeX related media extraction and compilation for agents.
  */
 export class LatexMediaManager {
+  private loggedFiles = new Set<string>();
+  
   constructor(private readonly logger: AgentLogger) {}
+
+  /**
+   * Reset the logged files tracking for a new processing session
+   */
+  public resetLoggedFiles(): void {
+    this.loggedFiles.clear();
+  }
 
   private async attachTeXCount(
     files: string[],
@@ -33,23 +42,32 @@ export class LatexMediaManager {
   }
 
   /**
-   * Log the loaded media files to the progress view (initial loading status)
+   * Log newly discovered media files immediately with loading status
    */
-  private logLoadedFiles(mediaFiles: string[], groupId?: string): void {
-    if (mediaFiles.length === 0) {
+  private logNewlyDiscoveredFiles(newFiles: string[], groupId?: string): void {
+    if (newFiles.length === 0) {
       return;
     }
 
-    // Log a message indicating files have been loaded and are ready for processing
-    const fileCount = mediaFiles.length;
+    // Filter out files that have already been logged
+    const unloggedFiles = newFiles.filter(file => !this.loggedFiles.has(file));
+    
+    if (unloggedFiles.length === 0) {
+      return;
+    }
+
+    // Mark files as logged
+    unloggedFiles.forEach(file => this.loggedFiles.add(file));
+
+    // Log a message indicating files have been discovered
+    const fileCount = unloggedFiles.length;
     const fileLabel = fileCount === 1 ? 'file' : 'files';
-    this.logger.info(`Loading ${fileCount} media ${fileLabel}`, groupId);
+    this.logger.info(`Discovered ${fileCount} media ${fileLabel}`, groupId);
 
     // Log the file list with loading status for progress view processing
-    // Note: Files are logged as loading initially, final status will be updated after processing
-    const mediaFileResults = mediaFiles.map((file) => ({
+    const mediaFileResults = unloggedFiles.map((file) => ({
       path: file,
-      ok: null, // null indicates loading state, will be updated with actual results
+      ok: null, // null indicates loading/discovery state, final status will be updated after processing
     }));
 
     this.logger.info(
@@ -122,6 +140,8 @@ export class LatexMediaManager {
     compileResults.forEach((result) => {
       if (result.status === 'fulfilled' && result.value) {
         toolState.addMediaFiles([result.value]);
+        // Log newly compiled PDF files immediately
+        this.logNewlyDiscoveredFiles([result.value], groupId);
       }
     });
   }
@@ -164,6 +184,8 @@ export class LatexMediaManager {
 
     if (extraMediaFiles.length > 0) {
       toolState.addMediaFiles(extraMediaFiles);
+      // Log newly added extra media files immediately
+      this.logNewlyDiscoveredFiles(extraMediaFiles, groupId);
     }
 
     if (cfg.autoExtractFigure) {
@@ -182,6 +204,8 @@ export class LatexMediaManager {
             groupId,
           );
           toolState.addMediaFiles(result.value);
+          // Log newly extracted figure files immediately
+          this.logNewlyDiscoveredFiles(result.value, groupId);
         }
       });
     }
@@ -197,6 +221,8 @@ export class LatexMediaManager {
           result.value.length > 0
         ) {
           toolState.addMediaFiles(result.value);
+          // Log newly compiled TikZ files immediately
+          this.logNewlyDiscoveredFiles(result.value, groupId);
         }
       });
       this.logger.debug(
@@ -209,10 +235,7 @@ export class LatexMediaManager {
       await this.compilePdfs(existingFiles, toolState, groupId);
     }
 
-    // Log all loaded media files immediately after processing
-    if (toolState.mediaFiles.length > 0) {
-      this.logLoadedFiles(toolState.mediaFiles, groupId);
-    }
+    // Note: Files are logged immediately when discovered/added above
   }
 
   /**
@@ -256,6 +279,8 @@ export class LatexMediaManager {
           result.value.length > 0
         ) {
           toolState.addMediaFiles(result.value);
+          // Log newly compiled TikZ files immediately
+          this.logNewlyDiscoveredFiles(result.value, groupId);
         }
       });
     }
@@ -264,9 +289,6 @@ export class LatexMediaManager {
       await this.compilePdfs(existingFiles, toolState, groupId);
     }
 
-    // Log all loaded media files immediately after processing
-    if (toolState.mediaFiles.length > 0) {
-      this.logLoadedFiles(toolState.mediaFiles, groupId);
-    }
+    // Note: Files are logged immediately when discovered/added above
   }
 }
