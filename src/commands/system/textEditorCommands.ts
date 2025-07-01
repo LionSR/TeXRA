@@ -7,7 +7,7 @@ import * as logger from '@logger/logUtils';
 // Local imports - Anthropic Tool
 import { TextEditorTool, ToolCallInput } from '@agent/toolUse';
 
-import { showLoggedErrorMessage } from '@utils/errorHandlingUtils';
+import { showLoggedErrorMessage } from '@common/errors/errorHandlingUtils';
 
 // Local imports - utilities
 import { WorkspaceFS } from '@utils/files';

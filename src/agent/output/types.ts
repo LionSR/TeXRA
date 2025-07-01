@@ -1,4 +1,4 @@
-import type { DiffStats } from '@/types/DiffTypes';
+import type { DiffStats } from '@agent/types/DiffTypes';
 
 export interface NamedOutputFile {
   source: string;

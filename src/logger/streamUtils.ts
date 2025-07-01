@@ -2,7 +2,7 @@
 import * as path from 'path';
 
 // Local imports
-import type { StreamTabId } from '../types/IdentifierTypes';
+import type { StreamTabId } from '@agent/types/IdentifierTypes';
 
 /**
  * Build a consistent stream tab identifier based on agent, model and input file.

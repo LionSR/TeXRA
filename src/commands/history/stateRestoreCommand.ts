@@ -4,7 +4,7 @@ import * as vscode from 'vscode';
 // Local imports - log
 import * as logger from '@logger/logUtils';
 import { objectToTaskState } from '@utils/config';
-import { showLoggedErrorMessage } from '@utils/errorHandlingUtils';
+import { showLoggedErrorMessage } from '@common/errors/errorHandlingUtils';
 
 const CHANNEL = 'stateRestoreCommand';
 logger.initialize(CHANNEL);

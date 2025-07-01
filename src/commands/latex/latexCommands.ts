@@ -12,7 +12,7 @@ import replacementEngine from '@replacement/engine';
 // Local imports - latex utils
 import { runLatexFormatter } from '@latex/texFormatter';
 import { getTeXCount } from '@latex/texcount';
-import { showLoggedErrorMessage } from '@utils/errorHandlingUtils';
+import { showLoggedErrorMessage } from '@common/errors/errorHandlingUtils';
 
 // Local imports - commands
 import { fileSelectionCommands } from '../files/fileSelectionCommands';
