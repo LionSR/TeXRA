@@ -40,7 +40,8 @@ export interface LogMessageData {
     | 'scratchpad'
     | 'thinking'
     | 'fileList'
-    | 'missingOutputs';
+    | 'missingOutputs'
+    | 'latexdiff';
   /** Whether verbose details should be displayed */
   verbose?: boolean;
 }
