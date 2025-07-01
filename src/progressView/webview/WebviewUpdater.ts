@@ -45,14 +45,15 @@ export class WebviewUpdater {
   /**
    * Update log content for a specific stream
    */
-  updateLogContent(stream: StreamTabId, messages: LogMessageData[]): void {
+  updateLogContent(stream: StreamTabId, messages: LogMessageData[], groups?: any[]): void {
     const webview = this.getWebview();
     if (!webview) return;
 
     webview.postMessage({
-      command: COMMANDS.UPDATE_LOG_CONTENT,
+      command: COMMANDS.UPDATE_LOGS,
       stream,
       messages,
+      groups: groups || [],
     });
   }
 
@@ -154,7 +155,8 @@ export class WebviewUpdater {
     if (activeStream) {
       // Update log content for active stream
       const messages = state.streamTabs.get(activeStream) || [];
-      this.updateLogContent(activeStream, messages);
+      const groups = Array.from(state.taskGroups.getStreamGroups(activeStream).values());
+      this.updateLogContent(activeStream, messages, groups);
 
       // Update files for active stream
       const files = state.outputFiles.getFiles(activeStream) || {};

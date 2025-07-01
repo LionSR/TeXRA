@@ -309,8 +309,15 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider, IProgre
    * Clear task output (legacy compatibility)
    */
   public clearTaskOutput(streamTabId: StreamTabId): void {
-    this.state.clearTaskState(streamTabId);
-    this.state.clearExecutionId(streamTabId);
+    const taskState = this.state.getTaskState(streamTabId);
+    if (taskState) {
+      // Only clear output-related fields, preserve other task state data
+      taskState.outputFiles = [];
+      if (taskState.activeFiles) {
+        taskState.activeFiles.output = false;
+      }
+      this.state.setTaskState(streamTabId, taskState);
+    }
   }
 
   /**
