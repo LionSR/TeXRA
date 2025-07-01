@@ -9,7 +9,7 @@ import { sync as globSync } from 'glob';
 import * as logger from '@logger/logUtils';
 
 // Local imports - result types
-import type { FileOpResult } from '@/types/ResultTypes';
+import type { FileOpResult } from '@agent/types/ResultTypes';
 
 // Local imports - utilities
 import { WorkspaceFS } from '@utils/files';

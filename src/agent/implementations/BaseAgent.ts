@@ -14,7 +14,7 @@ import { buildUserVars } from '../utils/userVars';
 // Local imports - utilities
 import { SHORT_SLEEP_MS } from '@utils/config';
 import { sleep } from '@utils/helpers';
-import type { StreamTabId } from '../../types/IdentifierTypes';
+import type { StreamTabId } from '@agent/types/IdentifierTypes';
 
 /**
  * Minimal abstract base class providing shared setup and interruption logic.

@@ -10,7 +10,7 @@ import { countTokens } from 'gpt-tokenizer';
 import { WorkspaceFS } from '@utils/files';
 import { cleanFileContent } from '@replacement/engine';
 import xmlUtils from '@utils/text/xmlUtils';
-import { formatProviderError } from '@utils/sdkErrorUtils';
+import { formatProviderError } from '@common/errors/sdkErrorUtils';
 
 // Local imports - agent components
 import { AgentConfig } from '../core/AgentConfig';

@@ -3,12 +3,12 @@ import { randomUUID } from 'crypto';
 
 // Local imports
 import { StatePersistenceManager } from '../persistence/StatePersistenceManager';
-import { WorkspaceStateKey } from '@utils/stateManager';
+import { WorkspaceStateKey } from '@common/state/stateManager';
 import { AgentLogger } from '@logger/AgentLogger';
 
 // Types
-import { LogMessageData } from '../../logger/LogTypes';
-import type { StreamTabId } from '../../types/IdentifierTypes';
+import { LogMessageData } from '@logger/LogTypes';
+import type { StreamTabId } from '@agent/types/IdentifierTypes';
 
 /**
  * Manages stream tabs collection with persistence.

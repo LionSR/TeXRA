@@ -11,7 +11,7 @@ import * as logger from '@logger/logUtils';
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
 import { getConfig } from '@utils/config';
 import { runLatexFormatter } from '@latex/texFormatter';
-import { showLoggedErrorMessage } from '@utils/errorHandlingUtils';
+import { showLoggedErrorMessage } from '@common/errors/errorHandlingUtils';
 
 // Local imports - housekeeping
 import { EXCLUDED_DIRS } from './constants';

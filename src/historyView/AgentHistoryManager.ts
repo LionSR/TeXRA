@@ -6,8 +6,8 @@ import { randomUUID } from 'crypto';
 
 // Local imports
 import { AgentConfig } from '@agent/core/AgentConfig';
-import { workspaceSM } from '@utils/stateManager';
-import type { ExecutionId } from '../types/IdentifierTypes';
+import { workspaceSM } from '@common/state/stateManager';
+import type { ExecutionId } from '@agent/types/IdentifierTypes';
 
 /**
  * Represents a historical agent execution

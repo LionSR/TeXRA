@@ -7,7 +7,7 @@ import * as vscode from 'vscode';
 // Local imports
 import * as logger from '@logger/logUtils';
 import { AbsoluteFS, GlobalStorageFS, StorageFS } from '@utils/files';
-import { GlobalStateKey, globalSM } from '@utils/stateManager';
+import { GlobalStateKey, globalSM } from '@common/state/stateManager';
 
 /**
  * Copies default agent files from the extension resources to the global storage directory
