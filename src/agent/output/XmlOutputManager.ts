@@ -4,6 +4,7 @@ import { XMLParser } from 'fast-xml-parser';
 import { AgentSetting } from '@agent/core/AgentDataclass';
 import { AgentConfig } from '@agent/core/AgentConfig';
 import { AgentLogger } from '@logger/AgentLogger';
+import { MESSAGE_TYPES } from '@logger/messageTypes';
 import { WorkspaceFS } from '@utils/files';
 import xmlUtils from '@utils/text/xmlUtils';
 import { getOutputFileName } from '@agent/utils/outputFileUtils';
@@ -51,16 +52,22 @@ export class XmlOutputManager {
       if (fallbackContent) {
         this.logger.info(
           `Successfully extracted ${documentTag} using fallback method`,
+          undefined,
+          MESSAGE_TYPES.INTERNAL,
         );
         return fallbackContent;
       }
       this.logger.error(
         `No ${documentTag} found in output file using fallback method`,
+        undefined,
+        MESSAGE_TYPES.INTERNAL,
       );
       return null;
     } catch (fallbackErr) {
       this.logger.error(
         `Failed fallback extraction: ${fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr)}`,
+        undefined,
+        MESSAGE_TYPES.INTERNAL,
       );
       return null;
     }
@@ -78,16 +85,22 @@ export class XmlOutputManager {
       if (fallbackDocuments && fallbackDocuments.length > 0) {
         this.logger.info(
           `Successfully extracted multiple ${documentTag} using fallback method`,
+          undefined,
+          MESSAGE_TYPES.INTERNAL,
         );
         return fallbackDocuments;
       }
       this.logger.error(
         `No ${documentTag} found in output file using fallback method`,
+        undefined,
+        MESSAGE_TYPES.INTERNAL,
       );
       return null;
     } catch (err) {
       this.logger.error(
         `Failed fallback extraction: ${err instanceof Error ? err.message : String(err)}`,
+        undefined,
+        MESSAGE_TYPES.INTERNAL,
       );
       return null;
     }
@@ -126,6 +139,8 @@ export class XmlOutputManager {
       }
       this.logger.warn(
         `No ${documentTag} found in parsed XML, attempting fallback extraction...`,
+        undefined,
+        MESSAGE_TYPES.INTERNAL,
       );
       const fallbackContent = this.extractDocumentbyRegex(
         outputContent,
@@ -141,6 +156,8 @@ export class XmlOutputManager {
     } catch (err) {
       this.logger.warn(
         `Failed to parse XML content: ${err instanceof Error ? err.message : String(err)}, attempting fallback extraction...`,
+        undefined,
+        MESSAGE_TYPES.INTERNAL,
       );
       const fallbackContent = this.extractDocumentbyRegex(
         outputContent,
@@ -184,6 +201,8 @@ export class XmlOutputManager {
       }
       this.logger.warn(
         `No ${documentTag} found in parsed XML, attempting fallback extraction...`,
+        undefined,
+        MESSAGE_TYPES.INTERNAL,
       );
       const fallbackDocuments = this.extractMultipleDocumentsbyRegex(
         outputContent,
@@ -199,6 +218,8 @@ export class XmlOutputManager {
     } catch (err) {
       this.logger.warn(
         `Failed to parse XML content: ${err instanceof Error ? err.message : String(err)}, attempting fallback extraction...`,
+        undefined,
+        MESSAGE_TYPES.INTERNAL,
       );
       const fallbackDocuments = this.extractMultipleDocumentsbyRegex(
         outputContent,
