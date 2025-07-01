@@ -123,7 +123,7 @@ export class LatexMediaManager {
           result.value.length > 0
         ) {
           const file = existingFiles[idx];
-          this.logger.info(
+          this.logger.debug(
             `Extracted ${result.value.length} figures from ${file}`,
             groupId,
           );
@@ -145,6 +145,10 @@ export class LatexMediaManager {
           toolState.addMediaFiles(result.value);
         }
       });
+      this.logger.debug(
+        `Extracted ${tikzResults.length} TikZ figures`,
+        groupId,
+      );
     }
 
     if (cfg.autoCompileInputPdf) {
