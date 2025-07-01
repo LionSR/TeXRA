@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { AgentHistoryManager } from './AgentHistoryManager';
 import { executeCommand } from '@commands/agent/executeCommand';
 import { agentConfigToTaskState } from '@utils/config';
-import { showLoggedErrorMessage } from '@utils/errorHandlingUtils';
+import { showLoggedErrorMessage } from '@common/errors/errorHandlingUtils';
 // @ts-ignore - Import JavaScript module
 import { HISTORY_VIEW_COMMANDS } from '@common/webview/commands';
 import { HistoryViewContentProvider } from './HistoryViewContentProvider';

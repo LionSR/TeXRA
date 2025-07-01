@@ -1,5 +1,5 @@
 // Local imports
-import { getConfig } from './config';
+import { getConfig } from '@utils/config';
 
 export type FileType =
   | 'input'

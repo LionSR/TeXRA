@@ -5,7 +5,7 @@ import * as vscode from 'vscode';
 import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
-import { showLoggedErrorMessage } from '@utils/errorHandlingUtils';
+import { showLoggedErrorMessage } from '@common/errors/errorHandlingUtils';
 
 const CHANNEL = 'commandUtils';
 logger.initialize(CHANNEL);

@@ -6,9 +6,9 @@ import { ProgressViewState } from '../state/ProgressViewState';
 import { AgentLogger } from '@logger/AgentLogger';
 
 // Types
-import { TokenUsageStats } from '../../types/UsageTypes';
-import { LogMessageData } from '../../logger/LogTypes';
-import type { StreamTabId } from '../../types/IdentifierTypes';
+import { TokenUsageStats } from '@agent/types/UsageTypes';
+import { LogMessageData } from '@logger/LogTypes';
+import type { StreamTabId } from '@agent/types/IdentifierTypes';
 
 // @ts-ignore - Import JavaScript module
 import { COMMANDS } from '../modules/constants.js';

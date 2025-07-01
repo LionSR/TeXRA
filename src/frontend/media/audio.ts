@@ -13,7 +13,7 @@ import * as logger from '@logger/logUtils';
 // Local imports - utils
 import { SecretManager } from '@frontend/secretManager';
 import { AbsoluteFS, StorageFS } from '@utils/files';
-import { getSdkErrorMessage } from '@utils/sdkErrorUtils';
+import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
 import { checkToolInstalled } from '@utils/system/toolUtils';
 import {
   extendEnvPath,

@@ -6,7 +6,7 @@ import * as path from 'path';
 
 // Local imports
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
-import { INSTRUCTION_PREFIX, globalSM } from '@utils/stateManager';
+import { INSTRUCTION_PREFIX, globalSM } from '@common/state/stateManager';
 
 /**
  * Show an instruction message that can be permanently dismissed.

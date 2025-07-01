@@ -1,11 +1,11 @@
 // Local imports
 import { StatePersistenceManager } from '../persistence/StatePersistenceManager';
-import { WorkspaceStateKey } from '@utils/stateManager';
+import { WorkspaceStateKey } from '@common/state/stateManager';
 import { AgentLogger } from '@logger/AgentLogger';
 
 // Types
-import { TokenUsageStats } from '../../types/UsageTypes';
-import type { StreamTabId } from '../../types/IdentifierTypes';
+import { TokenUsageStats } from '@agent/types/UsageTypes';
+import type { StreamTabId } from '@agent/types/IdentifierTypes';
 
 /**
  * Manages usage statistics collection with persistence.
