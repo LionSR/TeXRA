@@ -35,16 +35,24 @@ export class TaskGroupsManager {
   /**
    * Update an existing task group
    */
-  updateGroup(stream: StreamTabId, groupId: string, updates: Partial<TaskGroup>): void {
+  updateGroup(
+    stream: StreamTabId,
+    groupId: string,
+    updates: Partial<TaskGroup>,
+  ): void {
     const streamGroups = this._groups.get(stream);
     if (!streamGroups) {
-      this.logger.warn(`Cannot update group ${groupId}: stream ${stream} not found`);
+      this.logger.warn(
+        `Cannot update group ${groupId}: stream ${stream} not found`,
+      );
       return;
     }
 
     const group = streamGroups.get(groupId);
     if (!group) {
-      this.logger.warn(`Cannot update group ${groupId}: group not found in stream ${stream}`);
+      this.logger.warn(
+        `Cannot update group ${groupId}: group not found in stream ${stream}`,
+      );
       return;
     }
 
@@ -112,18 +120,14 @@ export class TaskGroupsManager {
   async load(): Promise<void> {
     const savedGroups = await this.persistence.loadWithMigration<{
       [key: string]: { [groupId: string]: TaskGroup };
-    }>(
-      WorkspaceStateKey.TASK_GROUPS,
-      'texra.logGroups',
-      {}
-    );
+    }>(WorkspaceStateKey.TASK_GROUPS, 'texra.logGroups', {});
 
     if (savedGroups && Object.keys(savedGroups).length > 0) {
       const processedGroups = new Map<StreamTabId, Map<string, TaskGroup>>();
-      
+
       for (const [streamId, groups] of Object.entries(savedGroups)) {
         const streamGroupsMap = new Map<string, TaskGroup>();
-        
+
         for (const [id, group] of Object.entries(groups)) {
           // Normalize timestamp fields
           const normalizedGroup: TaskGroup = {
@@ -139,13 +143,13 @@ export class TaskGroupsManager {
                   : group.endTime
                 : undefined,
           };
-          
+
           streamGroupsMap.set(id, normalizedGroup);
         }
-        
+
         processedGroups.set(streamId, streamGroupsMap);
       }
-      
+
       this._groups = processedGroups;
       this.logger.debug(`Loaded task groups for ${this._groups.size} streams`);
     } else {
@@ -158,7 +162,7 @@ export class TaskGroupsManager {
    */
   save(): void {
     const persistentGroups = Array.from(this._groups.entries()).map(
-      ([streamId, groups]) => [streamId, Object.fromEntries(groups.entries())]
+      ([streamId, groups]) => [streamId, Object.fromEntries(groups.entries())],
     );
     const groupsObj = Object.fromEntries(persistentGroups);
     this.persistence.save(WorkspaceStateKey.TASK_GROUPS, groupsObj);

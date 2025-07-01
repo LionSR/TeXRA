@@ -18,8 +18,15 @@ import type { StreamTabId, ExecutionId } from '../../types/IdentifierTypes';
 import { STATUS } from '../modules/constants.js';
 
 // Type aliases for status values
-type StatusType = typeof STATUS.RUNNING | typeof STATUS.ERROR | typeof STATUS.STOPPED | typeof STATUS.READY;
-type StreamStatusType = typeof STATUS.RUNNING | typeof STATUS.ERROR | typeof STATUS.STOPPED;
+type StatusType =
+  | typeof STATUS.RUNNING
+  | typeof STATUS.ERROR
+  | typeof STATUS.STOPPED
+  | typeof STATUS.READY;
+type StreamStatusType =
+  | typeof STATUS.RUNNING
+  | typeof STATUS.ERROR
+  | typeof STATUS.STOPPED;
 type StreamStatusOrReadyType = StreamStatusType | typeof STATUS.READY;
 
 /**
@@ -33,7 +40,7 @@ export class ProgressEventHandler {
 
   constructor(
     private state: ProgressViewState,
-    private webviewUpdater: WebviewUpdater
+    private webviewUpdater: WebviewUpdater,
   ) {
     this.logger = new AgentLogger('ProgressEventHandler');
   }
@@ -44,46 +51,58 @@ export class ProgressEventHandler {
   setupEventListeners(): vscode.Disposable[] {
     return [
       new vscode.Disposable(
-        onProgress('setActiveStream', this.handleSetActiveStream.bind(this))
+        onProgress('setActiveStream', this.handleSetActiveStream.bind(this)),
       ),
       new vscode.Disposable(
-        onProgress('updateStreamStatus', this.handleUpdateStreamStatus.bind(this))
+        onProgress(
+          'updateStreamStatus',
+          this.handleUpdateStreamStatus.bind(this),
+        ),
       ),
       new vscode.Disposable(
-        onProgress('addOutputFiles', this.handleAddOutputFiles.bind(this))
+        onProgress('addOutputFiles', this.handleAddOutputFiles.bind(this)),
       ),
       new vscode.Disposable(
-        onProgress('updateMissingOutputs', this.handleUpdateMissingOutputs.bind(this))
+        onProgress(
+          'updateMissingOutputs',
+          this.handleUpdateMissingOutputs.bind(this),
+        ),
       ),
       new vscode.Disposable(
-        onProgress('clearMissingOutputs', this.handleClearMissingOutputs.bind(this))
+        onProgress(
+          'clearMissingOutputs',
+          this.handleClearMissingOutputs.bind(this),
+        ),
       ),
       new vscode.Disposable(
-        onProgress('clearOutputFiles', this.handleClearOutputFiles.bind(this))
+        onProgress('clearOutputFiles', this.handleClearOutputFiles.bind(this)),
       ),
       new vscode.Disposable(
-        onProgress('setTaskState', this.handleSetTaskState.bind(this))
+        onProgress('setTaskState', this.handleSetTaskState.bind(this)),
       ),
       new vscode.Disposable(
-        onProgress('updateGroupUsage', this.handleUpdateGroupUsage.bind(this))
+        onProgress('updateGroupUsage', this.handleUpdateGroupUsage.bind(this)),
       ),
       new vscode.Disposable(
-        onProgress('clearTaskOutput', this.handleClearTaskOutput.bind(this))
+        onProgress('clearTaskOutput', this.handleClearTaskOutput.bind(this)),
       ),
       new vscode.Disposable(
-        onProgress('updateStreamUsage', this.handleUpdateStreamUsage.bind(this))
+        onProgress(
+          'updateStreamUsage',
+          this.handleUpdateStreamUsage.bind(this),
+        ),
       ),
       new vscode.Disposable(
-        onProgress('addLogMessage', this.handleAddLogMessage.bind(this))
+        onProgress('addLogMessage', this.handleAddLogMessage.bind(this)),
       ),
       new vscode.Disposable(
-        onProgress('updateLogMessage', this.handleUpdateLogMessage.bind(this))
+        onProgress('updateLogMessage', this.handleUpdateLogMessage.bind(this)),
       ),
       new vscode.Disposable(
-        onProgress('addTaskGroup', this.handleAddTaskGroup.bind(this))
+        onProgress('addTaskGroup', this.handleAddTaskGroup.bind(this)),
       ),
       new vscode.Disposable(
-        onProgress('updateTaskGroup', this.handleUpdateTaskGroup.bind(this))
+        onProgress('updateTaskGroup', this.handleUpdateTaskGroup.bind(this)),
       ),
     ];
   }
@@ -93,7 +112,7 @@ export class ProgressEventHandler {
    */
   private handleSetActiveStream(stream: string): void {
     this.state.activeStream = stream;
-    
+
     if (this.webviewUpdater.isAvailable()) {
       const streams = this.state.streamTabs.keys();
       this.webviewUpdater.updateStreams(streams, stream);
@@ -104,16 +123,22 @@ export class ProgressEventHandler {
   /**
    * Handle stream status updates
    */
-  private handleUpdateStreamStatus(data: { stream: string; status: StreamStatusOrReadyType }): void {
+  private handleUpdateStreamStatus(data: {
+    stream: string;
+    status: StreamStatusOrReadyType;
+  }): void {
     const { stream, status } = data;
-    
+
     if (status !== STATUS.READY) {
       this._streamStatus.set(stream, status as StreamStatusType);
     } else {
       this._streamStatus.delete(stream);
     }
 
-    if (this.webviewUpdater.isAvailable() && stream === this.state.activeStream) {
+    if (
+      this.webviewUpdater.isAvailable() &&
+      stream === this.state.activeStream
+    ) {
       this.webviewUpdater.updateStatus(status);
     }
   }
@@ -121,11 +146,17 @@ export class ProgressEventHandler {
   /**
    * Handle adding output files
    */
-  private handleAddOutputFiles(data: { stream: string; filesByRound: { [key: number]: any[] } }): void {
+  private handleAddOutputFiles(data: {
+    stream: string;
+    filesByRound: { [key: number]: any[] };
+  }): void {
     const { stream, filesByRound } = data;
     this.state.outputFiles.addFiles(stream, filesByRound);
 
-    if (this.webviewUpdater.isAvailable() && stream === this.state.activeStream) {
+    if (
+      this.webviewUpdater.isAvailable() &&
+      stream === this.state.activeStream
+    ) {
       const files = this.state.outputFiles.getFiles(stream) || {};
       this.webviewUpdater.updateFiles(stream, files);
     }
@@ -134,11 +165,17 @@ export class ProgressEventHandler {
   /**
    * Handle updating missing outputs
    */
-  private handleUpdateMissingOutputs(data: { stream: string; filesByRound: { [key: number]: string[] } }): void {
+  private handleUpdateMissingOutputs(data: {
+    stream: string;
+    filesByRound: { [key: number]: string[] };
+  }): void {
     const { stream, filesByRound } = data;
     this.state.outputFiles.updateMissingOutputs(stream, filesByRound);
 
-    if (this.webviewUpdater.isAvailable() && stream === this.state.activeStream) {
+    if (
+      this.webviewUpdater.isAvailable() &&
+      stream === this.state.activeStream
+    ) {
       const missing = this.state.outputFiles.getMissingOutputs(stream) || {};
       this.webviewUpdater.updateMissingOutputs(stream, missing);
     }
@@ -150,7 +187,10 @@ export class ProgressEventHandler {
   private handleClearMissingOutputs(stream: string): void {
     this.state.outputFiles.clearMissingOutputs(stream);
 
-    if (this.webviewUpdater.isAvailable() && stream === this.state.activeStream) {
+    if (
+      this.webviewUpdater.isAvailable() &&
+      stream === this.state.activeStream
+    ) {
       this.webviewUpdater.updateMissingOutputs(stream, {});
     }
   }
@@ -161,7 +201,10 @@ export class ProgressEventHandler {
   private handleClearOutputFiles(stream: string): void {
     this.state.outputFiles.clearFiles(stream);
 
-    if (this.webviewUpdater.isAvailable() && stream === this.state.activeStream) {
+    if (
+      this.webviewUpdater.isAvailable() &&
+      stream === this.state.activeStream
+    ) {
       this.webviewUpdater.updateFiles(stream, {});
     }
   }
@@ -175,9 +218,9 @@ export class ProgressEventHandler {
     taskState: TaskState;
   }): void {
     const { streamTabId, executionId, taskState } = data;
-    
+
     this.state.setTaskState(streamTabId, taskState);
-    
+
     if (executionId) {
       this.state.setExecutionId(streamTabId, executionId);
     }
@@ -186,9 +229,13 @@ export class ProgressEventHandler {
   /**
    * Handle updating group usage
    */
-  private handleUpdateGroupUsage(data: { stream: string; groupId: string; usage: TokenUsageStats }): void {
+  private handleUpdateGroupUsage(data: {
+    stream: string;
+    groupId: string;
+    usage: TokenUsageStats;
+  }): void {
     const { stream, groupId, usage } = data;
-    
+
     // Update the group with usage information
     const group = this.state.taskGroups.getGroup(stream, groupId);
     if (group) {
@@ -214,11 +261,17 @@ export class ProgressEventHandler {
   /**
    * Handle updating stream usage
    */
-  private handleUpdateStreamUsage(data: { stream: string; usage: TokenUsageStats }): void {
+  private handleUpdateStreamUsage(data: {
+    stream: string;
+    usage: TokenUsageStats;
+  }): void {
     const { stream, usage } = data;
     this.state.usageStats.updateStreamUsage(stream, usage);
 
-    if (this.webviewUpdater.isAvailable() && stream === this.state.activeStream) {
+    if (
+      this.webviewUpdater.isAvailable() &&
+      stream === this.state.activeStream
+    ) {
       this.webviewUpdater.updateUsage(usage);
     }
   }
@@ -226,18 +279,24 @@ export class ProgressEventHandler {
   /**
    * Handle adding log message
    */
-  private handleAddLogMessage(data: { stream: string; logMessage: LogMessageData }): void {
+  private handleAddLogMessage(data: {
+    stream: string;
+    logMessage: LogMessageData;
+  }): void {
     const { stream, logMessage } = data;
-    
+
     // Skip debug messages if debug mode is disabled
-    if (logMessage.level === 'debug' && !getConfig<boolean>('logger.debugMode', false)) {
+    if (
+      logMessage.level === 'debug' &&
+      !getConfig<boolean>('logger.debugMode', false)
+    ) {
       return;
     }
 
     // Create stream if it doesn't exist
     if (!this.state.streamTabs.has(stream)) {
       this.logger.debug(`Adding new stream to ProgressView: ${stream}`);
-      
+
       // Set initial status to running for new streams
       if (!this._streamStatus.has(stream)) {
         this.handleUpdateStreamStatus({ stream, status: STATUS.RUNNING });
@@ -257,15 +316,18 @@ export class ProgressEventHandler {
   /**
    * Handle updating log message
    */
-  private handleUpdateLogMessage(data: { stream: string; logMessage: LogMessageData }): void {
+  private handleUpdateLogMessage(data: {
+    stream: string;
+    logMessage: LogMessageData;
+  }): void {
     const { stream, logMessage } = data;
-    
+
     const messages = this.state.streamTabs.get(stream);
     if (!messages) return;
-    
+
     const existing = messages.find((m) => m.id === logMessage.id);
     if (!existing) return;
-    
+
     if (logMessage.text !== undefined) {
       existing.text = logMessage.text;
     }
@@ -273,7 +335,10 @@ export class ProgressEventHandler {
       existing.messageType = logMessage.messageType;
     }
 
-    if (this.webviewUpdater.isAvailable() && stream === this.state.activeStream) {
+    if (
+      this.webviewUpdater.isAvailable() &&
+      stream === this.state.activeStream
+    ) {
       this.webviewUpdater.updateLogMessage(stream, existing);
     }
   }
@@ -290,8 +355,16 @@ export class ProgressEventHandler {
     endTime?: number;
     parentGroupId?: string;
   }): void {
-    const { stream, groupId, groupName, startTime, status, endTime, parentGroupId } = data;
-    
+    const {
+      stream,
+      groupId,
+      groupName,
+      startTime,
+      status,
+      endTime,
+      parentGroupId,
+    } = data;
+
     // Ensure the stream exists
     if (!this.state.streamTabs.has(stream)) {
       this.logger.debug(`Creating stream from addTaskGroup: ${stream}`);
@@ -313,7 +386,10 @@ export class ProgressEventHandler {
     this.state.taskGroups.addGroup(stream, groupId, group);
 
     // Send webview update for the active stream
-    if (this.webviewUpdater.isAvailable() && stream === this.state.activeStream) {
+    if (
+      this.webviewUpdater.isAvailable() &&
+      stream === this.state.activeStream
+    ) {
       this.webviewUpdater.addTaskGroup(stream, group);
     }
   }
@@ -328,14 +404,17 @@ export class ProgressEventHandler {
     endTime?: number;
   }): void {
     const { stream, groupId, status, endTime } = data;
-    
+
     this.state.taskGroups.updateGroup(stream, groupId, {
       status,
       endTime,
     });
 
     // Send webview update for the active stream
-    if (this.webviewUpdater.isAvailable() && stream === this.state.activeStream) {
+    if (
+      this.webviewUpdater.isAvailable() &&
+      stream === this.state.activeStream
+    ) {
       this.webviewUpdater.updateTaskGroup(stream, groupId, status, endTime);
     }
   }
@@ -345,9 +424,11 @@ export class ProgressEventHandler {
    */
   private updateLogContentForStream(stream: string): void {
     if (!this.webviewUpdater.isAvailable()) return;
-    
+
     const messages = this.state.streamTabs.get(stream) || [];
-    const groups = Array.from(this.state.taskGroups.getStreamGroups(stream).values());
+    const groups = Array.from(
+      this.state.taskGroups.getStreamGroups(stream).values(),
+    );
     this.webviewUpdater.updateLogContent(stream, messages, groups);
 
     // Send output files for current stream

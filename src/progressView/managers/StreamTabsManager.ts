@@ -31,12 +31,12 @@ export class StreamTabsManager {
     }
 
     const messages = this._tabs.get(stream)!;
-    
+
     // Ensure message has required fields
     if (!message.id) {
       message.id = randomUUID();
     }
-    
+
     messages.push(message);
 
     // Limit message history to prevent memory issues
@@ -104,15 +104,11 @@ export class StreamTabsManager {
   async load(): Promise<void> {
     const savedState = await this.persistence.loadWithMigration<{
       [key: string]: LogMessageData[] | any[];
-    }>(
-      WorkspaceStateKey.STREAM_TABS,
-      'texra.logStreams',
-      {}
-    );
+    }>(WorkspaceStateKey.STREAM_TABS, 'texra.logStreams', {});
 
     if (savedState && Object.keys(savedState).length > 0) {
       const processedStreams = new Map<StreamTabId, LogMessageData[]>();
-      
+
       for (const [stream, messages] of Object.entries(savedState)) {
         const processedMessages = messages.map((msg: any) => {
           // Ensure message has required fields
@@ -140,10 +136,10 @@ export class StreamTabsManager {
           }
           return msg as LogMessageData;
         });
-        
+
         processedStreams.set(stream, processedMessages);
       }
-      
+
       this._tabs = processedStreams;
       this.logger.debug(`Loaded ${this._tabs.size} streams from storage`);
     } else {
