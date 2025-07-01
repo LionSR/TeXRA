@@ -33,10 +33,14 @@ export class LatexDiffManager {
         groupId,
       );
     } else {
-      this.logger.warn(
-        `Failed to generate ${operation}: ${result.message}`,
-        groupId,
-      );
+      if (result.message && result.message.includes('document environment')) {
+        this.logger.debug(`Skipping ${operation}: ${result.message}`, groupId);
+      } else {
+        this.logger.warn(
+          `Failed to generate ${operation}: ${result.message}`,
+          groupId,
+        );
+      }
     }
   }
 
@@ -45,6 +49,12 @@ export class LatexDiffManager {
     groupId?: string,
   ): Promise<void> {
     const diffProcessGroupId = groupId ?? this.logger.getActiveGroupId();
+    const aggregated: Array<{
+      base: string;
+      revised: string;
+      output: string;
+      status: 'success' | 'error';
+    }> = [];
 
     try {
       if (!(await checkToolInstalled('latexdiff'))) {
@@ -100,18 +110,14 @@ export class LatexDiffManager {
             currRound,
           );
           this.logLatexdiffResult(result, 'round-diff', diffProcessGroupId);
-          this.logger.info(
-            objectToLogString({
-              base: baseFile,
-              revised: outputFile,
-              output: result.diffFileName
-                ? path.join(path.dirname(baseFile), result.diffFileName)
-                : '',
-              status: result.success ? 'success' : 'error',
-            }),
-            diffProcessGroupId,
-            MESSAGE_TYPES.LATEXDIFF,
-          );
+          aggregated.push({
+            base: baseFile,
+            revised: outputFile,
+            output: result.diffFileName
+              ? path.join(path.dirname(baseFile), result.diffFileName)
+              : '',
+            status: result.success ? 'success' : 'error',
+          });
           if (result.success && result.diffFileName) {
             const diffPath = path.join(
               path.dirname(baseFile),
@@ -166,18 +172,14 @@ export class LatexDiffManager {
             'between-rounds-diff',
             diffProcessGroupId,
           );
-          this.logger.info(
-            objectToLogString({
-              base: prevOutputFile,
-              revised: currOutputFile,
-              output: result.diffFileName
-                ? path.join(path.dirname(prevOutputFile), result.diffFileName)
-                : '',
-              status: result.success ? 'success' : 'error',
-            }),
-            diffProcessGroupId,
-            MESSAGE_TYPES.LATEXDIFF,
-          );
+          aggregated.push({
+            base: prevOutputFile,
+            revised: currOutputFile,
+            output: result.diffFileName
+              ? path.join(path.dirname(prevOutputFile), result.diffFileName)
+              : '',
+            status: result.success ? 'success' : 'error',
+          });
           if (result.success && result.diffFileName) {
             const diffPath = path.join(
               path.dirname(prevOutputFile),
@@ -192,6 +194,14 @@ export class LatexDiffManager {
             );
           }
         }
+      }
+
+      if (aggregated.length > 0) {
+        this.logger.info(
+          objectToLogString(aggregated),
+          diffProcessGroupId,
+          MESSAGE_TYPES.LATEXDIFF,
+        );
       }
     } catch (err) {
       this.logger.error(
