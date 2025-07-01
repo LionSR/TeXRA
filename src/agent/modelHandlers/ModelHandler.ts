@@ -6,6 +6,7 @@ import * as path from 'path';
 
 // Local imports - log
 import { AgentLogger } from '@logger/AgentLogger';
+import { MESSAGE_TYPES } from '@logger/messageTypes';
 
 // Local imports - utilities
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
@@ -499,11 +500,22 @@ export abstract class ModelHandler<U = any, R = any>
     }
 
     if (mediaFileResults.length > 0) {
-      if (mediaFileResults.some((r) => !r.ok)) {
-        this.logger.warn('Some media files failed to load');
+      // Log the final processing results for progress view
+      this.logger.info(
+        JSON.stringify(mediaFileResults),
+        undefined,
+        MESSAGE_TYPES.FILE_LIST,
+      );
+
+      // Log summary message
+      const successCount = mediaFileResults.filter(r => r.ok).length;
+      const failCount = mediaFileResults.length - successCount;
+      
+      if (failCount > 0) {
+        this.logger.warn(`${successCount} media files processed successfully, ${failCount} failed`);
+      } else {
+        this.logger.info(`All ${successCount} media files processed successfully`);
       }
-      // Note: File list logging is now handled by LatexMediaManager when files are initially loaded,
-      // not here during message creation. This ensures the file list appears immediately in the UI.
     }
 
     return this.createMediaContent(mediaMessage);

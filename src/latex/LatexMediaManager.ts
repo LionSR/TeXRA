@@ -33,22 +33,23 @@ export class LatexMediaManager {
   }
 
   /**
-   * Log the loaded media files to the progress view
+   * Log the loaded media files to the progress view (initial loading status)
    */
   private logLoadedFiles(mediaFiles: string[], groupId?: string): void {
     if (mediaFiles.length === 0) {
       return;
     }
 
-    // Log a message indicating files have been loaded and are ready
+    // Log a message indicating files have been loaded and are ready for processing
     const fileCount = mediaFiles.length;
     const fileLabel = fileCount === 1 ? 'file' : 'files';
-    this.logger.info(`Loaded ${fileCount} media ${fileLabel}`, groupId);
+    this.logger.info(`Loading ${fileCount} media ${fileLabel}`, groupId);
 
-    // Also log the file list for progress view processing
+    // Log the file list with loading status for progress view processing
+    // Note: Files are logged as loading initially, final status will be updated after processing
     const mediaFileResults = mediaFiles.map((file) => ({
       path: file,
-      ok: true,
+      ok: null, // null indicates loading state, will be updated with actual results
     }));
 
     this.logger.info(
@@ -56,6 +57,32 @@ export class LatexMediaManager {
       groupId,
       MESSAGE_TYPES.FILE_LIST,
     );
+  }
+
+  /**
+   * Log the final processing results for media files to the progress view
+   */
+  public logMediaProcessingResults(mediaFileResults: Array<{ path: string; ok: boolean }>, groupId?: string): void {
+    if (mediaFileResults.length === 0) {
+      return;
+    }
+
+    // Update the progress view with final processing results
+    this.logger.info(
+      JSON.stringify(mediaFileResults),
+      groupId,
+      MESSAGE_TYPES.FILE_LIST,
+    );
+
+    // Log summary of results
+    const successCount = mediaFileResults.filter(r => r.ok).length;
+    const failCount = mediaFileResults.length - successCount;
+    
+    if (failCount > 0) {
+      this.logger.warn(`${successCount} media files processed successfully, ${failCount} failed`, groupId);
+    } else {
+      this.logger.info(`All ${successCount} media files processed successfully`, groupId);
+    }
   }
 
   /**
