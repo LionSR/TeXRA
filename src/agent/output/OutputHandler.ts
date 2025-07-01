@@ -414,6 +414,19 @@ export class OutputHandler implements IOutputHandler {
           `Error processing output file: ${err instanceof Error ? err.message : String(err)}`,
           activeGroupId,
         );
+        const missingOutputsData = {
+          missing: [],
+          xmlFile: outputFile,
+        };
+        this.logger.info(
+          JSON.stringify(missingOutputsData),
+          activeGroupId,
+          MESSAGE_TYPES.MISSING_OUTPUTS,
+        );
+        emitProgress('updateMissingOutputs', {
+          stream: this.channel,
+          filesByRound: { [currRound]: [] },
+        });
         this.outputFiles[currRound] = [];
         this.outputMappings[currRound] = [];
       }
