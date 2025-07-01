@@ -9,7 +9,6 @@ import { AgentLogger } from '@logger/AgentLogger';
 
 // Local imports - utilities
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
-import { MESSAGE_TYPES } from '@logger/messageTypes';
 import {
   getBase64EncodedMedia,
   countPdfPages,
@@ -503,11 +502,8 @@ export abstract class ModelHandler<U = any, R = any>
       if (mediaFileResults.some((r) => !r.ok)) {
         this.logger.warn('Some media files failed to load');
       }
-      this.logger.info(
-        JSON.stringify(mediaFileResults),
-        undefined,
-        MESSAGE_TYPES.FILE_LIST,
-      );
+      // Note: File list logging is now handled by LatexMediaManager when files are initially loaded,
+      // not here during message creation. This ensures the file list appears immediately in the UI.
     }
 
     return this.createMediaContent(mediaMessage);

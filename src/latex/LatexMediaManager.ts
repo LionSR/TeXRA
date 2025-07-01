@@ -3,6 +3,7 @@ import * as path from 'path';
 
 // Local imports - log
 import { AgentLogger } from '@logger/AgentLogger';
+import { MESSAGE_TYPES } from '@logger/messageTypes';
 
 // Local imports - latex utils
 import { extractFigurePathsFromLatex } from './extractFigure';
@@ -29,6 +30,32 @@ export class LatexMediaManager {
     if (cfg.attachTeXCount && files.length > 0) {
       toolState.texcountStats = await getTeXCountStats(files);
     }
+  }
+
+  /**
+   * Log the loaded media files to the progress view
+   */
+  private logLoadedFiles(mediaFiles: string[], groupId?: string): void {
+    if (mediaFiles.length === 0) {
+      return;
+    }
+
+    // Log a message indicating files have been loaded and are ready
+    const fileCount = mediaFiles.length;
+    const fileLabel = fileCount === 1 ? 'file' : 'files';
+    this.logger.info(`Loaded ${fileCount} media ${fileLabel}`, groupId);
+
+    // Also log the file list for progress view processing
+    const mediaFileResults = mediaFiles.map((file) => ({
+      path: file,
+      ok: true,
+    }));
+
+    this.logger.info(
+      JSON.stringify(mediaFileResults),
+      groupId,
+      MESSAGE_TYPES.FILE_LIST,
+    );
   }
 
   /**
@@ -154,6 +181,11 @@ export class LatexMediaManager {
     if (cfg.autoCompileInputPdf) {
       await this.compilePdfs(existingFiles, toolState, groupId);
     }
+
+    // Log all loaded media files immediately after processing
+    if (toolState.mediaFiles.length > 0) {
+      this.logLoadedFiles(toolState.mediaFiles, groupId);
+    }
   }
 
   /**
@@ -203,6 +235,11 @@ export class LatexMediaManager {
 
     if (supportsVision && cfg.autoCompileInputPdf) {
       await this.compilePdfs(existingFiles, toolState, groupId);
+    }
+
+    // Log all loaded media files immediately after processing
+    if (toolState.mediaFiles.length > 0) {
+      this.logLoadedFiles(toolState.mediaFiles, groupId);
     }
   }
 }
