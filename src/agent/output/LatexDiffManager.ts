@@ -2,6 +2,7 @@ import * as path from 'path';
 
 import { AgentSetting } from '@agent/core/AgentDataclass';
 import { AgentLogger } from '@logger/AgentLogger';
+import { MESSAGE_TYPES } from '@logger/messageTypes';
 import { createFileMapping } from '@utils/files';
 import { compileLatex2Pdf } from '@latex/texTools';
 import { checkToolInstalled } from '@utils/system';
@@ -98,6 +99,18 @@ export class LatexDiffManager {
             currRound,
           );
           this.logLatexdiffResult(result, 'round-diff', diffProcessGroupId);
+          this.logger.info(
+            JSON.stringify({
+              base: baseFile,
+              revised: outputFile,
+              output: result.diffFileName
+                ? path.join(path.dirname(baseFile), result.diffFileName)
+                : '',
+              status: result.success ? 'success' : 'error',
+            }),
+            diffProcessGroupId,
+            MESSAGE_TYPES.LATEXDIFF,
+          );
           if (result.success && result.diffFileName) {
             const diffPath = path.join(
               path.dirname(baseFile),
@@ -151,6 +164,18 @@ export class LatexDiffManager {
             result,
             'between-rounds-diff',
             diffProcessGroupId,
+          );
+          this.logger.info(
+            JSON.stringify({
+              base: prevOutputFile,
+              revised: currOutputFile,
+              output: result.diffFileName
+                ? path.join(path.dirname(prevOutputFile), result.diffFileName)
+                : '',
+              status: result.success ? 'success' : 'error',
+            }),
+            diffProcessGroupId,
+            MESSAGE_TYPES.LATEXDIFF,
           );
           if (result.success && result.diffFileName) {
             const diffPath = path.join(
