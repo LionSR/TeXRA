@@ -125,6 +125,12 @@ class VSCodeTransport extends Transport {
       return;
     }
 
+    // Skip progress view updates for internal messages
+    if (messageType === MESSAGE_TYPES.INTERNAL) {
+      callback();
+      return;
+    }
+
     // Skip progress view updates for non-agent channels
     if (!this.isAgentChannel) {
       callback();
