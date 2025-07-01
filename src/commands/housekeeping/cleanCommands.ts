@@ -17,11 +17,11 @@ import {
   runCleanBuild,
   runCleanOutput,
 } from '@housekeeping';
-import type { FileOpResult } from '@/types/ResultTypes';
+import type { FileOpResult } from '@agent/types/ResultTypes';
 import {
   showLoggedErrorMessage,
   showLoggedMessage,
-} from '@utils/errorHandlingUtils';
+} from '@common/errors/errorHandlingUtils';
 
 const CHANNEL = 'cleanCommands';
 logger.initialize(CHANNEL);

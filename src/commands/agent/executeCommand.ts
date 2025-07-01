@@ -7,7 +7,7 @@ import { executeAgent } from '@agent/runtime/executeAgent';
 
 // Local imports - history
 import { AgentHistoryManager } from '@historyView/AgentHistoryManager';
-import type { ExecutionId } from '../../types/IdentifierTypes';
+import type { ExecutionId } from '@agent/types/IdentifierTypes';
 
 // Add the registration function
 export function registerExecuteCommand(context: vscode.ExtensionContext) {
