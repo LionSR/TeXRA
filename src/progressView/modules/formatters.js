@@ -344,6 +344,10 @@ export class LogEntryFormatter {
         </div>`;
       }
 
+      if (missingFiles.length === 0 && xmlFile) {
+        return xmlLink;
+      }
+
       const summary = `Missing outputs (${missingFiles.length})`;
 
       return `<details class="file-list-details">
