@@ -20,8 +20,10 @@ interface OutputFileInfo extends DiffStats {
  * Handles adding, updating, and managing output files for different streams.
  */
 export class OutputFilesManager {
-  private _outputFiles: Map<StreamTabId, { [key: number]: OutputFileInfo[] }> = new Map();
-  private _missingOutputs: Map<StreamTabId, { [key: number]: string[] }> = new Map();
+  private _outputFiles: Map<StreamTabId, { [key: number]: OutputFileInfo[] }> =
+    new Map();
+  private _missingOutputs: Map<StreamTabId, { [key: number]: string[] }> =
+    new Map();
   private readonly logger: AgentLogger;
 
   constructor(private persistence: StatePersistenceManager) {
@@ -31,13 +33,16 @@ export class OutputFilesManager {
   /**
    * Add output files for a stream and round
    */
-  addFiles(stream: StreamTabId, filesByRound: { [key: number]: OutputFileInfo[] }): void {
+  addFiles(
+    stream: StreamTabId,
+    filesByRound: { [key: number]: OutputFileInfo[] },
+  ): void {
     if (!this._outputFiles.has(stream)) {
       this._outputFiles.set(stream, {});
     }
 
     const streamFiles = this._outputFiles.get(stream)!;
-    
+
     for (const [round, files] of Object.entries(filesByRound)) {
       const roundNum = parseInt(round, 10);
       if (!streamFiles[roundNum]) {
@@ -52,13 +57,16 @@ export class OutputFilesManager {
   /**
    * Update missing outputs for a stream
    */
-  updateMissingOutputs(stream: StreamTabId, filesByRound: { [key: number]: string[] }): void {
+  updateMissingOutputs(
+    stream: StreamTabId,
+    filesByRound: { [key: number]: string[] },
+  ): void {
     if (!this._missingOutputs.has(stream)) {
       this._missingOutputs.set(stream, {});
     }
 
     const streamMissing = this._missingOutputs.get(stream)!;
-    
+
     for (const [round, files] of Object.entries(filesByRound)) {
       const roundNum = parseInt(round, 10);
       streamMissing[roundNum] = files;
@@ -70,14 +78,18 @@ export class OutputFilesManager {
   /**
    * Get output files for a stream
    */
-  getFiles(stream: StreamTabId): { [key: number]: OutputFileInfo[] } | undefined {
+  getFiles(
+    stream: StreamTabId,
+  ): { [key: number]: OutputFileInfo[] } | undefined {
     return this._outputFiles.get(stream);
   }
 
   /**
    * Get missing outputs for a stream
    */
-  getMissingOutputs(stream: StreamTabId): { [key: number]: string[] } | undefined {
+  getMissingOutputs(
+    stream: StreamTabId,
+  ): { [key: number]: string[] } | undefined {
     return this._missingOutputs.get(stream);
   }
 
@@ -134,14 +146,18 @@ export class OutputFilesManager {
   /**
    * Set all output files (used during loading)
    */
-  setAllFiles(files: Map<StreamTabId, { [key: number]: OutputFileInfo[] }>): void {
+  setAllFiles(
+    files: Map<StreamTabId, { [key: number]: OutputFileInfo[] }>,
+  ): void {
     this._outputFiles = new Map(files);
   }
 
   /**
    * Set all missing outputs (used during loading)
    */
-  setAllMissingOutputs(missing: Map<StreamTabId, { [key: number]: string[] }>): void {
+  setAllMissingOutputs(
+    missing: Map<StreamTabId, { [key: number]: string[] }>,
+  ): void {
     this._missingOutputs = new Map(missing);
   }
 
@@ -241,14 +257,14 @@ export class OutputFilesManager {
 
     if (saved && Object.keys(saved).length > 0) {
       const processed = new Map<StreamTabId, { [key: number]: string[] }>();
-      
+
       for (const [stream, rounds] of Object.entries(saved)) {
         const roundMap = Object.fromEntries(
-          Object.entries(rounds).map(([r, files]) => [parseInt(r, 10), files])
+          Object.entries(rounds).map(([r, files]) => [parseInt(r, 10), files]),
         );
         processed.set(stream, roundMap);
       }
-      
+
       this._missingOutputs = processed;
     } else {
       this._missingOutputs.clear();

@@ -45,7 +45,11 @@ export class WebviewUpdater {
   /**
    * Update log content for a specific stream
    */
-  updateLogContent(stream: StreamTabId, messages: LogMessageData[], groups?: any[]): void {
+  updateLogContent(
+    stream: StreamTabId,
+    messages: LogMessageData[],
+    groups?: any[],
+  ): void {
     const webview = this.getWebview();
     if (!webview) return;
 
@@ -102,7 +106,10 @@ export class WebviewUpdater {
   /**
    * Update missing outputs for a stream
    */
-  updateMissingOutputs(stream: StreamTabId, files: { [key: number]: string[] }): void {
+  updateMissingOutputs(
+    stream: StreamTabId,
+    files: { [key: number]: string[] },
+  ): void {
     const webview = this.getWebview();
     if (!webview) return;
 
@@ -156,7 +163,12 @@ export class WebviewUpdater {
   /**
    * Update a task group in the webview
    */
-  updateTaskGroup(stream: StreamTabId, groupId: string, status: StatusType, endTime?: number): void {
+  updateTaskGroup(
+    stream: StreamTabId,
+    groupId: string,
+    status: StatusType,
+    endTime?: number,
+  ): void {
     const webview = this.getWebview();
     if (!webview) return;
 
@@ -185,7 +197,9 @@ export class WebviewUpdater {
     if (activeStream) {
       // Update log content for active stream
       const messages = state.streamTabs.get(activeStream) || [];
-      const groups = Array.from(state.taskGroups.getStreamGroups(activeStream).values());
+      const groups = Array.from(
+        state.taskGroups.getStreamGroups(activeStream).values(),
+      );
       this.updateLogContent(activeStream, messages, groups);
 
       // Update files for active stream
@@ -201,7 +215,9 @@ export class WebviewUpdater {
       this.updateUsage(usage);
     }
 
-    this.logger.debug(`Updated webview with ${streams.length} streams, active: ${activeStream}`);
+    this.logger.debug(
+      `Updated webview with ${streams.length} streams, active: ${activeStream}`,
+    );
   }
 
   /**
