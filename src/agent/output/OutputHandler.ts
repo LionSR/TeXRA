@@ -372,6 +372,7 @@ export class OutputHandler implements IOutputHandler {
         this.logger.error(
           `Error processing output files: ${err instanceof Error ? err.message : String(err)}`,
           activeGroupId,
+          MESSAGE_TYPES.INTERNAL,
         );
         this.outputFiles[currRound] = [];
         this.outputMappings[currRound] = [];
@@ -413,6 +414,7 @@ export class OutputHandler implements IOutputHandler {
         this.logger.error(
           `Error processing output file: ${err instanceof Error ? err.message : String(err)}`,
           activeGroupId,
+          MESSAGE_TYPES.INTERNAL,
         );
         const missingOutputsData = {
           missing: [],
