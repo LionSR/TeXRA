@@ -1,9 +1,6 @@
 // Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports
-import { WorkspaceStateKey } from '@utils/stateManager';
-
 /**
  * Manages persistence operations for progress view state.
  * Provides a clean interface for workspace storage with automatic

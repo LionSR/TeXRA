@@ -35,7 +35,7 @@ import { toGoogleTools } from './toolConversion';
 
 // Local imports - utilities
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
-import { formatProviderError } from '@utils/sdkErrorUtils';
+import { formatProviderError } from '@common/errors/sdkErrorUtils';
 import xmlUtils from '@utils/text/xmlUtils';
 import { calculateTokenPrice } from '@agent/utils/priceUtils';
 import { MESSAGE_TYPES } from '@logger/messageTypes';

@@ -14,10 +14,10 @@ import { IProgressViewProvider } from './interfaces/IProgressViewProvider';
 import { AgentLogger } from '@logger/AgentLogger';
 
 // Types
-import type { StreamTabId, ExecutionId } from '../types/IdentifierTypes';
+import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
 import { TaskState } from '@logger/TaskState';
-import { TokenUsageStats } from '../types/UsageTypes';
-import { LogMessageData } from '../logger/LogTypes';
+import { TokenUsageStats } from '@agent/types/UsageTypes';
+import { LogMessageData } from '@logger/LogTypes';
 
 // @ts-ignore - Import JavaScript module
 import { STATUS, COMMANDS } from './modules/constants.js';

@@ -5,7 +5,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 // Local imports - result types
-import type { FileOpResult } from '@/types/ResultTypes';
+import type { FileOpResult } from '@agent/types/ResultTypes';
 
 // Local imports - log
 import * as logger from '@logger/logUtils';
