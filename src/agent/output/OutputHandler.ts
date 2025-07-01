@@ -361,7 +361,7 @@ export class OutputHandler implements IOutputHandler {
             );
           }
         } else {
-          this.logger.warn(
+          this.logger.debug(
             `No processed files were generated from ${outputFile}`,
             activeGroupId,
           );
@@ -369,7 +369,7 @@ export class OutputHandler implements IOutputHandler {
           this.outputMappings[currRound] = [];
         }
       } catch (err) {
-        this.logger.error(
+        this.logger.debug(
           `Error processing output files: ${err instanceof Error ? err.message : String(err)}`,
           activeGroupId,
         );
@@ -402,7 +402,7 @@ export class OutputHandler implements IOutputHandler {
           this.outputFiles[currRound] = [processed.path];
           this.outputMappings[currRound] = [processed];
         } else {
-          this.logger.warn(
+          this.logger.debug(
             `No processed file was generated from ${outputFile}`,
             activeGroupId,
           );
@@ -410,7 +410,7 @@ export class OutputHandler implements IOutputHandler {
           this.outputMappings[currRound] = [];
         }
       } catch (err) {
-        this.logger.error(
+        this.logger.debug(
           `Error processing output file: ${err instanceof Error ? err.message : String(err)}`,
           activeGroupId,
         );
