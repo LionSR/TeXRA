@@ -12,11 +12,11 @@ import { getStreamTabId } from '@/logger/streamUtils';
 
 // Local imports - housekeeping
 import { runPack, runPackSingle, runPackMultiple } from '@housekeeping';
-import type { FileOpResult } from '@/types/ResultTypes';
+import type { FileOpResult } from '@agent/types/ResultTypes';
 import {
   showLoggedErrorMessage,
   showLoggedMessage,
-} from '@utils/errorHandlingUtils';
+} from '@common/errors/errorHandlingUtils';
 
 const CHANNEL = 'packCommands';
 logger.initialize(CHANNEL);

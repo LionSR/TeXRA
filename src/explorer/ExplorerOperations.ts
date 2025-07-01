@@ -5,7 +5,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import * as logger from '@logger/logUtils';
 
-import { showLoggedErrorMessage } from '@utils/errorHandlingUtils';
+import { showLoggedErrorMessage } from '@common/errors/errorHandlingUtils';
 
 // Local imports
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';

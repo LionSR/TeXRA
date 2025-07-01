@@ -17,7 +17,7 @@ import { TEMP_EXTENSIONS } from './constants';
 import {
   showLoggedErrorMessage,
   showLoggedMessage,
-} from '@utils/errorHandlingUtils';
+} from '@common/errors/errorHandlingUtils';
 
 const CHANNEL = 'Housekeeping';
 logger.initialize(CHANNEL);
