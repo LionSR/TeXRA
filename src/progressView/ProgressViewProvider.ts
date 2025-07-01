@@ -214,10 +214,10 @@ export class ProgressViewProvider
 
     // Update status for current stream
     if (this.state.activeStream) {
-      const status =
-        this.eventHandler.getStreamStatus(this.state.activeStream) ||
-        STATUS.STOPPED;
-      this.webviewUpdater.updateStatus(status);
+      const status = this.eventHandler.getStreamStatus(this.state.activeStream);
+      if (status) {
+        this.webviewUpdater.updateStatus(status);
+      }
     } else {
       this.webviewUpdater.updateStatus(STATUS.READY);
     }

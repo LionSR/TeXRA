@@ -137,12 +137,17 @@ export class ProgressViewState {
    * Load all state from persistence
    */
   async load(): Promise<void> {
+    // Load basic state first
     await Promise.all([
       this._streamTabs.load(),
       this._taskGroups.load(),
       this._outputFiles.load(),
       this._usageStats.load(),
-      this.loadActiveStream(),
+    ]);
+
+    // Load dependent state after basic state is loaded
+    await Promise.all([
+      this.loadActiveStream(), // Depends on stream tabs being loaded
       this.loadTaskStates(),
       this.loadExecutionIds(),
     ]);
