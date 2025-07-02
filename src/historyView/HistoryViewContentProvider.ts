@@ -17,6 +17,7 @@ export class HistoryViewContentProvider extends BaseViewContentProvider {
 
       // History view specific modules
       domHandlersUri: this.getWebviewUri(webview, 'modules/domHandlers.js'),
+      constantsUri: this.getWebviewUri(webview, 'modules/constants.js'),
       eventsUri: this.getWebviewUri(webview, 'modules/uiManagers/Events.js'),
       historyRendererUri: this.getWebviewUri(
         webview,
