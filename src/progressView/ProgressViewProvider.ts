@@ -403,7 +403,7 @@ export class ProgressViewProvider
       }
     }
 
-    // The TaskGroupsManager.updateGroup() method automatically saves state
+    // The TaskGroupManager.updateGroup() method automatically saves state
   }
 
   /**
