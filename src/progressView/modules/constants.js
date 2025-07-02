@@ -6,6 +6,26 @@ export const STATUS = {
   READY: 'ready',
 };
 
+// DOM element IDs used across the progress view
+export const ELEMENT_IDS = {
+  LOG_CONTENT: 'logContent',
+  GENERATED_FILES: 'generatedFiles',
+  STREAM_TABS: 'streamTabs',
+  ACTIVE_STREAM_NAME: 'activeStreamName',
+  STATUS_INDICATOR: 'statusIndicator',
+  RUN_SUMMARY: 'runSummary',
+  TOOLBAR_CONTAINER: 'toolbarContainer',
+  FILE_ITEM_TEMPLATE: 'fileItemTemplate',
+  DELETE_ALL_BTN: 'deleteAllBtn',
+  STOP_STREAM_BTN: 'stopStreamBtn',
+  RUN_AGAIN_BTN: 'runAgainBtn',
+  RESTORE_STATE_BTN: 'restoreStateBtn',
+  DIFF_STREAM_BTN: 'diffStreamBtn',
+  PACK_STREAM_BTN: 'packStreamBtn',
+  CLEAN_STREAM_BTN: 'cleanStreamBtn',
+  ERASE_STREAM_BTN: 'eraseStreamBtn',
+};
+
 // Default sizes for split view
 export const SPLIT_SIZES = {
   CONTENT: 80,
@@ -23,7 +43,7 @@ export const COMMANDS = PROGRESS_VIEW_COMMANDS;
 
 export const TOOLBAR_BUTTONS = [
   {
-    id: 'stopStreamBtn',
+    id: ELEMENT_IDS.STOP_STREAM_BTN,
     icon: 'debug-stop',
     command: COMMANDS.STOP_STREAM,
     title:
@@ -32,7 +52,7 @@ export const TOOLBAR_BUTTONS = [
     disabled: true,
   },
   {
-    id: 'runAgainBtn',
+    id: ELEMENT_IDS.RUN_AGAIN_BTN,
     icon: 'debug-rerun',
     command: COMMANDS.RUN_AGAIN,
     title: 'Run this task again',
@@ -40,7 +60,7 @@ export const TOOLBAR_BUTTONS = [
     disabled: true,
   },
   {
-    id: 'restoreStateBtn',
+    id: ELEMENT_IDS.RESTORE_STATE_BTN,
     icon: 'reply',
     command: COMMANDS.RESTORE_STATE,
     title: 'Restore this configuration to the main view',
@@ -48,7 +68,7 @@ export const TOOLBAR_BUTTONS = [
     disabled: true,
   },
   {
-    id: 'diffStreamBtn',
+    id: ELEMENT_IDS.DIFF_STREAM_BTN,
     icon: 'diff-multiple',
     command: COMMANDS.DIFF_STREAM,
     title: 'Run latexdiff on existing tex files',
@@ -56,7 +76,7 @@ export const TOOLBAR_BUTTONS = [
     disabled: true,
   },
   {
-    id: 'packStreamBtn',
+    id: ELEMENT_IDS.PACK_STREAM_BTN,
     icon: 'archive',
     command: COMMANDS.PACK_STREAM,
     title: 'Pack the output for this agent into the History folder',
@@ -64,7 +84,7 @@ export const TOOLBAR_BUTTONS = [
     disabled: true,
   },
   {
-    id: 'cleanStreamBtn',
+    id: ELEMENT_IDS.CLEAN_STREAM_BTN,
     icon: 'trash',
     command: COMMANDS.CLEAN_STREAM,
     title: 'Clean the output for this agent',
@@ -72,7 +92,7 @@ export const TOOLBAR_BUTTONS = [
     disabled: true,
   },
   {
-    id: 'eraseStreamBtn',
+    id: ELEMENT_IDS.ERASE_STREAM_BTN,
     icon: 'clear-all',
     command: COMMANDS.ERASE_STREAM,
     title: 'Erase the stream output for this agent',
