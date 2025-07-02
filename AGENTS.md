@@ -25,7 +25,8 @@ This document sets the common conventions for contributions. Follow these norms 
 - Group imports by source and prefix each block with a descriptive comment (e.g., `// Third-party imports`, `// Local imports - component`).
 - Document functions with concise comments. Use JSDoc style for public APIs.
 - Keep functions small and focused; extract helpers or modules when logic becomes complex.
-- Keep the directory structure aligned among different webviews (webviews, historyView, progressView). Use the same folder names for modules of the same type and functionality but in different webviews.
+- Keep the directory structure aligned among different webviews (webview, historyView, progressView). Use the same folder names for modules of the same type and functionality but in different webviews.
+- Place view-specific manager classes under each view's `managers` folder. For example, `WebviewUpdater.ts` lives in `src/progressView/managers/`.
 
 ### Patterns across the codebase
 
