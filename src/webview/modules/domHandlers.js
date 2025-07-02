@@ -11,6 +11,7 @@ import { FileInputManager } from './uiManagers/FileInputManager.js';
 import { ActionButtonManager } from './uiManagers/ActionButtonManager.js';
 import { SettingsButtonManager } from './uiManagers/SettingsButtonManager.js';
 import { webviewEventBus } from './eventBus.js';
+import { ELEMENT_IDS } from './constants.js';
 
 export const instructionManager = new InstructionManager(
   'instruction',
@@ -32,8 +33,8 @@ export class MainViewDomHandler {
   }
 
   _updateDebugButtonVisibility() {
-    const packBtn = document.getElementById('packButton');
-    const cleanBtn = document.getElementById('cleanButton');
+    const packBtn = document.getElementById(ELEMENT_IDS.PACK_BUTTON);
+    const cleanBtn = document.getElementById(ELEMENT_IDS.CLEAN_BUTTON);
     [packBtn, cleanBtn].forEach((btn) => {
       if (btn) {
         btn.style.display = this.debugMode ? '' : 'none';
