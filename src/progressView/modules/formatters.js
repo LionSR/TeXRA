@@ -313,17 +313,19 @@ export class LogEntryFormatter {
       const idAttr = logId ? ` data-log-id="${logId}"` : '';
       const parsed = JSON.parse(this._unescapeHtml(content));
 
-      // Handle both old format (array) and new format (object with missing and xmlFile)
+      // Handle both old format (array) and new format (object with missing, xmlFile, documentTag)
       let missingFiles = [];
       let xmlFile = null;
+      let documentTag = null;
 
       if (Array.isArray(parsed)) {
         // Old format: just an array of missing files
         missingFiles = parsed;
       } else if (parsed && typeof parsed === 'object') {
-        // New format: object with missing files and XML file
+        // New format: object with missing files, XML file, and optional document tag
         missingFiles = parsed.missing || [];
         xmlFile = parsed.xmlFile;
+        documentTag = parsed.documentTag;
       } else {
         throw new Error('Invalid missing outputs format');
       }
@@ -344,10 +346,14 @@ export class LogEntryFormatter {
         const xmlEscaped = this._escapeHtml(xmlFile);
         const xmlFileName = xmlFile.split('/').pop() || xmlFile;
         const xmlFileNameEscaped = this._escapeHtml(xmlFileName);
+        const tagInfo = documentTag
+          ? `<span class="document-tag">(Expected &lt;${this._escapeHtml(documentTag)}&gt; block)</span>`
+          : '';
         xmlLink = `<div class="xml-link-container">
           <i class="codicon codicon-file-code"></i>
           <span>Open XML to check tag consistency:</span>
           <span class="file-link clickable-link" data-file="${xmlEscaped}">${xmlFileNameEscaped}</span>
+          ${tagInfo}
         </div>`;
       }
 
