@@ -107,7 +107,8 @@ export class Events {
           e.target &&
           (e.target.classList.contains('special-details') ||
             e.target.classList.contains('file-list-details') ||
-            e.target.classList.contains('latexdiff-details'))
+            e.target.classList.contains('latexdiff-details') ||
+            e.target.classList.contains('statistics-details'))
         ) {
           const toggleIcon = e.target.querySelector('.toggle-icon');
           if (toggleIcon) {

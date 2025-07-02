@@ -9,6 +9,8 @@ import {
 } from '@agent/core/ResponseUsage';
 import { ResponseUsage } from 'openai/resources/responses/responses';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/modelHandlerOpenAIResponse';
+import { MESSAGE_TYPES } from '@logger/messageTypes';
+import { objectToLogString } from '@utils/text/stringUtils';
 
 export class StatisticsReporter {
   constructor(
@@ -24,64 +26,31 @@ export class StatisticsReporter {
     const statsGroupId = groupId ?? this.logger.getActiveGroupId();
 
     try {
-      this.logger.debug('=== Task Statistics ===', statsGroupId);
-      this.logger.debug(
-        `Total input tokens  : ${stateGlobal.totalInputTokens}`,
-        statsGroupId,
-      );
-      this.logger.debug(
-        `Total output tokens : ${stateGlobal.totalOutputTokens}`,
-        statsGroupId,
-      );
+      const usageSummary: any = {
+        inputTokens:
+          stateGlobal.totalInputTokens +
+          (stateGlobal.totalCacheCreationInputTokens ?? 0),
+        outputTokens: stateGlobal.totalOutputTokens,
+        cost: 0,
+      };
 
       if (
         this.modelHandler.capabilities.supportsPromptCaching ||
         this.modelHandler.capabilities.supportsAutoPromptCaching
       ) {
-        this.logger.debug(
-          `Total input tokens (cache read): ${stateGlobal.totalCacheReadInputTokens}`,
-          statsGroupId,
-        );
-
+        usageSummary.cacheReadTokens = stateGlobal.totalCacheReadInputTokens;
         if (this.modelHandler.capabilities.supportsPromptCaching) {
-          this.logger.debug(
-            `Total input tokens (cache create): ${stateGlobal.totalCacheCreationInputTokens}`,
-            statsGroupId,
-          );
+          usageSummary.cacheCreateTokens =
+            stateGlobal.totalCacheCreationInputTokens;
         }
-
-        let totalCacheableTokens: number;
-        if (this.modelHandler.capabilities.supportsPromptCaching) {
-          totalCacheableTokens =
-            stateGlobal.totalCacheCreationInputTokens +
-            stateGlobal.totalCacheReadInputTokens;
-        } else {
-          totalCacheableTokens = stateGlobal.totalInputTokens;
-        }
-
-        const percentageCached =
-          totalCacheableTokens > 0
-            ? (stateGlobal.totalCacheReadInputTokens / totalCacheableTokens) *
-              100
-            : 0;
-        this.logger.debug(
-          `Percentage cached: ${percentageCached.toFixed(2)}%`,
-          statsGroupId,
-        );
       }
 
       if (this.modelHandler.capabilities.supportsReasoning) {
-        this.logger.debug(
-          `Total reasoning tokens: ${stateGlobal.totalReasoningTokens}`,
-          statsGroupId,
-        );
+        usageSummary.reasoningTokens = stateGlobal.totalReasoningTokens;
       }
 
       if (stateGlobal.totalToolUseTokens > 0) {
-        this.logger.debug(
-          `Total tool use tokens: ${stateGlobal.totalToolUseTokens}`,
-          statsGroupId,
-        );
+        usageSummary.toolUseTokens = stateGlobal.totalToolUseTokens;
       }
 
       let responseUsage:
@@ -149,29 +118,26 @@ export class StatisticsReporter {
 
       const cost = this.modelHandler.computePrice(responseUsage);
 
+      usageSummary.cost = cost;
+      usageSummary.responseTime = stateGlobal.totalResponseTime;
+
       if (statsGroupId) {
         emitProgress('updateGroupUsage', {
           stream: this.channel,
           groupId: statsGroupId,
           usage: {
-            inputTokens:
-              stateGlobal.totalInputTokens +
-              (stateGlobal.totalCacheCreationInputTokens ?? 0),
-            outputTokens: stateGlobal.totalOutputTokens,
+            inputTokens: usageSummary.inputTokens,
+            outputTokens: usageSummary.outputTokens,
             cost,
           },
         });
       }
 
-      this.logger.debug(
-        `Total response time : ${stateGlobal.totalResponseTime.toFixed(1)} seconds`,
+      this.logger.info(
+        objectToLogString(usageSummary),
         statsGroupId,
+        MESSAGE_TYPES.STATISTICS,
       );
-      this.logger.debug(
-        `Total cost          : ${cost.toFixed(3)} USD`,
-        statsGroupId,
-      );
-      this.logger.debug('=======================', statsGroupId);
     } catch (error) {
       this.logger.error(`Error printing statistics: ${error}`, statsGroupId);
     }

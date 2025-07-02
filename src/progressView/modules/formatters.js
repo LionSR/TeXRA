@@ -378,6 +378,69 @@ export class LogEntryFormatter {
     }
   }
 
+  _formatStatistics(message, content, logId) {
+    try {
+      const idAttr = logId ? ` data-log-id="${logId}"` : '';
+      const parsed = JSON.parse(this._unescapeHtml(content));
+
+      const items = [];
+      if (parsed.inputTokens !== undefined) {
+        items.push(
+          `<li><i class="codicon codicon-arrow-up"></i> ${formatTokens(parsed.inputTokens)}</li>`,
+        );
+      }
+      if (parsed.outputTokens !== undefined) {
+        items.push(
+          `<li><i class="codicon codicon-arrow-down"></i> ${formatTokens(parsed.outputTokens)}</li>`,
+        );
+      }
+      if (parsed.cacheReadTokens !== undefined) {
+        items.push(
+          `<li><i class="codicon codicon-cloud-download"></i> ${formatTokens(parsed.cacheReadTokens)}</li>`,
+        );
+      }
+      if (parsed.cacheCreateTokens !== undefined) {
+        items.push(
+          `<li><i class="codicon codicon-cloud-upload"></i> ${formatTokens(parsed.cacheCreateTokens)}</li>`,
+        );
+      }
+      if (parsed.reasoningTokens !== undefined) {
+        items.push(
+          `<li><i class="codicon codicon-lightbulb"></i> ${formatTokens(parsed.reasoningTokens)}</li>`,
+        );
+      }
+      if (parsed.toolUseTokens !== undefined) {
+        items.push(
+          `<li><i class="codicon codicon-tools"></i> ${formatTokens(parsed.toolUseTokens)}</li>`,
+        );
+      }
+      if (parsed.responseTime !== undefined) {
+        items.push(
+          `<li><i class="codicon codicon-clock"></i> ${parsed.responseTime.toFixed(1)}s</li>`,
+        );
+      }
+      if (parsed.cost !== undefined) {
+        items.push(
+          `<li><i class="codicon codicon-symbol-key"></i> $${parsed.cost.toFixed(3)}</li>`,
+        );
+      }
+
+      const itemsMarkup = items.join('');
+
+      return `<details class="statistics-details">
+        <summary>
+          <i class="${CHEVRON_RIGHT_CLASS} toggle-icon"></i>
+          <i class="codicon codicon-dashboard"></i>
+          <span>Statistics</span>
+        </summary>
+        <ul class="statistics-content"${idAttr}>${itemsMarkup}</ul>
+      </details>`;
+    } catch (e) {
+      console.error('Error parsing statistics entry:', e);
+      return message;
+    }
+  }
+
   _formatLatexdiff(message, content, logId) {
     try {
       const idAttr = logId ? ` data-log-id="${logId}"` : '';
