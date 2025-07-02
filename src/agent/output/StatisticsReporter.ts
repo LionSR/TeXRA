@@ -104,16 +104,46 @@ export class StatisticsReporter {
         });
       }
 
-      const payload = {
+      const payload: Record<string, number> = {
         inputTokens: stateGlobal.totalInputTokens,
         outputTokens: stateGlobal.totalOutputTokens,
-        cacheReadInputTokens: stateGlobal.totalCacheReadInputTokens,
-        cacheCreationInputTokens: stateGlobal.totalCacheCreationInputTokens,
-        reasoningTokens: stateGlobal.totalReasoningTokens,
-        toolUseTokens: stateGlobal.totalToolUseTokens,
         elapsedTime: Number(stateGlobal.totalResponseTime.toFixed(1)),
         cost: Number(cost.toFixed(3)),
       };
+
+      if (
+        this.modelHandler.capabilities.supportsPromptCaching ||
+        this.modelHandler.capabilities.supportsAutoPromptCaching
+      ) {
+        payload.cacheReadInputTokens = stateGlobal.totalCacheReadInputTokens;
+
+        if (this.modelHandler.capabilities.supportsPromptCaching) {
+          payload.cacheCreationInputTokens =
+            stateGlobal.totalCacheCreationInputTokens;
+        }
+
+        const totalCacheableTokens = this.modelHandler.capabilities
+          .supportsPromptCaching
+          ? stateGlobal.totalCacheCreationInputTokens +
+            stateGlobal.totalCacheReadInputTokens
+          : stateGlobal.totalInputTokens;
+
+        const percentageCached =
+          totalCacheableTokens > 0
+            ? (stateGlobal.totalCacheReadInputTokens / totalCacheableTokens) *
+              100
+            : 0;
+
+        payload.percentageCached = Number(percentageCached.toFixed(2));
+      }
+
+      if (this.modelHandler.capabilities.supportsReasoning) {
+        payload.reasoningTokens = stateGlobal.totalReasoningTokens;
+      }
+
+      if (stateGlobal.totalToolUseTokens > 0) {
+        payload.toolUseTokens = stateGlobal.totalToolUseTokens;
+      }
 
       this.logger.debug(
         JSON.stringify(payload),
