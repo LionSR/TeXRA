@@ -1,4 +1,5 @@
 import { addEventListenerSafely } from '@common/domUtils.js';
+import { ELEMENT_IDS } from '../constants.js';
 
 /**
  * Registers global event listeners for the history view.
@@ -18,12 +19,12 @@ export class HistoryEvents {
   }
 
   setupEventListeners() {
-    const searchInput = document.getElementById('searchInput');
+    const searchInput = document.getElementById(ELEMENT_IDS.SEARCH_INPUT);
     const searchHandler = this._debounce((e) => {
       const term = e.target.value.trim();
       this.searchManager.search(term);
     }, 300);
-    addEventListenerSafely('searchInput', 'input', searchHandler);
+    addEventListenerSafely(ELEMENT_IDS.SEARCH_INPUT, 'input', searchHandler);
     if (searchInput) {
       this.handlers.push({
         element: searchInput,
@@ -33,8 +34,8 @@ export class HistoryEvents {
     }
 
     const prevHandler = () => this.searchManager.navigatePrev();
-    addEventListenerSafely('prevMatch', 'click', prevHandler);
-    const prevEl = document.getElementById('prevMatch');
+    addEventListenerSafely(ELEMENT_IDS.PREV_MATCH, 'click', prevHandler);
+    const prevEl = document.getElementById(ELEMENT_IDS.PREV_MATCH);
     if (prevEl)
       this.handlers.push({
         element: prevEl,
@@ -43,8 +44,8 @@ export class HistoryEvents {
       });
 
     const nextHandler = () => this.searchManager.navigateNext();
-    addEventListenerSafely('nextMatch', 'click', nextHandler);
-    const nextEl = document.getElementById('nextMatch');
+    addEventListenerSafely(ELEMENT_IDS.NEXT_MATCH, 'click', nextHandler);
+    const nextEl = document.getElementById(ELEMENT_IDS.NEXT_MATCH);
     if (nextEl)
       this.handlers.push({
         element: nextEl,
@@ -62,7 +63,7 @@ export class HistoryEvents {
         }
       }
     };
-    addEventListenerSafely('searchInput', 'keydown', keyHandler);
+    addEventListenerSafely(ELEMENT_IDS.SEARCH_INPUT, 'keydown', keyHandler);
     if (searchInput) {
       this.handlers.push({
         element: searchInput,
