@@ -12,7 +12,7 @@ export class HistoryViewContentProvider extends BaseViewContentProvider {
 
   protected getModuleUris(webview: vscode.Webview): Record<string, vscode.Uri> {
     return {
-      styleUri: this.getWebviewUri(webview, 'styles/style.css'),
+      styleUri: this.getWebviewUri(webview, 'styles/index.css'),
       scriptUri: this.getWebviewUri(webview, 'script.js'),
 
       // History view specific modules
