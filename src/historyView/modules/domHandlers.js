@@ -1,7 +1,7 @@
 // Local imports
 import { HistoryRenderer } from './uiManagers/HistoryRenderer.js';
 import { SearchManager } from './uiManagers/SearchManager.js';
-import { HistoryEvents } from './uiManagers/Events.js';
+import { HistoryEvents } from './uiManagers/HistoryEvents.js';
 import { historyViewState } from './historyViewState.js';
 
 /**
