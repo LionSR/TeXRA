@@ -10,7 +10,7 @@ const dom = progressViewDomHandler;
 
 // Create formatter instances
 
-export class ProgressMessageHandlers {
+export class ProgressViewMessageHandlers {
   constructor() {
     this._cleanupFn = null;
     this._entryFormatter = new LogEntryFormatter();
@@ -190,4 +190,4 @@ export class ProgressMessageHandlers {
   }
 }
 
-export const messageHandlers = new ProgressMessageHandlers();
+export const messageHandlers = new ProgressViewMessageHandlers();
