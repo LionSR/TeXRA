@@ -122,7 +122,7 @@
           "texra.model.useStreamingGoogle": {
             "type": "boolean",
             "default": false,
-            "description": "Enable streaming for Google models via OpenAI-compatible API. Overrides the global useStreaming setting.",
+            "description": "Enable streaming for Google models. Works with both the OpenAI-compatible API and the native GenAI SDK. Overrides the global useStreaming setting.",
             "scope": "resource"
           },
           "texra.model.useStreamingXai": {
