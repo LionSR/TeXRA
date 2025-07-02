@@ -23,7 +23,7 @@ export const recordingManager = new RecordingManager(vscode, webviewEventBus);
 /**
  * Coordinates UI managers for the main webview.
  */
-export class WebviewDomHandler {
+export class MainViewDomHandler {
   constructor() {
     this.fileInputManager = null;
     this.actionButtonManager = null;
@@ -91,4 +91,4 @@ export class WebviewDomHandler {
   }
 }
 
-export const webviewDomHandler = new WebviewDomHandler();
+export const mainViewDomHandler = new MainViewDomHandler();
