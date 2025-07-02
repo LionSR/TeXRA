@@ -6,7 +6,7 @@ import { AgentConfig } from '@agent/core/AgentConfig';
 import { executeAgent } from '@agent/runtime/executeAgent';
 
 // Local imports - history
-import { AgentHistoryManager } from '@historyView/AgentHistoryManager';
+import { AgentHistoryManager } from '@historyView/managers';
 import type { ExecutionId } from '@agent/types/IdentifierTypes';
 
 // Add the registration function
