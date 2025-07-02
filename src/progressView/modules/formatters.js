@@ -463,19 +463,25 @@ export class LogEntryFormatter {
       if (parsed.outputTokens !== undefined) {
         pushItem('codicon-arrow-down', formatTokens(parsed.outputTokens));
       }
-      if (parsed.cacheReadInputTokens) {
+      if (parsed.cacheReadInputTokens !== undefined) {
         pushItem('codicon-history', formatTokens(parsed.cacheReadInputTokens));
       }
-      if (parsed.cacheCreationInputTokens) {
+      if (parsed.cacheCreationInputTokens !== undefined) {
         pushItem('codicon-save', formatTokens(parsed.cacheCreationInputTokens));
       }
-      if (parsed.reasoningTokens) {
+      if (parsed.percentageCached !== undefined) {
+        pushItem(
+          'codicon-graph-line',
+          `${parsed.percentageCached.toFixed(2)}%`,
+        );
+      }
+      if (parsed.reasoningTokens !== undefined) {
         pushItem(
           'codicon-comment-discussion',
           formatTokens(parsed.reasoningTokens),
         );
       }
-      if (parsed.toolUseTokens) {
+      if (parsed.toolUseTokens !== undefined) {
         pushItem('codicon-tools', formatTokens(parsed.toolUseTokens));
       }
       if (parsed.elapsedTime !== undefined) {
