@@ -4,7 +4,7 @@ import {
   addEventListenerSafely,
   safeGetElementById,
 } from '@common/domUtils.js';
-import { historyViewState } from './historyViewState.js';
+import { historyViewState } from '../historyViewState.js';
 
 /**
  * Renders history items and manages per-item events.
