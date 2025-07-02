@@ -3,6 +3,7 @@ import { vscode } from '@common/webviewContext.js';
 import { safeGetElementById, safeSetElementValue } from '@common/domUtils.js';
 import { ELEMENT_IDS } from '../constants.js';
 import { capitalize, uncapitalize } from '@common/stringUtils.js';
+import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
 
 /**
  * Handles single-file dropdown updates and commit list logic.
@@ -37,7 +38,7 @@ export class FileSelect {
     if (baseFile) {
       const current = editedFileDiv.value;
       vscode.postMessage({
-        command: 'requestEditedFile',
+        command: MAIN_VIEW_COMMANDS.REQUEST_EDITED_FILE,
         baseFile,
         preserveSelection: current,
       });
@@ -100,7 +101,7 @@ export class FileSelect {
       fileDiv.dispatchEvent(new Event('change'));
     } else {
       vscode.postMessage({
-        command: 'showInformationMessage',
+        command: MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE,
         text: `The current file is not in the ${fileType} file list: ${filePath}`,
       });
     }
