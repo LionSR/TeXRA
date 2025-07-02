@@ -5,7 +5,7 @@ import { historyViewDomHandler } from './domHandlers.js';
 /**
  * Handles messages from the extension for the history view.
  */
-export class HistoryViewMessageHandlers {
+export class HistoryViewMessageHandler {
   constructor() {
     this._cleanupFn = null;
     this._handlers = {
@@ -34,4 +34,4 @@ export class HistoryViewMessageHandlers {
   }
 }
 
-export const messageHandlers = new HistoryViewMessageHandlers();
+export const messageHandler = new HistoryViewMessageHandler();
