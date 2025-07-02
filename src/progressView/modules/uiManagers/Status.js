@@ -1,6 +1,6 @@
 // Local imports
 import { progressViewState } from '../progressViewState.js';
-import { STATUS, TOOLBAR_BUTTONS } from '../constants.js';
+import { STATUS, TOOLBAR_BUTTONS, ELEMENT_IDS } from '../constants.js';
 
 /**
  * Manages status display and button states.
@@ -11,36 +11,36 @@ export class Status {
       [STATUS.RUNNING]: {
         className: 'running',
         label: 'Running',
-        enable: ['stopStreamBtn', 'restoreStateBtn'],
+        enable: [ELEMENT_IDS.STOP_STREAM_BTN, ELEMENT_IDS.RESTORE_STATE_BTN],
       },
       [STATUS.ERROR]: {
         className: 'error',
         label: 'Error',
         enable: [
-          'runAgainBtn',
-          'packStreamBtn',
-          'cleanStreamBtn',
-          'restoreStateBtn',
-          'diffStreamBtn',
-          'eraseStreamBtn',
+          ELEMENT_IDS.RUN_AGAIN_BTN,
+          ELEMENT_IDS.PACK_STREAM_BTN,
+          ELEMENT_IDS.CLEAN_STREAM_BTN,
+          ELEMENT_IDS.RESTORE_STATE_BTN,
+          ELEMENT_IDS.DIFF_STREAM_BTN,
+          ELEMENT_IDS.ERASE_STREAM_BTN,
         ],
       },
       [STATUS.STOPPED]: {
         className: 'stopped',
         label: 'Stopped',
         enable: [
-          'runAgainBtn',
-          'packStreamBtn',
-          'cleanStreamBtn',
-          'restoreStateBtn',
-          'diffStreamBtn',
-          'eraseStreamBtn',
+          ELEMENT_IDS.RUN_AGAIN_BTN,
+          ELEMENT_IDS.PACK_STREAM_BTN,
+          ELEMENT_IDS.CLEAN_STREAM_BTN,
+          ELEMENT_IDS.RESTORE_STATE_BTN,
+          ELEMENT_IDS.DIFF_STREAM_BTN,
+          ELEMENT_IDS.ERASE_STREAM_BTN,
         ],
       },
       [STATUS.READY]: {
         className: 'ready',
         label: 'Ready',
-        enable: ['restoreStateBtn', 'eraseStreamBtn'],
+        enable: [ELEMENT_IDS.RESTORE_STATE_BTN, ELEMENT_IDS.ERASE_STREAM_BTN],
       },
     };
 
@@ -53,7 +53,9 @@ export class Status {
    * @param {string} status - The status to set
    */
   update(status) {
-    const statusIndicator = document.getElementById('statusIndicator');
+    const statusIndicator = document.getElementById(
+      ELEMENT_IDS.STATUS_INDICATOR,
+    );
     if (!statusIndicator) {
       console.error('Status.update: statusIndicator element not found');
       return;
@@ -68,7 +70,7 @@ export class Status {
     });
 
     // Always enable the erase button regardless of status
-    const eraseBtn = document.getElementById('eraseStreamBtn');
+    const eraseBtn = document.getElementById(ELEMENT_IDS.ERASE_STREAM_BTN);
     if (eraseBtn) eraseBtn.disabled = false;
 
     statusIndicator.className = 'status-indicator';
