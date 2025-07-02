@@ -185,9 +185,12 @@ Configure streaming in VS Code Settings:
 "texra.model.useStreamingAnthropicReasoning": false,
 
 // Specific toggle for OpenAI reasoning models
-"texra.model.useStreamingOpenAIReasoning": false
+"texra.model.useStreamingOpenAIReasoning": false,
 
-// Similar configuration for Google/DeepSeek/OpenRouter models
+// Specific toggle for Google models
+"texra.model.useStreamingGoogle": false
+
+// Similar configuration exists for DeepSeek and OpenRouter models
 ```
 
 ## Next Steps
