@@ -1,6 +1,6 @@
 /* global Mark */
 import { safeGetElementById } from '@common/domUtils.js';
-import { historyViewState } from './historyViewState.js';
+import { historyViewState } from '../historyViewState.js';
 
 /**
  * Handles search functionality using mark.js.
