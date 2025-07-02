@@ -1,9 +1,11 @@
 // Local imports
 import { StatePersistenceManager } from '../persistence/StatePersistenceManager';
-import { StreamTabsManager } from '../managers/StreamTabsManager';
-import { TaskGroupsManager } from '../managers/TaskGroupsManager';
-import { OutputFilesManager } from '../managers/OutputFilesManager';
-import { UsageStatsManager } from '../managers/UsageStatsManager';
+import {
+  StreamTabsManager,
+  TaskGroupsManager,
+  OutputFilesManager,
+  UsageStatsManager,
+} from '../managers';
 import { WorkspaceStateKey } from '@common/state/stateManager';
 import { objectToTaskState } from '@utils/config';
 import { AgentLogger } from '@logger/AgentLogger';

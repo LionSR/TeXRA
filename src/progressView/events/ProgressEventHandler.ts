@@ -3,7 +3,7 @@ import * as vscode from 'vscode';
 
 // Local imports
 import { ProgressViewState } from '../state/ProgressViewState';
-import { WebviewUpdater } from '../managers/WebviewUpdater';
+import { WebviewUpdater } from '../managers';
 import { AgentLogger } from '@logger/AgentLogger';
 import { getConfig } from '@utils/config';
 import { onProgress } from '@eventBus/ProgressEventBus';
