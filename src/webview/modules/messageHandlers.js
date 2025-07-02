@@ -8,7 +8,7 @@ import {
 import { safeSetElementValue, safeGetElementById } from '@common/domUtils.js';
 import { capitalize, uncapitalize } from '@common/stringUtils.js';
 import { mainViewState } from './mainViewState.js';
-import { webviewDomHandler } from './domHandlers.js';
+import { mainViewDomHandler } from './domHandlers.js';
 
 // Local imports - UI managers
 import { fileList } from './uiManagers/FileList.js';
@@ -338,7 +338,7 @@ export class MessageHandlers {
   }
 
   handleSetDebugMode(message) {
-    webviewDomHandler.setDebugMode(message.debugMode);
+    mainViewDomHandler.setDebugMode(message.debugMode);
     this._postHandle();
   }
 
