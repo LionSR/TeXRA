@@ -276,6 +276,7 @@ export class OutputHandler implements IOutputHandler {
       const missingOutputsData = {
         missing,
         xmlFile: xmlExists ? xmlPath : null,
+        documentTag: this.agentSetting.documentTag,
       };
 
       this.logger.info(
@@ -419,6 +420,7 @@ export class OutputHandler implements IOutputHandler {
         const missingOutputsData = {
           missing: [],
           xmlFile: outputFile,
+          documentTag: this.agentSetting.documentTag,
         };
         this.logger.info(
           JSON.stringify(missingOutputsData),

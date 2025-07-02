@@ -72,3 +72,10 @@
 .xml-link-container .codicon {
   opacity: var(--opacity-subtle);
 }
+
+/* Document tag info styling */
+.xml-link-container .document-tag {
+  color: var(--vscode-descriptionForeground);
+  opacity: 0.8;
+  font-style: italic;
+}
