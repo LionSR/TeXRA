@@ -1,7 +1,7 @@
 import { mainViewState } from './modules/mainViewState.js';
 import { messageHandlers } from './modules/messageHandlers.js';
 import {
-  webviewDomHandler,
+  mainViewDomHandler,
   instructionManager,
   toggleManager,
 } from './modules/domHandlers.js';
@@ -11,14 +11,14 @@ messageHandlers.setup({ requestData: false });
 
 window.addEventListener('beforeunload', () => {
   messageHandlers.cleanup();
-  webviewDomHandler.cleanupUI();
+  mainViewDomHandler.cleanupUI();
 });
 
 // Setup UI when DOM is loaded
 document.addEventListener('DOMContentLoaded', function () {
   mainViewState.restore();
   instructionManager.setup();
-  webviewDomHandler.initializeUI();
+  mainViewDomHandler.initializeUI();
   toggleManager.updateToolConfigToggleState();
   toggleManager.updateAutoToggleState();
   toggleManager.setupDocumentListeners();
