@@ -5,9 +5,10 @@ import {
   CHEVRON_DOWN_CLASS,
 } from '@common/webviewContext.js';
 import { mainViewState } from '../mainViewState.js';
+import { ELEMENT_IDS } from '../constants.js';
 
-const LATEXDIFF_CONTENT_ID = 'latexdiffsContent';
-const TOGGLE_LATEXDIFFS_ID = 'toggleLatexdiffs';
+const LATEXDIFF_CONTENT_ID = ELEMENT_IDS.LATEXDIFFS_CONTENT;
+const TOGGLE_LATEXDIFFS_ID = ELEMENT_IDS.TOGGLE_LATEXDIFFS;
 const ICON_SELECTOR = 'i';
 
 /**

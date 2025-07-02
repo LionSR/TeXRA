@@ -6,7 +6,7 @@ import {
   safeGetElementChecked,
 } from '@common/domUtils.js';
 import { capitalize } from '@common/stringUtils.js';
-import { CHECK_BOXES, MULTIPLE_SELECTIONS } from '../constants.js';
+import { CHECK_BOXES, MULTIPLE_SELECTIONS, ELEMENT_IDS } from '../constants.js';
 
 export class ActionButtonManager {
   constructor(vscodeInstance = vscode, fileList, state, instructionMgr) {
@@ -51,7 +51,7 @@ export class ActionButtonManager {
         isActive && filesDiv ? this.fileList.getSelected(filesDiv) : [];
 
       multipleFilesData[id] =
-        id !== 'outputFiles' && singleFile
+        id !== ELEMENT_IDS.OUTPUT_FILES && singleFile
           ? files.filter((file) => file !== singleFile)
           : files;
     });
@@ -59,8 +59,8 @@ export class ActionButtonManager {
   }
 
   _setupInstructionButtons() {
-    this._addListener('eraseInstructionButton', 'click', () => {
-      const instruction = safeGetElementById('instruction');
+    this._addListener(ELEMENT_IDS.ERASE_INSTRUCTION_BUTTON, 'click', () => {
+      const instruction = safeGetElementById(ELEMENT_IDS.INSTRUCTION);
       if (instruction) {
         instruction.value = '';
         this.instructionManager.autoResizeTextarea(instruction);
@@ -68,8 +68,8 @@ export class ActionButtonManager {
       }
     });
 
-    this._addListener('magicPolishButton', 'click', () => {
-      const instruction = safeGetElementById('instruction');
+    this._addListener(ELEMENT_IDS.MAGIC_POLISH_BUTTON, 'click', () => {
+      const instruction = safeGetElementById(ELEMENT_IDS.INSTRUCTION);
       if (instruction && instruction.value.trim()) {
         const agent = safeGetElementValue('agent');
         const model = safeGetElementValue('model');
@@ -89,10 +89,10 @@ export class ActionButtonManager {
   }
 
   _setupExecuteButtons() {
-    this._addListener('executeButton', 'click', () => {
+    this._addListener(ELEMENT_IDS.EXECUTE_BUTTON, 'click', () => {
       const agent = safeGetElementValue('agent');
       const model = safeGetElementValue('model');
-      const instruction = safeGetElementValue('instruction');
+      const instruction = safeGetElementValue(ELEMENT_IDS.INSTRUCTION);
       const singleFiles = this._getSingleFileData();
       const multipleFilesData = this._getMultipleFileData(singleFiles);
 
@@ -112,7 +112,7 @@ export class ActionButtonManager {
       });
     });
 
-    this._addListener('mergeButton', 'click', () => {
+    this._addListener(ELEMENT_IDS.MERGE_BUTTON, 'click', () => {
       const { inputFile } = this._getSingleFileData(['input']);
       const editedFile = safeGetElementValue('editedFile');
 
@@ -128,16 +128,21 @@ export class ActionButtonManager {
       });
     });
 
-    ['pack', 'clean'].forEach((action) => {
-      this._addListener(`${action}Button`, 'click', () => {
+    [
+      { id: ELEMENT_IDS.PACK_BUTTON, action: 'pack' },
+      { id: ELEMENT_IDS.CLEAN_BUTTON, action: 'clean' },
+    ].forEach(({ id, action }) => {
+      this._addListener(id, 'click', () => {
         const { inputFile } = this._getSingleFileData(['input']);
         const agent = safeGetElementValue('agent');
         const model = safeGetElementValue('model');
 
         const outputFiles = this.fileList.getSelected(
-          safeGetElementById('outputFiles'),
+          safeGetElementById(ELEMENT_IDS.OUTPUT_FILES),
         );
-        const container = safeGetElementById('outputFilesContainer');
+        const container = safeGetElementById(
+          ELEMENT_IDS.OUTPUT_FILES_CONTAINER,
+        );
         const useMultiple =
           container &&
           container.style.display !== 'none' &&
@@ -182,7 +187,7 @@ export class ActionButtonManager {
   }
 
   _setupLatexdiffButtons() {
-    this._addListener('latexdiffButton', 'click', () => {
+    this._addListener(ELEMENT_IDS.LATEXDIFF_BUTTON, 'click', () => {
       const { inputFile } = this._getSingleFileData(['input']);
       const baseFile = safeGetElementValue('baseFile');
       const editedFile = safeGetElementValue('editedFile');
@@ -200,10 +205,10 @@ export class ActionButtonManager {
       });
     });
 
-    this._addListener('latexdiffvcButton', 'click', () => {
+    this._addListener(ELEMENT_IDS.LATEXDIFF_VC_BUTTON, 'click', () => {
       const { inputFile } = this._getSingleFileData(['input']);
       const baseFile = safeGetElementValue('baseFile');
-      const commitHash = safeGetElementValue('commit');
+      const commitHash = safeGetElementValue(ELEMENT_IDS.COMMIT_SELECT);
 
       this.vscode.postMessage({
         command: 'latexdiffvc',
@@ -218,11 +223,14 @@ export class ActionButtonManager {
       });
     });
 
-    ['pack', 'clean'].forEach((action) => {
-      this._addListener(`${action}LatexdiffvcButton`, 'click', () => {
+    [
+      { id: ELEMENT_IDS.PACK_LATEXDIFF_VC_BUTTON, action: 'pack' },
+      { id: ELEMENT_IDS.CLEAN_LATEXDIFF_VC_BUTTON, action: 'clean' },
+    ].forEach(({ id, action }) => {
+      this._addListener(id, 'click', () => {
         const { inputFile } = this._getSingleFileData(['input']);
         const baseFile = safeGetElementValue('baseFile');
-        const commitHash = safeGetElementValue('commit');
+        const commitHash = safeGetElementValue(ELEMENT_IDS.COMMIT_SELECT);
 
         this.vscode.postMessage({
           command: `${action}Latexdiffvc`,
@@ -241,7 +249,7 @@ export class ActionButtonManager {
   }
 
   _setupCompareButtons() {
-    this._addListener('compareButton', 'click', () => {
+    this._addListener(ELEMENT_IDS.COMPARE_BUTTON, 'click', () => {
       const baseFile = safeGetElementValue('baseFile');
       const editedFile = safeGetElementValue('editedFile');
       if (baseFile && editedFile) {
@@ -258,7 +266,7 @@ export class ActionButtonManager {
       }
     });
 
-    this._addListener('acceptButton', 'click', () => {
+    this._addListener(ELEMENT_IDS.ACCEPT_BUTTON, 'click', () => {
       const baseFile = safeGetElementValue('baseFile');
       const editedFile = safeGetElementValue('editedFile');
       if (baseFile && editedFile) {
