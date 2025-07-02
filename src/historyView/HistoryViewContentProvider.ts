@@ -19,11 +19,11 @@ export class HistoryViewContentProvider extends BaseViewContentProvider {
       domHandlersUri: this.getWebviewUri(webview, 'modules/domHandlers.js'),
       historyEventsUri: this.getWebviewUri(
         webview,
-        'modules/uiManagers/historyEvents.js',
+        'modules/uiManagers/HistoryEvents.js',
       ),
       historyRendererUri: this.getWebviewUri(
         webview,
-        'modules/uiManagers/historyRenderer.js',
+        'modules/uiManagers/HistoryRenderer.js',
       ),
       historyViewStateUri: this.getWebviewUri(
         webview,
@@ -31,7 +31,7 @@ export class HistoryViewContentProvider extends BaseViewContentProvider {
       ),
       searchManagerUri: this.getWebviewUri(
         webview,
-        'modules/uiManagers/searchManager.js',
+        'modules/uiManagers/SearchManager.js',
       ),
       messageHandlersUri: this.getWebviewUri(
         webview,
