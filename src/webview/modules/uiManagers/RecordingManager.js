@@ -2,6 +2,7 @@ import {
   addEventListenerSafely,
   safeGetElementById,
 } from '@common/domUtils.js';
+import { ELEMENT_IDS } from '../constants.js';
 import { webviewEventBus } from '../eventBus.js';
 
 export class RecordingManager {
@@ -13,7 +14,9 @@ export class RecordingManager {
 
   updateRecordingUI(recording) {
     this.isRecording = recording;
-    const recordButton = safeGetElementById('recordInstructionButton');
+    const recordButton = safeGetElementById(
+      ELEMENT_IDS.RECORD_INSTRUCTION_BUTTON,
+    );
     if (recordButton) {
       if (recording) {
         recordButton.innerHTML = '<i class="codicon codicon-stop-circle"></i>';
@@ -28,7 +31,7 @@ export class RecordingManager {
   }
 
   setupRecordButton() {
-    const buttonId = 'recordInstructionButton';
+    const buttonId = ELEMENT_IDS.RECORD_INSTRUCTION_BUTTON;
     const button = safeGetElementById(buttonId);
     if (!button) return;
 
