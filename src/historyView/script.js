@@ -1,12 +1,12 @@
 import { vscode } from '@common/webviewContext.js';
 import { historyViewDomHandler } from './modules/domHandlers.js';
 import { historyViewState } from './modules/historyViewState.js';
-import { messageHandlers } from './modules/messageHandlers.js';
+import { historyViewMessageHandlers } from './modules/messageHandlers.js';
 
 historyViewState.initialize();
 
 // Register handlers early so messages aren't missed
-messageHandlers.setup();
+historyViewMessageHandlers.setup();
 
 document.addEventListener('DOMContentLoaded', () => {
   historyViewDomHandler.events.setupEventListeners();
@@ -16,5 +16,5 @@ document.addEventListener('DOMContentLoaded', () => {
 window.addEventListener('beforeunload', () => {
   historyViewDomHandler.events.dispose();
   historyViewDomHandler.searchManager.dispose();
-  messageHandlers.cleanup();
+  historyViewMessageHandlers.cleanup();
 });

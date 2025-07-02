@@ -578,4 +578,4 @@ export class MainViewMessageHandlers {
   }
 }
 
-export const messageHandlers = new MainViewMessageHandlers();
+export const mainViewMessageHandlers = new MainViewMessageHandlers();

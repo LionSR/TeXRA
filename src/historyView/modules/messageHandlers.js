@@ -34,4 +34,4 @@ export class HistoryViewMessageHandlers {
   }
 }
 
-export const messageHandlers = new HistoryViewMessageHandlers();
+export const historyViewMessageHandlers = new HistoryViewMessageHandlers();

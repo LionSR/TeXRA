@@ -190,4 +190,4 @@ export class ProgressViewMessageHandlers {
   }
 }
 
-export const messageHandlers = new ProgressViewMessageHandlers();
+export const progressViewMessageHandlers = new ProgressViewMessageHandlers();
