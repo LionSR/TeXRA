@@ -2,7 +2,7 @@
 import { StatePersistenceManager } from '../persistence/StatePersistenceManager';
 import {
   StreamTabsManager,
-  TaskGroupsManager,
+  TaskGroupManager,
   OutputFilesManager,
   UsageStatsManager,
 } from '../managers';
@@ -21,7 +21,7 @@ import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
  */
 export class ProgressViewState {
   private _streamTabs: StreamTabsManager;
-  private _taskGroups: TaskGroupsManager;
+  private _taskGroups: TaskGroupManager;
   private _outputFiles: OutputFilesManager;
   private _usageStats: UsageStatsManager;
   private _activeStream: StreamTabId = '';
@@ -36,7 +36,7 @@ export class ProgressViewState {
 
     // Initialize focused managers
     this._streamTabs = new StreamTabsManager(persistence);
-    this._taskGroups = new TaskGroupsManager(persistence);
+    this._taskGroups = new TaskGroupManager(persistence);
     this._outputFiles = new OutputFilesManager(persistence);
     this._usageStats = new UsageStatsManager(persistence);
   }
@@ -46,7 +46,7 @@ export class ProgressViewState {
     return this._streamTabs;
   }
 
-  get taskGroups(): TaskGroupsManager {
+  get taskGroups(): TaskGroupManager {
     return this._taskGroups;
   }
 
