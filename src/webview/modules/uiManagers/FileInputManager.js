@@ -8,6 +8,7 @@ import {
   FILE_TYPES,
   ELEMENTS_TO_SAVE,
 } from '../constants.js';
+import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
 import { fileList } from './FileList.js';
 import { fileSelect } from './FileSelect.js';
 import { outputFilesManager } from './OutputFilesManager.js';
@@ -58,7 +59,7 @@ export class FileInputManager {
     this._addListener('inputFile', 'change', (e) => {
       const inputFile = e.target.value;
       this.vscode.postMessage({
-        command: 'inputFileSelected',
+        command: MAIN_VIEW_COMMANDS.INPUT_FILE_SELECTED,
         filePath: inputFile,
       });
     });
@@ -66,7 +67,7 @@ export class FileInputManager {
     this._addListener('referenceFile', 'change', (e) => {
       const referenceFile = e.target.value;
       this.vscode.postMessage({
-        command: 'referenceFileSelected',
+        command: MAIN_VIEW_COMMANDS.REFERENCE_FILE_SELECTED,
         filePath: referenceFile,
       });
     });
@@ -74,7 +75,7 @@ export class FileInputManager {
     this._addListener('baseFile', 'change', () => {
       const baseFile = safeGetElementValue('baseFile');
       this.vscode.postMessage({
-        command: 'requestEditedFile',
+        command: MAIN_VIEW_COMMANDS.REQUEST_EDITED_FILE,
         baseFile,
       });
       this.fileSelect.updateEdited(baseFile);
@@ -99,7 +100,7 @@ export class FileInputManager {
       this._addListener(buttonId, 'click', () => {
         const currentFile = safeGetElementValue(selectId);
         this.vscode.postMessage({
-          command: 'selectMultipleFiles',
+          command: MAIN_VIEW_COMMANDS.SELECT_MULTIPLE_FILES,
           fileType: id,
           currentFile,
         });
@@ -113,13 +114,13 @@ export class FileInputManager {
       const cap = capitalize(type);
       this._addListener(`addOpened${cap}FilesButton`, 'click', () => {
         this.vscode.postMessage({
-          command: 'addOpenedFiles',
+          command: MAIN_VIEW_COMMANDS.ADD_OPENED_FILES,
           fileType: type,
         });
       });
       this._addListener(`current${cap}FileButton`, 'click', () => {
         this.vscode.postMessage({
-          command: 'getCurrentFile',
+          command: MAIN_VIEW_COMMANDS.GET_CURRENT_FILE,
           fileType: type,
         });
       });
@@ -129,7 +130,7 @@ export class FileInputManager {
       this._addListener(`current${capitalize(type)}FileButton`, 'click', () => {
         const baseFile = safeGetElementValue('baseFile');
         this.vscode.postMessage({
-          command: 'getCurrentFile',
+          command: MAIN_VIEW_COMMANDS.GET_CURRENT_FILE,
           fileType: type,
           baseFile,
         });
@@ -161,7 +162,9 @@ export class FileInputManager {
     icons.forEach((icon) => {
       if (icon.classList.contains('codicon-git-commit')) {
         const handler = () => {
-          this.vscode.postMessage({ command: 'refreshCommits' });
+          this.vscode.postMessage({
+            command: MAIN_VIEW_COMMANDS.REFRESH_COMMITS,
+          });
         };
         icon.addEventListener('click', handler);
         this._listeners.push({ element: icon, event: 'click', handler });

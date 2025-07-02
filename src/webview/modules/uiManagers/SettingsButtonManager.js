@@ -8,6 +8,7 @@ import {
 } from '../constants.js';
 import { handleCheckboxChange } from '../fileHandlers.js';
 import { mainViewState } from '../mainViewState.js';
+import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
 
 export class SettingsButtonManager {
   constructor(
@@ -78,11 +79,15 @@ export class SettingsButtonManager {
 
   _setupSettingsButtons() {
     this._addListener('agentSettingsButton', 'click', () => {
-      this.vscode.postMessage({ command: 'openAgentSettings' });
+      this.vscode.postMessage({
+        command: MAIN_VIEW_COMMANDS.OPEN_AGENT_SETTINGS,
+      });
     });
 
     this._addListener('modelSettingsButton', 'click', () => {
-      this.vscode.postMessage({ command: 'openModelSettings' });
+      this.vscode.postMessage({
+        command: MAIN_VIEW_COMMANDS.OPEN_MODEL_SETTINGS,
+      });
     });
   }
 
@@ -93,9 +98,11 @@ export class SettingsButtonManager {
       if (reflectCheckbox) {
         reflectCheckbox.checked = !selectedAgent.startsWith('correct');
       }
-      this.vscode.postMessage({ command: 'requestMediaFile' });
       this.vscode.postMessage({
-        command: 'requestDefaultOutputFiles',
+        command: MAIN_VIEW_COMMANDS.REQUEST_MEDIA_FILE,
+      });
+      this.vscode.postMessage({
+        command: MAIN_VIEW_COMMANDS.REQUEST_DEFAULT_OUTPUT_FILES,
         agent: selectedAgent,
       });
       this.state.save();
@@ -103,7 +110,7 @@ export class SettingsButtonManager {
 
     this._addListener('model', 'change', (e) => {
       this.vscode.postMessage({
-        command: 'modelSelected',
+        command: MAIN_VIEW_COMMANDS.MODEL_SELECTED,
         model: e.target.value,
       });
       this.state.save();
