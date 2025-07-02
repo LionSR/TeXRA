@@ -1,6 +1,7 @@
 // Local imports
 import { vscode } from '@common/webviewContext.js';
 import { safeGetElementById, safeSetElementValue } from '@common/domUtils.js';
+import { ELEMENT_IDS } from '../constants.js';
 import { capitalize, uncapitalize } from '@common/stringUtils.js';
 
 /**
@@ -65,11 +66,11 @@ export class FileSelect {
 
   handleRecentCommits(message) {
     const commitButtons = [
-      'packLatexdiffvcButton',
-      'cleanLatexdiffvcButton',
-      'latexdiffvcButton',
+      ELEMENT_IDS.PACK_LATEXDIFF_VC_BUTTON,
+      ELEMENT_IDS.CLEAN_LATEXDIFF_VC_BUTTON,
+      ELEMENT_IDS.LATEXDIFF_VC_BUTTON,
     ];
-    const commitDiv = document.getElementById('commit');
+    const commitDiv = document.getElementById(ELEMENT_IDS.COMMIT_SELECT);
     commitDiv.innerHTML = '';
 
     if (message.isGitRepo === false) {

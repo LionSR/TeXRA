@@ -6,6 +6,7 @@ import {
 import {
   CHECK_BOXES_AUTO_EXTRACT,
   CHECK_BOXES_TOOL_USE,
+  ELEMENT_IDS,
 } from '../constants.js';
 
 export class ToggleManager {
@@ -41,8 +42,8 @@ export class ToggleManager {
 
   updateAutoToggleState() {
     this.updateDropdownToggleState(
-      'toggleAutoExtract',
-      'autoExtractOptions',
+      ELEMENT_IDS.TOGGLE_AUTO_EXTRACT,
+      ELEMENT_IDS.AUTO_EXTRACT_OPTIONS,
       CHECK_BOXES_AUTO_EXTRACT,
       'wand',
     );
@@ -50,8 +51,8 @@ export class ToggleManager {
 
   updateToolConfigToggleState() {
     this.updateDropdownToggleState(
-      'toggleToolConfig',
-      'toolConfigOptions',
+      ELEMENT_IDS.TOGGLE_TOOL_CONFIG,
+      ELEMENT_IDS.TOOL_CONFIG_OPTIONS,
       CHECK_BOXES_TOOL_USE,
       'tools',
     );
@@ -59,10 +60,18 @@ export class ToggleManager {
 
   setupDocumentListeners() {
     document.addEventListener('click', (e) => {
-      const toolConfigOptions = safeGetElementById('toolConfigOptions');
-      const autoExtractOptions = safeGetElementById('autoExtractOptions');
-      const toggleToolConfig = safeGetElementById('toggleToolConfig');
-      const toggleAutoExtract = safeGetElementById('toggleAutoExtract');
+      const toolConfigOptions = safeGetElementById(
+        ELEMENT_IDS.TOOL_CONFIG_OPTIONS,
+      );
+      const autoExtractOptions = safeGetElementById(
+        ELEMENT_IDS.AUTO_EXTRACT_OPTIONS,
+      );
+      const toggleToolConfig = safeGetElementById(
+        ELEMENT_IDS.TOGGLE_TOOL_CONFIG,
+      );
+      const toggleAutoExtract = safeGetElementById(
+        ELEMENT_IDS.TOGGLE_AUTO_EXTRACT,
+      );
 
       if (
         !toggleToolConfig?.contains(e.target) &&
