@@ -23,7 +23,7 @@ import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
 /**
  * Handles messages from the extension and syncs the webview state.
  */
-export class MainViewMessageHandlers {
+export class MainViewMessageHandler {
   constructor() {
     this._skipNextRestoreState = false;
     this._cleanupFn = null;
@@ -578,4 +578,4 @@ export class MainViewMessageHandlers {
   }
 }
 
-export const messageHandlers = new MainViewMessageHandlers();
+export const mainViewMessageHandler = new MainViewMessageHandler();
