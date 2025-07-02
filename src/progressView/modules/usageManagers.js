@@ -1,6 +1,7 @@
 // Local imports
 import { progressViewState } from './progressViewState.js';
 import { formatTokens, BULLET_MARKUP, TaskGroupLevel } from './formatters.js';
+import { ELEMENT_IDS } from './constants.js';
 
 /**
  * Manages usage summary display.
@@ -18,7 +19,7 @@ export class UsageSummary {
   update(usage) {
     // Cache the summary element
     if (!this._summaryElem) {
-      this._summaryElem = document.getElementById('runSummary');
+      this._summaryElem = document.getElementById(ELEMENT_IDS.RUN_SUMMARY);
     }
     if (!this._summaryElem) return;
 

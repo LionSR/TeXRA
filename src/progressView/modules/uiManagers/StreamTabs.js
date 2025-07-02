@@ -1,4 +1,5 @@
 // Local imports
+import { ELEMENT_IDS } from '../constants.js';
 
 /**
  * Manages stream tab UI updates.
@@ -14,7 +15,7 @@ export class StreamTabs {
       console.error('StreamTabs.update: streams must be an array');
       return;
     }
-    const tabsContainer = document.getElementById('streamTabs');
+    const tabsContainer = document.getElementById(ELEMENT_IDS.STREAM_TABS);
     if (!tabsContainer) {
       console.error('StreamTabs.update: streamTabs container not found');
       return;
@@ -35,7 +36,9 @@ export class StreamTabs {
       .join('');
 
     // Update active stream name
-    const streamNameElem = document.getElementById('activeStreamName');
+    const streamNameElem = document.getElementById(
+      ELEMENT_IDS.ACTIVE_STREAM_NAME,
+    );
     if (streamNameElem) {
       streamNameElem.textContent = activeStream || '';
     }
