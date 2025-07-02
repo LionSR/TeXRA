@@ -50,6 +50,7 @@ CLAUDE.md
 !src/common/modules/*.js
 
 !src/historyView/modules/*.js
+!src/historyView/modules/uiManagers/*.js
 !src/historyView/styles/*.css
 !src/historyView/*.html
 !src/historyView/*.css
@@ -58,7 +59,6 @@ CLAUDE.md
 !src/progressView/modules/uiManagers/*.js
 !src/progressView/modules/*.js
 !src/progressView/styles/*.css
-
 !src/progressView/*.js
 !src/progressView/*.html
 !src/progressView/*.css
