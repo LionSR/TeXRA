@@ -19,6 +19,7 @@ import {
   safeSetElementChecked,
 } from '@common/domUtils.js';
 import { capitalize } from '@common/stringUtils.js';
+import { createIcon } from '@common/templateUtils.js';
 
 /**
  * Manages persistent state for the main webview.
@@ -46,7 +47,11 @@ export class MainViewState {
     const autoExtractOptions = safeGetElementById('autoExtractOptions');
     if (autoExtractToggle && autoExtractOptions) {
       autoExtractToggle.classList.remove('active');
-      autoExtractToggle.innerHTML = `<i class="codicon codicon-wand"></i><i class="${CHEVRON_DOWN_CLASS}"></i>`;
+      autoExtractToggle.innerHTML = '';
+      const wandIcon = createIcon('codicon-wand');
+      const chevron = createIcon(CHEVRON_DOWN_CLASS);
+      if (wandIcon) autoExtractToggle.appendChild(wandIcon);
+      if (chevron) autoExtractToggle.appendChild(chevron);
       autoExtractOptions.style.display = 'none';
     }
 
@@ -63,7 +68,9 @@ export class MainViewState {
     const toggleLatexdiffs = safeGetElementById('toggleLatexdiffs');
     if (latexdiffsContent && toggleLatexdiffs) {
       latexdiffsContent.style.display = 'none';
-      toggleLatexdiffs.innerHTML = `<i class="${CHEVRON_DOWN_CLASS}"></i>`;
+      toggleLatexdiffs.innerHTML = '';
+      const icon = createIcon(CHEVRON_DOWN_CLASS);
+      if (icon) toggleLatexdiffs.appendChild(icon);
     }
 
     this.save();
@@ -90,7 +97,11 @@ export class MainViewState {
       );
       if (autoExtractToggle && autoExtractOptions) {
         autoExtractToggle.classList.toggle('active', hasAutoExtractChecked);
-        autoExtractToggle.innerHTML = `<i class="codicon codicon-wand"></i><i class="${CHEVRON_DOWN_CLASS}"></i>`;
+        autoExtractToggle.innerHTML = '';
+        const wandIcon = createIcon('codicon-wand');
+        const chevron = createIcon(CHEVRON_DOWN_CLASS);
+        if (wandIcon) autoExtractToggle.appendChild(wandIcon);
+        if (chevron) autoExtractToggle.appendChild(chevron);
         autoExtractOptions.style.display = 'none';
       }
 
@@ -101,7 +112,11 @@ export class MainViewState {
       );
       if (toggleToolConfig && toolConfigOptions) {
         toggleToolConfig.classList.toggle('active', hasToolConfigChecked);
-        toggleToolConfig.innerHTML = `<i class="codicon codicon-tools"></i><i class="${CHEVRON_DOWN_CLASS}"></i>`;
+        toggleToolConfig.innerHTML = '';
+        const toolsIcon = createIcon('codicon-tools');
+        const chevronIcon = createIcon(CHEVRON_DOWN_CLASS);
+        if (toolsIcon) toggleToolConfig.appendChild(toolsIcon);
+        if (chevronIcon) toggleToolConfig.appendChild(chevronIcon);
         toolConfigOptions.style.display = 'none';
       }
 
@@ -136,9 +151,11 @@ export class MainViewState {
       if (latexdiffsContent && toggleLatexdiffs) {
         const visible = previousState.latexdiffsVisible ?? false;
         latexdiffsContent.style.display = visible ? 'block' : 'none';
-        toggleLatexdiffs.innerHTML = `<i class="${
-          visible ? CHEVRON_UP_CLASS : CHEVRON_DOWN_CLASS
-        }"></i>`;
+        toggleLatexdiffs.innerHTML = '';
+        const icon = createIcon(
+          visible ? CHEVRON_UP_CLASS : CHEVRON_DOWN_CLASS,
+        );
+        if (icon) toggleLatexdiffs.appendChild(icon);
       }
     } else {
       this.setDefaults();

@@ -7,6 +7,7 @@ import {
 import { mainViewState } from '../mainViewState.js';
 import { fileList } from './FileList.js';
 import { fileSelect } from './FileSelect.js';
+import { createIcon } from '@common/templateUtils.js';
 
 const INPUT_FILE_ID = 'inputFile';
 const OUTPUT_FILES_ID = 'outputFiles';
@@ -89,9 +90,11 @@ export class OutputFilesManager {
       const shouldShow = state && state.outputFilesActive;
 
       container.style.display = shouldShow ? 'block' : 'none';
-      toggleIcon.innerHTML = `<i class="${
-        shouldShow ? CHEVRON_UP_CLASS : CHEVRON_DOWN_CLASS
-      }"></i>`;
+      toggleIcon.innerHTML = '';
+      const icon = createIcon(
+        shouldShow ? CHEVRON_UP_CLASS : CHEVRON_DOWN_CLASS,
+      );
+      if (icon) toggleIcon.appendChild(icon);
     }
   }
 }

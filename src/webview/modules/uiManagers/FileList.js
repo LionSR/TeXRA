@@ -8,6 +8,7 @@ import {
   CHEVRON_DOWN_CLASS,
 } from '@common/webviewContext.js';
 import { capitalize } from '@common/stringUtils.js';
+import { createIcon, createFileListItem } from '@common/templateUtils.js';
 
 /**
  * Handles multi-file list DOM updates.
@@ -31,10 +32,8 @@ export class FileList {
     const toggleIcon = safeGetElementById(`toggle${capitalize(containerId)}`);
     if (!container || !toggleIcon) return;
 
-    const fileElement = document.createElement('div');
-    fileElement.className = 'file-item';
-    fileElement.dataset.path = file;
-    fileElement.innerHTML = `${file} <span class="remove-button">-</span>`;
+    const fileElement = createFileListItem(file);
+    if (!fileElement) return;
 
     const removeButton = fileElement.querySelector('.remove-button');
     if (removeButton) {
@@ -63,7 +62,9 @@ export class FileList {
     if (newFiles.length > 0) {
       newFiles.forEach((file) => this.add(listId, file));
       listDiv.style.display = 'block';
-      toggleIcon.innerHTML = `<i class="${CHEVRON_UP_CLASS}"></i>`;
+      toggleIcon.innerHTML = '';
+      const iconEl = createIcon(CHEVRON_UP_CLASS);
+      if (iconEl) toggleIcon.appendChild(iconEl);
 
       const container = safeGetElementById(`${listId}Container`);
       if (container) {
@@ -85,9 +86,9 @@ export class FileList {
     const toggleIcon = safeGetElementById(toggleId);
     if (!container || !toggleIcon) return;
     container.style.display = isVisible ? 'block' : 'none';
-    toggleIcon.innerHTML = `<i class="${
-      isVisible ? CHEVRON_UP_CLASS : CHEVRON_DOWN_CLASS
-    }"></i>`;
+    toggleIcon.innerHTML = '';
+    const icon = createIcon(isVisible ? CHEVRON_UP_CLASS : CHEVRON_DOWN_CLASS);
+    if (icon) toggleIcon.appendChild(icon);
   }
 
   /** Toggle visibility of a file list container */
@@ -109,7 +110,9 @@ export class FileList {
     container.style.display = 'none';
     const toggleIconDiv = safeGetElementById(toggleId);
     if (toggleIconDiv) {
-      toggleIconDiv.innerHTML = `<i class="${CHEVRON_DOWN_CLASS}"></i>`;
+      toggleIconDiv.innerHTML = '';
+      const icon = createIcon(CHEVRON_DOWN_CLASS);
+      if (icon) toggleIconDiv.appendChild(icon);
     }
     this._saveFn();
   }

@@ -2,6 +2,7 @@
 import { vscode } from '@common/webviewContext.js';
 import { safeGetElementById, safeSetElementValue } from '@common/domUtils.js';
 import { capitalize, uncapitalize } from '@common/stringUtils.js';
+import { createOption } from '@common/templateUtils.js';
 
 /**
  * Handles single-file dropdown updates and commit list logic.
@@ -46,10 +47,8 @@ export class FileSelect {
   }
 
   addOption(select, value, text) {
-    const option = document.createElement('option');
-    option.value = value;
-    option.textContent = text;
-    select.appendChild(option);
+    const option = createOption({ value, text });
+    if (option) select.appendChild(option);
   }
 
   setElementsDisabled(elements, disabled) {

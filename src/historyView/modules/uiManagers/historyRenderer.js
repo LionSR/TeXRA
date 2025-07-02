@@ -5,6 +5,7 @@ import {
   safeGetElementById,
 } from '@common/domUtils.js';
 import { historyViewState } from '../historyViewState.js';
+import { renderTemplate } from '@common/templateUtils.js';
 
 /**
  * Renders history items and manages per-item events.
@@ -24,17 +25,22 @@ export class HistoryRenderer {
     clearButtonContainer.innerHTML = '';
 
     if (!historyItems || historyItems.length === 0) {
-      historyContainer.innerHTML =
-        '<div class="empty-state">No history items found</div>';
+      const empty = renderTemplate('emptyStateTemplate');
+      if (empty) {
+        empty.textContent = 'No history items found';
+        historyContainer.appendChild(empty);
+      }
       this.searchManager.initialize(historyContainer);
       return;
     }
 
-    clearButtonContainer.innerHTML =
-      '<button class="vscode-button button-clear" id="clearHistoryBtn">Clear All History</button>';
-    addEventListenerSafely('clearHistoryBtn', 'click', () => {
-      vscode.postMessage({ command: 'clearHistory' });
-    });
+    const clearBtn = renderTemplate('clearHistoryButtonTemplate');
+    if (clearBtn) {
+      clearButtonContainer.appendChild(clearBtn);
+      addEventListenerSafely('clearHistoryBtn', 'click', () => {
+        vscode.postMessage({ command: 'clearHistory' });
+      });
+    }
 
     const sorted = [...historyItems].sort(
       (a, b) => new Date(b.timestamp) - new Date(a.timestamp),
@@ -52,27 +58,28 @@ export class HistoryRenderer {
     const config = item.config;
     const date = new Date(item.timestamp).toLocaleString();
 
-    const container = document.createElement('div');
-    container.className = 'history-item';
+    const container = renderTemplate('historyItemTemplate');
+    if (!container) return document.createElement('div');
 
-    const header = document.createElement('div');
-    header.className = 'history-item-header';
-    header.innerHTML = `
-      <div class="history-timestamp">${date}</div>
-      <div class="history-actions button-group">
-        <button class="vscode-button delete-btn" data-id="${item.id}" data-command="deleteAgent" title="Delete this history item">
-          <i class="codicon codicon-trash"></i>
-        </button>
-        <button class="vscode-button restore-btn" data-id="${item.id}" data-command="restoreAgent" title="Load configuration to main view">
-          <i class="codicon codicon-reply"></i>
-        </button>
-        <button class="vscode-button rerun-btn" data-id="${item.id}" data-command="rerunAgent" title="Execute this configuration">
-          <i class="codicon codicon-debug-rerun"></i>
-        </button>
-      </div>`;
+    const headerTimestamp = container.querySelector('.history-timestamp');
+    if (headerTimestamp) headerTimestamp.textContent = date;
+    const delBtn = container.querySelector('.delete-btn');
+    if (delBtn) {
+      delBtn.dataset.id = item.id;
+      delBtn.dataset.command = 'deleteAgent';
+    }
+    const restoreBtn = container.querySelector('.restore-btn');
+    if (restoreBtn) {
+      restoreBtn.dataset.id = item.id;
+      restoreBtn.dataset.command = 'restoreAgent';
+    }
+    const rerunBtn = container.querySelector('.rerun-btn');
+    if (rerunBtn) {
+      rerunBtn.dataset.id = item.id;
+      rerunBtn.dataset.command = 'rerunAgent';
+    }
 
-    const basicDetails = document.createElement('div');
-    basicDetails.className = 'history-details';
+    const basicDetails = container.querySelector('.basic-details');
     let basicHTML = `
       <span class="history-label">Agent:</span>
       <span class="history-value">${config.agent}</span>
@@ -105,12 +112,12 @@ export class HistoryRenderer {
     });
     basicDetails.innerHTML = basicHTML;
 
-    const collapsible = document.createElement('div');
-    collapsible.className = 'collapsible';
-    collapsible.id = `content-${item.id}`;
+    const collapsible = container.querySelector('.collapsible');
+    if (collapsible) {
+      collapsible.id = `content-${item.id}`;
+    }
 
-    const detailsContainer = document.createElement('div');
-    detailsContainer.className = 'history-details';
+    const detailsContainer = container.querySelector('.details-container');
 
     let detailsHTML = '';
     const extraFileTypes = [
@@ -153,20 +160,16 @@ export class HistoryRenderer {
       );
     }
 
-    if (detailsHTML) {
+    const toggleButton = container.querySelector('.toggle-button');
+
+    if (detailsHTML && detailsContainer && collapsible && toggleButton) {
       detailsContainer.innerHTML = detailsHTML;
       collapsible.appendChild(detailsContainer);
-      const toggleButton = document.createElement('button');
-      toggleButton.className = 'toggle-button';
-      toggleButton.setAttribute('data-id', item.id);
+      toggleButton.dataset.id = item.id;
       toggleButton.textContent = 'Show more';
-      container.appendChild(header);
-      container.appendChild(basicDetails);
-      container.appendChild(collapsible);
-      container.appendChild(toggleButton);
     } else {
-      container.appendChild(header);
-      container.appendChild(basicDetails);
+      collapsible?.remove();
+      toggleButton?.remove();
     }
 
     return container;

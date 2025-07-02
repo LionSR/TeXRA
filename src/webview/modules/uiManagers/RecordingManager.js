@@ -3,6 +3,7 @@ import {
   safeGetElementById,
 } from '@common/domUtils.js';
 import { webviewEventBus } from '../eventBus.js';
+import { createIcon } from '@common/templateUtils.js';
 
 export class RecordingManager {
   constructor(vscode, eventBus = webviewEventBus) {
@@ -16,11 +17,15 @@ export class RecordingManager {
     const recordButton = safeGetElementById('recordInstructionButton');
     if (recordButton) {
       if (recording) {
-        recordButton.innerHTML = '<i class="codicon codicon-stop-circle"></i>';
+        recordButton.innerHTML = '';
+        const icon = createIcon('codicon-stop-circle');
+        if (icon) recordButton.appendChild(icon);
         recordButton.title = 'Stop recording';
         recordButton.classList.add('recording');
       } else {
-        recordButton.innerHTML = '<i class="codicon codicon-mic"></i>';
+        recordButton.innerHTML = '';
+        const icon = createIcon('codicon-mic');
+        if (icon) recordButton.appendChild(icon);
         recordButton.title = 'Record instruction with microphone';
         recordButton.classList.remove('recording');
       }
