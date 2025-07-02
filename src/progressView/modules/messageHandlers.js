@@ -1,7 +1,7 @@
 // Local imports - log state
 import { progressViewState } from './progressViewState.js';
 import { progressViewDomHandler, LogEntryFormatter } from './domHandlers.js';
-import { COMMANDS, STATUS } from './constants.js';
+import { COMMANDS, STATUS, ELEMENT_IDS } from './constants.js';
 import { registerMessageHandlers } from '@common/webviewContext.js';
 
 // Create shorter aliases for internal use
@@ -62,7 +62,7 @@ export class ProgressViewMessageHandler {
   }
 
   handleUpdateLogs(message) {
-    const logContent = document.getElementById('logContent');
+    const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
     if (message.stream === state.getActiveStream()) {
       logContent.innerHTML = '';
       state.taskGroups.clear();
@@ -100,7 +100,7 @@ export class ProgressViewMessageHandler {
   }
 
   handleClearLogs() {
-    const logContent = document.getElementById('logContent');
+    const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
     logContent.innerHTML = '';
     const groupIds = [];
     const headers = Array.from(document.querySelectorAll('.log-group-header'));
@@ -113,7 +113,7 @@ export class ProgressViewMessageHandler {
 
   handleAppendLog(message) {
     if (message.stream === state.getActiveStream()) {
-      const logContent = document.getElementById('logContent');
+      const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
       const addedToGroup = dom.logEntries.append(message.logMessage);
       if (!addedToGroup) {
         const el = document.createElement('div');
@@ -132,7 +132,7 @@ export class ProgressViewMessageHandler {
 
   handleAddTaskGroup(message) {
     if (message.stream === state.getActiveStream()) {
-      const logContent = document.getElementById('logContent');
+      const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
       dom.taskGroups.add(message.group);
       logContent.scrollTop = logContent.scrollHeight;
     }

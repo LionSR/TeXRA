@@ -2,7 +2,7 @@
 import Split from 'split.js';
 // Local imports
 import { progressViewState } from '../progressViewState.js';
-import { COMMANDS, SPLIT_SIZES } from '../constants.js';
+import { COMMANDS, SPLIT_SIZES, ELEMENT_IDS } from '../constants.js';
 import {
   CHEVRON_RIGHT_CLASS,
   CHEVRON_DOWN_CLASS,
@@ -33,26 +33,28 @@ export class Events {
    */
   setupEventListeners() {
     // Stream tab click handler
-    document.getElementById('streamTabs').addEventListener('click', (e) => {
-      const tabButton = e.target.closest('.tab');
-      const deleteButton = e.target.closest('.tab-delete');
+    document
+      .getElementById(ELEMENT_IDS.STREAM_TABS)
+      .addEventListener('click', (e) => {
+        const tabButton = e.target.closest('.tab');
+        const deleteButton = e.target.closest('.tab-delete');
 
-      if (tabButton && tabButton.dataset.stream) {
-        vscode.postMessage({
-          command: COMMANDS.SWITCH_STREAM,
-          stream: tabButton.dataset.stream,
-        });
-      } else if (deleteButton && deleteButton.dataset.stream) {
-        vscode.postMessage({
-          command: COMMANDS.DELETE_STREAM,
-          stream: deleteButton.dataset.stream,
-        });
-      }
-    });
+        if (tabButton && tabButton.dataset.stream) {
+          vscode.postMessage({
+            command: COMMANDS.SWITCH_STREAM,
+            stream: tabButton.dataset.stream,
+          });
+        } else if (deleteButton && deleteButton.dataset.stream) {
+          vscode.postMessage({
+            command: COMMANDS.DELETE_STREAM,
+            stream: deleteButton.dataset.stream,
+          });
+        }
+      });
 
     // Toolbar click handler
     document
-      .getElementById('toolbarContainer')
+      .getElementById(ELEMENT_IDS.TOOLBAR_CONTAINER)
       .addEventListener('click', (e) => {
         const button = e.target.closest('button[data-command]');
         if (!button || button.disabled) return;
@@ -69,7 +71,7 @@ export class Events {
     // This appears to be orphaned code from a previous design
 
     // File list button handler
-    document.getElementById('generatedFiles').addEventListener(
+    document.getElementById(ELEMENT_IDS.GENERATED_FILES).addEventListener(
       'click',
       (e) => {
         const button = e.target.closest('button');
@@ -84,7 +86,7 @@ export class Events {
     );
 
     // Delete all button handler
-    const deleteAllBtn = document.getElementById('deleteAllBtn');
+    const deleteAllBtn = document.getElementById(ELEMENT_IDS.DELETE_ALL_BTN);
     if (deleteAllBtn) {
       deleteAllBtn.addEventListener('click', () => {
         vscode.postMessage({ command: COMMANDS.DELETE_ALL });
