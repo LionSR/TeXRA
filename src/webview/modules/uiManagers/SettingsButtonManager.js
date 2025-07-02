@@ -9,6 +9,7 @@ import {
 import { handleCheckboxChange } from '../fileHandlers.js';
 import { mainViewState } from '../mainViewState.js';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
+import { ELEMENT_IDS } from '../constants.js';
 
 export class SettingsButtonManager {
   constructor(
@@ -36,9 +37,9 @@ export class SettingsButtonManager {
   }
 
   _setupToggles() {
-    this._addListener('toggleAutoExtract', 'click', (e) => {
+    this._addListener(ELEMENT_IDS.TOGGLE_AUTO_EXTRACT, 'click', (e) => {
       e.stopPropagation();
-      const options = safeGetElementById('autoExtractOptions');
+      const options = safeGetElementById(ELEMENT_IDS.AUTO_EXTRACT_OPTIONS);
       if (options) {
         const visible = options.style.display === 'block';
         options.style.display = visible ? 'none' : 'block';
@@ -46,9 +47,9 @@ export class SettingsButtonManager {
       this.toggleManager.updateAutoToggleState();
     });
 
-    this._addListener('toggleToolConfig', 'click', (e) => {
+    this._addListener(ELEMENT_IDS.TOGGLE_TOOL_CONFIG, 'click', (e) => {
       e.stopPropagation();
-      const options = safeGetElementById('toolConfigOptions');
+      const options = safeGetElementById(ELEMENT_IDS.TOOL_CONFIG_OPTIONS);
       if (options) {
         const visible = options.style.display === 'block';
         options.style.display = visible ? 'none' : 'block';
@@ -72,19 +73,19 @@ export class SettingsButtonManager {
       this._addListener(id, 'change', handleCheckboxChange);
     });
 
-    this._addListener('toggleLatexdiffs', 'click', () => {
+    this._addListener(ELEMENT_IDS.TOGGLE_LATEXDIFFS, 'click', () => {
       this.latexdiffManager.toggleLatexdiffs();
     });
   }
 
   _setupSettingsButtons() {
-    this._addListener('agentSettingsButton', 'click', () => {
+    this._addListener(ELEMENT_IDS.AGENT_SETTINGS_BUTTON, 'click', () => {
       this.vscode.postMessage({
         command: MAIN_VIEW_COMMANDS.OPEN_AGENT_SETTINGS,
       });
     });
 
-    this._addListener('modelSettingsButton', 'click', () => {
+    this._addListener(ELEMENT_IDS.MODEL_SETTINGS_BUTTON, 'click', () => {
       this.vscode.postMessage({
         command: MAIN_VIEW_COMMANDS.OPEN_MODEL_SETTINGS,
       });

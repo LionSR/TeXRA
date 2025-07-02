@@ -5,6 +5,7 @@ import {
   VALUE_ELEMENTS,
   CHECK_BOXES_TOOL_USE,
   CHECK_BOXES_AUTO_EXTRACT,
+  ELEMENT_IDS,
 } from './constants.js';
 import { fileList } from './uiManagers/FileList.js';
 import {
@@ -42,8 +43,12 @@ export class MainViewState {
 
   /** Initialize UI with default state */
   setDefaults() {
-    const autoExtractToggle = safeGetElementById('toggleAutoExtract');
-    const autoExtractOptions = safeGetElementById('autoExtractOptions');
+    const autoExtractToggle = safeGetElementById(
+      ELEMENT_IDS.TOGGLE_AUTO_EXTRACT,
+    );
+    const autoExtractOptions = safeGetElementById(
+      ELEMENT_IDS.AUTO_EXTRACT_OPTIONS,
+    );
     if (autoExtractToggle && autoExtractOptions) {
       autoExtractToggle.classList.remove('active');
       autoExtractToggle.innerHTML = `<i class="codicon codicon-wand"></i><i class="${CHEVRON_DOWN_CLASS}"></i>`;
@@ -59,8 +64,10 @@ export class MainViewState {
       }
     });
 
-    const latexdiffsContent = safeGetElementById('latexdiffsContent');
-    const toggleLatexdiffs = safeGetElementById('toggleLatexdiffs');
+    const latexdiffsContent = safeGetElementById(
+      ELEMENT_IDS.LATEXDIFFS_CONTENT,
+    );
+    const toggleLatexdiffs = safeGetElementById(ELEMENT_IDS.TOGGLE_LATEXDIFFS);
     if (latexdiffsContent && toggleLatexdiffs) {
       latexdiffsContent.style.display = 'none';
       toggleLatexdiffs.innerHTML = `<i class="${CHEVRON_DOWN_CLASS}"></i>`;
@@ -83,8 +90,12 @@ export class MainViewState {
         safeSetElementChecked(id, previousState[id] ?? false);
       });
 
-      const autoExtractToggle = safeGetElementById('toggleAutoExtract');
-      const autoExtractOptions = safeGetElementById('autoExtractOptions');
+      const autoExtractToggle = safeGetElementById(
+        ELEMENT_IDS.TOGGLE_AUTO_EXTRACT,
+      );
+      const autoExtractOptions = safeGetElementById(
+        ELEMENT_IDS.AUTO_EXTRACT_OPTIONS,
+      );
       const hasAutoExtractChecked = CHECK_BOXES_AUTO_EXTRACT.some((id) =>
         safeGetElementChecked(id),
       );
@@ -94,8 +105,12 @@ export class MainViewState {
         autoExtractOptions.style.display = 'none';
       }
 
-      const toggleToolConfig = safeGetElementById('toggleToolConfig');
-      const toolConfigOptions = safeGetElementById('toolConfigOptions');
+      const toggleToolConfig = safeGetElementById(
+        ELEMENT_IDS.TOGGLE_TOOL_CONFIG,
+      );
+      const toolConfigOptions = safeGetElementById(
+        ELEMENT_IDS.TOOL_CONFIG_OPTIONS,
+      );
       const hasToolConfigChecked = CHECK_BOXES_TOOL_USE.some((id) =>
         safeGetElementChecked(id),
       );
@@ -131,8 +146,12 @@ export class MainViewState {
         }
       });
 
-      const latexdiffsContent = safeGetElementById('latexdiffsContent');
-      const toggleLatexdiffs = safeGetElementById('toggleLatexdiffs');
+      const latexdiffsContent = safeGetElementById(
+        ELEMENT_IDS.LATEXDIFFS_CONTENT,
+      );
+      const toggleLatexdiffs = safeGetElementById(
+        ELEMENT_IDS.TOGGLE_LATEXDIFFS,
+      );
       if (latexdiffsContent && toggleLatexdiffs) {
         const visible = previousState.latexdiffsVisible ?? false;
         latexdiffsContent.style.display = visible ? 'block' : 'none';
@@ -151,7 +170,8 @@ export class MainViewState {
   save() {
     const state = {
       latexdiffsVisible:
-        safeGetElementById('latexdiffsContent')?.style.display === 'block',
+        safeGetElementById(ELEMENT_IDS.LATEXDIFFS_CONTENT)?.style.display ===
+        'block',
     };
 
     VALUE_ELEMENTS.forEach((id) => {

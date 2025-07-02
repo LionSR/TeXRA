@@ -56,3 +56,32 @@ export const VALUE_ELEMENTS = [
 
 // All elements that need to be saved
 export const ELEMENTS_TO_SAVE = [...VALUE_ELEMENTS, ...CHECK_BOXES];
+
+// Named element IDs used throughout the UI
+export const ELEMENT_IDS = {
+  PACK_BUTTON: 'packButton',
+  CLEAN_BUTTON: 'cleanButton',
+  MAGIC_POLISH_BUTTON: 'magicPolishButton',
+  ERASE_INSTRUCTION_BUTTON: 'eraseInstructionButton',
+  RECORD_INSTRUCTION_BUTTON: 'recordInstructionButton',
+  EXECUTE_BUTTON: 'executeButton',
+  MERGE_BUTTON: 'mergeButton',
+  COMPARE_BUTTON: 'compareButton',
+  ACCEPT_BUTTON: 'acceptButton',
+  LATEXDIFF_BUTTON: 'latexdiffButton',
+  LATEXDIFF_VC_BUTTON: 'latexdiffvcButton',
+  PACK_LATEXDIFF_VC_BUTTON: 'packLatexdiffvcButton',
+  CLEAN_LATEXDIFF_VC_BUTTON: 'cleanLatexdiffvcButton',
+  AGENT_SETTINGS_BUTTON: 'agentSettingsButton',
+  MODEL_SETTINGS_BUTTON: 'modelSettingsButton',
+  TOGGLE_AUTO_EXTRACT: 'toggleAutoExtract',
+  AUTO_EXTRACT_OPTIONS: 'autoExtractOptions',
+  TOGGLE_TOOL_CONFIG: 'toggleToolConfig',
+  TOOL_CONFIG_OPTIONS: 'toolConfigOptions',
+  TOGGLE_LATEXDIFFS: 'toggleLatexdiffs',
+  LATEXDIFFS_CONTENT: 'latexdiffsContent',
+  COMMIT_SELECT: 'commit',
+  OUTPUT_FILES: 'outputFiles',
+  OUTPUT_FILES_CONTAINER: 'outputFilesContainer',
+  INSTRUCTION: 'instruction',
+};
