@@ -8,7 +8,7 @@ import {
 } from '@common/webview/BaseViewMessageHandler';
 // @ts-ignore - Import JavaScript module
 import { HISTORY_VIEW_COMMANDS } from '@common/webview/commands';
-import { AgentHistoryManager } from './AgentHistoryManager';
+import { AgentHistoryManager } from './managers';
 import { executeCommand } from '@commands/agent/executeCommand';
 import { agentConfigToTaskState } from '@utils/config';
 import { showLoggedErrorMessage } from '@common/errors/errorHandlingUtils';
