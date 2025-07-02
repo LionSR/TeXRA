@@ -1,6 +1,7 @@
 // Local imports
 import { progressViewState } from './progressViewState.js';
 import { TaskGroupHeaderFormatter, LogEntryFormatter } from './formatters.js';
+import { ELEMENT_IDS } from './constants.js';
 
 /**
  * Manages task group DOM operations.
@@ -45,7 +46,7 @@ export class TaskGroupManager {
     });
 
     // Insert the group at the right position in the parent
-    const container = document.getElementById('logContent');
+    const container = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
     let insertPosition = null;
 
     if (group.parentGroupId) {
