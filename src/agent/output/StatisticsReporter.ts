@@ -9,6 +9,7 @@ import {
 } from '@agent/core/ResponseUsage';
 import { ResponseUsage } from 'openai/resources/responses/responses';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/modelHandlerOpenAIResponse';
+import { MESSAGE_TYPES } from '@logger/messageTypes';
 
 export class StatisticsReporter {
   constructor(
@@ -24,66 +25,6 @@ export class StatisticsReporter {
     const statsGroupId = groupId ?? this.logger.getActiveGroupId();
 
     try {
-      this.logger.debug('=== Task Statistics ===', statsGroupId);
-      this.logger.debug(
-        `Total input tokens  : ${stateGlobal.totalInputTokens}`,
-        statsGroupId,
-      );
-      this.logger.debug(
-        `Total output tokens : ${stateGlobal.totalOutputTokens}`,
-        statsGroupId,
-      );
-
-      if (
-        this.modelHandler.capabilities.supportsPromptCaching ||
-        this.modelHandler.capabilities.supportsAutoPromptCaching
-      ) {
-        this.logger.debug(
-          `Total input tokens (cache read): ${stateGlobal.totalCacheReadInputTokens}`,
-          statsGroupId,
-        );
-
-        if (this.modelHandler.capabilities.supportsPromptCaching) {
-          this.logger.debug(
-            `Total input tokens (cache create): ${stateGlobal.totalCacheCreationInputTokens}`,
-            statsGroupId,
-          );
-        }
-
-        let totalCacheableTokens: number;
-        if (this.modelHandler.capabilities.supportsPromptCaching) {
-          totalCacheableTokens =
-            stateGlobal.totalCacheCreationInputTokens +
-            stateGlobal.totalCacheReadInputTokens;
-        } else {
-          totalCacheableTokens = stateGlobal.totalInputTokens;
-        }
-
-        const percentageCached =
-          totalCacheableTokens > 0
-            ? (stateGlobal.totalCacheReadInputTokens / totalCacheableTokens) *
-              100
-            : 0;
-        this.logger.debug(
-          `Percentage cached: ${percentageCached.toFixed(2)}%`,
-          statsGroupId,
-        );
-      }
-
-      if (this.modelHandler.capabilities.supportsReasoning) {
-        this.logger.debug(
-          `Total reasoning tokens: ${stateGlobal.totalReasoningTokens}`,
-          statsGroupId,
-        );
-      }
-
-      if (stateGlobal.totalToolUseTokens > 0) {
-        this.logger.debug(
-          `Total tool use tokens: ${stateGlobal.totalToolUseTokens}`,
-          statsGroupId,
-        );
-      }
-
       let responseUsage:
         | ExtendedCompletionUsage
         | AnthropicUsage
@@ -163,15 +104,22 @@ export class StatisticsReporter {
         });
       }
 
+      const payload = {
+        inputTokens: stateGlobal.totalInputTokens,
+        outputTokens: stateGlobal.totalOutputTokens,
+        cacheReadInputTokens: stateGlobal.totalCacheReadInputTokens,
+        cacheCreationInputTokens: stateGlobal.totalCacheCreationInputTokens,
+        reasoningTokens: stateGlobal.totalReasoningTokens,
+        toolUseTokens: stateGlobal.totalToolUseTokens,
+        elapsedTime: Number(stateGlobal.totalResponseTime.toFixed(1)),
+        cost: Number(cost.toFixed(3)),
+      };
+
       this.logger.debug(
-        `Total response time : ${stateGlobal.totalResponseTime.toFixed(1)} seconds`,
+        JSON.stringify(payload),
         statsGroupId,
+        MESSAGE_TYPES.STATISTICS,
       );
-      this.logger.debug(
-        `Total cost          : ${cost.toFixed(3)} USD`,
-        statsGroupId,
-      );
-      this.logger.debug('=======================', statsGroupId);
     } catch (error) {
       this.logger.error(`Error printing statistics: ${error}`, statsGroupId);
     }

@@ -42,6 +42,7 @@ export interface LogMessageData {
     | 'fileList'
     | 'missingOutputs'
     | 'latexdiff'
+    | 'statistics'
     | 'internal';
   /** Whether verbose details should be displayed */
   verbose?: boolean;
