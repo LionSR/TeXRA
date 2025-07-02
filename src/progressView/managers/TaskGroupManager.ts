@@ -11,12 +11,12 @@ import type { StreamTabId } from '@agent/types/IdentifierTypes';
  * Manages task groups collection with persistence.
  * Handles adding, updating, and managing task groups for different streams.
  */
-export class TaskGroupsManager {
+export class TaskGroupManager {
   private _groups: Map<StreamTabId, Map<string, TaskGroup>> = new Map();
   private readonly logger: AgentLogger;
 
   constructor(private persistence: StatePersistenceManager) {
-    this.logger = new AgentLogger('TaskGroupsManager');
+    this.logger = new AgentLogger('TaskGroupManager');
   }
 
   /**

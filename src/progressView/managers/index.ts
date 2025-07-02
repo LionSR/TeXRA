@@ -1,5 +1,5 @@
 export { OutputFilesManager } from './OutputFilesManager';
 export { StreamTabsManager } from './StreamTabsManager';
-export { TaskGroupsManager } from './TaskGroupsManager';
+export { TaskGroupManager } from './TaskGroupManager';
 export { UsageStatsManager } from './UsageStatsManager';
 export { WebviewUpdater } from './WebviewUpdater';
