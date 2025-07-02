@@ -37,6 +37,7 @@ export class HistoryViewContentProvider extends BaseViewContentProvider {
         webview,
         'modules/messageHandlers.js',
       ),
+      constantsUri: this.getWebviewUri(webview, 'modules/constants.js'),
     };
   }
 }

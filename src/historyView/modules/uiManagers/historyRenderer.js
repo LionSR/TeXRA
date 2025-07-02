@@ -5,6 +5,7 @@ import {
   safeGetElementById,
 } from '@common/domUtils.js';
 import { historyViewState } from '../historyViewState.js';
+import { COMMANDS, DOM_IDS, CLASS_NAMES, TEXT } from '../constants.js';
 
 /**
  * Renders history items and manages per-item events.
@@ -16,24 +17,24 @@ export class HistoryRenderer {
 
   /** Render list of history items */
   render(historyItems) {
-    const historyContainer = safeGetElementById('historyContainer');
-    const clearButtonContainer = safeGetElementById('clearButtonContainer');
+    const historyContainer = safeGetElementById(DOM_IDS.HISTORY_CONTAINER);
+    const clearButtonContainer = safeGetElementById(
+      DOM_IDS.CLEAR_BUTTON_CONTAINER,
+    );
     if (!historyContainer || !clearButtonContainer) return;
 
     historyContainer.innerHTML = '';
     clearButtonContainer.innerHTML = '';
 
     if (!historyItems || historyItems.length === 0) {
-      historyContainer.innerHTML =
-        '<div class="empty-state">No history items found</div>';
+      historyContainer.innerHTML = `<div class="${CLASS_NAMES.EMPTY_STATE}">${TEXT.NO_HISTORY}</div>`;
       this.searchManager.initialize(historyContainer);
       return;
     }
 
-    clearButtonContainer.innerHTML =
-      '<button class="vscode-button button-clear" id="clearHistoryBtn">Clear All History</button>';
-    addEventListenerSafely('clearHistoryBtn', 'click', () => {
-      vscode.postMessage({ command: 'clearHistory' });
+    clearButtonContainer.innerHTML = `<button class="vscode-button ${CLASS_NAMES.BUTTON_CLEAR}" id="${DOM_IDS.CLEAR_HISTORY_BTN}">${TEXT.CLEAR_ALL_HISTORY}</button>`;
+    addEventListenerSafely(DOM_IDS.CLEAR_HISTORY_BTN, 'click', () => {
+      vscode.postMessage({ command: COMMANDS.CLEAR_HISTORY });
     });
 
     const sorted = [...historyItems].sort(
@@ -53,26 +54,26 @@ export class HistoryRenderer {
     const date = new Date(item.timestamp).toLocaleString();
 
     const container = document.createElement('div');
-    container.className = 'history-item';
+    container.className = CLASS_NAMES.HISTORY_ITEM;
 
     const header = document.createElement('div');
-    header.className = 'history-item-header';
+    header.className = CLASS_NAMES.HISTORY_ITEM_HEADER;
     header.innerHTML = `
       <div class="history-timestamp">${date}</div>
       <div class="history-actions button-group">
-        <button class="vscode-button delete-btn" data-id="${item.id}" data-command="deleteAgent" title="Delete this history item">
+        <button class="vscode-button delete-btn" data-id="${item.id}" data-command="${COMMANDS.DELETE_AGENT}" title="Delete this history item">
           <i class="codicon codicon-trash"></i>
         </button>
-        <button class="vscode-button restore-btn" data-id="${item.id}" data-command="restoreAgent" title="Load configuration to main view">
+        <button class="vscode-button restore-btn" data-id="${item.id}" data-command="${COMMANDS.RESTORE_AGENT}" title="Load configuration to main view">
           <i class="codicon codicon-reply"></i>
         </button>
-        <button class="vscode-button rerun-btn" data-id="${item.id}" data-command="rerunAgent" title="Execute this configuration">
+        <button class="vscode-button rerun-btn" data-id="${item.id}" data-command="${COMMANDS.RERUN_AGENT}" title="Execute this configuration">
           <i class="codicon codicon-debug-rerun"></i>
         </button>
       </div>`;
 
     const basicDetails = document.createElement('div');
-    basicDetails.className = 'history-details';
+    basicDetails.className = CLASS_NAMES.HISTORY_DETAILS;
     let basicHTML = `
       <span class="history-label">Agent:</span>
       <span class="history-value">${config.agent}</span>
@@ -106,11 +107,11 @@ export class HistoryRenderer {
     basicDetails.innerHTML = basicHTML;
 
     const collapsible = document.createElement('div');
-    collapsible.className = 'collapsible';
+    collapsible.className = CLASS_NAMES.COLLAPSIBLE;
     collapsible.id = `content-${item.id}`;
 
     const detailsContainer = document.createElement('div');
-    detailsContainer.className = 'history-details';
+    detailsContainer.className = CLASS_NAMES.HISTORY_DETAILS;
 
     let detailsHTML = '';
     const extraFileTypes = [
@@ -157,9 +158,9 @@ export class HistoryRenderer {
       detailsContainer.innerHTML = detailsHTML;
       collapsible.appendChild(detailsContainer);
       const toggleButton = document.createElement('button');
-      toggleButton.className = 'toggle-button';
+      toggleButton.className = CLASS_NAMES.TOGGLE_BUTTON;
       toggleButton.setAttribute('data-id', item.id);
-      toggleButton.textContent = 'Show more';
+      toggleButton.textContent = TEXT.SHOW_MORE;
       container.appendChild(header);
       container.appendChild(basicDetails);
       container.appendChild(collapsible);
@@ -199,9 +200,9 @@ export class HistoryRenderer {
   }
 
   setupItemEventListeners() {
-    const container = safeGetElementById('historyContainer');
+    const container = safeGetElementById(DOM_IDS.HISTORY_CONTAINER);
     if (!container) return;
-    addEventListenerSafely('historyContainer', 'click', (e) => {
+    addEventListenerSafely(DOM_IDS.HISTORY_CONTAINER, 'click', (e) => {
       const btn = e.target.closest('button[data-command]');
       if (btn) {
         const command = btn.dataset.command;
@@ -209,13 +210,13 @@ export class HistoryRenderer {
         vscode.postMessage({ command, historyId });
         return;
       }
-      const toggle = e.target.closest('.toggle-button');
+      const toggle = e.target.closest(`.${CLASS_NAMES.TOGGLE_BUTTON}`);
       if (toggle) {
         const id = toggle.getAttribute('data-id');
         const content = safeGetElementById(`content-${id}`);
         if (!content) return;
-        const expanded = content.classList.toggle('expanded');
-        toggle.textContent = expanded ? 'Show less' : 'Show more';
+        const expanded = content.classList.toggle(CLASS_NAMES.EXPANDED);
+        toggle.textContent = expanded ? TEXT.SHOW_LESS : TEXT.SHOW_MORE;
         historyViewState.toggleStates.set(id, expanded);
       }
     });
@@ -225,14 +226,16 @@ export class HistoryRenderer {
     const entries = historyViewState.toggleStates.entries();
     for (const [id, expanded] of entries) {
       const content = document.getElementById(`content-${id}`);
-      const toggle = document.querySelector(`.toggle-button[data-id="${id}"]`);
+      const toggle = document.querySelector(
+        `.${CLASS_NAMES.TOGGLE_BUTTON}[data-id="${id}"]`,
+      );
       if (content && toggle) {
         if (expanded) {
-          content.classList.add('expanded');
-          toggle.textContent = 'Show less';
+          content.classList.add(CLASS_NAMES.EXPANDED);
+          toggle.textContent = TEXT.SHOW_LESS;
         } else {
-          content.classList.remove('expanded');
-          toggle.textContent = 'Show more';
+          content.classList.remove(CLASS_NAMES.EXPANDED);
+          toggle.textContent = TEXT.SHOW_MORE;
         }
       }
     }
