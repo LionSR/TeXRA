@@ -1,6 +1,7 @@
 // Local imports
 import { registerMessageHandlers } from '@common/webviewContext.js';
 import { historyViewDomHandler } from './domHandlers.js';
+import { HISTORY_VIEW_COMMANDS } from '@common/webview/commands.js';
 
 /**
  * Handles messages from the extension for the history view.
@@ -9,8 +10,10 @@ export class HistoryViewMessageHandler {
   constructor() {
     this._cleanupFn = null;
     this._handlers = {
-      updateHistory: (m) => this.handleUpdateHistory(m),
-      historyCleared: () => this.handleHistoryCleared(),
+      [HISTORY_VIEW_COMMANDS.UPDATE_HISTORY]: (m) =>
+        this.handleUpdateHistory(m),
+      [HISTORY_VIEW_COMMANDS.HISTORY_CLEARED]: () =>
+        this.handleHistoryCleared(),
     };
   }
 
