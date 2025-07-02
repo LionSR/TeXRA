@@ -27,6 +27,8 @@ export class MainViewContentProvider extends BaseViewContentProvider {
       ),
       fileHandlersUri: this.getWebviewUri(webview, 'modules/fileHandlers.js'),
       domHandlersUri: this.getWebviewUri(webview, 'modules/domHandlers.js'),
+      constantsUri: this.getWebviewUri(webview, 'modules/constants.js'),
+      eventBusUri: this.getWebviewUri(webview, 'modules/eventBus.js'),
 
       // UI managers
       fileListUri: this.getWebviewUri(
@@ -60,6 +62,14 @@ export class MainViewContentProvider extends BaseViewContentProvider {
       instructionManagerUri: this.getWebviewUri(
         webview,
         'modules/uiManagers/InstructionManager.js',
+      ),
+      outputFilesManagerUri: this.getWebviewUri(
+        webview,
+        'modules/uiManagers/OutputFilesManager.js',
+      ),
+      latexdiffManagerUri: this.getWebviewUri(
+        webview,
+        'modules/uiManagers/LatexdiffManager.js',
       ),
     };
   }
