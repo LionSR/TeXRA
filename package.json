@@ -18,7 +18,7 @@
     "Data Science"
   ],
   "activationEvents": [
-    "onView:texra",
+    "onView:texra.mainView",
     "onColorTheme"
   ],
   "main": "./dist/extension.js",
