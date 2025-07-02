@@ -72,6 +72,25 @@ export const MAIN_VIEW_COMMANDS = {
   OPEN_MODEL_SETTINGS: 'openModelSettings',
   CLIPBOARD_IMAGE: 'clipboardImage',
 
+  // Extension response events
+  CHECK_RESTORED_BASE_FILE: 'checkRestoredBaseFile',
+  INSTRUCTION_TEXT_POLISHED: 'instructionTextPolished',
+  INSTRUCTION_TEXT_TRANSCRIBED: 'instructionTextTranscribed',
+  RECORDING_STARTED: 'recordingStarted',
+  RECORDING_ERROR: 'recordingError',
+  SET_INPUT_FILE: 'setInputFile',
+  SET_REFERENCE_FILE: 'setReferenceFile',
+  SET_AUXILIARY_FILE: 'setAuxiliaryFile',
+  SET_MEDIA_FILE: 'setMediaFile',
+  SET_EDITED_FILE: 'setEditedFile',
+  SET_DEFAULT_OUTPUT_FILES: 'setDefaultOutputFiles',
+  ADD_MEDIA_FILE: 'addMediaFile',
+  SET_OUTPUT_FILES: 'setOutputFiles',
+  SET_RECENT_COMMITS: 'setRecentCommits',
+  SET_CURRENT_FILE: 'setCurrentFile',
+  SET_OPENED_FILES: 'setOpenedFiles',
+  SET_BASE_FILE: 'setBaseFile',
+
   // File refresh and update operations
   REFRESH_ALL_FILES: 'refreshAllFiles',
   UPDATE_INPUT_FILES: 'updateInputFiles',
