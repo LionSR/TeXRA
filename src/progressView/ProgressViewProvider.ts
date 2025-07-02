@@ -5,7 +5,7 @@ import * as vscode from 'vscode';
 import { StatePersistenceManager } from './persistence/StatePersistenceManager';
 import { ProgressViewState } from './state/ProgressViewState';
 import { ProgressEventHandler } from './events/ProgressEventHandler';
-import { WebviewUpdater } from './managers/WebviewUpdater';
+import { WebviewUpdater } from './managers';
 
 // Local imports - existing components
 import { ProgressViewContentProvider } from './ProgressViewContentProvider';
