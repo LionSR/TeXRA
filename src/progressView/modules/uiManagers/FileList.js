@@ -1,6 +1,6 @@
 // Local imports
 import { formatTokens } from '../formatters.js';
-import { COMMANDS } from '../constants.js';
+import { COMMANDS, ELEMENT_IDS } from '../constants.js';
 import { vscode } from '@common/webviewContext.js';
 
 /**
@@ -36,12 +36,12 @@ export class FileList {
    * @param {Object} filesByRound - Files organized by round
    */
   update(filesByRound) {
-    const container = document.getElementById('generatedFiles');
+    const container = document.getElementById(ELEMENT_IDS.GENERATED_FILES);
     if (!container) return;
 
     container.innerHTML = '';
 
-    const template = document.getElementById('fileItemTemplate');
+    const template = document.getElementById(ELEMENT_IDS.FILE_ITEM_TEMPLATE);
     if (!template) {
       console.error('File item template not found');
       return;
