@@ -2,6 +2,7 @@ import { vscode } from '@common/webviewContext.js';
 import { historyViewDomHandler } from './modules/domHandlers.js';
 import { historyViewState } from './modules/historyViewState.js';
 import { messageHandlers } from './modules/messageHandlers.js';
+import { COMMANDS } from './modules/constants.js';
 
 historyViewState.initialize();
 
@@ -10,7 +11,7 @@ messageHandlers.setup();
 
 document.addEventListener('DOMContentLoaded', () => {
   historyViewDomHandler.events.setupEventListeners();
-  vscode.postMessage({ command: 'getHistoryData' });
+  vscode.postMessage({ command: COMMANDS.GET_HISTORY_DATA });
 });
 
 window.addEventListener('beforeunload', () => {

@@ -1,6 +1,7 @@
 /* global Mark */
 import { safeGetElementById } from '@common/domUtils.js';
 import { historyViewState } from '../historyViewState.js';
+import { CSS_CLASSES, BUTTON_TEXT } from '../constants.js';
 
 /**
  * Handles search functionality using mark.js.
@@ -54,8 +55,8 @@ export class SearchManager {
 
   navigateNext() {
     if (this.state.totalMatches === 0) return;
-    const current = document.querySelector('mark.current-match');
-    if (current) current.classList.remove('current-match');
+    const current = document.querySelector(`mark.${CSS_CLASSES.CURRENT_MATCH}`);
+    if (current) current.classList.remove(CSS_CLASSES.CURRENT_MATCH);
     const nextIndex = (this.state.searchIndex + 1) % this.state.totalMatches;
     this.state.setSearchIndex(nextIndex);
     this.scrollToCurrentMatch();
@@ -63,8 +64,8 @@ export class SearchManager {
 
   navigatePrev() {
     if (this.state.totalMatches === 0) return;
-    const current = document.querySelector('mark.current-match');
-    if (current) current.classList.remove('current-match');
+    const current = document.querySelector(`mark.${CSS_CLASSES.CURRENT_MATCH}`);
+    if (current) current.classList.remove(CSS_CLASSES.CURRENT_MATCH);
     const prevIndex =
       (this.state.searchIndex - 1 + this.state.totalMatches) %
       this.state.totalMatches;
@@ -76,7 +77,7 @@ export class SearchManager {
     if (this.state.totalMatches === 0) return;
     const marks = document.querySelectorAll('mark');
     if (marks.length > this.state.searchIndex) {
-      marks[this.state.searchIndex].classList.add('current-match');
+      marks[this.state.searchIndex].classList.add(CSS_CLASSES.CURRENT_MATCH);
       marks[this.state.searchIndex].scrollIntoView({
         behavior: 'smooth',
         block: 'center',
@@ -97,33 +98,39 @@ export class SearchManager {
   }
 
   expandAllCollapsibleSections() {
-    document.querySelectorAll('.collapsible').forEach((section) => {
-      if (!section.classList.contains('expanded')) {
-        section.classList.add('expanded');
-        const id = section.id.replace('content-', '');
-        const toggle = document.querySelector(
-          `.toggle-button[data-id="${id}"]`,
-        );
-        if (toggle) {
-          toggle.textContent = 'Show less';
+    document
+      .querySelectorAll(`.${CSS_CLASSES.COLLAPSIBLE}`)
+      .forEach((section) => {
+        if (!section.classList.contains(CSS_CLASSES.EXPANDED)) {
+          section.classList.add(CSS_CLASSES.EXPANDED);
+          const id = section.id.replace('content-', '');
+          const toggle = document.querySelector(
+            `.${CSS_CLASSES.TOGGLE_BUTTON}[data-id="${id}"]`,
+          );
+          if (toggle) {
+            toggle.textContent = BUTTON_TEXT.SHOW_LESS;
+          }
         }
-      }
-    });
+      });
   }
 
   applySavedToggleStates() {
-    document.querySelectorAll('.collapsible').forEach((section) => {
-      const id = section.id.replace('content-', '');
-      const expanded = this.state.toggleStates.get(id);
-      const toggle = document.querySelector(`.toggle-button[data-id="${id}"]`);
-      if (expanded) {
-        section.classList.add('expanded');
-        if (toggle) toggle.textContent = 'Show less';
-      } else {
-        section.classList.remove('expanded');
-        if (toggle) toggle.textContent = 'Show more';
-      }
-    });
+    document
+      .querySelectorAll(`.${CSS_CLASSES.COLLAPSIBLE}`)
+      .forEach((section) => {
+        const id = section.id.replace('content-', '');
+        const expanded = this.state.toggleStates.get(id);
+        const toggle = document.querySelector(
+          `.${CSS_CLASSES.TOGGLE_BUTTON}[data-id="${id}"]`,
+        );
+        if (expanded) {
+          section.classList.add(CSS_CLASSES.EXPANDED);
+          if (toggle) toggle.textContent = BUTTON_TEXT.SHOW_LESS;
+        } else {
+          section.classList.remove(CSS_CLASSES.EXPANDED);
+          if (toggle) toggle.textContent = BUTTON_TEXT.SHOW_MORE;
+        }
+      });
   }
 
   dispose() {
