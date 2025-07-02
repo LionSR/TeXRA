@@ -162,6 +162,10 @@ export class LogEntryFormatter {
       return this._formatLatexdiff(htmlMessage, text, id);
     }
 
+    if (messageType === 'statistics') {
+      return this._formatStatistics(htmlMessage, text, id);
+    }
+
     return htmlMessage;
   }
 
@@ -434,6 +438,63 @@ export class LogEntryFormatter {
       </details>`;
     } catch (e) {
       console.error('Error parsing latexdiff entry:', e);
+      return message;
+    }
+  }
+
+  _formatStatistics(message, content, logId) {
+    try {
+      const idAttr = logId ? ` data-log-id="${logId}"` : '';
+      const parsed = JSON.parse(this._unescapeHtml(content));
+      if (!parsed || typeof parsed !== 'object') {
+        return message;
+      }
+
+      const items = [];
+      const pushItem = (icon, value, suffix = '') => {
+        items.push(
+          `<li><i class="codicon ${icon}"></i> ${value}${suffix}</li>`,
+        );
+      };
+
+      if (parsed.inputTokens !== undefined) {
+        pushItem('codicon-arrow-up', formatTokens(parsed.inputTokens));
+      }
+      if (parsed.outputTokens !== undefined) {
+        pushItem('codicon-arrow-down', formatTokens(parsed.outputTokens));
+      }
+      if (parsed.cacheReadInputTokens) {
+        pushItem('codicon-history', formatTokens(parsed.cacheReadInputTokens));
+      }
+      if (parsed.cacheCreationInputTokens) {
+        pushItem('codicon-save', formatTokens(parsed.cacheCreationInputTokens));
+      }
+      if (parsed.reasoningTokens) {
+        pushItem(
+          'codicon-comment-discussion',
+          formatTokens(parsed.reasoningTokens),
+        );
+      }
+      if (parsed.toolUseTokens) {
+        pushItem('codicon-tools', formatTokens(parsed.toolUseTokens));
+      }
+      if (parsed.elapsedTime !== undefined) {
+        pushItem('codicon-clock', parsed.elapsedTime, 's');
+      }
+      if (parsed.cost !== undefined) {
+        pushItem('codicon-rocket', `$${parsed.cost.toFixed(3)}`);
+      }
+
+      return `<details class="statistics-details" open>
+        <summary>
+          <i class="${CHEVRON_DOWN_CLASS} toggle-icon"></i>
+          <i class="codicon codicon-dashboard"></i>
+          <span>Statistics</span>
+        </summary>
+        <ul class="statistics-content"${idAttr}>${items.join('')}</ul>
+      </details>`;
+    } catch (e) {
+      console.error('Error parsing statistics:', e);
       return message;
     }
   }
