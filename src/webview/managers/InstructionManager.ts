@@ -14,6 +14,8 @@ import {
   FileContext,
 } from '@utils/text/textEnhancementUtils';
 import { sleep } from '@utils/helpers';
+// Local imports - commands
+import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
 
 const CHANNEL = 'InstructionManager';
 logger.initialize(CHANNEL);
@@ -105,7 +107,7 @@ export class InstructionManager {
           await sleep(300);
           if (result.success) {
             webviewView.webview.postMessage({
-              command: 'instructionTextPolished',
+              command: MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_POLISHED,
               text: result.text,
             });
           } else {
@@ -197,7 +199,7 @@ export class InstructionManager {
       await StorageFS.write(relativePath, Buffer.from(base64, 'base64'));
       await StorageFS.cleanupOldFiles(PASTED_DIR, 3 * 24 * 60 * 60 * 1000);
       webviewView.webview.postMessage({
-        command: 'addMediaFile',
+        command: MAIN_VIEW_COMMANDS.ADD_MEDIA_FILE,
         file: fileName,
       });
     } catch (err) {

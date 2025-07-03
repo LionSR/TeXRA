@@ -21,6 +21,9 @@ import {
   listEditedFiles,
 } from '@frontend/files/fileLister';
 
+// Local imports - commands
+import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
+
 // Local imports - agent
 import { getAgentPath } from '@agent/runtime/executeAgent';
 import { loadAgentSettingAndPrompts } from '@agent/runtime/agentLoad';
@@ -58,7 +61,7 @@ export class FileManager {
     );
     if (editedFile) {
       webviewView.webview.postMessage({
-        command: 'editedFileSelected',
+        command: MAIN_VIEW_COMMANDS.EDITED_FILE_SELECTED,
         filePath: editedFile,
       });
     }
@@ -136,7 +139,7 @@ export class FileManager {
     const agent = message.agent;
     if (!agent) {
       webviewView.webview.postMessage({
-        command: 'setDefaultOutputFiles',
+        command: MAIN_VIEW_COMMANDS.SET_DEFAULT_OUTPUT_FILES,
         files: [],
       });
       return;
@@ -149,7 +152,7 @@ export class FileManager {
         ? settings.defaultOutputFiles
         : [];
       webviewView.webview.postMessage({
-        command: 'setDefaultOutputFiles',
+        command: MAIN_VIEW_COMMANDS.SET_DEFAULT_OUTPUT_FILES,
         files,
       });
     } catch (err) {
@@ -158,7 +161,7 @@ export class FileManager {
         `Error requesting default output files: ${err instanceof Error ? err.message : String(err)}`,
       );
       webviewView.webview.postMessage({
-        command: 'setDefaultOutputFiles',
+        command: MAIN_VIEW_COMMANDS.SET_DEFAULT_OUTPUT_FILES,
         files: [],
       });
     }
@@ -257,7 +260,7 @@ export class FileManager {
             currentFileName !== baseFileName
           ) {
             webviewView.webview.postMessage({
-              command: 'setCurrentFile',
+              command: MAIN_VIEW_COMMANDS.SET_CURRENT_FILE,
               filePath: currentOpenFile,
               fileType,
             });
@@ -273,7 +276,7 @@ export class FileManager {
         }
       } else {
         webviewView.webview.postMessage({
-          command: 'setCurrentFile',
+          command: MAIN_VIEW_COMMANDS.SET_CURRENT_FILE,
           filePath: currentOpenFile,
           fileType,
         });
@@ -291,7 +294,7 @@ export class FileManager {
   ): Promise<void> {
     const openedFiles = await this.getOpenedFiles();
     webviewView.webview.postMessage({
-      command: 'setOpenedFiles',
+      command: MAIN_VIEW_COMMANDS.SET_OPENED_FILES,
       files: openedFiles,
       fileType,
       shouldFilter: true,
@@ -373,7 +376,7 @@ export class FileManager {
   ): Promise<void> {
     const baseFiles = await listInputFiles();
     webviewView.webview.postMessage({
-      command: 'setBaseFile',
+      command: MAIN_VIEW_COMMANDS.SET_BASE_FILE,
       files: baseFiles,
       preserveBaseFile: true,
     });

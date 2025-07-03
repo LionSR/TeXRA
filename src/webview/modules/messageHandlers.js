@@ -47,67 +47,84 @@ export class MainViewMessageHandler {
 
   _createThemeHandlers() {
     return {
-      setTheme: (m) => this.handleSetTheme(m),
-      setDebugMode: (m) => this.handleSetDebugMode(m),
-      modelSelected: (m) => this.handleModelSelected(m),
+      [MAIN_VIEW_COMMANDS.THEME_SET]: (m) => this.handleSetTheme(m),
+      [MAIN_VIEW_COMMANDS.DEBUG_MODE_SET]: (m) => this.handleSetDebugMode(m),
+      [MAIN_VIEW_COMMANDS.MODEL_SELECTED]: (m) => this.handleModelSelected(m),
     };
   }
 
   _createStateHandlers() {
     return {
-      restoreState: (m) => this.handleRestoreState(m),
-      checkRestoredBaseFile: () => this.handleCheckRestoredBaseFile(),
+      [MAIN_VIEW_COMMANDS.STATE_RESTORE]: (m) => this.handleRestoreState(m),
+      [MAIN_VIEW_COMMANDS.CHECK_RESTORED_BASE_FILE]: () =>
+        this.handleCheckRestoredBaseFile(),
     };
   }
 
   _createInstructionHandlers() {
     return {
-      instructionTextPolished: (m) => this.handleInstructionTextPolished(m),
-      instructionTextTranscribed: (m) =>
+      [MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_POLISHED]: (m) =>
+        this.handleInstructionTextPolished(m),
+      [MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_TRANSCRIBED]: (m) =>
         this.handleInstructionTextTranscribed(m),
     };
   }
 
   _createRecordingHandlers() {
     return {
-      recordingStarted: () => this.handleRecordingStarted(),
-      recordingError: () => this.handleRecordingError(),
+      [MAIN_VIEW_COMMANDS.RECORDING_STARTED]: () =>
+        this.handleRecordingStarted(),
+      [MAIN_VIEW_COMMANDS.RECORDING_ERROR]: () => this.handleRecordingError(),
     };
   }
 
   _createSingleFileHandlers() {
     return {
-      setInputFile: (m) => this.handleSetInputFile(m),
-      setReferenceFile: (m) => this.handleSetReferenceFile(m),
-      setAuxiliaryFile: (m) => this.handleSetAuxiliaryFile(m),
-      setMediaFile: (m) => this.handleSetMediaFile(m),
-      setEditedFile: (m) => this.handleSetEditedFile(m),
-      inputFileSelected: (m) => this.handleInputFileSelected(m),
-      referenceFileSelected: (m) => this.handleReferenceFileSelected(m),
-      auxiliaryFileSelected: (m) => this.handleAuxiliaryFileSelected(m),
-      mediaFileSelected: (m) => this.handleMediaFileSelected(m),
-      editedFileSelected: (m) => this.handleEditedFileSelected(m),
-      setDefaultOutputFiles: (m) => this.handleSetDefaultOutputFiles(m),
+      [MAIN_VIEW_COMMANDS.SET_INPUT_FILE]: (m) => this.handleSetInputFile(m),
+      [MAIN_VIEW_COMMANDS.SET_REFERENCE_FILE]: (m) =>
+        this.handleSetReferenceFile(m),
+      [MAIN_VIEW_COMMANDS.SET_AUXILIARY_FILE]: (m) =>
+        this.handleSetAuxiliaryFile(m),
+      [MAIN_VIEW_COMMANDS.SET_MEDIA_FILE]: (m) => this.handleSetMediaFile(m),
+      [MAIN_VIEW_COMMANDS.SET_EDITED_FILE]: (m) => this.handleSetEditedFile(m),
+      [MAIN_VIEW_COMMANDS.INPUT_FILE_SELECTED]: (m) =>
+        this.handleInputFileSelected(m),
+      [MAIN_VIEW_COMMANDS.REFERENCE_FILE_SELECTED]: (m) =>
+        this.handleReferenceFileSelected(m),
+      [MAIN_VIEW_COMMANDS.AUXILIARY_FILE_SELECTED]: (m) =>
+        this.handleAuxiliaryFileSelected(m),
+      [MAIN_VIEW_COMMANDS.MEDIA_FILE_SELECTED]: (m) =>
+        this.handleMediaFileSelected(m),
+      [MAIN_VIEW_COMMANDS.EDITED_FILE_SELECTED]: (m) =>
+        this.handleEditedFileSelected(m),
+      [MAIN_VIEW_COMMANDS.SET_DEFAULT_OUTPUT_FILES]: (m) =>
+        this.handleSetDefaultOutputFiles(m),
     };
   }
 
   _createMultiFileHandlers() {
     return {
-      setInputFiles: (m) => this.handleSetInputFiles(m),
-      setReferenceFiles: (m) => this.handleSetReferenceFiles(m),
-      setAuxiliaryFiles: (m) => this.handleSetAuxiliaryFiles(m),
-      setMediaFiles: (m) => this.handleSetMediaFiles(m),
-      addMediaFile: (m) => this.handleAddMediaFile(m),
-      setOutputFiles: (m) => this.handleSetOutputFiles(m),
+      [MAIN_VIEW_COMMANDS.SET_INPUT_FILES]: (m) => this.handleSetInputFiles(m),
+      [MAIN_VIEW_COMMANDS.SET_REFERENCE_FILES]: (m) =>
+        this.handleSetReferenceFiles(m),
+      [MAIN_VIEW_COMMANDS.SET_AUXILIARY_FILES]: (m) =>
+        this.handleSetAuxiliaryFiles(m),
+      [MAIN_VIEW_COMMANDS.SET_MEDIA_FILES]: (m) => this.handleSetMediaFiles(m),
+      [MAIN_VIEW_COMMANDS.ADD_MEDIA_FILE]: (m) => this.handleAddMediaFile(m),
+      [MAIN_VIEW_COMMANDS.SET_OUTPUT_FILES]: (m) =>
+        this.handleSetOutputFiles(m),
     };
   }
 
   _createMiscHandlers() {
     return {
-      setRecentCommits: (m) => this.handleSetRecentCommits(m),
-      setCurrentFile: (m) => this.handleSetCurrentFile(m),
-      setOpenedFiles: (m) => this.handleSetOpenedFiles(m),
-      setBaseFile: (m) => this.handleSetBaseFile(m),
+      [MAIN_VIEW_COMMANDS.SET_RECENT_COMMITS]: (m) =>
+        this.handleSetRecentCommits(m),
+      [MAIN_VIEW_COMMANDS.SET_CURRENT_FILE]: (m) =>
+        this.handleSetCurrentFile(m),
+      [MAIN_VIEW_COMMANDS.SET_OPENED_FILES]: (m) =>
+        this.handleSetOpenedFiles(m),
+      [MAIN_VIEW_COMMANDS.SET_BASE_FILE]: (m) => this.handleSetBaseFile(m),
     };
   }
 
