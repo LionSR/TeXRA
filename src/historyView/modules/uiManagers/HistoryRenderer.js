@@ -76,8 +76,16 @@ export class HistoryRenderer {
     if (!container) return document.createElement('div');
 
     const basicDetails = container.querySelector('.basic-details');
-    const collapsible = container.querySelector('.collapsible');
+    const collapsible = container.querySelector(`.${CLASS_NAMES.COLLAPSIBLE}`);
     const detailsContainer = container.querySelector('.extra-details');
+    const toggleButton = container.querySelector(
+      `.${CLASS_NAMES.TOGGLE_BUTTON}`,
+    );
+
+    if (!basicDetails || !collapsible || !detailsContainer || !toggleButton) {
+      console.warn('[HistoryRenderer] Invalid history item template');
+      return document.createElement('div');
+    }
 
     let basicHTML = `
       <span class="history-label">Agent:</span>
@@ -156,7 +164,7 @@ export class HistoryRenderer {
       detailsContainer.innerHTML = detailsHTML;
     } else {
       collapsible.remove();
-      container.querySelector('.toggle-button').remove();
+      toggleButton.remove();
     }
 
     return container;
