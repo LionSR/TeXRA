@@ -19,6 +19,8 @@
   ],
   "activationEvents": [
     "onView:texra.mainView",
+    "onView:texra.folderExplorer",
+    "onView:texra.progressView",
     "onColorTheme"
   ],
   "main": "./dist/extension.js",
