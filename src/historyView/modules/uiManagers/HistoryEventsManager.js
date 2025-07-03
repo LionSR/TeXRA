@@ -4,7 +4,7 @@ import { ELEMENT_IDS } from '../constants.js';
 /**
  * Registers global event listeners for the history view.
  */
-export class HistoryEvents {
+export class HistoryEventsManager {
   constructor(searchManager) {
     this.searchManager = searchManager;
     this.handlers = [];

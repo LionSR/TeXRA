@@ -1,7 +1,7 @@
 // Local imports
 import { HistoryRenderer } from './uiManagers/HistoryRenderer.js';
 import { SearchManager } from './uiManagers/SearchManager.js';
-import { HistoryEvents } from './uiManagers/Events.js';
+import { HistoryEventsManager } from './uiManagers/HistoryEventsManager.js';
 import { historyViewState } from './historyViewState.js';
 
 /**
@@ -11,7 +11,7 @@ export class HistoryViewDomHandler {
   constructor() {
     this.searchManager = new SearchManager(historyViewState);
     this.renderer = new HistoryRenderer(this.searchManager);
-    this.events = new HistoryEvents(this.searchManager);
+    this.events = new HistoryEventsManager(this.searchManager);
   }
 }
 
