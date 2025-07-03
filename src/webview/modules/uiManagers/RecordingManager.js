@@ -2,6 +2,7 @@ import {
   addEventListenerSafely,
   safeGetElementById,
 } from '@common/domUtils.js';
+import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
 import { ELEMENT_IDS } from '../constants.js';
 import { webviewEventBus } from '../eventBus.js';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
