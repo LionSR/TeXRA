@@ -8,7 +8,7 @@ import {
   CHECK_BOXES_TOOL_USE,
   ELEMENT_IDS,
 } from '../constants.js';
-import { createFromTemplate } from '@common/templateUtils.js';
+import { createCodicon } from '@common/templateUtils.js';
 
 export class ToggleManager {
   isOptionsVisible(options) {
@@ -22,14 +22,10 @@ export class ToggleManager {
   setToggleIcon(toggle, icon, visible, active) {
     toggle.classList.toggle('active', active);
     toggle.innerHTML = '';
-    const iconEl = createFromTemplate('codiconTemplate', {
-      attributes: { '': { class: `codicon codicon-${icon}` } },
-    });
-    const chevron = createFromTemplate('codiconTemplate', {
-      attributes: {
-        '': { class: visible ? CHEVRON_UP_CLASS : CHEVRON_DOWN_CLASS },
-      },
-    });
+    const iconEl = createCodicon(`codicon-${icon}`);
+    const chevron = createCodicon(
+      visible ? CHEVRON_UP_CLASS : CHEVRON_DOWN_CLASS,
+    );
     if (iconEl) toggle.appendChild(iconEl);
     if (chevron) toggle.appendChild(chevron);
   }
