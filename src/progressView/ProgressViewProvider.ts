@@ -182,9 +182,8 @@ export class ProgressViewProvider
       webviewView.webview.onDidReceiveMessage(async (message) => {
         if (message.command === COMMANDS.WEBVIEW_READY) {
           this._webviewReady = true;
-          if (this._pendingUpdate) {
-            this.updateWebview();
-          }
+          // Always update webview when it becomes ready to ensure all streams are shown
+          this.updateWebview();
           return;
         }
         await this.messageHandler.handleMessage(message, webviewView);
