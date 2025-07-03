@@ -62,6 +62,16 @@ export class StreamTabsManager {
   }
 
   /**
+   * Create an empty stream if it doesn't exist
+   */
+  ensureStream(stream: StreamTabId): void {
+    if (!this._tabs.has(stream)) {
+      this._tabs.set(stream, []);
+      this.save();
+    }
+  }
+
+  /**
    * Delete a stream and its messages
    */
   delete(stream: StreamTabId): void {
