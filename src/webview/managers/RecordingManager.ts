@@ -9,6 +9,8 @@ import {
   startRecording,
   stopRecordingAndTranscribe,
 } from '@frontend/media/audio';
+// Local imports - commands
+import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
 
 const CHANNEL = 'RecordingManager';
 logger.initialize(CHANNEL);
@@ -20,11 +22,13 @@ export class RecordingManager {
     try {
       const result = await startRecording(this.context);
       if (result.success) {
-        webviewView.webview.postMessage({ command: 'recordingStarted' });
+        webviewView.webview.postMessage({
+          command: MAIN_VIEW_COMMANDS.RECORDING_STARTED,
+        });
       } else if (result.error) {
         vscode.window.showErrorMessage(result.error);
         webviewView.webview.postMessage({
-          command: 'recordingError',
+          command: MAIN_VIEW_COMMANDS.RECORDING_ERROR,
           error: result.error,
         });
       }
@@ -37,7 +41,7 @@ export class RecordingManager {
         `Error in start: ${error instanceof Error ? error.message : String(error)}`,
       );
       webviewView.webview.postMessage({
-        command: 'recordingError',
+        command: MAIN_VIEW_COMMANDS.RECORDING_ERROR,
         error: error instanceof Error ? error.message : 'Unknown error',
       });
     }
@@ -55,13 +59,13 @@ export class RecordingManager {
           const result = await stopRecordingAndTranscribe(this.context);
           if (result.success) {
             webviewView.webview.postMessage({
-              command: 'instructionTextTranscribed',
+              command: MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_TRANSCRIBED,
               text: result.text,
             });
           } else if (result.error) {
             vscode.window.showErrorMessage(result.error);
             webviewView.webview.postMessage({
-              command: 'recordingError',
+              command: MAIN_VIEW_COMMANDS.RECORDING_ERROR,
               error: result.error,
             });
           }
@@ -76,7 +80,7 @@ export class RecordingManager {
         `Error in stop: ${error instanceof Error ? error.message : String(error)}`,
       );
       webviewView.webview.postMessage({
-        command: 'recordingError',
+        command: MAIN_VIEW_COMMANDS.RECORDING_ERROR,
         error: error instanceof Error ? error.message : 'Unknown error',
       });
     }

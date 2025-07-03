@@ -8,7 +8,7 @@ import { registerPackCommands } from '@commands/housekeeping/packCommands';
 import { registerCleanCommands } from '@commands/housekeeping/cleanCommands';
 import { registerMergeCommands } from '@commands/agent/mergeCommands';
 import { registerExecuteCommand } from '@commands/agent/executeCommand';
-import { TeXRAViewProvider } from './ViewProvider';
+import { MainViewProvider } from './MainViewProvider';
 import { registerLatexCommands } from '@commands/latex/latexCommands';
 import { registerImageCommands } from '@commands/latex/imageCommands';
 import { registerFigureCommands } from '@commands/latex/figCommands';
@@ -75,7 +75,7 @@ export function registerCommands(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(
       'texra.mainView',
-      new TeXRAViewProvider(context),
+      new MainViewProvider(context),
       {
         webviewOptions: {
           retainContextWhenHidden: true,
