@@ -7,6 +7,7 @@ import {
 } from '@common/webviewContext.js';
 import { safeSetElementValue, safeGetElementById } from '@common/domUtils.js';
 import { capitalize, uncapitalize } from '@common/stringUtils.js';
+import { createFromTemplate } from '@common/templateUtils.js';
 import { mainViewState } from './mainViewState.js';
 import { mainViewDomHandler } from './domHandlers.js';
 
@@ -141,21 +142,19 @@ export class MainViewMessageHandler {
   _setToggleIcon(element, isVisible) {
     if (!element) return;
     element.innerHTML = '';
-    const icon = document.createElement('i');
-    icon.className = isVisible ? CHEVRON_UP_CLASS : CHEVRON_DOWN_CLASS;
-    element.appendChild(icon);
+    const icon = createFromTemplate('codiconTemplate', {
+      attributes: {
+        '': { class: isVisible ? CHEVRON_UP_CLASS : CHEVRON_DOWN_CLASS },
+      },
+    });
+    if (icon) element.appendChild(icon);
   }
 
   _createFileItem(file) {
-    const fileItem = document.createElement('div');
-    fileItem.className = 'file-item';
-    fileItem.dataset.path = file;
-    fileItem.textContent = file;
-    const removeButton = document.createElement('span');
-    removeButton.className = 'remove-button';
-    removeButton.textContent = '-';
-    fileItem.appendChild(removeButton);
-    return fileItem;
+    return createFromTemplate('fileListItemTemplate', {
+      text: { '.file-name': file },
+      dataset: { '': { path: file } },
+    });
   }
 
   _setupFileListHandler(fileType, container) {
