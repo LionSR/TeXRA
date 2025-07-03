@@ -42,6 +42,17 @@ export function createFromTemplate(templateId, replacements = {}) {
   return element;
 }
 
+export function validateTemplates(templateIds) {
+  return templateIds.every((id) => {
+    const template = document.getElementById(id);
+    if (!template) {
+      console.error(`Template ${id} not found`);
+      return false;
+    }
+    return true;
+  });
+}
+
 export function createIconButton({
   id,
   icon,

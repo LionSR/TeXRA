@@ -160,11 +160,17 @@ export class MainViewMessageHandler {
     const fileItem = document.createElement('div');
     fileItem.className = 'file-item';
     fileItem.dataset.path = file;
-    fileItem.textContent = file;
+
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'file-name';
+    nameSpan.textContent = file;
+    fileItem.appendChild(nameSpan);
+
     const removeButton = document.createElement('span');
     removeButton.className = 'remove-button';
     removeButton.textContent = '-';
     fileItem.appendChild(removeButton);
+
     return fileItem;
   }
 
