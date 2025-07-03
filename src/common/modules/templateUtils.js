@@ -7,6 +7,52 @@ export function renderTemplate(templateId) {
   return template.content.firstElementChild.cloneNode(true);
 }
 
+export function createFromTemplate(templateId, replacements = {}) {
+  const element = renderTemplate(templateId);
+  if (!element) return null;
+
+  const { text = {}, attributes = {}, dataset = {} } = replacements;
+  const apply = (selector, fn) => {
+    const target = selector ? element.querySelector(selector) : element;
+    if (target) fn(target);
+  };
+
+  Object.entries(text).forEach(([selector, value]) => {
+    apply(selector, (el) => {
+      el.textContent = value;
+    });
+  });
+
+  Object.entries(attributes).forEach(([selector, attrs]) => {
+    apply(selector, (el) => {
+      Object.entries(attrs).forEach(([attr, val]) => {
+        el.setAttribute(attr, val);
+      });
+    });
+  });
+
+  Object.entries(dataset).forEach(([selector, data]) => {
+    apply(selector, (el) => {
+      Object.entries(data).forEach(([key, val]) => {
+        el.dataset[key] = val;
+      });
+    });
+  });
+
+  return element;
+}
+
+export function validateTemplates(templateIds) {
+  return templateIds.every((id) => {
+    const template = document.getElementById(id);
+    if (!template) {
+      console.error(`Template ${id} not found`);
+      return false;
+    }
+    return true;
+  });
+}
+
 export function createIconButton({
   id,
   icon,
