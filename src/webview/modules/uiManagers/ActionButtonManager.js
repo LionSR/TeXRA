@@ -6,7 +6,13 @@ import {
   safeGetElementChecked,
 } from '@common/domUtils.js';
 import { capitalize } from '@common/stringUtils.js';
-import { CHECK_BOXES, MULTIPLE_SELECTIONS, ELEMENT_IDS } from '../constants.js';
+import {
+  CHECK_BOXES,
+  MULTIPLE_SELECTIONS,
+  ELEMENT_IDS,
+  BASE_FILE,
+  EDITED_FILE,
+} from '../constants.js';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
 
 export class ActionButtonManager {
@@ -115,7 +121,7 @@ export class ActionButtonManager {
 
     this._addListener(ELEMENT_IDS.MERGE_BUTTON, 'click', () => {
       const { inputFile } = this._getSingleFileData(['input']);
-      const editedFile = safeGetElementValue('editedFile');
+      const editedFile = safeGetElementValue(EDITED_FILE);
 
       this.vscode.postMessage({
         command: MAIN_VIEW_COMMANDS.MERGE,
@@ -198,8 +204,8 @@ export class ActionButtonManager {
   _setupLatexdiffButtons() {
     this._addListener(ELEMENT_IDS.LATEXDIFF_BUTTON, 'click', () => {
       const { inputFile } = this._getSingleFileData(['input']);
-      const baseFile = safeGetElementValue('baseFile');
-      const editedFile = safeGetElementValue('editedFile');
+      const baseFile = safeGetElementValue(BASE_FILE);
+      const editedFile = safeGetElementValue(EDITED_FILE);
 
       this.vscode.postMessage({
         command: MAIN_VIEW_COMMANDS.LATEXDIFF,
@@ -216,7 +222,7 @@ export class ActionButtonManager {
 
     this._addListener(ELEMENT_IDS.LATEXDIFF_VC_BUTTON, 'click', () => {
       const { inputFile } = this._getSingleFileData(['input']);
-      const baseFile = safeGetElementValue('baseFile');
+      const baseFile = safeGetElementValue(BASE_FILE);
       const commitHash = safeGetElementValue(ELEMENT_IDS.COMMIT_SELECT);
 
       this.vscode.postMessage({
@@ -238,7 +244,7 @@ export class ActionButtonManager {
     ].forEach(({ id, action }) => {
       this._addListener(id, 'click', () => {
         const { inputFile } = this._getSingleFileData(['input']);
-        const baseFile = safeGetElementValue('baseFile');
+        const baseFile = safeGetElementValue(BASE_FILE);
         const commitHash = safeGetElementValue(ELEMENT_IDS.COMMIT_SELECT);
 
         const command =
@@ -263,8 +269,8 @@ export class ActionButtonManager {
 
   _setupCompareButtons() {
     this._addListener(ELEMENT_IDS.COMPARE_BUTTON, 'click', () => {
-      const baseFile = safeGetElementValue('baseFile');
-      const editedFile = safeGetElementValue('editedFile');
+      const baseFile = safeGetElementValue(BASE_FILE);
+      const editedFile = safeGetElementValue(EDITED_FILE);
       if (baseFile && editedFile) {
         this.vscode.postMessage({
           command: MAIN_VIEW_COMMANDS.COMPARE,
@@ -280,8 +286,8 @@ export class ActionButtonManager {
     });
 
     this._addListener(ELEMENT_IDS.ACCEPT_BUTTON, 'click', () => {
-      const baseFile = safeGetElementValue('baseFile');
-      const editedFile = safeGetElementValue('editedFile');
+      const baseFile = safeGetElementValue(BASE_FILE);
+      const editedFile = safeGetElementValue(EDITED_FILE);
       if (baseFile && editedFile) {
         this.vscode.postMessage({
           command: MAIN_VIEW_COMMANDS.ACCEPT_EDITED,
