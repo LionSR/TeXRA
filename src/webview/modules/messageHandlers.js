@@ -181,23 +181,7 @@ export class MainViewMessageHandler {
       text: { '.file-name': file },
       dataset: { '': { path: file } },
     });
-    if (element) return element;
-
-    const fileItem = document.createElement('div');
-    fileItem.className = 'file-item';
-    fileItem.dataset.path = file;
-
-    const nameSpan = document.createElement('span');
-    nameSpan.className = 'file-name';
-    nameSpan.textContent = file;
-    fileItem.appendChild(nameSpan);
-
-    const removeButton = document.createElement('span');
-    removeButton.className = 'remove-button';
-    removeButton.textContent = '-';
-    fileItem.appendChild(removeButton);
-
-    return fileItem;
+    return element;
   }
 
   _setupFileListHandler(fileType, container) {

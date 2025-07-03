@@ -42,7 +42,8 @@ export class HistoryRenderer {
       (a, b) => new Date(b.timestamp) - new Date(a.timestamp),
     );
     sorted.forEach((item) => {
-      historyContainer.appendChild(this._createHistoryItemElement(item));
+      const el = this._createHistoryItemElement(item);
+      if (el) historyContainer.appendChild(el);
     });
 
     this.setupItemEventListeners();
@@ -73,7 +74,7 @@ export class HistoryRenderer {
       },
     });
 
-    if (!container) return document.createElement('div');
+    if (!container) return null;
 
     const basicDetails = container.querySelector('.basic-details');
     const collapsible = container.querySelector(`.${CLASS_NAMES.COLLAPSIBLE}`);
@@ -84,7 +85,7 @@ export class HistoryRenderer {
 
     if (!basicDetails || !collapsible || !detailsContainer || !toggleButton) {
       console.warn('[HistoryRenderer] Invalid history item template');
-      return document.createElement('div');
+      return null;
     }
 
     let basicHTML = `

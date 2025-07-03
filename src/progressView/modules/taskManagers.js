@@ -2,6 +2,7 @@
 import { progressViewState } from './progressViewState.js';
 import { TaskGroupHeaderFormatter, LogEntryFormatter } from './formatters.js';
 import { ELEMENT_IDS } from './constants.js';
+import { createFromTemplate } from '@common/templateUtils.js';
 
 /**
  * Manages task group DOM operations.
@@ -43,27 +44,29 @@ export class TaskGroupManager {
     // Add to state
     progressViewState.taskGroups.set(group.id, group);
 
-    // Create the details container that will manage toggle state
-    const detailsElem = document.createElement('details');
-    detailsElem.className = 'log-group';
+    const detailsElem = createFromTemplate(ELEMENT_IDS.LOG_GROUP_TEMPLATE);
+    if (!detailsElem) return;
+
     detailsElem.id = `group-${group.id}`;
 
-    // Create the header element as a <summary>
     const headerTemplate = document.createElement('template');
     headerTemplate.innerHTML = this.headerFormatter.create(group);
     const headerElement = headerTemplate.content.firstElementChild;
 
-    // Create a container for the group's messages
-    const groupContainer = document.createElement('div');
-    groupContainer.className = 'log-group-content';
-    groupContainer.id = `group-content-${group.id}`;
+    const groupContainer = detailsElem.querySelector('.log-group-content');
+    if (groupContainer) {
+      groupContainer.id = `group-content-${group.id}`;
+    }
+    const placeholderHeader = detailsElem.querySelector('.log-group-header');
+    if (placeholderHeader) {
+      placeholderHeader.replaceWith(headerElement);
+    } else {
+      detailsElem.insertBefore(headerElement, groupContainer);
+    }
 
     // Check if we have a saved collapsed state for this group
     const isCollapsed = progressViewState.toggleStates.get(group.id);
     detailsElem.open = isCollapsed !== true;
-
-    detailsElem.appendChild(headerElement);
-    detailsElem.appendChild(groupContainer);
 
     // Add toggle state tracking
     detailsElem.addEventListener('toggle', () => {
