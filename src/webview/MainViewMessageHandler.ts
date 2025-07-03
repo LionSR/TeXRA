@@ -229,7 +229,10 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
       vscode.window.activeColorTheme.kind === vscode.ColorThemeKind.Dark
         ? 'dark'
         : 'light';
-    webviewView.webview.postMessage({ command: 'setTheme', theme });
+    webviewView.webview.postMessage({
+      command: MAIN_VIEW_COMMANDS.THEME_SET,
+      theme,
+    });
   }
 
   private async handleDebugModeRequest(
@@ -237,7 +240,10 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
     webviewView: vscode.WebviewView,
   ): Promise<void> {
     const debugMode = getConfig<boolean>('logger.debugMode', false);
-    webviewView.webview.postMessage({ command: 'setDebugMode', debugMode });
+    webviewView.webview.postMessage({
+      command: MAIN_VIEW_COMMANDS.DEBUG_MODE_SET,
+      debugMode,
+    });
   }
 
   private async handleModelSelection(
@@ -246,7 +252,7 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
   ): Promise<void> {
     if (message.model) {
       webviewView.webview.postMessage({
-        command: 'modelSelected',
+        command: MAIN_VIEW_COMMANDS.MODEL_SELECTED,
         model: message.model,
       });
     }
