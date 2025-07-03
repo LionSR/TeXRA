@@ -1,9 +1,6 @@
 // Image paste handling utilities
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
 
-// Import standardized commands
-import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
-
 // Comprehensive MIME type to extension mapping
 export const IMAGE_MIME_TYPES = {
   'image/jpeg': 'jpg',

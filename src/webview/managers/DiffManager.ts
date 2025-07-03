@@ -3,6 +3,8 @@ import * as vscode from 'vscode';
 
 // Local imports - log
 import * as logger from '@logger/logUtils';
+// Local imports - commands
+import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
 
 const CHANNEL = 'DiffManager';
 logger.initialize(CHANNEL);
@@ -46,7 +48,7 @@ export class DiffManager {
       ? await vscode.commands.executeCommand<string[]>('texra.getRecentCommits')
       : [];
     webviewView.webview.postMessage({
-      command: 'setRecentCommits',
+      command: MAIN_VIEW_COMMANDS.SET_RECENT_COMMITS,
       commits,
       isGitRepo,
     });
@@ -61,12 +63,12 @@ export class DiffManager {
         'texra.getRecentCommits',
       );
       webviewView.webview.postMessage({
-        command: 'setRecentCommits',
+        command: MAIN_VIEW_COMMANDS.SET_RECENT_COMMITS,
         commits: commitsRefresh,
       });
     } else {
       webviewView.webview.postMessage({
-        command: 'setRecentCommits',
+        command: MAIN_VIEW_COMMANDS.SET_RECENT_COMMITS,
         isGitRepo: false,
       });
     }
