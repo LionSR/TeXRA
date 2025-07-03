@@ -73,5 +73,31 @@
         <!-- History items will be inserted here -->
       </div>
     </div>
+    <template id="historyItemTemplate">
+      <div class="history-item">
+        <div class="history-item-header">
+          <div class="history-timestamp"></div>
+          <div class="history-actions button-group">
+            <button class="vscode-button delete-btn" title="">
+              <i class="codicon codicon-trash"></i>
+            </button>
+            <button class="vscode-button restore-btn" title="">
+              <i class="codicon codicon-reply"></i>
+            </button>
+            <button class="vscode-button rerun-btn" title="">
+              <i class="codicon codicon-debug-rerun"></i>
+            </button>
+          </div>
+        </div>
+        <div class="history-details basic-details"></div>
+        <div class="collapsible">
+          <div class="history-details extra-details"></div>
+        </div>
+        <button class="toggle-button"></button>
+      </div>
+    </template>
+    <template id="codiconTemplate">
+      <i class="codicon"></i>
+    </template>
   </body>
 </html>
