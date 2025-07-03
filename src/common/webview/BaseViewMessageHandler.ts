@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import * as logger from '@logger/logUtils';
+import { COMMON_COMMANDS } from './commands';
 
 export type MessageHandler = (
   message: any,
@@ -78,7 +79,7 @@ export abstract class BaseViewMessageHandler {
     }
 
     webviewView.webview.postMessage({
-      command: 'setTheme',
+      command: COMMON_COMMANDS.THEME_SET,
       theme: message.theme,
     });
   }
@@ -91,7 +92,7 @@ export abstract class BaseViewMessageHandler {
     webviewView: vscode.WebviewView,
   ): Promise<void> {
     webviewView.webview.postMessage({
-      command: 'setDebugMode',
+      command: COMMON_COMMANDS.DEBUG_MODE_SET,
       debugMode: message.debugMode,
     });
   }
