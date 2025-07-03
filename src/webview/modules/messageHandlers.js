@@ -16,7 +16,16 @@ import { fileList } from './uiManagers/FileList.js';
 import { fileSelect } from './uiManagers/FileSelect.js';
 import { webviewEventBus } from './eventBus.js';
 
-import { FILE_TYPES } from './constants.js';
+import {
+  FILE_TYPES,
+  INPUT_FILE,
+  REFERENCE_FILE,
+  AUXILIARY_FILE,
+  MEDIA_FILE,
+  EDITED_FILE,
+  BASE_FILE,
+  ELEMENT_IDS,
+} from './constants.js';
 
 // Import standardized commands
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
@@ -279,12 +288,12 @@ export class MainViewMessageHandler {
       instruction.dispatchEvent(new Event('input'));
     }
 
-    if (state.inputFile) safeSetElementValue('inputFile', state.inputFile);
+    if (state.inputFile) safeSetElementValue(INPUT_FILE, state.inputFile);
     if (state.referenceFile)
-      safeSetElementValue('referenceFile', state.referenceFile);
+      safeSetElementValue(REFERENCE_FILE, state.referenceFile);
     if (state.auxiliaryFile)
-      safeSetElementValue('auxiliaryFile', state.auxiliaryFile);
-    if (state.mediaFile) safeSetElementValue('mediaFile', state.mediaFile);
+      safeSetElementValue(AUXILIARY_FILE, state.auxiliaryFile);
+    if (state.mediaFile) safeSetElementValue(MEDIA_FILE, state.mediaFile);
 
     const toolConfig = state.toolConfig || {};
     Object.assign(savedState, {
@@ -394,7 +403,7 @@ export class MainViewMessageHandler {
   }
 
   handleCheckRestoredBaseFile() {
-    const restoredBaseFileDiv = this._getElement('baseFile');
+    const restoredBaseFileDiv = this._getElement(BASE_FILE);
     if (restoredBaseFileDiv && restoredBaseFileDiv.value) {
       fileSelect.updateEdited(restoredBaseFileDiv.value);
     }
@@ -455,52 +464,52 @@ export class MainViewMessageHandler {
 
   // Single file updates
   handleSetInputFile(message) {
-    fileSelect.update('inputFile', message.files);
+    fileSelect.update(INPUT_FILE, message.files);
     this._postHandle();
   }
 
   handleSetReferenceFile(message) {
-    fileSelect.update('referenceFile', message.files);
+    fileSelect.update(REFERENCE_FILE, message.files);
     this._postHandle();
   }
 
   handleSetAuxiliaryFile(message) {
-    fileSelect.update('auxiliaryFile', message.files);
+    fileSelect.update(AUXILIARY_FILE, message.files);
     this._postHandle();
   }
 
   handleSetMediaFile(message) {
-    fileSelect.update('mediaFile', message.files);
+    fileSelect.update(MEDIA_FILE, message.files);
     this._postHandle();
   }
 
   handleSetEditedFile(message) {
-    fileSelect.update('editedFile', message.files);
+    fileSelect.update(EDITED_FILE, message.files);
     this._postHandle();
   }
 
   handleInputFileSelected(message) {
-    safeSetElementValue('inputFile', message.filePath);
+    safeSetElementValue(INPUT_FILE, message.filePath);
     this._postHandle();
   }
 
   handleReferenceFileSelected(message) {
-    safeSetElementValue('referenceFile', message.filePath);
+    safeSetElementValue(REFERENCE_FILE, message.filePath);
     this._postHandle();
   }
 
   handleAuxiliaryFileSelected(message) {
-    safeSetElementValue('auxiliaryFile', message.filePath);
+    safeSetElementValue(AUXILIARY_FILE, message.filePath);
     this._postHandle();
   }
 
   handleMediaFileSelected(message) {
-    safeSetElementValue('mediaFile', message.filePath);
+    safeSetElementValue(MEDIA_FILE, message.filePath);
     this._postHandle();
   }
 
   handleEditedFileSelected(message) {
-    safeSetElementValue('editedFile', message.filePath);
+    safeSetElementValue(EDITED_FILE, message.filePath);
     this._postHandle();
   }
 
@@ -554,8 +563,15 @@ export class MainViewMessageHandler {
   }
 
   handleSetOutputFiles(message) {
-    fileList.update('outputFiles', 'toggleOutputFiles', message.files);
-    this._setupFileListHandler('output', this._getElement('outputFiles'));
+    fileList.update(
+      ELEMENT_IDS.OUTPUT_FILES,
+      ELEMENT_IDS.TOGGLE_OUTPUT_FILES,
+      message.files,
+    );
+    this._setupFileListHandler(
+      'output',
+      this._getElement(ELEMENT_IDS.OUTPUT_FILES),
+    );
     this._postHandle();
   }
 
@@ -594,10 +610,10 @@ export class MainViewMessageHandler {
   }
 
   handleSetBaseFile(message) {
-    const currentBaseFileDiv = this._getElement('baseFile');
+    const currentBaseFileDiv = this._getElement(BASE_FILE);
     if (currentBaseFileDiv) {
       const currentBaseFile = currentBaseFileDiv.value;
-      fileSelect.update('baseFile', message.files);
+      fileSelect.update(BASE_FILE, message.files);
 
       const state = mainViewState.get();
       const storedBaseFile = state?.baseFile;
