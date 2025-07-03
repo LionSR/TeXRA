@@ -4,7 +4,12 @@ export function renderTemplate(templateId) {
     console.warn(`Template ${templateId} not found`);
     return null;
   }
-  return template.content.firstElementChild.cloneNode(true);
+  const element = template.content.firstElementChild;
+  if (!element) {
+    console.warn(`Template ${templateId} has no content`);
+    return null;
+  }
+  return element.cloneNode(true);
 }
 
 export function createIconButton({
@@ -21,7 +26,9 @@ export function createIconButton({
   if (iconEl) {
     iconEl.classList.add(`codicon-${icon}`);
   }
-  element.id = id;
+  if (id) {
+    element.id = id;
+  }
   element.className = className;
   element.title = title;
   element.disabled = disabled;

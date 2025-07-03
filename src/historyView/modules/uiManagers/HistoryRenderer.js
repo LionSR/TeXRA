@@ -42,7 +42,8 @@ export class HistoryRenderer {
       (a, b) => new Date(b.timestamp) - new Date(a.timestamp),
     );
     sorted.forEach((item) => {
-      historyContainer.appendChild(this._createHistoryItemElement(item));
+      const el = this._createHistoryItemElement(item);
+      if (el) historyContainer.appendChild(el);
     });
 
     this.setupItemEventListeners();
@@ -55,7 +56,10 @@ export class HistoryRenderer {
     const date = new Date(item.timestamp).toLocaleString();
 
     const container = createHistoryItem();
-    if (!container) return document.createElement('div');
+    if (!container) {
+      console.error('History item template missing');
+      return null;
+    }
 
     const timestampEl = container.querySelector('.history-timestamp');
     if (timestampEl) timestampEl.textContent = date;
@@ -125,7 +129,9 @@ export class HistoryRenderer {
           <span class="history-value">${multiple.join(', ')}</span>`;
       }
     });
-    basicDetails.innerHTML = basicHTML;
+    if (basicDetails) {
+      basicDetails.innerHTML = basicHTML;
+    }
 
     const collapsible = container.querySelector(`.${CLASS_NAMES.COLLAPSIBLE}`);
     const detailsContainer = collapsible?.querySelector('.history-details');
