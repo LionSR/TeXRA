@@ -12,7 +12,7 @@ import {
 /**
  * Manages event handling and state application.
  */
-export class Events {
+export class EventsManager {
   /**
    * Apply saved toggle states to any groups already in the DOM
    */
