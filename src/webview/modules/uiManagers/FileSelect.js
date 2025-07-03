@@ -1,6 +1,7 @@
 // Local imports
 import { vscode } from '@common/webviewContext.js';
 import { safeGetElementById, safeSetElementValue } from '@common/domUtils.js';
+import { createFromTemplate } from '@common/templateUtils.js';
 import { ELEMENT_IDS } from '../constants.js';
 import { capitalize, uncapitalize } from '@common/stringUtils.js';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
@@ -27,9 +28,9 @@ export class FileSelect {
       console.warn(`[FileSelect] Element with id '${id}' not found`);
       return;
     }
-    selectDiv.innerHTML =
-      '<option value="">None</option>' +
-      files.map((f) => `<option value="${f}">${f}</option>`).join('');
+    selectDiv.innerHTML = '';
+    this.addOption(selectDiv, '', 'None');
+    files.forEach((f) => this.addOption(selectDiv, f, f));
   }
 
   updateEdited(baseFile) {
@@ -48,10 +49,11 @@ export class FileSelect {
   }
 
   addOption(select, value, text) {
-    const option = document.createElement('option');
-    option.value = value;
-    option.textContent = text;
-    select.appendChild(option);
+    const option = createFromTemplate('selectOptionTemplate', {
+      text: { '': text },
+      attributes: { '': { value } },
+    });
+    if (option) select.appendChild(option);
   }
 
   setElementsDisabled(elements, disabled) {
