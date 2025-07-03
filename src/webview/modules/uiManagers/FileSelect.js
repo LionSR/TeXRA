@@ -2,7 +2,7 @@
 import { vscode } from '@common/webviewContext.js';
 import { safeGetElementById, safeSetElementValue } from '@common/domUtils.js';
 import { createFromTemplate } from '@common/templateUtils.js';
-import { ELEMENT_IDS } from '../constants.js';
+import { ELEMENT_IDS, EDITED_FILE } from '../constants.js';
 import { capitalize, uncapitalize } from '@common/stringUtils.js';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
 
@@ -34,7 +34,7 @@ export class FileSelect {
   }
 
   updateEdited(baseFile) {
-    const editedFileDiv = safeGetElementById('editedFile');
+    const editedFileDiv = safeGetElementById(EDITED_FILE);
     if (!editedFileDiv) return;
     if (baseFile) {
       const current = editedFileDiv.value;
@@ -44,7 +44,7 @@ export class FileSelect {
         preserveSelection: current,
       });
     } else {
-      this.update('editedFile', []);
+      this.update(EDITED_FILE, []);
     }
   }
 
