@@ -1,13 +1,8 @@
 // Local imports - webview context
-import {
-  vscode,
-  registerMessageHandlers,
-  CHEVRON_UP_CLASS,
-  CHEVRON_DOWN_CLASS,
-} from '@common/webviewContext.js';
+import { vscode, registerMessageHandlers } from '@common/webviewContext.js';
 import { safeSetElementValue, safeGetElementById } from '@common/domUtils.js';
 import { capitalize, uncapitalize } from '@common/stringUtils.js';
-import { createFromTemplate } from '@common/templateUtils.js';
+import { createFromTemplate, setChevronIcon } from '@common/templateUtils.js';
 import { mainViewState } from './mainViewState.js';
 import { mainViewDomHandler } from './domHandlers.js';
 
@@ -165,17 +160,6 @@ export class MainViewMessageHandler {
   }
 
   /* ---------- Private helpers ---------- */
-  _setToggleIcon(element, isVisible) {
-    if (!element) return;
-    element.innerHTML = '';
-    const icon = createFromTemplate('codiconTemplate', {
-      attributes: {
-        '': { class: isVisible ? CHEVRON_UP_CLASS : CHEVRON_DOWN_CLASS },
-      },
-    });
-    if (icon) element.appendChild(icon);
-  }
-
   _createFileItem(file) {
     const element = createFromTemplate('fileListEntryTemplate', {
       text: { '.file-name': file },
@@ -354,7 +338,7 @@ export class MainViewMessageHandler {
         }
 
         const toggleElement = this._getElement(toggleId);
-        this._setToggleIcon(toggleElement, isVisible);
+        setChevronIcon(toggleElement, isVisible);
 
         if (filesArray.length > 0 && multipleFiles) {
           multipleFiles.innerHTML = '';
@@ -556,7 +540,7 @@ export class MainViewMessageHandler {
     if (container && container.style.display === 'none') {
       container.style.display = 'block';
       const toggleIcon = this._getElement('toggleMediaFiles');
-      this._setToggleIcon(toggleIcon, true);
+      setChevronIcon(toggleIcon, true);
     }
 
     this._postHandle();

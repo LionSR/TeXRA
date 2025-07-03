@@ -1,3 +1,4 @@
+import { CHEVRON_UP_CLASS, CHEVRON_DOWN_CLASS } from './iconConstants.js';
 export function renderTemplate(templateId) {
   const template = document.getElementById(templateId);
   if (!template) {
@@ -75,4 +76,18 @@ export function createIconButton({
     element.dataset[key] = value;
   });
   return element;
+}
+
+export function setChevronIcon(element, expanded) {
+  if (!element) return;
+  const iconClass = expanded ? CHEVRON_UP_CLASS : CHEVRON_DOWN_CLASS;
+  const iconEl =
+    element.tagName.toLowerCase() === 'i'
+      ? element
+      : element.querySelector('i') || document.createElement('i');
+  iconEl.className = iconClass;
+  if (!element.contains(iconEl)) {
+    element.innerHTML = '';
+    element.appendChild(iconEl);
+  }
 }

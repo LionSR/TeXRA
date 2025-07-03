@@ -1,14 +1,10 @@
 import { safeGetElementById, safeGetElementChecked } from '@common/domUtils.js';
 import {
-  CHEVRON_UP_CLASS,
-  CHEVRON_DOWN_CLASS,
-} from '@common/webviewContext.js';
-import {
   CHECK_BOXES_AUTO_EXTRACT,
   CHECK_BOXES_TOOL_USE,
   ELEMENT_IDS,
 } from '../constants.js';
-import { createFromTemplate } from '@common/templateUtils.js';
+import { createFromTemplate, setChevronIcon } from '@common/templateUtils.js';
 
 export class ToggleManager {
   isOptionsVisible(options) {
@@ -25,13 +21,8 @@ export class ToggleManager {
     const iconEl = createFromTemplate('codiconTemplate', {
       attributes: { '': { class: `codicon codicon-${icon}` } },
     });
-    const chevron = createFromTemplate('codiconTemplate', {
-      attributes: {
-        '': { class: visible ? CHEVRON_UP_CLASS : CHEVRON_DOWN_CLASS },
-      },
-    });
     if (iconEl) toggle.appendChild(iconEl);
-    if (chevron) toggle.appendChild(chevron);
+    setChevronIcon(toggle, visible);
   }
 
   updateDropdownToggleState(toggleId, optionsId, checkboxIds, icon) {
