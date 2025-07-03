@@ -32,8 +32,18 @@ export function createIconButton({
 }
 
 export function createFileItem(path) {
-  const element = renderTemplate('fileItemTemplate');
-  if (!element) return null;
+  let element = renderTemplate('fileItemTemplate');
+  if (!element) {
+    element = document.createElement('div');
+    element.className = 'file-item';
+    element.dataset.path = path;
+    element.textContent = path;
+    const removeButton = document.createElement('span');
+    removeButton.className = 'remove-button';
+    removeButton.textContent = '-';
+    element.appendChild(removeButton);
+    return element;
+  }
   element.dataset.path = path;
   const pathEl = element.querySelector('.file-path');
   if (pathEl) {
