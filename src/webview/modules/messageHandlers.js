@@ -16,6 +16,7 @@ import { fileSelect } from './uiManagers/FileSelect.js';
 import { webviewEventBus } from './eventBus.js';
 
 import { FILE_TYPES } from './constants.js';
+import { createFileItem } from '@common/templateUtils.js';
 
 // Import standardized commands
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
@@ -147,15 +148,7 @@ export class MainViewMessageHandler {
   }
 
   _createFileItem(file) {
-    const fileItem = document.createElement('div');
-    fileItem.className = 'file-item';
-    fileItem.dataset.path = file;
-    fileItem.textContent = file;
-    const removeButton = document.createElement('span');
-    removeButton.className = 'remove-button';
-    removeButton.textContent = '-';
-    fileItem.appendChild(removeButton);
-    return fileItem;
+    return createFileItem(file);
   }
 
   _setupFileListHandler(fileType, container) {

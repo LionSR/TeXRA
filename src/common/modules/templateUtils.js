@@ -30,3 +30,16 @@ export function createIconButton({
   });
   return element;
 }
+
+export function createFileItem(path) {
+  const element = renderTemplate('fileItemTemplate');
+  if (!element) return null;
+  element.dataset.path = path;
+  const pathEl = element.querySelector('.file-path');
+  if (pathEl) {
+    pathEl.textContent = path;
+  } else {
+    element.prepend(document.createTextNode(path));
+  }
+  return element;
+}

@@ -8,6 +8,7 @@ import {
   CHEVRON_DOWN_CLASS,
 } from '@common/webviewContext.js';
 import { capitalize } from '@common/stringUtils.js';
+import { createFileItem } from '@common/templateUtils.js';
 
 /**
  * Handles multi-file list DOM updates.
@@ -31,10 +32,8 @@ export class FileList {
     const toggleIcon = safeGetElementById(`toggle${capitalize(containerId)}`);
     if (!container || !toggleIcon) return;
 
-    const fileElement = document.createElement('div');
-    fileElement.className = 'file-item';
-    fileElement.dataset.path = file;
-    fileElement.innerHTML = `${file} <span class="remove-button">-</span>`;
+    const fileElement = createFileItem(file);
+    if (!fileElement) return;
 
     const removeButton = fileElement.querySelector('.remove-button');
     if (removeButton) {

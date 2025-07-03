@@ -5,7 +5,6 @@ import {
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
 import { ELEMENT_IDS } from '../constants.js';
 import { webviewEventBus } from '../eventBus.js';
-import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
 
 export class RecordingManager {
   constructor(vscode, eventBus = webviewEventBus) {
