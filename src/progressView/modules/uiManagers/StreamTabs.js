@@ -1,5 +1,6 @@
 // Local imports
 import { ELEMENT_IDS } from '../constants.js';
+import { createFromTemplate } from '@common/templateUtils.js';
 
 /**
  * Manages stream tab UI updates.
@@ -20,20 +21,24 @@ export class StreamTabs {
       console.error('StreamTabs.update: streamTabs container not found');
       return;
     }
-    tabsContainer.innerHTML = streams
-      .map((stream) => {
-        if (!stream || typeof stream !== 'string') {
-          console.warn('StreamTabs.update: invalid stream value:', stream);
-          return '';
-        }
-        return `<div class="tab-container ${stream === activeStream ? 'active' : ''}" title="${stream}">
-            <button class="tab" data-stream="${stream}" title="${stream}">${stream}</button>
-            <button class="tab-delete" data-stream="${stream}" title="Delete stream">
-              <i class="codicon codicon-close"></i>
-            </button>
-          </div>`;
-      })
-      .join('');
+    tabsContainer.innerHTML = '';
+    streams.forEach((stream) => {
+      if (!stream || typeof stream !== 'string') {
+        console.warn('StreamTabs.update: invalid stream value:', stream);
+        return;
+      }
+      const tab = createFromTemplate('streamTabTemplate', {
+        text: { '.tab': stream },
+        attributes: {
+          '.tab': { 'data-stream': stream, title: stream },
+          '.tab-delete': { 'data-stream': stream, title: 'Delete stream' },
+        },
+      });
+      if (tab) {
+        if (stream === activeStream) tab.classList.add('active');
+        tabsContainer.appendChild(tab);
+      }
+    });
 
     // Update active stream name
     const streamNameElem = document.getElementById(

@@ -1,7 +1,8 @@
 // Local imports
 import { progressViewState } from './progressViewState.js';
-import { formatTokens, BULLET_MARKUP, TaskGroupLevel } from './formatters.js';
+import { formatTokens, TaskGroupLevel } from './formatters.js';
 import { ELEMENT_IDS } from './constants.js';
+import { createFromTemplate } from '@common/templateUtils.js';
 
 /**
  * Manages usage summary display.
@@ -89,14 +90,16 @@ export class UsageGroup {
     // Find or create usage display element in the group header
     let usageElem = groupHeader.querySelector('.group-usage');
     if (!usageElem) {
-      usageElem = document.createElement('span');
-      usageElem.className = 'group-usage';
+      usageElem = createFromTemplate('usageDisplayTemplate');
+      if (usageElem) {
+        usageElem.classList.add('group-usage');
 
-      // Determine the group level by checking for the 'top-level' class
-      const level = groupHeader.classList.contains('top-level')
-        ? TaskGroupLevel.ROOT
-        : TaskGroupLevel.NESTED;
-      this.insertUsageElement(groupHeader, usageElem, level);
+        // Determine the group level by checking for the 'top-level' class
+        const level = groupHeader.classList.contains('top-level')
+          ? TaskGroupLevel.ROOT
+          : TaskGroupLevel.NESTED;
+        this.insertUsageElement(groupHeader, usageElem, level);
+      }
     }
 
     if (!usage) {
@@ -105,10 +108,12 @@ export class UsageGroup {
     }
 
     const { inputTokens = 0, outputTokens = 0, cost = 0 } = usage;
-    usageElem.innerHTML =
-      `<i class="codicon codicon-arrow-up"></i> ${formatTokens(inputTokens)}, ` +
-      `<i class="codicon codicon-arrow-down"></i> ${formatTokens(outputTokens)}, ` +
-      `$${cost.toFixed(3)}`;
+    const inputEl = usageElem.querySelector('.usage-input');
+    const outputEl = usageElem.querySelector('.usage-output');
+    const costEl = usageElem.querySelector('.usage-cost');
+    if (inputEl) inputEl.textContent = formatTokens(inputTokens);
+    if (outputEl) outputEl.textContent = formatTokens(outputTokens);
+    if (costEl) costEl.textContent = cost.toFixed(3);
 
     // Persist usage on the group state so the summary can be computed
     const group = progressViewState.taskGroups.get(groupId);
@@ -182,9 +187,7 @@ export class UsageGroup {
 
     let bulletElem = groupHeader.querySelector('.group-bullet');
     if (!bulletElem) {
-      const tmpl = document.createElement('template');
-      tmpl.innerHTML = BULLET_MARKUP;
-      bulletElem = tmpl.content.firstElementChild;
+      bulletElem = createFromTemplate('bulletIconTemplate');
     }
 
     if (timeContainer) {

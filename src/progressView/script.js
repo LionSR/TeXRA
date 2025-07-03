@@ -3,6 +3,16 @@ import { messageHandler } from './modules/messageHandlers.js';
 import { progressViewDomHandler } from './modules/domHandlers.js';
 import { vscode } from '@common/webviewContext.js';
 import { COMMANDS } from './modules/constants.js';
+import { validateTemplates } from '@common/templateUtils.js';
+
+const TEMPLATE_IDS = [
+  'iconButtonTemplate',
+  'fileItemTemplate',
+  'usageDisplayTemplate',
+  'bulletIconTemplate',
+  'streamTabTemplate',
+  'roundHeaderTemplate',
+];
 
 // Initialize the state when the window loads
 progressViewState.initialize();
@@ -16,6 +26,7 @@ window.addEventListener('beforeunload', () => {
 
 // Initialize event listeners and state when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
+  validateTemplates(TEMPLATE_IDS);
   progressViewDomHandler.toolbar.render();
   // Setup UI event listeners
   progressViewDomHandler.events.setupEventListeners();

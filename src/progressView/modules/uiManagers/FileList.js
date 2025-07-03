@@ -2,6 +2,7 @@
 import { formatTokens } from '../formatters.js';
 import { COMMANDS, ELEMENT_IDS } from '../constants.js';
 import { vscode } from '@common/webviewContext.js';
+import { createFromTemplate } from '@common/templateUtils.js';
 
 /**
  * Manages file list rendering.
@@ -52,10 +53,6 @@ export class FileList {
       return;
     }
 
-    // Add total usage header
-    const usageHeader = document.createElement('div');
-    usageHeader.className = 'files-usage-header';
-
     // Calculate total usage from all groups
     const totals = this.usageSummary?.computeTotal() || {
       inputTokens: 0,
@@ -64,14 +61,21 @@ export class FileList {
     };
 
     if (totals.inputTokens || totals.outputTokens || totals.cost) {
-      usageHeader.innerHTML = `
-        <span class="files-usage-label">Total Usage:</span>
-        <span class="files-usage-stats">
-          <i class="codicon codicon-arrow-up"></i> ${formatTokens(totals.inputTokens)},
-          <i class="codicon codicon-arrow-down"></i> ${formatTokens(totals.outputTokens)},
-          $${totals.cost.toFixed(3)}
-        </span>
-      `;
+      const usageHeader = document.createElement('div');
+      usageHeader.className = 'files-usage-header';
+      const labelSpan = document.createElement('span');
+      labelSpan.className = 'files-usage-label';
+      labelSpan.textContent = 'Total Usage:';
+      const stats = createFromTemplate('usageDisplayTemplate', {
+        text: {
+          '.usage-input': formatTokens(totals.inputTokens),
+          '.usage-output': formatTokens(totals.outputTokens),
+          '.usage-cost': totals.cost.toFixed(3),
+        },
+        attributes: { '': { class: 'files-usage-stats' } },
+      });
+      usageHeader.appendChild(labelSpan);
+      if (stats) usageHeader.appendChild(stats);
       container.appendChild(usageHeader);
     }
 
@@ -88,10 +92,10 @@ export class FileList {
       roundGroup.className = 'round-group';
 
       // Create round header
-      const roundHeader = document.createElement('div');
-      roundHeader.className = 'round-header';
-      roundHeader.textContent = `r${round}`;
-      roundGroup.appendChild(roundHeader);
+      const roundHeader = createFromTemplate('roundHeaderTemplate', {
+        text: { '': `r${round}` },
+      });
+      if (roundHeader) roundGroup.appendChild(roundHeader);
 
       files.forEach((file) => {
         // Skip invalid file entries
@@ -129,10 +133,20 @@ export class FileList {
 
         // Handle file stats
         if (statsSpan) {
+          statsSpan.innerHTML = '';
           if (file.added !== undefined && file.removed !== undefined) {
-            statsSpan.innerHTML = `<span class="added">+${file.added}</span><span class="removed">-${file.removed}</span>`;
+            const add = document.createElement('span');
+            add.className = 'added';
+            add.textContent = `+${file.added}`;
+            const remove = document.createElement('span');
+            remove.className = 'removed';
+            remove.textContent = `-${file.removed}`;
+            statsSpan.append(add, remove);
           } else if (file.added !== undefined) {
-            statsSpan.innerHTML = `<span class="added">+${file.added}</span>`;
+            const add = document.createElement('span');
+            add.className = 'added';
+            add.textContent = `+${file.added}`;
+            statsSpan.appendChild(add);
           } else {
             statsSpan.remove();
           }
