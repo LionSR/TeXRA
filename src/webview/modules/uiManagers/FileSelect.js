@@ -49,7 +49,7 @@ export class FileSelect {
   }
 
   addOption(select, value, text) {
-    const option = createFromTemplate('optionTemplate', {
+    const option = createFromTemplate('selectOptionTemplate', {
       text: { '': text },
       attributes: { '': { value } },
     });
