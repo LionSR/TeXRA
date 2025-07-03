@@ -7,6 +7,12 @@ import {
   MULTIPLE_SELECTIONS,
   FILE_TYPES,
   ELEMENTS_TO_SAVE,
+  INPUT_FILE,
+  REFERENCE_FILE,
+  AUXILIARY_FILE,
+  MEDIA_FILE,
+  EDITED_FILE,
+  BASE_FILE,
 } from '../constants.js';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
 import { fileList } from './FileList.js';
@@ -56,7 +62,7 @@ export class FileInputManager {
   }
 
   _setupSingleFileSelectors() {
-    this._addListener('inputFile', 'change', (e) => {
+    this._addListener(INPUT_FILE, 'change', (e) => {
       const inputFile = e.target.value;
       this.vscode.postMessage({
         command: MAIN_VIEW_COMMANDS.INPUT_FILE_SELECTED,
@@ -64,7 +70,7 @@ export class FileInputManager {
       });
     });
 
-    this._addListener('referenceFile', 'change', (e) => {
+    this._addListener(REFERENCE_FILE, 'change', (e) => {
       const referenceFile = e.target.value;
       this.vscode.postMessage({
         command: MAIN_VIEW_COMMANDS.REFERENCE_FILE_SELECTED,
@@ -72,8 +78,8 @@ export class FileInputManager {
       });
     });
 
-    this._addListener('baseFile', 'change', () => {
-      const baseFile = safeGetElementValue('baseFile');
+    this._addListener(BASE_FILE, 'change', () => {
+      const baseFile = safeGetElementValue(BASE_FILE);
       this.vscode.postMessage({
         command: MAIN_VIEW_COMMANDS.REQUEST_EDITED_FILE,
         baseFile,
@@ -92,7 +98,7 @@ export class FileInputManager {
   _setupMultipleFileButtons() {
     const selectors = FILE_TYPES.map((type) => ({
       id: `${capitalize(type)}Files`,
-      selectId: type === 'output' ? 'inputFile' : `${type}File`,
+      selectId: type === 'output' ? INPUT_FILE : `${type}File`,
     }));
 
     selectors.forEach(({ id, selectId }) => {
@@ -128,7 +134,7 @@ export class FileInputManager {
 
     ['base', 'edited'].forEach((type) => {
       this._addListener(`current${capitalize(type)}FileButton`, 'click', () => {
-        const baseFile = safeGetElementValue('baseFile');
+        const baseFile = safeGetElementValue(BASE_FILE);
         this.vscode.postMessage({
           command: MAIN_VIEW_COMMANDS.GET_CURRENT_FILE,
           fileType: type,
