@@ -151,10 +151,21 @@ export class MainViewMessageHandler {
   }
 
   _createFileItem(file) {
-    return createFromTemplate('fileListItemTemplate', {
+    const element = createFromTemplate('fileListEntryTemplate', {
       text: { '.file-name': file },
       dataset: { '': { path: file } },
     });
+    if (element) return element;
+
+    const fileItem = document.createElement('div');
+    fileItem.className = 'file-item';
+    fileItem.dataset.path = file;
+    fileItem.textContent = file;
+    const removeButton = document.createElement('span');
+    removeButton.className = 'remove-button';
+    removeButton.textContent = '-';
+    fileItem.appendChild(removeButton);
+    return fileItem;
   }
 
   _setupFileListHandler(fileType, container) {
