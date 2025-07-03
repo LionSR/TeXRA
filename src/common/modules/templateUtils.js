@@ -30,3 +30,7 @@ export function createIconButton({
   });
   return element;
 }
+
+export function createHistoryItem() {
+  return renderTemplate('historyItemTemplate');
+}

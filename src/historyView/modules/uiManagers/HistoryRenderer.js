@@ -4,6 +4,7 @@ import {
   addEventListenerSafely,
   safeGetElementById,
 } from '@common/domUtils.js';
+import { createHistoryItem, createIconButton } from '@common/templateUtils.js';
 import { historyViewState } from '../historyViewState.js';
 import { COMMANDS, ELEMENT_IDS, CLASS_NAMES, LABELS } from '../constants.js';
 
@@ -53,27 +54,47 @@ export class HistoryRenderer {
     const config = item.config;
     const date = new Date(item.timestamp).toLocaleString();
 
-    const container = document.createElement('div');
-    container.className = 'history-item';
+    const container = createHistoryItem();
+    if (!container) return document.createElement('div');
 
-    const header = document.createElement('div');
-    header.className = 'history-item-header';
-    header.innerHTML = `
-      <div class="history-timestamp">${date}</div>
-      <div class="history-actions button-group">
-        <button class="vscode-button delete-btn" data-id="${item.id}" data-command="${COMMANDS.DELETE_AGENT}" title="Delete this history item">
-          <i class="codicon codicon-trash"></i>
-        </button>
-        <button class="vscode-button restore-btn" data-id="${item.id}" data-command="${COMMANDS.RESTORE_AGENT}" title="Load configuration to main view">
-          <i class="codicon codicon-reply"></i>
-        </button>
-        <button class="vscode-button rerun-btn" data-id="${item.id}" data-command="${COMMANDS.RERUN_AGENT}" title="Execute this configuration">
-          <i class="codicon codicon-debug-rerun"></i>
-        </button>
-      </div>`;
+    const timestampEl = container.querySelector('.history-timestamp');
+    if (timestampEl) timestampEl.textContent = date;
 
-    const basicDetails = document.createElement('div');
-    basicDetails.className = 'history-details';
+    const actions = container.querySelector('.history-actions');
+    if (actions) {
+      actions.innerHTML = '';
+      const buttons = [
+        {
+          icon: 'trash',
+          className: 'vscode-button delete-btn',
+          title: 'Delete this history item',
+          command: COMMANDS.DELETE_AGENT,
+        },
+        {
+          icon: 'reply',
+          className: 'vscode-button restore-btn',
+          title: 'Load configuration to main view',
+          command: COMMANDS.RESTORE_AGENT,
+        },
+        {
+          icon: 'debug-rerun',
+          className: 'vscode-button rerun-btn',
+          title: 'Execute this configuration',
+          command: COMMANDS.RERUN_AGENT,
+        },
+      ];
+      buttons.forEach((def) => {
+        const btn = createIconButton({
+          icon: def.icon,
+          className: def.className,
+          title: def.title,
+          dataset: { id: item.id, command: def.command },
+        });
+        if (btn) actions.appendChild(btn);
+      });
+    }
+
+    const basicDetails = container.querySelector('.basic-details');
     let basicHTML = `
       <span class="history-label">Agent:</span>
       <span class="history-value">${config.agent}</span>
@@ -106,12 +127,11 @@ export class HistoryRenderer {
     });
     basicDetails.innerHTML = basicHTML;
 
-    const collapsible = document.createElement('div');
-    collapsible.className = CLASS_NAMES.COLLAPSIBLE;
-    collapsible.id = `content-${item.id}`;
-
-    const detailsContainer = document.createElement('div');
-    detailsContainer.className = 'history-details';
+    const collapsible = container.querySelector(`.${CLASS_NAMES.COLLAPSIBLE}`);
+    const detailsContainer = collapsible?.querySelector('.history-details');
+    if (collapsible) {
+      collapsible.id = `content-${item.id}`;
+    }
 
     let detailsHTML = '';
     const extraFileTypes = [
@@ -154,20 +174,17 @@ export class HistoryRenderer {
       );
     }
 
-    if (detailsHTML) {
+    const toggleButton = container.querySelector(
+      `.${CLASS_NAMES.TOGGLE_BUTTON}`,
+    );
+
+    if (detailsHTML && collapsible && detailsContainer && toggleButton) {
       detailsContainer.innerHTML = detailsHTML;
-      collapsible.appendChild(detailsContainer);
-      const toggleButton = document.createElement('button');
-      toggleButton.className = CLASS_NAMES.TOGGLE_BUTTON;
-      toggleButton.setAttribute('data-id', item.id);
+      toggleButton.dataset.id = item.id;
       toggleButton.textContent = LABELS.SHOW_MORE;
-      container.appendChild(header);
-      container.appendChild(basicDetails);
-      container.appendChild(collapsible);
-      container.appendChild(toggleButton);
     } else {
-      container.appendChild(header);
-      container.appendChild(basicDetails);
+      if (collapsible) collapsible.remove();
+      if (toggleButton) toggleButton.remove();
     }
 
     return container;

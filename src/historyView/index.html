@@ -28,6 +28,7 @@
           "@common/webviewState.js": "${webviewStateUri}",
           "@common/webview/commands.js": "${commandsUri}",
           "@common/webviewContext.js": "${webviewContextUri}",
+          "@common/templateUtils.js": "${templateUtilsUri}",
           "@common/domUtils.js": "${domUtilsUri}"
         }
       }
@@ -72,6 +73,24 @@
       <div id="historyContainer" class="history-container">
         <!-- History items will be inserted here -->
       </div>
+      <template id="historyItemTemplate">
+        <div class="history-item">
+          <div class="history-item-header">
+            <div class="history-timestamp"></div>
+            <div class="history-actions button-group"></div>
+          </div>
+          <div class="history-details basic-details"></div>
+          <div class="collapsible">
+            <div class="history-details"></div>
+          </div>
+          <button class="toggle-button"></button>
+        </div>
+      </template>
+      <template id="iconButtonTemplate">
+        <button class="vscode-button">
+          <i class="codicon"></i>
+        </button>
+      </template>
     </div>
   </body>
 </html>
