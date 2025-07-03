@@ -32,10 +32,12 @@ export class FileList {
     const toggleIcon = safeGetElementById(`toggle${capitalize(containerId)}`);
     if (!container || !toggleIcon) return;
 
-    const fileElement = createFromTemplate('fileListItemTemplate', {
+    const fileElement = createFromTemplate('fileListEntryTemplate', {
       text: { '.file-name': file },
       dataset: { '': { path: file } },
     });
+
+    if (!fileElement) return;
 
     const removeButton = fileElement.querySelector('.remove-button');
     if (removeButton) {

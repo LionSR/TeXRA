@@ -73,6 +73,8 @@ export class HistoryRenderer {
       },
     });
 
+    if (!container) return document.createElement('div');
+
     const basicDetails = container.querySelector('.basic-details');
     const collapsible = container.querySelector('.collapsible');
     const detailsContainer = container.querySelector('.extra-details');
@@ -152,7 +154,6 @@ export class HistoryRenderer {
 
     if (detailsHTML) {
       detailsContainer.innerHTML = detailsHTML;
-      collapsible.appendChild(detailsContainer);
     } else {
       collapsible.remove();
       container.querySelector('.toggle-button').remove();
