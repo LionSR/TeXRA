@@ -7,6 +7,22 @@ import {
 } from '@common/domUtils.js';
 import { capitalize } from '@common/stringUtils.js';
 import { CHECK_BOXES, MULTIPLE_SELECTIONS, ELEMENT_IDS } from '../constants.js';
+import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
+
+const SINGLE_ACTION_COMMANDS = {
+  pack: MAIN_VIEW_COMMANDS.PACK_SINGLE,
+  clean: MAIN_VIEW_COMMANDS.CLEAN_SINGLE,
+};
+
+const MULTIPLE_ACTION_COMMANDS = {
+  pack: MAIN_VIEW_COMMANDS.PACK_MULTIPLE,
+  clean: MAIN_VIEW_COMMANDS.CLEAN_MULTIPLE,
+};
+
+const LATEXDIFFVC_ACTION_COMMANDS = {
+  pack: MAIN_VIEW_COMMANDS.PACK_LATEXDIFFVC,
+  clean: MAIN_VIEW_COMMANDS.CLEAN_LATEXDIFFVC,
+};
 
 export class ActionButtonManager {
   constructor(vscodeInstance = vscode, fileList, state, instructionMgr) {
@@ -77,7 +93,7 @@ export class ActionButtonManager {
         const multipleFilesData = this._getMultipleFileData(singleFiles);
 
         this.vscode.postMessage({
-          command: 'polishInstructionText',
+          command: MAIN_VIEW_COMMANDS.POLISH_INSTRUCTION_TEXT,
           text: instruction.value,
           agent,
           model,
@@ -102,7 +118,7 @@ export class ActionButtonManager {
       });
 
       this.vscode.postMessage({
-        command: 'execute',
+        command: MAIN_VIEW_COMMANDS.EXECUTE,
         agent,
         model,
         instruction,
@@ -117,13 +133,13 @@ export class ActionButtonManager {
       const editedFile = safeGetElementValue('editedFile');
 
       this.vscode.postMessage({
-        command: 'merge',
+        command: MAIN_VIEW_COMMANDS.MERGE,
         inputFile,
         editedFile,
       });
 
       this.vscode.postMessage({
-        command: 'showInformationMessage',
+        command: MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE,
         text: `Merging files: ${inputFile} and ${editedFile}`,
       });
     });
@@ -150,7 +166,7 @@ export class ActionButtonManager {
 
         if (useMultiple) {
           this.vscode.postMessage({
-            command: `${action}Multiple`,
+            command: MULTIPLE_ACTION_COMMANDS[action],
             inputFile,
             agent,
             model,
@@ -158,27 +174,27 @@ export class ActionButtonManager {
           });
 
           this.vscode.postMessage({
-            command: 'showInformationMessage',
+            command: MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE,
             text: `${capitalize(action)}ing multiple files: ${[inputFile, ...outputFiles].join(', ')}`,
           });
         } else {
           if (!inputFile || !agent || !model) {
             this.vscode.postMessage({
-              command: 'showInformationMessage',
+              command: MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE,
               text: 'Please select all required fields (input file, agent, and model)',
             });
             return;
           }
 
           this.vscode.postMessage({
-            command: `${action}Single`,
+            command: SINGLE_ACTION_COMMANDS[action],
             inputFile,
             agent,
             model,
           });
 
           this.vscode.postMessage({
-            command: 'showInformationMessage',
+            command: MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE,
             text: `${capitalize(action)}ing single file: ${inputFile}`,
           });
         }
@@ -193,14 +209,14 @@ export class ActionButtonManager {
       const editedFile = safeGetElementValue('editedFile');
 
       this.vscode.postMessage({
-        command: 'latexdiff',
+        command: MAIN_VIEW_COMMANDS.LATEXDIFF,
         inputFile,
         baseFile,
         editedFile,
       });
 
       this.vscode.postMessage({
-        command: 'showInformationMessage',
+        command: MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE,
         text: `Running LaTeX diff between ${baseFile} and ${editedFile}`,
       });
     });
@@ -211,14 +227,14 @@ export class ActionButtonManager {
       const commitHash = safeGetElementValue(ELEMENT_IDS.COMMIT_SELECT);
 
       this.vscode.postMessage({
-        command: 'latexdiffvc',
+        command: MAIN_VIEW_COMMANDS.LATEXDIFFVC,
         inputFile,
         baseFile,
         commitHash,
       });
 
       this.vscode.postMessage({
-        command: 'showInformationMessage',
+        command: MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE,
         text: `Running LaTeX diff with version control: ${baseFile} at commit ${commitHash}`,
       });
     });
@@ -233,7 +249,7 @@ export class ActionButtonManager {
         const commitHash = safeGetElementValue(ELEMENT_IDS.COMMIT_SELECT);
 
         this.vscode.postMessage({
-          command: `${action}Latexdiffvc`,
+          command: LATEXDIFFVC_ACTION_COMMANDS[action],
           inputFile,
           baseFile,
           commitHash,
@@ -241,7 +257,7 @@ export class ActionButtonManager {
         });
 
         this.vscode.postMessage({
-          command: 'showInformationMessage',
+          command: MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE,
           text: `${capitalize(action)}ing LaTeX diff with version control: ${baseFile} at commit ${commitHash}`,
         });
       });
@@ -254,13 +270,13 @@ export class ActionButtonManager {
       const editedFile = safeGetElementValue('editedFile');
       if (baseFile && editedFile) {
         this.vscode.postMessage({
-          command: 'compare',
+          command: MAIN_VIEW_COMMANDS.COMPARE,
           baseFile,
           editedFile,
         });
       } else {
         this.vscode.postMessage({
-          command: 'showInformationMessage',
+          command: MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE,
           text: 'Please select both base and edited files to compare',
         });
       }
@@ -271,13 +287,13 @@ export class ActionButtonManager {
       const editedFile = safeGetElementValue('editedFile');
       if (baseFile && editedFile) {
         this.vscode.postMessage({
-          command: 'acceptEdited',
+          command: MAIN_VIEW_COMMANDS.ACCEPT_EDITED,
           baseFile,
           editedFile,
         });
       } else {
         this.vscode.postMessage({
-          command: 'showInformationMessage',
+          command: MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE,
           text: 'Please select both base and edited files to accept changes',
         });
       }
