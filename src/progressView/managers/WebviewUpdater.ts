@@ -213,6 +213,12 @@ export class WebviewUpdater {
       // Update usage for active stream
       const usage = state.usageStats.getStreamUsage(activeStream);
       this.updateUsage(usage);
+    } else {
+      // Clear content when no active stream
+      this.updateLogContent('', [], []);
+      this.updateFiles('', {});
+      this.updateMissingOutputs('', {});
+      this.updateUsage(undefined);
     }
 
     this.logger.debug(

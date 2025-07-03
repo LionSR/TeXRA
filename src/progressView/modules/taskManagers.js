@@ -18,6 +18,16 @@ export class TaskGroupManager {
    */
   add(group) {
     progressViewState.taskGroups.set(group.id, group);
+
+    // Check if this specific group (by ID) already exists in the DOM
+    // This prevents duplicate groups from race conditions between UPDATE_LOGS and ADD_TASK_GROUP
+    const existingGroup = document.getElementById(`group-${group.id}`);
+    if (existingGroup) {
+      // Group already exists, just update it instead of creating a duplicate
+      this.update(group.id, group.status, group.endTime);
+      return;
+    }
+
     // Create the details container that will manage toggle state
     const detailsElem = document.createElement('details');
     detailsElem.className = 'log-group';

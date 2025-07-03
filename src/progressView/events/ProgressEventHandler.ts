@@ -111,11 +111,22 @@ export class ProgressEventHandler {
    * Handle setting active stream
    */
   private handleSetActiveStream(stream: string): void {
+    // Ensure the stream exists in streamTabs so it appears in the UI
+    // This handles the case where setActiveStream is called before any logs
+    this.state.streamTabs.ensureStream(stream);
+
+    // Set initial status to running for new streams
+    if (!this._streamStatus.has(stream)) {
+      this.handleUpdateStreamStatus({ stream, status: STATUS.RUNNING });
+    }
+
     this.state.activeStream = stream;
 
     if (this.webviewUpdater.isAvailable()) {
       const streams = this.state.streamTabs.keys();
       this.webviewUpdater.updateStreams(streams, stream);
+
+      // Update log content (will be empty for new streams)
       this.updateLogContentForStream(stream);
     }
   }
@@ -291,19 +302,6 @@ export class ProgressEventHandler {
       !getConfig<boolean>('logger.debugMode', false)
     ) {
       return;
-    }
-
-    // Create stream if it doesn't exist
-    if (!this.state.streamTabs.has(stream)) {
-      this.logger.debug(`Adding new stream to ProgressView: ${stream}`);
-
-      // Set initial status to running for new streams
-      if (!this._streamStatus.has(stream)) {
-        this.handleUpdateStreamStatus({ stream, status: STATUS.RUNNING });
-      }
-
-      // Auto-focus new agent streams
-      this.handleSetActiveStream(stream);
     }
 
     this.state.streamTabs.add(stream, logMessage);
