@@ -8,13 +8,20 @@ export const FILE_TYPES = [
 ];
 
 // Single file element IDs
+export const INPUT_FILE = 'inputFile';
+export const REFERENCE_FILE = 'referenceFile';
+export const AUXILIARY_FILE = 'auxiliaryFile';
+export const MEDIA_FILE = 'mediaFile';
+export const EDITED_FILE = 'editedFile';
+export const BASE_FILE = 'baseFile';
+
 export const SINGLE_FILE_ELEMENTS = [
-  'inputFile',
-  'referenceFile',
-  'auxiliaryFile',
-  'mediaFile',
-  'editedFile',
-  'baseFile',
+  INPUT_FILE,
+  REFERENCE_FILE,
+  AUXILIARY_FILE,
+  MEDIA_FILE,
+  EDITED_FILE,
+  BASE_FILE,
 ];
 
 // Multiple file selection element IDs (derived from FILE_TYPES)
@@ -83,5 +90,6 @@ export const ELEMENT_IDS = {
   COMMIT_SELECT: 'commit',
   OUTPUT_FILES: 'outputFiles',
   OUTPUT_FILES_CONTAINER: 'outputFilesContainer',
+  TOGGLE_OUTPUT_FILES: 'toggleOutputFiles',
   INSTRUCTION: 'instruction',
 };
