@@ -20,6 +20,15 @@ import { FILE_TYPES } from './constants.js';
 // Import standardized commands
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
 
+// Mapping from file types to update commands
+const UPDATE_COMMANDS_BY_FILE_TYPE = {
+  input: MAIN_VIEW_COMMANDS.UPDATE_INPUT_FILES,
+  reference: MAIN_VIEW_COMMANDS.UPDATE_REFERENCE_FILES,
+  auxiliary: MAIN_VIEW_COMMANDS.UPDATE_AUXILIARY_FILES,
+  media: MAIN_VIEW_COMMANDS.UPDATE_MEDIA_FILES,
+  output: MAIN_VIEW_COMMANDS.UPDATE_OUTPUT_FILES,
+};
+
 /**
  * Handles messages from the extension and syncs the webview state.
  */
@@ -172,10 +181,13 @@ export class MainViewMessageHandler {
           const updated = Array.from(
             container.querySelectorAll('.file-item'),
           ).map((el) => el.dataset.path);
-          vscode.postMessage({
-            command: `update${capitalize(fileType)}Files`,
-            files: updated,
-          });
+          const updateCommand = UPDATE_COMMANDS_BY_FILE_TYPE[fileType];
+          if (updateCommand) {
+            vscode.postMessage({
+              command: updateCommand,
+              files: updated,
+            });
+          }
           mainViewState.update({ [`${fileType}Files`]: updated });
         }
       }
@@ -193,14 +205,14 @@ export class MainViewMessageHandler {
 
   _initializeDataRequests() {
     const dataRequests = [
-      'getTheme',
-      'getDebugMode',
-      'requestInputFile',
-      'requestReferenceFile',
-      'requestAuxiliaryFile',
-      'requestMediaFile',
-      'requestRecentCommits',
-      'requestBaseFile',
+      MAIN_VIEW_COMMANDS.GET_THEME,
+      MAIN_VIEW_COMMANDS.GET_DEBUG_MODE,
+      MAIN_VIEW_COMMANDS.REQUEST_INPUT_FILE,
+      MAIN_VIEW_COMMANDS.REQUEST_REFERENCE_FILE,
+      MAIN_VIEW_COMMANDS.REQUEST_AUXILIARY_FILE,
+      MAIN_VIEW_COMMANDS.REQUEST_MEDIA_FILE,
+      MAIN_VIEW_COMMANDS.REQUEST_RECENT_COMMITS,
+      MAIN_VIEW_COMMANDS.REQUEST_BASE_FILE,
     ];
     dataRequests.forEach((request) => {
       vscode.postMessage({ command: request });
@@ -210,7 +222,7 @@ export class MainViewMessageHandler {
     const agentElement = this._getElement('agent');
     if (agentElement && agentElement.value) {
       vscode.postMessage({
-        command: 'requestDefaultOutputFiles',
+        command: MAIN_VIEW_COMMANDS.REQUEST_DEFAULT_OUTPUT_FILES,
         agent: agentElement.value,
       });
     }
@@ -367,7 +379,7 @@ export class MainViewMessageHandler {
     if (instruction && message.text) {
       instruction.value = message.text;
       vscode.postMessage({
-        command: 'showInformationMessage',
+        command: MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE,
         text: 'Instruction text has been polished!',
       });
       mainViewState.save();
@@ -387,7 +399,7 @@ export class MainViewMessageHandler {
       instruction.setSelectionRange(newCursorPos, newCursorPos);
       instruction.focus();
       vscode.postMessage({
-        command: 'showInformationMessage',
+        command: MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE,
         text: 'Instruction text transcribed!',
       });
       mainViewState.save();
