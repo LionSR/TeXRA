@@ -7,7 +7,7 @@ import { StreamTabs } from './uiManagers/StreamTabs.js';
 import { Toolbar } from './uiManagers/Toolbar.js';
 import { Status } from './uiManagers/Status.js';
 import { FileList } from './uiManagers/FileList.js';
-import { Events } from './uiManagers/Events.js';
+import { EventsManager } from './uiManagers/EventsManager.js';
 
 /**
  * Manages all DOM operations for the progress view.
@@ -23,7 +23,7 @@ export class ProgressViewDomHandler {
     this.fileList = new FileList(this.usageSummary); // Pass shared instance
     this.taskGroups = new TaskGroupManager();
     this.logEntries = new LogEntryManager();
-    this.events = new Events();
+    this.events = new EventsManager();
   }
 }
 
