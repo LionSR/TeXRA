@@ -8,11 +8,12 @@ import { mainViewState } from '../mainViewState.js';
 import { fileList } from './FileList.js';
 import { fileSelect } from './FileSelect.js';
 import { createFromTemplate } from '@common/templateUtils.js';
+import { INPUT_FILE, ELEMENT_IDS } from '../constants.js';
 
-const INPUT_FILE_ID = 'inputFile';
-const OUTPUT_FILES_ID = 'outputFiles';
-const OUTPUT_FILES_CONTAINER_ID = 'outputFilesContainer';
-const TOGGLE_OUTPUT_FILES_ID = 'toggleOutputFiles';
+const INPUT_FILE_ID = INPUT_FILE;
+const OUTPUT_FILES_ID = ELEMENT_IDS.OUTPUT_FILES;
+const OUTPUT_FILES_CONTAINER_ID = ELEMENT_IDS.OUTPUT_FILES_CONTAINER;
+const TOGGLE_OUTPUT_FILES_ID = ELEMENT_IDS.TOGGLE_OUTPUT_FILES;
 
 /**
  * Manages output files UI logic.
