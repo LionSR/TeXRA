@@ -42,7 +42,7 @@ export async function activate(context: vscode.ExtensionContext) {
   // Configure LaTeX settings if LaTeX Workshop is installed
   configureLatexSettings();
 
-  // Register commands first - this will create and store the TeXRAViewProvider
+  // Register commands first - this will create and store the MainViewProvider
   registerCommands(context);
 
   // Register the folder explorer with context
