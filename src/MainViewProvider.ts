@@ -8,7 +8,7 @@ import { SecretManager } from '@frontend/secretManager';
 import { watchConfig } from '@utils/config';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
 
-export class TeXRAViewProvider implements vscode.WebviewViewProvider {
+export class MainViewProvider implements vscode.WebviewViewProvider {
   private messageHandler: MainViewMessageHandler;
   private contentProvider: MainViewContentProvider;
   private fileWatcher: vscode.FileSystemWatcher | undefined;
@@ -27,7 +27,7 @@ export class TeXRAViewProvider implements vscode.WebviewViewProvider {
 
   private registerCommandHandlers() {
     // Only register commands if they haven't been registered yet
-    if (!TeXRAViewProvider.commandsRegistered) {
+    if (!MainViewProvider.commandsRegistered) {
       // Create a promise to check if the command exists and register if it doesn't
       const registerCommandPromise = vscode.commands
         .getCommands(true)
@@ -38,10 +38,10 @@ export class TeXRAViewProvider implements vscode.WebviewViewProvider {
                 return this.webviewView;
               }),
             );
-            TeXRAViewProvider.commandsRegistered = true;
+            MainViewProvider.commandsRegistered = true;
             return true;
           }
-          TeXRAViewProvider.commandsRegistered = true;
+          MainViewProvider.commandsRegistered = true;
           return false;
         });
 
