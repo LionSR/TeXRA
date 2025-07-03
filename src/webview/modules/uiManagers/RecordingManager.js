@@ -5,7 +5,7 @@ import {
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
 import { ELEMENT_IDS } from '../constants.js';
 import { webviewEventBus } from '../eventBus.js';
-import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
+import { createFromTemplate } from '@common/templateUtils.js';
 
 export class RecordingManager {
   constructor(vscode, eventBus = webviewEventBus) {
@@ -20,15 +20,18 @@ export class RecordingManager {
       ELEMENT_IDS.RECORD_INSTRUCTION_BUTTON,
     );
     if (recordButton) {
-      if (recording) {
-        recordButton.innerHTML = '<i class="codicon codicon-stop-circle"></i>';
-        recordButton.title = 'Stop recording';
-        recordButton.classList.add('recording');
-      } else {
-        recordButton.innerHTML = '<i class="codicon codicon-mic"></i>';
-        recordButton.title = 'Record instruction with microphone';
-        recordButton.classList.remove('recording');
-      }
+      recordButton.innerHTML = '';
+      const iconClass = recording
+        ? 'codicon codicon-stop-circle'
+        : 'codicon codicon-mic';
+      const icon = createFromTemplate('codiconTemplate', {
+        attributes: { '': { class: iconClass } },
+      });
+      if (icon) recordButton.appendChild(icon);
+      recordButton.title = recording
+        ? 'Stop recording'
+        : 'Record instruction with microphone';
+      recordButton.classList.toggle('recording', recording);
     }
   }
 
