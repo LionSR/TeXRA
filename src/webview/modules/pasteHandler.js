@@ -1,5 +1,8 @@
 // Image paste handling utilities
 
+// Import standardized commands
+import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
+
 // Comprehensive MIME type to extension mapping
 export const IMAGE_MIME_TYPES = {
   'image/jpeg': 'jpg',
@@ -66,7 +69,7 @@ export async function processClipboardImage(file, mimeType, vscode) {
         const base64 = result.split(',')[1];
         if (base64) {
           vscode.postMessage({
-            command: 'clipboardImage',
+            command: MAIN_VIEW_COMMANDS.CLIPBOARD_IMAGE,
             base64,
             mediaType: mimeType,
             fileName,
@@ -83,7 +86,7 @@ export async function processClipboardImage(file, mimeType, vscode) {
     reader.onerror = () => {
       console.error(`Failed to read file: ${fileName}`);
       vscode.postMessage({
-        command: 'showInformationMessage',
+        command: MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE,
         text: `Failed to process pasted image: ${fileName}`,
       });
       resolve(null);
