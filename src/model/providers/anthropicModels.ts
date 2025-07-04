@@ -18,6 +18,7 @@ const ANTHROPIC_DEFAULT_CAPABILITIES: ModelCapabilities = {
   supportsPromptCaching: true,
   cacheDiscountFactor: 0.1,
   supportsTokenCounting: true,
+  supportsVision: true,
   supportsNativePdf: true,
   supportsNativeMCPServer: false, // Set explicitly, overridden per model
   supportsNativeWebSearch: false, // Set explicitly, overridden per model
