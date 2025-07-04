@@ -1,10 +1,5 @@
 // Local imports - webview context
-import {
-  vscode,
-  registerMessageHandlers,
-  CHEVRON_UP_CLASS,
-  CHEVRON_DOWN_CLASS,
-} from '@common/webviewContext.js';
+import { vscode, registerMessageHandlers } from '@common/webviewContext.js';
 import { safeSetElementValue, safeGetElementById } from '@common/domUtils.js';
 import { capitalize, uncapitalize } from '@common/stringUtils.js';
 import { createCodicon, createFromTemplate } from '@common/templateUtils.js';
@@ -168,9 +163,7 @@ export class MainViewMessageHandler {
   _setToggleIcon(element, isVisible) {
     if (!element) return;
     element.innerHTML = '';
-    const icon = createCodicon(
-      isVisible ? CHEVRON_UP_CLASS : CHEVRON_DOWN_CLASS,
-    );
+    const icon = createCodicon(isVisible ? 'chevron-up' : 'chevron-down');
     if (icon) element.appendChild(icon);
   }
 
