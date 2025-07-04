@@ -1,9 +1,6 @@
 // Local imports
 import { safeGetElementById } from '@common/domUtils.js';
-import {
-  CHEVRON_UP_CLASS,
-  CHEVRON_DOWN_CLASS,
-} from '@common/webviewContext.js';
+import { setChevronIcon } from '@common/templateUtils.js';
 import { mainViewState } from '../mainViewState.js';
 import { ELEMENT_IDS } from '../constants.js';
 
@@ -32,9 +29,7 @@ export class LatexdiffManager {
 
       const iconElement = toggleIcon.querySelector(ICON_SELECTOR);
       if (iconElement) {
-        iconElement.className = shouldShow
-          ? CHEVRON_UP_CLASS
-          : CHEVRON_DOWN_CLASS;
+        setChevronIcon(iconElement, shouldShow);
       }
     }
   }
@@ -50,7 +45,7 @@ export class LatexdiffManager {
 
     const iconElement = toggleIcon.querySelector(ICON_SELECTOR);
     if (iconElement) {
-      iconElement.className = isVisible ? CHEVRON_DOWN_CLASS : CHEVRON_UP_CLASS;
+      setChevronIcon(iconElement, !isVisible);
     }
 
     this.state.update({ latexdiffsVisible: !isVisible });

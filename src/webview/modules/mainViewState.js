@@ -8,10 +8,7 @@ import {
   ELEMENT_IDS,
 } from './constants.js';
 import { fileList } from './uiManagers/FileList.js';
-import {
-  CHEVRON_UP_CLASS,
-  CHEVRON_DOWN_CLASS,
-} from '@common/webviewContext.js';
+import { setChevronIcon } from '@common/templateUtils.js';
 import {
   safeGetElementValue,
   safeGetElementById,
@@ -51,7 +48,8 @@ export class MainViewState {
     );
     if (autoExtractToggle && autoExtractOptions) {
       autoExtractToggle.classList.remove('active');
-      autoExtractToggle.innerHTML = `<i class="codicon codicon-wand"></i><i class="${CHEVRON_DOWN_CLASS}"></i>`;
+      autoExtractToggle.innerHTML = '<i class="codicon codicon-wand"></i>';
+      setChevronIcon(autoExtractToggle, false);
       autoExtractOptions.style.display = 'none';
     }
 
@@ -70,7 +68,8 @@ export class MainViewState {
     const toggleLatexdiffs = safeGetElementById(ELEMENT_IDS.TOGGLE_LATEXDIFFS);
     if (latexdiffsContent && toggleLatexdiffs) {
       latexdiffsContent.style.display = 'none';
-      toggleLatexdiffs.innerHTML = `<i class="${CHEVRON_DOWN_CLASS}"></i>`;
+      toggleLatexdiffs.innerHTML = '';
+      setChevronIcon(toggleLatexdiffs, false);
     }
 
     this.save();
@@ -101,7 +100,8 @@ export class MainViewState {
       );
       if (autoExtractToggle && autoExtractOptions) {
         autoExtractToggle.classList.toggle('active', hasAutoExtractChecked);
-        autoExtractToggle.innerHTML = `<i class="codicon codicon-wand"></i><i class="${CHEVRON_DOWN_CLASS}"></i>`;
+        autoExtractToggle.innerHTML = '<i class="codicon codicon-wand"></i>';
+        setChevronIcon(autoExtractToggle, false);
         autoExtractOptions.style.display = 'none';
       }
 
@@ -116,7 +116,8 @@ export class MainViewState {
       );
       if (toggleToolConfig && toolConfigOptions) {
         toggleToolConfig.classList.toggle('active', hasToolConfigChecked);
-        toggleToolConfig.innerHTML = `<i class="codicon codicon-tools"></i><i class="${CHEVRON_DOWN_CLASS}"></i>`;
+        toggleToolConfig.innerHTML = '<i class="codicon codicon-tools"></i>';
+        setChevronIcon(toggleToolConfig, false);
         toolConfigOptions.style.display = 'none';
       }
 
@@ -155,9 +156,8 @@ export class MainViewState {
       if (latexdiffsContent && toggleLatexdiffs) {
         const visible = previousState.latexdiffsVisible ?? false;
         latexdiffsContent.style.display = visible ? 'block' : 'none';
-        toggleLatexdiffs.innerHTML = `<i class="${
-          visible ? CHEVRON_UP_CLASS : CHEVRON_DOWN_CLASS
-        }"></i>`;
+        toggleLatexdiffs.innerHTML = '';
+        setChevronIcon(toggleLatexdiffs, visible);
       }
     } else {
       this.setDefaults();

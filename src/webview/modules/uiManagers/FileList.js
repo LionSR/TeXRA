@@ -3,12 +3,8 @@ import {
   addEventListenerSafely,
   safeGetElementById,
 } from '@common/domUtils.js';
-import {
-  CHEVRON_UP_CLASS,
-  CHEVRON_DOWN_CLASS,
-} from '@common/webviewContext.js';
 import { capitalize } from '@common/stringUtils.js';
-import { createFromTemplate } from '@common/templateUtils.js';
+import { createFromTemplate, setChevronIcon } from '@common/templateUtils.js';
 
 /**
  * Handles multi-file list DOM updates.
@@ -67,10 +63,7 @@ export class FileList {
       newFiles.forEach((file) => this.add(listId, file));
       listDiv.style.display = 'block';
       toggleIcon.innerHTML = '';
-      const icon = createFromTemplate('codiconTemplate', {
-        attributes: { '': { class: CHEVRON_UP_CLASS } },
-      });
-      if (icon) toggleIcon.appendChild(icon);
+      setChevronIcon(toggleIcon, true);
 
       const container = safeGetElementById(`${listId}Container`);
       if (container) {
@@ -93,12 +86,7 @@ export class FileList {
     if (!container || !toggleIcon) return;
     container.style.display = isVisible ? 'block' : 'none';
     toggleIcon.innerHTML = '';
-    const icon = createFromTemplate('codiconTemplate', {
-      attributes: {
-        '': { class: isVisible ? CHEVRON_UP_CLASS : CHEVRON_DOWN_CLASS },
-      },
-    });
-    if (icon) toggleIcon.appendChild(icon);
+    setChevronIcon(toggleIcon, isVisible);
   }
 
   /** Toggle visibility of a file list container */
@@ -121,10 +109,7 @@ export class FileList {
     const toggleIconDiv = safeGetElementById(toggleId);
     if (toggleIconDiv) {
       toggleIconDiv.innerHTML = '';
-      const icon = createFromTemplate('codiconTemplate', {
-        attributes: { '': { class: CHEVRON_DOWN_CLASS } },
-      });
-      if (icon) toggleIconDiv.appendChild(icon);
+      setChevronIcon(toggleIconDiv, false);
     }
     this._saveFn();
   }

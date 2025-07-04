@@ -81,13 +81,14 @@ export function createIconButton({
 export function setChevronIcon(element, expanded) {
   if (!element) return;
   const iconClass = expanded ? CHEVRON_UP_CLASS : CHEVRON_DOWN_CLASS;
-  const iconEl =
-    element.tagName.toLowerCase() === 'i'
-      ? element
-      : element.querySelector('i') || document.createElement('i');
-  iconEl.className = iconClass;
-  if (!element.contains(iconEl)) {
-    element.innerHTML = '';
-    element.appendChild(iconEl);
+
+  if (element.tagName?.toLowerCase() === 'i') {
+    element.className = iconClass;
+    return;
   }
+
+  const chevron =
+    element.querySelector('i[class*="codicon-chevron-"]') ||
+    element.appendChild(document.createElement('i'));
+  chevron.className = iconClass;
 }
