@@ -76,3 +76,14 @@ export function createIconButton({
   });
   return element;
 }
+
+/**
+ * Create a codicon element from the shared template.
+ * @param {string} iconName - Icon name such as 'mic' or 'chevron-up'.
+ * @returns {HTMLElement|null} The codicon element or null if template missing.
+ */
+export function createCodicon(iconName) {
+  return createFromTemplate('codiconTemplate', {
+    attributes: { '': { class: `codicon codicon-${iconName}` } },
+  });
+}

@@ -4,7 +4,8 @@ import {
 } from '@common/domUtils.js';
 import { ELEMENT_IDS } from '../constants.js';
 import { webviewEventBus } from '../eventBus.js';
-import { createFromTemplate } from '@common/templateUtils.js';
+import { createCodicon } from '@common/templateUtils.js';
+import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
 
 export class RecordingManager {
   constructor(vscode, eventBus = webviewEventBus) {
@@ -20,12 +21,8 @@ export class RecordingManager {
     );
     if (recordButton) {
       recordButton.innerHTML = '';
-      const iconClass = recording
-        ? 'codicon codicon-stop-circle'
-        : 'codicon codicon-mic';
-      const icon = createFromTemplate('codiconTemplate', {
-        attributes: { '': { class: iconClass } },
-      });
+      const iconName = recording ? 'stop-circle' : 'mic';
+      const icon = createCodicon(iconName);
       if (icon) recordButton.appendChild(icon);
       recordButton.title = recording
         ? 'Stop recording'

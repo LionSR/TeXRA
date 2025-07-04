@@ -6,7 +6,7 @@ import {
 } from '@common/domUtils.js';
 import { historyViewState } from '../historyViewState.js';
 import { COMMANDS, ELEMENT_IDS, CLASS_NAMES, LABELS } from '../constants.js';
-import { createFromTemplate } from '@common/templateUtils.js';
+import { createFromTemplate, createCodicon } from '@common/templateUtils.js';
 
 /**
  * Renders history items and manages per-item events.
@@ -154,8 +154,9 @@ export class HistoryRenderer {
     }
 
     if (config.toolConfig) {
+      const toolsIcon = createCodicon('tools');
       detailsHTML += this._renderToolConfig(
-        '<i class="codicon codicon-tools"></i> Config',
+        `${toolsIcon ? toolsIcon.outerHTML : ''} Config`,
         config.toolConfig,
       );
     }
