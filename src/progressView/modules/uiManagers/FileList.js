@@ -2,6 +2,7 @@
 import { formatTokens } from '../formatters.js';
 import { COMMANDS, ELEMENT_IDS } from '../constants.js';
 import { vscode } from '@common/webviewContext.js';
+import { createFromTemplate } from '@common/templateUtils.js';
 
 /**
  * Manages file list rendering.
@@ -83,15 +84,10 @@ export class FileList {
       const files = filesByRound[round];
       if (!files || files.length === 0) return;
 
-      // Create round group container
-      const roundGroup = document.createElement('div');
-      roundGroup.className = 'round-group';
-
-      // Create round header
-      const roundHeader = document.createElement('div');
-      roundHeader.className = 'round-header';
-      roundHeader.textContent = `r${round}`;
-      roundGroup.appendChild(roundHeader);
+      const roundGroup = createFromTemplate('roundHeaderTemplate');
+      if (!roundGroup) return;
+      const roundHeader = roundGroup.querySelector('.round-header');
+      if (roundHeader) roundHeader.textContent = `r${round}`;
 
       files.forEach((file) => {
         // Skip invalid file entries
