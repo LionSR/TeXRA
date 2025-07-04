@@ -1,13 +1,10 @@
 // Local imports
 import { safeGetElementById } from '@common/domUtils.js';
-import {
-  CHEVRON_UP_CLASS,
-  CHEVRON_DOWN_CLASS,
-} from '@common/webviewContext.js';
+
 import { mainViewState } from '../mainViewState.js';
 import { fileList } from './FileList.js';
 import { fileSelect } from './FileSelect.js';
-import { createFromTemplate } from '@common/templateUtils.js';
+import { createCodicon } from '@common/templateUtils.js';
 import { INPUT_FILE, ELEMENT_IDS } from '../constants.js';
 
 const INPUT_FILE_ID = INPUT_FILE;
@@ -92,11 +89,7 @@ export class OutputFilesManager {
 
       container.style.display = shouldShow ? 'block' : 'none';
       toggleIcon.innerHTML = '';
-      const icon = createFromTemplate('codiconTemplate', {
-        attributes: {
-          '': { class: shouldShow ? CHEVRON_UP_CLASS : CHEVRON_DOWN_CLASS },
-        },
-      });
+      const icon = createCodicon(shouldShow ? 'chevron-up' : 'chevron-down');
       if (icon) toggleIcon.appendChild(icon);
     }
   }
