@@ -154,7 +154,7 @@ export class HistoryRenderer {
     }
 
     if (config.toolConfig) {
-      const toolsIcon = createCodicon('codicon-tools');
+      const toolsIcon = createCodicon('tools');
       detailsHTML += this._renderToolConfig(
         `${toolsIcon ? toolsIcon.outerHTML : ''} Config`,
         config.toolConfig,

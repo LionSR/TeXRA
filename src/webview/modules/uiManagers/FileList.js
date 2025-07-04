@@ -3,10 +3,6 @@ import {
   addEventListenerSafely,
   safeGetElementById,
 } from '@common/domUtils.js';
-import {
-  CHEVRON_UP_CLASS,
-  CHEVRON_DOWN_CLASS,
-} from '@common/webviewContext.js';
 import { capitalize } from '@common/stringUtils.js';
 import { createCodicon, createFromTemplate } from '@common/templateUtils.js';
 
@@ -67,7 +63,7 @@ export class FileList {
       newFiles.forEach((file) => this.add(listId, file));
       listDiv.style.display = 'block';
       toggleIcon.innerHTML = '';
-      const icon = createCodicon(CHEVRON_UP_CLASS);
+      const icon = createCodicon('chevron-up');
       if (icon) toggleIcon.appendChild(icon);
 
       const container = safeGetElementById(`${listId}Container`);
@@ -91,9 +87,7 @@ export class FileList {
     if (!container || !toggleIcon) return;
     container.style.display = isVisible ? 'block' : 'none';
     toggleIcon.innerHTML = '';
-    const icon = createCodicon(
-      isVisible ? CHEVRON_UP_CLASS : CHEVRON_DOWN_CLASS,
-    );
+    const icon = createCodicon(isVisible ? 'chevron-up' : 'chevron-down');
     if (icon) toggleIcon.appendChild(icon);
   }
 
@@ -117,7 +111,7 @@ export class FileList {
     const toggleIconDiv = safeGetElementById(toggleId);
     if (toggleIconDiv) {
       toggleIconDiv.innerHTML = '';
-      const icon = createCodicon(CHEVRON_DOWN_CLASS);
+      const icon = createCodicon('chevron-down');
       if (icon) toggleIconDiv.appendChild(icon);
     }
     this._saveFn();
