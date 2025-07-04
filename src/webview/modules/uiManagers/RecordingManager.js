@@ -21,8 +21,8 @@ export class RecordingManager {
     );
     if (recordButton) {
       recordButton.innerHTML = '';
-      const iconClass = recording ? 'codicon-stop-circle' : 'codicon-mic';
-      const icon = createCodicon(iconClass);
+      const iconName = recording ? 'stop-circle' : 'mic';
+      const icon = createCodicon(iconName);
       if (icon) recordButton.appendChild(icon);
       recordButton.title = recording
         ? 'Stop recording'
