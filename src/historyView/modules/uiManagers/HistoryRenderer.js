@@ -97,13 +97,13 @@ export class HistoryRenderer {
     }
 
     const addBasic = (label, value) => {
-      const row = createFromTemplate('basicDetailTemplate');
-      if (!row) return;
-      const labelEl = row.querySelector('.history-label');
-      const valueEl = row.querySelector('.history-value');
-      if (labelEl) labelEl.textContent = label;
-      if (valueEl) valueEl.textContent = String(value);
-      basicDetails.appendChild(row);
+      const row = createFromTemplate('basicDetailTemplate', {
+        text: {
+          '.history-label': label,
+          '.history-value': String(value),
+        },
+      });
+      if (row) basicDetails.appendChild(row);
     };
 
     addBasic('Agent:', config.agent);
@@ -128,13 +128,13 @@ export class HistoryRenderer {
     });
 
     const addExtra = (label, value) => {
-      const row = createFromTemplate('extraDetailTemplate');
-      if (!row) return;
-      const labelEl = row.querySelector('.history-label');
-      const valueEl = row.querySelector('.history-value');
-      if (labelEl) labelEl.textContent = label;
-      if (valueEl) valueEl.textContent = String(value);
-      detailsContainer.appendChild(row);
+      const row = createFromTemplate('extraDetailTemplate', {
+        text: {
+          '.history-label': label,
+          '.history-value': String(value),
+        },
+      });
+      if (row) detailsContainer.appendChild(row);
     };
 
     const extraFileTypes = [
@@ -190,11 +190,11 @@ export class HistoryRenderer {
     });
     if (entries.length === 0) return null;
 
-    const row = createFromTemplate('extraDetailTemplate');
+    const row = createFromTemplate('extraDetailTemplate', {
+      text: { '.history-label': label },
+    });
     if (!row) return null;
-    const labelEl = row.querySelector('.history-label');
     const valueEl = row.querySelector('.history-value');
-    if (labelEl) labelEl.innerHTML = label;
     if (!valueEl) return row;
 
     const section = document.createElement('div');
@@ -204,7 +204,7 @@ export class HistoryRenderer {
       item.className = 'config-item';
       const keySpan = document.createElement('span');
       keySpan.className = 'config-key';
-      keySpan.textContent = `${key}:`;
+      keySpan.textContent = `${key}: `;
       item.appendChild(keySpan);
       const display = Array.isArray(value)
         ? value.join(', ')
@@ -227,13 +227,13 @@ export class HistoryRenderer {
       const btn = e.target.closest('button[data-command]');
       if (btn) {
         const command = btn.dataset.command;
-        const historyId = btn.getAttribute('data-id');
+        const historyId = btn.dataset.id;
         vscode.postMessage({ command, historyId });
         return;
       }
       const toggle = e.target.closest(`.${CLASS_NAMES.TOGGLE_BUTTON}`);
       if (toggle) {
-        const id = toggle.getAttribute('data-id');
+        const id = toggle.dataset.id;
         const content = safeGetElementById(`content-${id}`);
         if (!content) return;
         const expanded = content.classList.toggle(CLASS_NAMES.EXPANDED);
