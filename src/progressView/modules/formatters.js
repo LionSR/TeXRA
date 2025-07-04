@@ -98,7 +98,7 @@ export class LogEntryFormatter {
 
   _initializeMarkdown() {
     this.md = new MarkdownIt({
-      breaks: true,
+      breaks: false,
       linkify: true,
       html: false,
     }).use(markdownItKatex, {
