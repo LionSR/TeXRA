@@ -603,6 +603,7 @@
             "type": "string",
             "default": "sonnet37",
             "enum": [
+              "sonnet4T",
               "sonnet37",
               "sonnet35",
               "gemini25p",
@@ -618,6 +619,7 @@
               "Kimiv"
             ],
             "enumDescriptions": [
+              "Claude Sonnet 4T",
               "Claude Sonnet 3.7",
               "Claude Sonnet 3.5",
               "Gemini 2.5 Pro",
