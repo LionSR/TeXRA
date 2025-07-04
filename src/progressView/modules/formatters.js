@@ -1,6 +1,6 @@
 // Third-party imports
-import { marked } from 'marked';
-import markedKatex from 'marked-katex-extension';
+import MarkdownIt from 'markdown-it';
+import markdownItKatex from '@vscode/markdown-it-katex';
 // Local imports
 import { katexMacros } from './katexMacros.js';
 import {
@@ -97,20 +97,15 @@ export class LogEntryFormatter {
   }
 
   _initializeMarkdown() {
-    marked.setOptions({
+    this.md = new MarkdownIt({
       breaks: true,
-      gfm: true,
-      mangle: false,
-      headerIds: false,
+      linkify: true,
+      html: false,
+    }).use(markdownItKatex, {
+      throwOnError: false,
+      errorColor: '#cc0000',
+      macros: katexMacros,
     });
-
-    marked.use(
-      markedKatex({
-        throwOnError: false,
-        errorColor: '#cc0000',
-        macros: katexMacros,
-      }),
-    );
   }
 
   /**
@@ -198,7 +193,7 @@ export class LogEntryFormatter {
       content = content.replace(/\\\\eqref\{([^}]+)\}/g, '@@LATEX-EQREF:$1@@');
 
       // Process content as markdown
-      let parsedMarkdown = marked.parse(content);
+      let parsedMarkdown = this.md.render(content);
 
       // Post-process to restore and style LaTeX references
       parsedMarkdown = parsedMarkdown.replace(
