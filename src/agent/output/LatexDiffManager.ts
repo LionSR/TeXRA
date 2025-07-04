@@ -34,11 +34,16 @@ export class LatexDiffManager {
       );
     } else {
       if (result.message && result.message.includes('document environment')) {
-        this.logger.debug(`Skipping ${operation}: ${result.message}`, groupId);
+        this.logger.debug(
+          `Skipping ${operation}: ${result.message}`,
+          groupId,
+          MESSAGE_TYPES.INTERNAL,
+        );
       } else {
         this.logger.warn(
           `Failed to generate ${operation}: ${result.message}`,
           groupId,
+          MESSAGE_TYPES.INTERNAL,
         );
       }
     }
@@ -54,6 +59,7 @@ export class LatexDiffManager {
       revised: string;
       output: string;
       status: 'success' | 'error';
+      message?: string;
     }> = [];
 
     try {
@@ -117,6 +123,7 @@ export class LatexDiffManager {
               ? path.join(path.dirname(baseFile), result.diffFileName)
               : '',
             status: result.success ? 'success' : 'error',
+            message: result.success ? undefined : result.message,
           });
           if (result.success && result.diffFileName) {
             const diffPath = path.join(
@@ -179,6 +186,7 @@ export class LatexDiffManager {
               ? path.join(path.dirname(prevOutputFile), result.diffFileName)
               : '',
             status: result.success ? 'success' : 'error',
+            message: result.success ? undefined : result.message,
           });
           if (result.success && result.diffFileName) {
             const diffPath = path.join(
