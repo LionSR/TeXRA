@@ -28,15 +28,24 @@ export class HistoryRenderer {
     clearButtonContainer.innerHTML = '';
 
     if (!historyItems || historyItems.length === 0) {
-      historyContainer.innerHTML = `<div class="empty-state">${LABELS.EMPTY_STATE}</div>`;
+      const placeholder = createFromTemplate('emptyStateTemplate', {
+        text: { '': LABELS.EMPTY_STATE },
+      });
+      if (placeholder) historyContainer.appendChild(placeholder);
       this.searchManager.initialize(historyContainer);
       return;
     }
 
-    clearButtonContainer.innerHTML = `<button class="vscode-button button-clear" id="${ELEMENT_IDS.CLEAR_HISTORY_BTN}">${LABELS.CLEAR_ALL_HISTORY}</button>`;
-    addEventListenerSafely(ELEMENT_IDS.CLEAR_HISTORY_BTN, 'click', () => {
-      vscode.postMessage({ command: COMMANDS.CLEAR_HISTORY });
+    const clearBtn = createFromTemplate('clearHistoryButtonTemplate', {
+      text: { '': LABELS.CLEAR_ALL_HISTORY },
+      attributes: { '': { id: ELEMENT_IDS.CLEAR_HISTORY_BTN } },
     });
+    if (clearBtn) {
+      clearButtonContainer.appendChild(clearBtn);
+      addEventListenerSafely(ELEMENT_IDS.CLEAR_HISTORY_BTN, 'click', () => {
+        vscode.postMessage({ command: COMMANDS.CLEAR_HISTORY });
+      });
+    }
 
     const sorted = [...historyItems].sort(
       (a, b) => new Date(b.timestamp) - new Date(a.timestamp),
@@ -87,13 +96,19 @@ export class HistoryRenderer {
       return document.createElement('div');
     }
 
-    let basicHTML = `
-      <span class="history-label">Agent:</span>
-      <span class="history-value">${config.agent}</span>
-      <span class="history-label">Model:</span>
-      <span class="history-value">${config.model}</span>
-      <span class="history-label">Instruction:</span>
-      <span class="history-value">${config.instruction || 'None'}</span>`;
+    const addBasic = (label, value) => {
+      const row = createFromTemplate('basicDetailTemplate');
+      if (!row) return;
+      const labelEl = row.querySelector('.history-label');
+      const valueEl = row.querySelector('.history-value');
+      if (labelEl) labelEl.textContent = label;
+      if (valueEl) valueEl.textContent = String(value);
+      basicDetails.appendChild(row);
+    };
+
+    addBasic('Agent:', config.agent);
+    addBasic('Model:', config.model);
+    addBasic('Instruction:', config.instruction || 'None');
 
     const basicFileTypes = [
       { type: 'input', singular: 'InputFile', plural: 'InputFiles' },
@@ -103,23 +118,25 @@ export class HistoryRenderer {
       const single = config[`${type}File`];
       const multiple = config[`${type}Files`];
       if (single) {
-        basicHTML += `
-          <span class="history-label">${singular}:</span>
-          <span class="history-value">${single}</span>`;
+        addBasic(`${singular}:`, single);
       } else if (type === 'input') {
-        basicHTML += `
-          <span class="history-label">${singular}:</span>
-          <span class="history-value">None</span>`;
+        addBasic(`${singular}:`, 'None');
       }
       if (multiple && multiple.length > 0) {
-        basicHTML += `
-          <span class="history-label">${plural}:</span>
-          <span class="history-value">${multiple.join(', ')}</span>`;
+        addBasic(`${plural}:`, multiple.join(', '));
       }
     });
-    basicDetails.innerHTML = basicHTML;
 
-    let detailsHTML = '';
+    const addExtra = (label, value) => {
+      const row = createFromTemplate('extraDetailTemplate');
+      if (!row) return;
+      const labelEl = row.querySelector('.history-label');
+      const valueEl = row.querySelector('.history-value');
+      if (labelEl) labelEl.textContent = label;
+      if (valueEl) valueEl.textContent = String(value);
+      detailsContainer.appendChild(row);
+    };
+
     const extraFileTypes = [
       {
         type: 'reference',
@@ -136,33 +153,26 @@ export class HistoryRenderer {
       const single = config[`${type}File`];
       const multiple = config[`${type}Files`];
       if (single) {
-        detailsHTML += `
-          <span class="history-label">${singular}:</span>
-          <span class="history-value">${single}</span>`;
+        addExtra(`${singular}:`, single);
       }
       if (multiple && multiple.length > 0) {
-        detailsHTML += `
-          <span class="history-label">${plural}:</span>
-          <span class="history-value">${multiple.join(', ')}</span>`;
+        addExtra(`${plural}:`, multiple.join(', '));
       }
     });
 
     if (config.outputFiles && config.outputFiles.length > 0) {
-      detailsHTML += `
-        <span class="history-label">Output Files:</span>
-        <span class="history-value">${config.outputFiles.join(', ')}</span>`;
+      addExtra('Output Files:', config.outputFiles.join(', '));
     }
 
     if (config.toolConfig) {
-      detailsHTML += this._renderToolConfig(
+      const configRow = this._renderToolConfig(
         '<i class="codicon codicon-tools"></i> Config',
         config.toolConfig,
       );
+      if (configRow) detailsContainer.appendChild(configRow);
     }
 
-    if (detailsHTML) {
-      detailsContainer.innerHTML = detailsHTML;
-    } else {
+    if (detailsContainer.childElementCount === 0) {
       collapsible.remove();
       toggleButton.remove();
     }
@@ -171,18 +181,31 @@ export class HistoryRenderer {
   }
 
   _renderToolConfig(label, obj, exclude = []) {
-    if (!obj) return '';
+    if (!obj) return null;
     const entries = Object.entries(obj).filter(([key, value]) => {
       if (exclude.includes(key)) return false;
       if (value == null) return false;
       if (Array.isArray(value) && value.length === 0) return false;
       return true;
     });
-    if (entries.length === 0) return '';
-    let html = `
-      <span class="history-label">${label}:</span>
-      <div class="history-value config-section">`;
+    if (entries.length === 0) return null;
+
+    const row = createFromTemplate('extraDetailTemplate');
+    if (!row) return null;
+    const labelEl = row.querySelector('.history-label');
+    const valueEl = row.querySelector('.history-value');
+    if (labelEl) labelEl.innerHTML = label;
+    if (!valueEl) return row;
+
+    const section = document.createElement('div');
+    section.className = 'config-section';
     entries.forEach(([key, value]) => {
+      const item = document.createElement('div');
+      item.className = 'config-item';
+      const keySpan = document.createElement('span');
+      keySpan.className = 'config-key';
+      keySpan.textContent = `${key}:`;
+      item.appendChild(keySpan);
       const display = Array.isArray(value)
         ? value.join(', ')
         : typeof value === 'boolean'
@@ -190,10 +213,11 @@ export class HistoryRenderer {
             ? 'Yes'
             : 'No'
           : value;
-      html += `<div class="config-item"><span class="config-key">${key}:</span> ${display}</div>`;
+      item.appendChild(document.createTextNode(display));
+      section.appendChild(item);
     });
-    html += `</div>`;
-    return html;
+    valueEl.appendChild(section);
+    return row;
   }
 
   setupItemEventListeners() {
