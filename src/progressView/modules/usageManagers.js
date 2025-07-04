@@ -2,6 +2,7 @@
 import { progressViewState } from './progressViewState.js';
 import { formatTokens, BULLET_MARKUP, TaskGroupLevel } from './formatters.js';
 import { ELEMENT_IDS } from './constants.js';
+import { createFromTemplate } from '@common/templateUtils.js';
 
 /**
  * Manages usage summary display.
@@ -89,9 +90,11 @@ export class UsageGroup {
     // Find or create usage display element in the group header
     let usageElem = groupHeader.querySelector('.group-usage');
     if (!usageElem) {
-      usageElem = document.createElement('span');
-      usageElem.className = 'group-usage';
-
+      usageElem = createFromTemplate('usageTemplate');
+      if (!usageElem) {
+        console.error('UsageGroup.update: usageTemplate not found');
+        return;
+      }
       // Determine the group level by checking for the 'top-level' class
       const level = groupHeader.classList.contains('top-level')
         ? TaskGroupLevel.ROOT
@@ -99,16 +102,23 @@ export class UsageGroup {
       this.insertUsageElement(groupHeader, usageElem, level);
     }
 
+    if (!usageElem) return;
+
+    const inputEl = usageElem.querySelector('.usage-input');
+    const outputEl = usageElem.querySelector('.usage-output');
+    const costEl = usageElem.querySelector('.usage-cost');
+
     if (!usage) {
-      usageElem.textContent = '';
+      if (inputEl) inputEl.textContent = '';
+      if (outputEl) outputEl.textContent = '';
+      if (costEl) costEl.textContent = '';
       return;
     }
 
     const { inputTokens = 0, outputTokens = 0, cost = 0 } = usage;
-    usageElem.innerHTML =
-      `<i class="codicon codicon-arrow-up"></i> ${formatTokens(inputTokens)}, ` +
-      `<i class="codicon codicon-arrow-down"></i> ${formatTokens(outputTokens)}, ` +
-      `$${cost.toFixed(3)}`;
+    if (inputEl) inputEl.textContent = formatTokens(inputTokens);
+    if (outputEl) outputEl.textContent = formatTokens(outputTokens);
+    if (costEl) costEl.textContent = cost.toFixed(3);
 
     // Persist usage on the group state so the summary can be computed
     const group = progressViewState.taskGroups.get(groupId);
@@ -182,29 +192,37 @@ export class UsageGroup {
 
     let bulletElem = groupHeader.querySelector('.group-bullet');
     if (!bulletElem) {
-      const tmpl = document.createElement('template');
-      tmpl.innerHTML = BULLET_MARKUP;
-      bulletElem = tmpl.content.firstElementChild;
+      bulletElem = createFromTemplate('bulletTemplate');
     }
+
+    // If bullet template is missing, skip adding it
+    const hasBullet = !!bulletElem;
 
     if (timeContainer) {
       if (level.headerOrder === 'time-first') {
         // For root level groups: time comes first, then usage
-        timeContainer.parentNode.insertBefore(
-          bulletElem,
-          timeContainer.nextSibling,
-        );
+        if (hasBullet) {
+          timeContainer.parentNode.insertBefore(
+            bulletElem,
+            timeContainer.nextSibling,
+          );
+        }
         timeContainer.parentNode.insertBefore(
           usageElem,
-          bulletElem.nextSibling,
+          hasBullet ? bulletElem.nextSibling : timeContainer.nextSibling,
         );
       } else {
         // For nested groups: usage comes first, then time
         groupHeader.insertBefore(usageElem, timeContainer);
-        groupHeader.insertBefore(bulletElem, timeContainer);
+        if (hasBullet) {
+          groupHeader.insertBefore(bulletElem, timeContainer);
+        }
       }
     } else {
       groupHeader.appendChild(usageElem);
+      if (hasBullet) {
+        groupHeader.appendChild(bulletElem);
+      }
     }
   }
 }
