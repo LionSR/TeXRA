@@ -76,7 +76,7 @@ export interface ModelCapabilities {
 
 /** Complete configuration for a language model instance. */
 export interface ModelConfig {
-  name: string; // Short name (e.g., "sonnet37")
+  name: string; // Short name (e.g., "sonnet4T")
   fullName: string; // Full model name (e.g., "claude-3-7-sonnet-20250219")
   provider: ModelProvider; // The model provider (e.g., ANTHROPIC, OPENAI)
   maxOutputTokens: number;
