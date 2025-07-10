@@ -38,6 +38,9 @@ export class ModelHandlerXAI extends ModelHandlerOpenAI {
       return null;
     }
 
+    // reasoning_effort is not supported by grok-4.
+    // Specifying reasoning_effort parameter will get an error response.
+
     // Extract reasoning content from xAI response
     let reasoningContent = null;
 
