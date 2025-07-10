@@ -229,11 +229,17 @@ export abstract class ModelHandler<U = any, R = any>
   }
 
   get isOReasoningModel(): boolean {
-    return this.config.provider === ModelProvider.OPENAI && this.capabilities.supportsReasoning;
+    return (
+      this.config.provider === ModelProvider.OPENAI &&
+      this.capabilities.supportsReasoning
+    );
   }
 
   get isGrokReasoningModel(): boolean {
-    return this.config.provider === ModelProvider.XAI && this.capabilities.supportsReasoning;
+    return (
+      this.config.provider === ModelProvider.XAI &&
+      this.capabilities.supportsReasoning
+    );
   }
 
   /**
