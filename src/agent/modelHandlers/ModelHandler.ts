@@ -228,27 +228,17 @@ export abstract class ModelHandler<U = any, R = any>
     return getConfig<boolean>(configKey, useStreamingGlobal);
   }
 
-  get isOReasoningModelFull(): boolean {
-    const nameLowerCased = this.config.name.toLowerCase();
-    if (
-      nameLowerCased.includes('o1-') ||
-      nameLowerCased.includes('o1preview')
-    ) {
-      return false;
-    }
+  get isOReasoningModel(): boolean {
     return (
-      nameLowerCased.includes('o1') ||
-      nameLowerCased.includes('o3') ||
-      nameLowerCased.includes('o4')
+      this.config.provider === ModelProvider.OPENAI &&
+      this.capabilities.supportsReasoning
     );
   }
 
-  get isOReasoningModel(): boolean {
-    const nameLowerCased = this.config.name.toLowerCase();
+  get isGrokReasoningModel(): boolean {
     return (
-      nameLowerCased.includes('o1') ||
-      nameLowerCased.includes('o3') ||
-      nameLowerCased.includes('o4')
+      this.config.provider === ModelProvider.XAI &&
+      this.capabilities.supportsReasoning
     );
   }
 
