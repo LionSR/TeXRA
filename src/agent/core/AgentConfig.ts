@@ -28,7 +28,7 @@ export interface AgentConfig {
  * Default configuration for task execution and tool usage
  */
 export const DEFAULT_AGENT_CONFIG: AgentConfig = {
-  model: 'sonnet4T',
+  model: 'gemini25p',
   agent: 'correct',
   instruction: '',
   inputFile: '',
