@@ -2,14 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
-## 0.32.1 - 2025-07-07
+## 0.32.1 - 2025-07-10
 - Default model switched to **Gemini 2.5 Pro**.
 - Added Grok 4 model with token limit adjustments.
 - Extended support for Grok via dedicated handler and SDK updates.
 
 ## 0.32.0 - 2025-07-07
-- Introduced Grok 4 model support and refreshed xAI model names.
-- Sonnet 4T model added and set as default.
+- Default model fix
 
 ## 0.31.10 - 2025-07-04
 - Progress view templates for consistent UI.
