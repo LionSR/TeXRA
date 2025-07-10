@@ -109,7 +109,7 @@ export function objectToTaskState(obj: Record<string, any>): TaskState {
   const taskState: Partial<TaskState> = {
     // Basic task info
     agent: obj.agent || 'correct',
-    model: obj.model || 'sonnet4T',
+    model: obj.model || 'gemini25p',
     instruction: obj.instruction || '',
   };
 
