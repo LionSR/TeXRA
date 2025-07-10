@@ -105,6 +105,7 @@ Large context models from xAI.
 
 | Model ID | Key Strength / Use Case              | Relative Cost | Relative Speed | Notes           |
 | :------- | :----------------------------------- | :------------ | :------------- | :-------------- |
+| `grok4`  | Very large context, strong reasoning | $$$           | Medium         | xAI Grok 4      |
 | `grok3`  | Large context, alternative reasoning | $$$           | Medium         | xAI Grok 3      |
 | `grok3-` | Faster Grok 3 (mini)                 | $$            | Fast           | xAI Grok 3 Mini |
 
@@ -153,6 +154,7 @@ The specific models available by default and their identifiers (`sonnet37`, `gpt
   "gemini2fT",
   "dsv3",
   "dsr1",
+  "grok4",
   "grok3",
   "qwenplus",
   "kimit",
