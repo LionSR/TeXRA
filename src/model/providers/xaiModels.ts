@@ -15,11 +15,11 @@ const XAI_DEFAULT_CAPABILITIES: ModelCapabilities = {
 export const XAI_MODELS: Record<string, ModelConfig> = {
   grok4: {
     name: 'grok4',
-    fullName: 'grok-4-beta',
-    openrouterFullName: 'x-ai/grok-4',
+    fullName: 'grok-4-0709',
+    openrouterFullName: 'x-ai/grok-4-0709',
     provider: ModelProvider.XAI,
-    maxOutputTokens: 131072,
-    contextWindow: 131072,
+    maxOutputTokens: 128000, // Maximum 256000 but we should consider the input as well.
+    contextWindow: 256000,
     inputPrice: 3.0,
     outputPrice: 15.0,
     capabilities: {
