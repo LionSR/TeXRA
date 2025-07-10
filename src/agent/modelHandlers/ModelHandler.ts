@@ -252,6 +252,13 @@ export abstract class ModelHandler<U = any, R = any>
     );
   }
 
+  get isGrokReasoningModel(): boolean {
+    const nameLowerCased = this.config.name.toLowerCase();
+    return (
+      nameLowerCased.includes('grok4') || nameLowerCased.includes('grok3-')
+    );
+  }
+
   /**
    * Validates reasoning effort based on provider-specific support
    * @param effort The reasoning effort level to validate
