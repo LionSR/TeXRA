@@ -10,6 +10,7 @@ import {
 // Common capabilities for xAI models
 const XAI_DEFAULT_CAPABILITIES: ModelCapabilities = {
   ...DEFAULT_MODEL_CAPABILITIES,
+  supportsVision: false,
 };
 
 export const XAI_MODELS: Record<string, ModelConfig> = {
