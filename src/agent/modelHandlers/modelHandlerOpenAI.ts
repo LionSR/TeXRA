@@ -68,7 +68,9 @@ export class ModelHandlerOpenAI extends ModelHandler<
       [this.isOReasoningModel ? 'max_completion_tokens' : 'max_tokens']:
         this.config.maxOutputTokens,
     };
-    if (!this.isOReasoningModel) {
+
+    // stop parameters are not supported by Grok reasoning models .
+    if (!this.isOReasoningModel && !this.isGrokReasoningModel) {
       if (endTag) {
         kwargs.stop = [endTag];
       }
