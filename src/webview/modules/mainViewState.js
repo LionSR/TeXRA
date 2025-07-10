@@ -80,7 +80,7 @@ export class MainViewState {
   restore() {
     const previousState = this.stateManager.getState();
     if (previousState) {
-      const defaults = { agent: 'correct', commit: 'HEAD' };
+      const defaults = { agent: 'correct', model: 'gemini25p', commit: 'HEAD' };
 
       VALUE_ELEMENTS.forEach((id) => {
         safeSetElementValue(id, previousState[id] ?? defaults[id] ?? '');
