@@ -156,8 +156,8 @@ export function taskStateToAgentConfig(taskState: TaskState): AgentConfig {
   // Add tool config settings
   const allConfigFields: (keyof ToolConfig)[] = [...AUTO_EXTRACT_FIELDS, ...TOOL_CONFIG_FIELDS];
   allConfigFields.forEach((field) => {
-    if (taskState[field] !== undefined) {
-      agentConfig.toolConfig![field] = taskState[field];
+    if (taskState[field] !== undefined && agentConfig.toolConfig) {
+      agentConfig.toolConfig[field] = taskState[field];
     }
   });
 
