@@ -65,10 +65,10 @@ export class DiffCommandExecutor {
       'latexdiff',
       '--encoding=utf8',
       '-c',
-      `"PICTUREENV=${pictureEnvs}"`,
+      `PICTUREENV=${pictureEnvs}`,
       `--math-markup=${mathMarkup}`,
-      `"${inputFile}"`,
-      `"${editedFile}"`,
+      inputFile,
+      editedFile,
     ];
 
     if (useFlatten) {
@@ -88,13 +88,13 @@ export class DiffCommandExecutor {
       'latexdiff-vc',
       '--encoding=utf8',
       '-c',
-      `"PICTUREENV=${pictureEnvs}"`,
+      `PICTUREENV=${pictureEnvs}`,
       '--force',
       '--git',
       `--math-markup=${mathMarkup}`,
       '-r',
       commitHash,
-      `"${inputFile}"`,
+      inputFile,
     ];
 
     if (useFlatten) {
