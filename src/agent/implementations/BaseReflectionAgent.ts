@@ -31,7 +31,7 @@ import { checkForMassiveRepetition } from '@agent/utils/text/repetitionUtils';
 import xmlUtils from '@utils/text/xmlUtils';
 
 // Local imports - agent components
-import { AgentConfig } from '@agent/core/AgentConfig';
+import type { AgentConfig } from '@agent/core/AgentConfig';
 import {
   AgentSetting,
   AgentPrompt,

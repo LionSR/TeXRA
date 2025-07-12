@@ -2,7 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports - agent components
-import { AgentConfig } from '@agent/core/AgentConfig';
+import type { AgentConfig } from '@agent/core/AgentConfig';
 import { executeAgent } from '@agent/runtime/executeAgent';
 
 // Local imports - history
