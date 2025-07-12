@@ -1,5 +1,5 @@
 // Standard library imports
-import spawn from 'cross-spawn';
+import { execaCommandSync } from 'execa';
 
 // Local imports
 import { extendEnvPath, findToolInCommonPaths } from './platformPaths';
@@ -188,7 +188,7 @@ export async function checkToolInstalled(
 
     let isInstalled = false;
 
-    const spawnOptions = {
+    const execOptions = {
       env: { ...process.env, PATH: extendEnvPath() },
       shell: true,
     };
@@ -196,8 +196,8 @@ export async function checkToolInstalled(
     if (Array.isArray(command)) {
       // Try each command in the array until one succeeds
       for (const cmd of command) {
-        let result = spawn.sync(cmd, spawnOptions);
-        if (result.status === 0) {
+        let result = execaCommandSync(cmd, execOptions);
+        if (result.exitCode === 0) {
           isInstalled = true;
           break;
         }
@@ -207,19 +207,19 @@ export async function checkToolInstalled(
           const spaceIndex = cmd.indexOf(' ');
           const originalArgs =
             spaceIndex > -1 ? cmd.substring(spaceIndex + 1) : '';
-          result = spawn.sync(
+          result = execaCommandSync(
             originalArgs ? `${fallback} ${originalArgs}` : fallback,
-            spawnOptions,
+            execOptions,
           );
-          if (result.status === 0) {
+          if (result.exitCode === 0) {
             isInstalled = true;
             break;
           }
         }
       }
     } else {
-      let result = spawn.sync(command, spawnOptions);
-      isInstalled = result.status === 0;
+      let result = execaCommandSync(command, execOptions);
+      isInstalled = result.exitCode === 0;
       if (!isInstalled) {
         const cmdToolName = command.split(' ')[0];
         const fallback = findToolInCommonPaths(cmdToolName);
@@ -227,11 +227,11 @@ export async function checkToolInstalled(
           const spaceIndex = command.indexOf(' ');
           const originalArgs =
             spaceIndex > -1 ? command.substring(spaceIndex + 1) : '';
-          result = spawn.sync(
+          result = execaCommandSync(
             originalArgs ? `${fallback} ${originalArgs}` : fallback,
-            spawnOptions,
+            execOptions,
           );
-          isInstalled = result.status === 0;
+          isInstalled = result.exitCode === 0;
         }
       }
     }
