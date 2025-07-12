@@ -39,7 +39,7 @@ export const AgentSettingSchema = z
     defaultOutputFiles: z.array(z.string()).default([]),
     filePatternsContain: z.array(z.record(z.string())).default([]),
 
-    tools: z.array(ToolDefinitionSchema).optional(),
+    tools: z.array(ToolDefinitionSchema).optional().default([]),
   })
   .strict();
 
