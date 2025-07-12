@@ -92,7 +92,7 @@ export const AgentConfigSchema: z.ZodSchema<AgentConfig> = z
     instruction: z.string(),
 
     inputFile: z.string(),
-    inputFiles: z.array(z.string()).nullable(),
+    inputFiles: z.array(z.string()).nullable().optional(),
     referenceFile: z.string().nullable().optional(),
     referenceFiles: z.array(z.string()).nullable(),
     auxiliaryFile: z.string().nullable(),
