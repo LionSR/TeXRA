@@ -13,10 +13,8 @@ import { getStreamTabId } from '@/logger/streamUtils';
 // Local imports - housekeeping
 import { runPack, runPackSingle, runPackMultiple } from '@housekeeping';
 import type { FileOpResult } from '@agent/types/ResultTypes';
-import {
-  showLoggedErrorMessage,
-  showLoggedMessage,
-} from '@common/errors/errorHandlingUtils';
+import { showLoggedMessage } from '@common/errors/errorHandlingUtils';
+import { HousekeepingCommandConfigSchema } from './HousekeepingCommandConfig';
 
 const CHANNEL = 'packCommands';
 logger.initialize(CHANNEL);
@@ -60,27 +58,30 @@ async function handlePack(config: { streamId?: string; [key: string]: any }) {
     `Pack command called with config: ${JSON.stringify(config)}`,
   );
 
-  if (!config.agent || !config.inputFile) {
-    await showLoggedMessage(CHANNEL, 'Missing required parameters in config');
+  const parsed = HousekeepingCommandConfigSchema.safeParse(config);
+  if (!parsed.success) {
+    const issues = parsed.error.errors
+      .map((e) => `${e.path.join('.')} ${e.message}`)
+      .join('; ');
+    await showLoggedMessage(CHANNEL, `Invalid pack configuration: ${issues}`);
     return;
   }
+  const cfg = parsed.data;
 
   // Get output files if multiple files mode is enabled
-  const outputFiles = config.activeFiles?.output
-    ? config.outputFiles || []
-    : [];
+  const outputFiles = cfg.activeFiles?.output ? cfg.outputFiles || [] : [];
 
   const result = await runPack(
-    config.model,
-    config.inputFile,
-    config.agent,
+    cfg.model,
+    cfg.inputFile,
+    cfg.agent,
     outputFiles,
   );
-  showPackResult(result, config.inputFile);
+  showPackResult(result, cfg.inputFile);
 
   const streamId =
-    config.streamId ||
-    getStreamTabId(config.agent, config.model, config.inputFile, outputFiles);
+    cfg.streamId ||
+    getStreamTabId(cfg.agent, cfg.model, cfg.inputFile, outputFiles);
   emitProgress('clearOutputFiles', streamId);
   emitProgress('clearMissingOutputs', streamId);
   emitProgress('clearTaskOutput', streamId);

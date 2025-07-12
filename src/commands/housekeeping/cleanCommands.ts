@@ -18,10 +18,8 @@ import {
   runCleanOutput,
 } from '@housekeeping';
 import type { FileOpResult } from '@agent/types/ResultTypes';
-import {
-  showLoggedErrorMessage,
-  showLoggedMessage,
-} from '@common/errors/errorHandlingUtils';
+import { showLoggedMessage } from '@common/errors/errorHandlingUtils';
+import { HousekeepingCommandConfigSchema } from './HousekeepingCommandConfig';
 
 const CHANNEL = 'cleanCommands';
 logger.initialize(CHANNEL);
@@ -129,14 +127,17 @@ export async function handleClean(config: {
     `Clean command called with config: ${JSON.stringify(config)}`,
   );
 
-  if (!config.agent || !config.inputFile) {
-    await showLoggedMessage(CHANNEL, 'Missing required parameters in config');
+  const parsed = HousekeepingCommandConfigSchema.safeParse(config);
+  if (!parsed.success) {
+    const issues = parsed.error.errors
+      .map((e) => `${e.path.join('.')} ${e.message}`)
+      .join('; ');
+    await showLoggedMessage(CHANNEL, `Invalid clean configuration: ${issues}`);
     return;
   }
+  const cfg = parsed.data;
 
-  const outputFiles = config.activeFiles?.output
-    ? config.outputFiles || []
-    : [];
+  const outputFiles = cfg.activeFiles?.output ? cfg.outputFiles || [] : [];
 
   if (outputFiles.length > 0) {
     logger.info(
@@ -144,25 +145,21 @@ export async function handleClean(config: {
       `Running clean multiple with ${outputFiles.length} files`,
     );
     const result = await runCleanMultiple(
-      config.model,
-      config.inputFile,
-      config.agent,
+      cfg.model,
+      cfg.inputFile,
+      cfg.agent,
       outputFiles,
     );
-    showCleanResult(result, config.inputFile);
+    showCleanResult(result, cfg.inputFile);
   } else {
     logger.info(CHANNEL, `Running clean single`);
-    const result = await runCleanSingle(
-      config.model,
-      config.inputFile,
-      config.agent,
-    );
-    showCleanResult(result, config.inputFile);
+    const result = await runCleanSingle(cfg.model, cfg.inputFile, cfg.agent);
+    showCleanResult(result, cfg.inputFile);
   }
 
   const streamId =
-    config.streamId ||
-    getStreamTabId(config.agent, config.model, config.inputFile, outputFiles);
+    cfg.streamId ||
+    getStreamTabId(cfg.agent, cfg.model, cfg.inputFile, outputFiles);
   emitProgress('clearOutputFiles', streamId);
   emitProgress('clearMissingOutputs', streamId);
   emitProgress('clearTaskOutput', streamId);
