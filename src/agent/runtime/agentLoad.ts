@@ -9,7 +9,7 @@ import * as yaml from 'yaml';
 import {
   AgentSetting,
   AgentPrompt,
-  validateAgentSetting,
+  AgentSettingSchema,
   DEFAULT_AGENT_SETTINGS,
   DEFAULT_AGENT_PROMPTS,
 } from '@agent/core/AgentDataclass';
@@ -132,7 +132,8 @@ export async function loadAgentSettingAndPrompts(
     }
 
     // Validate the final, composed settings block
-    validateAgentSetting(settings as AgentSetting); // Cast to AgentSetting
+    const validatedSettings = AgentSettingSchema.parse(settings);
+    settings = validatedSettings;
 
     // The function returns the validated settings block and prompts.
     // The agent's name (declaredAgentName) is known in this scope but not part of AgentSetting.
@@ -182,8 +183,8 @@ export async function isValidAgentYaml(
       return null;
     }
 
-    // Validate the settings block (which no longer includes 'name' validation itself)
-    validateAgentSetting(settingsBlock as AgentSetting);
+    // Validate the settings block
+    const _ = AgentSettingSchema.parse(settingsBlock);
 
     // If all checks pass, return the structure
     return { name: rootName.trim(), settings: settingsBlock as AgentSetting };
