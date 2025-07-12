@@ -1,5 +1,6 @@
 // Local imports - model types
 import type { ToolDefinition } from '@model';
+import { z } from 'zod';
 
 /** Enum defining possible agent types */
 export enum AgentType {
@@ -7,6 +8,37 @@ export enum AgentType {
   Direct = 'direct',
   ToolUse = 'toolUse',
 }
+
+/** Zod schema for ToolDefinition validation */
+export const ToolDefinitionSchema = z
+  .object({
+    name: z.string(),
+    description: z.string().optional(),
+    parameters: z.record(z.unknown()).optional(),
+  })
+  .strict();
+
+/** Zod schema for AgentSetting validation */
+export const AgentSettingSchema = z
+  .object({
+    agentType: z.nativeEnum(AgentType),
+    documentTag: z.string().min(1, 'documentTag cannot be empty'),
+    temperature: z.number().min(0).max(1).nullable(),
+    isRewrite: z.boolean(),
+
+    rounds: z.number().optional(),
+    prefills: z.array(z.string()),
+    outputExt: z.string(),
+    endTag: z.string(),
+
+    requiredFiles: z.record(z.string()),
+    requiredFilesInternal: z.record(z.string()),
+    defaultOutputFiles: z.array(z.string()),
+    filePatternsContain: z.array(z.record(z.string())),
+
+    tools: z.array(ToolDefinitionSchema).optional(),
+  })
+  .strict();
 
 /** Base configuration for agent behavior with default values. */
 export const DEFAULT_AGENT_SETTINGS: AgentSetting = {
@@ -57,35 +89,6 @@ export interface AgentSetting {
 
   /** Tool definitions available to the agent */
   tools?: ToolDefinition[];
-}
-
-/**
- * Validates agent settings for correctness and completeness.
- * @throws Error if agentType is invalid, temperature is out of range, or documentTag is empty
- */
-export function validateAgentSetting(settings: AgentSetting): void {
-  if (
-    settings.agentType !== AgentType.CoT &&
-    settings.agentType !== AgentType.Direct &&
-    settings.agentType !== AgentType.ToolUse
-  ) {
-    throw new Error(
-      `Invalid agentType: ${settings.agentType}. Must be '${AgentType.CoT}', '${AgentType.Direct}' or '${AgentType.ToolUse}'`,
-    );
-  }
-
-  if (
-    settings.temperature !== null &&
-    (settings.temperature < 0.0 || settings.temperature > 1.0)
-  ) {
-    throw new Error(
-      `Temperature must be between 0.0 and 1.0, got ${settings.temperature}`,
-    );
-  }
-
-  if (!settings.documentTag) {
-    throw new Error('documentTag cannot be empty');
-  }
 }
 
 /**
