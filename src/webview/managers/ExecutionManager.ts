@@ -10,6 +10,7 @@ import {
   isPastedImage,
   getPastedImageFullPath,
 } from '@utils/files/pastedImageUtils';
+import { getFilesIfNotEmpty } from '@frontend/files/listing';
 
 // Local imports - agent
 import { ToolConfig } from '@agent/core/ToolConfig';
@@ -50,17 +51,19 @@ export class ExecutionManager {
       model: message.model,
       instruction: message.instruction,
       inputFile: message.inputFile,
-      inputFiles: message.inputFiles ?? [],
+      inputFiles: getFilesIfNotEmpty(message.inputFiles),
       referenceFile: message.referenceFile,
-      referenceFiles: message.referenceFiles ?? [],
+      referenceFiles: getFilesIfNotEmpty(message.referenceFiles),
       auxiliaryFile: message.auxiliaryFile,
-      auxiliaryFiles: message.auxiliaryFiles ?? [],
+      auxiliaryFiles: getFilesIfNotEmpty(message.auxiliaryFiles),
       mediaFile: mapMediaPath(message.mediaFile),
       mediaFiles: message.mediaFiles
-        ? message.mediaFiles
-            .map(mapMediaPath)
-            .filter((f: string | null): f is string => f !== null)
-        : [],
+        ? getFilesIfNotEmpty(
+            message.mediaFiles
+              .map(mapMediaPath)
+              .filter((f: string | null): f is string => f !== null),
+          )
+        : null,
       outputFiles:
         message.outputFiles && message.outputFiles.length > 0
           ? message.outputFiles

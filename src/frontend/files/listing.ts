@@ -7,6 +7,10 @@ import * as vscode from 'vscode';
 // Local imports - utilities
 import { AbsoluteFS } from '@utils/files';
 
+export function getFilesIfNotEmpty<T>(files: T[] | undefined): T[] | null {
+  return files && files.length > 0 ? files : null;
+}
+
 export async function getFilesInDirectory(
   dir: string,
   includeExtensions: string[] = [],
