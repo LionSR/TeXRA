@@ -4,6 +4,7 @@ import * as path from 'path';
 // Third-party imports
 import * as vscode from 'vscode';
 import * as yaml from 'yaml';
+import deepmerge from 'deepmerge';
 
 // Local imports - agent components
 import {
@@ -49,34 +50,6 @@ export async function loadYaml(absolutePath: string): Promise<object> {
   }
 }
 
-/** Recursively merges two dictionaries with override values. */
-export function mergeDicts(
-  base: { [key: string]: any },
-  override: { [key: string]: any },
-): { [key: string]: any } {
-  try {
-    const result = { ...base };
-    for (const [key, value] of Object.entries(override)) {
-      if (
-        value &&
-        typeof value === 'object' &&
-        !Array.isArray(value) &&
-        key in result
-      ) {
-        result[key] = mergeDicts(result[key], value);
-      } else {
-        result[key] = value;
-      }
-    }
-    return result;
-  } catch (err) {
-    vscode.window.showErrorMessage(
-      `Error merging dictionaries: ${err instanceof Error ? err.message : String(err)}`,
-    );
-    throw err;
-  }
-}
-
 /**
  * Loads agent settings and prompts with inheritance support.
  * Merges with parent configurations if specified in the inherits field.
@@ -117,17 +90,23 @@ export async function loadAgentSettingAndPrompts(
       const agentOwnPrompts = (config?.prompts || {}) as Partial<AgentPrompt>;
 
       // Merge with parent settings and prompts
-      settings = mergeDicts(parentSettings, agentOwnSettings);
-      prompts = mergeDicts(parentPrompts, agentOwnPrompts);
+      settings = deepmerge(parentSettings, agentOwnSettings, {
+        arrayMerge: (_d, s) => s,
+      });
+      prompts = deepmerge(parentPrompts, agentOwnPrompts, {
+        arrayMerge: (_d, s) => s,
+      });
     } else {
       // No inheritance, use current agent's settings and prompts directly, merged with defaults
-      settings = mergeDicts(
+      settings = deepmerge(
         DEFAULT_AGENT_SETTINGS, // DEFAULT_AGENT_SETTINGS no longer has a 'name' property
         (config?.settings || {}) as Partial<AgentSetting>,
+        { arrayMerge: (_d, s) => s },
       );
-      prompts = mergeDicts(
+      prompts = deepmerge(
         DEFAULT_AGENT_PROMPTS,
         (config?.prompts || {}) as Partial<AgentPrompt>,
+        { arrayMerge: (_d, s) => s },
       );
     }
 
