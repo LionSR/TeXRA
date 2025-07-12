@@ -2,12 +2,25 @@
 import type { FileType } from '@utils/config';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 
-/** Interface for storing task execution state */
+/**
+ * Interface for storing task execution state.
+ * 
+ * This interface represents the complete state of a task, including both
+ * the agent configuration and UI-specific state. The separation between
+ * agentConfig and UI state (activeFiles) provides a clean architecture
+ * where agent-specific settings are clearly distinguished from UI concerns.
+ */
 export interface TaskState {
-  // Agent configuration (contains all AgentConfig fields)
+  /**
+   * Agent configuration containing all settings needed for task execution.
+   * This includes model, agent type, file selections, and tool configurations.
+   */
   agentConfig: AgentConfig;
 
-  // UI-specific state
-  /** Map of file type to active state */
+  /**
+   * UI-specific state for managing file type visibility in the interface.
+   * Maps each file type (input, reference, auxiliary, media, output) to
+   * whether it should be shown in the UI.
+   */
   activeFiles: Record<FileType, boolean>;
 }
