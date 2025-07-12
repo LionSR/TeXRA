@@ -154,10 +154,10 @@ export function taskStateToAgentConfig(taskState: TaskState): AgentConfig {
   copyActiveFileLists(agentConfig, taskState);
 
   // Add tool config settings
-  const allConfigFields = [...AUTO_EXTRACT_FIELDS, ...TOOL_CONFIG_FIELDS];
+  const allConfigFields: (keyof ToolConfig)[] = [...AUTO_EXTRACT_FIELDS, ...TOOL_CONFIG_FIELDS];
   allConfigFields.forEach((field) => {
-    if ((taskState as any)[field] !== undefined) {
-      (agentConfig.toolConfig as any)[field] = (taskState as any)[field];
+    if (taskState[field] !== undefined) {
+      agentConfig.toolConfig![field] = taskState[field];
     }
   });
 
