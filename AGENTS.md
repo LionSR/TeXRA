@@ -79,6 +79,7 @@ This document sets the common conventions for contributions. Follow these norms 
   - Use direct access patterns: `state.taskGroups.get()` instead of `state.getTaskGroup()`
   - Keep method names simple - context comes from the class name (`set()`, `get()`, `clear()`)
   - Follow the pattern seen in `src/progressView/modules/progressViewState.js` and `domHandlers.js`
+- Prefer direct use of `encodeHtml` and `decodeHtml` from `he` instead of wrapper helpers like `_escapeHtml`. Apply this when confident to avoid repeated refactoring.
 - When modularizing webview code, ALL module dependencies must be explicitly mapped in the import map:
   - Each module imported by ANY module in the dependency tree needs its own URI and import map entry
   - This includes transitive dependencies (modules imported by imported modules)
