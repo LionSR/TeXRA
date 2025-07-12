@@ -41,7 +41,15 @@ export const DEFAULT_AGENT_CONFIG: AgentConfig = {
   mediaFiles: [],
   outputFiles: null,
   editedFile: null,
-  toolConfig: {} as ToolConfig,
+  toolConfig: {
+    reflect: false,
+    usePrefillFromInput: false,
+    autoExtractFigure: false,
+    autoExtractTikzFigure: false,
+    attachTeXCount: false,
+    printInputPrompt: false,
+    autoCompileInputPdf: false,
+  },
 };
 
 /**
@@ -50,8 +58,17 @@ export const DEFAULT_AGENT_CONFIG: AgentConfig = {
  * @returns Complete AgentConfig with all fields populated
  */
 export function createAgentConfig(config: Partial<AgentConfig>): AgentConfig {
-  // Merge provided config with defaults
-  return { ...DEFAULT_AGENT_CONFIG, ...config };
+  // Merge provided config with defaults, ensuring nested toolConfig is merged deeply
+  const mergedToolConfig: ToolConfig = {
+    ...DEFAULT_AGENT_CONFIG.toolConfig,
+    ...(config.toolConfig ?? {}),
+  };
+
+  return {
+    ...DEFAULT_AGENT_CONFIG,
+    ...config,
+    toolConfig: mergedToolConfig,
+  };
 }
 
 /**
