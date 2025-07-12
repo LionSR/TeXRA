@@ -1,4 +1,9 @@
 // Image paste handling utilities
+
+// Third-party imports
+import { nanoid } from 'nanoid';
+
+// Local imports
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
 
 // Comprehensive MIME type to extension mapping
@@ -35,8 +40,8 @@ export const IMAGE_MIME_TYPES = {
  */
 export function generatePastedImageName(extension) {
   const timestamp = Date.now();
-  const random = Math.random().toString(16).slice(2, 8);
-  return `pasted_${timestamp}_${random}.${extension}`;
+  const id = nanoid(6);
+  return `pasted_${timestamp}_${id}.${extension}`;
 }
 
 /**
