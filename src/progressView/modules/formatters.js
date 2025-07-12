@@ -114,7 +114,7 @@ export class LogEntryFormatter {
    * @returns {string} Formatted HTML for the log message
    */
   format(logMessage) {
-    const { id, text, level, timestamp, groupId, messageType, verbose } =
+    const { id, text, level, timestamp, groupId, messageType, verbose, data } =
       logMessage;
 
     const emoji = EMOJI_BY_LEVEL[level] || '•';
@@ -146,19 +146,19 @@ export class LogEntryFormatter {
     }
 
     if (messageType === 'fileList') {
-      return this._formatFileList(htmlMessage, text, id);
+      return this._formatFileList(htmlMessage, text, data, id);
     }
 
     if (messageType === 'missingOutputs') {
-      return this._formatMissingOutputs(htmlMessage, text, id);
+      return this._formatMissingOutputs(htmlMessage, text, data, id);
     }
 
     if (messageType === 'latexdiff') {
-      return this._formatLatexdiff(htmlMessage, text, id);
+      return this._formatLatexdiff(htmlMessage, text, data, id);
     }
 
     if (messageType === 'statistics') {
-      return this._formatStatistics(htmlMessage, text, id);
+      return this._formatStatistics(htmlMessage, text, data, id);
     }
 
     return htmlMessage;
@@ -232,10 +232,10 @@ export class LogEntryFormatter {
     }
   }
 
-  _formatFileList(message, content, logId) {
+  _formatFileList(message, content, data, logId) {
     try {
       const idAttr = logId ? ` data-log-id="${logId}"` : '';
-      const parsed = JSON.parse(this._unescapeHtml(content));
+      const parsed = data ?? JSON.parse(this._unescapeHtml(content));
       if (!Array.isArray(parsed)) {
         throw new Error('Invalid file list');
       }
@@ -307,10 +307,10 @@ export class LogEntryFormatter {
     }
   }
 
-  _formatMissingOutputs(message, content, logId) {
+  _formatMissingOutputs(message, content, data, logId) {
     try {
       const idAttr = logId ? ` data-log-id="${logId}"` : '';
-      const parsed = JSON.parse(this._unescapeHtml(content));
+      const parsed = data ?? JSON.parse(this._unescapeHtml(content));
 
       // Handle both old format (array) and new format (object with missing, xmlFile, documentTag)
       let missingFiles = [];
@@ -377,10 +377,10 @@ export class LogEntryFormatter {
     }
   }
 
-  _formatLatexdiff(message, content, logId) {
+  _formatLatexdiff(message, content, data, logId) {
     try {
       const idAttr = logId ? ` data-log-id="${logId}"` : '';
-      const parsed = JSON.parse(this._unescapeHtml(content));
+      const parsed = data ?? JSON.parse(this._unescapeHtml(content));
       const entries = Array.isArray(parsed)
         ? parsed
         : parsed && typeof parsed === 'object'
@@ -442,10 +442,10 @@ export class LogEntryFormatter {
     }
   }
 
-  _formatStatistics(message, content, logId) {
+  _formatStatistics(message, content, data, logId) {
     try {
       const idAttr = logId ? ` data-log-id="${logId}"` : '';
-      const parsed = JSON.parse(this._unescapeHtml(content));
+      const parsed = data ?? JSON.parse(this._unescapeHtml(content));
       if (!parsed || typeof parsed !== 'object') {
         return message;
       }
