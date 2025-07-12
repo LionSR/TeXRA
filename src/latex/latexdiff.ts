@@ -7,7 +7,6 @@ import * as vscode from 'vscode';
 // Local imports - log
 import * as logger from '@logger/logUtils';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
-import { objectToLogString } from '@utils/text/stringUtils';
 
 // Local imports - utilities
 import {
