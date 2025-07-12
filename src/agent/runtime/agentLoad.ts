@@ -183,11 +183,11 @@ export async function isValidAgentYaml(
       return null;
     }
 
-    // Validate the settings block
-    const _ = AgentSettingSchema.parse(settingsBlock);
+    // Validate the settings block and use the parsed result (which may include transformations)
+    const validatedSettings = AgentSettingSchema.parse(settingsBlock);
 
-    // If all checks pass, return the structure
-    return { name: rootName.trim(), settings: settingsBlock as AgentSetting };
+    // If all checks pass, return the structure with validated settings
+    return { name: rootName.trim(), settings: validatedSettings };
   } catch (err) {
     // Handles errors from loadYaml or validateAgentSetting (e.g., invalid temp)
     logger.debug(
