@@ -5,7 +5,7 @@ import * as path from 'path';
 import { DirectAgent } from './DirectAgent';
 import { AgentStateRound, AgentStateGlobal } from '../core/AgentState';
 import type { IModelHandler } from '@agent/modelHandlers';
-import { AgentConfig } from '../core/AgentConfig';
+import type { AgentConfig } from '../core/AgentConfig';
 import { AgentSetting, AgentPrompt } from '../core/AgentDataclass';
 
 /**
