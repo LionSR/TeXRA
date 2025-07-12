@@ -2,6 +2,10 @@
 import type { ToolDefinition } from '@model';
 import { z } from 'zod';
 
+/** Temperature bounds for agent generation. */
+export const MIN_TEMPERATURE = 0;
+export const MAX_TEMPERATURE = 1;
+
 /** Enum defining possible agent types */
 export enum AgentType {
   CoT = 'CoT',
@@ -26,7 +30,12 @@ export const AgentSettingSchema = z
       .string()
       .min(1, 'documentTag cannot be empty')
       .default('document'),
-    temperature: z.number().min(0).max(1).nullable().default(0.0),
+    temperature: z
+      .number()
+      .min(MIN_TEMPERATURE)
+      .max(MAX_TEMPERATURE)
+      .nullable()
+      .default(0.0),
     isRewrite: z.boolean().default(true),
 
     rounds: z.number().default(2),
@@ -124,10 +133,10 @@ export const AgentPromptSchema = z
  */
 export const AgentDefinitionSchema = z
   .object({
-    name: z.string().min(1),
+    name: z.string().trim().min(1),
     inherits: z.string().optional(),
-    settings: AgentSettingSchema.default({}),
-    prompts: AgentPromptSchema.default(DEFAULT_AGENT_PROMPTS),
+    settings: AgentSettingSchema.partial().optional(),
+    prompts: AgentPromptSchema.partial().optional(),
   })
   .strict();
 
