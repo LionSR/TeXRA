@@ -12,14 +12,25 @@ export interface ToolConfig {
 }
 
 /** Zod schema for validating ToolConfig objects */
+export const DEFAULT_TOOL_CONFIG: ToolConfig = {
+  reflect: false,
+  usePrefillFromInput: false,
+  autoExtractFigure: false,
+  autoExtractTikzFigure: false,
+  attachTeXCount: false,
+  printInputPrompt: false,
+  autoCompileInputPdf: false,
+};
+
 export const ToolConfigSchema = z
   .object({
-    reflect: z.boolean(),
-    usePrefillFromInput: z.boolean(),
-    autoExtractFigure: z.boolean(),
-    autoExtractTikzFigure: z.boolean(),
-    attachTeXCount: z.boolean(),
-    printInputPrompt: z.boolean(),
-    autoCompileInputPdf: z.boolean(),
+    reflect: z.boolean().default(false),
+    usePrefillFromInput: z.boolean().default(false),
+    autoExtractFigure: z.boolean().default(false),
+    autoExtractTikzFigure: z.boolean().default(false),
+    attachTeXCount: z.boolean().default(false),
+    printInputPrompt: z.boolean().default(false),
+    autoCompileInputPdf: z.boolean().default(false),
   })
-  .strict();
+  .strict()
+  .default(DEFAULT_TOOL_CONFIG);

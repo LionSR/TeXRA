@@ -11,7 +11,6 @@ import {
   AgentSetting,
   AgentPrompt,
   AgentSettingSchema,
-  DEFAULT_AGENT_SETTINGS,
   DEFAULT_AGENT_PROMPTS,
 } from '@agent/core/AgentDataclass';
 
@@ -97,9 +96,10 @@ export async function loadAgentSettingAndPrompts(
         arrayMerge: (_d, s) => s,
       });
     } else {
-      // No inheritance, use current agent's settings and prompts directly, merged with defaults
+      // No inheritance, merge with schema defaults by parsing empty object first
+      const baseSettings = AgentSettingSchema.parse({});
       settings = deepmerge(
-        DEFAULT_AGENT_SETTINGS, // DEFAULT_AGENT_SETTINGS no longer has a 'name' property
+        baseSettings,
         (config?.settings || {}) as Partial<AgentSetting>,
         { arrayMerge: (_d, s) => s },
       );
