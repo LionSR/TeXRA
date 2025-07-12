@@ -4,7 +4,7 @@ import * as path from 'path';
 // Third-party imports
 import * as vscode from 'vscode';
 import OpenAI from 'openai';
-import { execa, type ExecaChildProcess } from 'execa';
+import { execa, type Subprocess, type ExecaError } from 'execa';
 
 // Local imports - log
 import * as logger from '@logger/logUtils';
@@ -25,7 +25,7 @@ logger.initialize(CHANNEL);
 const RECORDINGS_DIR = 'recordings';
 
 // Store active recording process
-let activeRecordingProcess: ExecaChildProcess | null = null;
+let activeRecordingProcess: Subprocess | null = null;
 let activeRecordingPath: string | null = null;
 
 /**
@@ -98,25 +98,30 @@ export async function startRecording(
     });
     activeRecordingPath = absPath;
 
-    // Handle process events properly for ExecaChildProcess
-    activeRecordingProcess.catch((err) => {
-      logger.error(CHANNEL, `Sox process error: ${err}`);
-      activeRecordingProcess = null;
-      activeRecordingPath = null;
-    });
-
-    // Handle process completion
-    activeRecordingProcess.then((result) => {
-      logger.info(CHANNEL, `Recording process exited with code ${result.exitCode}`);
-      activeRecordingProcess = null;
-      activeRecordingPath = null;
-    }).catch(() => {
-      // Error already handled above
-    });
+    // Handle process completion and errors
+    activeRecordingProcess
+      .then((result) => {
+        if (result.signal === 'SIGTERM') {
+          logger.info(CHANNEL, `Recording stopped intentionally`);
+        } else {
+          logger.info(CHANNEL, `Recording process exited with code ${result.exitCode}`);
+        }
+        activeRecordingProcess = null;
+        activeRecordingPath = null;
+      })
+      .catch((err: ExecaError) => {
+        if (err.signal === 'SIGTERM') {
+          logger.info(CHANNEL, `Recording stopped intentionally`);
+        } else {
+          logger.error(CHANNEL, `Sox process error: ${err.message}`);
+        }
+        activeRecordingProcess = null;
+        activeRecordingPath = null;
+      });
 
     // Capture stderr for debugging
-    activeRecordingProcess.stderr?.on('data', (data) => {
-      logger.debug(CHANNEL, `Sox stderr: ${data}`);
+    activeRecordingProcess.stderr?.on('data', (data: Buffer) => {
+      logger.debug(CHANNEL, `Sox stderr: ${data.toString()}`);
     });
 
     return { success: true, recordingPath: absPath };
