@@ -1,7 +1,5 @@
 // Third-party imports
 import { execa, execaCommand, type Options, type ExecaError } from 'execa';
-import { quote as shellQuote } from 'shell-quote';
-
 // Local imports - log
 import * as logger from '@logger/logUtils';
 
