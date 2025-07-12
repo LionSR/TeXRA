@@ -13,7 +13,7 @@ import xmlUtils from '@utils/text/xmlUtils';
 import { formatProviderError } from '@common/errors/sdkErrorUtils';
 
 // Local imports - agent components
-import { AgentConfig } from '../core/AgentConfig';
+import type { AgentConfig } from '../core/AgentConfig';
 import { AgentSetting, hasEndTag } from '../core/AgentDataclass';
 import { AgentStateRound } from '../core/AgentState';
 import { ModelHandler } from './ModelHandler';
