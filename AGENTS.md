@@ -36,6 +36,7 @@ This document sets the common conventions for contributions. Follow these norms 
 - These helpers also provide cleanup methods to remove old files (pasted images are deleted after three days).
 - Generate names and resolve paths for pasted images through `src/utils/files/pastedImageUtils.ts`.
 - Interact with the logging system via `src/logger/logUtils`. Create a channel-specific logger with `logger.initialize(CHANNEL)` and log messages with `logger.info`, `logger.debug`, etc. Use `startGroup` and `endGroup` for nested log blocks.
+- Always supply structured data via the `data` argument for specialized messages (file lists, missing outputs, latexdiff, statistics). Avoid JSON parsing fallbacks in the ProgressView.
 - When executing external commands, prefer `executeCommand` from `src/utils/execUtils.ts` so that output is captured and routed through the logger.
 - Convert serialized objects into `TaskState` using `objectToTaskState` from `src/utils/configConversion.ts`. This applies default values such as the `sonnet4T` model.
 - Model handlers for each provider live under `src/agent/modelHandlers`. Add new handlers there and export them via `src/agent/modelHandlers/index.ts`.
