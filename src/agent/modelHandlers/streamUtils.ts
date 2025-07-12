@@ -4,7 +4,7 @@ import { randomUUID } from 'crypto';
 // Local imports
 import { emitProgress } from '@eventBus/ProgressEventBus';
 import { AgentLogger } from '@logger/AgentLogger';
-import { encodeHtml } from 'he';
+import { encode as encodeHtml } from 'he';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 
 /**
