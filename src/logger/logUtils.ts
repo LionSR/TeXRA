@@ -43,15 +43,6 @@ export function getColorForLevel(level: string): string {
 
 // Group State
 
-// Helper function to escape HTML tags
-export function escapeHtml(text: string): string {
-  return encodeHtml(text);
-}
-
-// Helper function to unescape HTML tags
-export function unescapeHtml(text: string): string {
-  return decodeHtml(text);
-}
 
 // Main TeXRA output channel for non-agent logs
 let mainOutputChannel: vscode.OutputChannel | null = null;
@@ -128,7 +119,7 @@ class VSCodeTransport extends Transport {
       return;
     }
 
-    const processedMessage = escapeHtml(message);
+    const processedMessage = encodeHtml(message);
 
     const msgType: MessageType = isValidMessageType(messageType)
       ? messageType
