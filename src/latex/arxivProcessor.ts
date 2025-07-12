@@ -46,11 +46,16 @@ export class ArxivSourceProcessor {
     return null;
   }
 
-  public async downloadFile(url: string, destPath: string): Promise<void> {
+  public async downloadFile(
+    url: string,
+    destPath: string,
+    timeout = 30000,
+  ): Promise<void> {
     try {
       const response = await axios.get(url, {
         responseType: 'stream',
         validateStatus: () => true,
+        timeout,
       });
 
       if (response.status === 404) {
