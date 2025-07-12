@@ -1,5 +1,5 @@
 // Local imports - types
-import { AgentStateGlobal } from '@agent/core/AgentState';
+import { AgentStateGlobal, AgentStateRound } from '@agent/core/AgentState';
 import { NamedOutputFile, OutputFileInfo } from './types';
 
 /** Interface describing OutputHandler behavior used by agents. */
@@ -56,4 +56,15 @@ export interface IOutputHandler {
     currRound: number,
     groupId?: string,
   ): Promise<void>;
+
+  /**
+   * Finalize a conversation round by collecting file info and validating
+   * expected outputs.
+   */
+  finalizeRound(
+    stateRound: AgentStateRound,
+    stateGlobal: AgentStateGlobal,
+    currRound: number,
+    roundGroupId?: string,
+  ): Promise<OutputFileInfo[]>;
 }

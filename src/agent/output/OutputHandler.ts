@@ -10,7 +10,7 @@ import { XmlOutputManager } from './XmlOutputManager';
 import { LatexDiffManager } from './LatexDiffManager';
 import { StatisticsReporter } from './StatisticsReporter';
 import { DiffStatsManager } from './DiffStatsManager';
-import { NamedOutputFile } from './types';
+import { NamedOutputFile, OutputFileInfo } from './types';
 import type { IOutputHandler } from './IOutputHandler';
 import { getOutputFileName } from '@agent/utils/outputFileUtils';
 
@@ -290,6 +290,25 @@ export class OutputHandler implements IOutputHandler {
       stream: this.channel,
       filesByRound: { [currRound]: missing },
     });
+  }
+
+  /**
+   * Finalizes a conversation round by gathering output file information and
+   * validating expected outputs.
+   */
+  public async finalizeRound(
+    stateRound: AgentStateRound,
+    stateGlobal: AgentStateGlobal,
+    currRound: number,
+    roundGroupId?: string,
+  ): Promise<OutputFileInfo[]> {
+    const fileInfos = await this.gatherOutputFileInfo(currRound);
+    await this.validateExpectedOutputs(
+      stateRound.outputFile,
+      currRound,
+      roundGroupId,
+    );
+    return fileInfos;
   }
 
   /** Processes single output file with XML splitting and filtering. */
