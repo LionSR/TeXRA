@@ -15,13 +15,13 @@ export interface AgentConfig {
 
   // Input/Output configuration
   inputFile: string;
-  inputFiles: string[] | null;
+  inputFiles: string[];
   referenceFile: string | null;
-  referenceFiles: string[] | null;
+  referenceFiles: string[];
   auxiliaryFile: string | null;
-  auxiliaryFiles: string[] | null;
+  auxiliaryFiles: string[];
   mediaFile: string | null;
-  mediaFiles: string[] | null;
+  mediaFiles: string[];
   outputFiles: string[] | null;
   editedFile: string | null;
 
@@ -58,13 +58,13 @@ export const AgentConfigSchema = z
     instruction: z.string().default(''),
 
     inputFile: z.string().default(''),
-    inputFiles: z.array(z.string()).nullable().default([]),
+    inputFiles: z.array(z.string()).default([]),
     referenceFile: z.string().nullable().default(null),
-    referenceFiles: z.array(z.string()).nullable().default([]),
+    referenceFiles: z.array(z.string()).default([]),
     auxiliaryFile: z.string().nullable().default(null),
-    auxiliaryFiles: z.array(z.string()).nullable().default([]),
+    auxiliaryFiles: z.array(z.string()).default([]),
     mediaFile: z.string().nullable().default(null),
-    mediaFiles: z.array(z.string()).nullable().default([]),
+    mediaFiles: z.array(z.string()).default([]),
     outputFiles: z.array(z.string()).nullable().default(null),
     editedFile: z.string().nullable().default(null),
 
