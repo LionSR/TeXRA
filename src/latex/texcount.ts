@@ -89,7 +89,7 @@ export async function getTeXCount(
         );
       }
 
-      command.push(`"${filePath}"`);
+      command.push(filePath);
 
       const result = await executeCommand(command, {
         channel,

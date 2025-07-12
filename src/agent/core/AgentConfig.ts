@@ -1,5 +1,10 @@
 // Local imports - agent components
-import { ToolConfig } from './ToolConfig';
+import {
+  ToolConfig,
+  ToolConfigSchema,
+  DEFAULT_TOOL_CONFIG,
+} from './ToolConfig';
+import { z } from 'zod';
 
 /** Configuration interface for controlling agent execution and file handling. */
 export interface AgentConfig {
@@ -10,13 +15,13 @@ export interface AgentConfig {
 
   // Input/Output configuration
   inputFile: string;
-  inputFiles: string[] | null;
+  inputFiles: string[];
   referenceFile: string | null;
-  referenceFiles: string[] | null;
+  referenceFiles: string[];
   auxiliaryFile: string | null;
-  auxiliaryFiles: string[] | null;
+  auxiliaryFiles: string[];
   mediaFile: string | null;
-  mediaFiles: string[] | null;
+  mediaFiles: string[];
   outputFiles: string[] | null;
   editedFile: string | null;
 
@@ -25,47 +30,49 @@ export interface AgentConfig {
 }
 
 /**
- * Default configuration for task execution and tool usage
- */
-export const DEFAULT_AGENT_CONFIG: AgentConfig = {
-  model: 'gemini25p',
-  agent: 'correct',
-  instruction: '',
-  inputFile: '',
-  inputFiles: [],
-  referenceFile: null,
-  referenceFiles: [],
-  auxiliaryFile: null,
-  auxiliaryFiles: [],
-  mediaFile: null,
-  mediaFiles: [],
-  outputFiles: null,
-  editedFile: null,
-  toolConfig: {} as ToolConfig,
-};
-
-/**
  * Creates a complete AgentConfig by merging partial config with defaults.
  * @param config Partial configuration to merge with defaults
  * @returns Complete AgentConfig with all fields populated
  */
 export function createAgentConfig(config: Partial<AgentConfig>): AgentConfig {
-  // Merge provided config with defaults
-  return { ...DEFAULT_AGENT_CONFIG, ...config };
+  return AgentConfigSchema.parse(config);
 }
 
 /**
- * Validates agent configuration for consistency and correctness.
- * @throws Error if output file count exceeds input file count
+ * Checks that the number of output files does not exceed the number of input files.
+ * Extracted as a separate function for clarity and reusability.
  */
-export function validateAgentConfig(config: AgentConfig): void {
-  // For multiple output agents
-  if (config.outputFiles) {
-    const allInputFiles = [config.inputFile, ...(config.inputFiles || [])];
-    if (config.outputFiles.length > allInputFiles.length) {
-      throw new Error(
-        'Number of output files must not be greater than the number of input files.',
-      );
-    }
+export const validateOutputFiles = (cfg: AgentConfig): boolean => {
+  if (cfg.outputFiles) {
+    const inputs = [cfg.inputFile, ...(cfg.inputFiles || [])];
+    return cfg.outputFiles.length <= inputs.length;
   }
-}
+  return true;
+};
+
+/** Zod schema for validating AgentConfig objects */
+export const AgentConfigSchema = z
+  .object({
+    model: z.string().default('gemini25p'),
+    agent: z.string().default('correct'),
+    instruction: z.string().default(''),
+
+    inputFile: z.string().default(''),
+    inputFiles: z.array(z.string()).default([]),
+    referenceFile: z.string().nullable().default(null),
+    referenceFiles: z.array(z.string()).default([]),
+    auxiliaryFile: z.string().nullable().default(null),
+    auxiliaryFiles: z.array(z.string()).default([]),
+    mediaFile: z.string().nullable().default(null),
+    mediaFiles: z.array(z.string()).default([]),
+    outputFiles: z.array(z.string()).nullable().default(null),
+    editedFile: z.string().nullable().default(null),
+
+    toolConfig: ToolConfigSchema.default(DEFAULT_TOOL_CONFIG),
+  })
+  .strict()
+  .refine(validateOutputFiles, {
+    message:
+      'Number of output files must not be greater than the number of input files.',
+    path: ['outputFiles'],
+  });

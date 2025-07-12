@@ -1,16 +1,17 @@
 // Standard library imports
 import * as path from 'path';
-import * as https from 'https';
+import axios from 'axios';
+import { pipeline } from 'node:stream/promises';
 
 // Third-party imports
 import * as arxivIdentifiers from 'identifiers-arxiv';
+import * as tar from 'tar';
 
 // Local imports - log
 import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
-import { executeCommand } from '@utils/system';
 import { indentLatexFilesInDirectory } from '@housekeeping/indent';
 
 export interface ExtractResult {
@@ -45,36 +46,38 @@ export class ArxivSourceProcessor {
     return null;
   }
 
-  public downloadFile(url: string, destPath: string): Promise<void> {
-    return new Promise((resolve, reject) => {
-      const file = AbsoluteFS.createWriteStream(destPath);
+  public async downloadFile(
+    url: string,
+    destPath: string,
+    timeout = 30000,
+  ): Promise<void> {
+    try {
+      const response = await axios.get(url, {
+        responseType: 'stream',
+        validateStatus: () => true,
+        timeout,
+      });
 
-      https
-        .get(url, (response) => {
-          if (response.statusCode === 404) {
-            reject(new Error('Source not available for this arXiv ID'));
-            return;
-          }
+      if (response.status === 404) {
+        throw new Error('Source not available for this arXiv ID');
+      }
 
-          if (response.statusCode !== 200) {
-            reject(
-              new Error(`Failed to download: HTTP ${response.statusCode}`),
-            );
-            return;
-          }
+      if (response.status !== 200) {
+        throw new Error(`Failed to download: HTTP ${response.status}`);
+      }
 
-          response.pipe(file);
-
-          file.on('finish', () => {
-            file.close();
-            resolve();
-          });
-        })
-        .on('error', (err) => {
-          AbsoluteFS.unlink(destPath, () => {});
-          reject(err);
-        });
-    });
+      await pipeline(
+        response.data as NodeJS.ReadableStream,
+        AbsoluteFS.createWriteStream(destPath),
+      );
+    } catch (err) {
+      try {
+        await AbsoluteFS.delete(destPath);
+      } catch {
+        // ignore errors deleting destPath
+      }
+      throw err;
+    }
   }
 
   public async extractTarFile(
@@ -87,26 +90,30 @@ export class ArxivSourceProcessor {
       `Extracting tar file: ${tarPath} to ${destDir}`,
     );
 
-    const tarCommand = `tar -xf "${tarPath}" -C "${destDir}"`;
-
-    const result = await executeCommand(tarCommand, {
-      channel: options.channel ?? this.channel,
-      timeout: options.timeout,
-      truncate: true,
-    });
-
-    if (!result.success) {
+    try {
+      const extraction = tar.x({ file: tarPath, cwd: destDir });
+      if (options.timeout) {
+        await Promise.race([
+          extraction,
+          new Promise((_, reject) =>
+            setTimeout(
+              () => reject(new Error('Extraction timed out')),
+              options.timeout,
+            ),
+          ),
+        ]);
+      } else {
+        await extraction;
+      }
+      return { success: true };
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
       logger.error(
         options.channel ?? this.channel,
-        `Failed to extract tar file: ${result.stderr}`,
+        `Failed to extract tar file: ${errorMsg}`,
       );
-      return {
-        success: false,
-        error: result.stderr || 'Unknown error during extraction',
-      };
+      return { success: false, error: errorMsg };
     }
-
-    return { success: true };
   }
 
   public async downloadSource(

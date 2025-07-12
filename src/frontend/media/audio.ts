@@ -4,8 +4,7 @@ import * as path from 'path';
 // Third-party imports
 import * as vscode from 'vscode';
 import OpenAI from 'openai';
-import spawn from 'cross-spawn';
-import type { ChildProcess } from 'child_process';
+import { execa, type Subprocess } from 'execa';
 
 // Local imports - log
 import * as logger from '@logger/logUtils';
@@ -26,7 +25,7 @@ logger.initialize(CHANNEL);
 const RECORDINGS_DIR = 'recordings';
 
 // Store active recording process
-let activeRecordingProcess: ChildProcess | null = null;
+let activeRecordingProcess: Subprocess | null = null;
 let activeRecordingPath: string | null = null;
 
 /**
@@ -93,26 +92,37 @@ export async function startRecording(
       `Starting audio recording with sox: ${soxPath} ${soxArgs.join(' ')}`,
     );
 
-    activeRecordingProcess = spawn(soxPath || 'sox', soxArgs, {
+    const subprocess = execa(soxPath || 'sox', soxArgs, {
       env: { ...process.env, PATH: extendEnvPath() },
+      reject: false,
     });
+
+    activeRecordingProcess = subprocess;
     activeRecordingPath = absPath;
 
-    activeRecordingProcess.on('error', (err) => {
-      logger.error(CHANNEL, `Sox process error: ${err}`);
-      activeRecordingProcess = null;
-      activeRecordingPath = null;
-    });
-
-    activeRecordingProcess.on('exit', (code) => {
-      logger.info(CHANNEL, `Recording process exited with code ${code}`);
-      activeRecordingProcess = null;
-      activeRecordingPath = null;
-    });
+    // Handle the subprocess promise to prevent unhandled rejection
+    subprocess
+      .then((result) => {
+        if (result.signal === 'SIGTERM') {
+          logger.info(CHANNEL, `Recording stopped intentionally`);
+        } else if (result.exitCode !== 0) {
+          logger.error(CHANNEL, `Sox process exited with code ${result.exitCode}`);
+        } else {
+          logger.info(CHANNEL, `Recording process completed successfully`);
+        }
+        activeRecordingProcess = null;
+        activeRecordingPath = null;
+      })
+      .catch((error) => {
+        // This should not happen with reject: false, but handle it just in case
+        logger.error(CHANNEL, `Sox process error: ${error.message}`);
+        activeRecordingProcess = null;
+        activeRecordingPath = null;
+      });
 
     // Capture stderr for debugging
-    activeRecordingProcess.stderr?.on('data', (data) => {
-      logger.debug(CHANNEL, `Sox stderr: ${data}`);
+    activeRecordingProcess.stderr?.on('data', (data: Buffer) => {
+      logger.debug(CHANNEL, `Sox stderr: ${data.toString()}`);
     });
 
     return { success: true, recordingPath: absPath };
