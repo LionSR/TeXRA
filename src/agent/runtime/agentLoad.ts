@@ -4,6 +4,7 @@ import * as path from 'path';
 // Third-party imports
 import * as vscode from 'vscode';
 import * as yaml from 'yaml';
+import merge from 'lodash.merge';
 
 // Local imports - agent components
 import {
@@ -55,20 +56,7 @@ export function mergeDicts(
   override: { [key: string]: any },
 ): { [key: string]: any } {
   try {
-    const result = { ...base };
-    for (const [key, value] of Object.entries(override)) {
-      if (
-        value &&
-        typeof value === 'object' &&
-        !Array.isArray(value) &&
-        key in result
-      ) {
-        result[key] = mergeDicts(result[key], value);
-      } else {
-        result[key] = value;
-      }
-    }
-    return result;
+    return merge({}, base, override);
   } catch (err) {
     vscode.window.showErrorMessage(
       `Error merging dictionaries: ${err instanceof Error ? err.message : String(err)}`,
