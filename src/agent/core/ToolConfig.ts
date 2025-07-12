@@ -20,4 +20,4 @@ export const ToolConfigSchema = z.object({
   attachTeXCount: z.boolean(),
   printInputPrompt: z.boolean(),
   autoCompileInputPdf: z.boolean(),
-});
+}).strict();
