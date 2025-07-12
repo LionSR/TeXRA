@@ -11,6 +11,8 @@ import {
   AgentSetting,
   AgentPrompt,
   AgentSettingSchema,
+  AgentPromptSchema,
+  AgentDefinitionSchema,
   DEFAULT_AGENT_PROMPTS,
 } from '@agent/core/AgentDataclass';
 
@@ -59,21 +61,19 @@ export async function loadAgentSettingAndPrompts(
 ): Promise<[AgentSetting, AgentPrompt]> {
   try {
     const agentFile = path.join(agentPath, `${agentNameFromFile}.yaml`);
-    const config = (await loadYaml(agentFile)) as any;
+    const rawConfig = await loadYaml(agentFile);
+    const config = AgentDefinitionSchema.parse(rawConfig);
 
     // Extract the agent's declared name from the root of the YAML, if present.
     // This is the authoritative name for this specific agent definition.
     // It's used for context or can be returned if needed, but not part of AgentSetting object.
-    const declaredAgentName =
-      typeof config?.name === 'string' && config.name.trim() !== ''
-        ? config.name.trim()
-        : agentNameFromFile; // Fallback to filename if no root name declared
+    const declaredAgentName = config.name;
     // logger.debug(CHANNEL, `Declared agent name for ${agentNameFromFile}: ${declaredAgentName}`); // Optional: for debugging
 
-    const parent = config?.inherits;
+    const parent = config.inherits;
 
-    let settings: Partial<AgentSetting>; // Use Partial initially for merging
-    let prompts: Partial<AgentPrompt>;
+    let settings: Partial<AgentSetting> = {};
+    let prompts: Partial<AgentPrompt> = {};
 
     if (parent) {
       // Load parent settings and prompts recursively
@@ -84,9 +84,8 @@ export async function loadAgentSettingAndPrompts(
       );
 
       // Get current agent's specific settings and prompts from its YAML
-      const agentOwnSettings = (config?.settings ||
-        {}) as Partial<AgentSetting>;
-      const agentOwnPrompts = (config?.prompts || {}) as Partial<AgentPrompt>;
+      const agentOwnSettings = config.settings ?? {};
+      const agentOwnPrompts = config.prompts ?? {};
 
       // Merge with parent settings and prompts
       settings = deepmerge(parentSettings, agentOwnSettings, {
@@ -96,23 +95,23 @@ export async function loadAgentSettingAndPrompts(
         arrayMerge: (_d, s) => s,
       });
     } else {
-      // No inheritance, merge with schema defaults by parsing empty object first
-      const baseSettings = AgentSettingSchema.parse({});
-      settings = deepmerge(
-        baseSettings,
-        (config?.settings || {}) as Partial<AgentSetting>,
-        { arrayMerge: (_d, s) => s },
-      );
-      prompts = deepmerge(
-        DEFAULT_AGENT_PROMPTS,
-        (config?.prompts || {}) as Partial<AgentPrompt>,
-        { arrayMerge: (_d, s) => s },
-      );
+      // No inheritance, just take own settings and prompts
+      settings = deepmerge({}, config.settings ?? {}, {
+        arrayMerge: (_d, s) => s,
+      });
+      prompts = deepmerge({}, config.prompts ?? {}, {
+        arrayMerge: (_d, s) => s,
+      });
     }
 
-    // Validate the final, composed settings block
+    // Apply defaults and validate the final settings and prompts
     const validatedSettings = AgentSettingSchema.parse(settings);
+    const promptsWithDefaults = deepmerge(DEFAULT_AGENT_PROMPTS, prompts, {
+      arrayMerge: (_d, s) => s,
+    });
+    const validatedPrompts = AgentPromptSchema.parse(promptsWithDefaults);
     settings = validatedSettings;
+    prompts = validatedPrompts;
 
     // The function returns the validated settings block and prompts.
     // The agent's name (declaredAgentName) is known in this scope but not part of AgentSetting.
@@ -133,42 +132,36 @@ export async function isValidAgentYaml(
   filePath: string,
 ): Promise<ValidAgentDefinition | null> {
   try {
-    const data = (await loadYaml(filePath)) as any;
-    const rootName = data?.name;
-    const settingsBlock = data?.settings;
-    const promptsBlock = data?.prompts;
+    const rawData = await loadYaml(filePath);
+    const data = AgentDefinitionSchema.parse(rawData);
 
-    if (!promptsBlock) {
+    if (!data.settings || !data.prompts) {
       logger.debug(
         CHANNEL,
-        `isValidAgentYaml check failed for ${filePath}: Prompts block is missing.`,
+        `isValidAgentYaml check failed for ${filePath}: missing settings or prompts block`,
       );
       return null;
     }
 
-    if (typeof rootName !== 'string' || rootName.trim() === '') {
+    const settingsBlock = AgentSettingSchema.parse(data.settings);
+    const promptsBlock = AgentPromptSchema.parse(
+      deepmerge(DEFAULT_AGENT_PROMPTS, data.prompts, {
+        arrayMerge: (_d, s) => s,
+      }),
+    );
+    const rootName = data.name.trim();
+
+    if (rootName === '') {
       logger.debug(
         CHANNEL,
-        `isValidAgentYaml check failed for ${filePath}: Root 'name' is missing, not a string, or empty.`,
+        `isValidAgentYaml check failed for ${filePath}: name is empty`,
       );
       return null;
     }
 
-    if (!settingsBlock) {
-      logger.debug(
-        CHANNEL,
-        `isValidAgentYaml check failed for ${filePath}: Settings block is missing.`,
-      );
-      return null;
-    }
-
-    // Validate the settings block and use the parsed result (which may include transformations)
-    const validatedSettings = AgentSettingSchema.parse(settingsBlock);
-
-    // If all checks pass, return the structure with validated settings
-    return { name: rootName.trim(), settings: validatedSettings };
+    // return structure with validated settings
+    return { name: rootName, settings: settingsBlock };
   } catch (err) {
-    // Handles errors from loadYaml or validateAgentSetting (e.g., invalid temp)
     logger.debug(
       CHANNEL,
       `isValidAgentYaml check failed for ${filePath}: ${err instanceof Error ? err.message : String(err)}`,
