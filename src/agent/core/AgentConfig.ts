@@ -72,6 +72,18 @@ export function createAgentConfig(config: Partial<AgentConfig>): AgentConfig {
   };
 }
 
+/**
+ * Checks that the number of output files does not exceed the number of input files.
+ * Extracted as a separate function for clarity and reusability.
+ */
+export const validateOutputFiles = (cfg: AgentConfig): boolean => {
+  if (cfg.outputFiles) {
+    const inputs = [cfg.inputFile, ...(cfg.inputFiles || [])];
+    return cfg.outputFiles.length <= inputs.length;
+  }
+  return true;
+};
+
 /** Zod schema for validating AgentConfig objects */
 export const AgentConfigSchema: z.ZodSchema<AgentConfig> = z
   .object({
@@ -93,13 +105,7 @@ export const AgentConfigSchema: z.ZodSchema<AgentConfig> = z
     toolConfig: ToolConfigSchema,
   })
   .refine(
-    (cfg) => {
-      if (cfg.outputFiles) {
-        const inputs = [cfg.inputFile, ...(cfg.inputFiles || [])];
-        return cfg.outputFiles.length <= inputs.length;
-      }
-      return true;
-    },
+    validateOutputFiles,
     {
       message:
         'Number of output files must not be greater than the number of input files.',
