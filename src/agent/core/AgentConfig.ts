@@ -1,5 +1,9 @@
 // Local imports - agent components
-import { ToolConfig, ToolConfigSchema } from './ToolConfig';
+import {
+  ToolConfig,
+  ToolConfigSchema,
+  DEFAULT_TOOL_CONFIG,
+} from './ToolConfig';
 import { z } from 'zod';
 
 /** Configuration interface for controlling agent execution and file handling. */
@@ -26,50 +30,12 @@ export interface AgentConfig {
 }
 
 /**
- * Default configuration for task execution and tool usage
- */
-export const DEFAULT_AGENT_CONFIG: AgentConfig = {
-  model: 'gemini25p',
-  agent: 'correct',
-  instruction: '',
-  inputFile: '',
-  inputFiles: [],
-  referenceFile: null,
-  referenceFiles: [],
-  auxiliaryFile: null,
-  auxiliaryFiles: [],
-  mediaFile: null,
-  mediaFiles: [],
-  outputFiles: null,
-  editedFile: null,
-  toolConfig: {
-    reflect: false,
-    usePrefillFromInput: false,
-    autoExtractFigure: false,
-    autoExtractTikzFigure: false,
-    attachTeXCount: false,
-    printInputPrompt: false,
-    autoCompileInputPdf: false,
-  },
-};
-
-/**
  * Creates a complete AgentConfig by merging partial config with defaults.
  * @param config Partial configuration to merge with defaults
  * @returns Complete AgentConfig with all fields populated
  */
 export function createAgentConfig(config: Partial<AgentConfig>): AgentConfig {
-  // Merge provided config with defaults, ensuring nested toolConfig is merged deeply
-  const mergedToolConfig: ToolConfig = {
-    ...DEFAULT_AGENT_CONFIG.toolConfig,
-    ...(config.toolConfig ?? {}),
-  };
-
-  return {
-    ...DEFAULT_AGENT_CONFIG,
-    ...config,
-    toolConfig: mergedToolConfig,
-  };
+  return AgentConfigSchema.parse(config);
 }
 
 /**
@@ -85,24 +51,24 @@ export const validateOutputFiles = (cfg: AgentConfig): boolean => {
 };
 
 /** Zod schema for validating AgentConfig objects */
-export const AgentConfigSchema: z.ZodSchema<AgentConfig> = z
+export const AgentConfigSchema = z
   .object({
-    model: z.string(),
-    agent: z.string(),
-    instruction: z.string(),
+    model: z.string().default('gemini25p'),
+    agent: z.string().default('correct'),
+    instruction: z.string().default(''),
 
-    inputFile: z.string(),
-    inputFiles: z.array(z.string()).nullable(),
-    referenceFile: z.string().nullable(),
-    referenceFiles: z.array(z.string()).nullable(),
-    auxiliaryFile: z.string().nullable(),
-    auxiliaryFiles: z.array(z.string()).nullable(),
-    mediaFile: z.string().nullable(),
-    mediaFiles: z.array(z.string()).nullable(),
-    outputFiles: z.array(z.string()).nullable(),
-    editedFile: z.string().nullable(),
+    inputFile: z.string().default(''),
+    inputFiles: z.array(z.string()).nullable().default([]),
+    referenceFile: z.string().nullable().default(null),
+    referenceFiles: z.array(z.string()).nullable().default([]),
+    auxiliaryFile: z.string().nullable().default(null),
+    auxiliaryFiles: z.array(z.string()).nullable().default([]),
+    mediaFile: z.string().nullable().default(null),
+    mediaFiles: z.array(z.string()).nullable().default([]),
+    outputFiles: z.array(z.string()).nullable().default(null),
+    editedFile: z.string().nullable().default(null),
 
-    toolConfig: ToolConfigSchema,
+    toolConfig: ToolConfigSchema.default(DEFAULT_TOOL_CONFIG),
   })
   .strict()
   .refine(validateOutputFiles, {
