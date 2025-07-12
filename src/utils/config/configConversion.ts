@@ -50,7 +50,8 @@ export function objectToTaskState(obj: Record<string, any>): TaskState {
     // Already in new format, just ensure it's valid
     return {
       agentConfig: AgentConfigSchema.parse(obj.agentConfig),
-      activeFiles: obj.activeFiles || createActiveFilesFromArrays(obj.agentConfig),
+      activeFiles:
+        obj.activeFiles || createActiveFilesFromArrays(obj.agentConfig),
     };
   }
 
@@ -69,26 +70,46 @@ export function objectToTaskState(obj: Record<string, any>): TaskState {
   } = obj;
 
   // Build toolConfig from extracted fields (backward compatibility)
-  if (!agentConfigData.toolConfig) {
-    agentConfigData.toolConfig = {
-      autoExtractFigure,
-      autoExtractTikzFigure,
-      autoCompileInputPdf,
-      attachTeXCount,
-      usePrefillFromInput,
-      printInputPrompt,
-      reflect,
-    };
+  // Ensure toolConfig is an object, handling cases where it might be malformed
+  if (!agentConfigData.toolConfig || typeof agentConfigData.toolConfig !== 'object') {
+    agentConfigData.toolConfig = {};
   }
+
+  // Merge top-level tool config fields into toolConfig
+  // Top-level fields take precedence for backward compatibility
+  agentConfigData.toolConfig = {
+    ...agentConfigData.toolConfig,
+    ...(autoExtractFigure !== undefined && { autoExtractFigure }),
+    ...(autoExtractTikzFigure !== undefined && { autoExtractTikzFigure }),
+    ...(autoCompileInputPdf !== undefined && { autoCompileInputPdf }),
+    ...(attachTeXCount !== undefined && { attachTeXCount }),
+    ...(usePrefillFromInput !== undefined && { usePrefillFromInput }),
+    ...(printInputPrompt !== undefined && { printInputPrompt }),
+    ...(reflect !== undefined && { reflect }),
+  };
 
   // Parse only AgentConfig-compatible fields
-  const normalized = AgentConfigSchema.parse(agentConfigData);
-  const taskState = agentConfigToTaskState(normalized);
+  try {
+    const normalized = AgentConfigSchema.parse(agentConfigData);
+    const taskState = agentConfigToTaskState(normalized);
 
-  // Add back TaskState-specific fields
-  if (activeFiles) {
-    taskState.activeFiles = activeFiles;
+    // Add back TaskState-specific fields
+    if (activeFiles) {
+      taskState.activeFiles = activeFiles;
+    }
+
+    return taskState;
+  } catch (error) {
+    // If parsing fails, create a minimal valid state
+    console.error('Failed to parse task state, using defaults:', error);
+    const defaultConfig = AgentConfigSchema.parse({});
+    const taskState = agentConfigToTaskState(defaultConfig);
+    
+    // Preserve activeFiles if available
+    if (activeFiles) {
+      taskState.activeFiles = activeFiles;
+    }
+    
+    return taskState;
   }
-
-  return taskState;
 }
