@@ -182,6 +182,14 @@ export class LogEntryFormatter {
       .replace(/&amp;/g, '&');
   }
 
+  _tryParseJson(text) {
+    try {
+      return JSON.parse(text);
+    } catch {
+      return undefined;
+    }
+  }
+
   _formatSpecialContent(message, content, contentType, logId) {
     try {
       // Unescape HTML entities that were escaped during logging
@@ -235,7 +243,10 @@ export class LogEntryFormatter {
   _formatFileList(message, content, data, logId) {
     try {
       const idAttr = logId ? ` data-log-id="${logId}"` : '';
-      const parsed = data;
+      let parsed = data;
+      if (parsed === undefined || typeof parsed === 'string') {
+        parsed = this._tryParseJson(parsed ?? content);
+      }
       if (!Array.isArray(parsed)) {
         console.warn('Missing structured data for file list log entry');
         return message;
@@ -311,7 +322,10 @@ export class LogEntryFormatter {
   _formatMissingOutputs(message, content, data, logId) {
     try {
       const idAttr = logId ? ` data-log-id="${logId}"` : '';
-      const parsed = data;
+      let parsed = data;
+      if (parsed == null || typeof parsed === 'string') {
+        parsed = this._tryParseJson(parsed ?? content);
+      }
 
       // Handle both old format (array) and new format (object with missing, xmlFile, documentTag)
       let missingFiles = [];
@@ -382,7 +396,10 @@ export class LogEntryFormatter {
   _formatLatexdiff(message, content, data, logId) {
     try {
       const idAttr = logId ? ` data-log-id="${logId}"` : '';
-      const parsed = data;
+      let parsed = data;
+      if (parsed == null || typeof parsed === 'string') {
+        parsed = this._tryParseJson(parsed ?? content);
+      }
       const entries = Array.isArray(parsed)
         ? parsed
         : parsed && typeof parsed === 'object'
@@ -447,7 +464,10 @@ export class LogEntryFormatter {
   _formatStatistics(message, content, data, logId) {
     try {
       const idAttr = logId ? ` data-log-id="${logId}"` : '';
-      const parsed = data;
+      let parsed = data;
+      if (!parsed || typeof parsed !== 'object') {
+        parsed = this._tryParseJson(content);
+      }
       if (!parsed || typeof parsed !== 'object') {
         return message;
       }
