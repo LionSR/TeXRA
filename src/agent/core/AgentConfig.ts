@@ -1,5 +1,6 @@
 // Local imports - agent components
-import { ToolConfig } from './ToolConfig';
+import { ToolConfig, ToolConfigSchema } from './ToolConfig';
+import { z } from 'zod';
 
 /** Configuration interface for controlling agent execution and file handling. */
 export interface AgentConfig {
@@ -71,18 +72,37 @@ export function createAgentConfig(config: Partial<AgentConfig>): AgentConfig {
   };
 }
 
-/**
- * Validates agent configuration for consistency and correctness.
- * @throws Error if output file count exceeds input file count
- */
-export function validateAgentConfig(config: AgentConfig): void {
-  // For multiple output agents
-  if (config.outputFiles) {
-    const allInputFiles = [config.inputFile, ...(config.inputFiles || [])];
-    if (config.outputFiles.length > allInputFiles.length) {
-      throw new Error(
+/** Zod schema for validating AgentConfig objects */
+export const AgentConfigSchema: z.ZodSchema<AgentConfig> = z
+  .object({
+    model: z.string(),
+    agent: z.string(),
+    instruction: z.string(),
+
+    inputFile: z.string(),
+    inputFiles: z.array(z.string()).nullable(),
+    referenceFile: z.string().nullable(),
+    referenceFiles: z.array(z.string()).nullable(),
+    auxiliaryFile: z.string().nullable(),
+    auxiliaryFiles: z.array(z.string()).nullable(),
+    mediaFile: z.string().nullable(),
+    mediaFiles: z.array(z.string()).nullable(),
+    outputFiles: z.array(z.string()).nullable(),
+    editedFile: z.string().nullable(),
+
+    toolConfig: ToolConfigSchema,
+  })
+  .refine(
+    (cfg) => {
+      if (cfg.outputFiles) {
+        const inputs = [cfg.inputFile, ...(cfg.inputFiles || [])];
+        return cfg.outputFiles.length <= inputs.length;
+      }
+      return true;
+    },
+    {
+      message:
         'Number of output files must not be greater than the number of input files.',
-      );
-    }
-  }
-}
+      path: ['outputFiles'],
+    },
+  );
