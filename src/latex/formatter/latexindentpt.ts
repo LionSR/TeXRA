@@ -38,7 +38,7 @@ export async function runLatexIndent(filePath: string): Promise<boolean> {
     if (latexindentConfig) {
       command.push(`-l=${latexindentConfig}`);
     }
-    command.push(`"${filePath}"`);
+    command.push(filePath);
 
     const result = await executeCommand(command, { channel: CHANNEL });
     if (!result.success) {

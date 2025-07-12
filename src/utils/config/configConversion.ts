@@ -5,9 +5,9 @@
 // (none needed)
 
 // Local imports - models
-import { AgentConfig } from '@agent/core/AgentConfig';
+import { AgentConfig, AgentConfigSchema } from '@agent/core/AgentConfig';
 import { TaskState } from '@logger/TaskState';
-import { ToolConfig } from '@agent/core/ToolConfig';
+import { ToolConfig, ToolConfigSchema } from '@agent/core/ToolConfig';
 
 import {
   SINGLE_FILE_FIELDS,
@@ -105,25 +105,8 @@ export function agentConfigToTaskState(config: AgentConfig): TaskState {
  * @returns A TaskState representing the same configuration
  */
 export function objectToTaskState(obj: Record<string, any>): TaskState {
-  // Initialize with required properties
-  const taskState: Partial<TaskState> = {
-    // Basic task info
-    agent: obj.agent || 'correct',
-    model: obj.model || 'gemini25p',
-    instruction: obj.instruction || '',
-  };
-
-  // Add single and multi-file selections
-  copyFields(taskState, obj, SINGLE_FILE_FIELDS, '', { skipOutputFile: true });
-  copyFields(taskState, obj, MULTIPLE_FILE_FIELDS, []);
-
-  // Set active file visibility
-  taskState.activeFiles = createActiveFilesFromArrays(obj);
-
-  // Add tool config settings - check both direct property and toolConfig
-  copyToolFlags(taskState, obj, false);
-
-  return taskState as TaskState;
+  const normalized = AgentConfigSchema.parse(obj);
+  return agentConfigToTaskState(normalized);
 }
 
 /**
@@ -143,8 +126,8 @@ export function taskStateToAgentConfig(taskState: TaskState): AgentConfig {
     // Edited file (not part of TaskState)
     editedFile: null,
 
-    // Initialize tool config
-    toolConfig: {} as ToolConfig,
+    // Initialize tool configuration with schema defaults
+    toolConfig: ToolConfigSchema.parse({}),
   };
 
   // Add single and multi-file selections
@@ -154,9 +137,14 @@ export function taskStateToAgentConfig(taskState: TaskState): AgentConfig {
   copyActiveFileLists(agentConfig, taskState);
 
   // Add tool config settings
-  const allConfigFields = [...AUTO_EXTRACT_FIELDS, ...TOOL_CONFIG_FIELDS];
+  const allConfigFields: (keyof ToolConfig)[] = [
+    ...AUTO_EXTRACT_FIELDS,
+    ...TOOL_CONFIG_FIELDS,
+  ];
   allConfigFields.forEach((field) => {
-    (agentConfig.toolConfig as any)[field] = (taskState as any)[field];
+    if (taskState[field] !== undefined && agentConfig.toolConfig) {
+      agentConfig.toolConfig[field] = taskState[field];
+    }
   });
 
   return agentConfig as AgentConfig;
