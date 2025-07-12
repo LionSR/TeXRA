@@ -22,7 +22,7 @@ export async function runTexFmt(filePath: string): Promise<boolean> {
     } else {
       command.push('--nowrap');
     }
-    command.push(`"${filePath}"`);
+    command.push(filePath);
 
     const result = await executeCommand(command, { channel: CHANNEL });
     if (!result.success) {
