@@ -2,7 +2,7 @@ import * as path from 'path';
 import { XMLParser } from 'fast-xml-parser';
 
 import { AgentSetting } from '@agent/core/AgentDataclass';
-import { AgentConfig } from '@agent/core/AgentConfig';
+import type { AgentConfig } from '@agent/core/AgentConfig';
 import { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import { WorkspaceFS } from '@utils/files';
