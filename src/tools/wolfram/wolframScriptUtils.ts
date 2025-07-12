@@ -40,9 +40,7 @@ export async function executeWolframCode(
   }
 
   try {
-    // Escape the code appropriately for shell execution
-    const escapedCode = code.replace(/'/g, "'\\''");
-    const command = `wolframscript -code '${escapedCode}'`;
+    const command = ['wolframscript', '-code', code];
 
     const result = await executeCommand(command, {
       truncate: false,
@@ -99,7 +97,7 @@ export async function executeWolframScriptFile(
   }
 
   try {
-    const command = `wolframscript -file "${filePath}"`;
+    const command = ['wolframscript', '-file', filePath];
 
     const result = await executeCommand(command, {
       truncate: false,

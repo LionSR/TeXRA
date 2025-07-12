@@ -4,13 +4,13 @@ import * as path from 'path';
 // Third-party imports
 import * as vscode from 'vscode';
 import * as yaml from 'yaml';
+import deepmerge from 'deepmerge';
 
 // Local imports - agent components
 import {
   AgentSetting,
   AgentPrompt,
-  validateAgentSetting,
-  DEFAULT_AGENT_SETTINGS,
+  AgentSettingSchema,
   DEFAULT_AGENT_PROMPTS,
 } from '@agent/core/AgentDataclass';
 
@@ -44,34 +44,6 @@ export async function loadYaml(absolutePath: string): Promise<object> {
   } catch (err) {
     vscode.window.showErrorMessage(
       `Error loading YAML file ${absolutePath}: ${err instanceof Error ? err.message : String(err)}`,
-    );
-    throw err;
-  }
-}
-
-/** Recursively merges two dictionaries with override values. */
-export function mergeDicts(
-  base: { [key: string]: any },
-  override: { [key: string]: any },
-): { [key: string]: any } {
-  try {
-    const result = { ...base };
-    for (const [key, value] of Object.entries(override)) {
-      if (
-        value &&
-        typeof value === 'object' &&
-        !Array.isArray(value) &&
-        key in result
-      ) {
-        result[key] = mergeDicts(result[key], value);
-      } else {
-        result[key] = value;
-      }
-    }
-    return result;
-  } catch (err) {
-    vscode.window.showErrorMessage(
-      `Error merging dictionaries: ${err instanceof Error ? err.message : String(err)}`,
     );
     throw err;
   }
@@ -117,22 +89,30 @@ export async function loadAgentSettingAndPrompts(
       const agentOwnPrompts = (config?.prompts || {}) as Partial<AgentPrompt>;
 
       // Merge with parent settings and prompts
-      settings = mergeDicts(parentSettings, agentOwnSettings);
-      prompts = mergeDicts(parentPrompts, agentOwnPrompts);
+      settings = deepmerge(parentSettings, agentOwnSettings, {
+        arrayMerge: (_d, s) => s,
+      });
+      prompts = deepmerge(parentPrompts, agentOwnPrompts, {
+        arrayMerge: (_d, s) => s,
+      });
     } else {
-      // No inheritance, use current agent's settings and prompts directly, merged with defaults
-      settings = mergeDicts(
-        DEFAULT_AGENT_SETTINGS, // DEFAULT_AGENT_SETTINGS no longer has a 'name' property
+      // No inheritance, merge with schema defaults by parsing empty object first
+      const baseSettings = AgentSettingSchema.parse({});
+      settings = deepmerge(
+        baseSettings,
         (config?.settings || {}) as Partial<AgentSetting>,
+        { arrayMerge: (_d, s) => s },
       );
-      prompts = mergeDicts(
+      prompts = deepmerge(
         DEFAULT_AGENT_PROMPTS,
         (config?.prompts || {}) as Partial<AgentPrompt>,
+        { arrayMerge: (_d, s) => s },
       );
     }
 
     // Validate the final, composed settings block
-    validateAgentSetting(settings as AgentSetting); // Cast to AgentSetting
+    const validatedSettings = AgentSettingSchema.parse(settings);
+    settings = validatedSettings;
 
     // The function returns the validated settings block and prompts.
     // The agent's name (declaredAgentName) is known in this scope but not part of AgentSetting.
@@ -182,11 +162,11 @@ export async function isValidAgentYaml(
       return null;
     }
 
-    // Validate the settings block (which no longer includes 'name' validation itself)
-    validateAgentSetting(settingsBlock as AgentSetting);
+    // Validate the settings block and use the parsed result (which may include transformations)
+    const validatedSettings = AgentSettingSchema.parse(settingsBlock);
 
-    // If all checks pass, return the structure
-    return { name: rootName.trim(), settings: settingsBlock as AgentSetting };
+    // If all checks pass, return the structure with validated settings
+    return { name: rootName.trim(), settings: validatedSettings };
   } catch (err) {
     // Handles errors from loadYaml or validateAgentSetting (e.g., invalid temp)
     logger.debug(

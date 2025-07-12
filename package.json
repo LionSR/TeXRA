@@ -1127,14 +1127,16 @@
   },
   "devDependencies": {
     "@stylistic/eslint-plugin": "^4.2.0",
-    "@types/cross-spawn": "^6.0.6",
     "@types/diff-match-patch": "^1.0.36",
     "@types/difflib": "^0.2.7",
     "@types/identifiers-arxiv": "^0.1.2",
+    "@types/mime-types": "^3.0.1",
     "@types/mocha": "^10.0.6",
     "@types/node": "^22.13.17",
     "@types/nunjucks": "^3.2.5",
+    "@types/shell-quote": "^1.7.5",
     "@types/vscode": "^1.93.0",
+    "@types/he": "^1.2.3",
     "@typescript-eslint/eslint-plugin": "^8.27.0",
     "@typescript-eslint/parser": "^8.27.0",
     "@vscode/test-cli": "^0.0.10",
@@ -1147,11 +1149,10 @@
     "prettier": "^3.4.2",
     "terser-webpack-plugin": "^5.3.14",
     "ts-loader": "^9.5.1",
-    "typescript": "^5.4.5",
+    "typescript": "^5.8.3",
     "typescript-eslint": "^8.27.0",
     "webpack": "^5.91.0",
-    "webpack-cli": "^6.0.1",
-    "@types/mime-types": "^3.0.1"
+    "webpack-cli": "^6.0.1"
   },
   "repository": {
     "type": "git",
@@ -1189,9 +1190,10 @@
     "@vscode/codicons": "^0.0.36",
     "@vscode/markdown-it-katex": "^1.1.1",
     "axios": "^1.10.0",
-    "cross-spawn": "^7.0.6",
+    "deepmerge": "^4.3.1",
     "diff-match-patch": "^1.0.5",
     "difflib": "^0.2.4",
+    "execa": "^9.6.0",
     "fast-xml-parser": "^5.2.5",
     "glob": "^11.0.3",
     "dotenv": "^16.4.5",
@@ -1200,12 +1202,17 @@
     "katex": "^0.16.22",
     "markdown-it": "^14.1.0",
     "mime-types": "^3.0.1",
+    "nanoid": "^5.1.5",
     "node-pandoc": "^0.3.0",
     "openai": "^5.8.3",
     "pdf2pic": "^3.2.0",
+    "shell-quote": "^1.8.3",
     "sortablejs": "^1.15.6",
     "split.js": "^1.6.5",
+    "he": "^1.2.0",
+    "tar": "^7.4.3",
     "winston": "^3.17.0",
-    "yaml": "^2.8.0"
+    "yaml": "^2.8.0",
+    "zod": "^3.25.76"
   }
 }
