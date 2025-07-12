@@ -4,7 +4,6 @@ import {
   MessageHandler,
 } from '@common/webview/BaseViewMessageHandler';
 import { IProgressViewProvider } from './interfaces/IProgressViewProvider';
-import { taskStateToAgentConfig } from '@utils/config';
 // @ts-ignore - Import JavaScript module
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 
@@ -95,8 +94,10 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
   ): Promise<void> {
     const taskState = this.provider.getTaskState(message.stream);
     if (taskState) {
-      const agentConfig = taskStateToAgentConfig(taskState);
-      await vscode.commands.executeCommand('texra.execute', agentConfig);
+      await vscode.commands.executeCommand(
+        'texra.execute',
+        taskState.agentConfig,
+      );
     }
   }
 
@@ -107,10 +108,10 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     const taskState = this.provider.getTaskState(message.stream);
     if (taskState) {
       await vscode.commands.executeCommand('texra.runLatexdiff', {
-        agent: taskState.agent,
-        model: taskState.model,
-        inputFile: taskState.inputFile,
-        outputFiles: taskState.outputFiles,
+        agent: taskState.agentConfig.agent,
+        model: taskState.agentConfig.model,
+        inputFile: taskState.agentConfig.inputFile,
+        outputFiles: taskState.agentConfig.outputFiles,
         outputFilesActive: taskState.activeFiles.output,
       });
     }
@@ -222,7 +223,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     if (!taskState) return;
 
     const generated = this.provider.getOutputFiles(stream);
-    const allFiles = new Set<string>(taskState.outputFiles || []);
+    const allFiles = new Set<string>(taskState.agentConfig.outputFiles || []);
     if (generated) {
       Object.values(generated).forEach((infos: any) =>
         infos.forEach((info: any) => {
@@ -237,9 +238,9 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     const outputFilesArray = Array.from(allFiles);
     await vscode.commands.executeCommand(command, {
       streamId: stream,
-      agent: taskState.agent,
-      model: taskState.model,
-      inputFile: taskState.inputFile,
+      agent: taskState.agentConfig.agent,
+      model: taskState.agentConfig.model,
+      inputFile: taskState.agentConfig.inputFile,
       outputFiles: outputFilesArray,
       activeFiles: {
         output: outputFilesArray.length > 0,
