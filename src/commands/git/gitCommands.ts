@@ -36,12 +36,18 @@ async function getRecentCommits(): Promise<string[] | null> {
   const workspacePath = WorkspaceFS.getPath();
   if (workspacePath) {
     const numberOfCommits = getConfig('git.numberOfCommitsToShow', 20);
-    
+
     // Validate numberOfCommits to prevent injection
-    if (typeof numberOfCommits !== 'number' || numberOfCommits <= 0 || numberOfCommits > 1000) {
-      throw new Error('Invalid numberOfCommits value. It must be a positive integer between 1 and 1000.');
+    if (
+      typeof numberOfCommits !== 'number' ||
+      numberOfCommits <= 0 ||
+      numberOfCommits > 1000
+    ) {
+      throw new Error(
+        'Invalid numberOfCommits value. It must be a positive integer between 1 and 1000.',
+      );
     }
-    
+
     const result = execaSync(
       'git',
       ['log', '-n', numberOfCommits.toString(), '--pretty=format:%h: %s (%cr)'],
