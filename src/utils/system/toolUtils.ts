@@ -198,7 +198,9 @@ export async function checkToolInstalled(
       // Try each command in the array until one succeeds
       for (const cmd of command) {
         const parsedArgs = shellParse(cmd);
-        const stringArgs = parsedArgs.filter((arg): arg is string => typeof arg === 'string');
+        const stringArgs = parsedArgs.filter(
+          (arg): arg is string => typeof arg === 'string',
+        );
         if (stringArgs.length === 0) continue;
         const [cmdName, ...args] = stringArgs;
         let result = execaSync(cmdName, args, execOptions);
@@ -217,7 +219,9 @@ export async function checkToolInstalled(
       }
     } else {
       const parsedArgs = shellParse(command);
-      const stringArgs = parsedArgs.filter((arg): arg is string => typeof arg === 'string');
+      const stringArgs = parsedArgs.filter(
+        (arg): arg is string => typeof arg === 'string',
+      );
       if (stringArgs.length === 0) {
         throw new Error('Invalid command: no executable found');
       }

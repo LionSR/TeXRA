@@ -87,12 +87,14 @@ export async function executeCommand(
       // Parse string command into arguments using shell-quote to handle quoted arguments
       const parsedArgs = shellParse(command);
       // Filter out non-string elements (shell-quote can return objects for operators)
-      const stringArgs = parsedArgs.filter((arg): arg is string => typeof arg === 'string');
-      
+      const stringArgs = parsedArgs.filter(
+        (arg): arg is string => typeof arg === 'string',
+      );
+
       if (stringArgs.length === 0) {
         throw new Error('Invalid command: no executable found');
       }
-      
+
       const [cmd, ...args] = stringArgs;
       logger.debug(
         options.channel ?? CHANNEL,
@@ -104,7 +106,6 @@ export async function executeCommand(
       exitCode = result.exitCode ?? 1;
       timedOut = result.timedOut ?? false;
     }
-
 
     const shouldTruncate = options.truncate ?? false;
     const processOutput = (output: string | null) =>
