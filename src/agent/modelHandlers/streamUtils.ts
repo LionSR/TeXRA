@@ -4,7 +4,7 @@ import { randomUUID } from 'crypto';
 // Local imports
 import { emitProgress } from '@eventBus/ProgressEventBus';
 import { AgentLogger } from '@logger/AgentLogger';
-import { escapeHtml } from '@logger/logUtils';
+import { encode as encodeHtml } from 'he';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 
 /**
@@ -12,7 +12,7 @@ import { MESSAGE_TYPES } from '@logger/messageTypes';
  * @param content - The text to wrap.
  * @param type - The message type value.
  */
-const escapeContent = (content: string): string => escapeHtml(content);
+const escapeContent = (content: string): string => encodeHtml(content);
 
 export async function streamReasoningToProgressView<T>(
   stream: AsyncIterable<T>,
