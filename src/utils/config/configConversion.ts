@@ -45,7 +45,16 @@ export function agentConfigToTaskState(config: AgentConfig): TaskState {
  * @returns A TaskState representing the same configuration
  */
 export function objectToTaskState(obj: Record<string, any>): TaskState {
-  // Extract UI-specific and tool config fields for backward compatibility
+  // Check if this is already in the new format with nested agentConfig
+  if (obj.agentConfig && typeof obj.agentConfig === 'object') {
+    // Already in new format, just ensure it's valid
+    return {
+      agentConfig: AgentConfigSchema.parse(obj.agentConfig),
+      activeFiles: obj.activeFiles || createActiveFilesFromArrays(obj.agentConfig),
+    };
+  }
+
+  // Old format: extract UI-specific and tool config fields for backward compatibility
   const {
     activeFiles,
     // Extract tool config fields that might be at top level in old format
@@ -59,7 +68,7 @@ export function objectToTaskState(obj: Record<string, any>): TaskState {
     ...agentConfigData
   } = obj;
 
-  // Build toolConfig if it doesn't exist (backward compatibility)
+  // Build toolConfig from extracted fields (backward compatibility)
   if (!agentConfigData.toolConfig) {
     agentConfigData.toolConfig = {
       autoExtractFigure,
