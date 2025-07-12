@@ -1,38 +1,13 @@
-// Local imports - constants
+// Local imports
 import type { FileType } from '@utils/config';
+import type { AgentConfig } from '@agent/core/AgentConfig';
 
 /** Interface for storing task execution state */
 export interface TaskState {
-  // Basic task info
-  agent: string;
-  model: string;
-  instruction: string;
+  // Agent configuration (contains all AgentConfig fields)
+  agentConfig: AgentConfig;
 
-  // File selections
-  inputFile: string;
-  referenceFile: string;
-  auxiliaryFile: string;
-  mediaFile: string;
-
-  // Multiple file selections
-  inputFiles: string[];
-  referenceFiles: string[];
-  auxiliaryFiles: string[];
-  mediaFiles: string[];
-  outputFiles: string[];
-
-  // Multiple file selection visibility
+  // UI-specific state
   /** Map of file type to active state */
   activeFiles: Record<FileType, boolean>;
-
-  // Auto extract settings
-  autoExtractFigure: boolean;
-  autoExtractTikzFigure: boolean;
-
-  // Tool config settings
-  reflect: boolean;
-  attachTeXCount: boolean;
-  usePrefillFromInput: boolean;
-  printInputPrompt: boolean;
-  autoCompileInputPdf: boolean;
 }
