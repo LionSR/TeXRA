@@ -1,5 +1,7 @@
 // Third-party imports
-import { execa, execaCommand, type Options, type ExecaError } from 'execa';
+import { execa, execaCommand, type Options, ExecaError } from 'execa';
+import { quote as shellQuote } from 'shell-quote';
+
 // Local imports - log
 import * as logger from '@logger/logUtils';
 
@@ -59,7 +61,7 @@ export async function executeCommand(
     const execaOptions: Options = {
       cwd: workspacePath,
       env,
-      encoding: encodingOption,
+      encoding: encodingOption as any,
       timeout: options.timeout,
       reject: false,
     };
@@ -77,22 +79,19 @@ export async function executeCommand(
         `Running command: ${cmd} ${args.join(' ')}`,
       );
       const result = await execa(cmd, args, execaOptions);
-      stdout = result.stdout ?? '';
-      stderr = result.stderr ?? '';
+      stdout = (result.stdout as string) ?? '';
+      stderr = (result.stderr as string) ?? '';
       exitCode = result.exitCode ?? 1;
       timedOut = result.timedOut ?? false;
     } else {
       // Use execaCommand for string commands with shell parsing
-      logger.debug(
-        options.channel ?? CHANNEL,
-        `Running command: ${command}`,
-      );
+      logger.debug(options.channel ?? CHANNEL, `Running command: ${command}`);
       const result = await execaCommand(command, {
         ...execaOptions,
         shell: true,
       });
-      stdout = result.stdout ?? '';
-      stderr = result.stderr ?? '';
+      stdout = (result.stdout as string) ?? '';
+      stderr = (result.stderr as string) ?? '';
       exitCode = result.exitCode ?? 1;
       timedOut = result.timedOut ?? false;
     }
@@ -136,7 +135,7 @@ export async function executeCommand(
     // Handle stderr from ExecaError
     let stderr = null;
     if (err instanceof ExecaError) {
-      stderr = err.stderr?.trim() || null;
+      stderr = err.stderr ? String(err.stderr).trim() : null;
     }
 
     // With reject: false, this catch block only handles actual execution errors
