@@ -83,8 +83,8 @@ export async function loadAgentSettingAndPrompts(
       );
 
       // Get current agent's specific settings and prompts from its YAML
-      const agentOwnSettings = (config.settings || {}) as Partial<AgentSetting>;
-      const agentOwnPrompts = (config.prompts || {}) as Partial<AgentPrompt>;
+      const agentOwnSettings = config.settings;
+      const agentOwnPrompts = config.prompts;
 
       // Merge with parent settings and prompts
       settings = deepmerge(parentSettings, agentOwnSettings, {
@@ -96,16 +96,12 @@ export async function loadAgentSettingAndPrompts(
     } else {
       // No inheritance, merge with schema defaults by parsing empty object first
       const baseSettings = AgentSettingSchema.parse({});
-      settings = deepmerge(
-        baseSettings,
-        (config.settings || {}) as Partial<AgentSetting>,
-        { arrayMerge: (_d, s) => s },
-      );
-      prompts = deepmerge(
-        DEFAULT_AGENT_PROMPTS,
-        (config.prompts || {}) as Partial<AgentPrompt>,
-        { arrayMerge: (_d, s) => s },
-      );
+      settings = deepmerge(baseSettings, config.settings, {
+        arrayMerge: (_d, s) => s,
+      });
+      prompts = deepmerge(DEFAULT_AGENT_PROMPTS, config.prompts, {
+        arrayMerge: (_d, s) => s,
+      });
     }
 
     // Validate the final, composed settings block
@@ -133,28 +129,10 @@ export async function isValidAgentYaml(
   try {
     const rawData = await loadYaml(filePath);
     const data = AgentDefinitionSchema.parse(rawData);
-    const rootName = data.name;
-    const settingsBlock = data.settings;
-    const promptsBlock = data.prompts;
+    const settingsBlock = AgentSettingSchema.parse(data.settings);
+    const rootName = data.name.trim();
 
-    if (!promptsBlock) {
-      logger.debug(
-        CHANNEL,
-        `isValidAgentYaml check failed for ${filePath}: Prompts block is missing.`,
-      );
-      return null;
-    }
-
-    if (!settingsBlock) {
-      logger.debug(
-        CHANNEL,
-        `isValidAgentYaml check failed for ${filePath}: Settings block is missing.`,
-      );
-      return null;
-    }
-
-    // All fields exist and were validated by AgentDefinitionSchema
-    return { name: rootName.trim(), settings: settingsBlock };
+    return { name: rootName, settings: settingsBlock };
   } catch (err) {
     // Handles errors from loadYaml or validateAgentSetting (e.g., invalid temp)
     logger.debug(
