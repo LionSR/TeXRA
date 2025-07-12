@@ -96,8 +96,13 @@ export async function loadAgentSettingAndPrompts(
         arrayMerge: (_d, s) => s,
       });
     } else {
-      // No inheritance, use current agent's settings directly
-      settings = (config?.settings || {}) as Partial<AgentSetting>;
+      // No inheritance, merge with schema defaults by parsing empty object first
+      const baseSettings = AgentSettingSchema.parse({});
+      settings = deepmerge(
+        baseSettings,
+        (config?.settings || {}) as Partial<AgentSetting>,
+        { arrayMerge: (_d, s) => s },
+      );
       prompts = deepmerge(
         DEFAULT_AGENT_PROMPTS,
         (config?.prompts || {}) as Partial<AgentPrompt>,
