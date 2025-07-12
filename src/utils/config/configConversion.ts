@@ -143,8 +143,16 @@ export function taskStateToAgentConfig(taskState: TaskState): AgentConfig {
     // Edited file (not part of TaskState)
     editedFile: null,
 
-    // Initialize tool config
-    toolConfig: {} as ToolConfig,
+    // Initialize tool config with default values
+    toolConfig: {
+      reflect: false,
+      usePrefillFromInput: false,
+      autoExtractFigure: false,
+      autoExtractTikzFigure: false,
+      attachTeXCount: false,
+      printInputPrompt: false,
+      autoCompileInputPdf: false,
+    },
   };
 
   // Add single and multi-file selections
@@ -156,7 +164,9 @@ export function taskStateToAgentConfig(taskState: TaskState): AgentConfig {
   // Add tool config settings
   const allConfigFields = [...AUTO_EXTRACT_FIELDS, ...TOOL_CONFIG_FIELDS];
   allConfigFields.forEach((field) => {
-    (agentConfig.toolConfig as any)[field] = (taskState as any)[field];
+    if ((taskState as any)[field] !== undefined) {
+      (agentConfig.toolConfig as any)[field] = (taskState as any)[field];
+    }
   });
 
   return agentConfig as AgentConfig;
