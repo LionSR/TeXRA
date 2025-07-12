@@ -6,11 +6,11 @@ import * as logger from '@logger/logUtils';
 
 // Local imports - utils
 import { capitalize } from '@frontend/ui/messageUtils';
-import { getFilesIfNotEmpty } from '@frontend/files/listing';
 import {
   isPastedImage,
   getPastedImageFullPath,
 } from '@utils/files/pastedImageUtils';
+import { getFilesIfNotEmpty } from '@frontend/files/listing';
 
 // Local imports - agent
 import { ToolConfig } from '@agent/core/ToolConfig';
