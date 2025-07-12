@@ -1,5 +1,6 @@
 // Third-party imports
 import { execa, type Options, ExecaError } from 'execa';
+import { parse as shellParse } from 'shell-quote';
 
 // Local imports - log
 import * as logger from '@logger/logUtils';
@@ -60,7 +61,7 @@ export async function executeCommand(
     const execaOptions: Options = {
       cwd: workspacePath,
       env,
-      encoding: encodingOption as any,
+      encoding: encodingOption as any, // execa v9 type compatibility
       timeout: options.timeout,
       reject: false,
     };
@@ -83,9 +84,16 @@ export async function executeCommand(
       exitCode = result.exitCode ?? 1;
       timedOut = result.timedOut ?? false;
     } else {
-      // Parse string command into arguments to avoid shell injection
-      const commandParts = command.trim().split(/\s+/);
-      const [cmd, ...args] = commandParts;
+      // Parse string command into arguments using shell-quote to handle quoted arguments
+      const parsedArgs = shellParse(command);
+      // Filter out non-string elements (shell-quote can return objects for operators)
+      const stringArgs = parsedArgs.filter((arg): arg is string => typeof arg === 'string');
+      
+      if (stringArgs.length === 0) {
+        throw new Error('Invalid command: no executable found');
+      }
+      
+      const [cmd, ...args] = stringArgs;
       logger.debug(
         options.channel ?? CHANNEL,
         `Running command: ${cmd} ${args.join(' ')}`,
