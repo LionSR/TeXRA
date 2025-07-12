@@ -1196,6 +1196,7 @@
     "execa": "^9.6.0",
     "fast-xml-parser": "^5.2.5",
     "glob": "^11.0.3",
+    "dotenv": "^16.4.5",
     "gpt-tokenizer": "^3.0.1",
     "identifiers-arxiv": "^0.1.1",
     "katex": "^0.16.22",

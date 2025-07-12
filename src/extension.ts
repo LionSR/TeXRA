@@ -1,5 +1,9 @@
+// Standard library imports
+import * as path from 'path';
+
 // Third-party imports
 import * as vscode from 'vscode';
+import dotenv from 'dotenv';
 
 // Local imports - core
 import * as logger from '@logger/logUtils';
@@ -20,6 +24,17 @@ import { WatcherManager } from './explorer/WatcherManager';
 import { registerCommands } from './commands';
 
 export async function activate(context: vscode.ExtensionContext) {
+  const workspaceRoot = vscode.workspace.workspaceFolders?.[0].uri.fsPath;
+  
+  // Load .env file only if a workspace is open
+  if (workspaceRoot) {
+    dotenv.config({
+      path: path.join(workspaceRoot, '.env'),
+    });
+  } else {
+    logger.warn('extension', 'No workspace folder is open. Skipping .env loading.');
+  }
+
   // Initialize storage systems
   SecretManager.initialize(context);
   StorageFS.initialize(context);
@@ -46,7 +61,6 @@ export async function activate(context: vscode.ExtensionContext) {
   registerCommands(context);
 
   // Register the folder explorer with context
-  const workspaceRoot = vscode.workspace.workspaceFolders?.[0].uri.fsPath;
   const folderExplorer = new FolderExplorer(workspaceRoot, context);
   const explorerOps = new ExplorerOperations(workspaceRoot, context, () =>
     folderExplorer.refresh(),
