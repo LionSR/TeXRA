@@ -104,6 +104,7 @@ export const AgentConfigSchema: z.ZodSchema<AgentConfig> = z
 
     toolConfig: ToolConfigSchema,
   })
+  .strict()
   .refine(
     validateOutputFiles,
     {
