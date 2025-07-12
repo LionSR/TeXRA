@@ -67,7 +67,7 @@ export async function loadAgentSettingAndPrompts(
     // Extract the agent's declared name from the root of the YAML, if present.
     // This is the authoritative name for this specific agent definition.
     // It's used for context or can be returned if needed, but not part of AgentSetting object.
-    const declaredAgentName = config.name;
+    const declaredAgentName = config.name?.trim() || agentNameFromFile;
     // logger.debug(CHANNEL, `Declared agent name for ${agentNameFromFile}: ${declaredAgentName}`); // Optional: for debugging
 
     const parent = config.inherits;
@@ -132,8 +132,18 @@ export async function isValidAgentYaml(
   try {
     const rawData = await loadYaml(filePath);
     const data = AgentDefinitionSchema.parse(rawData);
-    const settingsBlock = AgentSettingSchema.parse(data.settings ?? {});
-    const rootName = data.name;
+    const rootName = typeof data.name === 'string' ? data.name.trim() : '';
+
+    if (!data.settings || !data.prompts || rootName === '') {
+      logger.debug(
+        CHANNEL,
+        `isValidAgentYaml check failed for ${filePath}: Missing required blocks`,
+      );
+      return null;
+    }
+
+    const settingsBlock = AgentSettingSchema.parse(data.settings);
+    AgentPromptSchema.parse(data.prompts);
 
     return { name: rootName, settings: settingsBlock };
   } catch (err) {

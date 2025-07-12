@@ -119,10 +119,10 @@ export interface AgentPrompt {
 /** Zod schema for AgentPrompt validation */
 export const AgentPromptSchema = z
   .object({
-    systemPrompt: z.string().default(''),
-    userPrefix: z.string().default(''),
-    userRequest: z.string().default(''),
-    userReflect: z.string().default(''),
+    systemPrompt: z.string(),
+    userPrefix: z.string(),
+    userRequest: z.string(),
+    userReflect: z.string(),
   })
   .strict();
 
@@ -133,10 +133,10 @@ export const AgentPromptSchema = z
  */
 export const AgentDefinitionSchema = z
   .object({
-    name: z.string().trim().min(1),
+    name: z.string().trim().min(1).optional(),
     inherits: z.string().optional(),
-    settings: AgentSettingSchema.partial().optional(),
-    prompts: AgentPromptSchema.partial().optional(),
+    settings: z.record(z.unknown()).optional(),
+    prompts: z.record(z.unknown()).optional(),
   })
   .strict();
 
