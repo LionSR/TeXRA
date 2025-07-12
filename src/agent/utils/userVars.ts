@@ -12,7 +12,7 @@ import {
   getListOfFiles,
 } from '@agent/utils/promptUtils';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
-import { AgentConfig } from '../core/AgentConfig';
+import type { AgentConfig } from '../core/AgentConfig';
 import { AgentSetting } from '../core/AgentDataclass';
 import type { IModelHandler } from '@agent/modelHandlers';
 
