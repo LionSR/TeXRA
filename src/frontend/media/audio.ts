@@ -4,7 +4,7 @@ import * as path from 'path';
 // Third-party imports
 import * as vscode from 'vscode';
 import OpenAI from 'openai';
-import { execa, type Subprocess, type ExecaError } from 'execa';
+import { execa, type Subprocess } from 'execa';
 
 // Local imports - log
 import * as logger from '@logger/logUtils';
@@ -92,32 +92,32 @@ export async function startRecording(
       `Starting audio recording with sox: ${soxPath} ${soxArgs.join(' ')}`,
     );
 
-    activeRecordingProcess = execa(soxPath || 'sox', soxArgs, {
+    const subprocess = execa(soxPath || 'sox', soxArgs, {
       env: { ...process.env, PATH: extendEnvPath() },
       reject: false,
     });
+
+    activeRecordingProcess = subprocess;
     activeRecordingPath = absPath;
 
-    // Handle process completion and errors
-    activeRecordingProcess
-      .then((result) => {
-        if (result.signal === 'SIGTERM') {
-          logger.info(CHANNEL, `Recording stopped intentionally`);
-        } else {
-          logger.info(CHANNEL, `Recording process exited with code ${result.exitCode}`);
-        }
-        activeRecordingProcess = null;
-        activeRecordingPath = null;
-      })
-      .catch((err: ExecaError) => {
-        if (err.signal === 'SIGTERM') {
-          logger.info(CHANNEL, `Recording stopped intentionally`);
-        } else {
-          logger.error(CHANNEL, `Sox process error: ${err.message}`);
-        }
-        activeRecordingProcess = null;
-        activeRecordingPath = null;
-      });
+    // Handle process completion
+    subprocess.on('exit', (code, signal) => {
+      if (signal === 'SIGTERM') {
+        logger.info(CHANNEL, `Recording stopped intentionally`);
+      } else if (code !== 0) {
+        logger.error(CHANNEL, `Sox process exited with code ${code}`);
+      } else {
+        logger.info(CHANNEL, `Recording process completed successfully`);
+      }
+      activeRecordingProcess = null;
+      activeRecordingPath = null;
+    });
+
+    subprocess.on('error', (error) => {
+      logger.error(CHANNEL, `Sox process error: ${error.message}`);
+      activeRecordingProcess = null;
+      activeRecordingPath = null;
+    });
 
     // Capture stderr for debugging
     activeRecordingProcess.stderr?.on('data', (data: Buffer) => {
