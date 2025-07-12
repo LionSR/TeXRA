@@ -6,7 +6,6 @@ import * as logger from '@logger/logUtils';
 
 // Local imports - utils
 import { capitalize } from '@frontend/ui/messageUtils';
-import { getFilesIfNotEmpty } from '@frontend/files/listing';
 import {
   isPastedImage,
   getPastedImageFullPath,
@@ -51,20 +50,21 @@ export class ExecutionManager {
       model: message.model,
       instruction: message.instruction,
       inputFile: message.inputFile,
-      inputFiles: getFilesIfNotEmpty(message.inputFiles),
+      inputFiles: message.inputFiles ?? [],
       referenceFile: message.referenceFile,
-      referenceFiles: getFilesIfNotEmpty(message.referenceFiles),
+      referenceFiles: message.referenceFiles ?? [],
       auxiliaryFile: message.auxiliaryFile,
-      auxiliaryFiles: getFilesIfNotEmpty(message.auxiliaryFiles),
+      auxiliaryFiles: message.auxiliaryFiles ?? [],
       mediaFile: mapMediaPath(message.mediaFile),
       mediaFiles: message.mediaFiles
-        ? getFilesIfNotEmpty(
-            message.mediaFiles
-              .map(mapMediaPath)
-              .filter((f: string | null): f is string => f !== null),
-          )
-        : null,
-      outputFiles: getFilesIfNotEmpty(message.outputFiles),
+        ? message.mediaFiles
+            .map(mapMediaPath)
+            .filter((f: string | null): f is string => f !== null)
+        : [],
+      outputFiles:
+        message.outputFiles && message.outputFiles.length > 0
+          ? message.outputFiles
+          : null,
       editedFile: null,
       toolConfig,
     };
