@@ -1150,7 +1150,8 @@
     "typescript": "^5.4.5",
     "typescript-eslint": "^8.27.0",
     "webpack": "^5.91.0",
-    "webpack-cli": "^6.0.1"
+    "webpack-cli": "^6.0.1",
+    "@types/mime-types": "^3.0.1"
   },
   "repository": {
     "type": "git",
@@ -1197,6 +1198,7 @@
     "identifiers-arxiv": "^0.1.1",
     "katex": "^0.16.22",
     "markdown-it": "^14.1.0",
+    "mime-types": "^3.0.1",
     "node-pandoc": "^0.3.0",
     "openai": "^5.8.3",
     "pdf2pic": "^3.2.0",

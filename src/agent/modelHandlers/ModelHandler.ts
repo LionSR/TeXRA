@@ -8,7 +8,7 @@ import * as path from 'path';
 import { AgentLogger } from '@logger/AgentLogger';
 
 // Local imports - utilities
-import { WorkspaceFS, AbsoluteFS } from '@utils/files';
+import { WorkspaceFS, AbsoluteFS, getMimeType } from '@utils/files';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import {
   getBase64EncodedMedia,
@@ -268,16 +268,8 @@ export abstract class ModelHandler<U = any, R = any>
 
   /** Determine if extension corresponds to an audio format. */
   private isAudio(ext: string): boolean {
-    return [
-      '.wav',
-      '.m4a',
-      '.mp3',
-      '.mpeg',
-      '.aiff',
-      '.aac',
-      '.ogg',
-      '.flac',
-    ].includes(ext.toLowerCase());
+    const mimeType = getMimeType(ext);
+    return mimeType !== null && mimeType.startsWith('audio/');
   }
 
   /**
@@ -288,16 +280,6 @@ export abstract class ModelHandler<U = any, R = any>
     mediaFile: string,
     ext: string,
   ): Promise<[string | string[], string, 'image']> {
-    const imageMediaTypes: { [key: string]: string } = {
-      '.jpg': 'image/jpeg',
-      '.jpeg': 'image/jpeg',
-      '.png': 'image/png',
-      '.webp': 'image/webp',
-      '.heic': 'image/heic',
-      '.heif': 'image/heif',
-      '.gif': 'image/gif',
-    };
-
     let mediaType: string;
     let mediaData: string | string[];
 
@@ -338,16 +320,19 @@ export abstract class ModelHandler<U = any, R = any>
       } else {
         mediaData = pdfResult;
       }
-    } else if (ext in imageMediaTypes) {
-      mediaType = imageMediaTypes[ext];
-      this.logger.debug(
-        `Processing as image: ${mediaFile}, type: ${mediaType}`,
-      );
-      mediaData = await getBase64EncodedMedia(mediaFile);
     } else {
-      throw new Error(
-        `Unsupported image extension: ${ext}. Image support: ${this.capabilities.supportsVision}`,
-      );
+      const mimeType = getMimeType(mediaFile);
+      if (mimeType && mimeType.startsWith('image/')) {
+        mediaType = mimeType;
+        this.logger.debug(
+          `Processing as image: ${mediaFile}, type: ${mediaType}`,
+        );
+        mediaData = await getBase64EncodedMedia(mediaFile);
+      } else {
+        throw new Error(
+          `Unsupported image extension: ${ext}. Image support: ${this.capabilities.supportsVision}`,
+        );
+      }
     }
 
     return [mediaData, mediaType, 'image'];
@@ -358,24 +343,18 @@ export abstract class ModelHandler<U = any, R = any>
     mediaFile: string,
     ext: string,
   ): Promise<[string, string, 'audio']> {
-    const audioMediaTypes: { [key: string]: string } = {
-      '.wav': 'audio/wav',
-      '.m4a': 'audio/m4a',
-      '.mp3': 'audio/mp3',
-      '.mpeg': 'audio/mpeg',
-      '.aiff': 'audio/aiff',
-      '.aac': 'audio/aac',
-      '.ogg': 'audio/ogg',
-      '.flac': 'audio/flac',
-    };
-
-    if (!(ext in audioMediaTypes) || !this.capabilities.supportsNativeAudio) {
+    const mimeType = getMimeType(mediaFile);
+    if (
+      !mimeType ||
+      !mimeType.startsWith('audio/') ||
+      !this.capabilities.supportsNativeAudio
+    ) {
       throw new Error(
         `Unsupported or disabled audio extension: ${ext}. Audio support: ${this.capabilities.supportsNativeAudio}`,
       );
     }
 
-    const mediaType = audioMediaTypes[ext];
+    const mediaType = mimeType;
     this.logger.debug(`Processing as audio: ${mediaFile}, type: ${mediaType}`);
     let mediaData = await getBase64EncodedMedia(mediaFile);
     if (Array.isArray(mediaData)) {

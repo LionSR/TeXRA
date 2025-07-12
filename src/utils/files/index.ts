@@ -6,3 +6,4 @@ export * from './pastedImageUtils';
 export * from './baseFileUtils';
 export * from './fileMappingUtils';
 export * from './pathUtils';
+export * from './mimeUtils';
