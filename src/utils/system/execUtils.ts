@@ -1,5 +1,6 @@
 // Third-party imports
 import spawn from 'cross-spawn';
+import { quote as shellQuote } from 'shell-quote';
 
 // Local imports - log
 import * as logger from '@logger/logUtils';
@@ -47,7 +48,7 @@ export async function executeCommand(
       throw new Error('No workspace path found');
     }
 
-    const finalCommand = Array.isArray(command) ? command.join(' ') : command;
+    const finalCommand = Array.isArray(command) ? shellQuote(command) : command;
     logger.debug(
       options.channel ?? CHANNEL,
       `Running command: ${finalCommand}`,
