@@ -106,3 +106,29 @@ export interface AgentPrompt {
   userRequest: string;
   userReflect: string;
 }
+
+/** Zod schema for AgentPrompt validation */
+export const AgentPromptSchema = z
+  .object({
+    systemPrompt: z.string().optional(),
+    userPrefix: z.string().optional(),
+    userRequest: z.string().optional(),
+    userReflect: z.string().optional(),
+  })
+  .strict();
+
+/**
+ * Schema representing the full agent YAML definition.
+ * Includes the root name, optional inheritance target,
+ * settings block and prompt configuration.
+ */
+export const AgentDefinitionSchema = z
+  .object({
+    name: z.string().min(1),
+    inherits: z.string().optional(),
+    settings: AgentSettingSchema.optional(),
+    prompts: AgentPromptSchema.optional(),
+  })
+  .strict();
+
+export type AgentDefinition = z.infer<typeof AgentDefinitionSchema>;
