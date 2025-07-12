@@ -37,19 +37,8 @@ async function restoreState(config: any) {
 
     // Create a complete state object from the task state using utility function
     const taskState = objectToTaskState(config);
-    const stateToRestore = {
-      ...taskState,
-      // Ensure we keep toolConfig as a proper object for the UI
-      toolConfig: {
-        autoExtractFigure: taskState.autoExtractFigure,
-        autoExtractTikzFigure: taskState.autoExtractTikzFigure,
-        attachTeXCount: taskState.attachTeXCount,
-        usePrefillFromInput: taskState.usePrefillFromInput,
-        printInputPrompt: taskState.printInputPrompt,
-        reflect: taskState.reflect,
-        autoCompileInputPdf: taskState.autoCompileInputPdf,
-      },
-    };
+    // TaskState already has toolConfig as a nested object
+    const stateToRestore = taskState;
 
     // Try to get the webview directly using our safe command
     try {
