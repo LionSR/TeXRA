@@ -86,14 +86,14 @@ export async function compileLatex2Pdf(
           'latexmk',
           '-pdf',
           '-interaction=nonstopmode',
-          `-output-directory="${outDir}"`,
-          `"${latexFile}"`,
+          `-output-directory=${outDir}`,
+          latexFile,
         ]
       : [
           'pdflatex',
           '-interaction=nonstopmode',
-          `-output-directory="${outDir}"`,
-          `"${latexFile}"`,
+          `-output-directory=${outDir}`,
+          latexFile,
         ];
 
     const result = await executeCommand(command, { channel, env });
