@@ -1,5 +1,5 @@
 // Third-party imports
-import { execaCommand } from 'execa';
+import { execa, execaCommand, type ExecaOptions } from 'execa';
 import { quote as shellQuote } from 'shell-quote';
 
 // Local imports - log
@@ -48,42 +48,59 @@ export async function executeCommand(
       throw new Error('No workspace path found');
     }
 
-    const finalCommand = Array.isArray(command) ? shellQuote(command) : command;
-    logger.debug(
-      options.channel ?? CHANNEL,
-      `Running command: ${finalCommand}`,
-    );
-
     const env = options.env
       ? { ...process.env, ...options.env }
       : { ...process.env };
     env.PATH = extendEnvPath(env.PATH);
 
-    const encodingOption =
+    const encodingOption: BufferEncoding =
       options.encoding && options.encoding.toLowerCase() === 'utf-8'
         ? 'utf8'
-        : options.encoding;
+        : (options.encoding ?? 'utf8');
 
-    const { stdout, stderr, exitCode, timedOut } = await execaCommand(
-      finalCommand,
-      {
-        cwd: workspacePath,
-        env,
+    const execaOptions: ExecaOptions = {
+      cwd: workspacePath,
+      env,
+      encoding: encodingOption,
+      timeout: options.timeout,
+      reject: false,
+    };
+
+    let stdout: string;
+    let stderr: string;
+    let exitCode: number;
+    let timedOut: boolean;
+
+    if (Array.isArray(command)) {
+      // Use execa directly with argument array to avoid shell injection
+      const [cmd, ...args] = command;
+      logger.debug(
+        options.channel ?? CHANNEL,
+        `Running command: ${cmd} ${args.join(' ')}`,
+      );
+      const result = await execa(cmd, args, execaOptions);
+      stdout = result.stdout;
+      stderr = result.stderr;
+      exitCode = result.exitCode;
+      timedOut = result.timedOut || false;
+    } else {
+      // Use execaCommand for string commands with shell parsing
+      logger.debug(
+        options.channel ?? CHANNEL,
+        `Running command: ${command}`,
+      );
+      const result = await execaCommand(command, {
+        ...execaOptions,
         shell: true,
-        encoding: (encodingOption ?? 'utf8') as any,
-        timeout: options.timeout,
-        reject: false,
-      },
-    );
+      });
+      stdout = result.stdout;
+      stderr = result.stderr;
+      exitCode = result.exitCode;
+      timedOut = result.timedOut || false;
+    }
 
-    const stdoutStr =
-      typeof stdout === 'string'
-        ? stdout
-        : Buffer.from(stdout).toString(encodingOption ?? 'utf8');
-    const stderrStr =
-      typeof stderr === 'string'
-        ? stderr
-        : Buffer.from(stderr).toString(encodingOption ?? 'utf8');
+    const stdoutStr = stdout;
+    const stderrStr = stderr;
 
     const shouldTruncate = options.truncate ?? false;
     const processOutput = (output: string | null) =>
