@@ -1,5 +1,6 @@
 // Standard library imports
 import { execaSync } from 'execa';
+import { parse as shellParse } from 'shell-quote';
 
 // Local imports
 import { extendEnvPath, findToolInCommonPaths } from './platformPaths';
@@ -196,8 +197,10 @@ export async function checkToolInstalled(
     if (Array.isArray(command)) {
       // Try each command in the array until one succeeds
       for (const cmd of command) {
-        const cmdParts = cmd.trim().split(/\s+/);
-        const [cmdName, ...args] = cmdParts;
+        const parsedArgs = shellParse(cmd);
+        const stringArgs = parsedArgs.filter((arg): arg is string => typeof arg === 'string');
+        if (stringArgs.length === 0) continue;
+        const [cmdName, ...args] = stringArgs;
         let result = execaSync(cmdName, args, execOptions);
         if (result.exitCode === 0) {
           isInstalled = true;
@@ -213,8 +216,12 @@ export async function checkToolInstalled(
         }
       }
     } else {
-      const cmdParts = command.trim().split(/\s+/);
-      const [cmdName, ...args] = cmdParts;
+      const parsedArgs = shellParse(command);
+      const stringArgs = parsedArgs.filter((arg): arg is string => typeof arg === 'string');
+      if (stringArgs.length === 0) {
+        throw new Error('Invalid command: no executable found');
+      }
+      const [cmdName, ...args] = stringArgs;
       let result = execaSync(cmdName, args, execOptions);
       isInstalled = result.exitCode === 0;
       if (!isInstalled) {
