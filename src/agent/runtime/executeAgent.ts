@@ -11,7 +11,7 @@ import { agentConfigToTaskState } from '@utils/config';
 
 // Local imports - agent components
 import { AgentConfig, createAgentConfig } from '@agent/core/AgentConfig';
-import { AgentSetting, AgentPrompt } from '@agent/core/AgentDataclass';
+import type { AgentSetting, AgentPrompt } from '@agent/core/AgentDataclass';
 import { loadAgentSettingAndPrompts } from '@agent/runtime/agentLoad';
 
 import { MODEL_CONFIGS } from '@model/ModelRegistry';

@@ -23,7 +23,8 @@ import { SecretManager, ApiProvider } from '@frontend/secretManager';
 
 // Local imports - agent components
 import { AgentConfig } from '../core/AgentConfig';
-import { AgentSetting, hasEndTag } from '../core/AgentDataclass';
+import { hasEndTag } from '../core/AgentDataclass';
+import type { AgentSetting } from '../core/AgentDataclass';
 import { AgentStateRound, AgentStateGlobal } from '../core/AgentState';
 import {
   ModelConfig,

@@ -16,7 +16,8 @@ import { getOutputFileName } from '@agent/utils/outputFileUtils';
 
 // Local imports - agent components
 import { AgentConfig } from '@agent/core/AgentConfig';
-import { AgentSetting, AgentType } from '@agent/core/AgentDataclass';
+import { AgentType } from '@agent/core/AgentDataclass';
+import type { AgentSetting } from '@agent/core/AgentDataclass';
 import { AgentStateGlobal, AgentStateRound } from '@agent/core/AgentState';
 import type { IModelHandler } from '@agent/modelHandlers';
 

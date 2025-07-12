@@ -1,7 +1,7 @@
 import * as path from 'path';
 import { XMLParser } from 'fast-xml-parser';
 
-import { AgentSetting } from '@agent/core/AgentDataclass';
+import type { AgentSetting } from '@agent/core/AgentDataclass';
 import { AgentConfig } from '@agent/core/AgentConfig';
 import { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';

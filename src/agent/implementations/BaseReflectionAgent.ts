@@ -32,11 +32,8 @@ import xmlUtils from '@utils/text/xmlUtils';
 
 // Local imports - agent components
 import { AgentConfig } from '@agent/core/AgentConfig';
-import {
-  AgentSetting,
-  AgentPrompt,
-  AgentType,
-} from '@agent/core/AgentDataclass';
+import { AgentType } from '@agent/core/AgentDataclass';
+import type { AgentSetting, AgentPrompt } from '@agent/core/AgentDataclass';
 import { AgentStateRound, AgentStateGlobal } from '@agent/core/AgentState';
 import { ToolState } from '@agent/core/ToolState';
 import type { IModelHandler } from '@agent/modelHandlers';

@@ -7,9 +7,8 @@ import * as yaml from 'yaml';
 import deepmerge from 'deepmerge';
 
 // Local imports - agent components
+import type { AgentSetting, AgentPrompt } from '@agent/core/AgentDataclass';
 import {
-  AgentSetting,
-  AgentPrompt,
   AgentSettingSchema,
   AgentPromptSchema,
   AgentDefinitionSchema,

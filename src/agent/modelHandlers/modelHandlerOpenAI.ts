@@ -14,7 +14,8 @@ import { formatProviderError } from '@common/errors/sdkErrorUtils';
 
 // Local imports - agent components
 import { AgentConfig } from '../core/AgentConfig';
-import { AgentSetting, hasEndTag } from '../core/AgentDataclass';
+import { hasEndTag } from '../core/AgentDataclass';
+import type { AgentSetting } from '../core/AgentDataclass';
 import { AgentStateRound } from '../core/AgentState';
 import { ModelHandler } from './ModelHandler';
 import type { ProviderStopReason } from './types/StopReasonTypes';

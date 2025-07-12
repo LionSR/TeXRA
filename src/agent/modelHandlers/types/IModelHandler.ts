@@ -3,7 +3,7 @@ import type { AgentLogger } from '@logger/AgentLogger';
 
 // Local imports - agent components
 import { AgentConfig } from '../../core/AgentConfig';
-import { AgentSetting } from '../../core/AgentDataclass';
+import type { AgentSetting } from '../../core/AgentDataclass';
 import { AgentStateRound, AgentStateGlobal } from '../../core/AgentState';
 import { ToolState } from '../../core/ToolState';
 import type { MediaEntry } from '../../utils/mediaTypes';

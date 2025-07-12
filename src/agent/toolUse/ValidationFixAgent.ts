@@ -10,7 +10,7 @@ import { BaseToolUseAgent } from './BaseToolUseAgent';
 import { loadAgentSettingAndPrompts } from '@agent/runtime/agentLoad';
 
 // Local imports - types
-import { AgentPrompt, AgentSetting } from '@agent/core/AgentDataclass';
+import type { AgentPrompt, AgentSetting } from '@agent/core/AgentDataclass';
 import {
   ValidationResult,
   BaseError,
