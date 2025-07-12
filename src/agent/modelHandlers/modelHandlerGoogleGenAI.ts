@@ -445,6 +445,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
           JSON.stringify(mediaFileResults),
           undefined,
           MESSAGE_TYPES.FILE_LIST,
+          mediaFileResults,
         );
       }
     }
@@ -565,6 +566,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
           JSON.stringify(mediaFileResults),
           undefined,
           MESSAGE_TYPES.FILE_LIST,
+          mediaFileResults,
         );
       }
     }

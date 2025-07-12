@@ -476,6 +476,7 @@ export abstract class ModelHandler<U = any, R = any>
         JSON.stringify(mediaFileResults),
         undefined,
         MESSAGE_TYPES.FILE_LIST,
+        mediaFileResults,
       );
     }
 

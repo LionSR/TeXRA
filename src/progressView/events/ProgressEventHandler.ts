@@ -332,6 +332,9 @@ export class ProgressEventHandler {
     if (logMessage.messageType) {
       existing.messageType = logMessage.messageType;
     }
+    if (logMessage.data !== undefined) {
+      existing.data = logMessage.data;
+    }
 
     if (
       this.webviewUpdater.isAvailable() &&

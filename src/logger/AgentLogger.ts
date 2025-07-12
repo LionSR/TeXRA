@@ -23,43 +23,67 @@ export class AgentLogger {
     this.channelId = channelId;
   }
 
-  debug(message: string, groupId?: string, messageType?: MessageType): void {
+  debug(
+    message: string,
+    groupId?: string,
+    messageType?: MessageType,
+    data?: unknown,
+  ): void {
     logger.debug(
       this.channelId,
       message,
       groupId,
       messageType,
       this.isAgentLogger,
+      data,
     );
   }
 
-  info(message: string, groupId?: string, messageType?: MessageType): void {
+  info(
+    message: string,
+    groupId?: string,
+    messageType?: MessageType,
+    data?: unknown,
+  ): void {
     logger.info(
       this.channelId,
       message,
       groupId,
       messageType,
       this.isAgentLogger,
+      data,
     );
   }
 
-  warn(message: string, groupId?: string, messageType?: MessageType): void {
+  warn(
+    message: string,
+    groupId?: string,
+    messageType?: MessageType,
+    data?: unknown,
+  ): void {
     logger.warn(
       this.channelId,
       message,
       groupId,
       messageType,
       this.isAgentLogger,
+      data,
     );
   }
 
-  error(message: string, groupId?: string, messageType?: MessageType): void {
+  error(
+    message: string,
+    groupId?: string,
+    messageType?: MessageType,
+    data?: unknown,
+  ): void {
     logger.error(
       this.channelId,
       message,
       groupId,
       messageType,
       this.isAgentLogger,
+      data,
     );
   }
 
