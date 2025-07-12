@@ -1,5 +1,6 @@
 // Standard library imports
-import spawn from 'cross-spawn';
+import { execaSync } from 'execa';
+import { parse as shellParse } from 'shell-quote';
 
 // Local imports
 import { extendEnvPath, findToolInCommonPaths } from './platformPaths';
@@ -188,50 +189,46 @@ export async function checkToolInstalled(
 
     let isInstalled = false;
 
-    const spawnOptions = {
+    const execOptions = {
       env: { ...process.env, PATH: extendEnvPath() },
-      shell: true,
+      reject: false,
     };
 
     if (Array.isArray(command)) {
       // Try each command in the array until one succeeds
       for (const cmd of command) {
-        let result = spawn.sync(cmd, spawnOptions);
-        if (result.status === 0) {
+        const parsedArgs = shellParse(cmd);
+        const stringArgs = parsedArgs.filter((arg): arg is string => typeof arg === 'string');
+        if (stringArgs.length === 0) continue;
+        const [cmdName, ...args] = stringArgs;
+        let result = execaSync(cmdName, args, execOptions);
+        if (result.exitCode === 0) {
           isInstalled = true;
           break;
         }
-        const toolName = cmd.split(' ')[0];
-        const fallback = findToolInCommonPaths(toolName);
+        const fallback = findToolInCommonPaths(cmdName);
         if (fallback) {
-          const spaceIndex = cmd.indexOf(' ');
-          const originalArgs =
-            spaceIndex > -1 ? cmd.substring(spaceIndex + 1) : '';
-          result = spawn.sync(
-            originalArgs ? `${fallback} ${originalArgs}` : fallback,
-            spawnOptions,
-          );
-          if (result.status === 0) {
+          result = execaSync(fallback, args, execOptions);
+          if (result.exitCode === 0) {
             isInstalled = true;
             break;
           }
         }
       }
     } else {
-      let result = spawn.sync(command, spawnOptions);
-      isInstalled = result.status === 0;
+      const parsedArgs = shellParse(command);
+      const stringArgs = parsedArgs.filter((arg): arg is string => typeof arg === 'string');
+      if (stringArgs.length === 0) {
+        throw new Error('Invalid command: no executable found');
+      }
+      const [cmdName, ...args] = stringArgs;
+      let result = execaSync(cmdName, args, execOptions);
+      isInstalled = result.exitCode === 0;
       if (!isInstalled) {
-        const cmdToolName = command.split(' ')[0];
-        const fallback = findToolInCommonPaths(cmdToolName);
+        const fallback = findToolInCommonPaths(cmdName);
         if (fallback) {
-          const spaceIndex = command.indexOf(' ');
-          const originalArgs =
-            spaceIndex > -1 ? command.substring(spaceIndex + 1) : '';
-          result = spawn.sync(
-            originalArgs ? `${fallback} ${originalArgs}` : fallback,
-            spawnOptions,
-          );
-          isInstalled = result.status === 0;
+          result = execaSync(fallback, args, execOptions);
+          isInstalled = result.exitCode === 0;
         }
       }
     }
