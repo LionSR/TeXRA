@@ -5,7 +5,7 @@
 // (none needed)
 
 // Local imports - models
-import { AgentConfig } from '@agent/core/AgentConfig';
+import { AgentConfig, DEFAULT_AGENT_CONFIG } from '@agent/core/AgentConfig';
 import { TaskState } from '@logger/TaskState';
 import { ToolConfig } from '@agent/core/ToolConfig';
 
@@ -143,8 +143,8 @@ export function taskStateToAgentConfig(taskState: TaskState): AgentConfig {
     // Edited file (not part of TaskState)
     editedFile: null,
 
-    // Initialize tool config
-    toolConfig: {} as ToolConfig,
+    // Start with a copy of the default tool configuration to avoid value drift
+    toolConfig: { ...DEFAULT_AGENT_CONFIG.toolConfig },
   };
 
   // Add single and multi-file selections
@@ -154,9 +154,11 @@ export function taskStateToAgentConfig(taskState: TaskState): AgentConfig {
   copyActiveFileLists(agentConfig, taskState);
 
   // Add tool config settings
-  const allConfigFields = [...AUTO_EXTRACT_FIELDS, ...TOOL_CONFIG_FIELDS];
+  const allConfigFields: (keyof ToolConfig)[] = [...AUTO_EXTRACT_FIELDS, ...TOOL_CONFIG_FIELDS];
   allConfigFields.forEach((field) => {
-    (agentConfig.toolConfig as any)[field] = (taskState as any)[field];
+    if (taskState[field] !== undefined && agentConfig.toolConfig) {
+      agentConfig.toolConfig[field] = taskState[field];
+    }
   });
 
   return agentConfig as AgentConfig;
