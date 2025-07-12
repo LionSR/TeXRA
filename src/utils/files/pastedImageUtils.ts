@@ -1,6 +1,9 @@
 // Standard library imports
 import * as path from 'path';
 
+// Third-party imports
+import { nanoid } from 'nanoid';
+
 // Local imports
 import { StorageFS } from './storageFS';
 
@@ -36,6 +39,6 @@ export function getPastedImageDisplayName(fullPath: string): string {
  */
 export function generatePastedImageName(extension: string): string {
   const timestamp = Date.now();
-  const random = Math.random().toString(16).slice(2, 8);
+  const random = nanoid(6);
   return `${PASTED_PREFIX}${timestamp}_${random}.${extension}`;
 }
