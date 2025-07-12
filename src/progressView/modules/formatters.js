@@ -237,7 +237,8 @@ export class LogEntryFormatter {
       const idAttr = logId ? ` data-log-id="${logId}"` : '';
       const parsed = data;
       if (!Array.isArray(parsed)) {
-        throw new Error('Invalid file list');
+        console.warn('Missing structured data for file list log entry');
+        return message;
       }
 
       // Group files by source for better organization
@@ -326,7 +327,8 @@ export class LogEntryFormatter {
         xmlFile = parsed.xmlFile;
         documentTag = parsed.documentTag;
       } else {
-        throw new Error('Invalid missing outputs format');
+        console.warn('Missing structured data for missing outputs log entry');
+        return message;
       }
 
       const items = missingFiles
