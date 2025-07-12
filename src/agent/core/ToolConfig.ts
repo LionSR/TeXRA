@@ -12,12 +12,14 @@ export interface ToolConfig {
 }
 
 /** Zod schema for validating ToolConfig objects */
-export const ToolConfigSchema = z.object({
-  reflect: z.boolean(),
-  usePrefillFromInput: z.boolean(),
-  autoExtractFigure: z.boolean(),
-  autoExtractTikzFigure: z.boolean(),
-  attachTeXCount: z.boolean(),
-  printInputPrompt: z.boolean(),
-  autoCompileInputPdf: z.boolean(),
-}).strict();
+export const ToolConfigSchema = z
+  .object({
+    reflect: z.boolean(),
+    usePrefillFromInput: z.boolean(),
+    autoExtractFigure: z.boolean(),
+    autoExtractTikzFigure: z.boolean(),
+    attachTeXCount: z.boolean(),
+    printInputPrompt: z.boolean(),
+    autoCompileInputPdf: z.boolean(),
+  })
+  .strict();

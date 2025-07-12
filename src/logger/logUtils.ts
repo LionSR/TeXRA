@@ -43,7 +43,6 @@ export function getColorForLevel(level: string): string {
 
 // Group State
 
-
 // Main TeXRA output channel for non-agent logs
 let mainOutputChannel: vscode.OutputChannel | null = null;
 
