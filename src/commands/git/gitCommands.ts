@@ -1,5 +1,5 @@
 // Standard library imports
-import spawn from 'cross-spawn';
+import { execaCommandSync } from 'execa';
 
 // Third-party imports
 import * as vscode from 'vscode';
@@ -18,10 +18,10 @@ export function registerGitCommands(context: vscode.ExtensionContext) {
 async function isGitRepository(): Promise<boolean> {
   const workspacePath = WorkspaceFS.getPath();
   if (workspacePath) {
-    const result = spawn.sync('git', ['rev-parse', '--is-inside-work-tree'], {
+    const result = execaCommandSync('git rev-parse --is-inside-work-tree', {
       cwd: workspacePath,
     });
-    return result.status === 0;
+    return result.exitCode === 0;
   }
   return false;
 }
@@ -35,12 +35,11 @@ async function getRecentCommits(): Promise<string[] | null> {
   const workspacePath = WorkspaceFS.getPath();
   if (workspacePath) {
     const numberOfCommits = getConfig('git.numberOfCommitsToShow', 20);
-    const result = spawn.sync(
-      'git',
-      ['log', '-n', String(numberOfCommits), '--pretty=format:%h: %s (%cr)'],
+    const result = execaCommandSync(
+      `git log -n ${numberOfCommits} --pretty=format:%h: %s (%cr)`,
       { cwd: workspacePath },
     );
-    if (result.status !== 0) {
+    if (result.exitCode !== 0) {
       return [];
     }
     return result.stdout
