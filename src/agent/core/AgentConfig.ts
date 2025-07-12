@@ -105,11 +105,8 @@ export const AgentConfigSchema: z.ZodSchema<AgentConfig> = z
     toolConfig: ToolConfigSchema,
   })
   .strict()
-  .refine(
-    validateOutputFiles,
-    {
-      message:
-        'Number of output files must not be greater than the number of input files.',
-      path: ['outputFiles'],
-    },
-  );
+  .refine(validateOutputFiles, {
+    message:
+      'Number of output files must not be greater than the number of input files.',
+    path: ['outputFiles'],
+  });
