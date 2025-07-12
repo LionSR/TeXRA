@@ -1,5 +1,5 @@
 // Local imports - agent components
-import { AgentConfig } from './AgentConfig';
+import type { AgentConfig } from './AgentConfig';
 
 /**
  * Minimal interface implemented by all agent types.
