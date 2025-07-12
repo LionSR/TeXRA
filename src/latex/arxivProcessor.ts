@@ -4,13 +4,13 @@ import * as https from 'https';
 
 // Third-party imports
 import * as arxivIdentifiers from 'identifiers-arxiv';
+import * as tar from 'tar';
 
 // Local imports - log
 import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
-import { executeCommand } from '@utils/system';
 import { indentLatexFilesInDirectory } from '@housekeeping/indent';
 
 export interface ExtractResult {
@@ -87,26 +87,30 @@ export class ArxivSourceProcessor {
       `Extracting tar file: ${tarPath} to ${destDir}`,
     );
 
-    const tarCommand = `tar -xf "${tarPath}" -C "${destDir}"`;
-
-    const result = await executeCommand(tarCommand, {
-      channel: options.channel ?? this.channel,
-      timeout: options.timeout,
-      truncate: true,
-    });
-
-    if (!result.success) {
+    try {
+      const extraction = tar.x({ file: tarPath, cwd: destDir });
+      if (options.timeout) {
+        await Promise.race([
+          extraction,
+          new Promise((_, reject) =>
+            setTimeout(
+              () => reject(new Error('Extraction timed out')),
+              options.timeout,
+            ),
+          ),
+        ]);
+      } else {
+        await extraction;
+      }
+      return { success: true };
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
       logger.error(
         options.channel ?? this.channel,
-        `Failed to extract tar file: ${result.stderr}`,
+        `Failed to extract tar file: ${errorMsg}`,
       );
-      return {
-        success: false,
-        error: result.stderr || 'Unknown error during extraction',
-      };
+      return { success: false, error: errorMsg };
     }
-
-    return { success: true };
   }
 
   public async downloadSource(
