@@ -70,6 +70,8 @@ This document sets the common conventions for contributions. Follow these norms 
 - Initialize new agent YAML files from the provided template for a consistent structure.
 - Dispose event listeners and watchers when webviews close to prevent leaks.
 - Maintain provider capabilities and pricing info in `ModelRegistry`.
+- Define runtime schemas with `zod` and infer the corresponding TypeScript
+  types using `z.infer<typeof schema>` instead of writing separate interfaces.
 - Prefer debug logging for routine events; reserve info and error levels for important messages.
 - When refactoring classes for separation of concerns, avoid backward compatibility pass-through methods. Instead:
   - Organize functionality into focused manager classes (e.g., `TaskGroups`, `StreamTabs`, `FileList`)
