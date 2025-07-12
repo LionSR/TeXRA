@@ -149,6 +149,7 @@ export class StatisticsReporter {
         JSON.stringify(payload),
         statsGroupId,
         MESSAGE_TYPES.STATISTICS,
+        payload,
       );
     } catch (error) {
       this.logger.error(`Error printing statistics: ${error}`, statsGroupId);
