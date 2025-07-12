@@ -5,7 +5,7 @@
 // (none needed)
 
 // Local imports - models
-import { AgentConfig } from '@agent/core/AgentConfig';
+import { AgentConfig, DEFAULT_AGENT_CONFIG } from '@agent/core/AgentConfig';
 import { TaskState } from '@logger/TaskState';
 import { ToolConfig } from '@agent/core/ToolConfig';
 
@@ -143,16 +143,8 @@ export function taskStateToAgentConfig(taskState: TaskState): AgentConfig {
     // Edited file (not part of TaskState)
     editedFile: null,
 
-    // Initialize tool config with default values
-    toolConfig: {
-      reflect: false,
-      usePrefillFromInput: false,
-      autoExtractFigure: false,
-      autoExtractTikzFigure: false,
-      attachTeXCount: false,
-      printInputPrompt: false,
-      autoCompileInputPdf: false,
-    },
+    // Start with a copy of the default tool configuration to avoid value drift
+    toolConfig: { ...DEFAULT_AGENT_CONFIG.toolConfig },
   };
 
   // Add single and multi-file selections
