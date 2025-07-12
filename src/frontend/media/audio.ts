@@ -100,24 +100,25 @@ export async function startRecording(
     activeRecordingProcess = subprocess;
     activeRecordingPath = absPath;
 
-    // Handle process completion
-    subprocess.on('exit', (code, signal) => {
-      if (signal === 'SIGTERM') {
-        logger.info(CHANNEL, `Recording stopped intentionally`);
-      } else if (code !== 0) {
-        logger.error(CHANNEL, `Sox process exited with code ${code}`);
-      } else {
-        logger.info(CHANNEL, `Recording process completed successfully`);
-      }
-      activeRecordingProcess = null;
-      activeRecordingPath = null;
-    });
-
-    subprocess.on('error', (error) => {
-      logger.error(CHANNEL, `Sox process error: ${error.message}`);
-      activeRecordingProcess = null;
-      activeRecordingPath = null;
-    });
+    // Handle the subprocess promise to prevent unhandled rejection
+    subprocess
+      .then((result) => {
+        if (result.signal === 'SIGTERM') {
+          logger.info(CHANNEL, `Recording stopped intentionally`);
+        } else if (result.exitCode !== 0) {
+          logger.error(CHANNEL, `Sox process exited with code ${result.exitCode}`);
+        } else {
+          logger.info(CHANNEL, `Recording process completed successfully`);
+        }
+        activeRecordingProcess = null;
+        activeRecordingPath = null;
+      })
+      .catch((error) => {
+        // This should not happen with reject: false, but handle it just in case
+        logger.error(CHANNEL, `Sox process error: ${error.message}`);
+        activeRecordingProcess = null;
+        activeRecordingPath = null;
+      });
 
     // Capture stderr for debugging
     activeRecordingProcess.stderr?.on('data', (data: Buffer) => {
