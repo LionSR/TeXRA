@@ -2,6 +2,7 @@
 import * as vscode from 'vscode';
 import * as winston from 'winston';
 import Transport from 'winston-transport';
+import { encode as encodeHtml, decode as decodeHtml } from 'he';
 import { randomUUID } from 'crypto';
 
 // Local imports - progressView
@@ -41,26 +42,6 @@ export function getColorForLevel(level: string): string {
 }
 
 // Group State
-
-// Helper function to escape HTML tags
-export function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
-}
-
-// Helper function to unescape HTML tags
-export function unescapeHtml(text: string): string {
-  return text
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#039;/g, "'")
-    .replace(/&amp;/g, '&');
-}
 
 // Main TeXRA output channel for non-agent logs
 let mainOutputChannel: vscode.OutputChannel | null = null;
@@ -137,7 +118,7 @@ class VSCodeTransport extends Transport {
       return;
     }
 
-    const processedMessage = escapeHtml(message);
+    const processedMessage = encodeHtml(message);
 
     const msgType: MessageType = isValidMessageType(messageType)
       ? messageType
