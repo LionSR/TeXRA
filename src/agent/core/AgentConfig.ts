@@ -1,5 +1,7 @@
 // Local imports - agent components
-import { ToolConfig } from './ToolConfig';
+import { ToolConfig, ToolConfigSchema } from './ToolConfig';
+// Third-party imports
+import { z } from 'zod';
 
 /** Configuration interface for controlling agent execution and file handling. */
 export interface AgentConfig {
@@ -23,6 +25,36 @@ export interface AgentConfig {
   // Tool configuration
   toolConfig: ToolConfig;
 }
+
+/** Zod schema for ToolConfig */
+export const AgentConfigSchema = z
+  .object({
+    model: z.string(),
+    agent: z.string(),
+    instruction: z.string(),
+    inputFile: z.string(),
+    inputFiles: z.array(z.string()).nullable(),
+    referenceFile: z.string().nullable(),
+    referenceFiles: z.array(z.string()).nullable(),
+    auxiliaryFile: z.string().nullable(),
+    auxiliaryFiles: z.array(z.string()).nullable(),
+    mediaFile: z.string().nullable(),
+    mediaFiles: z.array(z.string()).nullable(),
+    outputFiles: z.array(z.string()).nullable(),
+    editedFile: z.string().nullable(),
+    toolConfig: ToolConfigSchema,
+  })
+  .refine(
+    (cfg) =>
+      !cfg.outputFiles ||
+      cfg.outputFiles.length <=
+        [cfg.inputFile, ...(cfg.inputFiles || [])].length,
+    {
+      message:
+        'Number of output files must not be greater than the number of input files.',
+      path: ['outputFiles'],
+    },
+  );
 
 /**
  * Default configuration for task execution and tool usage
@@ -59,13 +91,5 @@ export function createAgentConfig(config: Partial<AgentConfig>): AgentConfig {
  * @throws Error if output file count exceeds input file count
  */
 export function validateAgentConfig(config: AgentConfig): void {
-  // For multiple output agents
-  if (config.outputFiles) {
-    const allInputFiles = [config.inputFile, ...(config.inputFiles || [])];
-    if (config.outputFiles.length > allInputFiles.length) {
-      throw new Error(
-        'Number of output files must not be greater than the number of input files.',
-      );
-    }
-  }
+  AgentConfigSchema.parse(config);
 }
