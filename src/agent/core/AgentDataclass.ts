@@ -29,7 +29,7 @@ export const AgentSettingSchema = z
     temperature: z.number().min(0).max(1).nullable().default(0.0),
     isRewrite: z.boolean().default(true),
 
-    rounds: z.number().optional().default(2),
+    rounds: z.number().default(2),
     prefills: z.array(z.string()).default([]),
     outputExt: z.string().default('txt'),
     endTag: z.string().default('</latex_document>'),
@@ -39,7 +39,7 @@ export const AgentSettingSchema = z
     defaultOutputFiles: z.array(z.string()).default([]),
     filePatternsContain: z.array(z.record(z.string())).default([]),
 
-    tools: z.array(ToolDefinitionSchema).optional().default([]),
+    tools: z.array(ToolDefinitionSchema).default([]),
   })
   .strict();
 
@@ -60,7 +60,7 @@ export interface AgentSetting {
   isRewrite: boolean;
 
   /** Number of conversation rounds to run. */
-  rounds?: number;
+  rounds: number;
 
   /** Generation settings */
   prefills: string[];
@@ -74,7 +74,7 @@ export interface AgentSetting {
   filePatternsContain: Array<Record<string, string>>;
 
   /** Tool definitions available to the agent */
-  tools?: ToolDefinition[];
+  tools: ToolDefinition[];
 }
 
 /**
