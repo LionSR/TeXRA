@@ -118,35 +118,41 @@ async function handlePackSingle(
   emitProgress('clearTaskOutput', streamId);
 }
 
-async function handlePackMultiple(
-  inputFile: string,
-  agent: string,
-  model: string,
-  outputFiles: string[] = [],
-) {
+async function handlePackMultiple(config: {
+  streamId?: string;
+  [key: string]: any;
+}) {
   logger.debug(
     CHANNEL,
-    `Command called with: inputFile=${inputFile}, agent=${agent}, model=${model}`,
+    `Command called with config: ${JSON.stringify(config)}`,
   );
-  logger.debug(CHANNEL, `Additional files: ${outputFiles.join(', ')}`);
 
-  if ((!inputFile && !outputFiles.length) || !agent || !model) {
-    const missing = [];
-    if (!inputFile && !outputFiles.length)
-      missing.push('inputFile or outputFiles');
-    if (!agent) missing.push('agent');
-    if (!model) missing.push('model');
-    await showLoggedMessage(
-      CHANNEL,
-      `Missing required parameters for packMultiple: ${missing.join(', ')}`,
-    );
+  const parsed = HousekeepingCommandConfigSchema.safeParse(config);
+  if (!parsed.success) {
+    const issues = parsed.error.errors
+      .map((e) => `${e.path.join('.')} ${e.message}`)
+      .join('; ');
+    await showLoggedMessage(CHANNEL, `Invalid pack configuration: ${issues}`);
     return;
   }
+  const cfg = parsed.data;
 
-  const result = await runPackMultiple(model, inputFile, agent, outputFiles);
-  showPackResult(result, inputFile);
+  const outputFiles = cfg.activeFiles?.output ? cfg.outputFiles || [] : [];
 
-  const streamId = getStreamTabId(agent, model, inputFile, outputFiles);
+  const result = await runPackMultiple(
+    cfg.model,
+    cfg.inputFile,
+    cfg.agent,
+    outputFiles,
+  );
+  showPackResult(result, cfg.inputFile);
+
+  const streamId = getStreamTabId(
+    cfg.agent,
+    cfg.model,
+    cfg.inputFile,
+    outputFiles,
+  );
   emitProgress('clearOutputFiles', streamId);
   emitProgress('clearMissingOutputs', streamId);
   emitProgress('clearTaskOutput', streamId);

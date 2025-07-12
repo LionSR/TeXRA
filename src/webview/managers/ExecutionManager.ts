@@ -51,20 +51,20 @@ export class ExecutionManager {
       model: message.model,
       instruction: message.instruction,
       inputFile: message.inputFile,
-      inputFiles: getFilesIfNotEmpty(message.inputFiles),
+      inputFiles: getFilesIfNotEmpty(message.inputFiles) || [],
       referenceFile: message.referenceFile,
-      referenceFiles: getFilesIfNotEmpty(message.referenceFiles),
+      referenceFiles: getFilesIfNotEmpty(message.referenceFiles) || [],
       auxiliaryFile: message.auxiliaryFile,
-      auxiliaryFiles: getFilesIfNotEmpty(message.auxiliaryFiles),
+      auxiliaryFiles: getFilesIfNotEmpty(message.auxiliaryFiles) || [],
       mediaFile: mapMediaPath(message.mediaFile),
       mediaFiles: message.mediaFiles
         ? getFilesIfNotEmpty(
             message.mediaFiles
               .map(mapMediaPath)
               .filter((f: string | null): f is string => f !== null),
-          )
-        : null,
-      outputFiles: getFilesIfNotEmpty(message.outputFiles),
+          ) || []
+        : [],
+      outputFiles: getFilesIfNotEmpty(message.outputFiles) || [],
       editedFile: null,
       toolConfig,
     };
@@ -100,7 +100,15 @@ export class ExecutionManager {
   }
 
   handleHousekeeping(message: any): void {
-    vscode.commands.executeCommand(`texra.${message.command}`);
+    const config = {
+      agent: message.agent,
+      model: message.model,
+      inputFile: message.inputFile,
+      outputFiles: message.outputFiles,
+      activeFiles: message.activeFiles,
+      streamId: message.streamId,
+    };
+    vscode.commands.executeCommand(`texra.${message.command}`, config);
   }
 
   handleSingleOperation(message: any): void {
@@ -125,12 +133,14 @@ export class ExecutionManager {
       `${capitalize(operation)} multiple files: ${message.inputFile}, ${outputFilesStr}`,
     );
 
-    vscode.commands.executeCommand(
-      `texra.${message.command}`,
-      message.inputFile,
-      message.agent,
-      message.model,
-      message.outputFiles,
-    );
+    const config = {
+      agent: message.agent,
+      model: message.model,
+      inputFile: message.inputFile,
+      outputFiles: message.outputFiles,
+      activeFiles: message.activeFiles,
+      streamId: message.streamId,
+    };
+    vscode.commands.executeCommand(`texra.${message.command}`, config);
   }
 }

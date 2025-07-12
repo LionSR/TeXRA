@@ -85,34 +85,41 @@ async function handleCleanSingle(
   emitProgress('clearTaskOutput', streamId);
 }
 
-async function handleCleanMultiple(
-  inputFile: string,
-  agent: string,
-  model: string,
-  outputFiles: string[] = [],
-) {
+async function handleCleanMultiple(config: {
+  streamId?: string;
+  [key: string]: any;
+}) {
   logger.debug(
     CHANNEL,
-    `Command called with: inputFile=${inputFile}, agent=${agent}, model=${model}`,
+    `Command called with config: ${JSON.stringify(config)}`,
   );
-  logger.debug(CHANNEL, `Additional files: ${outputFiles.join(', ')}`);
 
-  if (!inputFile || !agent || !model) {
-    const missing = [];
-    if (!inputFile) missing.push('inputFile');
-    if (!agent) missing.push('agent');
-    if (!model) missing.push('model');
-    await showLoggedMessage(
-      CHANNEL,
-      `Missing required parameters for cleanMultiple: ${missing.join(', ')}`,
-    );
+  const parsed = HousekeepingCommandConfigSchema.safeParse(config);
+  if (!parsed.success) {
+    const issues = parsed.error.errors
+      .map((e) => `${e.path.join('.')} ${e.message}`)
+      .join('; ');
+    await showLoggedMessage(CHANNEL, `Invalid clean configuration: ${issues}`);
     return;
   }
+  const cfg = parsed.data;
 
-  const result = await runCleanMultiple(model, inputFile, agent, outputFiles);
-  showCleanResult(result, inputFile);
+  const outputFiles = cfg.activeFiles?.output ? cfg.outputFiles || [] : [];
 
-  const streamId = getStreamTabId(agent, model, inputFile, outputFiles);
+  const result = await runCleanMultiple(
+    cfg.model,
+    cfg.inputFile,
+    cfg.agent,
+    outputFiles,
+  );
+  showCleanResult(result, cfg.inputFile);
+
+  const streamId = getStreamTabId(
+    cfg.agent,
+    cfg.model,
+    cfg.inputFile,
+    outputFiles,
+  );
   emitProgress('clearOutputFiles', streamId);
   emitProgress('clearMissingOutputs', streamId);
   emitProgress('clearTaskOutput', streamId);
