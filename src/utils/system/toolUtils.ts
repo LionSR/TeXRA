@@ -1,5 +1,5 @@
 // Standard library imports
-import { execaCommandSync } from 'execa';
+import { execaSync } from 'execa';
 
 // Local imports
 import { extendEnvPath, findToolInCommonPaths } from './platformPaths';
@@ -190,27 +190,22 @@ export async function checkToolInstalled(
 
     const execOptions = {
       env: { ...process.env, PATH: extendEnvPath() },
-      shell: true,
+      reject: false,
     };
 
     if (Array.isArray(command)) {
       // Try each command in the array until one succeeds
       for (const cmd of command) {
-        let result = execaCommandSync(cmd, execOptions);
+        const cmdParts = cmd.trim().split(/\s+/);
+        const [cmdName, ...args] = cmdParts;
+        let result = execaSync(cmdName, args, execOptions);
         if (result.exitCode === 0) {
           isInstalled = true;
           break;
         }
-        const toolName = cmd.split(' ')[0];
-        const fallback = findToolInCommonPaths(toolName);
+        const fallback = findToolInCommonPaths(cmdName);
         if (fallback) {
-          const spaceIndex = cmd.indexOf(' ');
-          const originalArgs =
-            spaceIndex > -1 ? cmd.substring(spaceIndex + 1) : '';
-          result = execaCommandSync(
-            originalArgs ? `${fallback} ${originalArgs}` : fallback,
-            execOptions,
-          );
+          result = execaSync(fallback, args, execOptions);
           if (result.exitCode === 0) {
             isInstalled = true;
             break;
@@ -218,19 +213,14 @@ export async function checkToolInstalled(
         }
       }
     } else {
-      let result = execaCommandSync(command, execOptions);
+      const cmdParts = command.trim().split(/\s+/);
+      const [cmdName, ...args] = cmdParts;
+      let result = execaSync(cmdName, args, execOptions);
       isInstalled = result.exitCode === 0;
       if (!isInstalled) {
-        const cmdToolName = command.split(' ')[0];
-        const fallback = findToolInCommonPaths(cmdToolName);
+        const fallback = findToolInCommonPaths(cmdName);
         if (fallback) {
-          const spaceIndex = command.indexOf(' ');
-          const originalArgs =
-            spaceIndex > -1 ? command.substring(spaceIndex + 1) : '';
-          result = execaCommandSync(
-            originalArgs ? `${fallback} ${originalArgs}` : fallback,
-            execOptions,
-          );
+          result = execaSync(fallback, args, execOptions);
           isInstalled = result.exitCode === 0;
         }
       }
