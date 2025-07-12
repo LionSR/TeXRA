@@ -21,6 +21,8 @@ Before you can use TeXRA's AI features, you need to provide API keys for the ser
 
 Repeat this process for each AI provider you plan to use with TeXRA.
 
+You can also place a `.env` file in your workspace with variables like `OPENAI_API_KEY`. TeXRA loads this automatically so you don't need to enter keys every time.
+
 ## Basic Workflow
 
 The typical TeXRA workflow consists of these steps:
