@@ -1,6 +1,5 @@
 // Third-party imports
-import { execa, execaCommand, type Options, ExecaError } from 'execa';
-import { quote as shellQuote } from 'shell-quote';
+import { execa, type Options, ExecaError } from 'execa';
 
 // Local imports - log
 import * as logger from '@logger/logUtils';
@@ -84,20 +83,20 @@ export async function executeCommand(
       exitCode = result.exitCode ?? 1;
       timedOut = result.timedOut ?? false;
     } else {
-      // Use execaCommand for string commands with shell parsing
-      logger.debug(options.channel ?? CHANNEL, `Running command: ${command}`);
-      const result = await execaCommand(command, {
-        ...execaOptions,
-        shell: true,
-      });
+      // Parse string command into arguments to avoid shell injection
+      const commandParts = command.trim().split(/\s+/);
+      const [cmd, ...args] = commandParts;
+      logger.debug(
+        options.channel ?? CHANNEL,
+        `Running command: ${cmd} ${args.join(' ')}`,
+      );
+      const result = await execa(cmd, args, execaOptions);
       stdout = (result.stdout as string) ?? '';
       stderr = (result.stderr as string) ?? '';
       exitCode = result.exitCode ?? 1;
       timedOut = result.timedOut ?? false;
     }
 
-    const stdoutStr = stdout;
-    const stderrStr = stderr;
 
     const shouldTruncate = options.truncate ?? false;
     const processOutput = (output: string | null) =>
@@ -105,10 +104,10 @@ export async function executeCommand(
         ? truncateOutput(output?.trim() || null)
         : output?.trim() || null;
 
-    if (stderrStr && stderrStr.trim()) {
+    if (stderr && stderr.trim()) {
       logger.debug(
         options.channel ?? CHANNEL,
-        `Command stderr: ${processOutput(stderrStr)}`,
+        `Command stderr: ${processOutput(stderr)}`,
       );
     }
 
@@ -121,8 +120,8 @@ export async function executeCommand(
 
     return {
       success: exitCode === 0 && !timedOut,
-      stdout: processOutput(stdoutStr),
-      stderr: processOutput(stderrStr),
+      stdout: processOutput(stdout),
+      stderr: processOutput(stderr),
       timedOut,
     };
   } catch (err) {
