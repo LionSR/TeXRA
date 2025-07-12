@@ -1,6 +1,6 @@
 // Third-party imports
-import spawn from 'cross-spawn';
-import { quote as shellQuote } from 'shell-quote';
+import { execa, type Options, ExecaError } from 'execa';
+import { parse as shellParse } from 'shell-quote';
 
 // Local imports - log
 import * as logger from '@logger/logUtils';
@@ -48,61 +48,63 @@ export async function executeCommand(
       throw new Error('No workspace path found');
     }
 
-    const finalCommand = Array.isArray(command) ? shellQuote(command) : command;
-    logger.debug(
-      options.channel ?? CHANNEL,
-      `Running command: ${finalCommand}`,
-    );
-
     const env = options.env
       ? { ...process.env, ...options.env }
       : { ...process.env };
     env.PATH = extendEnvPath(env.PATH);
 
-    const spawnOptions = {
+    const encodingOption: BufferEncoding =
+      options.encoding && options.encoding.toLowerCase() === 'utf-8'
+        ? 'utf8'
+        : (options.encoding ?? 'utf8');
+
+    const execaOptions: Options = {
       cwd: workspacePath,
       env,
-      shell: true,
+      encoding: encodingOption as any, // execa v9 type compatibility
+      timeout: options.timeout,
+      reject: false,
     };
 
-    const result = await new Promise<{
-      stdout: string;
-      stderr: string;
-      exitCode: number | null;
-      timedOut: boolean;
-    }>((resolve, reject) => {
-      let stdout = '';
-      let stderr = '';
-      let timedOut = false;
-      const child = spawn(finalCommand, [], spawnOptions);
+    let stdout: string;
+    let stderr: string;
+    let exitCode: number;
+    let timedOut: boolean;
 
-      child.stdout?.on('data', (data) => {
-        stdout += data.toString(options.encoding ?? 'utf8');
-      });
-      child.stderr?.on('data', (data) => {
-        stderr += data.toString(options.encoding ?? 'utf8');
-      });
-
-      let timer: NodeJS.Timeout | undefined;
-      if (options.timeout) {
-        timer = setTimeout(() => {
-          timedOut = true;
-          child.kill();
-        }, options.timeout);
+    if (Array.isArray(command)) {
+      // Use execa directly with argument array to avoid shell injection
+      const [cmd, ...args] = command;
+      logger.debug(
+        options.channel ?? CHANNEL,
+        `Running command: ${cmd} ${args.join(' ')}`,
+      );
+      const result = await execa(cmd, args, execaOptions);
+      stdout = (result.stdout as string) ?? '';
+      stderr = (result.stderr as string) ?? '';
+      exitCode = result.exitCode ?? 1;
+      timedOut = result.timedOut ?? false;
+    } else {
+      // Parse string command into arguments using shell-quote to handle quoted arguments
+      const parsedArgs = shellParse(command);
+      // Filter out non-string elements (shell-quote can return objects for operators)
+      const stringArgs = parsedArgs.filter((arg): arg is string => typeof arg === 'string');
+      
+      if (stringArgs.length === 0) {
+        throw new Error('Invalid command: no executable found');
       }
+      
+      const [cmd, ...args] = stringArgs;
+      logger.debug(
+        options.channel ?? CHANNEL,
+        `Running command: ${cmd} ${args.join(' ')}`,
+      );
+      const result = await execa(cmd, args, execaOptions);
+      stdout = (result.stdout as string) ?? '';
+      stderr = (result.stderr as string) ?? '';
+      exitCode = result.exitCode ?? 1;
+      timedOut = result.timedOut ?? false;
+    }
 
-      child.on('error', (error) => {
-        if (timer) clearTimeout(timer);
-        reject(error);
-      });
-
-      child.on('close', (code) => {
-        if (timer) clearTimeout(timer);
-        resolve({ stdout, stderr, exitCode: code, timedOut });
-      });
-    });
-
-    const { stdout, stderr, exitCode, timedOut } = result;
 
     const shouldTruncate = options.truncate ?? false;
     const processOutput = (output: string | null) =>
@@ -137,17 +139,14 @@ export async function executeCommand(
       `Error executing command: ${errorMessage}`,
     );
 
-    // Handle stderr from exec errors
+    // Handle stderr from ExecaError
     let stderr = null;
-    if (err instanceof Error && 'stderr' in err) {
-      stderr = (err as any).stderr?.trim() || null;
+    if (err instanceof ExecaError) {
+      stderr = err.stderr ? String(err.stderr).trim() : null;
     }
 
-    // Check if it's a timeout error
-    const isTimeout =
-      err instanceof Error &&
-      (errorMessage.includes('ETIMEDOUT') || errorMessage.includes('Timeout'));
-
+    // With reject: false, this catch block only handles actual execution errors
+    // (e.g., command not found), not timeouts or non-zero exit codes
     const shouldTruncate = options.truncate ?? false;
     return {
       success: false,
@@ -155,7 +154,7 @@ export async function executeCommand(
       stderr: shouldTruncate
         ? truncateOutput(stderr || errorMessage)
         : stderr || errorMessage,
-      timedOut: isTimeout,
+      timedOut: false, // Real timeouts are handled in the main flow via result.timedOut
     };
   }
 }
