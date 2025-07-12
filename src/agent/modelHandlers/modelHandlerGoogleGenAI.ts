@@ -34,7 +34,7 @@ import type { ToolDefinition } from '@model';
 import { toGoogleTools } from './toolConversion';
 
 // Local imports - utilities
-import { WorkspaceFS, AbsoluteFS } from '@utils/files';
+import { WorkspaceFS, AbsoluteFS, getMimeType } from '@utils/files';
 import { formatProviderError } from '@common/errors/sdkErrorUtils';
 import xmlUtils from '@utils/text/xmlUtils';
 import { calculateTokenPrice } from '@agent/utils/priceUtils';
@@ -460,31 +460,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       `Determining MIME type for extension: '${ext}' from file: ${filePath}`,
     );
 
-    // TODO: this map/function can be put somewhere else to be more DRY and reusable
-    const mimeMap: { [key: string]: string } = {
-      '.jpg': 'image/jpeg',
-      '.jpeg': 'image/jpeg',
-      '.png': 'image/png',
-      '.webp': 'image/webp',
-      '.heic': 'image/heic',
-      '.heif': 'image/heif',
-      '.gif': 'image/gif',
-      '.pdf': 'application/pdf',
-      '.wav': 'audio/wav',
-      '.mp3': 'audio/mpeg',
-      '.aac': 'audio/aac',
-      '.ogg': 'audio/ogg',
-      '.oga': 'audio/ogg',
-      '.flac': 'audio/flac',
-      '.opus': 'audio/opus',
-      '.m4a': 'audio/m4a',
-      '.mp4': 'video/mp4',
-      '.mov': 'video/quicktime',
-      '.avi': 'video/x-msvideo',
-      '.webm': 'video/webm',
-      '.mpeg': 'video/mpeg',
-    };
-    const mimeType = mimeMap[ext];
+    const mimeType = getMimeType(filePath);
     if (!mimeType) {
       this.logger.warn(
         `Cannot determine mime type for ${filePath} from extension '${ext}'.`,
@@ -494,7 +470,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         `Determined MIME type: ${mimeType} for file: ${filePath}`,
       );
     }
-    return mimeType || null;
+    return mimeType;
   }
 
   /** Creates message array for subsequent rounds, managing image content and message structure. */
