@@ -170,6 +170,8 @@ TeXRA requires API keys to access language models. Here's how to set them up:
 
 Alternatively, you can access the extension settings (including API key setup) by clicking the gear icon (<i class="codicon codicon-gear"></i>) in the TeXRA webview panel.
 
+TeXRA also loads environment variables from a `.env` file in your workspace. Define variables like `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` in this file to avoid entering keys manually.
+
 ![API Key Setup](/images/api-key-setup.png)
 
 ::: info Getting API Keys
