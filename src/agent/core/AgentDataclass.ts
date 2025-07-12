@@ -19,24 +19,26 @@ export const ToolDefinitionSchema = z
   .strict();
 
 /** Zod schema for AgentSetting validation */
-export const AgentSettingSchema = z.object({
-  agentType: z.nativeEnum(AgentType),
-  documentTag: z.string().min(1, 'documentTag cannot be empty'),
-  temperature: z.number().min(0).max(1).nullable(),
-  isRewrite: z.boolean(),
+export const AgentSettingSchema = z
+  .object({
+    agentType: z.nativeEnum(AgentType),
+    documentTag: z.string().min(1, 'documentTag cannot be empty'),
+    temperature: z.number().min(0).max(1).nullable(),
+    isRewrite: z.boolean(),
 
-  rounds: z.number().optional(),
-  prefills: z.array(z.string()),
-  outputExt: z.string(),
-  endTag: z.string(),
+    rounds: z.number().optional(),
+    prefills: z.array(z.string()),
+    outputExt: z.string(),
+    endTag: z.string(),
 
-  requiredFiles: z.record(z.string()),
-  requiredFilesInternal: z.record(z.string()),
-  defaultOutputFiles: z.array(z.string()),
-  filePatternsContain: z.array(z.record(z.string())),
+    requiredFiles: z.record(z.string()),
+    requiredFilesInternal: z.record(z.string()),
+    defaultOutputFiles: z.array(z.string()),
+    filePatternsContain: z.array(z.record(z.string())),
 
-  tools: z.array(ToolDefinitionSchema).optional(),
-}).strict();
+    tools: z.array(ToolDefinitionSchema).optional(),
+  })
+  .strict();
 
 /** Base configuration for agent behavior with default values. */
 export const DEFAULT_AGENT_SETTINGS: AgentSetting = {
