@@ -4,7 +4,7 @@ import * as path from 'path';
 // Third-party imports
 import * as vscode from 'vscode';
 import OpenAI from 'openai';
-import spawn from 'cross-spawn';
+import { execa } from 'execa';
 import type { ChildProcess } from 'child_process';
 
 // Local imports - log
@@ -93,9 +93,10 @@ export async function startRecording(
       `Starting audio recording with sox: ${soxPath} ${soxArgs.join(' ')}`,
     );
 
-    activeRecordingProcess = spawn(soxPath || 'sox', soxArgs, {
+    activeRecordingProcess = execa(soxPath || 'sox', soxArgs, {
       env: { ...process.env, PATH: extendEnvPath() },
-    });
+      reject: false,
+    }) as unknown as ChildProcess;
     activeRecordingPath = absPath;
 
     activeRecordingProcess.on('error', (err) => {

@@ -1,5 +1,5 @@
 // Third-party imports
-import spawn from 'cross-spawn';
+import { execaCommand } from 'execa';
 import { quote as shellQuote } from 'shell-quote';
 
 // Local imports - log
@@ -59,50 +59,31 @@ export async function executeCommand(
       : { ...process.env };
     env.PATH = extendEnvPath(env.PATH);
 
-    const spawnOptions = {
-      cwd: workspacePath,
-      env,
-      shell: true,
-    };
+    const encodingOption =
+      options.encoding && options.encoding.toLowerCase() === 'utf-8'
+        ? 'utf8'
+        : options.encoding;
 
-    const result = await new Promise<{
-      stdout: string;
-      stderr: string;
-      exitCode: number | null;
-      timedOut: boolean;
-    }>((resolve, reject) => {
-      let stdout = '';
-      let stderr = '';
-      let timedOut = false;
-      const child = spawn(finalCommand, [], spawnOptions);
+    const { stdout, stderr, exitCode, timedOut } = await execaCommand(
+      finalCommand,
+      {
+        cwd: workspacePath,
+        env,
+        shell: true,
+        encoding: (encodingOption ?? 'utf8') as any,
+        timeout: options.timeout,
+        reject: false,
+      },
+    );
 
-      child.stdout?.on('data', (data) => {
-        stdout += data.toString(options.encoding ?? 'utf8');
-      });
-      child.stderr?.on('data', (data) => {
-        stderr += data.toString(options.encoding ?? 'utf8');
-      });
-
-      let timer: NodeJS.Timeout | undefined;
-      if (options.timeout) {
-        timer = setTimeout(() => {
-          timedOut = true;
-          child.kill();
-        }, options.timeout);
-      }
-
-      child.on('error', (error) => {
-        if (timer) clearTimeout(timer);
-        reject(error);
-      });
-
-      child.on('close', (code) => {
-        if (timer) clearTimeout(timer);
-        resolve({ stdout, stderr, exitCode: code, timedOut });
-      });
-    });
-
-    const { stdout, stderr, exitCode, timedOut } = result;
+    const stdoutStr =
+      typeof stdout === 'string'
+        ? stdout
+        : Buffer.from(stdout).toString(encodingOption ?? 'utf8');
+    const stderrStr =
+      typeof stderr === 'string'
+        ? stderr
+        : Buffer.from(stderr).toString(encodingOption ?? 'utf8');
 
     const shouldTruncate = options.truncate ?? false;
     const processOutput = (output: string | null) =>
@@ -110,10 +91,10 @@ export async function executeCommand(
         ? truncateOutput(output?.trim() || null)
         : output?.trim() || null;
 
-    if (stderr && stderr.trim()) {
+    if (stderrStr && stderrStr.trim()) {
       logger.debug(
         options.channel ?? CHANNEL,
-        `Command stderr: ${processOutput(stderr)}`,
+        `Command stderr: ${processOutput(stderrStr)}`,
       );
     }
 
@@ -126,8 +107,8 @@ export async function executeCommand(
 
     return {
       success: exitCode === 0 && !timedOut,
-      stdout: processOutput(stdout),
-      stderr: processOutput(stderr),
+      stdout: processOutput(stdoutStr),
+      stderr: processOutput(stderrStr),
       timedOut,
     };
   } catch (err) {
