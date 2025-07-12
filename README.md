@@ -50,6 +50,8 @@ After installing the extension, you can configure your API keys in VS Code setti
 - Gemini API key
 - Other (xAI, deepseek, OpenRouter, Qwen, Kimi, etc.) API keys
 
+You can store these keys in a `.env` file in your workspace using variables like `OPENAI_API_KEY`. TeXRA loads this file automatically at startup.
+
 ## Required Dependencies
 
 TeXRA requires several system dependencies for full functionality. See the [**Installation Guide**](https://texra.ai/guide/installation.html) in the full documentation for detailed setup instructions for your operating system.
