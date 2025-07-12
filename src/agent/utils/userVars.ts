@@ -57,6 +57,7 @@ export async function buildUserVars(
       JSON.stringify(allLoadedFiles),
       undefined,
       MESSAGE_TYPES.FILE_LIST,
+      allLoadedFiles,
     );
   }
 

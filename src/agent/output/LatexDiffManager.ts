@@ -209,6 +209,7 @@ export class LatexDiffManager {
           objectToLogString(aggregated),
           diffProcessGroupId,
           MESSAGE_TYPES.LATEXDIFF,
+          aggregated,
         );
       }
     } catch (err) {
