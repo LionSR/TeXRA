@@ -106,7 +106,10 @@ export async function startRecording(
         if (result.signal === 'SIGTERM') {
           logger.info(CHANNEL, `Recording stopped intentionally`);
         } else if (result.exitCode !== 0) {
-          logger.error(CHANNEL, `Sox process exited with code ${result.exitCode}`);
+          logger.error(
+            CHANNEL,
+            `Sox process exited with code ${result.exitCode}`,
+          );
         } else {
           logger.info(CHANNEL, `Recording process completed successfully`);
         }

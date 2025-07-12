@@ -25,14 +25,17 @@ import { registerCommands } from './commands';
 
 export async function activate(context: vscode.ExtensionContext) {
   const workspaceRoot = vscode.workspace.workspaceFolders?.[0].uri.fsPath;
-  
+
   // Load .env file only if a workspace is open
   if (workspaceRoot) {
     dotenv.config({
       path: path.join(workspaceRoot, '.env'),
     });
   } else {
-    logger.warn('extension', 'No workspace folder is open. Skipping .env loading.');
+    logger.warn(
+      'extension',
+      'No workspace folder is open. Skipping .env loading.',
+    );
   }
 
   // Initialize storage systems
