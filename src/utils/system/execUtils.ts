@@ -1,5 +1,5 @@
 // Third-party imports
-import { execa, execaCommand, type ExecaOptions } from 'execa';
+import { execa, execaCommand, type Options, type ExecaError } from 'execa';
 import { quote as shellQuote } from 'shell-quote';
 
 // Local imports - log
@@ -58,7 +58,7 @@ export async function executeCommand(
         ? 'utf8'
         : (options.encoding ?? 'utf8');
 
-    const execaOptions: ExecaOptions = {
+    const execaOptions: Options = {
       cwd: workspacePath,
       env,
       encoding: encodingOption,
@@ -79,10 +79,10 @@ export async function executeCommand(
         `Running command: ${cmd} ${args.join(' ')}`,
       );
       const result = await execa(cmd, args, execaOptions);
-      stdout = result.stdout;
-      stderr = result.stderr;
-      exitCode = result.exitCode;
-      timedOut = result.timedOut || false;
+      stdout = result.stdout ?? '';
+      stderr = result.stderr ?? '';
+      exitCode = result.exitCode ?? 1;
+      timedOut = result.timedOut ?? false;
     } else {
       // Use execaCommand for string commands with shell parsing
       logger.debug(
@@ -93,10 +93,10 @@ export async function executeCommand(
         ...execaOptions,
         shell: true,
       });
-      stdout = result.stdout;
-      stderr = result.stderr;
-      exitCode = result.exitCode;
-      timedOut = result.timedOut || false;
+      stdout = result.stdout ?? '';
+      stderr = result.stderr ?? '';
+      exitCode = result.exitCode ?? 1;
+      timedOut = result.timedOut ?? false;
     }
 
     const stdoutStr = stdout;
@@ -135,17 +135,14 @@ export async function executeCommand(
       `Error executing command: ${errorMessage}`,
     );
 
-    // Handle stderr from exec errors
+    // Handle stderr from ExecaError
     let stderr = null;
-    if (err instanceof Error && 'stderr' in err) {
-      stderr = (err as any).stderr?.trim() || null;
+    if (err instanceof ExecaError) {
+      stderr = err.stderr?.trim() || null;
     }
 
-    // Check if it's a timeout error
-    const isTimeout =
-      err instanceof Error &&
-      (errorMessage.includes('ETIMEDOUT') || errorMessage.includes('Timeout'));
-
+    // With reject: false, this catch block only handles actual execution errors
+    // (e.g., command not found), not timeouts or non-zero exit codes
     const shouldTruncate = options.truncate ?? false;
     return {
       success: false,
@@ -153,7 +150,7 @@ export async function executeCommand(
       stderr: shouldTruncate
         ? truncateOutput(stderr || errorMessage)
         : stderr || errorMessage,
-      timedOut: isTimeout,
+      timedOut: false, // Real timeouts are handled in the main flow via result.timedOut
     };
   }
 }
