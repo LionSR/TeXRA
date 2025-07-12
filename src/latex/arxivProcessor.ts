@@ -48,7 +48,10 @@ export class ArxivSourceProcessor {
 
   public async downloadFile(url: string, destPath: string): Promise<void> {
     try {
-      const response = await axios.get(url, { responseType: 'stream' });
+      const response = await axios.get(url, {
+        responseType: 'stream',
+        validateStatus: () => true,
+      });
 
       if (response.status === 404) {
         throw new Error('Source not available for this arXiv ID');
