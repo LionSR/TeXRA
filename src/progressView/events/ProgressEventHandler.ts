@@ -261,7 +261,7 @@ export class ProgressEventHandler {
     const taskState = this.state.getTaskState(streamTabId);
     if (taskState) {
       // Only clear output-related fields, preserve other task state data
-      taskState.outputFiles = [];
+      taskState.agentConfig.outputFiles = [];
       if (taskState.activeFiles) {
         taskState.activeFiles.output = false;
       }
