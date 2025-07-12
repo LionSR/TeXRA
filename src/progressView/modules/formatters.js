@@ -182,6 +182,14 @@ export class LogEntryFormatter {
       .replace(/&amp;/g, '&');
   }
 
+  _tryParseJson(text) {
+    try {
+      return JSON.parse(text);
+    } catch {
+      return undefined;
+    }
+  }
+
   _formatSpecialContent(message, content, contentType, logId) {
     try {
       // Unescape HTML entities that were escaped during logging
@@ -235,7 +243,10 @@ export class LogEntryFormatter {
   _formatFileList(message, content, data, logId) {
     try {
       const idAttr = logId ? ` data-log-id="${logId}"` : '';
-      const parsed = data;
+      let parsed = data;
+      if (!Array.isArray(parsed)) {
+        parsed = this._tryParseJson(content);
+      }
       if (!Array.isArray(parsed)) {
         console.warn('Missing structured data for file list log entry');
         return message;
@@ -311,7 +322,10 @@ export class LogEntryFormatter {
   _formatMissingOutputs(message, content, data, logId) {
     try {
       const idAttr = logId ? ` data-log-id="${logId}"` : '';
-      const parsed = data;
+      let parsed = data;
+      if (parsed === undefined) {
+        parsed = this._tryParseJson(content);
+      }
 
       // Handle both old format (array) and new format (object with missing, xmlFile, documentTag)
       let missingFiles = [];
@@ -327,8 +341,17 @@ export class LogEntryFormatter {
         xmlFile = parsed.xmlFile;
         documentTag = parsed.documentTag;
       } else {
-        console.warn('Missing structured data for missing outputs log entry');
-        return message;
+        parsed = this._tryParseJson(content);
+        if (Array.isArray(parsed)) {
+          missingFiles = parsed;
+        } else if (parsed && typeof parsed === 'object') {
+          missingFiles = parsed.missing || [];
+          xmlFile = parsed.xmlFile;
+          documentTag = parsed.documentTag;
+        } else {
+          console.warn('Missing structured data for missing outputs log entry');
+          return message;
+        }
       }
 
       const items = missingFiles
@@ -382,7 +405,10 @@ export class LogEntryFormatter {
   _formatLatexdiff(message, content, data, logId) {
     try {
       const idAttr = logId ? ` data-log-id="${logId}"` : '';
-      const parsed = data;
+      let parsed = data;
+      if (parsed === undefined) {
+        parsed = this._tryParseJson(content);
+      }
       const entries = Array.isArray(parsed)
         ? parsed
         : parsed && typeof parsed === 'object'
@@ -447,7 +473,10 @@ export class LogEntryFormatter {
   _formatStatistics(message, content, data, logId) {
     try {
       const idAttr = logId ? ` data-log-id="${logId}"` : '';
-      const parsed = data;
+      let parsed = data;
+      if (!parsed || typeof parsed !== 'object') {
+        parsed = this._tryParseJson(content);
+      }
       if (!parsed || typeof parsed !== 'object') {
         return message;
       }
