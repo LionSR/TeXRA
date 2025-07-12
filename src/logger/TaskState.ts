@@ -4,7 +4,7 @@ import type { AgentConfig } from '@agent/core/AgentConfig';
 
 /**
  * Interface for storing task execution state.
- * 
+ *
  * This interface represents the complete state of a task, including both
  * the agent configuration and UI-specific state. The separation between
  * agentConfig and UI state (activeFiles) provides a clean architecture
