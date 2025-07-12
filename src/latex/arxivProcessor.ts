@@ -1,6 +1,7 @@
 // Standard library imports
 import * as path from 'path';
-import * as https from 'https';
+import axios from 'axios';
+import { pipeline } from 'node:stream/promises';
 
 // Third-party imports
 import * as arxivIdentifiers from 'identifiers-arxiv';
@@ -45,36 +46,38 @@ export class ArxivSourceProcessor {
     return null;
   }
 
-  public downloadFile(url: string, destPath: string): Promise<void> {
-    return new Promise((resolve, reject) => {
-      const file = AbsoluteFS.createWriteStream(destPath);
+  public async downloadFile(
+    url: string,
+    destPath: string,
+    timeout = 30000,
+  ): Promise<void> {
+    try {
+      const response = await axios.get(url, {
+        responseType: 'stream',
+        validateStatus: () => true,
+        timeout,
+      });
 
-      https
-        .get(url, (response) => {
-          if (response.statusCode === 404) {
-            reject(new Error('Source not available for this arXiv ID'));
-            return;
-          }
+      if (response.status === 404) {
+        throw new Error('Source not available for this arXiv ID');
+      }
 
-          if (response.statusCode !== 200) {
-            reject(
-              new Error(`Failed to download: HTTP ${response.statusCode}`),
-            );
-            return;
-          }
+      if (response.status !== 200) {
+        throw new Error(`Failed to download: HTTP ${response.status}`);
+      }
 
-          response.pipe(file);
-
-          file.on('finish', () => {
-            file.close();
-            resolve();
-          });
-        })
-        .on('error', (err) => {
-          AbsoluteFS.unlink(destPath, () => {});
-          reject(err);
-        });
-    });
+      await pipeline(
+        response.data as NodeJS.ReadableStream,
+        AbsoluteFS.createWriteStream(destPath),
+      );
+    } catch (err) {
+      try {
+        await AbsoluteFS.delete(destPath);
+      } catch {
+        // ignore errors deleting destPath
+      }
+      throw err;
+    }
   }
 
   public async extractTarFile(
