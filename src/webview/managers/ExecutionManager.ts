@@ -14,7 +14,7 @@ import { getFilesIfNotEmpty } from '@frontend/files/listing';
 
 // Local imports - agent
 import { ToolConfig } from '@agent/core/ToolConfig';
-import { AgentConfig } from '@agent/core/AgentConfig';
+import type { AgentConfig } from '@agent/core/AgentConfig';
 
 const CHANNEL = 'ExecutionManager';
 logger.initialize(CHANNEL);
