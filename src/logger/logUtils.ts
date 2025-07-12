@@ -136,6 +136,7 @@ class VSCodeTransport extends Transport {
       groupId,
       messageType: msgType,
       verbose: isVerbose,
+      data: info.data,
     } satisfies import('./LogTypes').LogMessageData;
 
     emitProgress('addLogMessage', {
@@ -329,6 +330,7 @@ function logWithGroup(
   groupId?: string,
   messageType?: MessageType,
   isAgent = false,
+  data?: unknown,
 ): void {
   const logger = getOrCreateLogger(channel, isAgent);
   const transport = channelTransports.get(channel);
@@ -337,7 +339,7 @@ function logWithGroup(
   const actualGroupId = groupId || transport?.getActiveGroupId();
 
   // @ts-ignore - We're adding a custom property to the winston log
-  logger[level](message, { groupId: actualGroupId, messageType });
+  logger[level](message, { groupId: actualGroupId, messageType, data });
 }
 
 // Simplified logging methods that use channel as channel name
@@ -347,8 +349,9 @@ export const debug = (
   groupId?: string,
   messageType?: MessageType,
   isAgent = false,
+  data?: unknown,
 ): void => {
-  logWithGroup(channel, 'debug', message, groupId, messageType, isAgent);
+  logWithGroup(channel, 'debug', message, groupId, messageType, isAgent, data);
 };
 
 export const info = (
@@ -357,8 +360,9 @@ export const info = (
   groupId?: string,
   messageType?: MessageType,
   isAgent = false,
+  data?: unknown,
 ): void => {
-  logWithGroup(channel, 'info', message, groupId, messageType, isAgent);
+  logWithGroup(channel, 'info', message, groupId, messageType, isAgent, data);
 };
 
 export const warn = (
@@ -367,8 +371,9 @@ export const warn = (
   groupId?: string,
   messageType?: MessageType,
   isAgent = false,
+  data?: unknown,
 ): void => {
-  logWithGroup(channel, 'warn', message, groupId, messageType, isAgent);
+  logWithGroup(channel, 'warn', message, groupId, messageType, isAgent, data);
 };
 
 export const error = (
@@ -377,8 +382,9 @@ export const error = (
   groupId?: string,
   messageType?: MessageType,
   isAgent = false,
+  data?: unknown,
 ): void => {
-  logWithGroup(channel, 'error', message, groupId, messageType, isAgent);
+  logWithGroup(channel, 'error', message, groupId, messageType, isAgent, data);
 };
 
 function getOrCreateLogger(channel: string, isAgent = false): winston.Logger {

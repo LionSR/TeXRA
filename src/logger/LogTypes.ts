@@ -46,4 +46,6 @@ export interface LogMessageData {
     | 'internal';
   /** Whether verbose details should be displayed */
   verbose?: boolean;
+  /** Optional structured data associated with the entry */
+  data?: unknown;
 }
