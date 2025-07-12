@@ -4,8 +4,7 @@ import * as path from 'path';
 // Third-party imports
 import * as vscode from 'vscode';
 import OpenAI from 'openai';
-import { execa } from 'execa';
-import type { ChildProcess } from 'child_process';
+import { execa, type ExecaChildProcess } from 'execa';
 
 // Local imports - log
 import * as logger from '@logger/logUtils';
@@ -26,7 +25,7 @@ logger.initialize(CHANNEL);
 const RECORDINGS_DIR = 'recordings';
 
 // Store active recording process
-let activeRecordingProcess: ChildProcess | null = null;
+let activeRecordingProcess: ExecaChildProcess | null = null;
 let activeRecordingPath: string | null = null;
 
 /**
@@ -96,19 +95,23 @@ export async function startRecording(
     activeRecordingProcess = execa(soxPath || 'sox', soxArgs, {
       env: { ...process.env, PATH: extendEnvPath() },
       reject: false,
-    }) as unknown as ChildProcess;
+    });
     activeRecordingPath = absPath;
 
-    activeRecordingProcess.on('error', (err) => {
+    // Handle process events properly for ExecaChildProcess
+    activeRecordingProcess.catch((err) => {
       logger.error(CHANNEL, `Sox process error: ${err}`);
       activeRecordingProcess = null;
       activeRecordingPath = null;
     });
 
-    activeRecordingProcess.on('exit', (code) => {
-      logger.info(CHANNEL, `Recording process exited with code ${code}`);
+    // Handle process completion
+    activeRecordingProcess.then((result) => {
+      logger.info(CHANNEL, `Recording process exited with code ${result.exitCode}`);
       activeRecordingProcess = null;
       activeRecordingPath = null;
+    }).catch(() => {
+      // Error already handled above
     });
 
     // Capture stderr for debugging

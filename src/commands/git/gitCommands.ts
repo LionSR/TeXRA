@@ -1,5 +1,5 @@
 // Standard library imports
-import { execaCommandSync } from 'execa';
+import { execaSync } from 'execa';
 
 // Third-party imports
 import * as vscode from 'vscode';
@@ -18,8 +18,9 @@ export function registerGitCommands(context: vscode.ExtensionContext) {
 async function isGitRepository(): Promise<boolean> {
   const workspacePath = WorkspaceFS.getPath();
   if (workspacePath) {
-    const result = execaCommandSync('git rev-parse --is-inside-work-tree', {
+    const result = execaSync('git', ['rev-parse', '--is-inside-work-tree'], {
       cwd: workspacePath,
+      reject: false,
     });
     return result.exitCode === 0;
   }
@@ -35,9 +36,16 @@ async function getRecentCommits(): Promise<string[] | null> {
   const workspacePath = WorkspaceFS.getPath();
   if (workspacePath) {
     const numberOfCommits = getConfig('git.numberOfCommitsToShow', 20);
-    const result = execaCommandSync(
-      `git log -n ${numberOfCommits} --pretty=format:%h: %s (%cr)`,
-      { cwd: workspacePath },
+    
+    // Validate numberOfCommits to prevent injection
+    if (typeof numberOfCommits !== 'number' || numberOfCommits <= 0 || numberOfCommits > 1000) {
+      throw new Error('Invalid numberOfCommits value. It must be a positive integer between 1 and 1000.');
+    }
+    
+    const result = execaSync(
+      'git',
+      ['log', '-n', numberOfCommits.toString(), '--pretty=format:%h: %s (%cr)'],
+      { cwd: workspacePath, reject: false },
     );
     if (result.exitCode !== 0) {
       return [];
