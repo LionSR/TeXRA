@@ -283,6 +283,7 @@ export class OutputHandler implements IOutputHandler {
         JSON.stringify(missingOutputsData),
         groupId,
         MESSAGE_TYPES.MISSING_OUTPUTS,
+        missingOutputsData,
       );
     }
 
@@ -426,6 +427,7 @@ export class OutputHandler implements IOutputHandler {
           JSON.stringify(missingOutputsData),
           activeGroupId,
           MESSAGE_TYPES.MISSING_OUTPUTS,
+          missingOutputsData,
         );
         emitProgress('updateMissingOutputs', {
           stream: this.channel,
