@@ -36,7 +36,7 @@ export const AgentSettingSchema = z.object({
   filePatternsContain: z.array(z.record(z.string())),
 
   tools: z.array(ToolDefinitionSchema).optional(),
-});
+}).strict();
 
 /** Base configuration for agent behavior with default values. */
 export const DEFAULT_AGENT_SETTINGS: AgentSetting = {
