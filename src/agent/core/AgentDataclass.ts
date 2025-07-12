@@ -2,6 +2,10 @@
 import type { ToolDefinition } from '@model';
 import { z } from 'zod';
 
+/** Temperature bounds for agent generation. */
+export const MIN_TEMPERATURE = 0;
+export const MAX_TEMPERATURE = 1;
+
 /** Enum defining possible agent types */
 export enum AgentType {
   CoT = 'CoT',
@@ -26,7 +30,12 @@ export const AgentSettingSchema = z
       .string()
       .min(1, 'documentTag cannot be empty')
       .default('document'),
-    temperature: z.number().min(0).max(1).nullable().default(0.0),
+    temperature: z
+      .number()
+      .min(MIN_TEMPERATURE)
+      .max(MAX_TEMPERATURE)
+      .nullable()
+      .default(0.0),
     isRewrite: z.boolean().default(true),
 
     rounds: z.number().default(2),
@@ -106,3 +115,29 @@ export interface AgentPrompt {
   userRequest: string;
   userReflect: string;
 }
+
+/** Zod schema for AgentPrompt validation */
+export const AgentPromptSchema = z
+  .object({
+    systemPrompt: z.string(),
+    userPrefix: z.string(),
+    userRequest: z.string(),
+    userReflect: z.string(),
+  })
+  .strict();
+
+/**
+ * Schema representing the full agent YAML definition.
+ * Includes the root name, optional inheritance target,
+ * settings block and prompt configuration.
+ */
+export const AgentDefinitionSchema = z
+  .object({
+    name: z.string().trim().min(1),
+    inherits: z.string().optional(),
+    settings: z.record(z.unknown()).optional(),
+    prompts: z.record(z.unknown()).optional(),
+  })
+  .strict();
+
+export type AgentDefinition = z.infer<typeof AgentDefinitionSchema>;
