@@ -1,11 +1,45 @@
 import * as vscode from 'vscode';
 // Local imports - utilities
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
-import { resolveFilePath } from '@utils/files';
+import { resolveFilePath, WorkspaceFS } from '@utils/files';
+import { listInputFiles, listReferenceFiles } from '@frontend/files/fileLister';
 
 export async function openFile(file: string): Promise<void> {
   const uri = vscode.Uri.file(resolveFilePath(file));
   await vscode.commands.executeCommand('vscode.open', uri);
+}
+
+export async function openLabel(label: string): Promise<void> {
+  const escape = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const pattern = new RegExp(`\\\\label\\{${escape}\\}`, 'm');
+  const candidates = new Set([
+    ...(await listInputFiles()),
+    ...(await listReferenceFiles()),
+  ]);
+
+  for (const file of candidates) {
+    try {
+      const content = await WorkspaceFS.readFile(file);
+      const match = content.match(pattern);
+      if (match && match.index !== undefined) {
+        const doc = await vscode.workspace.openTextDocument(
+          resolveFilePath(file),
+        );
+        const pos = doc.positionAt(match.index);
+        const editor = await vscode.window.showTextDocument(doc, {
+          preview: true,
+        });
+        const range = new vscode.Range(pos, pos);
+        editor.revealRange(range, vscode.TextEditorRevealType.InCenter);
+        editor.selection = new vscode.Selection(pos, pos);
+        return;
+      }
+    } catch {
+      // ignore file read errors
+    }
+  }
+
+  vscode.window.showInformationMessage(`Label "${label}" not found.`);
 }
 
 export function registerOpenFileCommands(context: vscode.ExtensionContext) {
@@ -15,6 +49,7 @@ export function registerOpenFileCommands(context: vscode.ExtensionContext) {
       openBuildDisplayIfTex,
     ),
     vscode.commands.registerCommand('texra.openFile', openFile),
+    vscode.commands.registerCommand('texra.openLabel', openLabel),
   );
-  return { openFileCompile: openBuildDisplayIfTex, openFile };
+  return { openFileCompile: openBuildDisplayIfTex, openFile, openLabel };
 }
