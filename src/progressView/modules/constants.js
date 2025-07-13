@@ -38,8 +38,11 @@ export const MAX_HEIGHT = 400;
 // Import standardized commands
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands.js';
 
-// Use standardized commands
-export const COMMANDS = PROGRESS_VIEW_COMMANDS;
+// Extend with commands defined since bundling may ship an outdated object
+export const COMMANDS = {
+  ...PROGRESS_VIEW_COMMANDS,
+  OPEN_LABEL: 'openLabel',
+};
 
 export const TOOLBAR_BUTTONS = [
   {
