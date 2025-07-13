@@ -49,6 +49,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
       [PROGRESS_VIEW_COMMANDS.MERGE_FILE]: this.handleMergeFile.bind(this),
       [PROGRESS_VIEW_COMMANDS.LATEXDIFF_FILE]:
         this.handleLatexdiffFile.bind(this),
+      [PROGRESS_VIEW_COMMANDS.OPEN_LABEL]: this.handleOpenLabel.bind(this),
     };
   }
 
@@ -213,6 +214,13 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
       message.base,
       message.file,
     );
+  }
+
+  private async handleOpenLabel(
+    message: any,
+    webviewView: vscode.WebviewView,
+  ): Promise<void> {
+    await vscode.commands.executeCommand('texra.openLabel', message.label);
   }
 
   private async handleFileOperation(

@@ -110,6 +110,28 @@ export class LogEntryFormatter {
   }
 
   /**
+   * Helper function to create LaTeX reference HTML
+   * @param {string} refType - The reference type (ref, cref, eqref)
+   * @param {string} label - The label value
+   * @returns {string} HTML for the clickable reference
+   */
+  _createLatexReferenceHtml(refType, label) {
+    return `<span class="latex-ref clickable-link" data-label="${label}">\\${refType}{${label}}</span>`;
+  }
+
+  /**
+   * Restore LaTeX references from placeholders to clickable elements
+   * @param {string} content - Content with placeholder references
+   * @returns {string} Content with clickable LaTeX references
+   */
+  _restoreLatexReferences(content) {
+    return content
+      .replace(/@@LATEX-REF:([^@]+)@@/g, (_, label) => this._createLatexReferenceHtml('ref', label))
+      .replace(/@@LATEX-CREF:([^@]+)@@/g, (_, label) => this._createLatexReferenceHtml('cref', label))
+      .replace(/@@LATEX-EQREF:([^@]+)@@/g, (_, label) => this._createLatexReferenceHtml('eqref', label));
+  }
+
+  /**
    * Format a log entry with Markdown rendering for special content
    * @param {Object} logMessage - The log message to format
    * @returns {string} Formatted HTML for the log message
@@ -179,19 +201,7 @@ export class LogEntryFormatter {
       let parsedMarkdown = this.md.render(content);
 
       // Post-process to restore and style LaTeX references
-      parsedMarkdown = parsedMarkdown.replace(
-        /@@LATEX-REF:([^@]+)@@/g,
-        '<code class="latex-ref">\\ref{$1}</code>',
-      );
-
-      parsedMarkdown = parsedMarkdown.replace(
-        /@@LATEX-CREF:([^@]+)@@/g,
-        '<code class="latex-ref">\\cref{$1}</code>',
-      );
-      parsedMarkdown = parsedMarkdown.replace(
-        /@@LATEX-EQREF:([^@]+)@@/g,
-        '<code class="latex-ref">\\eqref{$1}</code>',
-      );
+      parsedMarkdown = this._restoreLatexReferences(parsedMarkdown);
 
       // Create enhanced content element with better formatting
       const idAttr = logId ? ` data-log-id="${logId}"` : '';
