@@ -177,6 +177,7 @@ export const PROGRESS_VIEW_COMMANDS = {
   ACCEPT_FILE: 'acceptFile',
   MERGE_FILE: 'mergeFile',
   LATEXDIFF_FILE: 'latexdiffFile',
+  OPEN_LABEL: 'openLabel',
 };
 
 // History view specific commands
