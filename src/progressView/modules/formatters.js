@@ -181,16 +181,16 @@ export class LogEntryFormatter {
       // Post-process to restore and style LaTeX references
       parsedMarkdown = parsedMarkdown.replace(
         /@@LATEX-REF:([^@]+)@@/g,
-        '<code class="latex-ref">\\ref{$1}</code>',
+        '<span class="latex-ref clickable-link" data-label="$1">\\ref{$1}</span>',
       );
 
       parsedMarkdown = parsedMarkdown.replace(
         /@@LATEX-CREF:([^@]+)@@/g,
-        '<code class="latex-ref">\\cref{$1}</code>',
+        '<span class="latex-ref clickable-link" data-label="$1">\\cref{$1}</span>',
       );
       parsedMarkdown = parsedMarkdown.replace(
         /@@LATEX-EQREF:([^@]+)@@/g,
-        '<code class="latex-ref">\\eqref{$1}</code>',
+        '<span class="latex-ref clickable-link" data-label="$1">\\eqref{$1}</span>',
       );
 
       // Create enhanced content element with better formatting
