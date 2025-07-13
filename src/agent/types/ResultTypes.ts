@@ -1,25 +1,41 @@
+// Third-party imports
+import { z } from 'zod';
+
 /**
- * Common result interfaces used across utilities.
+ * Zod schema for command execution results.
  */
+export const ExecResultSchema = z
+  .object({
+    /** Indicates whether the command succeeded */
+    success: z.boolean(),
+    /** Standard output from the command, if available */
+    stdout: z.string().nullable(),
+    /** Standard error from the command, if available */
+    stderr: z.string().nullable(),
+    /** True if the command timed out */
+    timedOut: z.boolean().optional(),
+  })
+  .strict();
 
-export interface ExecResult {
-  /** Indicates whether the command succeeded */
-  success: boolean;
-  /** Standard output from the command, if available */
-  stdout: string | null;
-  /** Standard error from the command, if available */
-  stderr: string | null;
-  /** True if the command timed out */
-  timedOut?: boolean;
-}
+export type ExecResult = z.infer<typeof ExecResultSchema>;
 
-export type FileOpStatus = 'success' | 'noFiles' | 'missingParams' | 'error';
+export const FileOpStatusSchema = z.enum([
+  'success',
+  'noFiles',
+  'missingParams',
+  'error',
+] as const);
+export type FileOpStatus = z.infer<typeof FileOpStatusSchema>;
 
-export interface FileOpResult {
-  /** Outcome of the pack or clean operation */
-  status: FileOpStatus;
-  /** Output directory if files were packed */
-  outputFolder?: string;
-  /** Error message when status is "error" */
-  error?: string;
-}
+export const FileOpResultSchema = z
+  .object({
+    /** Outcome of the pack or clean operation */
+    status: FileOpStatusSchema,
+    /** Output directory if files were packed */
+    outputFolder: z.string().optional(),
+    /** Error message when status is "error" */
+    error: z.string().optional(),
+  })
+  .strict();
+
+export type FileOpResult = z.infer<typeof FileOpResultSchema>;

@@ -9,7 +9,7 @@ import { getConfig } from '@utils/config';
 import { onProgress } from '@eventBus/ProgressEventBus';
 
 // Types
-import { TokenUsageStats } from '@agent/types/UsageTypes';
+import type { TokenUsageStats } from '@agent/types/UsageTypes';
 import { TaskState } from '@logger/TaskState';
 import { LogMessageData, TaskGroup } from '@logger/LogTypes';
 import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
