@@ -74,11 +74,12 @@ Strong technical and coding performance, cost-effective.
 
 High context models from Moonshot, suitable for complex reasoning and large documents.
 
-| Model ID | Key Strength / Use Case        | Relative Cost | Relative Speed | Notes                 |
-| :------- | :----------------------------- | :------------ | :------------- | :-------------------- |
-| `kimit`  | Detailed reasoning with vision | $$$           | Medium         | Kimi Thinking Preview |
-| `kimi`   | Large context, general tasks   | $$            | Medium         | 128k context          |
-| `kimiv`  | Vision-enabled variant         | $$            | Medium         | 128k context, vision  |
+| Model ID | Key Strength / Use Case         | Relative Cost | Relative Speed | Notes                 |
+| :------- | :------------------------------ | :------------ | :------------- | :-------------------- |
+| `kimit`  | Detailed reasoning with vision  | $$$           | Medium         | Kimi Thinking Preview |
+| `kimi`   | Large context, general tasks    | $$            | Medium         | 128k context          |
+| `kimiv`  | Vision-enabled variant          | $$            | Medium         | 128k context, vision  |
+| `k2`     | Advanced reasoning, Agent tasks | $$$           | Medium         | Kimi K2 0711 Preview  |
 
 ### DashScope Qwen Models
 
@@ -159,6 +160,7 @@ The specific models available by default and their identifiers (`sonnet37`, `gpt
   "qwenplus",
   "kimit",
   "kimiv",
+  "k2",
   "copilot4o"
 ]
 ```

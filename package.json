@@ -75,7 +75,8 @@
                 "grok3",
                 "qwenplus",
                 "kimit",
-                "kimiv"
+                "kimiv",
+                "k2"
               ]
             },
             "default": [
@@ -91,7 +92,7 @@
               "gemini25f",
               "grok4"
             ],
-            "description": "List of available models. Model codes: opus4T/opus4 (Claude Opus 4 Thinking/Regular), sonnet4T/sonnet4 (Claude Sonnet 4 Thinking/Regular), sonnet37T/sonnet37 (Claude Sonnet 3.7 Thinking/Regular), o4-/o3/o3pro/o3-/o1pro/o1 (OpenAI reasoning models), gpt41/gpt4o (GPT-4.1/4O), gemini25p/gemini25f/gemini2fT (Gemini 2.5 Pro/Flash, 2.0 Flash Thinking), dsv3/dsr1 (DeepSeek V3.1/R1), grok4 (Grok 4), grok3 (Grok 3), qwenplus (Qwen Plus), kimit/kimiv (Kimi Thinking/Vision)",
+            "description": "List of available models. Model codes: opus4T/opus4 (Claude Opus 4 Thinking/Regular), sonnet4T/sonnet4 (Claude Sonnet 4 Thinking/Regular), sonnet37T/sonnet37 (Claude Sonnet 3.7 Thinking/Regular), o4-/o3/o3pro/o3-/o1pro/o1 (OpenAI reasoning models), gpt41/gpt4o (GPT-4.1/4O), gemini25p/gemini25f/gemini2fT (Gemini 2.5 Pro/Flash, 2.0 Flash Thinking), dsv3/dsr1 (DeepSeek V3.1/R1), grok4 (Grok 4), grok3 (Grok 3), qwenplus (Qwen Plus), kimit/kimiv/k2 (Kimi Thinking/Vision/K2)",
             "scope": "resource"
           }
         }
@@ -618,7 +619,8 @@
               "dsv3",
               "qwenplus",
               "kimit",
-              "Kimiv"
+              "Kimiv",
+              "K2"
             ],
             "enumDescriptions": [
               "Claude Sonnet 4T",
@@ -634,7 +636,8 @@
               "DeepSeek V3",
               "Qwen Plus",
               "Kimi Thinking",
-              "Kimi Vision"
+              "Kimi Vision",
+              "Kimi K2"
             ],
             "description": "Default model to use for merge operations",
             "order": 1
