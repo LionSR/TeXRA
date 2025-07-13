@@ -34,8 +34,9 @@ export async function openLabel(label: string): Promise<void> {
         editor.selection = new vscode.Selection(pos, pos);
         return;
       }
-    } catch {
-      // ignore file read errors
+    } catch (error) {
+      // Log but continue search - file might be inaccessible
+      console.debug(`Could not read file ${file}: ${error instanceof Error ? error.message : error}`);
     }
   }
 
