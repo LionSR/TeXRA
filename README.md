@@ -24,6 +24,7 @@ See [texra.ai](https://texra.ai). For detailed guides and usage instructions, vi
 - YAML and XML configuration support
 - Git integration for version control
 - ProgressBoard view for detailed logs and re-running tasks
+- Clickable references in the ProgressBoard jump to their \label definitions
 - Multiple output support and intelligent merge tools
 
 ## Architecture
