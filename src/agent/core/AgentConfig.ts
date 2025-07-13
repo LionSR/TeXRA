@@ -1,9 +1,5 @@
 // Local imports - agent components
-import {
-  ToolConfig,
-  ToolConfigSchema,
-  DEFAULT_TOOL_CONFIG,
-} from './ToolConfig';
+import { ToolConfig, ToolConfigSchema } from './ToolConfig';
 import { z } from 'zod';
 
 /** Configuration interface for controlling agent execution and file handling. */
@@ -68,7 +64,7 @@ export const AgentConfigSchema = z
     outputFiles: z.array(z.string()).nullable().default(null),
     editedFile: z.string().nullable().default(null),
 
-    toolConfig: ToolConfigSchema.default(DEFAULT_TOOL_CONFIG),
+    toolConfig: ToolConfigSchema.default({}),
   })
   .strict()
   .refine(validateOutputFiles, {
