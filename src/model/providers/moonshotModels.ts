@@ -18,7 +18,7 @@ export const MOONSHOT_MODELS: Record<string, ModelConfig> = {
   kimi: {
     name: 'kimi128k',
     fullName: 'moonshot-v1-128k',
-    openrouterFullName: 'moonshot/moonshot-v1-128k',
+    openrouterFullName: 'moonshotai/moonshot-v1-128k',
     provider: ModelProvider.MOONSHOT,
     maxOutputTokens: 640000,
     contextWindow: 128000,
@@ -33,7 +33,7 @@ export const MOONSHOT_MODELS: Record<string, ModelConfig> = {
   kimiv: {
     name: 'kimi128kv',
     fullName: 'moonshot-v1-128k-vision',
-    openrouterFullName: 'moonshot/moonshot-v1-128k-vision',
+    openrouterFullName: 'moonshotai/moonshot-v1-128k-vision',
     provider: ModelProvider.MOONSHOT,
     maxOutputTokens: 64000,
     contextWindow: 128000,
@@ -48,7 +48,7 @@ export const MOONSHOT_MODELS: Record<string, ModelConfig> = {
   kimit: {
     name: 'kimit',
     fullName: 'kimi-thinking-preview',
-    openrouterFullName: 'moonshot/kimi-thinking-preview',
+    openrouterFullName: 'moonshotai/kimi-thinking-preview',
     provider: ModelProvider.MOONSHOT,
     maxOutputTokens: 64000,
     contextWindow: 128000,
