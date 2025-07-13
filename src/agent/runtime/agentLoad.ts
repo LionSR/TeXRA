@@ -5,6 +5,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import * as yaml from 'yaml';
 import deepmerge from 'deepmerge';
+import { z } from 'zod';
 
 // Local imports - agent components
 import {
@@ -23,12 +24,13 @@ import { AbsoluteFS } from '@utils/files';
 const CHANNEL = 'agentLoad';
 logger.initialize(CHANNEL);
 
-/** Structure returned by isValidAgentYaml if validation passes */
-export interface ValidAgentDefinition {
-  name: string;
-  settings: AgentSetting;
-  // Prompts are implicitly validated by their presence, but not returned here
-}
+/** Zod schema for the validated portion of an agent definition */
+export const ValidAgentDefinitionSchema = AgentDefinitionSchema.pick({
+  name: true,
+  settings: true,
+});
+
+export type ValidAgentDefinition = z.infer<typeof ValidAgentDefinitionSchema>;
 
 /** Loads and parses a YAML file from an absolute path. */
 export async function loadYaml(absolutePath: string): Promise<object> {
@@ -144,12 +146,12 @@ export async function isValidAgentYaml(
     }
 
     const settingsBlock = AgentSettingSchema.parse(data.settings);
-    const promptsBlock = AgentPromptSchema.parse(
+    AgentPromptSchema.parse(
       deepmerge(DEFAULT_AGENT_PROMPTS, data.prompts, {
         arrayMerge: (_d, s) => s,
       }),
     );
-    const rootName = data.name.trim();
+    const rootName = data.name;
 
     if (rootName === '') {
       logger.debug(
@@ -159,8 +161,11 @@ export async function isValidAgentYaml(
       return null;
     }
 
-    // return structure with validated settings
-    return { name: rootName, settings: settingsBlock };
+    // return structure validated by ValidAgentDefinitionSchema
+    return ValidAgentDefinitionSchema.parse({
+      name: rootName,
+      settings: settingsBlock,
+    });
   } catch (err) {
     logger.debug(
       CHANNEL,
