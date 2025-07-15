@@ -126,9 +126,15 @@ export class LogEntryFormatter {
    */
   _restoreLatexReferences(content) {
     return content
-      .replace(/@@LATEX-REF:([^@]+)@@/g, (_, label) => this._createLatexReferenceHtml('ref', label))
-      .replace(/@@LATEX-CREF:([^@]+)@@/g, (_, label) => this._createLatexReferenceHtml('cref', label))
-      .replace(/@@LATEX-EQREF:([^@]+)@@/g, (_, label) => this._createLatexReferenceHtml('eqref', label));
+      .replace(/@@LATEX-REF:([^@]+)@@/g, (_, label) =>
+        this._createLatexReferenceHtml('ref', label),
+      )
+      .replace(/@@LATEX-CREF:([^@]+)@@/g, (_, label) =>
+        this._createLatexReferenceHtml('cref', label),
+      )
+      .replace(/@@LATEX-EQREF:([^@]+)@@/g, (_, label) =>
+        this._createLatexReferenceHtml('eqref', label),
+      );
   }
 
   /**
