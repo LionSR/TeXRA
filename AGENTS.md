@@ -97,6 +97,10 @@ This document sets the common conventions for contributions. Follow these norms 
 - **Resource Access**: Include all common module paths in `localResourceRoots` to prevent 401 errors
 - **Module Structure**: Keep UI managers modular and focused on single responsibilities - avoid large consolidated classes
 
+### Source Organization
+
+Commands live under `src/commands/` and are grouped by domain. Key folders include `agent/` for agent lifecycle and merge commands, `housekeeping/` for cleanup and packaging, `latex/` for LaTeX document tasks, `wolfram/` for Wolfram Alpha and script utilities, and `system/` for editor helpers along with XML/YAML utilities. This structure keeps each area focused and aligns with the design philosophy of deep modules.
+
 ## Design and refactoring
 
 Draw on principles from John Ousterhout's _A Philosophy of Software Design_ when

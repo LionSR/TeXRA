@@ -6,9 +6,7 @@ import { z } from 'zod';
  * Checks that the number of output files does not exceed the number of input files.
  * Extracted as a separate function for clarity and reusability.
  */
-export const validateOutputFiles = (
-  cfg: Record<string, any>,
-): boolean => {
+export const validateOutputFiles = (cfg: Record<string, any>): boolean => {
   if (cfg.outputFiles) {
     const inputs = [cfg.inputFile, ...(cfg.inputFiles || [])];
     return cfg.outputFiles.length <= inputs.length;
