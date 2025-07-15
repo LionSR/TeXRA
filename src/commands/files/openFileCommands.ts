@@ -36,7 +36,9 @@ export async function openLabel(label: string): Promise<void> {
       }
     } catch (error) {
       // Log but continue search - file might be inaccessible
-      console.debug(`Could not read file ${file}: ${error instanceof Error ? error.message : error}`);
+      console.debug(
+        `Could not read file ${file}: ${error instanceof Error ? error.message : error}`,
+      );
     }
   }
 
