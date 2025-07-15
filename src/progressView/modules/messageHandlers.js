@@ -166,7 +166,7 @@ export class ProgressViewMessageHandler {
   }
 
   handleUpdateMissingOutputs(message) {
-    // State handled by ProgressStateManager - no direct DOM updates needed
+    // State persisted server-side - no direct DOM updates needed
   }
 
   handleDeleteStream(message) {
