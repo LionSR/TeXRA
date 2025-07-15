@@ -38,10 +38,6 @@ TeXRA is built as a TypeScript-based VS Code extension that provides:
 - Customizable prompts and settings
 - Direct integration with OpenAI, Anthropic, Google, DeepSeek, Moonshot (Kimi), and DashScope (Qwen) APIs with optional OpenRouter routing
 
-### Source Organization
-
-Commands live under `src/commands/` and are grouped by domain. Key folders include `agent/` for agent lifecycle and merge commands, `housekeeping/` for cleanup and packaging, `latex/` for LaTeX document tasks, `wolfram/` for Wolfram Alpha and script utilities, and `system/` for editor helpers along with XML/YAML utilities. This structure keeps each area focused and aligns with the design philosophy of deep modules.
-
 ## Installation Guide
 
 After installing the extension, you can configure your API keys in VS Code settings:
