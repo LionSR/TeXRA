@@ -4,6 +4,7 @@
 // Local imports - log
 import * as logger from './logUtils';
 import type { MessageType } from './messageTypes';
+import { MESSAGE_TYPES } from './messageTypes';
 import { sleep } from '@utils/helpers';
 import { SHORT_SLEEP_MS } from '@utils/config';
 
@@ -85,6 +86,40 @@ export class AgentLogger {
       this.isAgentLogger,
       data,
     );
+  }
+
+  /**
+   * Log a list of files that were processed.
+   */
+  fileList(files: unknown[], groupId?: string): void {
+    const summary = `Loaded ${files.length} file${files.length === 1 ? '' : 's'}`;
+    this.info(summary, groupId, MESSAGE_TYPES.FILE_LIST, files);
+  }
+
+  /**
+   * Log missing output information.
+   */
+  missingOutputs(info: unknown, groupId?: string): void {
+    const missing = (info as any).missing as unknown[] | undefined;
+    const count = missing ? missing.length : 0;
+    const summary = `${count} output file${count === 1 ? '' : 's'} missing`;
+    this.info(summary, groupId, MESSAGE_TYPES.MISSING_OUTPUTS, info);
+  }
+
+  /**
+   * Log latexdiff results.
+   */
+  latexDiff(results: unknown[], groupId?: string): void {
+    const summary = `Latexdiff results: ${results.length}`;
+    this.info(summary, groupId, MESSAGE_TYPES.LATEXDIFF, results);
+  }
+
+  /**
+   * Log statistics information.
+   */
+  statistics(stats: Record<string, number>, groupId?: string): void {
+    const summary = `Usage - input: ${stats.inputTokens ?? 0}, output: ${stats.outputTokens ?? 0}`;
+    this.info(summary, groupId, MESSAGE_TYPES.STATISTICS, stats);
   }
 
   /**

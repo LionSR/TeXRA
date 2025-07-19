@@ -441,12 +441,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         if (mediaFileResults.some((r) => !r.ok)) {
           this.logger.warn('Some media files failed to load');
         }
-        this.logger.info(
-          JSON.stringify(mediaFileResults),
-          undefined,
-          MESSAGE_TYPES.FILE_LIST,
-          mediaFileResults,
-        );
+        this.logger.fileList(mediaFileResults);
       }
     }
 
@@ -562,12 +557,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         if (mediaFileResults.some((r) => !r.ok)) {
           this.logger.warn('Some media files failed to load');
         }
-        this.logger.info(
-          JSON.stringify(mediaFileResults),
-          undefined,
-          MESSAGE_TYPES.FILE_LIST,
-          mediaFileResults,
-        );
+        this.logger.fileList(mediaFileResults);
       }
     }
 

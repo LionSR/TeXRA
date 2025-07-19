@@ -53,12 +53,7 @@ export async function buildUserVars(
 
   // Emit aggregated file list if any files were loaded
   if (allLoadedFiles.length > 0) {
-    logger.info(
-      JSON.stringify(allLoadedFiles),
-      undefined,
-      MESSAGE_TYPES.FILE_LIST,
-      allLoadedFiles,
-    );
+    logger.fileList(allLoadedFiles);
   }
 
   return userVars;
