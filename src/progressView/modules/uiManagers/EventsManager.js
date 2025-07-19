@@ -60,7 +60,7 @@ export class EventsManager {
         if (!button || button.disabled) return;
 
         const command = button.dataset.command;
-        const activeStream = progressViewState.getActiveStream();
+        const activeStream = progressViewState.activeStream;
 
         if (activeStream) {
           vscode.postMessage({ command, stream: activeStream });
