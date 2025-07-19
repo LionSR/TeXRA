@@ -12,7 +12,6 @@ import { MESSAGE_TYPES } from '@logger/messageTypes';
  * @param content - The text to wrap.
  * @param type - The message type value.
  */
-const escapeContent = (content: string): string => encodeHtml(content);
 
 export async function streamReasoningToProgressView<T>(
   stream: AsyncIterable<T>,
@@ -28,7 +27,7 @@ export async function streamReasoningToProgressView<T>(
     stream: streamId,
     logMessage: {
       id,
-      text: escapeContent(content),
+      text: encodeHtml(content),
       level: 'info',
       timestamp: Date.now(),
       groupId,
@@ -42,7 +41,7 @@ export async function streamReasoningToProgressView<T>(
       stream: streamId,
       logMessage: {
         id,
-        text: escapeContent(content),
+        text: encodeHtml(content),
         messageType: MESSAGE_TYPES.THINKING,
       },
     });
