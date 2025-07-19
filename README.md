@@ -24,6 +24,7 @@ See [texra.ai](https://texra.ai). For detailed guides and usage instructions, vi
 - YAML and XML configuration support
 - Git integration for version control
 - ProgressBoard view for detailed logs and re-running tasks
+- Clickable references in the ProgressBoard jump to their \label definitions
 - Multiple output support and intelligent merge tools
 
 ## Architecture
@@ -36,10 +37,6 @@ TeXRA is built as a TypeScript-based VS Code extension that provides:
 - Version control integration (latexdiff functionality)
 - Customizable prompts and settings
 - Direct integration with OpenAI, Anthropic, Google, DeepSeek, Moonshot (Kimi), and DashScope (Qwen) APIs with optional OpenRouter routing
-
-### Source Organization
-
-Commands live under `src/commands/` and are grouped by domain. Key folders include `agent/` for agent lifecycle and merge commands, `housekeeping/` for cleanup and packaging, `latex/` for LaTeX document tasks, `wolfram/` for Wolfram Alpha and script utilities, and `system/` for editor helpers along with XML/YAML utilities. This structure keeps each area focused and aligns with the design philosophy of deep modules.
 
 ## Installation Guide
 

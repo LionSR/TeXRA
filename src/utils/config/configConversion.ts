@@ -5,7 +5,8 @@
 // (none needed)
 
 // Local imports - models
-import { AgentConfig, AgentConfigSchema } from '@agent/core/AgentConfig';
+import type { AgentConfig } from '@agent/core/AgentConfig';
+import { AgentConfigSchema } from '@agent/core/AgentConfig';
 import { TaskState } from '@logger/TaskState';
 
 import { FILE_TYPES, type FileType } from './constants';
@@ -71,7 +72,10 @@ export function objectToTaskState(obj: Record<string, any>): TaskState {
 
   // Build toolConfig from extracted fields (backward compatibility)
   // Ensure toolConfig is an object, handling cases where it might be malformed
-  if (!agentConfigData.toolConfig || typeof agentConfigData.toolConfig !== 'object') {
+  if (
+    !agentConfigData.toolConfig ||
+    typeof agentConfigData.toolConfig !== 'object'
+  ) {
     agentConfigData.toolConfig = {};
   }
 
@@ -104,12 +108,12 @@ export function objectToTaskState(obj: Record<string, any>): TaskState {
     console.error('Failed to parse task state, using defaults:', error);
     const defaultConfig = AgentConfigSchema.parse({});
     const taskState = agentConfigToTaskState(defaultConfig);
-    
+
     // Preserve activeFiles if available
     if (activeFiles) {
       taskState.activeFiles = activeFiles;
     }
-    
+
     return taskState;
   }
 }

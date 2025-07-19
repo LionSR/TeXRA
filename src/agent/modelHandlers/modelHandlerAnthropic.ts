@@ -22,7 +22,7 @@ import type { ProviderStopReason } from './types/StopReasonTypes';
 import xmlUtils from '@utils/text/xmlUtils';
 
 // Local imports - agent components
-import { AgentConfig } from '@agent/core/AgentConfig';
+import type { AgentConfig } from '@agent/core/AgentConfig';
 import { AgentSetting, hasEndTag } from '@agent/core/AgentDataclass';
 import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
 import {

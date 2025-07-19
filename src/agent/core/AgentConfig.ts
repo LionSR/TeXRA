@@ -1,44 +1,13 @@
 // Local imports - agent components
 import { ToolConfig, ToolConfigSchema } from './ToolConfig';
+
 import { z } from 'zod';
-
-/** Configuration interface for controlling agent execution and file handling. */
-export interface AgentConfig {
-  // Core configuration
-  model: string;
-  agent: string;
-  instruction: string;
-
-  // Input/Output configuration
-  inputFile: string;
-  inputFiles: string[] | null;
-  referenceFile: string | null;
-  referenceFiles: string[] | null;
-  auxiliaryFile: string | null;
-  auxiliaryFiles: string[] | null;
-  mediaFile: string | null;
-  mediaFiles: string[] | null;
-  outputFiles: string[] | null;
-  editedFile: string | null;
-
-  // Tool configuration
-  toolConfig: ToolConfig;
-}
-
-/**
- * Creates a complete AgentConfig by merging partial config with defaults.
- * @param config Partial configuration to merge with defaults
- * @returns Complete AgentConfig with all fields populated
- */
-export function createAgentConfig(config: Partial<AgentConfig>): AgentConfig {
-  return AgentConfigSchema.parse(config);
-}
 
 /**
  * Checks that the number of output files does not exceed the number of input files.
  * Extracted as a separate function for clarity and reusability.
  */
-export const validateOutputFiles = (cfg: AgentConfig): boolean => {
+export const validateOutputFiles = (cfg: Record<string, any>): boolean => {
   if (cfg.outputFiles) {
     const inputs = [cfg.inputFile, ...(cfg.inputFiles || [])];
     return cfg.outputFiles.length <= inputs.length;
@@ -72,3 +41,14 @@ export const AgentConfigSchema = z
       'Number of output files must not be greater than the number of input files.',
     path: ['outputFiles'],
   });
+
+export type AgentConfig = z.infer<typeof AgentConfigSchema>;
+
+/**
+ * Creates a complete AgentConfig by merging partial config with defaults.
+ * @param config Partial configuration to merge with defaults
+ * @returns Complete AgentConfig with all fields populated
+ */
+export function createAgentConfig(config: Partial<AgentConfig>): AgentConfig {
+  return AgentConfigSchema.parse(config);
+}
