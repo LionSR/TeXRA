@@ -1,8 +1,9 @@
 // VS Code imports
 import * as vscode from 'vscode';
 
+// Third-party imports
+import { nanoid } from 'nanoid';
 // Local imports
-import { generateNonce } from '../nonce';
 import { AbsoluteFS } from '@utils/files';
 
 /**
@@ -14,7 +15,7 @@ export function buildWebviewHtml(
   replacements: Record<string, vscode.Uri | string>,
 ): string {
   const htmlContent = AbsoluteFS.readSync(htmlPath.fsPath);
-  const nonce = generateNonce();
+  const nonce = nanoid(32);
 
   let result = htmlContent
     .replace(/\${nonce}/g, nonce)
