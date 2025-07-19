@@ -103,7 +103,7 @@ export function deactivate() {
   const progressViewProvider = ProgressViewProvider.getInstance();
   if (progressViewProvider) {
     // Mark all running tasks as cancelled when extension deactivates
-    progressViewProvider.markAllRunningTasksAsCancelled();
+    progressViewProvider.eventHandler.markAllRunningTasksAsCancelled();
   }
   disposeDiffRefresh();
 }
