@@ -16,7 +16,7 @@ import { AgentLogger } from '@logger/AgentLogger';
 // Types
 import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
 import { TaskState } from '@logger/TaskState';
-import { TokenUsageStats } from '@agent/types/UsageTypes';
+import type { TokenUsageStats } from '@agent/types/UsageTypes';
 import { LogMessageData } from '@logger/LogTypes';
 
 // @ts-ignore - Import JavaScript module
