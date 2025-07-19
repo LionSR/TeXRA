@@ -1,5 +1,5 @@
 // Local imports - agent components
-import { ToolConfig, ToolConfigSchema } from './ToolConfig';
+import { ToolConfigSchema } from './ToolConfig';
 
 import { z } from 'zod';
 
@@ -43,12 +43,3 @@ export const AgentConfigSchema = z
   });
 
 export type AgentConfig = z.infer<typeof AgentConfigSchema>;
-
-/**
- * Creates a complete AgentConfig by merging partial config with defaults.
- * @param config Partial configuration to merge with defaults
- * @returns Complete AgentConfig with all fields populated
- */
-export function createAgentConfig(config: Partial<AgentConfig>): AgentConfig {
-  return AgentConfigSchema.parse(config);
-}
