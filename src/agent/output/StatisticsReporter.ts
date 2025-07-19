@@ -145,12 +145,7 @@ export class StatisticsReporter {
         payload.toolUseTokens = stateGlobal.totalToolUseTokens;
       }
 
-      this.logger.debug(
-        JSON.stringify(payload),
-        statsGroupId,
-        MESSAGE_TYPES.STATISTICS,
-        payload,
-      );
+      this.logger.statistics(payload, statsGroupId);
     } catch (error) {
       this.logger.error(`Error printing statistics: ${error}`, statsGroupId);
     }
