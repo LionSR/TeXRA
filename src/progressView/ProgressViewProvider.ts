@@ -10,7 +10,6 @@ import { WebviewUpdater } from './managers';
 // Local imports - existing components
 import { ProgressViewContentProvider } from './ProgressViewContentProvider';
 import { ProgressViewMessageHandler } from './ProgressViewMessageHandler';
-import { IProgressViewProvider } from './interfaces/IProgressViewProvider';
 import { AgentLogger } from '@logger/AgentLogger';
 
 // Types
@@ -33,16 +32,14 @@ type StreamStatusType =
  * This class now focuses on orchestration and delegation to focused managers,
  * following the design principles from AGENTS.md.
  */
-export class ProgressViewProvider
-  implements vscode.WebviewViewProvider, IProgressViewProvider
-{
+export class ProgressViewProvider implements vscode.WebviewViewProvider {
   private static _instance: ProgressViewProvider | undefined;
   private _view?: vscode.WebviewView;
 
   // New modular architecture components
-  private readonly state: ProgressViewState;
-  private readonly eventHandler: ProgressEventHandler;
-  private readonly webviewUpdater: WebviewUpdater;
+  public readonly state: ProgressViewState;
+  public readonly eventHandler: ProgressEventHandler;
+  public readonly webviewUpdater: WebviewUpdater;
 
   // Existing components (will be gradually updated)
   private readonly contentProvider: ProgressViewContentProvider;
@@ -197,7 +194,7 @@ export class ProgressViewProvider
   /**
    * Update webview content using the new architecture
    */
-  private updateWebview(): void {
+  public updateWebview(): void {
     if (!this._view) return;
 
     if (!this._webviewReady) {
@@ -230,102 +227,6 @@ export class ProgressViewProvider
   // Public API methods - these delegate to the new architecture
 
   /**
-   * Get stream tabs (legacy compatibility)
-   */
-  public getStreamTabs(): Map<string, LogMessageData[]> {
-    return this.state.streamTabs.getAll();
-  }
-
-  /**
-   * Get task groups (legacy compatibility)
-   */
-  public getTaskGroups(): Map<string, Map<string, any>> {
-    return this.state.taskGroups.getAll();
-  }
-
-  /**
-   * Erase a stream (legacy compatibility)
-   */
-  public eraseStream(stream: string): void {
-    this.state.eraseStreamContent(stream);
-    this.updateWebview();
-  }
-
-  /**
-   * Delete all streams (legacy compatibility)
-   */
-  public deleteAllStreams(): void {
-    this.state.clearAll();
-    this.updateWebview();
-  }
-
-  /**
-   * Delete a specific stream (legacy compatibility)
-   */
-  public deleteStream(stream: string): void {
-    this.state.clearStream(stream);
-    this.updateWebview();
-  }
-
-  /**
-   * Get stream status (legacy compatibility)
-   */
-  public getStreamStatus(stream: string): StreamStatusType | undefined {
-    return this.eventHandler.getStreamStatus(stream);
-  }
-
-  /**
-   * Get output files for a stream (legacy compatibility)
-   */
-  public getOutputFiles(stream: string): { [key: number]: any[] } | undefined {
-    return this.state.outputFiles.getFiles(stream);
-  }
-
-  /**
-   * Get missing outputs for a stream (legacy compatibility)
-   */
-  public getMissingOutputs(
-    stream: string,
-  ): { [key: number]: string[] } | undefined {
-    return this.state.outputFiles.getMissingOutputs(stream);
-  }
-
-  /**
-   * Get stream usage (legacy compatibility)
-   */
-  public getStreamUsage(stream: string): TokenUsageStats | undefined {
-    return this.state.usageStats.getStreamUsage(stream);
-  }
-
-  /**
-   * Set task state (legacy compatibility)
-   */
-  public setTaskState(
-    streamTabId: StreamTabId,
-    taskState: TaskState,
-    options?: { executionId?: ExecutionId },
-  ): void {
-    this.state.setTaskState(streamTabId, taskState);
-    if (options?.executionId) {
-      this.state.setExecutionId(streamTabId, options.executionId);
-    }
-  }
-
-  /**
-   * Get execution ID (legacy compatibility)
-   */
-  public getExecutionId(streamTabId: StreamTabId): ExecutionId | undefined {
-    return this.state.getExecutionId(streamTabId);
-  }
-
-  /**
-   * Get task state (legacy compatibility)
-   */
-  public getTaskState(streamTabId: StreamTabId): TaskState | undefined {
-    return this.state.getTaskState(streamTabId);
-  }
-
-  /**
    * Clear task output (legacy compatibility)
    */
   public clearTaskOutput(streamTabId: StreamTabId): void {
@@ -338,13 +239,6 @@ export class ProgressViewProvider
       }
       this.state.setTaskState(streamTabId, taskState);
     }
-  }
-
-  /**
-   * Mark all running tasks as cancelled (legacy compatibility)
-   */
-  public markAllRunningTasksAsCancelled(): void {
-    this.eventHandler.markAllRunningTasksAsCancelled();
   }
 
   /**
