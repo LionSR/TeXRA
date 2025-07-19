@@ -1,27 +1,11 @@
 import { z } from 'zod';
 
-/** Configuration interface for controlling tool behavior and automation features. */
-export interface ToolConfig {
-  reflect: boolean;
-  usePrefillFromInput: boolean;
-  autoExtractFigure: boolean;
-  autoExtractTikzFigure: boolean;
-  attachTeXCount: boolean;
-  printInputPrompt: boolean;
-  autoCompileInputPdf: boolean;
-}
-
-/** Zod schema for validating ToolConfig objects */
-export const DEFAULT_TOOL_CONFIG: ToolConfig = {
-  reflect: false,
-  usePrefillFromInput: false,
-  autoExtractFigure: false,
-  autoExtractTikzFigure: false,
-  attachTeXCount: false,
-  printInputPrompt: false,
-  autoCompileInputPdf: false,
-};
-
+/**
+ * Zod schema for validating ToolConfig objects.
+ * Defaults are defined at the property level and the schema itself
+ * defaults to an empty object, allowing omission of the entire
+ * configuration section.
+ */
 export const ToolConfigSchema = z
   .object({
     reflect: z.boolean().default(false),
@@ -33,4 +17,6 @@ export const ToolConfigSchema = z
     autoCompileInputPdf: z.boolean().default(false),
   })
   .strict()
-  .default(DEFAULT_TOOL_CONFIG);
+  .default({});
+
+export type ToolConfig = z.infer<typeof ToolConfigSchema>;
