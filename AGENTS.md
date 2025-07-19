@@ -79,6 +79,7 @@ This document sets the common conventions for contributions. Follow these norms 
   - Use direct access patterns: `state.taskGroups.get()` instead of `state.getTaskGroup()`
   - Keep method names simple - context comes from the class name (`set()`, `get()`, `clear()`)
   - Follow the pattern seen in `src/progressView/modules/progressViewState.js` and `domHandlers.js`
+- Prefer direct use of `encodeHtml` and `decodeHtml` from `he` instead of wrapper helpers like `_escapeHtml`. Apply this when confident to avoid repeated refactoring.
 - When modularizing webview code, ALL module dependencies must be explicitly mapped in the import map:
   - Each module imported by ANY module in the dependency tree needs its own URI and import map entry
   - This includes transitive dependencies (modules imported by imported modules)
@@ -95,6 +96,10 @@ This document sets the common conventions for contributions. Follow these norms 
 - **Client-Side State**: Add empty handlers with `/* State saved client-side */` comment for checkbox/toggle operations
 - **Resource Access**: Include all common module paths in `localResourceRoots` to prevent 401 errors
 - **Module Structure**: Keep UI managers modular and focused on single responsibilities - avoid large consolidated classes
+
+### Source Organization
+
+Commands live under `src/commands/` and are grouped by domain. Key folders include `agent/` for agent lifecycle and merge commands, `housekeeping/` for cleanup and packaging, `latex/` for LaTeX document tasks, `wolfram/` for Wolfram Alpha and script utilities, and `system/` for editor helpers along with XML/YAML utilities. This structure keeps each area focused and aligns with the design philosophy of deep modules.
 
 ## Design and refactoring
 

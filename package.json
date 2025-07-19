@@ -5,7 +5,7 @@
   "version": "0.32.2",
   "publisher": "texra-ai",
   "engines": {
-    "vscode": "^1.94.0"
+    "vscode": "1.99.3"
   },
   "categories": [
     "Programming Languages",
@@ -75,7 +75,8 @@
                 "grok3",
                 "qwenplus",
                 "kimit",
-                "kimiv"
+                "kimiv",
+                "kimi2"
               ]
             },
             "default": [
@@ -91,7 +92,7 @@
               "gemini25f",
               "grok4"
             ],
-            "description": "List of available models. Model codes: opus4T/opus4 (Claude Opus 4 Thinking/Regular), sonnet4T/sonnet4 (Claude Sonnet 4 Thinking/Regular), sonnet37T/sonnet37 (Claude Sonnet 3.7 Thinking/Regular), o4-/o3/o3pro/o3-/o1pro/o1 (OpenAI reasoning models), gpt41/gpt4o (GPT-4.1/4O), gemini25p/gemini25f/gemini2fT (Gemini 2.5 Pro/Flash, 2.0 Flash Thinking), dsv3/dsr1 (DeepSeek V3.1/R1), grok4 (Grok 4), grok3 (Grok 3), qwenplus (Qwen Plus), kimit/kimiv (Kimi Thinking/Vision)",
+            "description": "List of available models. Model codes: opus4T/opus4 (Claude Opus 4 Thinking/Regular), sonnet4T/sonnet4 (Claude Sonnet 4 Thinking/Regular), sonnet37T/sonnet37 (Claude Sonnet 3.7 Thinking/Regular), o4-/o3/o3pro/o3-/o1pro/o1 (OpenAI reasoning models), gpt41/gpt4o (GPT-4.1/4O), gemini25p/gemini25f/gemini2fT (Gemini 2.5 Pro/Flash, 2.0 Flash Thinking), dsv3/dsr1 (DeepSeek V3.1/R1), grok4 (Grok 4), grok3 (Grok 3), qwenplus (Qwen Plus), kimit/kimiv/kimi2 (Kimi Thinking/Vision/K2)",
             "scope": "resource"
           }
         }
@@ -618,7 +619,8 @@
               "dsv3",
               "qwenplus",
               "kimit",
-              "Kimiv"
+              "kimiv",
+              "kimi2"
             ],
             "enumDescriptions": [
               "Claude Sonnet 4T",
@@ -634,7 +636,8 @@
               "DeepSeek V3",
               "Qwen Plus",
               "Kimi Thinking",
-              "Kimi Vision"
+              "Kimi Vision",
+              "Kimi K2"
             ],
             "description": "Default model to use for merge operations",
             "order": 1
@@ -1126,32 +1129,32 @@
     "format": "prettier --write ."
   },
   "devDependencies": {
-    "@stylistic/eslint-plugin": "^4.2.0",
+    "@stylistic/eslint-plugin": "^5.2.0",
     "@types/diff-match-patch": "^1.0.36",
     "@types/difflib": "^0.2.7",
+    "@types/he": "^1.2.3",
     "@types/identifiers-arxiv": "^0.1.2",
     "@types/mime-types": "^3.0.1",
-    "@types/mocha": "^10.0.6",
-    "@types/node": "^22.13.17",
-    "@types/nunjucks": "^3.2.5",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^22.16.5",
+    "@types/nunjucks": "^3.2.6",
     "@types/shell-quote": "^1.7.5",
-    "@types/vscode": "^1.93.0",
-    "@types/he": "^1.2.3",
-    "@typescript-eslint/eslint-plugin": "^8.27.0",
-    "@typescript-eslint/parser": "^8.27.0",
-    "@vscode/test-cli": "^0.0.10",
+    "@types/vscode": "1.99.1",
+    "@typescript-eslint/eslint-plugin": "^8.37.0",
+    "@typescript-eslint/parser": "^8.37.0",
+    "@vscode/test-cli": "^0.0.11",
     "@vscode/test-electron": "^2.5.2",
-    "eslint": "^9.23.0",
-    "globals": "^15.8.0",
+    "eslint": "^9.31.0",
+    "globals": "^16.3.0",
     "node-loader": "^2.1.0",
     "nunjucks": "^3.2.4",
     "path-browserify": "^1.0.1",
-    "prettier": "^3.4.2",
+    "prettier": "^3.6.2",
     "terser-webpack-plugin": "^5.3.14",
-    "ts-loader": "^9.5.1",
+    "ts-loader": "^9.5.2",
     "typescript": "^5.8.3",
-    "typescript-eslint": "^8.27.0",
-    "webpack": "^5.91.0",
+    "typescript-eslint": "^8.37.0",
+    "webpack": "^5.100.2",
     "webpack-cli": "^6.0.1"
   },
   "repository": {
@@ -1185,31 +1188,31 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.56.0",
     "@cantoo/pdf-lib": "^2.4.2",
-    "@google/genai": "^1.9.0",
-    "@modelcontextprotocol/sdk": "^1.15.0",
-    "@vscode/codicons": "^0.0.36",
-    "@vscode/markdown-it-katex": "^1.1.1",
+    "@google/genai": "^1.10.0",
+    "@modelcontextprotocol/sdk": "^1.16.0",
+    "@vscode/codicons": "^0.0.38",
+    "@vscode/markdown-it-katex": "^1.1.2",
     "axios": "^1.10.0",
     "deepmerge": "^4.3.1",
     "diff-match-patch": "^1.0.5",
     "difflib": "^0.2.4",
+    "dotenv": "^17.2.0",
     "execa": "^9.6.0",
     "fast-xml-parser": "^5.2.5",
     "glob": "^11.0.3",
-    "dotenv": "^16.4.5",
     "gpt-tokenizer": "^3.0.1",
+    "he": "^1.2.0",
     "identifiers-arxiv": "^0.1.1",
     "katex": "^0.16.22",
     "markdown-it": "^14.1.0",
     "mime-types": "^3.0.1",
     "nanoid": "^5.1.5",
     "node-pandoc": "^0.3.0",
-    "openai": "^5.8.3",
+    "openai": "^5.10.1",
     "pdf2pic": "^3.2.0",
     "shell-quote": "^1.8.3",
     "sortablejs": "^1.15.6",
     "split.js": "^1.6.5",
-    "he": "^1.2.0",
     "tar": "^7.4.3",
     "winston": "^3.17.0",
     "yaml": "^2.8.0",

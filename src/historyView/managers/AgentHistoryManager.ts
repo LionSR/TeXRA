@@ -5,7 +5,7 @@ import * as vscode from 'vscode';
 import { randomUUID } from 'crypto';
 
 // Local imports
-import { AgentConfig } from '@agent/core/AgentConfig';
+import type { AgentConfig } from '@agent/core/AgentConfig';
 import { workspaceSM } from '@common/state/stateManager';
 import type { ExecutionId } from '@agent/types/IdentifierTypes';
 
