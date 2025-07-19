@@ -206,7 +206,7 @@ export class LatexDiffManager {
 
       if (aggregated.length > 0) {
         this.logger.info(
-          objectToLogString(aggregated),
+          JSON.stringify(aggregated),
           diffProcessGroupId,
           MESSAGE_TYPES.LATEXDIFF,
           aggregated,
