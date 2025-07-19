@@ -204,4 +204,10 @@ for more details.
 2.  Reload the VS Code window (Command Palette > `Developer: Reload Window`).
 3.  Your new custom agent should now appear in the "Agent" dropdown menu in the TeXRA UI.
 
+### Strict XML Extraction
+
+TeXRA's `XmlOutputManager` parses the `<latex_document>` or `<latex_documents>` blocks in the AI output.
+It requires properly closed tags and, for multiple outputs, each `<document>` must include a `name` attribute that matches a filename from the UI.
+If tags are mismatched or a filename is wrong, extraction fails and no files are saved.
+
 For more complex examples and advanced configuration options like `requiredFiles` and `filePatternsContain`, examine the source `.yaml` files of the [Built-in Agents](./built-in-agents.md).
