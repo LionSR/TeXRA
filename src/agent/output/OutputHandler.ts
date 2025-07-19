@@ -279,12 +279,7 @@ export class OutputHandler implements IOutputHandler {
         documentTag: this.agentSetting.documentTag,
       };
 
-      this.logger.info(
-        JSON.stringify(missingOutputsData),
-        groupId,
-        MESSAGE_TYPES.MISSING_OUTPUTS,
-        missingOutputsData,
-      );
+      this.logger.missingOutputs(missingOutputsData, groupId);
     }
 
     emitProgress('updateMissingOutputs', {
@@ -423,12 +418,7 @@ export class OutputHandler implements IOutputHandler {
           xmlFile: outputFile,
           documentTag: this.agentSetting.documentTag,
         };
-        this.logger.info(
-          JSON.stringify(missingOutputsData),
-          activeGroupId,
-          MESSAGE_TYPES.MISSING_OUTPUTS,
-          missingOutputsData,
-        );
+        this.logger.missingOutputs(missingOutputsData, activeGroupId);
         emitProgress('updateMissingOutputs', {
           stream: this.channel,
           filesByRound: { [currRound]: [] },
