@@ -2,7 +2,7 @@
 import { randomUUID } from 'crypto';
 
 // Local imports
-import { emitProgress } from '@eventBus/ProgressEventBus';
+import { bus } from '@eventBus/ProgressEventBus';
 import { AgentLogger } from '@logger/AgentLogger';
 import { encode as encodeHtml } from 'he';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
@@ -24,7 +24,7 @@ export async function streamReasoningToProgressView<T>(
   const id = randomUUID();
   let content = '';
 
-  emitProgress('addLogMessage', {
+  bus.emit('addLogMessage', {
     stream: streamId,
     logMessage: {
       id,
@@ -38,7 +38,7 @@ export async function streamReasoningToProgressView<T>(
 
   for await (const chunk of stream) {
     content += extract(chunk);
-    emitProgress('updateLogMessage', {
+    bus.emit('updateLogMessage', {
       stream: streamId,
       logMessage: {
         id,

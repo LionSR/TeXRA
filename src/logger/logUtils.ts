@@ -6,7 +6,7 @@ import { encode as encodeHtml, decode as decodeHtml } from 'he';
 import { randomUUID } from 'crypto';
 
 // Local imports - progressView
-import { emitProgress } from '@eventBus/ProgressEventBus';
+import { bus } from '@eventBus/ProgressEventBus';
 import { getConfig } from '@utils/config';
 import { TaskGroup, LogMessageData } from './LogTypes';
 import { MESSAGE_TYPES, type MessageType } from './messageTypes';
@@ -142,7 +142,7 @@ class VSCodeTransport extends Transport {
       data: info.data,
     } satisfies import('./LogTypes').LogMessageData;
 
-    emitProgress('addLogMessage', {
+    bus.emit('addLogMessage', {
       stream: this.streamName,
       logMessage,
     });
@@ -174,7 +174,7 @@ class VSCodeTransport extends Transport {
       return groupId;
     }
 
-    emitProgress('addTaskGroup', {
+    bus.emit('addTaskGroup', {
       stream: this.streamName,
       groupId,
       groupName,
@@ -203,7 +203,7 @@ class VSCodeTransport extends Transport {
       return;
     }
 
-    emitProgress('updateTaskGroup', {
+    bus.emit('updateTaskGroup', {
       stream: this.streamName,
       groupId,
       status,
