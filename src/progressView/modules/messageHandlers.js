@@ -49,7 +49,7 @@ export class ProgressViewMessageHandler {
   }
 
   handleUpdateStreams(message) {
-    state.setActiveStream(message.activeStream);
+    state.activeStream = message.activeStream;
     dom.streamTabs.update(message.streams, message.activeStream);
 
     // Update status based on whether there's an active stream
@@ -63,7 +63,7 @@ export class ProgressViewMessageHandler {
 
   handleUpdateLogs(message) {
     const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
-    if (message.stream === state.getActiveStream()) {
+    if (message.stream === state.activeStream) {
       logContent.innerHTML = '';
       state.taskGroups.clear();
       if (message.groups && message.groups.length > 0) {
@@ -112,7 +112,7 @@ export class ProgressViewMessageHandler {
   }
 
   handleAppendLog(message) {
-    if (message.stream === state.getActiveStream()) {
+    if (message.stream === state.activeStream) {
       const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
       const addedToGroup = dom.logEntries.append(message.logMessage);
       if (!addedToGroup) {
@@ -125,13 +125,13 @@ export class ProgressViewMessageHandler {
   }
 
   handleUpdateLog(message) {
-    if (message.stream === state.getActiveStream()) {
+    if (message.stream === state.activeStream) {
       dom.logEntries.update(message.logMessage);
     }
   }
 
   handleAddTaskGroup(message) {
-    if (message.stream === state.getActiveStream()) {
+    if (message.stream === state.activeStream) {
       const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
       dom.taskGroups.add(message.group);
       logContent.scrollTop = logContent.scrollHeight;
@@ -139,7 +139,7 @@ export class ProgressViewMessageHandler {
   }
 
   handleUpdateTaskGroup(message) {
-    if (message.stream === state.getActiveStream()) {
+    if (message.stream === state.activeStream) {
       state.taskGroups.update(message.groupId, message.status, message.endTime);
       dom.taskGroups.update(message.groupId, message.status, message.endTime);
     }
@@ -154,13 +154,13 @@ export class ProgressViewMessageHandler {
   }
 
   handleUpdateGroupUsage(message) {
-    if (message.stream === state.getActiveStream()) {
+    if (message.stream === state.activeStream) {
       dom.usageGroup.update(message.groupId, message.usage);
     }
   }
 
   handleUpdateFiles(message) {
-    if (message.stream === state.getActiveStream()) {
+    if (message.stream === state.activeStream) {
       dom.fileList.update(message.files);
     }
   }
@@ -172,7 +172,7 @@ export class ProgressViewMessageHandler {
   handleDeleteStream(message) {
     if (message.stream) {
       state.streamStatuses.delete(message.stream);
-      if (message.stream === state.getActiveStream()) {
+      if (message.stream === state.activeStream) {
         const groupIds = [];
         const headers = Array.from(
           document.querySelectorAll('.log-group-header'),

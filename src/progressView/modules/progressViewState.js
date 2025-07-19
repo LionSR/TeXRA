@@ -200,15 +200,6 @@ export class ProgressViewState {
       console.error('Failed to save state:', e);
     }
   }
-
-  // --- Active stream operations ---
-  getActiveStream() {
-    return this.activeStream;
-  }
-
-  setActiveStream(stream) {
-    this.activeStream = stream;
-  }
 }
 
 export const progressViewState = new ProgressViewState();
