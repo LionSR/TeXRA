@@ -2,6 +2,13 @@
 import * as vscode from 'vscode';
 import Anthropic from '@anthropic-ai/sdk';
 import type { MessageCreateParams } from '@anthropic-ai/sdk/resources/messages';
+import * as yaml from 'yaml';
+
+import {
+  AgentDefinitionSchema,
+  AgentPromptSchema,
+  AgentSettingSchema,
+} from '@agent/core/AgentDataclass';
 
 // Local imports - utils
 import { SecretManager } from '@frontend/secretManager';
@@ -20,6 +27,7 @@ export const agentCreatorCommands = {
 
 const SINGLE_TEMPLATE = `# --- Agent Inheritance (Optional) ---
 # inherits: base
+name: \${agentName}
 
 # --- Agent Settings ---
 settings:
@@ -86,6 +94,7 @@ prompts:
 
 const MULTI_TEMPLATE = `# --- Agent Inheritance (Optional) ---
 # inherits: base
+name: \${agentName}
 
 # --- Agent Settings ---
 settings:
@@ -155,6 +164,24 @@ prompts:
     following the order in OUTPUT_FILES_ORDER.
 `;
 
+function validateAgentYamlString(content: string): string | null {
+  try {
+    const parsed = yaml.parse(content);
+    const data = AgentDefinitionSchema.parse(parsed);
+    if (!data.settings || !data.prompts) {
+      return 'missing settings or prompts block';
+    }
+    AgentSettingSchema.parse(data.settings);
+    AgentPromptSchema.parse(data.prompts);
+    if (!data.name || data.name.trim() === '') {
+      return 'name is empty';
+    }
+    return null;
+  } catch (err) {
+    return err instanceof Error ? err.message : String(err);
+  }
+}
+
 export function registerAgentCreatorCommands(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand(
@@ -219,32 +246,55 @@ async function handleCreateAgentWithAI(context: vscode.ExtensionContext) {
     try {
       const apiKey = await SecretManager.getApiKey('anthropic');
       const anthropic = new Anthropic({ apiKey });
-      const prompt =
-        `You are an expert on the TeXRA codebase, a VS Code extension that ` +
-        `runs YAML-defined AI agents for academic writing.\n` +
-        `Generate a complete YAML definition for an agent named "${agentName}" ` +
-        `using the chain-of-thought style. Include prompts similar to the ` +
-        `polish agent with explicit rules. Mention variables from buildUserVars ` +
-        `(INPUT_CONTENT, ALL_INPUTS, OUTPUT_FILES_ORDER, REFERENCE_CONTENT, ` +
-        `AUXILIARY_CONTENT, ADDITIONAL_INPUTS).\n` +
-        `The user only provides a short description and the output filenames.\n` +
-        `Goal: ${description}. Wrap the YAML in <yaml> tags and return nothing else.`;
-      const params: MessageCreateParams = {
-        model: ANTHROPIC_MODELS.opus4.fullName,
-        messages: [{ role: 'user', content: prompt }],
-        max_tokens: 2048,
-      };
-      const response = await anthropic.messages.create(params);
-      if (
-        response.content &&
-        Array.isArray(response.content) &&
-        response.content.length > 0 &&
-        response.content[0] &&
-        response.content[0].type === 'text'
-      ) {
-        const text = response.content[0].text.trim();
-        const match = text.match(/<yaml>([\s\S]*?)<\/yaml>/i);
-        yamlContent = match ? match[1].trim() : text;
+
+      const basePrompt =
+        `You are an expert on the TeXRA codebase, a VS Code extension that runs YAML-defined AI agents.\n` +
+        `Generate a YAML definition for an agent named "${agentName}". The YAML must follow this layout:` +
+        `\nname: ${agentName}\n# inherits: base\nsettings:\n  ...\nprompts:\n  systemPrompt: |\n    ...\n  userPrefix: |\n    ...\n  userRequest: |\n    ...\n` +
+        `For reference, built-in agents start like:\nname: polish\nsettings:\n  documentTag: latex_document\n  endTag: </latex_document>\n  outputExt: tex\n` +
+        `Mention variables INPUT_CONTENT, ALL_INPUTS, OUTPUT_FILES_ORDER, REFERENCE_CONTENT, AUXILIARY_CONTENT and ADDITIONAL_INPUTS when relevant.\n` +
+        `Goal: ${description}. Respond only with the YAML wrapped in <yaml> tags.`;
+
+      let prompt = basePrompt;
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const params: MessageCreateParams = {
+          model: ANTHROPIC_MODELS.opus4.fullName,
+          messages: [{ role: 'user', content: prompt }],
+          max_tokens: 2048,
+        };
+        const response = await anthropic.messages.create(params);
+        if (
+          response.content &&
+          Array.isArray(response.content) &&
+          response.content.length > 0 &&
+          response.content[0] &&
+          response.content[0].type === 'text'
+        ) {
+          const text = response.content[0].text.trim();
+          const match = text.match(/<yaml>([\s\S]*?)<\/yaml>/i);
+          const candidate = match ? match[1].trim() : text;
+          const validationErr = validateAgentYamlString(candidate);
+          if (!validationErr) {
+            yamlContent = candidate;
+            break;
+          }
+
+          const options =
+            attempt === 0
+              ? (['Try Again', 'Use Template'] as const)
+              : (['Use Template'] as const);
+          const choice = await vscode.window.showWarningMessage(
+            `Generated YAML was invalid: ${validationErr}`,
+            ...options,
+          );
+          if (choice === 'Try Again' && attempt === 0) {
+            prompt =
+              basePrompt +
+              `\nThe previous attempt failed validation: ${validationErr}. Please fix and return only the YAML.`;
+            continue;
+          }
+          break;
+        }
       }
     } catch (err) {
       logger.error(
@@ -258,7 +308,9 @@ async function handleCreateAgentWithAI(context: vscode.ExtensionContext) {
         outputChoice === 'Multiple output files'
           ? MULTI_TEMPLATE.replace('[OUTPUT_FILES]', outputFilesYaml)
           : SINGLE_TEMPLATE;
-      yamlContent = template.replace('[DESCRIPTION]', description);
+      yamlContent = template
+        .replace('[DESCRIPTION]', description)
+        .replace('${agentName}', agentName);
     }
 
     await AbsoluteFS.write(filePath.fsPath, yamlContent);
