@@ -1,5 +1,6 @@
 // Local imports - model types
 import type { ToolDefinition } from '@model';
+import { ToolDefinitionSchema } from '@model';
 import { z } from 'zod';
 
 /** Temperature bounds for agent generation. */
@@ -12,15 +13,6 @@ export enum AgentType {
   Direct = 'direct',
   ToolUse = 'toolUse',
 }
-
-/** Zod schema for ToolDefinition validation */
-export const ToolDefinitionSchema = z
-  .object({
-    name: z.string(),
-    description: z.string().optional(),
-    parameters: z.record(z.unknown()).optional(),
-  })
-  .strict();
 
 /** Zod schema for AgentSetting validation */
 export const AgentSettingSchema = z
@@ -46,7 +38,15 @@ export const AgentSettingSchema = z
     requiredFiles: z.record(z.string()).default({}),
     requiredFilesInternal: z.record(z.string()).default({}),
     defaultOutputFiles: z.array(z.string()).default([]),
-    filePatternsContain: z.array(z.record(z.string())).default([]),
+    filePatternsContain: z
+      .array(
+        z.object({
+          pattern: z.string(),
+          varName: z.string(),
+          categories: z.array(z.string()).default([]),
+        }),
+      )
+      .default([]),
 
     tools: z.array(ToolDefinitionSchema).default([]),
   })

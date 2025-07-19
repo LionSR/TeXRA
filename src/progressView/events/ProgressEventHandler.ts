@@ -1,6 +1,5 @@
 // Third-party imports
 import * as vscode from 'vscode';
-
 // Local imports
 import { ProgressViewState } from '../state/ProgressViewState';
 import { WebviewUpdater } from '../managers';
@@ -12,6 +11,7 @@ import { onProgress } from '@eventBus/ProgressEventBus';
 import { TokenUsageStats } from '@agent/types/UsageTypes';
 import { TaskState } from '@logger/TaskState';
 import { LogMessageData, TaskGroup } from '@logger/LogTypes';
+import { parseLegacyLogData } from '@logger/logUtils';
 import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
 
 // @ts-ignore - Import JavaScript module
@@ -45,6 +45,11 @@ export class ProgressEventHandler {
     this.logger = new AgentLogger('ProgressEventHandler');
   }
 
+  /**
+   * Parse legacy JSON content from the log message text when structured data is
+   * missing. Parsed results are stored back into the log object so that future
+   * lookups don't require re-parsing.
+   */
   /**
    * Setup all event bus listeners
    */
@@ -296,6 +301,8 @@ export class ProgressEventHandler {
   }): void {
     const { stream, logMessage } = data;
 
+    parseLegacyLogData(logMessage, this.logger);
+
     // Skip debug messages if debug mode is disabled
     if (
       logMessage.level === 'debug' &&
@@ -334,6 +341,9 @@ export class ProgressEventHandler {
     }
     if (logMessage.data !== undefined) {
       existing.data = logMessage.data;
+    } else {
+      // Re-parse the updated text even if existing data is present
+      parseLegacyLogData(existing, this.logger, true);
     }
 
     if (
