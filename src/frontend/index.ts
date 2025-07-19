@@ -16,4 +16,3 @@ export * from './secretManager';
 export * from './setup';
 export * from './media/img';
 export * from './media/audio';
-export * from './nonce';
