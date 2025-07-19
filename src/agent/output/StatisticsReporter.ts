@@ -1,5 +1,5 @@
 import { AgentLogger } from '@logger/AgentLogger';
-import { emitProgress } from '@eventBus/ProgressEventBus';
+import { bus } from '@eventBus/ProgressEventBus';
 import { AgentStateGlobal } from '@agent/core/AgentState';
 import type { IModelHandler } from '@agent/modelHandlers';
 import {
@@ -91,7 +91,7 @@ export class StatisticsReporter {
       const cost = this.modelHandler.computePrice(responseUsage);
 
       if (statsGroupId) {
-        emitProgress('updateGroupUsage', {
+        bus.emit('updateGroupUsage', {
           stream: this.channel,
           groupId: statsGroupId,
           usage: {

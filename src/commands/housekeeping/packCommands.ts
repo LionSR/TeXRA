@@ -2,7 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports - progress view
-import { emitProgress } from '@eventBus/ProgressEventBus';
+import { bus } from '@eventBus/ProgressEventBus';
 
 // Local imports - log
 import * as logger from '@logger/logUtils';
@@ -81,9 +81,9 @@ async function handlePack(config: { streamId?: string; [key: string]: any }) {
   const streamId =
     config.streamId ||
     getStreamTabId(config.agent, config.model, config.inputFile, outputFiles);
-  emitProgress('clearOutputFiles', streamId);
-  emitProgress('clearMissingOutputs', streamId);
-  emitProgress('clearTaskOutput', streamId);
+  bus.emit('clearOutputFiles', streamId);
+  bus.emit('clearMissingOutputs', streamId);
+  bus.emit('clearTaskOutput', streamId);
 }
 
 async function handlePackSingle(
@@ -112,9 +112,9 @@ async function handlePackSingle(
   showPackResult(result, inputFile);
 
   const streamId = getStreamTabId(agent, model, inputFile);
-  emitProgress('clearOutputFiles', streamId);
-  emitProgress('clearMissingOutputs', streamId);
-  emitProgress('clearTaskOutput', streamId);
+  bus.emit('clearOutputFiles', streamId);
+  bus.emit('clearMissingOutputs', streamId);
+  bus.emit('clearTaskOutput', streamId);
 }
 
 async function handlePackMultiple(
@@ -146,9 +146,9 @@ async function handlePackMultiple(
   showPackResult(result, inputFile);
 
   const streamId = getStreamTabId(agent, model, inputFile, outputFiles);
-  emitProgress('clearOutputFiles', streamId);
-  emitProgress('clearMissingOutputs', streamId);
-  emitProgress('clearTaskOutput', streamId);
+  bus.emit('clearOutputFiles', streamId);
+  bus.emit('clearMissingOutputs', streamId);
+  bus.emit('clearTaskOutput', streamId);
 }
 
 export const packCommands = {

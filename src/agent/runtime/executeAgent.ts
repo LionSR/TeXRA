@@ -22,7 +22,7 @@ import { DirectAgent, CoTAgent, MergeAgent } from '@agent/implementations';
 
 import { AgentLogger } from '@logger/AgentLogger';
 
-import { emitProgress } from '@eventBus/ProgressEventBus';
+import { bus } from '@eventBus/ProgressEventBus';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
@@ -199,8 +199,8 @@ async function executeAgentWithLogging<T extends IAgent>(
         );
 
         // Switch to this stream and set its status to running
-        emitProgress('setActiveStream', streamTabId);
-        emitProgress('updateStreamStatus', {
+        bus.emit('setActiveStream', streamTabId);
+        bus.emit('updateStreamStatus', {
           stream: streamTabId,
           status: 'running',
         });
@@ -251,7 +251,7 @@ async function executeAgentWithLogging<T extends IAgent>(
         logger.endGroup(taskDetailsGroupId, 'stopped');
 
         // Convert AgentConfig to TaskState using utility function
-        emitProgress('setTaskState', {
+        bus.emit('setTaskState', {
           streamTabId: streamTabId,
           executionId,
           taskState: agentConfigToTaskState(config),
@@ -273,7 +273,7 @@ async function executeAgentWithLogging<T extends IAgent>(
           logger.debug(`Task completed successfully`, mainTaskGroupId);
           logger.endGroup(mainTaskGroupId, 'stopped');
           // Update status to stopped on successful completion
-          emitProgress('updateStreamStatus', {
+          bus.emit('updateStreamStatus', {
             stream: streamTabId,
             status: 'stopped',
           });
@@ -294,7 +294,7 @@ async function executeAgentWithLogging<T extends IAgent>(
           );
           logger.endGroup(mainTaskGroupId, 'error');
           // Update status to error if agent run fails
-          emitProgress('updateStreamStatus', {
+          bus.emit('updateStreamStatus', {
             stream: streamTabId,
             status: 'error',
           });
