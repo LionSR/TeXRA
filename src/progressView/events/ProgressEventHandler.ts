@@ -1,5 +1,6 @@
 // Third-party imports
 import * as vscode from 'vscode';
+import { decode as decodeHtml } from 'he';
 
 // Local imports
 import { ProgressViewState } from '../state/ProgressViewState';
@@ -12,6 +13,7 @@ import { onProgress } from '@eventBus/ProgressEventBus';
 import { TokenUsageStats } from '@agent/types/UsageTypes';
 import { TaskState } from '@logger/TaskState';
 import { LogMessageData, TaskGroup } from '@logger/LogTypes';
+import { MESSAGE_TYPES } from '@logger/messageTypes';
 import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
 
 // @ts-ignore - Import JavaScript module
@@ -43,6 +45,48 @@ export class ProgressEventHandler {
     private webviewUpdater: WebviewUpdater,
   ) {
     this.logger = new AgentLogger('ProgressEventHandler');
+  }
+
+  /**
+   * Parse legacy JSON content from the log message text when structured data is
+   * missing. Parsed results are stored back into the log object so that future
+   * lookups don't require re-parsing.
+   */
+  private parseLegacyData(
+    logMessage: LogMessageData,
+    forceParse = false,
+  ): unknown | undefined {
+    if (!forceParse && logMessage.data !== undefined) {
+      return logMessage.data;
+    }
+
+    const type = logMessage.messageType;
+    const legacyTypes = new Set<string>([
+      MESSAGE_TYPES.FILE_LIST,
+      MESSAGE_TYPES.MISSING_OUTPUTS,
+      MESSAGE_TYPES.LATEXDIFF,
+      MESSAGE_TYPES.STATISTICS,
+    ]);
+
+    if (type && legacyTypes.has(type) && logMessage.text) {
+      try {
+        const decoded = decodeHtml(logMessage.text);
+        const parsed = JSON.parse(decoded);
+
+        // Sanity check that parsed value is an object or array
+        if (typeof parsed === 'object' && parsed !== null) {
+          logMessage.data = parsed;
+          return parsed;
+        }
+      } catch (err) {
+        this.logger.warn(
+          `Failed to parse legacy log data: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+      }
+    }
+    return undefined;
   }
 
   /**
@@ -296,6 +340,8 @@ export class ProgressEventHandler {
   }): void {
     const { stream, logMessage } = data;
 
+    this.parseLegacyData(logMessage);
+
     // Skip debug messages if debug mode is disabled
     if (
       logMessage.level === 'debug' &&
@@ -334,6 +380,9 @@ export class ProgressEventHandler {
     }
     if (logMessage.data !== undefined) {
       existing.data = logMessage.data;
+    } else {
+      // Re-parse the updated text even if existing data is present
+      this.parseLegacyData(existing, true);
     }
 
     if (
