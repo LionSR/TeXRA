@@ -7,7 +7,7 @@ import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
 import { WorkspaceFS } from '@utils/files';
-import { ExecResult } from '@agent/types/ResultTypes';
+import type { ExecResult } from '@agent/types/ResultTypes';
 import { extendEnvPath } from '@utils/system/platformPaths';
 
 const CHANNEL = 'execUtils';
