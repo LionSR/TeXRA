@@ -10,7 +10,7 @@ import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { agentConfigToTaskState } from '@utils/config';
 
 // Local imports - agent components
-import { createAgentConfig } from '@agent/core/AgentConfig';
+import { AgentConfigSchema } from '@agent/core/AgentConfig';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import { AgentSetting, AgentPrompt } from '@agent/core/AgentDataclass';
 import { loadAgentSettingAndPrompts } from '@agent/runtime/agentLoad';
@@ -370,7 +370,7 @@ export async function executeAgent(
     agentName,
     async () => {
       // Create full agent config
-      const fullConfig = createAgentConfig(agentConfig);
+      const fullConfig = AgentConfigSchema.parse(agentConfig);
 
       // Get model configuration
       const modelName = fullConfig.model;
@@ -437,7 +437,7 @@ export async function executeMergeAgent(
     agentName,
     async () => {
       // Create agent config for merge operation
-      const agentConfig = createAgentConfig({
+      const agentConfig = AgentConfigSchema.parse({
         agent: 'merge',
         model,
         inputFile,
