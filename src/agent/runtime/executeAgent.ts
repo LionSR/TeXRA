@@ -10,7 +10,8 @@ import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { agentConfigToTaskState } from '@utils/config';
 
 // Local imports - agent components
-import { AgentConfig, createAgentConfig } from '@agent/core/AgentConfig';
+import { createAgentConfig } from '@agent/core/AgentConfig';
+import type { AgentConfig } from '@agent/core/AgentConfig';
 import { AgentSetting, AgentPrompt } from '@agent/core/AgentDataclass';
 import { loadAgentSettingAndPrompts } from '@agent/runtime/agentLoad';
 

@@ -8,8 +8,9 @@ import { randomUUID } from 'crypto';
 // Local imports - progressView
 import { emitProgress } from '@eventBus/ProgressEventBus';
 import { getConfig } from '@utils/config';
-import { TaskGroup } from './LogTypes';
+import { TaskGroup, LogMessageData } from './LogTypes';
 import { MESSAGE_TYPES, type MessageType } from './messageTypes';
+import { AgentLogger } from './AgentLogger';
 
 function isValidMessageType(type: unknown): type is MessageType {
   return Object.values(MESSAGE_TYPES).includes(type as MessageType);
@@ -94,7 +95,8 @@ class VSCodeTransport extends Transport {
     // Skip output channel logging for special structured messages
     if (
       messageType !== MESSAGE_TYPES.FILE_LIST &&
-      messageType !== MESSAGE_TYPES.MISSING_OUTPUTS
+      messageType !== MESSAGE_TYPES.MISSING_OUTPUTS &&
+      messageType !== MESSAGE_TYPES.LATEXDIFF
     ) {
       // Always write to the configured output channel
       this.channel.appendLine(formattedMessage);
@@ -386,6 +388,49 @@ export const error = (
 ): void => {
   logWithGroup(channel, 'error', message, groupId, messageType, isAgent, data);
 };
+
+/**
+ * Parse legacy JSON content from the log message text when structured data is
+ * missing. Parsed results are stored back into the log object so that future
+ * lookups don't require re-parsing.
+ */
+export function parseLegacyLogData(
+  logMessage: LogMessageData,
+  logger?: AgentLogger,
+  forceParse = false,
+): unknown | undefined {
+  if (!forceParse && logMessage.data !== undefined) {
+    return logMessage.data;
+  }
+
+  const type = logMessage.messageType;
+  const legacyTypes = new Set<string>([
+    MESSAGE_TYPES.FILE_LIST,
+    MESSAGE_TYPES.MISSING_OUTPUTS,
+    MESSAGE_TYPES.LATEXDIFF,
+    MESSAGE_TYPES.STATISTICS,
+  ]);
+
+  if (type && legacyTypes.has(type) && logMessage.text) {
+    try {
+      const decoded = decodeHtml(logMessage.text);
+      const parsed = JSON.parse(decoded);
+
+      if (typeof parsed === 'object' && parsed !== null) {
+        logMessage.data = parsed;
+        return parsed;
+      }
+    } catch (err) {
+      logger?.warn(
+        `Failed to parse legacy log data: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+    }
+  }
+
+  return undefined;
+}
 
 function getOrCreateLogger(channel: string, isAgent = false): winston.Logger {
   if (!channelLoggers.has(channel)) {

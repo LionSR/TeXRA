@@ -5,6 +5,7 @@ import { randomUUID } from 'crypto';
 import { StatePersistenceManager } from '../persistence/StatePersistenceManager';
 import { WorkspaceStateKey } from '@common/state/stateManager';
 import { AgentLogger } from '@logger/AgentLogger';
+import { parseLegacyLogData } from '@logger/logUtils';
 
 // Types
 import { LogMessageData } from '@logger/LogTypes';
@@ -151,10 +152,12 @@ export class StreamTabsManager {
             const timestamp = new Date(timeString).getTime();
             msg.timestamp = isNaN(timestamp) ? Date.now() : timestamp;
           }
-          if (!msg.messageType) {
-            msg.messageType = 'default';
+          const log = msg as LogMessageData;
+          parseLegacyLogData(log, this.logger);
+          if (!log.messageType) {
+            log.messageType = 'default';
           }
-          return msg as LogMessageData;
+          return log;
         });
 
         processedStreams.set(stream, processedMessages);

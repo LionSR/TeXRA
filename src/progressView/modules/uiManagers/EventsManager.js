@@ -133,5 +133,16 @@ export class EventsManager {
         });
       }
     });
+
+    // Handle clicks on LaTeX references within logs
+    document.addEventListener('click', (e) => {
+      const ref = e.target.closest('.latex-ref');
+      if (ref && ref.dataset.label) {
+        vscode.postMessage({
+          command: COMMANDS.OPEN_LABEL,
+          label: ref.dataset.label,
+        });
+      }
+    });
   }
 }
