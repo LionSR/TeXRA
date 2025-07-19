@@ -51,7 +51,7 @@ This document sets the common conventions for contributions. Follow these norms 
 - Use `setupPasteListener` from `src/webview/modules/pasteHandler.js` to enable clipboard image pasting in text areas.
 - Implement agents using the `IAgent` interface (`src/agent/IAgent.ts`) for a consistent lifecycle.
 - Track log groups with numeric timestamps using `addLogMessage` in `src/logger/logUtils.ts`.
-- Use the event bus (`emitProgress`/`onProgress` from `src/eventBus/ProgressEventBus.ts`) to publish and subscribe to progress updates instead of calling `ProgressViewProvider` methods directly.
+- Use the event bus (`bus.emit`/`bus.on` from `src/eventBus/ProgressEventBus.ts`) to publish and subscribe to progress updates instead of calling `ProgressViewProvider` methods directly.
 - Only agent streams appear in the ProgressView and get their own output channels. Other logs share the
   consolidated `TeXRA` channel and are not persisted across sessions.
 - Update cumulative usage stats with `updateUsageSummary` in `src/progressView/modules/domHandlers.js`.

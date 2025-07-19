@@ -9,7 +9,7 @@
 // Local imports - latex utils
 import { bestConnectionMethod, LatexMediaManager } from '@latex';
 
-import { emitProgress } from '@eventBus/ProgressEventBus';
+import { bus } from '@eventBus/ProgressEventBus';
 
 // Local imports - utilities
 import { WorkspaceFS } from '@utils/files';
@@ -472,7 +472,7 @@ export abstract class BaseReflectionAgent extends BaseAgent {
         );
       }
     }
-    emitProgress('addOutputFiles', {
+    bus.emit('addOutputFiles', {
       stream: this.logger.channelId,
       filesByRound: { [currRound]: fileInfos },
     });
