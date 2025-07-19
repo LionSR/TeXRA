@@ -381,7 +381,7 @@ export class LogEntryFormatter {
   _formatLatexdiff(message, content, data, logId) {
     try {
       const idAttr = logId ? ` data-log-id="${logId}"` : '';
-      const parsed = data;
+      const parsed = data ?? JSON.parse(decodeHtml(content));
       const entries = Array.isArray(parsed)
         ? parsed
         : parsed && typeof parsed === 'object'
