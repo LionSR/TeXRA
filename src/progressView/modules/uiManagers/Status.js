@@ -98,7 +98,7 @@ export class Status {
         if (el) el.disabled = false;
       });
 
-      const activeStream = progressViewState.getActiveStream();
+      const activeStream = progressViewState.activeStream;
       if (activeStream && status !== STATUS.READY) {
         progressViewState.streamStatuses.set(activeStream, status);
       }
