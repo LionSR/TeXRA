@@ -6,7 +6,7 @@ import { ProgressViewState } from '../state/ProgressViewState';
 import { AgentLogger } from '@logger/AgentLogger';
 
 // Types
-import { TokenUsageStats } from '@agent/types/UsageTypes';
+import type { TokenUsageStats } from '@agent/types/UsageTypes';
 import { LogMessageData } from '@logger/LogTypes';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 
