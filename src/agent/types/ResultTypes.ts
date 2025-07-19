@@ -1,25 +1,35 @@
 /**
- * Common result interfaces used across utilities.
+ * Common result schemas used across utilities.
  */
+import { z } from 'zod';
 
-export interface ExecResult {
+export const ExecResultSchema = z.object({
   /** Indicates whether the command succeeded */
-  success: boolean;
+  success: z.boolean(),
   /** Standard output from the command, if available */
-  stdout: string | null;
+  stdout: z.string().nullable(),
   /** Standard error from the command, if available */
-  stderr: string | null;
+  stderr: z.string().nullable(),
   /** True if the command timed out */
-  timedOut?: boolean;
-}
+  timedOut: z.boolean().optional(),
+});
+
+export type ExecResult = z.infer<typeof ExecResultSchema>;
 
 export type FileOpStatus = 'success' | 'noFiles' | 'missingParams' | 'error';
 
-export interface FileOpResult {
+export const FileOpResultSchema = z.object({
   /** Outcome of the pack or clean operation */
-  status: FileOpStatus;
+  status: z.union([
+    z.literal('success'),
+    z.literal('noFiles'),
+    z.literal('missingParams'),
+    z.literal('error'),
+  ]),
   /** Output directory if files were packed */
-  outputFolder?: string;
+  outputFolder: z.string().optional(),
   /** Error message when status is "error" */
-  error?: string;
-}
+  error: z.string().optional(),
+});
+
+export type FileOpResult = z.infer<typeof FileOpResultSchema>;

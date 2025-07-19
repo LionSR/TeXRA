@@ -1,19 +1,25 @@
 /**
  * Token usage statistics for tracking model usage and costs.
  */
-export interface TokenUsageStats {
+import { z } from 'zod';
+
+export const TokenUsageStatsSchema = z.object({
   /** Number of input tokens consumed */
-  inputTokens: number;
+  inputTokens: z.number(),
   /** Number of output tokens generated */
-  outputTokens: number;
+  outputTokens: z.number(),
   /** Total cost in USD for the request */
-  cost: number;
-}
+  cost: z.number(),
+});
+
+export type TokenUsageStats = z.infer<typeof TokenUsageStatsSchema>;
 
 /**
  * Message interface for updating usage stats in the progress view.
  */
-export interface StreamUsageMessage {
-  command: 'updateUsage';
-  usage: TokenUsageStats | undefined;
-}
+export const StreamUsageMessageSchema = z.object({
+  command: z.literal('updateUsage'),
+  usage: TokenUsageStatsSchema.optional(),
+});
+
+export type StreamUsageMessage = z.infer<typeof StreamUsageMessageSchema>;
