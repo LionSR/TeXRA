@@ -154,11 +154,4 @@ export class FileLister {
   }
 }
 
-const lister = FileLister.getInstance();
-
-export const listInputFiles = () => lister.list('input');
-export const listReferenceFiles = () => lister.list('reference');
-export const listAuxiliaryFiles = () => lister.list('auxiliary');
-export const listMediaFiles = () => lister.list('media');
-export const listEditedFiles = (baseName: string) =>
-  lister.listEditedFiles(baseName);
+export const fileLister = FileLister.getInstance();

@@ -7,7 +7,7 @@ import * as logger from '@logger/logUtils';
 // Local imports - utilities
 import { showInfoMessage, showErrorMessage } from '@frontend/ui/messageUtils';
 import { WorkspaceFS } from '@utils/files';
-import { listInputFiles } from '@frontend/files/fileLister';
+import { fileLister } from '@frontend/files/fileLister';
 import { getIncludedExtensions } from '@common/files/fileTypeUtils';
 import { selectFile, selectFiles } from '@frontend/files/dialog';
 import { showLoggedErrorMessage } from '@common/errors/errorHandlingUtils';
@@ -208,11 +208,11 @@ async function selectBaseFile(): Promise<string | null> {
 }
 
 async function refreshInputFiles(): Promise<string[]> {
-  return await listInputFiles();
+  return await fileLister.list('input');
 }
 
 async function refreshBaseFiles(): Promise<string[]> {
-  return await listInputFiles();
+  return await fileLister.list('input');
 }
 
 export const fileSelectionCommands = {

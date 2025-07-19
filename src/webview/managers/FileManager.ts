@@ -13,13 +13,7 @@ import { showLoggedMessage } from '@common/errors/errorHandlingUtils';
 // Local imports - utilities
 import { WorkspaceFS } from '@utils/files';
 import { getConfig } from '@utils/config';
-import {
-  listInputFiles,
-  listReferenceFiles,
-  listAuxiliaryFiles,
-  listMediaFiles,
-  listEditedFiles,
-} from '@frontend/files/fileLister';
+import { fileLister } from '@frontend/files/fileLister';
 
 // Local imports - commands
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
@@ -75,7 +69,8 @@ export class FileManager {
       message.filePath,
       path.extname(message.filePath),
     );
-    const filteredEditedFiles = await listEditedFiles(baseFileNameForInput);
+    const filteredEditedFiles =
+      await fileLister.listEditedFiles(baseFileNameForInput);
     this.postFileUpdate(webviewView, 'Edited', filteredEditedFiles);
   }
 
@@ -101,11 +96,11 @@ export class FileManager {
     const files = await (async () => {
       switch (fileType) {
         case 'Reference':
-          return await listReferenceFiles();
+          return await fileLister.list('reference');
         case 'Auxiliary':
-          return await listAuxiliaryFiles();
+          return await fileLister.list('auxiliary');
         case 'Media':
-          return await listMediaFiles();
+          return await fileLister.list('media');
         default:
           return [];
       }
@@ -123,13 +118,13 @@ export class FileManager {
         message.baseFile,
         path.extname(message.baseFile),
       );
-      allEditedFiles = await listEditedFiles(baseFileNameForEdited);
+      allEditedFiles = await fileLister.listEditedFiles(baseFileNameForEdited);
     }
     this.postFileUpdate(webviewView, 'Edited', allEditedFiles);
   }
 
   async handleRequestBaseFile(webviewView: vscode.WebviewView): Promise<void> {
-    this.postFileUpdate(webviewView, 'Base', await listInputFiles());
+    this.postFileUpdate(webviewView, 'Base', await fileLister.list('input'));
   }
 
   async handleRequestDefaultOutputFiles(
@@ -221,10 +216,10 @@ export class FileManager {
 
   async handleRefreshAllFiles(webviewView: vscode.WebviewView): Promise<void> {
     const refreshedFiles = {
-      input: await listInputFiles(),
-      reference: await listReferenceFiles(),
-      auxiliary: await listAuxiliaryFiles(),
-      media: await listMediaFiles(),
+      input: await fileLister.list('input'),
+      reference: await fileLister.list('reference'),
+      auxiliary: await fileLister.list('auxiliary'),
+      media: await fileLister.list('media'),
     };
 
     Object.entries(refreshedFiles).forEach(([type, files]) => {
@@ -374,7 +369,7 @@ export class FileManager {
   private async updateBaseFileSelect(
     webviewView: vscode.WebviewView,
   ): Promise<void> {
-    const baseFiles = await listInputFiles();
+    const baseFiles = await fileLister.list('input');
     webviewView.webview.postMessage({
       command: MAIN_VIEW_COMMANDS.SET_BASE_FILE,
       files: baseFiles,
