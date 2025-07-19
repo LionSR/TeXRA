@@ -1,6 +1,7 @@
 // Local imports - types
 import { AgentStateGlobal } from '@agent/core/AgentState';
 import { NamedOutputFile, OutputFileInfo } from './types';
+import { XmlOutputManager } from './XmlOutputManager';
 
 /** Interface describing OutputHandler behavior used by agents. */
 export interface IOutputHandler {
@@ -10,29 +11,17 @@ export interface IOutputHandler {
   /** Mapping of source to processed output files by round. */
   outputMappings: { [key: number]: NamedOutputFile[] };
 
+  /** XML manager for parsing and splitting outputs. */
+  xmlManager: XmlOutputManager;
+
   /** Indent a single LaTeX file for readability. */
   indentLatexFile(filePath: string): Promise<void>;
 
   /** Indent multiple LaTeX files for readability. */
   indentLatexFiles(filePaths: string[]): Promise<void>;
 
-  /** Filter and clean up raw XML content. */
-  processXmlContent(content: string): Promise<string>;
-
   /** Run latexdiff comparisons for the current round. */
   handleLatexdiffofOutput(currRound: number, groupId?: string): Promise<void>;
-
-  /** Split and process a single XML output file. */
-  processSingleXmlOutput(outputFile: string): Promise<NamedOutputFile>;
-
-  /** Split and process multiple XML output files. */
-  processMultipleXmlOutputs(outputFile: string): Promise<NamedOutputFile[]>;
-
-  /** Ensure the XML structure in the file is well formed. */
-  ensureCorrectXmlStructure(
-    filePath: string,
-    documentTag: string,
-  ): Promise<void>;
 
   /** Print token usage and cost statistics. */
   printStatistics(

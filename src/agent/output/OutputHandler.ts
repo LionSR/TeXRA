@@ -42,7 +42,7 @@ export class OutputHandler implements IOutputHandler {
   public processGroupId?: string;
   protected logger: AgentLogger;
   protected channel: string;
-  private xmlManager: XmlOutputManager;
+  public readonly xmlManager: XmlOutputManager;
   private diffManager: LatexDiffManager;
   private statsReporter: StatisticsReporter;
   private diffStatsManager: DiffStatsManager;
@@ -143,11 +143,6 @@ export class OutputHandler implements IOutputHandler {
     for (const filePath of filePaths) {
       await this.indentLatexFile(filePath);
     }
-  }
-
-  /** Processes XML content by filtering tags and applying replacements. */
-  public async processXmlContent(content: string): Promise<string> {
-    return this.xmlManager.processXmlContent(content);
   }
 
   /**
@@ -288,26 +283,6 @@ export class OutputHandler implements IOutputHandler {
     });
   }
 
-  /** Processes single output file with XML splitting and filtering. */
-  public async processSingleXmlOutput(
-    outputFile: string,
-  ): Promise<NamedOutputFile> {
-    return this.xmlManager.processSingleXmlOutput(outputFile);
-  }
-
-  /** Processes multiple output files with XML splitting and filtering. */
-  public async processMultipleXmlOutputs(
-    outputFile: string,
-  ): Promise<NamedOutputFile[]> {
-    return this.xmlManager.processMultipleXmlOutputs(outputFile);
-  }
-  async ensureCorrectXmlStructure(
-    filePath: string,
-    documentTag: string,
-  ): Promise<void> {
-    await this.xmlManager.ensureCorrectXmlStructure(filePath, documentTag);
-  }
-
   /** Prints statistics about token usage and costs */
   public async printStatistics(
     stateGlobal: AgentStateGlobal,
@@ -337,7 +312,8 @@ export class OutputHandler implements IOutputHandler {
       );
 
       try {
-        const processedPairs = await this.processMultipleXmlOutputs(outputFile);
+        const processedPairs =
+          await this.xmlManager.processMultipleXmlOutputs(outputFile);
 
         if (processedPairs && processedPairs.length > 0) {
           const processedFiles = processedPairs.map((p) => p.path);
@@ -387,7 +363,7 @@ export class OutputHandler implements IOutputHandler {
           path: outputFile,
         };
         if (this.agentSetting.agentType === AgentType.CoT) {
-          processed = await this.processSingleXmlOutput(outputFile);
+          processed = await this.xmlManager.processSingleXmlOutput(outputFile);
         }
 
         if (processed && processed.path) {
