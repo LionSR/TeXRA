@@ -14,7 +14,6 @@ import {
   AgentSettingSchema,
   AgentPromptSchema,
   AgentDefinitionSchema,
-  DEFAULT_AGENT_PROMPTS,
 } from '@agent/core/AgentDataclass';
 
 // Local imports - utils
@@ -108,10 +107,7 @@ export async function loadAgentSettingAndPrompts(
 
     // Apply defaults and validate the final settings and prompts
     const validatedSettings = AgentSettingSchema.parse(settings);
-    const promptsWithDefaults = deepmerge(DEFAULT_AGENT_PROMPTS, prompts, {
-      arrayMerge: (_d, s) => s,
-    });
-    const validatedPrompts = AgentPromptSchema.parse(promptsWithDefaults);
+    const validatedPrompts = AgentPromptSchema.parse(prompts);
     settings = validatedSettings;
     prompts = validatedPrompts;
 
@@ -146,11 +142,7 @@ export async function isValidAgentYaml(
     }
 
     const settingsBlock = AgentSettingSchema.parse(data.settings);
-    AgentPromptSchema.parse(
-      deepmerge(DEFAULT_AGENT_PROMPTS, data.prompts, {
-        arrayMerge: (_d, s) => s,
-      }),
-    );
+    AgentPromptSchema.parse(data.prompts);
     const rootName = data.name;
 
     if (rootName === '') {
