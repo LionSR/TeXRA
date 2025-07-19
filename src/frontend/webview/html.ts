@@ -15,7 +15,7 @@ export function buildWebviewHtml(
   replacements: Record<string, vscode.Uri | string>,
 ): string {
   const htmlContent = AbsoluteFS.readSync(htmlPath.fsPath);
-  const nonce = nanoid();
+  const nonce = nanoid(32);
 
   let result = htmlContent
     .replace(/\${nonce}/g, nonce)
