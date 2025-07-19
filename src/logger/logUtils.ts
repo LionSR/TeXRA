@@ -95,7 +95,8 @@ class VSCodeTransport extends Transport {
     // Skip output channel logging for special structured messages
     if (
       messageType !== MESSAGE_TYPES.FILE_LIST &&
-      messageType !== MESSAGE_TYPES.MISSING_OUTPUTS
+      messageType !== MESSAGE_TYPES.MISSING_OUTPUTS &&
+      messageType !== MESSAGE_TYPES.LATEXDIFF
     ) {
       // Always write to the configured output channel
       this.channel.appendLine(formattedMessage);
