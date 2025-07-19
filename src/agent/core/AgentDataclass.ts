@@ -55,12 +55,6 @@ export const AgentSettingSchema = z
 export type AgentSetting = z.infer<typeof AgentSettingSchema>;
 
 /** Default prompt templates for agent interactions. */
-export const DEFAULT_AGENT_PROMPTS: AgentPrompt = {
-  systemPrompt: '',
-  userPrefix: '',
-  userRequest: '',
-  userReflect: '',
-};
 
 /**
  * Checks if content contains a valid end marker.
@@ -85,10 +79,10 @@ export function hasEndTag(
 /** Zod schema for AgentPrompt validation */
 export const AgentPromptSchema = z
   .object({
-    systemPrompt: z.string(),
-    userPrefix: z.string(),
-    userRequest: z.string(),
-    userReflect: z.string(),
+    systemPrompt: z.string().default(''),
+    userPrefix: z.string().default(''),
+    userRequest: z.string().default(''),
+    userReflect: z.string().default(''),
   })
   .strict();
 
