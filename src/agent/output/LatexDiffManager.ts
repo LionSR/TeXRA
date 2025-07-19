@@ -205,12 +205,7 @@ export class LatexDiffManager {
       }
 
       if (aggregated.length > 0) {
-        this.logger.info(
-          JSON.stringify(aggregated),
-          diffProcessGroupId,
-          MESSAGE_TYPES.LATEXDIFF,
-          aggregated,
-        );
+        this.logger.latexDiff(aggregated, diffProcessGroupId);
       } else {
         this.logger.debug('No latexdiff results to report', diffProcessGroupId);
       }
