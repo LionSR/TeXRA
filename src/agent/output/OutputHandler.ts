@@ -24,7 +24,7 @@ import type { IModelHandler } from '@agent/modelHandlers';
 import { replaceInputCommands, createFileMapping } from '@utils/files';
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
 import { getEffectiveBaseFile } from '@utils/files/baseFileUtils';
-import { emitProgress } from '@eventBus/ProgressEventBus';
+import { bus } from '@eventBus/ProgressEventBus';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 
@@ -233,7 +233,7 @@ export class OutputHandler implements IOutputHandler {
   ): Promise<void> {
     const expected = this.agentConfig.outputFiles;
     if (!expected || expected.length === 0) {
-      emitProgress('updateMissingOutputs', {
+      bus.emit('updateMissingOutputs', {
         stream: this.channel,
         filesByRound: { [currRound]: [] },
       });
@@ -282,7 +282,7 @@ export class OutputHandler implements IOutputHandler {
       this.logger.missingOutputs(missingOutputsData, groupId);
     }
 
-    emitProgress('updateMissingOutputs', {
+    bus.emit('updateMissingOutputs', {
       stream: this.channel,
       filesByRound: { [currRound]: missing },
     });
@@ -419,7 +419,7 @@ export class OutputHandler implements IOutputHandler {
           documentTag: this.agentSetting.documentTag,
         };
         this.logger.missingOutputs(missingOutputsData, activeGroupId);
-        emitProgress('updateMissingOutputs', {
+        bus.emit('updateMissingOutputs', {
           stream: this.channel,
           filesByRound: { [currRound]: [] },
         });

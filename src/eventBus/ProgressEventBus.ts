@@ -49,15 +49,4 @@ class ProgressEventBus {
   }
 }
 
-const bus = new ProgressEventBus();
-
-export const emitProgress = (event: ProgressEvent, payload: any): void => {
-  bus.emit(event, payload);
-};
-
-export const onProgress = (
-  event: ProgressEvent,
-  listener: (payload: any) => void,
-): (() => void) => {
-  return bus.on(event, listener);
-};
+export const bus = new ProgressEventBus();
