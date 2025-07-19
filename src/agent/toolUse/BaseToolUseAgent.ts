@@ -206,7 +206,7 @@ export abstract class BaseToolUseAgent<
       return await SecretManager.getApiKey('anthropic' as ApiProvider);
     } catch (err) {
       this.logger.error(
-        `Error getting Anthropic API key: ${this.formatErrorMessage(err)}`,
+        `Error getting Anthropic API key: ${getSdkErrorMessage(err)}`,
       );
       throw new Error(
         'Missing API key from Anthropic. Please set it using the "Set API Key" command.',
@@ -438,9 +438,7 @@ export abstract class BaseToolUseAgent<
         isError: true,
       });
     } catch (err) {
-      this.logger.error(
-        `Error calling Claude API: ${this.formatErrorMessage(err)}`,
-      );
+      this.logger.error(`Error calling Claude API: ${getSdkErrorMessage(err)}`);
 
       return new ToolResult({
         error: `Error calling Claude API: ${String(err)}`,
@@ -469,14 +467,6 @@ export abstract class BaseToolUseAgent<
         return `${lineNumber.toString().padStart(4, ' ')}: ${marker}${textLine}`;
       })
       .join('\n');
-  }
-
-  /**
-   * Format an error message consistently
-   * This helps maintain a consistent error message format throughout the codebase
-   */
-  protected formatErrorMessage(err: unknown): string {
-    return getSdkErrorMessage(err);
   }
 
   /**
