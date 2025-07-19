@@ -66,7 +66,7 @@ export class CoTAgent extends BaseReflectionAgent {
         );
 
         // First fix XML structure
-        await this.outputHandler.ensureCorrectXmlStructure(
+        await this.outputHandler.xmlManager.ensureCorrectXmlStructure(
           outputFile,
           this.agentSetting.documentTag,
         );
