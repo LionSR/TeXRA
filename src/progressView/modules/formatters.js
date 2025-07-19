@@ -234,7 +234,8 @@ export class LogEntryFormatter {
   _formatFileList(message, content, data, logId) {
     try {
       const idAttr = logId ? ` data-log-id="${logId}"` : '';
-      const parsed = data;
+      const parsed = data ?? JSON.parse(decodeHtml(content));
+
       if (!Array.isArray(parsed)) {
         console.warn('Missing structured data for file list log entry');
         return message;
@@ -310,7 +311,7 @@ export class LogEntryFormatter {
   _formatMissingOutputs(message, content, data, logId) {
     try {
       const idAttr = logId ? ` data-log-id="${logId}"` : '';
-      const parsed = data;
+      const parsed = data ?? JSON.parse(decodeHtml(content));
 
       // Handle both old format (array) and new format (object with missing, xmlFile, documentTag)
       let missingFiles = [];
