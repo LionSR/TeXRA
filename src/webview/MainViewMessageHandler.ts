@@ -48,7 +48,8 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
       [MAIN_VIEW_COMMANDS.GET_DEBUG_MODE]:
         this.handleDebugModeRequest.bind(this),
       [MAIN_VIEW_COMMANDS.MODEL_SELECTED]: this.handleModelSelection.bind(this),
-      [MAIN_VIEW_COMMANDS.EXECUTE]: this.handleExecute.bind(this),
+      [MAIN_VIEW_COMMANDS.EXECUTE]: async (m) =>
+        this.executionManager.handleExecute(m),
       [MAIN_VIEW_COMMANDS.SHOW_AGENT_HISTORY]:
         this.handleShowAgentHistory.bind(this),
 
@@ -256,13 +257,6 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         model: message.model,
       });
     }
-  }
-
-  private async handleExecute(
-    message: any,
-    webviewView: vscode.WebviewView,
-  ): Promise<void> {
-    return this.executionManager.handleExecute(message);
   }
 
   private async handleShowAgentHistory(
