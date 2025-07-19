@@ -19,7 +19,8 @@ import {
 // Local imports - agent components
 import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
 import type { AgentConfig } from '@agent/core/AgentConfig';
-import { AgentSetting, hasEndTag } from '@agent/core/AgentDataclass';
+import type { AgentSetting } from '@agent/core/AgentDataclass';
+import { hasEndTag } from '@agent/core/AgentDataclass';
 import { AgentStateRound, AgentStateGlobal } from '@agent/core/AgentState';
 import { ToolState } from '@agent/core/ToolState';
 import {

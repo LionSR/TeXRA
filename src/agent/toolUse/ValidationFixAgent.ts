@@ -10,7 +10,8 @@ import { BaseToolUseAgent } from './BaseToolUseAgent';
 import { loadAgentSettingAndPrompts } from '@agent/runtime/agentLoad';
 
 // Local imports - types
-import { AgentPrompt, AgentSetting } from '@agent/core/AgentDataclass';
+import type { AgentPrompt, AgentSetting } from '@agent/core/AgentDataclass';
+import { AgentPromptSchema } from '@agent/core/AgentDataclass';
 import {
   ValidationResult,
   BaseError,
@@ -32,12 +33,7 @@ export class ValidationFixAgent<T extends ValidatorType>
   extends BaseToolUseAgent<ErrorFor<T>>
   implements IToolUseAgent<ErrorFor<T>>
 {
-  private prompts: AgentPrompt = {
-    systemPrompt: '',
-    userPrefix: '',
-    userRequest: '',
-    userReflect: '',
-  };
+  private prompts: AgentPrompt = AgentPromptSchema.parse({});
   private settings: AgentSetting | null = null;
   private validator: T;
 

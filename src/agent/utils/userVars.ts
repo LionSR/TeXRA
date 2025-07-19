@@ -13,7 +13,7 @@ import {
 } from '@agent/utils/promptUtils';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import type { AgentConfig } from '../core/AgentConfig';
-import { AgentSetting } from '../core/AgentDataclass';
+import type { AgentSetting } from '../core/AgentDataclass';
 import type { IModelHandler } from '@agent/modelHandlers';
 
 /**

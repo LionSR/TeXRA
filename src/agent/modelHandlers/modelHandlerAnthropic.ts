@@ -23,7 +23,8 @@ import xmlUtils from '@utils/text/xmlUtils';
 
 // Local imports - agent components
 import type { AgentConfig } from '@agent/core/AgentConfig';
-import { AgentSetting, hasEndTag } from '@agent/core/AgentDataclass';
+import type { AgentSetting } from '@agent/core/AgentDataclass';
+import { hasEndTag } from '@agent/core/AgentDataclass';
 import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
 import {
   AnthropicAPIResponseUsage,

@@ -1,6 +1,6 @@
 import * as path from 'path';
 
-import { AgentSetting } from '@agent/core/AgentDataclass';
+import type { AgentSetting } from '@agent/core/AgentDataclass';
 import { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import { objectToLogString } from '@utils/text/stringUtils';

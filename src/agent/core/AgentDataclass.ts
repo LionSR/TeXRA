@@ -52,39 +52,7 @@ export const AgentSettingSchema = z
   })
   .strict();
 
-/** Default prompt templates for agent interactions. */
-export const DEFAULT_AGENT_PROMPTS: AgentPrompt = {
-  systemPrompt: '',
-  userPrefix: '',
-  userRequest: '',
-  userReflect: '',
-};
-
-/** Configuration interface defining agent behavior and generation parameters. */
-export interface AgentSetting {
-  /** Core settings */
-  agentType: AgentType;
-  documentTag: string;
-  temperature: number | null;
-  isRewrite: boolean;
-
-  /** Number of conversation rounds to run. */
-  rounds: number;
-
-  /** Generation settings */
-  prefills: string[];
-  outputExt: string;
-  endTag: string;
-
-  /** File configurations */
-  requiredFiles: Record<string, string>;
-  requiredFilesInternal: Record<string, string>;
-  defaultOutputFiles: string[];
-  filePatternsContain: Array<Record<string, string>>;
-
-  /** Tool definitions available to the agent */
-  tools: ToolDefinition[];
-}
+export type AgentSetting = z.infer<typeof AgentSettingSchema>;
 
 /**
  * Checks if content contains a valid end marker.
@@ -106,25 +74,17 @@ export function hasEndTag(
   return endTagLists.some((tag) => tag && fileContent.includes(tag));
 }
 
-/**
- * Configuration for agent prompts
- */
-export interface AgentPrompt {
-  systemPrompt: string;
-  userPrefix: string;
-  userRequest: string;
-  userReflect: string;
-}
-
 /** Zod schema for AgentPrompt validation */
 export const AgentPromptSchema = z
   .object({
-    systemPrompt: z.string(),
-    userPrefix: z.string(),
-    userRequest: z.string(),
-    userReflect: z.string(),
+    systemPrompt: z.string().default(''),
+    userPrefix: z.string().default(''),
+    userRequest: z.string().default(''),
+    userReflect: z.string().default(''),
   })
   .strict();
+
+export type AgentPrompt = z.infer<typeof AgentPromptSchema>;
 
 /**
  * Schema representing the full agent YAML definition.

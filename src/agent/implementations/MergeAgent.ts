@@ -6,7 +6,7 @@ import { DirectAgent } from './DirectAgent';
 import { AgentStateRound, AgentStateGlobal } from '../core/AgentState';
 import type { IModelHandler } from '@agent/modelHandlers';
 import type { AgentConfig } from '../core/AgentConfig';
-import { AgentSetting, AgentPrompt } from '../core/AgentDataclass';
+import type { AgentSetting, AgentPrompt } from '../core/AgentDataclass';
 
 /**
  * Specialized agent for merging multiple edited files into a consolidated output.
