@@ -48,22 +48,42 @@ export class ProgressEventHandler {
   }
 
   /**
-   * Parse legacy JSON content from the log message text when structured data is missing.
+   * Parse legacy JSON content from the log message text when structured data is
+   * missing. Parsed results are stored back into the log object so that future
+   * lookups don't require re-parsing.
    */
-  private parseLegacyData(logMessage: LogMessageData): unknown | undefined {
-    if (logMessage.data !== undefined) return logMessage.data;
+  private parseLegacyData(
+    logMessage: LogMessageData,
+    forceParse = false,
+  ): unknown | undefined {
+    if (!forceParse && logMessage.data !== undefined) {
+      return logMessage.data;
+    }
+
     const type = logMessage.messageType;
-    if (
-      type === MESSAGE_TYPES.FILE_LIST ||
-      type === MESSAGE_TYPES.MISSING_OUTPUTS ||
-      type === MESSAGE_TYPES.LATEXDIFF ||
-      type === MESSAGE_TYPES.STATISTICS
-    ) {
+    const legacyTypes = new Set<string>([
+      MESSAGE_TYPES.FILE_LIST,
+      MESSAGE_TYPES.MISSING_OUTPUTS,
+      MESSAGE_TYPES.LATEXDIFF,
+      MESSAGE_TYPES.STATISTICS,
+    ]);
+
+    if (type && legacyTypes.has(type) && logMessage.text) {
       try {
         const decoded = decodeHtml(logMessage.text);
-        return JSON.parse(decoded);
-      } catch {
-        return undefined;
+        const parsed = JSON.parse(decoded);
+
+        // Sanity check that parsed value is an object or array
+        if (typeof parsed === 'object' && parsed !== null) {
+          logMessage.data = parsed;
+          return parsed;
+        }
+      } catch (err) {
+        this.logger.warn(
+          `Failed to parse legacy log data: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
       }
     }
     return undefined;
@@ -320,10 +340,7 @@ export class ProgressEventHandler {
   }): void {
     const { stream, logMessage } = data;
 
-    const parsed = this.parseLegacyData(logMessage);
-    if (parsed !== undefined) {
-      logMessage.data = parsed;
-    }
+    this.parseLegacyData(logMessage);
 
     // Skip debug messages if debug mode is disabled
     if (
@@ -364,10 +381,8 @@ export class ProgressEventHandler {
     if (logMessage.data !== undefined) {
       existing.data = logMessage.data;
     } else {
-      const parsed = this.parseLegacyData(existing);
-      if (parsed !== undefined) {
-        existing.data = parsed;
-      }
+      // Re-parse the updated text even if existing data is present
+      this.parseLegacyData(existing, true);
     }
 
     if (
