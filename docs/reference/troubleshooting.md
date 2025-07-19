@@ -11,7 +11,7 @@ Even the best research assistants (human or AI) have off days. This guide helps 
 **Solutions**:
 
 1. **Check VS Code compatibility**:
-   - Ensure you're running VS Code version 1.96.2 or newer
+   - Ensure you're running VS Code version 1.99 or newer
    - Update VS Code if needed
 
 2. **Verify installation**:
