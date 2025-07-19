@@ -75,11 +75,12 @@ export function registerFileSelectionCommands(
     vscode.commands.registerCommand('texra.selectEditedFile', selectEditedFile),
     vscode.commands.registerCommand('texra.getCurrentFile', getCurrentFile),
     vscode.commands.registerCommand('texra.selectBaseFile', selectBaseFile),
-    vscode.commands.registerCommand(
-      'texra.refreshInputFiles',
-      refreshInputFiles,
+    vscode.commands.registerCommand('texra.refreshInputFiles', () =>
+      fileLister.list('input'),
     ),
-    vscode.commands.registerCommand('texra.refreshBaseFiles', refreshBaseFiles),
+    vscode.commands.registerCommand('texra.refreshBaseFiles', () =>
+      fileLister.list('input'),
+    ),
   );
 }
 
@@ -207,14 +208,6 @@ async function selectBaseFile(): Promise<string | null> {
   return result ?? null;
 }
 
-async function refreshInputFiles(): Promise<string[]> {
-  return await fileLister.list('input');
-}
-
-async function refreshBaseFiles(): Promise<string[]> {
-  return await fileLister.list('input');
-}
-
 export const fileSelectionCommands = {
   selectInputFile,
   selectInputFiles,
@@ -226,6 +219,4 @@ export const fileSelectionCommands = {
   selectEditedFile,
   getCurrentFile,
   selectBaseFile,
-  refreshInputFiles,
-  refreshBaseFiles,
 };
