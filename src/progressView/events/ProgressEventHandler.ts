@@ -5,7 +5,7 @@ import { ProgressViewState } from '../state/ProgressViewState';
 import { WebviewUpdater } from '../managers';
 import { AgentLogger } from '@logger/AgentLogger';
 import { getConfig } from '@utils/config';
-import { onProgress } from '@eventBus/ProgressEventBus';
+import { bus } from '@eventBus/ProgressEventBus';
 
 // Types
 import type { TokenUsageStats } from '@agent/types/UsageTypes';
@@ -56,58 +56,52 @@ export class ProgressEventHandler {
   setupEventListeners(): vscode.Disposable[] {
     return [
       new vscode.Disposable(
-        onProgress('setActiveStream', this.handleSetActiveStream.bind(this)),
+        bus.on('setActiveStream', this.handleSetActiveStream.bind(this)),
       ),
       new vscode.Disposable(
-        onProgress(
-          'updateStreamStatus',
-          this.handleUpdateStreamStatus.bind(this),
-        ),
+        bus.on('updateStreamStatus', this.handleUpdateStreamStatus.bind(this)),
       ),
       new vscode.Disposable(
-        onProgress('addOutputFiles', this.handleAddOutputFiles.bind(this)),
+        bus.on('addOutputFiles', this.handleAddOutputFiles.bind(this)),
       ),
       new vscode.Disposable(
-        onProgress(
+        bus.on(
           'updateMissingOutputs',
           this.handleUpdateMissingOutputs.bind(this),
         ),
       ),
       new vscode.Disposable(
-        onProgress(
+        bus.on(
           'clearMissingOutputs',
           this.handleClearMissingOutputs.bind(this),
         ),
       ),
       new vscode.Disposable(
-        onProgress('clearOutputFiles', this.handleClearOutputFiles.bind(this)),
+        bus.on('clearOutputFiles', this.handleClearOutputFiles.bind(this)),
       ),
       new vscode.Disposable(
-        onProgress('setTaskState', this.handleSetTaskState.bind(this)),
+        bus.on('setTaskState', this.handleSetTaskState.bind(this)),
       ),
       new vscode.Disposable(
-        onProgress('updateGroupUsage', this.handleUpdateGroupUsage.bind(this)),
+        bus.on('updateGroupUsage', this.handleUpdateGroupUsage.bind(this)),
       ),
       new vscode.Disposable(
-        onProgress('clearTaskOutput', this.handleClearTaskOutput.bind(this)),
+        bus.on('clearTaskOutput', this.handleClearTaskOutput.bind(this)),
       ),
       new vscode.Disposable(
-        onProgress(
-          'updateStreamUsage',
-          this.handleUpdateStreamUsage.bind(this),
-        ),
+        bus.on('updateStreamUsage', this.handleUpdateStreamUsage.bind(this)),
       ),
       new vscode.Disposable(
-        onProgress('addLogMessage', this.handleAddLogMessage.bind(this)),
+        bus.on('addLogMessage', this.handleAddLogMessage.bind(this)),
       ),
       new vscode.Disposable(
-        onProgress('updateLogMessage', this.handleUpdateLogMessage.bind(this)),
+        bus.on('updateLogMessage', this.handleUpdateLogMessage.bind(this)),
       ),
       new vscode.Disposable(
-        onProgress('addTaskGroup', this.handleAddTaskGroup.bind(this)),
+        bus.on('addTaskGroup', this.handleAddTaskGroup.bind(this)),
       ),
       new vscode.Disposable(
-        onProgress('updateTaskGroup', this.handleUpdateTaskGroup.bind(this)),
+        bus.on('updateTaskGroup', this.handleUpdateTaskGroup.bind(this)),
       ),
     ];
   }
