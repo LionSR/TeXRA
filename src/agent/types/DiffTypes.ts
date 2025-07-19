@@ -1,10 +1,13 @@
 /**
- * Diff statistic interfaces used for file comparisons.
+ * Diff statistic schema used for file comparisons.
  */
+import { z } from 'zod';
 
-export interface DiffStats {
+export const DiffStatsSchema = z.object({
   /** Number of added lines */
-  added?: number;
+  added: z.number().optional(),
   /** Number of removed lines */
-  removed?: number;
-}
+  removed: z.number().optional(),
+});
+
+export type DiffStats = z.infer<typeof DiffStatsSchema>;
