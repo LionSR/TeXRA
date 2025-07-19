@@ -1,6 +1,7 @@
 // Third-party imports
 import MarkdownIt from 'markdown-it';
 import markdownItKatex from '@vscode/markdown-it-katex';
+import { encode as encodeHtml, decode as decodeHtml } from 'he';
 // Local imports
 import { katexMacros } from './katexMacros.js';
 import {
@@ -109,6 +110,34 @@ export class LogEntryFormatter {
   }
 
   /**
+   * Helper function to create LaTeX reference HTML
+   * @param {string} refType - The reference type (ref, cref, eqref)
+   * @param {string} label - The label value
+   * @returns {string} HTML for the clickable reference
+   */
+  _createLatexReferenceHtml(refType, label) {
+    return `<span class="latex-ref clickable-link" data-label="${label}">\\${refType}{${label}}</span>`;
+  }
+
+  /**
+   * Restore LaTeX references from placeholders to clickable elements
+   * @param {string} content - Content with placeholder references
+   * @returns {string} Content with clickable LaTeX references
+   */
+  _restoreLatexReferences(content) {
+    return content
+      .replace(/@@LATEX-REF:([^@]+)@@/g, (_, label) =>
+        this._createLatexReferenceHtml('ref', label),
+      )
+      .replace(/@@LATEX-CREF:([^@]+)@@/g, (_, label) =>
+        this._createLatexReferenceHtml('cref', label),
+      )
+      .replace(/@@LATEX-EQREF:([^@]+)@@/g, (_, label) =>
+        this._createLatexReferenceHtml('eqref', label),
+      );
+  }
+
+  /**
    * Format a log entry with Markdown rendering for special content
    * @param {Object} logMessage - The log message to format
    * @returns {string} Formatted HTML for the log message
@@ -164,28 +193,10 @@ export class LogEntryFormatter {
     return htmlMessage;
   }
 
-  _escapeHtml(text) {
-    return text
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#039;');
-  }
-
-  _unescapeHtml(text) {
-    return text
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>')
-      .replace(/&quot;/g, '"')
-      .replace(/&#039;/g, "'")
-      .replace(/&amp;/g, '&');
-  }
-
   _formatSpecialContent(message, content, contentType, logId) {
     try {
       // Unescape HTML entities that were escaped during logging
-      content = this._unescapeHtml(content);
+      content = decodeHtml(content);
 
       // Pre-process LaTeX references to protect them from markdown parsing
       content = content.replace(/\\\\ref\{([^}]+)\}/g, '@@LATEX-REF:$1@@');
@@ -196,19 +207,7 @@ export class LogEntryFormatter {
       let parsedMarkdown = this.md.render(content);
 
       // Post-process to restore and style LaTeX references
-      parsedMarkdown = parsedMarkdown.replace(
-        /@@LATEX-REF:([^@]+)@@/g,
-        '<code class="latex-ref">\\ref{$1}</code>',
-      );
-
-      parsedMarkdown = parsedMarkdown.replace(
-        /@@LATEX-CREF:([^@]+)@@/g,
-        '<code class="latex-ref">\\cref{$1}</code>',
-      );
-      parsedMarkdown = parsedMarkdown.replace(
-        /@@LATEX-EQREF:([^@]+)@@/g,
-        '<code class="latex-ref">\\eqref{$1}</code>',
-      );
+      parsedMarkdown = this._restoreLatexReferences(parsedMarkdown);
 
       // Create enhanced content element with better formatting
       const idAttr = logId ? ` data-log-id="${logId}"` : '';
@@ -235,7 +234,8 @@ export class LogEntryFormatter {
   _formatFileList(message, content, data, logId) {
     try {
       const idAttr = logId ? ` data-log-id="${logId}"` : '';
-      const parsed = data;
+      const parsed = data ?? JSON.parse(decodeHtml(content));
+
       if (!Array.isArray(parsed)) {
         console.warn('Missing structured data for file list log entry');
         return message;
@@ -256,11 +256,11 @@ export class LogEntryFormatter {
         files.forEach((f) => {
           const icon = f.ok ? 'codicon-check' : 'codicon-warning';
           const filePath = String(f.path ?? '');
-          const escaped = this._escapeHtml(filePath);
+          const escaped = encodeHtml(filePath);
 
           // Extract just the filename for display
           const fileName = filePath.split('/').pop() || filePath;
-          const fileNameEscaped = this._escapeHtml(fileName);
+          const fileNameEscaped = encodeHtml(fileName);
 
           // Build metadata string
           let metadata = '';
@@ -311,7 +311,7 @@ export class LogEntryFormatter {
   _formatMissingOutputs(message, content, data, logId) {
     try {
       const idAttr = logId ? ` data-log-id="${logId}"` : '';
-      const parsed = data;
+      const parsed = data ?? JSON.parse(decodeHtml(content));
 
       // Handle both old format (array) and new format (object with missing, xmlFile, documentTag)
       let missingFiles = [];
@@ -334,9 +334,9 @@ export class LogEntryFormatter {
       const items = missingFiles
         .map((f) => {
           const filePath = String(f);
-          const escaped = this._escapeHtml(filePath);
+          const escaped = encodeHtml(filePath);
           const fileName = filePath.split('/').pop() || filePath;
-          const fileNameEscaped = this._escapeHtml(fileName);
+          const fileNameEscaped = encodeHtml(fileName);
           return `<li title="${escaped}"><i class="codicon codicon-warning"></i> <span class="file-link clickable-link" data-file="${escaped}">${fileNameEscaped}</span></li>`;
         })
         .join('');
@@ -344,11 +344,11 @@ export class LogEntryFormatter {
       // Add XML file link if available
       let xmlLink = '';
       if (xmlFile) {
-        const xmlEscaped = this._escapeHtml(xmlFile);
+        const xmlEscaped = encodeHtml(xmlFile);
         const xmlFileName = xmlFile.split('/').pop() || xmlFile;
-        const xmlFileNameEscaped = this._escapeHtml(xmlFileName);
+        const xmlFileNameEscaped = encodeHtml(xmlFileName);
         const tagInfo = documentTag
-          ? `<span class="document-tag">(Expected &lt;${this._escapeHtml(documentTag)}&gt; block)</span>`
+          ? `<span class="document-tag">(Expected &lt;${encodeHtml(documentTag)}&gt; block)</span>`
           : '';
         xmlLink = `<div class="xml-link-container">
           <i class="codicon codicon-file-code"></i>
@@ -382,7 +382,7 @@ export class LogEntryFormatter {
   _formatLatexdiff(message, content, data, logId) {
     try {
       const idAttr = logId ? ` data-log-id="${logId}"` : '';
-      const parsed = data;
+      const parsed = data ?? JSON.parse(decodeHtml(content));
       const entries = Array.isArray(parsed)
         ? parsed
         : parsed && typeof parsed === 'object'
@@ -398,11 +398,11 @@ export class LogEntryFormatter {
         const basePath = String(d.base ?? '');
         const revisedPath = String(d.revised ?? '');
         const outputPath = String(d.output ?? '');
-        const message = d.message ? String(d.message) : '';
+        const msg = d.message ? String(d.message) : '';
 
-        const baseEsc = this._escapeHtml(basePath);
-        const revisedEsc = this._escapeHtml(revisedPath);
-        const outputEsc = this._escapeHtml(outputPath);
+        const baseEsc = encodeHtml(basePath);
+        const revisedEsc = encodeHtml(revisedPath);
+        const outputEsc = encodeHtml(outputPath);
 
         const baseName = basePath.split('/').pop() || basePath;
         const revisedName = revisedPath.split('/').pop() || revisedPath;
@@ -414,13 +414,11 @@ export class LogEntryFormatter {
           icon = 'codicon-error';
         }
 
-        const titleAttr = message
-          ? ` title="${this._escapeHtml(message)}"`
-          : '';
+        const titleAttr = msg ? ` title="${encodeHtml(msg)}"` : '';
 
-        items += `<li><i class="codicon ${icon}"${titleAttr}></i> <span class="file-link clickable-link" data-file="${baseEsc}">${this._escapeHtml(
+        items += `<li><i class="codicon ${icon}"${titleAttr}></i> <span class="file-link clickable-link" data-file="${baseEsc}">${encodeHtml(
           baseName,
-        )}</span> &rarr; <span class="file-link clickable-link" data-file="${revisedEsc}">${this._escapeHtml(
+        )}</span> &rarr; <span class="file-link clickable-link" data-file="${revisedEsc}">${encodeHtml(
           revisedName,
         )}</span> (<span class="file-link clickable-link" data-file="${outputEsc}">diff</span>)</li>`;
       });

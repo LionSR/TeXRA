@@ -77,6 +77,7 @@ export const LATEX_SPACING_REPLACEMENTS: ReplacementCategory = {
     '}\!\\': '} \\',
 
     // Math operator spacing
+    '\!\\left\!': ' \\left ',
     '\!\\cdot\!': ' \\cdot ',
     '\!\\ldots\!': ' \\ldots ',
     '\!\\cdots\!': ' \\cdots ',

@@ -79,6 +79,7 @@ High context models from Moonshot, suitable for complex reasoning and large docu
 | `kimit`  | Detailed reasoning with vision | $$$           | Medium         | Kimi Thinking Preview |
 | `kimi`   | Large context, general tasks   | $$            | Medium         | 128k context          |
 | `kimiv`  | Vision-enabled variant         | $$            | Medium         | 128k context, vision  |
+| `kimi2`  | Agent tasks                    | $$$           | Medium         | Kimi K2 0711 Preview  |
 
 ### DashScope Qwen Models
 
@@ -159,6 +160,7 @@ The specific models available by default and their identifiers (`sonnet37`, `gpt
   "qwenplus",
   "kimit",
   "kimiv",
+  "kimi2",
   "copilot4o"
 ]
 ```

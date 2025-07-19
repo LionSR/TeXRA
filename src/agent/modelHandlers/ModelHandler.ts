@@ -22,7 +22,7 @@ import type { IModelHandler } from './types/IModelHandler';
 import { SecretManager, ApiProvider } from '@frontend/secretManager';
 
 // Local imports - agent components
-import { AgentConfig } from '../core/AgentConfig';
+import type { AgentConfig } from '../core/AgentConfig';
 import { AgentSetting, hasEndTag } from '../core/AgentDataclass';
 import { AgentStateRound, AgentStateGlobal } from '../core/AgentState';
 import {

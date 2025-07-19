@@ -5,7 +5,7 @@ import * as path from 'path';
 import { AgentLogger } from '@logger/AgentLogger';
 
 // Local imports - agent components
-import { AgentConfig } from '../core/AgentConfig';
+import type { AgentConfig } from '../core/AgentConfig';
 import { AgentPrompt, AgentSetting } from '../core/AgentDataclass';
 import { IAgent } from '../core/IAgent';
 import type { IModelHandler } from '../modelHandlers';
