@@ -1,6 +1,6 @@
 // Types
 import { TaskState } from '@logger/TaskState';
-import { TokenUsageStats } from '@agent/types/UsageTypes';
+import type { TokenUsageStats } from '@agent/types/UsageTypes';
 import { LogMessageData } from '@logger/LogTypes';
 import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
 
