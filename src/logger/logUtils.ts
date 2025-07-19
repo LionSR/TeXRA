@@ -93,14 +93,15 @@ class VSCodeTransport extends Transport {
     const formattedMessage = `${emoji} [${timestamp}] ${channelPrefix}${message}`;
 
     // Skip output channel logging for special structured messages
-    if (
-      messageType !== MESSAGE_TYPES.FILE_LIST &&
-      messageType !== MESSAGE_TYPES.MISSING_OUTPUTS &&
-      messageType !== MESSAGE_TYPES.LATEXDIFF
-    ) {
-      // Always write to the configured output channel
-      this.channel.appendLine(formattedMessage);
-    }
+    // if (
+    //   messageType !== MESSAGE_TYPES.FILE_LIST &&
+    //   messageType !== MESSAGE_TYPES.MISSING_OUTPUTS &&
+    //   messageType !== MESSAGE_TYPES.LATEXDIFF
+    // ) {
+    //   // Always write to the configured output channel
+    //   this.channel.appendLine(formattedMessage);
+    // }
+    this.channel.appendLine(formattedMessage);
 
     // Skip debug messages in ProgressView if debug mode is disabled
     if (level === 'debug' && !getConfig<boolean>('logger.debugMode', false)) {
