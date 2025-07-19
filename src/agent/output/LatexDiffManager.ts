@@ -211,6 +211,8 @@ export class LatexDiffManager {
           MESSAGE_TYPES.LATEXDIFF,
           aggregated,
         );
+      } else {
+        this.logger.debug('No latexdiff results to report', diffProcessGroupId);
       }
     } catch (err) {
       this.logger.error(
