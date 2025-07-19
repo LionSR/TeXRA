@@ -3,12 +3,12 @@ import {
   BaseViewMessageHandler,
   MessageHandler,
 } from '@common/webview/BaseViewMessageHandler';
-import { IProgressViewProvider } from './interfaces/IProgressViewProvider';
+import type { ProgressViewProvider } from './ProgressViewProvider';
 // @ts-ignore - Import JavaScript module
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 
 export class ProgressViewMessageHandler extends BaseViewMessageHandler {
-  constructor(private readonly provider: IProgressViewProvider) {
+  constructor(private readonly provider: ProgressViewProvider) {
     super('ProgressView');
   }
 
@@ -65,21 +65,24 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     message: any,
     webviewView: vscode.WebviewView,
   ): Promise<void> {
-    this.provider.deleteStream(message.stream);
+    this.provider.state.clearStream(message.stream);
+    this.provider.updateWebview();
   }
 
   private async handleEraseStream(
     message: any,
     webviewView: vscode.WebviewView,
   ): Promise<void> {
-    this.provider.eraseStream(message.stream);
+    this.provider.state.eraseStreamContent(message.stream);
+    this.provider.updateWebview();
   }
 
   private async handleDeleteAll(
     message: any,
     webviewView: vscode.WebviewView,
   ): Promise<void> {
-    this.provider.deleteAllStreams();
+    this.provider.state.clearAll();
+    this.provider.updateWebview();
   }
 
   private async handleStopStream(
@@ -93,7 +96,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     message: any,
     webviewView: vscode.WebviewView,
   ): Promise<void> {
-    const taskState = this.provider.getTaskState(message.stream);
+    const taskState = this.provider.state.getTaskState(message.stream);
     if (taskState) {
       await vscode.commands.executeCommand(
         'texra.execute',
@@ -106,7 +109,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     message: any,
     webviewView: vscode.WebviewView,
   ): Promise<void> {
-    const taskState = this.provider.getTaskState(message.stream);
+    const taskState = this.provider.state.getTaskState(message.stream);
     if (taskState) {
       await vscode.commands.executeCommand('texra.runLatexdiff', {
         agent: taskState.agentConfig.agent,
@@ -136,7 +139,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     message: any,
     webviewView: vscode.WebviewView,
   ): Promise<void> {
-    const taskState = this.provider.getTaskState(message.stream);
+    const taskState = this.provider.state.getTaskState(message.stream);
     if (taskState) {
       await vscode.commands.executeCommand('texra.restoreState', taskState);
     }
@@ -227,10 +230,10 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     stream: string,
     command: 'texra.pack' | 'texra.clean',
   ): Promise<void> {
-    const taskState = this.provider.getTaskState(stream);
+    const taskState = this.provider.state.getTaskState(stream);
     if (!taskState) return;
 
-    const generated = this.provider.getOutputFiles(stream);
+    const generated = this.provider.state.outputFiles.getFiles(stream);
     const allFiles = new Set<string>(taskState.agentConfig.outputFiles || []);
     if (generated) {
       Object.values(generated).forEach((infos: any) =>
