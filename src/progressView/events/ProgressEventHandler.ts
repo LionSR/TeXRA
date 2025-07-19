@@ -1,5 +1,6 @@
 // Third-party imports
 import * as vscode from 'vscode';
+import { decode as decodeHtml } from 'he';
 
 // Local imports
 import { ProgressViewState } from '../state/ProgressViewState';
@@ -12,6 +13,7 @@ import { onProgress } from '@eventBus/ProgressEventBus';
 import { TokenUsageStats } from '@agent/types/UsageTypes';
 import { TaskState } from '@logger/TaskState';
 import { LogMessageData, TaskGroup } from '@logger/LogTypes';
+import { MESSAGE_TYPES } from '@logger/messageTypes';
 import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
 
 // @ts-ignore - Import JavaScript module
@@ -43,6 +45,28 @@ export class ProgressEventHandler {
     private webviewUpdater: WebviewUpdater,
   ) {
     this.logger = new AgentLogger('ProgressEventHandler');
+  }
+
+  /**
+   * Parse legacy JSON content from the log message text when structured data is missing.
+   */
+  private parseLegacyData(logMessage: LogMessageData): unknown | undefined {
+    if (logMessage.data !== undefined) return logMessage.data;
+    const type = logMessage.messageType;
+    if (
+      type === MESSAGE_TYPES.FILE_LIST ||
+      type === MESSAGE_TYPES.MISSING_OUTPUTS ||
+      type === MESSAGE_TYPES.LATEXDIFF ||
+      type === MESSAGE_TYPES.STATISTICS
+    ) {
+      try {
+        const decoded = decodeHtml(logMessage.text);
+        return JSON.parse(decoded);
+      } catch {
+        return undefined;
+      }
+    }
+    return undefined;
   }
 
   /**
@@ -296,6 +320,11 @@ export class ProgressEventHandler {
   }): void {
     const { stream, logMessage } = data;
 
+    const parsed = this.parseLegacyData(logMessage);
+    if (parsed !== undefined) {
+      logMessage.data = parsed;
+    }
+
     // Skip debug messages if debug mode is disabled
     if (
       logMessage.level === 'debug' &&
@@ -334,6 +363,11 @@ export class ProgressEventHandler {
     }
     if (logMessage.data !== undefined) {
       existing.data = logMessage.data;
+    } else {
+      const parsed = this.parseLegacyData(existing);
+      if (parsed !== undefined) {
+        existing.data = parsed;
+      }
     }
 
     if (
