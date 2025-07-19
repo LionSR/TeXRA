@@ -5,8 +5,7 @@ import { randomUUID } from 'crypto';
 import { StatePersistenceManager } from '../persistence/StatePersistenceManager';
 import { WorkspaceStateKey } from '@common/state/stateManager';
 import { AgentLogger } from '@logger/AgentLogger';
-import { decode as decodeHtml } from 'he';
-import { MESSAGE_TYPES } from '@logger/messageTypes';
+import { parseLegacyLogData } from '@logger/logUtils';
 
 // Types
 import { LogMessageData } from '@logger/LogTypes';
@@ -22,39 +21,6 @@ export class StreamTabsManager {
 
   constructor(private persistence: StatePersistenceManager) {
     this.logger = new AgentLogger('StreamTabsManager');
-  }
-
-  /**
-   * Parse legacy JSON content from the log message text when structured data is
-   * missing.
-   */
-  private parseLegacyData(logMessage: LogMessageData): void {
-    if (logMessage.data !== undefined) {
-      return;
-    }
-
-    const legacyTypes = new Set<string>([
-      MESSAGE_TYPES.FILE_LIST,
-      MESSAGE_TYPES.MISSING_OUTPUTS,
-      MESSAGE_TYPES.LATEXDIFF,
-      MESSAGE_TYPES.STATISTICS,
-    ]);
-
-    if (legacyTypes.has(logMessage.messageType ?? '') && logMessage.text) {
-      try {
-        const decoded = decodeHtml(logMessage.text);
-        const parsed = JSON.parse(decoded);
-        if (typeof parsed === 'object' && parsed !== null) {
-          logMessage.data = parsed;
-        }
-      } catch (err) {
-        this.logger.warn(
-          `Failed to parse legacy log data: ${
-            err instanceof Error ? err.message : String(err)
-          }`,
-        );
-      }
-    }
   }
 
   /**
@@ -186,11 +152,11 @@ export class StreamTabsManager {
             const timestamp = new Date(timeString).getTime();
             msg.timestamp = isNaN(timestamp) ? Date.now() : timestamp;
           }
-          if (!msg.messageType) {
-            msg.messageType = 'default';
-          }
           const log = msg as LogMessageData;
-          this.parseLegacyData(log);
+          parseLegacyLogData(log, this.logger);
+          if (!log.messageType) {
+            log.messageType = 'default';
+          }
           return log;
         });
 
