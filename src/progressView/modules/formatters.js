@@ -398,7 +398,7 @@ export class LogEntryFormatter {
         const basePath = String(d.base ?? '');
         const revisedPath = String(d.revised ?? '');
         const outputPath = String(d.output ?? '');
-        const message = d.message ? String(d.message) : '';
+        const msg = d.message ? String(d.message) : '';
 
         const baseEsc = encodeHtml(basePath);
         const revisedEsc = encodeHtml(revisedPath);
@@ -414,7 +414,7 @@ export class LogEntryFormatter {
           icon = 'codicon-error';
         }
 
-        const titleAttr = message ? ` title="${encodeHtml(message)}"` : '';
+        const titleAttr = msg ? ` title="${encodeHtml(msg)}"` : '';
 
         items += `<li><i class="codicon ${icon}"${titleAttr}></i> <span class="file-link clickable-link" data-file="${baseEsc}">${encodeHtml(
           baseName,
