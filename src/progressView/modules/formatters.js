@@ -451,44 +451,66 @@ export class LogEntryFormatter {
       }
 
       const items = [];
-      const pushItem = (icon, value, suffix = '') => {
+      const pushItem = (icon, label, value, suffix = '') => {
         items.push(
-          `<li><i class="codicon ${icon}"></i> ${value}${suffix}</li>`,
+          `<span class="stat-item" title="${label}"><i class="codicon ${icon}"></i> ${value}${suffix}</span>`,
         );
       };
 
       if (parsed.inputTokens !== undefined) {
-        pushItem('codicon-arrow-up', formatTokens(parsed.inputTokens));
+        pushItem(
+          'codicon-arrow-up',
+          'Input tokens',
+          formatTokens(parsed.inputTokens),
+        );
       }
       if (parsed.outputTokens !== undefined) {
-        pushItem('codicon-arrow-down', formatTokens(parsed.outputTokens));
+        pushItem(
+          'codicon-arrow-down',
+          'Output tokens',
+          formatTokens(parsed.outputTokens),
+        );
       }
       if (parsed.cacheReadInputTokens !== undefined) {
-        pushItem('codicon-history', formatTokens(parsed.cacheReadInputTokens));
+        pushItem(
+          'codicon-history',
+          'Cache hits',
+          formatTokens(parsed.cacheReadInputTokens),
+        );
       }
       if (parsed.cacheCreationInputTokens !== undefined) {
-        pushItem('codicon-save', formatTokens(parsed.cacheCreationInputTokens));
+        pushItem(
+          'codicon-save',
+          'Cache writes',
+          formatTokens(parsed.cacheCreationInputTokens),
+        );
       }
       if (parsed.percentageCached !== undefined) {
         pushItem(
           'codicon-graph-line',
+          'Cached %',
           `${parsed.percentageCached.toFixed(2)}%`,
         );
       }
       if (parsed.reasoningTokens !== undefined) {
         pushItem(
           'codicon-comment-discussion',
+          'Reasoning tokens',
           formatTokens(parsed.reasoningTokens),
         );
       }
       if (parsed.toolUseTokens !== undefined) {
-        pushItem('codicon-tools', formatTokens(parsed.toolUseTokens));
+        pushItem(
+          'codicon-tools',
+          'Tool tokens',
+          formatTokens(parsed.toolUseTokens),
+        );
       }
       if (parsed.elapsedTime !== undefined) {
-        pushItem('codicon-clock', parsed.elapsedTime, 's');
+        pushItem('codicon-clock', 'Elapsed time', parsed.elapsedTime, 's');
       }
       if (parsed.cost !== undefined) {
-        pushItem('codicon-rocket', `$${parsed.cost.toFixed(3)}`);
+        pushItem('codicon-rocket', 'Cost', `$${parsed.cost.toFixed(3)}`);
       }
 
       return `<details class="statistics-details" open>
@@ -497,7 +519,7 @@ export class LogEntryFormatter {
           <i class="codicon codicon-dashboard"></i>
           <span>Statistics</span>
         </summary>
-        <ul class="statistics-content"${idAttr}>${items.join('')}</ul>
+        <div class="statistics-content"${idAttr}>${items.join('')}</div>
       </details>`;
     } catch (e) {
       console.error('Error parsing statistics:', e);
