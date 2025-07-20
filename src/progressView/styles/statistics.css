@@ -27,10 +27,13 @@
 
 .statistics-content {
   padding: var(--spacing-tiny) 0 var(--spacing-small) var(--spacing-large);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-large);
   list-style: none;
 }
 
-.statistics-content li {
+.stat-item {
   display: flex;
   align-items: center;
   gap: var(--spacing-small);
