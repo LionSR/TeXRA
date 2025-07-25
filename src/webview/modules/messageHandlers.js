@@ -258,9 +258,13 @@ export class MainViewMessageHandler {
 
   _handleStateRestoration(state) {
     console.log('Restoring state:', state);
+
+    const config = state.agentConfig || state;
+    const activeFiles = state.activeFiles || {};
+
     const savedState = {};
-    this._restoreFormFields(state, savedState);
-    this._restoreFileArrays(state, savedState);
+    this._restoreFormFields(config, savedState);
+    this._restoreFileArrays(config, savedState, activeFiles);
     mainViewState.set(savedState);
     mainViewState.restore();
     this._skipNextRestoreState = true;
@@ -295,35 +299,32 @@ export class MainViewMessageHandler {
       referenceFile: state.referenceFile,
       auxiliaryFile: state.auxiliaryFile,
       mediaFile: state.mediaFile,
-      reflect: state.reflect || (toolConfig ? toolConfig.reflect : false),
+      reflect: state.reflect ?? toolConfig.reflect ?? false,
       autoExtractFigure:
-        state.autoExtractFigure ||
-        (toolConfig ? toolConfig.autoExtractFigure : false),
+        state.autoExtractFigure ?? toolConfig.autoExtractFigure ?? false,
       autoExtractTikzFigure:
-        state.autoExtractTikzFigure ||
-        (toolConfig ? toolConfig.autoExtractTikzFigure : false),
+        state.autoExtractTikzFigure ??
+        toolConfig.autoExtractTikzFigure ??
+        false,
       attachTeXCount:
-        state.attachTeXCount ||
-        (toolConfig ? toolConfig.attachTeXCount : false),
+        state.attachTeXCount ?? toolConfig.attachTeXCount ?? false,
       usePrefillFromInput:
-        state.usePrefillFromInput ||
-        (toolConfig ? toolConfig.usePrefillFromInput : false),
+        state.usePrefillFromInput ?? toolConfig.usePrefillFromInput ?? false,
       printInputPrompt:
-        state.printInputPrompt ||
-        (toolConfig ? toolConfig.printInputPrompt : false),
+        state.printInputPrompt ?? toolConfig.printInputPrompt ?? false,
       autoCompileInputPdf:
-        state.autoCompileInputPdf ||
-        (toolConfig ? toolConfig.autoCompileInputPdf : false),
+        state.autoCompileInputPdf ?? toolConfig.autoCompileInputPdf ?? false,
     });
   }
 
-  _restoreFileArrays(state, savedState) {
+  _restoreFileArrays(state, savedState, activeFiles = {}) {
     for (const fileType of FILE_TYPES) {
       const filesArray =
         state[`${fileType}Files`] ||
         state[`multiple${capitalize(fileType)}Files`] ||
         [];
       const isVisible =
+        activeFiles[fileType] ||
         state[`${fileType}FilesActive`] ||
         state[`multiple${capitalize(fileType)}FilesActive`] ||
         false;
