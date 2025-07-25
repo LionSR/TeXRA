@@ -6,9 +6,7 @@ import * as logger from '@logger/logUtils';
 
 // Local imports
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
-import { isValidAgentYaml } from '../agent/runtime/agentLoad';
-import { promptToAddAgentToConfig } from '@frontend/agents/register';
-import { getConfig } from '@utils/config';
+import { validateYamlAndPromptAdd } from '@frontend/agents/register';
 
 const CHANNEL = 'Webview';
 logger.initialize(CHANNEL);
@@ -32,22 +30,7 @@ export class WatcherManager {
   }
 
   private async validateYaml(filePath: string) {
-    const validationResult = await isValidAgentYaml(filePath);
-    if (validationResult) {
-      const filenameBase = path.basename(filePath, '.yaml');
-      const internalName = validationResult.name;
-      if (filenameBase !== internalName) {
-        vscode.window.showWarningMessage(
-          `Agent file '${filenameBase}.yaml' has a different internal name '${internalName}' defined in its YAML. ` +
-            `Consider renaming the file or updating the internal name in the YAML for consistency.`,
-        );
-      } else {
-        const configuredAgents = getConfig<string[]>('texra.agents', []);
-        if (!configuredAgents.includes(filenameBase)) {
-          await promptToAddAgentToConfig(filenameBase);
-        }
-      }
-    }
+    await validateYamlAndPromptAdd(filePath);
   }
 
   async setup() {
