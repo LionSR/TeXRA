@@ -236,6 +236,11 @@ export class ProgressEventHandler {
     if (executionId) {
       this.state.setExecutionId(streamTabId, executionId);
     }
+
+    if (this.webviewUpdater.isAvailable()) {
+      const infos = buildStreamInfos(this.state);
+      this.webviewUpdater.updateStreams(infos, this.state.activeStream);
+    }
   }
 
   /**

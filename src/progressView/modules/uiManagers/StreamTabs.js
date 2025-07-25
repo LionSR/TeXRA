@@ -54,11 +54,13 @@ export class StreamTabs {
         const key = (info.agentType || info.agent || '').toLowerCase();
         const icon = AGENT_ICONS[key] || AGENT_ICONS.direct;
         agentIcon.classList.add('codicon', `codicon-${icon}`);
+        agentIcon.title = info.agentType || info.agent || '';
       }
       const multiIcon = tabEl.querySelector('.multi-file');
       if (multiIcon) {
         if (info.hasMultipleOutputs) {
           multiIcon.classList.add('codicon', 'codicon-files');
+          multiIcon.title = 'Multiple output files';
         } else {
           multiIcon.remove();
         }
