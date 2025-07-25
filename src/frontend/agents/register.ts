@@ -4,7 +4,10 @@
 import * as vscode from 'vscode';
 
 // Local imports
+import * as path from 'path';
 import * as logger from '@logger/logUtils';
+import { isValidAgentYaml } from '@agent/runtime/agentLoad';
+import { getConfig } from '@utils/config';
 
 const CHANNEL = 'AgentRegister';
 logger.initialize(CHANNEL);
@@ -71,5 +74,43 @@ export async function promptToAddAgentToConfig(
     vscode.window.showInformationMessage(
       `Added "${agentName}" to texra.agents`,
     );
+  }
+}
+
+/**
+ * Validate the given YAML file as an agent definition and prompt to add
+ * the agent name to the configuration if it isn't already present.
+ *
+ * @param filePath Absolute path to the YAML file
+ * @param showInvalid Whether to warn when the YAML is invalid
+ */
+export async function validateYamlAndPromptAdd(
+  filePath: string,
+  showInvalid = false,
+): Promise<void> {
+  const validationResult = await isValidAgentYaml(filePath);
+  if (!validationResult) {
+    if (showInvalid) {
+      vscode.window.showWarningMessage(
+        'Selected file is not a valid agent YAML.',
+      );
+    }
+    return;
+  }
+
+  const filenameBase = path.basename(filePath, '.yaml');
+  const internalName = validationResult.name;
+
+  if (filenameBase !== internalName) {
+    vscode.window.showWarningMessage(
+      `Agent file '${filenameBase}.yaml' has a different internal name '${internalName}' defined in its YAML. ` +
+        `Consider renaming the file or updating the internal name in the YAML for consistency.`,
+    );
+    return;
+  }
+
+  const configuredAgents = getConfig<string[]>('texra.agents', []);
+  if (!configuredAgents.includes(filenameBase)) {
+    await promptToAddAgentToConfig(filenameBase);
   }
 }
