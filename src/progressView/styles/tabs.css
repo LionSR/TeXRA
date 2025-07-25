@@ -52,6 +52,42 @@
   width: 100%;
 }
 
+.tab {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: var(--spacing-small) var(--spacing-medium);
+  cursor: pointer;
+  border: none;
+  background: none;
+  color: var(--vscode-foreground);
+  text-align: left;
+  font-family: var(--font-family);
+  min-width: 0;
+}
+
+.tab-title {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tab-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-small);
+  font-size: var(--font-size-sm);
+  color: var(--vscode-foreground);
+  opacity: var(--opacity-subtle);
+  width: 100%;
+}
+
+.tab-meta .agent-type,
+.tab-meta .multi-file {
+  margin-left: var(--spacing-small);
+}
+
 .tab-container:hover {
   background-color: var(--vscode-list-hoverBackground);
 }
@@ -62,25 +98,6 @@
 
 .tab-container.active .tab {
   color: var(--vscode-list-activeSelectionForeground);
-}
-
-.tab {
-  flex: 1;
-  padding: var(--spacing-small) var(--spacing-medium);
-  cursor: pointer;
-  border: none;
-  background: none;
-  color: var(--vscode-foreground);
-  text-align: left;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  font-family: var(--font-family);
-  min-width: 0;
-}
-
-.tab:hover {
-  background: none;
 }
 
 .tab-delete {
