@@ -12,7 +12,11 @@ import { agentConfigToTaskState } from '@utils/config';
 // Local imports - agent components
 import { AgentConfigSchema } from '@agent/core/AgentConfig';
 import type { AgentConfig } from '@agent/core/AgentConfig';
-import { AgentSetting, AgentPrompt } from '@agent/core/AgentDataclass';
+import {
+  AgentSetting,
+  AgentPrompt,
+  AgentType,
+} from '@agent/core/AgentDataclass';
 import { loadAgentSettingAndPrompts } from '@agent/runtime/agentLoad';
 
 import { MODEL_CONFIGS } from '@model/ModelRegistry';
@@ -141,13 +145,13 @@ function getAgentName(
  */
 async function executeAgentWithLogging<T extends IAgent>(
   agentName: string,
-  createAgentFn: () => Promise<T>,
+  createAgentFn: () => Promise<{ agent: T; agentType?: AgentType }>,
   context: vscode.ExtensionContext,
   executionId?: ExecutionId,
 ): Promise<void> {
   try {
-    // Create agent to get config for stream ID
-    const agent = await createAgentFn();
+    // Create agent instance and extract its declared type
+    const { agent, agentType } = await createAgentFn();
 
     // Get the full stream tab ID
     const config = agent.config;
@@ -254,7 +258,7 @@ async function executeAgentWithLogging<T extends IAgent>(
         bus.emit('setTaskState', {
           streamTabId: streamTabId,
           executionId,
-          taskState: agentConfigToTaskState(config),
+          taskState: agentConfigToTaskState(config, agentType),
         });
         logger.debug(
           `Task state stored for stream: ${streamTabId}`,
@@ -409,13 +413,14 @@ export async function executeAgent(
 
       // Get appropriate agent class and create instance
       const AgentClass = getAgentClass(agentSetting);
-      return new AgentClass(
+      const agent = new AgentClass(
         modelHandler,
         fullConfig,
         agentSetting,
         agentPrompt,
         agentPath,
       );
+      return { agent, agentType: agentSetting.agentType };
     },
     context,
     executionId,
@@ -467,13 +472,14 @@ export async function executeMergeAgent(
         'merge',
       );
 
-      return new MergeAgent(
+      const agent = new MergeAgent(
         modelHandler,
         agentConfig,
         agentSetting,
         agentPrompt,
         agentPath,
       );
+      return { agent, agentType: agentSetting.agentType };
     },
     context,
     undefined,

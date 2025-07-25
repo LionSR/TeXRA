@@ -6,6 +6,7 @@ import { WebviewUpdater } from '../managers';
 import { AgentLogger } from '@logger/AgentLogger';
 import { getConfig } from '@utils/config';
 import { bus } from '@eventBus/ProgressEventBus';
+import { buildStreamInfos } from '../streamInfoUtils';
 
 // Types
 import type { TokenUsageStats } from '@agent/types/UsageTypes';
@@ -13,6 +14,7 @@ import { TaskState } from '@logger/TaskState';
 import { LogMessageData, TaskGroup } from '@logger/LogTypes';
 import { parseLegacyLogData } from '@logger/logUtils';
 import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
+import type { StreamTabInfo } from '../types';
 
 // @ts-ignore - Import JavaScript module
 import { STATUS } from '../modules/constants.js';
@@ -122,8 +124,8 @@ export class ProgressEventHandler {
     this.state.activeStream = stream;
 
     if (this.webviewUpdater.isAvailable()) {
-      const streams = this.state.streamTabs.keys();
-      this.webviewUpdater.updateStreams(streams, stream);
+      const infos = buildStreamInfos(this.state);
+      this.webviewUpdater.updateStreams(infos, stream);
 
       // Update log content (will be empty for new streams)
       this.updateLogContentForStream(stream);
@@ -233,6 +235,11 @@ export class ProgressEventHandler {
 
     if (executionId) {
       this.state.setExecutionId(streamTabId, executionId);
+    }
+
+    if (this.webviewUpdater.isAvailable()) {
+      const infos = buildStreamInfos(this.state);
+      this.webviewUpdater.updateStreams(infos, this.state.activeStream);
     }
   }
 
