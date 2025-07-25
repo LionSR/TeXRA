@@ -293,7 +293,7 @@ export class ExplorerOperations {
       return;
     }
 
-    if (path.extname(item.resourceUri.fsPath) !== '.yaml') {
+    if (path.extname(item.resourceUri.fsPath).toLowerCase() !== '.yaml') {
       vscode.window.showInformationMessage(
         'Only YAML files can be added as agents.',
       );
@@ -301,7 +301,13 @@ export class ExplorerOperations {
     }
 
     try {
-      await validateYamlAndPromptAdd(item.resourceUri.fsPath, true);
+      await vscode.window.withProgress(
+        {
+          location: vscode.ProgressLocation.Window,
+          title: 'Validating agent YAML...',
+        },
+        () => validateYamlAndPromptAdd(item.resourceUri.fsPath, true),
+      );
     } catch (err) {
       await showLoggedErrorMessage(
         CHANNEL,
