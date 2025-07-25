@@ -903,6 +903,12 @@
         "icon": "$(trash)"
       },
       {
+        "command": "texra.folderExplorer.addToList",
+        "title": "Add Agent to List",
+        "category": "TeXRA",
+        "icon": "$(diff-added)"
+      },
+      {
         "command": "texra.createAgentWithAI",
         "title": "Create AI Agent",
         "category": "TeXRA",
@@ -1099,6 +1105,11 @@
           "command": "texra.folderExplorer.delete",
           "when": "view == texra.folderExplorer && viewItem != editing",
           "group": "3_modification"
+        },
+        {
+          "command": "texra.folderExplorer.addToList",
+          "when": "view == texra.folderExplorer && viewItem == file",
+          "group": "4_modification"
         }
       ]
     },
