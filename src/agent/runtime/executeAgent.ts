@@ -254,7 +254,10 @@ async function executeAgentWithLogging<T extends IAgent>(
         bus.emit('setTaskState', {
           streamTabId: streamTabId,
           executionId,
-          taskState: agentConfigToTaskState(config),
+          taskState: agentConfigToTaskState(
+            config,
+            (agent as any).agentSetting?.agentType,
+          ),
         });
         logger.debug(
           `Task state stored for stream: ${streamTabId}`,
