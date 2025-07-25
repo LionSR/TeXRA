@@ -16,6 +16,12 @@ All notable changes to this project will be documented in this file.
 - Added Grok 4 model with token limit adjustments.
 - Extended support for Grok via dedicated handler and SDK updates.
 
+## 0.32.2 - 2025-07-12
+
+- Added "Add Agent to List" context menu option in the TeX Agents view that
+  validates the file then updates `texra.agents` without an extra prompt.
+- Improved YAML validation to handle `.YAML` files and show progress.
+
 ## 0.32.0 - 2025-07-07
 
 - Default model fix
