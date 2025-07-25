@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.32.4 - 2025-07-25
+
+- Right-click on YAML agent files in Explorer to quickly add them to your agent list.
+- Agent configuration improvements with better file type handling and validation.
+- Fixed restoration of agent states when reopening TeXRA sessions.
+- Improved agent metadata handling for better performance tracking.
+
 ## 0.32.3 - 2025-07-20
 
 - Improved statistics view UI with cleaner rendering and streamlined display.
