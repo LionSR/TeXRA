@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.32.3 - 2025-07-20
+
+- Improved statistics view UI with cleaner rendering and streamlined display.
+
+## 0.32.2 - 2025-07-19
+
+- Fixed missing LaTeX diff message rendering in progress view.
+
 ## 0.32.1 - 2025-07-10
 
 - Default model switched to **Gemini 2.5 Pro**.
