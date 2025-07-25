@@ -10,8 +10,9 @@ import { showLoggedErrorMessage } from '@common/errors/errorHandlingUtils';
 // Local imports
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { AbsoluteFS } from '@utils/files';
-import { getConfig } from '@utils/config';
+
 import { FileItem } from './FileItem';
+import { validateYamlAndPromptAdd } from '@frontend/agents/register';
 
 const NEW_AGENT_TEMPLATE = `# --- Agent Inheritance (Optional) ---
 # inherits: base
@@ -284,6 +285,35 @@ export class ExplorerOperations {
           err,
         );
       }
+    }
+  }
+
+  async addToList(item: FileItem) {
+    if (!item) {
+      return;
+    }
+
+    if (path.extname(item.resourceUri.fsPath).toLowerCase() !== '.yaml') {
+      vscode.window.showInformationMessage(
+        'Only YAML files can be added as agents.',
+      );
+      return;
+    }
+
+    try {
+      await vscode.window.withProgress(
+        {
+          location: vscode.ProgressLocation.Window,
+          title: 'Validating agent YAML...',
+        },
+        () => validateYamlAndPromptAdd(item.resourceUri.fsPath, true, false),
+      );
+    } catch (err) {
+      await showLoggedErrorMessage(
+        CHANNEL,
+        'Failed to add agent to configuration',
+        err,
+      );
     }
   }
 }
