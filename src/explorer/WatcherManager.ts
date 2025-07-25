@@ -6,9 +6,7 @@ import * as logger from '@logger/logUtils';
 
 // Local imports
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
-import { isValidAgentYaml } from '../agent/runtime/agentLoad';
-import { promptToAddAgentToConfig } from '@frontend/agents/register';
-import { getConfig } from '@utils/config';
+import { validateYamlAndPromptAdd } from '@frontend/agents/register';
 
 const CHANNEL = 'Webview';
 logger.initialize(CHANNEL);
@@ -29,25 +27,6 @@ export class WatcherManager {
       clearTimeout(this.refreshHandle);
     }
     this.refreshHandle = setTimeout(() => this.refresh(), 200);
-  }
-
-  private async validateYaml(filePath: string) {
-    const validationResult = await isValidAgentYaml(filePath);
-    if (validationResult) {
-      const filenameBase = path.basename(filePath, '.yaml');
-      const internalName = validationResult.name;
-      if (filenameBase !== internalName) {
-        vscode.window.showWarningMessage(
-          `Agent file '${filenameBase}.yaml' has a different internal name '${internalName}' defined in its YAML. ` +
-            `Consider renaming the file or updating the internal name in the YAML for consistency.`,
-        );
-      } else {
-        const configuredAgents = getConfig<string[]>('texra.agents', []);
-        if (!configuredAgents.includes(filenameBase)) {
-          await promptToAddAgentToConfig(filenameBase);
-        }
-      }
-    }
   }
 
   async setup() {
@@ -84,10 +63,10 @@ export class WatcherManager {
 
         watcher.onDidCreate((uri) => {
           this.triggerRefresh();
-          if (path.extname(uri.fsPath) === '.yaml') {
+          if (path.extname(uri.fsPath).toLowerCase() === '.yaml') {
             const handle = setTimeout(async () => {
               try {
-                await this.validateYaml(uri.fsPath);
+                await validateYamlAndPromptAdd(uri.fsPath);
               } catch (error) {
                 logger.error(CHANNEL, `Error validating YAML: ${error}`);
               } finally {
@@ -105,8 +84,8 @@ export class WatcherManager {
         if (path.resolve(watchPath) === path.resolve(customAgentsPath ?? '')) {
           watcher.onDidChange(async (uri) => {
             this.triggerRefresh();
-            if (path.extname(uri.fsPath) === '.yaml') {
-              await this.validateYaml(uri.fsPath);
+            if (path.extname(uri.fsPath).toLowerCase() === '.yaml') {
+              await validateYamlAndPromptAdd(uri.fsPath);
             }
           });
         } else {
