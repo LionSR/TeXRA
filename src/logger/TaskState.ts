@@ -1,6 +1,7 @@
 // Local imports
 import type { FileType } from '@utils/config';
 import type { AgentConfig } from '@agent/core/AgentConfig';
+import type { AgentType } from '@agent/core/AgentDataclass';
 
 /**
  * Interface for storing task execution state.
@@ -16,6 +17,12 @@ export interface TaskState {
    * This includes model, agent type, file selections, and tool configurations.
    */
   agentConfig: AgentConfig;
+
+  /**
+   * Type of agent (e.g., CoT, direct, toolUse). Optional for backward
+   * compatibility with older saved states.
+   */
+  agentType?: AgentType;
 
   /**
    * UI-specific state for managing file type visibility in the interface.
