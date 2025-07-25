@@ -1,5 +1,6 @@
 // Third-party imports
 import * as vscode from 'vscode';
+import * as path from 'path';
 // Local imports
 import { ProgressViewState } from '../state/ProgressViewState';
 import { WebviewUpdater } from '../managers';
@@ -55,8 +56,11 @@ export class ProgressEventHandler {
       const outputs = taskState?.agentConfig.outputFiles || [];
       return {
         name: id,
+        agentName: taskState?.agentConfig.agent,
+        inputFile: taskState
+          ? path.basename(taskState.agentConfig.inputFile)
+          : undefined,
         model: taskState?.agentConfig.model,
-        agent: taskState?.agentConfig.agent,
         hasMultipleOutputs: Array.isArray(outputs) && outputs.length > 1,
         lastTimestamp,
       };

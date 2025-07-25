@@ -2,6 +2,12 @@
 import { ELEMENT_IDS } from '../constants.js';
 import { createFromTemplate } from '@common/templateUtils.js';
 
+const AGENT_ICONS = {
+  CoT: 'terminal',
+  direct: 'lightbulb',
+  toolUse: 'tools',
+};
+
 /**
  * Manages stream tab UI updates.
  */
@@ -29,38 +35,34 @@ export class StreamTabs {
       }
       const tabEl = createFromTemplate('streamTabTemplate', {
         text: {
-          '.tab': info.name,
+          '.tab-title': `${info.agentName || ''}: ${info.inputFile || ''}`,
           '.model': info.model || '',
-          '.last-active': this._formatRelativeTime(info.lastTimestamp),
+          '.last-active': this.formatRelativeTime(info.lastTimestamp),
         },
         attributes: {
-          '.tab': { title: info.name },
+          '': { title: info.name },
           '.tab-delete': { title: 'Delete stream' },
         },
         dataset: {
-          '.tab': { stream: info.name },
+          '': { stream: info.name },
           '.tab-delete': { stream: info.name },
         },
       });
       if (!tabEl) return;
-      if (info.agent) {
-        const icon = info.agent.toLowerCase().includes('cot')
-          ? 'terminal'
-          : 'lightbulb';
-        tabEl
-          .querySelector('.agent-type')
-          .classList.add('codicon', `codicon-${icon}`);
+      const agentIcon = tabEl.querySelector('.agent-type');
+      if (agentIcon && info.agentType) {
+        const icon = AGENT_ICONS[info.agentType] || AGENT_ICONS.direct;
+        agentIcon.className = `codicon codicon-${icon} agent-type`;
       }
-      if (info.hasMultipleOutputs) {
-        tabEl
-          .querySelector('.multi-file')
-          .classList.add('codicon', 'codicon-files');
-      } else {
-        const el = tabEl.querySelector('.multi-file');
-        if (el) el.remove();
+      const multi = tabEl.querySelector('.multi-file');
+      if (multi) {
+        if (info.hasMultipleOutputs) {
+          multi.className = 'codicon codicon-files multi-file';
+        } else {
+          multi.remove();
+        }
       }
       if (info.name === activeStream) tabEl.classList.add('active');
-      tabEl.title = info.name;
       tabsContainer.appendChild(tabEl);
     });
 
@@ -73,7 +75,7 @@ export class StreamTabs {
     }
   }
 
-  _formatRelativeTime(timestamp) {
+  formatRelativeTime(timestamp) {
     if (!timestamp) return '';
     const diff = Date.now() - timestamp;
     const minutes = Math.floor(diff / 60000);

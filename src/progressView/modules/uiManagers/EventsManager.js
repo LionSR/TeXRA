@@ -36,18 +36,18 @@ export class EventsManager {
     document
       .getElementById(ELEMENT_IDS.STREAM_TABS)
       .addEventListener('click', (e) => {
-        const tabButton = e.target.closest('.tab');
+        const container = e.target.closest('.tab-container');
         const deleteButton = e.target.closest('.tab-delete');
 
-        if (tabButton && tabButton.dataset.stream) {
-          vscode.postMessage({
-            command: COMMANDS.SWITCH_STREAM,
-            stream: tabButton.dataset.stream,
-          });
-        } else if (deleteButton && deleteButton.dataset.stream) {
+        if (deleteButton && deleteButton.dataset.stream) {
           vscode.postMessage({
             command: COMMANDS.DELETE_STREAM,
             stream: deleteButton.dataset.stream,
+          });
+        } else if (container && container.dataset.stream) {
+          vscode.postMessage({
+            command: COMMANDS.SWITCH_STREAM,
+            stream: container.dataset.stream,
           });
         }
       });
