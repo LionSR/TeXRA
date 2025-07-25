@@ -4,11 +4,13 @@ import * as vscode from 'vscode';
 // Local imports
 import { ProgressViewState } from '../state/ProgressViewState';
 import { AgentLogger } from '@logger/AgentLogger';
+import { buildStreamInfos } from '../streamInfoUtils';
 
 // Types
 import type { TokenUsageStats } from '@agent/types/UsageTypes';
 import { LogMessageData } from '@logger/LogTypes';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
+import type { StreamTabInfo } from '../types';
 
 // @ts-ignore - Import JavaScript module
 import { COMMANDS } from '../modules/constants.js';
@@ -31,7 +33,7 @@ export class WebviewUpdater {
   /**
    * Update stream tabs in the webview
    */
-  updateStreams(streams: StreamTabId[], activeStream: StreamTabId): void {
+  updateStreams(streams: StreamTabInfo[], activeStream: StreamTabId): void {
     const webview = this.getWebview();
     if (!webview) return;
 
@@ -188,8 +190,9 @@ export class WebviewUpdater {
     const webview = this.getWebview();
     if (!webview) return;
 
-    const streams = state.streamTabs.keys();
     const activeStream = state.activeStream;
+
+    const streams = buildStreamInfos(state);
 
     // Update streams and active stream
     this.updateStreams(streams, activeStream);

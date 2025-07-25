@@ -8,6 +8,7 @@
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import { AgentConfigSchema } from '@agent/core/AgentConfig';
 import { TaskState } from '@logger/TaskState';
+import type { AgentType } from '@agent/core/AgentDataclass';
 
 import { FILE_TYPES, type FileType } from './constants';
 
@@ -31,10 +32,14 @@ function createActiveFilesFromArrays(
  * @param config The AgentConfig to convert
  * @returns A TaskState representing the same configuration
  */
-export function agentConfigToTaskState(config: AgentConfig): TaskState {
+export function agentConfigToTaskState(
+  config: AgentConfig,
+  agentType?: AgentType,
+): TaskState {
   return {
     agentConfig: config,
     activeFiles: createActiveFilesFromArrays(config),
+    ...(agentType ? { agentType } : {}),
   };
 }
 
@@ -53,6 +58,7 @@ export function objectToTaskState(obj: Record<string, any>): TaskState {
       agentConfig: AgentConfigSchema.parse(obj.agentConfig),
       activeFiles:
         obj.activeFiles || createActiveFilesFromArrays(obj.agentConfig),
+      agentType: obj.agentType,
     };
   }
 
@@ -95,7 +101,7 @@ export function objectToTaskState(obj: Record<string, any>): TaskState {
   // Parse only AgentConfig-compatible fields
   try {
     const normalized = AgentConfigSchema.parse(agentConfigData);
-    const taskState = agentConfigToTaskState(normalized);
+    const taskState = agentConfigToTaskState(normalized, obj.agentType);
 
     // Add back TaskState-specific fields
     if (activeFiles) {
@@ -107,7 +113,7 @@ export function objectToTaskState(obj: Record<string, any>): TaskState {
     // If parsing fails, create a minimal valid state
     console.error('Failed to parse task state, using defaults:', error);
     const defaultConfig = AgentConfigSchema.parse({});
-    const taskState = agentConfigToTaskState(defaultConfig);
+    const taskState = agentConfigToTaskState(defaultConfig, obj.agentType);
 
     // Preserve activeFiles if available
     if (activeFiles) {
