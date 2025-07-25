@@ -10,7 +10,7 @@ import { showLoggedErrorMessage } from '@common/errors/errorHandlingUtils';
 // Local imports
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { AbsoluteFS } from '@utils/files';
-import { getConfig } from '@utils/config';
+
 import { FileItem } from './FileItem';
 import { validateYamlAndPromptAdd } from '@frontend/agents/register';
 
@@ -288,7 +288,7 @@ export class ExplorerOperations {
     }
   }
 
-  async addToConfig(item: FileItem) {
+  async addToList(item: FileItem) {
     if (!item) {
       return;
     }

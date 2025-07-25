@@ -903,8 +903,8 @@
         "icon": "$(trash)"
       },
       {
-        "command": "texra.folderExplorer.addToConfig",
-        "title": "Add Agent to Config",
+        "command": "texra.folderExplorer.addToList",
+        "title": "Add Agent to List",
         "category": "TeXRA",
         "icon": "$(diff-added)"
       },
@@ -1107,7 +1107,7 @@
           "group": "3_modification"
         },
         {
-          "command": "texra.folderExplorer.addToConfig",
+          "command": "texra.folderExplorer.addToList",
           "when": "view == texra.folderExplorer && viewItem == file",
           "group": "4_modification"
         }
