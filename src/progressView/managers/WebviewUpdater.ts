@@ -9,6 +9,7 @@ import { AgentLogger } from '@logger/AgentLogger';
 import type { TokenUsageStats } from '@agent/types/UsageTypes';
 import { LogMessageData } from '@logger/LogTypes';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
+import type { StreamTabInfo } from '../types';
 
 // @ts-ignore - Import JavaScript module
 import { COMMANDS } from '../modules/constants.js';
@@ -31,7 +32,7 @@ export class WebviewUpdater {
   /**
    * Update stream tabs in the webview
    */
-  updateStreams(streams: StreamTabId[], activeStream: StreamTabId): void {
+  updateStreams(streams: StreamTabInfo[], activeStream: StreamTabId): void {
     const webview = this.getWebview();
     if (!webview) return;
 
@@ -188,8 +189,22 @@ export class WebviewUpdater {
     const webview = this.getWebview();
     if (!webview) return;
 
-    const streams = state.streamTabs.keys();
     const activeStream = state.activeStream;
+
+    const streams: StreamTabInfo[] = state.streamTabs.keys().map((id) => {
+      const taskState = state.getTaskState(id);
+      const logs = state.streamTabs.get(id);
+      const lastTimestamp =
+        logs && logs.length > 0 ? logs[logs.length - 1].timestamp : undefined;
+      const outputs = taskState?.agentConfig.outputFiles || [];
+      return {
+        name: id,
+        model: taskState?.agentConfig.model,
+        agent: taskState?.agentConfig.agent,
+        hasMultipleOutputs: Array.isArray(outputs) && outputs.length > 1,
+        lastTimestamp,
+      };
+    });
 
     // Update streams and active stream
     this.updateStreams(streams, activeStream);

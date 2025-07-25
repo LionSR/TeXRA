@@ -13,6 +13,7 @@ import { TaskState } from '@logger/TaskState';
 import { LogMessageData, TaskGroup } from '@logger/LogTypes';
 import { parseLegacyLogData } from '@logger/logUtils';
 import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
+import type { StreamTabInfo } from '../types';
 
 // @ts-ignore - Import JavaScript module
 import { STATUS } from '../modules/constants.js';
@@ -43,6 +44,23 @@ export class ProgressEventHandler {
     private webviewUpdater: WebviewUpdater,
   ) {
     this.logger = new AgentLogger('ProgressEventHandler');
+  }
+
+  private buildStreamInfos(): StreamTabInfo[] {
+    return this.state.streamTabs.keys().map((id) => {
+      const taskState = this.state.getTaskState(id);
+      const logs = this.state.streamTabs.get(id);
+      const lastTimestamp =
+        logs && logs.length > 0 ? logs[logs.length - 1].timestamp : undefined;
+      const outputs = taskState?.agentConfig.outputFiles || [];
+      return {
+        name: id,
+        model: taskState?.agentConfig.model,
+        agent: taskState?.agentConfig.agent,
+        hasMultipleOutputs: Array.isArray(outputs) && outputs.length > 1,
+        lastTimestamp,
+      };
+    });
   }
 
   /**
@@ -122,8 +140,8 @@ export class ProgressEventHandler {
     this.state.activeStream = stream;
 
     if (this.webviewUpdater.isAvailable()) {
-      const streams = this.state.streamTabs.keys();
-      this.webviewUpdater.updateStreams(streams, stream);
+      const infos = this.buildStreamInfos();
+      this.webviewUpdater.updateStreams(infos, stream);
 
       // Update log content (will be empty for new streams)
       this.updateLogContentForStream(stream);
