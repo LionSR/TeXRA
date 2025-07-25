@@ -112,7 +112,7 @@ export async function validateYamlAndPromptAdd(
     return;
   }
 
-  const filenameBase = path.basename(filePath, '.yaml');
+  const filenameBase = path.basename(filePath, path.extname(filePath));
   const internalName = validationResult.name;
 
   if (filenameBase !== internalName) {
