@@ -33,6 +33,10 @@ export class ExplorerCommands {
         'texra.folderExplorer.openFile',
         (uri: vscode.Uri) => this.operations.open(uri),
       ),
+      vscode.commands.registerCommand(
+        'texra.folderExplorer.addToList',
+        (node: FileItem) => this.operations.addToList(node),
+      ),
     );
   }
 }
