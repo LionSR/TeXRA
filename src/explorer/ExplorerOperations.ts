@@ -306,7 +306,7 @@ export class ExplorerOperations {
           location: vscode.ProgressLocation.Window,
           title: 'Validating agent YAML...',
         },
-        () => validateYamlAndPromptAdd(item.resourceUri.fsPath, true),
+        () => validateYamlAndPromptAdd(item.resourceUri.fsPath, true, false),
       );
     } catch (err) {
       await showLoggedErrorMessage(
