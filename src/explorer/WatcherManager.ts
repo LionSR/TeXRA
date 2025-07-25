@@ -29,10 +29,6 @@ export class WatcherManager {
     this.refreshHandle = setTimeout(() => this.refresh(), 200);
   }
 
-  private async validateYaml(filePath: string) {
-    await validateYamlAndPromptAdd(filePath);
-  }
-
   async setup() {
     try {
       if (!this.context) {
@@ -67,10 +63,10 @@ export class WatcherManager {
 
         watcher.onDidCreate((uri) => {
           this.triggerRefresh();
-          if (path.extname(uri.fsPath) === '.yaml') {
+          if (path.extname(uri.fsPath).toLowerCase() === '.yaml') {
             const handle = setTimeout(async () => {
               try {
-                await this.validateYaml(uri.fsPath);
+                await validateYamlAndPromptAdd(uri.fsPath);
               } catch (error) {
                 logger.error(CHANNEL, `Error validating YAML: ${error}`);
               } finally {
@@ -88,8 +84,8 @@ export class WatcherManager {
         if (path.resolve(watchPath) === path.resolve(customAgentsPath ?? '')) {
           watcher.onDidChange(async (uri) => {
             this.triggerRefresh();
-            if (path.extname(uri.fsPath) === '.yaml') {
-              await this.validateYaml(uri.fsPath);
+            if (path.extname(uri.fsPath).toLowerCase() === '.yaml') {
+              await validateYamlAndPromptAdd(uri.fsPath);
             }
           });
         } else {
