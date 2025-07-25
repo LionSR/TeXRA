@@ -24,6 +24,7 @@ This section lists all the agent execution streams from your current VS Code ses
 
 - **Switching Streams**: Click on a stream name (e.g., `polish@sonnet37: paper.tex`) to view its specific logs and status in the Content Area.
 - **Delete All**: The <i class="codicon codicon-trash"></i> **Delete All** button at the bottom permanently removes all streams and their logs from the ProgressBoard view for the current session.
+- **Metadata**: Tabs display the model and when the stream was last active on a second line. Icons indicate the agent type and if multiple output files were generated.
 
 ## Content Area
 
