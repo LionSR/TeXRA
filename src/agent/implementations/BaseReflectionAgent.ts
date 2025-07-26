@@ -45,6 +45,7 @@ import { OutputHandler, NamedOutputFile, IOutputHandler } from '@agent/output';
 import { messageToSkeleton } from '@agent/utils/messageSkeletonUtils';
 import { BaseAgent } from '@agent/implementations/BaseAgent';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
+import { UsageStatsManager } from '@agent/utils';
 
 // System imports - common utilities
 import { getConfig } from '@utils/config';
@@ -67,6 +68,7 @@ export abstract class BaseReflectionAgent extends BaseAgent {
   /** Handler for output file processing and validation. */
   protected outputHandler: IOutputHandler;
   protected latexMediaManager: LatexMediaManager;
+  protected usageStats: UsageStatsManager;
 
   constructor(
     modelHandler: IModelHandler,
@@ -104,13 +106,17 @@ export abstract class BaseReflectionAgent extends BaseAgent {
     this.outputHandler = new OutputHandler(
       this.agentSetting,
       this.agentConfig,
-      this.modelHandler,
       this.logId,
       this.baseFiles,
       this.logger,
     );
 
     this.latexMediaManager = new LatexMediaManager(this.logger);
+    this.usageStats = new UsageStatsManager(
+      this.modelHandler,
+      this.logger.channelId,
+      this.logger,
+    );
   }
 
   /**
@@ -481,7 +487,7 @@ export abstract class BaseReflectionAgent extends BaseAgent {
   /**
    * Processes output files for current round.
    * This method orchestrates the overall output processing flow with clear separation of concerns:
-   * 1. Statistics handling via printStatistics
+   * 1. Statistics handling via UsageStatsManager
    * 2. LaTeX diff operations via handleLatexdiffofOutput (only when endTurn is true)
    *
    * The actual file processing is handled separately in processOutputFiles.
@@ -497,7 +503,7 @@ export abstract class BaseReflectionAgent extends BaseAgent {
     processGroupId?: string,
   ): Promise<string[]> {
     // Print statistics at the end of each round
-    await this.outputHandler.printStatistics(stateGlobal, processGroupId);
+    await this.usageStats.printStatistics(stateGlobal, processGroupId);
 
     // If this is the end of a turn, handle latexdiff operations as a separate step
     if (
