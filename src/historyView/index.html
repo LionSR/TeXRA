@@ -29,7 +29,8 @@
           "@common/webview/commands.js": "${commandsUri}",
           "@common/webviewContext.js": "${webviewContextUri}",
           "@common/domUtils.js": "${domUtilsUri}",
-          "@common/templateUtils.js": "${templateUtilsUri}"
+          "@common/templateUtils.js": "${templateUtilsUri}",
+          "@common/iconButtonInitializer.js": "${iconButtonInitializerUri}"
         }
       }
     </script>
@@ -52,16 +53,14 @@
             id="prevMatch"
             class="vscode-button search-nav-btn"
             title="Previous match"
-          >
-            <i class="codicon codicon-chevron-up"></i>
-          </button>
+            data-icon="chevron-up"
+          ></button>
           <button
             id="nextMatch"
             class="vscode-button search-nav-btn"
             title="Next match"
-          >
-            <i class="codicon codicon-chevron-down"></i>
-          </button>
+            data-icon="chevron-down"
+          ></button>
           <span id="matchCount" class="match-count"></span>
         </div>
       </div>
@@ -79,15 +78,21 @@
         <div class="history-item-header">
           <div class="history-timestamp"></div>
           <div class="history-actions button-group">
-            <button class="vscode-button delete-btn" title="">
-              <i class="codicon codicon-trash"></i>
-            </button>
-            <button class="vscode-button restore-btn" title="">
-              <i class="codicon codicon-reply"></i>
-            </button>
-            <button class="vscode-button rerun-btn" title="">
-              <i class="codicon codicon-debug-rerun"></i>
-            </button>
+            <button
+              class="vscode-button delete-btn"
+              title=""
+              data-icon="trash"
+            ></button>
+            <button
+              class="vscode-button restore-btn"
+              title=""
+              data-icon="reply"
+            ></button>
+            <button
+              class="vscode-button rerun-btn"
+              title=""
+              data-icon="debug-rerun"
+            ></button>
           </div>
         </div>
         <div class="history-details basic-details"></div>
@@ -96,6 +101,11 @@
         </div>
         <button class="toggle-button"></button>
       </div>
+    </template>
+    <template id="iconButtonTemplate">
+      <button class="vscode-button">
+        <i class="codicon"></i>
+      </button>
     </template>
     <template id="codiconTemplate">
       <i class="codicon"></i>
