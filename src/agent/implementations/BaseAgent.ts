@@ -10,6 +10,7 @@ import { AgentPrompt, AgentSetting } from '../core/AgentDataclass';
 import { IAgent } from '../core/IAgent';
 import type { IModelHandler } from '../modelHandlers';
 import { buildUserVars } from '../utils/userVars';
+import { UsageStatsManager } from '@agent/utils';
 
 // Local imports - utilities
 import { SHORT_SLEEP_MS } from '@utils/config';
@@ -31,6 +32,7 @@ export abstract class BaseAgent implements IAgent {
   protected client: any;
   protected isInterrupted = false;
   protected abortController: AbortController | null = null;
+  protected usageStats: UsageStatsManager;
 
   private static runningAgents: Map<string, BaseAgent> = new Map();
 
@@ -54,6 +56,11 @@ export abstract class BaseAgent implements IAgent {
     const streamTabId = this.getStreamTabId();
     this.logger = new AgentLogger(streamTabId, true);
     this.modelHandler.setLogger(this.logger);
+    this.usageStats = new UsageStatsManager(
+      this.modelHandler,
+      this.logger.channelId,
+      this.logger,
+    );
   }
 
   /** Initialize the API client. */

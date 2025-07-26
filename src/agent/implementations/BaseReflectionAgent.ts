@@ -39,7 +39,6 @@ import type { ToolDefinition } from '@model';
 import { OutputHandler, NamedOutputFile, IOutputHandler } from '@agent/output';
 import { BaseAgent } from '@agent/implementations/BaseAgent';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
-import { UsageStatsManager } from '@agent/utils';
 
 // System imports - common utilities
 import { getConfig } from '@utils/config';
@@ -62,7 +61,6 @@ export abstract class BaseReflectionAgent extends BaseAgent {
   /** Handler for output file processing and validation. */
   protected outputHandler: IOutputHandler;
   protected latexMediaManager: LatexMediaManager;
-  protected usageStats: UsageStatsManager;
 
   constructor(
     modelHandler: IModelHandler,
@@ -106,11 +104,6 @@ export abstract class BaseReflectionAgent extends BaseAgent {
     );
 
     this.latexMediaManager = new LatexMediaManager(this.logger);
-    this.usageStats = new UsageStatsManager(
-      this.modelHandler,
-      this.logger.channelId,
-      this.logger,
-    );
   }
 
   /**
