@@ -149,6 +149,31 @@ export abstract class BaseAgent implements IAgent {
     await this.usageMonitor.recordUsage(stateGlobal, groupId);
   }
 
+  /**
+   * Start a log group for this agent's run and store its ID.
+   * @param parentGroupId Optional parent group
+   * @returns The created group ID
+   */
+  protected async startRunGroup(parentGroupId?: string): Promise<string> {
+    this.runGroupId = await this.logger.startGroup(
+      `Run: ${this.agentConfig.agent}@${this.agentConfig.model}`,
+      undefined,
+      parentGroupId,
+    );
+    return this.runGroupId;
+  }
+
+  /**
+   * End the current run group.
+   * @param status Status to mark for the group
+   */
+  protected endRunGroup(status: 'stopped' | 'error' = 'stopped'): void {
+    if (this.runGroupId) {
+      this.logger.endGroup(this.runGroupId, status);
+      this.runGroupId = null;
+    }
+  }
+
   public static getRunningAgent(
     streamTabId: StreamTabId,
   ): BaseAgent | undefined {
