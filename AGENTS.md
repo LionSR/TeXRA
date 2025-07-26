@@ -32,7 +32,7 @@ This document sets the common conventions for contributions. Follow these norms 
 
 - Use `getConfig` from `src/utils/configUtils` to read extension settings rather than calling `vscode.workspace.getConfiguration` directly.
 - For any filesystem access tied to the workspace, use helpers in `src/utils/workspaceFileUtils.ts`. These utilities automatically handle workspace-relative paths and use the VS Code `fs` APIs.
-- For extension storage operations (temporary assets like pasted images), use the utilities in `src/utils/files/workspaceStorageUtils.ts`.
+- Use `src/utils/files/storageFS.ts` for workspace and global storage (temporary assets like pasted images).
 - These helpers also provide cleanup methods to remove old files (pasted images are deleted after three days).
 - Generate names and resolve paths for pasted images through `src/utils/files/pastedImageUtils.ts`.
 - Interact with the logging system via `src/logger/logUtils`. Create a channel-specific logger with `logger.initialize(CHANNEL)` and log messages with `logger.info`, `logger.debug`, etc. Use `startGroup` and `endGroup` for nested log blocks.
