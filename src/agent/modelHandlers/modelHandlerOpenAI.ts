@@ -10,7 +10,7 @@ import { countTokens } from 'gpt-tokenizer';
 import { WorkspaceFS } from '@utils/files';
 import { cleanFileContent } from '@replacement/engine';
 import xmlUtils from '@utils/text/xmlUtils';
-import { formatProviderError } from '@common/errors/sdkErrorUtils';
+import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
 
 // Local imports - agent components
 import type { AgentConfig } from '../core/AgentConfig';
@@ -192,7 +192,7 @@ export class ModelHandlerOpenAI extends ModelHandler<
         // we should also make sure partial results can be returned in the presence of errors!
       } catch (err) {
         this.logger.error(
-          formatProviderError('Error in createResponse(streaming)', err),
+          `Error in createResponse(streaming): ${getSdkErrorMessage(err)}`,
         );
         throw err;
       }
@@ -204,7 +204,9 @@ export class ModelHandlerOpenAI extends ModelHandler<
         });
         return response;
       } catch (err) {
-        this.logger.error(formatProviderError('Error in createResponse', err));
+        this.logger.error(
+          `Error in createResponse: ${getSdkErrorMessage(err)}`,
+        );
         throw err;
       }
     }

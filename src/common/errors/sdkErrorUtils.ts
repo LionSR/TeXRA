@@ -113,10 +113,3 @@ export function getSdkErrorMessage(err: unknown): string {
 
   return 'An unexpected error occurred.';
 }
-
-/**
- * Formats a provider error with a custom prefix.
- */
-export function formatProviderError(prefix: string, err: unknown): string {
-  return `${prefix}: ${getSdkErrorMessage(err)}`;
-}
