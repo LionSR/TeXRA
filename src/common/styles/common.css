@@ -226,3 +226,28 @@ select:focus {
   color: var(--vscode-textLink-activeForeground);
   text-decoration: underline;
 }
+
+/* Shared styling for expandable summary blocks */
+.details-summary {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-small);
+  padding: var(--spacing-tiny) 0;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+  opacity: var(--opacity-normal);
+}
+
+.details-summary:hover {
+  opacity: 1;
+}
+
+.details-summary::-webkit-details-marker {
+  display: none;
+}
+
+.details-summary .toggle-icon {
+  opacity: var(--opacity-subtle);
+  font-size: var(--font-size-sm);
+}

@@ -7,36 +7,10 @@
 .special-details {
   margin: var(--spacing-small) 0;
 }
-
-.special-details summary {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-small);
-  padding: var(--spacing-tiny) 0;
-  cursor: pointer;
-  list-style: none;
-  user-select: none;
-  opacity: var(--opacity-normal);
-}
-
-.special-details summary:hover {
-  opacity: 1;
-}
-
-.special-details summary::-webkit-details-marker {
-  display: none;
-}
-
 .special-details .special-content {
   padding: var(--spacing-small) 0 var(--spacing-medium) var(--spacing-large);
   /* Remove max-height to prevent nested scrollbars */
   overflow: visible;
-}
-
-/* Toggle icon styling */
-.special-details summary .toggle-icon {
-  opacity: var(--opacity-subtle);
-  font-size: var(--font-size-sm);
 }
 
 /* Style markdown elements in special content */
