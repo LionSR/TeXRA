@@ -187,29 +187,6 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
       // Other operations
       [MAIN_VIEW_COMMANDS.ACCEPT_EDITED]: async (m) =>
         this.executionManager.handleAcceptEdited(m),
-
-      // Checkbox update operations - handled client-side, empty handlers to prevent warnings
-      [MAIN_VIEW_COMMANDS.UPDATE_REFLECT]: async () => {
-        /* State saved client-side */
-      },
-      [MAIN_VIEW_COMMANDS.UPDATE_ATTACH_TEX_COUNT]: async () => {
-        /* State saved client-side */
-      },
-      [MAIN_VIEW_COMMANDS.UPDATE_AUTO_EXTRACT_FIGURE]: async () => {
-        /* State saved client-side */
-      },
-      [MAIN_VIEW_COMMANDS.UPDATE_AUTO_EXTRACT_TIKZ_FIGURE]: async () => {
-        /* State saved client-side */
-      },
-      [MAIN_VIEW_COMMANDS.UPDATE_AUTO_COMPILE_INPUT_PDF]: async () => {
-        /* State saved client-side */
-      },
-      [MAIN_VIEW_COMMANDS.UPDATE_USE_PREFILL_FROM_INPUT]: async () => {
-        /* State saved client-side */
-      },
-      [MAIN_VIEW_COMMANDS.UPDATE_PRINT_INPUT_PROMPT]: async () => {
-        /* State saved client-side */
-      },
     };
   }
 
