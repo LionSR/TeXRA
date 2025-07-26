@@ -14,25 +14,15 @@ import {
   EDITED_FILE,
 } from '../constants.js';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
+import { BaseUIManager } from './BaseUIManager.js';
 
-export class ActionButtonManager {
+export class ActionButtonManager extends BaseUIManager {
   constructor(vscodeInstance = vscode, fileList, state, instructionMgr) {
+    super();
     this.vscode = vscodeInstance;
     this.fileList = fileList;
     this.state = state;
     this.instructionManager = instructionMgr;
-    this._listeners = [];
-  }
-
-  _addListener(elementOrId, event, handler) {
-    const element =
-      typeof elementOrId === 'string'
-        ? safeGetElementById(elementOrId)
-        : elementOrId;
-    if (element) {
-      element.addEventListener(event, handler);
-      this._listeners.push({ element, event, handler });
-    }
   }
 
   _getSingleFileData(fileTypes = ['input', 'reference', 'auxiliary', 'media']) {
@@ -66,7 +56,7 @@ export class ActionButtonManager {
   }
 
   _setupInstructionButtons() {
-    this._addListener(ELEMENT_IDS.ERASE_INSTRUCTION_BUTTON, 'click', () => {
+    this.addListener(ELEMENT_IDS.ERASE_INSTRUCTION_BUTTON, 'click', () => {
       const instruction = safeGetElementById(ELEMENT_IDS.INSTRUCTION);
       if (instruction) {
         instruction.value = '';
@@ -75,7 +65,7 @@ export class ActionButtonManager {
       }
     });
 
-    this._addListener(ELEMENT_IDS.MAGIC_POLISH_BUTTON, 'click', () => {
+    this.addListener(ELEMENT_IDS.MAGIC_POLISH_BUTTON, 'click', () => {
       const instruction = safeGetElementById(ELEMENT_IDS.INSTRUCTION);
       if (instruction && instruction.value.trim()) {
         const agent = safeGetElementValue('agent');
@@ -96,7 +86,7 @@ export class ActionButtonManager {
   }
 
   _setupExecuteButtons() {
-    this._addListener(ELEMENT_IDS.EXECUTE_BUTTON, 'click', () => {
+    this.addListener(ELEMENT_IDS.EXECUTE_BUTTON, 'click', () => {
       const agent = safeGetElementValue('agent');
       const model = safeGetElementValue('model');
       const instruction = safeGetElementValue(ELEMENT_IDS.INSTRUCTION);
@@ -119,7 +109,7 @@ export class ActionButtonManager {
       });
     });
 
-    this._addListener(ELEMENT_IDS.MERGE_BUTTON, 'click', () => {
+    this.addListener(ELEMENT_IDS.MERGE_BUTTON, 'click', () => {
       const { inputFile } = this._getSingleFileData(['input']);
       const editedFile = safeGetElementValue(EDITED_FILE);
 
@@ -139,7 +129,7 @@ export class ActionButtonManager {
       { id: ELEMENT_IDS.PACK_BUTTON, action: 'pack' },
       { id: ELEMENT_IDS.CLEAN_BUTTON, action: 'clean' },
     ].forEach(({ id, action }) => {
-      this._addListener(id, 'click', () => {
+      this.addListener(id, 'click', () => {
         const { inputFile } = this._getSingleFileData(['input']);
         const agent = safeGetElementValue('agent');
         const model = safeGetElementValue('model');
@@ -202,7 +192,7 @@ export class ActionButtonManager {
   }
 
   _setupLatexdiffButtons() {
-    this._addListener(ELEMENT_IDS.LATEXDIFF_BUTTON, 'click', () => {
+    this.addListener(ELEMENT_IDS.LATEXDIFF_BUTTON, 'click', () => {
       const { inputFile } = this._getSingleFileData(['input']);
       const baseFile = safeGetElementValue(BASE_FILE);
       const editedFile = safeGetElementValue(EDITED_FILE);
@@ -220,7 +210,7 @@ export class ActionButtonManager {
       });
     });
 
-    this._addListener(ELEMENT_IDS.LATEXDIFF_VC_BUTTON, 'click', () => {
+    this.addListener(ELEMENT_IDS.LATEXDIFF_VC_BUTTON, 'click', () => {
       const { inputFile } = this._getSingleFileData(['input']);
       const baseFile = safeGetElementValue(BASE_FILE);
       const commitHash = safeGetElementValue(ELEMENT_IDS.COMMIT_SELECT);
@@ -242,7 +232,7 @@ export class ActionButtonManager {
       { id: ELEMENT_IDS.PACK_LATEXDIFF_VC_BUTTON, action: 'pack' },
       { id: ELEMENT_IDS.CLEAN_LATEXDIFF_VC_BUTTON, action: 'clean' },
     ].forEach(({ id, action }) => {
-      this._addListener(id, 'click', () => {
+      this.addListener(id, 'click', () => {
         const { inputFile } = this._getSingleFileData(['input']);
         const baseFile = safeGetElementValue(BASE_FILE);
         const commitHash = safeGetElementValue(ELEMENT_IDS.COMMIT_SELECT);
@@ -268,7 +258,7 @@ export class ActionButtonManager {
   }
 
   _setupCompareButtons() {
-    this._addListener(ELEMENT_IDS.COMPARE_BUTTON, 'click', () => {
+    this.addListener(ELEMENT_IDS.COMPARE_BUTTON, 'click', () => {
       const baseFile = safeGetElementValue(BASE_FILE);
       const editedFile = safeGetElementValue(EDITED_FILE);
       if (baseFile && editedFile) {
@@ -285,7 +275,7 @@ export class ActionButtonManager {
       }
     });
 
-    this._addListener(ELEMENT_IDS.ACCEPT_BUTTON, 'click', () => {
+    this.addListener(ELEMENT_IDS.ACCEPT_BUTTON, 'click', () => {
       const baseFile = safeGetElementValue(BASE_FILE);
       const editedFile = safeGetElementValue(EDITED_FILE);
       if (baseFile && editedFile) {
@@ -308,12 +298,5 @@ export class ActionButtonManager {
     this._setupExecuteButtons();
     this._setupLatexdiffButtons();
     this._setupCompareButtons();
-  }
-
-  cleanup() {
-    this._listeners.forEach(({ element, event, handler }) => {
-      element.removeEventListener(event, handler);
-    });
-    this._listeners = [];
   }
 }
