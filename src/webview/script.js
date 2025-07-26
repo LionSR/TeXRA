@@ -8,6 +8,7 @@ import {
   instructionManager,
   toggleManager,
 } from './modules/domHandlers.js';
+import { initializeIconButtons } from '@common/iconButtonInitializer.js';
 
 // Register handlers immediately so early messages aren't missed
 setupHandlers({ requestData: false });
@@ -19,6 +20,7 @@ window.addEventListener('beforeunload', () => {
 
 // Setup UI when DOM is loaded
 document.addEventListener('DOMContentLoaded', function () {
+  initializeIconButtons();
   mainViewState.restore();
   instructionManager.setup();
   mainViewDomHandler.initializeUI();
