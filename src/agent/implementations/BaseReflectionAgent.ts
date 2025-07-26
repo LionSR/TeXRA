@@ -157,33 +157,12 @@ export abstract class BaseReflectionAgent extends BaseAgent {
       throw error;
     }
 
-    const fileInfos = await this.outputHandler.gatherOutputFileInfo(currRound);
-
-    // Validate expected outputs if this is the end of the turn
-    if (endTurn) {
-      try {
-        await this.outputHandler.validateExpectedOutputs(
-          outputFile,
-          currRound,
-          roundGroupId,
-        );
-        this.logger.debug(
-          `Expected outputs validated for round ${currRound}`,
-          roundGroupId,
-        );
-      } catch (error) {
-        this.logger.error(
-          `Expected output validation failed after round ${currRound}: ${
-            error instanceof Error ? error.message : String(error)
-          }`,
-          roundGroupId,
-        );
-      }
-    }
-    bus.emit('addOutputFiles', {
-      stream: this.logger.channelId,
-      filesByRound: { [currRound]: fileInfos },
-    });
+    await this.outputHandler.finalizeRound(
+      outputFile,
+      currRound,
+      endTurn,
+      roundGroupId,
+    );
   }
 
   /**
