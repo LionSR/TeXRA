@@ -3,6 +3,7 @@ import { formatTokens } from '../formatters.js';
 import { COMMANDS, ELEMENT_IDS } from '../constants.js';
 import { vscode } from '@common/webviewContext.js';
 import { createFromTemplate } from '@common/templateUtils.js';
+import { initializeIconButtons } from '@common/iconButtonInitializer.js';
 
 /**
  * Manages file list rendering.
@@ -149,6 +150,7 @@ export class FileList {
 
       // Append the round group to the container
       container.appendChild(roundGroup);
+      initializeIconButtons(roundGroup);
     });
   }
 
