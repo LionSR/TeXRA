@@ -94,24 +94,26 @@ export async function runResponseCycle(
       false,
     );
     if (shouldSaveMessageObjects) {
-      const outputFileBaseName = outputFile.replace('.xml', '');
+      const outputFileBaseName = path.basename(outputFile, '.xml');
       const debugFileName = `${outputFileBaseName}_cont${stateRound.continuationCount}.json`;
       const debugFilePath = executionId
         ? path.join(getRunDir(executionId), debugFileName)
         : WorkspaceFS.fullPath(debugFileName);
       try {
         if (executionId) {
+          const runDirPath = path.join(TASK_RUNS_DIR, executionId, debugFileName);
           await StorageFS.write(
-            path.join(TASK_RUNS_DIR, executionId, debugFileName),
+            runDirPath,
             JSON.stringify(messages, null, 2),
           );
+          logger.info(`Saved message object to ${path.join(getRunDir(executionId), debugFileName)}`, taskGroupId);
         } else {
           await WorkspaceFS.writeFile(
             WorkspaceFS.relativePath(debugFilePath),
             JSON.stringify(messages, null, 2),
           );
+          logger.info(`Saved message object to ${debugFilePath}`, taskGroupId);
         }
-        logger.info(`Saved message object to ${debugFilePath}`, taskGroupId);
       } catch (error) {
         logger.error(`Failed to save message object: ${error}`, taskGroupId);
       }
