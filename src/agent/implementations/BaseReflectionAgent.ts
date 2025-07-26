@@ -46,7 +46,13 @@ import { getConfig } from '@utils/config';
 // Shared constants
 import { K_SLICE } from '@utils/config';
 
-/** Options for handling round output */
+/**
+ * Options for handling round output.
+ * 
+ * @property outputFile - The path to the file where the round's output will be saved.
+ * @property endTurn - A flag indicating whether the current turn should be ended after processing.
+ * @property processGroupId - (Optional) An identifier for grouping related processes, useful for tracking or managing outputs.
+ */
 export interface RoundOutputOptions {
   outputFile: string;
   endTurn: boolean;
