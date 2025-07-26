@@ -34,6 +34,7 @@ import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 
 import { getStreamTabId } from '@/logger/streamUtils';
 import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
+import { ensureRunDir } from '@utils/files/taskRunStorage';
 import { IAgent } from '@agent/core/IAgent';
 
 const CHANNEL = 'executeAgent';
@@ -152,6 +153,11 @@ async function executeAgentWithLogging<T extends IAgent>(
   try {
     // Create agent instance and extract its declared type
     const { agent, agentType } = await createAgentFn();
+
+    if (executionId && 'setExecutionId' in agent) {
+      (agent as any).setExecutionId(executionId);
+      await ensureRunDir(executionId);
+    }
 
     // Get the full stream tab ID
     const config = agent.config;

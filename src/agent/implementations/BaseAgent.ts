@@ -16,7 +16,7 @@ import { AgentStateGlobal } from '../core/AgentState';
 // Local imports - utilities
 import { SHORT_SLEEP_MS } from '@utils/config';
 import { sleep } from '@utils/helpers';
-import type { StreamTabId } from '@agent/types/IdentifierTypes';
+import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
 
 /**
  * Minimal abstract base class providing shared setup and interruption logic.
@@ -34,6 +34,7 @@ export abstract class BaseAgent implements IAgent {
   protected client: any;
   protected isInterrupted = false;
   protected abortController: AbortController | null = null;
+  protected executionId?: ExecutionId;
 
   private static runningAgents: Map<string, BaseAgent> = new Map();
 
@@ -140,6 +141,14 @@ export abstract class BaseAgent implements IAgent {
       return true;
     }
     return false;
+  }
+
+  public setExecutionId(id: ExecutionId): void {
+    this.executionId = id;
+  }
+
+  public getExecutionId(): ExecutionId | undefined {
+    return this.executionId;
   }
 
   protected async trackRoundUsage(
