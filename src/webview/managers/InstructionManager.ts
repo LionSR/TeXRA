@@ -70,64 +70,6 @@ export class InstructionManager {
     }
   }
 
-  /**
-   * Call the text enhancement utility without any progress handling.
-   */
-  private async _polishInstructionText(
-    text: string,
-    context: FileContext,
-  ): Promise<{ success: boolean; text: string; error?: string }> {
-    return polishTextWithAI(text, context);
-  }
-
-  /**
-   * Show progress while polishing the instruction text.
-   */
-  private async _polishWithProgress(
-    text: string,
-    context: FileContext,
-    webviewView: vscode.WebviewView,
-  ): Promise<void> {
-    await vscode.window.withProgress(
-      {
-        location: vscode.ProgressLocation.Notification,
-        title: 'Polishing your instruction text',
-        cancellable: false,
-      },
-      async (progress) => {
-        try {
-          progress.report({ message: 'Preparing text and context...' });
-          await sleep(300);
-          progress.report({
-            message: 'Sending to AI for polishing...',
-            increment: 30,
-          });
-          const result = await this._polishInstructionText(text, context);
-          progress.report({ message: 'Applying changes...', increment: 60 });
-          await sleep(300);
-          if (result.success) {
-            webviewView.webview.postMessage({
-              command: MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_POLISHED,
-              text: result.text,
-            });
-          } else {
-            vscode.window.showErrorMessage(
-              result.error || 'Error polishing text',
-            );
-          }
-        } catch (error) {
-          vscode.window.showErrorMessage(
-            `Error polishing text: ${error instanceof Error ? error.message : 'Unknown error'}`,
-          );
-          logger.error(
-            CHANNEL,
-            `Error in handlePolishInstructionText: ${error instanceof Error ? error.message : String(error)}`,
-          );
-        }
-      },
-    );
-  }
-
   async handlePolishInstructionText(
     message: any,
     webviewView: vscode.WebviewView,
@@ -167,7 +109,48 @@ export class InstructionManager {
         );
       }
 
-      await this._polishWithProgress(message.text, fileContext, webviewView);
+      await vscode.window.withProgress(
+        {
+          location: vscode.ProgressLocation.Notification,
+          title: 'Polishing your instruction text',
+          cancellable: false,
+        },
+        async (progress) => {
+          try {
+            progress.report({ message: 'Preparing text and context...' });
+            await sleep(300);
+            progress.report({
+              message: 'Sending to AI for polishing...',
+              increment: 30,
+            });
+            const result = await polishTextWithAI(message.text, fileContext);
+            progress.report({ message: 'Applying changes...', increment: 60 });
+            await sleep(300);
+            if (result.success) {
+              webviewView.webview.postMessage({
+                command: MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_POLISHED,
+                text: result.text,
+              });
+            } else {
+              vscode.window.showErrorMessage(
+                result.error || 'Error polishing text',
+              );
+            }
+          } catch (error) {
+            vscode.window.showErrorMessage(
+              `Error polishing text: ${
+                error instanceof Error ? error.message : 'Unknown error'
+              }`,
+            );
+            logger.error(
+              CHANNEL,
+              `Error in handlePolishInstructionText: ${
+                error instanceof Error ? error.message : String(error)
+              }`,
+            );
+          }
+        },
+      );
     } catch (error) {
       vscode.window.showErrorMessage(
         `Error setting up text polishing: ${error instanceof Error ? error.message : 'Unknown error'}`,
