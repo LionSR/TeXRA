@@ -38,4 +38,12 @@ export interface IOutputHandler {
     currRound: number,
     groupId?: string,
   ): Promise<void>;
+
+  /** Finalize processing for a round. */
+  finalizeRound(
+    outputFile: string,
+    currRound: number,
+    endTurn: boolean,
+    groupId?: string,
+  ): Promise<void>;
 }
