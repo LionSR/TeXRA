@@ -10,6 +10,10 @@ import { mainViewDomHandler } from './domHandlers.js';
 import { fileList } from './uiManagers/FileList.js';
 import { fileSelect } from './uiManagers/FileSelect.js';
 import { webviewEventBus } from './eventBus.js';
+// Handler submodules
+import { createThemeHandlers } from './handlers/themeHandlers.js';
+import { createRecordingHandlers } from './handlers/recordingHandlers.js';
+import { createFileHandlers } from './handlers/fileHandlers.js';
 
 import {
   FILE_TYPES,
@@ -39,22 +43,19 @@ export class MainViewMessageHandler {
     // Track file list event handlers for cleanup
     this._fileListHandlers = {};
 
+    const ctx = {
+      postHandle: this._postHandle.bind(this),
+      getElement: this._getElement.bind(this),
+      setToggleIcon: this._setToggleIcon.bind(this),
+      setupFileListHandler: this._setupFileListHandler.bind(this),
+    };
+
     this._handlers = {
-      ...this._createThemeHandlers(),
+      ...createThemeHandlers({ postHandle: ctx.postHandle }),
       ...this._createStateHandlers(),
       ...this._createInstructionHandlers(),
-      ...this._createRecordingHandlers(),
-      ...this._createSingleFileHandlers(),
-      ...this._createMultiFileHandlers(),
-      ...this._createMiscHandlers(),
-    };
-  }
-
-  _createThemeHandlers() {
-    return {
-      [MAIN_VIEW_COMMANDS.THEME_SET]: (m) => this.handleSetTheme(m),
-      [MAIN_VIEW_COMMANDS.DEBUG_MODE_SET]: (m) => this.handleSetDebugMode(m),
-      [MAIN_VIEW_COMMANDS.MODEL_SELECTED]: (m) => this.handleModelSelected(m),
+      ...createRecordingHandlers({ postHandle: ctx.postHandle }),
+      ...createFileHandlers(ctx),
     };
   }
 
@@ -75,75 +76,15 @@ export class MainViewMessageHandler {
     };
   }
 
-  _createRecordingHandlers() {
-    return {
-      [MAIN_VIEW_COMMANDS.RECORDING_STARTED]: () =>
-        this.handleRecordingStarted(),
-      [MAIN_VIEW_COMMANDS.RECORDING_ERROR]: () => this.handleRecordingError(),
-    };
-  }
-
-  _createSingleFileHandlers() {
-    return {
-      [MAIN_VIEW_COMMANDS.SET_INPUT_FILE]: (m) => this.handleSetInputFile(m),
-      [MAIN_VIEW_COMMANDS.SET_REFERENCE_FILE]: (m) =>
-        this.handleSetReferenceFile(m),
-      [MAIN_VIEW_COMMANDS.SET_AUXILIARY_FILE]: (m) =>
-        this.handleSetAuxiliaryFile(m),
-      [MAIN_VIEW_COMMANDS.SET_MEDIA_FILE]: (m) => this.handleSetMediaFile(m),
-      [MAIN_VIEW_COMMANDS.SET_EDITED_FILE]: (m) => this.handleSetEditedFile(m),
-      [MAIN_VIEW_COMMANDS.INPUT_FILE_SELECTED]: (m) =>
-        this.handleInputFileSelected(m),
-      [MAIN_VIEW_COMMANDS.REFERENCE_FILE_SELECTED]: (m) =>
-        this.handleReferenceFileSelected(m),
-      [MAIN_VIEW_COMMANDS.AUXILIARY_FILE_SELECTED]: (m) =>
-        this.handleAuxiliaryFileSelected(m),
-      [MAIN_VIEW_COMMANDS.MEDIA_FILE_SELECTED]: (m) =>
-        this.handleMediaFileSelected(m),
-      [MAIN_VIEW_COMMANDS.EDITED_FILE_SELECTED]: (m) =>
-        this.handleEditedFileSelected(m),
-      [MAIN_VIEW_COMMANDS.SET_DEFAULT_OUTPUT_FILES]: (m) =>
-        this.handleSetDefaultOutputFiles(m),
-    };
-  }
-
-  _createMultiFileHandlers() {
-    return {
-      [MAIN_VIEW_COMMANDS.SET_INPUT_FILES]: (m) => this.handleSetInputFiles(m),
-      [MAIN_VIEW_COMMANDS.SET_REFERENCE_FILES]: (m) =>
-        this.handleSetReferenceFiles(m),
-      [MAIN_VIEW_COMMANDS.SET_AUXILIARY_FILES]: (m) =>
-        this.handleSetAuxiliaryFiles(m),
-      [MAIN_VIEW_COMMANDS.SET_MEDIA_FILES]: (m) => this.handleSetMediaFiles(m),
-      [MAIN_VIEW_COMMANDS.ADD_MEDIA_FILE]: (m) => this.handleAddMediaFile(m),
-      [MAIN_VIEW_COMMANDS.SET_OUTPUT_FILES]: (m) =>
-        this.handleSetOutputFiles(m),
-    };
-  }
-
-  _createMiscHandlers() {
-    return {
-      [MAIN_VIEW_COMMANDS.SET_RECENT_COMMITS]: (m) =>
-        this.handleSetRecentCommits(m),
-      [MAIN_VIEW_COMMANDS.SET_CURRENT_FILE]: (m) =>
-        this.handleSetCurrentFile(m),
-      [MAIN_VIEW_COMMANDS.SET_OPENED_FILES]: (m) =>
-        this.handleSetOpenedFiles(m),
-      [MAIN_VIEW_COMMANDS.SET_BASE_FILE]: (m) => this.handleSetBaseFile(m),
-    };
-  }
-
   /** Register handlers and optionally request initial data. */
   setup(options = {}) {
     const { requestData = true } = options;
-    this._cleanupFn = registerMessageHandlers(this._handlers);
+    if (!this._cleanupFn) {
+      this._cleanupFn = registerMessageHandlers(this._handlers);
+    }
     if (requestData) {
       this._initializeDataRequests();
     }
-  }
-
-  requestInitialData() {
-    this._initializeDataRequests();
   }
 
   cleanup() {
@@ -368,25 +309,6 @@ export class MainViewMessageHandler {
   }
 
   /* ---------- Command handlers ---------- */
-  // Theme & debug
-  handleSetTheme(message) {
-    if (!message || typeof message.theme !== 'string') {
-      console.warn('Invalid theme message:', message);
-      return;
-    }
-    document.body.className = message.theme;
-    this._postHandle();
-  }
-
-  handleSetDebugMode(message) {
-    mainViewDomHandler.setDebugMode(message.debugMode);
-    this._postHandle();
-  }
-
-  handleModelSelected(message) {
-    safeSetElementValue('model', message.model);
-    this._postHandle();
-  }
 
   // State restoration
   handleRestoreState(message) {
@@ -438,192 +360,8 @@ export class MainViewMessageHandler {
     );
     this._postHandle();
   }
-
-  // Recording
-  handleRecordingStarted() {
-    webviewEventBus.dispatchEvent(
-      new CustomEvent('recordingUIUpdate', { detail: { recording: true } }),
-    );
-    this._postHandle();
-  }
-
-  handleRecordingError() {
-    webviewEventBus.dispatchEvent(
-      new CustomEvent('recordingUIUpdate', { detail: { recording: false } }),
-    );
-    this._postHandle();
-  }
-
-  // Single file updates
-  handleSetInputFile(message) {
-    fileSelect.update(INPUT_FILE, message.files);
-    this._postHandle();
-  }
-
-  handleSetReferenceFile(message) {
-    fileSelect.update(REFERENCE_FILE, message.files);
-    this._postHandle();
-  }
-
-  handleSetAuxiliaryFile(message) {
-    fileSelect.update(AUXILIARY_FILE, message.files);
-    this._postHandle();
-  }
-
-  handleSetMediaFile(message) {
-    fileSelect.update(MEDIA_FILE, message.files);
-    this._postHandle();
-  }
-
-  handleSetEditedFile(message) {
-    fileSelect.update(EDITED_FILE, message.files);
-    this._postHandle();
-  }
-
-  handleInputFileSelected(message) {
-    safeSetElementValue(INPUT_FILE, message.filePath);
-    this._postHandle();
-  }
-
-  handleReferenceFileSelected(message) {
-    safeSetElementValue(REFERENCE_FILE, message.filePath);
-    this._postHandle();
-  }
-
-  handleAuxiliaryFileSelected(message) {
-    safeSetElementValue(AUXILIARY_FILE, message.filePath);
-    this._postHandle();
-  }
-
-  handleMediaFileSelected(message) {
-    safeSetElementValue(MEDIA_FILE, message.filePath);
-    this._postHandle();
-  }
-
-  handleEditedFileSelected(message) {
-    safeSetElementValue(EDITED_FILE, message.filePath);
-    this._postHandle();
-  }
-
-  handleSetDefaultOutputFiles(message) {
-    fileSelect.setAgentDefaultOutputFiles(message.files || []);
-    this._postHandle();
-  }
-
-  // Multi-file updates
-  handleSetInputFiles(message) {
-    fileList.update('inputFiles', 'toggleInputFiles', message.files);
-    this._setupFileListHandler('input', this._getElement('inputFiles'));
-    this._postHandle();
-  }
-
-  handleSetReferenceFiles(message) {
-    fileList.update('referenceFiles', 'toggleReferenceFiles', message.files);
-    this._setupFileListHandler('reference', this._getElement('referenceFiles'));
-    this._postHandle();
-  }
-
-  handleSetAuxiliaryFiles(message) {
-    fileList.update('auxiliaryFiles', 'toggleAuxiliaryFiles', message.files);
-    this._setupFileListHandler('auxiliary', this._getElement('auxiliaryFiles'));
-    this._postHandle();
-  }
-
-  handleSetMediaFiles(message) {
-    fileList.update('mediaFiles', 'toggleMediaFiles', message.files);
-    this._setupFileListHandler('media', this._getElement('mediaFiles'));
-    this._postHandle();
-  }
-
-  handleAddMediaFile(message) {
-    const listDiv = this._getElement('mediaFiles');
-    const existingFiles = listDiv ? fileList.getSelected(listDiv) : [];
-    fileList.update('mediaFiles', 'toggleMediaFiles', [
-      ...existingFiles,
-      message.file,
-    ]);
-    this._setupFileListHandler('media', listDiv);
-
-    const container = this._getElement('mediaFilesContainer');
-    if (container && container.style.display === 'none') {
-      container.style.display = 'block';
-      const toggleIcon = this._getElement('toggleMediaFiles');
-      this._setToggleIcon(toggleIcon, true);
-    }
-
-    this._postHandle();
-  }
-
-  handleSetOutputFiles(message) {
-    fileList.update(
-      ELEMENT_IDS.OUTPUT_FILES,
-      ELEMENT_IDS.TOGGLE_OUTPUT_FILES,
-      message.files,
-    );
-    this._setupFileListHandler(
-      'output',
-      this._getElement(ELEMENT_IDS.OUTPUT_FILES),
-    );
-    this._postHandle();
-  }
-
-  // Misc updates
-  handleSetRecentCommits(message) {
-    fileSelect.handleRecentCommits(message);
-    this._postHandle();
-  }
-
-  handleSetCurrentFile(message) {
-    fileSelect.handleSetCurrentFile({
-      fileType: message.fileType,
-      filePath: message.filePath,
-    });
-    this._postHandle();
-  }
-
-  handleSetOpenedFiles(message) {
-    if (message.fileType) {
-      const fileType = message.fileType.replace('Files', '');
-      const singleFileId = `${uncapitalize(fileType)}File`;
-      const multipleFileId = `${uncapitalize(fileType)}Files`;
-      const toggleId = `toggle${capitalize(fileType)}Files`;
-
-      let filesToAdd = message.files ?? [];
-      if (message.shouldFilter) {
-        const singleFileSelect = this._getElement(singleFileId);
-        if (singleFileSelect && singleFileSelect.value) {
-          filesToAdd = filesToAdd.filter((f) => f !== singleFileSelect.value);
-        }
-      }
-
-      fileList.update(multipleFileId, toggleId, filesToAdd);
-    }
-    this._postHandle();
-  }
-
-  handleSetBaseFile(message) {
-    const currentBaseFileDiv = this._getElement(BASE_FILE);
-    if (currentBaseFileDiv) {
-      const currentBaseFile = currentBaseFileDiv.value;
-      fileSelect.update(BASE_FILE, message.files);
-
-      const state = mainViewState.get();
-      const storedBaseFile = state?.baseFile;
-
-      if (storedBaseFile && message.files.includes(storedBaseFile)) {
-        currentBaseFileDiv.value = storedBaseFile;
-      } else if (
-        message.preserveBaseFile &&
-        currentBaseFile &&
-        message.files.includes(currentBaseFile)
-      ) {
-        currentBaseFileDiv.value = currentBaseFile;
-      }
-
-      fileSelect.updateEdited(currentBaseFileDiv.value);
-    }
-    this._postHandle();
-  }
 }
 
-export const messageHandler = new MainViewMessageHandler();
+const handler = new MainViewMessageHandler();
+export const setup = handler.setup.bind(handler);
+export const cleanup = handler.cleanup.bind(handler);
