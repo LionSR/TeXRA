@@ -151,9 +151,9 @@ export abstract class BaseReflectionAgent extends BaseAgent {
       );
 
       await this.outputHandler.finalizeRound(
-        outputFile,
-        endTurn,
         currRound,
+        endTurn,
+        outputFile,
         roundGroupId,
       );
 

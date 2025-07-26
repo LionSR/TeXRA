@@ -278,21 +278,20 @@ export class OutputHandler implements IOutputHandler {
    * events with gathered file info.
    */
   public async finalizeRound(
-    outputFile: string,
-    endTurn: boolean,
     currRound: number,
+    endTurn: boolean,
+    outputFile?: string,
     groupId?: string,
   ): Promise<void> {
-    if (
-      endTurn &&
-      this.outputFiles[currRound] &&
-      this.outputFiles[currRound].length > 0
-    ) {
+    const hasOutputs =
+      this.outputFiles[currRound] && this.outputFiles[currRound].length > 0;
+
+    if (endTurn && hasOutputs) {
       const existingBase = await Promise.all(
         this.baseFiles.map(async (f) => await WorkspaceFS.exists(f)),
       );
 
-      if (existingBase.some((e) => e)) {
+      if (existingBase.some(Boolean)) {
         await this.handleLatexdiffofOutput(currRound, groupId);
       } else {
         this.logger.debug(
@@ -300,13 +299,26 @@ export class OutputHandler implements IOutputHandler {
           groupId,
         );
       }
+
+      if (outputFile) {
+        try {
+          await this.validateExpectedOutputs(outputFile, currRound, groupId);
+          this.logger.debug(
+            `Expected outputs validated for round ${currRound}`,
+            groupId,
+          );
+        } catch (error) {
+          this.logger.error(
+            `Expected output validation failed after round ${currRound}: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            groupId,
+          );
+        }
+      }
     }
 
     const fileInfos = await this.gatherOutputFileInfo(currRound);
-
-    if (endTurn) {
-      await this.validateExpectedOutputs(outputFile, currRound, groupId);
-    }
 
     bus.emit('addOutputFiles', {
       stream: this.channel,

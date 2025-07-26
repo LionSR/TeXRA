@@ -44,9 +44,9 @@ export interface IOutputHandler {
    * validating outputs and emitting update events.
    */
   finalizeRound(
-    outputFile: string,
-    endTurn: boolean,
     currRound: number,
+    endTurn: boolean,
+    outputFile?: string,
     groupId?: string,
   ): Promise<void>;
 }
