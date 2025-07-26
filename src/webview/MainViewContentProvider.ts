@@ -43,6 +43,10 @@ export class MainViewContentProvider extends BaseViewContentProvider {
         webview,
         'modules/uiManagers/ToggleManager.js',
       ),
+      baseUIManagerUri: this.getWebviewUri(
+        webview,
+        'modules/uiManagers/BaseUIManager.js',
+      ),
       fileInputManagerUri: this.getWebviewUri(
         webview,
         'modules/uiManagers/FileInputManager.js',
