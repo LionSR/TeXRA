@@ -41,21 +41,6 @@ const CHANNEL = 'executeAgent';
 const logger = new AgentLogger(CHANNEL);
 
 /**
- * Interface for agents that support execution ID tracking.
- */
-interface IExecutionIdTrackingAgent extends IAgent {
-  setExecutionId(id: ExecutionId): void;
-  getExecutionId(): ExecutionId | undefined;
-}
-
-/**
- * Type guard to check if an agent supports execution ID tracking.
- */
-function isExecutionIdTrackingAgent(agent: IAgent): agent is IExecutionIdTrackingAgent {
-  return 'setExecutionId' in agent && 'getExecutionId' in agent;
-}
-
-/**
  * Constructor signature for any agent implementation.
  */
 type AgentConstructor = {
@@ -169,8 +154,8 @@ async function executeAgentWithLogging<T extends IAgent>(
     // Create agent instance and extract its declared type
     const { agent, agentType } = await createAgentFn();
 
-    if (executionId && isExecutionIdTrackingAgent(agent)) {
-      agent.setExecutionId(executionId);
+    if (executionId && 'setExecutionId' in agent) {
+      (agent as any).setExecutionId(executionId);
       await ensureRunDir(executionId);
     }
 
