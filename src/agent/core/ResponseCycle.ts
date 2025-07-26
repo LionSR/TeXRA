@@ -101,12 +101,11 @@ export async function runResponseCycle(
         : WorkspaceFS.fullPath(debugFileName);
       try {
         if (executionId) {
-          const runDirPath = path.join(getRunDir(executionId), debugFileName);
           await StorageFS.write(
-            runDirPath,
+            debugFilePath,
             JSON.stringify(messages, null, 2),
           );
-          logger.info(`Saved message object to ${runDirPath}`, taskGroupId);
+          logger.info(`Saved message object to ${debugFilePath}`, taskGroupId);
         } else {
           await WorkspaceFS.writeFile(
             WorkspaceFS.relativePath(debugFilePath),
