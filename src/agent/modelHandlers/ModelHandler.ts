@@ -76,6 +76,7 @@ export abstract class ModelHandler<U = any, R = any>
         autoExtractTikzFigure: false,
         reflect: false,
         attachTeXCount: false,
+        attachDiagnostics: false,
         printInputPrompt: false,
         autoCompileInputPdf: false,
       },
