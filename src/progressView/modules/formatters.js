@@ -217,7 +217,7 @@ export class LogEntryFormatter {
       const icon = isThinking ? 'codicon-lightbulb' : 'codicon-pencil';
 
       return `<details class="special-details">
-        <summary>
+        <summary class="details-summary">
           <i class="${CHEVRON_RIGHT_CLASS} toggle-icon"></i>
           <i class="codicon ${icon}"></i>
           <span>${labelText}</span>
@@ -295,7 +295,7 @@ export class LogEntryFormatter {
       summary += ')';
 
       return `<details class="file-list-details">
-        <summary>
+        <summary class="details-summary">
           <i class="${CHEVRON_RIGHT_CLASS} toggle-icon"></i>
           <i class="codicon codicon-list-tree"></i>
           <span>${summary}</span>
@@ -365,7 +365,7 @@ export class LogEntryFormatter {
       const summary = `Missing outputs (${missingFiles.length})`;
 
       return `<details class="file-list-details">
-        <summary>
+        <summary class="details-summary">
           <i class="${CHEVRON_RIGHT_CLASS} toggle-icon"></i>
           <i class="codicon codicon-warning"></i>
           <span>${summary}</span>
@@ -429,7 +429,7 @@ export class LogEntryFormatter {
           : `Latexdiff results (${entries.length})`;
 
       return `<details class="latexdiff-details" open>
-        <summary>
+        <summary class="details-summary">
           <i class="${CHEVRON_DOWN_CLASS} toggle-icon"></i>
           <i class="codicon codicon-diff"></i>
           <span>${summary}</span>
@@ -514,7 +514,7 @@ export class LogEntryFormatter {
       }
 
       return `<details class="statistics-details" open>
-        <summary>
+        <summary class="details-summary">
           <i class="${CHEVRON_DOWN_CLASS} toggle-icon"></i>
           <i class="codicon codicon-dashboard"></i>
           <span>Statistics</span>
