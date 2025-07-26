@@ -280,9 +280,9 @@ export class OutputHandler implements IOutputHandler {
   public async finalizeRound(
     outputFile: string,
     currRound: number,
-    endTurn: boolean,
-    groupId?: string,
+    options: { endTurn: boolean; groupId?: string },
   ): Promise<void> {
+    const { endTurn, groupId } = options;
     const fileInfos = await this.gatherOutputFileInfo(currRound);
 
     if (endTurn) {
