@@ -1,5 +1,5 @@
 // Standard library imports
-// (none needed)
+import * as path from 'path';
 
 // Third-party imports
 // (none needed)
@@ -13,11 +13,14 @@ import { bestConnectionMethod } from '@latex';
 
 // Local imports - utilities
 import { WorkspaceFS } from '@utils/files';
+import { StorageFS } from '@utils/files';
+import { getRunDir, TASK_RUNS_DIR } from '@utils/files/taskRunStorage';
 import { getSystemPromptWithRules } from '@agent/utils/promptHelpers';
 import { messageToSkeleton } from '@agent/utils/messageSkeletonUtils';
 import { checkForMassiveRepetition } from '@agent/utils/text/repetitionUtils';
 import replacementEngine from '@replacement/engine';
 import xmlUtils from '@utils/text/xmlUtils';
+import type { ExecutionId } from '@agent/types/IdentifierTypes';
 
 // Local imports - agent components
 import type { AgentConfig } from './AgentConfig';
@@ -57,6 +60,7 @@ export async function runResponseCycle(
   toolState: ToolState,
   outputFile: string,
   roundGroupId?: string,
+  executionId?: ExecutionId,
 ): Promise<[AgentStateRound, AgentStateGlobal, ToolState, boolean]> {
   const {
     modelHandler,
@@ -90,14 +94,25 @@ export async function runResponseCycle(
       false,
     );
     if (shouldSaveMessageObjects) {
-      const outputFileBaseName = outputFile.replace('.xml', '');
-      const debugFilePath = `${outputFileBaseName}_cont${stateRound.continuationCount}.json`;
+      const outputFileBaseName = path.basename(outputFile, '.xml');
+      const debugFileName = `${outputFileBaseName}_cont${stateRound.continuationCount}.json`;
+      const debugFilePath = executionId
+        ? path.join(getRunDir(executionId), debugFileName)
+        : WorkspaceFS.fullPath(debugFileName);
       try {
-        await WorkspaceFS.writeFile(
-          debugFilePath,
-          JSON.stringify(messages, null, 2),
-        );
-        logger.info(`Saved message object to ${debugFilePath}`, taskGroupId);
+        if (executionId) {
+          await StorageFS.write(
+            debugFilePath,
+            JSON.stringify(messages, null, 2),
+          );
+          logger.info(`Saved message object to ${debugFilePath}`, taskGroupId);
+        } else {
+          await WorkspaceFS.writeFile(
+            WorkspaceFS.relativePath(debugFilePath),
+            JSON.stringify(messages, null, 2),
+          );
+          logger.info(`Saved message object to ${debugFilePath}`, taskGroupId);
+        }
       } catch (error) {
         logger.error(`Failed to save message object: ${error}`, taskGroupId);
       }
