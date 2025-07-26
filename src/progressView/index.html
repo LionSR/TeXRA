@@ -41,6 +41,7 @@
           "@common/webview/commands.js": "${commandsUri}",
           "@common/webviewState.js": "${webviewStateUri}",
           "@common/templateUtils.js": "${templateUtilsUri}",
+          "@common/iconButtonInitializer.js": "${iconButtonInitializerUri}",
           "@common/domUtils.js": "${domUtilsUri}",
           "@common/stringUtils.js": "${stringUtilsUri}",
           "he": "https://esm.sh/he@1.2.0"
@@ -83,24 +84,28 @@
               <button
                 class="vscode-button compare-btn"
                 title="Compare with base"
-              >
-                <i class="codicon codicon-diff"></i>
-              </button>
-              <button class="vscode-button accept-btn" title="Accept edits">
-                <i class="codicon codicon-check"></i>
-              </button>
-              <button class="vscode-button merge-btn" title="Merge edits">
-                <i class="codicon codicon-git-merge"></i>
-              </button>
-              <button class="vscode-button diff-btn" title="LaTeXdiff">
-                <i class="codicon codicon-diff-single"></i>
-              </button>
+                data-icon="diff"
+              ></button>
+              <button
+                class="vscode-button accept-btn"
+                title="Accept edits"
+                data-icon="check"
+              ></button>
+              <button
+                class="vscode-button merge-btn"
+                title="Merge edits"
+                data-icon="git-merge"
+              ></button>
+              <button
+                class="vscode-button diff-btn"
+                title="LaTeXdiff"
+                data-icon="diff-single"
+              ></button>
               <button
                 class="vscode-button prev-btn"
                 title="Compare with previous round"
-              >
-                <i class="codicon codicon-diff-added"></i>
-              </button>
+                data-icon="diff-added"
+              ></button>
             </span>
           </div>
         </template>
@@ -128,9 +133,12 @@
                 <i class="multi-file"></i>
               </div>
             </button>
-            <button class="tab-delete" data-stream="" title="Delete stream">
-              <i class="codicon codicon-close"></i>
-            </button>
+            <button
+              class="tab-delete"
+              data-stream=""
+              title="Delete stream"
+              data-icon="close"
+            ></button>
           </div>
         </template>
         <template id="roundHeaderTemplate">
@@ -144,8 +152,8 @@
           <!-- Stream tabs will be dynamically inserted here -->
         </div>
         <div class="clear-all-container">
-          <button class="clear-button" id="deleteAllBtn">
-            <i class="codicon codicon-close-all"></i> Delete All
+          <button class="clear-button" id="deleteAllBtn" data-icon="close-all">
+            Delete All
           </button>
         </div>
       </div>
