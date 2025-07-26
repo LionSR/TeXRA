@@ -2,24 +2,23 @@
 // Local imports - log
 import { AgentLogger } from '@logger/AgentLogger';
 import * as path from 'path';
-import * as vscode from 'vscode';
 
 // Local imports - utilities
-import { runLatexFormatter } from '@latex/texFormatter';
 import { XmlOutputManager } from './XmlOutputManager';
 import { LatexDiffManager } from './LatexDiffManager';
 import { DiffStatsManager } from './DiffStatsManager';
+import { OutputProcessor } from './OutputProcessor';
 import { NamedOutputFile } from './types';
 import type { IOutputHandler } from './IOutputHandler';
 import { getOutputFileName } from '@agent/utils/outputFileUtils';
 
 // Local imports - agent components
 import type { AgentConfig } from '@agent/core/AgentConfig';
-import { AgentSetting, AgentType } from '@agent/core/AgentDataclass';
+import { AgentSetting } from '@agent/core/AgentDataclass';
 import { AgentStateGlobal, AgentStateRound } from '@agent/core/AgentState';
 
 // Local imports - utilities
-import { replaceInputCommands, createFileMapping } from '@utils/files';
+import { createFileMapping } from '@utils/files';
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
 import { getEffectiveBaseFile } from '@utils/files/baseFileUtils';
 import { bus } from '@eventBus/ProgressEventBus';
@@ -39,6 +38,7 @@ export class OutputHandler implements IOutputHandler {
   public processGroupId?: string;
   protected logger: AgentLogger;
   protected channel: string;
+  public readonly outputProcessor: OutputProcessor;
   public readonly xmlManager: XmlOutputManager;
   private diffManager: LatexDiffManager;
   private diffStatsManager: DiffStatsManager;
@@ -59,11 +59,13 @@ export class OutputHandler implements IOutputHandler {
     this.logger = logger || new AgentLogger('OutputHandler');
     this.channel = this.logger.channelId;
 
-    this.xmlManager = new XmlOutputManager(
+    this.outputProcessor = new OutputProcessor(
       this.agentSetting,
       this.agentConfig,
+      this.baseFiles,
       this.logger,
     );
+    this.xmlManager = this.outputProcessor.xmlManager;
     this.diffManager = new LatexDiffManager(
       this.agentSetting,
       this.outputFiles,
@@ -111,26 +113,6 @@ export class OutputHandler implements IOutputHandler {
       // this.logger.info(`Completed output processing`, this.processGroupId);
       this.logger.endGroup(this.processGroupId, status);
       this.processGroupId = undefined;
-    }
-  }
-
-  /**
-   * Indents a LaTeX file for better readability
-   */
-  public async indentLatexFile(filePath: string): Promise<void> {
-    if (!filePath.includes('.tex')) {
-      return;
-    }
-    this.logger.debug(`Formatting ${filePath}`);
-    await runLatexFormatter(filePath);
-  }
-
-  /**
-   * Indents multiple LaTeX files for better readability
-   */
-  public async indentLatexFiles(filePaths: string[]): Promise<void> {
-    for (const filePath of filePaths) {
-      await this.indentLatexFile(filePath);
     }
   }
 
@@ -317,109 +299,24 @@ export class OutputHandler implements IOutputHandler {
     groupId?: string,
   ): Promise<void> {
     const activeGroupId = groupId || this.logger.getActiveGroupId();
+    const { files, mappings } = await this.outputProcessor.processOutputFiles(
+      outputFile,
+      activeGroupId,
+    );
 
     if (
+      files.length === 0 &&
       Array.isArray(this.agentConfig.outputFiles) &&
       this.agentConfig.outputFiles.length > 0
     ) {
-      // Multiple output files case
-      this.logger.debug(
-        `Processing multiple outputs for ${outputFile}; outputFiles: ${this.agentConfig.outputFiles}`,
-        activeGroupId,
-      );
-
-      try {
-        const processedPairs =
-          await this.xmlManager.processMultipleXmlOutputs(outputFile);
-
-        if (processedPairs && processedPairs.length > 0) {
-          const processedFiles = processedPairs.map((p) => p.path);
-          await this.indentLatexFiles(processedFiles);
-          this.logger.debug(
-            `Indented multiple output files: ${processedFiles.join(',')}`,
-            activeGroupId,
-          );
-
-          this.outputFiles[currRound] = processedFiles;
-          this.outputMappings[currRound] = processedPairs;
-
-          if (this.baseFiles && this.baseFiles.length > 0) {
-            await replaceInputCommands(
-              this.baseFiles,
-              processedFiles,
-              this.logger,
-            );
-          }
-        } else {
-          this.logger.debug(
-            `No processed files were generated from ${outputFile}`,
-            activeGroupId,
-          );
-          this.outputFiles[currRound] = [];
-          this.outputMappings[currRound] = [];
-        }
-      } catch (err) {
-        this.logger.debug(
-          `Error processing output files: ${err instanceof Error ? err.message : String(err)}`,
-          activeGroupId,
-          MESSAGE_TYPES.INTERNAL,
-        );
-        this.outputFiles[currRound] = [];
-        this.outputMappings[currRound] = [];
-      }
-    } else {
-      // Single output file case
-      this.logger.debug(
-        `Processing single output for ${outputFile}`,
-        activeGroupId,
-      );
-
-      try {
-        let processed: NamedOutputFile = {
-          source: outputFile,
-          path: outputFile,
-        };
-        if (this.agentSetting.agentType === AgentType.CoT) {
-          processed = await this.xmlManager.processSingleXmlOutput(outputFile);
-        }
-
-        if (processed && processed.path) {
-          await this.indentLatexFile(processed.path);
-          this.logger.debug(
-            `Indented single output file: ${processed.path}`,
-            activeGroupId,
-          );
-
-          this.outputFiles[currRound] = [processed.path];
-          this.outputMappings[currRound] = [processed];
-        } else {
-          this.logger.debug(
-            `No processed file was generated from ${outputFile}`,
-            activeGroupId,
-          );
-          this.outputFiles[currRound] = [];
-          this.outputMappings[currRound] = [];
-        }
-      } catch (err) {
-        this.logger.debug(
-          `Error processing output file: ${err instanceof Error ? err.message : String(err)}`,
-          activeGroupId,
-          MESSAGE_TYPES.INTERNAL,
-        );
-        const missingOutputsData = {
-          missing: [],
-          xmlFile: outputFile,
-          documentTag: this.agentSetting.documentTag,
-        };
-        this.logger.missingOutputs(missingOutputsData, activeGroupId);
-        bus.emit('updateMissingOutputs', {
-          stream: this.channel,
-          filesByRound: { [currRound]: [] },
-        });
-        this.outputFiles[currRound] = [];
-        this.outputMappings[currRound] = [];
-      }
+      bus.emit('updateMissingOutputs', {
+        stream: this.channel,
+        filesByRound: { [currRound]: [] },
+      });
     }
+
+    this.outputFiles[currRound] = files;
+    this.outputMappings[currRound] = mappings;
   }
   /** Processes output files for current round. */
   protected async handleOutput(
