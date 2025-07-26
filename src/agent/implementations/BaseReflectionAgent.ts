@@ -41,7 +41,12 @@ import { AgentStateRound, AgentStateGlobal } from '@agent/core/AgentState';
 import { ToolState } from '@agent/core/ToolState';
 import type { IModelHandler } from '@agent/modelHandlers';
 import type { ToolDefinition } from '@model';
-import { OutputHandler, NamedOutputFile, IOutputHandler } from '@agent/output';
+import {
+  OutputHandler,
+  NamedOutputFile,
+  IOutputHandler,
+  LatexOutputProcessor,
+} from '@agent/output';
 import { messageToSkeleton } from '@agent/utils/messageSkeletonUtils';
 import { BaseAgent } from '@agent/implementations/BaseAgent';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
@@ -66,6 +71,7 @@ export abstract class BaseReflectionAgent extends BaseAgent {
   protected logId: number = 0;
   /** Handler for output file processing and validation. */
   protected outputHandler: IOutputHandler;
+  protected latexOutputProcessor: LatexOutputProcessor;
   protected latexMediaManager: LatexMediaManager;
 
   constructor(
@@ -101,12 +107,20 @@ export abstract class BaseReflectionAgent extends BaseAgent {
     // Initialize logging
     this.logId = 0;
 
+    this.latexOutputProcessor = new LatexOutputProcessor(
+      this.agentSetting,
+      this.baseFiles,
+      this.logger,
+      this.logger.channelId,
+    );
+
     this.outputHandler = new OutputHandler(
       this.agentSetting,
       this.agentConfig,
       this.modelHandler,
       this.logId,
       this.baseFiles,
+      this.latexOutputProcessor,
       this.logger,
     );
 
@@ -511,7 +525,7 @@ export abstract class BaseReflectionAgent extends BaseAgent {
 
       if (existingBase.some((e) => e)) {
         // Pass the process group ID to maintain proper nesting in the log hierarchy
-        await this.outputHandler.handleLatexdiffofOutput(
+        await this.latexOutputProcessor.handleLatexdiffofOutput(
           currRound,
           processGroupId,
         );

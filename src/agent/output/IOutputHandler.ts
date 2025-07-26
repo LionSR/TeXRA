@@ -2,6 +2,7 @@
 import { AgentStateGlobal } from '@agent/core/AgentState';
 import { NamedOutputFile, OutputFileInfo } from './types';
 import { XmlOutputManager } from './XmlOutputManager';
+import type { LatexOutputProcessor } from './LatexOutputProcessor';
 
 /** Interface describing OutputHandler behavior used by agents. */
 export interface IOutputHandler {
@@ -14,14 +15,8 @@ export interface IOutputHandler {
   /** XML manager for parsing and splitting outputs. */
   xmlManager: XmlOutputManager;
 
-  /** Indent a single LaTeX file for readability. */
-  indentLatexFile(filePath: string): Promise<void>;
-
-  /** Indent multiple LaTeX files for readability. */
-  indentLatexFiles(filePaths: string[]): Promise<void>;
-
-  /** Run latexdiff comparisons for the current round. */
-  handleLatexdiffofOutput(currRound: number, groupId?: string): Promise<void>;
+  /** Optional LaTeX processor for formatting and diffing. */
+  latexProcessor?: LatexOutputProcessor;
 
   /** Print token usage and cost statistics. */
   printStatistics(

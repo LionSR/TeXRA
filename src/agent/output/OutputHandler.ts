@@ -2,12 +2,10 @@
 // Local imports - log
 import { AgentLogger } from '@logger/AgentLogger';
 import * as path from 'path';
-import * as vscode from 'vscode';
 
 // Local imports - utilities
-import { runLatexFormatter } from '@latex/texFormatter';
 import { XmlOutputManager } from './XmlOutputManager';
-import { LatexDiffManager } from './LatexDiffManager';
+import { LatexOutputProcessor } from './LatexOutputProcessor';
 import { StatisticsReporter } from './StatisticsReporter';
 import { DiffStatsManager } from './DiffStatsManager';
 import { NamedOutputFile } from './types';
@@ -43,7 +41,7 @@ export class OutputHandler implements IOutputHandler {
   protected logger: AgentLogger;
   protected channel: string;
   public readonly xmlManager: XmlOutputManager;
-  private diffManager: LatexDiffManager;
+  public latexProcessor?: LatexOutputProcessor;
   private statsReporter: StatisticsReporter;
   private diffStatsManager: DiffStatsManager;
 
@@ -53,6 +51,7 @@ export class OutputHandler implements IOutputHandler {
     modelHandler: IModelHandler,
     logId: number,
     baseFiles: string[] = [],
+    latexProcessor?: LatexOutputProcessor,
     logger?: AgentLogger,
   ) {
     this.agentSetting = agentSetting;
@@ -64,18 +63,15 @@ export class OutputHandler implements IOutputHandler {
     this.baseFiles = baseFiles;
     this.logger = logger || new AgentLogger('OutputHandler');
     this.channel = this.logger.channelId;
+    this.latexProcessor = latexProcessor;
+    if (this.latexProcessor) {
+      this.latexProcessor.setOutputFilesRef(this.outputFiles);
+    }
 
     this.xmlManager = new XmlOutputManager(
       this.agentSetting,
       this.agentConfig,
       this.logger,
-    );
-    this.diffManager = new LatexDiffManager(
-      this.agentSetting,
-      this.outputFiles,
-      this.baseFiles,
-      this.logger,
-      this.channel,
     );
     this.statsReporter = new StatisticsReporter(
       this.modelHandler,
@@ -123,49 +119,6 @@ export class OutputHandler implements IOutputHandler {
       this.logger.endGroup(this.processGroupId, status);
       this.processGroupId = undefined;
     }
-  }
-
-  /**
-   * Indents a LaTeX file for better readability
-   */
-  public async indentLatexFile(filePath: string): Promise<void> {
-    if (!filePath.includes('.tex')) {
-      return;
-    }
-    this.logger.debug(`Formatting ${filePath}`);
-    await runLatexFormatter(filePath);
-  }
-
-  /**
-   * Indents multiple LaTeX files for better readability
-   */
-  public async indentLatexFiles(filePaths: string[]): Promise<void> {
-    for (const filePath of filePaths) {
-      await this.indentLatexFile(filePath);
-    }
-  }
-
-  /**
-   * Helper method to log latexdiff results with appropriate level
-   * @param result The result of a latexdiff operation
-   * @param operation Description of the operation being performed
-   * @param groupId The group ID for logging context
-   */
-
-  /**
-   * Runs all latexdiff comparisons for the current round.
-   * This is the ONLY place where latexdiff operations should be performed.
-   *
-   * Generates two types of diffs:
-   * 1. Round diffs: Between original input and current output (when in rewrite mode)
-   * 2. Between-rounds diffs: Comparing previous round to current round (when applicable)
-   *
-   */
-  public async handleLatexdiffofOutput(
-    currRound: number,
-    groupId?: string,
-  ): Promise<void> {
-    await this.diffManager.handleLatexdiffofOutput(currRound, groupId);
   }
 
   /**
@@ -317,7 +270,7 @@ export class OutputHandler implements IOutputHandler {
 
         if (processedPairs && processedPairs.length > 0) {
           const processedFiles = processedPairs.map((p) => p.path);
-          await this.indentLatexFiles(processedFiles);
+          await this.latexProcessor?.indentLatexFiles(processedFiles);
           this.logger.debug(
             `Indented multiple output files: ${processedFiles.join(',')}`,
             activeGroupId,
@@ -367,7 +320,7 @@ export class OutputHandler implements IOutputHandler {
         }
 
         if (processed && processed.path) {
-          await this.indentLatexFile(processed.path);
+          await this.latexProcessor?.indentLatexFile(processed.path);
           this.logger.debug(
             `Indented single output file: ${processed.path}`,
             activeGroupId,
