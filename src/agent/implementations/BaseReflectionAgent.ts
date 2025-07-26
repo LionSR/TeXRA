@@ -371,6 +371,7 @@ export abstract class BaseReflectionAgent extends BaseAgent {
           toolState,
           this.outputFile[currRound],
           round0GroupId,
+          this.executionId,
         );
         finalEndTurn = newEndTurn;
 
@@ -540,6 +541,7 @@ export abstract class BaseReflectionAgent extends BaseAgent {
           toolState,
           this.outputFile[currRound],
           round1GroupId,
+          this.executionId,
         );
 
         // Handle output and logging
