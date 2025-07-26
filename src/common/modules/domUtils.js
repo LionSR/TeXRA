@@ -52,3 +52,28 @@ export function safeGetElementChecked(id) {
   }
   return element.checked;
 }
+
+/**
+ * Update or insert a chevron icon inside the given toggle element.
+ *
+ * @param {HTMLElement} toggleElement - The element containing the chevron.
+ * @param {boolean} expanded - True if the section is expanded.
+ */
+export function updateChevronIcon(toggleElement, expanded) {
+  if (!toggleElement) {
+    console.warn('[domUtils] Missing toggleElement for updateChevronIcon');
+    return;
+  }
+
+  const icon = toggleElement.querySelector(
+    '.codicon-chevron-up, .codicon-chevron-down',
+  );
+  if (icon) {
+    icon.classList.toggle('codicon-chevron-up', expanded);
+    icon.classList.toggle('codicon-chevron-down', !expanded);
+  } else {
+    const newIcon = document.createElement('i');
+    newIcon.className = `codicon ${expanded ? 'codicon-chevron-up' : 'codicon-chevron-down'}`;
+    toggleElement.appendChild(newIcon);
+  }
+}

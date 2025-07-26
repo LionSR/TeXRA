@@ -1,4 +1,8 @@
-import { safeGetElementById, safeGetElementChecked } from '@common/domUtils.js';
+import {
+  safeGetElementById,
+  safeGetElementChecked,
+  updateChevronIcon,
+} from '@common/domUtils.js';
 import {
   CHECK_BOXES_AUTO_EXTRACT,
   CHECK_BOXES_TOOL_USE,
@@ -19,9 +23,8 @@ export class ToggleManager {
     toggle.classList.toggle('active', active);
     toggle.innerHTML = '';
     const iconEl = createCodicon(icon);
-    const chevron = createCodicon(visible ? 'chevron-up' : 'chevron-down');
     if (iconEl) toggle.appendChild(iconEl);
-    if (chevron) toggle.appendChild(chevron);
+    updateChevronIcon(toggle, visible);
   }
 
   updateDropdownToggleState(toggleId, optionsId, checkboxIds, icon) {

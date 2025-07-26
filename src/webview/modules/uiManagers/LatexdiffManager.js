@@ -1,15 +1,10 @@
 // Local imports
-import { safeGetElementById } from '@common/domUtils.js';
-import {
-  CHEVRON_UP_CLASS,
-  CHEVRON_DOWN_CLASS,
-} from '@common/webviewContext.js';
+import { safeGetElementById, updateChevronIcon } from '@common/domUtils.js';
 import { mainViewState } from '../mainViewState.js';
 import { ELEMENT_IDS } from '../constants.js';
 
 const LATEXDIFF_CONTENT_ID = ELEMENT_IDS.LATEXDIFFS_CONTENT;
 const TOGGLE_LATEXDIFFS_ID = ELEMENT_IDS.TOGGLE_LATEXDIFFS;
-const ICON_SELECTOR = 'i';
 
 /**
  * Handles LaTeX diff section visibility.
@@ -29,13 +24,7 @@ export class LatexdiffManager {
       const shouldShow = state && state.latexdiffsVisible;
 
       container.style.display = shouldShow ? 'block' : 'none';
-
-      const iconElement = toggleIcon.querySelector(ICON_SELECTOR);
-      if (iconElement) {
-        iconElement.className = shouldShow
-          ? CHEVRON_UP_CLASS
-          : CHEVRON_DOWN_CLASS;
-      }
+      updateChevronIcon(toggleIcon, shouldShow);
     }
   }
 
@@ -48,10 +37,7 @@ export class LatexdiffManager {
     const isVisible = container.style.display !== 'none';
     container.style.display = isVisible ? 'none' : 'block';
 
-    const iconElement = toggleIcon.querySelector(ICON_SELECTOR);
-    if (iconElement) {
-      iconElement.className = isVisible ? CHEVRON_DOWN_CLASS : CHEVRON_UP_CLASS;
-    }
+    updateChevronIcon(toggleIcon, !isVisible);
 
     this.state.update({ latexdiffsVisible: !isVisible });
     this.state.save();
