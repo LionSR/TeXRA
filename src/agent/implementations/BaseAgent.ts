@@ -10,6 +10,8 @@ import { AgentPrompt, AgentSetting } from '../core/AgentDataclass';
 import { IAgent } from '../core/IAgent';
 import type { IModelHandler } from '../modelHandlers';
 import { buildUserVars } from '../utils/userVars';
+import { UsageMonitor } from '../utils/UsageMonitor';
+import { AgentStateGlobal } from '../core/AgentState';
 
 // Local imports - utilities
 import { SHORT_SLEEP_MS } from '@utils/config';
@@ -26,6 +28,7 @@ export abstract class BaseAgent implements IAgent {
   protected agentPrompt: AgentPrompt;
   protected agentPath: string;
   protected logger: AgentLogger;
+  protected usageMonitor: UsageMonitor;
   protected runGroupId?: string;
   protected userVars: Record<string, any> = {};
   protected client: any;
@@ -55,6 +58,11 @@ export abstract class BaseAgent implements IAgent {
     const streamTabId = this.getStreamTabId();
     this.logger = new AgentLogger(streamTabId, true);
     this.modelHandler.setLogger(this.logger);
+    this.usageMonitor = new UsageMonitor(
+      this.modelHandler,
+      this.logger.channelId,
+      this.logger,
+    );
   }
 
   /** Initialize the API client. */
@@ -141,6 +149,12 @@ export abstract class BaseAgent implements IAgent {
 
   public getExecutionId(): ExecutionId | undefined {
     return this.executionId;
+
+  protected async trackRoundUsage(
+    stateGlobal: AgentStateGlobal,
+    groupId?: string,
+  ): Promise<void> {
+    await this.usageMonitor.recordUsage(stateGlobal, groupId);
   }
 
   public static getRunningAgent(
