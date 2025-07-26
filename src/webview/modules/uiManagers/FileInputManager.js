@@ -19,8 +19,9 @@ import { fileList } from './FileList.js';
 import { fileSelect } from './FileSelect.js';
 import { outputFilesManager } from './OutputFilesManager.js';
 import { mainViewState } from '../mainViewState.js';
+import { BaseUIManager } from './BaseUIManager.js';
 
-export class FileInputManager {
+export class FileInputManager extends BaseUIManager {
   constructor(
     vscodeInstance = vscode,
     state = mainViewState,
@@ -28,24 +29,13 @@ export class FileInputManager {
     select = fileSelect,
     outputMgr = outputFilesManager,
   ) {
+    super();
     this.vscode = vscodeInstance;
     this.state = state;
     this.fileList = list;
     this.fileSelect = select;
     this.outputFilesManager = outputMgr;
-    this._listeners = [];
     this._sortables = [];
-  }
-
-  _addListener(elementOrId, event, handler) {
-    const element =
-      typeof elementOrId === 'string'
-        ? safeGetElementById(elementOrId)
-        : elementOrId;
-    if (element) {
-      element.addEventListener(event, handler);
-      this._listeners.push({ element, event, handler });
-    }
   }
 
   _setupSortable() {
@@ -62,7 +52,7 @@ export class FileInputManager {
   }
 
   _setupSingleFileSelectors() {
-    this._addListener(INPUT_FILE, 'change', (e) => {
+    this.addListener(INPUT_FILE, 'change', (e) => {
       const inputFile = e.target.value;
       this.vscode.postMessage({
         command: MAIN_VIEW_COMMANDS.INPUT_FILE_SELECTED,
@@ -70,7 +60,7 @@ export class FileInputManager {
       });
     });
 
-    this._addListener(REFERENCE_FILE, 'change', (e) => {
+    this.addListener(REFERENCE_FILE, 'change', (e) => {
       const referenceFile = e.target.value;
       this.vscode.postMessage({
         command: MAIN_VIEW_COMMANDS.REFERENCE_FILE_SELECTED,
@@ -78,7 +68,7 @@ export class FileInputManager {
       });
     });
 
-    this._addListener(BASE_FILE, 'change', () => {
+    this.addListener(BASE_FILE, 'change', () => {
       const baseFile = safeGetElementValue(BASE_FILE);
       this.vscode.postMessage({
         command: MAIN_VIEW_COMMANDS.REQUEST_EDITED_FILE,
@@ -103,7 +93,7 @@ export class FileInputManager {
 
     selectors.forEach(({ id, selectId }) => {
       const buttonId = `select${id}Button`;
-      this._addListener(buttonId, 'click', () => {
+      this.addListener(buttonId, 'click', () => {
         const currentFile = safeGetElementValue(selectId);
         this.vscode.postMessage({
           command: MAIN_VIEW_COMMANDS.SELECT_MULTIPLE_FILES,
@@ -118,13 +108,13 @@ export class FileInputManager {
     const fileTypes = ['input', 'reference', 'auxiliary'];
     fileTypes.forEach((type) => {
       const cap = capitalize(type);
-      this._addListener(`addOpened${cap}FilesButton`, 'click', () => {
+      this.addListener(`addOpened${cap}FilesButton`, 'click', () => {
         this.vscode.postMessage({
           command: MAIN_VIEW_COMMANDS.ADD_OPENED_FILES,
           fileType: type,
         });
       });
-      this._addListener(`current${cap}FileButton`, 'click', () => {
+      this.addListener(`current${cap}FileButton`, 'click', () => {
         this.vscode.postMessage({
           command: MAIN_VIEW_COMMANDS.GET_CURRENT_FILE,
           fileType: type,
@@ -133,7 +123,7 @@ export class FileInputManager {
     });
 
     ['base', 'edited'].forEach((type) => {
-      this._addListener(`current${capitalize(type)}FileButton`, 'click', () => {
+      this.addListener(`current${capitalize(type)}FileButton`, 'click', () => {
         const baseFile = safeGetElementValue(BASE_FILE);
         this.vscode.postMessage({
           command: MAIN_VIEW_COMMANDS.GET_CURRENT_FILE,
@@ -148,10 +138,10 @@ export class FileInputManager {
     MULTIPLE_SELECTIONS.forEach((id) => {
       const toggleId = `toggle${capitalize(id)}`;
       const emptyButtonId = `empty${capitalize(id)}Button`;
-      this._addListener(emptyButtonId, 'click', () =>
+      this.addListener(emptyButtonId, 'click', () =>
         this.fileList.empty(id, toggleId),
       );
-      this._addListener(toggleId, 'click', () => {
+      this.addListener(toggleId, 'click', () => {
         if (id === 'outputFiles') {
           this.outputFilesManager.toggleOutputFiles();
         } else {
@@ -172,8 +162,7 @@ export class FileInputManager {
             command: MAIN_VIEW_COMMANDS.REFRESH_COMMITS,
           });
         };
-        icon.addEventListener('click', handler);
-        this._listeners.push({ element: icon, event: 'click', handler });
+        this.addListener(icon, 'click', handler);
       }
     });
   }
@@ -188,7 +177,7 @@ export class FileInputManager {
       'edited',
     ];
     types.forEach((type) => {
-      this._addListener(`empty${capitalize(type)}FileButton`, 'click', () => {
+      this.addListener(`empty${capitalize(type)}FileButton`, 'click', () => {
         const selectEl = safeGetElementById(`${type}File`);
         if (selectEl) {
           selectEl.value = '';
@@ -204,10 +193,10 @@ export class FileInputManager {
         return; // handled by SettingsButtonManager
       }
       if (id !== 'instruction') {
-        this._addListener(id, 'change', () => this.state.save());
+        this.addListener(id, 'change', () => this.state.save());
       }
     });
-    this._addListener('instruction', 'input', () => this.state.save());
+    this.addListener('instruction', 'input', () => this.state.save());
   }
 
   setup() {
@@ -219,10 +208,7 @@ export class FileInputManager {
   }
 
   cleanup() {
-    this._listeners.forEach(({ element, event, handler }) => {
-      element.removeEventListener(event, handler);
-    });
-    this._listeners = [];
+    super.cleanup();
     this._sortables.forEach((s) => s.destroy());
     this._sortables = [];
   }
