@@ -7,7 +7,7 @@ import type { MessageCreateParams } from '@anthropic-ai/sdk/resources/messages';
 import * as vscode from 'vscode';
 
 // Local imports - error utils
-import { formatProviderError } from '@common/errors/sdkErrorUtils';
+import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
 
 // Local imports - log
 import * as logger from '@logger/logUtils';
@@ -204,7 +204,7 @@ ${text}`;
       text: trimmedText,
     };
   } catch (error) {
-    logger.error(CHANNEL, formatProviderError('Error polishing text', error));
+    logger.error(CHANNEL, `Error polishing text: ${getSdkErrorMessage(error)}`);
     return {
       success: false,
       text: text,
