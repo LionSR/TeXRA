@@ -3,6 +3,7 @@ import * as path from 'path';
 
 // Local imports - agent components
 import { DirectAgent } from './DirectAgent';
+import { RoundOutputOptions } from './BaseReflectionAgent';
 import { AgentStateRound, AgentStateGlobal } from '../core/AgentState';
 import type { IModelHandler } from '@agent/modelHandlers';
 import type { AgentConfig } from '../core/AgentConfig';
@@ -119,34 +120,33 @@ export class MergeAgent extends DirectAgent {
 
   /**
    * Processes output files for merge operation.
+   * @param currRound Current round number (defaults to 0)
    * @param stateRound Current round state
    * @param stateGlobal Global conversation state
-   * @param outputFile Path to the output file
-   * @param endTurn Whether this is the end of the current turn
-   * @param currRound Current round number (defaults to 0)
-   * @param processGroupId Optional processing group ID for logging
+   * @param options Output processing options
    * @returns Array of processed output file paths
    */
   protected async handleOutput(
+    currRound: number,
     stateRound: AgentStateRound,
     stateGlobal: AgentStateGlobal,
-    outputFile: string,
-    endTurn: boolean,
-    currRound: number = 0,
-    processGroupId?: string,
+    options: RoundOutputOptions,
   ): Promise<string[]> {
+    const { outputFile, endTurn, processGroupId } = options;
     if (endTurn) {
       this.logger.debug(
         `Processing merge output for round ${currRound}`,
         processGroupId,
       );
       const files = await super.handleOutput(
+        currRound,
         stateRound,
         stateGlobal,
-        outputFile,
-        endTurn,
-        currRound,
-        processGroupId,
+        {
+          outputFile,
+          endTurn,
+          processGroupId,
+        },
       );
       this.logger.info(`Merge output file: ${outputFile}`, processGroupId);
       return files;

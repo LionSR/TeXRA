@@ -83,7 +83,7 @@ describe('OutputHandler.finalizeRound', () => {
     const events: any[] = [];
     const dispose = bus.on('addOutputFiles', (data) => events.push(data));
 
-    await handler.finalizeRound('out.xml', 0, true);
+    await handler.finalizeRound('out.xml', 0, { endTurn: true });
 
     assert.ok(handler.gatherCalled);
     assert.ok(handler.validateCalled);
@@ -99,7 +99,7 @@ describe('OutputHandler.finalizeRound', () => {
     const events: any[] = [];
     const dispose = bus.on('addOutputFiles', (data) => events.push(data));
 
-    await handler.finalizeRound('out.xml', 0, false);
+    await handler.finalizeRound('out.xml', 0, { endTurn: false });
 
     assert.ok(handler.gatherCalled);
     assert.strictEqual(handler.validateCalled, false);
