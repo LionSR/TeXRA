@@ -35,7 +35,7 @@
   flex-wrap: nowrap;
   flex: 1;
   min-width: 0;
-  min-height: var(--control-height);
+  min-height: var(--height-control);
   position: relative;
 }
 
