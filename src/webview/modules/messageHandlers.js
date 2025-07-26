@@ -1,8 +1,12 @@
 // Local imports - webview context
 import { vscode, registerMessageHandlers } from '@common/webviewContext.js';
-import { safeSetElementValue, safeGetElementById } from '@common/domUtils.js';
+import {
+  safeSetElementValue,
+  safeGetElementById,
+  setChevronIcon,
+} from '@common/domUtils.js';
 import { capitalize, uncapitalize } from '@common/stringUtils.js';
-import { createCodicon, createFromTemplate } from '@common/templateUtils.js';
+import { createFromTemplate } from '@common/templateUtils.js';
 import { mainViewState } from './mainViewState.js';
 import { mainViewDomHandler } from './domHandlers.js';
 
@@ -103,9 +107,7 @@ export class MainViewMessageHandler {
   /* ---------- Private helpers ---------- */
   _setToggleIcon(element, isVisible) {
     if (!element) return;
-    element.innerHTML = '';
-    const icon = createCodicon(isVisible ? 'chevron-up' : 'chevron-down');
-    if (icon) element.appendChild(icon);
+    setChevronIcon(element, isVisible);
   }
 
   _createFileItem(file) {
