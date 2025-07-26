@@ -67,6 +67,8 @@ export abstract class BaseReflectionAgent extends BaseAgent {
   /** Handler for output file processing and validation. */
   protected outputHandler: IOutputHandler;
   protected latexMediaManager: LatexMediaManager;
+  /** Stores the duration of the last model call. */
+  private lastResponseTime = 0;
 
   constructor(
     modelHandler: IModelHandler,
@@ -126,6 +128,241 @@ export abstract class BaseReflectionAgent extends BaseAgent {
   }
 
   /**
+   * Request a model response for the current message list.
+   */
+  private async fetchModelResponse(
+    messages: any[],
+    roundGroupId?: string,
+  ): Promise<any> {
+    const systemPrompt = await getSystemPromptWithRules(
+      this.agentPrompt.systemPrompt,
+      this.userVars,
+    );
+    const startTime = Date.now();
+
+    this.abortController = new AbortController();
+    try {
+      const response = await this.modelHandler.createResponse(
+        this.client,
+        messages,
+        this.agentSetting.temperature || 0.0,
+        systemPrompt,
+        this.agentSetting.endTag,
+        this.abortController.signal,
+        this.modelHandler.capabilities.supportsFunctionCalling
+          ? this.agentSetting.tools
+          : undefined,
+      );
+      this.lastResponseTime = (Date.now() - startTime) / 1000;
+      return response;
+    } finally {
+      this.abortController = null;
+    }
+  }
+
+  /**
+   * Process the model response and update state accordingly.
+   * @returns Whether the turn should end.
+   */
+  private async handleModelResponse(
+    responseObject: any,
+    messages: any[],
+    stateRound: AgentStateRound,
+    stateGlobal: AgentStateGlobal,
+    toolState: ToolState,
+    outputFile: string,
+    roundGroupId?: string,
+  ): Promise<boolean> {
+    const taskGroupId = roundGroupId;
+
+    // Extract and validate response
+    const [newResponse, responseUsage, stopReason] =
+      this.modelHandler.extractResponse(
+        responseObject,
+        this.agentSetting.endTag,
+      );
+
+    this.logger.debug(`Stop reason: ${stopReason}`, taskGroupId);
+    this.logger.debug(
+      `Token usage: ${JSON.stringify(responseUsage)}`,
+      taskGroupId,
+    );
+
+    const thinkingContent = this.modelHandler.processThinkingBlock(
+      responseObject,
+      taskGroupId,
+      toolState,
+    );
+
+    if (thinkingContent) {
+      const formatted = await xmlUtils.formatContent(thinkingContent);
+      this.logger.info(formatted, taskGroupId, MESSAGE_TYPES.THINKING);
+    }
+
+    const scratchpad = await xmlUtils.extractScratchpad(
+      newResponse,
+      'scratchpad',
+    );
+    if (scratchpad) {
+      this.logger.info(scratchpad, taskGroupId, MESSAGE_TYPES.SCRATCHPAD);
+    }
+
+    const APIUsage = this.modelHandler.computeResponseUsage(
+      responseUsage,
+      this.lastResponseTime,
+    );
+
+    stateRound.updateTokenCounts(APIUsage);
+    stateGlobal.updateFromCurrRound(stateRound);
+
+    const repetitionResult = checkForMassiveRepetition(
+      toolState.lastResponse,
+      newResponse,
+    );
+    if (repetitionResult.massiveRepetitionDetected) {
+      this.logger.error(
+        `The new response is (first ${REPETITION_DETECTION_THRESHOLD} chars): ${newResponse.substring(
+          0,
+          REPETITION_DETECTION_THRESHOLD,
+        )}`,
+        taskGroupId,
+      );
+      this.logger.error(
+        `Massive repetition detected - skipping this response`,
+        taskGroupId,
+      );
+      this.logger.error(
+        `Message structure when repetition detected:`,
+        taskGroupId,
+      );
+      this.logger.error(
+        JSON.stringify(messageToSkeleton(messages), null, 2),
+        taskGroupId,
+      );
+      return true;
+    }
+
+    const processedResponse = replacementEngine.applyAll(newResponse);
+    toolState.updateLastResponse(processedResponse);
+
+    const result = await bestConnectionMethod(
+      toolState.lastResponse.slice(-K_SLICE),
+      processedResponse.slice(0, K_SLICE),
+    );
+    const bestConnector = result.connector;
+
+    toolState.updateAccumulatedOutput(
+      toolState.accumulatedOutput + bestConnector + processedResponse,
+    );
+
+    await this.writeOutputFile(
+      outputFile,
+      bestConnector,
+      processedResponse,
+      taskGroupId,
+    );
+
+    this.logger.debug(`Response preview:`, taskGroupId);
+    this.logger.debug(
+      `First ${K_SLICE} chars:\n${processedResponse.slice(0, K_SLICE)}`,
+      taskGroupId,
+    );
+    this.logger.debug(
+      `Last ${K_SLICE} chars:\n${processedResponse.slice(-K_SLICE)}`,
+      taskGroupId,
+    );
+
+    if (this.modelHandler.capabilities.supportsAssistantPrefill) {
+      this.modelHandler.updateMessageContentWithPrefill(
+        messages,
+        bestConnector,
+        processedResponse,
+        toolState,
+      );
+    } else {
+      this.modelHandler.updateMessageContentWithoutPrefill(
+        messages,
+        bestConnector,
+        processedResponse,
+        toolState,
+      );
+    }
+
+    const [shouldEndTurn, shouldStop] = this.modelHandler.checkStopConditions(
+      stopReason,
+      processedResponse,
+      stateRound,
+      stateGlobal,
+      this.agentSetting,
+    );
+
+    if (shouldStop) {
+      return shouldEndTurn;
+    }
+
+    stateRound.incrementContinuation();
+    this.logger.info(
+      `Starting continuation #${stateRound.continuationCount}`,
+      taskGroupId,
+    );
+
+    if (
+      this.modelHandler.shouldContinue(
+        stopReason,
+        processedResponse,
+        this.agentSetting,
+      )
+    ) {
+      this.logger.debug(
+        `Should continue - adding continuation message to conversation`,
+        taskGroupId,
+      );
+      if (this.modelHandler.capabilities.supportsAssistantPrefill) {
+        this.modelHandler.addContinueMessageWithPrefill(
+          messages,
+          stateRound,
+          toolState,
+          this.agentSetting,
+          this.agentConfig,
+        );
+      } else {
+        this.modelHandler.addContinueMessageWithoutPrefill(
+          messages,
+          stateRound,
+          toolState,
+          this.agentSetting,
+          this.agentConfig,
+        );
+      }
+      return false;
+    }
+
+    return shouldEndTurn;
+  }
+
+  /**
+   * Write processed model output to the designated file.
+   */
+  private async writeOutputFile(
+    outputFile: string,
+    connector: string,
+    response: string,
+    roundGroupId?: string,
+  ): Promise<void> {
+    const exists = await WorkspaceFS.exists(outputFile);
+    if (!exists) {
+      this.logger.debug(`Creating new file: ${outputFile}`, roundGroupId);
+      await WorkspaceFS.writeFile(outputFile, response);
+    } else {
+      this.logger.debug(
+        `Appending to existing file: ${outputFile}`,
+        roundGroupId,
+      );
+      await WorkspaceFS.appendFile(outputFile, connector + response);
+    }
+  }
+
+  /**
    * Manages single response cycle with model interaction.
    * @param messages Current conversation messages
    * @param stateRound Current round state
@@ -153,14 +390,6 @@ export abstract class BaseReflectionAgent extends BaseAgent {
         if (await this.checkInterruption()) {
           break;
         }
-
-        const exists = await WorkspaceFS.exists(outputFile);
-        const startTime = Date.now();
-        const systemPrompt = await getSystemPromptWithRules(
-          this.agentPrompt.systemPrompt,
-          this.userVars,
-        );
-
         // Save message object to file for debugging if enabled in settings
         const shouldSaveMessageObjects = getConfig(
           'debug.saveMessageObjects',
@@ -186,23 +415,10 @@ export abstract class BaseReflectionAgent extends BaseAgent {
           }
         }
 
-        this.abortController = new AbortController();
-        let responseObject;
-        try {
-          responseObject = await this.modelHandler.createResponse(
-            this.client,
-            messages,
-            this.agentSetting.temperature || 0.0,
-            systemPrompt,
-            this.agentSetting.endTag,
-            this.abortController.signal,
-            this.modelHandler.capabilities.supportsFunctionCalling
-              ? this.agentSetting.tools
-              : undefined,
-          );
-        } finally {
-          this.abortController = null;
-        }
+        const responseObject = await this.fetchModelResponse(
+          messages,
+          taskGroupId,
+        );
         if (!responseObject) {
           this.logger.warn(
             'Model response was aborted or returned no data; output may be incomplete.',
@@ -210,205 +426,21 @@ export abstract class BaseReflectionAgent extends BaseAgent {
           );
           break;
         }
-        const responseTime = (Date.now() - startTime) / 1000;
-        stateRound.updateResponseTime(responseTime);
+        stateRound.updateResponseTime(this.lastResponseTime);
         this.logger.debug(
-          `Response time: ${responseTime.toFixed(2)}s`,
+          `Response time: ${this.lastResponseTime.toFixed(2)}s`,
           taskGroupId,
         );
 
-        // Extract and validate response
-        const [newResponse, responseUsage, stopReason] =
-          this.modelHandler.extractResponse(
-            responseObject,
-            this.agentSetting.endTag,
-          );
-
-        this.logger.debug(`Stop reason: ${stopReason}`, taskGroupId);
-        this.logger.debug(
-          `Token usage: ${JSON.stringify(responseUsage)}`,
-          taskGroupId,
-        );
-
-        // Extract thinking blocks directly from the response object
-        // This updates toolState with all thinking/redacted_thinking blocks
-        // and returns content of the first thinking block for logging (if any)
-        const thinkingContent = this.modelHandler.processThinkingBlock(
+        endTurn = await this.handleModelResponse(
           responseObject,
-          taskGroupId,
+          messages,
+          stateRound,
+          stateGlobal,
           toolState,
-        );
-
-        // If thinking content was extracted, format and log it first
-        if (thinkingContent) {
-          const formatted = await xmlUtils.formatContent(thinkingContent);
-          this.logger.info(formatted, taskGroupId, MESSAGE_TYPES.THINKING);
-
-          // Note: The complete thinking blocks (including signatures) have already been
-          // stored in toolState.thinkingBlocks by the processThinkingBlock method
-        }
-
-        // Extract scratchpad content directly from the response text
-        const scratchpad = await xmlUtils.extractScratchpad(
-          newResponse,
-          'scratchpad',
-        );
-        if (scratchpad) {
-          this.logger.info(scratchpad, taskGroupId, MESSAGE_TYPES.SCRATCHPAD);
-        }
-        // this has a potential bug if <scratchpad> is included in the prefill
-
-        // Compute statistics and update states
-        const APIUsage = this.modelHandler.computeResponseUsage(
-          responseUsage,
-          responseTime,
-        );
-
-        stateRound.updateTokenCounts(APIUsage);
-        stateGlobal.updateFromCurrRound(stateRound);
-
-        // Early exit for repetition
-        const repetitionResult = checkForMassiveRepetition(
-          toolState.lastResponse,
-          newResponse,
-        );
-        if (repetitionResult.massiveRepetitionDetected) {
-          this.logger.error(
-            `The new response is (first ${REPETITION_DETECTION_THRESHOLD} chars): ${newResponse.substring(0, REPETITION_DETECTION_THRESHOLD)}`,
-            taskGroupId,
-          );
-          this.logger.error(
-            `Massive repetition detected - skipping this response`,
-            taskGroupId,
-          );
-
-          // Debug information - print message skeleton to help diagnose the problem
-          this.logger.error(
-            `Message structure when repetition detected:`,
-            taskGroupId,
-          );
-          this.logger.error(
-            JSON.stringify(messageToSkeleton(messages), null, 2),
-            taskGroupId,
-          );
-          break;
-        }
-
-        // Chain response processing operations
-        const processedResponse = replacementEngine.applyAll(newResponse);
-
-        toolState.updateLastResponse(processedResponse);
-
-        // Process response connection with proper slicing
-        const result = await bestConnectionMethod(
-          toolState.lastResponse.slice(-K_SLICE),
-          processedResponse.slice(0, K_SLICE),
-        );
-        const bestConnector = result.connector;
-
-        // Update state and file atomically
-        toolState.updateAccumulatedOutput(
-          toolState.accumulatedOutput + bestConnector + processedResponse,
-        );
-
-        // Write or append to output file
-        if (!exists) {
-          this.logger.debug(`Creating new file: ${outputFile}`, taskGroupId);
-          await WorkspaceFS.writeFile(outputFile, processedResponse);
-        } else {
-          this.logger.debug(
-            `Appending to existing file: ${outputFile}`,
-            taskGroupId,
-          );
-          await WorkspaceFS.appendFile(
-            outputFile,
-            bestConnector + processedResponse,
-          );
-        }
-
-        // Log response boundaries
-        this.logger.debug(`Response preview:`, taskGroupId);
-        this.logger.debug(
-          `First ${K_SLICE} chars:\n${processedResponse.slice(0, K_SLICE)}`,
+          outputFile,
           taskGroupId,
         );
-        this.logger.debug(
-          `Last ${K_SLICE} chars:\n${processedResponse.slice(-K_SLICE)}`,
-          taskGroupId,
-        );
-
-        // Update message content
-        // maybe we should separate this into the case of with or without support for assistant prefill since they have different logic...
-        if (this.modelHandler.capabilities.supportsAssistantPrefill) {
-          this.modelHandler.updateMessageContentWithPrefill(
-            messages,
-            bestConnector,
-            processedResponse,
-            toolState,
-          );
-        } else {
-          this.modelHandler.updateMessageContentWithoutPrefill(
-            messages,
-            bestConnector,
-            processedResponse,
-            toolState,
-          );
-        }
-
-        // Check stop conditions
-        const [shouldEndTurn, shouldStop] =
-          this.modelHandler.checkStopConditions(
-            stopReason,
-            processedResponse,
-            stateRound,
-            stateGlobal,
-            this.agentSetting,
-          );
-        endTurn = shouldEndTurn;
-        if (shouldStop) {
-          break;
-        }
-
-        // Handle continuation
-        stateRound.incrementContinuation();
-        this.logger.info(
-          `Starting continuation #${stateRound.continuationCount}`,
-          taskGroupId,
-        );
-
-        // Check if model should continue generating
-        // why is this not included in the checkStopConditions function?
-        if (
-          this.modelHandler.shouldContinue(
-            stopReason,
-            processedResponse,
-            this.agentSetting,
-          )
-        ) {
-          this.logger.debug(
-            `Should continue - adding continuation message to conversation`,
-            taskGroupId,
-          );
-          if (this.modelHandler.capabilities.supportsAssistantPrefill) {
-            this.modelHandler.addContinueMessageWithPrefill(
-              messages,
-              stateRound,
-              toolState,
-              this.agentSetting,
-              this.agentConfig,
-            );
-            continue;
-          } else {
-            this.modelHandler.addContinueMessageWithoutPrefill(
-              messages,
-              stateRound,
-              toolState,
-              this.agentSetting,
-              this.agentConfig,
-            );
-            continue;
-          }
-        }
       }
 
       return [stateRound, stateGlobal, toolState, endTurn];
