@@ -418,7 +418,7 @@ export class LogEntryFormatter {
 
         items += `<li><i class="codicon ${icon}"${titleAttr}></i> <span class="file-link clickable-link" data-file="${baseEsc}">${encodeHtml(
           baseName,
-        )}</span> &rarr; <span class="file-link clickable-link" data-file="${revisedEsc}">${encodeHtml(
+        )}</span> <span class="arrow">&rarr;</span> <span class="file-link clickable-link" data-file="${revisedEsc}">${encodeHtml(
           revisedName,
         )}</span> (<span class="file-link clickable-link" data-file="${outputEsc}">diff</span>)</li>`;
       });
