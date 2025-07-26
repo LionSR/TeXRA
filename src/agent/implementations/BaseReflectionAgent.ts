@@ -48,7 +48,7 @@ import { K_SLICE } from '@utils/config';
 
 /**
  * Options for handling round output.
- * 
+ *
  * @property outputFile - The path to the file where the round's output will be saved.
  * @property endTurn - A flag indicating whether the current turn should be ended after processing.
  * @property processGroupId - (Optional) An identifier for grouping related processes, useful for tracking or managing outputs.
@@ -557,9 +557,7 @@ export abstract class BaseReflectionAgent extends BaseAgent {
    */
   public async run(): Promise<void> {
     // Create a dedicated run group for this agent execution
-    this.runGroupId = await this.logger.startGroup(
-      `Run: ${this.agentConfig.agent}@${this.agentConfig.model}`,
-    );
+    await this.startRunGroup();
 
     try {
       // Initialize agent variables within the run group
@@ -584,12 +582,10 @@ export abstract class BaseReflectionAgent extends BaseAgent {
       }
 
       // End the run group with success status
-      this.logger.endGroup(this.runGroupId, 'stopped');
+      this.endRunGroup('stopped');
     } catch (error) {
       // End the run group with error status
-      if (this.runGroupId) {
-        this.logger.endGroup(this.runGroupId, 'error');
-      }
+      this.endRunGroup('error');
       throw error;
     } finally {
       // Always clean up, whether execution completed or was interrupted
