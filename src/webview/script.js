@@ -1,5 +1,8 @@
 import { mainViewState } from './modules/mainViewState.js';
-import { messageHandler } from './modules/messageHandlers.js';
+import {
+  setup as setupHandlers,
+  cleanup as cleanupHandlers,
+} from './modules/messageHandlers.js';
 import {
   mainViewDomHandler,
   instructionManager,
@@ -7,10 +10,10 @@ import {
 } from './modules/domHandlers.js';
 
 // Register handlers immediately so early messages aren't missed
-messageHandler.setup({ requestData: false });
+setupHandlers({ requestData: false });
 
 window.addEventListener('beforeunload', () => {
-  messageHandler.cleanup();
+  cleanupHandlers();
   mainViewDomHandler.cleanupUI();
 });
 
@@ -22,5 +25,5 @@ document.addEventListener('DOMContentLoaded', function () {
   toggleManager.updateToolConfigToggleState();
   toggleManager.updateAutoToggleState();
   toggleManager.setupDocumentListeners();
-  messageHandler.requestInitialData();
+  setupHandlers({ requestData: true });
 });
