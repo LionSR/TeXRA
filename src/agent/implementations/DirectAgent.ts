@@ -30,21 +30,23 @@ export class DirectAgent extends BaseReflectionAgent {
    * @returns Array of processed output file paths
    */
   protected async handleOutput(
+    currRound: number = 0,
     stateRound: AgentStateRound,
     stateGlobal: AgentStateGlobal,
-    outputFile: string,
-    endTurn: boolean,
-    currRound: number = 0,
-    processGroupId?: string,
+    options: {
+      outputFile: string;
+      endTurn: boolean;
+      processGroupId?: string;
+    },
   ): Promise<string[]> {
     // Declare the process group ID at the function scope level
-    // Initialize with processGroupId if provided, otherwise it will be set in the try block
-    let outputProcessGroupId: string = processGroupId || '';
+    // Initialize with options.processGroupId if provided, otherwise it will be set in the try block
+    let outputProcessGroupId: string = options.processGroupId || '';
 
     // These groups needs to be made consistent with the @BaseReflectionAgent.handleOutput method
     try {
       // Start a main output processing group if none provided
-      if (!processGroupId) {
+      if (!options.processGroupId) {
         outputProcessGroupId = await this.logger.startGroup(
           `OutputProcessing-Round${currRound}`,
           undefined,
@@ -56,7 +58,7 @@ export class DirectAgent extends BaseReflectionAgent {
       this.outputHandler.outputFiles[currRound] =
         this.outputHandler.outputFiles[currRound] || [];
 
-      if (endTurn) {
+      if (options.endTurn) {
         this.logger.debug(
           `Processing output for round ${currRound}`,
           outputProcessGroupId,
@@ -64,7 +66,7 @@ export class DirectAgent extends BaseReflectionAgent {
 
         // Process output files using the output handler
         await this.outputHandler.processOutputFiles(
-          outputFile,
+          options.outputFile,
           currRound,
           outputProcessGroupId,
         );
@@ -78,16 +80,18 @@ export class DirectAgent extends BaseReflectionAgent {
 
       // Finally handle statistics in base class (but pass our group ID)
       const result = await super.handleOutput(
+        currRound,
         stateRound,
         stateGlobal,
-        outputFile,
-        endTurn,
-        currRound,
-        outputProcessGroupId, // The statistics will be a subgroup of our output processing group
+        {
+          outputFile: options.outputFile,
+          endTurn: options.endTurn,
+          processGroupId: outputProcessGroupId,
+        },
       );
 
       // Only end the processing group if we created it
-      if (!processGroupId) {
+      if (!options.processGroupId) {
         this.logger.endGroup(outputProcessGroupId, 'stopped');
       }
 
@@ -95,11 +99,11 @@ export class DirectAgent extends BaseReflectionAgent {
     } catch (error) {
       this.logger.error(
         `Error in DirectAgent.handleOutput: ${error}`,
-        processGroupId,
+        options.processGroupId,
       );
 
       // Only end the processing group if we created it and we have a valid outputProcessGroupId
-      if (!processGroupId && outputProcessGroupId) {
+      if (!options.processGroupId && outputProcessGroupId) {
         this.logger.endGroup(outputProcessGroupId, 'error');
       }
 

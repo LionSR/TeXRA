@@ -34,20 +34,22 @@ export class CoTAgent extends BaseReflectionAgent {
    * @returns Array of processed output file paths
    */
   protected async handleOutput(
+    currRound: number = 0,
     stateRound: AgentStateRound,
     stateGlobal: AgentStateGlobal,
-    outputFile: string,
-    endTurn: boolean,
-    currRound: number = 0,
-    processGroupId?: string,
+    options: {
+      outputFile: string;
+      endTurn: boolean;
+      processGroupId?: string;
+    },
   ): Promise<string[]> {
     // Declare the process group ID at the function scope level
-    // Initialize with processGroupId if provided, otherwise it will be set in the try block
-    let outputProcessGroupId: string = processGroupId || '';
+    // Initialize with options.processGroupId if provided, otherwise it will be set in the try block
+    let outputProcessGroupId: string = options.processGroupId || '';
 
     try {
       // Start a main output processing group if none provided
-      if (!processGroupId) {
+      if (!options.processGroupId) {
         outputProcessGroupId = await this.logger.startGroup(
           `OutputProcessing-Round${currRound}`,
           undefined,
@@ -59,7 +61,7 @@ export class CoTAgent extends BaseReflectionAgent {
       this.outputHandler.outputFiles[currRound] =
         this.outputHandler.outputFiles[currRound] || [];
 
-      if (endTurn) {
+      if (options.endTurn) {
         this.logger.debug(
           `Processing output for round ${currRound}`,
           outputProcessGroupId,
@@ -67,13 +69,13 @@ export class CoTAgent extends BaseReflectionAgent {
 
         // First fix XML structure
         await this.outputHandler.xmlManager.ensureCorrectXmlStructure(
-          outputFile,
+          options.outputFile,
           this.agentSetting.documentTag,
         );
 
         // Then process output files using the output handler
         await this.outputHandler.processOutputFiles(
-          outputFile,
+          options.outputFile,
           currRound,
           outputProcessGroupId,
         );
@@ -83,16 +85,18 @@ export class CoTAgent extends BaseReflectionAgent {
 
       // Finally handle statistics in base class (but pass our group ID)
       const result = await super.handleOutput(
+        currRound,
         stateRound,
         stateGlobal,
-        outputFile,
-        endTurn,
-        currRound,
-        outputProcessGroupId, // The statistics will be a subgroup of our output processing group
+        {
+          outputFile: options.outputFile,
+          endTurn: options.endTurn,
+          processGroupId: outputProcessGroupId,
+        },
       );
 
       // Only end the processing group if we created it
-      if (!processGroupId) {
+      if (!options.processGroupId) {
         this.logger.endGroup(outputProcessGroupId, 'stopped');
       }
 
@@ -100,11 +104,11 @@ export class CoTAgent extends BaseReflectionAgent {
     } catch (err) {
       this.logger.error(
         `Error in handleOutput for round ${currRound}: ${err}`,
-        processGroupId,
+        options.processGroupId,
       );
 
       // Only end the processing group if we created it and we have a valid outputProcessGroupId
-      if (!processGroupId && outputProcessGroupId) {
+      if (!options.processGroupId && outputProcessGroupId) {
         this.logger.endGroup(outputProcessGroupId, 'error');
       }
 
