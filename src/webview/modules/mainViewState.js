@@ -8,16 +8,14 @@ import {
   ELEMENT_IDS,
 } from './constants.js';
 import { fileList } from './uiManagers/FileList.js';
-import {
-  CHEVRON_UP_CLASS,
-  CHEVRON_DOWN_CLASS,
-} from '@common/webviewContext.js';
+import { CHEVRON_DOWN_CLASS } from '@common/webviewContext.js';
 import {
   safeGetElementValue,
   safeGetElementById,
   safeGetElementChecked,
   safeSetElementValue,
   safeSetElementChecked,
+  setChevronIcon,
 } from '@common/domUtils.js';
 import { capitalize } from '@common/stringUtils.js';
 
@@ -70,7 +68,7 @@ export class MainViewState {
     const toggleLatexdiffs = safeGetElementById(ELEMENT_IDS.TOGGLE_LATEXDIFFS);
     if (latexdiffsContent && toggleLatexdiffs) {
       latexdiffsContent.style.display = 'none';
-      toggleLatexdiffs.innerHTML = `<i class="${CHEVRON_DOWN_CLASS}"></i>`;
+      setChevronIcon(toggleLatexdiffs, false);
     }
 
     this.save();
@@ -155,9 +153,7 @@ export class MainViewState {
       if (latexdiffsContent && toggleLatexdiffs) {
         const visible = previousState.latexdiffsVisible ?? false;
         latexdiffsContent.style.display = visible ? 'block' : 'none';
-        toggleLatexdiffs.innerHTML = `<i class="${
-          visible ? CHEVRON_UP_CLASS : CHEVRON_DOWN_CLASS
-        }"></i>`;
+        setChevronIcon(toggleLatexdiffs, visible);
       }
     } else {
       this.setDefaults();
