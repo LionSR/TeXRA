@@ -20,7 +20,7 @@
 }
 
 .model-selection-footer .select-group select {
-  height: var(--control-height);
+  height: var(--height-control);
   font-size: var(--font-size);
   padding: var(--spacing-tiny) var(--spacing-small);
 }
