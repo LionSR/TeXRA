@@ -34,6 +34,7 @@
           "@common/webviewState.js": "${webviewStateUri}",
           "@common/webview/commands.js": "${commandsUri}",
           "@common/templateUtils.js": "${templateUtilsUri}",
+          "@common/iconButtonInitializer.js": "${iconButtonInitializerUri}",
           "@common/domUtils.js": "${domUtilsUri}",
           "@common/stringUtils.js": "${stringUtilsUri}",
           "sortablejs": "https://cdn.skypack.dev/sortablejs",
@@ -65,16 +66,14 @@
                   id="currentInputFileButton"
                   class="vscode-button"
                   title="Set current file as input"
-                >
-                  <i class="codicon codicon-file-code"></i>
-                </button>
+                  data-icon="file-code"
+                ></button>
                 <button
                   id="emptyInputFileButton"
                   class="vscode-button"
                   title="Empty"
-                >
-                  <i class="codicon codicon-close"></i>
-                </button>
+                  data-icon="close"
+                ></button>
                 <span id="toggleInputFiles" class="toggle-icon" title="Multiple"
                   ><i class="codicon codicon-chevron-down"></i
                 ></span>
@@ -82,23 +81,20 @@
                   id="addOpenedInputFilesButton"
                   class="vscode-button"
                   title="Add opened files as input"
-                >
-                  <i class="codicon codicon-folder-opened"></i>
-                </button>
+                  data-icon="folder-opened"
+                ></button>
                 <button
                   id="emptyInputFilesButton"
                   class="vscode-button"
                   title="Empty"
-                >
-                  <i class="codicon codicon-trash"></i>
-                </button>
+                  data-icon="trash"
+                ></button>
                 <button
                   id="selectInputFilesButton"
                   class="vscode-button"
                   title="Add"
-                >
-                  <i class="codicon codicon-add"></i>
-                </button>
+                  data-icon="add"
+                ></button>
               </div>
             </div>
             <select id="inputFile">
@@ -128,16 +124,14 @@
                   id="currentReferenceFileButton"
                   class="vscode-button"
                   title="Set current file as reference"
-                >
-                  <i class="codicon codicon-file-code"></i>
-                </button>
+                  data-icon="file-code"
+                ></button>
                 <button
                   id="emptyReferenceFileButton"
                   class="vscode-button"
                   title="Empty"
-                >
-                  <i class="codicon codicon-close"></i>
-                </button>
+                  data-icon="close"
+                ></button>
                 <span
                   id="toggleReferenceFiles"
                   class="toggle-icon"
@@ -148,23 +142,20 @@
                   id="addOpenedReferenceFilesButton"
                   class="vscode-button"
                   title="Add opened files as reference"
-                >
-                  <i class="codicon codicon-folder-opened"></i>
-                </button>
+                  data-icon="folder-opened"
+                ></button>
                 <button
                   id="emptyReferenceFilesButton"
                   class="vscode-button"
                   title="Empty"
-                >
-                  <i class="codicon codicon-trash"></i>
-                </button>
+                  data-icon="trash"
+                ></button>
                 <button
                   id="selectReferenceFilesButton"
                   class="vscode-button"
                   title="Add"
-                >
-                  <i class="codicon codicon-add"></i>
-                </button>
+                  data-icon="add"
+                ></button>
               </div>
             </div>
             <select id="referenceFile">
@@ -194,16 +185,14 @@
                   id="currentAuxiliaryFileButton"
                   class="vscode-button"
                   title="Set current file as auxiliary"
-                >
-                  <i class="codicon codicon-file-code"></i>
-                </button>
+                  data-icon="file-code"
+                ></button>
                 <button
                   id="emptyAuxiliaryFileButton"
                   class="vscode-button"
                   title="Empty"
-                >
-                  <i class="codicon codicon-close"></i>
-                </button>
+                  data-icon="close"
+                ></button>
                 <span
                   id="toggleAuxiliaryFiles"
                   class="toggle-icon"
@@ -214,23 +203,20 @@
                   id="addOpenedAuxiliaryFilesButton"
                   class="vscode-button"
                   title="Add opened files as auxiliary"
-                >
-                  <i class="codicon codicon-folder-opened"></i>
-                </button>
+                  data-icon="folder-opened"
+                ></button>
                 <button
                   id="emptyAuxiliaryFilesButton"
                   class="vscode-button"
                   title="Empty"
-                >
-                  <i class="codicon codicon-trash"></i>
-                </button>
+                  data-icon="trash"
+                ></button>
                 <button
                   id="selectAuxiliaryFilesButton"
                   class="vscode-button"
                   title="Add"
-                >
-                  <i class="codicon codicon-add"></i>
-                </button>
+                  data-icon="add"
+                ></button>
               </div>
             </div>
             <select id="auxiliaryFile">
@@ -296,9 +282,8 @@
                   id="emptyMediaFileButton"
                   class="vscode-button"
                   title="Empty"
-                >
-                  <i class="codicon codicon-close"></i>
-                </button>
+                  data-icon="close"
+                ></button>
                 <span id="toggleMediaFiles" class="toggle-icon" title="Multiple"
                   ><i class="codicon codicon-chevron-down"></i
                 ></span>
@@ -306,16 +291,14 @@
                   id="emptyMediaFilesButton"
                   class="vscode-button"
                   title="Empty"
-                >
-                  <i class="codicon codicon-trash"></i>
-                </button>
+                  data-icon="trash"
+                ></button>
                 <button
                   id="selectMediaFilesButton"
                   class="vscode-button"
                   title="Add"
-                >
-                  <i class="codicon codicon-add"></i>
-                </button>
+                  data-icon="add"
+                ></button>
               </div>
             </div>
             <select id="mediaFile">
@@ -347,16 +330,14 @@
                   id="emptyOutputFilesButton"
                   class="vscode-button"
                   title="Empty"
-                >
-                  <i class="codicon codicon-trash"></i>
-                </button>
+                  data-icon="trash"
+                ></button>
                 <button
                   id="selectOutputFilesButton"
                   class="vscode-button"
                   title="Add"
-                >
-                  <i class="codicon codicon-add"></i>
-                </button>
+                  data-icon="add"
+                ></button>
               </div>
             </div>
             <div
@@ -419,38 +400,33 @@
                 class="vscode-button"
                 title="Pack the output for this agent into the History folder"
                 style="display: none"
-              >
-                <i class="codicon codicon-archive"></i>
-              </button>
+                data-icon="archive"
+              ></button>
               <button
                 id="cleanButton"
                 class="vscode-button"
                 title="Clean the output for this agent"
                 style="display: none"
-              >
-                <i class="codicon codicon-trash"></i>
-              </button>
+                data-icon="trash"
+              ></button>
               <button
                 id="magicPolishButton"
                 class="vscode-button"
                 title="Polish instruction text with AI"
-              >
-                <i class="codicon codicon-sparkle"></i>
-              </button>
+                data-icon="sparkle"
+              ></button>
               <button
                 id="recordInstructionButton"
                 class="vscode-button"
                 title="Record instruction with microphone"
-              >
-                <i class="codicon codicon-mic"></i>
-              </button>
+                data-icon="mic"
+              ></button>
               <button
                 id="eraseInstructionButton"
                 class="vscode-button"
                 title="Erase Instruction"
-              >
-                <i class="codicon codicon-clear-all"></i>
-              </button>
+                data-icon="clear-all"
+              ></button>
             </div>
           </div>
           <textarea
@@ -480,9 +456,12 @@
               </select>
             </div>
           </div>
-          <button id="executeButton" class="vscode-button" title="Execute">
-            <i class="codicon codicon-play"></i>
-          </button>
+          <button
+            id="executeButton"
+            class="vscode-button"
+            title="Execute"
+            data-icon="play"
+          ></button>
         </div>
       </div>
       <div class="latexdiffs-section">
@@ -509,16 +488,14 @@
                   id="currentBaseFileButton"
                   class="vscode-button"
                   title="Set current file as base"
-                >
-                  <i class="codicon codicon-file-code"></i>
-                </button>
+                  data-icon="file-code"
+                ></button>
                 <button
                   id="emptyBaseFileButton"
                   class="vscode-button"
                   title="Empty"
-                >
-                  <i class="codicon codicon-close"></i>
-                </button>
+                  data-icon="close"
+                ></button>
               </div>
             </div>
             <select id="baseFile">
@@ -541,44 +518,38 @@
                   id="acceptButton"
                   class="vscode-button"
                   title="Accept changes from edited file and overwrite base file"
-                >
-                  <i class="codicon codicon-check"></i>
-                </button>
+                  data-icon="check"
+                ></button>
                 <button
                   id="compareButton"
                   class="vscode-button"
                   title="Compare the selected edited file with the selected base file"
-                >
-                  <i class="codicon codicon-diff"></i>
-                </button>
+                  data-icon="diff"
+                ></button>
                 <button
                   id="mergeButton"
                   class="vscode-button"
                   title="Create a new verion of the base file by merging the edits suggested by the edited file"
-                >
-                  <i class="codicon codicon-merge"></i>
-                </button>
+                  data-icon="merge"
+                ></button>
                 <button
                   id="latexdiffButton"
                   class="vscode-button"
                   title="LaTeXdiff the selected edited file with the selected base file"
-                >
-                  <i class="codicon codicon-diff-single"></i>
-                </button>
+                  data-icon="diff-single"
+                ></button>
                 <button
                   id="currentEditedFileButton"
                   class="vscode-button"
                   title="Set current file as edited"
-                >
-                  <i class="codicon codicon-file-code"></i>
-                </button>
+                  data-icon="file-code"
+                ></button>
                 <button
                   id="emptyEditedFileButton"
                   class="vscode-button"
                   title="Empty"
-                >
-                  <i class="codicon codicon-close"></i>
-                </button>
+                  data-icon="close"
+                ></button>
               </div>
             </div>
             <select id="editedFile">
@@ -601,23 +572,20 @@
                   id="latexdiffvcButton"
                   class="vscode-button"
                   title="LaTeXdiff the selected base file with another git commit"
-                >
-                  <i class="codicon codicon-diff-single"></i>
-                </button>
+                  data-icon="diff-single"
+                ></button>
                 <button
                   id="packLatexdiffvcButton"
                   class="vscode-button"
                   title="Pack the latexdiff-vc output into the History folder"
-                >
-                  <i class="codicon codicon-archive"></i>
-                </button>
+                  data-icon="archive"
+                ></button>
                 <button
                   id="cleanLatexdiffvcButton"
                   class="vscode-button"
                   title="Clean the latexdiff-vc output"
-                >
-                  <i class="codicon codicon-trash"></i>
-                </button>
+                  data-icon="trash"
+                ></button>
               </div>
             </div>
             <select id="commit">
