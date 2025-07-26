@@ -33,6 +33,7 @@ export class ExecutionManager {
       autoExtractTikzFigure: message.autoExtractTikzFigure,
       reflect: message.reflect,
       attachTeXCount: message.attachTeXCount,
+      attachDiagnostics: message.attachDiagnostics,
       usePrefillFromInput: message.usePrefillFromInput,
       printInputPrompt: message.printInputPrompt,
       autoCompileInputPdf: message.autoCompileInputPdf,

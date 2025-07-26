@@ -38,6 +38,7 @@ export const CHECK_BOXES_AUTO_EXTRACT = [
 // Tool configuration checkboxes
 export const CHECK_BOXES_TOOL_USE = [
   'attachTeXCount',
+  'attachDiagnostics',
   'usePrefillFromInput',
   'printInputPrompt',
   'reflect',

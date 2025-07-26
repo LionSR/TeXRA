@@ -25,6 +25,20 @@ export class AgentDirectoryManager {
     return basePath;
   }
 
+  async builtInToolUse(context: vscode.ExtensionContext): Promise<string> {
+    if (!context) {
+      throw new Error('Extension context required for built-in agents');
+    }
+
+    StorageFS.initialize(context);
+    await GlobalStorageFS.ensureDir('tool_use_agents');
+
+    const basePath = GlobalStorageFS.fullPath('tool_use_agents');
+    logger.debug(CHANNEL, `Using built-in tool-use directory: ${basePath}`);
+
+    return basePath;
+  }
+
   async custom(): Promise<string> {
     const customPath = getConfig<string>('explorer.agentsDirectory', '');
 
