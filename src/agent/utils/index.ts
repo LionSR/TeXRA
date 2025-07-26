@@ -6,4 +6,4 @@ export * from './promptHelpers';
 export * from './outputFileUtils';
 export * from './priceUtils';
 export * from './text';
-export * from './UsageStatsManager';
+export * from './UsageMonitor';
