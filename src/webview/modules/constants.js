@@ -49,17 +49,6 @@ export const CHECK_BOXES = [
   ...CHECK_BOXES_TOOL_USE,
 ];
 
-// Map checkbox IDs to their corresponding update commands
-export const CHECKBOX_UPDATE_COMMANDS = {
-  autoExtractFigure: MAIN_VIEW_COMMANDS.UPDATE_AUTO_EXTRACT_FIGURE,
-  autoExtractTikzFigure: MAIN_VIEW_COMMANDS.UPDATE_AUTO_EXTRACT_TIKZ_FIGURE,
-  autoCompileInputPdf: MAIN_VIEW_COMMANDS.UPDATE_AUTO_COMPILE_INPUT_PDF,
-  attachTeXCount: MAIN_VIEW_COMMANDS.UPDATE_ATTACH_TEX_COUNT,
-  usePrefillFromInput: MAIN_VIEW_COMMANDS.UPDATE_USE_PREFILL_FROM_INPUT,
-  printInputPrompt: MAIN_VIEW_COMMANDS.UPDATE_PRINT_INPUT_PROMPT,
-  reflect: MAIN_VIEW_COMMANDS.UPDATE_REFLECT,
-};
-
 // Form elements with values to save
 export const VALUE_ELEMENTS = [
   // parameters
