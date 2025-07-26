@@ -527,327 +527,203 @@ export abstract class BaseReflectionAgent extends BaseAgent {
   }
 
   /**
-   * Processes initial conversation round.
-   * @returns Tuple of [round state, global state, messages, completion flag, tool state]
+   * Run a single conversation round combining setup and reflection logic.
    */
-  protected async process(): Promise<
-    [AgentStateRound, AgentStateGlobal, any[], boolean, ToolState]
-  > {
-    // Initialize input files list
-    const inputFiles = [
-      this.agentConfig.inputFile,
-      ...(this.agentConfig.inputFiles || []),
-    ];
-    const toolState = new ToolState();
-
-    // Initialize state and messages
-    const currRound = 0;
-    const stateGlobal = new AgentStateGlobal();
-
-    this.logger.debug(`Processing round ${currRound}`);
-
-    // Create a dedicated group for Round 0, as a child of the main run group
-    const round0GroupId = await this.logger.startGroup(
-      `r${currRound}`,
+  protected async runRound(
+    roundIndex: number,
+    messages: any[],
+    toolState: ToolState,
+    stateGlobal: AgentStateGlobal,
+  ): Promise<[AgentStateRound, AgentStateGlobal, any[], boolean]> {
+    this.logger.debug(`Processing round ${roundIndex}`);
+    const roundGroupId = await this.logger.startGroup(
+      `r${roundIndex}`,
       undefined,
-      this.runGroupId, // Use the runGroupId from the class as the parent
+      this.runGroupId,
     );
 
     try {
-      // Handle prefill from input if enabled
-      if (this.agentConfig.toolConfig.usePrefillFromInput) {
-        toolState.firstKCharsFromInput = await getFirstKCharsFromDocument(
+      if (roundIndex === 0) {
+        const inputFiles = [
           this.agentConfig.inputFile,
-          K_SLICE,
+          ...(this.agentConfig.inputFiles || []),
+        ];
+
+        if (this.agentConfig.toolConfig.usePrefillFromInput) {
+          toolState.firstKCharsFromInput = await getFirstKCharsFromDocument(
+            this.agentConfig.inputFile,
+            K_SLICE,
+          );
+        }
+
+        const extraMedia: string[] = [];
+        if (this.modelHandler.capabilities.supportsVision) {
+          if (
+            this.agentConfig.mediaFile &&
+            !toolState.mediaFiles.includes(this.agentConfig.mediaFile)
+          ) {
+            extraMedia.push(this.agentConfig.mediaFile);
+          }
+          if (this.agentConfig.mediaFiles) {
+            extraMedia.push(...this.agentConfig.mediaFiles);
+          }
+        }
+
+        await this.latexMediaManager.processInputFiles(
+          inputFiles,
+          toolState,
+          this.agentConfig.toolConfig,
+          this.modelHandler.capabilities.supportsVision,
+          extraMedia,
+          roundGroupId,
         );
-      }
 
-      const extraMedia: string[] = [];
-      if (this.modelHandler.capabilities.supportsVision) {
-        if (
-          this.agentConfig.mediaFile &&
-          !toolState.mediaFiles.includes(this.agentConfig.mediaFile)
-        ) {
-          extraMedia.push(this.agentConfig.mediaFile);
+        const [systemPrompt, userRequest, userPrefix] = await Promise.all([
+          getSystemPromptWithRules(
+            this.agentPrompt.systemPrompt,
+            this.userVars,
+          ),
+          renderPrompt(this.agentPrompt.userRequest, this.userVars),
+          renderPrompt(this.agentPrompt.userPrefix, this.userVars),
+        ]);
+
+        let prefixWithStats = userPrefix;
+        if (toolState.texcountStats) {
+          prefixWithStats = `${toolState.texcountStats}${userPrefix}`;
         }
-        if (this.agentConfig.mediaFiles) {
-          extraMedia.push(...this.agentConfig.mediaFiles);
+
+        if (this.agentConfig.toolConfig.printInputPrompt) {
+          await writePromptToXml(
+            systemPrompt,
+            prefixWithStats,
+            userRequest,
+            this.agentConfig.inputFile,
+            this.agentConfig.agent,
+          );
         }
-      }
 
-      await this.latexMediaManager.processInputFiles(
-        inputFiles,
-        toolState,
-        this.agentConfig.toolConfig,
-        this.modelHandler.capabilities.supportsVision,
-        extraMedia,
-        round0GroupId,
-      );
-
-      const messages: any[] = [];
-
-      // Set up initial prompts
-      const [systemPrompt, userRequest, userPrefix] = await Promise.all([
-        getSystemPromptWithRules(this.agentPrompt.systemPrompt, this.userVars),
-        renderPrompt(this.agentPrompt.userRequest, this.userVars),
-        renderPrompt(this.agentPrompt.userPrefix, this.userVars),
-      ]);
-
-      let prefixWithStats = userPrefix;
-      if (toolState.texcountStats) {
-        prefixWithStats = `${toolState.texcountStats}${userPrefix}`;
-      }
-
-      // Write prompt to file if requested
-      if (this.agentConfig.toolConfig.printInputPrompt) {
-        await writePromptToXml(
-          systemPrompt,
+        const initialMessages = await this.modelHandler.initializeMessages(
           prefixWithStats,
           userRequest,
-          this.agentConfig.inputFile,
-          this.agentConfig.agent,
+          toolState.mediaFiles,
+          systemPrompt,
+        );
+        messages.push(...initialMessages);
+      } else {
+        if (this.agentConfig.outputFiles) {
+          await this._handleToolStateForOutput(
+            this.agentConfig.outputFiles,
+            roundIndex,
+            toolState,
+          );
+        } else {
+          const outputFiles = this.outputHandler.outputFiles[roundIndex - 1];
+          if (outputFiles && outputFiles.length > 0) {
+            await this._handleToolStateForOutput(
+              [outputFiles[0]],
+              roundIndex,
+              toolState,
+            );
+          }
+        }
+
+        if (this.agentConfig.toolConfig.usePrefillFromInput) {
+          toolState.firstKCharsFromInput = await getFirstKCharsFromDocument(
+            this.agentConfig.inputFile,
+            K_SLICE,
+          );
+        }
+
+        const userRequestReflect = await renderPrompt(
+          this.agentPrompt.userReflect,
+          this.userVars,
+        );
+        let userMessage = userRequestReflect ? `${userRequestReflect}\n` : '';
+        if (toolState.texcountStats) {
+          userMessage = `${toolState.texcountStats}${userMessage}`;
+        }
+
+        if (!userMessage.trim()) {
+          this.logger.endGroup(roundGroupId, 'stopped');
+          const stateRound = new AgentStateRound(roundIndex);
+          return [stateRound, stateGlobal, messages, true];
+        }
+
+        messages = await this.modelHandler.createRoundMessages(
+          messages,
+          userMessage,
+          toolState.mediaFiles,
         );
       }
 
-      // Initialize messages with prompts
-      const initialMessages = await this.modelHandler.initializeMessages(
-        prefixWithStats,
-        userRequest,
-        toolState.mediaFiles,
-        systemPrompt,
+      const prefill = getPrefillForRound(
+        this.agentSetting.prefills,
+        roundIndex,
       );
-      messages.push(...initialMessages);
-
-      // Handle prefill
-      const prefill = getPrefillForRound(this.agentSetting.prefills, currRound);
       toolState.updateAccumulatedOutput(prefill);
 
-      // Initialize output and handle prefill
       const [endTurn, updatedMessages] =
         await this.modelHandler.initializeOutputAndPrefill(
           this.agentConfig,
           this.agentSetting,
           messages,
           toolState,
-          this.outputFile[currRound],
+          this.outputFile[roundIndex],
           prefill,
-          round0GroupId,
+          roundGroupId,
         );
 
-      const stateRound = new AgentStateRound(currRound);
+      const stateRound = new AgentStateRound(roundIndex);
       let finalEndTurn = endTurn;
 
       if (!endTurn) {
-        const [
-          updatedStateRound,
-          updatedStateGlobal,
-          updatedToolState,
-          newEndTurn,
-        ] = await this.processResponseCycle(
-          updatedMessages,
-          stateRound,
-          stateGlobal,
-          toolState,
-          this.outputFile[currRound],
-          round0GroupId, // Pass the round group ID to processResponseCycle
-        );
+        const [updatedStateRound, updatedStateGlobal, , newEndTurn] =
+          await this.processResponseCycle(
+            updatedMessages,
+            stateRound,
+            stateGlobal,
+            toolState,
+            this.outputFile[roundIndex],
+            roundGroupId,
+          );
         finalEndTurn = newEndTurn;
 
-        // Handle output and logging
         await this.handleRoundCompletion(
           updatedStateRound,
           updatedStateGlobal,
-          this.outputFile[currRound],
+          this.outputFile[roundIndex],
           finalEndTurn,
-          currRound,
-          round0GroupId, // Pass the round group ID
+          roundIndex,
+          roundGroupId,
         );
 
-        this.logger.debug(
-          `stateGlobal: ${JSON.stringify(updatedStateGlobal)}`,
-          round0GroupId,
-        );
-
-        // End the round group
-        this.logger.endGroup(round0GroupId, 'stopped');
-
+        this.logger.endGroup(roundGroupId, 'stopped');
         return [
           updatedStateRound,
           updatedStateGlobal,
           updatedMessages,
           finalEndTurn,
-          updatedToolState,
         ];
       }
 
-      // Handle output and logging for early termination
       await this.handleRoundCompletion(
         stateRound,
         stateGlobal,
-        this.outputFile[currRound],
+        this.outputFile[roundIndex],
         finalEndTurn,
-        currRound,
-        round0GroupId, // Pass the round group ID
+        roundIndex,
+        roundGroupId,
       );
-
-      // End the round group
-      this.logger.endGroup(round0GroupId, 'stopped');
-
-      return [
-        stateRound,
-        stateGlobal,
-        updatedMessages,
-        finalEndTurn,
-        toolState,
-      ];
+      this.logger.endGroup(roundGroupId, 'stopped');
+      return [stateRound, stateGlobal, updatedMessages, finalEndTurn];
     } catch (error) {
-      // End the round group with error status in case of exceptions
-      this.logger.endGroup(round0GroupId, 'error');
+      this.logger.endGroup(roundGroupId, 'error');
       throw error;
     }
   }
 
   /**
-   * Processes a follow-up conversation round.
-   * @returns Tuple of [round state, global state, messages, completion flag]
-   */
-  protected async reflect(
-    stateGlobal: AgentStateGlobal,
-    messages: any[],
-    toolState: ToolState,
-    currRound: number = 1,
-  ): Promise<[AgentStateRound, AgentStateGlobal, any[], boolean]> {
-    this.logger.debug(`Processing round ${currRound}`);
-
-    // Create a dedicated group for round 1, as a child of the main run group
-    const round1GroupId = await this.logger.startGroup(
-      `r${currRound}`,
-      undefined,
-      this.runGroupId,
-    );
-
-    try {
-      // Handle output file processing
-      if (this.agentConfig.outputFiles) {
-        await this._handleToolStateForOutput(
-          this.agentConfig.outputFiles,
-          currRound,
-          toolState,
-        );
-      } else {
-        // Handle single output file from previous round
-        const outputFiles = this.outputHandler.outputFiles[currRound - 1];
-        if (outputFiles && outputFiles.length > 0) {
-          await this._handleToolStateForOutput(
-            [outputFiles[0]],
-            currRound,
-            toolState,
-          );
-        }
-      }
-
-      if (this.agentConfig.toolConfig.usePrefillFromInput) {
-        toolState.firstKCharsFromInput = await getFirstKCharsFromDocument(
-          this.agentConfig.inputFile,
-          K_SLICE,
-        );
-      }
-
-      // Initialize round
-      const stateRound = new AgentStateRound(currRound);
-
-      // Prepare round message
-      const userRequestReflect = await renderPrompt(
-        this.agentPrompt.userReflect,
-        this.userVars,
-      );
-      let userMessage = userRequestReflect ? `${userRequestReflect}\n` : '';
-      if (toolState.texcountStats) {
-        userMessage = `${toolState.texcountStats}${userMessage}`;
-      }
-
-      // Only proceed if there's actual content
-      if (!userMessage.trim()) {
-        this.logger.endGroup(round1GroupId, 'stopped');
-        return [stateRound, stateGlobal, messages, true];
-      }
-
-      const roundMessages = await this.modelHandler.createRoundMessages(
-        messages,
-        userMessage,
-        toolState.mediaFiles,
-      );
-
-      // Handle prefill for round
-      const prefill = getPrefillForRound(this.agentSetting.prefills, currRound);
-      toolState.updateAccumulatedOutput(prefill);
-
-      const [endTurn, updatedMessages] =
-        await this.modelHandler.initializeOutputAndPrefill(
-          this.agentConfig,
-          this.agentSetting,
-          roundMessages,
-          toolState,
-          this.outputFile[currRound],
-          prefill,
-          round1GroupId,
-        );
-
-      if (!endTurn) {
-        const [
-          updatedStateRound,
-          updatedStateGlobal,
-          updatedToolState,
-          newEndTurn,
-        ] = await this.processResponseCycle(
-          updatedMessages,
-          stateRound,
-          stateGlobal,
-          toolState,
-          this.outputFile[currRound],
-          round1GroupId,
-        );
-
-        // Handle output and logging
-        await this.handleRoundCompletion(
-          updatedStateRound,
-          updatedStateGlobal,
-          this.outputFile[currRound],
-          newEndTurn,
-          currRound,
-          round1GroupId,
-        );
-
-        this.logger.endGroup(round1GroupId, 'stopped');
-        return [
-          updatedStateRound,
-          updatedStateGlobal,
-          updatedMessages,
-          newEndTurn,
-        ];
-      }
-
-      // Handle output and logging for early termination
-      await this.handleRoundCompletion(
-        stateRound,
-        stateGlobal,
-        this.outputFile[currRound],
-        endTurn,
-        currRound,
-        round1GroupId,
-      );
-
-      this.logger.endGroup(round1GroupId, 'stopped');
-      return [stateRound, stateGlobal, updatedMessages, endTurn];
-    } catch (error) {
-      // End the round group with error status in case of exceptions
-      this.logger.endGroup(round1GroupId, 'error');
-      throw error;
-    }
-  }
-
-  /**
-   * Main execution method that processes inputs and generates outputs.
+   * Runs all configured rounds sequentially.
    */
   public async run(): Promise<void> {
     // Create a dedicated run group for this agent execution
@@ -862,19 +738,21 @@ export abstract class BaseReflectionAgent extends BaseAgent {
       // Initialize client before starting
       await this.initializeClient();
 
-      const [stateRound, stateGlobal, messages, endTurn, toolState] =
-        await this.process();
-      this.logger.debug(`Round 0 completed\n`, this.runGroupId);
+      const stateGlobal = new AgentStateGlobal();
+      let messages: any[] = [];
 
-      // Check for interruption before next round
-      if (
-        !this.isInterrupted &&
-        this.agentConfig.toolConfig.reflect &&
-        endTurn
-      ) {
-        const toolStateReflection = new ToolState();
-        await this.reflect(stateGlobal, messages, toolStateReflection);
-        this.logger.debug(`Round 1 completed\n`, this.runGroupId);
+      for (let i = 0; i < this.getNumberOfRounds(); i++) {
+        const toolState = new ToolState();
+        const [stateRound, updatedGlobal, updatedMessages, endTurn] =
+          await this.runRound(i, messages, toolState, stateGlobal);
+        messages = updatedMessages;
+        // stateGlobal is mutated by runRound but reassign to keep reference
+        Object.assign(stateGlobal, updatedGlobal);
+        this.logger.debug(`Round ${i} completed\n`, this.runGroupId);
+
+        if (this.isInterrupted || !endTurn) {
+          break;
+        }
       }
 
       // End the run group with success status
