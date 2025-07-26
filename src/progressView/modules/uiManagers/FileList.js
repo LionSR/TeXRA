@@ -3,6 +3,7 @@ import { formatTokens } from '../formatters.js';
 import { COMMANDS, ELEMENT_IDS } from '../constants.js';
 import { vscode } from '@common/webviewContext.js';
 import { createFromTemplate } from '@common/templateUtils.js';
+import { initializeIconButtons } from '@common/iconButtonInitializer.js';
 
 /**
  * Manages file list rendering.
@@ -143,6 +144,9 @@ export class FileList {
 
         // Update existing buttons based on file state
         this.updateFileButtons(clone, file, effectiveBase);
+
+        // Replace any icon placeholders inside the clone
+        initializeIconButtons(clone);
 
         roundGroup.appendChild(clone);
       });
