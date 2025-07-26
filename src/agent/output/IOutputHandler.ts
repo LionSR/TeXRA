@@ -1,5 +1,4 @@
 // Local imports - types
-import { AgentStateGlobal } from '@agent/core/AgentState';
 import { NamedOutputFile, OutputFileInfo } from './types';
 import { XmlOutputManager } from './XmlOutputManager';
 
@@ -22,12 +21,6 @@ export interface IOutputHandler {
 
   /** Run latexdiff comparisons for the current round. */
   handleLatexdiffofOutput(currRound: number, groupId?: string): Promise<void>;
-
-  /** Print token usage and cost statistics. */
-  printStatistics(
-    stateGlobal: AgentStateGlobal,
-    groupId?: string,
-  ): Promise<void>;
 
   /** Process output files from XML or direct input. */
   processOutputFiles(

@@ -8,7 +8,6 @@ import * as vscode from 'vscode';
 import { runLatexFormatter } from '@latex/texFormatter';
 import { XmlOutputManager } from './XmlOutputManager';
 import { LatexDiffManager } from './LatexDiffManager';
-import { StatisticsReporter } from './StatisticsReporter';
 import { DiffStatsManager } from './DiffStatsManager';
 import { NamedOutputFile } from './types';
 import type { IOutputHandler } from './IOutputHandler';
@@ -18,7 +17,6 @@ import { getOutputFileName } from '@agent/utils/outputFileUtils';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import { AgentSetting, AgentType } from '@agent/core/AgentDataclass';
 import { AgentStateGlobal, AgentStateRound } from '@agent/core/AgentState';
-import type { IModelHandler } from '@agent/modelHandlers';
 
 // Local imports - utilities
 import { replaceInputCommands, createFileMapping } from '@utils/files';
@@ -34,7 +32,6 @@ import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 export class OutputHandler implements IOutputHandler {
   public agentSetting: AgentSetting;
   public agentConfig: AgentConfig;
-  public modelHandler: IModelHandler;
   public logId: number;
   public outputFiles: { [key: number]: string[] };
   public outputMappings: { [key: number]: NamedOutputFile[] };
@@ -44,20 +41,17 @@ export class OutputHandler implements IOutputHandler {
   protected channel: string;
   public readonly xmlManager: XmlOutputManager;
   private diffManager: LatexDiffManager;
-  private statsReporter: StatisticsReporter;
   private diffStatsManager: DiffStatsManager;
 
   constructor(
     agentSetting: AgentSetting,
     agentConfig: AgentConfig,
-    modelHandler: IModelHandler,
     logId: number,
     baseFiles: string[] = [],
     logger?: AgentLogger,
   ) {
     this.agentSetting = agentSetting;
     this.agentConfig = agentConfig;
-    this.modelHandler = modelHandler;
     this.logId = logId;
     this.outputFiles = { 0: [], 1: [] };
     this.outputMappings = { 0: [], 1: [] };
@@ -76,11 +70,6 @@ export class OutputHandler implements IOutputHandler {
       this.baseFiles,
       this.logger,
       this.channel,
-    );
-    this.statsReporter = new StatisticsReporter(
-      this.modelHandler,
-      this.channel,
-      this.logger,
     );
     this.diffStatsManager = new DiffStatsManager();
   }
@@ -283,14 +272,6 @@ export class OutputHandler implements IOutputHandler {
     });
   }
 
-  /** Prints statistics about token usage and costs */
-  public async printStatistics(
-    stateGlobal: AgentStateGlobal,
-    groupId?: string,
-  ): Promise<void> {
-    await this.statsReporter.printStatistics(stateGlobal, groupId);
-  }
-
   /**
    * Processes output files from XML or direct input.
    */
@@ -413,9 +394,6 @@ export class OutputHandler implements IOutputHandler {
     currRound: number = 0,
     roundGroupId?: string,
   ): Promise<string[]> {
-    // Print statistics at the end of each round
-    await this.printStatistics(stateGlobal, roundGroupId);
-
     return this.outputFiles[currRound] || [];
   }
 }
