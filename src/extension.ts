@@ -11,7 +11,7 @@ import { watchConfig } from '@utils/config';
 import { SecretManager } from '@frontend/secretManager';
 import { copyDefaultAgents, configureLatexSettings } from '@frontend/setup';
 import { disposeDiffRefresh } from '@frontend/ui/diffView';
-import { StorageFS } from '@utils/files';
+import { StorageFS, TASK_RUNS_DIR } from '@utils/files';
 import { initializeStateManagers } from '@common/state/stateManager';
 import { FileLister } from '@frontend/files/fileLister';
 
@@ -41,6 +41,7 @@ export async function activate(context: vscode.ExtensionContext) {
   // Initialize storage systems
   SecretManager.initialize(context);
   StorageFS.initialize(context);
+  await StorageFS.ensureDir(TASK_RUNS_DIR);
   initializeStateManagers(context);
   FileLister.initialize(context);
 

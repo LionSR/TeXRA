@@ -10,6 +10,7 @@ import { AgentPrompt, AgentSetting } from '../core/AgentDataclass';
 import { IAgent } from '../core/IAgent';
 import type { IModelHandler } from '../modelHandlers';
 import { buildUserVars } from '../utils/userVars';
+import type { ExecutionId } from '@agent/types/IdentifierTypes';
 
 // Local imports - utilities
 import { SHORT_SLEEP_MS } from '@utils/config';
@@ -27,6 +28,7 @@ export abstract class BaseAgent implements IAgent {
   protected agentPath: string;
   protected logger: AgentLogger;
   protected runGroupId?: string;
+  public executionId?: ExecutionId;
   protected userVars: Record<string, any> = {};
   protected client: any;
   protected isInterrupted = false;

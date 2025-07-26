@@ -52,6 +52,8 @@ The header provides a summary and actions for the selected stream:
   - <i class="codicon codicon-trash"></i> **Clean**: Deletes the output files associated with this stream.
   - <i class="codicon codicon-clear-all"></i> **Erase**: Removes this stream and its log content entirely from the ProgressBoard.
 
+Every time you run a task, TeXRA also creates a folder under the extension's workspace storage: `taskRuns/<executionId>`. This directory stores intermediate artifacts like debug message JSON files. You can inspect these files if you enable the `debug.saveMessageObjects` setting.
+
 ### Log Content
 
 This scrollable area displays the detailed, timestamped logs for the selected agent run.

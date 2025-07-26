@@ -1,5 +1,5 @@
 // Standard library imports
-// (none needed)
+import * as path from 'path';
 
 // Third-party imports
 // (none needed)
@@ -12,7 +12,7 @@ import { bestConnectionMethod, LatexMediaManager } from '@latex';
 import { bus } from '@eventBus/ProgressEventBus';
 
 // Local imports - utilities
-import { WorkspaceFS } from '@utils/files';
+import { WorkspaceFS, StorageFS, getRunDir } from '@utils/files';
 import {
   renderPrompt,
   getFirstKCharsFromDocument,
@@ -173,10 +173,15 @@ export abstract class BaseReflectionAgent extends BaseAgent {
           false,
         );
         if (shouldSaveMessageObjects) {
-          const outputFileBaseName = outputFile.replace('.xml', '');
-          const debugFilePath = `${outputFileBaseName}_cont${stateRound.continuationCount}.json`;
+          const outputFileBaseName = path
+            .basename(outputFile)
+            .replace('.xml', '');
+          const debugFileName = `${outputFileBaseName}_cont${stateRound.continuationCount}.json`;
+          const debugFilePath = this.executionId
+            ? path.join(getRunDir(this.executionId), debugFileName)
+            : debugFileName;
           try {
-            await WorkspaceFS.writeFile(
+            await StorageFS.write(
               debugFilePath,
               JSON.stringify(messages, null, 2),
             );
