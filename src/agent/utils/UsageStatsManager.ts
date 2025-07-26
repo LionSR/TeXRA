@@ -1,3 +1,4 @@
+// Local imports - log
 import { AgentLogger } from '@logger/AgentLogger';
 import { bus } from '@eventBus/ProgressEventBus';
 import { AgentStateGlobal } from '@agent/core/AgentState';
@@ -9,9 +10,11 @@ import {
 } from '@agent/core/ResponseUsage';
 import { ResponseUsage } from 'openai/resources/responses/responses';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/modelHandlerOpenAIResponse';
-import { MESSAGE_TYPES } from '@logger/messageTypes';
 
-export class StatisticsReporter {
+/**
+ * Handles printing usage statistics to the log and progress view.
+ */
+export class UsageStatsManager {
   constructor(
     private readonly modelHandler: IModelHandler,
     private readonly channel: string,
