@@ -25,7 +25,19 @@ export class MainViewContentProvider extends BaseViewContentProvider {
         webview,
         'modules/messageHandlers.js',
       ),
+      themeHandlersUri: this.getWebviewUri(
+        webview,
+        'modules/handlers/themeHandlers.js',
+      ),
       fileHandlersUri: this.getWebviewUri(webview, 'modules/fileHandlers.js'),
+      fileMessageHandlersUri: this.getWebviewUri(
+        webview,
+        'modules/handlers/fileHandlers.js',
+      ),
+      recordingHandlersUri: this.getWebviewUri(
+        webview,
+        'modules/handlers/recordingHandlers.js',
+      ),
       domHandlersUri: this.getWebviewUri(webview, 'modules/domHandlers.js'),
       constantsUri: this.getWebviewUri(webview, 'modules/constants.js'),
       eventBusUri: this.getWebviewUri(webview, 'modules/eventBus.js'),
