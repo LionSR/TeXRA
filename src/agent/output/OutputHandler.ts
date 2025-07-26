@@ -273,6 +273,42 @@ export class OutputHandler implements IOutputHandler {
   }
 
   /**
+   * Finalize processing for a conversation round.
+   * Gathers file info, validates expected outputs and
+   * emits an event with the collected files.
+   */
+  public async finalizeRound(
+    outputFile: string,
+    currRound: number,
+    options: { endTurn: boolean; groupId?: string },
+  ): Promise<void> {
+    const { endTurn, groupId } = options;
+    const fileInfos = await this.gatherOutputFileInfo(currRound);
+
+    if (endTurn) {
+      try {
+        await this.validateExpectedOutputs(outputFile, currRound, groupId);
+        this.logger.debug(
+          `Expected outputs validated for round ${currRound}`,
+          groupId,
+        );
+      } catch (error) {
+        this.logger.error(
+          `Expected output validation failed after round ${currRound}: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+          groupId,
+        );
+      }
+    }
+
+    bus.emit('addOutputFiles', {
+      stream: this.channel,
+      filesByRound: { [currRound]: fileInfos },
+    });
+  }
+
+  /**
    * Processes output files from XML or direct input.
    */
   public async processOutputFiles(
