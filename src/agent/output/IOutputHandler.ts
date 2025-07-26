@@ -43,7 +43,9 @@ export interface IOutputHandler {
   finalizeRound(
     outputFile: string,
     currRound: number,
-    endTurn: boolean,
-    groupId?: string,
+    options: {
+      endTurn: boolean;
+      groupId?: string;
+    },
   ): Promise<void>;
 }
