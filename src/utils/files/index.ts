@@ -7,3 +7,4 @@ export * from './baseFileUtils';
 export * from './fileMappingUtils';
 export * from './pathUtils';
 export * from './mimeUtils';
+export * from './taskRunStorage';

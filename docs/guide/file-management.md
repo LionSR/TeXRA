@@ -171,6 +171,19 @@ open using VS Code's default viewer, so PDFs and images display correctly while
 `.tex` documents open in the editor. Absolute paths are also handled
 properly.
 
+### Task Run Storage
+
+Every time you run an agent, TeXRA creates a folder under its workspace storage
+directory:
+
+```text
+.vscode/texra/taskRuns/<executionId>/
+```
+
+This folder stores intermediate artifacts such as the optional message JSON
+files written when `texra.debug.saveMessageObjects` is enabled. These directories
+are safe to delete if you need to reclaim space.
+
 ## Working with LaTeX Projects
 
 For complex LaTeX projects with many files and dependencies:
