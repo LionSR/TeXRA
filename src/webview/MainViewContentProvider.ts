@@ -29,7 +29,6 @@ export class MainViewContentProvider extends BaseViewContentProvider {
         webview,
         'modules/handlers/themeHandlers.js',
       ),
-      fileHandlersUri: this.getWebviewUri(webview, 'modules/fileHandlers.js'),
       fileMessageHandlersUri: this.getWebviewUri(
         webview,
         'modules/handlers/fileHandlers.js',

@@ -85,25 +85,37 @@ export function createFileHandlers(ctx) {
 
   function handleSetInputFiles(message) {
     fileList.update('inputFiles', 'toggleInputFiles', message.files);
-    setupFileListHandler('input', getElement('inputFiles'));
+    const listEl = getElement('inputFiles');
+    if (listEl) {
+      setupFileListHandler('input', listEl);
+    }
     postHandle();
   }
 
   function handleSetReferenceFiles(message) {
     fileList.update('referenceFiles', 'toggleReferenceFiles', message.files);
-    setupFileListHandler('reference', getElement('referenceFiles'));
+    const listEl = getElement('referenceFiles');
+    if (listEl) {
+      setupFileListHandler('reference', listEl);
+    }
     postHandle();
   }
 
   function handleSetAuxiliaryFiles(message) {
     fileList.update('auxiliaryFiles', 'toggleAuxiliaryFiles', message.files);
-    setupFileListHandler('auxiliary', getElement('auxiliaryFiles'));
+    const listEl = getElement('auxiliaryFiles');
+    if (listEl) {
+      setupFileListHandler('auxiliary', listEl);
+    }
     postHandle();
   }
 
   function handleSetMediaFiles(message) {
     fileList.update('mediaFiles', 'toggleMediaFiles', message.files);
-    setupFileListHandler('media', getElement('mediaFiles'));
+    const listEl = getElement('mediaFiles');
+    if (listEl) {
+      setupFileListHandler('media', listEl);
+    }
     postHandle();
   }
 
@@ -114,7 +126,9 @@ export function createFileHandlers(ctx) {
       ...existingFiles,
       message.file,
     ]);
-    setupFileListHandler('media', listDiv);
+    if (listDiv) {
+      setupFileListHandler('media', listDiv);
+    }
 
     const container = getElement('mediaFilesContainer');
     if (container && container.style.display === 'none') {
@@ -132,7 +146,10 @@ export function createFileHandlers(ctx) {
       ELEMENT_IDS.TOGGLE_OUTPUT_FILES,
       message.files,
     );
-    setupFileListHandler('output', getElement(ELEMENT_IDS.OUTPUT_FILES));
+    const outputEl = getElement(ELEMENT_IDS.OUTPUT_FILES);
+    if (outputEl) {
+      setupFileListHandler('output', outputEl);
+    }
     postHandle();
   }
 
