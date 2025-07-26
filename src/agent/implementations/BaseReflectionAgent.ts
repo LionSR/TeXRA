@@ -46,6 +46,13 @@ import { getConfig } from '@utils/config';
 // Shared constants
 import { K_SLICE } from '@utils/config';
 
+/** Options for handling round output */
+export interface RoundOutputOptions {
+  outputFile: string;
+  endTurn: boolean;
+  processGroupId?: string;
+}
+
 /**
  * Abstract base class for agents that support multi-turn reflection and refinement.
  * Provides core functionality for processing inputs, managing state, and handling outputs
@@ -122,30 +129,22 @@ export abstract class BaseReflectionAgent extends BaseAgent {
    * Processes completion of conversation round.
    */
   private async handleRoundCompletion(
+    currRound: number,
     stateRound: AgentStateRound,
     stateGlobal: AgentStateGlobal,
-    outputFile: string,
-    endTurn: boolean,
-    currRound: number,
-    roundGroupId?: string,
+    options: RoundOutputOptions,
   ): Promise<void> {
+    const { outputFile, endTurn, processGroupId } = options;
     try {
       // Instead of creating a new group, use the round group directly
       // this.logger.debug(
       //   `State global: ${JSON.stringify(stateGlobal)}`,
-      //   roundGroupId,
+      //   processGroupId,
       // );
 
-      await this.handleOutput(
-        stateRound,
-        stateGlobal,
-        outputFile,
-        endTurn,
-        currRound,
-        roundGroupId,
-      );
+      await this.handleOutput(currRound, stateRound, stateGlobal, options);
 
-      this.logger.debug(`Completed round ${currRound}`, roundGroupId);
+      this.logger.debug(`Completed round ${currRound}`, processGroupId);
     } catch (error) {
       throw error;
     }
@@ -154,7 +153,7 @@ export abstract class BaseReflectionAgent extends BaseAgent {
       outputFile,
       currRound,
       endTurn,
-      roundGroupId,
+      processGroupId,
     );
   }
 
@@ -169,13 +168,12 @@ export abstract class BaseReflectionAgent extends BaseAgent {
    * @returns Array of processed output file paths
    */
   protected async handleOutput(
+    currRound: number,
     stateRound: AgentStateRound,
     stateGlobal: AgentStateGlobal,
-    outputFile: string,
-    endTurn: boolean,
-    currRound: number = 0,
-    processGroupId?: string,
+    options: RoundOutputOptions,
   ): Promise<string[]> {
+    const { outputFile, endTurn, processGroupId } = options;
     // Record usage statistics at the end of each round
     await this.trackRoundUsage(stateGlobal, processGroupId);
 
@@ -348,12 +346,14 @@ export abstract class BaseReflectionAgent extends BaseAgent {
 
         // Handle output and logging
         await this.handleRoundCompletion(
+          currRound,
           updatedStateRound,
           updatedStateGlobal,
-          this.outputFile[currRound],
-          finalEndTurn,
-          currRound,
-          round0GroupId, // Pass the round group ID
+          {
+            outputFile: this.outputFile[currRound],
+            endTurn: finalEndTurn,
+            processGroupId: round0GroupId,
+          },
         );
 
         this.logger.debug(
@@ -374,14 +374,11 @@ export abstract class BaseReflectionAgent extends BaseAgent {
       }
 
       // Handle output and logging for early termination
-      await this.handleRoundCompletion(
-        stateRound,
-        stateGlobal,
-        this.outputFile[currRound],
-        finalEndTurn,
-        currRound,
-        round0GroupId, // Pass the round group ID
-      );
+      await this.handleRoundCompletion(currRound, stateRound, stateGlobal, {
+        outputFile: this.outputFile[currRound],
+        endTurn: finalEndTurn,
+        processGroupId: round0GroupId,
+      });
 
       // End the round group
       this.logger.endGroup(round0GroupId, 'stopped');
@@ -516,12 +513,14 @@ export abstract class BaseReflectionAgent extends BaseAgent {
 
         // Handle output and logging
         await this.handleRoundCompletion(
+          currRound,
           updatedStateRound,
           updatedStateGlobal,
-          this.outputFile[currRound],
-          newEndTurn,
-          currRound,
-          round1GroupId,
+          {
+            outputFile: this.outputFile[currRound],
+            endTurn: newEndTurn,
+            processGroupId: round1GroupId,
+          },
         );
 
         this.logger.endGroup(round1GroupId, 'stopped');
@@ -534,14 +533,11 @@ export abstract class BaseReflectionAgent extends BaseAgent {
       }
 
       // Handle output and logging for early termination
-      await this.handleRoundCompletion(
-        stateRound,
-        stateGlobal,
-        this.outputFile[currRound],
+      await this.handleRoundCompletion(currRound, stateRound, stateGlobal, {
+        outputFile: this.outputFile[currRound],
         endTurn,
-        currRound,
-        round1GroupId,
-      );
+        processGroupId: round1GroupId,
+      });
 
       this.logger.endGroup(round1GroupId, 'stopped');
       return [stateRound, stateGlobal, updatedMessages, endTurn];
