@@ -116,15 +116,6 @@ export const MAIN_VIEW_COMMANDS = {
   PACK_MULTIPLE: 'packMultiple',
   CLEAN_MULTIPLE: 'cleanMultiple',
 
-  // Checkbox update operations
-  UPDATE_REFLECT: 'updateReflect',
-  UPDATE_ATTACH_TEX_COUNT: 'updateAttachTeXCount',
-  UPDATE_AUTO_EXTRACT_FIGURE: 'updateAutoExtractFigure',
-  UPDATE_AUTO_EXTRACT_TIKZ_FIGURE: 'updateAutoExtractTikzFigure',
-  UPDATE_AUTO_COMPILE_INPUT_PDF: 'updateAutoCompileInputPdf',
-  UPDATE_USE_PREFILL_FROM_INPUT: 'updateUsePrefillFromInput',
-  UPDATE_PRINT_INPUT_PROMPT: 'updatePrintInputPrompt',
-
   // Other operations
   ACCEPT_EDITED: 'acceptEdited',
 
