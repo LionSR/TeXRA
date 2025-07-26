@@ -14,14 +14,14 @@ import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/modelHandlerOpe
 /**
  * Handles printing usage statistics to the log and progress view.
  */
-export class UsageStatsManager {
+export class UsageMonitor {
   constructor(
     private readonly modelHandler: IModelHandler,
     private readonly channel: string,
     private readonly logger: AgentLogger,
   ) {}
 
-  async printStatistics(
+  async recordUsage(
     stateGlobal: AgentStateGlobal,
     groupId?: string,
   ): Promise<void> {

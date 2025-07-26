@@ -10,11 +10,14 @@ import { AgentPrompt, AgentSetting } from '../core/AgentDataclass';
 import { IAgent } from '../core/IAgent';
 import type { IModelHandler } from '../modelHandlers';
 import { buildUserVars } from '../utils/userVars';
+import { UsageMonitor } from '../utils';
+import type { RoundResult } from '../types/RoundResult';
 
 // Local imports - utilities
 import { SHORT_SLEEP_MS } from '@utils/config';
 import { sleep } from '@utils/helpers';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
+import { AgentStateGlobal } from '../core/AgentState';
 
 /**
  * Minimal abstract base class providing shared setup and interruption logic.
@@ -31,6 +34,7 @@ export abstract class BaseAgent implements IAgent {
   protected client: any;
   protected isInterrupted = false;
   protected abortController: AbortController | null = null;
+  protected usageMonitor: UsageMonitor;
 
   private static runningAgents: Map<string, BaseAgent> = new Map();
 
@@ -54,6 +58,11 @@ export abstract class BaseAgent implements IAgent {
     const streamTabId = this.getStreamTabId();
     this.logger = new AgentLogger(streamTabId, true);
     this.modelHandler.setLogger(this.logger);
+    this.usageMonitor = new UsageMonitor(
+      this.modelHandler,
+      this.logger.channelId,
+      this.logger,
+    );
   }
 
   /** Initialize the API client. */
@@ -144,6 +153,20 @@ export abstract class BaseAgent implements IAgent {
     const streamTabId = this.getStreamTabId();
     BaseAgent.runningAgents.delete(streamTabId);
   }
+
+  protected async trackRoundUsage(
+    state: AgentStateGlobal,
+    options?: { groupId?: string },
+  ): Promise<void> {
+    await this.usageMonitor.recordUsage(state, options?.groupId);
+  }
+
+  protected async onRoundStart(_round: number): Promise<void> {}
+
+  protected abstract onRoundComplete(
+    round: number,
+    result: RoundResult,
+  ): Promise<void>;
 
   abstract run(): Promise<void>;
 }
