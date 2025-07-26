@@ -12,7 +12,7 @@ import {
 import type { BetaMessage } from '@anthropic-ai/sdk/resources/beta/messages';
 
 // Local imports - error utils
-import { formatProviderError } from '@common/errors/sdkErrorUtils';
+import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
 
 // Local imports - utilities
 import { WorkspaceFS } from '@utils/files';
@@ -184,7 +184,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
         response = await client.beta.messages.create(options, { signal });
       }
     } catch (err) {
-      this.logger.error(formatProviderError('Error creating response', err));
+      this.logger.error(`Error creating response: ${getSdkErrorMessage(err)}`);
       throw err;
     }
 

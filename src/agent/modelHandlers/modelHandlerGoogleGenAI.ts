@@ -35,7 +35,7 @@ import { toGoogleTools } from './toolConversion';
 
 // Local imports - utilities
 import { WorkspaceFS, AbsoluteFS, getMimeType } from '@utils/files';
-import { formatProviderError } from '@common/errors/sdkErrorUtils';
+import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
 import xmlUtils from '@utils/text/xmlUtils';
 import { calculateTokenPrice } from '@agent/utils/priceUtils';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
@@ -272,10 +272,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         }
       } catch (err) {
         this.logger.error(
-          formatProviderError(
-            'Token counting failed, proceeding without token adjustment',
-            err,
-          ),
+          `Token counting failed, proceeding without token adjustment: ${getSdkErrorMessage(err)}`,
         );
       }
     }
@@ -340,7 +337,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       return result;
     } catch (error) {
       this.logger.error(
-        formatProviderError('Error during Google GenAI Chat API call', error),
+        `Error during Google GenAI Chat API call: ${getSdkErrorMessage(error)}`,
       );
       if (
         error instanceof Error &&
@@ -428,10 +425,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
           mediaFileResults.push({ path: mediaFile, ok: true });
         } catch (error) {
           this.logger.error(
-            formatProviderError(
-              `Failed to upload media file ${mediaFile} via native SDK`,
-              error,
-            ),
+            `Failed to upload media file ${mediaFile} via native SDK: ${getSdkErrorMessage(error)}`,
           );
           mediaFileResults.push({ path: mediaFile, ok: false });
         }
@@ -544,10 +538,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
           mediaFileResults.push({ path: mediaFile, ok: true });
         } catch (error) {
           this.logger.error(
-            formatProviderError(
-              `Failed to upload media file ${mediaFile} for follow-up round`,
-              error,
-            ),
+            `Failed to upload media file ${mediaFile} for follow-up round: ${getSdkErrorMessage(error)}`,
           );
           mediaFileResults.push({ path: mediaFile, ok: false });
         }
