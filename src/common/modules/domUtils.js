@@ -1,3 +1,5 @@
+import { CHEVRON_UP_CLASS, CHEVRON_DOWN_CLASS } from './iconConstants.js';
+
 export function addEventListenerSafely(elementOrId, event, handler) {
   const element =
     typeof elementOrId === 'string'
@@ -51,4 +53,22 @@ export function safeGetElementChecked(id) {
     return false;
   }
   return element.checked;
+}
+
+/**
+ * Set a chevron icon to indicate expanded/collapsed state.
+ * @param {HTMLElement} element - The icon container or <i> element.
+ * @param {boolean} expanded - Whether the section is expanded.
+ */
+export function setChevronIcon(element, expanded) {
+  if (!element) return;
+  let icon = element;
+  if (icon.tagName.toLowerCase() !== 'i') {
+    icon = element.querySelector('i');
+    if (!icon) {
+      icon = document.createElement('i');
+      element.appendChild(icon);
+    }
+  }
+  icon.className = expanded ? CHEVRON_UP_CLASS : CHEVRON_DOWN_CLASS;
 }
