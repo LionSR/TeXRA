@@ -7,6 +7,7 @@ import {
 import { historyViewState } from '../historyViewState.js';
 import { COMMANDS, ELEMENT_IDS, CLASS_NAMES, LABELS } from '../constants.js';
 import { createFromTemplate, createCodicon } from '@common/templateUtils.js';
+import { initializeIconButtons } from '@common/iconButtonInitializer.js';
 
 /**
  * Renders history items and manages per-item events.
@@ -167,6 +168,9 @@ export class HistoryRenderer {
       collapsible.remove();
       toggleButton.remove();
     }
+
+    // Convert any icon placeholders within this item
+    initializeIconButtons(container);
 
     return container;
   }
