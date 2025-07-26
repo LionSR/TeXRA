@@ -9,8 +9,6 @@
 // Local imports - latex utils
 import { LatexMediaManager } from '@latex';
 
-import { bus } from '@eventBus/ProgressEventBus';
-
 // Local imports - utilities
 import { WorkspaceFS } from '@utils/files';
 import {
@@ -152,38 +150,17 @@ export abstract class BaseReflectionAgent extends BaseAgent {
         roundGroupId,
       );
 
+      await this.outputHandler.finalizeRound(
+        outputFile,
+        endTurn,
+        currRound,
+        roundGroupId,
+      );
+
       this.logger.debug(`Completed round ${currRound}`, roundGroupId);
     } catch (error) {
       throw error;
     }
-
-    const fileInfos = await this.outputHandler.gatherOutputFileInfo(currRound);
-
-    // Validate expected outputs if this is the end of the turn
-    if (endTurn) {
-      try {
-        await this.outputHandler.validateExpectedOutputs(
-          outputFile,
-          currRound,
-          roundGroupId,
-        );
-        this.logger.debug(
-          `Expected outputs validated for round ${currRound}`,
-          roundGroupId,
-        );
-      } catch (error) {
-        this.logger.error(
-          `Expected output validation failed after round ${currRound}: ${
-            error instanceof Error ? error.message : String(error)
-          }`,
-          roundGroupId,
-        );
-      }
-    }
-    bus.emit('addOutputFiles', {
-      stream: this.logger.channelId,
-      filesByRound: { [currRound]: fileInfos },
-    });
   }
 
   /**
@@ -206,30 +183,6 @@ export abstract class BaseReflectionAgent extends BaseAgent {
   ): Promise<string[]> {
     // Print statistics at the end of each round
     await this.usageStats.printStatistics(stateGlobal, processGroupId);
-
-    // If this is the end of a turn, handle latexdiff operations as a separate step
-    if (
-      endTurn &&
-      this.outputHandler.outputFiles[currRound] &&
-      this.outputHandler.outputFiles[currRound].length > 0
-    ) {
-      const existingBase = await Promise.all(
-        this.baseFiles.map(async (f) => await WorkspaceFS.exists(f)),
-      );
-
-      if (existingBase.some((e) => e)) {
-        // Pass the process group ID to maintain proper nesting in the log hierarchy
-        await this.outputHandler.handleLatexdiffofOutput(
-          currRound,
-          processGroupId,
-        );
-      } else {
-        this.logger.debug(
-          `Skipping latexdiff for round ${currRound} - base files missing`,
-          processGroupId,
-        );
-      }
-    }
 
     return this.outputHandler.outputFiles[currRound] || [];
   }

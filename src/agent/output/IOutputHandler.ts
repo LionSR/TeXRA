@@ -38,4 +38,15 @@ export interface IOutputHandler {
     currRound: number,
     groupId?: string,
   ): Promise<void>;
+
+  /**
+   * Finalize processing after a round completes by running diff operations,
+   * validating outputs and emitting update events.
+   */
+  finalizeRound(
+    outputFile: string,
+    endTurn: boolean,
+    currRound: number,
+    groupId?: string,
+  ): Promise<void>;
 }

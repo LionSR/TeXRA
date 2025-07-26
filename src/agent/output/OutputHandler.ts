@@ -273,6 +273,48 @@ export class OutputHandler implements IOutputHandler {
   }
 
   /**
+   * Finalize output processing for a round.
+   * Handles diff generation, expected output validation and emits progress
+   * events with gathered file info.
+   */
+  public async finalizeRound(
+    outputFile: string,
+    endTurn: boolean,
+    currRound: number,
+    groupId?: string,
+  ): Promise<void> {
+    if (
+      endTurn &&
+      this.outputFiles[currRound] &&
+      this.outputFiles[currRound].length > 0
+    ) {
+      const existingBase = await Promise.all(
+        this.baseFiles.map(async (f) => await WorkspaceFS.exists(f)),
+      );
+
+      if (existingBase.some((e) => e)) {
+        await this.handleLatexdiffofOutput(currRound, groupId);
+      } else {
+        this.logger.debug(
+          `Skipping latexdiff for round ${currRound} - base files missing`,
+          groupId,
+        );
+      }
+    }
+
+    const fileInfos = await this.gatherOutputFileInfo(currRound);
+
+    if (endTurn) {
+      await this.validateExpectedOutputs(outputFile, currRound, groupId);
+    }
+
+    bus.emit('addOutputFiles', {
+      stream: this.channel,
+      filesByRound: { [currRound]: fileInfos },
+    });
+  }
+
+  /**
    * Processes output files from XML or direct input.
    */
   public async processOutputFiles(
