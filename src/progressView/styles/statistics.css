@@ -6,25 +6,6 @@
   margin: var(--spacing-small) 0;
 }
 
-.statistics-details summary {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-small);
-  padding: var(--spacing-tiny) 0;
-  cursor: pointer;
-  list-style: none;
-  user-select: none;
-  opacity: var(--opacity-normal);
-}
-
-.statistics-details summary:hover {
-  opacity: 1;
-}
-
-.statistics-details summary::-webkit-details-marker {
-  display: none;
-}
-
 .statistics-content {
   padding: var(--spacing-tiny) 0 var(--spacing-small) var(--spacing-large);
   display: flex;
@@ -37,9 +18,4 @@
   display: flex;
   align-items: center;
   gap: var(--spacing-small);
-}
-
-.statistics-details summary .toggle-icon {
-  opacity: var(--opacity-subtle);
-  font-size: var(--font-size-sm);
 }
