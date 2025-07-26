@@ -14,15 +14,11 @@ import { bus } from '@eventBus/ProgressEventBus';
 // Local imports - utilities
 import { WorkspaceFS } from '@utils/files';
 import {
-  renderPrompt,
+  PromptManager,
+  getPrefillForRound,
   getFirstKCharsFromDocument,
   writePromptToXml,
-} from '@agent/utils/promptUtils';
-
-import {
-  getSystemPromptWithRules,
-  getPrefillForRound,
-} from '@agent/utils/promptHelpers';
+} from '@agent/utils';
 
 // Local imports - UI
 
@@ -156,9 +152,10 @@ export abstract class BaseReflectionAgent extends BaseAgent {
 
         const exists = await WorkspaceFS.exists(outputFile);
         const startTime = Date.now();
-        const systemPrompt = await getSystemPromptWithRules(
-          this.agentPrompt.systemPrompt,
+        const { systemPrompt } = await PromptManager.renderInitialPrompts(
+          this.agentPrompt,
           this.userVars,
+          toolState,
         );
 
         // Save message object to file for debugging if enabled in settings
@@ -587,11 +584,12 @@ export abstract class BaseReflectionAgent extends BaseAgent {
       const messages: any[] = [];
 
       // Set up initial prompts
-      const [systemPrompt, userRequest, userPrefix] = await Promise.all([
-        getSystemPromptWithRules(this.agentPrompt.systemPrompt, this.userVars),
-        renderPrompt(this.agentPrompt.userRequest, this.userVars),
-        renderPrompt(this.agentPrompt.userPrefix, this.userVars),
-      ]);
+      const { systemPrompt, userRequest, userPrefix } =
+        await PromptManager.renderInitialPrompts(
+          this.agentPrompt,
+          this.userVars,
+          toolState,
+        );
 
       let prefixWithStats = userPrefix;
       if (toolState.texcountStats) {
@@ -757,14 +755,11 @@ export abstract class BaseReflectionAgent extends BaseAgent {
       const stateRound = new AgentStateRound(currRound);
 
       // Prepare round message
-      const userRequestReflect = await renderPrompt(
-        this.agentPrompt.userReflect,
+      const userMessage = await PromptManager.renderReflectionPrompt(
+        this.agentPrompt,
         this.userVars,
+        toolState,
       );
-      let userMessage = userRequestReflect ? `${userRequestReflect}\n` : '';
-      if (toolState.texcountStats) {
-        userMessage = `${toolState.texcountStats}${userMessage}`;
-      }
 
       // Only proceed if there's actual content
       if (!userMessage.trim()) {
