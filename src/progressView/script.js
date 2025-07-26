@@ -4,6 +4,7 @@ import { progressViewDomHandler } from './modules/domHandlers.js';
 import { vscode } from '@common/webviewContext.js';
 import { COMMANDS } from './modules/constants.js';
 import { validateTemplates } from '@common/templateUtils.js';
+import { initializeIconButtons } from '@common/iconButtonInitializer.js';
 
 // Initialize the state when the window loads
 progressViewState.initialize();
@@ -25,6 +26,7 @@ document.addEventListener('DOMContentLoaded', () => {
     'streamTabTemplate',
     'roundHeaderTemplate',
   ]);
+  initializeIconButtons();
   progressViewDomHandler.toolbar.render();
   // Setup UI event listeners
   progressViewDomHandler.events.setupEventListeners();
