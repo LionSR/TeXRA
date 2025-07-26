@@ -149,6 +149,7 @@ export abstract class BaseAgent implements IAgent {
 
   public getExecutionId(): ExecutionId | undefined {
     return this.executionId;
+  }
 
   protected async trackRoundUsage(
     stateGlobal: AgentStateGlobal,
