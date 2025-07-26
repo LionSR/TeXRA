@@ -41,7 +41,7 @@ import { AgentStateRound, AgentStateGlobal } from '@agent/core/AgentState';
 import { ToolState } from '@agent/core/ToolState';
 import type { IModelHandler } from '@agent/modelHandlers';
 import type { ToolDefinition } from '@model';
-import { OutputHandler, NamedOutputFile, IOutputHandler } from '@agent/output';
+import { OutputHandler, IOutputHandler } from '@agent/output';
 import { messageToSkeleton } from '@agent/utils/messageSkeletonUtils';
 import { BaseAgent } from '@agent/implementations/BaseAgent';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
@@ -729,19 +729,19 @@ export abstract class BaseReflectionAgent extends BaseAgent {
     try {
       // Handle output file processing
       if (this.agentConfig.outputFiles) {
-        await this._handleToolStateForOutput(
+        await this.outputHandler.handleToolStateForOutput(
           this.agentConfig.outputFiles,
-          currRound,
           toolState,
+          this.logger.getActiveGroupId(),
         );
       } else {
         // Handle single output file from previous round
         const outputFiles = this.outputHandler.outputFiles[currRound - 1];
         if (outputFiles && outputFiles.length > 0) {
-          await this._handleToolStateForOutput(
+          await this.outputHandler.handleToolStateForOutput(
             [outputFiles[0]],
-            currRound,
             toolState,
+            this.logger.getActiveGroupId(),
           );
         }
       }
@@ -891,31 +891,5 @@ export abstract class BaseReflectionAgent extends BaseAgent {
     }
   }
 
-  /**
-   * Updates tool state based on output files.
-   */
-  private async _handleToolStateForOutput(
-    outputFiles: string[],
-    currRound: number,
-    toolState: ToolState,
-  ): Promise<void> {
-    await this.latexMediaManager.processOutputFiles(
-      outputFiles,
-      toolState,
-      this.agentConfig.toolConfig,
-      this.modelHandler.capabilities.supportsVision,
-      this.logger.getActiveGroupId(),
-    );
-  }
-
-  /**
-   * Processes output files from XML or direct input.
-   * This method focuses solely on extracting and processing output files.
-   * It does NOT perform any latexdiff operations - those are handled separately
-   * in the handleOutput method via handleLatexdiffofOutput.
-   *
-   * @param outputFile Path to the output file to process
-   * @param currRound Current round number
-   * @param processGroupId Optional process group ID for logging
-   */
+  // Output file tool state handling moved to OutputHandler
 }

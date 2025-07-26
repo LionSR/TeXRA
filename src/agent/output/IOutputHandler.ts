@@ -1,5 +1,6 @@
 // Local imports - types
 import { AgentStateGlobal } from '@agent/core/AgentState';
+import { ToolState } from '@agent/core/ToolState';
 import { NamedOutputFile, OutputFileInfo } from './types';
 import { XmlOutputManager } from './XmlOutputManager';
 
@@ -43,6 +44,13 @@ export interface IOutputHandler {
   validateExpectedOutputs(
     outputFile: string,
     currRound: number,
+    groupId?: string,
+  ): Promise<void>;
+
+  /** Update tool state with information from output files. */
+  handleToolStateForOutput(
+    outputFiles: string[],
+    toolState: ToolState,
     groupId?: string,
   ): Promise<void>;
 }

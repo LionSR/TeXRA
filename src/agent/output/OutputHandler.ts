@@ -6,6 +6,7 @@ import * as vscode from 'vscode';
 
 // Local imports - utilities
 import { runLatexFormatter } from '@latex/texFormatter';
+import { LatexMediaManager } from '@latex';
 import { XmlOutputManager } from './XmlOutputManager';
 import { LatexDiffManager } from './LatexDiffManager';
 import { StatisticsReporter } from './StatisticsReporter';
@@ -19,6 +20,7 @@ import type { AgentConfig } from '@agent/core/AgentConfig';
 import { AgentSetting, AgentType } from '@agent/core/AgentDataclass';
 import { AgentStateGlobal, AgentStateRound } from '@agent/core/AgentState';
 import type { IModelHandler } from '@agent/modelHandlers';
+import { ToolState } from '@agent/core/ToolState';
 
 // Local imports - utilities
 import { replaceInputCommands, createFileMapping } from '@utils/files';
@@ -46,6 +48,7 @@ export class OutputHandler implements IOutputHandler {
   private diffManager: LatexDiffManager;
   private statsReporter: StatisticsReporter;
   private diffStatsManager: DiffStatsManager;
+  private latexMediaManager: LatexMediaManager;
 
   constructor(
     agentSetting: AgentSetting,
@@ -83,6 +86,7 @@ export class OutputHandler implements IOutputHandler {
       this.logger,
     );
     this.diffStatsManager = new DiffStatsManager();
+    this.latexMediaManager = new LatexMediaManager(this.logger);
   }
 
   /**
@@ -219,6 +223,23 @@ export class OutputHandler implements IOutputHandler {
       });
     }
     return infos;
+  }
+
+  /**
+   * Update tool state with information from output files.
+   */
+  public async handleToolStateForOutput(
+    outputFiles: string[],
+    toolState: ToolState,
+    groupId?: string,
+  ): Promise<void> {
+    await this.latexMediaManager.processOutputFiles(
+      outputFiles,
+      toolState,
+      this.agentConfig.toolConfig,
+      this.modelHandler.capabilities.supportsVision,
+      groupId ?? this.logger.getActiveGroupId(),
+    );
   }
 
   public async validateExpectedOutputs(
