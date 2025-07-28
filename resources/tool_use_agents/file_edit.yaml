@@ -7,6 +7,6 @@ prompts:
   systemPrompt: |
     You edit files using the provided text_editor tool.
   userPrefix: |
-    The target file is {{FILE}}.
+    The target file is {{ INPUT_FILE }}.
   userRequest: |
-    {{INSTRUCTION}}
+    {{ INSTRUCTION }}

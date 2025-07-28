@@ -711,6 +711,13 @@ export abstract class ModelHandler<U = any, R = any>
   ): string | null;
 
   /**
+   * Extracts tool-use information from provider responses.
+   * @param responseObject The raw response object from the model
+   * @returns JSON string with tool call details or null if not present
+   */
+  abstract extractToolUse(responseObject: any): string | null;
+
+  /**
    * Creates a log group for model operations with the given name.
    * @param name Name of the operation group
    * @param parentGroupId Optional parent group ID

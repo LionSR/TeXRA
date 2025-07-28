@@ -953,4 +953,15 @@ export class ModelHandlerAnthropic extends ModelHandler<
     // Return content of the first regular thinking block for logging
     return regularThinkingContent;
   }
+
+  extractToolUse(responseObject: BetaMessage): string | null {
+    const content = responseObject?.content;
+    if (Array.isArray(content)) {
+      const tu = content.find((c: any) => c.type === 'tool_use');
+      if (tu) {
+        return JSON.stringify(tu, null, 2);
+      }
+    }
+    return null;
+  }
 }

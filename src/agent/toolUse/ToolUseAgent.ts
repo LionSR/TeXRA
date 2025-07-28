@@ -2,7 +2,6 @@
 
 // Standard library imports
 import { encode as encodeHtml } from 'he';
-
 // Local imports - core
 import { BaseAgent } from '../implementations/BaseAgent';
 import type { AgentConfig } from '../core/AgentConfig';
@@ -11,7 +10,6 @@ import { getSystemPromptWithRules } from '../utils/promptHelpers';
 import { renderPrompt } from '../utils/promptUtils';
 import type { IModelHandler } from '../modelHandlers';
 import type { ToolDefinition } from '@model';
-import { WorkspaceFS } from '@utils/files';
 import xmlUtils from '@utils/text/xmlUtils';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 
@@ -27,35 +25,25 @@ export class ToolUseAgent extends BaseAgent {
   }
 
   private getTools(): ToolDefinition[] {
-    let tools: ToolDefinition[] = [];
     const cfg = this.agentSetting.tools;
+    let tools: ToolDefinition[] = [];
+
     if (Array.isArray(cfg) && cfg.length > 0) {
-      if (typeof cfg[0] === 'string') {
-        tools = (cfg as unknown as string[]).map((n) => ({ name: n }));
+      if (cfg.every((t) => typeof t === 'string')) {
+        tools = (cfg as string[]).map((name) => ({ name }));
       } else {
         tools = cfg as ToolDefinition[];
       }
     }
-    if (this.agentConfig.toolConfig.attachDiagnostics) {
-      if (!tools.some((t) => t.name === 'diagnostics')) {
-        tools.push({ name: 'diagnostics' });
-      }
-    }
-    return tools;
-  }
 
-  private extractToolUse(response: any): string | null {
-    if (response?.content && Array.isArray(response.content)) {
-      const tu = response.content.find((c: any) => c.type === 'tool_use');
-      if (tu) {
-        return encodeHtml(JSON.stringify(tu, null, 2));
-      }
+    if (
+      this.agentConfig.toolConfig.attachDiagnostics &&
+      !tools.some((t) => t.name === 'diagnostics')
+    ) {
+      tools.push({ name: 'diagnostics' });
     }
-    const openai = response?.choices?.[0]?.message?.tool_calls?.[0];
-    if (openai) {
-      return encodeHtml(JSON.stringify(openai, null, 2));
-    }
-    return null;
+
+    return tools;
   }
 
   public async run(): Promise<void> {
@@ -96,9 +84,13 @@ export class ToolUseAgent extends BaseAgent {
         this.logger.info(formatted, this.runGroupId, MESSAGE_TYPES.THINKING);
       }
 
-      const toolInfo = this.extractToolUse(response);
+      const toolInfo = this.modelHandler.extractToolUse(response);
       if (toolInfo) {
-        this.logger.info(toolInfo, this.runGroupId, MESSAGE_TYPES.TOOL_USE);
+        this.logger.info(
+          encodeHtml(toolInfo),
+          this.runGroupId,
+          MESSAGE_TYPES.TOOL_USE,
+        );
       }
 
       const [text, usage] = this.modelHandler.extractResponse(
@@ -109,10 +101,6 @@ export class ToolUseAgent extends BaseAgent {
         this.logger.debug(
           `Model response: ${text.slice(0, 100)}`,
           this.runGroupId,
-        );
-        await WorkspaceFS.writeFile(
-          this.agentConfig.inputFile + '.tool.txt',
-          text,
         );
       }
       if (usage) {

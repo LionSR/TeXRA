@@ -447,4 +447,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
 
     return thoughtContent || null;
   }
+
+  extractToolUse(_response: Response): string | null {
+    return null;
+  }
 }
