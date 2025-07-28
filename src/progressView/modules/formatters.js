@@ -174,6 +174,10 @@ export class LogEntryFormatter {
       return this._formatSpecialContent(htmlMessage, text, label, id);
     }
 
+    if (messageType === 'toolUse') {
+      return this._formatToolUse(htmlMessage, text, id);
+    }
+
     if (messageType === 'fileList') {
       return this._formatFileList(htmlMessage, text, data, id);
     }
@@ -227,6 +231,25 @@ export class LogEntryFormatter {
     } catch (e) {
       console.error('Error parsing markdown:', e);
       // Fallback to original content
+      return message;
+    }
+  }
+
+  _formatToolUse(message, content, logId) {
+    try {
+      const idAttr = logId ? ` data-log-id="${logId}"` : '';
+      content = decodeHtml(content);
+      const parsedMarkdown = this.md.render(content);
+      return `<details class="special-details">
+        <summary class="details-summary">
+          <i class="${CHEVRON_RIGHT_CLASS} toggle-icon"></i>
+          <i class="codicon codicon-wrench"></i>
+          <span>Tool Use</span>
+        </summary>
+        <div class="special-content"${idAttr}>${parsedMarkdown}</div>
+      </details>`;
+    } catch (e) {
+      console.error('Error parsing tool use content:', e);
       return message;
     }
   }
