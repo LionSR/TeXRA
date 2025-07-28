@@ -239,14 +239,21 @@ export class LogEntryFormatter {
     try {
       const idAttr = logId ? ` data-log-id="${logId}"` : '';
       content = decodeHtml(content);
-      const parsedMarkdown = this.md.render(content);
+      let parsed;
+      try {
+        parsed = JSON.parse(content);
+        content = `<pre>${encodeHtml(JSON.stringify(parsed, null, 2))}</pre>`;
+      } catch {
+        const md = this.md.render(content);
+        content = md;
+      }
       return `<details class="special-details">
         <summary class="details-summary">
           <i class="${CHEVRON_RIGHT_CLASS} toggle-icon"></i>
           <i class="codicon codicon-wrench"></i>
           <span>Tool Use</span>
         </summary>
-        <div class="special-content"${idAttr}>${parsedMarkdown}</div>
+        <div class="special-content"${idAttr}>${content}</div>
       </details>`;
     } catch (e) {
       console.error('Error parsing tool use content:', e);

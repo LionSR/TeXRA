@@ -6,3 +6,4 @@ export * from './ToolState';
 export * from './ResponseUsage';
 export * from './IAgent';
 export * from './ResponseCycle';
+export * from './ToolUseCycle';
