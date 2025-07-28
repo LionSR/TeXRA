@@ -25,6 +25,7 @@ export class ProgressViewState {
   private _outputFiles: OutputFilesManager;
   private _usageStats: UsageStatsManager;
   private _activeStream: StreamTabId = '';
+  private _streamSortOrder = 'none';
   private _taskStates: Map<StreamTabId, TaskState> = new Map();
   private _executionIds: Map<StreamTabId, ExecutionId> = new Map();
   private readonly persistence: StatePersistenceManager;
@@ -66,6 +67,15 @@ export class ProgressViewState {
   set activeStream(stream: StreamTabId) {
     this._activeStream = stream;
     this.saveActiveStream();
+  }
+
+  get streamSortOrder(): string {
+    return this._streamSortOrder;
+  }
+
+  set streamSortOrder(order: string) {
+    this._streamSortOrder = order;
+    this.saveStreamSortOrder();
   }
 
   // Task state management
@@ -166,6 +176,7 @@ export class ProgressViewState {
       this.loadActiveStream(), // Depends on stream tabs being loaded
       this.loadTaskStates(),
       this.loadExecutionIds(),
+      this.loadStreamSortOrder(),
     ]);
   }
 
@@ -258,5 +269,19 @@ export class ProgressViewState {
   private saveExecutionIds(): void {
     const executionIdsObj = Object.fromEntries(this._executionIds.entries());
     this.persistence.save(WorkspaceStateKey.EXECUTION_IDS, executionIdsObj);
+  }
+
+  private async loadStreamSortOrder(): Promise<void> {
+    this._streamSortOrder = await this.persistence.load(
+      WorkspaceStateKey.STREAM_SORT_ORDER,
+      'none',
+    );
+  }
+
+  private saveStreamSortOrder(): void {
+    this.persistence.save(
+      WorkspaceStateKey.STREAM_SORT_ORDER,
+      this._streamSortOrder,
+    );
   }
 }
