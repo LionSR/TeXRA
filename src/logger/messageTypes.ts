@@ -5,6 +5,7 @@ export const MESSAGE_TYPES = {
   MISSING_OUTPUTS: 'missingOutputs',
   LATEXDIFF: 'latexdiff',
   STATISTICS: 'statistics',
+  TOOL_USE: 'toolUse',
   /** Messages that should be hidden from the progress view */
   INTERNAL: 'internal',
   DEFAULT: 'default',
