@@ -937,5 +937,17 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     return thoughtContent || null;
   }
 
+  extractToolUse(responseObject: GenerateContentResponse): string | null {
+    const candidate = responseObject?.candidates?.[0];
+    const parts = candidate?.content?.parts;
+    if (Array.isArray(parts)) {
+      const funcPart = parts.find((p: any) => p.functionCall);
+      if (funcPart) {
+        return JSON.stringify(funcPart.functionCall, null, 2);
+      }
+    }
+    return null;
+  }
+
   // Assuming containCutOffMessage is available from base class ModelHandler
 }

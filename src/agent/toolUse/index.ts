@@ -8,10 +8,11 @@
 // Local imports - agents
 import { ValidationFixAgent } from './ValidationFixAgent';
 import { BaseToolUseAgent } from './BaseToolUseAgent';
+import { ToolUseAgent } from './ToolUseAgent';
 import type { IToolUseAgent } from './IToolUseAgent';
 
 // Export individual classes
-export { ValidationFixAgent, BaseToolUseAgent };
+export { ValidationFixAgent, BaseToolUseAgent, ToolUseAgent };
 export type { IToolUseAgent };
 
 // Export shared tool implementations and types

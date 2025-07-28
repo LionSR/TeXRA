@@ -1,5 +1,7 @@
 import * as vscode from 'vscode';
 import { getConfig } from '@utils/config';
+import { GlobalStorageFS, AbsoluteFS } from '@utils/files';
+import * as path from 'path';
 import { BaseViewContentProvider } from '@common/webview/BaseViewContentProvider';
 
 export class MainViewContentProvider extends BaseViewContentProvider {
@@ -91,7 +93,18 @@ export class MainViewContentProvider extends BaseViewContentProvider {
 
   protected getTemplateVariables(): Record<string, any> {
     const agents = getConfig<string[]>('agents', []);
-    const agentOptions = agents
+    const toolUseDir = GlobalStorageFS.fullPath('tool_use_agents');
+    let extraAgents: string[] = [];
+    try {
+      const files = AbsoluteFS.readDirSync(toolUseDir);
+      extraAgents = files
+        .filter((f) => f.endsWith('.yaml'))
+        .map((f) => path.basename(f, '.yaml'));
+    } catch {
+      extraAgents = [];
+    }
+    const allAgents = [...agents, ...extraAgents];
+    const agentOptions = allAgents
       .map((agent) => `<option value="${agent}">${agent}</option>`)
       .join('\n');
 
