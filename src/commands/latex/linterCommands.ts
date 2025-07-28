@@ -7,10 +7,9 @@ import * as logger from '@logger/logUtils';
 // Local imports - utils
 import { getLinterMessages } from '@frontend/latex/linter';
 import { WorkspaceFS } from '@utils/files';
-import { sleep } from '@utils/helpers';
 
 // Local imports - core
-import { ValidationFixAgent } from '@agent/toolUse';
+import { executeAgent } from '@agent/runtime/executeAgent';
 
 const CHANNEL = 'LinterCommands';
 logger.initialize(CHANNEL);
@@ -179,35 +178,13 @@ export async function handleFixLinterIssues(
       `Found ${issues.length} linter issues in ${relativePath}`,
     );
 
-    // Create the agent
-    const linterFixAgent = await ValidationFixAgent.create(
-      'latexLinter',
-      context,
-    );
-
-    // Show progress indicator
-    await vscode.window.withProgress(
+    await executeAgent(
       {
-        location: vscode.ProgressLocation.Notification,
-        title: 'Fixing linter issues using Claude',
-        cancellable: false,
+        agent: 'tex_linter_fix',
+        model: 'claude-3-7-sonnet-latest',
+        inputFile: relativePath,
       },
-      async (progress) => {
-        progress.report({ message: 'Analyzing issues...' });
-
-        // Run the fix operation
-        const result = await linterFixAgent.fixIssues(relativePath);
-
-        if (result) {
-          progress.report({ message: 'Fixed successfully!' });
-        } else {
-          progress.report({ message: 'Could not fix all issues' });
-        }
-
-        // Short delay to give user time to see the result
-        await sleep(1500);
-        return;
-      },
+      context,
     );
   } catch (err) {
     logger.error(

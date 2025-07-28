@@ -1,9 +1,10 @@
-// Agent implementation for one-shot tool use conversations
+// Base class for tool-use agents
 
 // Standard library imports
 import { encode as encodeHtml } from 'he';
+
 // Local imports - core
-import { BaseAgent } from '../implementations/BaseAgent';
+import { BaseAgent } from './BaseAgent';
 import type { AgentConfig } from '../core/AgentConfig';
 import { AgentPrompt, AgentSetting } from '../core/AgentDataclass';
 import { getSystemPromptWithRules } from '../utils/promptHelpers';
@@ -12,8 +13,14 @@ import type { IModelHandler } from '../modelHandlers';
 import type { ToolDefinition } from '@model';
 import xmlUtils from '@utils/text/xmlUtils';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
+import { DEFAULT_TOOL_REGISTRY } from '@tools/registry';
+import { BaseTool } from '@tools/core/base';
+import { ToolResult } from '@tools/result';
+import { TOOL_USE_INSTRUCTIONS } from '../utils/toolUsePrompt';
 
-export class ToolUseAgent extends BaseAgent {
+export class BaseToolUseAgent extends BaseAgent {
+  private toolRegistry: Record<string, BaseTool<any>>;
+
   constructor(
     modelHandler: IModelHandler,
     agentConfig: AgentConfig,
@@ -22,28 +29,39 @@ export class ToolUseAgent extends BaseAgent {
     agentPath: string,
   ) {
     super(modelHandler, agentConfig, agentSetting, agentPrompt, agentPath);
+    this.toolRegistry = DEFAULT_TOOL_REGISTRY;
   }
 
   private getTools(): ToolDefinition[] {
-    const cfg = this.agentSetting.tools;
-    let tools: ToolDefinition[] = [];
-
-    if (Array.isArray(cfg) && cfg.length > 0) {
-      if (cfg.every((t) => typeof t === 'string')) {
-        tools = (cfg as string[]).map((name) => ({ name }));
-      } else {
-        tools = cfg as ToolDefinition[];
+    const cfg = Array.isArray(this.agentSetting.tools)
+      ? this.agentSetting.tools
+      : [];
+    const tools: ToolDefinition[] = [];
+    for (const t of cfg) {
+      const def = typeof t === 'string' ? { name: t } : t;
+      if (!this.toolRegistry[def.name]) {
+        this.logger.warn(
+          `Tool "${def.name}" not found in registry`,
+          this.runGroupId,
+        );
       }
+      tools.push(def);
     }
-
     if (
       this.agentConfig.toolConfig.attachDiagnostics &&
       !tools.some((t) => t.name === 'diagnostics')
     ) {
       tools.push({ name: 'diagnostics' });
     }
-
     return tools;
+  }
+
+  private async runTool(name: string, input: any): Promise<ToolResult> {
+    const tool = this.toolRegistry[name];
+    if (!tool) {
+      return new ToolResult({ error: `Unknown tool ${name}`, isError: true });
+    }
+    return tool.call(input);
   }
 
   public async run(): Promise<void> {
@@ -53,7 +71,10 @@ export class ToolUseAgent extends BaseAgent {
       await this.initializeClient();
 
       const [systemPrompt, userRequest, userPrefix] = await Promise.all([
-        getSystemPromptWithRules(this.agentPrompt.systemPrompt, this.userVars),
+        getSystemPromptWithRules(
+          `${this.agentPrompt.systemPrompt}\n${TOOL_USE_INSTRUCTIONS}`,
+          this.userVars,
+        ),
         renderPrompt(this.agentPrompt.userRequest, this.userVars),
         renderPrompt(this.agentPrompt.userPrefix, this.userVars),
       ]);
@@ -91,6 +112,31 @@ export class ToolUseAgent extends BaseAgent {
           this.runGroupId,
           MESSAGE_TYPES.TOOL_USE,
         );
+        let parsed: { name: string; input: unknown } | undefined;
+        try {
+          parsed = JSON.parse(toolInfo);
+        } catch (jsonErr) {
+          this.logger.error(
+            `Malformed tool JSON: ${jsonErr instanceof Error ? jsonErr.message : String(jsonErr)}`,
+            this.runGroupId,
+          );
+          parsed = undefined;
+        }
+        if (parsed && parsed.name) {
+          try {
+            const result = await this.runTool(parsed.name, parsed.input);
+            this.logger.info(
+              encodeHtml(JSON.stringify(result, null, 2)),
+              this.runGroupId,
+              MESSAGE_TYPES.TOOL_USE,
+            );
+          } catch (err) {
+            this.logger.error(
+              `Failed to execute tool: ${err instanceof Error ? err.message : String(err)}`,
+              this.runGroupId,
+            );
+          }
+        }
       }
 
       const [text, usage] = this.modelHandler.extractResponse(
