@@ -67,10 +67,20 @@ export class FolderExplorer implements vscode.TreeDataProvider<FileItem> {
 
       const items: FileItem[] = [];
       const builtInPath = await agentDirectories.builtIn(this.context);
+      const builtInToolUsePath = await agentDirectories.builtInToolUse(
+        this.context,
+      );
       items.push(
         new FileItem(
           'Built-in Agents',
           vscode.Uri.file(builtInPath),
+          vscode.TreeItemCollapsibleState.Collapsed,
+        ),
+      );
+      items.push(
+        new FileItem(
+          'Tool Use Agents',
+          vscode.Uri.file(builtInToolUsePath),
           vscode.TreeItemCollapsibleState.Collapsed,
         ),
       );

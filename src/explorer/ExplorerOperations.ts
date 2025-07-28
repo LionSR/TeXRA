@@ -47,6 +47,7 @@ logger.initialize(CHANNEL);
 
 export class ExplorerOperations {
   private builtInAgentsPath = '';
+  private builtInToolUsePath = '';
   private editingItem: FileItem | undefined;
 
   constructor(
@@ -58,13 +59,19 @@ export class ExplorerOperations {
       agentDirectories.builtIn(this.context).then((p) => {
         this.builtInAgentsPath = p;
       });
+      agentDirectories.builtInToolUse(this.context).then((p) => {
+        this.builtInToolUsePath = p;
+      });
     }
   }
 
   async open(uri: vscode.Uri) {
     try {
       const isBuiltIn =
-        this.builtInAgentsPath && uri.fsPath.startsWith(this.builtInAgentsPath);
+        (this.builtInAgentsPath &&
+          uri.fsPath.startsWith(this.builtInAgentsPath)) ||
+        (this.builtInToolUsePath &&
+          uri.fsPath.startsWith(this.builtInToolUsePath));
 
       const document = await vscode.workspace.openTextDocument(uri);
       await vscode.window.showTextDocument(document);
@@ -96,7 +103,10 @@ export class ExplorerOperations {
         return;
       }
 
-      const relativePath = path.relative(this.builtInAgentsPath, uri.fsPath);
+      const base = uri.fsPath.startsWith(this.builtInToolUsePath)
+        ? this.builtInToolUsePath
+        : this.builtInAgentsPath;
+      const relativePath = path.relative(base, uri.fsPath);
       const targetPath = path.join(customPath, relativePath);
 
       const targetDir = path.dirname(targetPath);
@@ -126,8 +136,14 @@ export class ExplorerOperations {
 
       let parentPath = node?.resourceUri.fsPath || customBase;
 
-      if (parentPath.startsWith(this.builtInAgentsPath)) {
-        const relative = path.relative(this.builtInAgentsPath, parentPath);
+      if (
+        parentPath.startsWith(this.builtInAgentsPath) ||
+        parentPath.startsWith(this.builtInToolUsePath)
+      ) {
+        const base = parentPath.startsWith(this.builtInToolUsePath)
+          ? this.builtInToolUsePath
+          : this.builtInAgentsPath;
+        const relative = path.relative(base, parentPath);
         parentPath = path.join(customBase, relative);
       }
 

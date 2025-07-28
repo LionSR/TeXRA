@@ -35,6 +35,11 @@ export async function copyDefaultAgents(context: vscode.ExtensionContext) {
   );
 
   const resourcesPath = path.join(context.extensionPath, 'resources', 'agents');
+  const resourcesToolUse = path.join(
+    context.extensionPath,
+    'resources',
+    'tool_use_agents',
+  );
   const globalStoragePath = GlobalStorageFS.fullPath('agents');
 
   console.log('Resources path:', resourcesPath);
@@ -43,6 +48,7 @@ export async function copyDefaultAgents(context: vscode.ExtensionContext) {
   try {
     // Ensure the global storage agents directory exists
     await GlobalStorageFS.ensureDir('agents');
+    await GlobalStorageFS.ensureDir('tool_use_agents');
     console.log('Created or verified global storage directory');
 
     // Recursive function to copy files and directories
@@ -69,6 +75,7 @@ export async function copyDefaultAgents(context: vscode.ExtensionContext) {
 
     // Start recursive copy from root
     await copyRecursively(resourcesPath, 'agents');
+    await copyRecursively(resourcesToolUse, 'tool_use_agents');
 
     // Update the stored version after successful copy
     await globalSM.update(GlobalStateKey.LAST_KNOWN_VERSION, currentVersion);
