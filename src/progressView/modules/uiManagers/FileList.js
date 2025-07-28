@@ -225,7 +225,7 @@ export class FileList {
     // Add dataset for the file path link
     const filePathSpan = clone.querySelector('.file-path');
     if (filePathSpan && file.path) {
-      filePathSpan.classList.add('clickable-link');
+      filePathSpan.classList.add('file-link');
       filePathSpan.dataset.command = COMMANDS.OPEN_FILE;
       filePathSpan.dataset.file = file.path;
     }
