@@ -15,6 +15,7 @@ import {
   AgentPromptSchema,
   AgentDefinitionSchema,
 } from '@agent/core/AgentDataclass';
+import type { ToolDefinition } from '@model';
 
 // Local imports - utils
 import * as logger from '@logger/logUtils';
@@ -103,6 +104,22 @@ export async function loadAgentSettingAndPrompts(
       prompts = deepmerge({}, config.prompts ?? {}, {
         arrayMerge: (_d, s) => s,
       });
+    }
+
+    // Resolve tool set shortcuts before validation
+    if (Array.isArray(settings.tools)) {
+      const { ToolSets } = await import('@agent/toolUse/ToolSetRegistry');
+      const expanded: ToolDefinition[] = [];
+      for (const t of settings.tools as any[]) {
+        if (typeof t === 'string' && ToolSets[t]) {
+          expanded.push(...ToolSets[t]);
+        } else if (typeof t === 'string') {
+          expanded.push({ name: t });
+        } else {
+          expanded.push(t as ToolDefinition);
+        }
+      }
+      settings.tools = expanded as any;
     }
 
     // Apply defaults and validate the final settings and prompts

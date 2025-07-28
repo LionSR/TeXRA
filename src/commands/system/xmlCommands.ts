@@ -6,11 +6,10 @@ import { XMLParser } from 'fast-xml-parser';
 import * as logger from '@logger/logUtils';
 
 // Local imports - core
-import { ValidationFixAgent } from '@agent/toolUse';
+import { executeAgent } from '@agent/runtime/executeAgent';
 
 // Local imports - utils
 import { WorkspaceFS } from '@utils/files';
-import { sleep } from '@utils/helpers';
 
 const CHANNEL = 'XmlCommands';
 logger.initialize(CHANNEL);
@@ -107,41 +106,19 @@ export async function handleValidateAndFixXml(
       return;
     }
 
-    // Initialize the validator agent
-    const validator = await ValidationFixAgent.create('xmlValidator', context);
-
-    // Save the file first to make sure we're working with the latest content
     await editor.document.save();
 
-    // Get the file path
     const filePath = WorkspaceFS.relativePath(editor.document.fileName);
 
-    // Use the validator to fix any XML errors
     logger.info(CHANNEL, `Starting XML validation for ${filePath}`);
 
-    // Show progress while validating
-    await vscode.window.withProgress(
+    await executeAgent(
       {
-        location: vscode.ProgressLocation.Notification,
-        title: 'Validating and fixing XML using Claude',
-        cancellable: false,
+        agent: 'xml_validator',
+        model: 'claude-3-7-sonnet-latest',
+        inputFile: filePath,
       },
-      async (progress) => {
-        progress.report({ message: 'Analyzing XML...' });
-
-        // Use the standard fixIssues method
-        const result = await validator.fixIssues(filePath);
-
-        if (result) {
-          progress.report({ message: 'Fixed successfully!' });
-        } else {
-          progress.report({ message: 'Could not fix all issues' });
-        }
-
-        // Short delay to give user time to see the result
-        await sleep(1500);
-        return;
-      },
+      context,
     );
   } catch (err) {
     logger.error(

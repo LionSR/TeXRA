@@ -1,0 +1,35 @@
+// Standard library imports
+
+// Local imports - core
+import { z } from 'zod';
+import { executeCommand } from '@utils/system/execUtils';
+import { BaseTool } from './core/base';
+import { ToolResult } from '@tools/anthropic/base';
+import type { ToolDefinition } from '@model';
+
+const BashInputSchema = z.object({
+  command: z.string(),
+});
+
+export type BashInput = z.infer<typeof BashInputSchema>;
+
+export class BashTool extends BaseTool<BashInput> {
+  constructor() {
+    const definition: ToolDefinition = {
+      name: 'bash',
+      description: 'Execute a shell command within the workspace',
+    };
+    super(definition, BashInputSchema);
+  }
+
+  protected async execute(input: BashInput): Promise<ToolResult> {
+    const result = await executeCommand(input.command, { truncate: true });
+    if (result.success) {
+      return new ToolResult({ output: result.stdout || '' });
+    }
+    return new ToolResult({
+      error: result.stderr || 'Command failed',
+      isError: true,
+    });
+  }
+}
