@@ -1,7 +1,16 @@
 import * as path from 'path';
 import type { ProgressViewState } from './state/ProgressViewState';
 import type { StreamTabInfo } from './types';
-import { getConfig } from '@utils/config';
+
+const sortComparators = {
+  time: (a: StreamTabInfo, b: StreamTabInfo) =>
+    (b.lastTimestamp ?? b.creationTimestamp ?? 0) -
+    (a.lastTimestamp ?? a.creationTimestamp ?? 0),
+  inputFile: (a: StreamTabInfo, b: StreamTabInfo) =>
+    (a.inputFile || '').localeCompare(b.inputFile || ''),
+  agent: (a: StreamTabInfo, b: StreamTabInfo) =>
+    (a.agent || '').localeCompare(b.agent || ''),
+} as const;
 
 /**
  * Build metadata objects for all streams in the given state.
@@ -31,21 +40,10 @@ export function buildStreamInfos(state: ProgressViewState): StreamTabInfo[] {
     } as StreamTabInfo;
   });
 
-  const sortBy = getConfig<string>('progressView.sortStreamsBy', 'none');
-  switch (sortBy) {
-    case 'lastActive':
-      infos.sort((a, b) => (b.lastTimestamp ?? 0) - (a.lastTimestamp ?? 0));
-      break;
-    case 'inputFile':
-      infos.sort((a, b) =>
-        (a.inputFile || '').localeCompare(b.inputFile || ''),
-      );
-      break;
-    case 'agent':
-      infos.sort((a, b) => (a.agent || '').localeCompare(b.agent || ''));
-      break;
-    default:
-      break;
+  const comparator =
+    sortComparators[state.streamSortOrder as keyof typeof sortComparators];
+  if (comparator) {
+    infos.sort(comparator);
   }
 
   return infos;

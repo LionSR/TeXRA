@@ -28,6 +28,12 @@
   padding: var(--spacing-small);
 }
 
+.sort-actions {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: var(--spacing-small);
+}
+
 .clear-button {
   display: flex;
   align-items: center;
