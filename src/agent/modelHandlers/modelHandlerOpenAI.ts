@@ -843,6 +843,18 @@ export class ModelHandlerOpenAI extends ModelHandler<
     return null;
   }
 
+  extractToolUse(responseObject: any): string | null {
+    const toolCalls = responseObject?.choices?.[0]?.message?.tool_calls;
+    if (Array.isArray(toolCalls) && toolCalls.length > 0) {
+      return JSON.stringify(toolCalls[0], null, 2);
+    }
+    const func = responseObject?.choices?.[0]?.message?.function_call;
+    if (func) {
+      return JSON.stringify(func, null, 2);
+    }
+    return null;
+  }
+
   /**
    * Calculates the approximate number of tokens for a given set of messages and system prompt
    * using gpt-tokenizer. This is an estimation and might not perfectly match OpenAI's

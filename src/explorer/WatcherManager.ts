@@ -42,9 +42,12 @@ export class WatcherManager {
       this.dispose();
 
       const builtInAgentsPath = await agentDirectories.builtIn(this.context);
+      const builtInToolUsePath = await agentDirectories.builtInToolUse(
+        this.context,
+      );
       const customAgentsPath = await agentDirectories.custom();
 
-      const pathsToWatch = [builtInAgentsPath];
+      const pathsToWatch = [builtInAgentsPath, builtInToolUsePath];
       if (customAgentsPath) {
         pathsToWatch.push(customAgentsPath);
       }
