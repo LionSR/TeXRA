@@ -7,4 +7,6 @@ export interface StreamTabInfo {
   agentType?: string;
   hasMultipleOutputs?: boolean;
   lastTimestamp?: number;
+  inputFile?: string;
+  creationTimestamp?: number;
 }
