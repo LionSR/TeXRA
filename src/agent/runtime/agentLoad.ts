@@ -15,6 +15,7 @@ import {
   AgentPromptSchema,
   AgentDefinitionSchema,
 } from '@agent/core/AgentDataclass';
+import type { ToolDefinition } from '@model';
 
 // Local imports - utils
 import * as logger from '@logger/logUtils';
@@ -103,6 +104,40 @@ export async function loadAgentSettingAndPrompts(
       prompts = deepmerge({}, config.prompts ?? {}, {
         arrayMerge: (_d, s) => s,
       });
+    }
+
+    // Resolve tool set shortcuts before validation
+    if (Array.isArray(settings.tools)) {
+      const { ToolSets } = await import('@agent/toolUse/ToolSetRegistry');
+      const { DEFAULT_TOOL_REGISTRY } = await import('@tools/registry');
+      const resolveSets = (
+        items: any[],
+        visited = new Set<string>(),
+      ): ToolDefinition[] => {
+        const output: ToolDefinition[] = [];
+        for (const item of items) {
+          if (typeof item === 'string' && ToolSets[item]) {
+            if (visited.has(item)) {
+              throw new Error(`Circular tool set reference: ${item}`);
+            }
+            visited.add(item);
+            output.push(...resolveSets(ToolSets[item], visited));
+            visited.delete(item);
+          } else if (typeof item === 'string') {
+            if (!DEFAULT_TOOL_REGISTRY[item]) {
+              logger.warn(CHANNEL, `Tool "${item}" not found in registry`);
+            }
+            output.push({ name: item });
+          } else {
+            if (!DEFAULT_TOOL_REGISTRY[item.name]) {
+              logger.warn(CHANNEL, `Tool "${item.name}" not found in registry`);
+            }
+            output.push(item as ToolDefinition);
+          }
+        }
+        return output;
+      };
+      settings.tools = resolveSets(settings.tools as any[]);
     }
 
     // Apply defaults and validate the final settings and prompts

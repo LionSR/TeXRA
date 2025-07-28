@@ -22,8 +22,12 @@ import { loadAgentSettingAndPrompts } from '@agent/runtime/agentLoad';
 import { MODEL_CONFIGS } from '@model/ModelRegistry';
 import { ModelFactory } from '@agent/runtime/ModelFactory';
 
-import { DirectAgent, CoTAgent, MergeAgent } from '@agent/implementations';
-import { ToolUseAgent } from '@agent/toolUse';
+import {
+  DirectAgent,
+  CoTAgent,
+  MergeAgent,
+  BaseToolUseAgent,
+} from '@agent/implementations';
 
 import { AgentLogger } from '@logger/AgentLogger';
 
@@ -124,7 +128,7 @@ function getAgentClass(settings: AgentSetting): AgentConstructor {
   const agentTypeMapping: Record<string, AgentConstructor> = {
     direct: DirectAgent,
     CoT: CoTAgent,
-    toolUse: ToolUseAgent,
+    toolUse: BaseToolUseAgent,
   };
   return agentTypeMapping[settings.agentType] || DirectAgent;
 }
