@@ -158,6 +158,25 @@ userPrefix: |
 - **Start Simple:** Begin with basic settings/prompts and add complexity incrementally.
 - **Test Iteratively:** Test frequently and review logs in the ProgressBoard.
 
+### Tool-Use Agents
+
+Tools live under `src/tools/` and each one defines its input schema with Zod.
+Your YAML can reference individual tools or predefined sets. Sets are expanded
+when the agent configuration is loaded.
+
+Example:
+
+```yaml
+settings:
+  agentType: toolUse
+  tools:
+    - file_edit # expands to the text_editor tool
+    - bash # single tool by name
+```
+
+The ProgressBoard shows the JSON passed to each tool along with the tool's
+response.
+
 ### Example: Multiple Output Agent
 
 If your workflow requires several output files, your agent must structure its
