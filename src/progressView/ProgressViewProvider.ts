@@ -17,6 +17,7 @@ import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
 import { TaskState } from '@logger/TaskState';
 import type { TokenUsageStats } from '@agent/types/UsageTypes';
 import { LogMessageData } from '@logger/LogTypes';
+import { watchConfig } from '@utils/config';
 
 // @ts-ignore - Import JavaScript module
 import { STATUS, COMMANDS } from './modules/constants.js';
@@ -94,6 +95,10 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
    */
   public async initialize(): Promise<void> {
     await this.state.load();
+
+    watchConfig(this.context, 'texra.progressView.sortStreamsBy', () =>
+      this.updateWebview(),
+    );
 
     // Setup event listeners using the new architecture
     this._disposables.push(...this.eventHandler.setupEventListeners());
