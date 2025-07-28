@@ -109,17 +109,35 @@ export async function loadAgentSettingAndPrompts(
     // Resolve tool set shortcuts before validation
     if (Array.isArray(settings.tools)) {
       const { ToolSets } = await import('@agent/toolUse/ToolSetRegistry');
-      const expanded: ToolDefinition[] = [];
-      for (const t of settings.tools as any[]) {
-        if (typeof t === 'string' && ToolSets[t]) {
-          expanded.push(...ToolSets[t]);
-        } else if (typeof t === 'string') {
-          expanded.push({ name: t });
-        } else {
-          expanded.push(t as ToolDefinition);
+      const { DEFAULT_TOOL_REGISTRY } = await import('@tools/registry');
+      const resolveSets = (
+        items: any[],
+        visited = new Set<string>(),
+      ): ToolDefinition[] => {
+        const output: ToolDefinition[] = [];
+        for (const item of items) {
+          if (typeof item === 'string' && ToolSets[item]) {
+            if (visited.has(item)) {
+              throw new Error(`Circular tool set reference: ${item}`);
+            }
+            visited.add(item);
+            output.push(...resolveSets(ToolSets[item], visited));
+            visited.delete(item);
+          } else if (typeof item === 'string') {
+            if (!DEFAULT_TOOL_REGISTRY[item]) {
+              logger.warn(CHANNEL, `Tool "${item}" not found in registry`);
+            }
+            output.push({ name: item });
+          } else {
+            if (!DEFAULT_TOOL_REGISTRY[item.name]) {
+              logger.warn(CHANNEL, `Tool "${item.name}" not found in registry`);
+            }
+            output.push(item as ToolDefinition);
+          }
         }
-      }
-      settings.tools = expanded as any;
+        return output;
+      };
+      settings.tools = resolveSets(settings.tools as any[]);
     }
 
     // Apply defaults and validate the final settings and prompts
