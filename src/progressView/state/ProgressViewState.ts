@@ -25,7 +25,7 @@ export class ProgressViewState {
   private _outputFiles: OutputFilesManager;
   private _usageStats: UsageStatsManager;
   private _activeStream: StreamTabId = '';
-  private _streamSortOrder = 'none';
+  private _streamSortOrder = 'time';
   private _taskStates: Map<StreamTabId, TaskState> = new Map();
   private _executionIds: Map<StreamTabId, ExecutionId> = new Map();
   private readonly persistence: StatePersistenceManager;
@@ -274,7 +274,7 @@ export class ProgressViewState {
   private async loadStreamSortOrder(): Promise<void> {
     this._streamSortOrder = await this.persistence.load(
       WorkspaceStateKey.STREAM_SORT_ORDER,
-      'none',
+      'time',
     );
   }
 

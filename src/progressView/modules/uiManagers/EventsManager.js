@@ -94,6 +94,19 @@ export class EventsManager {
       });
     }
 
+    const sortButtons = document.getElementById('sortButtons');
+    if (sortButtons) {
+      sortButtons.addEventListener('click', (e) => {
+        const btn = e.target.closest('.sort-btn');
+        if (btn && btn.dataset.sort) {
+          vscode.postMessage({
+            command: COMMANDS.SORT_STREAMS,
+            sortBy: btn.dataset.sort,
+          });
+        }
+      });
+    }
+
     // Initialize split view
     Split(['.content-area', '.tabs'], {
       sizes: [SPLIT_SIZES.CONTENT, SPLIT_SIZES.TABS],
