@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { ToolDefinition } from '@model';
-import { ToolResult } from '@tools/anthropic/base';
+import { ToolResult } from '@tools/result';
 
 export abstract class BaseTool<T> {
   readonly definition: ToolDefinition;

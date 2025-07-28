@@ -4,8 +4,9 @@
 import { z } from 'zod';
 import { WorkspaceFS } from '@utils/files';
 import { BaseTool } from './core/base';
-import { ToolResult } from '@tools/anthropic/base';
+import { ToolResult } from '@tools/result';
 import type { ToolDefinition } from '@model';
+import { zodToJsonSchema } from 'openai/_vendor/zod-to-json-schema/index.js';
 
 const FileOpInputSchema = z.object({
   command: z.enum(['read', 'write', 'append']),
@@ -20,6 +21,7 @@ export class FileOpTool extends BaseTool<FileOpInput> {
     const definition: ToolDefinition = {
       name: 'file_op',
       description: 'Perform basic file operations',
+      parameters: zodToJsonSchema(FileOpInputSchema, { name: 'fileOpInput' }),
     };
     super(definition, FileOpInputSchema);
   }
