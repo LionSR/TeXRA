@@ -2,15 +2,14 @@
 
 import * as path from 'path';
 import * as vscode from 'vscode';
+import { z } from 'zod';
 
 // Local imports - core
-import { BaseAnthropicTool, CLIResult, ToolError, ToolResult } from './base';
-import {
-  TextEditorToolParams,
-  ToolCallInput,
-  EditorCommand,
-  FileHistoryEntry,
-} from './types';
+import { BaseTool } from './core/base';
+import { ToolCallInput, EditorCommand, FileHistoryEntry } from './types';
+import { ToolResult, CLIResult, ToolError } from './result';
+import type { ToolDefinition } from '@model';
+import { zodToJsonSchema } from 'openai/_vendor/zod-to-json-schema/index.js';
 
 // Local imports - utilities
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
@@ -22,10 +21,22 @@ import * as logger from '@logger/logUtils';
 const CHANNEL = 'TextEditorTool';
 const SNIPPET_LINES = 4;
 
+export const TextEditorInputSchema = z.object({
+  command: z.enum(['view', 'create', 'str_replace', 'insert', 'undo_edit']),
+  path: z.string(),
+  file_text: z.string().optional(),
+  view_range: z.tuple([z.number(), z.number()]).optional(),
+  old_str: z.string().optional(),
+  new_str: z.string().optional(),
+  insert_line: z.number().optional(),
+});
+
+export type TextEditorInput = z.infer<typeof TextEditorInputSchema>;
+
 /**
  * Implementation of Anthropic's text editor tool for VS Code
  */
-export class TextEditorTool extends BaseAnthropicTool {
+export class TextEditorTool extends BaseTool<TextEditorInput> {
   // Tool type and name
   private apiType:
     | 'text_editor_20250124'
@@ -46,30 +57,28 @@ export class TextEditorTool extends BaseAnthropicTool {
       | 'text_editor_20241022'
       | 'text_editor_20250429' = 'text_editor_20250124',
   ) {
-    super();
-    this.apiType = apiType;
-    // Set tool name based on type - Claude 4 models use different name
-    this.name =
+    const name =
       apiType === 'text_editor_20250429'
         ? 'str_replace_based_edit_tool'
         : 'str_replace_editor';
-  }
-
-  /**
-   * Convert the tool to the format expected by Anthropic's API
-   */
-  toParams(): TextEditorToolParams {
-    return {
-      name: this.name,
-      type: this.apiType,
+    const definition: ToolDefinition = {
+      name,
+      description:
+        'Edit files using search and replace or insertion operations',
+      parameters: zodToJsonSchema(TextEditorInputSchema, {
+        name: 'textEditorInput',
+      }),
     };
+    super(definition, TextEditorInputSchema);
+    this.apiType = apiType;
+    this.name = name;
   }
 
   /**
    * Execute the tool with the given arguments
    * @param input - Tool call input parameters
    */
-  async call(input: ToolCallInput): Promise<ToolResult> {
+  protected async execute(input: TextEditorInput): Promise<ToolResult> {
     try {
       const { command, path: filePath } = input;
 
