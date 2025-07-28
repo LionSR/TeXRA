@@ -17,6 +17,9 @@ export const ELEMENT_IDS = {
   TOOLBAR_CONTAINER: 'toolbarContainer',
   FILE_ITEM_TEMPLATE: 'fileItemTemplate',
   DELETE_ALL_BTN: 'deleteAllBtn',
+  SORT_TIME_BTN: 'sortTimeBtn',
+  SORT_FILE_BTN: 'sortFileBtn',
+  SORT_AGENT_BTN: 'sortAgentBtn',
   STOP_STREAM_BTN: 'stopStreamBtn',
   RUN_AGAIN_BTN: 'runAgainBtn',
   RESTORE_STATE_BTN: 'restoreStateBtn',
@@ -98,5 +101,26 @@ export const TOOLBAR_BUTTONS = [
     title: 'Erase the stream output for this agent',
     className: 'vscode-button clear-button',
     disabled: false,
+  },
+];
+
+export const SORT_BUTTONS = [
+  {
+    id: ELEMENT_IDS.SORT_TIME_BTN,
+    icon: 'clock',
+    sort: 'time',
+    title: 'Sort by time',
+  },
+  {
+    id: ELEMENT_IDS.SORT_FILE_BTN,
+    icon: 'file',
+    sort: 'inputFile',
+    title: 'Sort by file',
+  },
+  {
+    id: ELEMENT_IDS.SORT_AGENT_BTN,
+    icon: 'account',
+    sort: 'agent',
+    title: 'Sort by agent',
   },
 ];
