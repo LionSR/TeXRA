@@ -1,6 +1,7 @@
 // Local imports
 import { ELEMENT_IDS } from '../constants.js';
 import { createFromTemplate } from '@common/templateUtils.js';
+import { initializeIconButtons } from '@common/iconButtonInitializer.js';
 
 const AGENT_ICONS = {
   CoT: 'terminal',
@@ -50,6 +51,7 @@ export class StreamTabs {
         },
       });
       if (!tabEl) return;
+      initializeIconButtons(tabEl);
       const agentIcon = tabEl.querySelector('.agent-type');
       if (agentIcon) {
         const key = info.agentType || info.agent || 'unknown';
