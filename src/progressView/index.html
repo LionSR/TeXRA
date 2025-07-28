@@ -152,7 +152,7 @@
           <!-- Stream tabs will be dynamically inserted here -->
         </div>
         <div class="clear-all-container">
-          <div id="sortButtons" class="sort-actions button-group">
+          <div class="button-group" id="sortButtons">
             <button
               class="vscode-button sort-btn"
               id="sortTimeBtn"
@@ -174,10 +174,14 @@
               title="Sort by agent"
               data-icon="account"
             ></button>
+            <button
+              class="vscode-button"
+              id="deleteAllBtn"
+              data-icon="close-all"
+            >
+              Delete All
+            </button>
           </div>
-          <button class="clear-button" id="deleteAllBtn" data-icon="close-all">
-            Delete All
-          </button>
         </div>
       </div>
     </div>
