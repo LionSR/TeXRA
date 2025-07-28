@@ -25,6 +25,7 @@ This section lists all the agent execution streams from your current VS Code ses
 - **Switching Streams**: Click on a stream name (e.g., `polish@sonnet37: paper.tex`) to view its specific logs and status in the Content Area.
 - **Delete All**: The <i class="codicon codicon-trash"></i> **Delete All** button at the bottom permanently removes all streams and their logs from the ProgressBoard view for the current session.
 - **Metadata**: Tabs display the model and when the stream was last active on a second line. Icons indicate the agent type and if multiple output files were generated.
+- **Sorting**: Use the buttons below the tab list to order streams by time, input file, or agent name. The chosen order is saved for the workspace.
 
 ## Content Area
 
@@ -64,3 +65,4 @@ This scrollable area displays the detailed, timestamped logs for the selected ag
 Understanding the log content is key to diagnosing problems and seeing how TeXRA and the AI models process your requests. Refer to the [Troubleshooting](../reference/troubleshooting.md) guide for more tips on using logs.
 
 At the bottom of the tab list, there is a "Delete All" button (<i class="codicon codicon-close-all"></i>) that allows you to clear all streams and their associated logs from the ProgressBoard view.
+Next to it are sorting buttons (<i class="codicon codicon-clock"></i>, <i class="codicon codicon-file"></i>, <i class="codicon codicon-account"></i>) for ordering the tabs.

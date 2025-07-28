@@ -152,9 +152,36 @@
           <!-- Stream tabs will be dynamically inserted here -->
         </div>
         <div class="clear-all-container">
-          <button class="clear-button" id="deleteAllBtn" data-icon="close-all">
-            Delete All
-          </button>
+          <div class="button-group" id="sortButtons">
+            <button
+              class="vscode-button sort-btn"
+              id="sortTimeBtn"
+              data-sort="time"
+              title="Sort by time"
+              data-icon="clock"
+            ></button>
+            <button
+              class="vscode-button sort-btn"
+              id="sortFileBtn"
+              data-sort="inputFile"
+              title="Sort by file"
+              data-icon="file"
+            ></button>
+            <button
+              class="vscode-button sort-btn"
+              id="sortAgentBtn"
+              data-sort="agent"
+              title="Sort by agent"
+              data-icon="account"
+            ></button>
+            <button
+              class="vscode-button"
+              id="deleteAllBtn"
+              data-icon="close-all"
+            >
+              Delete All
+            </button>
+          </div>
         </div>
       </div>
     </div>
