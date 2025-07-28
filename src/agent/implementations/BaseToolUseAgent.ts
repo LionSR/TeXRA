@@ -27,17 +27,25 @@ export class BaseToolUseAgent extends BaseAgent {
     agentSetting: AgentSetting,
     agentPrompt: AgentPrompt,
     agentPath: string,
-    registry: Record<string, BaseTool<any>> = DEFAULT_TOOL_REGISTRY,
   ) {
     super(modelHandler, agentConfig, agentSetting, agentPrompt, agentPath);
-    this.toolRegistry = registry;
+    this.toolRegistry = DEFAULT_TOOL_REGISTRY;
   }
 
   private getTools(): ToolDefinition[] {
-    const cfg = this.agentSetting.tools;
+    const cfg = Array.isArray(this.agentSetting.tools)
+      ? this.agentSetting.tools
+      : [];
     const tools: ToolDefinition[] = [];
     for (const t of cfg) {
-      tools.push(typeof t === 'string' ? { name: t } : t);
+      const def = typeof t === 'string' ? { name: t } : t;
+      if (!this.toolRegistry[def.name]) {
+        this.logger.warn(
+          `Tool "${def.name}" not found in registry`,
+          this.runGroupId,
+        );
+      }
+      tools.push(def);
     }
     if (
       this.agentConfig.toolConfig.attachDiagnostics &&
@@ -104,19 +112,30 @@ export class BaseToolUseAgent extends BaseAgent {
           this.runGroupId,
           MESSAGE_TYPES.TOOL_USE,
         );
+        let parsed: { name: string; input: unknown } | undefined;
         try {
-          const parsed = JSON.parse(toolInfo);
-          const result = await this.runTool(parsed.name, parsed.input);
-          this.logger.info(
-            encodeHtml(JSON.stringify(result, null, 2)),
-            this.runGroupId,
-            MESSAGE_TYPES.TOOL_USE,
-          );
-        } catch (err) {
+          parsed = JSON.parse(toolInfo);
+        } catch (jsonErr) {
           this.logger.error(
-            `Failed to execute tool: ${err instanceof Error ? err.message : String(err)}`,
+            `Malformed tool JSON: ${jsonErr instanceof Error ? jsonErr.message : String(jsonErr)}`,
             this.runGroupId,
           );
+          parsed = undefined;
+        }
+        if (parsed && parsed.name) {
+          try {
+            const result = await this.runTool(parsed.name, parsed.input);
+            this.logger.info(
+              encodeHtml(JSON.stringify(result, null, 2)),
+              this.runGroupId,
+              MESSAGE_TYPES.TOOL_USE,
+            );
+          } catch (err) {
+            this.logger.error(
+              `Failed to execute tool: ${err instanceof Error ? err.message : String(err)}`,
+              this.runGroupId,
+            );
+          }
         }
       }
 
