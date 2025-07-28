@@ -164,6 +164,11 @@ Tools live under `src/tools/` and each one defines its input schema with Zod.
 Your YAML can reference individual tools or predefined sets. Sets are expanded
 when the agent configuration is loaded.
 
+The built-in `ToolSetRegistry` maps aliases to lists of tool definitions. For
+instance, the `file_edit` set expands to `{ name: 'text_editor' }`. Nested sets
+are resolved recursively, and any unknown names trigger a warning during agent
+loading.
+
 Example:
 
 ```yaml
@@ -172,6 +177,7 @@ settings:
   tools:
     - file_edit # expands to the text_editor tool
     - bash # single tool by name
+    - basic_io # adds bash and file_op tools
 ```
 
 The ProgressBoard shows the JSON passed to each tool along with the tool's
