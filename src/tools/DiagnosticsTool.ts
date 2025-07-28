@@ -1,57 +1,37 @@
-// Standard library imports
-
-// Third-party imports
-
-// Local imports - core
-import { BaseAnthropicTool, ToolError, ToolResult } from './base';
-import { BetaToolUnionParam } from './types';
-
-// Local imports - utils
+import { z } from 'zod';
 import { getLinterMessages } from '@frontend/latex/linter';
 import * as logger from '@logger/logUtils';
+import { BaseTool } from './core/base';
+import { ToolResult, ToolError } from './result';
+import type { ToolDefinition } from '@model';
+import { zodToJsonSchema } from 'openai/_vendor/zod-to-json-schema/index.js';
 
 const CHANNEL = 'DiagnosticsTool';
 logger.initialize(CHANNEL);
 
-export type DiagnosticsCommand = 'list' | 'count';
+export const DiagnosticsInputSchema = z.object({
+  command: z.enum(['list', 'count']),
+  path: z.string(),
+});
 
-export interface DiagnosticsToolInput {
-  command: DiagnosticsCommand;
-  path: string;
-}
+export type DiagnosticsInput = z.infer<typeof DiagnosticsInputSchema>;
 
-/**
- * Tool for retrieving VS Code diagnostics.
- */
-export class DiagnosticsTool extends BaseAnthropicTool {
-  toParams(): BetaToolUnionParam {
-    return {
+export class DiagnosticsTool extends BaseTool<DiagnosticsInput> {
+  constructor() {
+    const definition: ToolDefinition = {
       name: 'diagnostics',
-      type: 'function',
       description:
-        'Retrieve linter diagnostics. Use `list` for full messages or `count` for a summary.',
-      input_schema: {
-        type: 'object',
-        properties: {
-          command: {
-            type: 'string',
-            description: 'Either "list" or "count"',
-            enum: ['list', 'count'],
-          },
-          path: { type: 'string', description: 'Relative file path' },
-        },
-        required: ['command', 'path'],
-      },
+        'Retrieve linter diagnostics. Use "list" for full messages or "count" for a summary.',
+      parameters: zodToJsonSchema(DiagnosticsInputSchema, {
+        name: 'diagnosticsInput',
+      }),
     };
+    super(definition, DiagnosticsInputSchema);
   }
 
-  async call(input: DiagnosticsToolInput): Promise<ToolResult> {
+  protected async execute(input: DiagnosticsInput): Promise<ToolResult> {
     try {
       const { command, path } = input;
-      if (!command || !path) {
-        throw new ToolError('Both `command` and `path` are required');
-      }
-
       switch (command) {
         case 'list': {
           const messages = await getLinterMessages(path);

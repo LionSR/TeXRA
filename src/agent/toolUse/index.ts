@@ -6,16 +6,14 @@
  */
 
 // Local imports - agents
-import { ValidationFixAgent } from './ValidationFixAgent';
-import { BaseToolUseAgent } from './BaseToolUseAgent';
-import { ToolUseAgent } from './ToolUseAgent';
-import type { IToolUseAgent } from './IToolUseAgent';
+export { BaseToolUseAgent } from '@agent/implementations/BaseToolUseAgent';
 
 // Export individual classes
-export { ValidationFixAgent, BaseToolUseAgent, ToolUseAgent };
-export type { IToolUseAgent };
-
-// Export shared tool implementations and types
-export * from '@tools/anthropic/TextEditorTool';
-export * from '@tools/anthropic/types';
-export * from '@tools/anthropic/base';
+export * from '@tools/TextEditorTool';
+export * from '@tools/DiagnosticsTool';
+export * from '@tools/types';
+export * from '@tools/result';
+export * from '@tools/bash';
+export * from '@tools/fileOp';
+export * from '@tools/core/base';
+export * from '@tools/registry';
