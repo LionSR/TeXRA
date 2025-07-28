@@ -142,11 +142,11 @@ export class FileList {
           file.path,
         );
 
-        // Add data attributes for delegated click handlers
-        this.updateFileButtons(clone, file, effectiveBase);
-
-        // Replace any icon placeholders after attributes are set
+        // Replace any icon placeholders before attaching handlers
         initializeIconButtons(clone);
+
+        // Update buttons with click handlers
+        this.updateFileButtons(clone, file, effectiveBase);
 
         roundGroup.appendChild(clone);
       });
