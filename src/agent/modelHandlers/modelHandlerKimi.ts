@@ -96,6 +96,10 @@ export class ModelHandlerKimi extends ModelHandlerOpenAI {
     return reasoningContent;
   }
 
+  extractToolUse(_responseObject: any): string | null {
+    return null;
+  }
+
   /**
    * Preprocess messages array for Moonshot Kimi models
    * Ensures compatibility with Kimi API format requirements

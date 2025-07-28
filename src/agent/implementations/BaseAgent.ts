@@ -179,7 +179,7 @@ export abstract class BaseAgent implements IAgent {
   protected endRunGroup(status: 'stopped' | 'error' = 'stopped'): void {
     if (this.runGroupId) {
       this.logger.endGroup(this.runGroupId, status);
-      this.runGroupId = null;
+      this.runGroupId = undefined;
     }
   }
 

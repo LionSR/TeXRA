@@ -157,4 +157,7 @@ export interface IModelHandler<U = any, R = any> {
     groupId?: string,
     toolState?: ToolState,
   ): string | null;
+
+  /** Extract tool-use details from a provider response. */
+  extractToolUse(responseObject: any): string | null;
 }
