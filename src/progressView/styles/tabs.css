@@ -28,27 +28,8 @@
   padding: var(--spacing-small);
 }
 
-.sort-actions {
-  display: flex;
+.clear-all-container .button-group {
   justify-content: space-between;
-  margin-bottom: var(--spacing-small);
-}
-
-.clear-button {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-small);
-  padding: var(--spacing-small) var(--spacing-small);
-  cursor: pointer;
-  border: none;
-  background: none;
-  color: var(--vscode-foreground);
-  font-family: var(--font-family);
-  font-size: var(--font-size-sm);
-}
-
-.clear-button:hover {
-  background-color: var(--vscode-list-hoverBackground);
 }
 
 .tab-container {
