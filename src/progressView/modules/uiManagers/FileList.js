@@ -142,11 +142,11 @@ export class FileList {
           file.path,
         );
 
-        // Update existing buttons based on file state
-        this.updateFileButtons(clone, file, effectiveBase);
-
-        // Replace any icon placeholders inside the clone
+        // Replace any icon placeholders before attaching handlers
         initializeIconButtons(clone);
+
+        // Update buttons with click handlers
+        this.updateFileButtons(clone, file, effectiveBase);
 
         roundGroup.appendChild(clone);
       });
