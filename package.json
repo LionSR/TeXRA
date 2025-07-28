@@ -975,6 +975,11 @@
         "category": "TeXRA"
       },
       {
+        "command": "texra.testWolframTool",
+        "title": "Test Wolfram Tool",
+        "category": "TeXRA"
+      },
+      {
         "command": "texra.wolframScriptExecute",
         "title": "Execute Wolfram Language Code",
         "category": "TeXRA"

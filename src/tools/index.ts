@@ -5,3 +5,4 @@ export * from './bash';
 export * from './fileOp';
 export * from './core/base';
 export * from './registry';
+export * from './wolfram';

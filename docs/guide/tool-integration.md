@@ -30,6 +30,7 @@ Processing visual elements for analysis and inclusion.
 Providing quantitative insights into your document structure.
 
 - **Statistics:** `texcount` analyzes your document to provide statistics like word counts, heading counts, and math element counts. This information can optionally be included in prompts to give the LLM better context about the document's scale and complexity. See the "Attach TeX Count" option in the UI ([File Management guide](./file-management.md#tool-config-dropdown)) and the `texra.getTeXCount` command.
+- **Symbolic Math:** The `wolfram` tool runs Wolfram Language code through `wolframscript`, letting agents verify calculations or perform algebra before responding.
 
 _(Note: These tools often rely on external programs that need to be installed separately. See the [Installation guide](./installation.md) for requirements.)_
 

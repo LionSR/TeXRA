@@ -162,7 +162,8 @@ userPrefix: |
 
 Tools live under `src/tools/` and each one defines its input schema with Zod.
 Your YAML can reference individual tools or predefined sets. Sets are expanded
-when the agent configuration is loaded.
+when the agent configuration is loaded. The `wolfram_exec` set enables the
+`wolfram` tool for running small Wolfram Language snippets during a run.
 
 Example:
 
@@ -171,6 +172,7 @@ settings:
   agentType: toolUse
   tools:
     - file_edit # expands to the text_editor tool
+    - wolfram_exec # execute Wolfram Language code
     - bash # single tool by name
 ```
 
