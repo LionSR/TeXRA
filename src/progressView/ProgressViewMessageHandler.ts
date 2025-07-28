@@ -34,6 +34,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
       [PROGRESS_VIEW_COMMANDS.DIFF_STREAM]: this.handleDiffStream.bind(this),
       [PROGRESS_VIEW_COMMANDS.PACK_STREAM]: this.handlePackStream.bind(this),
       [PROGRESS_VIEW_COMMANDS.CLEAN_STREAM]: this.handleCleanStream.bind(this),
+      [PROGRESS_VIEW_COMMANDS.SORT_STREAMS]: this.handleSortStreams.bind(this),
       [PROGRESS_VIEW_COMMANDS.RESTORE_STATE]:
         this.handleRestoreState.bind(this),
 
@@ -133,6 +134,14 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     webviewView: vscode.WebviewView,
   ): Promise<void> {
     await this.handleFileOperation(message.stream, 'texra.clean');
+  }
+
+  private async handleSortStreams(
+    message: any,
+    webviewView: vscode.WebviewView,
+  ): Promise<void> {
+    this.provider.state.streamSortOrder = message.sortBy ?? 'time';
+    this.provider.updateWebview();
   }
 
   private async handleRestoreState(
