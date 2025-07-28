@@ -1,5 +1,5 @@
-import { TextEditorTool } from '@tools/anthropic/TextEditorTool';
-import { DiagnosticsTool } from '@tools/anthropic/DiagnosticsTool';
+import { TextEditorTool } from './TextEditorTool';
+import { DiagnosticsTool } from './DiagnosticsTool';
 import { BashTool } from './bash';
 import { FileOpTool } from './fileOp';
 export const DEFAULT_TOOL_REGISTRY: Record<string, any> = {
