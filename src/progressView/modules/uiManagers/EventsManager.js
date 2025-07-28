@@ -74,11 +74,12 @@ export class EventsManager {
     document.getElementById(ELEMENT_IDS.GENERATED_FILES).addEventListener(
       'click',
       (e) => {
-        const button = e.target.closest('button');
-        if (button && button.dataset.command) {
-          const data = { command: button.dataset.command };
-          if (button.dataset.file) data.file = button.dataset.file;
-          if (button.dataset.base) data.base = button.dataset.base;
+        const element = e.target.closest('[data-command]');
+        if (element && element.dataset.command) {
+          const data = { command: element.dataset.command };
+          if (element.dataset.file) data.file = element.dataset.file;
+          if (element.dataset.base) data.base = element.dataset.base;
+          if (element.dataset.prev) data.prev = element.dataset.prev;
           vscode.postMessage(data);
         }
       },

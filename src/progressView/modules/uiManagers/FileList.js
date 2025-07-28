@@ -170,13 +170,9 @@ export class FileList {
     // Compare button - show only if there's a base file
     if (compareBtn) {
       if (effectiveBase) {
-        compareBtn.onclick = () => {
-          vscode.postMessage({
-            command: COMMANDS.COMPARE_ORIGINAL,
-            file: file.path,
-            base: effectiveBase,
-          });
-        };
+        compareBtn.dataset.command = COMMANDS.COMPARE_ORIGINAL;
+        compareBtn.dataset.file = file.path;
+        compareBtn.dataset.base = effectiveBase;
       } else {
         compareBtn.style.display = 'none';
       }
@@ -185,13 +181,9 @@ export class FileList {
     // Accept button - show only if there's a base file
     if (acceptBtn) {
       if (effectiveBase) {
-        acceptBtn.onclick = () => {
-          vscode.postMessage({
-            command: COMMANDS.ACCEPT_FILE,
-            file: file.path,
-            base: effectiveBase,
-          });
-        };
+        acceptBtn.dataset.command = COMMANDS.ACCEPT_FILE;
+        acceptBtn.dataset.file = file.path;
+        acceptBtn.dataset.base = effectiveBase;
       } else {
         acceptBtn.style.display = 'none';
       }
@@ -200,13 +192,9 @@ export class FileList {
     // Merge button - show only if there's a base file
     if (mergeBtn) {
       if (effectiveBase) {
-        mergeBtn.onclick = () => {
-          vscode.postMessage({
-            command: COMMANDS.MERGE_FILE,
-            file: file.path,
-            base: effectiveBase,
-          });
-        };
+        mergeBtn.dataset.command = COMMANDS.MERGE_FILE;
+        mergeBtn.dataset.file = file.path;
+        mergeBtn.dataset.base = effectiveBase;
       } else {
         mergeBtn.style.display = 'none';
       }
@@ -215,13 +203,9 @@ export class FileList {
     // LaTeX diff button - show only if there's a base file
     if (diffBtn) {
       if (effectiveBase) {
-        diffBtn.onclick = () => {
-          vscode.postMessage({
-            command: COMMANDS.LATEXDIFF_FILE,
-            file: file.path,
-            base: effectiveBase,
-          });
-        };
+        diffBtn.dataset.command = COMMANDS.LATEXDIFF_FILE;
+        diffBtn.dataset.file = file.path;
+        diffBtn.dataset.base = effectiveBase;
       } else {
         diffBtn.style.display = 'none';
       }
@@ -230,27 +214,20 @@ export class FileList {
     // Previous round comparison button - show only if there's a previous version
     if (prevBtn) {
       if (file.prev) {
-        prevBtn.onclick = () => {
-          vscode.postMessage({
-            command: COMMANDS.COMPARE_PREVIOUS,
-            file: file.path,
-            prev: file.prev,
-          });
-        };
+        prevBtn.dataset.command = COMMANDS.COMPARE_PREVIOUS;
+        prevBtn.dataset.file = file.path;
+        prevBtn.dataset.prev = file.prev;
       } else {
         prevBtn.style.display = 'none';
       }
     }
 
-    // Add click handler for the file path
+    // Add dataset for the file path link
     const filePathSpan = clone.querySelector('.file-path');
     if (filePathSpan && file.path) {
-      filePathSpan.onclick = () => {
-        vscode.postMessage({
-          command: COMMANDS.OPEN_FILE,
-          file: file.path,
-        });
-      };
+      filePathSpan.classList.add('clickable-link');
+      filePathSpan.dataset.command = COMMANDS.OPEN_FILE;
+      filePathSpan.dataset.file = file.path;
     }
   }
 }
