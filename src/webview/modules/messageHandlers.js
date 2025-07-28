@@ -251,6 +251,8 @@ export class MainViewMessageHandler {
         false,
       attachTeXCount:
         state.attachTeXCount ?? toolConfig.attachTeXCount ?? false,
+      attachDiagnostics:
+        state.attachDiagnostics ?? toolConfig.attachDiagnostics ?? false,
       usePrefillFromInput:
         state.usePrefillFromInput ?? toolConfig.usePrefillFromInput ?? false,
       printInputPrompt:
