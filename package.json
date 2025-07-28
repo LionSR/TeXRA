@@ -731,6 +731,29 @@
             "scope": "resource"
           }
         }
+      },
+      {
+        "title": "Progress Board",
+        "properties": {
+          "texra.progressBoard.streamSortOrder": {
+            "type": "string",
+            "default": "time",
+            "enum": [
+              "none",
+              "time",
+              "inputFile",
+              "agent"
+            ],
+            "enumDescriptions": [
+              "No sorting (maintain order of creation)",
+              "Sort by last active time (newest first)",
+              "Sort alphabetically by input file name",
+              "Sort alphabetically by agent type"
+            ],
+            "description": "Default sort order for streams in the Progress Board",
+            "scope": "resource"
+          }
+        }
       }
     ],
     "commands": [

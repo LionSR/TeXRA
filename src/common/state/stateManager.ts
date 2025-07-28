@@ -13,6 +13,7 @@ export enum WorkspaceStateKey {
   TASK_IDS = 'texra.taskIds', // Legacy key for migration
   EXECUTION_IDS = 'texra.executionIds',
   USAGE_STATS = 'texra.usageStats',
+  STREAM_SORT_ORDER = 'texra.streamSortOrder',
 }
 
 export enum GlobalStateKey {
