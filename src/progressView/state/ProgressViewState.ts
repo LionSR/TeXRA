@@ -7,7 +7,7 @@ import {
   UsageStatsManager,
 } from '../managers';
 import { WorkspaceStateKey } from '@common/state/stateManager';
-import { objectToTaskState } from '@utils/config';
+import { objectToTaskState, getConfig } from '@utils/config';
 import { AgentLogger } from '@logger/AgentLogger';
 
 // Types
@@ -272,9 +272,10 @@ export class ProgressViewState {
   }
 
   private async loadStreamSortOrder(): Promise<void> {
+    const configDefault = getConfig('progressBoard.streamSortOrder', 'time');
     this._streamSortOrder = await this.persistence.load(
       WorkspaceStateKey.STREAM_SORT_ORDER,
-      'time',
+      configDefault,
     );
   }
 
