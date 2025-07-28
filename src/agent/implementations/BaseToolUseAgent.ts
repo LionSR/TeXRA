@@ -1,7 +1,6 @@
 // Base class for tool-use agents
 
 // Standard library imports
-import { encode as encodeHtml } from 'he';
 
 // Local imports - core
 import { BaseAgent } from './BaseAgent';
@@ -11,11 +10,11 @@ import { getSystemPromptWithRules } from '../utils/promptHelpers';
 import { renderPrompt } from '../utils/promptUtils';
 import type { IModelHandler } from '../modelHandlers';
 import type { ToolDefinition } from '@model';
-import xmlUtils from '@utils/text/xmlUtils';
-import { MESSAGE_TYPES } from '@logger/messageTypes';
+
 import { DEFAULT_TOOL_REGISTRY } from '@tools/registry';
 import { BaseTool } from '@tools/core/base';
 import { ToolResult } from '@tools/result';
+import { runToolUseCycle } from '../core/ToolUseCycle';
 import { TOOL_USE_INSTRUCTIONS } from '../utils/toolUsePrompt';
 
 export class BaseToolUseAgent extends BaseAgent {
@@ -86,72 +85,23 @@ export class BaseToolUseAgent extends BaseAgent {
         systemPrompt,
       );
 
-      const response = await this.modelHandler.createResponse(
-        this.client,
+      await runToolUseCycle(
+        {
+          modelHandler: this.modelHandler,
+          agentSetting: this.agentSetting,
+          agentPrompt: this.agentPrompt,
+          userVars: this.userVars,
+          logger: this.logger,
+          client: this.client,
+          toolRegistry: this.toolRegistry,
+          checkInterruption: () => this.checkInterruption(),
+          setAbortController: (ctrl) => {
+            this.abortController = ctrl;
+          },
+        },
         messages,
-        this.agentSetting.temperature ?? 0,
-        undefined,
-        this.agentSetting.endTag,
-        undefined,
-        this.getTools(),
-      );
-
-      const thinking = this.modelHandler.processThinkingBlock(
-        response,
         this.runGroupId,
       );
-      if (thinking) {
-        const formatted = await xmlUtils.formatContent(thinking);
-        this.logger.info(formatted, this.runGroupId, MESSAGE_TYPES.THINKING);
-      }
-
-      const toolInfo = this.modelHandler.extractToolUse(response);
-      if (toolInfo) {
-        this.logger.info(
-          encodeHtml(toolInfo),
-          this.runGroupId,
-          MESSAGE_TYPES.TOOL_USE,
-        );
-        let parsed: { name: string; input: unknown } | undefined;
-        try {
-          parsed = JSON.parse(toolInfo);
-        } catch (jsonErr) {
-          this.logger.error(
-            `Malformed tool JSON: ${jsonErr instanceof Error ? jsonErr.message : String(jsonErr)}`,
-            this.runGroupId,
-          );
-          parsed = undefined;
-        }
-        if (parsed && parsed.name) {
-          try {
-            const result = await this.runTool(parsed.name, parsed.input);
-            this.logger.info(
-              encodeHtml(JSON.stringify(result, null, 2)),
-              this.runGroupId,
-              MESSAGE_TYPES.TOOL_USE,
-            );
-          } catch (err) {
-            this.logger.error(
-              `Failed to execute tool: ${err instanceof Error ? err.message : String(err)}`,
-              this.runGroupId,
-            );
-          }
-        }
-      }
-
-      const [text, usage] = this.modelHandler.extractResponse(
-        response,
-        this.agentSetting.endTag,
-      );
-      if (text) {
-        this.logger.debug(
-          `Model response: ${text.slice(0, 100)}`,
-          this.runGroupId,
-        );
-      }
-      if (usage) {
-        this.logger.statistics(usage, this.runGroupId);
-      }
       this.endRunGroup('stopped');
     } catch (err) {
       this.endRunGroup('error');
