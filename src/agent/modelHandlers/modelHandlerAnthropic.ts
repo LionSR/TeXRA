@@ -172,6 +172,10 @@ export class ModelHandlerAnthropic extends ModelHandler<
       // in the future we log this in firstInputTokens of the AgentStateGlobal
     }
 
+    this.logger.debug(
+      `CreateResponse options: ${JSON.stringify(options, null, 2)}`,
+    );
+
     let response: BetaMessage;
 
     try {
