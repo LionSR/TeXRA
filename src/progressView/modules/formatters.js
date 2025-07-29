@@ -334,8 +334,8 @@ export class LogEntryFormatter {
 
   _formatSpecialContent(content, contentType, logId) {
     const parsedMarkdown = this._processMarkdownContent(content);
-    let element = createFromTemplate('specialDetailsTemplate');
-    if (!element) element = document.createElement('div');
+    const element = createFromTemplate('specialDetailsTemplate');
+    if (!element) return null;
 
     const isThinking = contentType.includes('Thinking');
     const labelText = isThinking ? 'Thinking' : 'Scratchpad';
@@ -576,7 +576,12 @@ export class LogEntryFormatter {
     if (missingFiles.length === 0 && xmlFile) {
       const wrapper = document.createElement('div');
       wrapper.innerHTML = xmlLink;
-      return wrapper.firstElementChild;
+      const element = wrapper.firstElementChild;
+      if (!element) {
+        console.error('Failed to create XML link element from HTML:', xmlLink);
+        return null;
+      }
+      return element;
     }
 
     const summary = `Missing outputs (${missingFiles.length})`;
@@ -749,7 +754,7 @@ export class TaskGroupHeaderFormatter {
   /**
    * Create a group header element
    * @param {Object} group - Task group data
-   * @returns {HTMLElement} Header element
+   * @returns {HTMLElement|null} Header element or null if template creation fails
    */
   create(group) {
     const startDate = new Date(group.startTime);
@@ -757,7 +762,7 @@ export class TaskGroupHeaderFormatter {
     const formattedStartTime = level.formatTime(startDate);
 
     const header = createFromTemplate('groupHeaderTemplate');
-    if (!header) return document.createElement('summary');
+    if (!header) return null;
 
     header.id = `group-header-${group.id}`;
     header.className = this._getHeaderClass(group, level);
