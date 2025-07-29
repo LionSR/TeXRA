@@ -464,6 +464,17 @@ export class ModelHandlerOpenAI extends ModelHandler<
     let newResponse = '';
     if (choice.message.content) {
       newResponse = choice.message.content.trim();
+    } else if (
+      stopReason === 'tool_calls' ||
+      stopReason === 'tool_use' ||
+      stopReason === 'function_call' ||
+      Array.isArray(choice.message.tool_calls) ||
+      choice.message.function_call
+    ) {
+      // Other provider SDKs (Anthropic, Google, etc.) keep a placeholder
+      // message when a tool is invoked. OpenAI omits `content` entirely,
+      // so lack of content is not an error in this case.
+      this.logger.debug('Received tool call without message content');
     } else {
       newResponse = '';
       this.logger.error(
