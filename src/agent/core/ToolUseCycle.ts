@@ -234,7 +234,12 @@ export async function runToolUseCycle(
       resultObj.base64Image = result.base64Image;
     if (result.system !== undefined) resultObj.system = result.system;
 
-    const followUp = modelHandler.createFollowUpMessage(id, name, resultObj);
-    messages.push(followUp);
+    const [callMsg, resultMsg] = modelHandler.createFollowUpMessage(
+      id,
+      name,
+      parsed,
+      resultObj,
+    );
+    messages.push(callMsg, resultMsg);
   }
 }
