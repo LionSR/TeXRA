@@ -10,6 +10,7 @@ import type {
   ResponseOutputText,
   ResponseReasoningItem,
   ResponseFunctionToolCallItem,
+  ResponseFunctionToolCall,
   ResponseInputItem,
 } from 'openai/resources/responses/responses';
 
@@ -463,13 +464,24 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
 
   createFollowUpMessage(
     id: string,
-    _name: string,
+    name: string,
+    call: any,
     result: Record<string, unknown>,
-  ): ResponseInputItem.FunctionCallOutput {
-    return {
+  ): [any, any] {
+    const callMsg: ResponseFunctionToolCall = {
+      type: 'function_call',
+      call_id: id,
+      name,
+      arguments:
+        typeof call?.arguments === 'string'
+          ? call.arguments
+          : JSON.stringify(call?.input ?? call?.arguments ?? {}),
+    };
+    const resultMsg: ResponseInputItem.FunctionCallOutput = {
       type: 'function_call_output',
       call_id: id,
       output: JSON.stringify(result),
     };
+    return [callMsg, resultMsg];
   }
 }

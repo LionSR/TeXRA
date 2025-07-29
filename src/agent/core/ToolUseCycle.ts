@@ -1,7 +1,6 @@
 // Utility to run iterative tool-use cycles
 
 // Third-party imports
-import { encode as encodeHtml } from 'he';
 
 // Local imports - log
 import { AgentLogger } from '@logger/AgentLogger';
@@ -69,8 +68,8 @@ export async function runToolUseCycle(
         client,
         messages,
         agentSetting.temperature ?? 0,
+        undefined, // endTag - not used in tool use scenarios
         undefined,
-        agentSetting.endTag,
         abortController.signal,
         agentSetting.tools as ToolDefinition[],
       );
@@ -89,13 +88,16 @@ export async function runToolUseCycle(
     }
 
     const toolInfo = modelHandler.extractToolUse(response);
+    // Note: We pass empty string for endTag because model responses in tool use
+    // scenarios should not have custom end tags - they're part of the natural
+    // conversation flow (not specialized content like thinking/scratchpad)
     const [text, usage, stopReason] = modelHandler.extractResponse(
       response,
-      agentSetting.endTag,
+      '',
     );
     if (text) {
       logger.debug(`Model response: ${text.slice(0, 100)}`, groupId);
-      logger.info(encodeHtml(text), groupId);
+      logger.info(text, groupId, MESSAGE_TYPES.MODEL_RESPONSE);
     }
     if (usage) {
       const normalized = modelHandler.computeResponseUsage(usage, responseTime);
@@ -112,25 +114,42 @@ export async function runToolUseCycle(
       break;
     }
 
-    logger.info(encodeHtml(toolInfo), groupId, MESSAGE_TYPES.TOOL_USE);
-
+    // Parse tool info first before logging
     let parsed: any;
     try {
       parsed = JSON.parse(toolInfo);
     } catch (err) {
-      logger.error(
-        `Malformed tool JSON: ${err instanceof Error ? err.message : String(err)}`,
+      const errorMsg = `Malformed tool JSON: ${err instanceof Error ? err.message : String(err)}`;
+
+      // Log the failed tool use attempt
+      const toolUseLog = {
+        tool: 'unknown',
+        input: toolInfo,
+        output: new ToolResult({ error: errorMsg, isError: true }),
+      };
+      logger.info(
+        JSON.stringify(toolUseLog, null, 2),
         groupId,
+        MESSAGE_TYPES.TOOL_USE,
       );
       break;
     }
 
     const id = parsed.id || parsed.tool_use_id || parsed.tool_call_id;
     const name = parsed.name || parsed.function?.name;
-    if (!id || !name) {
-      logger.error(
-        `Tool JSON missing id or name: id=${String(id)} name=${String(name)}`,
+    if (!name) {
+      const errorMsg = `Tool JSON missing name: ${JSON.stringify(parsed)}`;
+
+      // Log the failed tool use attempt with available info
+      const toolUseLog = {
+        tool: 'unknown',
+        input: parsed,
+        output: new ToolResult({ error: errorMsg, isError: true }),
+      };
+      logger.info(
+        JSON.stringify(toolUseLog, null, 2),
         groupId,
+        MESSAGE_TYPES.TOOL_USE,
       );
       break;
     }
@@ -151,18 +170,58 @@ export async function runToolUseCycle(
       try {
         result = await tool.call(input);
       } catch (err) {
-        result = new ToolResult({
-          error:
+        // Prepare both user-friendly error and detailed diagnostics
+        let errorMessage: string;
+        let diagnostics: any;
+
+        if (err && typeof err === 'object' && 'issues' in err) {
+          // This is a Zod validation error
+          const zodError = err as any;
+          // Simple message for the model/user
+          errorMessage = `${name}: Invalid parameters provided`;
+          // Detailed diagnostics for debugging
+          diagnostics = {
+            type: 'validation_error',
+            issues: zodError.issues,
+            formatted: zodError.issues?.map((issue: any) => ({
+              path: issue.path.join('.'),
+              message: issue.message,
+              expected: issue.expected,
+              received: issue.received,
+              code: issue.code,
+            })),
+          };
+        } else {
+          errorMessage =
             err instanceof Error
               ? `${name}: ${err.message}`
-              : `${name}: ${String(err)}`,
+              : `${name}: ${String(err)}`;
+        }
+
+        result = new ToolResult({
+          error: errorMessage,
           isError: true,
+          diagnostics,
         });
       }
     }
 
+    // Combine tool input and output into a single log entry
+    // Extract just the arguments/input based on provider format
+    let toolInput = input; // Default to the already extracted input
+    if (!toolInput) {
+      // Fallback to the raw parsed object if input extraction failed
+      toolInput = parsed;
+    }
+
+    const toolUseLog = {
+      tool: name,
+      input: toolInput,
+      output: result,
+    };
+
     logger.info(
-      encodeHtml(JSON.stringify(result, null, 2)),
+      JSON.stringify(toolUseLog, null, 2),
       groupId,
       MESSAGE_TYPES.TOOL_USE,
     );
@@ -175,7 +234,12 @@ export async function runToolUseCycle(
       resultObj.base64Image = result.base64Image;
     if (result.system !== undefined) resultObj.system = result.system;
 
-    const followUp = modelHandler.createFollowUpMessage(id, name, resultObj);
-    messages.push(followUp);
+    const [callMsg, resultMsg] = modelHandler.createFollowUpMessage(
+      id,
+      name,
+      parsed,
+      resultObj,
+    );
+    messages.push(callMsg, resultMsg);
   }
 }

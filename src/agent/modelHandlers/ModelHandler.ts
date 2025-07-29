@@ -723,8 +723,9 @@ export abstract class ModelHandler<U = any, R = any>
   abstract createFollowUpMessage(
     id: string,
     name: string,
+    call: any,
     result: Record<string, unknown>,
-  ): any;
+  ): [any, any];
 
   /**
    * Creates a log group for model operations with the given name.

@@ -110,6 +110,47 @@ export class LogEntryFormatter {
   }
 
   /**
+   * Format timestamp consistently across all methods
+   * @param {Date} date - Date object to format
+   * @returns {{fullTimestamp: string, timeDisplay: string}} Formatted timestamps
+   */
+  _formatTimestamp(date) {
+    const fullTimestamp = date.toISOString();
+    const timeDisplay = date
+      .toISOString()
+      .split('T')[1]
+      .replace('Z', '')
+      .split('.')[0];
+    return { fullTimestamp, timeDisplay };
+  }
+
+  /**
+   * Process markdown content with LaTeX reference protection
+   * @param {string} content - Raw content to process
+   * @param {boolean} decode - Whether to decode HTML entities (default: true)
+   * @returns {string} Processed markdown HTML
+   */
+  _processMarkdownContent(content, decode = true) {
+    // Unescape HTML entities if requested
+    if (decode) {
+      content = decodeHtml(content);
+    }
+
+    // Pre-process LaTeX references to protect them from markdown parsing
+    content = content.replace(/\\ref\{([^}]+)\}/g, '@@LATEX-REF:$1@@');
+    content = content.replace(/\\cref\{([^}]+)\}/g, '@@LATEX-CREF:$1@@');
+    content = content.replace(/\\eqref\{([^}]+)\}/g, '@@LATEX-EQREF:$1@@');
+
+    // Process content as markdown
+    let parsedMarkdown = this.md.render(content);
+
+    // Post-process to restore and style LaTeX references
+    parsedMarkdown = this._restoreLatexReferences(parsedMarkdown);
+
+    return parsedMarkdown;
+  }
+
+  /**
    * Helper function to create LaTeX reference HTML
    * @param {string} refType - The reference type (ref, cref, eqref)
    * @param {string} label - The label value
@@ -148,12 +189,7 @@ export class LogEntryFormatter {
 
     const emoji = EMOJI_BY_LEVEL[level] || '•';
     const date = new Date(timestamp);
-    const timeDisplay = date
-      .toISOString()
-      .split('T')[1]
-      .replace('Z', '')
-      .split('.')[0];
-    const fullTimestamp = date.toISOString();
+    const { fullTimestamp, timeDisplay } = this._formatTimestamp(date);
 
     const prefix = `<div class="log-line" data-log-id="${id}" ${
       groupId ? `data-group-id="${groupId}"` : ''
@@ -161,6 +197,64 @@ export class LogEntryFormatter {
     const levelMarkup = verbose
       ? `<span class="level-${level}">${level.toUpperCase().padEnd(8)}</span> `
       : '';
+
+    if (messageType === 'thinking' || messageType === 'scratchpad') {
+      const label = messageType === 'thinking' ? 'Thinking' : 'Scratchpad';
+      const special = this._formatSpecialContent(text, label, id);
+      if (special) {
+        return special;
+      }
+    }
+
+    if (messageType === 'toolUse') {
+      const tool = this._formatToolUse(text, id);
+      if (tool) {
+        return tool;
+      }
+    }
+
+    if (messageType === 'modelResponse') {
+      const model = this._formatModelResponse({
+        id,
+        groupId,
+        timestamp,
+        verbose,
+        content: text,
+        level,
+      });
+      if (model) {
+        return model;
+      }
+    }
+
+    if (messageType === 'fileList') {
+      const list = this._formatFileList(text, data, id);
+      if (list) {
+        return list;
+      }
+    }
+
+    if (messageType === 'missingOutputs') {
+      const missing = this._formatMissingOutputs(text, data, id);
+      if (missing) {
+        return missing;
+      }
+    }
+
+    if (messageType === 'latexdiff') {
+      const diff = this._formatLatexdiff(text, data, id);
+      if (diff) {
+        return diff;
+      }
+    }
+
+    if (messageType === 'statistics') {
+      const stats = this._formatStatistics(text, data, id);
+      if (stats) {
+        return stats;
+      }
+    }
+
     const htmlMessage =
       prefix +
       `<span class="timestamp" title="${fullTimestamp}">${emoji}${
@@ -169,49 +263,13 @@ export class LogEntryFormatter {
       levelMarkup +
       `<span class="message-${level}">${text}</span>` +
       `</div>`;
-    if (messageType === 'thinking' || messageType === 'scratchpad') {
-      const label = messageType === 'thinking' ? 'Thinking' : 'Scratchpad';
-      return this._formatSpecialContent(htmlMessage, text, label, id);
-    }
-
-    if (messageType === 'toolUse') {
-      return this._formatToolUse(htmlMessage, text, id);
-    }
-
-    if (messageType === 'fileList') {
-      return this._formatFileList(htmlMessage, text, data, id);
-    }
-
-    if (messageType === 'missingOutputs') {
-      return this._formatMissingOutputs(htmlMessage, text, data, id);
-    }
-
-    if (messageType === 'latexdiff') {
-      return this._formatLatexdiff(htmlMessage, text, data, id);
-    }
-
-    if (messageType === 'statistics') {
-      return this._formatStatistics(htmlMessage, text, data, id);
-    }
 
     return htmlMessage;
   }
 
-  _formatSpecialContent(message, content, contentType, logId) {
+  _formatSpecialContent(content, contentType, logId) {
     try {
-      // Unescape HTML entities that were escaped during logging
-      content = decodeHtml(content);
-
-      // Pre-process LaTeX references to protect them from markdown parsing
-      content = content.replace(/\\\\ref\{([^}]+)\}/g, '@@LATEX-REF:$1@@');
-      content = content.replace(/\\\\cref\{([^}]+)\}/g, '@@LATEX-CREF:$1@@');
-      content = content.replace(/\\\\eqref\{([^}]+)\}/g, '@@LATEX-EQREF:$1@@');
-
-      // Process content as markdown
-      let parsedMarkdown = this.md.render(content);
-
-      // Post-process to restore and style LaTeX references
-      parsedMarkdown = this._restoreLatexReferences(parsedMarkdown);
+      const parsedMarkdown = this._processMarkdownContent(content);
 
       // Create enhanced content element with better formatting
       const idAttr = logId ? ` data-log-id="${logId}"` : '';
@@ -226,26 +284,52 @@ export class LogEntryFormatter {
           <i class="codicon ${icon}"></i>
           <span>${labelText}</span>
         </summary>
-        <div class="special-content"${idAttr}>${parsedMarkdown}</div>
+        <div class="special-content markdown-content"${idAttr}>${parsedMarkdown}</div>
       </details>`;
     } catch (e) {
       console.error('Error parsing markdown:', e);
-      // Fallback to original content
-      return message;
+      return null;
     }
   }
 
-  _formatToolUse(message, content, logId) {
+  _formatToolUse(content, logId) {
     try {
       const idAttr = logId ? ` data-log-id="${logId}"` : '';
-      content = decodeHtml(content);
-      let parsed;
+      let formattedContent;
       try {
-        parsed = JSON.parse(content);
-        content = `<pre>${encodeHtml(JSON.stringify(parsed, null, 2))}</pre>`;
+        // Try to parse as JSON first - don't decode HTML entities
+        const parsed = JSON.parse(content);
+
+        // Check if this is the new combined format
+        if (parsed.tool && parsed.input && parsed.output) {
+          // Format combined tool input/output
+          const toolName = parsed.tool;
+          const inputJson = JSON.stringify(parsed.input, null, 2);
+          const outputJson = JSON.stringify(parsed.output, null, 2);
+
+          formattedContent = `
+            <div class="tool-use-section">
+              <div class="tool-use-label">${toolName}</div>
+              <div class="tool-use-subsection">
+                <span class="tool-use-sublabel">Input:</span>
+                <pre>${inputJson}</pre>
+              </div>
+            </div>
+            <hr class="tool-use-separator">
+            <div class="tool-use-section">
+              <div class="tool-use-subsection">
+                <span class="tool-use-sublabel">Output:</span>
+                <pre>${outputJson}</pre>
+              </div>
+            </div>`;
+        } else {
+          // Legacy format - just display as before
+          formattedContent = `<pre>${JSON.stringify(parsed, null, 2)}</pre>`;
+        }
       } catch {
-        const md = this.md.render(content);
-        content = md;
+        // If not valid JSON, just display as-is in a pre block
+        // This preserves any HTML entities in error messages
+        formattedContent = `<pre>${content}</pre>`;
       }
       return `<details class="special-details">
         <summary class="details-summary">
@@ -253,22 +337,42 @@ export class LogEntryFormatter {
           <i class="codicon codicon-wrench"></i>
           <span>Tool Use</span>
         </summary>
-        <div class="special-content"${idAttr}>${content}</div>
+        <div class="special-content"${idAttr}>${formattedContent}</div>
       </details>`;
     } catch (e) {
       console.error('Error parsing tool use content:', e);
-      return message;
+      return null;
     }
   }
 
-  _formatFileList(message, content, data, logId) {
+  _formatModelResponse({ id, groupId, timestamp, verbose, content, level }) {
+    try {
+      const date = new Date(timestamp);
+      const { fullTimestamp, timeDisplay } = this._formatTimestamp(date);
+      const groupAttr = groupId ? ` data-group-id="${groupId}"` : '';
+      const prefix = `<div class="log-line" data-log-id="${id}"${groupAttr} data-full-timestamp="${fullTimestamp}">`;
+      const timeMarkup = `<span class="timestamp" title="${fullTimestamp}">${
+        verbose ? `[${timeDisplay}]` : ''
+      }</span>`;
+      const parsedMarkdown = this._processMarkdownContent(content);
+      const html =
+        prefix +
+        `${timeMarkup} <span class="message-${level}"><div class="model-response-content markdown-content">${parsedMarkdown}</div></span></div>`;
+      return html;
+    } catch (e) {
+      console.error('Error parsing model response:', e);
+      return null;
+    }
+  }
+
+  _formatFileList(content, data, logId) {
     try {
       const idAttr = logId ? ` data-log-id="${logId}"` : '';
       const parsed = data ?? JSON.parse(decodeHtml(content));
 
       if (!Array.isArray(parsed)) {
         console.warn('Missing structured data for file list log entry');
-        return message;
+        return null;
       }
 
       // Group files by source for better organization
@@ -334,11 +438,11 @@ export class LogEntryFormatter {
       </details>`;
     } catch (e) {
       console.error('Error parsing file list:', e);
-      return message;
+      return null;
     }
   }
 
-  _formatMissingOutputs(message, content, data, logId) {
+  _formatMissingOutputs(content, data, logId) {
     try {
       const idAttr = logId ? ` data-log-id="${logId}"` : '';
       const parsed = data ?? JSON.parse(decodeHtml(content));
@@ -358,7 +462,7 @@ export class LogEntryFormatter {
         documentTag = parsed.documentTag;
       } else {
         console.warn('Missing structured data for missing outputs log entry');
-        return message;
+        return null;
       }
 
       const items = missingFiles
@@ -405,11 +509,11 @@ export class LogEntryFormatter {
       </details>`;
     } catch (e) {
       console.error('Error parsing missing outputs:', e);
-      return message;
+      return null;
     }
   }
 
-  _formatLatexdiff(message, content, data, logId) {
+  _formatLatexdiff(content, data, logId) {
     try {
       const idAttr = logId ? ` data-log-id="${logId}"` : '';
       const parsed = data ?? JSON.parse(decodeHtml(content));
@@ -420,7 +524,7 @@ export class LogEntryFormatter {
           : [];
 
       if (entries.length === 0) {
-        return message;
+        return null;
       }
 
       let items = '';
@@ -468,16 +572,16 @@ export class LogEntryFormatter {
       </details>`;
     } catch (e) {
       console.error('Error parsing latexdiff entry:', e);
-      return message;
+      return null;
     }
   }
 
-  _formatStatistics(message, content, data, logId) {
+  _formatStatistics(content, data, logId) {
     try {
       const idAttr = logId ? ` data-log-id="${logId}"` : '';
       const parsed = data;
       if (!parsed || typeof parsed !== 'object') {
-        return message;
+        return null;
       }
 
       const items = [];
@@ -553,7 +657,7 @@ export class LogEntryFormatter {
       </details>`;
     } catch (e) {
       console.error('Error parsing statistics:', e);
-      return message;
+      return null;
     }
   }
 }
