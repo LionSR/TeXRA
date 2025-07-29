@@ -1,0 +1,138 @@
+import { strict as assert } from 'assert';
+import { z } from 'zod';
+
+// Local imports
+import { bus } from '@eventBus/ProgressEventBus';
+import { runToolUseCycle } from '@agent/core/ToolUseCycle';
+import { AgentLogger } from '@logger/AgentLogger';
+import { MESSAGE_TYPES } from '@logger/messageTypes';
+import { BaseTool } from '@tools/core/base';
+import { ToolResult } from '@tools/result';
+import {
+  AgentSetting,
+  AgentType,
+  AgentPrompt,
+} from '@agent/core/AgentDataclass';
+import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/modelHandlerOpenAIResponse';
+import {
+  ModelConfig,
+  ModelProvider,
+  DEFAULT_MODEL_CAPABILITIES,
+} from '@model/ModelConfig';
+
+class EchoTool extends BaseTool<{ value: string }> {
+  constructor() {
+    super({ name: 'echo' }, z.object({ value: z.string() }));
+  }
+  protected async execute(input: { value: string }): Promise<ToolResult> {
+    return new ToolResult({ output: input.value });
+  }
+}
+
+class MockHandler extends ModelHandlerOpenAIResponse {
+  private call = 0;
+  async getClient() {
+    return {} as any;
+  }
+  override async createResponse(): Promise<any> {
+    this.call++;
+    if (this.call === 1) {
+      return {
+        id: 'r1',
+        status: 'completed',
+        output: [
+          {
+            type: 'function_call',
+            id: 'c1',
+            name: 'echo',
+            arguments: '{"value":"hello"}',
+          },
+        ],
+        usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 },
+      };
+    }
+    return {
+      id: 'r2',
+      status: 'completed',
+      output: [
+        {
+          type: 'message',
+          role: 'assistant',
+          status: 'completed',
+          content: [{ type: 'output_text', text: 'done' }],
+        },
+      ],
+      usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 },
+    };
+  }
+  override extractResponse(resp: any): [string, any, any] {
+    return ['', resp.usage, 'stop'];
+  }
+}
+
+describe('runToolUseCycle OpenAIResponse', () => {
+  it('logs tool calls and creates follow-up message', async () => {
+    const config: ModelConfig = {
+      name: 'test',
+      fullName: 'test',
+      provider: ModelProvider.OPENAI,
+      maxOutputTokens: 10,
+      inputPrice: 0,
+      outputPrice: 0,
+      contextWindow: 1000,
+      capabilities: { ...DEFAULT_MODEL_CAPABILITIES },
+      openRouterOnly: false,
+    };
+    const handler = new MockHandler(config);
+    const logger = new AgentLogger('TestHandler', true);
+    const toolRegistry = { echo: new EchoTool() };
+    const setting: AgentSetting = {
+      agentType: AgentType.ToolUse,
+      documentTag: 'doc',
+      temperature: 0,
+      isRewrite: true,
+      rounds: 1,
+      prefills: [],
+      outputExt: 'txt',
+      endTag: '</doc>',
+      requiredFiles: {},
+      requiredFilesInternal: {},
+      defaultOutputFiles: [],
+      filePatternsContain: [],
+      tools: [{ name: 'echo' }],
+    };
+    const prompt: AgentPrompt = {
+      systemPrompt: '',
+      userPrefix: '',
+      userRequest: '',
+      userReflect: '',
+    };
+    const options = {
+      modelHandler: handler,
+      agentSetting: setting,
+      agentPrompt: prompt,
+      userVars: {},
+      logger,
+      client: {},
+      toolRegistry,
+      checkInterruption: () => false,
+      setAbortController: () => {},
+    };
+    const events: any[] = [];
+    const dispose = bus.on('addLogMessage', (e) => events.push(e));
+    const messages: any[] = [];
+
+    await runToolUseCycle(options, messages);
+    dispose();
+
+    const toolEvents = events.filter(
+      (e) => e.logMessage.messageType === MESSAGE_TYPES.TOOL_USE,
+    );
+    assert.equal(toolEvents.length, 2);
+    assert.deepEqual(messages[0], {
+      type: 'function_call_output',
+      call_id: 'c1',
+      output: JSON.stringify({ output: 'hello' }),
+    });
+  });
+});
