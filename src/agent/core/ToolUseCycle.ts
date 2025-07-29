@@ -93,15 +93,13 @@ export async function runToolUseCycle(
     );
     if (text) {
       logger.debug(`Model response: ${text.slice(0, 100)}`, groupId);
+      logger.info(encodeHtml(text), groupId);
     }
     if (usage) {
       logger.statistics(usage, groupId);
     }
 
     if (!toolInfo || stopReason === 'end_turn') {
-      if (text) {
-        logger.info(encodeHtml(text), groupId);
-      }
       break;
     }
 
