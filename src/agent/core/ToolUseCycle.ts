@@ -108,7 +108,8 @@ export async function runToolUseCycle(
     );
     if (text) {
       logger.debug(`Model response: ${text.slice(0, 100)}`, groupId);
-      logger.info(text, groupId, MESSAGE_TYPES.MODEL_RESPONSE);
+      const formatted = await xmlUtils.formatContent(text);
+      logger.info(formatted, groupId, MESSAGE_TYPES.MODEL_RESPONSE);
     }
     if (usage) {
       const normalized = modelHandler.computeResponseUsage(usage, responseTime);
