@@ -179,7 +179,7 @@ export class LogEntryFormatter {
     }
 
     if (messageType === 'toolOutput') {
-      return this._formatToolOutput(text, id);
+      return this._formatToolOutput(text, timestamp, id);
     }
 
     if (messageType === 'fileList') {
@@ -265,16 +265,19 @@ export class LogEntryFormatter {
     }
   }
 
-  _formatToolOutput(content, logId) {
+  _formatToolOutput(content, timestamp, logId) {
     try {
       const idAttr = logId ? ` data-log-id="${logId}"` : '';
+      const timeAttr = timestamp
+        ? ` data-full-timestamp="${new Date(timestamp).toISOString()}"`
+        : '';
       content = decodeHtml(content);
       content = content.replace(/\\ref\{([^}]+)\}/g, '@@LATEX-REF:$1@@');
       content = content.replace(/\\cref\{([^}]+)\}/g, '@@LATEX-CREF:$1@@');
       content = content.replace(/\\eqref\{([^}]+)\}/g, '@@LATEX-EQREF:$1@@');
       let parsedMarkdown = this.md.render(content);
       parsedMarkdown = this._restoreLatexReferences(parsedMarkdown);
-      return `<div class="tool-output-content"${idAttr}>${parsedMarkdown}</div>`;
+      return `<div class="tool-output-content"${idAttr}${timeAttr}>${parsedMarkdown}</div>`;
     } catch (e) {
       console.error('Error parsing tool output:', e);
       return content;
