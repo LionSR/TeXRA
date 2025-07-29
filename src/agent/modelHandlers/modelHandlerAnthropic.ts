@@ -967,10 +967,22 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
   createFollowUpMessage(
     id: string,
-    _name: string,
+    name: string,
+    call: any,
     result: Record<string, unknown>,
-  ): any {
-    return {
+  ): [any, any] {
+    const callMsg = {
+      role: 'assistant',
+      content: [
+        {
+          type: 'tool_use',
+          id,
+          name,
+          input: call?.input ?? call?.arguments ?? {},
+        },
+      ],
+    };
+    const resultMsg = {
       role: 'user',
       content: [
         {
@@ -980,5 +992,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
         },
       ],
     };
+    return [callMsg, resultMsg];
   }
 }
