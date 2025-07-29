@@ -69,7 +69,7 @@ export async function runToolUseCycle(
         messages,
         agentSetting.temperature ?? 0,
         undefined,
-        agentSetting.endTag,
+        undefined,
         abortController.signal,
         agentSetting.tools as ToolDefinition[],
       );
@@ -89,11 +89,11 @@ export async function runToolUseCycle(
     const toolInfo = modelHandler.extractToolUse(response);
     const [text, usage, stopReason] = modelHandler.extractResponse(
       response,
-      agentSetting.endTag,
+      '',
     );
     if (text) {
       logger.debug(`Model response: ${text.slice(0, 100)}`, groupId);
-      logger.info(encodeHtml(text), groupId);
+      logger.info(encodeHtml(text), groupId, MESSAGE_TYPES.TOOL_OUTPUT);
     }
     if (usage) {
       logger.statistics(usage, groupId);
