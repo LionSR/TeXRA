@@ -160,4 +160,18 @@ export interface IModelHandler<U = any, R = any> {
 
   /** Extract tool-use details from a provider response. */
   extractToolUse(responseObject: any): string | null;
+
+  /**
+   * Create a provider-specific follow-up message containing the tool result.
+   *
+   * @param id - Tool call identifier from the model response
+   * @param name - Tool name
+   * @param result - Object with output/error fields
+   * @returns Message formatted for the provider API
+   */
+  createFollowUpMessage(
+    id: string,
+    name: string,
+    result: Record<string, unknown>,
+  ): any;
 }
