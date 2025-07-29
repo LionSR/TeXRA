@@ -7,3 +7,22 @@
 .special-details {
   margin: var(--spacing-small) 0;
 }
+
+/* Tool use formatting */
+.tool-use-section {
+  margin: var(--spacing-small) 0;
+}
+
+.tool-use-label {
+  font-weight: 600;
+  color: var(--vscode-foreground);
+  margin-bottom: var(--spacing-tiny);
+  font-size: var(--font-size-sm);
+}
+
+.tool-use-separator {
+  margin: var(--spacing-medium) 0;
+  border: none;
+  border-top: 1px solid var(--vscode-panel-border);
+  opacity: 0.5;
+}
