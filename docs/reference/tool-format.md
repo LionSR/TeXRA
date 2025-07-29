@@ -12,10 +12,16 @@ const tools: ToolDefinition[] = [
     name: 'searchWeb',
     description: 'Perform a web search',
     parameters: {
-      /* JSON schema */
+      type: 'object',
+      /* JSON schema properties */
     },
   },
 ];
 ```
 
-See your provider's documentation for the exact schema.
+`parameters` should contain a valid JSON Schema object describing the tool
+inputs. Include `type: 'object'` at the root to satisfy providers like
+Anthropic. The definition is compatible with OpenAI
+(`ChatCompletionTool['function']['parameters']`), Anthropic
+(`Tool['input_schema']`), and Google Gemini (`FunctionDeclaration.parameters`).
+Refer to your provider's documentation for the full schema details.

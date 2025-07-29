@@ -20,7 +20,7 @@ export function toOpenAITools(defs: ToolDefinition[]): ChatCompletionTool[] {
     function: {
       name: d.name,
       description: d.description,
-      parameters: d.parameters,
+      parameters: d.parameters as ChatCompletionTool['function']['parameters'],
     },
   }));
 }
