@@ -281,6 +281,10 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
 
     const useStreaming = this.getStreamingConfig();
 
+    this.logger.debug(
+      `CreateResponse chatParams: ${JSON.stringify(chatParams, null, 2)}`,
+    );
+
     try {
       this.logger.debug(
         `Creating chat session with history length: ${chatHistory.length}`,

@@ -208,8 +208,8 @@ export class LogEntryFormatter {
     return text
       .replace(/\n(\s*)\n(\s*)\n(\s*)- /g, '\n$3- ')
       .replace(/\n(\s*)\n(\s*)- /g, '\n$2- ')
-      .replace(/\n{4,}/g, '\n\n')
-      // .replace(/ {4}/gm, '  ');
+      .replace(/\n{4,}/g, '\n\n');
+    // .replace(/ {4}/gm, '  ');
   }
 
   /**
