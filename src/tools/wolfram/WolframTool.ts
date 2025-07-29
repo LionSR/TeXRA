@@ -20,7 +20,7 @@ export class WolframTool extends BaseTool<WolframInput> {
     const definition: ToolDefinition = {
       name: 'wolfram',
       description: 'Execute Wolfram Language code',
-      parameters: zodToJsonSchema(WolframInputSchema, { name: 'wolframInput' }),
+      parameters: zodToJsonSchema(WolframInputSchema),
     };
     super(definition, WolframInputSchema);
   }
