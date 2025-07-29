@@ -2,10 +2,10 @@ name: file_edit
 settings:
   agentType: toolUse
   tools:
-    - text_editor
+    - str_replace_editor
 prompts:
   systemPrompt: |
-    You edit files using the provided text_editor tool.
+    You edit files using the provided str_replace_editor tool.
   userPrefix: |
     The target file is {{ INPUT_FILE }}.
   userRequest: |
