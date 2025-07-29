@@ -178,6 +178,17 @@ export class LogEntryFormatter {
       return this._formatToolUse(htmlMessage, text, id);
     }
 
+    if (messageType === 'toolOutput') {
+      return this._formatToolOutput({
+        id,
+        groupId,
+        timestamp,
+        verbose,
+        content: text,
+        level,
+      });
+    }
+
     if (messageType === 'fileList') {
       return this._formatFileList(htmlMessage, text, data, id);
     }
@@ -226,7 +237,7 @@ export class LogEntryFormatter {
           <i class="codicon ${icon}"></i>
           <span>${labelText}</span>
         </summary>
-        <div class="special-content"${idAttr}>${parsedMarkdown}</div>
+        <div class="special-content markdown-content"${idAttr}>${parsedMarkdown}</div>
       </details>`;
     } catch (e) {
       console.error('Error parsing markdown:', e);
@@ -253,11 +264,41 @@ export class LogEntryFormatter {
           <i class="codicon codicon-wrench"></i>
           <span>Tool Use</span>
         </summary>
-        <div class="special-content"${idAttr}>${content}</div>
+        <div class="special-content markdown-content"${idAttr}>${content}</div>
       </details>`;
     } catch (e) {
       console.error('Error parsing tool use content:', e);
       return message;
+    }
+  }
+
+  _formatToolOutput({ id, groupId, timestamp, verbose, content, level }) {
+    try {
+      const date = new Date(timestamp);
+      const fullTimestamp = date.toISOString();
+      const timeDisplay = date
+        .toISOString()
+        .split('T')[1]
+        .replace('Z', '')
+        .split('.')[0];
+      const groupAttr = groupId ? ` data-group-id="${groupId}"` : '';
+      const prefix = `<div class="log-line" data-log-id="${id}"${groupAttr} data-full-timestamp="${fullTimestamp}">`;
+      const timeMarkup = `<span class="timestamp" title="${fullTimestamp}">${
+        verbose ? `[${timeDisplay}]` : ''
+      }</span>`;
+      content = decodeHtml(content);
+      content = content.replace(/\\ref\{([^}]+)\}/g, '@@LATEX-REF:$1@@');
+      content = content.replace(/\\cref\{([^}]+)\}/g, '@@LATEX-CREF:$1@@');
+      content = content.replace(/\\eqref\{([^}]+)\}/g, '@@LATEX-EQREF:$1@@');
+      let parsedMarkdown = this.md.render(content);
+      parsedMarkdown = this._restoreLatexReferences(parsedMarkdown);
+      const html =
+        prefix +
+        `${timeMarkup} <span class="message-${level}"><div class="tool-output-content markdown-content">${parsedMarkdown}</div></span></div>`;
+      return html;
+    } catch (e) {
+      console.error('Error parsing tool output:', e);
+      return content;
     }
   }
 
