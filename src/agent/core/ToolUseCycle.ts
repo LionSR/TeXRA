@@ -118,7 +118,10 @@ export async function runToolUseCycle(
     const id = parsed.id || parsed.tool_use_id || parsed.tool_call_id;
     const name = parsed.name || parsed.function?.name;
     if (!id || !name) {
-      logger.error('Tool JSON missing id or name', groupId);
+      logger.error(
+        `Tool JSON missing id or name: id=${String(id)} name=${String(name)}`,
+        groupId,
+      );
       break;
     }
     let input = parsed.input;
@@ -139,7 +142,10 @@ export async function runToolUseCycle(
         result = await tool.call(input);
       } catch (err) {
         result = new ToolResult({
-          error: err instanceof Error ? err.message : String(err),
+          error:
+            err instanceof Error
+              ? `${name}: ${err.message}`
+              : `${name}: ${String(err)}`,
           isError: true,
         });
       }
