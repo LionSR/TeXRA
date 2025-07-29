@@ -65,6 +65,8 @@ export class TextEditorTool extends BaseTool<TextEditorInput> {
       name,
       description:
         'Edit files using search and replace or insertion operations',
+      // Provide the built-in tool type so Anthropic can recognize it
+      type: apiType,
       parameters: zodToJsonSchema(TextEditorInputSchema),
     };
     super(definition, TextEditorInputSchema);

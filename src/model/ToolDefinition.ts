@@ -12,6 +12,8 @@ export const ToolDefinitionSchema = z
     name: z.string(),
     /** Optional description for the model */
     description: z.string().optional(),
+    /** Optional provider specific type (e.g. Anthropic built-in tool id) */
+    type: z.string().optional(),
     /** Parameter schema or provider specific metadata */
     parameters: z.record(z.unknown()).optional(),
   })
