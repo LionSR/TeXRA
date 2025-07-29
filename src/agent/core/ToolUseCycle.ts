@@ -13,6 +13,7 @@ import type { IModelHandler } from '../modelHandlers';
 import { BaseTool } from '@tools/core/base';
 import { ToolResult } from '@tools/result';
 import xmlUtils from '@utils/text/xmlUtils';
+import { maybeSaveMessages } from '@agent/utils/debugMessageSaver';
 
 export interface ToolUseCycleOptions {
   /** Model handler for API interactions */
@@ -54,10 +55,20 @@ export async function runToolUseCycle(
     setAbortController,
   } = options;
 
+  let iteration = 0;
+
   while (true) {
     if (await checkInterruption()) {
       break;
     }
+
+    await maybeSaveMessages({
+      messages,
+      logger,
+      continuationCount: iteration,
+      baseName: 'tooluse',
+      groupId,
+    });
 
     const abortController = new AbortController();
     setAbortController(abortController);
@@ -241,5 +252,7 @@ export async function runToolUseCycle(
       resultObj,
     );
     messages.push(callMsg, resultMsg);
+
+    iteration++;
   }
 }

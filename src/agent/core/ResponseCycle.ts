@@ -1,5 +1,4 @@
 // Standard library imports
-import * as path from 'path';
 
 // Third-party imports
 // (none needed)
@@ -13,7 +12,6 @@ import { bestConnectionMethod } from '@latex';
 
 // Local imports - utilities
 import { WorkspaceFS } from '@utils/files';
-import { StorageFS } from '@utils/files';
 import { getRunDir, TASK_RUNS_DIR } from '@utils/files/taskRunStorage';
 import { getSystemPromptWithRules } from '@agent/utils/promptHelpers';
 import { messageToSkeleton } from '@agent/utils/messageSkeletonUtils';
@@ -21,6 +19,7 @@ import { checkForMassiveRepetition } from '@agent/utils/text/repetitionUtils';
 import replacementEngine from '@replacement/engine';
 import xmlUtils from '@utils/text/xmlUtils';
 import type { ExecutionId } from '@agent/types/IdentifierTypes';
+import { maybeSaveMessages } from '@agent/utils/debugMessageSaver';
 
 // Local imports - agent components
 import type { AgentConfig } from './AgentConfig';
@@ -89,34 +88,14 @@ export async function runResponseCycle(
       userVars,
     );
 
-    const shouldSaveMessageObjects = getConfig(
-      'debug.saveMessageObjects',
-      false,
-    );
-    if (shouldSaveMessageObjects) {
-      const outputFileBaseName = path.basename(outputFile, '.xml');
-      const debugFileName = `${outputFileBaseName}_cont${stateRound.continuationCount}.json`;
-      const debugFilePath = executionId
-        ? path.join(getRunDir(executionId), debugFileName)
-        : WorkspaceFS.fullPath(debugFileName);
-      try {
-        if (executionId) {
-          await StorageFS.write(
-            debugFilePath,
-            JSON.stringify(messages, null, 2),
-          );
-          logger.info(`Saved message object to ${debugFilePath}`, taskGroupId);
-        } else {
-          await WorkspaceFS.writeFile(
-            WorkspaceFS.relativePath(debugFilePath),
-            JSON.stringify(messages, null, 2),
-          );
-          logger.info(`Saved message object to ${debugFilePath}`, taskGroupId);
-        }
-      } catch (error) {
-        logger.error(`Failed to save message object: ${error}`, taskGroupId);
-      }
-    }
+    await maybeSaveMessages({
+      messages,
+      logger,
+      continuationCount: stateRound.continuationCount,
+      outputFile,
+      executionId,
+      groupId: taskGroupId,
+    });
 
     const abortController = new AbortController();
     setAbortController(abortController);
