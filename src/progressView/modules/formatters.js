@@ -110,6 +110,47 @@ export class LogEntryFormatter {
   }
 
   /**
+   * Format timestamp consistently across all methods
+   * @param {Date} date - Date object to format
+   * @returns {{fullTimestamp: string, timeDisplay: string}} Formatted timestamps
+   */
+  _formatTimestamp(date) {
+    const fullTimestamp = date.toISOString();
+    const timeDisplay = date
+      .toISOString()
+      .split('T')[1]
+      .replace('Z', '')
+      .split('.')[0];
+    return { fullTimestamp, timeDisplay };
+  }
+
+  /**
+   * Process markdown content with LaTeX reference protection
+   * @param {string} content - Raw content to process
+   * @param {boolean} decode - Whether to decode HTML entities (default: true)
+   * @returns {string} Processed markdown HTML
+   */
+  _processMarkdownContent(content, decode = true) {
+    // Unescape HTML entities if requested
+    if (decode) {
+      content = decodeHtml(content);
+    }
+
+    // Pre-process LaTeX references to protect them from markdown parsing
+    content = content.replace(/\\ref\{([^}]+)\}/g, '@@LATEX-REF:$1@@');
+    content = content.replace(/\\cref\{([^}]+)\}/g, '@@LATEX-CREF:$1@@');
+    content = content.replace(/\\eqref\{([^}]+)\}/g, '@@LATEX-EQREF:$1@@');
+
+    // Process content as markdown
+    let parsedMarkdown = this.md.render(content);
+
+    // Post-process to restore and style LaTeX references
+    parsedMarkdown = this._restoreLatexReferences(parsedMarkdown);
+
+    return parsedMarkdown;
+  }
+
+  /**
    * Helper function to create LaTeX reference HTML
    * @param {string} refType - The reference type (ref, cref, eqref)
    * @param {string} label - The label value
@@ -148,12 +189,7 @@ export class LogEntryFormatter {
 
     const emoji = EMOJI_BY_LEVEL[level] || '•';
     const date = new Date(timestamp);
-    const timeDisplay = date
-      .toISOString()
-      .split('T')[1]
-      .replace('Z', '')
-      .split('.')[0];
-    const fullTimestamp = date.toISOString();
+    const { fullTimestamp, timeDisplay } = this._formatTimestamp(date);
 
     const prefix = `<div class="log-line" data-log-id="${id}" ${
       groupId ? `data-group-id="${groupId}"` : ''
@@ -210,19 +246,7 @@ export class LogEntryFormatter {
 
   _formatSpecialContent(message, content, contentType, logId) {
     try {
-      // Unescape HTML entities that were escaped during logging
-      content = decodeHtml(content);
-
-      // Pre-process LaTeX references to protect them from markdown parsing
-      content = content.replace(/\\ref\{([^}]+)\}/g, '@@LATEX-REF:$1@@');
-      content = content.replace(/\\cref\{([^}]+)\}/g, '@@LATEX-CREF:$1@@');
-      content = content.replace(/\\eqref\{([^}]+)\}/g, '@@LATEX-EQREF:$1@@');
-
-      // Process content as markdown
-      let parsedMarkdown = this.md.render(content);
-
-      // Post-process to restore and style LaTeX references
-      parsedMarkdown = this._restoreLatexReferences(parsedMarkdown);
+      const parsedMarkdown = this._processMarkdownContent(content);
 
       // Create enhanced content element with better formatting
       const idAttr = logId ? ` data-log-id="${logId}"` : '';
@@ -249,14 +273,16 @@ export class LogEntryFormatter {
   _formatToolUse(message, content, logId) {
     try {
       const idAttr = logId ? ` data-log-id="${logId}"` : '';
-      content = decodeHtml(content);
-      let parsed;
+      let formattedContent;
       try {
-        parsed = JSON.parse(content);
-        content = `<pre>${encodeHtml(JSON.stringify(parsed, null, 2))}</pre>`;
+        // Try to parse as JSON first - don't decode HTML entities
+        const parsed = JSON.parse(content);
+        // Pretty print the JSON without encoding
+        formattedContent = `<pre>${JSON.stringify(parsed, null, 2)}</pre>`;
       } catch {
-        const md = this.md.render(content);
-        content = md;
+        // If not valid JSON, just display as-is in a pre block
+        // This preserves any HTML entities in error messages
+        formattedContent = `<pre>${content}</pre>`;
       }
       return `<details class="special-details">
         <summary class="details-summary">
@@ -264,7 +290,7 @@ export class LogEntryFormatter {
           <i class="codicon codicon-wrench"></i>
           <span>Tool Use</span>
         </summary>
-        <div class="special-content markdown-content"${idAttr}>${content}</div>
+        <div class="special-content"${idAttr}>${formattedContent}</div>
       </details>`;
     } catch (e) {
       console.error('Error parsing tool use content:', e);
@@ -275,23 +301,13 @@ export class LogEntryFormatter {
   _formatModelResponse({ id, groupId, timestamp, verbose, content, level }) {
     try {
       const date = new Date(timestamp);
-      const fullTimestamp = date.toISOString();
-      const timeDisplay = date
-        .toISOString()
-        .split('T')[1]
-        .replace('Z', '')
-        .split('.')[0];
+      const { fullTimestamp, timeDisplay } = this._formatTimestamp(date);
       const groupAttr = groupId ? ` data-group-id="${groupId}"` : '';
       const prefix = `<div class="log-line" data-log-id="${id}"${groupAttr} data-full-timestamp="${fullTimestamp}">`;
       const timeMarkup = `<span class="timestamp" title="${fullTimestamp}">${
         verbose ? `[${timeDisplay}]` : ''
       }</span>`;
-      content = decodeHtml(content);
-      content = content.replace(/\\ref\{([^}]+)\}/g, '@@LATEX-REF:$1@@');
-      content = content.replace(/\\cref\{([^}]+)\}/g, '@@LATEX-CREF:$1@@');
-      content = content.replace(/\\eqref\{([^}]+)\}/g, '@@LATEX-EQREF:$1@@');
-      let parsedMarkdown = this.md.render(content);
-      parsedMarkdown = this._restoreLatexReferences(parsedMarkdown);
+      const parsedMarkdown = this._processMarkdownContent(content);
       const html =
         prefix +
         `${timeMarkup} <span class="message-${level}"><div class="model-response-content markdown-content">${parsedMarkdown}</div></span></div>`;
