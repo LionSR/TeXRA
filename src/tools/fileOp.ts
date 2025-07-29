@@ -6,7 +6,7 @@ import { WorkspaceFS } from '@utils/files';
 import { BaseTool } from './core/base';
 import { ToolResult } from '@tools/result';
 import type { ToolDefinition } from '@model';
-import { zodToJsonSchema } from 'openai/_vendor/zod-to-json-schema/index.js';
+import { zodToJsonSchema } from 'zod-to-json-schema';
 
 const FileOpInputSchema = z.object({
   command: z.enum(['read', 'write', 'append']),
