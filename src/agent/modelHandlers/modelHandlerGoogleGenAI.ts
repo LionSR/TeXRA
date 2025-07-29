@@ -10,6 +10,7 @@ import {
   FinishReason,
   File,
   createPartFromUri,
+  createPartFromFunctionCall,
   createPartFromFunctionResponse,
   GenerateContentConfig,
   type CreateChatParameters,
@@ -953,10 +954,21 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
   createFollowUpMessage(
     id: string,
     name: string,
+    call: any,
     result: Record<string, unknown>,
-  ): any {
-    const part = createPartFromFunctionResponse(id, name, result);
-    return { role: 'user', parts: [part] };
+  ): [any, any] {
+    const callPart = createPartFromFunctionCall(
+      name,
+      typeof call?.args === 'object' ? call.args : (call?.input ?? {}),
+    );
+    if (callPart.functionCall) {
+      callPart.functionCall.id = id;
+    }
+    const resultPart = createPartFromFunctionResponse(id, name, result);
+    return [
+      { role: 'assistant', parts: [callPart] },
+      { role: 'user', parts: [resultPart] },
+    ];
   }
 
   // Assuming containCutOffMessage is available from base class ModelHandler
