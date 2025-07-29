@@ -130,6 +130,12 @@ describe('runToolUseCycle OpenAIResponse', () => {
     );
     assert.equal(toolEvents.length, 2);
     assert.deepEqual(messages[0], {
+      type: 'function_call',
+      call_id: 'c1',
+      name: 'echo',
+      arguments: '{"value":"hello"}',
+    });
+    assert.deepEqual(messages[1], {
       type: 'function_call_output',
       call_id: 'c1',
       output: JSON.stringify({ output: 'hello' }),
