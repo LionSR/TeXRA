@@ -90,7 +90,18 @@ export async function getAgentPath(
       absolute: false,
     });
 
-    if (builtInMatches.length === 0) {
+    // Also check the built-in tool-use directory for agents
+    const builtInToolUseDir = await agentDirectories.builtInToolUse(context);
+    const toolUseMatches = await glob(`**/${agentName}.yaml`, {
+      cwd: builtInToolUseDir,
+      dot: false,
+      nodir: true,
+      absolute: false,
+    });
+
+    const allMatches = [...builtInMatches, ...toolUseMatches];
+
+    if (allMatches.length === 0) {
       const configureButton = 'Open Settings';
       await showInstructionWithSuppress(
         'agentNotFound',
@@ -113,7 +124,10 @@ export async function getAgentPath(
     }
 
     // Return the directory containing the yaml file
-    return path.join(builtInDir, path.dirname(builtInMatches[0]));
+    if (builtInMatches.length > 0) {
+      return path.join(builtInDir, path.dirname(builtInMatches[0]));
+    }
+    return path.join(builtInToolUseDir, path.dirname(toolUseMatches[0]));
   } catch (err) {
     const errorMsg = `Error finding agent path: ${err instanceof Error ? err.message : String(err)}`;
     vscode.window.showErrorMessage(errorMsg);
