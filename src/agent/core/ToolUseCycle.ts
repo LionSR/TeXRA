@@ -2,7 +2,6 @@
 
 // Third-party imports
 import { encode as encodeHtml } from 'he';
-import { createPartFromFunctionResponse } from '@google/genai';
 
 // Local imports - log
 import { AgentLogger } from '@logger/AgentLogger';
@@ -17,14 +16,23 @@ import { ToolResult } from '@tools/result';
 import xmlUtils from '@utils/text/xmlUtils';
 
 export interface ToolUseCycleOptions {
+  /** Model handler for API interactions */
   modelHandler: IModelHandler;
+  /** Agent settings with tool configuration */
   agentSetting: AgentSetting;
+  /** Prompt configuration for the agent */
   agentPrompt: AgentPrompt;
+  /** User variables resolved from YAML */
   userVars: Record<string, any>;
+  /** Logger instance for progress output */
   logger: AgentLogger;
+  /** Provider client object */
   client: any;
+  /** Registry mapping tool names to implementations */
   toolRegistry: Record<string, BaseTool<any>>;
+  /** Check if the agent run has been interrupted */
   checkInterruption: () => Promise<boolean> | boolean;
+  /** Pass abort controllers back to the agent */
   setAbortController: (ctrl: AbortController | null) => void;
 }
 
@@ -109,6 +117,10 @@ export async function runToolUseCycle(
 
     const id = parsed.id || parsed.tool_use_id || parsed.tool_call_id;
     const name = parsed.name || parsed.function?.name;
+    if (!id || !name) {
+      logger.error('Tool JSON missing id or name', groupId);
+      break;
+    }
     let input = parsed.input;
     if (!input && parsed.function?.arguments) {
       try {
@@ -147,28 +159,7 @@ export async function runToolUseCycle(
       resultObj.base64Image = result.base64Image;
     if (result.system !== undefined) resultObj.system = result.system;
 
-    if (modelHandler.isAnthropic) {
-      messages.push({
-        role: 'user',
-        content: [
-          {
-            type: 'tool_result',
-            tool_use_id: id,
-            content: JSON.stringify(resultObj),
-          },
-        ],
-      });
-    } else if (modelHandler.isOpenaiCompatible) {
-      messages.push({
-        role: 'tool',
-        tool_call_id: id,
-        content: JSON.stringify(resultObj),
-      });
-    } else if (modelHandler.isGoogle) {
-      const part = createPartFromFunctionResponse(id, name, resultObj);
-      messages.push({ role: 'user', parts: [part] });
-    } else {
-      messages.push({ role: 'user', content: JSON.stringify(resultObj) });
-    }
+    const followUp = modelHandler.createFollowUpMessage(id, name, resultObj);
+    messages.push(followUp);
   }
 }

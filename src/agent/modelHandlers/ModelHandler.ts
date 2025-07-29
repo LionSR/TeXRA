@@ -718,6 +718,15 @@ export abstract class ModelHandler<U = any, R = any>
   abstract extractToolUse(responseObject: any): string | null;
 
   /**
+   * Build a provider-specific follow-up message containing a tool result.
+   */
+  abstract createFollowUpMessage(
+    id: string,
+    name: string,
+    result: Record<string, unknown>,
+  ): any;
+
+  /**
    * Creates a log group for model operations with the given name.
    * @param name Name of the operation group
    * @param parentGroupId Optional parent group ID
