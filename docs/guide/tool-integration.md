@@ -34,6 +34,12 @@ Providing quantitative insights into your document structure.
 
 _(Note: These tools often rely on external programs that need to be installed separately. See the [Installation guide](./installation.md) for requirements.)_
 
+### 4. Shell Access
+
+For advanced workflows, TeXRA exposes a persistent shell via the [bash tool](./bash-tool.md). This
+allows agents to run simple commands, chain them together, and manipulate files within the
+workspace. Restart the session when needed using the `restart` flag.
+
 ## How Tools Enhance Agents
 
 Tool integration improves agent performance and reliability:
