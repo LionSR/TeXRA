@@ -165,6 +165,11 @@ Your YAML can reference individual tools or predefined sets. Sets are expanded
 when the agent configuration is loaded. The `wolframExec` set enables the
 `wolfram` tool for running small Wolfram Language snippets during a run.
 
+The built-in `ToolSetRegistry` maps aliases to lists of tool definitions. For
+instance, the `file_edit` set expands to `{ name: 'text_editor' }`. Nested sets
+are resolved recursively, and any unknown names trigger a warning during agent
+loading.
+
 Example:
 
 ```yaml
@@ -174,6 +179,7 @@ settings:
     - file_edit # expands to the text_editor tool
     - wolframExec # execute Wolfram Language code
     - bash # single tool by name
+    - basic_io # adds bash and file_op tools
 ```
 
 The ProgressBoard shows the JSON passed to each tool along with the tool's
