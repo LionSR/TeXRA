@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 - Agent configuration improvements with better file type handling and validation.
 - Fixed restoration of agent states when reopening TeXRA sessions.
 - Improved agent metadata handling for better performance tracking.
+- Duplicate agents removed from main view dropdown.
 
 ## 0.32.3 - 2025-07-20
 
