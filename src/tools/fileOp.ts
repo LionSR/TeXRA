@@ -21,7 +21,7 @@ export class FileOpTool extends BaseTool<FileOpInput> {
     const definition: ToolDefinition = {
       name: 'file_op',
       description: 'Perform basic file operations',
-      parameters: zodToJsonSchema(FileOpInputSchema, { name: 'fileOpInput' }),
+      parameters: zodToJsonSchema(FileOpInputSchema),
     };
     super(definition, FileOpInputSchema);
   }
