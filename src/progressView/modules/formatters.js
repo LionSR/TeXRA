@@ -178,6 +178,10 @@ export class LogEntryFormatter {
       return this._formatToolUse(htmlMessage, text, id);
     }
 
+    if (messageType === 'toolOutput') {
+      return this._formatToolOutput(text, id);
+    }
+
     if (messageType === 'fileList') {
       return this._formatFileList(htmlMessage, text, data, id);
     }
@@ -258,6 +262,22 @@ export class LogEntryFormatter {
     } catch (e) {
       console.error('Error parsing tool use content:', e);
       return message;
+    }
+  }
+
+  _formatToolOutput(content, logId) {
+    try {
+      const idAttr = logId ? ` data-log-id="${logId}"` : '';
+      content = decodeHtml(content);
+      content = content.replace(/\\ref\{([^}]+)\}/g, '@@LATEX-REF:$1@@');
+      content = content.replace(/\\cref\{([^}]+)\}/g, '@@LATEX-CREF:$1@@');
+      content = content.replace(/\\eqref\{([^}]+)\}/g, '@@LATEX-EQREF:$1@@');
+      let parsedMarkdown = this.md.render(content);
+      parsedMarkdown = this._restoreLatexReferences(parsedMarkdown);
+      return `<div class="tool-output-content"${idAttr}>${parsedMarkdown}</div>`;
+    } catch (e) {
+      console.error('Error parsing tool output:', e);
+      return content;
     }
   }
 
