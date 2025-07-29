@@ -1,6 +1,6 @@
 // Local imports
 import { progressViewState } from './progressViewState.js';
-import { formatTokens, BULLET_MARKUP, TaskGroupLevel } from './formatters.js';
+import { formatTokens, TaskGroupLevel } from './formatters.js';
 import { ELEMENT_IDS } from './constants.js';
 import { createFromTemplate } from '@common/templateUtils.js';
 

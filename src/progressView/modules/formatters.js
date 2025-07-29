@@ -9,10 +9,9 @@ import {
   CHEVRON_DOWN_CLASS,
 } from '@common/webviewContext.js';
 import { STATUS } from './constants.js';
+import { createFromTemplate } from '@common/templateUtils.js';
 
 // Constants
-export const BULLET_MARKUP =
-  '<i class="codicon codicon-circle-small-filled group-bullet"></i>';
 
 export const EMOJI_BY_LEVEL = {
   error: '🔴',
@@ -70,22 +69,23 @@ export function formatTokens(tokens) {
  */
 export class MessageTimestampExtractor {
   /**
-   * Extract timestamp from HTML message
-   * @param {string} message - HTML message containing timestamp
+   * Extract timestamp from a log line element
+   * @param {HTMLElement} element - Log line element
    * @returns {string} Extracted timestamp
    */
-  extract(message) {
-    // First try to extract the full timestamp from data-full-timestamp attribute
-    const div = document.createElement('div');
-    div.innerHTML = message;
-    const logLine = div.querySelector('.log-line');
+  extract(element) {
+    const logLine = element.classList.contains('log-line')
+      ? element
+      : element.querySelector('.log-line');
     if (logLine && logLine.dataset.fullTimestamp) {
-      return logLine.dataset.fullTimestamp; // Return the full precise timestamp
+      return logLine.dataset.fullTimestamp;
     }
 
-    // Fallback: extract from the message content using regex
-    const match = message.match(/\[(.*?)\]/);
-    return match ? match[1] : ''; // Extract timestamp or empty string
+    const text = logLine
+      ? logLine.textContent || ''
+      : element.textContent || '';
+    const match = text.match(/\[(.*?)\]/);
+    return match ? match[1] : '';
   }
 }
 
@@ -191,12 +191,33 @@ export class LogEntryFormatter {
     const date = new Date(timestamp);
     const { fullTimestamp, timeDisplay } = this._formatTimestamp(date);
 
-    const prefix = `<div class="log-line" data-log-id="${id}" ${
-      groupId ? `data-group-id="${groupId}"` : ''
-    } data-full-timestamp="${fullTimestamp}">`;
-    const levelMarkup = verbose
-      ? `<span class="level-${level}">${level.toUpperCase().padEnd(8)}</span> `
-      : '';
+    const element = createFromTemplate('logLineTemplate');
+    if (!element) return document.createElement('div');
+    element.dataset.logId = id;
+    if (groupId) element.dataset.groupId = groupId;
+    element.dataset.fullTimestamp = fullTimestamp;
+
+    const timestampEl = element.querySelector('.timestamp');
+    if (timestampEl) {
+      timestampEl.title = fullTimestamp;
+      timestampEl.textContent = `${emoji}${verbose ? ` [${timeDisplay}]` : ''}`;
+    }
+
+    const levelEl = element.querySelector('.level');
+    if (levelEl) {
+      if (verbose) {
+        levelEl.className = `level-${level}`;
+        levelEl.textContent = level.toUpperCase().padEnd(8);
+      } else {
+        levelEl.remove();
+      }
+    }
+
+    const msgEl = element.querySelector('.message');
+    if (msgEl) {
+      msgEl.className = `message-${level}`;
+      msgEl.textContent = text;
+    }
 
     if (messageType === 'thinking' || messageType === 'scratchpad') {
       const label = messageType === 'thinking' ? 'Thinking' : 'Scratchpad';
@@ -255,37 +276,36 @@ export class LogEntryFormatter {
       }
     }
 
-    const htmlMessage =
-      prefix +
-      `<span class="timestamp" title="${fullTimestamp}">${emoji}${
-        verbose ? ` [${timeDisplay}]` : ''
-      }</span> ` +
-      levelMarkup +
-      `<span class="message-${level}">${text}</span>` +
-      `</div>`;
-
-    return htmlMessage;
+    return element;
   }
 
   _formatSpecialContent(content, contentType, logId) {
     try {
       const parsedMarkdown = this._processMarkdownContent(content);
+      let element = createFromTemplate('specialDetailsTemplate');
+      if (!element) element = document.createElement('div');
 
-      // Create enhanced content element with better formatting
-      const idAttr = logId ? ` data-log-id="${logId}"` : '';
-      // Determine label and icon based on content type
       const isThinking = contentType.includes('Thinking');
       const labelText = isThinking ? 'Thinking' : 'Scratchpad';
       const icon = isThinking ? 'codicon-lightbulb' : 'codicon-pencil';
 
-      return `<details class="special-details">
-        <summary class="details-summary">
-          <i class="${CHEVRON_RIGHT_CLASS} toggle-icon"></i>
-          <i class="codicon ${icon}"></i>
-          <span>${labelText}</span>
-        </summary>
-        <div class="special-content markdown-content"${idAttr}>${parsedMarkdown}</div>
-      </details>`;
+      const toggleIcon = element.querySelector('.toggle-icon');
+      if (toggleIcon)
+        toggleIcon.className = `${CHEVRON_RIGHT_CLASS} toggle-icon`;
+
+      const iconElem = element.querySelector('.icon');
+      if (iconElem) iconElem.classList.add(icon);
+
+      const labelElem = element.querySelector('.label');
+      if (labelElem) labelElem.textContent = labelText;
+
+      const contentElem = element.querySelector('.special-content');
+      if (contentElem) {
+        contentElem.innerHTML = parsedMarkdown;
+        if (logId) contentElem.dataset.logId = logId;
+      }
+
+      return element;
     } catch (e) {
       console.error('Error parsing markdown:', e);
       return null;
@@ -294,7 +314,8 @@ export class LogEntryFormatter {
 
   _formatToolUse(content, logId) {
     try {
-      const idAttr = logId ? ` data-log-id="${logId}"` : '';
+      const element = createFromTemplate('toolUseTemplate');
+      if (!element) return null;
       let formattedContent;
       try {
         // Try to parse as JSON first - don't decode HTML entities
@@ -331,14 +352,18 @@ export class LogEntryFormatter {
         // This preserves any HTML entities in error messages
         formattedContent = `<pre>${content}</pre>`;
       }
-      return `<details class="special-details">
-        <summary class="details-summary">
-          <i class="${CHEVRON_RIGHT_CLASS} toggle-icon"></i>
-          <i class="codicon codicon-wrench"></i>
-          <span>Tool Use</span>
-        </summary>
-        <div class="special-content"${idAttr}>${formattedContent}</div>
-      </details>`;
+
+      const toggleIcon = element.querySelector('.toggle-icon');
+      if (toggleIcon)
+        toggleIcon.className = `${CHEVRON_RIGHT_CLASS} toggle-icon`;
+
+      const contentElem = element.querySelector('.special-content');
+      if (contentElem) {
+        contentElem.innerHTML = formattedContent;
+        if (logId) contentElem.dataset.logId = logId;
+      }
+
+      return element;
     } catch (e) {
       console.error('Error parsing tool use content:', e);
       return null;
@@ -349,16 +374,27 @@ export class LogEntryFormatter {
     try {
       const date = new Date(timestamp);
       const { fullTimestamp, timeDisplay } = this._formatTimestamp(date);
-      const groupAttr = groupId ? ` data-group-id="${groupId}"` : '';
-      const prefix = `<div class="log-line" data-log-id="${id}"${groupAttr} data-full-timestamp="${fullTimestamp}">`;
-      const timeMarkup = `<span class="timestamp" title="${fullTimestamp}">${
-        verbose ? `[${timeDisplay}]` : ''
-      }</span>`;
-      const parsedMarkdown = this._processMarkdownContent(content);
-      const html =
-        prefix +
-        `${timeMarkup} <span class="message-${level}"><div class="model-response-content markdown-content">${parsedMarkdown}</div></span></div>`;
-      return html;
+      const element = createFromTemplate('modelResponseTemplate');
+      if (!element) return null;
+
+      element.dataset.logId = id;
+      if (groupId) element.dataset.groupId = groupId;
+      element.dataset.fullTimestamp = fullTimestamp;
+
+      const timeEl = element.querySelector('.timestamp');
+      if (timeEl) {
+        timeEl.title = fullTimestamp;
+        timeEl.textContent = verbose ? `[${timeDisplay}]` : '';
+      }
+
+      const container = element.querySelector('.message-container');
+      if (container) container.classList.add(`message-${level}`);
+
+      const contentEl = element.querySelector('.model-response-content');
+      if (contentEl)
+        contentEl.innerHTML = this._processMarkdownContent(content);
+
+      return element;
     } catch (e) {
       console.error('Error parsing model response:', e);
       return null;
@@ -367,7 +403,14 @@ export class LogEntryFormatter {
 
   _formatFileList(content, data, logId) {
     try {
-      const idAttr = logId ? ` data-log-id="${logId}"` : '';
+      const element = createFromTemplate('fileListDetailsTemplate');
+      if (!element) return null;
+      const contentElem = element.querySelector('.file-list-content');
+      const summaryElem = element.querySelector('.summary-text');
+      const toggleIcon = element.querySelector('.toggle-icon');
+      if (toggleIcon)
+        toggleIcon.className = `${CHEVRON_RIGHT_CLASS} toggle-icon`;
+
       const parsed = data ?? JSON.parse(decodeHtml(content));
 
       if (!Array.isArray(parsed)) {
@@ -428,14 +471,13 @@ export class LogEntryFormatter {
       }
       summary += ')';
 
-      return `<details class="file-list-details">
-        <summary class="details-summary">
-          <i class="${CHEVRON_RIGHT_CLASS} toggle-icon"></i>
-          <i class="codicon codicon-list-tree"></i>
-          <span>${summary}</span>
-        </summary>
-        <ul class="file-list-content"${idAttr}>${items}</ul>
-      </details>`;
+      if (summaryElem) summaryElem.textContent = summary;
+      if (contentElem) {
+        contentElem.innerHTML = items;
+        if (logId) contentElem.dataset.logId = logId;
+      }
+
+      return element;
     } catch (e) {
       console.error('Error parsing file list:', e);
       return null;
@@ -444,7 +486,14 @@ export class LogEntryFormatter {
 
   _formatMissingOutputs(content, data, logId) {
     try {
-      const idAttr = logId ? ` data-log-id="${logId}"` : '';
+      const element = createFromTemplate('missingOutputsDetailsTemplate');
+      if (!element) return null;
+      const contentElem = element.querySelector('.file-list-content');
+      const summaryElem = element.querySelector('.summary-text');
+      const toggleIcon = element.querySelector('.toggle-icon');
+      if (toggleIcon)
+        toggleIcon.className = `${CHEVRON_RIGHT_CLASS} toggle-icon`;
+
       const parsed = data ?? JSON.parse(decodeHtml(content));
 
       // Handle both old format (array) and new format (object with missing, xmlFile, documentTag)
@@ -493,20 +542,25 @@ export class LogEntryFormatter {
       }
 
       if (missingFiles.length === 0 && xmlFile) {
-        return xmlLink;
+        const wrapper = document.createElement('div');
+        wrapper.innerHTML = xmlLink;
+        return wrapper.firstElementChild;
       }
 
       const summary = `Missing outputs (${missingFiles.length})`;
 
-      return `<details class="file-list-details">
-        <summary class="details-summary">
-          <i class="${CHEVRON_RIGHT_CLASS} toggle-icon"></i>
-          <i class="codicon codicon-warning"></i>
-          <span>${summary}</span>
-        </summary>
-        <ul class="file-list-content"${idAttr}>${items}</ul>
-        ${xmlLink}
-      </details>`;
+      if (summaryElem) summaryElem.textContent = summary;
+      if (contentElem) {
+        contentElem.innerHTML = items;
+        if (logId) contentElem.dataset.logId = logId;
+      }
+      if (xmlLink && element) {
+        const div = document.createElement('div');
+        div.innerHTML = xmlLink;
+        element.appendChild(div.firstElementChild);
+      }
+
+      return element;
     } catch (e) {
       console.error('Error parsing missing outputs:', e);
       return null;
@@ -515,7 +569,14 @@ export class LogEntryFormatter {
 
   _formatLatexdiff(content, data, logId) {
     try {
-      const idAttr = logId ? ` data-log-id="${logId}"` : '';
+      const element = createFromTemplate('latexdiffDetailsTemplate');
+      if (!element) return null;
+      const contentElem = element.querySelector('.latexdiff-content');
+      const summaryElem = element.querySelector('.summary-text');
+      const toggleIcon = element.querySelector('.toggle-icon');
+      if (toggleIcon)
+        toggleIcon.className = `${CHEVRON_DOWN_CLASS} toggle-icon`;
+
       const parsed = data ?? JSON.parse(decodeHtml(content));
       const entries = Array.isArray(parsed)
         ? parsed
@@ -562,14 +623,13 @@ export class LogEntryFormatter {
           ? 'Latexdiff result'
           : `Latexdiff results (${entries.length})`;
 
-      return `<details class="latexdiff-details" open>
-        <summary class="details-summary">
-          <i class="${CHEVRON_DOWN_CLASS} toggle-icon"></i>
-          <i class="codicon codicon-diff"></i>
-          <span>${summary}</span>
-        </summary>
-        <ul class="latexdiff-content"${idAttr}>${items}</ul>
-      </details>`;
+      if (summaryElem) summaryElem.textContent = summary;
+      if (contentElem) {
+        contentElem.innerHTML = items;
+        if (logId) contentElem.dataset.logId = logId;
+      }
+
+      return element;
     } catch (e) {
       console.error('Error parsing latexdiff entry:', e);
       return null;
@@ -578,7 +638,12 @@ export class LogEntryFormatter {
 
   _formatStatistics(content, data, logId) {
     try {
-      const idAttr = logId ? ` data-log-id="${logId}"` : '';
+      const element = createFromTemplate('statisticsDetailsTemplate');
+      if (!element) return null;
+      const contentElem = element.querySelector('.statistics-content');
+      const toggleIcon = element.querySelector('.toggle-icon');
+      if (toggleIcon)
+        toggleIcon.className = `${CHEVRON_DOWN_CLASS} toggle-icon`;
       const parsed = data;
       if (!parsed || typeof parsed !== 'object') {
         return null;
@@ -647,14 +712,12 @@ export class LogEntryFormatter {
         pushItem('codicon-rocket', 'Cost', `$${parsed.cost.toFixed(3)}`);
       }
 
-      return `<details class="statistics-details" open>
-        <summary class="details-summary">
-          <i class="${CHEVRON_DOWN_CLASS} toggle-icon"></i>
-          <i class="codicon codicon-dashboard"></i>
-          <span>Statistics</span>
-        </summary>
-        <div class="statistics-content"${idAttr}>${items.join('')}</div>
-      </details>`;
+      if (contentElem) {
+        contentElem.innerHTML = items.join('');
+        if (logId) contentElem.dataset.logId = logId;
+      }
+
+      return element;
     } catch (e) {
       console.error('Error parsing statistics:', e);
       return null;
@@ -667,61 +730,52 @@ export class LogEntryFormatter {
  */
 export class TaskGroupHeaderFormatter {
   /**
-   * Create a group header HTML
+   * Create a group header element
    * @param {Object} group - Task group data
-   * @returns {string} HTML for group header
+   * @returns {HTMLElement} Header element
    */
   create(group) {
     const startDate = new Date(group.startTime);
     const level = this._getGroupLevel(group);
     const formattedStartTime = level.formatTime(startDate);
 
-    let durationDisplay = '';
-    if (group.endTime) {
-      const durationMs = group.endTime - group.startTime;
-      durationDisplay = `<span class="group-duration">${this._formatDuration(durationMs)}</span>`;
+    const header = createFromTemplate('groupHeaderTemplate');
+    if (!header) return document.createElement('summary');
+
+    header.id = `group-header-${group.id}`;
+    header.className = this._getHeaderClass(group, level);
+
+    const statusIconElem = header.querySelector('.group-status-icon');
+    if (statusIconElem) {
+      statusIconElem.innerHTML = this._getStatusIcon(group.status);
     }
 
-    // Add indicator based on status
-    const statusIcon = this._getStatusIcon(group.status);
-
-    // Add usage information if available
-    let usageDisplay = '';
-    if (group.usage) {
-      const { inputTokens = 0, outputTokens = 0, cost = 0 } = group.usage;
-      usageDisplay =
-        `<span class="group-usage"><i class="codicon codicon-arrow-up"></i> ${formatTokens(inputTokens)}, ` +
-        `<i class="codicon codicon-arrow-down"></i> ${formatTokens(outputTokens)}, ` +
-        `$${cost.toFixed(3)}</span>`;
+    const titleElem = header.querySelector('.group-title');
+    if (titleElem) {
+      if (level.showTitle) {
+        titleElem.textContent = group.name;
+      } else {
+        titleElem.remove();
+      }
     }
 
-    const titleMarkup = level.showTitle
-      ? `<span class="group-title">${group.name}</span>`
-      : '';
-    const headerClass = this._getHeaderClass(group, level);
+    const startTimeElem = header.querySelector('.group-start-time');
+    if (startTimeElem) {
+      startTimeElem.dataset.start = String(group.startTime);
+      startTimeElem.innerHTML = `<i class="codicon codicon-clock"></i> ${formattedStartTime}`;
+    }
 
-    const timeMarkup = `
-        <span class="group-time">
-          <span class="group-start-time" data-start="${group.startTime}">
-            <i class="codicon codicon-clock"></i> ${formattedStartTime}
-          </span>
-          ${durationDisplay}
-        </span>`;
+    const durationElem = header.querySelector('.group-duration');
+    if (durationElem) {
+      if (group.endTime) {
+        const durationMs = group.endTime - group.startTime;
+        durationElem.textContent = this._formatDuration(durationMs);
+      } else {
+        durationElem.remove();
+      }
+    }
 
-    const bulletMarkup = BULLET_MARKUP;
-
-    const headerContents = this._formatHeaderElements(
-      level,
-      timeMarkup,
-      usageDisplay,
-      bulletMarkup,
-    );
-
-    return `
-      <summary id="group-header-${group.id}" class="${headerClass}">
-        <span class="group-status-icon">${statusIcon}</span>${titleMarkup}${headerContents}
-      </summary>
-    `;
+    return header;
   }
 
   _getGroupLevel(group) {
@@ -767,16 +821,6 @@ export class TaskGroupHeaderFormatter {
       return `${minutes}min`;
     } else {
       return `${minutes}min, ${seconds}sec`;
-    }
-  }
-
-  _formatHeaderElements(level, timeMarkup, usageDisplay, bulletMarkup) {
-    if (level.headerOrder === 'time-first') {
-      // For root level: time → bullet → usage
-      return `${timeMarkup}${usageDisplay ? `${bulletMarkup}${usageDisplay}` : ''}`;
-    } else {
-      // For nested level: usage → bullet → time
-      return `${usageDisplay ? `${usageDisplay}${bulletMarkup}` : ''}${timeMarkup}`;
     }
   }
 }
