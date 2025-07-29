@@ -277,8 +277,28 @@ export class LogEntryFormatter {
       try {
         // Try to parse as JSON first - don't decode HTML entities
         const parsed = JSON.parse(content);
-        // Pretty print the JSON without encoding
-        formattedContent = `<pre>${JSON.stringify(parsed, null, 2)}</pre>`;
+
+        // Check if this is the new combined format
+        if (parsed.tool && parsed.input && parsed.output) {
+          // Format combined tool input/output
+          const toolName = parsed.tool;
+          const inputJson = JSON.stringify(parsed.input, null, 2);
+          const outputJson = JSON.stringify(parsed.output, null, 2);
+
+          formattedContent = `
+            <div class="tool-use-section">
+              <div class="tool-use-label">Input:</div>
+              <pre>${inputJson}</pre>
+            </div>
+            <hr class="tool-use-separator">
+            <div class="tool-use-section">
+              <div class="tool-use-label">Output:</div>
+              <pre>${outputJson}</pre>
+            </div>`;
+        } else {
+          // Legacy format - just display as before
+          formattedContent = `<pre>${JSON.stringify(parsed, null, 2)}</pre>`;
+        }
       } catch {
         // If not valid JSON, just display as-is in a pre block
         // This preserves any HTML entities in error messages

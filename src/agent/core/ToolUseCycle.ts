@@ -105,15 +105,24 @@ export async function runToolUseCycle(
       break;
     }
 
-    logger.info(toolInfo, groupId, MESSAGE_TYPES.TOOL_USE);
-
+    // Parse tool info first before logging
     let parsed: any;
     try {
       parsed = JSON.parse(toolInfo);
     } catch (err) {
-      logger.error(
-        `Malformed tool JSON: ${err instanceof Error ? err.message : String(err)}`,
+      const errorMsg = `Malformed tool JSON: ${err instanceof Error ? err.message : String(err)}`;
+      logger.error(errorMsg, groupId);
+
+      // Log the failed tool use attempt
+      const toolUseLog = {
+        tool: 'unknown',
+        input: toolInfo,
+        output: new ToolResult({ error: errorMsg, isError: true }),
+      };
+      logger.info(
+        JSON.stringify(toolUseLog, null, 2),
         groupId,
+        MESSAGE_TYPES.TOOL_USE,
       );
       break;
     }
@@ -121,9 +130,19 @@ export async function runToolUseCycle(
     const id = parsed.id || parsed.tool_use_id || parsed.tool_call_id;
     const name = parsed.name || parsed.function?.name;
     if (!id || !name) {
-      logger.error(
-        `Tool JSON missing id or name: id=${String(id)} name=${String(name)}`,
+      const errorMsg = `Tool JSON missing id or name: id=${String(id)} name=${String(name)}`;
+      logger.error(errorMsg, groupId);
+
+      // Log the failed tool use attempt with available info
+      const toolUseLog = {
+        tool: name || 'unknown',
+        input: parsed,
+        output: new ToolResult({ error: errorMsg, isError: true }),
+      };
+      logger.info(
+        JSON.stringify(toolUseLog, null, 2),
         groupId,
+        MESSAGE_TYPES.TOOL_USE,
       );
       break;
     }
@@ -154,8 +173,22 @@ export async function runToolUseCycle(
       }
     }
 
+    // Combine tool input and output into a single log entry
+    // Extract just the arguments/input based on provider format
+    let toolInput = input; // Default to the already extracted input
+    if (!toolInput) {
+      // Fallback to the raw parsed object if input extraction failed
+      toolInput = parsed;
+    }
+
+    const toolUseLog = {
+      tool: name,
+      input: toolInput,
+      output: result,
+    };
+
     logger.info(
-      JSON.stringify(result, null, 2),
+      JSON.stringify(toolUseLog, null, 2),
       groupId,
       MESSAGE_TYPES.TOOL_USE,
     );
