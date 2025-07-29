@@ -9,7 +9,8 @@ import type {
   ResponseOutputMessage,
   ResponseOutputText,
   ResponseReasoningItem,
-  EasyInputMessage,
+  ResponseFunctionToolCallItem,
+  ResponseInputItem,
 } from 'openai/resources/responses/responses';
 
 // Local imports - base handler
@@ -55,7 +56,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
     userRequest: string,
     mediaFiles?: string[],
     systemPrompt?: string,
-  ): Promise<EasyInputMessage[]> {
+  ): Promise<ResponseInputItem[]> {
     this.previousResponseId = null;
     this.sentMessages = 0;
     return super.initializeMessages(
@@ -69,7 +70,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
   /** Create a response using the Responses API. */
   async createResponse(
     client: OpenAI,
-    messages: EasyInputMessage[],
+    messages: ResponseInputItem[],
     temperature: number,
     systemPrompt?: string,
     endTag?: string,
@@ -78,50 +79,52 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
   ): Promise<Response> {
     const useStreaming = this.getStreamingConfig();
 
-    const newMessages = messages.slice(this.sentMessages).map((msg) => ({
-      role: msg.role,
-      content:
-        typeof msg.content === 'string'
-          ? [{ type: 'input_text', text: msg.content }]
-          : msg.content.map((part: any) => {
-              if (part.type === 'text') {
-                if (msg.role === 'user') {
-                  return { type: 'input_text', text: part.text };
-                } else if (msg.role === 'assistant') {
-                  return { type: 'output_text', text: part.text };
-                } else {
-                  return { type: 'input_text', text: part.text };
-                }
-              }
-              if (part.type === 'image_url') {
-                const url =
-                  typeof part.image_url === 'string'
-                    ? part.image_url
-                    : part.image_url.url;
+    const newMessages = messages.slice(this.sentMessages).map((msg) => {
+      if ('role' in msg) {
+        return {
+          role: msg.role,
+          content:
+            typeof msg.content === 'string'
+              ? [{ type: 'input_text', text: msg.content }]
+              : msg.content.map((part: any) => {
+                  if (part.type === 'text') {
+                    if (msg.role === 'user') {
+                      return { type: 'input_text', text: part.text };
+                    } else if (msg.role === 'assistant') {
+                      return { type: 'output_text', text: part.text };
+                    } else {
+                      return { type: 'input_text', text: part.text };
+                    }
+                  }
+                  if (part.type === 'image_url') {
+                    const url =
+                      typeof part.image_url === 'string'
+                        ? part.image_url
+                        : part.image_url.url;
 
-                // Check if this is a PDF by examining the data URL
-                if (url.startsWith('data:application/pdf;base64,')) {
-                  // Extract the base64 data from the data URL
-                  const base64Data = url.replace(
-                    'data:application/pdf;base64,',
-                    '',
-                  );
-                  return {
-                    type: 'input_file',
-                    input_file: {
-                      data: base64Data,
-                      mime_type: 'application/pdf',
-                    },
-                  };
-                }
+                    if (url.startsWith('data:application/pdf;base64,')) {
+                      const base64Data = url.replace(
+                        'data:application/pdf;base64,',
+                        '',
+                      );
+                      return {
+                        type: 'input_file',
+                        input_file: {
+                          data: base64Data,
+                          mime_type: 'application/pdf',
+                        },
+                      };
+                    }
 
-                // For regular images, use input_image format
-                const detail = part.image_url?.detail ?? 'auto';
-                return { type: 'input_image', image_url: url, detail };
-              }
-              return part;
-            }),
-    }));
+                    const detail = part.image_url?.detail ?? 'auto';
+                    return { type: 'input_image', image_url: url, detail };
+                  }
+                  return part;
+                }),
+        };
+      }
+      return msg;
+    });
 
     const params: any = {
       model: this.config.fullName,
@@ -448,7 +451,25 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
     return thoughtContent || null;
   }
 
-  extractToolUse(_response: Response): string | null {
-    return null;
+  extractToolUse(response: Response): string | null {
+    const items = response?.output;
+    if (!Array.isArray(items)) return null;
+
+    const call = items.find(
+      (it): it is ResponseFunctionToolCallItem => it?.type === 'function_call',
+    );
+    return call ? JSON.stringify(call, null, 2) : null;
+  }
+
+  createFollowUpMessage(
+    id: string,
+    _name: string,
+    result: Record<string, unknown>,
+  ): ResponseInputItem.FunctionCallOutput {
+    return {
+      type: 'function_call_output',
+      call_id: id,
+      output: JSON.stringify(result),
+    };
   }
 }
