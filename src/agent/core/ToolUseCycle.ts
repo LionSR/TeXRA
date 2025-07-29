@@ -99,6 +99,9 @@ export async function runToolUseCycle(
     }
 
     if (!toolInfo || stopReason === 'end_turn') {
+      if (text) {
+        logger.info(encodeHtml(text), groupId);
+      }
       break;
     }
 
