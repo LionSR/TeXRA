@@ -9,7 +9,7 @@ import { BaseTool } from './core/base';
 import { ToolCallInput, EditorCommand, FileHistoryEntry } from './types';
 import { ToolResult, CLIResult, ToolError } from './result';
 import type { ToolDefinition } from '@model';
-import { zodToJsonSchema } from 'openai/_vendor/zod-to-json-schema/index.js';
+import { zodToJsonSchema } from 'zod-to-json-schema';
 
 // Local imports - utilities
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';

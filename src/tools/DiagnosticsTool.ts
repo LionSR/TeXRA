@@ -4,7 +4,7 @@ import * as logger from '@logger/logUtils';
 import { BaseTool } from './core/base';
 import { ToolResult, ToolError } from './result';
 import type { ToolDefinition } from '@model';
-import { zodToJsonSchema } from 'openai/_vendor/zod-to-json-schema/index.js';
+import { zodToJsonSchema } from 'zod-to-json-schema';
 
 const CHANNEL = 'DiagnosticsTool';
 logger.initialize(CHANNEL);
