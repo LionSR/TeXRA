@@ -103,7 +103,7 @@ export class MainViewContentProvider extends BaseViewContentProvider {
     } catch {
       extraAgents = [];
     }
-    const allAgents = [...agents, ...extraAgents];
+    const allAgents = Array.from(new Set([...agents, ...extraAgents]));
     const agentOptions = allAgents
       .map((agent) => `<option value="${agent}">${agent}</option>`)
       .join('\n');
