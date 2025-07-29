@@ -27,11 +27,30 @@ export function toOpenAITools(defs: ToolDefinition[]): ChatCompletionTool[] {
 
 /** Convert generic ToolDefinition objects to Anthropic Tool format. */
 export function toAnthropicTools(defs: ToolDefinition[]): ToolUnion[] {
-  return defs.map<ToolUnion>((d) => ({
-    name: d.name,
-    description: d.description,
-    input_schema: (d.parameters ?? {}) as AnthropicTool['input_schema'],
-  }));
+  const typeMap: Record<string, string> = {
+    bash: 'bash_20250124',
+    str_replace_editor: 'text_editor_20250124',
+    str_replace_based_edit_tool: 'text_editor_20250429',
+    web_search: 'web_search_20250305',
+  };
+
+  return defs.map<ToolUnion>((d) => {
+    const remoteType = typeMap[d.name];
+    if (remoteType) {
+      return {
+        name: d.name,
+        type: remoteType,
+        ...(d.parameters ?? {}),
+      } as ToolUnion;
+    }
+
+    const params = d.parameters as AnthropicTool['input_schema'] | undefined;
+    return {
+      name: d.name,
+      description: d.description,
+      ...(params ? { input_schema: params } : {}),
+    } as ToolUnion;
+  });
 }
 
 /** Convert generic ToolDefinition objects to Google Gemini Tool format. */
