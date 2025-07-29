@@ -162,7 +162,8 @@ userPrefix: |
 
 Tools live under `src/tools/` and each one defines its input schema with Zod.
 Your YAML can reference individual tools or predefined sets. Sets are expanded
-when the agent configuration is loaded.
+when the agent configuration is loaded. The `wolframExec` set enables the
+`wolfram` tool for running small Wolfram Language snippets during a run.
 
 The built-in `ToolSetRegistry` maps aliases to lists of tool definitions. For
 instance, the `file_edit` set expands to `{ name: 'text_editor' }`. Nested sets
@@ -176,6 +177,7 @@ settings:
   agentType: toolUse
   tools:
     - file_edit # expands to the text_editor tool
+    - wolframExec # execute Wolfram Language code
     - bash # single tool by name
     - basic_io # adds bash and file_op tools
 ```
