@@ -22,9 +22,7 @@ export class DiagnosticsTool extends BaseTool<DiagnosticsInput> {
       name: 'diagnostics',
       description:
         'Retrieve linter diagnostics. Use "list" for full messages or "count" for a summary.',
-      parameters: zodToJsonSchema(DiagnosticsInputSchema, {
-        name: 'diagnosticsInput',
-      }),
+      parameters: zodToJsonSchema(DiagnosticsInputSchema),
     };
     super(definition, DiagnosticsInputSchema);
   }

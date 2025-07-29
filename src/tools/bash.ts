@@ -19,7 +19,7 @@ export class BashTool extends BaseTool<BashInput> {
     const definition: ToolDefinition = {
       name: 'bash',
       description: 'Execute a shell command within the workspace',
-      parameters: zodToJsonSchema(BashInputSchema, { name: 'bashInput' }),
+      parameters: zodToJsonSchema(BashInputSchema),
     };
     super(definition, BashInputSchema);
   }
