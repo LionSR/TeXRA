@@ -1088,6 +1088,16 @@
           "group": "navigation@3"
         },
         {
+          "command": "texra.openSettings",
+          "when": "view == texra.mainView",
+          "group": "navigation@4"
+        },
+        {
+          "command": "texra.showAgentHistory",
+          "when": "view == texra.mainView",
+          "group": "navigation@5"
+        },
+        {
           "command": "texra.folderExplorer.newFile",
           "when": "view == texra.folderExplorer",
           "group": "navigation"
