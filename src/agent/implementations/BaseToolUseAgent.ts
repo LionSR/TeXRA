@@ -13,7 +13,6 @@ import type { ToolDefinition } from '@model';
 
 import { DEFAULT_TOOL_REGISTRY } from '@tools/registry';
 import { BaseTool } from '@tools/core/base';
-import { ToolResult } from '@tools/result';
 import { runToolUseCycle } from '../core/ToolUseCycle';
 import { TOOL_USE_INSTRUCTIONS } from '../utils/toolUsePrompt';
 
@@ -43,6 +42,7 @@ export class BaseToolUseAgent extends BaseAgent {
           `Tool "${def.name}" not found in registry`,
           this.runGroupId,
         );
+        continue;
       }
       tools.push(def);
     }
@@ -53,14 +53,6 @@ export class BaseToolUseAgent extends BaseAgent {
       tools.push({ name: 'diagnostics' });
     }
     return tools;
-  }
-
-  private async runTool(name: string, input: any): Promise<ToolResult> {
-    const tool = this.toolRegistry[name];
-    if (!tool) {
-      return new ToolResult({ error: `Unknown tool ${name}`, isError: true });
-    }
-    return tool.call(input);
   }
 
   public async run(): Promise<void> {
@@ -85,10 +77,15 @@ export class BaseToolUseAgent extends BaseAgent {
         systemPrompt,
       );
 
+      const resolvedSetting = {
+        ...this.agentSetting,
+        tools: this.getTools(),
+      };
+
       await runToolUseCycle(
         {
           modelHandler: this.modelHandler,
-          agentSetting: this.agentSetting,
+          agentSetting: resolvedSetting,
           agentPrompt: this.agentPrompt,
           userVars: this.userVars,
           logger: this.logger,
