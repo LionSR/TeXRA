@@ -197,6 +197,64 @@ export class LogEntryFormatter {
     const levelMarkup = verbose
       ? `<span class="level-${level}">${level.toUpperCase().padEnd(8)}</span> `
       : '';
+
+    if (messageType === 'thinking' || messageType === 'scratchpad') {
+      const label = messageType === 'thinking' ? 'Thinking' : 'Scratchpad';
+      const special = this._formatSpecialContent(text, label, id);
+      if (special) {
+        return special;
+      }
+    }
+
+    if (messageType === 'toolUse') {
+      const tool = this._formatToolUse(text, id);
+      if (tool) {
+        return tool;
+      }
+    }
+
+    if (messageType === 'modelResponse') {
+      const model = this._formatModelResponse({
+        id,
+        groupId,
+        timestamp,
+        verbose,
+        content: text,
+        level,
+      });
+      if (model) {
+        return model;
+      }
+    }
+
+    if (messageType === 'fileList') {
+      const list = this._formatFileList(text, data, id);
+      if (list) {
+        return list;
+      }
+    }
+
+    if (messageType === 'missingOutputs') {
+      const missing = this._formatMissingOutputs(text, data, id);
+      if (missing) {
+        return missing;
+      }
+    }
+
+    if (messageType === 'latexdiff') {
+      const diff = this._formatLatexdiff(text, data, id);
+      if (diff) {
+        return diff;
+      }
+    }
+
+    if (messageType === 'statistics') {
+      const stats = this._formatStatistics(text, data, id);
+      if (stats) {
+        return stats;
+      }
+    }
+
     const htmlMessage =
       prefix +
       `<span class="timestamp" title="${fullTimestamp}">${emoji}${
@@ -205,46 +263,11 @@ export class LogEntryFormatter {
       levelMarkup +
       `<span class="message-${level}">${text}</span>` +
       `</div>`;
-    if (messageType === 'thinking' || messageType === 'scratchpad') {
-      const label = messageType === 'thinking' ? 'Thinking' : 'Scratchpad';
-      return this._formatSpecialContent(htmlMessage, text, label, id);
-    }
-
-    if (messageType === 'toolUse') {
-      return this._formatToolUse(htmlMessage, text, id);
-    }
-
-    if (messageType === 'modelResponse') {
-      return this._formatModelResponse({
-        id,
-        groupId,
-        timestamp,
-        verbose,
-        content: text,
-        level,
-      });
-    }
-
-    if (messageType === 'fileList') {
-      return this._formatFileList(htmlMessage, text, data, id);
-    }
-
-    if (messageType === 'missingOutputs') {
-      return this._formatMissingOutputs(htmlMessage, text, data, id);
-    }
-
-    if (messageType === 'latexdiff') {
-      return this._formatLatexdiff(htmlMessage, text, data, id);
-    }
-
-    if (messageType === 'statistics') {
-      return this._formatStatistics(htmlMessage, text, data, id);
-    }
 
     return htmlMessage;
   }
 
-  _formatSpecialContent(message, content, contentType, logId) {
+  _formatSpecialContent(content, contentType, logId) {
     try {
       const parsedMarkdown = this._processMarkdownContent(content);
 
@@ -265,12 +288,11 @@ export class LogEntryFormatter {
       </details>`;
     } catch (e) {
       console.error('Error parsing markdown:', e);
-      // Fallback to original content
-      return message;
+      return null;
     }
   }
 
-  _formatToolUse(message, content, logId) {
+  _formatToolUse(content, logId) {
     try {
       const idAttr = logId ? ` data-log-id="${logId}"` : '';
       let formattedContent;
@@ -319,7 +341,7 @@ export class LogEntryFormatter {
       </details>`;
     } catch (e) {
       console.error('Error parsing tool use content:', e);
-      return message;
+      return null;
     }
   }
 
@@ -339,18 +361,18 @@ export class LogEntryFormatter {
       return html;
     } catch (e) {
       console.error('Error parsing model response:', e);
-      return content;
+      return null;
     }
   }
 
-  _formatFileList(message, content, data, logId) {
+  _formatFileList(content, data, logId) {
     try {
       const idAttr = logId ? ` data-log-id="${logId}"` : '';
       const parsed = data ?? JSON.parse(decodeHtml(content));
 
       if (!Array.isArray(parsed)) {
         console.warn('Missing structured data for file list log entry');
-        return message;
+        return null;
       }
 
       // Group files by source for better organization
@@ -416,11 +438,11 @@ export class LogEntryFormatter {
       </details>`;
     } catch (e) {
       console.error('Error parsing file list:', e);
-      return message;
+      return null;
     }
   }
 
-  _formatMissingOutputs(message, content, data, logId) {
+  _formatMissingOutputs(content, data, logId) {
     try {
       const idAttr = logId ? ` data-log-id="${logId}"` : '';
       const parsed = data ?? JSON.parse(decodeHtml(content));
@@ -440,7 +462,7 @@ export class LogEntryFormatter {
         documentTag = parsed.documentTag;
       } else {
         console.warn('Missing structured data for missing outputs log entry');
-        return message;
+        return null;
       }
 
       const items = missingFiles
@@ -487,11 +509,11 @@ export class LogEntryFormatter {
       </details>`;
     } catch (e) {
       console.error('Error parsing missing outputs:', e);
-      return message;
+      return null;
     }
   }
 
-  _formatLatexdiff(message, content, data, logId) {
+  _formatLatexdiff(content, data, logId) {
     try {
       const idAttr = logId ? ` data-log-id="${logId}"` : '';
       const parsed = data ?? JSON.parse(decodeHtml(content));
@@ -502,7 +524,7 @@ export class LogEntryFormatter {
           : [];
 
       if (entries.length === 0) {
-        return message;
+        return null;
       }
 
       let items = '';
@@ -550,16 +572,16 @@ export class LogEntryFormatter {
       </details>`;
     } catch (e) {
       console.error('Error parsing latexdiff entry:', e);
-      return message;
+      return null;
     }
   }
 
-  _formatStatistics(message, content, data, logId) {
+  _formatStatistics(content, data, logId) {
     try {
       const idAttr = logId ? ` data-log-id="${logId}"` : '';
       const parsed = data;
       if (!parsed || typeof parsed !== 'object') {
-        return message;
+        return null;
       }
 
       const items = [];
@@ -635,7 +657,7 @@ export class LogEntryFormatter {
       </details>`;
     } catch (e) {
       console.error('Error parsing statistics:', e);
-      return message;
+      return null;
     }
   }
 }
