@@ -1,7 +1,6 @@
 // Utility to run iterative tool-use cycles
 
 // Third-party imports
-import { encode as encodeHtml } from 'he';
 
 // Local imports - log
 import { AgentLogger } from '@logger/AgentLogger';
@@ -156,7 +155,7 @@ export async function runToolUseCycle(
     }
 
     logger.info(
-      encodeHtml(JSON.stringify(result, null, 2)),
+      JSON.stringify(result, null, 2),
       groupId,
       MESSAGE_TYPES.TOOL_USE,
     );
