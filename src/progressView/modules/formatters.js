@@ -287,13 +287,18 @@ export class LogEntryFormatter {
 
           formattedContent = `
             <div class="tool-use-section">
-              <div class="tool-use-label">Input:</div>
-              <pre>${inputJson}</pre>
+              <div class="tool-use-label">${toolName}</div>
+              <div class="tool-use-subsection">
+                <span class="tool-use-sublabel">Input:</span>
+                <pre>${inputJson}</pre>
+              </div>
             </div>
             <hr class="tool-use-separator">
             <div class="tool-use-section">
-              <div class="tool-use-label">Output:</div>
-              <pre>${outputJson}</pre>
+              <div class="tool-use-subsection">
+                <span class="tool-use-sublabel">Output:</span>
+                <pre>${outputJson}</pre>
+              </div>
             </div>`;
         } else {
           // Legacy format - just display as before

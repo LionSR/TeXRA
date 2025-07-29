@@ -15,14 +15,24 @@
 
 .tool-use-label {
   font-weight: 600;
+  color: var(--vscode-textLink-foreground);
+  margin-bottom: var(--spacing-small);
+}
+
+.tool-use-subsection {
+  margin: var(--spacing-tiny) 0;
+}
+
+.tool-use-sublabel {
+  font-weight: 500;
   color: var(--vscode-foreground);
-  margin-bottom: var(--spacing-tiny);
+  opacity: 0.8;
   font-size: var(--font-size-sm);
 }
 
 .tool-use-separator {
-  margin: var(--spacing-medium) 0;
+  margin: var(--spacing-small) 0;
   border: none;
   border-top: 1px solid var(--vscode-panel-border);
-  opacity: 0.5;
+  opacity: 0.3;
 }
