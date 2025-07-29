@@ -1089,12 +1089,12 @@
         },
         {
           "command": "texra.openSettings",
-          "when": "view == texra.mainView",
+          "when": "view == texra.progressView",
           "group": "navigation@4"
         },
         {
           "command": "texra.showAgentHistory",
-          "when": "view == texra.mainView",
+          "when": "view == texra.progressView",
           "group": "navigation@5"
         },
         {
