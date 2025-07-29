@@ -1,4 +1,6 @@
 /* Shared markdown content styles */
+
+/* Base layout for markdown containers */
 .markdown-content {
   padding: var(--spacing-small) 0 var(--spacing-medium) var(--spacing-large);
   overflow: visible;
@@ -6,6 +8,7 @@
 
 .tool-output-content {
   margin: var(--spacing-small) 0;
+  padding: var(--spacing-small) 0 var(--spacing-medium) var(--spacing-large);
 }
 
 .markdown-content h1,
