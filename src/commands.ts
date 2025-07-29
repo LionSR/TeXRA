@@ -22,6 +22,7 @@ import { registerStateRestoreCommand } from '@commands/history/stateRestoreComma
 import { registerTextEditorCommands } from '@commands/system/textEditorCommands';
 import { registerLinterCommands } from '@commands/latex/linterCommands';
 import { registerWolframScriptCommands } from '@commands/wolfram/wolframScriptCommands';
+import { registerWolframToolCommands } from '@commands/wolfram/wolframToolCommands';
 import { registerHistoryCommands } from '@commands/history/historyCommands';
 import { registerArXivCommands } from '@commands/latex/arXivCommands';
 import { registerCompareCommands } from '@commands/latex/compareCommands';
@@ -61,6 +62,7 @@ export function registerCommands(context: vscode.ExtensionContext) {
     stateRestore: registerStateRestoreCommand(context),
     textEditor: registerTextEditorCommands(context),
     linter: registerLinterCommands(context),
+    wolframTool: registerWolframToolCommands(context),
     wolframScript: registerWolframScriptCommands(context),
     history: registerHistoryCommands(context),
     arXiv: registerArXivCommands(context),
@@ -104,6 +106,7 @@ export { apiKeyCommands } from '@commands/api/apiKeyCommands';
 export { stateRestoreCommand } from '@commands/history/stateRestoreCommand';
 export { textEditorCommands } from '@commands/system/textEditorCommands';
 export { linterCommands } from '@commands/latex/linterCommands';
+export { wolframToolCommands } from '@commands/wolfram/wolframToolCommands';
 export { wolframScriptCommands } from '@commands/wolfram/wolframScriptCommands';
 export { historyCommands } from '@commands/history/historyCommands';
 export { arXivCommands } from '@commands/latex/arXivCommands';
