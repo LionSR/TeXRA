@@ -13,6 +13,14 @@ import type {
   Schema,
 } from '@google/genai/dist/genai';
 
+// Map local tool names to Anthropic remote tool types
+const ANTHROPIC_TOOL_TYPE_MAP: Record<string, string> = {
+  bash: 'bash_20250124',
+  str_replace_editor: 'text_editor_20250124',
+  str_replace_based_edit_tool: 'text_editor_20250429',
+  web_search: 'web_search_20250305',
+} as const;
+
 /** Convert generic ToolDefinition objects to OpenAI ChatCompletionTool format. */
 export function toOpenAITools(defs: ToolDefinition[]): ChatCompletionTool[] {
   return defs.map((d) => ({
@@ -27,11 +35,22 @@ export function toOpenAITools(defs: ToolDefinition[]): ChatCompletionTool[] {
 
 /** Convert generic ToolDefinition objects to Anthropic Tool format. */
 export function toAnthropicTools(defs: ToolDefinition[]): ToolUnion[] {
-  return defs.map<ToolUnion>((d) => ({
-    name: d.name,
-    description: d.description,
-    input_schema: (d.parameters ?? {}) as AnthropicTool['input_schema'],
-  }));
+  return defs.map<ToolUnion>((d) => {
+    const remoteType = ANTHROPIC_TOOL_TYPE_MAP[d.name];
+    if (remoteType) {
+      return {
+        name: d.name,
+        type: remoteType,
+      } as ToolUnion;
+    }
+
+    const params = d.parameters as AnthropicTool['input_schema'] | undefined;
+    return {
+      name: d.name,
+      description: d.description,
+      ...(params ? { input_schema: params } : {}),
+    } as ToolUnion;
+  });
 }
 
 /** Convert generic ToolDefinition objects to Google Gemini Tool format. */
