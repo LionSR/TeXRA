@@ -68,7 +68,7 @@ export async function runToolUseCycle(
         client,
         messages,
         agentSetting.temperature ?? 0,
-        undefined,
+        undefined, // endTag - not used in tool use scenarios
         undefined,
         abortController.signal,
         agentSetting.tools as ToolDefinition[],
@@ -87,13 +87,16 @@ export async function runToolUseCycle(
     }
 
     const toolInfo = modelHandler.extractToolUse(response);
+    // Note: We pass empty string for endTag because model responses in tool use
+    // scenarios should not have custom end tags - they're part of the natural
+    // conversation flow (not specialized content like thinking/scratchpad)
     const [text, usage, stopReason] = modelHandler.extractResponse(
       response,
       '',
     );
     if (text) {
       logger.debug(`Model response: ${text.slice(0, 100)}`, groupId);
-      logger.info(encodeHtml(text), groupId, MESSAGE_TYPES.TOOL_OUTPUT);
+      logger.info(text, groupId, MESSAGE_TYPES.MODEL_RESPONSE);
     }
     if (usage) {
       logger.statistics(usage, groupId);
@@ -103,7 +106,7 @@ export async function runToolUseCycle(
       break;
     }
 
-    logger.info(encodeHtml(toolInfo), groupId, MESSAGE_TYPES.TOOL_USE);
+    logger.info(toolInfo, groupId, MESSAGE_TYPES.TOOL_USE);
 
     let parsed: any;
     try {
