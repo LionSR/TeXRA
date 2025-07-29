@@ -1,3 +1,16 @@
+/**
+ * Formatters for log entries in the progress view.
+ *
+ * WHITESPACE HANDLING NOTE:
+ * This module uses a hybrid approach for HTML generation:
+ * - String-based HTML for format() and _formatModelResponse() to maintain precise whitespace control
+ * - Template-based HTML for other methods where whitespace is less critical
+ *
+ * This is necessary because Prettier reformats HTML templates, introducing line breaks
+ * that cause excessive whitespace in the rendered output. The two critical methods
+ * that display plain text messages must use string concatenation to avoid this issue.
+ */
+
 // Third-party imports
 import MarkdownIt from 'markdown-it';
 import markdownItKatex from '@vscode/markdown-it-katex';
@@ -12,6 +25,8 @@ import { STATUS } from './constants.js';
 import { createFromTemplate } from '@common/templateUtils.js';
 
 // Constants
+export const BULLET_MARKUP =
+  '<i class="codicon codicon-circle-small-filled group-bullet"></i>';
 
 export const EMOJI_BY_LEVEL = {
   error: '🔴',
@@ -179,9 +194,79 @@ export class LogEntryFormatter {
   }
 
   /**
+   * Get the formatter for a specific message type
+   * @private
+   * @returns {Object} Map of message types to their formatters with error handling
+   */
+  _getFormatters() {
+    return {
+      thinking: (text, id) =>
+        this._safeFormat(
+          () => this._formatSpecialContent(text, 'Thinking', id),
+          'thinking',
+        ),
+      scratchpad: (text, id) =>
+        this._safeFormat(
+          () => this._formatSpecialContent(text, 'Scratchpad', id),
+          'scratchpad',
+        ),
+      toolUse: (text, id) =>
+        this._safeFormat(() => this._formatToolUse(text, id), 'tool use'),
+      modelResponse: (params) =>
+        this._safeFormat(
+          () => this._formatModelResponse(params),
+          'model response',
+        ),
+      fileList: (text, data, id) =>
+        this._safeFormat(
+          () => this._formatFileList(text, data, id),
+          'file list',
+        ),
+      missingOutputs: (text, data, id) =>
+        this._safeFormat(
+          () => this._formatMissingOutputs(text, data, id),
+          'missing outputs',
+        ),
+      latexdiff: (text, data, id) =>
+        this._safeFormat(
+          () => this._formatLatexdiff(text, data, id),
+          'latexdiff',
+        ),
+      statistics: (text, data, id) =>
+        this._safeFormat(
+          () => this._formatStatistics(text, data, id),
+          'statistics',
+        ),
+    };
+  }
+
+  /**
+   * Safely execute a formatting function with error handling
+   * @private
+   * @param {Function} formatter - The formatting function to execute
+   * @param {string} errorContext - Context for error message (e.g., 'special content', 'tool use')
+   * @returns {*} Result of formatter or null if error
+   */
+  _safeFormat(formatter, errorContext) {
+    try {
+      return formatter();
+    } catch (e) {
+      console.error(`Error parsing ${errorContext}:`, e);
+      return null;
+    }
+  }
+
+  /**
    * Format a log entry with Markdown rendering for special content
    * @param {Object} logMessage - The log message to format
-   * @returns {string} Formatted HTML for the log message
+   * @returns {HTMLElement} DOM element for the log message
+   *
+   * IMPORTANT: This method uses string-based HTML generation instead of templates
+   * for the default log messages to maintain precise control over whitespace.
+   * Prettier and other formatters will reformat HTML templates, introducing unwanted
+   * line breaks and spaces that create visual issues in the output.
+   * DO NOT convert this to use templates unless you have a solution for the
+   * whitespace formatting issue.
    */
   format(logMessage) {
     const { id, text, level, timestamp, groupId, messageType, verbose, data } =
@@ -191,537 +276,469 @@ export class LogEntryFormatter {
     const date = new Date(timestamp);
     const { fullTimestamp, timeDisplay } = this._formatTimestamp(date);
 
-    const element = createFromTemplate('logLineTemplate');
-    if (!element) return document.createElement('div');
-    element.dataset.logId = id;
-    if (groupId) element.dataset.groupId = groupId;
-    element.dataset.fullTimestamp = fullTimestamp;
+    // Check if we have a special formatter for this message type
+    const formatters = this._getFormatters();
+    const formatter = formatters[messageType];
 
-    const timestampEl = element.querySelector('.timestamp');
-    if (timestampEl) {
-      timestampEl.title = fullTimestamp;
-      timestampEl.textContent = `${emoji}${verbose ? ` [${timeDisplay}]` : ''}`;
-    }
-
-    const levelEl = element.querySelector('.level');
-    if (levelEl) {
-      if (verbose) {
-        levelEl.className = `level-${level}`;
-        levelEl.textContent = level.toUpperCase().padEnd(8);
+    if (formatter) {
+      let result;
+      if (messageType === 'modelResponse') {
+        // modelResponse needs the full parameter object
+        result = formatter({
+          id,
+          groupId,
+          timestamp,
+          verbose,
+          content: text,
+          level,
+        });
+      } else if (
+        messageType === 'thinking' ||
+        messageType === 'scratchpad' ||
+        messageType === 'toolUse'
+      ) {
+        // These only need text and id
+        result = formatter(text, id);
       } else {
-        levelEl.remove();
+        // File list, missing outputs, latexdiff, statistics need data
+        result = formatter(text, data, id);
+      }
+
+      if (result) {
+        return result;
       }
     }
 
-    const msgEl = element.querySelector('.message');
-    if (msgEl) {
-      msgEl.className = `message-${level}`;
-      msgEl.textContent = text;
-    }
+    // Default formatting for regular log messages
+    const prefix = `<div class="log-line" data-log-id="${id}" ${
+      groupId ? `data-group-id="${groupId}"` : ''
+    } data-full-timestamp="${fullTimestamp}">`;
+    const levelMarkup = verbose
+      ? `<span class="level-${level}">${level.toUpperCase().padEnd(8)}</span> `
+      : '';
 
-    if (messageType === 'thinking' || messageType === 'scratchpad') {
-      const label = messageType === 'thinking' ? 'Thinking' : 'Scratchpad';
-      const special = this._formatSpecialContent(text, label, id);
-      if (special) {
-        return special;
-      }
-    }
+    const htmlMessage =
+      prefix +
+      `<span class="timestamp" title="${fullTimestamp}">${emoji}${
+        verbose ? ` [${timeDisplay}]` : ''
+      }</span> ` +
+      levelMarkup +
+      `<span class="message-${level}">${text}</span>` +
+      `</div>`;
 
-    if (messageType === 'toolUse') {
-      const tool = this._formatToolUse(text, id);
-      if (tool) {
-        return tool;
-      }
-    }
+    // Convert HTML string to DOM element
+    const wrapper = document.createElement('div');
+    wrapper.innerHTML = htmlMessage;
+    return wrapper.firstElementChild;
+  }
 
-    if (messageType === 'modelResponse') {
-      const model = this._formatModelResponse({
-        id,
-        groupId,
-        timestamp,
-        verbose,
-        content: text,
-        level,
-      });
-      if (model) {
-        return model;
-      }
-    }
+  _formatSpecialContent(content, contentType, logId) {
+    const parsedMarkdown = this._processMarkdownContent(content);
+    let element = createFromTemplate('specialDetailsTemplate');
+    if (!element) element = document.createElement('div');
 
-    if (messageType === 'fileList') {
-      const list = this._formatFileList(text, data, id);
-      if (list) {
-        return list;
-      }
-    }
+    const isThinking = contentType.includes('Thinking');
+    const labelText = isThinking ? 'Thinking' : 'Scratchpad';
+    const icon = isThinking ? 'codicon-lightbulb' : 'codicon-pencil';
 
-    if (messageType === 'missingOutputs') {
-      const missing = this._formatMissingOutputs(text, data, id);
-      if (missing) {
-        return missing;
-      }
-    }
+    const toggleIcon = element.querySelector('.toggle-icon');
+    if (toggleIcon) toggleIcon.className = `${CHEVRON_RIGHT_CLASS} toggle-icon`;
 
-    if (messageType === 'latexdiff') {
-      const diff = this._formatLatexdiff(text, data, id);
-      if (diff) {
-        return diff;
-      }
-    }
+    const iconElem = element.querySelector('.icon');
+    if (iconElem) iconElem.classList.add(icon);
 
-    if (messageType === 'statistics') {
-      const stats = this._formatStatistics(text, data, id);
-      if (stats) {
-        return stats;
-      }
+    const labelElem = element.querySelector('.label');
+    if (labelElem) labelElem.textContent = labelText;
+
+    const contentElem = element.querySelector('.special-content');
+    if (contentElem) {
+      contentElem.innerHTML = parsedMarkdown;
+      if (logId) contentElem.dataset.logId = logId;
     }
 
     return element;
   }
 
-  _formatSpecialContent(content, contentType, logId) {
-    try {
-      const parsedMarkdown = this._processMarkdownContent(content);
-      let element = createFromTemplate('specialDetailsTemplate');
-      if (!element) element = document.createElement('div');
-
-      const isThinking = contentType.includes('Thinking');
-      const labelText = isThinking ? 'Thinking' : 'Scratchpad';
-      const icon = isThinking ? 'codicon-lightbulb' : 'codicon-pencil';
-
-      const toggleIcon = element.querySelector('.toggle-icon');
-      if (toggleIcon)
-        toggleIcon.className = `${CHEVRON_RIGHT_CLASS} toggle-icon`;
-
-      const iconElem = element.querySelector('.icon');
-      if (iconElem) iconElem.classList.add(icon);
-
-      const labelElem = element.querySelector('.label');
-      if (labelElem) labelElem.textContent = labelText;
-
-      const contentElem = element.querySelector('.special-content');
-      if (contentElem) {
-        contentElem.innerHTML = parsedMarkdown;
-        if (logId) contentElem.dataset.logId = logId;
-      }
-
-      return element;
-    } catch (e) {
-      console.error('Error parsing markdown:', e);
-      return null;
-    }
-  }
-
   _formatToolUse(content, logId) {
+    const element = createFromTemplate('toolUseTemplate');
+    if (!element) return null;
+    let formattedContent;
     try {
-      const element = createFromTemplate('toolUseTemplate');
-      if (!element) return null;
-      let formattedContent;
-      try {
-        // Try to parse as JSON first - don't decode HTML entities
-        const parsed = JSON.parse(content);
+      // Try to parse as JSON first - don't decode HTML entities
+      const parsed = JSON.parse(content);
 
-        // Check if this is the new combined format
-        if (parsed.tool && parsed.input && parsed.output) {
-          // Format combined tool input/output
-          const toolName = parsed.tool;
-          const inputJson = JSON.stringify(parsed.input, null, 2);
-          const outputJson = JSON.stringify(parsed.output, null, 2);
+      // Check if this is the new combined format
+      if (parsed.tool && parsed.input && parsed.output) {
+        // Format combined tool input/output
+        const toolName = parsed.tool;
+        const inputJson = JSON.stringify(parsed.input, null, 2);
+        const outputJson = JSON.stringify(parsed.output, null, 2);
 
-          formattedContent = `
-            <div class="tool-use-section">
-              <div class="tool-use-label">${toolName}</div>
-              <div class="tool-use-subsection">
-                <span class="tool-use-sublabel">Input:</span>
-                <pre>${inputJson}</pre>
-              </div>
+        formattedContent = `
+          <div class="tool-use-section">
+            <div class="tool-use-label">${toolName}</div>
+            <div class="tool-use-subsection">
+              <span class="tool-use-sublabel">Input:</span>
+              <pre>${inputJson}</pre>
             </div>
-            <hr class="tool-use-separator">
-            <div class="tool-use-section">
-              <div class="tool-use-subsection">
-                <span class="tool-use-sublabel">Output:</span>
-                <pre>${outputJson}</pre>
-              </div>
-            </div>`;
-        } else {
-          // Legacy format - just display as before
-          formattedContent = `<pre>${JSON.stringify(parsed, null, 2)}</pre>`;
-        }
-      } catch {
-        // If not valid JSON, just display as-is in a pre block
-        // This preserves any HTML entities in error messages
-        formattedContent = `<pre>${content}</pre>`;
+          </div>
+          <hr class="tool-use-separator">
+          <div class="tool-use-section">
+            <div class="tool-use-subsection">
+              <span class="tool-use-sublabel">Output:</span>
+              <pre>${outputJson}</pre>
+            </div>
+          </div>`;
+      } else {
+        // Legacy format - just display as before
+        formattedContent = `<pre>${JSON.stringify(parsed, null, 2)}</pre>`;
       }
-
-      const toggleIcon = element.querySelector('.toggle-icon');
-      if (toggleIcon)
-        toggleIcon.className = `${CHEVRON_RIGHT_CLASS} toggle-icon`;
-
-      const contentElem = element.querySelector('.special-content');
-      if (contentElem) {
-        contentElem.innerHTML = formattedContent;
-        if (logId) contentElem.dataset.logId = logId;
-      }
-
-      return element;
-    } catch (e) {
-      console.error('Error parsing tool use content:', e);
-      return null;
+    } catch {
+      // If not valid JSON, just display as-is in a pre block
+      // This preserves any HTML entities in error messages
+      formattedContent = `<pre>${content}</pre>`;
     }
+
+    const toggleIcon = element.querySelector('.toggle-icon');
+    if (toggleIcon) toggleIcon.className = `${CHEVRON_RIGHT_CLASS} toggle-icon`;
+
+    const contentElem = element.querySelector('.special-content');
+    if (contentElem) {
+      contentElem.innerHTML = formattedContent;
+      if (logId) contentElem.dataset.logId = logId;
+    }
+
+    return element;
   }
 
+  /**
+   * Format a model response with markdown rendering
+   * @private
+   * @param {Object} params - Response parameters
+   * @returns {HTMLElement|null} DOM element for the model response
+   *
+   * IMPORTANT: Like the format() method, this uses string-based HTML generation
+   * to maintain precise whitespace control. Templates would be reformatted by
+   * Prettier, causing excessive line breaks in the output.
+   * DO NOT convert to templates without addressing the whitespace issue.
+   */
   _formatModelResponse({ id, groupId, timestamp, verbose, content, level }) {
-    try {
-      const date = new Date(timestamp);
-      const { fullTimestamp, timeDisplay } = this._formatTimestamp(date);
-      const element = createFromTemplate('modelResponseTemplate');
-      if (!element) return null;
+    const date = new Date(timestamp);
+    const { fullTimestamp, timeDisplay } = this._formatTimestamp(date);
+    const groupAttr = groupId ? ` data-group-id="${groupId}"` : '';
+    const prefix = `<div class="log-line" data-log-id="${id}"${groupAttr} data-full-timestamp="${fullTimestamp}">`;
+    const timeMarkup = `<span class="timestamp" title="${fullTimestamp}">${
+      verbose ? `[${timeDisplay}]` : ''
+    }</span>`;
+    const parsedMarkdown = this._processMarkdownContent(content);
+    const html =
+      prefix +
+      `${timeMarkup} <span class="message-${level}"><div class="model-response-content markdown-content">${parsedMarkdown}</div></span></div>`;
 
-      element.dataset.logId = id;
-      if (groupId) element.dataset.groupId = groupId;
-      element.dataset.fullTimestamp = fullTimestamp;
-
-      const timeEl = element.querySelector('.timestamp');
-      if (timeEl) {
-        timeEl.title = fullTimestamp;
-        timeEl.textContent = verbose ? `[${timeDisplay}]` : '';
-      }
-
-      const container = element.querySelector('.message-container');
-      if (container) container.classList.add(`message-${level}`);
-
-      const contentEl = element.querySelector('.model-response-content');
-      if (contentEl)
-        contentEl.innerHTML = this._processMarkdownContent(content);
-
-      return element;
-    } catch (e) {
-      console.error('Error parsing model response:', e);
-      return null;
-    }
+    // Convert HTML string to DOM element
+    const wrapper = document.createElement('div');
+    wrapper.innerHTML = html;
+    return wrapper.firstElementChild;
   }
 
   _formatFileList(content, data, logId) {
-    try {
-      const element = createFromTemplate('fileListDetailsTemplate');
-      if (!element) return null;
-      const contentElem = element.querySelector('.file-list-content');
-      const summaryElem = element.querySelector('.summary-text');
-      const toggleIcon = element.querySelector('.toggle-icon');
-      if (toggleIcon)
-        toggleIcon.className = `${CHEVRON_RIGHT_CLASS} toggle-icon`;
+    const element = createFromTemplate('fileListDetailsTemplate');
+    if (!element) return null;
+    const contentElem = element.querySelector('.file-list-content');
+    const summaryElem = element.querySelector('.summary-text');
+    const toggleIcon = element.querySelector('.toggle-icon');
+    if (toggleIcon) toggleIcon.className = `${CHEVRON_RIGHT_CLASS} toggle-icon`;
 
-      const parsed = data ?? JSON.parse(decodeHtml(content));
+    const parsed = data ?? JSON.parse(decodeHtml(content));
 
-      if (!Array.isArray(parsed)) {
-        console.warn('Missing structured data for file list log entry');
-        return null;
-      }
-
-      // Group files by source for better organization
-      const filesBySource = {};
-      parsed.forEach((f) => {
-        const source = f.source || 'unknown';
-        if (!filesBySource[source]) {
-          filesBySource[source] = [];
-        }
-        filesBySource[source].push(f);
-      });
-
-      let items = '';
-      Object.entries(filesBySource).forEach(([source, files]) => {
-        files.forEach((f) => {
-          const icon = f.ok ? 'codicon-check' : 'codicon-warning';
-          const filePath = String(f.path ?? '');
-          const escaped = encodeHtml(filePath);
-
-          // Extract just the filename for display
-          const fileName = filePath.split('/').pop() || filePath;
-          const fileNameEscaped = encodeHtml(fileName);
-
-          // Build metadata string
-          let metadata = '';
-          if (f.varName) {
-            metadata += `<span class="file-var">[${f.varName}]</span>`;
-          }
-          if (source && source !== 'unknown') {
-            // Simplify source display
-            const sourceDisplay = source
-              .replace('requiredFiles', 'required')
-              .replace('Pattern ', '')
-              .replace(/'/g, '');
-            if (f.internal) {
-              metadata += ` <span class="file-source">(${sourceDisplay}, internal)</span>`;
-            } else {
-              metadata += ` <span class="file-source">(${sourceDisplay})</span>`;
-            }
-          }
-
-          items += `<li title="${escaped}"><i class="codicon ${icon}"></i> <span class="file-link clickable-link" data-file="${escaped}">${fileNameEscaped}</span> ${metadata}</li>`;
-        });
-      });
-
-      const totalFiles = parsed.length;
-      const loadedFiles = parsed.filter((f) => f.ok).length;
-      const failedFiles = totalFiles - loadedFiles;
-
-      let summary = `Files (${loadedFiles}/${totalFiles} loaded`;
-      if (failedFiles > 0) {
-        summary += `, ${failedFiles} not found`;
-      }
-      summary += ')';
-
-      if (summaryElem) summaryElem.textContent = summary;
-      if (contentElem) {
-        contentElem.innerHTML = items;
-        if (logId) contentElem.dataset.logId = logId;
-      }
-
-      return element;
-    } catch (e) {
-      console.error('Error parsing file list:', e);
+    if (!Array.isArray(parsed)) {
+      console.warn('Missing structured data for file list log entry');
       return null;
     }
+
+    // Group files by source for better organization
+    const filesBySource = {};
+    parsed.forEach((f) => {
+      const source = f.source || 'unknown';
+      if (!filesBySource[source]) {
+        filesBySource[source] = [];
+      }
+      filesBySource[source].push(f);
+    });
+
+    let items = '';
+    Object.entries(filesBySource).forEach(([source, files]) => {
+      files.forEach((f) => {
+        const icon = f.ok ? 'codicon-check' : 'codicon-warning';
+        const filePath = String(f.path ?? '');
+        const escaped = encodeHtml(filePath);
+
+        // Extract just the filename for display
+        const fileName = filePath.split('/').pop() || filePath;
+        const fileNameEscaped = encodeHtml(fileName);
+
+        // Build metadata string
+        let metadata = '';
+        if (f.varName) {
+          metadata += `<span class="file-var">[${f.varName}]</span>`;
+        }
+        if (source && source !== 'unknown') {
+          // Simplify source display
+          const sourceDisplay = source
+            .replace('requiredFiles', 'required')
+            .replace('Pattern ', '')
+            .replace(/'/g, '');
+          if (f.internal) {
+            metadata += ` <span class="file-source">(${sourceDisplay}, internal)</span>`;
+          } else {
+            metadata += ` <span class="file-source">(${sourceDisplay})</span>`;
+          }
+        }
+
+        items += `<li title="${escaped}"><i class="codicon ${icon}"></i> <span class="file-link clickable-link" data-file="${escaped}">${fileNameEscaped}</span> ${metadata}</li>`;
+      });
+    });
+
+    const totalFiles = parsed.length;
+    const loadedFiles = parsed.filter((f) => f.ok).length;
+    const failedFiles = totalFiles - loadedFiles;
+
+    let summary = `Files (${loadedFiles}/${totalFiles} loaded`;
+    if (failedFiles > 0) {
+      summary += `, ${failedFiles} not found`;
+    }
+    summary += ')';
+
+    if (summaryElem) summaryElem.textContent = summary;
+    if (contentElem) {
+      contentElem.innerHTML = items;
+      if (logId) contentElem.dataset.logId = logId;
+    }
+
+    return element;
   }
 
   _formatMissingOutputs(content, data, logId) {
-    try {
-      const element = createFromTemplate('missingOutputsDetailsTemplate');
-      if (!element) return null;
-      const contentElem = element.querySelector('.file-list-content');
-      const summaryElem = element.querySelector('.summary-text');
-      const toggleIcon = element.querySelector('.toggle-icon');
-      if (toggleIcon)
-        toggleIcon.className = `${CHEVRON_RIGHT_CLASS} toggle-icon`;
+    const element = createFromTemplate('missingOutputsDetailsTemplate');
+    if (!element) return null;
+    const contentElem = element.querySelector('.file-list-content');
+    const summaryElem = element.querySelector('.summary-text');
+    const toggleIcon = element.querySelector('.toggle-icon');
+    if (toggleIcon) toggleIcon.className = `${CHEVRON_RIGHT_CLASS} toggle-icon`;
 
-      const parsed = data ?? JSON.parse(decodeHtml(content));
+    const parsed = data ?? JSON.parse(decodeHtml(content));
 
-      // Handle both old format (array) and new format (object with missing, xmlFile, documentTag)
-      let missingFiles = [];
-      let xmlFile = null;
-      let documentTag = null;
+    // Handle both old format (array) and new format (object with missing, xmlFile, documentTag)
+    let missingFiles = [];
+    let xmlFile = null;
+    let documentTag = null;
 
-      if (Array.isArray(parsed)) {
-        // Old format: just an array of missing files
-        missingFiles = parsed;
-      } else if (parsed && typeof parsed === 'object') {
-        // New format: object with missing files, XML file, and optional document tag
-        missingFiles = parsed.missing || [];
-        xmlFile = parsed.xmlFile;
-        documentTag = parsed.documentTag;
-      } else {
-        console.warn('Missing structured data for missing outputs log entry');
-        return null;
-      }
+    if (Array.isArray(parsed)) {
+      // Old format: just an array of missing files
+      missingFiles = parsed;
+    } else if (parsed && typeof parsed === 'object') {
+      // New format: object with missing files, XML file, and optional document tag
+      missingFiles = parsed.missing || [];
+      xmlFile = parsed.xmlFile;
+      documentTag = parsed.documentTag;
+    } else {
+      console.warn('Missing structured data for missing outputs log entry');
+      return null;
+    }
 
-      const items = missingFiles
-        .map((f) => {
-          const filePath = String(f);
-          const escaped = encodeHtml(filePath);
-          const fileName = filePath.split('/').pop() || filePath;
-          const fileNameEscaped = encodeHtml(fileName);
-          return `<li title="${escaped}"><i class="codicon codicon-warning"></i> <span class="file-link clickable-link" data-file="${escaped}">${fileNameEscaped}</span></li>`;
-        })
-        .join('');
+    const items = missingFiles
+      .map((f) => {
+        const filePath = String(f);
+        const escaped = encodeHtml(filePath);
+        const fileName = filePath.split('/').pop() || filePath;
+        const fileNameEscaped = encodeHtml(fileName);
+        return `<li title="${escaped}"><i class="codicon codicon-warning"></i> <span class="file-link clickable-link" data-file="${escaped}">${fileNameEscaped}</span></li>`;
+      })
+      .join('');
 
-      // Add XML file link if available
-      let xmlLink = '';
-      if (xmlFile) {
-        const xmlEscaped = encodeHtml(xmlFile);
-        const xmlFileName = xmlFile.split('/').pop() || xmlFile;
-        const xmlFileNameEscaped = encodeHtml(xmlFileName);
-        const tagInfo = documentTag
-          ? `<span class="document-tag">(Expected &lt;${encodeHtml(documentTag)}&gt; block)</span>`
-          : '';
-        xmlLink = `<div class="xml-link-container">
+    // Add XML file link if available
+    let xmlLink = '';
+    if (xmlFile) {
+      const xmlEscaped = encodeHtml(xmlFile);
+      const xmlFileName = xmlFile.split('/').pop() || xmlFile;
+      const xmlFileNameEscaped = encodeHtml(xmlFileName);
+      const tagInfo = documentTag
+        ? `<span class="document-tag">(Expected &lt;${encodeHtml(documentTag)}&gt; block)</span>`
+        : '';
+      xmlLink = `<div class="xml-link-container">
           <i class="codicon codicon-file-code"></i>
           <span>Open XML to check tag consistency:</span>
           <span class="file-link clickable-link" data-file="${xmlEscaped}">${xmlFileNameEscaped}</span>
           ${tagInfo}
         </div>`;
-      }
-
-      if (missingFiles.length === 0 && xmlFile) {
-        const wrapper = document.createElement('div');
-        wrapper.innerHTML = xmlLink;
-        return wrapper.firstElementChild;
-      }
-
-      const summary = `Missing outputs (${missingFiles.length})`;
-
-      if (summaryElem) summaryElem.textContent = summary;
-      if (contentElem) {
-        contentElem.innerHTML = items;
-        if (logId) contentElem.dataset.logId = logId;
-      }
-      if (xmlLink && element) {
-        const div = document.createElement('div');
-        div.innerHTML = xmlLink;
-        element.appendChild(div.firstElementChild);
-      }
-
-      return element;
-    } catch (e) {
-      console.error('Error parsing missing outputs:', e);
-      return null;
     }
+
+    if (missingFiles.length === 0 && xmlFile) {
+      const wrapper = document.createElement('div');
+      wrapper.innerHTML = xmlLink;
+      return wrapper.firstElementChild;
+    }
+
+    const summary = `Missing outputs (${missingFiles.length})`;
+
+    if (summaryElem) summaryElem.textContent = summary;
+    if (contentElem) {
+      contentElem.innerHTML = items;
+      if (logId) contentElem.dataset.logId = logId;
+    }
+    if (xmlLink && element) {
+      const div = document.createElement('div');
+      div.innerHTML = xmlLink;
+      element.appendChild(div.firstElementChild);
+    }
+
+    return element;
   }
 
   _formatLatexdiff(content, data, logId) {
-    try {
-      const element = createFromTemplate('latexdiffDetailsTemplate');
-      if (!element) return null;
-      const contentElem = element.querySelector('.latexdiff-content');
-      const summaryElem = element.querySelector('.summary-text');
-      const toggleIcon = element.querySelector('.toggle-icon');
-      if (toggleIcon)
-        toggleIcon.className = `${CHEVRON_DOWN_CLASS} toggle-icon`;
+    const element = createFromTemplate('latexdiffDetailsTemplate');
+    if (!element) return null;
+    const contentElem = element.querySelector('.latexdiff-content');
+    const summaryElem = element.querySelector('.summary-text');
+    const toggleIcon = element.querySelector('.toggle-icon');
+    if (toggleIcon) toggleIcon.className = `${CHEVRON_DOWN_CLASS} toggle-icon`;
 
-      const parsed = data ?? JSON.parse(decodeHtml(content));
-      const entries = Array.isArray(parsed)
-        ? parsed
-        : parsed && typeof parsed === 'object'
-          ? [parsed]
-          : [];
+    const parsed = data ?? JSON.parse(decodeHtml(content));
+    const entries = Array.isArray(parsed)
+      ? parsed
+      : parsed && typeof parsed === 'object'
+        ? [parsed]
+        : [];
 
-      if (entries.length === 0) {
-        return null;
-      }
-
-      let items = '';
-      entries.forEach((d) => {
-        const basePath = String(d.base ?? '');
-        const revisedPath = String(d.revised ?? '');
-        const outputPath = String(d.output ?? '');
-        const msg = d.message ? String(d.message) : '';
-
-        const baseEsc = encodeHtml(basePath);
-        const revisedEsc = encodeHtml(revisedPath);
-        const outputEsc = encodeHtml(outputPath);
-
-        const baseName = basePath.split('/').pop() || basePath;
-        const revisedName = revisedPath.split('/').pop() || revisedPath;
-
-        let icon = 'codicon-question';
-        if (d.status === 'success') {
-          icon = 'codicon-check';
-        } else if (d.status === 'error') {
-          icon = 'codicon-error';
-        }
-
-        const titleAttr = msg ? ` title="${encodeHtml(msg)}"` : '';
-
-        items += `<li><i class="codicon ${icon}"${titleAttr}></i> <span class="file-link clickable-link" data-file="${baseEsc}">${encodeHtml(
-          baseName,
-        )}</span> <span class="arrow">&rarr;</span> <span class="file-link clickable-link" data-file="${revisedEsc}">${encodeHtml(
-          revisedName,
-        )}</span> (<span class="file-link clickable-link" data-file="${outputEsc}">diff</span>)</li>`;
-      });
-
-      const summary =
-        entries.length === 1
-          ? 'Latexdiff result'
-          : `Latexdiff results (${entries.length})`;
-
-      if (summaryElem) summaryElem.textContent = summary;
-      if (contentElem) {
-        contentElem.innerHTML = items;
-        if (logId) contentElem.dataset.logId = logId;
-      }
-
-      return element;
-    } catch (e) {
-      console.error('Error parsing latexdiff entry:', e);
+    if (entries.length === 0) {
       return null;
     }
+
+    let items = '';
+    entries.forEach((d) => {
+      const basePath = String(d.base ?? '');
+      const revisedPath = String(d.revised ?? '');
+      const outputPath = String(d.output ?? '');
+      const msg = d.message ? String(d.message) : '';
+
+      const baseEsc = encodeHtml(basePath);
+      const revisedEsc = encodeHtml(revisedPath);
+      const outputEsc = encodeHtml(outputPath);
+
+      const baseName = basePath.split('/').pop() || basePath;
+      const revisedName = revisedPath.split('/').pop() || revisedPath;
+
+      let icon = 'codicon-question';
+      if (d.status === 'success') {
+        icon = 'codicon-check';
+      } else if (d.status === 'error') {
+        icon = 'codicon-error';
+      }
+
+      const titleAttr = msg ? ` title="${encodeHtml(msg)}"` : '';
+
+      items += `<li><i class="codicon ${icon}"${titleAttr}></i> <span class="file-link clickable-link" data-file="${baseEsc}">${encodeHtml(
+        baseName,
+      )}</span> <span class="arrow">&rarr;</span> <span class="file-link clickable-link" data-file="${revisedEsc}">${encodeHtml(
+        revisedName,
+      )}</span> (<span class="file-link clickable-link" data-file="${outputEsc}">diff</span>)</li>`;
+    });
+
+    const summary =
+      entries.length === 1
+        ? 'Latexdiff result'
+        : `Latexdiff results (${entries.length})`;
+
+    if (summaryElem) summaryElem.textContent = summary;
+    if (contentElem) {
+      contentElem.innerHTML = items;
+      if (logId) contentElem.dataset.logId = logId;
+    }
+
+    return element;
   }
 
   _formatStatistics(content, data, logId) {
-    try {
-      const element = createFromTemplate('statisticsDetailsTemplate');
-      if (!element) return null;
-      const contentElem = element.querySelector('.statistics-content');
-      const toggleIcon = element.querySelector('.toggle-icon');
-      if (toggleIcon)
-        toggleIcon.className = `${CHEVRON_DOWN_CLASS} toggle-icon`;
-      const parsed = data;
-      if (!parsed || typeof parsed !== 'object') {
-        return null;
-      }
-
-      const items = [];
-      const pushItem = (icon, label, value, suffix = '') => {
-        items.push(
-          `<span class="stat-item" title="${label}"><i class="codicon ${icon}"></i> ${value}${suffix}</span>`,
-        );
-      };
-
-      if (parsed.inputTokens !== undefined) {
-        pushItem(
-          'codicon-arrow-up',
-          'Input tokens',
-          formatTokens(parsed.inputTokens),
-        );
-      }
-      if (parsed.outputTokens !== undefined) {
-        pushItem(
-          'codicon-arrow-down',
-          'Output tokens',
-          formatTokens(parsed.outputTokens),
-        );
-      }
-      if (parsed.cacheReadInputTokens !== undefined) {
-        pushItem(
-          'codicon-history',
-          'Cache hits',
-          formatTokens(parsed.cacheReadInputTokens),
-        );
-      }
-      if (parsed.cacheCreationInputTokens !== undefined) {
-        pushItem(
-          'codicon-save',
-          'Cache writes',
-          formatTokens(parsed.cacheCreationInputTokens),
-        );
-      }
-      if (parsed.percentageCached !== undefined) {
-        pushItem(
-          'codicon-graph-line',
-          'Cached %',
-          `${parsed.percentageCached.toFixed(2)}%`,
-        );
-      }
-      if (parsed.reasoningTokens !== undefined) {
-        pushItem(
-          'codicon-comment-discussion',
-          'Reasoning tokens',
-          formatTokens(parsed.reasoningTokens),
-        );
-      }
-      if (parsed.toolUseTokens !== undefined) {
-        pushItem(
-          'codicon-tools',
-          'Tool tokens',
-          formatTokens(parsed.toolUseTokens),
-        );
-      }
-      if (parsed.elapsedTime !== undefined) {
-        pushItem('codicon-clock', 'Elapsed time', parsed.elapsedTime, 's');
-      }
-      if (parsed.cost !== undefined) {
-        pushItem('codicon-rocket', 'Cost', `$${parsed.cost.toFixed(3)}`);
-      }
-
-      if (contentElem) {
-        contentElem.innerHTML = items.join('');
-        if (logId) contentElem.dataset.logId = logId;
-      }
-
-      return element;
-    } catch (e) {
-      console.error('Error parsing statistics:', e);
+    // Note: content parameter kept for consistency with other formatters but not used
+    const element = createFromTemplate('statisticsDetailsTemplate');
+    if (!element) return null;
+    const contentElem = element.querySelector('.statistics-content');
+    const toggleIcon = element.querySelector('.toggle-icon');
+    if (toggleIcon) toggleIcon.className = `${CHEVRON_DOWN_CLASS} toggle-icon`;
+    const parsed = data;
+    if (!parsed || typeof parsed !== 'object') {
       return null;
     }
+
+    const items = [];
+    const pushItem = (icon, label, value, suffix = '') => {
+      items.push(
+        `<span class="stat-item" title="${label}"><i class="codicon ${icon}"></i> ${value}${suffix}</span>`,
+      );
+    };
+
+    if (parsed.inputTokens !== undefined) {
+      pushItem(
+        'codicon-arrow-up',
+        'Input tokens',
+        formatTokens(parsed.inputTokens),
+      );
+    }
+    if (parsed.outputTokens !== undefined) {
+      pushItem(
+        'codicon-arrow-down',
+        'Output tokens',
+        formatTokens(parsed.outputTokens),
+      );
+    }
+    if (parsed.cacheReadInputTokens !== undefined) {
+      pushItem(
+        'codicon-history',
+        'Cache hits',
+        formatTokens(parsed.cacheReadInputTokens),
+      );
+    }
+    if (parsed.cacheCreationInputTokens !== undefined) {
+      pushItem(
+        'codicon-save',
+        'Cache writes',
+        formatTokens(parsed.cacheCreationInputTokens),
+      );
+    }
+    if (parsed.percentageCached !== undefined) {
+      pushItem(
+        'codicon-graph-line',
+        'Cached %',
+        `${parsed.percentageCached.toFixed(2)}%`,
+      );
+    }
+    if (parsed.reasoningTokens !== undefined) {
+      pushItem(
+        'codicon-comment-discussion',
+        'Reasoning tokens',
+        formatTokens(parsed.reasoningTokens),
+      );
+    }
+    if (parsed.toolUseTokens !== undefined) {
+      pushItem(
+        'codicon-tools',
+        'Tool tokens',
+        formatTokens(parsed.toolUseTokens),
+      );
+    }
+    if (parsed.elapsedTime !== undefined) {
+      pushItem('codicon-clock', 'Elapsed time', parsed.elapsedTime, 's');
+    }
+    if (parsed.cost !== undefined) {
+      pushItem('codicon-rocket', 'Cost', `$${parsed.cost.toFixed(3)}`);
+    }
+
+    if (contentElem) {
+      contentElem.innerHTML = items.join('');
+      if (logId) contentElem.dataset.logId = logId;
+    }
+
+    return element;
   }
 }
 
@@ -772,6 +789,36 @@ export class TaskGroupHeaderFormatter {
         durationElem.textContent = this._formatDuration(durationMs);
       } else {
         durationElem.remove();
+      }
+    }
+
+    // Add usage information if available
+    if (group.usage) {
+      const { inputTokens = 0, outputTokens = 0, cost = 0 } = group.usage;
+      const usageDisplay =
+        `<span class="group-usage"><i class="codicon codicon-arrow-up"></i> ${formatTokens(inputTokens)}, ` +
+        `<i class="codicon codicon-arrow-down"></i> ${formatTokens(outputTokens)}, ` +
+        `$${cost.toFixed(3)}</span>`;
+
+      const bulletMarkup =
+        '<i class="codicon codicon-circle-small-filled group-bullet"></i>';
+
+      // Add usage and bullet based on level
+      const timeSpan = header.querySelector('.group-time');
+      if (timeSpan) {
+        if (level.headerOrder === 'time-first') {
+          // For root level: time → bullet → usage
+          timeSpan.insertAdjacentHTML(
+            'afterend',
+            usageDisplay ? `${bulletMarkup}${usageDisplay}` : '',
+          );
+        } else {
+          // For nested level: usage → bullet → time
+          timeSpan.insertAdjacentHTML(
+            'beforebegin',
+            usageDisplay ? `${usageDisplay}${bulletMarkup}` : '',
+          );
+        }
       }
     }
 
