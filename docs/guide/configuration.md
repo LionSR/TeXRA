@@ -198,7 +198,7 @@ Control logging behavior:
 ```
 
 - `debugMode`: Show detailed debug messages in the logger view
-- `saveMessageObjects`: Save message JSON objects to files before API calls (for debugging)
+- `saveMessageObjects`: Save message JSON objects to files before API calls (for debugging, including tool use cycles)
 
 ## Environment-Specific Configuration
 
