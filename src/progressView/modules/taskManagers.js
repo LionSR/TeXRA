@@ -49,9 +49,7 @@ export class TaskGroupManager {
     detailsElem.id = `group-${group.id}`;
 
     // Create the header element as a <summary>
-    const headerTemplate = document.createElement('template');
-    headerTemplate.innerHTML = this.headerFormatter.create(group);
-    const headerElement = headerTemplate.content.firstElementChild;
+    const headerElement = this.headerFormatter.create(group);
 
     // Create a container for the group's messages
     const groupContainer = document.createElement('div');
@@ -310,9 +308,7 @@ export class LogEntryManager {
         `group-content-${logMessage.groupId}`,
       );
       if (groupContent) {
-        const messageElement = document.createElement('div');
-        messageElement.innerHTML = this.entryFormatter.format(logMessage);
-        const logLineElement = messageElement.firstElementChild;
+        const logLineElement = this.entryFormatter.format(logMessage);
 
         // Extract timestamp from the message for chronological ordering
         const msgDate = new Date(logMessage.timestamp);
@@ -376,9 +372,8 @@ export class LogEntryManager {
   update(logMessage) {
     const existing = document.querySelector(`[data-log-id="${logMessage.id}"]`);
     if (existing) {
-      const wrapper = document.createElement('div');
-      wrapper.innerHTML = this.entryFormatter.format(logMessage);
-      existing.replaceWith(wrapper.firstElementChild);
+      const newEl = this.entryFormatter.format(logMessage);
+      existing.replaceWith(newEl);
     }
   }
 }
