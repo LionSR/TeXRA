@@ -964,4 +964,21 @@ export class ModelHandlerAnthropic extends ModelHandler<
     }
     return null;
   }
+
+  createFollowUpMessage(
+    id: string,
+    _name: string,
+    result: Record<string, unknown>,
+  ): any {
+    return {
+      role: 'user',
+      content: [
+        {
+          type: 'tool_result',
+          tool_use_id: id,
+          content: JSON.stringify(result),
+        },
+      ],
+    };
+  }
 }

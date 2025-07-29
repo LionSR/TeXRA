@@ -855,6 +855,18 @@ export class ModelHandlerOpenAI extends ModelHandler<
     return null;
   }
 
+  createFollowUpMessage(
+    id: string,
+    _name: string,
+    result: Record<string, unknown>,
+  ): any {
+    return {
+      role: 'tool',
+      tool_call_id: id,
+      content: JSON.stringify(result),
+    };
+  }
+
   /**
    * Calculates the approximate number of tokens for a given set of messages and system prompt
    * using gpt-tokenizer. This is an estimation and might not perfectly match OpenAI's
