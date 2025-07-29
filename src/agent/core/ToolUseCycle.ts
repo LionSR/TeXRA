@@ -99,7 +99,13 @@ export async function runToolUseCycle(
     }
     if (usage) {
       const normalized = modelHandler.computeResponseUsage(usage, responseTime);
-      logger.statistics(normalized, groupId);
+      const stats = {
+        inputTokens: normalized.totalInputTokens,
+        outputTokens: normalized.totalOutputTokens,
+        cost: normalized.cost,
+        elapsedTime: normalized.responseTime,
+      };
+      logger.statistics(stats, groupId);
     }
 
     if (!toolInfo || stopReason === 'end_turn') {
