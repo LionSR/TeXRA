@@ -9,6 +9,7 @@ export type OpenAIFinishReason =
   | 'stop'
   | 'length'
   | 'tool_calls'
+  | 'tool_use'
   | 'content_filter'
   | 'function_call'
   | null;
