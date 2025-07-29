@@ -43,7 +43,7 @@ export interface LogMessageData {
     | 'missingOutputs'
     | 'latexdiff'
     | 'statistics'
-    | 'toolOutput'
+    | 'modelResponse'
     | 'toolUse'
     | 'internal';
   /** Whether verbose details should be displayed */
