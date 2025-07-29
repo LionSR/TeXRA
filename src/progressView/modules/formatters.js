@@ -594,7 +594,12 @@ export class LogEntryFormatter {
     if (xmlLink && element) {
       const div = document.createElement('div');
       div.innerHTML = xmlLink;
-      element.appendChild(div.firstElementChild);
+      const xmlElement = div.firstElementChild;
+      if (xmlElement) {
+        element.appendChild(xmlElement);
+      } else {
+        console.error('Failed to create XML link element from HTML:', xmlLink);
+      }
     }
 
     return element;
