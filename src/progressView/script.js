@@ -25,6 +25,15 @@ document.addEventListener('DOMContentLoaded', () => {
     'bulletTemplate',
     'streamTabTemplate',
     'roundHeaderTemplate',
+    'logLineTemplate',
+    'specialDetailsTemplate',
+    'toolUseTemplate',
+    'modelResponseTemplate',
+    'fileListDetailsTemplate',
+    'missingOutputsDetailsTemplate',
+    'latexdiffDetailsTemplate',
+    'statisticsDetailsTemplate',
+    'groupHeaderTemplate',
   ]);
   initializeIconButtons();
   progressViewDomHandler.toolbar.render();
