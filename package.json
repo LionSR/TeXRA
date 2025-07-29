@@ -975,6 +975,11 @@
         "category": "TeXRA"
       },
       {
+        "command": "texra.testWolframTool",
+        "title": "Test Wolfram Tool",
+        "category": "TeXRA"
+      },
+      {
         "command": "texra.wolframScriptExecute",
         "title": "Execute Wolfram Language Code",
         "category": "TeXRA"
@@ -1250,6 +1255,7 @@
     "tar": "^7.4.3",
     "winston": "^3.17.0",
     "yaml": "^2.8.0",
-    "zod": "^3.25.76"
+    "zod": "^3.25.76",
+    "zod-to-json-schema": "^3.24.6"
   }
 }
