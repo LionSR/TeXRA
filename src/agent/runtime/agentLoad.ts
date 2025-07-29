@@ -124,10 +124,13 @@ export async function loadAgentSettingAndPrompts(
             output.push(...resolveSets(ToolSets[item], visited));
             visited.delete(item);
           } else if (typeof item === 'string') {
-            if (!DEFAULT_TOOL_REGISTRY[item]) {
+            const tool = DEFAULT_TOOL_REGISTRY[item];
+            if (!tool) {
               logger.warn(CHANNEL, `Tool "${item}" not found in registry`);
+              output.push({ name: item });
+            } else {
+              output.push(tool.definition);
             }
-            output.push({ name: item });
           } else {
             if (!DEFAULT_TOOL_REGISTRY[item.name]) {
               logger.warn(CHANNEL, `Tool "${item.name}" not found in registry`);
