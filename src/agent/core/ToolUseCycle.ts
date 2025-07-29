@@ -63,6 +63,7 @@ export async function runToolUseCycle(
     const abortController = new AbortController();
     setAbortController(abortController);
     let response: any;
+    const startTime = Date.now();
     try {
       response = await modelHandler.createResponse(
         client,
@@ -76,6 +77,7 @@ export async function runToolUseCycle(
     } finally {
       setAbortController(null);
     }
+    const responseTime = (Date.now() - startTime) / 1000;
     if (!response) {
       break;
     }
@@ -96,7 +98,14 @@ export async function runToolUseCycle(
       logger.info(encodeHtml(text), groupId);
     }
     if (usage) {
-      logger.statistics(usage, groupId);
+      const normalized = modelHandler.computeResponseUsage(usage, responseTime);
+      const stats = {
+        inputTokens: normalized.totalInputTokens,
+        outputTokens: normalized.totalOutputTokens,
+        cost: normalized.cost,
+        elapsedTime: normalized.responseTime,
+      };
+      logger.statistics(stats, groupId);
     }
 
     if (!toolInfo || stopReason === 'end_turn') {
