@@ -1,5 +1,4 @@
 // Local imports - model types
-import type { ToolDefinition } from '@model';
 import { ToolDefinitionSchema } from '@model';
 import { z } from 'zod';
 

@@ -4,6 +4,7 @@ export class ToolResult {
   base64Image?: string;
   system?: string;
   isError: boolean;
+  diagnostics?: any; // Additional error details like validation issues
 
   constructor({
     output,
@@ -11,18 +12,21 @@ export class ToolResult {
     base64Image,
     system,
     isError = false,
+    diagnostics,
   }: {
     output?: string;
     error?: string;
     base64Image?: string;
     system?: string;
     isError?: boolean;
+    diagnostics?: any;
   }) {
     this.output = output;
     this.error = error;
     this.base64Image = base64Image;
     this.system = system;
     this.isError = isError;
+    this.diagnostics = diagnostics;
   }
 
   add(other: ToolResult): ToolResult {
@@ -44,6 +48,7 @@ export class ToolResult {
       base64Image: combine(this.base64Image, other.base64Image, false),
       system: combine(this.system, other.system),
       isError: this.isError || other.isError,
+      diagnostics: this.diagnostics || other.diagnostics,
     });
   }
 }
