@@ -3,7 +3,11 @@
 
 // Third-party imports
 import OpenAI from 'openai';
-import { ChatCompletionContentPart } from 'openai/resources/chat/completions';
+import {
+  ChatCompletionContentPart,
+  ChatCompletionAssistantMessageParam,
+  ChatCompletionToolMessageParam,
+} from 'openai/resources/chat/completions';
 import { countTokens } from 'gpt-tokenizer';
 
 // Local imports - utilities
@@ -471,9 +475,11 @@ export class ModelHandlerOpenAI extends ModelHandler<
       Array.isArray(choice.message.tool_calls) ||
       choice.message.function_call
     ) {
+
       // Other provider SDKs (Anthropic, Google, etc.) keep a placeholder
       // message when a tool is invoked. OpenAI omits `content` entirely,
       // so lack of content is not an error in this case.
+
       this.logger.debug('Received tool call without message content');
     } else {
       newResponse = '';
@@ -868,14 +874,32 @@ export class ModelHandlerOpenAI extends ModelHandler<
 
   createFollowUpMessage(
     id: string,
-    _name: string,
+    name: string,
+    call: any,
     result: Record<string, unknown>,
-  ): any {
-    return {
+  ): [any, any] {
+    const callMsg: ChatCompletionAssistantMessageParam = {
+      role: 'assistant',
+      tool_calls: [
+        {
+          id,
+          type: 'function',
+          function: {
+            name,
+            arguments:
+              typeof call?.arguments === 'string'
+                ? call.arguments
+                : JSON.stringify(call?.input ?? call?.arguments ?? {}),
+          },
+        },
+      ],
+    };
+    const resultMsg: ChatCompletionToolMessageParam = {
       role: 'tool',
       tool_call_id: id,
       content: JSON.stringify(result),
     };
+    return [callMsg, resultMsg];
   }
 
   /**
