@@ -111,7 +111,6 @@ export async function runToolUseCycle(
       parsed = JSON.parse(toolInfo);
     } catch (err) {
       const errorMsg = `Malformed tool JSON: ${err instanceof Error ? err.message : String(err)}`;
-      logger.error(errorMsg, groupId);
 
       // Log the failed tool use attempt
       const toolUseLog = {
@@ -129,13 +128,12 @@ export async function runToolUseCycle(
 
     const id = parsed.id || parsed.tool_use_id || parsed.tool_call_id;
     const name = parsed.name || parsed.function?.name;
-    if (!id || !name) {
-      const errorMsg = `Tool JSON missing id or name: id=${String(id)} name=${String(name)}`;
-      logger.error(errorMsg, groupId);
+    if (!name) {
+      const errorMsg = `Tool JSON missing name: ${JSON.stringify(parsed)}`;
 
       // Log the failed tool use attempt with available info
       const toolUseLog = {
-        tool: name || 'unknown',
+        tool: 'unknown',
         input: parsed,
         output: new ToolResult({ error: errorMsg, isError: true }),
       };
@@ -163,12 +161,38 @@ export async function runToolUseCycle(
       try {
         result = await tool.call(input);
       } catch (err) {
-        result = new ToolResult({
-          error:
+        // Prepare both user-friendly error and detailed diagnostics
+        let errorMessage: string;
+        let diagnostics: any;
+
+        if (err && typeof err === 'object' && 'issues' in err) {
+          // This is a Zod validation error
+          const zodError = err as any;
+          // Simple message for the model/user
+          errorMessage = `${name}: Invalid parameters provided`;
+          // Detailed diagnostics for debugging
+          diagnostics = {
+            type: 'validation_error',
+            issues: zodError.issues,
+            formatted: zodError.issues?.map((issue: any) => ({
+              path: issue.path.join('.'),
+              message: issue.message,
+              expected: issue.expected,
+              received: issue.received,
+              code: issue.code,
+            })),
+          };
+        } else {
+          errorMessage =
             err instanceof Error
               ? `${name}: ${err.message}`
-              : `${name}: ${String(err)}`,
+              : `${name}: ${String(err)}`;
+        }
+
+        result = new ToolResult({
+          error: errorMessage,
           isError: true,
+          diagnostics,
         });
       }
     }
