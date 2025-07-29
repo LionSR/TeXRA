@@ -464,6 +464,14 @@ export class ModelHandlerOpenAI extends ModelHandler<
     let newResponse = '';
     if (choice.message.content) {
       newResponse = choice.message.content.trim();
+    } else if (
+      stopReason === 'tool_calls' ||
+      stopReason === 'tool_use' ||
+      stopReason === 'function_call' ||
+      Array.isArray(choice.message.tool_calls) ||
+      choice.message.function_call
+    ) {
+      this.logger.debug('Received tool call without message content');
     } else {
       newResponse = '';
       this.logger.error(
