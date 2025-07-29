@@ -66,6 +66,8 @@ export class TextEditorTool extends BaseTool<TextEditorInput> {
       description:
         'Edit files using search and replace or insertion operations',
       parameters: zodToJsonSchema(TextEditorInputSchema),
+      type: apiType,
+      max_characters: 10000,
     };
     super(definition, TextEditorInputSchema);
     this.apiType = apiType;

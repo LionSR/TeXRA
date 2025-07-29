@@ -14,6 +14,10 @@ export const ToolDefinitionSchema = z
     description: z.string().optional(),
     /** Parameter schema or provider specific metadata */
     parameters: z.record(z.unknown()).optional(),
+    /** Optional provider specific type, e.g. Anthropic built-in tools */
+    type: z.string().optional(),
+    /** Additional provider specific metadata */
+    max_characters: z.number().optional(),
   })
   .strict();
 
