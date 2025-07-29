@@ -6,9 +6,8 @@
   overflow: visible;
 }
 
-.tool-output-content {
+.model-response-content {
   margin: var(--spacing-small) 0;
-  padding: var(--spacing-small) 0 var(--spacing-medium) var(--spacing-large);
 }
 
 .markdown-content h1,

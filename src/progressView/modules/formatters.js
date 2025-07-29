@@ -178,8 +178,8 @@ export class LogEntryFormatter {
       return this._formatToolUse(htmlMessage, text, id);
     }
 
-    if (messageType === 'toolOutput') {
-      return this._formatToolOutput({
+    if (messageType === 'modelResponse') {
+      return this._formatModelResponse({
         id,
         groupId,
         timestamp,
@@ -214,9 +214,9 @@ export class LogEntryFormatter {
       content = decodeHtml(content);
 
       // Pre-process LaTeX references to protect them from markdown parsing
-      content = content.replace(/\\\\ref\{([^}]+)\}/g, '@@LATEX-REF:$1@@');
-      content = content.replace(/\\\\cref\{([^}]+)\}/g, '@@LATEX-CREF:$1@@');
-      content = content.replace(/\\\\eqref\{([^}]+)\}/g, '@@LATEX-EQREF:$1@@');
+      content = content.replace(/\\ref\{([^}]+)\}/g, '@@LATEX-REF:$1@@');
+      content = content.replace(/\\cref\{([^}]+)\}/g, '@@LATEX-CREF:$1@@');
+      content = content.replace(/\\eqref\{([^}]+)\}/g, '@@LATEX-EQREF:$1@@');
 
       // Process content as markdown
       let parsedMarkdown = this.md.render(content);
@@ -272,7 +272,7 @@ export class LogEntryFormatter {
     }
   }
 
-  _formatToolOutput({ id, groupId, timestamp, verbose, content, level }) {
+  _formatModelResponse({ id, groupId, timestamp, verbose, content, level }) {
     try {
       const date = new Date(timestamp);
       const fullTimestamp = date.toISOString();
@@ -294,10 +294,10 @@ export class LogEntryFormatter {
       parsedMarkdown = this._restoreLatexReferences(parsedMarkdown);
       const html =
         prefix +
-        `${timeMarkup} <span class="message-${level}"><div class="tool-output-content markdown-content">${parsedMarkdown}</div></span></div>`;
+        `${timeMarkup} <span class="message-${level}"><div class="model-response-content markdown-content">${parsedMarkdown}</div></span></div>`;
       return html;
     } catch (e) {
-      console.error('Error parsing tool output:', e);
+      console.error('Error parsing model response:', e);
       return content;
     }
   }
