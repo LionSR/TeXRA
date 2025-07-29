@@ -93,6 +93,7 @@ export async function runToolUseCycle(
     );
     if (text) {
       logger.debug(`Model response: ${text.slice(0, 100)}`, groupId);
+      logger.info(encodeHtml(text), groupId);
     }
     if (usage) {
       logger.statistics(usage, groupId);
