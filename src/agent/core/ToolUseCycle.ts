@@ -263,6 +263,7 @@ export async function runToolUseCycle(
       parsed,
       resultObj,
       toolState,
+      text,
     );
     messages.push(callMsg, resultMsg);
 
