@@ -161,14 +161,9 @@ userPrefix: |
 ### Tool-Use Agents
 
 Tools live under `src/tools/` and each one defines its input schema with Zod.
-Your YAML can reference individual tools or predefined sets. Sets are expanded
-when the agent configuration is loaded. The `wolframExec` set enables the
-`wolfram` tool for running small Wolfram Language snippets during a run.
-
-The built-in `ToolSetRegistry` maps aliases to lists of tool definitions. For
-instance, the `file_edit` set expands to `{ name: 'str_replace_editor' }`. Nested sets
-are resolved recursively, and any unknown names trigger a warning during agent
-loading.
+List the desired tools by name in your agent YAML. The registry includes tools
+like `str_replace_editor`, `bash`, `file_op`, `wolfram`, and `web_search` for
+searching the web.
 
 Example:
 
@@ -176,10 +171,11 @@ Example:
 settings:
   agentType: toolUse
   tools:
-    - file_edit # expands to the str_replace_editor tool
-    - wolframExec # execute Wolfram Language code
-    - bash # single tool by name
-    - basic_io # adds bash and file_op tools
+    - str_replace_editor
+    - wolfram
+    - bash
+    - file_op
+    - web_search
 ```
 
 The ProgressBoard shows the JSON passed to each tool along with the tool's
