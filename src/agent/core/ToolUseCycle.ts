@@ -5,6 +5,7 @@
 // Local imports - log
 import { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
+import type { ExtendedTokenUsageStats } from '@agent/types/UsageTypes';
 
 // Local imports - agent components
 import type { AgentSetting, AgentPrompt } from './AgentDataclass';
@@ -113,7 +114,7 @@ export async function runToolUseCycle(
     }
     if (usage) {
       const normalized = modelHandler.computeResponseUsage(usage, responseTime);
-      const stats = {
+      const stats: ExtendedTokenUsageStats = {
         inputTokens: normalized.totalInputTokens,
         outputTokens: normalized.totalOutputTokens,
         cost: normalized.cost,
