@@ -13,7 +13,11 @@ import type {
   ResponseFunctionToolCall,
   ResponseInputItem,
 } from 'openai/resources/responses/responses';
-import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
+import type {
+  ChatCompletionMessageParam,
+  ChatCompletionAssistantMessageParam,
+} from 'openai/resources/chat/completions';
+import type { ProviderMessage } from './types/ProviderMessage';
 
 // Local imports - base handler
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
@@ -503,7 +507,16 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
     call: any,
     result: Record<string, unknown>,
     _toolState?: ToolState,
-  ): [any, any] {
+    text?: string,
+  ): any[] {
+    const messages: ProviderMessage[] = [];
+    if (text) {
+      const textMsg: ChatCompletionAssistantMessageParam = {
+        role: 'assistant',
+        content: text,
+      };
+      messages.push(textMsg);
+    }
     const callMsg: ResponseFunctionToolCall = {
       type: 'function_call',
       call_id: id,
@@ -518,6 +531,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
       call_id: id,
       output: JSON.stringify(result),
     };
-    return [callMsg, resultMsg];
+    messages.push(callMsg, resultMsg);
+    return messages;
   }
 }

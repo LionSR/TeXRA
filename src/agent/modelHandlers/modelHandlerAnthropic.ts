@@ -982,10 +982,14 @@ export class ModelHandlerAnthropic extends ModelHandler<
     call: any,
     result: Record<string, unknown>,
     toolState?: ToolState,
-  ): [any, any] {
+    text?: string,
+  ): any[] {
     const content: any[] = [];
     if (toolState?.thinkingBlocks && toolState.thinkingBlocks.length > 0) {
       content.push(...toolState.thinkingBlocks);
+    }
+    if (text) {
+      content.push({ type: 'text', text });
     }
     content.push({
       type: 'tool_use',

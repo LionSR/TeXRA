@@ -962,7 +962,8 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     call: any,
     result: Record<string, unknown>,
     _toolState?: ToolState,
-  ): [any, any] {
+    text?: string,
+  ): any[] {
     const callPart = createPartFromFunctionCall(
       name,
       typeof call?.args === 'object' ? call.args : (call?.input ?? {}),
@@ -971,8 +972,11 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       callPart.functionCall.id = id;
     }
     const resultPart = createPartFromFunctionResponse(id, name, result);
+    const parts = [] as any[];
+    if (text) parts.push({ text });
+    parts.push(callPart);
     return [
-      { role: 'assistant', parts: [callPart] },
+      { role: 'assistant', parts },
       { role: 'user', parts: [resultPart] },
     ];
   }

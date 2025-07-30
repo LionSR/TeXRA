@@ -180,7 +180,8 @@ export interface IModelHandler<
    * @param name - Tool name
    * @param call - Parsed tool call object or input payload
    * @param result - Object with output/error fields
-   * @returns Tuple of [call message, result message]
+   * @param text - Optional assistant text preceding the tool call
+   * @returns Array of provider messages representing the tool call and result
    */
   createFollowUpMessage(
     id: string,
@@ -188,5 +189,6 @@ export interface IModelHandler<
     call: any,
     result: Record<string, unknown>,
     toolState?: ToolState,
-  ): [M, M];
+    text?: string,
+  ): M[];
 }

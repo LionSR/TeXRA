@@ -68,6 +68,9 @@ class MockHandler extends ModelHandlerOpenAIResponse {
     };
   }
   override extractResponse(resp: any): [string, any, any] {
+    if (this.call === 1) {
+      return ['intro', resp.usage, 'stop'];
+    }
     return ['', resp.usage, 'stop'];
   }
 }
@@ -134,12 +137,16 @@ describe('runToolUseCycle OpenAIResponse', () => {
     );
     assert.equal(toolEvents.length, 2);
     assert.deepEqual(messages[0], {
+      role: 'assistant',
+      content: 'intro',
+    });
+    assert.deepEqual(messages[1], {
       type: 'function_call',
       call_id: 'c1',
       name: 'echo',
       arguments: '{"value":"hello"}',
     });
-    assert.deepEqual(messages[1], {
+    assert.deepEqual(messages[2], {
       type: 'function_call_output',
       call_id: 'c1',
       output: JSON.stringify({ output: 'hello' }),
