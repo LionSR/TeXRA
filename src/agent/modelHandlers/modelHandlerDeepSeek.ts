@@ -144,6 +144,15 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI {
     _toolState?: ToolState,
     text?: string,
   ): any[] {
+    const argString =
+      typeof call?.function?.arguments === 'string'
+        ? call.function.arguments
+        : typeof call?.arguments === 'string'
+          ? call.arguments
+          : JSON.stringify(
+              call?.input ?? call?.function?.arguments ?? call?.arguments ?? {},
+            );
+
     const callMsg: any = {
       role: 'assistant',
       tool_calls: [
@@ -152,10 +161,7 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI {
           type: 'function',
           function: {
             name,
-            arguments:
-              typeof call?.arguments === 'string'
-                ? call.arguments
-                : JSON.stringify(call?.input ?? call?.arguments ?? {}),
+            arguments: argString,
           },
         },
       ],
