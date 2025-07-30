@@ -502,6 +502,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
     name: string,
     call: any,
     result: Record<string, unknown>,
+    _toolState?: ToolState,
   ): [any, any] {
     const callMsg: ResponseFunctionToolCall = {
       type: 'function_call',

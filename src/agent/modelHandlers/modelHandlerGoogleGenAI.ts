@@ -961,6 +961,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     name: string,
     call: any,
     result: Record<string, unknown>,
+    _toolState?: ToolState,
   ): [any, any] {
     const callPart = createPartFromFunctionCall(
       name,
