@@ -161,45 +161,35 @@ export function getSeverityString(severity: vscode.DiagnosticSeverity): string {
 /**
  * Count diagnostics by severity for a file
  */
-export function countDiagnosticsBySeverity(filePath: string): {
+export function countDiagnosticsBySeverity(diagnostics: vscode.Diagnostic[]): {
   errors: number;
   warnings: number;
   info: number;
   hints: number;
 } {
-  try {
-    const diagnostics = getDiagnostics(filePath);
+  const counts = {
+    errors: 0,
+    warnings: 0,
+    info: 0,
+    hints: 0,
+  };
 
-    const counts = {
-      errors: 0,
-      warnings: 0,
-      info: 0,
-      hints: 0,
-    };
+  diagnostics.forEach((diagnostic) => {
+    switch (diagnostic.severity) {
+      case vscode.DiagnosticSeverity.Error:
+        counts.errors++;
+        break;
+      case vscode.DiagnosticSeverity.Warning:
+        counts.warnings++;
+        break;
+      case vscode.DiagnosticSeverity.Information:
+        counts.info++;
+        break;
+      case vscode.DiagnosticSeverity.Hint:
+        counts.hints++;
+        break;
+    }
+  });
 
-    diagnostics.forEach((diagnostic) => {
-      switch (diagnostic.severity) {
-        case vscode.DiagnosticSeverity.Error:
-          counts.errors++;
-          break;
-        case vscode.DiagnosticSeverity.Warning:
-          counts.warnings++;
-          break;
-        case vscode.DiagnosticSeverity.Information:
-          counts.info++;
-          break;
-        case vscode.DiagnosticSeverity.Hint:
-          counts.hints++;
-          break;
-      }
-    });
-
-    return counts;
-  } catch (err) {
-    logger.error(
-      CHANNEL,
-      `Error counting diagnostics for ${filePath}: ${err instanceof Error ? err.message : String(err)}`,
-    );
-    return { errors: 0, warnings: 0, info: 0, hints: 0 };
-  }
+  return counts;
 }
