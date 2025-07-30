@@ -24,6 +24,7 @@ import { K_SLICE } from '@utils/config';
 import type { ProviderStopReason } from './types/StopReasonTypes';
 import { OPENAI_CHAT_FINISH } from './types/StopReasonTypes';
 import type { ToolDefinition } from '@model';
+import { toOpenAIResponseTools } from './toolConversion';
 
 // import { ResponseCreateParams } from 'openai/src/resources/responses/response';
 // this is incorrect now, but would be nice to use
@@ -99,7 +100,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
     systemPrompt?: string,
     endTag?: string,
     signal?: AbortSignal,
-    _tools?: ToolDefinition[],
+    tools?: ToolDefinition[],
   ): Promise<Response> {
     const useStreaming = this.getStreamingConfig();
 
@@ -171,6 +172,11 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
     }
     if (systemPrompt) {
       params.instructions = systemPrompt;
+    }
+
+    if (tools && tools.length > 0) {
+      params.tools = toOpenAIResponseTools(tools);
+      params.tool_choice = 'auto';
     }
 
     if (this.capabilities.supportsReasoning) {

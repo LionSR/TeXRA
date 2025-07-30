@@ -3,6 +3,7 @@ import type { ToolDefinition } from '@model';
 
 // Third-party imports
 import type { ChatCompletionTool } from 'openai/resources/chat/completions';
+import type { FunctionTool } from 'openai/resources/responses/responses';
 import type {
   Tool as AnthropicTool,
   ToolUnion,
@@ -30,6 +31,17 @@ export function toOpenAITools(defs: ToolDefinition[]): ChatCompletionTool[] {
       description: d.description,
       parameters: d.parameters,
     },
+  }));
+}
+
+/** Convert generic ToolDefinition objects to OpenAI Responses FunctionTool format. */
+export function toOpenAIResponseTools(defs: ToolDefinition[]): FunctionTool[] {
+  return defs.map((d) => ({
+    type: 'function',
+    name: d.name,
+    description: d.description,
+    parameters: d.parameters as Record<string, unknown> | null,
+    strict: true,
   }));
 }
 
