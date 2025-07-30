@@ -894,10 +894,6 @@ export class ModelHandlerOpenAI extends ModelHandler<
     _toolState?: ToolState,
     text?: string,
   ): any[] {
-    const messages: ChatCompletionMessageParam[] = [];
-    if (text) {
-      messages.push({ role: 'assistant', content: [{ type: 'text', text }] });
-    }
     const callMsg: ChatCompletionAssistantMessageParam = {
       role: 'assistant',
       tool_calls: [
@@ -914,13 +910,15 @@ export class ModelHandlerOpenAI extends ModelHandler<
         },
       ],
     };
+    if (text) {
+      callMsg.content = [{ type: 'text', text }];
+    }
     const resultMsg: ChatCompletionToolMessageParam = {
       role: 'tool',
       tool_call_id: id,
       content: JSON.stringify(result),
     };
-    messages.push(callMsg, resultMsg);
-    return messages;
+    return [callMsg, resultMsg];
   }
 
   /**
