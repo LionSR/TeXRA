@@ -7,6 +7,7 @@ import {
   ChatCompletionContentPart,
   ChatCompletionAssistantMessageParam,
   ChatCompletionToolMessageParam,
+  ChatCompletionMessageParam,
 } from 'openai/resources/chat/completions';
 import { countTokens } from 'gpt-tokenizer';
 
@@ -40,6 +41,7 @@ import { MESSAGE_TYPES } from '@logger/messageTypes';
  * OpenAI-specific handlers.
  */
 export class ModelHandlerOpenAI extends ModelHandler<
+  ChatCompletionMessageParam,
   ExtendedCompletionUsage | null,
   OpenAIAPIResponseUsage
 > {
