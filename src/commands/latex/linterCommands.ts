@@ -5,7 +5,11 @@ import * as vscode from 'vscode';
 import * as logger from '@logger/logUtils';
 
 // Local imports - utils
-import { getLinterMessages, getSeverityString } from '@frontend/latex/linter';
+import {
+  getLinterMessages,
+  getSeverityString,
+  countDiagnosticsBySeverity,
+} from '@frontend/latex/linter';
 import { WorkspaceFS } from '@utils/files';
 
 // Local imports - core
@@ -96,29 +100,7 @@ export async function handleCountLinterMessages(): Promise<void> {
     const messages = await getLinterMessages(relativePath);
 
     // Count by severity
-    const counts = {
-      errors: 0,
-      warnings: 0,
-      info: 0,
-      hints: 0,
-    };
-
-    messages.forEach((msg) => {
-      switch (msg.severity) {
-        case vscode.DiagnosticSeverity.Error:
-          counts.errors++;
-          break;
-        case vscode.DiagnosticSeverity.Warning:
-          counts.warnings++;
-          break;
-        case vscode.DiagnosticSeverity.Information:
-          counts.info++;
-          break;
-        case vscode.DiagnosticSeverity.Hint:
-          counts.hints++;
-          break;
-      }
-    });
+    const counts = countDiagnosticsBySeverity(messages);
 
     const total = counts.errors + counts.warnings + counts.info + counts.hints;
 

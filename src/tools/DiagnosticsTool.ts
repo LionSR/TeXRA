@@ -1,6 +1,8 @@
 import { z } from 'zod';
-import { getLinterMessages } from '@frontend/latex/linter';
-import * as vscode from 'vscode';
+import {
+  getLinterMessages,
+  countDiagnosticsBySeverity,
+} from '@frontend/latex/linter';
 import * as logger from '@logger/logUtils';
 import { BaseTool } from './core/base';
 import { ToolResult, ToolError } from './result';
@@ -38,23 +40,7 @@ export class DiagnosticsTool extends BaseTool<DiagnosticsInput> {
         }
         case 'count': {
           const messages = await getLinterMessages(path);
-          const counts = { errors: 0, warnings: 0, info: 0, hints: 0 };
-          messages.forEach((m) => {
-            switch (m.severity) {
-              case vscode.DiagnosticSeverity.Error:
-                counts.errors++;
-                break;
-              case vscode.DiagnosticSeverity.Warning:
-                counts.warnings++;
-                break;
-              case vscode.DiagnosticSeverity.Information:
-                counts.info++;
-                break;
-              case vscode.DiagnosticSeverity.Hint:
-                counts.hints++;
-                break;
-            }
-          });
+          const counts = countDiagnosticsBySeverity(messages);
           return new ToolResult({ output: JSON.stringify(counts) });
         }
         default:
