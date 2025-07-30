@@ -9,11 +9,16 @@ import { ToolState } from '../../core/ToolState';
 import type { MediaEntry } from '../../utils/mediaTypes';
 import type { ModelConfig, ModelCapabilities, ToolDefinition } from '@model';
 import type { ProviderStopReason } from './StopReasonTypes';
+import type { ProviderMessage } from './ProviderMessage';
 
 /**
  * Common interface implemented by all model handlers.
  */
-export interface IModelHandler<U = any, R = any> {
+export interface IModelHandler<
+  M extends ProviderMessage = ProviderMessage,
+  U = any,
+  R = any,
+> {
   /** Model configuration used by the handler. */
   config: ModelConfig;
 
@@ -49,7 +54,7 @@ export interface IModelHandler<U = any, R = any> {
    */
   createResponse(
     client: any,
-    messages: any[],
+    messages: M[],
     temperature: number,
     systemPrompt?: string,
     endTag?: string,
@@ -63,14 +68,14 @@ export interface IModelHandler<U = any, R = any> {
     userRequest: string,
     mediaFiles?: string[],
     systemPrompt?: string,
-  ): Promise<any[]>;
+  ): Promise<M[]>;
 
   /** Create messages for a follow-up round. */
   createRoundMessages(
-    messages: any[],
+    messages: M[],
     userMessage: string,
     mediaFiles?: string[],
-  ): Promise<any[]>;
+  ): Promise<M[]>;
 
   /** Format media content for provider APIs. */
   createMediaContent(mediaMessage: MediaEntry[]): any[];
@@ -83,7 +88,7 @@ export interface IModelHandler<U = any, R = any> {
 
   /** Handle continuation for models supporting prefill. */
   addContinueMessageWithPrefill(
-    messages: any[],
+    messages: M[],
     stateRound: AgentStateRound,
     toolState: ToolState,
     agentSetting: AgentSetting,
@@ -92,7 +97,7 @@ export interface IModelHandler<U = any, R = any> {
 
   /** Handle continuation for models without prefill. */
   addContinueMessageWithoutPrefill(
-    messages: any[],
+    messages: M[],
     stateRound: AgentStateRound,
     toolState: ToolState,
     agentSetting: AgentSetting,
@@ -103,12 +108,12 @@ export interface IModelHandler<U = any, R = any> {
   initializeOutputAndPrefill(
     agentConfig: AgentConfig,
     agentSetting: AgentSetting,
-    messages: any[],
+    messages: M[],
     toolState: ToolState,
     outputFile: string,
     prefill: string,
     groupId?: string,
-  ): Promise<[boolean, any[]]>;
+  ): Promise<[boolean, M[]]>;
 
   /** Compute the cost for a response. */
   computePrice(responseUsage: U): number;
@@ -118,7 +123,7 @@ export interface IModelHandler<U = any, R = any> {
 
   /** Update messages when prefill is supported. */
   updateMessageContentWithPrefill(
-    messages: any[],
+    messages: M[],
     bestConnector: string,
     newResponse: string,
     toolState: ToolState,
@@ -126,7 +131,7 @@ export interface IModelHandler<U = any, R = any> {
 
   /** Update messages when prefill is not supported. */
   updateMessageContentWithoutPrefill(
-    messages: any[],
+    messages: M[],
     bestConnector: string,
     newResponse: string,
     toolState: ToolState,
@@ -175,5 +180,5 @@ export interface IModelHandler<U = any, R = any> {
     name: string,
     call: any,
     result: Record<string, unknown>,
-  ): [any, any];
+  ): [M, M];
 }
