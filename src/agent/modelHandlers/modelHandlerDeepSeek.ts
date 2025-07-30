@@ -124,8 +124,51 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI {
     return reasoningContent;
   }
 
-  extractToolUse(_responseObject: any): string | null {
+  extractToolUse(responseObject: any): string | null {
+    const toolCalls = responseObject?.choices?.[0]?.message?.tool_calls;
+    if (Array.isArray(toolCalls) && toolCalls.length > 0) {
+      return JSON.stringify(toolCalls[0], null, 2);
+    }
+    const func = responseObject?.choices?.[0]?.message?.function_call;
+    if (func) {
+      return JSON.stringify(func, null, 2);
+    }
     return null;
+  }
+
+  createFollowUpMessage(
+    id: string,
+    name: string,
+    call: any,
+    result: Record<string, unknown>,
+    _toolState?: ToolState,
+    text?: string,
+  ): any[] {
+    const callMsg: any = {
+      role: 'assistant',
+      tool_calls: [
+        {
+          id,
+          type: 'function',
+          function: {
+            name,
+            arguments:
+              typeof call?.arguments === 'string'
+                ? call.arguments
+                : JSON.stringify(call?.input ?? call?.arguments ?? {}),
+          },
+        },
+      ],
+    };
+    if (text) {
+      callMsg.content = text;
+    }
+    const resultMsg = {
+      role: 'tool',
+      tool_call_id: id,
+      content: JSON.stringify(result),
+    };
+    return [callMsg, resultMsg];
   }
 
   /**
