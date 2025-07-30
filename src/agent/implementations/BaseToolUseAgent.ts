@@ -14,6 +14,7 @@ import type { ToolDefinition } from '@model';
 import { DEFAULT_TOOL_REGISTRY } from '@tools/registry';
 import { BaseTool } from '@tools/core/base';
 import { runToolUseCycle } from '../core/ToolUseCycle';
+import { ToolState } from '../core/ToolState';
 import { TOOL_USE_INSTRUCTIONS } from '../utils/toolUsePrompt';
 
 export class BaseToolUseAgent extends BaseAgent {
@@ -77,6 +78,8 @@ export class BaseToolUseAgent extends BaseAgent {
         systemPrompt,
       );
 
+      const toolState = new ToolState();
+
       const resolvedSetting = {
         ...this.agentSetting,
         tools: this.getTools(),
@@ -95,6 +98,7 @@ export class BaseToolUseAgent extends BaseAgent {
           setAbortController: (ctrl) => {
             this.abortController = ctrl;
           },
+          toolState,
         },
         messages,
         this.runGroupId,
