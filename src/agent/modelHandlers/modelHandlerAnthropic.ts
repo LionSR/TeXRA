@@ -19,6 +19,7 @@ import { WorkspaceFS } from '@utils/files';
 import { cleanFileContent } from '@replacement/engine';
 import replacementEngine from '@replacement/engine';
 import type { ProviderStopReason } from './types/StopReasonTypes';
+import { ANTHROPIC_STOP } from './types/StopReasonTypes';
 import xmlUtils from '@utils/text/xmlUtils';
 
 // Local imports - agent components
@@ -407,7 +408,10 @@ export class ModelHandlerAnthropic extends ModelHandler<
     }
 
     // Add end tag if needed
-    if (stopReason === 'stop_sequence' && !newResponse.includes(endTag)) {
+    if (
+      stopReason === ANTHROPIC_STOP.STOP_SEQUENCE &&
+      !newResponse.includes(endTag)
+    ) {
       newResponse += `\n${endTag}`;
     }
 
@@ -857,7 +861,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     );
 
     // Handle Claude 4 refusal stop reason - never continue when model refuses
-    if (stopReason === 'refusal') {
+    if (stopReason === ANTHROPIC_STOP.REFUSAL) {
       this.logger.warn(
         'Model refused to generate content - stopping generation',
       );
@@ -867,10 +871,13 @@ export class ModelHandlerAnthropic extends ModelHandler<
     // We should continue if:
     // 1. We hit the max tokens limit (stopReason === 'max_tokens')
     // 2. AND we don't have an end tag (meaning the response is incomplete)
-    if (stopReason === 'max_tokens' && !hasEndTag(agentSetting, newResponse)) {
+    if (
+      stopReason === ANTHROPIC_STOP.MAX_TOKENS &&
+      !hasEndTag(agentSetting, newResponse)
+    ) {
       return true;
     }
-    if (stopReason === 'stop_sequence') {
+    if (stopReason === ANTHROPIC_STOP.STOP_SEQUENCE) {
       if (!hasEndTag(agentSetting, newResponse)) {
         return true;
       } else {

@@ -23,6 +23,7 @@ import { AgentSetting, hasEndTag } from '../core/AgentDataclass';
 import { AgentStateRound } from '../core/AgentState';
 import { ModelHandler } from './ModelHandler';
 import type { ProviderStopReason } from './types/StopReasonTypes';
+import { OPENAI_CHAT_FINISH } from './types/StopReasonTypes';
 import { toOpenAITools } from './toolConversion';
 import type { ToolDefinition } from '@model';
 import {
@@ -165,7 +166,8 @@ export class ModelHandlerOpenAI extends ModelHandler<
           }
           response = {
             role: 'assistant',
-            finish_reason: 'stop', // there is no good choice it seems unless deepseek models support it;
+            // there is no good choice it seems unless deepseek models support it
+            finish_reason: OPENAI_CHAT_FINISH.STOP,
             // In the future maybe we can count the output tokens to see if it is at the limit approximatelly..
             choices: [
               {
@@ -173,7 +175,7 @@ export class ModelHandlerOpenAI extends ModelHandler<
                   content: content,
                   reasoning_content: reasoning_content,
                 },
-                finish_reason: 'stop',
+                finish_reason: OPENAI_CHAT_FINISH.STOP,
               },
             ],
           };
@@ -186,7 +188,7 @@ export class ModelHandlerOpenAI extends ModelHandler<
             this.logger.warn(
               `Token count output of deepseek model is close to the max output tokens: ${tokenCount} - ${this.config.maxOutputTokens}. Setting finish_reason to length`,
             );
-            response.finish_reason = 'length';
+            response.finish_reason = OPENAI_CHAT_FINISH.LENGTH;
           }
           return response;
         }
@@ -424,9 +426,9 @@ export class ModelHandlerOpenAI extends ModelHandler<
           'Using direct response format (streaming style) as fallback',
         );
         let newResponse = responseObject.content.trim();
-        // Since we don't have a stop reason in this format, assume 'stop'
-        let stopReason = 'stop';
-        // let stopReason = 'length';
+        // Since we don't have a stop reason in this format, assume stop
+        let stopReason = OPENAI_CHAT_FINISH.STOP;
+        // let stopReason = OPENAI_CHAT_FINISH.LENGTH;
         if (responseObject.finish_reason) {
           stopReason = responseObject.finish_reason;
         }
@@ -441,7 +443,11 @@ export class ModelHandlerOpenAI extends ModelHandler<
         };
 
         // Add end tag if response was stopped and tag isn't present
-        if (stopReason === 'stop' && endTag && !newResponse.includes(endTag)) {
+        if (
+          stopReason === OPENAI_CHAT_FINISH.STOP &&
+          endTag &&
+          !newResponse.includes(endTag)
+        ) {
           this.logger.debug(`Adding end tag to response: ${endTag}`);
           newResponse = `${newResponse}\n${endTag}`;
         }
@@ -471,9 +477,9 @@ export class ModelHandlerOpenAI extends ModelHandler<
     if (choice.message.content) {
       newResponse = choice.message.content.trim();
     } else if (
-      stopReason === 'tool_calls' ||
-      stopReason === 'tool_use' ||
-      stopReason === 'function_call' ||
+      stopReason === OPENAI_CHAT_FINISH.TOOL_CALLS ||
+      stopReason === OPENAI_CHAT_FINISH.TOOL_USE ||
+      stopReason === OPENAI_CHAT_FINISH.FUNCTION_CALL ||
       Array.isArray(choice.message.tool_calls) ||
       choice.message.function_call
     ) {
@@ -491,7 +497,11 @@ export class ModelHandlerOpenAI extends ModelHandler<
     }
 
     // Add end tag if response was stopped and tag isn't present
-    if (stopReason === 'stop' && endTag && !newResponse.includes(endTag)) {
+    if (
+      stopReason === OPENAI_CHAT_FINISH.STOP &&
+      endTag &&
+      !newResponse.includes(endTag)
+    ) {
       this.logger.debug(`Adding end tag to response: ${endTag}`);
       newResponse = `${newResponse}\n${endTag}`;
     }
@@ -843,7 +853,10 @@ export class ModelHandlerOpenAI extends ModelHandler<
     newResponse: string,
     agentSetting: AgentSetting,
   ): boolean {
-    return stopReason === 'length' && !hasEndTag(agentSetting, newResponse);
+    return (
+      stopReason === OPENAI_CHAT_FINISH.LENGTH &&
+      !hasEndTag(agentSetting, newResponse)
+    );
   }
 
   /**

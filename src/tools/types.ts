@@ -76,10 +76,6 @@ export interface XMLValidationError extends BaseError {
 }
 
 /**
- * Import the LinterMessage type from linterUtils
- */
-
-/**
  * Standard validation result interface for all agents
  */
 export interface ValidationResult<T extends BaseError | BaseError[]> {
