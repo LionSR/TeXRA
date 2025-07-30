@@ -13,6 +13,13 @@ import type { ProviderMessage } from './ProviderMessage';
 
 /**
  * Common interface implemented by all model handlers.
+ *
+ * @template M - Message type specific to the provider (e.g., MessageParam for Anthropic,
+ *               ChatCompletionMessageParam for OpenAI). Must extend ProviderMessage.
+ * @template U - Usage/statistics type returned by the provider's API response
+ *               (e.g., Usage for Anthropic, CompletionUsage for OpenAI)
+ * @template R - Processed response usage type for internal tracking
+ *               (e.g., AnthropicAPIResponseUsage, OpenAIAPIResponseUsage)
  */
 export interface IModelHandler<
   M extends ProviderMessage = ProviderMessage,
