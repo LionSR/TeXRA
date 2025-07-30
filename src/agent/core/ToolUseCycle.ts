@@ -40,6 +40,8 @@ export interface ToolUseCycleOptions {
   setAbortController: (ctrl: AbortController | null) => void;
   /** Runtime state tracking for tools */
   toolState?: ToolState;
+  /** Name of the model used for this run */
+  modelName?: string;
 }
 
 /**
@@ -60,6 +62,7 @@ export async function runToolUseCycle(
     checkInterruption,
     setAbortController,
     toolState,
+    modelName,
   } = options;
 
   let iteration = 0;
@@ -74,6 +77,7 @@ export async function runToolUseCycle(
       logger,
       continuationCount: iteration,
       baseName: 'tooluse',
+      modelName,
       groupId,
     });
 
