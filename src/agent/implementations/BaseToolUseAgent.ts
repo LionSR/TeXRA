@@ -99,6 +99,7 @@ export class BaseToolUseAgent extends BaseAgent {
             this.abortController = ctrl;
           },
           toolState,
+          modelName: this.agentConfig.model,
         },
         messages,
         this.runGroupId,

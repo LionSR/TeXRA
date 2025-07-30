@@ -94,6 +94,7 @@ export async function runResponseCycle(
       logger,
       continuationCount: stateRound.continuationCount,
       outputFile,
+      modelName: agentConfig.model,
       executionId,
       groupId: taskGroupId,
     });
