@@ -13,6 +13,7 @@ import type {
   ResponseFunctionToolCall,
   ResponseInputItem,
 } from 'openai/resources/responses/responses';
+import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 
 // Local imports - base handler
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
@@ -30,6 +31,12 @@ import type { ToolDefinition } from '@model';
 /**
  * Handler for OpenAI's new Responses API. Uses `previous_response_id` to
  * manage conversation state between calls.
+ *
+ * This class extends ModelHandlerOpenAI to maintain compatibility with the
+ * existing message handling infrastructure while adapting to the Responses API's
+ * different message format. The base class works with ChatCompletionMessageParam[],
+ * but the Responses API requires ResponseInputItem[]. All conversion happens
+ * internally in the createResponse method.
  *
  * Note: PDFs are handled specially - they are converted from image_url format
  * to input_file format with mime_type 'application/pdf' for proper processing.
@@ -69,10 +76,25 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
     );
   }
 
-  /** Create a response using the Responses API. */
+  /**
+   * Create a response using the Responses API.
+   *
+   * IMPORTANT: This method maintains the base class signature for compatibility,
+   * accepting ChatCompletionMessageParam[] even though the Responses API requires
+   * ResponseInputItem[]. The conversion is handled internally to preserve the
+   * inheritance hierarchy and allow seamless integration with the existing infrastructure.
+   *
+   * The conversion handles:
+   * - Text content: 'text' -> 'input_text' or 'output_text' based on role
+   * - Images: 'image_url' -> 'input_image'
+   * - PDFs: Special handling to convert from image_url to input_file format
+   *
+   * @param messages ChatCompletionMessageParam[] from base class methods
+   * @returns Response object from the Responses API
+   */
   async createResponse(
     client: OpenAI,
-    messages: ResponseInputItem[],
+    messages: ChatCompletionMessageParam[],
     temperature: number,
     systemPrompt?: string,
     endTag?: string,
@@ -88,41 +110,43 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
           content:
             typeof msg.content === 'string'
               ? [{ type: 'input_text', text: msg.content }]
-              : msg.content.map((part: any) => {
-                  if (part.type === 'text') {
-                    if (msg.role === 'user') {
-                      return { type: 'input_text', text: part.text };
-                    } else if (msg.role === 'assistant') {
-                      return { type: 'output_text', text: part.text };
-                    } else {
-                      return { type: 'input_text', text: part.text };
+              : Array.isArray(msg.content)
+                ? msg.content.map((part: any) => {
+                    if (part.type === 'text') {
+                      if (msg.role === 'user') {
+                        return { type: 'input_text', text: part.text };
+                      } else if (msg.role === 'assistant') {
+                        return { type: 'output_text', text: part.text };
+                      } else {
+                        return { type: 'input_text', text: part.text };
+                      }
                     }
-                  }
-                  if (part.type === 'image_url') {
-                    const url =
-                      typeof part.image_url === 'string'
-                        ? part.image_url
-                        : part.image_url.url;
+                    if (part.type === 'image_url') {
+                      const url =
+                        typeof part.image_url === 'string'
+                          ? part.image_url
+                          : part.image_url.url;
 
-                    if (url.startsWith('data:application/pdf;base64,')) {
-                      const base64Data = url.replace(
-                        'data:application/pdf;base64,',
-                        '',
-                      );
-                      return {
-                        type: 'input_file',
-                        input_file: {
-                          data: base64Data,
-                          mime_type: 'application/pdf',
-                        },
-                      };
+                      if (url.startsWith('data:application/pdf;base64,')) {
+                        const base64Data = url.replace(
+                          'data:application/pdf;base64,',
+                          '',
+                        );
+                        return {
+                          type: 'input_file',
+                          input_file: {
+                            data: base64Data,
+                            mime_type: 'application/pdf',
+                          },
+                        };
+                      }
+
+                      const detail = part.image_url?.detail ?? 'auto';
+                      return { type: 'input_image', image_url: url, detail };
                     }
-
-                    const detail = part.image_url?.detail ?? 'auto';
-                    return { type: 'input_image', image_url: url, detail };
-                  }
-                  return part;
-                }),
+                    return part;
+                  })
+                : [],
         };
       }
       return msg;
