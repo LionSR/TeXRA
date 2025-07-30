@@ -975,8 +975,12 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     call: any,
     result: Record<string, unknown>,
     _toolState?: ToolState,
-    _text?: string,
-  ): [any, any] {
+    text?: string,
+  ): any[] {
+    const messages: Content[] = [];
+    if (text) {
+      messages.push({ role: 'assistant', parts: [{ text }] });
+    }
     const callPart = createPartFromFunctionCall(
       name,
       typeof call?.args === 'object' ? call.args : (call?.input ?? {}),
@@ -985,10 +989,11 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       callPart.functionCall.id = id;
     }
     const resultPart = createPartFromFunctionResponse(id, name, result);
-    return [
+    messages.push(
       { role: 'assistant', parts: [callPart] },
       { role: 'user', parts: [resultPart] },
-    ];
+    );
+    return messages;
   }
 
   // Assuming containCutOffMessage is available from base class ModelHandler

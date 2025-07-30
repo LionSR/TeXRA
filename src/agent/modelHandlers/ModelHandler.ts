@@ -739,7 +739,7 @@ export abstract class ModelHandler<
     result: Record<string, unknown>,
     toolState?: ToolState,
     text?: string,
-  ): [any, any];
+  ): any[];
 
   /**
    * Creates a log group for model operations with the given name.
