@@ -67,8 +67,8 @@ type InternalMessagePart = {
 // but is compatible with Google's Content type
 interface Message {
   role: string;
-  content?: string | InternalMessagePart[];
-  parts?: Part[];
+  content?: string | InternalMessagePart[]; // Used for internal message representation
+  parts?: Part[]; // Used for Google-specific message format when sending to API
 }
 
 // Helper function
@@ -197,8 +197,8 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
 
     let lastMessageParts: Part[] = [];
     if (lastMessage) {
-      if (Array.isArray((lastMessage as any).parts)) {
-        lastMessageParts = (lastMessage as any).parts as Part[];
+      if (Array.isArray(lastMessage.parts)) {
+        lastMessageParts = lastMessage.parts;
       } else if (Array.isArray(lastMessage.content)) {
         lastMessageParts = convertInternalPartsToGoogleParts(
           lastMessage.content,
