@@ -10,6 +10,10 @@ import {
 } from '@agent/core/ResponseUsage';
 import { ResponseUsage } from 'openai/resources/responses/responses';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/modelHandlerOpenAIResponse';
+import type {
+  TokenUsageStats,
+  ExtendedTokenUsageStats,
+} from '@agent/types/UsageTypes';
 
 /**
  * Handles recording usage statistics to the log and progress view.
@@ -107,46 +111,46 @@ export class UsageMonitor {
         });
       }
 
-      const payload: Record<string, number> = {
+      const cachingStats =
+        this.modelHandler.capabilities.supportsPromptCaching ||
+        this.modelHandler.capabilities.supportsAutoPromptCaching;
+
+      const totalCacheableTokens = cachingStats
+        ? this.modelHandler.capabilities.supportsPromptCaching
+          ? stateGlobal.totalCacheCreationInputTokens +
+            stateGlobal.totalCacheReadInputTokens
+          : stateGlobal.totalInputTokens
+        : 0;
+
+      const percentageCached = cachingStats
+        ? totalCacheableTokens > 0
+          ? (stateGlobal.totalCacheReadInputTokens / totalCacheableTokens) * 100
+          : 0
+        : undefined;
+
+      const baseStats: TokenUsageStats = {
         inputTokens: stateGlobal.totalInputTokens,
         outputTokens: stateGlobal.totalOutputTokens,
-        elapsedTime: Number(stateGlobal.totalResponseTime.toFixed(1)),
         cost: Number(cost.toFixed(3)),
       };
 
-      if (
-        this.modelHandler.capabilities.supportsPromptCaching ||
-        this.modelHandler.capabilities.supportsAutoPromptCaching
-      ) {
-        payload.cacheReadInputTokens = stateGlobal.totalCacheReadInputTokens;
-
-        if (this.modelHandler.capabilities.supportsPromptCaching) {
-          payload.cacheCreationInputTokens =
-            stateGlobal.totalCacheCreationInputTokens;
-        }
-
-        const totalCacheableTokens = this.modelHandler.capabilities
-          .supportsPromptCaching
-          ? stateGlobal.totalCacheCreationInputTokens +
-            stateGlobal.totalCacheReadInputTokens
-          : stateGlobal.totalInputTokens;
-
-        const percentageCached =
-          totalCacheableTokens > 0
-            ? (stateGlobal.totalCacheReadInputTokens / totalCacheableTokens) *
-              100
-            : 0;
-
-        payload.percentageCached = Number(percentageCached.toFixed(2));
-      }
-
-      if (this.modelHandler.capabilities.supportsReasoning) {
-        payload.reasoningTokens = stateGlobal.totalReasoningTokens;
-      }
-
-      if (stateGlobal.totalToolUseTokens > 0) {
-        payload.toolUseTokens = stateGlobal.totalToolUseTokens;
-      }
+      const payload: ExtendedTokenUsageStats = {
+        ...baseStats,
+        elapsedTime: Number(stateGlobal.totalResponseTime.toFixed(1)),
+        ...(cachingStats && {
+          cacheReadInputTokens: stateGlobal.totalCacheReadInputTokens,
+          ...(this.modelHandler.capabilities.supportsPromptCaching && {
+            cacheCreationInputTokens: stateGlobal.totalCacheCreationInputTokens,
+          }),
+          percentageCached: Number((percentageCached ?? 0).toFixed(2)),
+        }),
+        ...(this.modelHandler.capabilities.supportsReasoning && {
+          reasoningTokens: stateGlobal.totalReasoningTokens,
+        }),
+        ...(stateGlobal.totalToolUseTokens > 0 && {
+          toolUseTokens: stateGlobal.totalToolUseTokens,
+        }),
+      };
 
       this.logger.statistics(payload, statsGroupId);
     } catch (error) {
