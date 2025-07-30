@@ -21,6 +21,7 @@ import type { ProviderStopReason } from './types/StopReasonTypes';
 import { ANTHROPIC_STOP, OPENAI_CHAT_FINISH } from './types/StopReasonTypes';
 import { FinishReason } from '@google/genai';
 import type { IModelHandler } from './types/IModelHandler';
+import type { ProviderMessage } from './types/ProviderMessage';
 import { SecretManager, ApiProvider } from '@frontend/secretManager';
 
 // Local imports - agent components
@@ -59,8 +60,11 @@ interface MarkerFlags {
 /**
  * Abstract base class for model-specific handlers that manage API interactions, message processing, and response handling.
  */
-export abstract class ModelHandler<U = any, R = any>
-  implements IModelHandler<U, R>
+export abstract class ModelHandler<
+  M extends ProviderMessage = ProviderMessage,
+  U = any,
+  R = any,
+> implements IModelHandler<M, U, R>
 {
   public config: ModelConfig;
   public capabilities: ModelCapabilities;
@@ -577,7 +581,7 @@ export abstract class ModelHandler<U = any, R = any>
    */
   abstract createResponse(
     client: any,
-    messages: any[],
+    messages: M[],
     temperature: number,
     systemPrompt?: string,
     endTag?: string,
@@ -594,17 +598,17 @@ export abstract class ModelHandler<U = any, R = any>
     userRequest: string,
     mediaFiles?: string[],
     systemPrompt?: string,
-  ): Promise<any[]>;
+  ): Promise<M[]>;
 
   /**
    * Creates messages for follow-up conversation rounds with optional images.
    * @returns Provider-specific message array with new round content
    */
   abstract createRoundMessages(
-    messages: any[],
+    messages: M[],
     userMessage: string,
     mediaFiles?: string[],
-  ): Promise<any[]>;
+  ): Promise<M[]>;
 
   /**
    * Formats image content into provider-specific message format.
@@ -628,7 +632,7 @@ export abstract class ModelHandler<U = any, R = any>
    * Updates messages array and tool state for next turn.
    */
   abstract addContinueMessageWithPrefill(
-    messages: any[],
+    messages: M[],
     stateRound: AgentStateRound,
     toolState: ToolState,
     agentSetting: AgentSetting,
@@ -640,7 +644,7 @@ export abstract class ModelHandler<U = any, R = any>
    * Updates messages array and tool state for next turn.
    */
   abstract addContinueMessageWithoutPrefill(
-    messages: any[],
+    messages: M[],
     stateRound: AgentStateRound,
     toolState: ToolState,
     agentSetting: AgentSetting,
@@ -654,12 +658,12 @@ export abstract class ModelHandler<U = any, R = any>
   abstract initializeOutputAndPrefill(
     agentConfig: AgentConfig,
     agentSetting: AgentSetting,
-    messages: any[],
+    messages: M[],
     toolState: ToolState,
     outputFile: string,
     prefill: string,
     groupId?: string,
-  ): Promise<[boolean, any[]]>;
+  ): Promise<[boolean, M[]]>;
 
   /**
    * Calculates API usage cost based on token counts and provider pricing.
@@ -678,7 +682,7 @@ export abstract class ModelHandler<U = any, R = any>
    * Handles cache control and content formatting.
    */
   abstract updateMessageContentWithPrefill(
-    messages: any[],
+    messages: M[],
     bestConnector: string,
     newResponse: string,
     toolState: ToolState,
@@ -689,7 +693,7 @@ export abstract class ModelHandler<U = any, R = any>
    * Handles cache control and content formatting.
    */
   abstract updateMessageContentWithoutPrefill(
-    messages: any[],
+    messages: M[],
     bestConnector: string,
     newResponse: string,
     toolState: ToolState,

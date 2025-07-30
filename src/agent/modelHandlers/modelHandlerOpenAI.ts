@@ -7,6 +7,7 @@ import {
   ChatCompletionContentPart,
   ChatCompletionAssistantMessageParam,
   ChatCompletionToolMessageParam,
+  ChatCompletionMessageParam,
 } from 'openai/resources/chat/completions';
 import { countTokens } from 'gpt-tokenizer';
 
@@ -41,6 +42,7 @@ import { MESSAGE_TYPES } from '@logger/messageTypes';
  * OpenAI-specific handlers.
  */
 export class ModelHandlerOpenAI extends ModelHandler<
+  ChatCompletionMessageParam,
   ExtendedCompletionUsage | null,
   OpenAIAPIResponseUsage
 > {
@@ -57,7 +59,7 @@ export class ModelHandlerOpenAI extends ModelHandler<
   /** Creates a chat completion with model-specific parameters. */
   async createResponse(
     client: OpenAI,
-    messages: any[],
+    messages: ChatCompletionMessageParam[],
     temperature: number,
     systemPrompt?: string,
     endTag?: string,
