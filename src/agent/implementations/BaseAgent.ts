@@ -8,7 +8,7 @@ import { AgentLogger } from '@logger/AgentLogger';
 import type { AgentConfig } from '../core/AgentConfig';
 import { AgentPrompt, AgentSetting } from '../core/AgentDataclass';
 import { IAgent } from '../core/IAgent';
-import type { IModelHandler } from '../modelHandlers';
+import type { IModelHandler, ModelClient } from '../modelHandlers';
 import { buildUserVars } from '../utils/userVars';
 import { UsageMonitor } from '../utils/UsageMonitor';
 import { AgentStateGlobal } from '../core/AgentState';
@@ -31,7 +31,7 @@ export abstract class BaseAgent implements IAgent {
   protected usageMonitor: UsageMonitor;
   protected runGroupId?: string;
   protected userVars: Record<string, any> = {};
-  protected client: any;
+  protected client!: ModelClient;
   protected isInterrupted = false;
   protected abortController: AbortController | null = null;
   protected executionId?: ExecutionId;

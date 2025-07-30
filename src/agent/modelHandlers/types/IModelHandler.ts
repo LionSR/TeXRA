@@ -9,6 +9,7 @@ import { ToolState } from '../../core/ToolState';
 import type { MediaEntry } from '../../utils/mediaTypes';
 import type { ModelConfig, ModelCapabilities, ToolDefinition } from '@model';
 import type { ProviderStopReason } from './StopReasonTypes';
+import type { ModelClient } from './ModelClient';
 
 /**
  * Common interface implemented by all model handlers.
@@ -36,7 +37,7 @@ export interface IModelHandler<U = any, R = any> {
   setLogger(logger: AgentLogger): void;
 
   /** Retrieve an authenticated client instance. */
-  getClient(): Promise<any>;
+  getClient(): Promise<ModelClient>;
 
   /**
    * Generate a response from the model.
@@ -48,7 +49,7 @@ export interface IModelHandler<U = any, R = any> {
    * @param signal Optional abort signal
    */
   createResponse(
-    client: any,
+    client: ModelClient,
     messages: any[],
     temperature: number,
     systemPrompt?: string,

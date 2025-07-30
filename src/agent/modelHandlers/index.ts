@@ -3,6 +3,7 @@
 // Base class
 export { ModelHandler } from './ModelHandler';
 export type { IModelHandler } from './types/IModelHandler';
+export type { ModelClient } from './types/ModelClient';
 
 // Specific model handler implementations
 export { ModelHandlerAnthropic } from './modelHandlerAnthropic';

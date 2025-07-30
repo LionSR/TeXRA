@@ -9,7 +9,7 @@ import { MESSAGE_TYPES } from '@logger/messageTypes';
 // Local imports - agent components
 import type { AgentSetting, AgentPrompt } from './AgentDataclass';
 import type { ToolDefinition } from '@model';
-import type { IModelHandler } from '../modelHandlers';
+import type { IModelHandler, ModelClient } from '../modelHandlers';
 import { BaseTool } from '@tools/core/base';
 import { ToolResult } from '@tools/result';
 import xmlUtils from '@utils/text/xmlUtils';
@@ -27,7 +27,7 @@ export interface ToolUseCycleOptions {
   /** Logger instance for progress output */
   logger: AgentLogger;
   /** Provider client object */
-  client: any;
+  client: ModelClient;
   /** Registry mapping tool names to implementations */
   toolRegistry: Record<string, BaseTool<any>>;
   /** Check if the agent run has been interrupted */

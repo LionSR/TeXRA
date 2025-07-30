@@ -19,6 +19,7 @@ import { checkMultipleToolsInstalled } from '@utils/system';
 import { getConfig } from '@utils/config';
 import type { ProviderStopReason } from './types/StopReasonTypes';
 import type { IModelHandler } from './types/IModelHandler';
+import type { ModelClient } from './types/ModelClient';
 import { SecretManager, ApiProvider } from '@frontend/secretManager';
 
 // Local imports - agent components
@@ -561,14 +562,14 @@ export abstract class ModelHandler<U = any, R = any>
   }
 
   /** Creates and configures a client instance for the specific model provider. */
-  abstract getClient(): Promise<any>;
+  abstract getClient(): Promise<ModelClient>;
 
   /**
    * Generates a model response using the provider's API.
    * @returns Promise resolving to provider-specific response object
    */
   abstract createResponse(
-    client: any,
+    client: ModelClient,
     messages: any[],
     temperature: number,
     systemPrompt?: string,

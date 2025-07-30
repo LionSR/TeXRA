@@ -26,7 +26,7 @@ import type { AgentConfig } from './AgentConfig';
 import type { AgentSetting, AgentPrompt } from './AgentDataclass';
 import { AgentStateRound, AgentStateGlobal } from './AgentState';
 import { ToolState } from './ToolState';
-import type { IModelHandler } from '@agent/modelHandlers';
+import type { IModelHandler, ModelClient } from '@agent/modelHandlers';
 
 // Shared constants
 import { K_SLICE, REPETITION_DETECTION_THRESHOLD } from '@utils/config';
@@ -42,7 +42,7 @@ export interface ResponseCycleOptions {
   agentPrompt: AgentPrompt;
   userVars: Record<string, any>;
   logger: AgentLogger;
-  client: any;
+  client: ModelClient;
   checkInterruption: () => Promise<boolean> | boolean;
   setAbortController: (ctrl: AbortController | null) => void;
 }

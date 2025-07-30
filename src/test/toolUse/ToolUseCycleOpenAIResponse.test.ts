@@ -14,6 +14,7 @@ import {
   AgentPrompt,
 } from '@agent/core/AgentDataclass';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/modelHandlerOpenAIResponse';
+import OpenAI from 'openai';
 import {
   ModelConfig,
   ModelProvider,
@@ -32,7 +33,7 @@ class EchoTool extends BaseTool<{ value: string }> {
 class MockHandler extends ModelHandlerOpenAIResponse {
   private call = 0;
   async getClient() {
-    return {} as any;
+    return {} as unknown as OpenAI;
   }
   override async createResponse(): Promise<any> {
     this.call++;
@@ -113,7 +114,7 @@ describe('runToolUseCycle OpenAIResponse', () => {
       agentPrompt: prompt,
       userVars: {},
       logger,
-      client: {},
+      client: {} as unknown as OpenAI,
       toolRegistry,
       checkInterruption: () => false,
       setAbortController: () => {},
