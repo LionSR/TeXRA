@@ -1,0 +1,27 @@
+import { strict as assert } from 'assert';
+
+import { toOpenAIResponseTools } from '@agent/modelHandlers/toolConversion';
+import type { ToolDefinition } from '@model';
+
+describe('toOpenAIResponseTools', () => {
+  it('converts tool definitions to Response API format', () => {
+    const defs: ToolDefinition[] = [
+      {
+        name: 'echo',
+        description: 'Echo value',
+        parameters: {
+          type: 'object',
+          properties: { value: { type: 'string' } },
+          required: ['value'],
+          additionalProperties: false,
+        },
+      },
+    ];
+
+    const tools = toOpenAIResponseTools(defs);
+    assert.equal(tools.length, 1);
+    assert.equal(tools[0].type, 'function');
+    assert.equal(tools[0].name, 'echo');
+    assert.deepEqual(tools[0].parameters, defs[0].parameters);
+  });
+});
