@@ -4,6 +4,7 @@
 
 // Local imports
 import { MESSAGE_PREVIEW_LENGTH } from '@utils/config';
+import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 
 /**
  * Creates a skeleton representation of a message object for debugging.
@@ -13,9 +14,9 @@ import { MESSAGE_PREVIEW_LENGTH } from '@utils/config';
  * @returns A simplified message object with truncated content
  */
 export function messageToSkeleton(
-  message: any,
+  message: ProviderMessage | any,
   maxContentLength: number = MESSAGE_PREVIEW_LENGTH,
-): any {
+): ProviderMessage | any {
   if (!message) {
     return null;
   }

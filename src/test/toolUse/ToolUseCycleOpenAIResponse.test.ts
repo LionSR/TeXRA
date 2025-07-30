@@ -8,6 +8,7 @@ import { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import { BaseTool } from '@tools/core/base';
 import { ToolResult } from '@tools/result';
+import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import {
   AgentSetting,
   AgentType,
@@ -120,7 +121,7 @@ describe('runToolUseCycle OpenAIResponse', () => {
     };
     const events: any[] = [];
     const dispose = bus.on('addLogMessage', (e) => events.push(e));
-    const messages: any[] = [];
+    const messages: ProviderMessage[] = [];
 
     await runToolUseCycle(options, messages);
     dispose();
