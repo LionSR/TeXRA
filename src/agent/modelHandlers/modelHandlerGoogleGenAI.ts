@@ -67,7 +67,8 @@ type InternalMessagePart = {
 // but is compatible with Google's Content type
 interface Message {
   role: string;
-  content: string | InternalMessagePart[];
+  content?: string | InternalMessagePart[];
+  parts?: Part[];
 }
 
 // Helper function
@@ -106,7 +107,9 @@ function convertMessagesToGoogleContentHistory(
     if (!role) return;
 
     let parts: Part[] = [];
-    if (Array.isArray(msg.content)) {
+    if (Array.isArray(msg.parts)) {
+      parts = msg.parts;
+    } else if (Array.isArray(msg.content)) {
       parts = msg.content
         .map((part: InternalMessagePart): Part | null => {
           if (part.type === 'text' && typeof part.text === 'string') {
@@ -193,8 +196,10 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     );
 
     let lastMessageParts: Part[] = [];
-    if (lastMessage?.content) {
-      if (Array.isArray(lastMessage.content)) {
+    if (lastMessage) {
+      if (Array.isArray((lastMessage as any).parts)) {
+        lastMessageParts = (lastMessage as any).parts as Part[];
+      } else if (Array.isArray(lastMessage.content)) {
         lastMessageParts = convertInternalPartsToGoogleParts(
           lastMessage.content,
           this.logger,
@@ -728,6 +733,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     const lastMessage = messages.at(-1);
     if (
       lastMessage?.role === 'user' &&
+      lastMessage.content &&
       this.containCutOffMessage(lastMessage.content)
     ) {
       messages.pop();
@@ -812,10 +818,17 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       const lastMessage = messages[messages.length - 1];
       const pseudoPrefillMsg = `Organize your response with XML tags. Start your response with:\n${prefill}`;
 
-      if (Array.isArray(lastMessage.content)) {
-        lastMessage.content.push({ type: 'text', text: pseudoPrefillMsg });
+      if (lastMessage) {
+        if (Array.isArray(lastMessage.content)) {
+          lastMessage.content.push({ type: 'text', text: pseudoPrefillMsg });
+        } else {
+          lastMessage.content = [{ type: 'text', text: pseudoPrefillMsg }];
+        }
       } else {
-        lastMessage.content = [{ type: 'text', text: pseudoPrefillMsg }];
+        messages.push({
+          role: 'assistant',
+          content: [{ type: 'text', text: pseudoPrefillMsg }],
+        });
       }
 
       this.logger.debug(`Added pseudo-prefill message: "${pseudoPrefillMsg}"`);
