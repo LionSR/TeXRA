@@ -43,7 +43,10 @@ export function toOpenAIResponseTools(defs: ToolDefinition[]): FunctionTool[] {
       name: d.name,
       description: d.description,
       parameters: params,
-      strict: true,
+      // Setting strict=true requires an explicit `required` array covering all
+      // parameters. The Wolfram tool uses optional fields, so disable strict
+      // validation to avoid schema errors from the OpenAI Responses API.
+      strict: false,
     };
   });
 }
