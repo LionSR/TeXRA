@@ -985,15 +985,16 @@ export class ModelHandlerAnthropic extends ModelHandler<
     text?: string,
   ): [any, any] {
     const content: any[] = [];
-    if (text) {
-      content.push({ type: 'text', text });
-    }
     if (
       this.capabilities.supportsReasoning &&
       toolState?.thinkingBlocks &&
       toolState.thinkingBlocks.length > 0
     ) {
+      // Anthropic models expect thinking blocks before text
       content.push(...toolState.thinkingBlocks);
+    }
+    if (text) {
+      content.push({ type: 'text', text });
     }
     content.push({
       type: 'tool_use',
