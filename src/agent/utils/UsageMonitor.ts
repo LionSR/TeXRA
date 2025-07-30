@@ -10,7 +10,10 @@ import {
 } from '@agent/core/ResponseUsage';
 import { ResponseUsage } from 'openai/resources/responses/responses';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/modelHandlerOpenAIResponse';
-import type { TokenUsageStats } from '@agent/types/UsageTypes';
+import type {
+  TokenUsageStats,
+  ExtendedTokenUsageStats,
+} from '@agent/types/UsageTypes';
 
 /**
  * Handles recording usage statistics to the log and progress view.
@@ -131,7 +134,7 @@ export class UsageMonitor {
         cost: Number(cost.toFixed(3)),
       };
 
-      const payload = {
+      const payload: ExtendedTokenUsageStats = {
         ...baseStats,
         elapsedTime: Number(stateGlobal.totalResponseTime.toFixed(1)),
         ...(cachingStats && {
