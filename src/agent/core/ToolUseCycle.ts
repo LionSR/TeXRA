@@ -168,7 +168,7 @@ export async function runToolUseCycle(
       );
       break;
     }
-    let input = parsed.input;
+    let input = parsed.input ?? parsed.args;
     if (!input && parsed.function?.arguments) {
       try {
         input = JSON.parse(parsed.function.arguments);
