@@ -981,17 +981,21 @@ export class ModelHandlerAnthropic extends ModelHandler<
     name: string,
     call: any,
     result: Record<string, unknown>,
+    toolState?: ToolState,
   ): [any, any] {
+    const content: any[] = [];
+    if (toolState?.thinkingBlocks && toolState.thinkingBlocks.length > 0) {
+      content.push(...toolState.thinkingBlocks);
+    }
+    content.push({
+      type: 'tool_use',
+      id,
+      name,
+      input: call?.input ?? call?.arguments ?? {},
+    });
     const callMsg = {
       role: 'assistant',
-      content: [
-        {
-          type: 'tool_use',
-          id,
-          name,
-          input: call?.input ?? call?.arguments ?? {},
-        },
-      ],
+      content,
     };
     const resultMsg = {
       role: 'user',

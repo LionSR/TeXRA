@@ -17,6 +17,7 @@ import { ToolResult } from '@tools/result';
 import xmlUtils from '@utils/text/xmlUtils';
 import { maybeSaveMessages } from '@agent/utils/debugMessageSaver';
 import { ANTHROPIC_STOP } from '../modelHandlers/types/StopReasonTypes';
+import { ToolState } from './ToolState';
 
 export interface ToolUseCycleOptions {
   /** Model handler for API interactions */
@@ -37,6 +38,8 @@ export interface ToolUseCycleOptions {
   checkInterruption: () => Promise<boolean> | boolean;
   /** Pass abort controllers back to the agent */
   setAbortController: (ctrl: AbortController | null) => void;
+  /** Runtime state tracking for tools */
+  toolState?: ToolState;
 }
 
 /**
@@ -56,6 +59,7 @@ export async function runToolUseCycle(
     toolRegistry,
     checkInterruption,
     setAbortController,
+    toolState,
   } = options;
 
   let iteration = 0;
@@ -95,7 +99,11 @@ export async function runToolUseCycle(
       break;
     }
 
-    const thinking = modelHandler.processThinkingBlock(response, groupId);
+    const thinking = modelHandler.processThinkingBlock(
+      response,
+      groupId,
+      toolState,
+    );
     if (thinking) {
       const formatted = await xmlUtils.formatContent(thinking);
       logger.info(formatted, groupId, MESSAGE_TYPES.THINKING);
@@ -254,6 +262,7 @@ export async function runToolUseCycle(
       name,
       parsed,
       resultObj,
+      toolState,
     );
     messages.push(callMsg, resultMsg);
 
