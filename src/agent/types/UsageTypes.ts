@@ -15,6 +15,24 @@ export const TokenUsageStatsSchema = z.object({
 export type TokenUsageStats = z.infer<typeof TokenUsageStatsSchema>;
 
 /**
+ * Extended statistics tracked during agent execution.
+ */
+export interface ExtendedTokenUsageStats extends TokenUsageStats {
+  /** Total elapsed time in seconds */
+  elapsedTime?: number;
+  /** Tokens read from cache */
+  cacheReadInputTokens?: number;
+  /** Tokens written to cache */
+  cacheCreationInputTokens?: number;
+  /** Percentage of tokens served from cache */
+  percentageCached?: number;
+  /** Tokens used for reasoning */
+  reasoningTokens?: number;
+  /** Tokens consumed by tool use */
+  toolUseTokens?: number;
+}
+
+/**
  * Message interface for updating usage stats in the progress view.
  */
 export const StreamUsageMessageSchema = z.object({
