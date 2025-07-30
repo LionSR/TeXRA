@@ -188,5 +188,6 @@ export interface IModelHandler<
     call: any,
     result: Record<string, unknown>,
     toolState?: ToolState,
+    text?: string,
   ): [M, M];
 }
