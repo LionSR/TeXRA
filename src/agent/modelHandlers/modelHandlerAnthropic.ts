@@ -984,7 +984,11 @@ export class ModelHandlerAnthropic extends ModelHandler<
     toolState?: ToolState,
   ): [any, any] {
     const content: any[] = [];
-    if (toolState?.thinkingBlocks && toolState.thinkingBlocks.length > 0) {
+    if (
+      this.capabilities.supportsReasoning &&
+      toolState?.thinkingBlocks &&
+      toolState.thinkingBlocks.length > 0
+    ) {
       content.push(...toolState.thinkingBlocks);
     }
     content.push({
