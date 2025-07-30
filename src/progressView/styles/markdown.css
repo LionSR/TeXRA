@@ -8,6 +8,13 @@
 
 .model-response-content {
   padding: var(--spacing-small) 0;
+  /* Override log-line whitespace preservation for model responses */
+  white-space: normal;
+}
+
+/* Preserve formatting for code blocks within model responses */
+.model-response-content pre {
+  white-space: pre-wrap;
 }
 
 .markdown-content h1,
