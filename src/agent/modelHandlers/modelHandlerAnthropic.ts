@@ -983,7 +983,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     result: Record<string, unknown>,
     toolState?: ToolState,
     text?: string,
-  ): [any, any] {
+  ): any[] {
     const content: any[] = [];
     if (
       this.capabilities.supportsReasoning &&
