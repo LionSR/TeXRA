@@ -8,6 +8,7 @@
 
 .model-response-content {
   padding: var(--spacing-small) 0;
+  white-space: normal;
 }
 
 .markdown-content h1,
