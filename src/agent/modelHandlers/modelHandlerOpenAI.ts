@@ -29,6 +29,7 @@ import {
   ResponseUsageFactory,
   ExtendedCompletionUsage,
 } from '../core/ResponseUsage';
+import type { ResponseUsage } from 'openai/resources/responses/responses';
 import { ToolState } from '../core/ToolState';
 import { K_SLICE } from '@utils/config';
 import { objectToLogString } from '@utils/text/stringUtils';
@@ -40,7 +41,7 @@ import { MESSAGE_TYPES } from '@logger/messageTypes';
  * OpenAI-specific handlers.
  */
 export class ModelHandlerOpenAI extends ModelHandler<
-  ExtendedCompletionUsage | null,
+  ExtendedCompletionUsage | ResponseUsage | null | undefined,
   OpenAIAPIResponseUsage
 > {
   /** Returns OpenAI client with configured API key. */
@@ -652,16 +653,39 @@ export class ModelHandlerOpenAI extends ModelHandler<
   }
 
   /** Computes cost based on token usage and model pricing. */
-  computePrice(responseUsage: ExtendedCompletionUsage | null): number {
+  computePrice(
+    responseUsage: ExtendedCompletionUsage | ResponseUsage | null | undefined,
+  ): number {
     // Handle models that return None for usage
     if (!responseUsage) {
       return 0.0;
     }
 
+    // Normalize ResponseUsage to ExtendedCompletionUsage if needed
+    const usage: ExtendedCompletionUsage =
+      'input_tokens' in responseUsage
+        ? {
+            prompt_tokens: responseUsage.input_tokens,
+            completion_tokens: responseUsage.output_tokens,
+            total_tokens: responseUsage.total_tokens,
+            prompt_cache_hit_tokens: (responseUsage as any)
+              .prompt_cache_hit_tokens,
+            prompt_tokens_details: {
+              cached_tokens:
+                responseUsage.input_tokens_details?.cached_tokens ?? 0,
+            },
+            completion_tokens_details: {
+              reasoning_tokens:
+                responseUsage.output_tokens_details?.reasoning_tokens ?? 0,
+              accepted_prediction_tokens: undefined,
+              rejected_prediction_tokens: undefined,
+            },
+          }
+        : responseUsage;
+
     // Get token counts
-    const promptTokens = responseUsage.prompt_tokens ?? 0;
-    const completionTokens = responseUsage.completion_tokens ?? 0;
-    // Note: OpenAI doesn't provide tool_use_tokens in their API response
+    const promptTokens = usage.prompt_tokens ?? 0;
+    const completionTokens = usage.completion_tokens ?? 0;
 
     let basePrice = calculateTokenPrice(
       promptTokens,
@@ -672,10 +696,10 @@ export class ModelHandlerOpenAI extends ModelHandler<
 
     // Retrieve nested token details if present
     const reasoningTokens =
-      responseUsage.completion_tokens_details?.reasoning_tokens ?? 0;
+      usage.completion_tokens_details?.reasoning_tokens ?? 0;
     const cachedTokens =
-      responseUsage.prompt_tokens_details?.cached_tokens ??
-      responseUsage.prompt_cache_hit_tokens ?? // deepseek
+      usage.prompt_tokens_details?.cached_tokens ??
+      usage.prompt_cache_hit_tokens ?? // deepseek
       0;
 
     if (reasoningTokens) {
@@ -694,7 +718,7 @@ export class ModelHandlerOpenAI extends ModelHandler<
 
   /** Creates usage statistics from OpenAI's response format. */
   computeResponseUsage(
-    responseUsage: ExtendedCompletionUsage | null,
+    responseUsage: ExtendedCompletionUsage | ResponseUsage | null | undefined,
     responseTime: number,
   ): OpenAIAPIResponseUsage {
     // For Google models, create a minimal usage object with zeros
@@ -718,9 +742,30 @@ export class ModelHandlerOpenAI extends ModelHandler<
       );
     }
 
+    const usage: ExtendedCompletionUsage =
+      'input_tokens' in responseUsage
+        ? {
+            prompt_tokens: responseUsage.input_tokens,
+            completion_tokens: responseUsage.output_tokens,
+            total_tokens: responseUsage.total_tokens,
+            prompt_cache_hit_tokens: (responseUsage as any)
+              .prompt_cache_hit_tokens,
+            prompt_tokens_details: {
+              cached_tokens:
+                responseUsage.input_tokens_details?.cached_tokens ?? 0,
+            },
+            completion_tokens_details: {
+              reasoning_tokens:
+                responseUsage.output_tokens_details?.reasoning_tokens ?? 0,
+              accepted_prediction_tokens: undefined,
+              rejected_prediction_tokens: undefined,
+            },
+          }
+        : responseUsage;
+
     return ResponseUsageFactory.fromOpenAIResponse(
-      responseUsage,
-      this.computePrice(responseUsage),
+      usage,
+      this.computePrice(usage),
       responseTime,
     );
   }

@@ -3,6 +3,7 @@
 
 // Third-party imports
 import OpenAI from 'openai';
+import type { CompletionUsage } from 'openai/resources/completions';
 
 // Local imports - agent components
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
@@ -12,6 +13,10 @@ import type { ToolDefinition } from '@model';
 // Local imports - utilities
 import { convertContentToString } from '@agent/utils/text/messageUtils';
 import { K_SLICE, MESSAGE_PREVIEW_LENGTH } from '@utils/config';
+import {
+  OpenAIAPIResponseUsage,
+  type ExtendedCompletionUsage,
+} from '../core/ResponseUsage';
 
 // TODO: prompt_cache_hit_tokens can also be used here to correct the price and response usage computation in the base class (just overwrite the computePrice and computeResponseUsage methods with a revalues responseUsage.prompt_tokens_details?.cached_tokens and then call the super methods)
 // DEEPSEEK RESPONSE USAGE FORMAT:
@@ -55,6 +60,66 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI {
     const baseURL = this.getBaseUrl();
     this.logger.debug(`Using DeepSeek API key. Base URL: ${baseURL}`);
     return new OpenAI({ apiKey, baseURL });
+  }
+
+  /**
+   * Compute price using DeepSeek's usage object by mapping it to the
+   * extended OpenAI format and delegating to the parent implementation.
+   */
+  computePrice(responseUsage: CompletionUsage | null): number {
+    if (!responseUsage) {
+      return super.computePrice(null);
+    }
+
+    const mapped: ExtendedCompletionUsage = {
+      prompt_tokens: responseUsage.prompt_tokens,
+      completion_tokens: responseUsage.completion_tokens,
+      total_tokens: responseUsage.total_tokens,
+      prompt_cache_hit_tokens: (responseUsage as any).prompt_cache_hit_tokens,
+      prompt_tokens_details: {
+        cached_tokens: (responseUsage as any).prompt_cache_hit_tokens ?? 0,
+      },
+      completion_tokens_details: {
+        reasoning_tokens:
+          (responseUsage as any).completion_tokens_details?.reasoning_tokens ??
+          0,
+        accepted_prediction_tokens: undefined,
+        rejected_prediction_tokens: undefined,
+      },
+    };
+
+    return super.computePrice(mapped);
+  }
+
+  /**
+   * Map DeepSeek usage to the extended OpenAI format and compute detailed usage.
+   */
+  computeResponseUsage(
+    responseUsage: CompletionUsage | null,
+    responseTime: number,
+  ): OpenAIAPIResponseUsage {
+    if (!responseUsage) {
+      return super.computeResponseUsage(null, responseTime);
+    }
+
+    const mapped: ExtendedCompletionUsage = {
+      prompt_tokens: responseUsage.prompt_tokens,
+      completion_tokens: responseUsage.completion_tokens,
+      total_tokens: responseUsage.total_tokens,
+      prompt_cache_hit_tokens: (responseUsage as any).prompt_cache_hit_tokens,
+      prompt_tokens_details: {
+        cached_tokens: (responseUsage as any).prompt_cache_hit_tokens ?? 0,
+      },
+      completion_tokens_details: {
+        reasoning_tokens:
+          (responseUsage as any).completion_tokens_details?.reasoning_tokens ??
+          0,
+        accepted_prediction_tokens: undefined,
+        rejected_prediction_tokens: undefined,
+      },
+    };
+
+    return super.computeResponseUsage(mapped, responseTime);
   }
 
   /**

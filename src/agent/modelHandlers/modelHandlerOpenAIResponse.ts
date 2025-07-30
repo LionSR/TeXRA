@@ -16,7 +16,11 @@ import type {
 
 // Local imports - base handler
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
-import { ResponseUsageFactory } from '../core/ResponseUsage';
+import {
+  ResponseUsageFactory,
+  OpenAIAPIResponseUsage,
+  ExtendedCompletionUsage,
+} from '../core/ResponseUsage';
 import { calculateTokenPrice } from '@agent/utils/priceUtils';
 import { ToolState } from '../core/ToolState';
 import { K_SLICE } from '@utils/config';
@@ -297,66 +301,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
   }
 
   /** Price computation adapted for Responses API token fields. */
-  computePrice(responseUsage: any): number {
+  computePrice(responseUsage: ResponseUsage | undefined): number {
     if (!responseUsage) {
       return 0.0;
     }
 
-    // Response API uses input_tokens/output_tokens
-    const promptTokens = responseUsage.input_tokens ?? 0;
-    const completionTokens = responseUsage.output_tokens ?? 0;
-
-    let basePrice = calculateTokenPrice(
-      promptTokens,
-      completionTokens,
-      this.config.inputPrice,
-      this.config.outputPrice,
-    );
-
-    // Response API uses output_tokens_details and input_tokens_details
-    const reasoningTokens =
-      responseUsage.output_tokens_details?.reasoning_tokens ?? 0;
-    const cachedTokens = responseUsage.input_tokens_details?.cached_tokens ?? 0;
-
-    if (reasoningTokens) {
-      basePrice += (reasoningTokens * this.config.outputPrice) / 1e6;
-    }
-    if (cachedTokens) {
-      basePrice -=
-        (cachedTokens *
-          this.config.inputPrice *
-          (1 - this.capabilities.cacheDiscountFactor)) /
-        1e6;
-    }
-
-    return basePrice;
-  }
-
-  /** Map usage fields and create usage statistics object. */
-  computeResponseUsage(responseUsage: any, responseTime: number): any {
-    if (!responseUsage) {
-      const emptyUsage = {
-        input_tokens: 0,
-        output_tokens: 0,
-        total_tokens: 0,
-        input_tokens_details: { cached_tokens: 0 },
-        output_tokens_details: { reasoning_tokens: 0 },
-      };
-      const mapped = {
-        prompt_tokens: 0,
-        completion_tokens: 0,
-        total_tokens: 0,
-        prompt_tokens_details: { cached_tokens: 0 },
-        completion_tokens_details: { reasoning_tokens: 0 },
-      };
-      return ResponseUsageFactory.fromOpenAIResponse(
-        mapped,
-        this.computePrice(emptyUsage),
-        responseTime,
-      );
-    }
-
-    const mapped = {
+    const mapped: ExtendedCompletionUsage = {
       prompt_tokens: responseUsage.input_tokens,
       completion_tokens: responseUsage.output_tokens,
       total_tokens: responseUsage.total_tokens,
@@ -371,9 +321,39 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
       },
     };
 
+    return super.computePrice(mapped);
+  }
+
+  /** Map usage fields and create usage statistics object. */
+  computeResponseUsage(
+    responseUsage: ResponseUsage | undefined,
+    responseTime: number,
+  ): OpenAIAPIResponseUsage {
+    const usage: ResponseUsage = responseUsage ?? {
+      input_tokens: 0,
+      output_tokens: 0,
+      total_tokens: 0,
+      input_tokens_details: { cached_tokens: 0 },
+      output_tokens_details: { reasoning_tokens: 0 },
+    };
+
+    const mapped: ExtendedCompletionUsage = {
+      prompt_tokens: usage.input_tokens,
+      completion_tokens: usage.output_tokens,
+      total_tokens: usage.total_tokens,
+      prompt_tokens_details: {
+        cached_tokens: usage.input_tokens_details?.cached_tokens ?? 0,
+      },
+      completion_tokens_details: {
+        reasoning_tokens: usage.output_tokens_details?.reasoning_tokens ?? 0,
+        accepted_prediction_tokens: undefined,
+        rejected_prediction_tokens: undefined,
+      },
+    };
+
     return ResponseUsageFactory.fromOpenAIResponse(
       mapped,
-      this.computePrice(responseUsage),
+      this.computePrice(usage),
       responseTime,
     );
   }
