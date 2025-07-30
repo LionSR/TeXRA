@@ -738,6 +738,7 @@ export abstract class ModelHandler<
     call: any,
     result: Record<string, unknown>,
     toolState?: ToolState,
+    text?: string,
   ): [any, any];
 
   /**
