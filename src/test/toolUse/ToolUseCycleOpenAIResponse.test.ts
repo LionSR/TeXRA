@@ -9,6 +9,7 @@ import { MESSAGE_TYPES } from '@logger/messageTypes';
 import { BaseTool } from '@tools/core/base';
 import { ToolResult } from '@tools/result';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
+import { ToolState } from '@agent/core/ToolState';
 import {
   AgentSetting,
   AgentType,
@@ -108,6 +109,7 @@ describe('runToolUseCycle OpenAIResponse', () => {
       userRequest: '',
       userReflect: '',
     };
+    const toolState = new ToolState();
     const options = {
       modelHandler: handler,
       agentSetting: setting,
@@ -118,6 +120,7 @@ describe('runToolUseCycle OpenAIResponse', () => {
       toolRegistry,
       checkInterruption: () => false,
       setAbortController: () => {},
+      toolState,
     };
     const events: any[] = [];
     const dispose = bus.on('addLogMessage', (e) => events.push(e));
