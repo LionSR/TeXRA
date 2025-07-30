@@ -16,6 +16,7 @@ import {
   ModelHandlerOpenAI,
   ModelHandlerOpenAIResponse,
 } from '@agent/modelHandlers';
+import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 
 // Local imports - utils
 import { getConfig } from '@utils/config';
@@ -80,7 +81,7 @@ export class ModelFactory {
     // Map providers to their handler classes (excluding the native Google handler handled above)
     const handlerMap = new Map<
       ModelProvider,
-      new (config: ModelConfig) => ModelHandler
+      new (config: ModelConfig) => ModelHandler<ProviderMessage>
     >([
       [ModelProvider.ANTHROPIC, ModelHandlerAnthropic],
       [ModelProvider.OPENAI, ModelHandlerOpenAI],
