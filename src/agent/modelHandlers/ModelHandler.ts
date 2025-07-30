@@ -18,6 +18,8 @@ import {
 import { checkMultipleToolsInstalled } from '@utils/system';
 import { getConfig } from '@utils/config';
 import type { ProviderStopReason } from './types/StopReasonTypes';
+import { ANTHROPIC_STOP, OPENAI_CHAT_FINISH } from './types/StopReasonTypes';
+import { FinishReason } from '@google/genai';
 import type { IModelHandler } from './types/IModelHandler';
 import { SecretManager, ApiProvider } from '@frontend/secretManager';
 
@@ -502,10 +504,15 @@ export abstract class ModelHandler<U = any, R = any>
     response: string,
     setting: AgentSetting,
   ): MarkerFlags {
+    const endTurnReasons: ProviderStopReason[] = [
+      ANTHROPIC_STOP.END_TURN,
+      ANTHROPIC_STOP.STOP_SEQUENCE,
+      OPENAI_CHAT_FINISH.STOP,
+      FinishReason.STOP,
+    ];
+
     return {
-      endTurn: ['end_turn', 'stop_sequence', 'stop', 'STOP'].includes(
-        stopReason ?? '',
-      ),
+      endTurn: endTurnReasons.includes(stopReason ?? ''),
       encounterDocumentTag: response.includes(`</${setting.documentTag}>`),
     };
   }

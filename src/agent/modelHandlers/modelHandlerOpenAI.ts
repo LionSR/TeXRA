@@ -22,6 +22,7 @@ import { AgentSetting, hasEndTag } from '../core/AgentDataclass';
 import { AgentStateRound } from '../core/AgentState';
 import { ModelHandler } from './ModelHandler';
 import type { ProviderStopReason } from './types/StopReasonTypes';
+import { OPENAI_CHAT_FINISH } from './types/StopReasonTypes';
 import { toOpenAITools } from './toolConversion';
 import type { ToolDefinition } from '@model';
 import {
@@ -439,7 +440,11 @@ export class ModelHandlerOpenAI extends ModelHandler<
         };
 
         // Add end tag if response was stopped and tag isn't present
-        if (stopReason === 'stop' && endTag && !newResponse.includes(endTag)) {
+        if (
+          stopReason === OPENAI_CHAT_FINISH.STOP &&
+          endTag &&
+          !newResponse.includes(endTag)
+        ) {
           this.logger.debug(`Adding end tag to response: ${endTag}`);
           newResponse = `${newResponse}\n${endTag}`;
         }
@@ -469,9 +474,9 @@ export class ModelHandlerOpenAI extends ModelHandler<
     if (choice.message.content) {
       newResponse = choice.message.content.trim();
     } else if (
-      stopReason === 'tool_calls' ||
-      stopReason === 'tool_use' ||
-      stopReason === 'function_call' ||
+      stopReason === OPENAI_CHAT_FINISH.TOOL_CALLS ||
+      stopReason === OPENAI_CHAT_FINISH.TOOL_USE ||
+      stopReason === OPENAI_CHAT_FINISH.FUNCTION_CALL ||
       Array.isArray(choice.message.tool_calls) ||
       choice.message.function_call
     ) {
@@ -489,7 +494,11 @@ export class ModelHandlerOpenAI extends ModelHandler<
     }
 
     // Add end tag if response was stopped and tag isn't present
-    if (stopReason === 'stop' && endTag && !newResponse.includes(endTag)) {
+    if (
+      stopReason === OPENAI_CHAT_FINISH.STOP &&
+      endTag &&
+      !newResponse.includes(endTag)
+    ) {
       this.logger.debug(`Adding end tag to response: ${endTag}`);
       newResponse = `${newResponse}\n${endTag}`;
     }
@@ -841,7 +850,10 @@ export class ModelHandlerOpenAI extends ModelHandler<
     newResponse: string,
     agentSetting: AgentSetting,
   ): boolean {
-    return stopReason === 'length' && !hasEndTag(agentSetting, newResponse);
+    return (
+      stopReason === OPENAI_CHAT_FINISH.LENGTH &&
+      !hasEndTag(agentSetting, newResponse)
+    );
   }
 
   /**
