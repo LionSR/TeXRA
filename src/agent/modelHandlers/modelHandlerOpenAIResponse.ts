@@ -79,9 +79,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
   /**
    * Create a response using the Responses API.
    *
-   * Note: This method accepts ChatCompletionMessageParam[] (from the base class)
-   * but internally converts them to ResponseInputItem[] format required by the
-   * OpenAI Responses API. The conversion handles:
+   * IMPORTANT: This method maintains the base class signature for compatibility,
+   * accepting ChatCompletionMessageParam[] even though the Responses API requires
+   * ResponseInputItem[]. The conversion is handled internally to preserve the
+   * inheritance hierarchy and allow seamless integration with the existing infrastructure.
+   *
+   * The conversion handles:
    * - Text content: 'text' -> 'input_text' or 'output_text' based on role
    * - Images: 'image_url' -> 'input_image'
    * - PDFs: Special handling to convert from image_url to input_file format
@@ -105,7 +108,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
         return {
           role: msg.role,
           content:
-            msg.content && typeof msg.content === 'string'
+            typeof msg.content === 'string'
               ? [{ type: 'input_text', text: msg.content }]
               : Array.isArray(msg.content)
                 ? msg.content.map((part: any) => {
