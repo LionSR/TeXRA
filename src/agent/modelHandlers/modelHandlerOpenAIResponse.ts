@@ -503,8 +503,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
     call: any,
     result: Record<string, unknown>,
     _toolState?: ToolState,
-    _text?: string,
-  ): [any, any] {
+    text?: string,
+  ): any[] {
+    const messages: (ResponseInputItem | ChatCompletionMessageParam)[] = [];
+    if (text) {
+      messages.push({ role: 'assistant', content: [{ type: 'text', text }] });
+    }
     const callMsg: ResponseFunctionToolCall = {
       type: 'function_call',
       call_id: id,
@@ -519,6 +523,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
       call_id: id,
       output: JSON.stringify(result),
     };
-    return [callMsg, resultMsg];
+    messages.push(callMsg, resultMsg);
+    return messages;
   }
 }
