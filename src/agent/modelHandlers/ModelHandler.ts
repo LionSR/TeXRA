@@ -509,6 +509,7 @@ export abstract class ModelHandler<U = any, R = any>
       ANTHROPIC_STOP.STOP_SEQUENCE,
       OPENAI_CHAT_FINISH.STOP,
       FinishReason.STOP,
+      'STOP', // handle string form returned by some Google clients
     ];
 
     return {
