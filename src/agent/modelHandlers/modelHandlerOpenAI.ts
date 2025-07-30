@@ -58,7 +58,7 @@ export class ModelHandlerOpenAI extends ModelHandler<
   /** Creates a chat completion with model-specific parameters. */
   async createResponse(
     client: OpenAI,
-    messages: any[],
+    messages: ChatCompletionMessageParam[],
     temperature: number,
     systemPrompt?: string,
     endTag?: string,

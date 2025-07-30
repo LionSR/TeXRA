@@ -13,6 +13,7 @@ import type {
   ResponseFunctionToolCall,
   ResponseInputItem,
 } from 'openai/resources/responses/responses';
+import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 
 // Local imports - base handler
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
@@ -71,7 +72,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
   /** Create a response using the Responses API. */
   async createResponse(
     client: OpenAI,
-    messages: ResponseInputItem[],
+    messages: ChatCompletionMessageParam[],
     temperature: number,
     systemPrompt?: string,
     endTag?: string,
@@ -85,9 +86,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
         return {
           role: msg.role,
           content:
-            typeof msg.content === 'string'
+            msg.content && typeof msg.content === 'string'
               ? [{ type: 'input_text', text: msg.content }]
-              : msg.content.map((part: any) => {
+              : Array.isArray(msg.content)
+                ? msg.content.map((part: any) => {
                   if (part.type === 'text') {
                     if (msg.role === 'user') {
                       return { type: 'input_text', text: part.text };
@@ -121,7 +123,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
                     return { type: 'input_image', image_url: url, detail };
                   }
                   return part;
-                }),
+                })
+                : [],
         };
       }
       return msg;
