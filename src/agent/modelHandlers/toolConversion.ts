@@ -16,7 +16,7 @@ import type {
 // Map local tool names to Anthropic remote tool types
 const ANTHROPIC_TOOL_TYPE_MAP: Record<string, string> = {
   bash: 'bash_20250124',
-  str_replace_editor: 'text_editor_20250124',
+  str_replace_editor: 'text_editor_20250429',
   str_replace_based_edit_tool: 'text_editor_20250429',
   web_search: 'web_search_20250305',
 } as const;
