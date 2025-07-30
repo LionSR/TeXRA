@@ -27,6 +27,7 @@ import type { AgentSetting, AgentPrompt } from './AgentDataclass';
 import { AgentStateRound, AgentStateGlobal } from './AgentState';
 import { ToolState } from './ToolState';
 import type { IModelHandler } from '@agent/modelHandlers';
+import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 
 // Shared constants
 import { K_SLICE, REPETITION_DETECTION_THRESHOLD } from '@utils/config';
@@ -53,7 +54,7 @@ export interface ResponseCycleOptions {
  */
 export async function runResponseCycle(
   options: ResponseCycleOptions,
-  messages: any[],
+  messages: ProviderMessage[],
   stateRound: AgentStateRound,
   stateGlobal: AgentStateGlobal,
   toolState: ToolState,
