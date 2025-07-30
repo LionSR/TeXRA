@@ -892,6 +892,7 @@ export class ModelHandlerOpenAI extends ModelHandler<
     call: any,
     result: Record<string, unknown>,
     _toolState?: ToolState,
+    _text?: string,
   ): [any, any] {
     const callMsg: ChatCompletionAssistantMessageParam = {
       role: 'assistant',
