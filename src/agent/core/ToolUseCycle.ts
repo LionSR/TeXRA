@@ -5,6 +5,7 @@
 // Local imports - log
 import { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
+import type { ExtendedTokenUsageStats } from '@agent/types/UsageTypes';
 
 // Local imports - agent components
 import type { AgentSetting, AgentPrompt } from './AgentDataclass';
@@ -15,6 +16,7 @@ import { BaseTool } from '@tools/core/base';
 import { ToolResult } from '@tools/result';
 import xmlUtils from '@utils/text/xmlUtils';
 import { maybeSaveMessages } from '@agent/utils/debugMessageSaver';
+import { ANTHROPIC_STOP } from '../modelHandlers/types/StopReasonTypes';
 
 export interface ToolUseCycleOptions {
   /** Model handler for API interactions */
@@ -114,7 +116,7 @@ export async function runToolUseCycle(
     }
     if (usage) {
       const normalized = modelHandler.computeResponseUsage(usage, responseTime);
-      const stats = {
+      const stats: ExtendedTokenUsageStats = {
         inputTokens: normalized.totalInputTokens,
         outputTokens: normalized.totalOutputTokens,
         cost: normalized.cost,
@@ -123,7 +125,7 @@ export async function runToolUseCycle(
       logger.statistics(stats, groupId);
     }
 
-    if (!toolInfo || stopReason === 'end_turn') {
+    if (!toolInfo || stopReason === ANTHROPIC_STOP.END_TURN) {
       break;
     }
 

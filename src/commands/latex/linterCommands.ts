@@ -5,7 +5,11 @@ import * as vscode from 'vscode';
 import * as logger from '@logger/logUtils';
 
 // Local imports - utils
-import { getLinterMessages } from '@frontend/latex/linter';
+import {
+  getLinterMessages,
+  getSeverityString,
+  countDiagnosticsBySeverity,
+} from '@frontend/latex/linter';
 import { WorkspaceFS } from '@utils/files';
 
 // Local imports - core
@@ -49,10 +53,13 @@ export async function handleShowLinterMessages(): Promise<void> {
     }
 
     // Format messages for display
-    const formattedMessages = messages.map(
-      (msg) =>
-        `${msg.severity.toUpperCase()} [${msg.source}]: Line ${msg.line}, Col ${msg.column} - ${msg.message}`,
-    );
+    const formattedMessages = messages.map((msg) => {
+      const severity = getSeverityString(msg.severity).toUpperCase();
+      const line = msg.range.start.line + 1;
+      const col = msg.range.start.character + 1;
+      const source = msg.source ?? 'unknown';
+      return `${severity} [${source}]: Line ${line}, Col ${col} - ${msg.message}`;
+    });
 
     // Use logger instead of output channel
     logger.info(CHANNEL, `Linter messages for: ${relativePath}`);
@@ -93,29 +100,7 @@ export async function handleCountLinterMessages(): Promise<void> {
     const messages = await getLinterMessages(relativePath);
 
     // Count by severity
-    const counts = {
-      errors: 0,
-      warnings: 0,
-      info: 0,
-      hints: 0,
-    };
-
-    messages.forEach((msg) => {
-      switch (msg.severity) {
-        case 'error':
-          counts.errors++;
-          break;
-        case 'warning':
-          counts.warnings++;
-          break;
-        case 'info':
-          counts.info++;
-          break;
-        case 'hint':
-          counts.hints++;
-          break;
-      }
-    });
+    const counts = countDiagnosticsBySeverity(messages);
 
     const total = counts.errors + counts.warnings + counts.info + counts.hints;
 
