@@ -9,9 +9,10 @@ import { getRunDir } from '@utils/files/taskRunStorage';
 import { getConfig } from '@utils/config';
 import type { ExecutionId } from '@agent/types/IdentifierTypes';
 import { AgentLogger } from '@logger/AgentLogger';
+import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 
 export interface SaveMessagesParams {
-  messages: any[];
+  messages: ProviderMessage[];
   logger: AgentLogger;
   continuationCount?: number;
   outputFile?: string;

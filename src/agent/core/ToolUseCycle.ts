@@ -11,6 +11,7 @@ import type { ExtendedTokenUsageStats } from '@agent/types/UsageTypes';
 import type { AgentSetting, AgentPrompt } from './AgentDataclass';
 import type { ToolDefinition } from '@model';
 import type { IModelHandler } from '../modelHandlers';
+import type { ProviderMessage } from '../modelHandlers/types/ProviderMessage';
 import { BaseTool } from '@tools/core/base';
 import { ToolResult } from '@tools/result';
 import xmlUtils from '@utils/text/xmlUtils';
@@ -44,7 +45,7 @@ export interface ToolUseCycleOptions {
  */
 export async function runToolUseCycle(
   options: ToolUseCycleOptions,
-  messages: any[],
+  messages: ProviderMessage[],
   groupId?: string,
 ): Promise<void> {
   const {
