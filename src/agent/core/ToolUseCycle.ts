@@ -162,7 +162,8 @@ export async function runToolUseCycle(
       break;
     }
 
-    const id = parsed.id || parsed.tool_use_id || parsed.tool_call_id;
+    const id =
+      parsed.call_id || parsed.id || parsed.tool_use_id || parsed.tool_call_id;
     const name = parsed.name || parsed.function?.name;
     if (!name) {
       const errorMsg = `Tool JSON missing name: ${JSON.stringify(parsed)}`;
