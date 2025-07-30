@@ -22,9 +22,7 @@ export function messageToSkeleton(
   }
 
   if (Array.isArray(message)) {
-    return message.map((item) =>
-      messageToSkeleton(item as ProviderMessage, maxContentLength),
-    );
+    return message.map((item) => messageToSkeleton(item, maxContentLength));
   }
 
   if (typeof message !== 'object') {
@@ -94,10 +92,9 @@ export function messageToSkeleton(
       value !== undefined
     ) {
       // Recursively process nested objects
-      result[key] = messageToSkeleton(
-        value as ProviderMessage,
-        maxContentLength,
-      );
+      // Note: We pass 'any' here since nested properties within a message
+      // are not necessarily ProviderMessage instances themselves
+      result[key] = messageToSkeleton(value as any, maxContentLength);
     } else {
       // Pass through primitive values
       result[key] = value;
