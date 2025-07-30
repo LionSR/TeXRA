@@ -5,6 +5,15 @@
 import OpenAI from 'openai';
 import type { CompletionUsage } from 'openai/resources/completions';
 
+/** DeepSeek-specific response usage interface */
+interface DeepSeekResponseUsage extends CompletionUsage {
+  prompt_cache_hit_tokens?: number;
+  prompt_cache_miss_tokens?: number;
+  completion_tokens_details?: {
+    reasoning_tokens?: number;
+  };
+}
+
 // Local imports - agent components
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 import { ToolState } from '../core/ToolState';
@@ -54,6 +63,29 @@ import {
  * Handler for DeepSeek models using OpenAI-compatible API.
  */
 export class ModelHandlerDeepSeek extends ModelHandlerOpenAI {
+  /**
+   * Maps DeepSeek-specific usage format to ExtendedCompletionUsage.
+   * Centralizes the conversion logic to avoid duplication.
+   */
+  private mapDeepSeekUsageToExtended(
+    responseUsage: DeepSeekResponseUsage,
+  ): ExtendedCompletionUsage {
+    return {
+      prompt_tokens: responseUsage.prompt_tokens,
+      completion_tokens: responseUsage.completion_tokens,
+      total_tokens: responseUsage.total_tokens,
+      prompt_cache_hit_tokens: responseUsage.prompt_cache_hit_tokens,
+      prompt_tokens_details: {
+        cached_tokens: responseUsage.prompt_cache_hit_tokens ?? 0,
+      },
+      completion_tokens_details: {
+        reasoning_tokens:
+          responseUsage.completion_tokens_details?.reasoning_tokens ?? 0,
+        accepted_prediction_tokens: undefined,
+        rejected_prediction_tokens: undefined,
+      },
+    };
+  }
   /** Returns OpenAI client configured with DeepSeek's base URL. */
   async getClient(): Promise<OpenAI> {
     const apiKey = await this.getApiKey();
@@ -71,23 +103,9 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI {
       return super.computePrice(null);
     }
 
-    const mapped: ExtendedCompletionUsage = {
-      prompt_tokens: responseUsage.prompt_tokens,
-      completion_tokens: responseUsage.completion_tokens,
-      total_tokens: responseUsage.total_tokens,
-      prompt_cache_hit_tokens: (responseUsage as any).prompt_cache_hit_tokens,
-      prompt_tokens_details: {
-        cached_tokens: (responseUsage as any).prompt_cache_hit_tokens ?? 0,
-      },
-      completion_tokens_details: {
-        reasoning_tokens:
-          (responseUsage as any).completion_tokens_details?.reasoning_tokens ??
-          0,
-        accepted_prediction_tokens: undefined,
-        rejected_prediction_tokens: undefined,
-      },
-    };
-
+    const mapped = this.mapDeepSeekUsageToExtended(
+      responseUsage as DeepSeekResponseUsage,
+    );
     return super.computePrice(mapped);
   }
 
@@ -102,23 +120,9 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI {
       return super.computeResponseUsage(null, responseTime);
     }
 
-    const mapped: ExtendedCompletionUsage = {
-      prompt_tokens: responseUsage.prompt_tokens,
-      completion_tokens: responseUsage.completion_tokens,
-      total_tokens: responseUsage.total_tokens,
-      prompt_cache_hit_tokens: (responseUsage as any).prompt_cache_hit_tokens,
-      prompt_tokens_details: {
-        cached_tokens: (responseUsage as any).prompt_cache_hit_tokens ?? 0,
-      },
-      completion_tokens_details: {
-        reasoning_tokens:
-          (responseUsage as any).completion_tokens_details?.reasoning_tokens ??
-          0,
-        accepted_prediction_tokens: undefined,
-        rejected_prediction_tokens: undefined,
-      },
-    };
-
+    const mapped = this.mapDeepSeekUsageToExtended(
+      responseUsage as DeepSeekResponseUsage,
+    );
     return super.computeResponseUsage(mapped, responseTime);
   }
 

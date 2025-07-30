@@ -42,6 +42,29 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
   private sentMessages = 0;
 
   /**
+   * Maps ResponseUsage to ExtendedCompletionUsage format.
+   * Centralizes the conversion logic to avoid duplication.
+   */
+  private mapResponseUsageToExtended(
+    responseUsage: ResponseUsage,
+  ): ExtendedCompletionUsage {
+    return {
+      prompt_tokens: responseUsage.input_tokens,
+      completion_tokens: responseUsage.output_tokens,
+      total_tokens: responseUsage.total_tokens,
+      prompt_tokens_details: {
+        cached_tokens: responseUsage.input_tokens_details?.cached_tokens ?? 0,
+      },
+      completion_tokens_details: {
+        reasoning_tokens:
+          responseUsage.output_tokens_details?.reasoning_tokens ?? 0,
+        accepted_prediction_tokens: undefined,
+        rejected_prediction_tokens: undefined,
+      },
+    };
+  }
+
+  /**
    * Manually set the previous response ID to resume a conversation.
    * Call with `null` to reset the stored ID.
    */
@@ -306,21 +329,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
       return 0.0;
     }
 
-    const mapped: ExtendedCompletionUsage = {
-      prompt_tokens: responseUsage.input_tokens,
-      completion_tokens: responseUsage.output_tokens,
-      total_tokens: responseUsage.total_tokens,
-      prompt_tokens_details: {
-        cached_tokens: responseUsage.input_tokens_details?.cached_tokens ?? 0,
-      },
-      completion_tokens_details: {
-        reasoning_tokens:
-          responseUsage.output_tokens_details?.reasoning_tokens ?? 0,
-        accepted_prediction_tokens: undefined,
-        rejected_prediction_tokens: undefined,
-      },
-    };
-
+    const mapped = this.mapResponseUsageToExtended(responseUsage);
     return super.computePrice(mapped);
   }
 
@@ -337,20 +346,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
       output_tokens_details: { reasoning_tokens: 0 },
     };
 
-    const mapped: ExtendedCompletionUsage = {
-      prompt_tokens: usage.input_tokens,
-      completion_tokens: usage.output_tokens,
-      total_tokens: usage.total_tokens,
-      prompt_tokens_details: {
-        cached_tokens: usage.input_tokens_details?.cached_tokens ?? 0,
-      },
-      completion_tokens_details: {
-        reasoning_tokens: usage.output_tokens_details?.reasoning_tokens ?? 0,
-        accepted_prediction_tokens: undefined,
-        rejected_prediction_tokens: undefined,
-      },
-    };
-
+    const mapped = this.mapResponseUsageToExtended(usage);
     return ResponseUsageFactory.fromOpenAIResponse(
       mapped,
       this.computePrice(usage),
