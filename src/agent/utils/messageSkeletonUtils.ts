@@ -14,15 +14,17 @@ import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage
  * @returns A simplified message object with truncated content
  */
 export function messageToSkeleton(
-  message: ProviderMessage | any,
+  message: ProviderMessage | ProviderMessage[],
   maxContentLength: number = MESSAGE_PREVIEW_LENGTH,
-): ProviderMessage | any {
+): any {
   if (!message) {
     return null;
   }
 
   if (Array.isArray(message)) {
-    return message.map((item) => messageToSkeleton(item, maxContentLength));
+    return message.map((item) =>
+      messageToSkeleton(item as ProviderMessage, maxContentLength),
+    );
   }
 
   if (typeof message !== 'object') {
@@ -92,7 +94,10 @@ export function messageToSkeleton(
       value !== undefined
     ) {
       // Recursively process nested objects
-      result[key] = messageToSkeleton(value, maxContentLength);
+      result[key] = messageToSkeleton(
+        value as ProviderMessage,
+        maxContentLength,
+      );
     } else {
       // Pass through primitive values
       result[key] = value;
