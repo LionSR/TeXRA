@@ -63,7 +63,8 @@ Known for large context windows, multimodality, and speed/cost efficiency.
 
 ### DeepSeek Models
 
-Strong technical and coding performance, cost-effective.
+Strong technical and coding performance, cost-effective. DeepSeek's API now
+supports function calling so agents can use external tools during a run.
 
 | Model ID | Key Strength / Use Case     | Relative Cost | Relative Speed | Notes            |
 | :------- | :-------------------------- | :------------ | :------------- | :--------------- |
