@@ -6,3 +6,4 @@ export * from './fileOp';
 export * from './core/base';
 export * from './registry';
 export * from './wolfram';
+export * from './web/WebSearchTool';
