@@ -121,6 +121,7 @@ describe('runToolUseCycle OpenAIResponse', () => {
       checkInterruption: () => false,
       setAbortController: () => {},
       toolState,
+      modelName: 'test',
     };
     const events: any[] = [];
     const dispose = bus.on('addLogMessage', (e) => events.push(e));
