@@ -988,7 +988,11 @@ export class ModelHandlerAnthropic extends ModelHandler<
     if (text) {
       content.push({ type: 'text', text });
     }
-    if (toolState?.thinkingBlocks && toolState.thinkingBlocks.length > 0) {
+    if (
+      this.capabilities.supportsReasoning &&
+      toolState?.thinkingBlocks &&
+      toolState.thinkingBlocks.length > 0
+    ) {
       content.push(...toolState.thinkingBlocks);
     }
     content.push({
