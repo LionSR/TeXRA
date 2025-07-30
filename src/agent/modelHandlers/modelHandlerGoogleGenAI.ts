@@ -46,6 +46,7 @@ import { cleanFileContent } from '@replacement/engine';
 import replacementEngine from '@replacement/engine';
 
 import type { ProviderStopReason } from './types/StopReasonTypes';
+// Google finish reasons are re-exported from the SDK
 
 // Local constant
 import { K_SLICE } from '@utils/config';

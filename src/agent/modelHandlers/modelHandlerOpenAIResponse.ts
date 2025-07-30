@@ -21,6 +21,7 @@ import { calculateTokenPrice } from '@agent/utils/priceUtils';
 import { ToolState } from '../core/ToolState';
 import { K_SLICE } from '@utils/config';
 import type { ProviderStopReason } from './types/StopReasonTypes';
+import { OPENAI_CHAT_FINISH } from './types/StopReasonTypes';
 import type { ToolDefinition } from '@model';
 
 // import { ResponseCreateParams } from 'openai/src/resources/responses/response';
@@ -288,9 +289,15 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
     }
 
     const stopReason =
-      responseObject.status === 'completed' ? 'stop' : 'length';
+      responseObject.status === 'completed'
+        ? OPENAI_CHAT_FINISH.STOP
+        : OPENAI_CHAT_FINISH.LENGTH;
 
-    if (stopReason === 'stop' && endTag && !newResponse.includes(endTag)) {
+    if (
+      stopReason === OPENAI_CHAT_FINISH.STOP &&
+      endTag &&
+      !newResponse.includes(endTag)
+    ) {
       return [`${newResponse}\n${endTag}`, usage, stopReason];
     }
     return [newResponse, usage, stopReason];
