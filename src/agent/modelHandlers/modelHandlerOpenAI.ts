@@ -9,7 +9,6 @@ import {
   ChatCompletionToolMessageParam,
   ChatCompletionMessageParam,
 } from 'openai/resources/chat/completions';
-import type { ResponseInputItem } from 'openai/resources/responses/responses';
 import { countTokens } from 'gpt-tokenizer';
 
 // Local imports - utilities
@@ -60,7 +59,7 @@ export class ModelHandlerOpenAI extends ModelHandler<
   /** Creates a chat completion with model-specific parameters. */
   async createResponse(
     client: OpenAI,
-    messages: ChatCompletionMessageParam[] | ResponseInputItem[],
+    messages: ChatCompletionMessageParam[],
     temperature: number,
     systemPrompt?: string,
     endTag?: string,
