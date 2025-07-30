@@ -5,6 +5,7 @@
 import * as logger from './logUtils';
 import type { MessageType } from './messageTypes';
 import { MESSAGE_TYPES } from './messageTypes';
+import type { TokenUsageStats } from '@agent/types/UsageTypes';
 import { sleep } from '@utils/helpers';
 import { SHORT_SLEEP_MS } from '@utils/config';
 
@@ -117,7 +118,7 @@ export class AgentLogger {
   /**
    * Log statistics information.
    */
-  statistics(stats: Record<string, number>, groupId?: string): void {
+  statistics(stats: TokenUsageStats, groupId?: string): void {
     const summary = `Usage - input: ${stats.inputTokens ?? 0}, output: ${stats.outputTokens ?? 0}`;
     this.info(summary, groupId, MESSAGE_TYPES.STATISTICS, stats);
   }
