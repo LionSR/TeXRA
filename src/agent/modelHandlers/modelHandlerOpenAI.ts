@@ -164,7 +164,8 @@ export class ModelHandlerOpenAI extends ModelHandler<
           }
           response = {
             role: 'assistant',
-            finish_reason: 'stop', // there is no good choice it seems unless deepseek models support it;
+            // there is no good choice it seems unless deepseek models support it
+            finish_reason: OPENAI_CHAT_FINISH.STOP,
             // In the future maybe we can count the output tokens to see if it is at the limit approximatelly..
             choices: [
               {
@@ -172,7 +173,7 @@ export class ModelHandlerOpenAI extends ModelHandler<
                   content: content,
                   reasoning_content: reasoning_content,
                 },
-                finish_reason: 'stop',
+                finish_reason: OPENAI_CHAT_FINISH.STOP,
               },
             ],
           };
@@ -185,7 +186,7 @@ export class ModelHandlerOpenAI extends ModelHandler<
             this.logger.warn(
               `Token count output of deepseek model is close to the max output tokens: ${tokenCount} - ${this.config.maxOutputTokens}. Setting finish_reason to length`,
             );
-            response.finish_reason = 'length';
+            response.finish_reason = OPENAI_CHAT_FINISH.LENGTH;
           }
           return response;
         }
@@ -423,9 +424,9 @@ export class ModelHandlerOpenAI extends ModelHandler<
           'Using direct response format (streaming style) as fallback',
         );
         let newResponse = responseObject.content.trim();
-        // Since we don't have a stop reason in this format, assume 'stop'
-        let stopReason = 'stop';
-        // let stopReason = 'length';
+        // Since we don't have a stop reason in this format, assume stop
+        let stopReason = OPENAI_CHAT_FINISH.STOP;
+        // let stopReason = OPENAI_CHAT_FINISH.LENGTH;
         if (responseObject.finish_reason) {
           stopReason = responseObject.finish_reason;
         }
