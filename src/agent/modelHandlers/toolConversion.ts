@@ -36,13 +36,16 @@ export function toOpenAITools(defs: ToolDefinition[]): ChatCompletionTool[] {
 
 /** Convert generic ToolDefinition objects to OpenAI Responses FunctionTool format. */
 export function toOpenAIResponseTools(defs: ToolDefinition[]): FunctionTool[] {
-  return defs.map((d) => ({
-    type: 'function',
-    name: d.name,
-    description: d.description,
-    parameters: d.parameters as Record<string, unknown> | null,
-    strict: true,
-  }));
+  return defs.map((d) => {
+    const params = (d.parameters ?? null) as Record<string, unknown> | null;
+    return {
+      type: 'function',
+      name: d.name,
+      description: d.description,
+      parameters: params,
+      strict: true,
+    };
+  });
 }
 
 /** Convert generic ToolDefinition objects to Anthropic Tool format. */
