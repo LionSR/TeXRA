@@ -17,6 +17,8 @@ export interface SaveMessagesParams {
   continuationCount?: number;
   outputFile?: string;
   baseName?: string;
+  /** Name of the model used for this conversation */
+  modelName?: string;
   executionId?: ExecutionId;
   groupId?: string;
 }
@@ -31,6 +33,7 @@ export async function maybeSaveMessages({
   continuationCount,
   outputFile,
   baseName = 'messages',
+  modelName,
   executionId,
   groupId,
 }: SaveMessagesParams): Promise<void> {
@@ -45,7 +48,8 @@ export async function maybeSaveMessages({
       : baseName;
   const cont =
     continuationCount !== undefined ? `_cont${continuationCount}` : '';
-  const debugFileName = `${fileBase}${cont}.json`;
+  const modelPart = modelName ? `_${modelName.replace(/[\\/]/g, '_')}` : '';
+  const debugFileName = `${fileBase}${modelPart}${cont}.json`;
 
   const debugFilePath = executionId
     ? path.join(getRunDir(executionId), debugFileName)
