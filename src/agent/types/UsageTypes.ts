@@ -15,6 +15,24 @@ export const TokenUsageStatsSchema = z.object({
 export type TokenUsageStats = z.infer<typeof TokenUsageStatsSchema>;
 
 /**
+ * Extended usage statistics for detailed logging.
+ */
+export interface ExtendedTokenUsageStats extends TokenUsageStats {
+  /** Total response time in seconds */
+  elapsedTime?: number;
+  /** Number of tokens retrieved from cache */
+  cacheReadInputTokens?: number;
+  /** Number of tokens stored in cache */
+  cacheCreationInputTokens?: number;
+  /** Percentage of cache hits */
+  percentageCached?: number;
+  /** Number of reasoning tokens generated */
+  reasoningTokens?: number;
+  /** Number of tokens used for tool calls */
+  toolUseTokens?: number;
+}
+
+/**
  * Message interface for updating usage stats in the progress view.
  */
 export const StreamUsageMessageSchema = z.object({

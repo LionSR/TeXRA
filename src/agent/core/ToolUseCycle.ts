@@ -14,6 +14,7 @@ import { BaseTool } from '@tools/core/base';
 import { ToolResult } from '@tools/result';
 import xmlUtils from '@utils/text/xmlUtils';
 import { maybeSaveMessages } from '@agent/utils/debugMessageSaver';
+import type { ExtendedTokenUsageStats } from '@agent/types/UsageTypes';
 
 export interface ToolUseCycleOptions {
   /** Model handler for API interactions */
@@ -113,7 +114,7 @@ export async function runToolUseCycle(
     }
     if (usage) {
       const normalized = modelHandler.computeResponseUsage(usage, responseTime);
-      const stats = {
+      const stats: ExtendedTokenUsageStats = {
         inputTokens: normalized.totalInputTokens,
         outputTokens: normalized.totalOutputTokens,
         cost: normalized.cost,
