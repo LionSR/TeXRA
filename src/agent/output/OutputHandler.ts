@@ -9,7 +9,7 @@ import { runLatexFormatter } from '@latex/texFormatter';
 import { XmlOutputManager } from './XmlOutputManager';
 import { LatexDiffManager } from './LatexDiffManager';
 import { DiffStatsManager } from './DiffStatsManager';
-import { NamedOutputFile } from './types';
+import type { NamedOutputFile, OutputFileInfo } from './types';
 import type { IOutputHandler } from './IOutputHandler';
 import { getOutputFileName } from '@agent/utils/outputFileUtils';
 
@@ -160,16 +160,9 @@ export class OutputHandler implements IOutputHandler {
   /**
    * Gather mapping and diff statistics for output files of a round.
    */
-  public async gatherOutputFileInfo(currRound: number): Promise<
-    {
-      path: string;
-      base: string | null;
-      prev: string | null;
-      original: string | null;
-      added?: number;
-      removed?: number;
-    }[]
-  > {
+  public async gatherOutputFileInfo(
+    currRound: number,
+  ): Promise<OutputFileInfo[]> {
     const roundOutputs = this.outputFiles[currRound] || [];
     const baseMap = createFileMapping(this.baseFiles, roundOutputs, 'contains');
     const prevMap =
@@ -185,7 +178,7 @@ export class OutputHandler implements IOutputHandler {
       (this.outputMappings[currRound] || []).map((p) => [p.path, p.source]),
     );
 
-    const infos = [] as any[];
+    const infos: OutputFileInfo[] = [];
     for (const file of roundOutputs) {
       const baseFile =
         Array.from(baseMap.entries()).find(([, out]) => out === file)?.[0] ||
