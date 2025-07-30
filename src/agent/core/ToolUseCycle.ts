@@ -14,6 +14,8 @@ import { BaseTool } from '@tools/core/base';
 import { ToolResult } from '@tools/result';
 import xmlUtils from '@utils/text/xmlUtils';
 import { maybeSaveMessages } from '@agent/utils/debugMessageSaver';
+import type { LinterMessage } from '@frontend/latex/linter';
+import type { BaseError } from '@tools/types';
 
 export interface ToolUseCycleOptions {
   /** Model handler for API interactions */
@@ -184,25 +186,17 @@ export async function runToolUseCycle(
       } catch (err) {
         // Prepare both user-friendly error and detailed diagnostics
         let errorMessage: string;
-        let diagnostics: any;
+        let diagnostics: LinterMessage[] | BaseError | BaseError[] | undefined;
 
         if (err && typeof err === 'object' && 'issues' in err) {
           // This is a Zod validation error
           const zodError = err as any;
           // Simple message for the model/user
           errorMessage = `${name}: Invalid parameters provided`;
-          // Detailed diagnostics for debugging
-          diagnostics = {
-            type: 'validation_error',
-            issues: zodError.issues,
-            formatted: zodError.issues?.map((issue: any) => ({
-              path: issue.path.join('.'),
-              message: issue.message,
-              expected: issue.expected,
-              received: issue.received,
-              code: issue.code,
-            })),
-          };
+          // Convert issues to BaseError array for diagnostics
+          diagnostics = zodError.issues?.map((issue: any) => ({
+            message: issue.message,
+          }));
         } else {
           errorMessage =
             err instanceof Error

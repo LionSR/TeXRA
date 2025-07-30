@@ -1,10 +1,14 @@
+// Local imports - types
+import type { LinterMessage } from '@frontend/latex/linter';
+import type { BaseError } from '@tools/types';
+
 export class ToolResult {
   output?: string;
   error?: string;
   base64Image?: string;
   system?: string;
   isError: boolean;
-  diagnostics?: any; // Additional error details like validation issues
+  diagnostics?: LinterMessage[] | BaseError | BaseError[]; // Additional error details like validation issues
 
   constructor({
     output,
@@ -19,7 +23,7 @@ export class ToolResult {
     base64Image?: string;
     system?: string;
     isError?: boolean;
-    diagnostics?: any;
+    diagnostics?: LinterMessage[] | BaseError | BaseError[];
   }) {
     this.output = output;
     this.error = error;
