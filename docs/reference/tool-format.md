@@ -19,3 +19,11 @@ const tools: ToolDefinition[] = [
 ```
 
 See your provider's documentation for the exact schema.
+
+DeepSeek uses the same structure as OpenAI. Tool calls are returned in
+`choices[0].message.tool_calls` and results should be sent back using:
+
+```ts
+{ role: 'assistant', tool_calls: [/* ... */] }
+{ role: 'tool', tool_call_id: id, content: JSON.stringify(result) }
+```
