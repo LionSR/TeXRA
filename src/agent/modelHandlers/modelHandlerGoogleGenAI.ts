@@ -877,8 +877,8 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     newResponse: string,
     agentSetting: AgentSetting,
   ): boolean {
-    const hitTokenLimit =
-      stopReason === FinishReason.MAX_TOKENS || stopReason === 'MAX_TOKENS';
+    // Google SDK uses the FinishReason enum for stop reasons
+    const hitTokenLimit = stopReason === FinishReason.MAX_TOKENS;
     const containsEndTag = hasEndTag(agentSetting, newResponse);
 
     if (hitTokenLimit && !containsEndTag) {
