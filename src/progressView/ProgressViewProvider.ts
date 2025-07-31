@@ -202,6 +202,12 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       return;
     }
 
+    const theme =
+      vscode.window.activeColorTheme.kind === vscode.ColorThemeKind.Dark
+        ? 'dark'
+        : 'light';
+    this.webviewUpdater.updateTheme(theme);
+
     // Validate and update active stream if necessary
     const streams = this.state.streamTabs.keys();
     if (!streams.includes(this.state.activeStream)) {
