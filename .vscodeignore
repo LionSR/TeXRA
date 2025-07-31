@@ -58,6 +58,7 @@ CLAUDE.md
 !src/historyView/*.js
 
 !src/progressView/modules/uiManagers/*.js
+!src/progressView/modules/handlers/*.js
 !src/progressView/modules/*.js
 !src/progressView/styles/*.css
 !src/progressView/*.js
