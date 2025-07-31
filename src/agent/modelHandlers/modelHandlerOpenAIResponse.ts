@@ -503,7 +503,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
     return call ? JSON.stringify(call, null, 2) : null;
   }
 
-  createFollowUpMessage(
+  createToolUseFollowUpMessages(
     id: string,
     name: string,
     call: any,
