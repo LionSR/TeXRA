@@ -59,7 +59,7 @@ export interface SaveDebugParams {
 /**
  * Save debug objects (messages or responses) to a JSON file when
  * `texra.debug.saveDebugObjects` is enabled.
- * 
+ *
  * @param params - Parameters for saving the debug object
  */
 export async function maybeSaveDebugObject({
@@ -133,9 +133,12 @@ export interface SaveResponseParams {
 /**
  * @deprecated Use maybeSaveDebugObject instead
  */
-export async function maybeSaveMessages(params: SaveMessagesParams): Promise<void> {
-  const { messages, logger, modelName, executionId, groupId, ...fileOptions } = params;
-  
+export async function maybeSaveMessages(
+  params: SaveMessagesParams,
+): Promise<void> {
+  const { messages, logger, modelName, executionId, groupId, ...fileOptions } =
+    params;
+
   await maybeSaveDebugObject({
     object: messages,
     objectType: 'messages',
@@ -147,9 +150,18 @@ export async function maybeSaveMessages(params: SaveMessagesParams): Promise<voi
 /**
  * @deprecated Use maybeSaveDebugObject instead
  */
-export async function maybeSaveResponse(params: SaveResponseParams): Promise<void> {
-  const { responseObject, logger, modelName, executionId, groupId, ...fileOptions } = params;
-  
+export async function maybeSaveResponse(
+  params: SaveResponseParams,
+): Promise<void> {
+  const {
+    responseObject,
+    logger,
+    modelName,
+    executionId,
+    groupId,
+    ...fileOptions
+  } = params;
+
   await maybeSaveDebugObject({
     object: responseObject,
     objectType: 'response',
