@@ -136,6 +136,19 @@ export class WebviewUpdater {
   }
 
   /**
+   * Update the code highlight theme
+   */
+  updateTheme(theme: 'dark' | 'light'): void {
+    const webview = this.getWebview();
+    if (!webview) return;
+
+    webview.postMessage({
+      command: COMMANDS.THEME_SET,
+      theme,
+    });
+  }
+
+  /**
    * Update stream status
    */
   updateStatus(status: StatusType): void {
