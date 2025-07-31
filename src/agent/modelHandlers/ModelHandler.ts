@@ -732,7 +732,7 @@ export abstract class ModelHandler<
   /**
    * Build a provider-specific follow-up message containing a tool result.
    */
-  abstract createFollowUpMessage(
+  abstract createToolUseFollowUpMessages(
     id: string,
     name: string,
     call: any,
