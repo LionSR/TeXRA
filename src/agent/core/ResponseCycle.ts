@@ -20,6 +20,7 @@ import replacementEngine from '@replacement/engine';
 import xmlUtils from '@utils/text/xmlUtils';
 import type { ExecutionId } from '@agent/types/IdentifierTypes';
 import {
+  maybeSaveDebugObject,
   maybeSaveMessages,
   maybeSaveResponse,
 } from '@agent/utils/debugMessageSaver';
