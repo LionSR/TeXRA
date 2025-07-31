@@ -25,6 +25,7 @@ See [texra.ai](https://texra.ai). For detailed guides and usage instructions, vi
 - Git integration for version control
 - ProgressBoard view for detailed logs and re-running tasks
 - Clickable references in the ProgressBoard jump to their \label definitions
+- Syntax-highlighted code blocks in ProgressBoard logs
 - Multiple output support and intelligent merge tools
 
 ## Architecture
