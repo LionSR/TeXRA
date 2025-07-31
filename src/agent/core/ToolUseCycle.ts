@@ -287,7 +287,7 @@ export async function runToolUseCycle(
       resultObj.base64Image = result.base64Image;
     if (result.system !== undefined) resultObj.system = result.system;
 
-    const followUpMsgs = modelHandler.createFollowUpMessage(
+    const followUpMsgs = modelHandler.createToolUseFollowUpMessages(
       id,
       name,
       parsed,
