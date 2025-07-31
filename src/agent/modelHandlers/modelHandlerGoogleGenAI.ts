@@ -578,6 +578,10 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     return messages;
   }
 
+  createAssistantMessage(text: string): Message {
+    return { role: 'model', parts: [{ text }] };
+  }
+
   createMediaContent(mediaMessage: MediaEntry[]): MediaEntry[] {
     this.logger.warn(
       'createMediaContent called on ModelHandlerGoogleGenAI - should be obsolete.',

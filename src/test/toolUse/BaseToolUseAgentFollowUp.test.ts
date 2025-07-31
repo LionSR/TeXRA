@@ -49,6 +49,12 @@ class DummyHandler extends ModelHandler {
     m.push({ role: 'user', content: u });
     return m;
   }
+  createAssistantMessage(text: string) {
+    return { role: 'assistant', content: text } as any;
+  }
+  isEndTurnStop(_r: any): boolean {
+    return false;
+  }
   createMediaContent() {
     return [];
   }

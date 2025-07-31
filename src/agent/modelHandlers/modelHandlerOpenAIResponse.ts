@@ -543,4 +543,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
     });
     return messages;
   }
+
+  createAssistantMessage(text: string): ChatCompletionMessageParam {
+    return { role: 'assistant', content: [{ type: 'text', text }] };
+  }
 }
