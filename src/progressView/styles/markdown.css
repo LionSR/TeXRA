@@ -7,8 +7,8 @@
 }
 
 .model-response-content {
-  padding: var(--spacing-small) 0;
-  /* Override log-line whitespace preservation for model responses */
+  padding: 0;
+  /* Model responses use normal whitespace handling */
   white-space: normal;
 }
 
@@ -184,6 +184,14 @@
 /* Additional enhancements for scratchpad content */
 .markdown-content p:first-child {
   margin-top: 0;
+}
+
+.markdown-content pre:first-child {
+  margin-top: 0;
+}
+
+.markdown-content pre:last-child {
+  margin-bottom: 0;
 }
 
 .markdown-content p:last-child {
