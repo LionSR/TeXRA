@@ -322,6 +322,17 @@ export class ModelHandlerAnthropic extends ModelHandler<
     return messages;
   }
 
+  async createFollowUpMessages(
+    messages: MessageParam[],
+    userMessage: string,
+  ): Promise<MessageParam[]> {
+    messages.push({
+      role: 'user',
+      content: [{ type: 'text', text: userMessage, citations: null }],
+    });
+    return messages;
+  }
+
   /** Converts image/document content array into Anthropic-compatible message format with type and source metadata. */
   createMediaContent(mediaMessage: MediaEntry[]): ContentBlock[] {
     if (mediaMessage.length === 0) {

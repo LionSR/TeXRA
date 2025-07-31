@@ -27,6 +27,9 @@ export const ELEMENT_IDS = {
   PACK_STREAM_BTN: 'packStreamBtn',
   CLEAN_STREAM_BTN: 'cleanStreamBtn',
   ERASE_STREAM_BTN: 'eraseStreamBtn',
+  FOLLOW_UP_CONTAINER: 'followUpContainer',
+  FOLLOW_UP_INPUT: 'followUpInput',
+  SEND_FOLLOW_UP_BTN: 'sendFollowUpBtn',
 };
 
 // Default sizes for split view

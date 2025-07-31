@@ -160,6 +160,7 @@ export const PROGRESS_VIEW_COMMANDS = {
   CLEAN_STREAM: 'cleanStream',
   SORT_STREAMS: 'sortStreams',
   RESTORE_STATE: 'restoreState',
+  SEND_FOLLOW_UP: 'sendFollowUp',
 
   // File operations
   OPEN_FILE: 'openFile',
