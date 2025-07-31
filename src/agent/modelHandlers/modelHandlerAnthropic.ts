@@ -128,11 +128,21 @@ export class ModelHandlerAnthropic extends ModelHandler<
     }
 
     if (this.capabilities.supportsTokenCounting) {
-      const responseTokenCount = await client.beta.messages.countTokens({
+      const countTokensParams: any = {
         model: this.config.fullName,
         system: systemPrompt,
         messages: messages,
-      });
+      };
+
+      // If thinking is enabled, we need to pass it to countTokens as well
+      // to ensure consistency with the actual message creation.
+      // Without this, the API returns an error when messages contain thinking blocks.
+      if (options.thinking) {
+        countTokensParams.thinking = options.thinking;
+      }
+
+      const responseTokenCount =
+        await client.beta.messages.countTokens(countTokensParams);
       this.logger.debug(
         `Token count of message: ${responseTokenCount.input_tokens}`,
       );
