@@ -435,29 +435,31 @@ export class LogEntryFormatter {
    * @private
    * @param {Object} params - Response parameters
    * @returns {HTMLElement|null} DOM element for the model response
-   *
-   * IMPORTANT: Like the format() method, this uses string-based HTML generation
-   * to maintain precise whitespace control. Templates would be reformatted by
-   * Prettier, causing excessive line breaks in the output.
-   * DO NOT convert to templates without addressing the whitespace issue.
    */
   _formatModelResponse({ id, groupId, timestamp, verbose, content, level }) {
+    const element = createFromTemplate('modelResponseTemplate');
+    if (!element) return null;
+
     const date = new Date(timestamp);
     const { fullTimestamp, timeDisplay } = this._formatTimestamp(date);
-    const groupAttr = groupId ? ` data-group-id="${groupId}"` : '';
-    const prefix = `<div class="log-line" data-log-id="${id}"${groupAttr} data-full-timestamp="${fullTimestamp}">`;
-    const timeMarkup = `<span class="timestamp" title="${fullTimestamp}">${
-      verbose ? `[${timeDisplay}]` : ''
-    }</span>`;
-    const parsedMarkdown = this._processMarkdownContent(content);
-    const html =
-      prefix +
-      `${timeMarkup} <span class="message-${level}"><div class="model-response-content markdown-content">${parsedMarkdown}</div></span></div>`;
 
-    // Convert HTML string to DOM element
-    const wrapper = document.createElement('div');
-    wrapper.innerHTML = html;
-    return wrapper.firstElementChild;
+    element.dataset.logId = id;
+    element.dataset.fullTimestamp = fullTimestamp;
+    if (groupId) element.dataset.groupId = groupId;
+
+    const ts = element.querySelector('.timestamp');
+    if (ts) {
+      ts.title = fullTimestamp;
+      if (verbose) ts.textContent = `[${timeDisplay}]`;
+    }
+
+    const contentElem = element.querySelector('.model-response-content');
+    if (contentElem) {
+      contentElem.classList.add(`message-${level}`);
+      contentElem.innerHTML = this._processMarkdownContent(content);
+    }
+
+    return element;
   }
 
   _formatFileList(content, data, logId) {
