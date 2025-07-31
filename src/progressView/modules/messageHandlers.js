@@ -3,6 +3,7 @@ import { progressViewState } from './progressViewState.js';
 import { progressViewDomHandler, LogEntryFormatter } from './domHandlers.js';
 import { COMMANDS, STATUS, ELEMENT_IDS } from './constants.js';
 import { registerMessageHandlers } from '@common/webviewContext.js';
+import { createThemeHandlers } from './handlers/themeHandlers.js';
 
 // Create shorter aliases for internal use
 const state = progressViewState;
@@ -14,7 +15,10 @@ export class ProgressViewMessageHandler {
   constructor() {
     this._cleanupFn = null;
     this._entryFormatter = new LogEntryFormatter();
-    this._handlers = this._createHandlers();
+    this._handlers = {
+      ...createThemeHandlers(),
+      ...this._createHandlers(),
+    };
   }
 
   _createHandlers() {
