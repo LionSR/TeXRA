@@ -359,6 +359,10 @@ export class ModelHandlerOpenAI extends ModelHandler<
     return messages;
   }
 
+  createAssistantMessage(text: string): ChatCompletionMessageParam {
+    return { role: 'assistant', content: [{ type: 'text', text }] };
+  }
+
   /** Formats image/audio content for OpenAI/Google's vision/audio API. */
   createMediaContent(mediaMessage: MediaEntry[]): ChatCompletionContentPart[] {
     return mediaMessage.flatMap((media): ChatCompletionContentPart[] => {
