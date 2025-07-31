@@ -190,4 +190,10 @@ export interface IModelHandler<
     toolState?: ToolState,
     text?: string,
   ): M[];
+
+  /**
+   * Create provider-specific messages for a simple text follow-up.
+   * Appends the user's message to the existing conversation array.
+   */
+  createFollowUpMessages(messages: M[], userMessage: string): Promise<M[]>;
 }
