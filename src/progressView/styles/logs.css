@@ -318,4 +318,15 @@
   .header-actions {
     margin-left: auto;
   }
+
+  .follow-up-container {
+    display: none;
+    padding: var(--spacing-small);
+    border-top: 1px solid var(--vscode-panel-border);
+    gap: var(--spacing-small);
+  }
+
+  .follow-up-container input {
+    flex: 1;
+  }
 }

@@ -570,6 +570,14 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     return messages;
   }
 
+  async createFollowUpMessages(
+    messages: Message[],
+    userMessage: string,
+  ): Promise<Message[]> {
+    messages.push({ role: 'user', parts: [{ text: userMessage }] });
+    return messages;
+  }
+
   createMediaContent(mediaMessage: MediaEntry[]): MediaEntry[] {
     this.logger.warn(
       'createMediaContent called on ModelHandlerGoogleGenAI - should be obsolete.',

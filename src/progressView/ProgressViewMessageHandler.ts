@@ -37,6 +37,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
       [PROGRESS_VIEW_COMMANDS.SORT_STREAMS]: this.handleSortStreams.bind(this),
       [PROGRESS_VIEW_COMMANDS.RESTORE_STATE]:
         this.handleRestoreState.bind(this),
+      [PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP]:
+        this.handleSendFollowUp.bind(this),
 
       // File operations
       [PROGRESS_VIEW_COMMANDS.OPEN_FILE]: this.handleOpenFile.bind(this),
@@ -152,6 +154,16 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     if (taskState) {
       await vscode.commands.executeCommand('texra.restoreState', taskState);
     }
+  }
+
+  private async handleSendFollowUp(
+    message: any,
+    _webviewView: vscode.WebviewView,
+  ): Promise<void> {
+    await vscode.commands.executeCommand('texra.sendFollowUp', {
+      stream: message.stream,
+      text: message.text,
+    });
   }
 
   private async handleOpenFile(
