@@ -19,11 +19,7 @@ import { checkForMassiveRepetition } from '@agent/utils/text/repetitionUtils';
 import replacementEngine from '@replacement/engine';
 import xmlUtils from '@utils/text/xmlUtils';
 import type { ExecutionId } from '@agent/types/IdentifierTypes';
-import {
-  maybeSaveDebugObject,
-  maybeSaveMessages,
-  maybeSaveResponse,
-} from '@agent/utils/debugMessageSaver';
+import { maybeSaveDebugObject } from '@agent/utils/debugMessageSaver';
 
 // Local imports - agent components
 import type { AgentConfig } from './AgentConfig';
@@ -35,7 +31,6 @@ import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage
 
 // Shared constants
 import { K_SLICE, REPETITION_DETECTION_THRESHOLD } from '@utils/config';
-import { getConfig } from '@utils/config';
 
 /**
  * Options required to run a single response cycle.
@@ -93,14 +88,23 @@ export async function runResponseCycle(
       userVars,
     );
 
-    await maybeSaveMessages({
-      messages,
+    // Common debug save parameters
+    const debugContext = {
       logger,
-      continuationCount: stateRound.continuationCount,
-      outputFile,
       modelName: agentConfig.model,
       executionId,
       groupId: taskGroupId,
+    };
+    const debugFileOptions = {
+      continuationCount: stateRound.continuationCount,
+      outputFile,
+    };
+
+    await maybeSaveDebugObject({
+      object: messages,
+      objectType: 'messages',
+      context: debugContext,
+      fileOptions: debugFileOptions,
     });
 
     const abortController = new AbortController();
@@ -119,16 +123,19 @@ export async function runResponseCycle(
           : undefined,
       );
     } finally {
+      await maybeSaveDebugObject({
+        object: responseObject,
+        objectType: 'response',
+        context: debugContext,
+        fileOptions: debugFileOptions,
+      });
       setAbortController(null);
     }
-    await maybeSaveResponse({
-      responseObject,
-      logger,
-      continuationCount: stateRound.continuationCount,
-      outputFile,
-      modelName: agentConfig.model,
-      executionId,
-      groupId: taskGroupId,
+    await maybeSaveDebugObject({
+      object: responseObject,
+      objectType: 'response',
+      context: debugContext,
+      fileOptions: debugFileOptions,
     });
     if (!responseObject) {
       logger.warn(
