@@ -10,7 +10,7 @@ export function createThemeHandlers({ postHandle } = {}) {
   const updateHighlightTheme = (theme) => {
     const link = document.getElementById('hljs-theme');
     if (!link) return;
-    const base = 'https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/';
+    const base = 'https://cdn.jsdelivr.net/npm/highlight.js@11.11.1/styles/';
     link.href = `${base}${theme === 'dark' ? 'github-dark' : 'github'}.css`;
   };
 
