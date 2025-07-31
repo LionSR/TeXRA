@@ -93,7 +93,10 @@ export class TaskGroupManager {
             }
           }
           // If sibling is a log message, check if group should come before it
-          else if (sibling.classList.contains('log-line')) {
+          else if (
+            sibling.classList.contains('log-line') ||
+            sibling.classList.contains('model-response-line')
+          ) {
             // Extract full timestamp from data attribute if available
             const msgFullTimestamp = sibling.dataset.fullTimestamp;
             const msgTime = msgFullTimestamp
@@ -338,7 +341,10 @@ export class LogEntryManager {
             }
           }
           // If this is a log message, extract its timestamp
-          else if (child.classList.contains('log-line')) {
+          else if (
+            child.classList.contains('log-line') ||
+            child.classList.contains('model-response-line')
+          ) {
             // Try to get the full timestamp from data attribute
             const childFullTimestamp = child.dataset.fullTimestamp;
             if (childFullTimestamp) {
