@@ -19,7 +19,11 @@ import { checkForMassiveRepetition } from '@agent/utils/text/repetitionUtils';
 import replacementEngine from '@replacement/engine';
 import xmlUtils from '@utils/text/xmlUtils';
 import type { ExecutionId } from '@agent/types/IdentifierTypes';
-import { maybeSaveMessages } from '@agent/utils/debugMessageSaver';
+import {
+  maybeSaveDebugObject,
+  maybeSaveMessages,
+  maybeSaveResponse,
+} from '@agent/utils/debugMessageSaver';
 
 // Local imports - agent components
 import type { AgentConfig } from './AgentConfig';
@@ -117,6 +121,15 @@ export async function runResponseCycle(
     } finally {
       setAbortController(null);
     }
+    await maybeSaveResponse({
+      responseObject,
+      logger,
+      continuationCount: stateRound.continuationCount,
+      outputFile,
+      modelName: agentConfig.model,
+      executionId,
+      groupId: taskGroupId,
+    });
     if (!responseObject) {
       logger.warn(
         'Model response was aborted or returned no data; output may be incomplete.',

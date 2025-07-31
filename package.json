@@ -724,10 +724,10 @@
             "description": "Whether to show verbose debug messages in the logger view",
             "scope": "resource"
           },
-          "texra.debug.saveMessageObjects": {
+          "texra.debug.saveDebugObjects": {
             "type": "boolean",
             "default": false,
-            "description": "Save message JSON objects to files before API calls for debugging purposes",
+            "description": "Save message and response objects to JSON files for debugging purposes",
             "scope": "resource"
           }
         }
