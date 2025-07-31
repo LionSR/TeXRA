@@ -194,11 +194,11 @@ Control logging behavior:
 
 ```json
 "texra.logger.debugMode": false,
-"texra.debug.saveMessageObjects": false
+"texra.debug.saveDebugObjects": false
 ```
 
 - `debugMode`: Show detailed debug messages in the logger view
-- `saveMessageObjects`: Save message JSON objects to files before API calls (for debugging, including tool use cycles)
+- `saveDebugObjects`: Save message and response objects to JSON files for debugging purposes (includes both API messages and raw responses)
 
 ## Environment-Specific Configuration
 
