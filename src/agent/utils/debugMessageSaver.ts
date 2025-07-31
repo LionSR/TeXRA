@@ -11,58 +11,70 @@ import type { ExecutionId } from '@agent/types/IdentifierTypes';
 import { AgentLogger } from '@logger/AgentLogger';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 
-export interface SaveDebugObjectParams {
-  object: unknown;
+/**
+ * Context information for the debug save operation
+ */
+export interface DebugContext {
+  /** Logger instance for the operation */
   logger: AgentLogger;
-  continuationCount?: number;
-  outputFile?: string;
-  baseName?: string;
+  /** Model name being used */
   modelName?: string;
+  /** Execution ID if part of a task run */
   executionId?: ExecutionId;
-  groupId?: string;
-  configKey: string;
-  label: string;
-}
-
-export interface SaveMessagesParams {
-  messages: ProviderMessage[];
-  logger: AgentLogger;
-  continuationCount?: number;
-  outputFile?: string;
-  baseName?: string;
-  /** Name of the model used for this conversation */
-  modelName?: string;
-  executionId?: ExecutionId;
+  /** Group ID for log correlation */
   groupId?: string;
 }
 
-export interface SaveResponseParams {
-  responseObject: any;
-  logger: AgentLogger;
-  continuationCount?: number;
+/**
+ * File naming and location options
+ */
+export interface FileOptions {
+  /** Output file path (if specific path needed) */
   outputFile?: string;
+  /** Base name for the file (e.g., 'messages', 'response') */
   baseName?: string;
-  modelName?: string;
-  executionId?: ExecutionId;
-  groupId?: string;
+  /** Continuation count for multi-part responses */
+  continuationCount?: number;
 }
 
-async function maybeSaveDebugObject({
+/**
+ * Type of object being saved (for file naming and logging)
+ */
+export type DebugObjectType = 'messages' | 'response';
+
+/**
+ * Parameters for saving debug objects
+ */
+export interface SaveDebugParams {
+  /** The object to save (messages array or response object) */
+  object: ProviderMessage[] | any;
+  /** Type of object for file naming */
+  objectType: DebugObjectType;
+  /** Execution context */
+  context: DebugContext;
+  /** File options */
+  fileOptions?: FileOptions;
+}
+
+/**
+ * Save debug objects (messages or responses) to a JSON file when
+ * `texra.debug.saveDebugObjects` is enabled.
+ * 
+ * @param params - Parameters for saving the debug object
+ */
+export async function maybeSaveDebugObject({
   object,
-  logger,
-  continuationCount,
-  outputFile,
-  baseName = 'debug',
-  modelName,
-  executionId,
-  groupId,
-  configKey,
-  label,
-}: SaveDebugObjectParams): Promise<void> {
-  const shouldSave = getConfig<boolean>(configKey, false);
+  objectType,
+  context,
+  fileOptions = {},
+}: SaveDebugParams): Promise<void> {
+  const shouldSave = getConfig<boolean>('debug.saveDebugObjects', false);
   if (!shouldSave) {
     return;
   }
+
+  const { logger, modelName, executionId, groupId } = context;
+  const { outputFile, baseName = objectType, continuationCount } = fileOptions;
 
   const fileBase =
     outputFile !== undefined
@@ -87,60 +99,61 @@ async function maybeSaveDebugObject({
         content,
       );
     }
-    logger.info(`Saved ${label} to ${debugFilePath}`, groupId);
+    logger.info(`Saved ${objectType} object to ${debugFilePath}`, groupId);
   } catch (error) {
-    logger.error(`Failed to save ${label}: ${error}`, groupId);
+    logger.error(`Failed to save ${objectType} object: ${error}`, groupId);
   }
 }
 
+// Legacy function signatures for backward compatibility
+// These will be removed in a future version
+
+export interface SaveMessagesParams {
+  messages: ProviderMessage[];
+  logger: AgentLogger;
+  continuationCount?: number;
+  outputFile?: string;
+  baseName?: string;
+  modelName?: string;
+  executionId?: ExecutionId;
+  groupId?: string;
+}
+
+export interface SaveResponseParams {
+  responseObject: any;
+  logger: AgentLogger;
+  continuationCount?: number;
+  outputFile?: string;
+  baseName?: string;
+  modelName?: string;
+  executionId?: ExecutionId;
+  groupId?: string;
+}
+
 /**
- * Save conversation message objects to a JSON file when
- * `texra.debug.saveMessageObjects` is enabled.
+ * @deprecated Use maybeSaveDebugObject instead
  */
-export async function maybeSaveMessages({
-  messages,
-  logger,
-  continuationCount,
-  outputFile,
-  baseName = 'messages',
-  modelName,
-  executionId,
-  groupId,
-}: SaveMessagesParams): Promise<void> {
+export async function maybeSaveMessages(params: SaveMessagesParams): Promise<void> {
+  const { messages, logger, modelName, executionId, groupId, ...fileOptions } = params;
+  
   await maybeSaveDebugObject({
     object: messages,
-    logger,
-    continuationCount,
-    outputFile,
-    baseName,
-    modelName,
-    executionId,
-    groupId,
-    configKey: 'debug.saveMessageObjects',
-    label: 'message object',
+    objectType: 'messages',
+    context: { logger, modelName, executionId, groupId },
+    fileOptions,
   });
 }
 
-export async function maybeSaveResponse({
-  responseObject,
-  logger,
-  continuationCount,
-  outputFile,
-  baseName = 'response',
-  modelName,
-  executionId,
-  groupId,
-}: SaveResponseParams): Promise<void> {
+/**
+ * @deprecated Use maybeSaveDebugObject instead
+ */
+export async function maybeSaveResponse(params: SaveResponseParams): Promise<void> {
+  const { responseObject, logger, modelName, executionId, groupId, ...fileOptions } = params;
+  
   await maybeSaveDebugObject({
     object: responseObject,
-    logger,
-    continuationCount,
-    outputFile,
-    baseName,
-    modelName,
-    executionId,
-    groupId,
-    configKey: 'debug.saveResponseObjects',
-    label: 'response object',
+    objectType: 'response',
+    context: { logger, modelName, executionId, groupId },
+    fileOptions,
   });
 }
