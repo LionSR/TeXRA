@@ -742,6 +742,14 @@ export abstract class ModelHandler<
   ): any[];
 
   /**
+   * Append a simple text follow-up from the user.
+   */
+  abstract createFollowUpMessages(
+    messages: M[],
+    userMessage: string,
+  ): Promise<M[]>;
+
+  /**
    * Creates a log group for model operations with the given name.
    * @param name Name of the operation group
    * @param parentGroupId Optional parent group ID

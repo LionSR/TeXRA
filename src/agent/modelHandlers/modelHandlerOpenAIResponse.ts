@@ -532,4 +532,15 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
     messages.push(callMsg, resultMsg);
     return messages;
   }
+
+  async createFollowUpMessages(
+    messages: ResponseInputItem[],
+    userMessage: string,
+  ): Promise<ResponseInputItem[]> {
+    messages.push({
+      role: 'user',
+      content: [{ type: 'input_text', text: userMessage }],
+    });
+    return messages;
+  }
 }
