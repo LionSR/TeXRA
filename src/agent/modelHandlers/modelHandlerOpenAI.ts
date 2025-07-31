@@ -193,7 +193,7 @@ export class ModelHandlerOpenAI extends ModelHandler<
           return response;
         }
 
-        response = await stream.finalMessage();
+        response = await stream.finalChatCompletion();
 
         // in the future we can add: stream_options: {"include_usage": true} to get usage statistics
         // in the future if we pass stream to outside (signal: controller.signal)), calling stream.controller.abort() will abort the stream; which will be very useful for our stop button (controller.abort();)
