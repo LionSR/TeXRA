@@ -72,7 +72,7 @@ export async function promptToAddAgentToConfig(
 
   const addButton = 'Add Agent';
   const choice = await vscode.window.showInformationMessage(
-    `Agent "${agentName}" was created. Add it to 'texra.agents'?`,
+    `Agent "${agentName}" was created or modified. Add it to 'texra.agents'?`,
     addButton,
     'Cancel',
   );

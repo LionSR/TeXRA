@@ -125,6 +125,10 @@ export function generateXmlLatexConversions(environments: string[]): {
     // LaTeX with incorrect labels
     patterns[`\\begin{-${env}}`] = `\\begin{${env}}`;
     patterns[`\\end{-${env}}`] = `\\end{${env}}`;
+
+    // LaTeX with incorrect XML ending
+    patterns[`\\begin${env}`] = `\\begin{${env}}`;
+    patterns[`\\end${env}`] = `\\end{${env}}`;
   });
 
   return patterns;
