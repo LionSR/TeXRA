@@ -180,8 +180,8 @@ directory:
 .vscode/texra/taskRuns/<executionId>/
 ```
 
-This folder stores intermediate artifacts such as the optional debug JSON 
-files written when the `texra.debug.saveDebugObjects` setting is enabled 
+This folder stores intermediate artifacts such as the optional debug JSON
+files written when the `texra.debug.saveDebugObjects` setting is enabled
 (saves both message and response objects for debugging). These directories
 are safe to delete if you need to reclaim space.
 
