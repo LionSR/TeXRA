@@ -15,7 +15,10 @@ import type { ProviderMessage } from '../modelHandlers/types/ProviderMessage';
 import { BaseTool } from '@tools/core/base';
 import { ToolResult } from '@tools/result';
 import xmlUtils from '@utils/text/xmlUtils';
-import { maybeSaveMessages } from '@agent/utils/debugMessageSaver';
+import {
+  maybeSaveMessages,
+  maybeSaveResponse,
+} from '@agent/utils/debugMessageSaver';
 import { ANTHROPIC_STOP } from '../modelHandlers/types/StopReasonTypes';
 import { ToolState } from './ToolState';
 
@@ -98,6 +101,14 @@ export async function runToolUseCycle(
     } finally {
       setAbortController(null);
     }
+    await maybeSaveResponse({
+      responseObject: response,
+      logger,
+      continuationCount: iteration,
+      baseName: 'tooluse_response',
+      modelName,
+      groupId,
+    });
     const responseTime = (Date.now() - startTime) / 1000;
     if (!response) {
       break;

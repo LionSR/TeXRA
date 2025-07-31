@@ -729,6 +729,12 @@
             "default": false,
             "description": "Save message JSON objects to files before API calls for debugging purposes",
             "scope": "resource"
+          },
+          "texra.debug.saveResponseObjects": {
+            "type": "boolean",
+            "default": false,
+            "description": "Save raw model response objects to files after API calls for debugging purposes",
+            "scope": "resource"
           }
         }
       },
