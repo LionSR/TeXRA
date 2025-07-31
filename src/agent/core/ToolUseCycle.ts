@@ -74,11 +74,16 @@ export async function runToolUseCycle(
 
     await maybeSaveDebugObject({
       object: messages,
-      logger,
-      continuationCount: iteration,
-      baseName: 'tooluse',
-      modelName,
-      groupId,
+      objectType: 'messages',
+      context: {
+        logger,
+        modelName,
+        groupId,
+      },
+      fileOptions: {
+        continuationCount: iteration,
+        baseName: 'tooluse',
+      },
     });
 
     const abortController = new AbortController();
@@ -100,11 +105,16 @@ export async function runToolUseCycle(
     }
     await maybeSaveDebugObject({
       object: response,
-      logger,
-      continuationCount: iteration,
-      baseName: 'tooluse_response',
-      modelName,
-      groupId,
+      objectType: 'response',
+      context: {
+        logger,
+        modelName,
+        groupId,
+      },
+      fileOptions: {
+        continuationCount: iteration,
+        baseName: 'tooluse_response',
+      },
     });
     const responseTime = (Date.now() - startTime) / 1000;
     if (!response) {
