@@ -182,7 +182,7 @@ export interface IModelHandler<
    * @param result - Object with output/error fields
    * @returns Tuple of [call message, result message]
    */
-  createFollowUpMessage(
+  createToolUseFollowUpMessages(
     id: string,
     name: string,
     call: any,
