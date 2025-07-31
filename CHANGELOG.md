@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.32.5 - 2025-07-31
+
+- Added syntax highlighting for code blocks in the progress view using
+  `markdown-it-highlightjs`.
+
 ## 0.32.4 - 2025-07-25
 
 - Right-click on YAML agent files in Explorer to quickly add them to your agent list.
