@@ -1,4 +1,4 @@
-// Utility for saving message objects during debugging
+// Utility for saving debug objects (messages/responses) during debugging
 
 // Standard library imports
 import * as path from 'path';
@@ -10,6 +10,19 @@ import { getConfig } from '@utils/config';
 import type { ExecutionId } from '@agent/types/IdentifierTypes';
 import { AgentLogger } from '@logger/AgentLogger';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
+
+export interface SaveDebugObjectParams {
+  object: unknown;
+  logger: AgentLogger;
+  continuationCount?: number;
+  outputFile?: string;
+  baseName?: string;
+  modelName?: string;
+  executionId?: ExecutionId;
+  groupId?: string;
+  configKey: string;
+  label: string;
+}
 
 export interface SaveMessagesParams {
   messages: ProviderMessage[];
@@ -23,21 +36,30 @@ export interface SaveMessagesParams {
   groupId?: string;
 }
 
-/**
- * Save conversation message objects to a JSON file when
- * `texra.debug.saveMessageObjects` is enabled.
- */
-export async function maybeSaveMessages({
-  messages,
+export interface SaveResponseParams {
+  responseObject: any;
+  logger: AgentLogger;
+  continuationCount?: number;
+  outputFile?: string;
+  baseName?: string;
+  modelName?: string;
+  executionId?: ExecutionId;
+  groupId?: string;
+}
+
+async function maybeSaveDebugObject({
+  object,
   logger,
   continuationCount,
   outputFile,
-  baseName = 'messages',
+  baseName = 'debug',
   modelName,
   executionId,
   groupId,
-}: SaveMessagesParams): Promise<void> {
-  const shouldSave = getConfig<boolean>('debug.saveMessageObjects', false);
+  configKey,
+  label,
+}: SaveDebugObjectParams): Promise<void> {
+  const shouldSave = getConfig<boolean>(configKey, false);
   if (!shouldSave) {
     return;
   }
@@ -56,7 +78,7 @@ export async function maybeSaveMessages({
     : WorkspaceFS.fullPath(debugFileName);
 
   try {
-    const content = JSON.stringify(messages, null, 2);
+    const content = JSON.stringify(object, null, 2);
     if (executionId) {
       await StorageFS.write(debugFilePath, content);
     } else {
@@ -65,8 +87,60 @@ export async function maybeSaveMessages({
         content,
       );
     }
-    logger.info(`Saved message object to ${debugFilePath}`, groupId);
+    logger.info(`Saved ${label} to ${debugFilePath}`, groupId);
   } catch (error) {
-    logger.error(`Failed to save message object: ${error}`, groupId);
+    logger.error(`Failed to save ${label}: ${error}`, groupId);
   }
+}
+
+/**
+ * Save conversation message objects to a JSON file when
+ * `texra.debug.saveMessageObjects` is enabled.
+ */
+export async function maybeSaveMessages({
+  messages,
+  logger,
+  continuationCount,
+  outputFile,
+  baseName = 'messages',
+  modelName,
+  executionId,
+  groupId,
+}: SaveMessagesParams): Promise<void> {
+  await maybeSaveDebugObject({
+    object: messages,
+    logger,
+    continuationCount,
+    outputFile,
+    baseName,
+    modelName,
+    executionId,
+    groupId,
+    configKey: 'debug.saveMessageObjects',
+    label: 'message object',
+  });
+}
+
+export async function maybeSaveResponse({
+  responseObject,
+  logger,
+  continuationCount,
+  outputFile,
+  baseName = 'response',
+  modelName,
+  executionId,
+  groupId,
+}: SaveResponseParams): Promise<void> {
+  await maybeSaveDebugObject({
+    object: responseObject,
+    logger,
+    continuationCount,
+    outputFile,
+    baseName,
+    modelName,
+    executionId,
+    groupId,
+    configKey: 'debug.saveResponseObjects',
+    label: 'response object',
+  });
 }
