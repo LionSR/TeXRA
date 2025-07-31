@@ -986,7 +986,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     return null;
   }
 
-  createFollowUpMessage(
+  createToolUseFollowUpMessages(
     id: string,
     name: string,
     call: any,
