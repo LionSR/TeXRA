@@ -14,6 +14,7 @@
 // Third-party imports
 import MarkdownIt from 'markdown-it';
 import markdownItKatex from '@vscode/markdown-it-katex';
+import highlight from 'markdown-it-highlightjs';
 import { encode as encodeHtml, decode as decodeHtml } from 'he';
 // Local imports
 import { katexMacros } from './katexMacros.js';
@@ -117,11 +118,13 @@ export class LogEntryFormatter {
       breaks: false,
       linkify: true,
       html: false,
-    }).use(markdownItKatex, {
-      throwOnError: false,
-      errorColor: '#cc0000',
-      macros: katexMacros,
-    });
+    })
+      .use(markdownItKatex, {
+        throwOnError: false,
+        errorColor: '#cc0000',
+        macros: katexMacros,
+      })
+      .use(highlight);
   }
 
   /**
