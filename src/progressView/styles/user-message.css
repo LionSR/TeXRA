@@ -1,0 +1,53 @@
+/**
+ * User message styles for ProgressView
+ * Formatting for user follow-up messages in chat
+ */
+
+.user-message-container {
+  display: flex;
+  justify-content: flex-end;
+  margin: var(--spacing-medium) 0;
+  padding: 0 var(--spacing-medium);
+}
+
+.user-message {
+  background-color: var(--vscode-button-background);
+  border: 1px solid var(--vscode-button-border, var(--vscode-button-background));
+  border-radius: var(--border-radius-medium);
+  padding: var(--spacing-small) var(--spacing-medium);
+  max-width: 70%;
+  position: relative;
+  box-shadow: 0 1px 2px var(--vscode-widget-shadow);
+  margin-left: auto;
+}
+
+.user-message-header {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-small);
+  margin-bottom: var(--spacing-tiny);
+  font-size: var(--font-size-sm);
+  color: var(--vscode-button-foreground);
+  opacity: 0.8;
+}
+
+.user-message-icon {
+  font-size: var(--font-size-sm);
+}
+
+.user-message-content {
+  color: var(--vscode-button-foreground);
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  line-height: 1.4;
+}
+
+.user-message-timestamp {
+  font-size: var(--font-size-sm);
+  color: var(--vscode-descriptionForeground);
+}
+
+/* Hover effect */
+.user-message:hover {
+  background-color: var(--vscode-button-hoverBackground);
+}
