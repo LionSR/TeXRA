@@ -135,6 +135,8 @@ export class ModelHandlerAnthropic extends ModelHandler<
       };
 
       // If thinking is enabled, we need to pass it to countTokens as well
+      // to ensure consistency with the actual message creation.
+      // Without this, the API returns an error when messages contain thinking blocks.
       if (options.thinking) {
         countTokensParams.thinking = options.thinking;
       }
