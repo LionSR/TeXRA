@@ -196,4 +196,14 @@ export interface IModelHandler<
    * Appends the user's message to the existing conversation array.
    */
   createFollowUpMessages(messages: M[], userMessage: string): Promise<M[]>;
+
+  /**
+   * Build a simple assistant message from plain text.
+   */
+  createAssistantMessage(text: string): M;
+
+  /**
+   * Determine if the stop reason represents an end-turn marker.
+   */
+  isEndTurnStop(reason: ProviderStopReason): boolean;
 }
