@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 TeXRA is a VS Code extension that serves as an AI-powered LaTeX research assistant. It uses Large Language Models to help academics with writing, research, and document processing.
 
+**Documentation Note**: When updating the CHANGELOG or release notes, focus on user-facing features, bug fixes, and improvements that directly impact the user experience.
+
 ## Development Commands
 
 ### Build and Development

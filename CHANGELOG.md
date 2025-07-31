@@ -2,142 +2,234 @@
 
 All notable changes to this project will be documented in this file.
 
-## 0.32.5 - 2025-07-31
+## [0.32.5] - 2025-07-31
 
-- Added syntax highlighting for code blocks in the progress view using
-  `markdown-it-highlightjs`.
+### Features
 
-## 0.32.4 - 2025-07-25
+- Added syntax highlighting for code blocks in the progress view
+- Introduced tool-use agents with support for web search and code execution
+- Added stream sorting option in progress view settings
 
-- Right-click on YAML agent files in Explorer to quickly add them to your agent list.
-- Agent configuration improvements with better file type handling and validation.
-- Fixed restoration of agent states when reopening TeXRA sessions.
-- Improved agent metadata handling for better performance tracking.
-- Duplicate agents removed from main view dropdown.
+### Bug Fixes
 
-## 0.32.3 - 2025-07-20
+- Fixed duplicate agents appearing in the dropdown menu
+- Improved theme switching for code highlighting
+- Fixed various issues with file list button interactions
 
-- Improved statistics view UI with cleaner rendering and streamlined display.
+## [0.32.4] - 2025-07-25
 
-## 0.32.2 - 2025-07-19
+### Features
 
-- Fixed missing LaTeX diff message rendering in progress view.
+- Right-click on YAML agent files in Explorer to quickly add them to your agent list
+- Improved agent configuration with better file type handling and validation
 
-## 0.32.1 - 2025-07-10
+### Bug Fixes
 
-- Default model switched to **Gemini 2.5 Pro**.
-- Added Grok 4 model with token limit adjustments.
-- Extended support for Grok via dedicated handler and SDK updates.
+- Fixed restoration of agent states when reopening TeXRA sessions
+- Improved agent metadata handling for better performance tracking
 
-## 0.32.2 - 2025-07-12
+## [0.32.3] - 2025-07-20
 
-- Added "Add Agent to List" context menu option in the TeX Agents view that
-  validates the file then updates `texra.agents` without an extra prompt.
-- Improved YAML validation to handle `.YAML` files and show progress.
+### Features
 
-## 0.32.0 - 2025-07-07
+- Improved statistics view UI with cleaner rendering and streamlined display
 
-- Default model fix
+## [0.32.2] - 2025-07-19
 
-## 0.31.10 - 2025-07-04
+### Bug Fixes
 
-- Progress view templates for consistent UI.
-- Markdown rendering restored using markdown-it with KaTeX.
-- Display diff errors as tooltips.
-- Consolidated command constants across webviews.
+- Fixed missing LaTeX diff message rendering in progress view
 
-## 0.31.9 - 2025-07-01
+## [0.32.1] - 2025-07-10
 
-- Major progress view refactor with modular architecture.
-- Improved file list display and structured logging.
-- Missing output files now highlighted with direct links.
+### Features
 
-## 0.31.8 - 2025-06-28
+- Default model switched to **Gemini 2.5 Pro**
+- Added Grok 4 model with extended context window support
 
-- Added diagnostics tool and validation agent.
-- KaTeX math rendering in progress view.
-- Introduced progress event bus for smoother streaming.
+## [0.32.0] - 2025-07-07
 
-## 0.31.7 - 2025-06-25
+### Features
 
-- Added bulk latexdiff-vc runner.
-- Introduced base tool‑use agent framework.
-- Automated version bump workflow improvements.
+- Claude Sonnet 4T (Thinking) model set as default
+- Added Grok 4 Beta model support with 131k context window
 
-## 0.31.6 - 2025-06-25
+## [0.31.10] - 2025-07-04
 
-- Stream reasoning updates live in progress view.
-- Markdown rendering switched to marked with improved styles.
-- New state management for progress logs.
+### Features
 
-## 0.31.5 - 2025-06-23
+- Progress view templates for consistent UI
+- Markdown rendering restored with KaTeX math support
+- Diff errors now displayed as helpful tooltips
 
-- Scratchpad and thinking sections redesigned.
-- Microphone transcription with ElevenLabs support.
-- Centralized file system operations via managers.
+## [0.31.9] - 2025-07-01
 
-## 0.31.4 - 2025-06-17
+### Features
 
-- Settings and history buttons moved to editor title bar.
-- Optional beep when a round finishes.
-- Agent creator templates enhanced with YAML parsing.
+- Improved file list display in progress view
+- Missing output files now highlighted with direct links for easy access
 
-## 0.31.3 - 2025-06-15
+## [0.31.8] - 2025-06-28
 
-- Clipboard image pasting in instruction box with cleanup.
-- New root path aliases and improved utils organization.
-- Added arXiv source processor and deep research models.
+### Features
 
-## 0.31.2 - 2025-06-08
+- Added diagnostics tool and validation agent
+- KaTeX math rendering in progress view
+- Smoother streaming updates in progress view
 
-- Collapsible LaTeXdiff sections and improved log hierarchy.
-- Automatic search for TeX tools on all platforms.
-- Cleaner error messages and tool configuration.
+## [0.31.7] - 2025-06-25
 
-## 0.31.1 - 2025-06-04
+### Features
 
-- Added GitHub Copilot model support.
-- Streaming chunks accumulated for smoother output.
-- Diff view auto-refresh and open compiled outputs.
+- Added bulk latexdiff-vc runner for comparing multiple file versions
+- New tool-use agent capabilities
 
-## 0.31.0 - 2025-06-03
+## [0.31.6] - 2025-06-25
 
-- Google thought summaries displayed in progress board.
-- Diff editor improvements with smart word wrap.
-- Watch configuration helper for dynamic setting reloads.
+### Features
 
-## 0.30.9 - 2025-05-24
+- Live reasoning updates displayed in progress view
+- Improved markdown rendering with better styling
 
-- Output files cleared after housekeeping to reduce clutter.
-- Simplified log toggles using `<details>` elements.
-- Auto-extract and tool dropdowns unified.
+## [0.31.5] - 2025-06-23
 
-## 0.30.8 - 2025-05-22
+### Features
 
-- Clickable output filenames and improved history actions.
-- Unified CSS variables and refined UI spacing.
-- Webview state handling centralized for consistency.
+- Redesigned scratchpad and thinking sections
+- Microphone transcription with ElevenLabs support
 
-## 0.30.7 - 2025-05-21
+## [0.31.4] - 2025-06-17
 
-- File progress and diff features added to progress view.
-- API pricing info updated for Anthropic and Google models.
-- Round configuration moved to agent settings.
+### Features
 
-## 0.30.6 - 2025-05-19
+- Settings and history buttons moved to editor title bar for easier access
+- Optional audio notification when agent rounds complete
+- Enhanced agent creator with better YAML template support
 
-- Model registry split by provider for easier updates.
-- New SDK versions for OpenAI, Anthropic, and Google.
-- Various UI refactors and error feedback improvements.
+## [0.31.3] - 2025-06-15
 
-## 0.30.5 - 2025-05-13
+### Features
 
-- Command to apply LaTeX replacements to the current file.
-- Added Moonshot Kimi and Alibaba Qwen model support.
-- Configurable latexdiff markup and improved formatting rules.
+- Clipboard image pasting in instruction box with automatic cleanup
+- Added arXiv source processor for research papers
+- New deep research model support
 
-## 0.30.0 - 2025-05-04
+## [0.31.2] - 2025-06-08
 
-- Explorer configured to hide build directory and disable auto reveal.
-- DeepSeek model handler enhanced with message preprocessing.
-- Improved PDF viewer tabs and reflection UI.
+### Features
+
+- Collapsible LaTeX diff sections for better organization
+- Automatic detection of TeX tools on all platforms
+- Cleaner error messages throughout the extension
+
+## [0.31.1] - 2025-06-04
+
+### Features
+
+- Added GitHub Copilot model support
+- Smoother streaming output display
+- Diff view auto-refresh and quick access to compiled outputs
+
+## [0.31.0] - 2025-06-03
+
+### Features
+
+- Google AI thought summaries displayed in progress board
+- Improved diff editor with smart word wrap
+- Dynamic setting updates without restart
+
+## [0.30.9] - 2025-05-24
+
+### Features
+
+- Automatic cleanup of output files after housekeeping
+- Simplified log navigation with collapsible sections
+- Unified dropdown interface for tools and auto-extract options
+
+## [0.30.8] - 2025-05-22
+
+### Features
+
+- Clickable output filenames for quick file access
+- Improved history browser with better action buttons
+- Refined UI spacing and visual consistency
+
+## [0.30.7] - 2025-05-21
+
+### Features
+
+- File progress tracking and diff visualization in progress view
+- Updated API pricing information for all models
+- Round configuration now available in agent settings
+
+## [0.30.6] - 2025-05-19
+
+### Features
+
+- Updated SDKs for OpenAI, Anthropic, and Google models
+- Improved error messages and user feedback
+
+## [0.30.5] - 2025-05-13
+
+### Features
+
+- New command to apply LaTeX replacements to current file
+- Added Moonshot Kimi and Alibaba Qwen model support
+- Configurable LaTeX diff markup options
+
+## [0.30.2] - 2025-05-06
+
+### Improvements
+
+- Updated Gemini model naming for clarity
+
+## [0.30.1] - 2025-05-06
+
+### Features
+
+- Updated Gemini 2.5 Pro model configuration
+- Enhanced quick-start documentation
+
+## [0.30.0] - 2025-05-04
+
+### Features
+
+- Explorer now hides build directories by default
+- Enhanced DeepSeek model support
+- Improved PDF viewer with better tab management
+
+## [0.29.11] - 2025-05-04
+
+### Features
+
+- Added O4 models support
+- Improved DeepSeek integration with official API and OpenRouter
+
+### Improvements
+
+- Updated delete button icon in progress view
+
+## [0.29.10] - 2025-05-04
+
+### Improvements
+
+- Code formatting improvements and stability enhancements
+
+## [0.29.7] - 2025-05-02
+
+### Bug Fixes
+
+- Fixed progress view display issues
+
+## [0.29.2] - 2025-04-22
+
+### Features
+
+- Added Gemini-2.5-Flash model support
+- Enhanced Unicode character replacements
+
+## [0.29.0] - 2025-04-17
+
+### Features
+
+- First public release of TeXRA
