@@ -136,7 +136,7 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI {
     return null;
   }
 
-  createFollowUpMessage(
+  createToolUseFollowUpMessages(
     id: string,
     name: string,
     call: any,
