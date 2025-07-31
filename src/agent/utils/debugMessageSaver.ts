@@ -1,4 +1,4 @@
-// Utility for saving message objects during debugging
+// Utility for saving debug objects (messages/responses) during debugging
 
 // Standard library imports
 import * as path from 'path';
@@ -11,36 +11,70 @@ import type { ExecutionId } from '@agent/types/IdentifierTypes';
 import { AgentLogger } from '@logger/AgentLogger';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 
-export interface SaveMessagesParams {
-  messages: ProviderMessage[];
+/**
+ * Context information for the debug save operation
+ */
+export interface DebugContext {
+  /** Logger instance for the operation */
   logger: AgentLogger;
-  continuationCount?: number;
-  outputFile?: string;
-  baseName?: string;
-  /** Name of the model used for this conversation */
+  /** Model name being used */
   modelName?: string;
+  /** Execution ID if part of a task run */
   executionId?: ExecutionId;
+  /** Group ID for log correlation */
   groupId?: string;
 }
 
 /**
- * Save conversation message objects to a JSON file when
- * `texra.debug.saveMessageObjects` is enabled.
+ * File naming and location options
  */
-export async function maybeSaveMessages({
-  messages,
-  logger,
-  continuationCount,
-  outputFile,
-  baseName = 'messages',
-  modelName,
-  executionId,
-  groupId,
-}: SaveMessagesParams): Promise<void> {
-  const shouldSave = getConfig<boolean>('debug.saveMessageObjects', false);
+export interface FileOptions {
+  /** Output file path (if specific path needed) */
+  outputFile?: string;
+  /** Base name for the file (e.g., 'messages', 'response') */
+  baseName?: string;
+  /** Continuation count for multi-part responses */
+  continuationCount?: number;
+}
+
+/**
+ * Type of object being saved (for file naming and logging)
+ */
+export type DebugObjectType = 'messages' | 'response';
+
+/**
+ * Parameters for saving debug objects
+ */
+export interface SaveDebugParams {
+  /** The object to save (messages array or response object) */
+  object: ProviderMessage[] | any;
+  /** Type of object for file naming */
+  objectType: DebugObjectType;
+  /** Execution context */
+  context: DebugContext;
+  /** File options */
+  fileOptions?: FileOptions;
+}
+
+/**
+ * Save debug objects (messages or responses) to a JSON file when
+ * `texra.debug.saveDebugObjects` is enabled.
+ * 
+ * @param params - Parameters for saving the debug object
+ */
+export async function maybeSaveDebugObject({
+  object,
+  objectType,
+  context,
+  fileOptions = {},
+}: SaveDebugParams): Promise<void> {
+  const shouldSave = getConfig<boolean>('debug.saveDebugObjects', false);
   if (!shouldSave) {
     return;
   }
+
+  const { logger, modelName, executionId, groupId } = context;
+  const { outputFile, baseName = objectType, continuationCount } = fileOptions;
 
   const fileBase =
     outputFile !== undefined
@@ -56,7 +90,7 @@ export async function maybeSaveMessages({
     : WorkspaceFS.fullPath(debugFileName);
 
   try {
-    const content = JSON.stringify(messages, null, 2);
+    const content = JSON.stringify(object, null, 2);
     if (executionId) {
       await StorageFS.write(debugFilePath, content);
     } else {
@@ -65,8 +99,61 @@ export async function maybeSaveMessages({
         content,
       );
     }
-    logger.info(`Saved message object to ${debugFilePath}`, groupId);
+    logger.info(`Saved ${objectType} object to ${debugFilePath}`, groupId);
   } catch (error) {
-    logger.error(`Failed to save message object: ${error}`, groupId);
+    logger.error(`Failed to save ${objectType} object: ${error}`, groupId);
   }
+}
+
+// Legacy function signatures for backward compatibility
+// These will be removed in a future version
+
+export interface SaveMessagesParams {
+  messages: ProviderMessage[];
+  logger: AgentLogger;
+  continuationCount?: number;
+  outputFile?: string;
+  baseName?: string;
+  modelName?: string;
+  executionId?: ExecutionId;
+  groupId?: string;
+}
+
+export interface SaveResponseParams {
+  responseObject: any;
+  logger: AgentLogger;
+  continuationCount?: number;
+  outputFile?: string;
+  baseName?: string;
+  modelName?: string;
+  executionId?: ExecutionId;
+  groupId?: string;
+}
+
+/**
+ * @deprecated Use maybeSaveDebugObject instead
+ */
+export async function maybeSaveMessages(params: SaveMessagesParams): Promise<void> {
+  const { messages, logger, modelName, executionId, groupId, ...fileOptions } = params;
+  
+  await maybeSaveDebugObject({
+    object: messages,
+    objectType: 'messages',
+    context: { logger, modelName, executionId, groupId },
+    fileOptions,
+  });
+}
+
+/**
+ * @deprecated Use maybeSaveDebugObject instead
+ */
+export async function maybeSaveResponse(params: SaveResponseParams): Promise<void> {
+  const { responseObject, logger, modelName, executionId, groupId, ...fileOptions } = params;
+  
+  await maybeSaveDebugObject({
+    object: responseObject,
+    objectType: 'response',
+    context: { logger, modelName, executionId, groupId },
+    fileOptions,
+  });
 }
