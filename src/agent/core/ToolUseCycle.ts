@@ -16,6 +16,7 @@ import { BaseTool } from '@tools/core/base';
 import { ToolResult } from '@tools/result';
 import xmlUtils from '@utils/text/xmlUtils';
 import {
+  maybeSaveDebugObject,
   maybeSaveMessages,
   maybeSaveResponse,
 } from '@agent/utils/debugMessageSaver';
