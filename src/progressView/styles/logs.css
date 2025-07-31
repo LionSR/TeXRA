@@ -15,14 +15,22 @@
   position: relative;
 }
 
-.log-line {
-  white-space: pre-wrap;
-  word-wrap: break-word;
-  word-break: break-all;
+.log-line,
+.model-response-line {
   line-height: 1.4;
   margin: 0;
   padding: calc(var(--spacing-tiny) / 2) 0;
   display: block;
+}
+
+.log-line {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  word-break: break-all;
+}
+
+.model-response-line {
+  white-space: normal;
 }
 
 /* Timestamp color */
