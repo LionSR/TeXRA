@@ -15,11 +15,7 @@ import type { ProviderMessage } from '../modelHandlers/types/ProviderMessage';
 import { BaseTool } from '@tools/core/base';
 import { ToolResult } from '@tools/result';
 import xmlUtils from '@utils/text/xmlUtils';
-import {
-  maybeSaveDebugObject,
-  maybeSaveMessages,
-  maybeSaveResponse,
-} from '@agent/utils/debugMessageSaver';
+import { maybeSaveDebugObject } from '@agent/utils/debugMessageSaver';
 import { ANTHROPIC_STOP } from '../modelHandlers/types/StopReasonTypes';
 import { ToolState } from './ToolState';
 
@@ -76,13 +72,18 @@ export async function runToolUseCycle(
       break;
     }
 
-    await maybeSaveMessages({
-      messages,
-      logger,
-      continuationCount: iteration,
-      baseName: 'tooluse',
-      modelName,
-      groupId,
+    await maybeSaveDebugObject({
+      object: messages,
+      objectType: 'messages',
+      context: {
+        logger,
+        modelName,
+        groupId,
+      },
+      fileOptions: {
+        continuationCount: iteration,
+        baseName: 'tooluse',
+      },
     });
 
     const abortController = new AbortController();
@@ -102,13 +103,18 @@ export async function runToolUseCycle(
     } finally {
       setAbortController(null);
     }
-    await maybeSaveResponse({
-      responseObject: response,
-      logger,
-      continuationCount: iteration,
-      baseName: 'tooluse_response',
-      modelName,
-      groupId,
+    await maybeSaveDebugObject({
+      object: response,
+      objectType: 'response',
+      context: {
+        logger,
+        modelName,
+        groupId,
+      },
+      fileOptions: {
+        continuationCount: iteration,
+        baseName: 'tooluse_response',
+      },
     });
     const responseTime = (Date.now() - startTime) / 1000;
     if (!response) {
