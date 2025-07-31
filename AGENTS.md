@@ -2,6 +2,15 @@
 
 This document sets the common conventions for contributions. Follow these norms when working anywhere in this repository.
 
+## Changelog Guidelines
+
+When updating CHANGELOG.md:
+
+- Focus on user-visible features and bug fixes
+- Use clear, concise language that end users can understand
+- Group changes into Features, Bug Fixes, and (rarely) Breaking Changes
+- Avoid technical implementation details
+
 ## Development workflow
 
 1. **Install dependencies**: run `npm install` if needed.
