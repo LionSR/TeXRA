@@ -259,6 +259,11 @@ export class LogEntryFormatter {
           () => this._formatStatistics(text, data, id),
           'statistics',
         ),
+      userMessage: (text, id, timestamp) =>
+        this._safeFormat(
+          () => this._formatUserMessage(text, id, timestamp),
+          'user message',
+        ),
     };
   }
 
@@ -321,6 +326,9 @@ export class LogEntryFormatter {
       ) {
         // These only need text and id
         result = formatter(text, id);
+      } else if (messageType === 'userMessage') {
+        // User message needs text, id, and timestamp
+        result = formatter(text, id, timestamp);
       } else {
         // File list, missing outputs, latexdiff, statistics need data
         result = formatter(text, data, id);
@@ -698,7 +706,7 @@ export class LogEntryFormatter {
     if (!element) return null;
     const contentElem = element.querySelector('.statistics-content');
     const toggleIcon = element.querySelector('.toggle-icon');
-    if (toggleIcon) toggleIcon.className = `${CHEVRON_DOWN_CLASS} toggle-icon`;
+    if (toggleIcon) toggleIcon.className = `${CHEVRON_RIGHT_CLASS} toggle-icon`;
     const parsed = data;
     if (!parsed || typeof parsed !== 'object') {
       return null;
@@ -769,6 +777,28 @@ export class LogEntryFormatter {
 
     if (contentElem) {
       contentElem.innerHTML = items.join('');
+      if (logId) contentElem.dataset.logId = logId;
+    }
+
+    return element;
+  }
+
+  _formatUserMessage(content, logId, timestamp) {
+    const element = createFromTemplate('userMessageTemplate');
+    if (!element) return null;
+
+    const date = new Date(timestamp);
+    const { fullTimestamp, timeDisplay } = this._formatTimestamp(date);
+
+    const timestampElem = element.querySelector('.user-message-timestamp');
+    if (timestampElem) {
+      timestampElem.textContent = timeDisplay;
+      timestampElem.title = fullTimestamp;
+    }
+
+    const contentElem = element.querySelector('.user-message-content');
+    if (contentElem) {
+      contentElem.textContent = content;
       if (logId) contentElem.dataset.logId = logId;
     }
 
