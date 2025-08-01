@@ -171,6 +171,12 @@
   box-shadow: 0 0 4px var(--vscode-testing-iconSkipped, #cca700);
 }
 
+.status-indicator.waiting {
+  background-color: var(--vscode-textLink-foreground, #3794ff);
+  box-shadow: 0 0 4px var(--vscode-textLink-foreground, #3794ff);
+  animation: pulse 3s infinite;
+}
+
 /* Generated files list */
 .files-container {
   padding: var(--spacing-small);
@@ -317,5 +323,16 @@
 
   .header-actions {
     margin-left: auto;
+  }
+
+  .follow-up-container {
+    display: none;
+    padding: var(--spacing-small);
+    border-top: 1px solid var(--vscode-panel-border);
+    gap: var(--spacing-small);
+  }
+
+  .follow-up-container input {
+    flex: 1;
   }
 }
