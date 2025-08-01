@@ -79,6 +79,19 @@
         </div>
         <div id="logContent" class="log-container"></div>
         <div id="generatedFiles" class="files-container"></div>
+        <div id="followUpContainer" class="follow-up-container">
+          <textarea
+            id="followUpInput"
+            class="vscode-textarea"
+            placeholder="Send follow-up message"
+          ></textarea>
+          <button
+            id="sendFollowUpBtn"
+            class="vscode-button"
+            title="Send"
+            data-icon="send"
+          ></button>
+        </div>
         <template id="fileItemTemplate">
           <div class="file-item">
             <span class="file-name">
@@ -184,6 +197,17 @@
           <div class="model-response-line">
             <span class="timestamp"></span>
             <div class="model-response-content markdown-content"></div>
+          </div>
+        </template>
+        <template id="userMessageTemplate">
+          <div class="user-message-container">
+            <div class="user-message">
+              <div class="user-message-header">
+                <i class="codicon codicon-account user-message-icon"></i>
+                <span class="user-message-timestamp"></span>
+              </div>
+              <div class="user-message-content"></div>
+            </div>
           </div>
         </template>
         <template id="fileListDetailsTemplate">

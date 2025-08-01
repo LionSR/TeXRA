@@ -119,11 +119,18 @@ export class AgentLogger {
   }
 
   /**
-   * Log statistics information.
+   * Log statistics information (only shown in debug mode).
    */
   statistics(stats: ExtendedTokenUsageStats, groupId?: string): void {
     const summary = `Usage - input: ${stats.inputTokens ?? 0}, output: ${stats.outputTokens ?? 0}`;
-    this.info(summary, groupId, MESSAGE_TYPES.STATISTICS, stats);
+    this.debug(summary, groupId, MESSAGE_TYPES.STATISTICS, stats);
+  }
+
+  /**
+   * Log a user follow-up message.
+   */
+  userMessage(message: string, groupId?: string): void {
+    this.info(message, groupId, MESSAGE_TYPES.USER_MESSAGE);
   }
 
   /**

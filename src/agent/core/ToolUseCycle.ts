@@ -16,7 +16,6 @@ import { BaseTool } from '@tools/core/base';
 import { ToolResult } from '@tools/result';
 import xmlUtils from '@utils/text/xmlUtils';
 import { maybeSaveDebugObject } from '@agent/utils/debugMessageSaver';
-import { ANTHROPIC_STOP } from '../modelHandlers/types/StopReasonTypes';
 import { ToolState } from './ToolState';
 
 export interface ToolUseCycleOptions {
@@ -155,7 +154,12 @@ export async function runToolUseCycle(
       logger.statistics(stats, groupId);
     }
 
-    if (!toolInfo || stopReason === ANTHROPIC_STOP.END_TURN) {
+    const endTurn = modelHandler.isEndTurnStop(stopReason);
+    if (!toolInfo || endTurn) {
+      if (text) {
+        messages.push(modelHandler.createAssistantMessage(text));
+        toolState?.updateLastResponse(text);
+      }
       break;
     }
 

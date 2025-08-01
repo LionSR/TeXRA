@@ -1,0 +1,28 @@
+/**
+ * Follow-up input styles for ProgressView
+ * Minimal styling for the user input area
+ */
+
+/* Follow-up input container */
+.follow-up-container {
+  display: none;
+  align-items: flex-end;
+  padding: var(--spacing-medium);
+  border-top: 1px solid var(--vscode-panel-border);
+  gap: var(--spacing-small);
+}
+
+/* Style the textarea for multi-line input */
+#followUpInput {
+  min-height: 36px;
+  max-height: 200px;
+  resize: none;
+  flex: 1;
+  overflow-y: auto;
+  line-height: 1.4;
+}
+
+/* Align send button to bottom */
+#sendFollowUpBtn {
+  margin-bottom: var(--spacing-tiny);
+}

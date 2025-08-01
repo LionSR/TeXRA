@@ -348,6 +348,21 @@ export class ModelHandlerOpenAI extends ModelHandler<
     return messages;
   }
 
+  async createUserFollowUpMessages(
+    messages: any[],
+    userMessage: string,
+  ): Promise<any[]> {
+    messages.push({
+      role: 'user',
+      content: [{ type: 'text', text: userMessage }],
+    });
+    return messages;
+  }
+
+  createAssistantMessage(text: string): ChatCompletionMessageParam {
+    return { role: 'assistant', content: [{ type: 'text', text }] };
+  }
+
   /** Formats image/audio content for OpenAI/Google's vision/audio API. */
   createMediaContent(mediaMessage: MediaEntry[]): ChatCompletionContentPart[] {
     return mediaMessage.flatMap((media): ChatCompletionContentPart[] => {
