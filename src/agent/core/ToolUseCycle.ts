@@ -159,7 +159,6 @@ export async function runToolUseCycle(
       if (text) {
         messages.push(modelHandler.createAssistantMessage(text));
         toolState?.updateLastResponse(text);
-        toolState?.updateAccumulatedOutput(toolState.accumulatedOutput + text);
       }
       break;
     }
