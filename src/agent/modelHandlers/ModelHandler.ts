@@ -748,7 +748,7 @@ export abstract class ModelHandler<
   /**
    * Append a simple text follow-up from the user.
    */
-  abstract createFollowUpMessages(
+  abstract createUserFollowUpMessages(
     messages: M[],
     userMessage: string,
   ): Promise<M[]>;

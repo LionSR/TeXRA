@@ -45,7 +45,7 @@ class DummyHandler extends ModelHandler {
     m.push({ role: 'user', content: u });
     return m;
   }
-  async createFollowUpMessages(m: any[], u: any): Promise<any[]> {
+  async createUserFollowUpMessages(m: any[], u: any): Promise<any[]> {
     m.push({ role: 'user', content: u });
     return m;
   }
