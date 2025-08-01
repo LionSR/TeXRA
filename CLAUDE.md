@@ -135,3 +135,36 @@ To add support for a new AI provider:
 1. Create model handler in `src/agent/modelHandlers/`
 2. Add provider configuration in `src/model/providers/`
 3. Update model registry in `src/model/`
+
+## Release Process
+
+When creating a new release:
+
+1. **Update CHANGELOG.md** with user-facing changes
+   - Follow the format: `## [x.x.x] - YYYY-MM-DD`
+   - Group changes into Features, Bug Fixes, and Improvements
+   - Focus only on user-visible changes
+
+2. **Build the VSIX package**
+
+   ```bash
+   npm run build
+   # Creates: releases/texra-{version}.vsix
+   ```
+
+3. **Create GitHub release**
+
+   ```bash
+   gh release create v{version} \
+     --title "TeXRA v{version}" \
+     --notes "## What's Changed\n\n{release notes}\n\n**Full Changelog**: https://github.com/LionSR/TeXRA/compare/v{prev}...v{version}" \
+     releases/texra-{version}.vsix
+   ```
+
+4. **Publish to VS Code Marketplace**
+
+   ```bash
+   vsce publish
+   ```
+
+5. **Version bump**: A GitHub Action automatically creates a PR to bump the version after release
