@@ -570,7 +570,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     return messages;
   }
 
-  async createFollowUpMessages(
+  async createUserFollowUpMessages(
     messages: Message[],
     userMessage: string,
   ): Promise<Message[]> {

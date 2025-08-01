@@ -533,7 +533,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
     return messages;
   }
 
-  async createFollowUpMessages(
+  async createUserFollowUpMessages(
     messages: ResponseInputItem[],
     userMessage: string,
   ): Promise<ResponseInputItem[]> {

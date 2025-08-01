@@ -195,7 +195,7 @@ export interface IModelHandler<
    * Create provider-specific messages for a simple text follow-up.
    * Appends the user's message to the existing conversation array.
    */
-  createFollowUpMessages(messages: M[], userMessage: string): Promise<M[]>;
+  createUserFollowUpMessages(messages: M[], userMessage: string): Promise<M[]>;
 
   /**
    * Build a simple assistant message from plain text.
