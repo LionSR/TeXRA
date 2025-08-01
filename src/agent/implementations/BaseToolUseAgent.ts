@@ -139,7 +139,7 @@ export class BaseToolUseAgent extends BaseAgent {
         const followUp = await this.waitForFollowUp();
         if (!followUp || this.checkInterruption()) break;
         this.logger.userMessage(followUp, this.runGroupId);
-        this.messages = await this.modelHandler.createFollowUpMessages(
+        this.messages = await this.modelHandler.createUserFollowUpMessages(
           this.messages,
           followUp,
         );
