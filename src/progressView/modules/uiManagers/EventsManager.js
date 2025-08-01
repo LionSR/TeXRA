@@ -123,7 +123,8 @@ export class EventsManager {
       };
       followBtn.addEventListener('click', send);
       followInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') {
+        // Enter sends, Shift+Enter adds new line
+        if (e.key === 'Enter' && !e.shiftKey) {
           e.preventDefault();
           send();
         }
