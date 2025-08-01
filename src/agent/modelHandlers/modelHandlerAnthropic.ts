@@ -322,7 +322,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     return messages;
   }
 
-  async createFollowUpMessages(
+  async createUserFollowUpMessages(
     messages: MessageParam[],
     userMessage: string,
   ): Promise<MessageParam[]> {

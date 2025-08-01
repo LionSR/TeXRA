@@ -348,7 +348,7 @@ export class ModelHandlerOpenAI extends ModelHandler<
     return messages;
   }
 
-  async createFollowUpMessages(
+  async createUserFollowUpMessages(
     messages: any[],
     userMessage: string,
   ): Promise<any[]> {
