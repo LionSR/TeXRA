@@ -36,7 +36,10 @@ export abstract class BaseViewMessageHandler {
     webviewView: vscode.WebviewView,
   ): Promise<void> {
     if (!message?.command) {
-      this.logger.warn(this.channel, 'Received message without command');
+      this.logger.warn(
+        this.channel,
+        `Received message without command. Message: ${JSON.stringify(message)}`,
+      );
       return;
     }
 

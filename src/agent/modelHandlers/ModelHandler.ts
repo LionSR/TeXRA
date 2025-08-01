@@ -18,7 +18,11 @@ import {
 import { checkMultipleToolsInstalled } from '@utils/system';
 import { getConfig } from '@utils/config';
 import type { ProviderStopReason } from './types/StopReasonTypes';
-import { ANTHROPIC_STOP, OPENAI_CHAT_FINISH } from './types/StopReasonTypes';
+import {
+  ANTHROPIC_STOP,
+  OPENAI_CHAT_FINISH,
+  MCP_STOP,
+} from './types/StopReasonTypes';
 import { FinishReason } from '@google/genai';
 import type { IModelHandler } from './types/IModelHandler';
 import type { ProviderMessage } from './types/ProviderMessage';
@@ -740,6 +744,27 @@ export abstract class ModelHandler<
     toolState?: ToolState,
     text?: string,
   ): any[];
+
+  /**
+   * Append a simple text follow-up from the user.
+   */
+  abstract createUserFollowUpMessages(
+    messages: M[],
+    userMessage: string,
+  ): Promise<M[]>;
+
+  /** Build a simple assistant message from text. */
+  abstract createAssistantMessage(text: string): M;
+
+  /** Check if stop reason signals end-turn. */
+  public isEndTurnStop(reason: ProviderStopReason): boolean {
+    return (
+      reason === ANTHROPIC_STOP.END_TURN ||
+      reason === MCP_STOP.END_TURN ||
+      String(reason).toLowerCase() === 'end_turn' ||
+      String(reason).toLowerCase() === 'endturn'
+    );
+  }
 
   /**
    * Creates a log group for model operations with the given name.

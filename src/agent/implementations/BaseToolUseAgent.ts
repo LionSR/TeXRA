@@ -16,9 +16,14 @@ import { BaseTool } from '@tools/core/base';
 import { runToolUseCycle } from '../core/ToolUseCycle';
 import { ToolState } from '../core/ToolState';
 import { TOOL_USE_INSTRUCTIONS } from '../utils/toolUsePrompt';
+import type { ProviderMessage } from '../modelHandlers/types/ProviderMessage';
 
 export class BaseToolUseAgent extends BaseAgent {
   private toolRegistry: Record<string, BaseTool<any>>;
+  private followUpQueue: string[] = [];
+  private followUpResolver: ((v: string | null) => void) | null = null;
+  private messages: ProviderMessage[] = [];
+  private toolState: ToolState | null = null;
 
   constructor(
     modelHandler: IModelHandler,
@@ -56,6 +61,33 @@ export class BaseToolUseAgent extends BaseAgent {
     return tools;
   }
 
+  public appendFollowUp(text: string): void {
+    if (this.followUpResolver) {
+      this.followUpResolver(text);
+      this.followUpResolver = null;
+    } else {
+      this.followUpQueue.push(text);
+    }
+  }
+
+  private async waitForFollowUp(): Promise<string | null> {
+    if (this.followUpQueue.length > 0) {
+      return this.followUpQueue.shift()!;
+    }
+    if (this.isInterrupted) return null;
+    return new Promise<string | null>((resolve) => {
+      this.followUpResolver = resolve;
+    });
+  }
+
+  public override interrupt(): void {
+    super.interrupt();
+    if (this.followUpResolver) {
+      this.followUpResolver(null);
+      this.followUpResolver = null;
+    }
+  }
+
   public async run(): Promise<void> {
     await this.startRunGroup();
     try {
@@ -71,39 +103,48 @@ export class BaseToolUseAgent extends BaseAgent {
         renderPrompt(this.agentPrompt.userPrefix, this.userVars),
       ]);
 
-      const messages = await this.modelHandler.initializeMessages(
+      this.messages = await this.modelHandler.initializeMessages(
         userPrefix,
         userRequest,
         undefined,
         systemPrompt,
       );
 
-      const toolState = new ToolState();
+      this.toolState = new ToolState();
 
       const resolvedSetting = {
         ...this.agentSetting,
         tools: this.getTools(),
       };
 
-      await runToolUseCycle(
-        {
-          modelHandler: this.modelHandler,
-          agentSetting: resolvedSetting,
-          agentPrompt: this.agentPrompt,
-          userVars: this.userVars,
-          logger: this.logger,
-          client: this.client,
-          toolRegistry: this.toolRegistry,
-          checkInterruption: () => this.checkInterruption(),
-          setAbortController: (ctrl) => {
-            this.abortController = ctrl;
-          },
-          toolState,
-          modelName: this.agentConfig.model,
+      const cycleOptions = {
+        modelHandler: this.modelHandler,
+        agentSetting: resolvedSetting,
+        agentPrompt: this.agentPrompt,
+        userVars: this.userVars,
+        logger: this.logger,
+        client: this.client,
+        toolRegistry: this.toolRegistry,
+        checkInterruption: () => this.checkInterruption(),
+        setAbortController: (ctrl: AbortController | null) => {
+          this.abortController = ctrl;
         },
-        messages,
-        this.runGroupId,
-      );
+        toolState: this.toolState,
+        modelName: this.agentConfig.model,
+      } as const;
+
+      while (true) {
+        await runToolUseCycle(cycleOptions, this.messages, this.runGroupId);
+        if (this.checkInterruption()) break;
+        const followUp = await this.waitForFollowUp();
+        if (!followUp || this.checkInterruption()) break;
+        this.logger.userMessage(followUp, this.runGroupId);
+        this.messages = await this.modelHandler.createUserFollowUpMessages(
+          this.messages,
+          followUp,
+        );
+      }
+
       this.endRunGroup('stopped');
     } catch (err) {
       this.endRunGroup('error');

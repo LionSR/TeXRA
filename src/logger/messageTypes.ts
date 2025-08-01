@@ -7,6 +7,7 @@ export const MESSAGE_TYPES = {
   STATISTICS: 'statistics',
   TOOL_USE: 'toolUse',
   MODEL_RESPONSE: 'modelResponse',
+  USER_MESSAGE: 'userMessage',
   /** Messages that should be hidden from the progress view */
   INTERNAL: 'internal',
   DEFAULT: 'default',

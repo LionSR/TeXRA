@@ -56,6 +56,15 @@ export class ProgressViewMessageHandler {
     state.activeStream = message.activeStream;
     dom.streamTabs.update(message.streams, message.activeStream);
 
+    const container = document.getElementById(ELEMENT_IDS.FOLLOW_UP_CONTAINER);
+    if (container) {
+      const active = message.streams.find(
+        (s) => s.name === message.activeStream,
+      );
+      container.style.display =
+        active && active.agentType === 'toolUse' ? 'flex' : 'none';
+    }
+
     // Update status based on whether there's an active stream
     if (!message.activeStream) {
       dom.status.update(STATUS.READY);
