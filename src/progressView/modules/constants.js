@@ -4,6 +4,7 @@ export const STATUS = {
   ERROR: 'error',
   STOPPED: 'stopped',
   READY: 'ready',
+  WAITING: 'waiting',
 };
 
 // DOM element IDs used across the progress view
