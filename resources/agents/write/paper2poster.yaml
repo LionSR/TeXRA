@@ -3,6 +3,7 @@ settings:
   documentTag: beamer_poster
   endTag: </beamer_poster>
   outputExt: tex
+  isRewrite: False
   prefills:
     - <scratchpad>
     - <scratchpad>
@@ -34,6 +35,12 @@ prompts:
     {{ ALL_AUXILIARYS }}
     {{ ALL_REFERENCES }}
     {{ ADDITIONAL_INPUTS }}
+    <document name="{{ TEMPLATE_POSTER_STYLE_FILE }}"
+    {{ TEMPLATE_POSTER_STYLE_CONTENT }}
+    </document>
+    <document name="{{ TEMPLATE_POSTER_THEME_FILE }}"
+    {{ TEMPLATE_POSTER_THEME_CONTENT }}
+    </document>
     <document name="{{ INPUT_FILE }}">
     {{ INPUT_CONTENT }}
     </document>
@@ -83,10 +90,6 @@ prompts:
 
     Then, please create the LaTeX Beamer poster, incorporating the key points outlined in the scratchpad. The poster should be professional, mathematically detailed, and effectively highlight the main aspects of the research paper. Use the following format:
 
-    <document name="TEMPLATE_">
-    </document>
-    <document name="TEMPLATE_">
-    </document>
     <beamer_poster>
     {{ TEMPLATE_POSTER_CONTENT }}
     </beamer_poster>
