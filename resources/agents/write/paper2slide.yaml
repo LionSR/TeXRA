@@ -6,9 +6,8 @@ settings:
   prefills:
     - <scratchpad>
     - <scratchpad>
-
-requiredFilesInternal:
-  TEMPLATE_SLIDE: template_slide.tex
+  requiredFilesInternal:
+    TEMPLATE_SLIDE: template_slide.tex
 
 prompts:
   systemPrompt: |
@@ -31,6 +30,12 @@ prompts:
     {{ ALL_AUXILIARYS }}
     {{ ALL_REFERENCES }}
     {{ ADDITIONAL_INPUTS }}
+    <document name="{{ TEMPLATE_POSTER_STYLE_FILE }}"
+    {{ TEMPLATE_POSTER_STYLE_CONTENT }}
+    </document>
+    <document name="{{ TEMPLATE_POSTER_THEME_FILE }}"
+    {{ TEMPLATE_POSTER_THEME_CONTENT }}
+    </document>
     <document name="{{ INPUT_FILE }}">
     {{ INPUT_CONTENT }}
     </document>
