@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.32.6] - 2025-08-03
+
+### Features
+
+- **Follow-up Chat**: Continue conversations with tool-use agents (web search, code execution) directly in the progress view with multi-line input support (Shift+Enter for new lines, Enter to send)
+- **Code Syntax Highlighting**: Code blocks in progress view now have syntax highlighting that automatically adapts to your VS Code theme
+
 ## [0.32.5] - 2025-07-31
 
 ### Features
