@@ -9,7 +9,7 @@ settings:
     - <scratchpad>
   requiredFilesInternal:
     TEMPLATE_POSTER: template_poster.tex
-    TEMPLATE_POSTER_STYLE: beamercolorthemempq.sty
+    TEMPLATE_POSTER_STYLE: beamercolorthemempi.sty
     TEMPLATE_POSTER_THEME: beamerthemeconfposter.sty
 
 prompts:
