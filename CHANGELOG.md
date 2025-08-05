@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## [0.32.7] - 2025-08-05
 
+### Features
+
+- Added Claude Opus 4.1 (regular and thinking) models (`opus41` and `opus41T`)
+
 ### Bug Fixes
 
 - Updated OpenAI, Anthropic, and Gemini SDKs to their latest releases

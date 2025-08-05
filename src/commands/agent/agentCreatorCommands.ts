@@ -258,7 +258,7 @@ async function handleCreateAgentWithAI(context: vscode.ExtensionContext) {
       let prompt = basePrompt;
       for (let attempt = 0; attempt < 2; attempt++) {
         const params: MessageCreateParams = {
-          model: ANTHROPIC_MODELS.opus4.fullName,
+          model: ANTHROPIC_MODELS.opus41.fullName,
           messages: [{ role: 'user', content: prompt }],
           max_tokens: 2048,
         };
