@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 ### Features
 
 - Added Claude Opus 4.1 (regular and thinking) models (`opus41` and `opus41T`)
+- Added GPT OSS 120B and 20B reasoning models (`gptoss` and `gptoss-`)
 
 ### Bug Fixes
 
