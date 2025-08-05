@@ -26,6 +26,43 @@ const ANTHROPIC_DEFAULT_CAPABILITIES: ModelCapabilities = {
 };
 
 export const ANTHROPIC_MODELS: Record<string, ModelConfig> = {
+  opus41T: {
+    name: 'opus41T',
+    fullName: 'claude-opus-4-1-20250805',
+    openrouterFullName: 'anthropic/claude-opus-4.1:thinking',
+    provider: ModelProvider.ANTHROPIC,
+    maxOutputTokens: 32000, // Official Claude Opus 4.1 limit - streaming recommended for large outputs
+    contextWindow: 200000,
+    inputPrice: 15.0,
+    outputPrice: 75.0,
+    capabilities: {
+      ...ANTHROPIC_DEFAULT_CAPABILITIES,
+      supportsNativeMCPServer: true,
+      supportsNativeWebSearch: true,
+      supportsNativeCodeExecution: true,
+      supportsAssistantPrefill: false,
+      supportsReasoning: true,
+    } satisfies ModelCapabilities,
+    openRouterOnly: false,
+  },
+  opus41: {
+    name: 'opus41',
+    fullName: 'claude-opus-4-1-20250805',
+    openrouterFullName: 'anthropic/claude-opus-4.1',
+    provider: ModelProvider.ANTHROPIC,
+    maxOutputTokens: 32000, // Official Claude Opus 4.1 limit - streaming recommended for large outputs
+    contextWindow: 200000,
+    inputPrice: 15.0,
+    outputPrice: 75.0,
+    capabilities: {
+      ...ANTHROPIC_DEFAULT_CAPABILITIES,
+      supportsNativeWebSearch: true,
+      supportsNativeCodeExecution: true,
+      supportsAssistantPrefill: true,
+      supportsReasoning: false,
+    } satisfies ModelCapabilities,
+    openRouterOnly: false,
+  },
   opus4T: {
     name: 'opus4T',
     fullName: 'claude-opus-4-20250514',
