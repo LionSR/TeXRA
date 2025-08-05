@@ -234,7 +234,7 @@ Here are some common tasks you can try with TeXRA:
 ### Improving Writing Style
 
 - **Agent**: `polish`
-- **Model**: `opus` or `sonnet37T`
+- **Model**: `opus41` or `sonnet37T`
 - **Instruction**: "Improve the writing style to make it more engaging and clear. Enhance the flow between paragraphs while preserving all technical content."
 
 ## Understanding the Output
