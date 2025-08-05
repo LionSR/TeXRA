@@ -1236,7 +1236,7 @@
   },
   "homepage": "https://texra.ai",
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.57.0",
+    "@anthropic-ai/sdk": "^0.58.0",
     "@cantoo/pdf-lib": "^2.4.2",
     "@google/genai": "^1.12.0",
     "@modelcontextprotocol/sdk": "^1.17.1",
@@ -1260,7 +1260,7 @@
     "mime-types": "^3.0.1",
     "nanoid": "^5.1.5",
     "node-pandoc": "^0.3.0",
-    "openai": "^5.11.0",
+    "openai": "^5.12.0",
     "pdf2pic": "^3.2.0",
     "shell-quote": "^1.8.3",
     "sortablejs": "^1.15.6",
