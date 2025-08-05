@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.32.7] - 2025-08-05
+
+### Bug Fixes
+
+- Updated OpenAI, Anthropic, and Gemini SDKs to their latest releases
+
 ## [0.32.6] - 2025-08-03
 
 ### Features
