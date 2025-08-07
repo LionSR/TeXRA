@@ -37,21 +37,21 @@ Known for strong instruction following and context handling.
 
 Known for strong reasoning and creative capabilities.
 
-| Model ID  | Key Strength / Use Case               | Relative Cost | Relative Speed | Notes                   |
-| :-------- | :------------------------------------ | :------------ | :------------- | :---------------------- |
-| `o1`      | Advanced reasoning, math, figures     | $$$$          | Slow           | Explicit reasoning      |
-| `gpt45`   | High quality, vision (Preview)        | $$$$          | Medium         |                         |
-| `gpt41`   | Long-context vision, powerful         | $$$           | Medium         | 1M tokens context       |
-| `gpt41-`  | Long-context vision, cost-effective   | $$            | Medium         | 1M tokens context, mini |
-| `gpt41--` | Long-context vision, cheapest         | $             | Medium         | 1M tokens context, nano |
-| `gpt4o`   | Strong all-rounder, vision            | $$$           | Medium         | Good default choice     |
-| `gpt4ol`  | Latest `gpt4o`, potentially better    | $$$           | Medium         |                         |
-| `o3`      | Coding, tool calling                  | $$$           | Medium         |                         |
-| `o3pro`   | Reliable answers, heavy compute       | $$$$          | Slow           | `o3-pro`                |
-| `o3-`     | Fast reasoning                        | $$$           | Fast           | `o3-mini`               |
-| `o1-`     | Fast reasoning (smaller `o1`)         | $$$           | Fast           | `o1-mini`               |
-| `gptoss`  | Open-weight reasoning, large context  | $$            | Medium         | `gpt-oss-120b`          |
-| `gptoss-` | Open-weight reasoning, cost-effective | $             | Fast           | `gpt-oss-20b`           |
+| Model ID  | Key Strength / Use Case               | Relative Cost | Relative Speed | Notes                          |
+| :-------- | :------------------------------------ | :------------ | :------------- | :----------------------------- |
+| `o1`      | Advanced reasoning, math, figures     | $$$$          | Slow           | Explicit reasoning             |
+| `gpt45`   | High quality, vision (Preview)        | $$$$          | Medium         |                                |
+| `gpt41`   | Long-context vision, powerful         | $$$           | Medium         | 1M tokens context              |
+| `gpt41-`  | Long-context vision, cost-effective   | $$            | Medium         | 1M tokens context, mini        |
+| `gpt41--` | Long-context vision, cheapest         | $             | Medium         | 1M tokens context, nano        |
+| `gpt4o`   | Strong all-rounder, vision            | $$$           | Medium         | Good default choice            |
+| `gpt4ol`  | Latest `gpt4o`, potentially better    | $$$           | Medium         |                                |
+| `o3`      | Coding, tool calling                  | $$$           | Medium         |                                |
+| `o3pro`   | Reliable answers, heavy compute       | $$$$          | Slow           | `o3-pro`                       |
+| `o3-`     | Fast reasoning                        | $$$           | Fast           | `o3-mini`                      |
+| `o1-`     | Fast reasoning (smaller `o1`)         | $$$           | Fast           | `o1-mini`                      |
+| `gptoss`  | Open-weight reasoning, large context  | $$            | Medium         | `gpt-oss-120b` (Responses API) |
+| `gptoss-` | Open-weight reasoning, cost-effective | $             | Fast           | `gpt-oss-20b` (Responses API)  |
 
 ### Google Models
 
