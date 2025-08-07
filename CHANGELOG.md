@@ -2,10 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.32.8] - 2025-08-07
+## [0.32.8] - 2025-08-08
 
 ### Features
 
+- Added GPT-5 family models (`gpt5`, `gpt5-`, `gpt5--`)
 - Route GPT OSS models through OpenAI Responses API by default
 
 ## [0.32.7] - 2025-08-05
