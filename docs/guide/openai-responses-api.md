@@ -21,3 +21,6 @@ When `"texra.model.useOpenAIResponsesAPI"` is enabled, the extension automatical
 3. Reads the returned text from `output_text` or the `output` array.
 
 This keeps requests small and simplifies conversation management.
+
+The open-weight models `gpt-oss-120b` and `gpt-oss-20b` also use the
+Responses API automatically, even if the setting isn't enabled.
