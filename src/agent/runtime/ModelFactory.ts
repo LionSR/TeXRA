@@ -70,7 +70,10 @@ export class ModelFactory {
       'model.useOpenAIResponsesAPI',
       false,
     );
-    if (config.provider === ModelProvider.OPENAI && useOpenAIResponsesAPI) {
+    if (
+      config.provider === ModelProvider.OPENAI &&
+      (useOpenAIResponsesAPI || config.fullName.startsWith('gpt-oss'))
+    ) {
       logger.debug(
         CHANNEL,
         'Using OpenAI Responses API Handler (ModelHandlerOpenAIResponse)',
