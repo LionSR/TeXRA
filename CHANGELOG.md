@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.32.8] - 2025-08-07
+
+### Features
+
+- Route GPT OSS models through OpenAI Responses API by default
+
 ## [0.32.7] - 2025-08-05
 
 ### Features
