@@ -43,7 +43,7 @@ default list is maintained in the [Models Guide](./models.md). Override it by
 specifying your own model identifiers:
 
 ```json
-"texra.models": ["sonnet37T", "gpt4o"]
+"texra.models": ["sonnet37T", "gpt5"]
 ```
 
 ### API Provider Settings
