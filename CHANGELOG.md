@@ -2,19 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.32.8] - 2025-08-08
-
-### Features
-
-- Added GPT-5 family models (`gpt5`, `gpt5-`, `gpt5--`)
-- Route GPT OSS models through OpenAI Responses API by default
-
-## [0.32.7] - 2025-08-05
+## [0.32.7] - 2025-08-08
 
 ### Features
 
 - Added Claude Opus 4.1 (regular and thinking) models (`opus41` and `opus41T`)
 - Added GPT OSS 120B and 20B reasoning models (`gptoss` and `gptoss-`)
+- Added GPT-5 family models (`gpt5`, `gpt5-`, `gpt5--`)
+- Route GPT OSS models through OpenAI Responses API by default
 
 ### Bug Fixes
 
