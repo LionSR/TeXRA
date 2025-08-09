@@ -9,4 +9,5 @@ export interface StreamTabInfo {
   lastTimestamp?: number;
   inputFile?: string;
   creationTimestamp?: number;
+  status?: string;
 }
