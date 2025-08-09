@@ -146,28 +146,44 @@ export abstract class ModelHandler<
       this.config.openRouterOnly ||
       getConfig<boolean>('model.useOpenRouter', false);
     const useProxy = getConfig<boolean>('model.useProxy', false);
-    const proxyDomain = getConfig<string>(
+    let proxyDomain = getConfig<string>(
       'model.proxyDomain',
       'proxy.texra.ai',
     );
 
-    if (useProxy) {
-      if (useOpenRouter) {
-        return `https://${proxyDomain}/openrouter/v1`;
-      }
-      const PROXY_PATHS: Record<ModelProvider, string | null> = {
+    if (useProxy && proxyDomain) {
+      // Normalize proxy domain: remove protocol and trailing slashes
+      proxyDomain = proxyDomain
+        .replace(/^https?:\/\//, '') // Remove http:// or https://
+        .replace(/\/+$/, ''); // Remove trailing slashes
+
+      // Define supported proxy paths for specific providers
+      // Only these providers are supported by the proxy
+      const PROXY_PATHS: Partial<Record<ModelProvider | 'openrouter' | 'groq' | 'perplexity' | 'mistral' | 'cerebras', string>> = {
         [ModelProvider.GOOGLE]: 'generativelanguage/v1beta',
         [ModelProvider.OPENAI]: 'openai/v1',
         [ModelProvider.ANTHROPIC]: 'anthropic/v1',
-        [ModelProvider.DEEPSEEK]: 'deepseek',
-        [ModelProvider.XAI]: 'xai/v1',
-        [ModelProvider.MOONSHOT]: 'moonshot/v1',
-        [ModelProvider.DASHSCOPE]: 'dashscope/compatible-mode/v1',
-        [ModelProvider.COPILOT]: null,
-        [ModelProvider.OTHERS]: null,
+        [ModelProvider.XAI]: 'xai',
+        openrouter: 'openrouter',
+        // Additional providers that may be accessed via OpenRouter
+        groq: 'groq/openai/v1',
+        perplexity: 'pplx',
+        mistral: 'mistral',
+        cerebras: 'cerebras',
       };
+
+      // Check if using OpenRouter
+      if (useOpenRouter) {
+        return `https://${proxyDomain}/openrouter`;
+      }
+
+      // Check if provider is supported by proxy
       const path = PROXY_PATHS[this.config.provider];
-      return path ? `https://${proxyDomain}/${path}` : `https://${proxyDomain}`;
+      if (path) {
+        return `https://${proxyDomain}/${path}`;
+      }
+
+      // Provider not supported by proxy, fall through to regular URLs
     }
 
     if (useOpenRouter) {
