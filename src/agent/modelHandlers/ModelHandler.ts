@@ -145,6 +145,30 @@ export abstract class ModelHandler<
     const useOpenRouter =
       this.config.openRouterOnly ||
       getConfig<boolean>('model.useOpenRouter', false);
+    const useProxy = getConfig<boolean>('model.useProxy', false);
+    const proxyDomain = getConfig<string>(
+      'model.proxyDomain',
+      'proxy.texra.ai',
+    );
+
+    if (useProxy) {
+      if (useOpenRouter) {
+        return `https://${proxyDomain}/openrouter/v1`;
+      }
+      const PROXY_PATHS: Record<ModelProvider, string | null> = {
+        [ModelProvider.GOOGLE]: 'generativelanguage/v1beta',
+        [ModelProvider.OPENAI]: 'openai/v1',
+        [ModelProvider.ANTHROPIC]: 'anthropic/v1',
+        [ModelProvider.DEEPSEEK]: 'deepseek',
+        [ModelProvider.XAI]: 'xai/v1',
+        [ModelProvider.MOONSHOT]: 'moonshot/v1',
+        [ModelProvider.DASHSCOPE]: 'dashscope/compatible-mode/v1',
+        [ModelProvider.COPILOT]: null,
+        [ModelProvider.OTHERS]: null,
+      };
+      const path = PROXY_PATHS[this.config.provider];
+      return path ? `https://${proxyDomain}/${path}` : `https://${proxyDomain}`;
+    }
 
     if (useOpenRouter) {
       return 'https://openrouter.ai/api/v1';
