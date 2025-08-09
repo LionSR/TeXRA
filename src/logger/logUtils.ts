@@ -42,6 +42,13 @@ export function getColorForLevel(level: string): string {
   return EMOJI_BY_LEVEL[level.toLowerCase()] ?? '•';
 }
 
+function serializeLogData(data: unknown): unknown {
+  if (data instanceof Error) {
+    return { name: data.name, message: data.message, stack: data.stack };
+  }
+  return data;
+}
+
 // Group State
 
 // Main TeXRA output channel for non-agent logs
@@ -77,6 +84,7 @@ class VSCodeTransport extends Transport {
 
   log(info: any, callback: () => void) {
     const { level, message, timestamp, messageType } = info;
+    const structuredData = serializeLogData(info.data);
     // Use the provided groupId or fall back to the activeGroupId if available
     const groupId = info.groupId || this.activeGroupId;
 
@@ -102,6 +110,16 @@ class VSCodeTransport extends Transport {
     //   this.channel.appendLine(formattedMessage);
     // }
     this.channel.appendLine(formattedMessage);
+    if (
+      structuredData !== undefined &&
+      getConfig<boolean>('logger.debugMode', false)
+    ) {
+      const dataString =
+        typeof structuredData === 'string'
+          ? structuredData
+          : JSON.stringify(structuredData, null, 2);
+      this.channel.appendLine(dataString);
+    }
 
     // Skip debug messages in ProgressView if debug mode is disabled
     if (level === 'debug' && !getConfig<boolean>('logger.debugMode', false)) {
@@ -139,7 +157,7 @@ class VSCodeTransport extends Transport {
       groupId,
       messageType: msgType,
       verbose: isVerbose,
-      data: info.data,
+      data: structuredData,
     } satisfies import('./LogTypes').LogMessageData;
 
     bus.emit('addLogMessage', {

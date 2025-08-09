@@ -290,6 +290,9 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       } catch (err) {
         this.logger.error(
           `Token counting failed, proceeding without token adjustment: ${getSdkErrorMessage(err)}`,
+          undefined,
+          undefined,
+          err,
         );
       }
     }
@@ -359,6 +362,9 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     } catch (error) {
       this.logger.error(
         `Error during Google GenAI Chat API call: ${getSdkErrorMessage(error)}`,
+        undefined,
+        undefined,
+        error,
       );
       if (
         error instanceof Error &&
@@ -447,6 +453,9 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         } catch (error) {
           this.logger.error(
             `Failed to upload media file ${mediaFile} via native SDK: ${getSdkErrorMessage(error)}`,
+            undefined,
+            undefined,
+            error,
           );
           mediaFileResults.push({ path: mediaFile, ok: false });
         }
@@ -560,6 +569,9 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         } catch (error) {
           this.logger.error(
             `Failed to upload media file ${mediaFile} for follow-up round: ${getSdkErrorMessage(error)}`,
+            undefined,
+            undefined,
+            error,
           );
           mediaFileResults.push({ path: mediaFile, ok: false });
         }
