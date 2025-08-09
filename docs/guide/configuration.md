@@ -52,16 +52,31 @@ Configure how TeXRA connects to AI model providers:
 
 ```json
 "texra.model.useOpenRouter": false,
+"texra.model.useProxy": false,
+"texra.model.proxyDomain": "proxy.texra.ai",
 "texra.model.useStreaming": false,
 "texra.model.useStreamingAnthropicReasoning": false,
 "texra.model.useStreamingOpenAIReasoning": false
 ```
 
 - `useOpenRouter`: Access models through OpenRouter instead of direct APIs
+- `useProxy`: Route all API requests through a proxy server
+- `proxyDomain`: Custom proxy domain when `useProxy` is enabled (default `proxy.texra.ai`)
 - `useStreaming`: Enable streaming responses for better handling of long outputs
 - `useStreamingAnthropicReasoning`: Enable streaming specifically for Anthropic reasoning models
 - `useStreamingOpenAIReasoning`: Enable streaming specifically for OpenAI reasoning models
 - `useCopilot`: Use the Copilot language model through VS Code's Language Model API for instruction polishing and text connection
+
+| Provider         | Proxy path                     |
+| ---------------- | ------------------------------ |
+| OpenAI           | `openai/v1`                    |
+| Anthropic        | `anthropic/v1`                 |
+| Gemini           | `generativelanguage/v1beta`    |
+| DeepSeek         | `deepseek`                     |
+| xAI              | `xai/v1`                       |
+| Moonshot (Kimi)  | `moonshot/v1`                  |
+| DashScope (Qwen) | `dashscope/compatible-mode/v1` |
+| OpenRouter       | `openrouter/v1`                |
 
 ## File Management Configuration
 
