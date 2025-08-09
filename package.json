@@ -567,7 +567,7 @@
             "type": "number",
             "default": 10000,
             "minimum": 1000,
-            "maximum": 60000,
+            "maximum": 80000,
             "description": "Timeout in milliseconds for latexdiff operations",
             "order": 1
           },
