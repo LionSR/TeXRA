@@ -180,7 +180,9 @@ export abstract class ModelHandler<
       // Check if provider is supported by proxy
       const path = PROXY_PATHS[this.config.provider];
       if (path) {
+        this.logger.debug(`Using proxy for ${this.config.provider}: ${path}`);
         return `https://${proxyDomain}/${path}`;
+
       }
 
       // Provider not supported by proxy, fall through to regular URLs
