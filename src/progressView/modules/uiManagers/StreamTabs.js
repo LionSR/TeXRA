@@ -52,6 +52,13 @@ export class StreamTabs {
       });
       if (!tabEl) return;
       initializeIconButtons(tabEl);
+      const statusEl = tabEl.querySelector('.tab-status');
+      if (statusEl) {
+        const status = info.status || 'stopped';
+        statusEl.classList.add(status);
+        statusEl.dataset.status =
+          status.charAt(0).toUpperCase() + status.slice(1);
+      }
       const agentIcon = tabEl.querySelector('.agent-type');
       if (agentIcon) {
         const key = info.agentType || info.agent || 'unknown';
