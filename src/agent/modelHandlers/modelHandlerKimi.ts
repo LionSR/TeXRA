@@ -13,6 +13,7 @@ import type { ToolDefinition } from '@model';
 // Local imports - utilities
 import { convertContentToString } from '@agent/utils/text/messageUtils';
 import { K_SLICE, MESSAGE_PREVIEW_LENGTH } from '@utils/config';
+import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
 
 /**
  * Handler for Moonshot Kimi models using OpenAI-compatible API.
@@ -192,7 +193,10 @@ export class ModelHandlerKimi extends ModelHandlerOpenAI {
         return response;
       } catch (err) {
         this.logger.error(
-          `Error in createResponse for Kimi thinking model: ${err}`,
+          `Error in createResponse for Kimi thinking model: ${getSdkErrorMessage(err)}`,
+          undefined,
+          undefined,
+          err,
         );
         throw err;
       }
