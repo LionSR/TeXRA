@@ -50,7 +50,7 @@ Even the best research assistants (human or AI) have off days. This guide helps 
    - Restart your terminal and VS Code after updating PATH
 
 - When launching VS Code from the system menu or Finder, it may inherit a minimal PATH. TeXRA automatically searches common locations in the following order:
-  
+
   **macOS:**
   1. `/opt/homebrew/bin` (Apple Silicon Homebrew)
   2. `/usr/local/bin` (Intel Homebrew and general tools)
@@ -58,7 +58,7 @@ Even the best research assistants (human or AI) have off days. This guide helps 
   4. `/usr/texbin` (legacy MacTeX location)
   5. Versioned TeX Live directories (e.g., `/usr/local/texlive/2024/bin/universal-darwin`)
   6. User-specific installations in `~/texlive/*/bin/*` and `~/TinyTeX/bin/*`
-  
+
   **Windows:**
   1. `C:\Program Files\MiKTeX\miktex\bin\x64` (64-bit MiKTeX)
   2. `C:\Program Files\MiKTeX\miktex\bin` (32-bit MiKTeX)
@@ -66,7 +66,7 @@ Even the best research assistants (human or AI) have off days. This guide helps 
   4. `%LOCALAPPDATA%\Programs\MiKTeX\miktex\bin\x64` (user MiKTeX installation)
   5. Versioned TeX Live directories (e.g., `C:\texlive\2024\bin\windows`)
   6. User-specific installations in `%USERPROFILE%\texlive\*\bin\*` and `%USERPROFILE%\TinyTeX\bin\*`
-  
+
   **Linux:**
   1. `/usr/local/bin`
   2. `/usr/bin`
@@ -74,12 +74,12 @@ Even the best research assistants (human or AI) have off days. This guide helps 
   4. `/home/linuxbrew/.linuxbrew/bin` (Linuxbrew)
   5. Versioned TeX Live directories
   6. User-specific installations
-  
+
   **Fallback mechanisms:**
   - If tools aren't found in standard paths, TeXRA searches `texmf-dist/scripts` directories
   - Uses `kpsewhich` to locate Perl scripts (e.g., `latexdiff.pl`)
   - Automatically runs Perl scripts with `perl` interpreter when needed
-  
+
   Opening VS Code from a configured terminal provides the most reliable environment.
 
 3. **Manual installation**:
