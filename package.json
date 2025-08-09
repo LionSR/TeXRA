@@ -130,7 +130,7 @@
           },
           "texra.model.useStreaming": {
             "type": "boolean",
-            "default": false,
+            "default": true,
             "description": "Enable streaming API responses when supported by the model. This serves as a global default but can be overridden by provider-specific settings.",
             "scope": "resource"
           },
@@ -172,13 +172,13 @@
           },
           "texra.model.useOpenAIResponsesAPI": {
             "type": "boolean",
-            "default": false,
+            "default": true,
             "description": "Use the OpenAI Responses API instead of the Chat Completions API when available.",
             "scope": "resource"
           },
           "texra.model.useNativeGoogleSDK": {
             "type": "boolean",
-            "default": false,
+            "default": true,
             "description": "Use the native @google/genai SDK for Google models instead of the OpenAI-compatible API. This feature is experimental and may not work as expected.",
             "scope": "resource"
           },
