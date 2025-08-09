@@ -66,7 +66,7 @@ export const ANTHROPIC_MODELS: Record<string, ModelConfig> = {
   opus4T: {
     name: 'opus4T',
     fullName: 'claude-opus-4-20250514',
-    openrouterFullName: 'anthropic/claude-opus-4:thinking',
+    openrouterFullName: 'anthropic/claude-opus-4',
     provider: ModelProvider.ANTHROPIC,
     maxOutputTokens: 32000, // Official Claude Opus 4 limit - streaming recommended for large outputs
     contextWindow: 200000,
@@ -103,7 +103,7 @@ export const ANTHROPIC_MODELS: Record<string, ModelConfig> = {
   sonnet4T: {
     name: 'sonnet4T',
     fullName: 'claude-sonnet-4-20250514',
-    openrouterFullName: 'anthropic/claude-sonnet-4:thinking',
+    openrouterFullName: 'anthropic/claude-sonnet-4',
     provider: ModelProvider.ANTHROPIC,
     maxOutputTokens: 64000, // Official Claude Sonnet 4 limit - streaming recommended for large outputs
     contextWindow: 200000,
