@@ -114,6 +114,14 @@ export function generateXmlLatexConversions(environments: string[]): {
     patterns[`<${env}>`] = `\\begin{${env}}`;
     patterns[`</${env}>`] = `\\end{${env}}`;
 
+    // XML with begin to LaTeX
+    patterns[`<begin{${env}}>`] = `\\begin{${env}}`;
+    patterns[`</begin{${env}}>`] = `\\end{${env}}`;
+
+    // XML with end to LaTeX
+    patterns[`<end{${env}}>`] = `\\end{${env}}`;
+    patterns[`</end{${env}}>`] = `\\end{${env}}`;
+
     // XML with braces to LaTeX
     patterns[`<${env}}`] = `\\begin{${env}}`;
     patterns[`</${env}}`] = `\\end{${env}}`;

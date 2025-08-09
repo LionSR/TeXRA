@@ -163,8 +163,17 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
   async getClient(): Promise<GoogleGenAI> {
     if (!this.googleClient) {
       const apiKey = await this.getApiKey();
-      this.logger.debug(`Using Google GenAI Native SDK.`);
-      this.googleClient = new GoogleGenAI({ apiKey });
+      const baseUrl = this.getBaseUrl();
+      // this would get the base url for the google via openai provider
+      // const baseUrl = 'https://generativelanguage.googleapis.com/v1beta/';
+      // const baseUrl = 'https://generativelanguage.googleapis.com';
+      this.logger.debug(`Using Google GenAI Native SDK. Base URL: ${baseUrl}`);
+      this.googleClient = new GoogleGenAI({
+        apiKey: apiKey,
+        httpOptions: {
+          baseUrl: baseUrl ?? undefined,
+        },
+      });
     }
     return this.googleClient;
   }
