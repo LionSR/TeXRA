@@ -38,6 +38,7 @@ TeXRA is built as a TypeScript-based VS Code extension that provides:
 - Version control integration (latexdiff functionality)
 - Customizable prompts and settings
 - Direct integration with OpenAI, Anthropic, Google, DeepSeek, Moonshot (Kimi), and DashScope (Qwen) APIs with optional OpenRouter routing
+- Configurable AI proxy to route requests through a custom domain (default `proxy.texra.ai`); see the [Configuration Guide](https://texra.ai/guide/configuration.html) for setup details
 
 ## Installation Guide
 
