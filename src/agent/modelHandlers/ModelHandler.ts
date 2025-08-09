@@ -146,10 +146,7 @@ export abstract class ModelHandler<
       this.config.openRouterOnly ||
       getConfig<boolean>('model.useOpenRouter', false);
     const useProxy = getConfig<boolean>('model.useProxy', false);
-    let proxyDomain = getConfig<string>(
-      'model.proxyDomain',
-      'proxy.texra.ai',
-    );
+    let proxyDomain = getConfig<string>('model.proxyDomain', 'proxy.texra.ai');
 
     if (useProxy && proxyDomain) {
       // Normalize proxy domain: remove protocol and trailing slashes
@@ -159,7 +156,17 @@ export abstract class ModelHandler<
 
       // Define supported proxy paths for specific providers
       // Only these providers are supported by the proxy
-      const PROXY_PATHS: Partial<Record<ModelProvider | 'openrouter' | 'groq' | 'perplexity' | 'mistral' | 'cerebras', string>> = {
+      const PROXY_PATHS: Partial<
+        Record<
+          | ModelProvider
+          | 'openrouter'
+          | 'groq'
+          | 'perplexity'
+          | 'mistral'
+          | 'cerebras',
+          string
+        >
+      > = {
         [ModelProvider.GOOGLE]: 'generativelanguage/v1beta',
         [ModelProvider.OPENAI]: 'openai/v1',
         [ModelProvider.ANTHROPIC]: 'anthropic/v1',
@@ -182,7 +189,6 @@ export abstract class ModelHandler<
       if (path) {
         this.logger.debug(`Using proxy for ${this.config.provider}: ${path}`);
         return `https://${proxyDomain}/${path}`;
-
       }
 
       // Provider not supported by proxy, fall through to regular URLs
