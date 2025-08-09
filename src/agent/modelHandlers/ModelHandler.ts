@@ -145,6 +145,51 @@ export abstract class ModelHandler<
     const useOpenRouter =
       this.config.openRouterOnly ||
       getConfig<boolean>('model.useOpenRouter', false);
+    const useProxy = getConfig<boolean>('model.useProxy', false);
+    let proxyDomain = getConfig<string>('model.proxyDomain', 'proxy.texra.ai');
+
+    if (useProxy && proxyDomain) {
+      // Normalize proxy domain: remove protocol and trailing slashes
+      proxyDomain = proxyDomain
+        .replace(/^https?:\/\//, '') // Remove http:// or https://
+        .replace(/\/+$/, ''); // Remove trailing slashes
+
+      // Define supported proxy paths for specific providers
+      // Only these providers are supported by the proxy
+      const PROXY_PATHS: Partial<Record<ModelProvider, string>> = {
+        // [ModelProvider.GOOGLE]: 'generativelanguage/v1beta',
+        [ModelProvider.GOOGLE]: 'generativelanguage',
+        [ModelProvider.OPENAI]: 'openai/v1',
+        // [ModelProvider.ANTHROPIC]: 'anthropic/v1',
+        [ModelProvider.ANTHROPIC]: 'anthropic',
+        [ModelProvider.XAI]: 'xai',
+        // [ModelProvider.OPENROUTER]: 'openrouter',
+        // Additional providers that may be accessed via OpenRouter
+        // groq: 'groq/openai/v1',
+        // perplexity: 'pplx',
+        // mistral: 'mistral',
+        // cerebras: 'cerebras',
+      };
+
+      // Check if using OpenRouter
+      if (useOpenRouter) {
+        this.logger.debug(
+          `Using proxy for ${this.config.provider} for OpenRouter`,
+        );
+        return `https://${proxyDomain}/openrouter`;
+      }
+
+      // Check if provider is supported by proxy
+      const path = PROXY_PATHS[this.config.provider];
+      if (path) {
+        this.logger.debug(
+          `Using proxy for ${this.config.provider}: with ${proxyDomain}/${path}`,
+        );
+        return `https://${proxyDomain}/${path}`;
+      }
+
+      // Provider not supported by proxy, fall through to regular URLs
+    }
 
     if (useOpenRouter) {
       return 'https://openrouter.ai/api/v1';
@@ -153,7 +198,8 @@ export abstract class ModelHandler<
     // Provider-specific base URLs
     const BASE_URLS: Record<ModelProvider, string | null> = {
       [ModelProvider.GOOGLE]:
-        'https://generativelanguage.googleapis.com/v1beta/openai/',
+        // 'https://generativelanguage.googleapis.com/v1beta/openai/',
+        'https://generativelanguage.googleapis.com/v1beta/',
       [ModelProvider.OPENAI]: null, // OpenAI uses default base URL
       [ModelProvider.ANTHROPIC]: 'https://api.anthropic.com/v1/',
       [ModelProvider.DEEPSEEK]: 'https://api.deepseek.com',
