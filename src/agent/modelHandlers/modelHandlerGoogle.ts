@@ -24,7 +24,8 @@ export class ModelHandlerGoogle extends ModelHandlerOpenAI {
   /** Returns OpenAI client configured with Google's base URL. */
   async getClient(): Promise<OpenAI> {
     const apiKey = await this.getApiKey();
-    const baseURL = this.getBaseUrl();
+    // const baseURL = this.getBaseUrl();
+    const baseURL = 'https://generativelanguage.googleapis.com/v1beta/openai/';
     this.logger.debug(`Using Google API key. Base URL: ${baseURL}`);
     return new OpenAI({ apiKey, baseURL });
   }
