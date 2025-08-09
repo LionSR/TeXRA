@@ -201,7 +201,12 @@ export class ModelHandlerAnthropic extends ModelHandler<
         response = await client.beta.messages.create(options, { signal });
       }
     } catch (err) {
-      this.logger.error(`Error creating response: ${getSdkErrorMessage(err)}`);
+      this.logger.error(
+        `Error creating response: ${getSdkErrorMessage(err)}`,
+        undefined,
+        undefined,
+        err,
+      );
       throw err;
     }
 
@@ -294,7 +299,10 @@ export class ModelHandlerAnthropic extends ModelHandler<
         );
       } catch (err) {
         this.logger.error(
-          `Error processing media files for follow-up round: ${err}`,
+          `Error processing media files for follow-up round: ${getSdkErrorMessage(err)}`,
+          undefined,
+          undefined,
+          err,
         );
       }
     }
@@ -956,7 +964,12 @@ export class ModelHandlerAnthropic extends ModelHandler<
         }
       }
     } catch (e) {
-      this.logger.error(`Error extracting thinking blocks: ${e}`, groupId);
+      this.logger.error(
+        `Error extracting thinking blocks: ${getSdkErrorMessage(e)}`,
+        groupId,
+        undefined,
+        e,
+      );
       return null;
     }
 
