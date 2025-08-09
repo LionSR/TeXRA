@@ -49,7 +49,38 @@ Even the best research assistants (human or AI) have off days. This guide helps 
    - Ensure installation directories are in your system PATH
    - Restart your terminal and VS Code after updating PATH
 
-- When launching VS Code from the system menu or Finder, it may inherit a minimal PATH. TeXRA automatically searches common locations such as Homebrew, Linuxbrew, MacTeX links (`/Library/TeX/texbin`, `/usr/texbin`), versioned TeX&nbsp;Live bins (including `current`), user-level `texlive` and TinyTeX installs, distro paths like `/usr/bin`, MiKTeX binaries (system and user AppData), and `texmf-dist/scripts` fallbacks located via `kpsewhich` and run with `perl` if needed. Opening VS Code from a configured terminal provides the most reliable environment.
+- When launching VS Code from the system menu or Finder, it may inherit a minimal PATH. TeXRA automatically searches common locations in the following order:
+  
+  **macOS:**
+  1. `/opt/homebrew/bin` (Apple Silicon Homebrew)
+  2. `/usr/local/bin` (Intel Homebrew and general tools)
+  3. `/Library/TeX/texbin` (MacTeX symlink)
+  4. `/usr/texbin` (legacy MacTeX location)
+  5. Versioned TeX Live directories (e.g., `/usr/local/texlive/2024/bin/universal-darwin`)
+  6. User-specific installations in `~/texlive/*/bin/*` and `~/TinyTeX/bin/*`
+  
+  **Windows:**
+  1. `C:\Program Files\MiKTeX\miktex\bin\x64` (64-bit MiKTeX)
+  2. `C:\Program Files\MiKTeX\miktex\bin` (32-bit MiKTeX)
+  3. `C:\Program Files (x86)\MiKTeX\miktex\bin` (32-bit on 64-bit Windows)
+  4. `%LOCALAPPDATA%\Programs\MiKTeX\miktex\bin\x64` (user MiKTeX installation)
+  5. Versioned TeX Live directories (e.g., `C:\texlive\2024\bin\windows`)
+  6. User-specific installations in `%USERPROFILE%\texlive\*\bin\*` and `%USERPROFILE%\TinyTeX\bin\*`
+  
+  **Linux:**
+  1. `/usr/local/bin`
+  2. `/usr/bin`
+  3. `/usr/texbin`
+  4. `/home/linuxbrew/.linuxbrew/bin` (Linuxbrew)
+  5. Versioned TeX Live directories
+  6. User-specific installations
+  
+  **Fallback mechanisms:**
+  - If tools aren't found in standard paths, TeXRA searches `texmf-dist/scripts` directories
+  - Uses `kpsewhich` to locate Perl scripts (e.g., `latexdiff.pl`)
+  - Automatically runs Perl scripts with `perl` interpreter when needed
+  
+  Opening VS Code from a configured terminal provides the most reliable environment.
 
 3. **Manual installation**:
    - Follow the detailed installation steps in the [Installation Guide](/guide/installation)

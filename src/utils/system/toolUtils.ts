@@ -195,6 +195,29 @@ export async function checkToolInstalled(
       reject: false,
     };
 
+    // Helper function to execute a command with fallback
+    const executeWithFallback = (
+      cmd: string,
+      args: string[],
+    ): boolean => {
+      let result = execaSync(cmd, args, execOptions);
+      if (result.exitCode === 0) {
+        return true;
+      }
+      
+      const fallback = findToolInCommonPaths(cmd);
+      if (fallback) {
+        const needsPerl =
+          fallback.toLowerCase().endsWith('.pl') ||
+          (process.platform === 'win32' && path.extname(fallback) === '');
+        result = needsPerl
+          ? execaSync('perl', [fallback, ...args], execOptions)
+          : execaSync(fallback, args, execOptions);
+        return result.exitCode === 0;
+      }
+      return false;
+    };
+
     if (Array.isArray(command)) {
       // Try each command in the array until one succeeds
       for (const cmd of command) {
@@ -204,23 +227,9 @@ export async function checkToolInstalled(
         );
         if (stringArgs.length === 0) continue;
         const [cmdName, ...args] = stringArgs;
-        let result = execaSync(cmdName, args, execOptions);
-        if (result.exitCode === 0) {
+        if (executeWithFallback(cmdName, args)) {
           isInstalled = true;
           break;
-        }
-        const fallback = findToolInCommonPaths(cmdName);
-        if (fallback) {
-          const needsPerl =
-            fallback.toLowerCase().endsWith('.pl') ||
-            (process.platform === 'win32' && path.extname(fallback) === '');
-          result = needsPerl
-            ? execaSync('perl', [fallback, ...args], execOptions)
-            : execaSync(fallback, args, execOptions);
-          if (result.exitCode === 0) {
-            isInstalled = true;
-            break;
-          }
         }
       }
     } else {
@@ -232,20 +241,7 @@ export async function checkToolInstalled(
         throw new Error('Invalid command: no executable found');
       }
       const [cmdName, ...args] = stringArgs;
-      let result = execaSync(cmdName, args, execOptions);
-      isInstalled = result.exitCode === 0;
-      if (!isInstalled) {
-        const fallback = findToolInCommonPaths(cmdName);
-        if (fallback) {
-          const needsPerl =
-            fallback.toLowerCase().endsWith('.pl') ||
-            (process.platform === 'win32' && path.extname(fallback) === '');
-          result = needsPerl
-            ? execaSync('perl', [fallback, ...args], execOptions)
-            : execaSync(fallback, args, execOptions);
-          isInstalled = result.exitCode === 0;
-        }
-      }
+      isInstalled = executeWithFallback(cmdName, args);
     }
 
     if (!isInstalled && showError) {
