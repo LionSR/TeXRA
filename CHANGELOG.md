@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.32.8] - 2025-08-09
+
+### Features
+
+- Added optional AI proxy routing with configurable domain (default `proxy.texra.ai`)
+
 ## [0.32.7] - 2025-08-08
 
 ### Features
