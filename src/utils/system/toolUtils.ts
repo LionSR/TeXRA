@@ -196,15 +196,12 @@ export async function checkToolInstalled(
     };
 
     // Helper function to execute a command with fallback
-    const executeWithFallback = (
-      cmd: string,
-      args: string[],
-    ): boolean => {
+    const executeWithFallback = (cmd: string, args: string[]): boolean => {
       let result = execaSync(cmd, args, execOptions);
       if (result.exitCode === 0) {
         return true;
       }
-      
+
       const fallback = findToolInCommonPaths(cmd);
       if (fallback) {
         const needsPerl =

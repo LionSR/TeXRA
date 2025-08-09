@@ -141,10 +141,10 @@ export function extendEnvPath(
     }
   }
   const result = segments.join(path.delimiter);
-  
+
   // Cache the result
   cachedExtendedPaths.set(basePath, result);
-  
+
   return result;
 }
 
@@ -165,7 +165,7 @@ function isPathSafe(filepath: string): boolean {
 export function findToolInCommonPaths(tool: string): string | null {
   // Basic security validation
   if (!isPathSafe(tool)) {
-    logger.log(`Unsafe tool name rejected: ${tool}`, 'warn');
+    logger.debug(`Unsafe tool name rejected: ${tool}`, 'warn');
     return null;
   }
   const candidates = [tool];
