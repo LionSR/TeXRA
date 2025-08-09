@@ -215,7 +215,10 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     }
 
     // Update all webview content using the new updater
-    this.webviewUpdater.updateAll(this.state);
+    this.webviewUpdater.updateAll(
+      this.state,
+      this.eventHandler.getAllStreamStatuses(),
+    );
 
     // Update status for current stream
     if (this.state.activeStream) {
