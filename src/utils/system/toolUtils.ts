@@ -1,12 +1,13 @@
 // Standard library imports
+import * as path from 'path';
+
+// Third-party imports
 import { execaSync } from 'execa';
 import { parse as shellParse } from 'shell-quote';
+import * as vscode from 'vscode';
 
 // Local imports
 import { extendEnvPath, findToolInCommonPaths } from './platformPaths';
-
-// Third-party imports
-import * as vscode from 'vscode';
 
 // No local imports needed
 
@@ -210,7 +211,12 @@ export async function checkToolInstalled(
         }
         const fallback = findToolInCommonPaths(cmdName);
         if (fallback) {
-          result = execaSync(fallback, args, execOptions);
+          const needsPerl =
+            fallback.toLowerCase().endsWith('.pl') ||
+            (process.platform === 'win32' && path.extname(fallback) === '');
+          result = needsPerl
+            ? execaSync('perl', [fallback, ...args], execOptions)
+            : execaSync(fallback, args, execOptions);
           if (result.exitCode === 0) {
             isInstalled = true;
             break;
@@ -231,7 +237,12 @@ export async function checkToolInstalled(
       if (!isInstalled) {
         const fallback = findToolInCommonPaths(cmdName);
         if (fallback) {
-          result = execaSync(fallback, args, execOptions);
+          const needsPerl =
+            fallback.toLowerCase().endsWith('.pl') ||
+            (process.platform === 'win32' && path.extname(fallback) === '');
+          result = needsPerl
+            ? execaSync('perl', [fallback, ...args], execOptions)
+            : execaSync(fallback, args, execOptions);
           isInstalled = result.exitCode === 0;
         }
       }
