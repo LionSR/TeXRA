@@ -54,7 +54,20 @@
   min-width: 0;
 }
 
+.tab-header {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-small);
+  width: 100%;
+}
+
+.tab-header .tab-status {
+  margin-left: 0;
+  margin-right: 0;
+}
+
 .tab-title {
+  flex: 1;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
