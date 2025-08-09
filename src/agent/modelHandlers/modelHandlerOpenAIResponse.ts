@@ -196,9 +196,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
       }
     }
 
-    this.logger.debug(
-      `CreateResponse params: ${JSON.stringify(params, null, 2)}`,
-    );
+    // this.logger.debug(
+    //   `CreateResponse params: ${JSON.stringify(params, null, 2)}`,
+    // );
 
     if (useStreaming) {
       // this.logger.debug(

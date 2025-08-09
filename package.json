@@ -116,9 +116,21 @@
             "description": "Whether to use OpenRouter for API calls when possible",
             "scope": "resource"
           },
-          "texra.model.useStreaming": {
+          "texra.model.useProxy": {
             "type": "boolean",
             "default": false,
+            "description": "Route API requests through a proxy domain",
+            "scope": "resource"
+          },
+          "texra.model.proxyDomain": {
+            "type": "string",
+            "default": "proxy.texra.ai",
+            "description": "Proxy domain to use when routing API requests",
+            "scope": "resource"
+          },
+          "texra.model.useStreaming": {
+            "type": "boolean",
+            "default": true,
             "description": "Enable streaming API responses when supported by the model. This serves as a global default but can be overridden by provider-specific settings.",
             "scope": "resource"
           },
@@ -160,13 +172,13 @@
           },
           "texra.model.useOpenAIResponsesAPI": {
             "type": "boolean",
-            "default": false,
+            "default": true,
             "description": "Use the OpenAI Responses API instead of the Chat Completions API when available.",
             "scope": "resource"
           },
           "texra.model.useNativeGoogleSDK": {
             "type": "boolean",
-            "default": false,
+            "default": true,
             "description": "Use the native @google/genai SDK for Google models instead of the OpenAI-compatible API. This feature is experimental and may not work as expected.",
             "scope": "resource"
           },
@@ -555,7 +567,7 @@
             "type": "number",
             "default": 10000,
             "minimum": 1000,
-            "maximum": 60000,
+            "maximum": 80000,
             "description": "Timeout in milliseconds for latexdiff operations",
             "order": 1
           },
@@ -1188,7 +1200,7 @@
     "format": "prettier --write ."
   },
   "devDependencies": {
-    "@stylistic/eslint-plugin": "^5.2.2",
+    "@stylistic/eslint-plugin": "^5.2.3",
     "@types/diff-match-patch": "^1.0.36",
     "@types/difflib": "^0.2.7",
     "@types/he": "^1.2.3",
@@ -1203,7 +1215,7 @@
     "@typescript-eslint/parser": "^8.38.0",
     "@vscode/test-cli": "^0.0.11",
     "@vscode/test-electron": "^2.5.2",
-    "eslint": "^9.32.0",
+    "eslint": "^9.33.0",
     "globals": "^16.3.0",
     "jsdom": "^26.1.0",
     "node-loader": "^2.1.0",
@@ -1246,7 +1258,7 @@
   },
   "homepage": "https://texra.ai",
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.58.0",
+    "@anthropic-ai/sdk": "^0.59.0",
     "@cantoo/pdf-lib": "^2.4.2",
     "@google/genai": "^1.13.0",
     "@modelcontextprotocol/sdk": "^1.17.2",
@@ -1270,14 +1282,14 @@
     "mime-types": "^3.0.1",
     "nanoid": "^5.1.5",
     "node-pandoc": "^0.3.0",
-    "openai": "^5.12.1",
+    "openai": "^5.12.2",
     "pdf2pic": "^3.2.0",
     "shell-quote": "^1.8.3",
     "sortablejs": "^1.15.6",
     "split.js": "^1.6.5",
     "tar": "^7.4.3",
     "winston": "^3.17.0",
-    "yaml": "^2.8.0",
+    "yaml": "^2.8.1",
     "zod": "^3.25.76",
     "zod-to-json-schema": "^3.24.6"
   }
