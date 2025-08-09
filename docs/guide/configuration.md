@@ -62,21 +62,27 @@ Configure how TeXRA connects to AI model providers:
 - `useOpenRouter`: Access models through OpenRouter instead of direct APIs
 - `useProxy`: Route all API requests through a proxy server
 - `proxyDomain`: Custom proxy domain when `useProxy` is enabled (default `proxy.texra.ai`)
+  - ⚠️ **Security Warning:** When using a proxy, ensure you trust the proxy server as it will receive your API keys. Only use proxies from trusted sources.
 - `useStreaming`: Enable streaming responses for better handling of long outputs
 - `useStreamingAnthropicReasoning`: Enable streaming specifically for Anthropic reasoning models
 - `useStreamingOpenAIReasoning`: Enable streaming specifically for OpenAI reasoning models
 - `useCopilot`: Use the Copilot language model through VS Code's Language Model API for instruction polishing and text connection
 
-| Provider         | Proxy path                     |
-| ---------------- | ------------------------------ |
-| OpenAI           | `openai/v1`                    |
-| Anthropic        | `anthropic/v1`                 |
-| Gemini           | `generativelanguage/v1beta`    |
-| DeepSeek         | `deepseek`                     |
-| xAI              | `xai/v1`                       |
-| Moonshot (Kimi)  | `moonshot/v1`                  |
-| DashScope (Qwen) | `dashscope/compatible-mode/v1` |
-| OpenRouter       | `openrouter/v1`                |
+| Provider         | Proxy path                     | Supported |
+| ---------------- | ------------------------------ | --------- |
+| OpenAI           | `openai/v1`                    | ✅ Yes    |
+| Anthropic        | `anthropic/v1`                 | ✅ Yes    |
+| Gemini (Google)  | `generativelanguage/v1beta`    | ✅ Yes    |
+| xAI              | `xai`                          | ✅ Yes    |
+| OpenRouter       | `openrouter`                   | ✅ Yes    |
+| Groq             | `groq/openai/v1`               | ✅ Yes    |
+| Perplexity       | `pplx`                         | ✅ Yes    |
+| Mistral          | `mistral`                      | ✅ Yes    |
+| DeepSeek         | N/A                            | ❌ No     |
+| Moonshot (Kimi)  | N/A                            | ❌ No     |
+| DashScope (Qwen) | N/A                            | ❌ No     |
+
+**Note:** Only the providers marked with ✅ are supported by the proxy. Other providers will use their direct API endpoints even when proxy is enabled.
 
 ## File Management Configuration
 
