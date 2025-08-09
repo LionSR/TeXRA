@@ -54,6 +54,13 @@ export class ProgressViewMessageHandler {
 
   handleUpdateStreams(message) {
     state.activeStream = message.activeStream;
+    message.streams.forEach((s) => {
+      if (s.status) {
+        state.streamStatuses.set(s.name, s.status);
+      } else {
+        state.streamStatuses.delete(s.name);
+      }
+    });
     dom.streamTabs.update(message.streams, message.activeStream);
 
     const container = document.getElementById(ELEMENT_IDS.FOLLOW_UP_CONTAINER);

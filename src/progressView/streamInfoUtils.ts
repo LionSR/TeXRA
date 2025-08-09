@@ -15,7 +15,10 @@ const sortComparators = {
 /**
  * Build metadata objects for all streams in the given state.
  */
-export function buildStreamInfos(state: ProgressViewState): StreamTabInfo[] {
+export function buildStreamInfos(
+  state: ProgressViewState,
+  statuses?: Map<string, string>,
+): StreamTabInfo[] {
   const infos = state.streamTabs.keys().map((id) => {
     const taskState = state.getTaskState(id);
     const logs = state.streamTabs.get(id);
@@ -37,6 +40,7 @@ export function buildStreamInfos(state: ProgressViewState): StreamTabInfo[] {
       lastTimestamp,
       inputFile,
       creationTimestamp,
+      status: statuses?.get(id),
     } as StreamTabInfo;
   });
 

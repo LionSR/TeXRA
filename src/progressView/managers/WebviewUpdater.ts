@@ -199,13 +199,13 @@ export class WebviewUpdater {
   /**
    * Update all webview content based on current state
    */
-  updateAll(state: ProgressViewState): void {
+  updateAll(state: ProgressViewState, statuses?: Map<string, string>): void {
     const webview = this.getWebview();
     if (!webview) return;
 
     const activeStream = state.activeStream;
 
-    const streams = buildStreamInfos(state);
+    const streams = buildStreamInfos(state, statuses);
 
     // Update streams and active stream
     this.updateStreams(streams, activeStream);
