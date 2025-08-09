@@ -53,9 +53,11 @@ export class ModelHandlerAnthropic extends ModelHandler<
 > {
   async getClient(): Promise<Anthropic> {
     const apiKey = await this.getApiKey();
-    this.logger.debug('Using Anthropic API.');
+    const baseUrl = this.getBaseUrl();
+    // const baseUrl = 'https://api.anthropic.com/v1/';
+    this.logger.debug(`Using Anthropic API. Base URL: ${baseUrl}`);
     // there is a time out parameter that be be set; default is 10 minutes
-    return new Anthropic({ apiKey });
+    return new Anthropic({ apiKey, baseURL: baseUrl });
   }
 
   /** Creates a chat completion response using Anthropic's API with specified parameters and optional system prompt. */
@@ -183,9 +185,9 @@ export class ModelHandlerAnthropic extends ModelHandler<
       // in the future we log this in firstInputTokens of the AgentStateGlobal
     }
 
-    this.logger.debug(
-      `CreateResponse options: ${JSON.stringify(options, null, 2)}`,
-    );
+    // this.logger.debug(
+    //   `CreateResponse options: ${JSON.stringify(options, null, 2)}`,
+    // );
 
     let response: BetaMessage;
 
