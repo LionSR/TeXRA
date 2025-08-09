@@ -17,6 +17,7 @@ import {
 } from '@frontend/media/img';
 import { checkMultipleToolsInstalled } from '@utils/system';
 import { getConfig } from '@utils/config';
+import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
 import type { ProviderStopReason } from './types/StopReasonTypes';
 import {
   ANTHROPIC_STOP,
@@ -519,7 +520,12 @@ export abstract class ModelHandler<
           mediaFileResults.push({ path: mediaFile, ok: true });
         }
       } catch (err) {
-        this.logger.error(`Failed to process media ${mediaFile}: ${err}`);
+        this.logger.error(
+          `Failed to process media ${mediaFile}: ${getSdkErrorMessage(err)}`,
+          undefined,
+          undefined,
+          err,
+        );
         mediaFileResults.push({ path: mediaFile, ok: false });
         continue;
       }
