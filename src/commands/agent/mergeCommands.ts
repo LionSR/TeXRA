@@ -26,7 +26,14 @@ async function handleMerge(
   if (!editedFile || (!baseFile && !inputFile)) {
     const errorMsg =
       'Both input file and edited file must be specified for merge operation';
-    vscode.window.showErrorMessage(errorMsg);
+    const docsAction = 'View Merge Docs';
+    const selection = await vscode.window.showErrorMessage(
+      errorMsg,
+      docsAction,
+    );
+    if (selection === docsAction) {
+      vscode.commands.executeCommand('texra.openDoc', 'intelligent-merge');
+    }
     return;
   }
 
