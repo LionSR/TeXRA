@@ -139,7 +139,10 @@ export class ModelHandlerOpenAI extends ModelHandler<
       }
     } catch (err) {
       this.logger.error(
-        `Token counting failed: ${err instanceof Error ? err.message : String(err)}. Proceeding without token adjustment.`,
+        `Token counting failed: ${getSdkErrorMessage(err)}. Proceeding without token adjustment.`,
+        undefined,
+        undefined,
+        err,
       );
       // Decide if you want to throw here or let the API call potentially fail
     }
@@ -201,6 +204,9 @@ export class ModelHandlerOpenAI extends ModelHandler<
       } catch (err) {
         this.logger.error(
           `Error in createResponse(streaming): ${getSdkErrorMessage(err)}`,
+          undefined,
+          undefined,
+          err,
         );
         throw err;
       }
@@ -214,6 +220,9 @@ export class ModelHandlerOpenAI extends ModelHandler<
       } catch (err) {
         this.logger.error(
           `Error in createResponse: ${getSdkErrorMessage(err)}`,
+          undefined,
+          undefined,
+          err,
         );
         throw err;
       }
@@ -338,7 +347,10 @@ export class ModelHandlerOpenAI extends ModelHandler<
         roundContent.push(...formattedMediaContent);
       } catch (err) {
         this.logger.error(
-          `Error processing media files for follow-up round: ${err}`,
+          `Error processing media files for follow-up round: ${getSdkErrorMessage(err)}`,
+          undefined,
+          undefined,
+          err,
         );
       }
     }
@@ -984,7 +996,10 @@ export class ModelHandlerOpenAI extends ModelHandler<
     } catch (err) {
       // Log the error and re-throw to indicate failure
       this.logger.error(
-        `Error counting tokens: ${err instanceof Error ? err.message : String(err)}`,
+        `Error counting tokens: ${getSdkErrorMessage(err)}`,
+        undefined,
+        undefined,
+        err,
       );
       throw err;
     }
