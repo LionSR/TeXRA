@@ -52,16 +52,16 @@ Configure how TeXRA connects to AI model providers:
 
 ```json
 "texra.model.useOpenRouter": false,
-"texra.model.useProxy": false,
-"texra.model.proxyDomain": "proxy.texra.ai",
+"texra.model.useImprovedConnection": false,
+"texra.model.improvedConnectionDomain": "proxy.texra.ai",
 "texra.model.useStreaming": false,
 "texra.model.useStreamingAnthropicReasoning": false,
 "texra.model.useStreamingOpenAIReasoning": false
 ```
 
 - `useOpenRouter`: Access models through OpenRouter instead of direct APIs
-- `useProxy`: Route all API requests through a proxy server
-- `proxyDomain`: Custom proxy domain when `useProxy` is enabled (default `proxy.texra.ai`)
+- `useImprovedConnection`: Route all API requests through a proxy server
+- `improvedConnectionDomain`: Custom proxy domain when `useImprovedConnection` is enabled (default `proxy.texra.ai`)
   - ⚠️ **Security Warning:** When using a proxy, ensure you trust the proxy server as it will receive your API keys. Only use proxies from trusted sources.
 - `useStreaming`: Enable streaming responses for better handling of long outputs
 - `useStreamingAnthropicReasoning`: Enable streaming specifically for Anthropic reasoning models
