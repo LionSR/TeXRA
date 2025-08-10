@@ -116,16 +116,15 @@
             "description": "Whether to use OpenRouter for API calls when possible",
             "scope": "resource"
           },
-          "texra.model.useProxy": {
+          "texra.model.useImprovedConnection": {
             "type": "boolean",
             "default": false,
-            "description": "Route API requests through a proxy domain",
+            "description": "Use improved connection for API requests",
             "scope": "resource"
           },
-          "texra.model.proxyDomain": {
+          "texra.model.improvedConnectionDomain": {
             "type": "string",
-            "default": "proxy.texra.ai",
-            "description": "Proxy domain to use when routing API requests",
+            "description": "Domain to use when using improved connection",
             "scope": "resource"
           },
           "texra.model.useStreaming": {

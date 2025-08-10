@@ -146,12 +146,18 @@ export abstract class ModelHandler<
     const useOpenRouter =
       this.config.openRouterOnly ||
       getConfig<boolean>('model.useOpenRouter', false);
-    const useProxy = getConfig<boolean>('model.useProxy', false);
-    let proxyDomain = getConfig<string>('model.proxyDomain', 'proxy.texra.ai');
+    const useImprovedConnection = getConfig<boolean>(
+      'model.useImprovedConnection',
+      false,
+    );
+    let improvedConnectionDomain = getConfig<string>(
+      'model.improvedConnectionDomain',
+      'proxy.texra.ai',
+    );
 
-    if (useProxy && proxyDomain) {
+    if (useImprovedConnection && improvedConnectionDomain) {
       // Normalize proxy domain: remove protocol and trailing slashes
-      proxyDomain = proxyDomain
+      improvedConnectionDomain = improvedConnectionDomain
         .replace(/^https?:\/\//, '') // Remove http:// or https://
         .replace(/\/+$/, ''); // Remove trailing slashes
 
@@ -177,16 +183,16 @@ export abstract class ModelHandler<
         this.logger.debug(
           `Using proxy for ${this.config.provider} for OpenRouter`,
         );
-        return `https://${proxyDomain}/openrouter`;
+        return `https://${improvedConnectionDomain}/openrouter`;
       }
 
       // Check if provider is supported by proxy
       const path = PROXY_PATHS[this.config.provider];
       if (path) {
         this.logger.debug(
-          `Using proxy for ${this.config.provider}: with ${proxyDomain}/${path}`,
+          `Using proxy for ${this.config.provider}: with ${improvedConnectionDomain}/${path}`,
         );
-        return `https://${proxyDomain}/${path}`;
+        return `https://${improvedConnectionDomain}/${path}`;
       }
 
       // Provider not supported by proxy, fall through to regular URLs
