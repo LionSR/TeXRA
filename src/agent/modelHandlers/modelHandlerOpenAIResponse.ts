@@ -1,8 +1,8 @@
 // Standard library imports
-// (none needed)
+import { Buffer } from 'node:buffer';
 
 // Third-party imports
-import OpenAI from 'openai';
+import OpenAI, { toFile } from 'openai';
 import type {
   Response,
   ResponseUsage,
@@ -25,6 +25,7 @@ import type { ProviderStopReason } from './types/StopReasonTypes';
 import { OPENAI_CHAT_FINISH } from './types/StopReasonTypes';
 import type { ToolDefinition } from '@model';
 import { toOpenAIResponseTools } from './toolConversion';
+import { logErrorMessage } from '@common/errors/errorHandlingUtils';
 
 // import { ResponseCreateParams } from 'openai/src/resources/responses/response';
 // this is incorrect now, but would be nice to use
@@ -104,54 +105,75 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
   ): Promise<Response> {
     const useStreaming = this.getStreamingConfig();
 
-    const newMessages = messages.slice(this.sentMessages).map((msg) => {
-      if ('role' in msg) {
-        return {
-          role: msg.role,
-          content:
+    const newMessages = await Promise.all(
+      messages.slice(this.sentMessages).map(async (msg) => {
+        if ('role' in msg) {
+          const content =
             typeof msg.content === 'string'
               ? [{ type: 'input_text', text: msg.content }]
               : Array.isArray(msg.content)
-                ? msg.content.map((part: any) => {
-                    if (part.type === 'text') {
-                      if (msg.role === 'user') {
-                        return { type: 'input_text', text: part.text };
-                      } else if (msg.role === 'assistant') {
-                        return { type: 'output_text', text: part.text };
-                      } else {
-                        return { type: 'input_text', text: part.text };
+                ? await Promise.all(
+                    msg.content.map(async (part: any) => {
+                      if (part.type === 'text') {
+                        if (msg.role === 'user') {
+                          return { type: 'input_text', text: part.text };
+                        } else if (msg.role === 'assistant') {
+                          return { type: 'output_text', text: part.text };
+                        } else {
+                          return { type: 'input_text', text: part.text };
+                        }
                       }
-                    }
-                    if (part.type === 'image_url') {
-                      const url =
-                        typeof part.image_url === 'string'
-                          ? part.image_url
-                          : part.image_url.url;
+                      if (part.type === 'image_url') {
+                        const url =
+                          typeof part.image_url === 'string'
+                            ? part.image_url
+                            : part.image_url.url;
 
-                      if (url.startsWith('data:application/pdf;base64,')) {
-                        const base64Data = url.replace(
-                          'data:application/pdf;base64,',
-                          '',
-                        );
-                        return {
-                          type: 'input_file',
-                          input_file: {
-                            data: base64Data,
-                            mime_type: 'application/pdf',
-                          },
-                        };
+                        if (url.startsWith('data:application/pdf;base64,')) {
+                          const base64Data = url.replace(
+                            'data:application/pdf;base64,',
+                            '',
+                          );
+                          let buffer: Buffer | undefined = Buffer.from(
+                            base64Data,
+                            'base64',
+                          );
+                          try {
+                            const uploadedFile = await client.files.create({
+                              file: await toFile(buffer, 'upload.pdf'),
+                              purpose: 'assistants',
+                            });
+                            return {
+                              type: 'input_file',
+                              file_id: uploadedFile.id,
+                            };
+                          } catch (err) {
+                            logErrorMessage(
+                              'OpenAI',
+                              'Failed to upload PDF',
+                              err,
+                            );
+                            throw err;
+                          } finally {
+                            if (buffer) {
+                              buffer.fill(0);
+                              buffer = undefined;
+                            }
+                          }
+                        }
+
+                        const detail = part.image_url?.detail ?? 'auto';
+                        return { type: 'input_image', image_url: url, detail };
                       }
-
-                      const detail = part.image_url?.detail ?? 'auto';
-                      return { type: 'input_image', image_url: url, detail };
-                    }
-                    return part;
-                  })
-                : [],
-        };
-      }
-      return msg;
-    });
+                      return part;
+                    }),
+                  )
+                : [];
+          return { role: msg.role, content };
+        }
+        return msg;
+      }),
+    );
 
     const params: any = {
       model: this.config.fullName,
