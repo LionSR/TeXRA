@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.32.9] - 2025-08-09
+
+### Bug Fixes
+
+- Upload PDFs to OpenAI via the Files API instead of embedding base64 data in Responses requests.
+
 ## [0.32.8] - 2025-08-09
 
 ### Features
