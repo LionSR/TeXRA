@@ -204,11 +204,11 @@ export abstract class ModelHandler<
 
     // Provider-specific base URLs
     const BASE_URLS: Record<ModelProvider, string | null> = {
-      [ModelProvider.GOOGLE]:
-        // 'https://generativelanguage.googleapis.com/v1beta/openai/',
-        'https://generativelanguage.googleapis.com/v1beta/',
+      [ModelProvider.GOOGLE]: null,
+      // 'https://generativelanguage.googleapis.com/v1beta/',
       [ModelProvider.OPENAI]: null, // OpenAI uses default base URL
-      [ModelProvider.ANTHROPIC]: 'https://api.anthropic.com/v1/',
+      // [ModelProvider.ANTHROPIC]: 'https://api.anthropic.com/v1/',
+      [ModelProvider.ANTHROPIC]: null,
       [ModelProvider.DEEPSEEK]: 'https://api.deepseek.com',
       [ModelProvider.XAI]: 'https://api.x.ai/v1',
       [ModelProvider.MOONSHOT]: 'https://api.moonshot.cn/v1',
