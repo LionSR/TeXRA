@@ -31,6 +31,18 @@ logger.initialize(CHANNEL);
 
 const service = new LaTeXdiffService(CHANNEL);
 
+/**
+ * Show an error message and optionally open Latexdiff documentation.
+ * @param message The error message to display.
+ */
+async function showLatexdiffError(message: string) {
+  const docsAction = 'Latexdiff Docs';
+  const selection = await vscode.window.showErrorMessage(message, docsAction);
+  if (selection === docsAction) {
+    await vscode.commands.executeCommand('texra.openDoc', 'latex-diff');
+  }
+}
+
 export function registerLatexdiffCommands(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand('texra.latexdiff', handleLatexdiff),
@@ -61,11 +73,11 @@ async function handleLatexdiff(
   editedFile: string,
 ) {
   if (!(baseFile || inputFile)) {
-    vscode.window.showErrorMessage('No base file specified for latexdiff');
+    await showLatexdiffError('No base file specified for latexdiff');
     return;
   }
   if (!editedFile) {
-    vscode.window.showErrorMessage('No revised file specified for latexdiff');
+    await showLatexdiffError('No revised file specified for latexdiff');
     return;
   }
 
