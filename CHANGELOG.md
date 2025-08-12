@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.32.10] - 2025-08-09
+
+### Bug Fixes
+
+- Prompt users to open a workspace folder when none is active to avoid initialization.
+
 ## [0.32.9] - 2025-08-09
 
 ### Bug Fixes
