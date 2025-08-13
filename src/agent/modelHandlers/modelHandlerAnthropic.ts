@@ -34,7 +34,7 @@ import {
 import { ToolState } from '@agent/core/ToolState';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import { AgentStateRound } from '@agent/core/AgentState';
-import { K_SLICE } from '@utils/config';
+import { K_SLICE, getConfig } from '@utils/config';
 import { objectToLogString } from '@utils/text/stringUtils';
 import { calculateTokenPrice } from '@agent/utils/priceUtils';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
@@ -72,6 +72,10 @@ export class ModelHandlerAnthropic extends ModelHandler<
   ): Promise<BetaMessage> {
     // Get streaming config
     const useStreaming = this.getStreamingConfig();
+    const useAnthropic1MBeta = getConfig<boolean>(
+      'model.useAnthropic1MBeta',
+      false,
+    );
 
     // Prepare options for the API call
     const options: MessageCreateParams & { betas?: string[] } = {
@@ -129,6 +133,14 @@ export class ModelHandlerAnthropic extends ModelHandler<
       // The thinking configuration is now handled above for all reasoning models
     }
 
+    // Opt-in beta for 1M context window on Claude Sonnet 4
+    if (
+      useAnthropic1MBeta &&
+      this.config.fullName === 'claude-sonnet-4-20250514'
+    ) {
+      options.betas = [...(options.betas ?? []), 'context-1m-2025-08-07'];
+    }
+
     if (this.capabilities.supportsTokenCounting) {
       const countTokensParams: any = {
         model: this.config.fullName,
@@ -141,6 +153,13 @@ export class ModelHandlerAnthropic extends ModelHandler<
       // Without this, the API returns an error when messages contain thinking blocks.
       if (options.thinking) {
         countTokensParams.thinking = options.thinking;
+      }
+
+      if (
+        useAnthropic1MBeta &&
+        this.config.fullName === 'claude-sonnet-4-20250514'
+      ) {
+        countTokensParams.betas = ['context-1m-2025-08-07'];
       }
 
       const responseTokenCount =
