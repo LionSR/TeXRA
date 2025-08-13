@@ -33,6 +33,10 @@ Known for strong instruction following and context handling.
 | `sonnet37`  | Strong all-rounder, good context            | $$$           | Medium         |                               |
 | `sonnet35`  | Good balance of quality/cost (older Sonnet) | $$$           | Medium         |                               |
 
+#### Sonnet 4 1M Context (Beta)
+
+To experiment with Anthropic's 1M-token context window for Sonnet 4, enable `"texra.model.useAnthropic1MBeta": true` in VS Code settings. The extension attaches the `context-1m-2025-08-07` beta header for these requests. Only Sonnet 4 supports this beta, and TeXRA still enforces the tier‑4 limit of 200 K tokens.
+
 ### OpenAI Models
 
 Known for strong reasoning and creative capabilities.
