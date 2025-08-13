@@ -24,7 +24,14 @@ export class ExecutionManager {
 
   async handleExecute(message: any): Promise<void> {
     if (!message.inputFile) {
-      vscode.window.showErrorMessage('Please select an input file.');
+      const openDocs = 'File Management Guide';
+      const choice = await vscode.window.showErrorMessage(
+        'Please select an input file.',
+        openDocs,
+      );
+      if (choice === openDocs) {
+        vscode.commands.executeCommand('texra.openDoc', 'file-management');
+      }
       return;
     }
 
