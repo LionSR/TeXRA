@@ -136,7 +136,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     // Opt-in beta for 1M context window on Claude Sonnet 4
     if (
       useAnthropic1MBeta &&
-      this.config.fullName.includes('claude-sonnet-4')
+      this.config.fullName === 'claude-sonnet-4-20250514'
     ) {
       options.betas = [...(options.betas ?? []), 'context-1m-2025-08-07'];
     }
@@ -157,7 +157,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
       if (
         useAnthropic1MBeta &&
-        this.config.fullName.includes('claude-sonnet-4')
+        this.config.fullName === 'claude-sonnet-4-20250514'
       ) {
         countTokensParams.betas = ['context-1m-2025-08-07'];
       }
