@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Features
+
+- Show TeXRA task status in the VS Code status bar.
+
 ## [0.32.9] - 2025-08-09
 
 ### Bug Fixes
