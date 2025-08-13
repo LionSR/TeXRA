@@ -181,6 +181,12 @@
             "description": "Use the native @google/genai SDK for Google models instead of the OpenAI-compatible API. This feature is experimental and may not work as expected.",
             "scope": "resource"
           },
+          "texra.model.useAnthropic1MBeta": {
+            "type": "boolean",
+            "default": false,
+            "description": "Attach the `context-1m-2025-08-07` beta header for Claude Sonnet 4 requests to enable the 1M-token context window (usage capped at 200 K by extension).",
+            "scope": "resource"
+          },
           "texra.model.useCopilot": {
             "type": "boolean",
             "default": false,
