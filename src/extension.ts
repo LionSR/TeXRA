@@ -15,6 +15,7 @@ import { StorageFS } from '@utils/files';
 import { TASK_RUNS_DIR } from '@utils/files/taskRunStorage';
 import { initializeStateManagers } from '@common/state/stateManager';
 import { FileLister } from '@frontend/files/fileLister';
+import { bus } from '@eventBus/ProgressEventBus';
 
 // Local imports - components
 import { ProgressViewProvider } from './progressView/ProgressViewProvider';
@@ -23,6 +24,8 @@ import { ExplorerOperations } from './explorer/ExplorerOperations';
 import { ExplorerCommands } from './explorer/ExplorerCommands';
 import { WatcherManager } from './explorer/WatcherManager';
 import { registerCommands } from './commands';
+
+let statusBarItem: vscode.StatusBarItem | undefined;
 
 export async function activate(context: vscode.ExtensionContext) {
   const workspaceRoot = vscode.workspace.workspaceFolders?.[0].uri.fsPath;
@@ -45,6 +48,30 @@ export async function activate(context: vscode.ExtensionContext) {
   await StorageFS.ensureDir(TASK_RUNS_DIR);
   initializeStateManagers(context);
   FileLister.initialize(context);
+
+  // Create a status bar item to show TeXRA progress
+  statusBarItem = vscode.window.createStatusBarItem(
+    vscode.StatusBarAlignment.Left,
+  );
+  statusBarItem.command = 'texra.showProgressView';
+  statusBarItem.text = 'TeXRA: Idle';
+  statusBarItem.show();
+  context.subscriptions.push(statusBarItem);
+
+  const runningStreams = new Set<string>();
+  const disposeStatusListener = bus.on(
+    'updateStreamStatus',
+    ({ stream, status }: { stream: string; status: string }) => {
+      if (status === 'running') {
+        runningStreams.add(stream);
+      } else if (status === 'stopped' || status === 'error') {
+        runningStreams.delete(stream);
+      }
+      statusBarItem!.text =
+        runningStreams.size > 0 ? 'TeXRA: Running' : 'TeXRA: Idle';
+    },
+  );
+  context.subscriptions.push({ dispose: disposeStatusListener });
 
   // Create the log view provider
   const progressViewProvider = new ProgressViewProvider(context);
@@ -107,5 +134,6 @@ export function deactivate() {
     // Mark all running tasks as cancelled when extension deactivates
     progressViewProvider.eventHandler.markAllRunningTasksAsCancelled();
   }
+  statusBarItem?.dispose();
   disposeDiffRefresh();
 }
