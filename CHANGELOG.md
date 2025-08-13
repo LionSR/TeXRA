@@ -8,6 +8,10 @@ All notable changes to this project will be documented in this file.
 
 - Show TeXRA task status in the VS Code status bar.
 
+### Bug Fixes
+
+- Stabilize status bar command registration and task cancellation handling.
+
 ## [0.32.9] - 2025-08-09
 
 ### Bug Fixes
