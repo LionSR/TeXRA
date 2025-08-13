@@ -11,6 +11,7 @@ import { watchConfig } from '@utils/config';
 import { SecretManager } from '@frontend/secretManager';
 import { copyDefaultAgents, configureLatexSettings } from '@frontend/setup';
 import { disposeDiffRefresh } from '@frontend/ui/diffView';
+import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { StorageFS } from '@utils/files';
 import { TASK_RUNS_DIR } from '@utils/files/taskRunStorage';
 import { initializeStateManagers } from '@common/state/stateManager';
@@ -98,6 +99,17 @@ export async function activate(context: vscode.ExtensionContext) {
     watcherManager.setup();
     folderExplorer.refresh();
   });
+
+  await showInstructionWithSuppress('welcome', 'Welcome to TeXRA…', [
+    {
+      title: 'Open Guide',
+      callback: async () => {
+        await vscode.env.openExternal(
+          vscode.Uri.parse('https://texra.ai/guide/'),
+        );
+      },
+    },
+  ]);
 }
 
 export function deactivate() {
