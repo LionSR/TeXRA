@@ -26,6 +26,7 @@ import { WatcherManager } from './explorer/WatcherManager';
 import { registerCommands } from './commands';
 
 let statusBarItem: vscode.StatusBarItem | undefined;
+let disposeStatusListener: (() => void) | undefined;
 
 export async function activate(context: vscode.ExtensionContext) {
   const workspaceRoot = vscode.workspace.workspaceFolders?.[0].uri.fsPath;
@@ -49,30 +50,6 @@ export async function activate(context: vscode.ExtensionContext) {
   initializeStateManagers(context);
   FileLister.initialize(context);
 
-  // Create a status bar item to show TeXRA progress
-  statusBarItem = vscode.window.createStatusBarItem(
-    vscode.StatusBarAlignment.Left,
-  );
-  statusBarItem.command = 'texra.showProgressView';
-  statusBarItem.text = 'TeXRA: Idle';
-  statusBarItem.show();
-  context.subscriptions.push(statusBarItem);
-
-  const runningStreams = new Set<string>();
-  const disposeStatusListener = bus.on(
-    'updateStreamStatus',
-    ({ stream, status }: { stream: string; status: string }) => {
-      if (status === 'running') {
-        runningStreams.add(stream);
-      } else if (status === 'stopped' || status === 'error') {
-        runningStreams.delete(stream);
-      }
-      statusBarItem!.text =
-        runningStreams.size > 0 ? 'TeXRA: Running' : 'TeXRA: Idle';
-    },
-  );
-  context.subscriptions.push({ dispose: disposeStatusListener });
-
   // Create the log view provider
   const progressViewProvider = new ProgressViewProvider(context);
   await progressViewProvider.initialize();
@@ -91,6 +68,34 @@ export async function activate(context: vscode.ExtensionContext) {
 
   // Register commands first - this will create and store the MainViewProvider
   registerCommands(context);
+
+  // Create a status bar item to show TeXRA progress
+  statusBarItem = vscode.window.createStatusBarItem(
+    vscode.StatusBarAlignment.Left,
+  );
+  statusBarItem.command = 'texra.showProgressView';
+  statusBarItem.text = 'TeXRA: Idle';
+  statusBarItem.show();
+
+  const runningStreams = new Set<string>();
+  disposeStatusListener = bus.on(
+    'updateStreamStatus',
+    ({ stream, status }: { stream: string; status: string }) => {
+      if (status === 'running') {
+        runningStreams.add(stream);
+      } else if (
+        status === 'stopped' ||
+        status === 'error' ||
+        status === 'cancelled'
+      ) {
+        runningStreams.delete(stream);
+      }
+      statusBarItem!.text =
+        runningStreams.size > 0 ? 'TeXRA: Running' : 'TeXRA: Idle';
+    },
+  );
+
+  context.subscriptions.push({ dispose: disposeStatusListener }, statusBarItem);
 
   // Register the folder explorer with context
   const folderExplorer = new FolderExplorer(workspaceRoot, context);
@@ -128,6 +133,7 @@ export async function activate(context: vscode.ExtensionContext) {
 }
 
 export function deactivate() {
+  disposeStatusListener?.();
   // Get the ProgressViewProvider instance
   const progressViewProvider = ProgressViewProvider.getInstance();
   if (progressViewProvider) {
