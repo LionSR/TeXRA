@@ -84,6 +84,16 @@ Configure how TeXRA connects to AI model providers:
 
 **Note:** Only the providers marked with ✅ are supported by the proxy. Other providers will use their direct API endpoints even when proxy is enabled.
 
+### Audio Settings
+
+Specify a custom path to the [SoX](http://sox.sourceforge.net/) binary when automatic detection fails:
+
+```json
+"texra.audio.soxPath": "C:\\Users\\thinking\\scoop\\apps\\sox\\current\\sox.exe"
+```
+
+If unset, TeXRA searches common install locations and your `PATH`.
+
 ## File Management Configuration
 
 ### File Extensions
