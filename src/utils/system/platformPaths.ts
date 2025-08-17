@@ -45,7 +45,7 @@ export function getExtraDirs(): string[] {
     const localAppData = process.env.LOCALAPPDATA;
     if (localAppData) {
       dirs.push(
-        `${localAppData.replace(/\\/g, '/')}/Programs/MiKTeX/miktex/bin/x64`,
+        path.join(localAppData, 'Programs', 'MiKTeX', 'miktex', 'bin', 'x64'),
       );
     }
 
@@ -56,11 +56,10 @@ export function getExtraDirs(): string[] {
         ? path.join(process.env.USERPROFILE, 'scoop')
         : null);
     if (scoopDir && AbsoluteFS.existsSync(scoopDir)) {
-      const normalizedScoop = scoopDir.replace(/\\/g, '/');
-      dirs.push(`${normalizedScoop}/shims`);
+      dirs.push(path.join(scoopDir, 'shims'));
       try {
         const matches = glob
-          .sync(`${normalizedScoop}/apps/*/current`)
+          .sync(path.join(scoopDir, 'apps', '*', 'current'))
           .sort()
           .reverse();
         dirs.push(...matches);
