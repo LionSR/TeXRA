@@ -726,6 +726,17 @@
         }
       },
       {
+        "title": "Audio",
+        "properties": {
+          "texra.audio.soxPath": {
+            "type": "string",
+            "default": "",
+            "description": "Path to the SoX executable. Overrides automatic detection.",
+            "scope": "resource"
+          }
+        }
+      },
+      {
         "title": "API Keys",
         "properties": {
           "texra.apiKeys.set": {
