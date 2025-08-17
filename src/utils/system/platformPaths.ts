@@ -45,8 +45,27 @@ export function getExtraDirs(): string[] {
     const localAppData = process.env.LOCALAPPDATA;
     if (localAppData) {
       dirs.push(
-        `${localAppData.replace(/\\/g, '/')}/Programs/MiKTeX/miktex/bin/x64`,
+        path.join(localAppData, 'Programs', 'MiKTeX', 'miktex', 'bin', 'x64'),
       );
+    }
+
+    const scoopDir =
+      process.env.SCOOP ||
+      process.env.SCOOP_HOME ||
+      (process.env.USERPROFILE
+        ? path.join(process.env.USERPROFILE, 'scoop')
+        : null);
+    if (scoopDir && AbsoluteFS.existsSync(scoopDir)) {
+      dirs.push(path.join(scoopDir, 'shims'));
+      try {
+        const matches = glob
+          .sync(path.join(scoopDir, 'apps', '*', 'current'))
+          .sort()
+          .reverse();
+        dirs.push(...matches);
+      } catch {
+        // ignore glob errors
+      }
     }
   } else {
     dirs.push(
@@ -198,6 +217,19 @@ export function findToolInCommonPaths(tool: string): string | null {
       }
     } catch {
       // ignore kpsewhich errors
+    }
+  }
+  if (process.platform === 'win32') {
+    for (const name of candidates) {
+      try {
+        const result = execaSync('where', [name], execOptions);
+        const found = result.stdout.split(/\r?\n/)[0]?.trim();
+        if (result.exitCode === 0 && found) {
+          return found;
+        }
+      } catch {
+        // ignore where errors
+      }
     }
   }
   return null;
