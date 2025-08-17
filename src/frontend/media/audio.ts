@@ -55,19 +55,14 @@ export async function startRecording(
     logger.info(CHANNEL, `Sox path found: ${soxPath}`);
 
     const soxInstalled = await checkToolInstalled('sox', false);
-    if (!soxInstalled) {
-      logger.error(
-        CHANNEL,
-        'Sox check failed - but we found it at: ' + soxPath,
-      );
-      // If we found sox path, proceed anyway
-      if (!soxPath) {
-        return {
-          success: false,
-          error:
-            'Sox is required for audio recording. Please install it first.',
-        };
-      }
+    if (!soxInstalled && !soxPath) {
+      return {
+        success: false,
+        error: 'Sox is required for audio recording. Please install it first.',
+      };
+    }
+    if (!soxInstalled && soxPath) {
+      logger.warn(CHANNEL, `Sox check failed but found at: ${soxPath}`);
     }
     // Initialize StorageFS with context if not already done
     StorageFS.initialize(context);
