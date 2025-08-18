@@ -5,30 +5,24 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'none'; style-src ${cspSource} vscode-resource: 'unsafe-inline' https://cdn.jsdelivr.net; script-src 'nonce-${nonce}' https://esm.sh; font-src ${cspSource} vscode-resource: https://cdn.jsdelivr.net; img-src ${cspSource} data: https:;"
+      content="default-src 'none'; style-src ${cspSource} vscode-resource: 'unsafe-inline'; script-src 'nonce-${nonce}'; font-src ${cspSource} vscode-resource:; img-src ${cspSource} data: https:;"
     />
     <link rel="stylesheet" href="${commonStyleUri}" />
     <link rel="stylesheet" href="${styleUri}" />
     <link rel="stylesheet" href="${codiconUri}" />
-    <link
-      rel="stylesheet"
-      href="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css"
-    />
-    <link
-      rel="stylesheet"
-      href="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/contrib/copy-tex.min.css"
-    />
+    <link rel="stylesheet" href="${katexCssUri}" />
     <link
       id="hljs-theme"
       rel="stylesheet"
-      href="https://cdn.jsdelivr.net/npm/highlight.js@11.11.1/styles/github-dark.css"
+      href="${highlightCssUri}"
+      data-base="${highlightBaseUri}/"
     />
     <script type="importmap" nonce="${nonce}">
       {
         "imports": {
           "split.js": "${splitJsUri}",
-          "markdown-it": "https://esm.sh/markdown-it@14.1.0",
-          "@vscode/markdown-it-katex": "https://esm.sh/@vscode/markdown-it-katex@1.1.1",
+          "markdown-it": "${markdownItUri}",
+          "@vscode/markdown-it-katex": "${markdownItKatexUri}",
           "./modules/progressViewState.js": "${progressViewStateUri}",
           "./modules/messageHandlers.js": "${messageHandlersUri}",
           "./modules/domHandlers.js": "${domHandlersUri}",
@@ -50,15 +44,13 @@
           "@common/iconButtonInitializer.js": "${iconButtonInitializerUri}",
           "@common/domUtils.js": "${domUtilsUri}",
           "@common/stringUtils.js": "${stringUtilsUri}",
-          "he": "https://esm.sh/he@1.2.0",
-          "highlight.js": "https://esm.sh/highlight.js@11.11.1",
-          "markdown-it-highlightjs": "https://esm.sh/markdown-it-highlightjs@4.2.0"
+          "he": "${heUri}",
+          "highlight.js": "${highlightJsUri}",
+          "markdown-it-highlightjs": "${markdownItHighlightJsUri}"
         }
       }
     </script>
-    <script type="module" nonce="${nonce}">
-      import 'https://esm.sh/katex@0.16.22/dist/contrib/copy-tex';
-    </script>
+    <script type="module" nonce="${nonce}" src="${copyTexUri}"></script>
     <script type="module" nonce="${nonce}" src="${scriptUri}"></script>
   </head>
 
