@@ -96,11 +96,13 @@ async function getImageDimensions(
   const [widthStr, heightStr] = result.stdout.trim().split(/\s+/);
   const width = parseInt(widthStr, 10);
   const height = parseInt(heightStr, 10);
-  
+
   if (isNaN(width) || isNaN(height)) {
-    throw new Error(`Invalid dimensions parsed: width=${widthStr}, height=${heightStr}`);
+    throw new Error(
+      `Invalid dimensions parsed: width=${widthStr}, height=${heightStr}`,
+    );
   }
-  
+
   return { width, height };
 }
 
@@ -116,7 +118,10 @@ async function resizeImageIfNeeded(imagePath: string): Promise<string> {
     return imagePath;
   }
   const ext = path.extname(imagePath);
-  const tempPath = path.join(os.tmpdir(), `texra-resized-${crypto.randomUUID()}${ext}`);
+  const tempPath = path.join(
+    os.tmpdir(),
+    `texra-resized-${crypto.randomUUID()}${ext}`,
+  );
   const { tool, prefix } = await selectImageTool();
   let command: string[];
   if (tool === 'magick') {
