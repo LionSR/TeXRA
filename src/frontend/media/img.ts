@@ -1,8 +1,10 @@
 // Standard library imports
+import * as crypto from 'crypto';
 import * as os from 'os';
 import * as path from 'path';
 
 // Third-party imports
+import * as vscode from 'vscode';
 import { PDFDocument } from '@cantoo/pdf-lib';
 import { fromPath } from 'pdf2pic';
 
@@ -17,7 +19,14 @@ import { executeCommand } from '@utils/system/execUtils';
 const CHANNEL = 'ImgUtils';
 logger.initialize(CHANNEL);
 
-const MAX_IMAGE_DIMENSION = 2000;
+/**
+ * Get the maximum image dimension from VS Code configuration
+ * @returns Maximum image dimension (defaults to 2000)
+ */
+function getMaxImageDimension(): number {
+  const config = vscode.workspace.getConfiguration('texra');
+  return config.get<number>('maxImageDimension', 2000);
+}
 
 // Define the temporary directory path
 const TEMP_DIR = path.join(os.tmpdir(), 'texra-pdf-conversion');
@@ -47,60 +56,86 @@ async function cleanupTempFiles(
   }
 }
 
-async function getImageDimensions(
-  imagePath: string,
-): Promise<{ width: number; height: number }> {
+/**
+ * Select the appropriate image processing tool
+ * @returns Tool name ('magick' or 'gm') and command prefix
+ */
+async function selectImageTool(): Promise<{ tool: string; prefix: string[] }> {
   const [hasMagick, hasGm] = await checkMultipleToolsInstalled(
     ['magick', 'gm'],
     false,
   );
-  let command: string[];
   if (hasMagick) {
-    command = ['magick', 'identify', '-format', '%w %h', imagePath];
+    return { tool: 'magick', prefix: ['magick'] };
   } else if (hasGm) {
-    command = ['gm', 'identify', '-format', '%w %h', imagePath];
+    return { tool: 'gm', prefix: ['gm'] };
   } else {
     throw new Error('Neither ImageMagick nor GraphicsMagick is installed');
+  }
+}
+
+/**
+ * Get the dimensions of an image file
+ * @param imagePath Path to the image file
+ * @returns Promise resolving to width and height
+ */
+async function getImageDimensions(
+  imagePath: string,
+): Promise<{ width: number; height: number }> {
+  const { tool, prefix } = await selectImageTool();
+  let command: string[];
+  if (tool === 'magick') {
+    command = [...prefix, 'identify', '-format', '%w %h', imagePath];
+  } else {
+    command = [...prefix, 'identify', '-format', '%w %h', imagePath];
   }
   const result = await executeCommand(command, { channel: CHANNEL });
   if (!result.success || !result.stdout) {
     throw new Error(result.stderr || 'Failed to get image dimensions');
   }
   const [widthStr, heightStr] = result.stdout.trim().split(/\s+/);
-  return { width: parseInt(widthStr, 10), height: parseInt(heightStr, 10) };
+  const width = parseInt(widthStr, 10);
+  const height = parseInt(heightStr, 10);
+  
+  if (isNaN(width) || isNaN(height)) {
+    throw new Error(`Invalid dimensions parsed: width=${widthStr}, height=${heightStr}`);
+  }
+  
+  return { width, height };
 }
 
+/**
+ * Resize an image if it exceeds the maximum dimensions
+ * @param imagePath Path to the image file
+ * @returns Promise resolving to the path of the resized image (or original if no resize needed)
+ */
 async function resizeImageIfNeeded(imagePath: string): Promise<string> {
+  const maxDimension = getMaxImageDimension();
   const { width, height } = await getImageDimensions(imagePath);
-  if (width <= MAX_IMAGE_DIMENSION && height <= MAX_IMAGE_DIMENSION) {
+  if (width <= maxDimension && height <= maxDimension) {
     return imagePath;
   }
   const ext = path.extname(imagePath);
-  const tempPath = path.join(os.tmpdir(), `texra-resized-${Date.now()}${ext}`);
-  const [hasMagick, hasGm] = await checkMultipleToolsInstalled(
-    ['magick', 'gm'],
-    false,
-  );
+  const tempPath = path.join(os.tmpdir(), `texra-resized-${crypto.randomUUID()}${ext}`);
+  const { tool, prefix } = await selectImageTool();
   let command: string[];
-  if (hasMagick) {
+  if (tool === 'magick') {
     command = [
-      'magick',
+      ...prefix,
       imagePath,
       '-resize',
-      `${MAX_IMAGE_DIMENSION}x${MAX_IMAGE_DIMENSION}>`,
-      tempPath,
-    ];
-  } else if (hasGm) {
-    command = [
-      'gm',
-      'convert',
-      imagePath,
-      '-resize',
-      `${MAX_IMAGE_DIMENSION}x${MAX_IMAGE_DIMENSION}>`,
+      `${maxDimension}x${maxDimension}>`,
       tempPath,
     ];
   } else {
-    throw new Error('Neither ImageMagick nor GraphicsMagick is installed');
+    command = [
+      ...prefix,
+      'convert',
+      imagePath,
+      '-resize',
+      `${maxDimension}x${maxDimension}>`,
+      tempPath,
+    ];
   }
   const result = await executeCommand(command, { channel: CHANNEL });
   if (!result.success) {
@@ -108,7 +143,7 @@ async function resizeImageIfNeeded(imagePath: string): Promise<string> {
   }
   logger.debug(
     CHANNEL,
-    `Resized image ${imagePath} to fit within ${MAX_IMAGE_DIMENSION}px`,
+    `Resized image ${imagePath} (${width}x${height}) to fit within ${maxDimension}px`,
   );
   return tempPath;
 }
@@ -137,31 +172,33 @@ export async function getBase64EncodedMedia(
     let tempPath: string | null = null;
     let pathToRead = absolutePath;
 
-    if (mimeType?.startsWith('image/')) {
-      const resizedPath = await resizeImageIfNeeded(absolutePath);
-      if (resizedPath !== absolutePath) {
-        tempPath = resizedPath;
-        pathToRead = resizedPath;
+    try {
+      if (mimeType?.startsWith('image/')) {
+        const resizedPath = await resizeImageIfNeeded(absolutePath);
+        if (resizedPath !== absolutePath) {
+          tempPath = resizedPath;
+          pathToRead = resizedPath;
+        }
       }
-    }
 
-    const mediaBytes = AbsoluteFS.readBytesSync(pathToRead);
-    const base64String = mediaBytes.toString('base64');
-
-    if (tempPath) {
-      try {
-        AbsoluteFS.deleteSync(tempPath);
-        logger.debug(CHANNEL, `Removed temporary file: ${tempPath}`);
-      } catch (err) {
-        logger.warn(
-          CHANNEL,
-          `Failed to remove temporary file ${tempPath}: ${err instanceof Error ? err.message : String(err)}`,
-        );
+      const mediaBytes = AbsoluteFS.readBytesSync(pathToRead);
+      const base64String = mediaBytes.toString('base64');
+      return base64String;
+    } finally {
+      if (tempPath) {
+        try {
+          AbsoluteFS.deleteSync(tempPath);
+          logger.debug(CHANNEL, `Removed temporary file: ${tempPath}`);
+        } catch (err) {
+          logger.warn(
+            CHANNEL,
+            `Failed to remove temporary file ${tempPath}: ${err instanceof Error ? err.message : String(err)}`,
+          );
+        }
       }
     }
 
     logger.debug(CHANNEL, `Successfully encoded image: ${mediaPath}`);
-    return base64String;
   } catch (err) {
     logger.error(
       CHANNEL,

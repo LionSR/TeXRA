@@ -413,6 +413,14 @@
             "description": "Keywords to ignore when selecting files",
             "editPresentation": "multilineText",
             "order": 14
+          },
+          "texra.maxImageDimension": {
+            "type": "number",
+            "default": 2000,
+            "minimum": 100,
+            "maximum": 10000,
+            "description": "Maximum dimension (width or height) in pixels for images before resizing. Images larger than this will be resized to fit within this dimension while maintaining aspect ratio.",
+            "order": 15
           }
         }
       },
