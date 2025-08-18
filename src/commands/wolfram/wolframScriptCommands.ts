@@ -18,6 +18,21 @@ export const wolframScriptCommands = {
   wolframScriptRunFile: 'texra.wolframScriptRunFile',
 };
 
+/**
+ * Show an error message with a link to Tool Integration docs.
+ * @param message The error message to display.
+ */
+async function showWolframError(message: string) {
+  const docsAction = 'Open Tool Integration Docs';
+  const selection = await vscode.window.showErrorMessage(
+    `${message} See Tool Integration for setup instructions.`,
+    docsAction,
+  );
+  if (selection === docsAction) {
+    await vscode.commands.executeCommand('texra.openDoc', 'tool-integration');
+  }
+}
+
 export function registerWolframScriptCommands(
   context: vscode.ExtensionContext,
 ) {
@@ -43,17 +58,17 @@ export function registerWolframScriptCommands(
               `Wolframscript test successful: ${result.output}`,
             );
           } else {
-            vscode.window.showErrorMessage(
-              `Wolframscript test failed: ${result.error}`,
+            await showWolframError(
+              `Wolframscript test failed: ${result.error}.`,
             );
           }
         } else {
-          vscode.window.showErrorMessage(
+          await showWolframError(
             'Wolframscript is not properly installed or not available in PATH.',
           );
         }
       } catch (err) {
-        vscode.window.showErrorMessage(`Failed to test Wolframscript: ${err}`);
+        await showWolframError(`Failed to test Wolframscript: ${err}`);
       }
     },
   );
@@ -166,9 +181,7 @@ export function registerWolframScriptCommands(
           </html>
         `;
       } catch (err) {
-        vscode.window.showErrorMessage(
-          `Failed to execute Wolfram code: ${err}`,
-        );
+        await showWolframError(`Failed to execute Wolfram code: ${err}`);
       }
     },
   );
@@ -306,9 +319,7 @@ export function registerWolframScriptCommands(
           </html>
         `;
       } catch (err) {
-        vscode.window.showErrorMessage(
-          `Failed to execute Wolfram script file: ${err}`,
-        );
+        await showWolframError(`Failed to execute Wolfram script file: ${err}`);
       }
     },
   );

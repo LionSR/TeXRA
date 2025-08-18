@@ -16,6 +16,7 @@ import { StorageFS } from '@utils/files';
 import { TASK_RUNS_DIR } from '@utils/files/taskRunStorage';
 import { initializeStateManagers } from '@common/state/stateManager';
 import { FileLister } from '@frontend/files/fileLister';
+import { bus } from '@eventBus/ProgressEventBus';
 
 // Local imports - components
 import { ProgressViewProvider } from './progressView/ProgressViewProvider';
@@ -24,6 +25,9 @@ import { ExplorerOperations } from './explorer/ExplorerOperations';
 import { ExplorerCommands } from './explorer/ExplorerCommands';
 import { WatcherManager } from './explorer/WatcherManager';
 import { registerCommands } from './commands';
+
+let statusBarItem: vscode.StatusBarItem | undefined;
+let disposeStatusListener: (() => void) | undefined;
 
 export async function activate(context: vscode.ExtensionContext) {
   const workspaceRoot = vscode.workspace.workspaceFolders?.[0].uri.fsPath;
@@ -72,6 +76,34 @@ export async function activate(context: vscode.ExtensionContext) {
   // Register commands first - this will create and store the MainViewProvider
   registerCommands(context);
 
+  // Create a status bar item to show TeXRA progress
+  statusBarItem = vscode.window.createStatusBarItem(
+    vscode.StatusBarAlignment.Left,
+  );
+  statusBarItem.command = 'texra.showProgressView';
+  statusBarItem.text = 'TeXRA: Idle';
+  statusBarItem.show();
+
+  const runningStreams = new Set<string>();
+  disposeStatusListener = bus.on(
+    'updateStreamStatus',
+    ({ stream, status }: { stream: string; status: string }) => {
+      if (status === 'running') {
+        runningStreams.add(stream);
+      } else if (
+        status === 'stopped' ||
+        status === 'error' ||
+        status === 'cancelled'
+      ) {
+        runningStreams.delete(stream);
+      }
+      statusBarItem!.text =
+        runningStreams.size > 0 ? 'TeXRA: Running' : 'TeXRA: Idle';
+    },
+  );
+
+  context.subscriptions.push({ dispose: disposeStatusListener }, statusBarItem);
+
   // Register the folder explorer with context
   const folderExplorer = new FolderExplorer(workspaceRoot, context);
   const explorerOps = new ExplorerOperations(workspaceRoot, context, () =>
@@ -119,11 +151,13 @@ export async function activate(context: vscode.ExtensionContext) {
 }
 
 export function deactivate() {
+  disposeStatusListener?.();
   // Get the ProgressViewProvider instance
   const progressViewProvider = ProgressViewProvider.getInstance();
   if (progressViewProvider) {
     // Mark all running tasks as cancelled when extension deactivates
     progressViewProvider.eventHandler.markAllRunningTasksAsCancelled();
   }
+  statusBarItem?.dispose();
   disposeDiffRefresh();
 }
