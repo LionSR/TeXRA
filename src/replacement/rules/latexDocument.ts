@@ -18,8 +18,8 @@ export const LATEX_DOCUMENT_REPLACEMENTS: ReplacementCategory = {
     '<scratchpad>\n<scratchpad>\n': '<scratchpad>\n',
     '<scratchpad>\n```latex\n': '<scratchpad>\n<latex_document>\n',
     '<scratchpad>```latex': '<scratchpad>\n<latex_document>',
-    '```\n</scratchpad>\n</latex_document>': '</latex_document>',
-    '</latex_document>\n```\n</latex_document>': '</latex_document>\n',
+    // '```\n</scratchpad>\n</latex_document>': '</latex_document>', // Removed to keep closing code fences
+    // '</latex_document>\n```\n</latex_document>': '</latex_document>\n', // Removed to keep closing code fences
     '</latex_document>\n</latex_document>': '</latex_document>\n',
     '</latex_document>\n\n</latex_document>': '</latex_document>\n',
 

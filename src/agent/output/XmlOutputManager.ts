@@ -57,6 +57,15 @@ export class XmlOutputManager {
         );
         return fallbackContent;
       }
+      const markdownContent = xmlUtils.extractLatexFromMarkdown(outputContent);
+      if (markdownContent) {
+        this.logger.info(
+          `Recovered ${documentTag} from Markdown code block`,
+          undefined,
+          MESSAGE_TYPES.INTERNAL,
+        );
+        return markdownContent;
+      }
       this.logger.debug(
         `No ${documentTag} found in output file using fallback method`,
         undefined,

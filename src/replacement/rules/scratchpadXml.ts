@@ -29,7 +29,7 @@ export const SCRATCHPAD_XML_REPLACEMENTS: ReplacementCategory = {
     '</scratchpad>\n```latex': '</scratchpad>\n<latex_document>',
     '</scratchpad>\n\n```latex': '</scratchpad>\n\n<latex_document>',
     '</scratchpad>\n    \n```latex': '</scratchpad>\n\n<latex_document>',
-    '```\n</latex_document>': '</latex_document>',
+    // '```\n</latex_document>': '</latex_document>', // Removed to preserve closing code fences
     // Special LaTeX content handling
     '</scratchpad>\n\\section{':
       '</scratchpad>\n\\<latex_document>\n\\section{',
