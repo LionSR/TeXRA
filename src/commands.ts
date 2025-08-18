@@ -31,6 +31,7 @@ import { registerHelpCommands } from '@commands/system/helpCommands';
 import { registerProgressViewCommands } from '@commands/progress/progressViewCommands';
 import { registerOpenFileCommands } from '@commands/files/openFileCommands';
 import { registerSettingsCommands } from '@commands/system/settingsCommands';
+import { registerMainViewCommands } from '@commands/system/mainViewCommands';
 
 import * as logger from '@logger/logUtils';
 
@@ -72,6 +73,7 @@ export function registerCommands(context: vscode.ExtensionContext) {
     followUp: registerFollowUpCommand(context),
     openFile: registerOpenFileCommands(context),
     help: registerHelpCommands(context),
+    mainView: registerMainViewCommands(context),
     settings: registerSettingsCommands(context),
   };
 
@@ -117,3 +119,4 @@ export { helpCommands } from '@commands/system/helpCommands';
 export { agentCreatorCommands } from '@commands/agent/agentCreatorCommands';
 export { registerOpenFileCommands as openFileCommands } from '@commands/files/openFileCommands';
 export { settingsCommands } from '@commands/system/settingsCommands';
+export { mainViewCommands } from '@commands/system/mainViewCommands';
