@@ -13,6 +13,7 @@ import * as logger from '@logger/logUtils';
 import { SecretManager } from '@frontend/secretManager';
 import { AbsoluteFS, StorageFS } from '@utils/files';
 import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
+import { getConfig } from '@utils/config/configUtils';
 import { checkToolInstalled } from '@utils/system/toolUtils';
 import {
   extendEnvPath,
@@ -45,24 +46,23 @@ export async function startRecording(
       };
     }
 
-    // Check if sox is installed (don't show error dialog)
-    const soxPath = findToolInCommonPaths('sox');
+    // Determine sox path from configuration or auto-detection
+    const configuredPath = getConfig<string>('audio.soxPath', '');
+    const soxPath =
+      configuredPath && AbsoluteFS.existsSync(configuredPath)
+        ? configuredPath
+        : findToolInCommonPaths('sox');
     logger.info(CHANNEL, `Sox path found: ${soxPath}`);
 
     const soxInstalled = await checkToolInstalled('sox', false);
-    if (!soxInstalled) {
-      logger.error(
-        CHANNEL,
-        'Sox check failed - but we found it at: ' + soxPath,
-      );
-      // If we found sox path, proceed anyway
-      if (!soxPath) {
-        return {
-          success: false,
-          error:
-            'Sox is required for audio recording. Please install it first.',
-        };
-      }
+    if (!soxInstalled && !soxPath) {
+      return {
+        success: false,
+        error: 'Sox is required for audio recording. Please install it first.',
+      };
+    }
+    if (!soxInstalled && soxPath) {
+      logger.warn(CHANNEL, `Sox check failed but found at: ${soxPath}`);
     }
     // Initialize StorageFS with context if not already done
     StorageFS.initialize(context);

@@ -2,7 +2,7 @@
   "name": "texra",
   "displayName": "TeXRA",
   "description": "TeXRA: Your LLM-powered 24/7 LaTeX Research Assistant.",
-  "version": "0.32.10",
+  "version": "0.33.0",
   "publisher": "texra-ai",
   "engines": {
     "vscode": "^1.99.3"
@@ -161,6 +161,12 @@
             "type": "boolean",
             "default": false,
             "description": "Enable streaming for DeepSeek models via OpenAI-compatible API. Overrides the global useStreaming setting.",
+            "scope": "resource"
+          },
+          "texra.model.baseUrlDeepSeek": {
+            "type": "string",
+            "default": "",
+            "description": "Custom base URL for DeepSeek models; leave blank to use `https://api.deepseek.com`.",
             "scope": "resource"
           },
           "texra.model.useStreamingOpenrouter": {
@@ -407,6 +413,14 @@
             "description": "Keywords to ignore when selecting files",
             "editPresentation": "multilineText",
             "order": 14
+          },
+          "texra.maxImageDimension": {
+            "type": "number",
+            "default": 2000,
+            "minimum": 100,
+            "maximum": 10000,
+            "description": "Maximum dimension (width or height) in pixels for images before resizing. Images larger than this will be resized to fit within this dimension while maintaining aspect ratio.",
+            "order": 15
           }
         }
       },
@@ -726,6 +740,17 @@
         }
       },
       {
+        "title": "Audio",
+        "properties": {
+          "texra.audio.soxPath": {
+            "type": "string",
+            "default": "",
+            "description": "Path to the SoX executable. Overrides automatic detection.",
+            "scope": "resource"
+          }
+        }
+      },
+      {
         "title": "API Keys",
         "properties": {
           "texra.apiKeys.set": {
@@ -1022,6 +1047,12 @@
         "category": "TeXRA"
       },
       {
+        "command": "texra.mainView.reset",
+        "title": "New",
+        "category": "TeXRA",
+        "icon": "$(new-file)"
+      },
+      {
         "command": "texra.showAgentHistory",
         "title": "Show Agent Execution History",
         "category": "TeXRA",
@@ -1138,6 +1169,11 @@
           "command": "texra.createAgentWithAI",
           "when": "view == texra.folderExplorer",
           "group": "navigation"
+        },
+        {
+          "command": "texra.mainView.reset",
+          "when": "view == texra.mainView",
+          "group": "navigation@0"
         },
         {
           "command": "texra.openSettings",
@@ -1263,10 +1299,10 @@
   },
   "homepage": "https://texra.ai",
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.59.0",
+    "@anthropic-ai/sdk": "^0.60.0",
     "@cantoo/pdf-lib": "^2.4.2",
-    "@google/genai": "^1.13.0",
-    "@modelcontextprotocol/sdk": "^1.17.2",
+    "@google/genai": "^1.14.0",
+    "@modelcontextprotocol/sdk": "^1.17.3",
     "@vscode/codicons": "^0.0.39",
     "@vscode/markdown-it-katex": "^1.1.2",
     "axios": "^1.11.0",
