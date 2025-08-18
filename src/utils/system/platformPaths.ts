@@ -16,6 +16,9 @@ logger.initialize(CHANNEL);
 // Cache for extra directories to avoid repeated glob operations
 let cachedExtraDirs: string[] | null = null;
 
+const DEFAULT_MSYS_ROOTS = ['C:\\msys64', 'C:\\msys32'];
+const MSYS_SUBDIRS = ['usr\\bin', 'mingw64\\bin', 'mingw32\\bin'];
+
 /**
  * Return common tool directories based on the current platform.
  * Results are cached for the session to improve performance.
@@ -45,8 +48,44 @@ export function getExtraDirs(): string[] {
     const localAppData = process.env.LOCALAPPDATA;
     if (localAppData) {
       dirs.push(
-        `${localAppData.replace(/\\/g, '/')}/Programs/MiKTeX/miktex/bin/x64`,
+        path.join(localAppData, 'Programs', 'MiKTeX', 'miktex', 'bin', 'x64'),
       );
+    }
+
+    const scoopDir =
+      process.env.SCOOP ||
+      process.env.SCOOP_HOME ||
+      (process.env.USERPROFILE
+        ? path.join(process.env.USERPROFILE, 'scoop')
+        : null);
+    if (scoopDir && AbsoluteFS.existsSync(scoopDir)) {
+      dirs.push(path.join(scoopDir, 'shims'));
+      try {
+        const matches = glob
+          .sync(path.join(scoopDir, 'apps', '*', 'current'))
+          .sort()
+          .reverse();
+        dirs.push(...matches);
+      } catch {
+        // ignore glob errors
+      }
+    }
+
+    const msysRoots = new Set<string>(DEFAULT_MSYS_ROOTS);
+    if (process.env.MSYS2_HOME) {
+      msysRoots.add(process.env.MSYS2_HOME);
+    }
+
+    for (const root of msysRoots) {
+      for (const sub of MSYS_SUBDIRS) {
+        const dir = path.join(root, sub);
+        if (
+          AbsoluteFS.existsSync(path.join(dir, 'perl.exe')) &&
+          !dirs.includes(dir)
+        ) {
+          dirs.push(dir);
+        }
+      }
     }
   } else {
     dirs.push(
@@ -198,6 +237,19 @@ export function findToolInCommonPaths(tool: string): string | null {
       }
     } catch {
       // ignore kpsewhich errors
+    }
+  }
+  if (process.platform === 'win32') {
+    for (const name of candidates) {
+      try {
+        const result = execaSync('where', [name], execOptions);
+        const found = result.stdout.split(/\r?\n/)[0]?.trim();
+        if (result.exitCode === 0 && found) {
+          return found;
+        }
+      } catch {
+        // ignore where errors
+      }
     }
   }
   return null;
