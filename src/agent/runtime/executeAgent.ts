@@ -360,6 +360,7 @@ async function executeAgentWithLogging<T extends IAgent>(
       errorMsg.includes('API key not found')
     ) {
       const setKey = 'Set API Key';
+      const openGuide = 'Open Settings Guide';
       await showInstructionWithSuppress(
         'missingApiKey',
         'API key not found. Set your API key in the extension settings and run again.',
@@ -367,6 +368,11 @@ async function executeAgentWithLogging<T extends IAgent>(
           {
             title: setKey,
             callback: () => vscode.commands.executeCommand('texra.setApiKey'),
+          },
+          {
+            title: openGuide,
+            callback: () =>
+              vscode.commands.executeCommand('texra.openDoc', 'configuration'),
           },
         ],
         false,

@@ -11,6 +11,7 @@ import { watchConfig } from '@utils/config';
 import { SecretManager } from '@frontend/secretManager';
 import { copyDefaultAgents, configureLatexSettings } from '@frontend/setup';
 import { disposeDiffRefresh } from '@frontend/ui/diffView';
+import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { StorageFS } from '@utils/files';
 import { TASK_RUNS_DIR } from '@utils/files/taskRunStorage';
 import { initializeStateManagers } from '@common/state/stateManager';
@@ -30,18 +31,24 @@ let disposeStatusListener: (() => void) | undefined;
 
 export async function activate(context: vscode.ExtensionContext) {
   const workspaceRoot = vscode.workspace.workspaceFolders?.[0].uri.fsPath;
-
-  // Load .env file only if a workspace is open
-  if (workspaceRoot) {
-    dotenv.config({
-      path: path.join(workspaceRoot, '.env'),
-    });
-  } else {
-    logger.warn(
-      'extension',
-      'No workspace folder is open. Skipping .env loading.',
-    );
+  if (!workspaceRoot) {
+    const openAction = 'Open Folder';
+    vscode.window
+      .showInformationMessage(
+        'TeXRA requires an open workspace. Please open a folder to enable the extension.',
+        openAction,
+      )
+      .then((choice) => {
+        if (choice === openAction) {
+          vscode.commands.executeCommand('workbench.action.files.openFolder');
+        }
+      });
+    return; // Exit before further initialization
   }
+
+  dotenv.config({
+    path: path.join(workspaceRoot, '.env'),
+  });
 
   // Initialize storage systems
   SecretManager.initialize(context);
@@ -130,6 +137,17 @@ export async function activate(context: vscode.ExtensionContext) {
     watcherManager.setup();
     folderExplorer.refresh();
   });
+
+  await showInstructionWithSuppress('welcome', 'Welcome to TeXRA…', [
+    {
+      title: 'Open Guide',
+      callback: async () => {
+        await vscode.env.openExternal(
+          vscode.Uri.parse('https://texra.ai/guide/'),
+        );
+      },
+    },
+  ]);
 }
 
 export function deactivate() {

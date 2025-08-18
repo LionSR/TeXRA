@@ -46,9 +46,17 @@ export async function loadYaml(absolutePath: string): Promise<object> {
     console.log(`Successfully loaded YAML from: ${absolutePath}`);
     return parsedYaml;
   } catch (err) {
-    vscode.window.showErrorMessage(
-      `Error loading YAML file ${absolutePath}: ${err instanceof Error ? err.message : String(err)}`,
-    );
+    const moreInfo = 'More Info';
+    vscode.window
+      .showErrorMessage(
+        `Error loading YAML file ${absolutePath}: ${err instanceof Error ? err.message : String(err)}`,
+        moreInfo,
+      )
+      .then((selection) => {
+        if (selection === moreInfo) {
+          void vscode.commands.executeCommand('texra.openDoc', 'custom-agents');
+        }
+      });
     throw err;
   }
 }
