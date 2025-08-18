@@ -67,6 +67,26 @@ export function getExtraDirs(): string[] {
         // ignore glob errors
       }
     }
+
+    const msysRoots = new Set<string>();
+    if (process.env.MSYS2_HOME) {
+      msysRoots.add(process.env.MSYS2_HOME);
+    }
+    msysRoots.add('C:\\msys64');
+    msysRoots.add('C:\\msys32');
+
+    for (const root of msysRoots) {
+      const candidates = [
+        path.join(root, 'usr', 'bin'),
+        path.join(root, 'mingw64', 'bin'),
+        path.join(root, 'mingw32', 'bin'),
+      ];
+      for (const dir of candidates) {
+        if (AbsoluteFS.existsSync(path.join(dir, 'perl.exe'))) {
+          dirs.push(dir);
+        }
+      }
+    }
   } else {
     dirs.push(
       '/usr/local/bin',
