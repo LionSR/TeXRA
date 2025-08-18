@@ -2,10 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.32.11] - 2025-08-14
+## [0.33.0] - 2025-08-18
 
 ### Bug Fixes
 
+- Detect MSYS2 Perl directories on Windows so `latexdiff` can find `perl`.
 - Prevent first task from being marked as error when progress view loads.
 
 ## [0.32.10] - 2025-08-13
