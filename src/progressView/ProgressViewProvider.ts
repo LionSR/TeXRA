@@ -158,6 +158,22 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
           'codicons',
           'dist',
         ),
+        vscode.Uri.joinPath(this._extensionUri, 'node_modules', 'katex'),
+        vscode.Uri.joinPath(this._extensionUri, 'node_modules', 'highlight.js'),
+        vscode.Uri.joinPath(this._extensionUri, 'node_modules', 'markdown-it'),
+        vscode.Uri.joinPath(
+          this._extensionUri,
+          'node_modules',
+          'markdown-it-highlightjs',
+        ),
+        vscode.Uri.joinPath(
+          this._extensionUri,
+          'node_modules',
+          '@vscode',
+          'markdown-it-katex',
+          'dist',
+        ),
+        vscode.Uri.joinPath(this._extensionUri, 'node_modules', 'he'),
       ],
     };
 
