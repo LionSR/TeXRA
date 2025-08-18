@@ -17,6 +17,7 @@ import {
 } from '@frontend/media/img';
 import { checkMultipleToolsInstalled } from '@utils/system';
 import { getConfig } from '@utils/config';
+import { normalizeUrl } from '@utils/urlUtils';
 import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
 import type { ProviderStopReason } from './types/StopReasonTypes';
 import {
@@ -156,10 +157,8 @@ export abstract class ModelHandler<
     );
 
     if (useImprovedConnection && improvedConnectionDomain) {
-      // Normalize proxy domain: remove protocol and trailing slashes
-      improvedConnectionDomain = improvedConnectionDomain
-        .replace(/^https?:\/\//, '') // Remove http:// or https://
-        .replace(/\/+$/, ''); // Remove trailing slashes
+      // Normalize proxy domain
+      improvedConnectionDomain = normalizeUrl(improvedConnectionDomain);
 
       // Define supported proxy paths for specific providers
       // Only these providers are supported by the proxy
@@ -200,6 +199,12 @@ export abstract class ModelHandler<
 
     if (useOpenRouter) {
       return 'https://openrouter.ai/api/v1';
+    }
+
+    const customDeepSeekUrl = getConfig<string>('model.baseUrlDeepSeek', '');
+    if (customDeepSeekUrl && this.config.provider === ModelProvider.DEEPSEEK) {
+      const normalized = normalizeUrl(customDeepSeekUrl);
+      return `https://${normalized}`;
     }
 
     // Provider-specific base URLs
