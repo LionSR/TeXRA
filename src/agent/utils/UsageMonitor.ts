@@ -82,6 +82,7 @@ export class UsageMonitor {
           cache_read_input_tokens: stateGlobal.totalCacheReadInputTokens,
           cache_creation_input_tokens:
             stateGlobal.totalCacheCreationInputTokens,
+          cache_creation: null,
           server_tool_use: null,
           service_tier: null,
         };
