@@ -10,11 +10,14 @@ import { fromPath } from 'pdf2pic';
 import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
-import { WorkspaceFS, AbsoluteFS } from '@utils/files';
+import { WorkspaceFS, AbsoluteFS, getMimeType } from '@utils/files';
 import { checkMultipleToolsInstalled } from '@utils/system';
+import { executeCommand } from '@utils/system/execUtils';
 
 const CHANNEL = 'ImgUtils';
 logger.initialize(CHANNEL);
+
+const MAX_IMAGE_DIMENSION = 2000;
 
 // Define the temporary directory path
 const TEMP_DIR = path.join(os.tmpdir(), 'texra-pdf-conversion');
@@ -44,6 +47,72 @@ async function cleanupTempFiles(
   }
 }
 
+async function getImageDimensions(
+  imagePath: string,
+): Promise<{ width: number; height: number }> {
+  const [hasMagick, hasGm] = await checkMultipleToolsInstalled(
+    ['magick', 'gm'],
+    false,
+  );
+  let command: string[];
+  if (hasMagick) {
+    command = ['magick', 'identify', '-format', '%w %h', imagePath];
+  } else if (hasGm) {
+    command = ['gm', 'identify', '-format', '%w %h', imagePath];
+  } else {
+    throw new Error('Neither ImageMagick nor GraphicsMagick is installed');
+  }
+  const result = await executeCommand(command, { channel: CHANNEL });
+  if (!result.success || !result.stdout) {
+    throw new Error(result.stderr || 'Failed to get image dimensions');
+  }
+  const [widthStr, heightStr] = result.stdout.trim().split(/\s+/);
+  return { width: parseInt(widthStr, 10), height: parseInt(heightStr, 10) };
+}
+
+async function resizeImageIfNeeded(imagePath: string): Promise<string> {
+  const { width, height } = await getImageDimensions(imagePath);
+  if (width <= MAX_IMAGE_DIMENSION && height <= MAX_IMAGE_DIMENSION) {
+    return imagePath;
+  }
+  const ext = path.extname(imagePath);
+  const tempPath = path.join(os.tmpdir(), `texra-resized-${Date.now()}${ext}`);
+  const [hasMagick, hasGm] = await checkMultipleToolsInstalled(
+    ['magick', 'gm'],
+    false,
+  );
+  let command: string[];
+  if (hasMagick) {
+    command = [
+      'magick',
+      imagePath,
+      '-resize',
+      `${MAX_IMAGE_DIMENSION}x${MAX_IMAGE_DIMENSION}>`,
+      tempPath,
+    ];
+  } else if (hasGm) {
+    command = [
+      'gm',
+      'convert',
+      imagePath,
+      '-resize',
+      `${MAX_IMAGE_DIMENSION}x${MAX_IMAGE_DIMENSION}>`,
+      tempPath,
+    ];
+  } else {
+    throw new Error('Neither ImageMagick nor GraphicsMagick is installed');
+  }
+  const result = await executeCommand(command, { channel: CHANNEL });
+  if (!result.success) {
+    throw new Error(result.stderr || 'Failed to resize image');
+  }
+  logger.debug(
+    CHANNEL,
+    `Resized image ${imagePath} to fit within ${MAX_IMAGE_DIMENSION}px`,
+  );
+  return tempPath;
+}
+
 /**
  * Convert an image file to a base64 encoded string
  * @param mediaPath Path to the image file (relative to workspace)
@@ -53,26 +122,43 @@ export async function getBase64EncodedMedia(
   mediaPath: string,
 ): Promise<string> {
   try {
-    // Check if this is an absolute path (for pasted images)
     const isAbsolutePath = path.isAbsolute(mediaPath);
+    const absolutePath = isAbsolutePath
+      ? mediaPath
+      : WorkspaceFS.fullPath(mediaPath);
 
-    // Check if file exists
-    const fileExistsResult = isAbsolutePath
-      ? await AbsoluteFS.exists(mediaPath)
-      : await WorkspaceFS.exists(mediaPath);
-
+    const fileExistsResult = await AbsoluteFS.exists(absolutePath);
     if (!fileExistsResult) {
       logger.error(CHANNEL, `Image file not found: ${mediaPath}`);
       throw new Error(`Image file not found: ${mediaPath}`);
     }
 
-    // Read the image file as bytes
-    const mediaBytes = isAbsolutePath
-      ? AbsoluteFS.readBytesSync(mediaPath)
-      : WorkspaceFS.readFileBytesSync(mediaPath);
+    const mimeType = getMimeType(absolutePath);
+    let tempPath: string | null = null;
+    let pathToRead = absolutePath;
 
-    // Convert to base64
+    if (mimeType?.startsWith('image/')) {
+      const resizedPath = await resizeImageIfNeeded(absolutePath);
+      if (resizedPath !== absolutePath) {
+        tempPath = resizedPath;
+        pathToRead = resizedPath;
+      }
+    }
+
+    const mediaBytes = AbsoluteFS.readBytesSync(pathToRead);
     const base64String = mediaBytes.toString('base64');
+
+    if (tempPath) {
+      try {
+        AbsoluteFS.deleteSync(tempPath);
+        logger.debug(CHANNEL, `Removed temporary file: ${tempPath}`);
+      } catch (err) {
+        logger.warn(
+          CHANNEL,
+          `Failed to remove temporary file ${tempPath}: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    }
 
     logger.debug(CHANNEL, `Successfully encoded image: ${mediaPath}`);
     return base64String;
