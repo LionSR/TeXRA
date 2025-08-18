@@ -2,12 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+
+
 ## [0.33.0] - 2025-08-18
 
-### Bug Fixes
+### Features
 
+- Show TeXRA task status in the VS Code status bar.
+
+### Bug Fixes
+- Stabilize status bar command registration and task cancellation handling.
 - Detect MSYS2 Perl directories on Windows so `latexdiff` can find `perl`.
 - Prevent first task from being marked as error when progress view loads.
+
+
 
 ## [0.32.10] - 2025-08-13
 
