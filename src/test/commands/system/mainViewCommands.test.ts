@@ -1,11 +1,14 @@
 import { strict as assert } from 'assert';
 import * as vscode from 'vscode';
-import { registerMainViewCommands, mainViewCommands } from '@commands/system/mainViewCommands';
+import {
+  registerMainViewCommands,
+  mainViewCommands,
+} from '@commands/system/mainViewCommands';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
 
 describe('Main View Commands', () => {
   let context: vscode.ExtensionContext;
-  let registeredCommands: Map<string, Function>;
+  let registeredCommands: Map<string, (...args: unknown[]) => unknown>;
   let warningMessages: string[];
   let executeCommandResults: Map<string, any>;
 
@@ -24,14 +27,20 @@ describe('Main View Commands', () => {
     executeCommandResults = new Map();
 
     // Mock registerCommand
-    (vscode.commands as any).registerCommand = (command: string, callback: Function) => {
+    (vscode.commands as any).registerCommand = (
+      command: string,
+      callback: (...args: unknown[]) => unknown,
+    ) => {
       registeredCommands.set(command, callback);
       const disposable = { dispose: () => {} };
       return disposable;
     };
 
     // Mock executeCommand
-    (vscode.commands as any).executeCommand = async (command: string, ...args: any[]) => {
+    (vscode.commands as any).executeCommand = async (
+      command: string,
+      ...args: any[]
+    ) => {
       if (executeCommandResults.has(command)) {
         const result = executeCommandResults.get(command);
         if (result instanceof Error) {
@@ -67,7 +76,7 @@ describe('Main View Commands', () => {
   });
 
   describe('reset command', () => {
-    let resetHandler: Function;
+    let resetHandler: (...args: unknown[]) => unknown;
     let mockWebviewView: vscode.WebviewView;
     let postMessageCalls: any[];
 
@@ -107,13 +116,16 @@ describe('Main View Commands', () => {
       assert.strictEqual(warningMessages.length, 1);
       assert.strictEqual(
         warningMessages[0],
-        'Main view is not available. Please ensure the TeXRA view is open.'
+        'Main view is not available. Please ensure the TeXRA view is open.',
       );
       assert.strictEqual(postMessageCalls.length, 0);
     });
 
     it('should handle errors gracefully when executeCommand fails', async () => {
-      executeCommandResults.set('texra.getWebviewView', new Error('Command failed'));
+      executeCommandResults.set(
+        'texra.getWebviewView',
+        new Error('Command failed'),
+      );
 
       // The safeExecuteCommand should catch the error and return undefined
       await resetHandler();
@@ -121,7 +133,7 @@ describe('Main View Commands', () => {
       assert.strictEqual(warningMessages.length, 1);
       assert.strictEqual(
         warningMessages[0],
-        'Main view is not available. Please ensure the TeXRA view is open.'
+        'Main view is not available. Please ensure the TeXRA view is open.',
       );
       assert.strictEqual(postMessageCalls.length, 0);
     });
