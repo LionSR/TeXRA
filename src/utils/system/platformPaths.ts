@@ -16,6 +16,9 @@ logger.initialize(CHANNEL);
 // Cache for extra directories to avoid repeated glob operations
 let cachedExtraDirs: string[] | null = null;
 
+const DEFAULT_MSYS_ROOTS = ['C:\\msys64', 'C:\\msys32'];
+const MSYS_SUBDIRS = ['usr\\bin', 'mingw64\\bin', 'mingw32\\bin'];
+
 /**
  * Return common tool directories based on the current platform.
  * Results are cached for the session to improve performance.
@@ -68,21 +71,18 @@ export function getExtraDirs(): string[] {
       }
     }
 
-    const msysRoots = new Set<string>();
+    const msysRoots = new Set<string>(DEFAULT_MSYS_ROOTS);
     if (process.env.MSYS2_HOME) {
       msysRoots.add(process.env.MSYS2_HOME);
     }
-    msysRoots.add('C:\\msys64');
-    msysRoots.add('C:\\msys32');
 
     for (const root of msysRoots) {
-      const candidates = [
-        path.join(root, 'usr', 'bin'),
-        path.join(root, 'mingw64', 'bin'),
-        path.join(root, 'mingw32', 'bin'),
-      ];
-      for (const dir of candidates) {
-        if (AbsoluteFS.existsSync(path.join(dir, 'perl.exe'))) {
+      for (const sub of MSYS_SUBDIRS) {
+        const dir = path.join(root, sub);
+        if (
+          AbsoluteFS.existsSync(path.join(dir, 'perl.exe')) &&
+          !dirs.includes(dir)
+        ) {
           dirs.push(dir);
         }
       }
