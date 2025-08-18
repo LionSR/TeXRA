@@ -161,6 +161,14 @@ export function extractTextFromTag(
 }
 
 /**
+ * Extract LaTeX content from a markdown fenced code block
+ */
+export function extractLatexFromMarkdown(content: string): string | null {
+  const match = content.match(/```(?:latex|tex)\n([\s\S]*?)\n```/i);
+  return match ? match[1] : null;
+}
+
+/**
  * Extract multiple document elements from an XML container tag
  * Used as a fallback for extracting documents when XML parsing fails
  */
@@ -404,6 +412,7 @@ export const xmlUtils = {
   addCdataToTags,
   addCdataToTagsMultiple,
   extractTextFromTag,
+  extractLatexFromMarkdown,
   extractMultipleTextFromTag,
   filterTagsFromText,
   extractContentFromXMLbyTag,
