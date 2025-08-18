@@ -2,7 +2,7 @@
   "name": "texra",
   "displayName": "TeXRA",
   "description": "TeXRA: Your LLM-powered 24/7 LaTeX Research Assistant.",
-  "version": "0.32.9",
+  "version": "0.33.0",
   "publisher": "texra-ai",
   "engines": {
     "vscode": "^1.99.3"
@@ -163,6 +163,12 @@
             "description": "Enable streaming for DeepSeek models via OpenAI-compatible API. Overrides the global useStreaming setting.",
             "scope": "resource"
           },
+          "texra.model.baseUrlDeepSeek": {
+            "type": "string",
+            "default": "",
+            "description": "Custom base URL for DeepSeek models; leave blank to use `https://api.deepseek.com`.",
+            "scope": "resource"
+          },
           "texra.model.useStreamingOpenrouter": {
             "type": "boolean",
             "default": false,
@@ -179,6 +185,12 @@
             "type": "boolean",
             "default": true,
             "description": "Use the native @google/genai SDK for Google models instead of the OpenAI-compatible API. This feature is experimental and may not work as expected.",
+            "scope": "resource"
+          },
+          "texra.model.useAnthropic1MBeta": {
+            "type": "boolean",
+            "default": false,
+            "description": "Attach the `context-1m-2025-08-07` beta header for Claude Sonnet 4 requests to enable the 1M-token context window (usage capped at 200 K by extension).",
             "scope": "resource"
           },
           "texra.model.useCopilot": {
@@ -715,6 +727,17 @@
             "type": "string",
             "default": "",
             "description": "Root path for the TeXRA file explorer view. Can be absolute or relative to workspace root.",
+            "scope": "resource"
+          }
+        }
+      },
+      {
+        "title": "Audio",
+        "properties": {
+          "texra.audio.soxPath": {
+            "type": "string",
+            "default": "",
+            "description": "Path to the SoX executable. Overrides automatic detection.",
             "scope": "resource"
           }
         }
@@ -1257,10 +1280,10 @@
   },
   "homepage": "https://texra.ai",
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.59.0",
+    "@anthropic-ai/sdk": "^0.60.0",
     "@cantoo/pdf-lib": "^2.4.2",
-    "@google/genai": "^1.13.0",
-    "@modelcontextprotocol/sdk": "^1.17.2",
+    "@google/genai": "^1.14.0",
+    "@modelcontextprotocol/sdk": "^1.17.3",
     "@vscode/codicons": "^0.0.39",
     "@vscode/markdown-it-katex": "^1.1.2",
     "axios": "^1.11.0",
