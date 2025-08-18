@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.32.11] - 2025-08-14
+
+### Bug Fixes
+
+- Prevent first task from being marked as error when progress view loads.
+
 ## [0.32.10] - 2025-08-13
 
 ### Bug Fixes
