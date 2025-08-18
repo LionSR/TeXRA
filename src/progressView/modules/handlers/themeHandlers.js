@@ -7,10 +7,10 @@ import { COMMON_COMMANDS } from '@common/webview/commands.js';
  * @param {Function} ctx.postHandle Callback after handling a message.
  */
 export function createThemeHandlers({ postHandle } = {}) {
+  const link = document.getElementById('hljs-theme');
+  const base = link?.dataset.base || '';
   const updateHighlightTheme = (theme) => {
-    const link = document.getElementById('hljs-theme');
     if (!link) return;
-    const base = 'https://cdn.jsdelivr.net/npm/highlight.js@11.11.1/styles/';
     link.href = `${base}${theme === 'dark' ? 'github-dark' : 'github'}.css`;
   };
 
