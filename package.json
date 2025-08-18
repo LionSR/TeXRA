@@ -1047,6 +1047,12 @@
         "category": "TeXRA"
       },
       {
+        "command": "texra.mainView.reset",
+        "title": "New",
+        "category": "TeXRA",
+        "icon": "$(new-file)"
+      },
+      {
         "command": "texra.showAgentHistory",
         "title": "Show Agent Execution History",
         "category": "TeXRA",
@@ -1163,6 +1169,11 @@
           "command": "texra.createAgentWithAI",
           "when": "view == texra.folderExplorer",
           "group": "navigation"
+        },
+        {
+          "command": "texra.mainView.reset",
+          "when": "view == texra.mainView",
+          "group": "navigation@0"
         },
         {
           "command": "texra.openSettings",

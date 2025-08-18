@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 - Show TeXRA task status in the VS Code status bar.
 - - Automatically resize large images (> 2000px) before base64 encoding to optimize memory usage and performance
 - Added configurable `texra.maxImageDimension` setting to control the maximum image size threshold
+- Add “New” button in main view to reset all fields.
 
 ### Bug Fixes
 
