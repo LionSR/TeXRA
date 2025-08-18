@@ -52,6 +52,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   private readonly _viewTitle: string;
   private _webviewReady = false;
   private _pendingUpdate = false;
+  private _hasResolved = false;
   private readonly logger: AgentLogger;
 
   constructor(
@@ -123,8 +124,11 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   public resolveWebviewView(webviewView: vscode.WebviewView): void {
     this.cleanupView();
 
-    // Mark all running tasks as cancelled since they will lose contact when webview reloads
-    this.resetRunningStreamStatuses();
+    // Mark running tasks as cancelled on subsequent webview resolves
+    if (this._hasResolved) {
+      this.resetRunningStreamStatuses();
+    }
+    this._hasResolved = true;
 
     this._webviewReady = false;
     this._pendingUpdate = false;
