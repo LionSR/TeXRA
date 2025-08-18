@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Features
+
+- Automatically resize large images (> 2000px) before base64 encoding to optimize memory usage and performance
+- Added configurable `texra.maxImageDimension` setting to control the maximum image size threshold
+
+### Improvements
+
+- Enhanced image processing with better error handling and temporary file cleanup
+- Added dimension validation when parsing image metadata
+- Improved logging to include actual image dimensions when resizing
+
 ## [0.32.10] - 2025-08-13
 
 ### Bug Fixes
