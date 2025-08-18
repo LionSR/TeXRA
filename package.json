@@ -2,7 +2,7 @@
   "name": "texra",
   "displayName": "TeXRA",
   "description": "TeXRA: Your LLM-powered 24/7 LaTeX Research Assistant.",
-  "version": "0.32.10",
+  "version": "0.33.0",
   "publisher": "texra-ai",
   "engines": {
     "vscode": "^1.99.3"
@@ -161,6 +161,12 @@
             "type": "boolean",
             "default": false,
             "description": "Enable streaming for DeepSeek models via OpenAI-compatible API. Overrides the global useStreaming setting.",
+            "scope": "resource"
+          },
+          "texra.model.baseUrlDeepSeek": {
+            "type": "string",
+            "default": "",
+            "description": "Custom base URL for DeepSeek models; leave blank to use `https://api.deepseek.com`.",
             "scope": "resource"
           },
           "texra.model.useStreamingOpenrouter": {
