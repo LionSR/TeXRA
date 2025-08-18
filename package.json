@@ -163,6 +163,12 @@
             "description": "Enable streaming for DeepSeek models via OpenAI-compatible API. Overrides the global useStreaming setting.",
             "scope": "resource"
           },
+          "texra.model.baseUrlDeepSeek": {
+            "type": "string",
+            "default": "",
+            "description": "Custom base URL for DeepSeek models; leave blank to use `https://api.deepseek.com`.",
+            "scope": "resource"
+          },
           "texra.model.useStreamingOpenrouter": {
             "type": "boolean",
             "default": false,
