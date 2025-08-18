@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 - Added configurable `texra.maxImageDimension` setting to control the maximum image size threshold
 
 ### Bug Fixes
+
 - Stabilize status bar command registration and task cancellation handling.
 - Detect MSYS2 Perl directories on Windows so `latexdiff` can find `perl`.
 - Prevent first task from being marked as error when progress view loads.
@@ -20,7 +21,6 @@ All notable changes to this project will be documented in this file.
 - Enhanced image processing with better error handling and temporary file cleanup
 - Added dimension validation when parsing image metadata
 - Improved logging to include actual image dimensions when resizing
-
 
 ## [0.32.10] - 2025-08-13
 
