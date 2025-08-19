@@ -93,19 +93,18 @@
               ]
             },
             "default": [
+              "gemini25p",
+              "gemini25f",
               "opus41T",
               "sonnet4T",
+              "dsv3",
               "dsr1",
+              "gpt5",
+              "gpt41",
+              "gptoss",
               "o3",
               "o4-",
               "o3-",
-              "gptoss",
-              "gptoss-",
-              "gpt41",
-              "gpt5",
-              "gpt4o",
-              "gemini25p",
-              "gemini25f",
               "grok4"
             ],
             "description": "List of available models. Model codes: opus41T/opus41 (Claude Opus 4.1 Thinking/Regular), opus4T/opus4 (Claude Opus 4 Thinking/Regular), sonnet4T/sonnet4 (Claude Sonnet 4 Thinking/Regular), sonnet37T/sonnet37 (Claude Sonnet 3.7 Thinking/Regular), o4-/o3/o3pro/o3-/o1pro/o1/gptoss/gptoss- (OpenAI reasoning models), gpt5/gpt5-/gpt5--/gpt41/gpt4o (GPT-5/5 Mini/5 Nano/4.1/4O), gemini25p/gemini25f/gemini2fT (Gemini 2.5 Pro/Flash, 2.0 Flash Thinking), dsv3/dsr1 (DeepSeek V3.1/R1), grok4 (Grok 4), grok3 (Grok 3), qwenplus (Qwen Plus), kimit/kimiv/kimi2 (Kimi Thinking/Vision/K2)",
@@ -612,17 +611,6 @@
         }
       },
       {
-        "title": "Execution",
-        "properties": {
-          "texra.agent.pauseForConfirmation": {
-            "type": "boolean",
-            "default": false,
-            "description": "Whether to pause for confirmation after each agent even with reflect=True",
-            "scope": "resource"
-          }
-        }
-      },
-      {
         "title": "Git",
         "properties": {
           "texra.git.numberOfCommitsToShow": {
@@ -677,49 +665,6 @@
             ],
             "description": "Default model to use for merge operations",
             "order": 1
-          },
-          "texra.merge.defaultReflect": {
-            "type": "string",
-            "default": "False",
-            "enum": [
-              "True",
-              "False"
-            ],
-            "description": "Default reflect setting for merge operations",
-            "order": 2
-          }
-        }
-      },
-      {
-        "title": "Code Validation & Fixing",
-        "properties": {
-          "texra.xmlValidator.maxIterations": {
-            "type": "number",
-            "default": 10,
-            "minimum": 1,
-            "maximum": 20,
-            "description": "Maximum number of iterations when trying to fix XML validation errors",
-            "order": 2
-          },
-          "texra.linterFixer.maxIterations": {
-            "type": "number",
-            "default": 10,
-            "minimum": 1,
-            "maximum": 20,
-            "description": "Maximum number of iterations when trying to fix linter issues in code files",
-            "order": 2
-          },
-          "texra.autoIterateOnLinter.latex": {
-            "type": "boolean",
-            "default": false,
-            "description": "Automatically trigger LaTeX linter fix when linter issues are detected",
-            "order": 3
-          },
-          "texra.autoIterateOnLinter.xml": {
-            "type": "boolean",
-            "default": false,
-            "description": "Automatically trigger XML validation fix when XML validation issues are detected",
-            "order": 4
           }
         }
       },
