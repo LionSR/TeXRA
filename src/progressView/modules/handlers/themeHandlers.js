@@ -8,10 +8,9 @@ import { COMMON_COMMANDS } from '@common/webview/commands.js';
  */
 export function createThemeHandlers({ postHandle } = {}) {
   const link = document.getElementById('hljs-theme');
-  const base = link?.dataset.base || '';
   const updateHighlightTheme = (theme) => {
     if (!link) return;
-    link.href = `${base}${theme === 'dark' ? 'github-dark' : 'github'}.css`;
+    link.href = `https://cdn.jsdelivr.net/npm/highlight.js@11.11.1/styles/${theme === 'dark' ? 'github-dark' : 'github'}.css`;
   };
 
   return {

@@ -15,30 +15,6 @@ export class ProgressViewContentProvider extends BaseViewContentProvider {
       styleUri: this.getWebviewUri(webview, 'styles/index.css'),
       scriptUri: this.getWebviewUri(webview, 'script.js'),
       splitJsUri: this.getNodeModulesUri(webview, 'split.js/dist/split.es.js'),
-      katexCssUri: this.getNodeModulesUri(webview, 'katex/dist/katex.min.css'),
-      copyTexUri: this.getNodeModulesUri(
-        webview,
-        'katex/dist/contrib/copy-tex.mjs',
-      ),
-      markdownItUri: this.getNodeModulesUri(webview, 'markdown-it/index.mjs'),
-      markdownItKatexUri: this.getNodeModulesUri(
-        webview,
-        '@vscode/markdown-it-katex/dist/index.js',
-      ),
-      highlightJsUri: this.getNodeModulesUri(
-        webview,
-        'highlight.js/es/index.js',
-      ),
-      markdownItHighlightJsUri: this.getNodeModulesUri(
-        webview,
-        'markdown-it-highlightjs/dist/index.js',
-      ),
-      heUri: this.getNodeModulesUri(webview, 'he/he.js'),
-      highlightCssUri: this.getNodeModulesUri(
-        webview,
-        'highlight.js/styles/github-dark.css',
-      ),
-      highlightBaseUri: this.getNodeModulesUri(webview, 'highlight.js/styles'),
 
       // Progress view specific modules
       progressViewStateUri: this.getWebviewUri(
