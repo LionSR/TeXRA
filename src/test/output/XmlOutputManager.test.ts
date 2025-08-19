@@ -92,4 +92,27 @@ describe('XmlOutputManager markdown fallback', () => {
     await WorkspaceFS.delete(outputXml);
     await WorkspaceFS.delete(texPath);
   });
+
+  it('writes tex file from plain LaTeX document block', async () => {
+    const logger = new AgentLogger('TestXmlOutput');
+    const manager = new XmlOutputManager(setting, config, logger);
+    const outputXml = 'plain_latex.xml';
+    const content =
+      'some explanation\n\\documentclass{article}\n\\begin{document}\nhello\n\\end{document}\nmore text';
+
+    await WorkspaceFS.writeFile(outputXml, content);
+
+    const texPath = await manager.splitScratchpadOutputXml(
+      outputXml,
+      setting.documentTag,
+    );
+
+    const written = await WorkspaceFS.readFile('plain_latex.tex');
+    assert.ok(written.includes('\\documentclass'));
+    assert.ok(written.includes('\\end{document}'));
+    assert.ok(!written.includes('some explanation'));
+
+    await WorkspaceFS.delete(outputXml);
+    await WorkspaceFS.delete(texPath);
+  });
 });
