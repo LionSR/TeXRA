@@ -230,9 +230,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
         signal,
       });
       const response = await stream.finalResponse();
-      this.logger.debug(
-        `OpenAI Responses final response: ${JSON.stringify(response)}`,
-      );
+      // this.logger.debug(
+      //   `OpenAI Responses final response: ${JSON.stringify(response)}`,
+      // );
       this.previousResponseId = response.id;
       this.sentMessages = messages.length;
       return response;
