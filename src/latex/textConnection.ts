@@ -7,7 +7,13 @@ import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
 
 // Local imports - log
 import * as logger from '@logger/logUtils';
-import { SecretManager, ApiProvider } from '@frontend/secretManager';
+
+// Local imports - agent handlers
+import { ModelHandlerOpenAI } from '@agent/modelHandlers/modelHandlerOpenAI';
+import { ModelHandlerAnthropic } from '@agent/modelHandlers/modelHandlerAnthropic';
+
+// Local imports - model configs
+import { MODEL_CONFIGS } from '@model/ModelRegistry';
 
 const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);
@@ -88,22 +94,6 @@ function processMajorityChoice(choices: string[]): ConnectionResult {
 }
 
 /**
- * Gets API key from VS Code settings
- */
-
-// it should also be possible to fallback to openrouter for this maybe
-// Use Vercel ai sdk for this for convenience?
-async function getApiKey(provider: 'openai' | 'anthropic'): Promise<string> {
-  try {
-    return await SecretManager.getApiKey(provider as ApiProvider);
-  } catch (err) {
-    throw new Error(
-      `Missing API key from ${provider.toUpperCase()}. Please set it using the "Set API Key" command.`,
-    );
-  }
-}
-
-/**
  * Determines the best way to connect two strings in a LaTeX context using GPT-4
  */
 export async function bestConnectionMethod(
@@ -113,9 +103,12 @@ export async function bestConnectionMethod(
   n: number = 10,
 ): Promise<ConnectionResult> {
   try {
-    const apiKey = openaiApiKey || (await getApiKey('openai'));
     const { prompt } = preparePrompt(str1, str2);
-    const client = new OpenAI({ apiKey });
+    const handler = new ModelHandlerOpenAI(MODEL_CONFIGS['gpt41']);
+    const baseURL = handler.getBaseUrl() || undefined;
+    const client = openaiApiKey
+      ? new OpenAI({ apiKey: openaiApiKey, baseURL })
+      : await handler.getClient();
 
     const completion = await client.chat.completions.create({
       model: 'gpt-4.1', //'gpt-4-turbo',
@@ -161,9 +154,12 @@ export async function bestConnectionMethodAnthropic(
   n: number = 10,
 ): Promise<ConnectionResult> {
   try {
-    const apiKey = anthropicApiKey || (await getApiKey('anthropic'));
     const { prompt } = preparePrompt(str1, str2);
-    const client = new Anthropic({ apiKey });
+    const handler = new ModelHandlerAnthropic(MODEL_CONFIGS['sonnet37']);
+    const baseURL = handler.getBaseUrl() || undefined;
+    const client = anthropicApiKey
+      ? new Anthropic({ apiKey: anthropicApiKey, baseURL })
+      : await handler.getClient();
 
     // Make multiple API calls since Anthropic doesn't support n parameter
     const choices = await Promise.all(
