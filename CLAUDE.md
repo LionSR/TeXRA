@@ -80,6 +80,8 @@ Three main webview interfaces:
 - **Progress view** (`src/progressView/`) - Task tracking board
 - **History view** (`src/historyView/`) - Execution history browser
 
+**Dependency Management Note**: WebViews load complex packages (markdown-it, KaTeX, highlight.js) from CDN to avoid transitive dependency issues and reduce extension size. Simple standalone packages (split.js, codicons) are bundled locally.
+
 ### LaTeX Processing
 
 The `src/latex/` module provides:
