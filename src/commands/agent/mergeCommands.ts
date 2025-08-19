@@ -1,11 +1,14 @@
 // Third-party imports
+// Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - utilities
-import { getConfig } from '@utils/config';
+// Local imports - commands
 
 // Local imports - agent
 import { executeMergeAgent } from '@agent/runtime/executeAgent';
+
+// Local imports - utilities
+import { getConfig } from '@utils/config';
 
 export function registerMergeCommands(context: vscode.ExtensionContext) {
   context.subscriptions.push(

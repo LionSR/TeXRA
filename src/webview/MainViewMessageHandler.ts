@@ -1,12 +1,7 @@
+// Third-party imports
 import * as vscode from 'vscode';
-import { safeExecuteCommand } from '@utils/system';
-import { getConfig } from '@utils/config';
-import {
-  BaseViewMessageHandler,
-  MessageHandler,
-} from '@common/webview/BaseViewMessageHandler';
-// @ts-ignore - Import JavaScript module
-import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
+
+// Local imports - webview
 import {
   SettingsManager,
   RecordingManager,
@@ -15,6 +10,15 @@ import {
   DiffManager,
   InstructionManager,
 } from './managers';
+import {
+  BaseViewMessageHandler,
+  MessageHandler,
+} from '@common/webview/BaseViewMessageHandler';
+
+// @ts-ignore - Import JavaScript module
+import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
+import { getConfig } from '@utils/config';
+import { safeExecuteCommand } from '@utils/system';
 
 export class MainViewMessageHandler extends BaseViewMessageHandler {
   private readonly settingsManager: SettingsManager;

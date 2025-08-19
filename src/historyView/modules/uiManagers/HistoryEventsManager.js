@@ -1,5 +1,6 @@
-import { addEventListenerSafely } from '@common/domUtils.js';
+// Local imports - history view
 import { ELEMENT_IDS } from '../constants.js';
+import { addEventListenerSafely } from '@common/domUtils.js';
 
 /**
  * Registers global event listeners for the history view.

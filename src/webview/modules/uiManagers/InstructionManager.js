@@ -1,3 +1,4 @@
+// Local imports - webview
 import { setupPasteListener } from '../pasteHandler.js';
 import { safeGetElementById } from '@common/domUtils.js';
 

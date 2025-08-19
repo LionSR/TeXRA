@@ -1,11 +1,12 @@
+// Local imports - progress view
 // Local imports
 import { StatePersistenceManager } from '../persistence/StatePersistenceManager';
-import { WorkspaceStateKey } from '@common/state/stateManager';
-import { AgentLogger } from '@logger/AgentLogger';
+import type { StreamTabId } from '@agent/types/IdentifierTypes';
 
 // Types
 import type { TokenUsageStats } from '@agent/types/UsageTypes';
-import type { StreamTabId } from '@agent/types/IdentifierTypes';
+import { WorkspaceStateKey } from '@common/state/stateManager';
+import { AgentLogger } from '@logger/AgentLogger';
 
 /**
  * Manages usage statistics collection with persistence.

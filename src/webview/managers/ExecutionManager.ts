@@ -1,20 +1,23 @@
 // Third-party imports
+// Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - log
-import * as logger from '@logger/logUtils';
+// Local imports - webview
+import type { AgentConfig } from '@agent/core/AgentConfig';
+
+// Local imports - agent
+import { ToolConfig } from '@agent/core/ToolConfig';
+import { getFilesIfNotEmpty } from '@frontend/files/listing';
 
 // Local imports - utils
 import { capitalize } from '@frontend/ui/messageUtils';
+
+// Local imports - log
+import * as logger from '@logger/logUtils';
 import {
   isPastedImage,
   getPastedImageFullPath,
 } from '@utils/files/pastedImageUtils';
-import { getFilesIfNotEmpty } from '@frontend/files/listing';
-
-// Local imports - agent
-import { ToolConfig } from '@agent/core/ToolConfig';
-import type { AgentConfig } from '@agent/core/AgentConfig';
 
 const CHANNEL = 'ExecutionManager';
 logger.initialize(CHANNEL);

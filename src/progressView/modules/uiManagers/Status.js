@@ -1,6 +1,7 @@
+// Local imports - progress view
+import { STATUS, TOOLBAR_BUTTONS, ELEMENT_IDS } from '../constants.js';
 // Local imports
 import { progressViewState } from '../progressViewState.js';
-import { STATUS, TOOLBAR_BUTTONS, ELEMENT_IDS } from '../constants.js';
 
 /**
  * Manages status display and button states.

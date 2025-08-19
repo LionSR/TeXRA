@@ -1,4 +1,5 @@
 // Third-party imports
+// Third-party imports
 import * as vscode from 'vscode';
 
 // Simple enums for commonly used state keys

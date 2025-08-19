@@ -1,11 +1,12 @@
-import { TextEditorTool } from './TextEditorTool';
-import { DiagnosticsTool } from './DiagnosticsTool';
+// Local imports - tools
 import { BashTool } from './bash';
-import { FileOpTool } from './fileOp';
-import { WolframTool } from './wolfram';
-import { WebSearchTool } from './web/WebSearchTool';
-
 import { BaseTool } from './core/base';
+import { DiagnosticsTool } from './DiagnosticsTool';
+import { FileOpTool } from './fileOp';
+import { TextEditorTool } from './TextEditorTool';
+import { WebSearchTool } from './web/WebSearchTool';
+import { WolframTool } from './wolfram';
+
 export const DEFAULT_TOOL_REGISTRY: Record<string, BaseTool<any>> = {
   str_replace_editor: new TextEditorTool(),
   diagnostics: new DiagnosticsTool(),

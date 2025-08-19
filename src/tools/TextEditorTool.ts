@@ -1,21 +1,26 @@
 // Standard library imports
+// Standard library imports
 
 import * as path from 'path';
+
+// Third-party imports
 import * as vscode from 'vscode';
 import { z } from 'zod';
+import { zodToJsonSchema } from 'zod-to-json-schema';
+
+// Local imports - tools
 
 // Local imports - core
 import { BaseTool } from './core/base';
-import { ToolCallInput, EditorCommand, FileHistoryEntry } from './types';
 import { ToolResult, CLIResult, ToolError } from './result';
-import type { ToolDefinition } from '@model';
-import { zodToJsonSchema } from 'zod-to-json-schema';
-
-// Local imports - utilities
-import { WorkspaceFS, AbsoluteFS } from '@utils/files';
+import { ToolCallInput, EditorCommand, FileHistoryEntry } from './types';
 
 // Local imports - Log
 import * as logger from '@logger/logUtils';
+import type { ToolDefinition } from '@model';
+
+// Local imports - utilities
+import { WorkspaceFS, AbsoluteFS } from '@utils/files';
 
 // Constants
 const CHANNEL = 'TextEditorTool';

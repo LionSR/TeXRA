@@ -1,3 +1,4 @@
+// Third-party imports
 import { GoogleGenAI } from '@google/genai';
 
 // Set the API key directly or via environment variable

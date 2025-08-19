@@ -1,5 +1,8 @@
 // Standard library imports
+// Standard library imports
 import * as path from 'path';
+
+// Local imports - utils
 
 // Local imports
 import { WorkspaceFS } from './workspaceFS';

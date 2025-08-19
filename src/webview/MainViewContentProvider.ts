@@ -1,8 +1,13 @@
+// Standard library imports
+import * as path from 'path';
+
+// Third-party imports
 import * as vscode from 'vscode';
+
+// Local imports - webview
+import { BaseViewContentProvider } from '@common/webview/BaseViewContentProvider';
 import { getConfig } from '@utils/config';
 import { GlobalStorageFS, AbsoluteFS } from '@utils/files';
-import * as path from 'path';
-import { BaseViewContentProvider } from '@common/webview/BaseViewContentProvider';
 
 export class MainViewContentProvider extends BaseViewContentProvider {
   constructor(context: vscode.ExtensionContext) {

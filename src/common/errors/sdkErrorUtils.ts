@@ -1,19 +1,5 @@
 // Third-party imports
 import {
-  APIConnectionError as OpenAIConnectionError,
-  APIConnectionTimeoutError as OpenAIConnectionTimeoutError,
-  APIError as OpenAIAPIError,
-  AuthenticationError as OpenAIAuthenticationError,
-  PermissionDeniedError as OpenAIPermissionDeniedError,
-  RateLimitError as OpenAIRateLimitError,
-  BadRequestError as OpenAIBadRequestError,
-  NotFoundError as OpenAINotFoundError,
-  ConflictError as OpenAIConflictError,
-  UnprocessableEntityError as OpenAIUnprocessableEntityError,
-  InternalServerError as OpenAIInternalServerError,
-  APIUserAbortError as OpenAIUserAbortError,
-} from 'openai';
-import {
   APIConnectionError as AnthropicConnectionError,
   APIConnectionTimeoutError as AnthropicConnectionTimeoutError,
   APIError as AnthropicAPIError,
@@ -27,6 +13,23 @@ import {
   InternalServerError as AnthropicInternalServerError,
   APIUserAbortError as AnthropicUserAbortError,
 } from '@anthropic-ai/sdk';
+// Third-party imports
+import {
+  APIConnectionError as OpenAIConnectionError,
+  APIConnectionTimeoutError as OpenAIConnectionTimeoutError,
+  APIError as OpenAIAPIError,
+  AuthenticationError as OpenAIAuthenticationError,
+  PermissionDeniedError as OpenAIPermissionDeniedError,
+  RateLimitError as OpenAIRateLimitError,
+  BadRequestError as OpenAIBadRequestError,
+  NotFoundError as OpenAINotFoundError,
+  ConflictError as OpenAIConflictError,
+  UnprocessableEntityError as OpenAIUnprocessableEntityError,
+  InternalServerError as OpenAIInternalServerError,
+  APIUserAbortError as OpenAIUserAbortError,
+} from 'openai';
+
+// Local imports - common
 
 // Local imports
 import { getConfig } from '@utils/config';
