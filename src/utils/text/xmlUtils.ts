@@ -169,6 +169,19 @@ export function extractLatexFromMarkdown(content: string): string | null {
 }
 
 /**
+ * Extract LaTeX document starting at \documentclass and ending at \end{document}
+ */
+export function extractLatexBetweenDocumentClass(
+  content: string,
+): string | null {
+  const match = content.match(/\\documentclass[\s\S]*?\\end{document}/);
+  if (!match) {
+    return null;
+  }
+  return match[0].replace(/<!\[CDATA\[(.*?)\]\]>/gs, '$1');
+}
+
+/**
  * Extract multiple document elements from an XML container tag
  * Used as a fallback for extracting documents when XML parsing fails
  */
@@ -413,6 +426,7 @@ export const xmlUtils = {
   addCdataToTagsMultiple,
   extractTextFromTag,
   extractLatexFromMarkdown,
+  extractLatexBetweenDocumentClass,
   extractMultipleTextFromTag,
   filterTagsFromText,
   extractContentFromXMLbyTag,
