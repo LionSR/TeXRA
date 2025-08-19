@@ -137,38 +137,33 @@ export async function configureLatexSettings() {
       ]);
 
       // Configure LaTeX formatting
-      await config.update(
+      await updateIfUnset<string>(
         'latex-workshop.formatting.latex',
         'latexindent',
-        vscode.ConfigurationTarget.Global,
       );
 
       // Configure word wrap for LaTeX files
-      await config.update(
+      await updateIfUnset(
         '[latex]',
         { 'editor.wordWrap': 'on', 'files.autoSave': 'afterDelay' },
-        vscode.ConfigurationTarget.Global,
       );
 
       // Also add word wrap for yaml files
-      await config.update(
+      await updateIfUnset(
         '[yaml]',
         { 'editor.wordWrap': 'on', 'files.autoSave': 'afterDelay' },
-        vscode.ConfigurationTarget.Global,
       );
 
       // Configure explorer settings to not automatically reveal build directory
-      await config.update(
+      await updateIfUnset(
         'explorer.autoRevealExclude',
         { 'build/': true },
-        vscode.ConfigurationTarget.Global,
       );
 
       // Disable automatic revealing of files in explorer
-      await config.update(
+      await updateIfUnset(
         'explorer.autoReveal',
         false,
-        vscode.ConfigurationTarget.Global,
       );
 
       const isWindsurf = vscode.env.appName?.toLowerCase().includes('windsurf');
@@ -176,17 +171,9 @@ export async function configureLatexSettings() {
       if (!isWindsurf) {
         const activityBarKey = 'workbench.activityBar.location';
 
-        // Check if the activity bar location setting exists
-        const activityBarSetting = config.inspect(activityBarKey);
-        if (activityBarSetting) {
-          // Setting exists, update it
-          await config.update(
-            activityBarKey,
-            'default',
-            vscode.ConfigurationTarget.Global,
-          );
-          logger.info('extension', 'Activity bar location set to default');
-        }
+        // Update activity bar location only if unset
+        await updateIfUnset(activityBarKey, 'default');
+        logger.info('extension', 'Activity bar location set to default');
       }
 
       logger.info(
