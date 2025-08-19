@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Features
+
+- Add `texra.includeToolUseAgents` setting to optionally show built-in tool-use agents in the agent dropdown.
+
 ## [0.33.0] - 2025-08-18
 
 ### Features
