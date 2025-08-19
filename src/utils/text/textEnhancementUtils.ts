@@ -13,9 +13,14 @@ import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
 import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
-import { SecretManager } from '@frontend/secretManager';
 import xmlUtils from './xmlUtils';
 import { getConfig } from '../config';
+
+// Local imports - agent handlers
+import { ModelHandlerAnthropic } from '@agent/modelHandlers/modelHandlerAnthropic';
+
+// Local imports - model configs
+import { MODEL_CONFIGS } from '@model/ModelRegistry';
 
 const CHANNEL = 'TextEnhancement';
 
@@ -63,18 +68,6 @@ export async function polishTextWithAI(
 ): Promise<{ success: boolean; text: string; error?: string }> {
   try {
     const useCopilot = getConfig<boolean>('model.useCopilot', false);
-
-    // Get the API key from secrets when not using Copilot
-    const apiKey = useCopilot
-      ? undefined
-      : await SecretManager.getApiKey('anthropic');
-    if (!useCopilot && !apiKey) {
-      return {
-        success: false,
-        text: text,
-        error: 'No Anthropic API key found. Please set your API key first.',
-      };
-    }
 
     // Build file context string if available
     let fileContextString = '';
@@ -167,8 +160,18 @@ ${text}`;
         responseText += chunk;
       }
     } else {
-      // Use the Anthropic SDK
-      const anthropic = new Anthropic({ apiKey: apiKey! });
+      // Use the Anthropic SDK via model handler for proxy support
+      let anthropic: Anthropic;
+      try {
+        const handler = new ModelHandlerAnthropic(MODEL_CONFIGS['sonnet37']);
+        anthropic = await handler.getClient();
+      } catch {
+        return {
+          success: false,
+          text,
+          error: 'No Anthropic API key found. Please set your API key first.',
+        };
+      }
       const params: MessageCreateParams = {
         model: 'claude-3-7-sonnet-20250219',
         messages: [{ role: 'user', content: prompt }],
