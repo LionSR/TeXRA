@@ -19,6 +19,7 @@ See the main [Installation Guide](./installation.md) for more details on install
 ## Integration with LaTeX Workshop
 
 TeXRA is designed to work smoothly alongside the popular [LaTeX Workshop](https://marketplace.visualstudio.com/items?itemName=James-Yu.latex-workshop) extension, which provides excellent compilation, previewing, and IntelliSense features.
+If the extension isn't detected, TeXRA will prompt you to install it so you can take advantage of these capabilities.
 
 **Workflow Interaction:**
 
