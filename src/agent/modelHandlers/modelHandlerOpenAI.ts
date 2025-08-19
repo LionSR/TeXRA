@@ -156,44 +156,34 @@ export class ModelHandlerOpenAI extends ModelHandler<
         });
 
         if (this.config.fullName.includes('deepseek')) {
-          // This wait for finalMessage method do not support deepseek models, so we need to aggreatate the results manually like this:
-          let reasoning_content = '';
-          let content = '';
+          // DeepSeek models do not support the wait for final message helper, so aggregate chunks manually
+          let fullContent = '';
+          let reasoning = '';
+          let lastChunk: any;
           for await (const chunk of stream) {
-            if ((chunk.choices[0].delta as any).reasoning_content) {
-              reasoning_content += (chunk.choices[0].delta as any)
-                .reasoning_content;
-            } else {
-              content += (chunk.choices[0].delta as any).content;
-            }
+            lastChunk = chunk;
+            fullContent += chunk.choices[0]?.delta?.content ?? '';
+            reasoning +=
+              (chunk.choices[0]?.delta as any)?.reasoning_content ?? '';
           }
-          response = {
-            role: 'assistant',
-            // there is no good choice it seems unless deepseek models support it
-            finish_reason: OPENAI_CHAT_FINISH.STOP,
-            // In the future maybe we can count the output tokens to see if it is at the limit approximatelly..
+          return {
+            id: lastChunk?.id,
+            object: 'chat.completion',
+            created: lastChunk?.created,
+            model: lastChunk?.model,
+            system_fingerprint: lastChunk?.system_fingerprint,
+            usage: lastChunk?.usage,
             choices: [
               {
+                index: 0,
                 message: {
-                  content: content,
-                  reasoning_content: reasoning_content,
+                  content: fullContent,
+                  reasoning_content: reasoning,
                 },
-                finish_reason: OPENAI_CHAT_FINISH.STOP,
+                finish_reason: lastChunk?.choices?.[0]?.finish_reason,
               },
             ],
           };
-          const tokenCount = countTokens(content + reasoning_content);
-          this.logger.debug(
-            `Token count output of deepseek model: ${tokenCount}`,
-          );
-
-          if (Math.abs(tokenCount - this.config.maxOutputTokens) < 1000) {
-            this.logger.warn(
-              `Token count output of deepseek model is close to the max output tokens: ${tokenCount} - ${this.config.maxOutputTokens}. Setting finish_reason to length`,
-            );
-            response.finish_reason = OPENAI_CHAT_FINISH.LENGTH;
-          }
-          return response;
         }
 
         response = await stream.finalChatCompletion();
