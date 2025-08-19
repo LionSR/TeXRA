@@ -46,6 +46,12 @@
             "description": "List of available agents",
             "scope": "resource"
           },
+          "texra.includeToolUseAgents": {
+            "type": "boolean",
+            "default": false,
+            "description": "Include built-in tool-use agents (e.g., xml_validator, tex_linter_fix) in the agent list",
+            "scope": "resource"
+          },
           "texra.models": {
             "type": "array",
             "items": {
