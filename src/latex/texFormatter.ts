@@ -7,6 +7,9 @@ import { getConfig } from '@utils/config';
 
 export async function runLatexFormatter(filePath: string): Promise<boolean> {
   const formatter = getConfig<string>('latex.formatter', 'latexindent');
+  if (formatter === 'none') {
+    return true;
+  }
   if (formatter === 'tex-fmt') {
     return runTexFmt(filePath);
   }

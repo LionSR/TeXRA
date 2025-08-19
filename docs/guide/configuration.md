@@ -168,12 +168,14 @@ Control which directories TeXRA ignores:
 Configure LaTeX formatting behavior:
 
 ```json
-"texra.latex.formatter": "latexindent",
+"texra.latex.formatter": "none",
+"texra.latex.showLatexindentWarning": false,
 "texra.latex.latexindentConfig": "/path/to/latexindent.yaml",
 "texra.latex.texfmtConfig": "/path/to/tex-fmt.toml"
 ```
 
-- `formatter`: Choose between `latexindent` and `tex-fmt`.
+- `formatter`: Choose between `latexindent`, `tex-fmt`, or `none` to disable formatting.
+- `showLatexindentWarning`: Set to `false` to suppress missing `latexindent` warnings.
 - `latexindentConfig`: Path to a `latexindent` configuration file.
 - `texfmtConfig`: Path to a `tex-fmt` configuration file.
 
