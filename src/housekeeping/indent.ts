@@ -35,6 +35,10 @@ export async function indentLatexFilesInDirectory(
   );
 
   const formatter = getConfig<string>('latex.formatter', 'latexindent');
+  if (formatter === 'none') {
+    logger.debug(CHANNEL, 'LaTeX formatter disabled; skipping indentation');
+    return 0;
+  }
   const configKey =
     formatter === 'tex-fmt' ? 'latex.texfmtConfig' : 'latex.latexindentConfig';
   const config = getConfig<string>(configKey, '');
