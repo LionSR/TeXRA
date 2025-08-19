@@ -95,6 +95,10 @@ When updating CHANGELOG.md:
   - Generate URIs using appropriate helpers (`getHistoryViewUri`, `getCommonUri`, etc.)
   - Pass all URIs to the HTML template and map them in the importmap script tag
   - Without complete import mapping, ES modules will fail to resolve in the webview's sandboxed environment
+- For webview dependencies:
+  - Use CDN (jsdelivr for static assets, esm.sh for ES modules) for packages with complex transitive dependencies (e.g., markdown-it, KaTeX, highlight.js)
+  - Keep simple, standalone packages local (e.g., split.js, @vscode/codicons)
+  - CDN usage avoids dependency resolution issues and reduces extension size significantly
 
 ### Webview Consistency Patterns
 
