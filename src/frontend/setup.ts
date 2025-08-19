@@ -102,32 +102,39 @@ export async function configureLatexSettings() {
       );
       const config = vscode.workspace.getConfiguration();
 
+      // Helper to update LaTeX Workshop settings only when unset
+      const updateIfUnset = async <T>(key: string, value: T) => {
+        const setting = config.inspect<T>(key);
+        if (
+          setting &&
+          setting.globalValue === undefined &&
+          setting.workspaceValue === undefined &&
+          setting.workspaceFolderValue === undefined
+        ) {
+          await config.update(key, value, vscode.ConfigurationTarget.Global);
+        }
+      };
+
       // Update LaTeX Workshop build settings
-      await config.update(
+      await updateIfUnset<string[]>(
         'latex-workshop.latex.external.build.args',
         ['--output-directory=build', '-f', '-pdf'],
-        vscode.ConfigurationTarget.Global,
       );
 
-      await config.update(
+      await updateIfUnset<string>(
         'latex-workshop.latex.outDir',
         '%DIR%/build/',
-        vscode.ConfigurationTarget.Global,
       );
 
       // Add nonstopmode magic arguments for LaTeX Workshop
-      await config.update(
-        'latex-workshop.latex.magic.args',
-        [
-          '-synctex=1',
-          '-interaction=nonstopmode',
-          '-file-line-error',
-          '%DOC%',
-          '-pdf',
-          '-f',
-        ],
-        vscode.ConfigurationTarget.Global,
-      );
+      await updateIfUnset<string[]>('latex-workshop.latex.magic.args', [
+        '-synctex=1',
+        '-interaction=nonstopmode',
+        '-file-line-error',
+        '%DOC%',
+        '-pdf',
+        '-f',
+      ]);
 
       // Configure LaTeX formatting
       await config.update(
