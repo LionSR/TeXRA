@@ -169,6 +169,26 @@ export function extractLatexFromMarkdown(content: string): string | null {
 }
 
 /**
+ * Extract content from a tag with a specific name attribute
+ */
+export function extractNamedTextFromTag(
+  inputContent: string,
+  documentTag: string,
+  name: string,
+): string | null {
+  const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const regex = new RegExp(
+    `<${documentTag}\\b[^>]*\\bname="${escapedName}"[^>]*>([\\s\\S]*?)<\\/${documentTag}>`,
+  );
+  const match = regex.exec(inputContent);
+  if (!match) {
+    return null;
+  }
+  const content = match[1].replace(/<!\\[CDATA\\[(.*?)\\]\\]>/gs, '$1');
+  return content;
+}
+
+/**
  * Extract multiple document elements from an XML container tag
  * Used as a fallback for extracting documents when XML parsing fails
  */
@@ -413,6 +433,7 @@ export const xmlUtils = {
   addCdataToTagsMultiple,
   extractTextFromTag,
   extractLatexFromMarkdown,
+  extractNamedTextFromTag,
   extractMultipleTextFromTag,
   filterTagsFromText,
   extractContentFromXMLbyTag,

@@ -66,6 +66,19 @@ export class XmlOutputManager {
         );
         return markdownFallback;
       }
+      const byName = xmlUtils.extractNamedTextFromTag(
+        outputContent,
+        documentTag,
+        path.basename(this.agentConfig.inputFile),
+      );
+      if (byName) {
+        this.logger.info(
+          `Recovered ${documentTag} from named document tag`,
+          undefined,
+          MESSAGE_TYPES.INTERNAL,
+        );
+        return byName;
+      }
       this.logger.debug(
         `No ${documentTag} found in output file using fallback method`,
         undefined,

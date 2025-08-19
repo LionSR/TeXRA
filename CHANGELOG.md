@@ -10,6 +10,7 @@ All notable changes to this project will be documented in this file.
 - Automatically resize large images (> 2000px) before base64 encoding to optimize memory usage and performance
 - Added configurable `texra.maxImageDimension` setting to control the maximum image size threshold
 - Add "New" button in main view to reset all fields.
+- Recover single-output files from `<document name="…">` tags when other fallbacks fail.
 
 ### Bug Fixes
 
