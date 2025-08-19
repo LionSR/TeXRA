@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Features
+
+- Parse LaTeX source and aux files to collect math macros for latexdiff.
+
 ## [0.33.0] - 2025-08-18
 
 ### Features

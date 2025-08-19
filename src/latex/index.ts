@@ -19,6 +19,8 @@ export { getTeXCountStats } from './texcount';
 
 // Export latexdiff service
 export { LaTeXdiffService } from './latexdiff';
+// Export latexdiff helpers
+export { collectMathMacros } from './latexdiff/mathMacroDetector';
 
 export { ArxivSourceProcessor, arxivProcessor } from './arxivProcessor';
 
