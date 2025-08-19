@@ -9,6 +9,7 @@ import * as logger from '@logger/logUtils';
 import { AbsoluteFS, GlobalStorageFS, StorageFS } from '@utils/files';
 import { GlobalStateKey, globalSM } from '@common/state/stateManager';
 import { safeExecuteCommand } from '@utils/system';
+import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 
 /**
  * Copies default agent files from the extension resources to the global storage directory
@@ -180,17 +181,22 @@ export async function configureLatexSettings() {
         'extension',
         'LaTeX Workshop extension not found, prompting installation',
       );
-      const selection = await vscode.window.showInformationMessage(
-        'LaTeX Workshop extension is recommended for full TeXRA functionality. Install now?',
-        'Install',
+      await showInstructionWithSuppress(
+        'latex-workshop-install',
+        'LaTeX Workshop extension is recommended for full TeXRA functionality (LaTeX compilation, PDF preview, and IntelliSense). Install now?',
+        [
+          {
+            title: 'Install',
+            callback: async () => {
+              await safeExecuteCommand(
+                'workbench.extensions.installExtension',
+                ['James-Yu.latex-workshop'],
+                'extension',
+              );
+            },
+          },
+        ],
       );
-      if (selection === 'Install') {
-        await safeExecuteCommand(
-          'workbench.extensions.installExtension',
-          ['James-Yu.latex-workshop'],
-          'extension',
-        );
-      }
     }
   } catch (err) {
     logger.error('extension', `Error configuring LaTeX settings: ${err}`);
