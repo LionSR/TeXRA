@@ -25,9 +25,20 @@ function showPackResult(result: FileOpResult, inputFile: string): void {
   switch (result.status) {
     case 'success':
       if (result.outputFolder) {
-        vscode.window.showInformationMessage(
-          `Files packed into ${result.outputFolder}`,
-        );
+        const openFolder = 'Open Folder';
+        vscode.window
+          .showInformationMessage(
+            `Files packed into ${result.outputFolder}`,
+            openFolder,
+          )
+          .then((selection) => {
+            if (selection === openFolder) {
+              void vscode.commands.executeCommand(
+                'revealFileInOS',
+                vscode.Uri.file(result.outputFolder!),
+              );
+            }
+          });
       }
       break;
     case 'noFiles':
