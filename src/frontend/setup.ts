@@ -8,6 +8,8 @@ import * as vscode from 'vscode';
 import * as logger from '@logger/logUtils';
 import { AbsoluteFS, GlobalStorageFS, StorageFS } from '@utils/files';
 import { GlobalStateKey, globalSM } from '@common/state/stateManager';
+import { safeExecuteCommand } from '@utils/system';
+import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 
 /**
  * Copies default agent files from the extension resources to the global storage directory
@@ -143,28 +145,22 @@ export async function configureLatexSettings() {
       );
 
       // Configure word wrap for LaTeX files
-      await updateIfUnset(
-        '[latex]',
-        { 'editor.wordWrap': 'on', 'files.autoSave': 'afterDelay' },
-      );
+      await updateIfUnset('[latex]', {
+        'editor.wordWrap': 'on',
+        'files.autoSave': 'afterDelay',
+      });
 
       // Also add word wrap for yaml files
-      await updateIfUnset(
-        '[yaml]',
-        { 'editor.wordWrap': 'on', 'files.autoSave': 'afterDelay' },
-      );
+      await updateIfUnset('[yaml]', {
+        'editor.wordWrap': 'on',
+        'files.autoSave': 'afterDelay',
+      });
 
       // Configure explorer settings to not automatically reveal build directory
-      await updateIfUnset(
-        'explorer.autoRevealExclude',
-        { 'build/': true },
-      );
+      await updateIfUnset('explorer.autoRevealExclude', { 'build/': true });
 
       // Disable automatic revealing of files in explorer
-      await updateIfUnset(
-        'explorer.autoReveal',
-        false,
-      );
+      await updateIfUnset('explorer.autoReveal', false);
 
       const isWindsurf = vscode.env.appName?.toLowerCase().includes('windsurf');
 
@@ -183,7 +179,23 @@ export async function configureLatexSettings() {
     } else {
       logger.info(
         'extension',
-        'LaTeX Workshop extension not found, skipping configuration',
+        'LaTeX Workshop extension not found, prompting installation',
+      );
+      await showInstructionWithSuppress(
+        'latex-workshop-install',
+        'LaTeX Workshop extension is recommended for full TeXRA functionality (LaTeX compilation, PDF preview, and IntelliSense). Install now?',
+        [
+          {
+            title: 'Install',
+            callback: async () => {
+              await safeExecuteCommand(
+                'workbench.extensions.installExtension',
+                ['James-Yu.latex-workshop'],
+                'extension',
+              );
+            },
+          },
+        ],
       );
     }
   } catch (err) {
