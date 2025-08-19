@@ -215,7 +215,9 @@ TeXRA automatically detects appropriate input files based on:
 
 ### LaTeX Workshop Integration
 
-If you use the popular [LaTeX Workshop](https://marketplace.visualstudio.com/items?itemName=James-Yu.latex-workshop) extension, TeXRA attempts to automatically configure some settings upon its first activation to ensure smoother integration and cleaner project structures. These defaults are applied only if the corresponding settings are not already defined:
+If you use the popular [LaTeX Workshop](https://marketplace.visualstudio.com/items?itemName=James-Yu.latex-workshop) extension, TeXRA attempts to automatically configure some settings upon its first activation to ensure smoother integration and cleaner project structures.
+If the extension isn't installed, TeXRA will offer to install it for a smoother experience.
+These defaults are applied only if the corresponding settings are not already defined:
 
 - **Output Directory**: Sets `latex-workshop.latex.outDir` to `%DIR%/build/`. This directs LaTeX compilation output (like `.aux`, `.log`, `.pdf` files) into a `build` subdirectory within your project, keeping your main directory tidy.
 
