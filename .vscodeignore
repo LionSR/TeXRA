@@ -33,12 +33,6 @@ CLAUDE.md
 
 !node_modules/@vscode/codicons/dist/**
 !node_modules/split.js/**
-!node_modules/katex/**
-!node_modules/@vscode/markdown-it-katex/**
-!node_modules/markdown-it/**
-!node_modules/markdown-it-highlightjs/**
-!node_modules/highlight.js/**
-!node_modules/he/**
 
 
 !resources/**
