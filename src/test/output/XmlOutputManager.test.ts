@@ -70,4 +70,26 @@ describe('XmlOutputManager markdown fallback', () => {
     await WorkspaceFS.delete(outputXml);
     await WorkspaceFS.delete(texPath);
   });
+
+  it('writes tex file from named document tag', async () => {
+    const logger = new AgentLogger('TestXmlOutput');
+    const manager = new XmlOutputManager(setting, config, logger);
+    const outputXml = 'named_document.xml';
+    const xmlContent =
+      '<document name="input.tex"><![CDATA[\\begin{document}\nhello\n\\end{document}]]></document>';
+
+    await WorkspaceFS.writeFile(outputXml, xmlContent);
+
+    const texPath = await manager.splitScratchpadOutputXml(
+      outputXml,
+      setting.documentTag,
+    );
+
+    const written = await WorkspaceFS.readFile('named_document.tex');
+    assert.ok(written.includes('hello'));
+    assert.ok(!written.includes('CDATA'));
+
+    await WorkspaceFS.delete(outputXml);
+    await WorkspaceFS.delete(texPath);
+  });
 });
