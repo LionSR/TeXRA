@@ -66,6 +66,19 @@ export class XmlOutputManager {
         );
         return markdownFallback;
       }
+      const documents = xmlUtils.extractMultipleTextFromTag(outputContent);
+      if (documents && documents.length > 0) {
+        const filename = path.basename(this.agentConfig.inputFile);
+        const match = documents.find((doc) => doc.name === filename);
+        if (match && match.content) {
+          this.logger.info(
+            `Recovered ${documentTag} from named document tag`,
+            undefined,
+            MESSAGE_TYPES.INTERNAL,
+          );
+          return match.content;
+        }
+      }
       this.logger.debug(
         `No ${documentTag} found in output file using fallback method`,
         undefined,
