@@ -2,36 +2,34 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.33.0] - 2025-08-19 🎂 Birthday Edition
 
 ### Features
 
-- Add `texra.includeToolUseAgents` setting to optionally show built-in tool-use agents in the agent dropdown.
-
-## [0.33.0] - 2025-08-18
-
-### Features
-
-- Show TeXRA task status in the VS Code status bar.
+- Show TeXRA task status in the VS Code status bar
 - Automatically resize large images (> 2000px) before base64 encoding to optimize memory usage and performance
 - Allow disabling LaTeX formatting and silencing missing `latexindent` warnings
 - Added configurable `texra.maxImageDimension` setting to control the maximum image size threshold
-- Add "New" button in main view to reset all fields.
-- Recover LaTeX from plain output between `\documentclass` and `\end{document}` when other markers are missing.
+- Add "New" button in main view to reset all fields
+- Add `texra.includeToolUseAgents` setting to optionally show built-in tool-use agents in the agent dropdown
+- Prompt users to install LaTeX Workshop extension with "Never remind again" option for enhanced LaTeX features
 
 ### Bug Fixes
 
-- Stabilize status bar command registration and task cancellation handling.
-- Detect MSYS2 Perl directories on Windows so `latexdiff` can find `perl`.
-- Prevent first task from being marked as error when progress view loads.
-- Recover TeX from named `document` tags when standard extraction fails.
-- Rename OpenRouter alias `anthropic/claude-opus-4.1:thinking` to `anthropic/claude-opus-4.1`.
+- Stabilize status bar command registration and task cancellation handling
+- Detect MSYS2 Perl directories on Windows so `latexdiff` can find `perl`
+- Prevent first task from being marked as error when progress view loads
+- Rename OpenRouter alias `anthropic/claude-opus-4.1:thinking` to `anthropic/claude-opus-4.1`
+- Fixed DeepSeek model streaming response aggregation
+- Fixed Google model streaming to preserve finish reason correctly
+- Respect existing LaTeX Workshop configuration when updating settings
 
 ### Improvements
 
-- Enhanced image processing with better error handling and temporary file cleanup
-- Added dimension validation when parsing image metadata
-- Improved logging to include actual image dimensions when resizing
+- Enhanced image processing with dimension validation, better error handling, and improved logging
+- Enhanced LaTeX environment setup with better extension recommendations
+- Improved streaming API stability for various model providers
+- Increased robustness of LaTeX extraction from agent responses
 
 ## [0.32.10] - 2025-08-13
 
