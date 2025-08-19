@@ -20,7 +20,11 @@ logger.initialize(CHANNEL);
 export async function runLatexIndent(filePath: string): Promise<boolean> {
   try {
     // Check if latexindent is installed
-    if (!(await checkToolInstalled('latexindent'))) {
+    const showWarning = getConfig<boolean>(
+      'latex.showLatexindentWarning',
+      true,
+    );
+    if (!(await checkToolInstalled('latexindent', showWarning))) {
       return false;
     }
 
