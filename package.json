@@ -163,7 +163,7 @@
             "description": "Enable streaming for xAI models via OpenAI-compatible API. Overrides the global useStreaming setting.",
             "scope": "resource"
           },
-          "texra.model.useStreamingDeepSeek": {
+          "texra.model.useStreamingDeepseek": {
             "type": "boolean",
             "default": false,
             "description": "Enable streaming for DeepSeek models via OpenAI-compatible API. Overrides the global useStreaming setting.",
@@ -433,24 +433,6 @@
       {
         "title": "LaTeX",
         "properties": {
-          "texra.latex.mathMarkup": {
-            "type": "string",
-            "default": "coarse",
-            "enum": [
-              "off",
-              "whole",
-              "coarse",
-              "fine"
-            ],
-            "enumDescriptions": [
-              "Suppress markup for math environments. Deleted equations will not appear in diff file.",
-              "Differencing on the level of whole equations. Even trivial changes cause the whole equation to be marked changed.",
-              "Detect changes within equations with coarse granularity; changes in equation type appear as a change to the complete equation.",
-              "Detect small changes in equations and mark up at fine granularity."
-            ],
-            "description": "Determine granularity of markup in displayed math environments for latexdiff",
-            "order": 7
-          }
         }
       },
       {
@@ -1105,7 +1087,7 @@
         {
           "type": "webview",
           "id": "texra.mainView",
-          "name": "Your Favourite TeXRA",
+          "name": "TeXRA",
           "contextualTitle": "TeXRA"
         },
         {
