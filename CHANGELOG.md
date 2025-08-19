@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 - Allow disabling LaTeX formatting and silencing missing `latexindent` warnings
 - Added configurable `texra.maxImageDimension` setting to control the maximum image size threshold
 - Add "New" button in main view to reset all fields.
+- Prompt to install LaTeX Workshop when the extension is missing.
 
 ### Bug Fixes
 

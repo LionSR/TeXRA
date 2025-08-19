@@ -18,6 +18,7 @@ export enum WorkspaceStateKey {
 
 export enum GlobalStateKey {
   LAST_KNOWN_VERSION = 'lastKnownVersion',
+  LATEX_WORKSHOP_PROMPTED = 'latexWorkshopPrompted',
 }
 
 // Prefix used for per-instruction suppression flags

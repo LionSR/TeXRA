@@ -143,28 +143,22 @@ export async function configureLatexSettings() {
       );
 
       // Configure word wrap for LaTeX files
-      await updateIfUnset(
-        '[latex]',
-        { 'editor.wordWrap': 'on', 'files.autoSave': 'afterDelay' },
-      );
+      await updateIfUnset('[latex]', {
+        'editor.wordWrap': 'on',
+        'files.autoSave': 'afterDelay',
+      });
 
       // Also add word wrap for yaml files
-      await updateIfUnset(
-        '[yaml]',
-        { 'editor.wordWrap': 'on', 'files.autoSave': 'afterDelay' },
-      );
+      await updateIfUnset('[yaml]', {
+        'editor.wordWrap': 'on',
+        'files.autoSave': 'afterDelay',
+      });
 
       // Configure explorer settings to not automatically reveal build directory
-      await updateIfUnset(
-        'explorer.autoRevealExclude',
-        { 'build/': true },
-      );
+      await updateIfUnset('explorer.autoRevealExclude', { 'build/': true });
 
       // Disable automatic revealing of files in explorer
-      await updateIfUnset(
-        'explorer.autoReveal',
-        false,
-      );
+      await updateIfUnset('explorer.autoReveal', false);
 
       const isWindsurf = vscode.env.appName?.toLowerCase().includes('windsurf');
 
@@ -185,6 +179,24 @@ export async function configureLatexSettings() {
         'extension',
         'LaTeX Workshop extension not found, skipping configuration',
       );
+      const prompted = globalSM.get<boolean>(
+        GlobalStateKey.LATEX_WORKSHOP_PROMPTED,
+      );
+      if (!prompted) {
+        const install = 'Install';
+        const choice = await vscode.window.showInformationMessage(
+          'LaTeX Workshop is recommended for LaTeX compilation and preview. Install now?',
+          install,
+          'Dismiss',
+        );
+        if (choice === install) {
+          await vscode.commands.executeCommand(
+            'workbench.extensions.installExtension',
+            'James-Yu.latex-workshop',
+          );
+        }
+        await globalSM.update(GlobalStateKey.LATEX_WORKSHOP_PROMPTED, true);
+      }
     }
   } catch (err) {
     logger.error('extension', `Error configuring LaTeX settings: ${err}`);
