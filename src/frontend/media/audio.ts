@@ -10,7 +10,6 @@ import { execa, type Subprocess } from 'execa';
 import * as logger from '@logger/logUtils';
 
 // Local imports - utils
-import { SecretManager } from '@frontend/secretManager';
 import { AbsoluteFS, StorageFS } from '@utils/files';
 import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
 import { getConfig } from '@utils/config/configUtils';
@@ -19,6 +18,12 @@ import {
   extendEnvPath,
   findToolInCommonPaths,
 } from '@utils/system/platformPaths';
+
+// Local imports - agent handlers
+import { ModelHandlerOpenAI } from '@agent/modelHandlers/modelHandlerOpenAI';
+
+// Local imports - model configs
+import { MODEL_CONFIGS } from '@model/ModelRegistry';
 
 const CHANNEL = 'AudioUtils';
 logger.initialize(CHANNEL);
@@ -185,9 +190,9 @@ export async function stopRecordingAndTranscribe(
       };
     }
 
-    // Transcribe the audio
-    const apiKey = await SecretManager.getApiKey('openai');
-    const client = new OpenAI({ apiKey });
+    // Transcribe the audio using model handler for proxy support
+    const handler = new ModelHandlerOpenAI(MODEL_CONFIGS['gpt4o']);
+    const client = await handler.getClient();
     const result = await client.audio.transcriptions.create({
       file: AbsoluteFS.createReadStream(recordingPath),
       model: 'gpt-4o-transcribe',
