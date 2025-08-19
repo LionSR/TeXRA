@@ -93,15 +93,18 @@ export class MainViewContentProvider extends BaseViewContentProvider {
 
   protected getTemplateVariables(): Record<string, any> {
     const agents = getConfig<string[]>('agents', []);
+    const includeToolUse = getConfig<boolean>('includeToolUseAgents', false);
     const toolUseDir = GlobalStorageFS.fullPath('tool_use_agents');
     let extraAgents: string[] = [];
-    try {
-      const files = AbsoluteFS.readDirSync(toolUseDir);
-      extraAgents = files
-        .filter((f) => f.endsWith('.yaml'))
-        .map((f) => path.basename(f, '.yaml'));
-    } catch {
-      extraAgents = [];
+    if (includeToolUse) {
+      try {
+        const files = AbsoluteFS.readDirSync(toolUseDir);
+        extraAgents = files
+          .filter((f) => f.endsWith('.yaml'))
+          .map((f) => path.basename(f, '.yaml'));
+      } catch {
+        extraAgents = [];
+      }
     }
     const allAgents = Array.from(new Set([...agents, ...extraAgents]));
     const agentOptions = allAgents
