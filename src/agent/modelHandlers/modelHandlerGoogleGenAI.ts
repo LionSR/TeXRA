@@ -8,6 +8,7 @@ import {
   Content,
   GenerateContentResponse,
   FinishReason,
+  type Candidate,
   File,
   createPartFromUri,
   createPartFromFunctionCall,
@@ -321,13 +322,19 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         const stream = await chat.sendMessageStream(streamParams);
 
         const fullParts: Part[] = [];
+        let lastCandidate: Candidate | undefined;
+        let finalUsage: GenerateContentResponseUsageMetadata | undefined;
         const finalResponse = new GenerateContentResponse();
         for await (const chunk of stream) {
-          if (chunk.candidates?.[0]?.content?.parts) {
-            fullParts.push(...chunk.candidates[0].content.parts);
+          if (chunk.candidates) {
+            lastCandidate = chunk.candidates[0];
+            const parts = chunk.candidates[0]?.content?.parts;
+            if (parts) {
+              fullParts.push(...parts);
+            }
           }
           if (chunk.usageMetadata) {
-            finalResponse.usageMetadata = chunk.usageMetadata;
+            finalUsage = chunk.usageMetadata;
           }
           if (chunk.responseId) finalResponse.responseId = chunk.responseId;
           if (chunk.createTime) finalResponse.createTime = chunk.createTime;
@@ -342,10 +349,15 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
           throw new Error('Stream yielded no chunks');
         }
 
+        finalResponse.usageMetadata = finalUsage;
         finalResponse.candidates = [
           {
             content: { role: 'model', parts: fullParts },
-            finishReason: FinishReason.STOP, // there is no good choice, could be length, but let us just put this.
+            finishReason:
+              lastCandidate?.finishReason ??
+              FinishReason.FINISH_REASON_UNSPECIFIED,
+            finishMessage: lastCandidate?.finishMessage,
+            safetyRatings: lastCandidate?.safetyRatings,
           },
         ];
 
