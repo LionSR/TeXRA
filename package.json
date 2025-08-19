@@ -454,25 +454,32 @@
             "type": "string",
             "enum": [
               "latexindent",
-              "tex-fmt"
+              "tex-fmt",
+              "none"
             ],
             "default": "latexindent",
-            "description": "LaTeX formatter to use when formatting files",
+            "description": "LaTeX formatter to use when formatting files ('none' to disable)",
             "order": 1
+          },
+          "texra.latex.showLatexindentWarning": {
+            "type": "boolean",
+            "default": true,
+            "description": "Show warning when latexindent is not installed",
+            "order": 2
           },
           "texra.latex.latexindentConfig": {
             "type": "string",
             "default": "",
             "description": "Path to latexindent configuration file",
             "editPresentation": "singlelineText",
-            "order": 2
+            "order": 3
           },
           "texra.latex.texfmtConfig": {
             "type": "string",
             "default": "",
             "description": "Path to tex-fmt configuration file",
             "editPresentation": "singlelineText",
-            "order": 3
+            "order": 4
           }
         }
       },
