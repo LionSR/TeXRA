@@ -1,19 +1,22 @@
-// Local imports - log
-import { AgentLogger } from '@logger/AgentLogger';
-import { bus } from '@eventBus/ProgressEventBus';
+// Third-party imports
+import { ResponseUsage } from 'openai/resources/responses/responses';
+
+// Local imports - agent
 import { AgentStateGlobal } from '@agent/core/AgentState';
-import type { IModelHandler } from '@agent/modelHandlers';
 import {
   ExtendedCompletionUsage,
   AnthropicUsage,
   GenerateContentResponseUsageMetadata,
 } from '@agent/core/ResponseUsage';
-import { ResponseUsage } from 'openai/resources/responses/responses';
+import type { IModelHandler } from '@agent/modelHandlers';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/modelHandlerOpenAIResponse';
 import type {
   TokenUsageStats,
   ExtendedTokenUsageStats,
 } from '@agent/types/UsageTypes';
+import { bus } from '@eventBus/ProgressEventBus';
+// Local imports - log
+import { AgentLogger } from '@logger/AgentLogger';
 
 /**
  * Handles recording usage statistics to the log and progress view.

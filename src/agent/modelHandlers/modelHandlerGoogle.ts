@@ -1,17 +1,20 @@
+// Third-party imports
 // Standard library imports
 // (none needed)
 
 // Third-party imports
 import OpenAI from 'openai';
+import type { CompletionUsage } from 'openai/resources/completions';
 
-// Local imports - agent components
-import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
+// Local imports - agent
 import { hasEndTag } from '../core/AgentDataclass';
 import {
   OpenAIAPIResponseUsage,
   GenerateContentResponseUsageMetadata,
 } from '../core/ResponseUsage';
-import type { CompletionUsage } from 'openai/resources/completions';
+
+// Local imports - agent components
+import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 import type { ProviderStopReason } from './types/StopReasonTypes';
 
 /**

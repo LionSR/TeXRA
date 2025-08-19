@@ -1,18 +1,21 @@
 // Standard library imports
+// Standard library imports
 import * as path from 'path';
 
 // Third-party imports
-import * as vscode from 'vscode';
-import * as logger from '@logger/logUtils';
 
+// Third-party imports
+import * as vscode from 'vscode';
+
+// Local imports - explorer
+import { FileItem } from './FileItem';
 import { showLoggedErrorMessage } from '@common/errors/errorHandlingUtils';
 
 // Local imports
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
-import { AbsoluteFS } from '@utils/files';
-
-import { FileItem } from './FileItem';
 import { validateYamlAndPromptAdd } from '@frontend/agents/register';
+import * as logger from '@logger/logUtils';
+import { AbsoluteFS } from '@utils/files';
 
 const NEW_AGENT_TEMPLATE = `# --- Agent Inheritance (Optional) ---
 # inherits: base

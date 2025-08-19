@@ -1,13 +1,15 @@
+// Standard library imports
 import * as path from 'path';
 
+// Local imports - agent
 import { AgentSetting } from '@agent/core/AgentDataclass';
+import { LaTeXdiffService, LaTeXdiffResult } from '@latex/latexdiff';
+import { compileLatex2Pdf } from '@latex/texTools';
 import { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
-import { objectToLogString } from '@utils/text/stringUtils';
 import { createFileMapping } from '@utils/files';
-import { compileLatex2Pdf } from '@latex/texTools';
 import { checkToolInstalled } from '@utils/system';
-import { LaTeXdiffService, LaTeXdiffResult } from '@latex/latexdiff';
+import { objectToLogString } from '@utils/text/stringUtils';
 
 export class LatexDiffManager {
   private readonly latexdiffService: LaTeXdiffService;

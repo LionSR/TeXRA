@@ -1,9 +1,12 @@
+// Third-party imports
 // Standard library imports
 // (none needed)
 
 // Third-party imports
 import { diff_match_patch } from 'diff-match-patch';
 import * as difflib from 'difflib';
+
+// Local imports - agent
 
 // Local imports - log
 import * as logger from '@logger/logUtils';

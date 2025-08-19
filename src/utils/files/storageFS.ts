@@ -1,5 +1,8 @@
 // Third-party imports
+// Third-party imports
 import * as vscode from 'vscode';
+
+// Local imports - utils
 
 // Local imports - fs
 import { RelativeFS } from './relativeFS';

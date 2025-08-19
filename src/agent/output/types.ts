@@ -1,3 +1,4 @@
+// Local imports - agent
 import type { DiffStats } from '@agent/types/DiffTypes';
 
 export interface NamedOutputFile {

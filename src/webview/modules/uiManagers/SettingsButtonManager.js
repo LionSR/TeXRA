@@ -1,16 +1,17 @@
-// Local imports
-import { vscode } from '@common/webviewContext.js';
-import { safeGetElementById } from '@common/domUtils.js';
+// Local imports - webview
 import {
   CHECK_BOXES_AUTO_EXTRACT,
   CHECK_BOXES_TOOL_USE,
   CHECK_BOXES,
 } from '../constants.js';
+import { ELEMENT_IDS } from '../constants.js';
 import { handleCheckboxChange } from '../fileHandlers.js';
 import { mainViewState } from '../mainViewState.js';
-import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
-import { ELEMENT_IDS } from '../constants.js';
 import { BaseUIManager } from './BaseUIManager.js';
+import { safeGetElementById } from '@common/domUtils.js';
+import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
+// Local imports
+import { vscode } from '@common/webviewContext.js';
 
 export class SettingsButtonManager extends BaseUIManager {
   constructor(

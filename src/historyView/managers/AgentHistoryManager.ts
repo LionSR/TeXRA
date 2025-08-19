@@ -1,13 +1,18 @@
-// Third-party imports
-import * as vscode from 'vscode';
+// Standard library imports
 
 // Standard library imports
 import { randomUUID } from 'crypto';
 
+// Third-party imports
+// Third-party imports
+import * as vscode from 'vscode';
+
+// Local imports - history view
+
 // Local imports
 import type { AgentConfig } from '@agent/core/AgentConfig';
-import { workspaceSM } from '@common/state/stateManager';
 import type { ExecutionId } from '@agent/types/IdentifierTypes';
+import { workspaceSM } from '@common/state/stateManager';
 
 /**
  * Represents a historical agent execution
