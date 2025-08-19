@@ -660,7 +660,8 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     let responseText = '';
     if (candidate?.content?.parts) {
       responseText = candidate.content.parts
-        .filter((part) => !!part.text)
+        // Exclude reasoning/thought blocks from the returned text
+        .filter((part) => !!part.text && !part.thought)
         .map((part: Part) => part.text ?? '')
         .join('')
         .trim();
