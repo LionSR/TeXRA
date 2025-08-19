@@ -16,6 +16,7 @@ All notable changes to this project will be documented in this file.
 - Stabilize status bar command registration and task cancellation handling.
 - Detect MSYS2 Perl directories on Windows so `latexdiff` can find `perl`.
 - Prevent first task from being marked as error when progress view loads.
+- Recover TeX from named `document` tags when standard extraction fails.
 
 ### Improvements
 
