@@ -28,6 +28,7 @@ tsconfig.json
 venv/**
 docs/**
 prototypes/**
+test/**
 AGENTS.md
 CLAUDE.md
 
@@ -65,4 +66,5 @@ CLAUDE.md
 !src/progressView/*.html
 !src/progressView/*.css
 
+.env
 
