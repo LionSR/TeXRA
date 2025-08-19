@@ -28,6 +28,7 @@ tsconfig.json
 venv/**
 docs/**
 prototypes/**
+test/**
 AGENTS.md
 CLAUDE.md
 
