@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 - Allow disabling LaTeX formatting and silencing missing `latexindent` warnings
 - Added configurable `texra.maxImageDimension` setting to control the maximum image size threshold
 - Add "New" button in main view to reset all fields.
+- Recover LaTeX from plain output between `\documentclass` and `\end{document}` when other markers are missing.
 
 ### Bug Fixes
 

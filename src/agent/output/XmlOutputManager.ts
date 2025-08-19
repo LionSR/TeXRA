@@ -79,6 +79,16 @@ export class XmlOutputManager {
           return match.content;
         }
       }
+      const latexFallback =
+        xmlUtils.extractLatexBetweenDocumentClass(outputContent);
+      if (latexFallback) {
+        this.logger.info(
+          `Recovered ${documentTag} from \\documentclass block`,
+          undefined,
+          MESSAGE_TYPES.INTERNAL,
+        );
+        return latexFallback;
+      }
       this.logger.debug(
         `No ${documentTag} found in output file using fallback method`,
         undefined,
