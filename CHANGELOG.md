@@ -12,6 +12,7 @@ All notable changes to this project will be documented in this file.
 - Added configurable `texra.maxImageDimension` setting to control the maximum image size threshold
 - Add "New" button in main view to reset all fields.
 - Prompt to install LaTeX Workshop when the extension is missing.
+- Recover LaTeX from plain output between `\documentclass` and `\end{document}` when other markers are missing.
 
 ### Bug Fixes
 
@@ -19,6 +20,7 @@ All notable changes to this project will be documented in this file.
 - Detect MSYS2 Perl directories on Windows so `latexdiff` can find `perl`.
 - Prevent first task from being marked as error when progress view loads.
 - Recover TeX from named `document` tags when standard extraction fails.
+- Rename OpenRouter alias `anthropic/claude-opus-4.1:thinking` to `anthropic/claude-opus-4.1`.
 
 ### Improvements
 

@@ -29,7 +29,7 @@ export const ANTHROPIC_MODELS: Record<string, ModelConfig> = {
   opus41T: {
     name: 'opus41T',
     fullName: 'claude-opus-4-1-20250805',
-    openrouterFullName: 'anthropic/claude-opus-4.1:thinking',
+    openrouterFullName: 'anthropic/claude-opus-4.1',
     provider: ModelProvider.ANTHROPIC,
     maxOutputTokens: 32000, // Official Claude Opus 4.1 limit - streaming recommended for large outputs
     contextWindow: 200000,
