@@ -180,7 +180,7 @@ export class ModelHandlerOpenAI extends ModelHandler<
                   content: fullContent,
                   reasoning_content: reasoning,
                 },
-                finish_reason: lastChunk?.choices?.[0]?.finish_reason,
+                finish_reason: lastChunk?.choices?.[0]?.finish_reason ?? OPENAI_CHAT_FINISH.STOP,
               },
             ],
           };
