@@ -1,5 +1,4 @@
-// Local imports - log
-import type { AgentLogger } from '@logger/AgentLogger';
+// Local imports - agent
 
 // Local imports - agent components
 import type { AgentConfig } from '../../core/AgentConfig';
@@ -7,9 +6,11 @@ import { AgentSetting } from '../../core/AgentDataclass';
 import { AgentStateRound, AgentStateGlobal } from '../../core/AgentState';
 import { ToolState } from '../../core/ToolState';
 import type { MediaEntry } from '../../utils/mediaTypes';
-import type { ModelConfig, ModelCapabilities, ToolDefinition } from '@model';
-import type { ProviderStopReason } from './StopReasonTypes';
 import type { ProviderMessage } from './ProviderMessage';
+import type { ProviderStopReason } from './StopReasonTypes';
+// Local imports - log
+import type { AgentLogger } from '@logger/AgentLogger';
+import type { ModelConfig, ModelCapabilities, ToolDefinition } from '@model';
 
 /**
  * Common interface implemented by all model handlers.

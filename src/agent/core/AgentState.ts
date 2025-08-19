@@ -1,3 +1,10 @@
+// Local imports - agent
+
+// Local imports - agent components
+import {
+  OpenAIAPIResponseUsage,
+  AnthropicAPIResponseUsage,
+} from './ResponseUsage';
 // Standard library imports
 // (none needed)
 
@@ -6,12 +13,6 @@
 
 // Local imports - log
 import * as logger from '@logger/logUtils';
-
-// Local imports - agent components
-import {
-  OpenAIAPIResponseUsage,
-  AnthropicAPIResponseUsage,
-} from './ResponseUsage';
 
 const CHANNEL = 'Agent';
 logger.initialize(CHANNEL);

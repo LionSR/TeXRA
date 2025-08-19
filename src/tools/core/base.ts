@@ -1,4 +1,7 @@
+// Third-party imports
 import { z } from 'zod';
+
+// Local imports - tools
 import type { ToolDefinition } from '@model';
 import { ToolResult } from '@tools/result';
 

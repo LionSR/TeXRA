@@ -1,8 +1,12 @@
 // Standard library imports
+// Standard library imports
 import { Buffer } from 'node:buffer';
 
 // Third-party imports
+
+// Third-party imports
 import OpenAI, { toFile } from 'openai';
+import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 import type {
   Response,
   ResponseUsage,
@@ -13,19 +17,20 @@ import type {
   ResponseFunctionToolCall,
   ResponseInputItem,
 } from 'openai/resources/responses/responses';
-import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
+
+// Local imports - agent
+import { ResponseUsageFactory } from '../core/ResponseUsage';
+import { ToolState } from '../core/ToolState';
 
 // Local imports - base handler
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
-import { ResponseUsageFactory } from '../core/ResponseUsage';
-import { calculateTokenPrice } from '@agent/utils/priceUtils';
-import { ToolState } from '../core/ToolState';
-import { K_SLICE } from '@utils/config';
+import { toOpenAIResponseTools } from './toolConversion';
 import type { ProviderStopReason } from './types/StopReasonTypes';
 import { OPENAI_CHAT_FINISH } from './types/StopReasonTypes';
-import type { ToolDefinition } from '@model';
-import { toOpenAIResponseTools } from './toolConversion';
+import { calculateTokenPrice } from '@agent/utils/priceUtils';
 import { logErrorMessage } from '@common/errors/errorHandlingUtils';
+import type { ToolDefinition } from '@model';
+import { K_SLICE } from '@utils/config';
 
 // import { ResponseCreateParams } from 'openai/src/resources/responses/response';
 // this is incorrect now, but would be nice to use

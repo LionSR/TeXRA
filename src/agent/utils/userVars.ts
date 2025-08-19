@@ -1,20 +1,23 @@
+// Standard library imports
 // Utility functions for building user variables for prompts
 
 // Standard library imports
 import * as path from 'path';
 
-// Local imports
-import { AgentLogger } from '@logger/AgentLogger';
-import { WorkspaceFS } from '@utils/files';
-import { setVarFromFile } from '@frontend/files/vars';
+// Local imports - agent
+import type { AgentConfig } from '../core/AgentConfig';
+import { AgentSetting } from '../core/AgentDataclass';
+import type { IModelHandler } from '@agent/modelHandlers';
 import {
   getXmlFormatFromFiles,
   getListOfFiles,
 } from '@agent/utils/promptUtils';
+import { setVarFromFile } from '@frontend/files/vars';
+
+// Local imports
+import { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
-import type { AgentConfig } from '../core/AgentConfig';
-import { AgentSetting } from '../core/AgentDataclass';
-import type { IModelHandler } from '@agent/modelHandlers';
+import { WorkspaceFS } from '@utils/files';
 
 /**
  * Build all user variables needed for prompt rendering.

@@ -1,47 +1,52 @@
 // Standard library imports
+// Standard library imports
 import * as path from 'path';
 
 // Third-party imports
-// (none needed)
+import { FinishReason } from '@google/genai';
 
-// Local imports - log
-import { AgentLogger } from '@logger/AgentLogger';
+// Local imports - agent
 
-// Local imports - utilities
-import { WorkspaceFS, AbsoluteFS, getMimeType } from '@utils/files';
-import { MESSAGE_TYPES } from '@logger/messageTypes';
-import {
-  getBase64EncodedMedia,
-  countPdfPages,
-  processPdf2Png,
-} from '@frontend/media/img';
-import { checkMultipleToolsInstalled } from '@utils/system';
-import { getConfig } from '@utils/config';
-import { normalizeUrl } from '@utils/urlUtils';
-import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
+// Local imports - agent components
+import type { AgentConfig } from '../core/AgentConfig';
+import { AgentSetting, hasEndTag } from '../core/AgentDataclass';
+import { AgentStateRound, AgentStateGlobal } from '../core/AgentState';
+import { ToolState } from '../core/ToolState';
+import type { IModelHandler } from './types/IModelHandler';
+import type { ProviderMessage } from './types/ProviderMessage';
 import type { ProviderStopReason } from './types/StopReasonTypes';
 import {
   ANTHROPIC_STOP,
   OPENAI_CHAT_FINISH,
   MCP_STOP,
 } from './types/StopReasonTypes';
-import { FinishReason } from '@google/genai';
-import type { IModelHandler } from './types/IModelHandler';
-import type { ProviderMessage } from './types/ProviderMessage';
+import { MediaEntry } from '@agent/utils/mediaTypes';
+import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
+import {
+  getBase64EncodedMedia,
+  countPdfPages,
+  processPdf2Png,
+} from '@frontend/media/img';
 import { SecretManager, ApiProvider } from '@frontend/secretManager';
 
-// Local imports - agent components
-import type { AgentConfig } from '../core/AgentConfig';
-import { AgentSetting, hasEndTag } from '../core/AgentDataclass';
-import { AgentStateRound, AgentStateGlobal } from '../core/AgentState';
+// Third-party imports
+// (none needed)
+
+// Local imports - log
+import { AgentLogger } from '@logger/AgentLogger';
+import { MESSAGE_TYPES } from '@logger/messageTypes';
+import type { ToolDefinition } from '@model';
 import {
   ModelConfig,
   ModelProvider,
   ModelCapabilities,
 } from '@model/ModelConfig';
-import type { ToolDefinition } from '@model';
-import { ToolState } from '../core/ToolState';
-import { MediaEntry } from '@agent/utils/mediaTypes';
+import { getConfig } from '@utils/config';
+
+// Local imports - utilities
+import { WorkspaceFS, AbsoluteFS, getMimeType } from '@utils/files';
+import { checkMultipleToolsInstalled } from '@utils/system';
+import { normalizeUrl } from '@utils/urlUtils';
 
 // Default continuation limits
 const DEFAULT_CONTINUE_LIMIT = 10;

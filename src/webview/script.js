@@ -1,13 +1,14 @@
-import { mainViewState } from './modules/mainViewState.js';
-import {
-  setup as setupHandlers,
-  cleanup as cleanupHandlers,
-} from './modules/messageHandlers.js';
+// Local imports - webview
 import {
   mainViewDomHandler,
   instructionManager,
   toggleManager,
 } from './modules/domHandlers.js';
+import { mainViewState } from './modules/mainViewState.js';
+import {
+  setup as setupHandlers,
+  cleanup as cleanupHandlers,
+} from './modules/messageHandlers.js';
 import { initializeIconButtons } from '@common/iconButtonInitializer.js';
 
 // Register handlers immediately so early messages aren't missed

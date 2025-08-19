@@ -1,4 +1,6 @@
+// Local imports - replacement
 import { ReplacementCategory } from '../types';
+
 export const PERSONAL_STYLE_REPLACEMENTS: ReplacementCategory = {
   name: 'personal_style',
   description:

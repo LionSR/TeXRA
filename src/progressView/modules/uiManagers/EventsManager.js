@@ -1,8 +1,12 @@
 // Third-party imports
+// Third-party imports
 import Split from 'split.js';
+
+// Local imports - progress view
+import { COMMANDS, SPLIT_SIZES, ELEMENT_IDS } from '../constants.js';
+
 // Local imports
 import { progressViewState } from '../progressViewState.js';
-import { COMMANDS, SPLIT_SIZES, ELEMENT_IDS } from '../constants.js';
 import {
   CHEVRON_RIGHT_CLASS,
   CHEVRON_DOWN_CLASS,

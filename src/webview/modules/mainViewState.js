@@ -1,4 +1,4 @@
-import { WebviewStateManager } from '@common/webviewState.js';
+// Local imports - webview
 import {
   MULTIPLE_SELECTIONS,
   CHECK_BOXES,
@@ -8,7 +8,6 @@ import {
   ELEMENT_IDS,
 } from './constants.js';
 import { fileList } from './uiManagers/FileList.js';
-import { CHEVRON_DOWN_CLASS } from '@common/webviewContext.js';
 import {
   safeGetElementValue,
   safeGetElementById,
@@ -18,6 +17,8 @@ import {
   setChevronIcon,
 } from '@common/domUtils.js';
 import { capitalize } from '@common/stringUtils.js';
+import { CHEVRON_DOWN_CLASS } from '@common/webviewContext.js';
+import { WebviewStateManager } from '@common/webviewState.js';
 
 /**
  * Manages persistent state for the main webview.

@@ -1,4 +1,6 @@
+// Local imports - replacement
 import { ReplacementCategory } from '../types';
+
 export const UNICODE_REPLACEMENTS: ReplacementCategory = {
   name: 'unicode',
   description:

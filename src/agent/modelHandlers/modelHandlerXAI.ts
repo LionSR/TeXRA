@@ -1,14 +1,17 @@
+// Third-party imports
 // Standard library imports
 // (none needed)
 
 // Third-party imports
 import OpenAI from 'openai';
 
+// Local imports - agent
+import { ToolState } from '../core/ToolState';
+
 // Local imports - agent components
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
-import { ToolState } from '../core/ToolState';
-import { K_SLICE } from '@utils/config';
 import type { ProviderStopReason } from './types/StopReasonTypes';
+import { K_SLICE } from '@utils/config';
 
 /**
  * Handler for xAI models using OpenAI-compatible API.
