@@ -326,7 +326,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         let finalUsage: GenerateContentResponseUsageMetadata | undefined;
         const finalResponse = new GenerateContentResponse();
         for await (const chunk of stream) {
-          if (chunk.candidates) {
+          if (chunk.candidates && chunk.candidates.length > 0) {
             lastCandidate = chunk.candidates[0];
             const parts = chunk.candidates[0]?.content?.parts;
             if (parts) {
