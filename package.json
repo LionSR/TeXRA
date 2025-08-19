@@ -1307,8 +1307,8 @@
   "homepage": "https://texra.ai",
   "dependencies": {
     "@anthropic-ai/sdk": "^0.60.0",
-    "@cantoo/pdf-lib": "^2.4.2",
-    "@google/genai": "^1.14.0",
+    "@cantoo/pdf-lib": "^2.4.3",
+    "@google/genai": "^1.15.0",
     "@modelcontextprotocol/sdk": "^1.17.3",
     "@vscode/codicons": "^0.0.39",
     "@vscode/markdown-it-katex": "^1.1.2",
