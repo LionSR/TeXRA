@@ -1,26 +1,31 @@
 // Standard library imports
+// Standard library imports
 import * as path from 'path';
+
+// Third-party imports
 
 // Third-party imports
 import * as vscode from 'vscode';
 import { workspace } from 'vscode';
 
-// Local imports - log
-import * as logger from '@logger/logUtils';
-import { uncapitalize } from '@frontend/ui/messageUtils';
-import { showLoggedMessage } from '@common/errors/errorHandlingUtils';
-
-// Local imports - utilities
-import { WorkspaceFS } from '@utils/files';
-import { getConfig } from '@utils/config';
-import { fileLister } from '@frontend/files/fileLister';
-
-// Local imports - commands
-import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
+// Local imports - webview
+import { loadAgentSettingAndPrompts } from '@agent/runtime/agentLoad';
 
 // Local imports - agent
 import { getAgentPath } from '@agent/runtime/executeAgent';
-import { loadAgentSettingAndPrompts } from '@agent/runtime/agentLoad';
+import { showLoggedMessage } from '@common/errors/errorHandlingUtils';
+
+// Local imports - commands
+import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
+import { fileLister } from '@frontend/files/fileLister';
+import { uncapitalize } from '@frontend/ui/messageUtils';
+
+// Local imports - log
+import * as logger from '@logger/logUtils';
+import { getConfig } from '@utils/config';
+
+// Local imports - utilities
+import { WorkspaceFS } from '@utils/files';
 
 const CHANNEL = 'FileManager';
 logger.initialize(CHANNEL);

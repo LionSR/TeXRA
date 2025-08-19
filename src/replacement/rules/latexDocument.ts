@@ -1,4 +1,6 @@
+// Local imports - replacement
 import { ReplacementCategory } from '../types';
+
 export const LATEX_DOCUMENT_REPLACEMENTS: ReplacementCategory = {
   name: 'latex_document',
   description: 'Fixes for LaTeX document structure, code blocks, and cleanup',

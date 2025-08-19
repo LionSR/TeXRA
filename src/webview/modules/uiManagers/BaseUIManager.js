@@ -1,4 +1,6 @@
+// Local imports - webview
 import { safeGetElementById } from '@common/domUtils.js';
+
 export class BaseUIManager {
   constructor() {
     this._listeners = [];

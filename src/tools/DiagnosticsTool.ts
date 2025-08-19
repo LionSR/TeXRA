@@ -1,13 +1,16 @@
+// Third-party imports
 import { z } from 'zod';
+import { zodToJsonSchema } from 'zod-to-json-schema';
+
+// Local imports - tools
+import { BaseTool } from './core/base';
+import { ToolResult, ToolError } from './result';
 import {
   getLinterMessages,
   countDiagnosticsBySeverity,
 } from '@frontend/latex/linter';
 import * as logger from '@logger/logUtils';
-import { BaseTool } from './core/base';
-import { ToolResult, ToolError } from './result';
 import type { ToolDefinition } from '@model';
-import { zodToJsonSchema } from 'zod-to-json-schema';
 
 const CHANNEL = 'DiagnosticsTool';
 logger.initialize(CHANNEL);

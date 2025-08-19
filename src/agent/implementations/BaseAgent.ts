@@ -1,22 +1,25 @@
 // Standard library imports
+// Standard library imports
 import * as path from 'path';
 
-// Local imports - log
-import { AgentLogger } from '@logger/AgentLogger';
+// Local imports - agent
 
 // Local imports - agent components
 import type { AgentConfig } from '../core/AgentConfig';
 import { AgentPrompt, AgentSetting } from '../core/AgentDataclass';
+import { AgentStateGlobal } from '../core/AgentState';
 import { IAgent } from '../core/IAgent';
 import type { IModelHandler } from '../modelHandlers';
-import { buildUserVars } from '../utils/userVars';
 import { UsageMonitor } from '../utils/UsageMonitor';
-import { AgentStateGlobal } from '../core/AgentState';
+import { buildUserVars } from '../utils/userVars';
+import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
+
+// Local imports - log
+import { AgentLogger } from '@logger/AgentLogger';
 
 // Local imports - utilities
 import { SHORT_SLEEP_MS } from '@utils/config';
 import { sleep } from '@utils/helpers';
-import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
 
 /**
  * Minimal abstract base class providing shared setup and interruption logic.

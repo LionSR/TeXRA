@@ -1,12 +1,15 @@
 // Third-party imports
+// Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - log
-import * as logger from '@logger/logUtils';
+// Local imports - commands
 
 // Local imports - agent
 import { BaseAgent } from '@agent/implementations/BaseAgent';
 import { bus } from '@eventBus/ProgressEventBus';
+
+// Local imports - log
+import * as logger from '@logger/logUtils';
 
 const CHANNEL = 'AgentCommands';
 logger.initialize(CHANNEL);

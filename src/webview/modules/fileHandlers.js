@@ -1,3 +1,4 @@
+// Local imports - webview
 import { mainViewState } from './mainViewState.js';
 
 export function handleCheckboxChange(event) {

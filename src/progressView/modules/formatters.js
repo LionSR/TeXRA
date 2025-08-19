@@ -1,3 +1,6 @@
+// Third-party imports
+import markdownItKatex from '@vscode/markdown-it-katex';
+import { encode as encodeHtml, decode as decodeHtml } from 'he';
 /**
  * Formatters for log entries in the progress view.
  *
@@ -13,17 +16,18 @@
 
 // Third-party imports
 import MarkdownIt from 'markdown-it';
-import markdownItKatex from '@vscode/markdown-it-katex';
 import highlight from 'markdown-it-highlightjs';
-import { encode as encodeHtml, decode as decodeHtml } from 'he';
+
+// Local imports - progress view
+import { STATUS } from './constants.js';
+
 // Local imports
 import { katexMacros } from './katexMacros.js';
+import { createFromTemplate } from '@common/templateUtils.js';
 import {
   CHEVRON_RIGHT_CLASS,
   CHEVRON_DOWN_CLASS,
 } from '@common/webviewContext.js';
-import { STATUS } from './constants.js';
-import { createFromTemplate } from '@common/templateUtils.js';
 
 // Constants
 export const BULLET_MARKUP =

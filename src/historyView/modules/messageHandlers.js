@@ -1,7 +1,8 @@
-// Local imports
-import { registerMessageHandlers } from '@common/webviewContext.js';
+// Local imports - history view
 import { historyViewDomHandler } from './domHandlers.js';
 import { HISTORY_VIEW_COMMANDS } from '@common/webview/commands.js';
+// Local imports
+import { registerMessageHandlers } from '@common/webviewContext.js';
 
 /**
  * Handles messages from the extension for the history view.

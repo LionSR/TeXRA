@@ -1,13 +1,14 @@
-// Local imports
-import { vscode } from '@common/webviewContext.js';
+// Local imports - history view
+import { COMMANDS, ELEMENT_IDS, CLASS_NAMES, LABELS } from '../constants.js';
+import { historyViewState } from '../historyViewState.js';
 import {
   addEventListenerSafely,
   safeGetElementById,
 } from '@common/domUtils.js';
-import { historyViewState } from '../historyViewState.js';
-import { COMMANDS, ELEMENT_IDS, CLASS_NAMES, LABELS } from '../constants.js';
-import { createFromTemplate, createCodicon } from '@common/templateUtils.js';
 import { initializeIconButtons } from '@common/iconButtonInitializer.js';
+import { createFromTemplate, createCodicon } from '@common/templateUtils.js';
+// Local imports
+import { vscode } from '@common/webviewContext.js';
 
 /**
  * Renders history items and manages per-item events.

@@ -1,4 +1,6 @@
+// Local imports - replacement
 import { ReplacementCategory } from '../types';
+
 export const FONT_COMMAND_REPLACEMENTS: ReplacementCategory = {
   name: 'font_commands',
   description: 'Normalize deprecated font commands to modern equivalents',

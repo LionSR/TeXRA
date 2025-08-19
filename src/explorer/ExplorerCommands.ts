@@ -1,5 +1,8 @@
 // Third-party imports
+// Third-party imports
 import * as vscode from 'vscode';
+
+// Local imports - explorer
 
 // Local imports
 import { ExplorerOperations } from './ExplorerOperations';
