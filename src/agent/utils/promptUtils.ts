@@ -1,15 +1,20 @@
 // Standard library imports
+// Standard library imports
 import * as path from 'path';
 
 // Third-party imports
+
+// Third-party imports
 import * as nunjucks from 'nunjucks';
+
+// Local imports - agent
+import { getAgentFirstNameChunk } from '@housekeeping/utils';
 
 // Local imports - log
 import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
 import { WorkspaceFS } from '@utils/files';
-import { getAgentFirstNameChunk } from '@housekeeping/utils';
 
 const CHANNEL = 'promptUtils';
 logger.initialize(CHANNEL);

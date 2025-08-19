@@ -1,10 +1,13 @@
+// Standard library imports
 import { strict as assert } from 'assert';
+
+// Local imports - test
+import type { AgentConfig } from '@agent/core/AgentConfig';
+import { AgentSetting, AgentType } from '@agent/core/AgentDataclass';
+import { OutputHandler } from '@agent/output';
 
 // Local imports
 import { bus } from '@eventBus/ProgressEventBus';
-import { OutputHandler } from '@agent/output';
-import { AgentSetting, AgentType } from '@agent/core/AgentDataclass';
-import type { AgentConfig } from '@agent/core/AgentConfig';
 import { AgentLogger } from '@logger/AgentLogger';
 
 class MockOutputHandler extends OutputHandler {

@@ -1,8 +1,13 @@
 // Standard library imports
+// Standard library imports
 import * as path from 'path';
 
 // Third-party imports
+
+// Third-party imports
 import { nanoid } from 'nanoid';
+
+// Local imports - utils
 
 // Local imports
 import { StorageFS } from './storageFS';

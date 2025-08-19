@@ -1,3 +1,4 @@
+// Local imports - agent
 // Local imports - types
 import { NamedOutputFile, OutputFileInfo } from './types';
 import { XmlOutputManager } from './XmlOutputManager';

@@ -1,3 +1,4 @@
+// Local imports - history view
 import { WebviewStateManager } from '@common/webviewState.js';
 
 class ToggleStates {

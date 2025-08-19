@@ -1,13 +1,16 @@
 // Third-party imports
+// Third-party imports
 import * as vscode from 'vscode';
+
+// Local imports - commands
 
 // Local imports - agent components
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import { executeAgent } from '@agent/runtime/executeAgent';
+import type { ExecutionId } from '@agent/types/IdentifierTypes';
 
 // Local imports - history
 import { AgentHistoryManager } from '@historyView/managers';
-import type { ExecutionId } from '@agent/types/IdentifierTypes';
 
 // Add the registration function
 export function registerExecuteCommand(context: vscode.ExtensionContext) {

@@ -1,13 +1,15 @@
 // Standard library imports
+// Standard library imports
 import * as path from 'path';
-import * as vscode from 'vscode';
+
+// Third-party imports
 
 // Third-party imports
 import { glob } from 'glob';
+import * as vscode from 'vscode';
 
-// Local imports - utilities
-import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
-import { agentConfigToTaskState } from '@utils/config';
+// Local imports - agent
+import { getStreamTabId } from '@/logger/streamUtils';
 
 // Local imports - agent components
 import { AgentConfigSchema } from '@agent/core/AgentConfig';
@@ -17,30 +19,27 @@ import {
   AgentPrompt,
   AgentType,
 } from '@agent/core/AgentDataclass';
-import { loadAgentSettingAndPrompts } from '@agent/runtime/agentLoad';
-
-import { MODEL_CONFIGS } from '@model/ModelRegistry';
-import { ModelFactory } from '@agent/runtime/ModelFactory';
-
+import { IAgent } from '@agent/core/IAgent';
 import {
   DirectAgent,
   CoTAgent,
   MergeAgent,
   BaseToolUseAgent,
 } from '@agent/implementations';
-
-import { AgentLogger } from '@logger/AgentLogger';
-
+import { loadAgentSettingAndPrompts } from '@agent/runtime/agentLoad';
+import { ModelFactory } from '@agent/runtime/ModelFactory';
+import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
 import { bus } from '@eventBus/ProgressEventBus';
-import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 
+// Local imports - utilities
+import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
-
-import { getStreamTabId } from '@/logger/streamUtils';
-import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
+import { AgentLogger } from '@logger/AgentLogger';
+import { MODEL_CONFIGS } from '@model/ModelRegistry';
+import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
+import { agentConfigToTaskState } from '@utils/config';
 import { ensureRunDir } from '@utils/files/taskRunStorage';
-import { IAgent } from '@agent/core/IAgent';
 
 const CHANNEL = 'executeAgent';
 const logger = new AgentLogger(CHANNEL);
