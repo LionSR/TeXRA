@@ -1,7 +1,8 @@
+// Local imports - history view
+import { CLASS_NAMES, ELEMENT_IDS, LABELS } from '../constants.js';
+import { historyViewState } from '../historyViewState.js';
 /* global Mark */
 import { safeGetElementById } from '@common/domUtils.js';
-import { historyViewState } from '../historyViewState.js';
-import { CLASS_NAMES, ELEMENT_IDS, LABELS } from '../constants.js';
 
 /**
  * Handles search functionality using mark.js.

@@ -1,7 +1,9 @@
+// Third-party imports
+import { z } from 'zod';
+
+// Local imports - agent
 // Local imports - agent components
 import { ToolConfigSchema } from './ToolConfig';
-
-import { z } from 'zod';
 
 /**
  * Checks that the number of output files does not exceed the number of input files.

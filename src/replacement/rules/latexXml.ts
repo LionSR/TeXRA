@@ -1,9 +1,11 @@
-import { ReplacementCategory } from '../types';
+// Local imports - replacement
 import {
   generateXmlLatexConversions,
   generateLatexToXmlConversions,
   LATEX_ENVIRONMENTS,
 } from '../helpers';
+import { ReplacementCategory } from '../types';
+
 export const LATEX_XML_REPLACEMENTS: ReplacementCategory = {
   name: 'latex_xml',
   description: 'Fixes specific to XML output processing',

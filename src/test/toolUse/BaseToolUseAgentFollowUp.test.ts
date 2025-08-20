@@ -1,15 +1,18 @@
+// Standard library imports
 import { strict as assert } from 'assert';
-import { bus } from '@eventBus/ProgressEventBus';
-import { BaseToolUseAgent } from '@agent/implementations/BaseToolUseAgent';
-import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
+
+// Local imports - test
+import type { AgentConfig } from '@agent/core/AgentConfig';
 import {
   AgentSetting,
   AgentPrompt,
   AgentType,
 } from '@agent/core/AgentDataclass';
-import { ModelProvider, DEFAULT_MODEL_CAPABILITIES } from '@model/ModelConfig';
-import type { AgentConfig } from '@agent/core/AgentConfig';
+import { BaseToolUseAgent } from '@agent/implementations/BaseToolUseAgent';
+import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
+import { bus } from '@eventBus/ProgressEventBus';
+import { ModelProvider, DEFAULT_MODEL_CAPABILITIES } from '@model/ModelConfig';
 
 class DummyHandler extends ModelHandler {
   calls = 0;

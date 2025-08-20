@@ -1,3 +1,28 @@
+// Local imports - agent
+
+// Local imports - agent components
+import type { AgentConfig } from '@agent/core/AgentConfig';
+import {
+  AgentSetting,
+  AgentPrompt,
+  AgentType,
+} from '@agent/core/AgentDataclass';
+import { AgentStateRound, AgentStateGlobal } from '@agent/core/AgentState';
+import { runResponseCycle } from '@agent/core/ResponseCycle';
+import { ToolState } from '@agent/core/ToolState';
+import { BaseAgent } from '@agent/implementations/BaseAgent';
+import type { IModelHandler } from '@agent/modelHandlers';
+import { OutputHandler, NamedOutputFile, IOutputHandler } from '@agent/output';
+import {
+  getSystemPromptWithRules,
+  getPrefillForRound,
+} from '@agent/utils/promptHelpers';
+import {
+  renderPrompt,
+  getFirstKCharsFromDocument,
+  writePromptToXml,
+} from '@agent/utils/promptUtils';
+import { bus } from '@eventBus/ProgressEventBus';
 // Standard library imports
 // (none needed)
 
@@ -8,43 +33,17 @@
 
 // Local imports - latex utils
 import { LatexMediaManager } from '@latex';
-
-import { bus } from '@eventBus/ProgressEventBus';
-
-// Local imports - utilities
-import { WorkspaceFS } from '@utils/files';
-import {
-  renderPrompt,
-  getFirstKCharsFromDocument,
-  writePromptToXml,
-} from '@agent/utils/promptUtils';
-
-import {
-  getSystemPromptWithRules,
-  getPrefillForRound,
-} from '@agent/utils/promptHelpers';
-
-// Local imports - agent components
-import type { AgentConfig } from '@agent/core/AgentConfig';
-import {
-  AgentSetting,
-  AgentPrompt,
-  AgentType,
-} from '@agent/core/AgentDataclass';
-import { AgentStateRound, AgentStateGlobal } from '@agent/core/AgentState';
-import { ToolState } from '@agent/core/ToolState';
-import { runResponseCycle } from '@agent/core/ResponseCycle';
-import type { IModelHandler } from '@agent/modelHandlers';
-import type { ToolDefinition } from '@model';
-import { OutputHandler, NamedOutputFile, IOutputHandler } from '@agent/output';
-import { BaseAgent } from '@agent/implementations/BaseAgent';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
+import type { ToolDefinition } from '@model';
 
 // System imports - common utilities
 import { getConfig } from '@utils/config';
 
 // Shared constants
 import { K_SLICE } from '@utils/config';
+
+// Local imports - utilities
+import { WorkspaceFS } from '@utils/files';
 
 /**
  * Options for handling round output.

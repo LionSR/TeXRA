@@ -1,15 +1,18 @@
+// Standard library imports
 // Third-party imports
 import { randomUUID } from 'crypto';
 
+// Local imports - progress view
+
 // Local imports
 import { StatePersistenceManager } from '../persistence/StatePersistenceManager';
+import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import { WorkspaceStateKey } from '@common/state/stateManager';
 import { AgentLogger } from '@logger/AgentLogger';
-import { parseLegacyLogData } from '@logger/logUtils';
 
 // Types
 import { LogMessageData } from '@logger/LogTypes';
-import type { StreamTabId } from '@agent/types/IdentifierTypes';
+import { parseLegacyLogData } from '@logger/logUtils';
 
 /**
  * Manages stream tabs collection with persistence.

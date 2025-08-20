@@ -1,6 +1,9 @@
+// Third-party imports
 import * as vscode from 'vscode';
-import * as logger from '@logger/logUtils';
+
+// Local imports - common
 import { COMMON_COMMANDS } from './commands';
+import * as logger from '@logger/logUtils';
 
 export type MessageHandler = (
   message: any,

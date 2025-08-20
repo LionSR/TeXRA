@@ -1,10 +1,11 @@
+// Local imports - webview
+import { ELEMENT_IDS, EDITED_FILE } from '../constants.js';
+import { safeGetElementById, safeSetElementValue } from '@common/domUtils.js';
+import { capitalize, uncapitalize } from '@common/stringUtils.js';
+import { createFromTemplate } from '@common/templateUtils.js';
+import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
 // Local imports
 import { vscode } from '@common/webviewContext.js';
-import { safeGetElementById, safeSetElementValue } from '@common/domUtils.js';
-import { createFromTemplate } from '@common/templateUtils.js';
-import { ELEMENT_IDS, EDITED_FILE } from '../constants.js';
-import { capitalize, uncapitalize } from '@common/stringUtils.js';
-import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
 
 /**
  * Handles single-file dropdown updates and commit list logic.

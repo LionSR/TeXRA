@@ -1,13 +1,15 @@
 // Standard library imports
 import * as path from 'path';
 
-// Local imports - agent components
-import { DirectAgent } from './DirectAgent';
-import { RoundOutputOptions } from './BaseReflectionAgent';
-import { AgentStateRound, AgentStateGlobal } from '../core/AgentState';
-import type { IModelHandler } from '@agent/modelHandlers';
+// Local imports - agent
 import type { AgentConfig } from '../core/AgentConfig';
 import { AgentSetting, AgentPrompt } from '../core/AgentDataclass';
+import { AgentStateRound, AgentStateGlobal } from '../core/AgentState';
+import { RoundOutputOptions } from './BaseReflectionAgent';
+
+// Local imports - agent components
+import { DirectAgent } from './DirectAgent';
+import type { IModelHandler } from '@agent/modelHandlers';
 
 /**
  * Specialized agent for merging multiple edited files into a consolidated output.

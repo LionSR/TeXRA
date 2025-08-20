@@ -1,13 +1,14 @@
-import {
-  safeGetElementById,
-  safeGetElementChecked,
-  setChevronIcon,
-} from '@common/domUtils.js';
+// Local imports - webview
 import {
   CHECK_BOXES_AUTO_EXTRACT,
   CHECK_BOXES_TOOL_USE,
   ELEMENT_IDS,
 } from '../constants.js';
+import {
+  safeGetElementById,
+  safeGetElementChecked,
+  setChevronIcon,
+} from '@common/domUtils.js';
 import { createCodicon } from '@common/templateUtils.js';
 
 export class ToggleManager {
