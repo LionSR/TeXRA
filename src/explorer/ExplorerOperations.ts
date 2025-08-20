@@ -10,9 +10,12 @@ import { showLoggedErrorMessage } from '@common/errors/errorHandlingUtils';
 
 // Local imports
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
-import { validateYamlAndPromptAdd } from '@frontend/agents/register';
-import * as logger from '@logger/logUtils';
+
 import { AbsoluteFS } from '@utils/files';
+import { safeExecuteCommand } from '@utils/system/commandUtils';
+import { validateYamlAndPromptAdd } from '@frontend/agents/register';
+
+import * as logger from '@logger/logUtils';
 
 const NEW_AGENT_TEMPLATE = `# --- Agent Inheritance (Optional) ---
 # inherits: base
@@ -94,6 +97,10 @@ export class ExplorerOperations {
     } catch (err) {
       await showLoggedErrorMessage(CHANNEL, 'Error opening file', err);
     }
+  }
+
+  async reveal(uri: vscode.Uri) {
+    await safeExecuteCommand('revealFileInOS', [uri], CHANNEL);
   }
 
   private async createCustomCopy(uri: vscode.Uri) {
