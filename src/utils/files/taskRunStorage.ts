@@ -1,8 +1,5 @@
 // Standard library imports
-// Standard library imports
 import * as path from 'path';
-
-// Local imports - utils
 
 // Local imports - storage
 import { StorageFS } from './storageFS';
