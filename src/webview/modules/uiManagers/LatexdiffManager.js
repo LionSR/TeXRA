@@ -1,7 +1,6 @@
 // Local imports - webview
 import { ELEMENT_IDS } from '../constants.js';
 import { mainViewState } from '../mainViewState.js';
-// Local imports
 import { safeGetElementById, setChevronIcon } from '@common/domUtils.js';
 
 const LATEXDIFF_CONTENT_ID = ELEMENT_IDS.LATEXDIFFS_CONTENT;

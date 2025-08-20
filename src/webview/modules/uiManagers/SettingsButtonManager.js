@@ -10,7 +10,6 @@ import { mainViewState } from '../mainViewState.js';
 import { BaseUIManager } from './BaseUIManager.js';
 import { safeGetElementById } from '@common/domUtils.js';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
-// Local imports
 import { vscode } from '@common/webviewContext.js';
 
 export class SettingsButtonManager extends BaseUIManager {
