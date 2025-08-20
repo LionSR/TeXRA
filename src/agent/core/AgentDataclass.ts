@@ -1,6 +1,9 @@
+// Third-party imports
+import { z } from 'zod';
+
+// Local imports - agent
 // Local imports - model types
 import { ToolDefinitionSchema } from '@model';
-import { z } from 'zod';
 
 /** Temperature bounds for agent generation. */
 export const MIN_TEMPERATURE = 0;

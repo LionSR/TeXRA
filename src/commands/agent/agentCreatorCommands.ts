@@ -1,19 +1,20 @@
 // Third-party imports
-import * as vscode from 'vscode';
 import Anthropic from '@anthropic-ai/sdk';
 import type { MessageCreateParams } from '@anthropic-ai/sdk/resources/messages';
+import * as vscode from 'vscode';
 import * as yaml from 'yaml';
 
+// Local imports - commands
 import {
   AgentDefinitionSchema,
   AgentPromptSchema,
   AgentSettingSchema,
 } from '@agent/core/AgentDataclass';
+import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
+import { promptToAddAgentToConfig } from '@frontend/agents/register';
 
 // Local imports - utils
 import { SecretManager } from '@frontend/secretManager';
-import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
-import { promptToAddAgentToConfig } from '@frontend/agents/register';
 import * as logger from '@logger/logUtils';
 import { ANTHROPIC_MODELS } from '@model/providers/anthropicModels';
 import { AbsoluteFS } from '@utils/files';

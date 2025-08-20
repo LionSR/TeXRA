@@ -1,3 +1,4 @@
+// Local imports - progress view
 // Handler for theme-related messages in the progress view
 import { COMMON_COMMANDS } from '@common/webview/commands.js';
 

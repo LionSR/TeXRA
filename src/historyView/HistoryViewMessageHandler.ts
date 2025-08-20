@@ -1,17 +1,21 @@
 // Third-party imports
+// Third-party imports
 import * as vscode from 'vscode';
+
+// Local imports - history view
+import { executeCommand } from '@commands/agent/executeCommand';
+import { showLoggedErrorMessage } from '@common/errors/errorHandlingUtils';
 
 // Local imports - common
 import {
   BaseViewMessageHandler,
   type MessageHandler,
 } from '@common/webview/BaseViewMessageHandler';
+
 // @ts-ignore - Import JavaScript module
 import { HISTORY_VIEW_COMMANDS } from '@common/webview/commands';
 import { AgentHistoryManager } from '@historyView/managers';
-import { executeCommand } from '@commands/agent/executeCommand';
 import { agentConfigToTaskState } from '@utils/config';
-import { showLoggedErrorMessage } from '@common/errors/errorHandlingUtils';
 
 export class HistoryViewMessageHandler extends BaseViewMessageHandler {
   constructor(private readonly context: vscode.ExtensionContext) {

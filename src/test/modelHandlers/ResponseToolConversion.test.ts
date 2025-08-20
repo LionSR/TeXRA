@@ -1,5 +1,7 @@
+// Standard library imports
 import { strict as assert } from 'assert';
 
+// Local imports - test
 import { toOpenAIResponseTools } from '@agent/modelHandlers/toolConversion';
 import type { ToolDefinition } from '@model';
 

@@ -1,4 +1,6 @@
+// Local imports - replacement
 import { ReplacementCategory } from '../types';
+
 export const GPTNESS_REPLACEMENTS: ReplacementCategory = {
   name: 'gptness',
   description: 'GPTness improvements',

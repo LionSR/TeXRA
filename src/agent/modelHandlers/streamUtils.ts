@@ -1,10 +1,12 @@
 // Standard library imports
 import { randomUUID } from 'crypto';
 
+// Third-party imports
+import { encode as encodeHtml } from 'he';
+
 // Local imports
 import { bus } from '@eventBus/ProgressEventBus';
 import { AgentLogger } from '@logger/AgentLogger';
-import { encode as encodeHtml } from 'he';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 
 /**
