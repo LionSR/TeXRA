@@ -1,9 +1,10 @@
+// Local imports - progress view
+import { COMMANDS, STATUS, ELEMENT_IDS } from './constants.js';
+import { progressViewDomHandler, LogEntryFormatter } from './domHandlers.js';
+import { createThemeHandlers } from './handlers/themeHandlers.js';
 // Local imports - log state
 import { progressViewState } from './progressViewState.js';
-import { progressViewDomHandler, LogEntryFormatter } from './domHandlers.js';
-import { COMMANDS, STATUS, ELEMENT_IDS } from './constants.js';
 import { registerMessageHandlers } from '@common/webviewContext.js';
-import { createThemeHandlers } from './handlers/themeHandlers.js';
 
 // Create shorter aliases for internal use
 const state = progressViewState;

@@ -1,7 +1,8 @@
+// Local imports - progress view
+import { ELEMENT_IDS } from './constants.js';
+import { TaskGroupHeaderFormatter, LogEntryFormatter } from './formatters.js';
 // Local imports
 import { progressViewState } from './progressViewState.js';
-import { TaskGroupHeaderFormatter, LogEntryFormatter } from './formatters.js';
-import { ELEMENT_IDS } from './constants.js';
 
 /**
  * Manages task group DOM operations.

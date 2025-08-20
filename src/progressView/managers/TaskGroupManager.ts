@@ -1,11 +1,12 @@
+// Local imports - progress view
 // Local imports
 import { StatePersistenceManager } from '../persistence/StatePersistenceManager';
+import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import { WorkspaceStateKey } from '@common/state/stateManager';
 import { AgentLogger } from '@logger/AgentLogger';
 
 // Types
 import { TaskGroup } from '@logger/LogTypes';
-import type { StreamTabId } from '@agent/types/IdentifierTypes';
 
 /**
  * Manages task groups collection with persistence.

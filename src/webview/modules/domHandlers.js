@@ -1,17 +1,18 @@
-import { vscode } from '@common/webviewContext.js';
+// Local imports - webview
+import { ELEMENT_IDS } from './constants.js';
+import { webviewEventBus } from './eventBus.js';
 import { mainViewState } from './mainViewState.js';
+import { ActionButtonManager } from './uiManagers/ActionButtonManager.js';
+import { FileInputManager } from './uiManagers/FileInputManager.js';
 import { fileList } from './uiManagers/FileList.js';
 import { fileSelect } from './uiManagers/FileSelect.js';
-import { outputFilesManager } from './uiManagers/OutputFilesManager.js';
-import { latexdiffManager } from './uiManagers/LatexdiffManager.js';
 import { InstructionManager } from './uiManagers/InstructionManager.js';
-import { ToggleManager } from './uiManagers/ToggleManager.js';
+import { latexdiffManager } from './uiManagers/LatexdiffManager.js';
+import { outputFilesManager } from './uiManagers/OutputFilesManager.js';
 import { RecordingManager } from './uiManagers/RecordingManager.js';
-import { FileInputManager } from './uiManagers/FileInputManager.js';
-import { ActionButtonManager } from './uiManagers/ActionButtonManager.js';
 import { SettingsButtonManager } from './uiManagers/SettingsButtonManager.js';
-import { webviewEventBus } from './eventBus.js';
-import { ELEMENT_IDS } from './constants.js';
+import { ToggleManager } from './uiManagers/ToggleManager.js';
+import { vscode } from '@common/webviewContext.js';
 
 export const instructionManager = new InstructionManager(
   'instruction',

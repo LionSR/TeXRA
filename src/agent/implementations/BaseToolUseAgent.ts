@@ -1,22 +1,22 @@
+// Local imports - agent
+import type { AgentConfig } from '../core/AgentConfig';
+import { AgentPrompt, AgentSetting } from '../core/AgentDataclass';
+import { ToolState } from '../core/ToolState';
+import { runToolUseCycle } from '../core/ToolUseCycle';
+import type { IModelHandler } from '../modelHandlers';
+import type { ProviderMessage } from '../modelHandlers/types/ProviderMessage';
+import { getSystemPromptWithRules } from '../utils/promptHelpers';
+import { renderPrompt } from '../utils/promptUtils';
+import { TOOL_USE_INSTRUCTIONS } from '../utils/toolUsePrompt';
 // Base class for tool-use agents
 
 // Standard library imports
 
 // Local imports - core
 import { BaseAgent } from './BaseAgent';
-import type { AgentConfig } from '../core/AgentConfig';
-import { AgentPrompt, AgentSetting } from '../core/AgentDataclass';
-import { getSystemPromptWithRules } from '../utils/promptHelpers';
-import { renderPrompt } from '../utils/promptUtils';
-import type { IModelHandler } from '../modelHandlers';
 import type { ToolDefinition } from '@model';
-
-import { DEFAULT_TOOL_REGISTRY } from '@tools/registry';
 import { BaseTool } from '@tools/core/base';
-import { runToolUseCycle } from '../core/ToolUseCycle';
-import { ToolState } from '../core/ToolState';
-import { TOOL_USE_INSTRUCTIONS } from '../utils/toolUsePrompt';
-import type { ProviderMessage } from '../modelHandlers/types/ProviderMessage';
+import { DEFAULT_TOOL_REGISTRY } from '@tools/registry';
 
 export class BaseToolUseAgent extends BaseAgent {
   private toolRegistry: Record<string, BaseTool<any>>;

@@ -19,38 +19,39 @@ import {
   type UploadFileParameters,
 } from '@google/genai';
 
-// Local imports - agent components
-import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
+// Local imports - agent
+import { toGoogleTools } from './toolConversion';
+import type { ProviderStopReason } from './types/StopReasonTypes';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import { AgentSetting, hasEndTag } from '@agent/core/AgentDataclass';
 import { AgentStateRound, AgentStateGlobal } from '@agent/core/AgentState';
-import { ToolState } from '@agent/core/ToolState';
 import {
   OpenAIAPIResponseUsage,
   ResponseUsageFactory,
   GenerateContentResponseUsageMetadata,
   ExtendedCompletionUsage,
 } from '@agent/core/ResponseUsage';
+import { ToolState } from '@agent/core/ToolState';
+
+// Local imports - agent components
+import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
 import { MediaEntry } from '@agent/utils/mediaTypes';
-import { AgentLogger } from '@logger/AgentLogger';
-import type { ToolDefinition } from '@model';
-import { toGoogleTools } from './toolConversion';
-
-// Local imports - utilities
-import { WorkspaceFS, AbsoluteFS, getMimeType } from '@utils/files';
-import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
-import xmlUtils from '@utils/text/xmlUtils';
 import { calculateTokenPrice } from '@agent/utils/priceUtils';
+import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
+import { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
-
+import type { ToolDefinition } from '@model';
 import { cleanFileContent } from '@replacement/engine';
 import replacementEngine from '@replacement/engine';
 
-import type { ProviderStopReason } from './types/StopReasonTypes';
 // Google finish reasons are re-exported from the SDK
 
 // Local constant
 import { K_SLICE } from '@utils/config';
+
+// Local imports - utilities
+import { WorkspaceFS, AbsoluteFS, getMimeType } from '@utils/files';
+import xmlUtils from '@utils/text/xmlUtils';
 
 // Internal type definition
 type InternalMessagePart = {

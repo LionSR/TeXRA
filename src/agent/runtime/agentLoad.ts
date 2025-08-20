@@ -2,9 +2,9 @@
 import * as path from 'path';
 
 // Third-party imports
+import deepmerge from 'deepmerge';
 import * as vscode from 'vscode';
 import * as yaml from 'yaml';
-import deepmerge from 'deepmerge';
 import { z } from 'zod';
 
 // Local imports - agent components
@@ -15,10 +15,10 @@ import {
   AgentPromptSchema,
   AgentDefinitionSchema,
 } from '@agent/core/AgentDataclass';
-import type { ToolDefinition } from '@model';
 
 // Local imports - utils
 import * as logger from '@logger/logUtils';
+import type { ToolDefinition } from '@model';
 import { AbsoluteFS } from '@utils/files';
 
 const CHANNEL = 'agentLoad';

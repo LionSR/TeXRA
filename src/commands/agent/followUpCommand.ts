@@ -1,4 +1,7 @@
+// Third-party imports
 import * as vscode from 'vscode';
+
+// Local imports - commands
 import { BaseAgent } from '@agent/implementations/BaseAgent';
 
 const CHANNEL = 'followUpCommand';

@@ -48,9 +48,10 @@ export class ArxivSourceProcessor {
 
   public async downloadFile(
     url: string,
-    destPath: string,
+    destBasePath: string,
     timeout = 30000,
-  ): Promise<void> {
+  ): Promise<string> {
+    let destPath = destBasePath;
     try {
       const response = await axios.get(url, {
         responseType: 'stream',
@@ -66,13 +67,43 @@ export class ArxivSourceProcessor {
         throw new Error(`Failed to download: HTTP ${response.status}`);
       }
 
+      // Determine filename from headers
+      const disposition = response.headers['content-disposition'];
+      if (disposition) {
+        const match = /filename="?([^";]+)"?/i.exec(disposition);
+        if (match) {
+          destPath = path.join(path.dirname(destBasePath), match[1]);
+        }
+      } else {
+        const contentType = response.headers['content-type'];
+        let extension = '';
+        if (contentType) {
+          if (contentType.includes('tar')) {
+            extension = '.tar';
+          }
+          if (contentType.includes('gzip') || contentType.includes('gz')) {
+            extension = extension ? `${extension}.gz` : '.gz';
+          } else if (
+            contentType.includes('tex') ||
+            contentType.includes('plain')
+          ) {
+            extension = '.tex';
+          }
+        }
+        destPath = destBasePath + extension;
+      }
+
       await pipeline(
         response.data as NodeJS.ReadableStream,
         AbsoluteFS.createWriteStream(destPath),
       );
+
+      return destPath;
     } catch (err) {
       try {
-        await AbsoluteFS.delete(destPath);
+        if (destPath) {
+          await AbsoluteFS.delete(destPath);
+        }
       } catch {
         // ignore errors deleting destPath
       }
@@ -144,33 +175,49 @@ export class ArxivSourceProcessor {
     }
 
     const paperDirFull = WorkspaceFS.fullPath(paperDirRelative);
-    const tarFileName = `${id.replace(/\//g, '_')}.tar.gz`;
-    const tarFilePath = path.join(paperDirFull, tarFileName);
+    const basePath = path.join(paperDirFull, id.replace(/\//g, '_'));
 
     if (progressCallback) {
       progressCallback(`Downloading arXiv source for ${id}...`, 20);
     }
 
     const downloadUrl = `https://arxiv.org/src/${id}`;
-    await this.downloadFile(downloadUrl, tarFilePath);
+    const downloadedPath = await this.downloadFile(downloadUrl, basePath);
 
-    if (progressCallback) {
-      progressCallback('Extracting source files...', 60);
+    const isArchive =
+      downloadedPath.endsWith('.tar') ||
+      downloadedPath.endsWith('.tar.gz') ||
+      downloadedPath.endsWith('.tgz');
+
+    if (isArchive) {
+      if (progressCallback) {
+        progressCallback('Extracting source files...', 60);
+      }
+
+      const extractResult = await this.extractTarFile(
+        downloadedPath,
+        paperDirFull,
+        { timeout: 30000 },
+      );
+
+      if (!extractResult.success) {
+        throw new Error(
+          `Failed to extract arXiv source: ${extractResult.error}`,
+        );
+      }
+
+      if (progressCallback) {
+        progressCallback('Cleaning up...', 80);
+      }
+
+      await AbsoluteFS.delete(downloadedPath);
+    } else {
+      const downloadedRel = WorkspaceFS.relativePath(downloadedPath);
+      const targetRel = path.join(paperDirRelative, 'main.tex');
+      if (path.basename(downloadedPath) !== 'main.tex') {
+        await WorkspaceFS.move(downloadedRel, targetRel);
+      }
     }
-
-    const extractResult = await this.extractTarFile(tarFilePath, paperDirFull, {
-      timeout: 30000,
-    });
-
-    if (!extractResult.success) {
-      throw new Error(`Failed to extract arXiv source: ${extractResult.error}`);
-    }
-
-    if (progressCallback) {
-      progressCallback('Cleaning up...', 80);
-    }
-
-    await WorkspaceFS.delete(path.join(paperDirRelative, tarFileName));
 
     if (autoIndent) {
       if (progressCallback) {
@@ -191,10 +238,7 @@ export class ArxivSourceProcessor {
       progressCallback('arXiv source downloaded successfully!', 100);
     }
 
-    logger.info(
-      this.channel,
-      `arXiv source downloaded and extracted to: ${paperDirFull}`,
-    );
+    logger.info(this.channel, `arXiv source downloaded to: ${paperDirFull}`);
 
     return paperDirFull;
   }

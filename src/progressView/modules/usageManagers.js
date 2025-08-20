@@ -1,7 +1,8 @@
+// Local imports - progress view
+import { ELEMENT_IDS } from './constants.js';
+import { formatTokens, TaskGroupLevel } from './formatters.js';
 // Local imports
 import { progressViewState } from './progressViewState.js';
-import { formatTokens, TaskGroupLevel } from './formatters.js';
-import { ELEMENT_IDS } from './constants.js';
 import { createFromTemplate } from '@common/templateUtils.js';
 
 /**
