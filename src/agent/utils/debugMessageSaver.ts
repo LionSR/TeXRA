@@ -1,7 +1,5 @@
 // Standard library imports
 // Utility for saving debug objects (messages/responses) during debugging
-
-// Standard library imports
 import * as path from 'path';
 
 // Local imports - agent
