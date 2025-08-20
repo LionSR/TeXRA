@@ -2,11 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.33.1] - 2025-08-20
+## [0.33.1] - Unreleased
 
 ### Features
 
 - Detect arXiv source file type and handle plain `.tex` downloads without extraction
+- Add descriptive tooltips for Input, Reference, Auxiliary and Media file selectors in the main webview
+
 
 ## [0.33.0] - 2025-08-19 🎂 Birthday Edition
 
