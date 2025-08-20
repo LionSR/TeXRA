@@ -14,7 +14,6 @@ import {
 } from '@common/domUtils.js';
 import { capitalize } from '@common/stringUtils.js';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
-// Local imports
 import { vscode } from '@common/webviewContext.js';
 
 export class ActionButtonManager extends BaseUIManager {
