@@ -9,7 +9,7 @@ The TeXRA extension includes a dedicated **Agent Explorer** view within the VS C
 The Agent Explorer is organized into two main sections:
 
 1.  **Built-in Agents**: This section displays the standard agents that come bundled with the TeXRA extension. These files (`.yaml`) define the core functionalities like `correct`, `polish`, `draw`, etc.
-2.  **Custom Agents**: This section displays agents that you have created or added yourself. This directory's location can be customized in the VS Code settings via `texra.explorer.agentsDirectory`. If this setting is not configured, or the directory doesn't exist, this section might not appear.
+2.  **Custom Agents**: This section displays agents that you have created or added yourself. This directory's location can be customized in the VS Code settings via `texra.explorer.agentsDirectory` and must be an absolute path. If this setting is not configured, or the directory doesn't exist, this section might not appear.
 
 ## Browsing and Viewing Agents
 
@@ -34,6 +34,9 @@ Available actions for **Custom Agents** include:
 - **Delete** <i class="codicon codicon-trash"></i>: Deletes the selected custom file or folder (with confirmation).
 - **Add Agent to Config** <i class="codicon codicon-diff-added"></i>: Validates a YAML file and adds its agent name to `texra.agents`.
 - **Create AI Agent** <i class="codicon codicon-sparkle"></i>: Launches a wizard that collects a short description and output style (single vs. multiple files) then generates a starter YAML using Claude. See [Strict XML Extraction](./custom-agents.md#strict-xml-extraction) for why the YAML must be precise.
+- **Reveal in OS** <i class="codicon codicon-folder-opened"></i>: Opens the selected
+  folder in your operating system's file explorer so you can paste or manage files
+  directly.
 
 **Important**: These management actions (New File, New Folder, Rename, Delete) are **not available** for items within the "Built-in Agents" section.
 

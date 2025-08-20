@@ -19,7 +19,7 @@ Follow these steps to create a new custom agent:
 Custom agents reside in a specific directory.
 
 1.  **Find Existing**: Look for the "Custom Agents" folder within the [Agent Explorer](./agent-explorer.md).
-2.  **Configure (Optional)**: If the folder doesn't exist or you want to use a different location, set the path in VS Code Settings (`Ctrl+,`) under `texra.explorer.agentsDirectory`.
+2.  **Configure (Optional)**: If the folder doesn't exist or you want to use a different location, set the absolute path in VS Code Settings (`Ctrl+,`) under `texra.explorer.agentsDirectory`.
 
 ### Automatic Creation
 
