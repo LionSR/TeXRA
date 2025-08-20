@@ -1,12 +1,13 @@
+// Local imports - progress view
 // Local imports
 import { StatePersistenceManager } from '../persistence/StatePersistenceManager';
-import { WorkspaceStateKey } from '@common/state/stateManager';
-import { WorkspaceFS } from '@utils/files';
-import { AgentLogger } from '@logger/AgentLogger';
 
 // Types
 import type { DiffStats } from '@agent/types/DiffTypes';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
+import { WorkspaceStateKey } from '@common/state/stateManager';
+import { AgentLogger } from '@logger/AgentLogger';
+import { WorkspaceFS } from '@utils/files';
 
 interface OutputFileInfo extends DiffStats {
   path: string;

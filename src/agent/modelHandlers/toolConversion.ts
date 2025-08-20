@@ -1,9 +1,4 @@
-// Local imports - types
-import type { ToolDefinition } from '@model';
-
 // Third-party imports
-import type { ChatCompletionTool } from 'openai/resources/chat/completions';
-import type { FunctionTool } from 'openai/resources/responses/responses';
 import type {
   Tool as AnthropicTool,
   ToolUnion,
@@ -13,6 +8,14 @@ import type {
   FunctionDeclaration,
   Schema,
 } from '@google/genai/dist/genai';
+
+// Third-party imports
+import type { ChatCompletionTool } from 'openai/resources/chat/completions';
+import type { FunctionTool } from 'openai/resources/responses/responses';
+
+// Local imports - agent
+// Local imports - types
+import type { ToolDefinition } from '@model';
 
 // Map local tool names to Anthropic remote tool types
 const ANTHROPIC_TOOL_TYPE_MAP: Record<string, string> = {

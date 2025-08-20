@@ -1,5 +1,7 @@
-import { ReplacementCategory } from '../types';
+// Local imports - replacement
 import { generateSectionSpacingFixes, SECTION_TYPES } from '../helpers';
+import { ReplacementCategory } from '../types';
+
 export const SECTION_REPLACEMENTS: ReplacementCategory = {
   name: 'sections',
   description: 'Fixes for section spacing in LaTeX documents',

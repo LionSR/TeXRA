@@ -1,4 +1,6 @@
+// Local imports - replacement
 import { ReplacementCategory } from '../types';
+
 export const SCRATCHPAD_XML_REPLACEMENTS: ReplacementCategory = {
   name: 'scratchpad_xml',
   description: 'Fixes for scratchpad XML processing',
