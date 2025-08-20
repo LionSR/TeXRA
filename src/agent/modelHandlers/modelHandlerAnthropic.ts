@@ -3,43 +3,45 @@
 
 // Third-party imports
 import { Anthropic } from '@anthropic-ai/sdk';
+import type { BetaMessage } from '@anthropic-ai/sdk/resources/beta/messages';
 import {
   MessageParam,
   ContentBlock,
   ContentBlockParam,
   MessageCreateParams,
 } from '@anthropic-ai/sdk/resources/messages';
-import type { BetaMessage } from '@anthropic-ai/sdk/resources/beta/messages';
 
-// Local imports - error utils
-import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
-
-// Local imports - utilities
-import { WorkspaceFS } from '@utils/files';
-import { cleanFileContent } from '@replacement/engine';
-import replacementEngine from '@replacement/engine';
+// Local imports - agent
+import { toAnthropicTools } from './toolConversion';
 import type { ProviderStopReason } from './types/StopReasonTypes';
 import { ANTHROPIC_STOP } from './types/StopReasonTypes';
-import xmlUtils from '@utils/text/xmlUtils';
 
 // Local imports - agent components
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import { AgentSetting, hasEndTag } from '@agent/core/AgentDataclass';
-import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
+import { AgentStateRound } from '@agent/core/AgentState';
 import {
   AnthropicAPIResponseUsage,
   ResponseUsageFactory,
   AnthropicUsage,
 } from '@agent/core/ResponseUsage';
 import { ToolState } from '@agent/core/ToolState';
+import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
 import { MediaEntry } from '@agent/utils/mediaTypes';
-import { AgentStateRound } from '@agent/core/AgentState';
-import { K_SLICE, getConfig } from '@utils/config';
-import { objectToLogString } from '@utils/text/stringUtils';
 import { calculateTokenPrice } from '@agent/utils/priceUtils';
+
+// Local imports - error utils
+import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import type { ToolDefinition } from '@model';
-import { toAnthropicTools } from './toolConversion';
+import { cleanFileContent } from '@replacement/engine';
+import replacementEngine from '@replacement/engine';
+import { K_SLICE, getConfig } from '@utils/config';
+
+// Local imports - utilities
+import { WorkspaceFS } from '@utils/files';
+import { objectToLogString } from '@utils/text/stringUtils';
+import xmlUtils from '@utils/text/xmlUtils';
 
 /**
  * Anthropic-specific model handler implementation for managing API interactions and message processing.

@@ -1,30 +1,35 @@
 // Standard library imports
-// Local imports - log
-import { AgentLogger } from '@logger/AgentLogger';
 import * as path from 'path';
+
+// Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - utilities
-import { runLatexFormatter } from '@latex/texFormatter';
-import { XmlOutputManager } from './XmlOutputManager';
-import { LatexDiffManager } from './LatexDiffManager';
+// Local imports - agent
 import { DiffStatsManager } from './DiffStatsManager';
-import type { NamedOutputFile, OutputFileInfo } from './types';
 import type { IOutputHandler } from './IOutputHandler';
-import { getOutputFileName } from '@agent/utils/outputFileUtils';
+import { LatexDiffManager } from './LatexDiffManager';
+import type { NamedOutputFile, OutputFileInfo } from './types';
+import { XmlOutputManager } from './XmlOutputManager';
 
 // Local imports - agent components
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import { AgentSetting, AgentType } from '@agent/core/AgentDataclass';
 import { AgentStateGlobal, AgentStateRound } from '@agent/core/AgentState';
+import { getOutputFileName } from '@agent/utils/outputFileUtils';
+import { bus } from '@eventBus/ProgressEventBus';
+import { showInstructionWithSuppress } from '@frontend/ui/instruction';
+
+// Local imports - utilities
+import { runLatexFormatter } from '@latex/texFormatter';
+
+// Local imports - log
+import { AgentLogger } from '@logger/AgentLogger';
+import { MESSAGE_TYPES } from '@logger/messageTypes';
 
 // Local imports - utilities
 import { replaceInputCommands, createFileMapping } from '@utils/files';
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
 import { getEffectiveBaseFile } from '@utils/files/baseFileUtils';
-import { bus } from '@eventBus/ProgressEventBus';
-import { MESSAGE_TYPES } from '@logger/messageTypes';
-import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 
 // Local imports - types
 

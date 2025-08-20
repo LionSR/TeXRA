@@ -1,24 +1,4 @@
-// Local imports - webview context
-import { vscode, registerMessageHandlers } from '@common/webviewContext.js';
-import {
-  safeSetElementValue,
-  safeGetElementById,
-  setChevronIcon,
-} from '@common/domUtils.js';
-import { capitalize, uncapitalize } from '@common/stringUtils.js';
-import { createFromTemplate } from '@common/templateUtils.js';
-import { mainViewState } from './mainViewState.js';
-import { mainViewDomHandler } from './domHandlers.js';
-
-// Local imports - UI managers
-import { fileList } from './uiManagers/FileList.js';
-import { fileSelect } from './uiManagers/FileSelect.js';
-import { webviewEventBus } from './eventBus.js';
-// Handler submodules
-import { createThemeHandlers } from './handlers/themeHandlers.js';
-import { createRecordingHandlers } from './handlers/recordingHandlers.js';
-import { createFileHandlers } from './handlers/fileHandlers.js';
-
+// Local imports - webview
 import {
   FILE_TYPES,
   INPUT_FILE,
@@ -29,9 +9,30 @@ import {
   BASE_FILE,
   ELEMENT_IDS,
 } from './constants.js';
+import { mainViewDomHandler } from './domHandlers.js';
+import { webviewEventBus } from './eventBus.js';
+import { createFileHandlers } from './handlers/fileHandlers.js';
+import { createRecordingHandlers } from './handlers/recordingHandlers.js';
+
+// Handler submodules
+import { createThemeHandlers } from './handlers/themeHandlers.js';
+import { mainViewState } from './mainViewState.js';
+
+// Local imports - UI managers
+import { fileList } from './uiManagers/FileList.js';
+import { fileSelect } from './uiManagers/FileSelect.js';
+import {
+  safeSetElementValue,
+  safeGetElementById,
+  setChevronIcon,
+} from '@common/domUtils.js';
+import { capitalize, uncapitalize } from '@common/stringUtils.js';
+import { createFromTemplate } from '@common/templateUtils.js';
 
 // Import standardized commands
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
+// Local imports - webview context
+import { vscode, registerMessageHandlers } from '@common/webviewContext.js';
 
 /**
  * Handles messages from the extension and syncs the webview state.

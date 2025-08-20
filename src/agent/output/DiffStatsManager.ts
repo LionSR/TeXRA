@@ -1,7 +1,10 @@
+// Third-party imports
+import { diff_match_patch } from 'diff-match-patch';
+
+// Local imports - agent
+import type { DiffStats } from '@agent/types/DiffTypes';
 // Local imports
 import { WorkspaceFS } from '@utils/files';
-import { diff_match_patch } from 'diff-match-patch';
-import type { DiffStats } from '@agent/types/DiffTypes';
 
 export class DiffStatsManager {
   private countLines(text: string): number {
