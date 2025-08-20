@@ -1,13 +1,8 @@
 // Standard library imports
-
-// Local imports - utilities
 import * as path from 'path';
 
 // Third-party imports
-// Third-party imports
 import * as vscode from 'vscode';
-
-// Local imports - webview
 
 // Local imports - commands
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';

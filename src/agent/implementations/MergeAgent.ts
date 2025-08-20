@@ -1,5 +1,4 @@
 // Standard library imports
-// Standard library imports
 import * as path from 'path';
 
 // Local imports - agent

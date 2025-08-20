@@ -1,8 +1,5 @@
 // Third-party imports
-// Third-party imports
 import * as vscode from 'vscode';
-
-// Local imports - commands
 
 // Local imports - agent
 import { executeMergeAgent } from '@agent/runtime/executeAgent';

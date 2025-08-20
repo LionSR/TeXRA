@@ -1,7 +1,6 @@
 // Third-party imports
 import Anthropic from '@anthropic-ai/sdk';
 import type { MessageCreateParams } from '@anthropic-ai/sdk/resources/messages';
-// Third-party imports
 import * as vscode from 'vscode';
 import * as yaml from 'yaml';
 
