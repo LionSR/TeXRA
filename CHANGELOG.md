@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.33.1] - 2025-08-20
+
+### Features
+
+- Detect arXiv source file type and handle plain `.tex` downloads without extraction
+
 ## [0.33.0] - 2025-08-19 🎂 Birthday Edition
 
 ### Features
