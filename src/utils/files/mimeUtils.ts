@@ -1,5 +1,4 @@
 // Third-party imports
-// Third-party imports
 import mime from 'mime-types';
 
 /**
