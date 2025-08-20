@@ -1,13 +1,8 @@
 // Standard library imports
-// Standard library imports
 import * as path from 'path';
 
 // Third-party imports
-
-// Third-party imports
 import * as vscode from 'vscode';
-
-// Local imports - explorer
 
 // Local imports
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';

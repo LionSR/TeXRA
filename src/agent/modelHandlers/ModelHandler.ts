@@ -26,7 +26,6 @@ import {
 } from '@frontend/media/img';
 import { SecretManager, ApiProvider } from '@frontend/secretManager';
 
-
 // Local imports - log
 import { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
