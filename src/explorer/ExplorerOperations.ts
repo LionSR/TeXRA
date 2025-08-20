@@ -10,6 +10,7 @@ import { showLoggedErrorMessage } from '@common/errors/errorHandlingUtils';
 // Local imports
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { AbsoluteFS } from '@utils/files';
+import { safeExecuteCommand } from '@utils/system/commandUtils';
 
 import { FileItem } from './FileItem';
 import { validateYamlAndPromptAdd } from '@frontend/agents/register';
@@ -94,6 +95,10 @@ export class ExplorerOperations {
     } catch (err) {
       await showLoggedErrorMessage(CHANNEL, 'Error opening file', err);
     }
+  }
+
+  async reveal(uri: vscode.Uri) {
+    await safeExecuteCommand('revealFileInOS', [uri], CHANNEL);
   }
 
   private async createCustomCopy(uri: vscode.Uri) {

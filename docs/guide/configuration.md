@@ -221,7 +221,7 @@ Configure the folder explorer view:
 "texra.explorer.agentsDirectory": "/path/to/custom/agents"
 ```
 
-This setting specifies a custom root path for the TeXRA file explorer view, which can be absolute or relative to the workspace root.
+This setting specifies a custom root path for the TeXRA file explorer view and must be an absolute path.
 
 ## Logger Configuration
 
