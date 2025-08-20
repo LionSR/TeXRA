@@ -673,7 +673,7 @@
           "texra.explorer.agentsDirectory": {
             "type": "string",
             "default": "",
-            "description": "Root path for the TeXRA file explorer view. Can be absolute or relative to workspace root.",
+            "description": "Root path for the TeXRA file explorer view. Must be an absolute path.",
             "scope": "resource"
           }
         }
@@ -923,6 +923,12 @@
         "icon": "$(diff-added)"
       },
       {
+        "command": "texra.folderExplorer.revealInOS",
+        "title": "Reveal in OS",
+        "category": "TeXRA",
+        "icon": "$(folder-opened)"
+      },
+      {
         "command": "texra.createAgentWithAI",
         "title": "Create AI Agent",
         "category": "TeXRA",
@@ -1150,6 +1156,11 @@
           "command": "texra.folderExplorer.addToList",
           "when": "view == texra.folderExplorer && viewItem == file",
           "group": "4_modification"
+        },
+        {
+          "command": "texra.folderExplorer.revealInOS",
+          "when": "view == texra.folderExplorer && viewItem == folder",
+          "group": "5_modification"
         }
       ]
     },

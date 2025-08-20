@@ -37,6 +37,10 @@ export class ExplorerCommands {
         'texra.folderExplorer.addToList',
         (node: FileItem) => this.operations.addToList(node),
       ),
+      vscode.commands.registerCommand(
+        'texra.folderExplorer.revealInOS',
+        (node: FileItem) => this.operations.reveal(node.resourceUri),
+      ),
     );
   }
 }
