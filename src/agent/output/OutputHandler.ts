@@ -21,7 +21,7 @@ import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 
 // Local imports - utilities
 import { runLatexFormatter } from '@latex/texFormatter';
-// Standard library imports
+
 // Local imports - log
 import { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';

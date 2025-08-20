@@ -1,16 +1,11 @@
 // Standard library imports
-// Standard library imports
 import * as path from 'path';
 
 // Third-party imports
 import deepmerge from 'deepmerge';
-
-// Third-party imports
 import * as vscode from 'vscode';
 import * as yaml from 'yaml';
 import { z } from 'zod';
-
-// Local imports - agent
 
 // Local imports - agent components
 import {

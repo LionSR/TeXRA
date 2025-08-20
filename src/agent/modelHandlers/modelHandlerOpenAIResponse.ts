@@ -1,8 +1,5 @@
 // Standard library imports
-// Standard library imports
 import { Buffer } from 'node:buffer';
-
-// Third-party imports
 
 // Third-party imports
 import OpenAI, { toFile } from 'openai';

@@ -1,11 +1,8 @@
 // Standard library imports
-// Standard library imports
 import * as path from 'path';
 
 // Third-party imports
 import { FinishReason } from '@google/genai';
-
-// Local imports - agent
 
 // Local imports - agent components
 import type { AgentConfig } from '../core/AgentConfig';
@@ -29,8 +26,6 @@ import {
 } from '@frontend/media/img';
 import { SecretManager, ApiProvider } from '@frontend/secretManager';
 
-// Third-party imports
-// (none needed)
 
 // Local imports - log
 import { AgentLogger } from '@logger/AgentLogger';
