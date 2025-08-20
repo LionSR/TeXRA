@@ -1,5 +1,8 @@
+// Third-party imports
 // Standard library imports
 import * as vscode from 'vscode';
+
+// Local imports - tools
 
 // Local imports
 import { executeCommand, checkToolInstalled } from '@utils/system';

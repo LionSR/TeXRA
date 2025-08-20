@@ -1,3 +1,5 @@
+// Third-party imports
+import { countTokens } from 'gpt-tokenizer';
 // Standard library imports
 // (none needed)
 
@@ -9,34 +11,35 @@ import {
   ChatCompletionToolMessageParam,
   ChatCompletionMessageParam,
 } from 'openai/resources/chat/completions';
-import { countTokens } from 'gpt-tokenizer';
 
-// Local imports - utilities
-import { WorkspaceFS } from '@utils/files';
-import { cleanFileContent } from '@replacement/engine';
-import xmlUtils from '@utils/text/xmlUtils';
-import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
+// Local imports - agent
 
 // Local imports - agent components
 import type { AgentConfig } from '../core/AgentConfig';
 import { AgentSetting, hasEndTag } from '../core/AgentDataclass';
 import { AgentStateRound } from '../core/AgentState';
-import { ModelHandler } from './ModelHandler';
-import type { ProviderStopReason } from './types/StopReasonTypes';
-import { OPENAI_CHAT_FINISH } from './types/StopReasonTypes';
-import { toOpenAITools } from './toolConversion';
-import type { ToolDefinition } from '@model';
 import {
   OpenAIAPIResponseUsage,
   ResponseUsageFactory,
   ExtendedCompletionUsage,
 } from '../core/ResponseUsage';
 import { ToolState } from '../core/ToolState';
-import { K_SLICE } from '@utils/config';
-import { objectToLogString } from '@utils/text/stringUtils';
-import { calculateTokenPrice } from '@agent/utils/priceUtils';
+import { ModelHandler } from './ModelHandler';
+import { toOpenAITools } from './toolConversion';
+import type { ProviderStopReason } from './types/StopReasonTypes';
+import { OPENAI_CHAT_FINISH } from './types/StopReasonTypes';
 import { MediaEntry } from '@agent/utils/mediaTypes';
+import { calculateTokenPrice } from '@agent/utils/priceUtils';
+import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
+import type { ToolDefinition } from '@model';
+import { cleanFileContent } from '@replacement/engine';
+import { K_SLICE } from '@utils/config';
+
+// Local imports - utilities
+import { WorkspaceFS } from '@utils/files';
+import { objectToLogString } from '@utils/text/stringUtils';
+import xmlUtils from '@utils/text/xmlUtils';
 
 /**
  * OpenAI-specific handlers.

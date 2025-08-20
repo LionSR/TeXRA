@@ -1,3 +1,4 @@
+// Local imports - progress view
 // Local imports
 import { TOOLBAR_BUTTONS, ELEMENT_IDS } from '../constants.js';
 import { createIconButton } from '@common/templateUtils.js';

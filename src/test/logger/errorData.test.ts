@@ -1,4 +1,7 @@
+// Standard library imports
 import { strict as assert } from 'assert';
+
+// Local imports - test
 import { bus } from '@eventBus/ProgressEventBus';
 import { AgentLogger } from '@logger/AgentLogger';
 

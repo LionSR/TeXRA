@@ -1,25 +1,28 @@
 // Third-party imports
+// Third-party imports
 import * as vscode from 'vscode';
+
+// Local imports - progress view
+import { ProgressEventHandler } from './events/ProgressEventHandler';
+import { WebviewUpdater } from './managers';
+
+// @ts-ignore - Import JavaScript module
+import { STATUS, COMMANDS } from './modules/constants.js';
 
 // Local imports - new architecture
 import { StatePersistenceManager } from './persistence/StatePersistenceManager';
-import { ProgressViewState } from './state/ProgressViewState';
-import { ProgressEventHandler } from './events/ProgressEventHandler';
-import { WebviewUpdater } from './managers';
 
 // Local imports - existing components
 import { ProgressViewContentProvider } from './ProgressViewContentProvider';
 import { ProgressViewMessageHandler } from './ProgressViewMessageHandler';
-import { AgentLogger } from '@logger/AgentLogger';
+import { ProgressViewState } from './state/ProgressViewState';
 
 // Types
 import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
-import { TaskState } from '@logger/TaskState';
 import type { TokenUsageStats } from '@agent/types/UsageTypes';
+import { AgentLogger } from '@logger/AgentLogger';
 import { LogMessageData } from '@logger/LogTypes';
-
-// @ts-ignore - Import JavaScript module
-import { STATUS, COMMANDS } from './modules/constants.js';
+import { TaskState } from '@logger/TaskState';
 
 // Type aliases for status values
 type StreamStatusType =

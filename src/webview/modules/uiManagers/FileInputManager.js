@@ -1,8 +1,7 @@
-// Local imports
-import { vscode } from '@common/webviewContext.js';
+// Third-party imports
 import Sortable from 'sortablejs';
-import { safeGetElementById, safeGetElementValue } from '@common/domUtils.js';
-import { capitalize } from '@common/stringUtils.js';
+
+// Local imports - webview
 import {
   MULTIPLE_SELECTIONS,
   FILE_TYPES,
@@ -14,12 +13,15 @@ import {
   EDITED_FILE,
   BASE_FILE,
 } from '../constants.js';
-import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
+import { mainViewState } from '../mainViewState.js';
+import { BaseUIManager } from './BaseUIManager.js';
 import { fileList } from './FileList.js';
 import { fileSelect } from './FileSelect.js';
 import { outputFilesManager } from './OutputFilesManager.js';
-import { mainViewState } from '../mainViewState.js';
-import { BaseUIManager } from './BaseUIManager.js';
+import { safeGetElementById, safeGetElementValue } from '@common/domUtils.js';
+import { capitalize } from '@common/stringUtils.js';
+import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
+import { vscode } from '@common/webviewContext.js';
 
 export class FileInputManager extends BaseUIManager {
   constructor(

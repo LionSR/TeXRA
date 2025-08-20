@@ -1,7 +1,8 @@
+// Local imports - progress view
 // Local imports
 import { ELEMENT_IDS } from '../constants.js';
-import { createFromTemplate } from '@common/templateUtils.js';
 import { initializeIconButtons } from '@common/iconButtonInitializer.js';
+import { createFromTemplate } from '@common/templateUtils.js';
 
 const AGENT_ICONS = {
   CoT: 'terminal',
