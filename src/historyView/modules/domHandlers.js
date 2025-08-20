@@ -1,8 +1,9 @@
+// Local imports - history view
+import { historyViewState } from './historyViewState.js';
+import { HistoryEventsManager } from './uiManagers/HistoryEventsManager.js';
 // Local imports
 import { HistoryRenderer } from './uiManagers/HistoryRenderer.js';
 import { SearchManager } from './uiManagers/SearchManager.js';
-import { HistoryEventsManager } from './uiManagers/HistoryEventsManager.js';
-import { historyViewState } from './historyViewState.js';
 
 /**
  * Coordinates the history view DOM managers.

@@ -1,4 +1,4 @@
-import { ReplacementCategory } from '../types';
+// Local imports - replacement
 import {
   generateGroupedBackslashFixes,
   generateReferenceSpacing,
@@ -7,6 +7,8 @@ import {
   GREEK_LETTERS,
   MATH_OPERATORS,
 } from '../helpers';
+import { ReplacementCategory } from '../types';
+
 // Common LaTeX equation spacing fixes
 export const EQUATION_REPLACEMENTS: ReplacementCategory = {
   name: 'equations',

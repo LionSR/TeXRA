@@ -1,12 +1,13 @@
 // Standard library imports
 import * as path from 'path';
+
 // Third-party imports
 import * as vscode from 'vscode';
-import * as logger from '@logger/logUtils';
 
 // Local imports
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { validateYamlAndPromptAdd } from '@frontend/agents/register';
+import * as logger from '@logger/logUtils';
 
 const CHANNEL = 'Webview';
 logger.initialize(CHANNEL);

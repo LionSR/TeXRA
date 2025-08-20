@@ -1,3 +1,4 @@
+// Local imports - progress view
 // Local imports - state management helper
 import { WebviewStateManager } from '@common/webviewState.js';
 

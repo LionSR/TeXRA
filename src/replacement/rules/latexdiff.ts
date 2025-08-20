@@ -1,4 +1,6 @@
+// Local imports - replacement
 import { ReplacementCategory } from '../types';
+
 export const LATEXDIFF_REPLACEMENTS: ReplacementCategory = {
   name: 'latexdiff',
   description: 'Fixes for LaTeXdiff markup and compatibility issues',

@@ -1,11 +1,4 @@
-// Local imports
-import { vscode } from '@common/webviewContext.js';
-import {
-  safeGetElementById,
-  safeGetElementValue,
-  safeGetElementChecked,
-} from '@common/domUtils.js';
-import { capitalize } from '@common/stringUtils.js';
+// Local imports - webview
 import {
   CHECK_BOXES,
   MULTIPLE_SELECTIONS,
@@ -13,8 +6,15 @@ import {
   BASE_FILE,
   EDITED_FILE,
 } from '../constants.js';
-import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
 import { BaseUIManager } from './BaseUIManager.js';
+import {
+  safeGetElementById,
+  safeGetElementValue,
+  safeGetElementChecked,
+} from '@common/domUtils.js';
+import { capitalize } from '@common/stringUtils.js';
+import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
+import { vscode } from '@common/webviewContext.js';
 
 export class ActionButtonManager extends BaseUIManager {
   constructor(vscodeInstance = vscode, fileList, state, instructionMgr) {

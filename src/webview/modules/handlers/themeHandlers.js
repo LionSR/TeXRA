@@ -1,7 +1,8 @@
+// Local imports - webview
+import { mainViewDomHandler } from '../domHandlers.js';
 // Local imports - DOM utilities
 import { safeSetElementValue } from '@common/domUtils.js';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
-import { mainViewDomHandler } from '../domHandlers.js';
 
 /**
  * Create handlers related to theme and model configuration.

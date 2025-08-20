@@ -1,23 +1,27 @@
 // Third-party imports
+// Third-party imports
 import * as vscode from 'vscode';
-// Local imports
-import { ProgressViewState } from '../state/ProgressViewState';
-import { WebviewUpdater } from '../managers';
-import { AgentLogger } from '@logger/AgentLogger';
-import { getConfig } from '@utils/config';
-import { bus } from '@eventBus/ProgressEventBus';
-import { buildStreamInfos } from '../streamInfoUtils';
 
-// Types
-import type { TokenUsageStats } from '@agent/types/UsageTypes';
-import { TaskState } from '@logger/TaskState';
-import { LogMessageData, TaskGroup } from '@logger/LogTypes';
-import { parseLegacyLogData } from '@logger/logUtils';
-import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
-import type { StreamTabInfo } from '../types';
+// Local imports - progress view
+import { WebviewUpdater } from '../managers';
 
 // @ts-ignore - Import JavaScript module
 import { STATUS } from '../modules/constants.js';
+
+// Local imports
+import { ProgressViewState } from '../state/ProgressViewState';
+import { buildStreamInfos } from '../streamInfoUtils';
+import type { StreamTabInfo } from '../types';
+import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
+
+// Types
+import type { TokenUsageStats } from '@agent/types/UsageTypes';
+import { bus } from '@eventBus/ProgressEventBus';
+import { AgentLogger } from '@logger/AgentLogger';
+import { LogMessageData, TaskGroup } from '@logger/LogTypes';
+import { parseLegacyLogData } from '@logger/logUtils';
+import { TaskState } from '@logger/TaskState';
+import { getConfig } from '@utils/config';
 
 // Type aliases for status values
 type StatusType =
