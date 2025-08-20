@@ -14,9 +14,8 @@ import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { AbsoluteFS } from '@utils/files';
 import { safeExecuteCommand } from '@utils/system/commandUtils';
 import { validateYamlAndPromptAdd } from '@frontend/agents/register';
-import * as logger from '@logger/logUtils';
 
-import { FileItem } from './FileItem';
+import * as logger from '@logger/logUtils';
 
 const NEW_AGENT_TEMPLATE = `# --- Agent Inheritance (Optional) ---
 # inherits: base
