@@ -1,10 +1,11 @@
-import { progressViewState } from './modules/progressViewState.js';
-import { messageHandler } from './modules/messageHandlers.js';
-import { progressViewDomHandler } from './modules/domHandlers.js';
-import { vscode } from '@common/webviewContext.js';
+// Local imports - progress view
 import { COMMANDS } from './modules/constants.js';
-import { validateTemplates } from '@common/templateUtils.js';
+import { progressViewDomHandler } from './modules/domHandlers.js';
+import { messageHandler } from './modules/messageHandlers.js';
+import { progressViewState } from './modules/progressViewState.js';
 import { initializeIconButtons } from '@common/iconButtonInitializer.js';
+import { validateTemplates } from '@common/templateUtils.js';
+import { vscode } from '@common/webviewContext.js';
 
 // Initialize the state when the window loads
 progressViewState.initialize();

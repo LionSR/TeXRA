@@ -1,25 +1,4 @@
-// Standard library imports
-
-// Third-party imports
-// (none needed)
-
-// Local imports - log
-import { AgentLogger } from '@logger/AgentLogger';
-import { MESSAGE_TYPES } from '@logger/messageTypes';
-
-// Local imports - latex utils
-import { bestConnectionMethod } from '@latex';
-
-// Local imports - utilities
-import { WorkspaceFS } from '@utils/files';
-import { getRunDir, TASK_RUNS_DIR } from '@utils/files/taskRunStorage';
-import { getSystemPromptWithRules } from '@agent/utils/promptHelpers';
-import { messageToSkeleton } from '@agent/utils/messageSkeletonUtils';
-import { checkForMassiveRepetition } from '@agent/utils/text/repetitionUtils';
-import replacementEngine from '@replacement/engine';
-import xmlUtils from '@utils/text/xmlUtils';
-import type { ExecutionId } from '@agent/types/IdentifierTypes';
-import { maybeSaveDebugObject } from '@agent/utils/debugMessageSaver';
+// Local imports - agent
 
 // Local imports - agent components
 import type { AgentConfig } from './AgentConfig';
@@ -28,9 +7,31 @@ import { AgentStateRound, AgentStateGlobal } from './AgentState';
 import { ToolState } from './ToolState';
 import type { IModelHandler } from '@agent/modelHandlers';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
+import type { ExecutionId } from '@agent/types/IdentifierTypes';
+import { maybeSaveDebugObject } from '@agent/utils/debugMessageSaver';
+import { messageToSkeleton } from '@agent/utils/messageSkeletonUtils';
+import { getSystemPromptWithRules } from '@agent/utils/promptHelpers';
+import { checkForMassiveRepetition } from '@agent/utils/text/repetitionUtils';
+
+// Local imports - latex utils
+import { bestConnectionMethod } from '@latex';
+// Standard library imports
+
+// Third-party imports
+// (none needed)
+
+// Local imports - log
+import { AgentLogger } from '@logger/AgentLogger';
+import { MESSAGE_TYPES } from '@logger/messageTypes';
+import replacementEngine from '@replacement/engine';
 
 // Shared constants
 import { K_SLICE, REPETITION_DETECTION_THRESHOLD } from '@utils/config';
+
+// Local imports - utilities
+import { WorkspaceFS } from '@utils/files';
+import { getRunDir, TASK_RUNS_DIR } from '@utils/files/taskRunStorage';
+import xmlUtils from '@utils/text/xmlUtils';
 
 /**
  * Options required to run a single response cycle.

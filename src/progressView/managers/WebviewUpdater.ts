@@ -1,19 +1,22 @@
 // Third-party imports
+// Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports
-import { ProgressViewState } from '../state/ProgressViewState';
-import { AgentLogger } from '@logger/AgentLogger';
-import { buildStreamInfos } from '../streamInfoUtils';
-
-// Types
-import type { TokenUsageStats } from '@agent/types/UsageTypes';
-import { LogMessageData } from '@logger/LogTypes';
-import type { StreamTabId } from '@agent/types/IdentifierTypes';
-import type { StreamTabInfo } from '../types';
+// Local imports - progress view
 
 // @ts-ignore - Import JavaScript module
 import { COMMANDS } from '../modules/constants.js';
+
+// Local imports
+import { ProgressViewState } from '../state/ProgressViewState';
+import { buildStreamInfos } from '../streamInfoUtils';
+import type { StreamTabInfo } from '../types';
+import type { StreamTabId } from '@agent/types/IdentifierTypes';
+
+// Types
+import type { TokenUsageStats } from '@agent/types/UsageTypes';
+import { AgentLogger } from '@logger/AgentLogger';
+import { LogMessageData } from '@logger/LogTypes';
 
 // Type aliases for status values
 type StatusType = 'running' | 'error' | 'stopped' | 'ready';

@@ -1,4 +1,6 @@
+// Local imports - replacement
 import { ReplacementCategory } from '../types';
+
 // LaTeX spacing and punctuation fixes
 export const LATEX_SPACING_REPLACEMENTS: ReplacementCategory = {
   name: 'latex_spacing',

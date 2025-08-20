@@ -1,10 +1,9 @@
-// Local imports
-import { safeGetElementById, setChevronIcon } from '@common/domUtils.js';
-
+// Local imports - webview
+import { INPUT_FILE, ELEMENT_IDS } from '../constants.js';
 import { mainViewState } from '../mainViewState.js';
 import { fileList } from './FileList.js';
 import { fileSelect } from './FileSelect.js';
-import { INPUT_FILE, ELEMENT_IDS } from '../constants.js';
+import { safeGetElementById, setChevronIcon } from '@common/domUtils.js';
 
 const INPUT_FILE_ID = INPUT_FILE;
 const OUTPUT_FILES_ID = ELEMENT_IDS.OUTPUT_FILES;

@@ -1,11 +1,14 @@
+// Standard library imports
 import { strict as assert } from 'assert';
+
+// Local imports - test
+import type { AgentConfig } from '@agent/core/AgentConfig';
 
 // Local imports
 import { AgentSetting, AgentType } from '@agent/core/AgentDataclass';
-import type { AgentConfig } from '@agent/core/AgentConfig';
+import { XmlOutputManager } from '@agent/output/XmlOutputManager';
 import { AgentLogger } from '@logger/AgentLogger';
 import { WorkspaceFS } from '@utils/files';
-import { XmlOutputManager } from '@agent/output/XmlOutputManager';
 
 describe('XmlOutputManager markdown fallback', () => {
   const setting: AgentSetting = {

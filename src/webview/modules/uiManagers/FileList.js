@@ -1,4 +1,4 @@
-// Local imports
+// Local imports - webview
 import {
   addEventListenerSafely,
   safeGetElementById,

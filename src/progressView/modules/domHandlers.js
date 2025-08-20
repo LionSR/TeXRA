@@ -1,13 +1,14 @@
+// Local imports - progress view
+import { LogEntryFormatter } from './formatters.js';
 // Local imports
 import { progressViewState } from './progressViewState.js';
-import { LogEntryFormatter } from './formatters.js';
 import { TaskGroupManager, LogEntryManager } from './taskManagers.js';
-import { UsageSummary, UsageGroup } from './usageManagers.js';
+import { EventsManager } from './uiManagers/EventsManager.js';
+import { FileList } from './uiManagers/FileList.js';
+import { Status } from './uiManagers/Status.js';
 import { StreamTabs } from './uiManagers/StreamTabs.js';
 import { Toolbar } from './uiManagers/Toolbar.js';
-import { Status } from './uiManagers/Status.js';
-import { FileList } from './uiManagers/FileList.js';
-import { EventsManager } from './uiManagers/EventsManager.js';
+import { UsageSummary, UsageGroup } from './usageManagers.js';
 
 /**
  * Manages all DOM operations for the progress view.

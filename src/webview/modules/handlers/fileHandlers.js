@@ -1,7 +1,4 @@
-// Local imports - utilities
-import { vscode } from '@common/webviewContext.js';
-import { safeSetElementValue } from '@common/domUtils.js';
-import { capitalize, uncapitalize } from '@common/stringUtils.js';
+// Local imports - webview
 import {
   FILE_TYPES,
   INPUT_FILE,
@@ -12,10 +9,14 @@ import {
   BASE_FILE,
   ELEMENT_IDS,
 } from '../constants.js';
+import { mainViewState } from '../mainViewState.js';
 import { fileList } from '../uiManagers/FileList.js';
 import { fileSelect } from '../uiManagers/FileSelect.js';
-import { mainViewState } from '../mainViewState.js';
+import { safeSetElementValue } from '@common/domUtils.js';
+import { capitalize, uncapitalize } from '@common/stringUtils.js';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
+// Local imports - utilities
+import { vscode } from '@common/webviewContext.js';
 
 /**
  * Create file related handlers.

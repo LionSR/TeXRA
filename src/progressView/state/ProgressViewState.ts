@@ -1,18 +1,19 @@
-// Local imports
-import { StatePersistenceManager } from '../persistence/StatePersistenceManager';
+// Local imports - progress view
 import {
   StreamTabsManager,
   TaskGroupManager,
   OutputFilesManager,
   UsageStatsManager,
 } from '../managers';
+// Local imports
+import { StatePersistenceManager } from '../persistence/StatePersistenceManager';
+import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
 import { WorkspaceStateKey } from '@common/state/stateManager';
-import { objectToTaskState, getConfig } from '@utils/config';
 import { AgentLogger } from '@logger/AgentLogger';
 
 // Types
 import { TaskState } from '@logger/TaskState';
-import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
+import { objectToTaskState, getConfig } from '@utils/config';
 
 /**
  * Core state management for the progress view.
