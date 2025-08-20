@@ -146,25 +146,25 @@
           },
           "texra.model.useStreamingOpenai": {
             "type": "boolean",
-            "default": false,
+            "default": true,
             "description": "Enable streaming for OpenAI models. Overrides the global useStreaming setting.",
             "scope": "resource"
           },
           "texra.model.useStreamingGoogle": {
             "type": "boolean",
-            "default": false,
+            "default": true,
             "description": "Enable streaming for Google models. Works with both the OpenAI-compatible API and the native GenAI SDK. Overrides the global useStreaming setting.",
             "scope": "resource"
           },
           "texra.model.useStreamingXai": {
             "type": "boolean",
-            "default": false,
+            "default": true,
             "description": "Enable streaming for xAI models via OpenAI-compatible API. Overrides the global useStreaming setting.",
             "scope": "resource"
           },
           "texra.model.useStreamingDeepseek": {
             "type": "boolean",
-            "default": false,
+            "default": true,
             "description": "Enable streaming for DeepSeek models via OpenAI-compatible API. Overrides the global useStreaming setting.",
             "scope": "resource"
           },
@@ -1262,7 +1262,7 @@
     "mime-types": "^3.0.1",
     "nanoid": "^5.1.5",
     "node-pandoc": "^0.3.0",
-    "openai": "^5.12.2",
+    "openai": "^5.13.1",
     "pdf2pic": "^3.2.0",
     "shell-quote": "^1.8.3",
     "sortablejs": "^1.15.6",
