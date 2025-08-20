@@ -4,16 +4,18 @@
 // Third-party imports
 import OpenAI from 'openai';
 
+// Local imports - agent
+import { ToolState } from '../core/ToolState';
+
 // Local imports - agent components
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
-import { ToolState } from '../core/ToolState';
 import { MediaEntry } from '@agent/utils/mediaTypes';
-import type { ToolDefinition } from '@model';
 
 // Local imports - utilities
 import { convertContentToString } from '@agent/utils/text/messageUtils';
-import { K_SLICE, MESSAGE_PREVIEW_LENGTH } from '@utils/config';
 import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
+import type { ToolDefinition } from '@model';
+import { K_SLICE, MESSAGE_PREVIEW_LENGTH } from '@utils/config';
 
 /**
  * Handler for Moonshot Kimi models using OpenAI-compatible API.

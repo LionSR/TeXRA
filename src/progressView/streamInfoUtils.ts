@@ -1,4 +1,7 @@
+// Standard library imports
 import * as path from 'path';
+
+// Local imports - progress view
 import type { ProgressViewState } from './state/ProgressViewState';
 import type { StreamTabInfo } from './types';
 

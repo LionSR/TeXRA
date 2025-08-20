@@ -4,14 +4,16 @@
 // Third-party imports
 import OpenAI from 'openai';
 
+// Local imports - agent
+import { ToolState } from '../core/ToolState';
+
 // Local imports - agent components
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
-import { ToolState } from '../core/ToolState';
 import { MediaEntry } from '@agent/utils/mediaTypes';
-import type { ToolDefinition } from '@model';
 
 // Local imports - utilities
 import { convertContentToString } from '@agent/utils/text/messageUtils';
+import type { ToolDefinition } from '@model';
 import { MESSAGE_PREVIEW_LENGTH } from '@utils/config';
 
 /**

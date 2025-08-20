@@ -1,6 +1,9 @@
+// Third-party imports
+import { nanoid } from 'nanoid';
+
+// Local imports - webview
 // Image paste handling utilities
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
-import { nanoid } from 'nanoid';
 
 // Comprehensive MIME type to extension mapping
 export const IMAGE_MIME_TYPES = {

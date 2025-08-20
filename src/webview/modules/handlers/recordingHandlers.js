@@ -1,5 +1,6 @@
-import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
+// Local imports - webview
 import { webviewEventBus } from '../eventBus.js';
+import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
 
 /**
  * Handlers related to recording state.

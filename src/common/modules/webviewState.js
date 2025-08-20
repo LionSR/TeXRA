@@ -1,3 +1,4 @@
+// Local imports - common
 import { vscode } from '@common/webviewContext.js';
 
 /**

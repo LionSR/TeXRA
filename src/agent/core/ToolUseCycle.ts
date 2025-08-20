@@ -1,3 +1,12 @@
+// Local imports - agent
+import type { IModelHandler } from '../modelHandlers';
+import type { ProviderMessage } from '../modelHandlers/types/ProviderMessage';
+
+// Local imports - agent components
+import type { AgentSetting, AgentPrompt } from './AgentDataclass';
+import { ToolState } from './ToolState';
+import type { ExtendedTokenUsageStats } from '@agent/types/UsageTypes';
+import { maybeSaveDebugObject } from '@agent/utils/debugMessageSaver';
 // Utility to run iterative tool-use cycles
 
 // Third-party imports
@@ -5,18 +14,10 @@
 // Local imports - log
 import { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
-import type { ExtendedTokenUsageStats } from '@agent/types/UsageTypes';
-
-// Local imports - agent components
-import type { AgentSetting, AgentPrompt } from './AgentDataclass';
 import type { ToolDefinition } from '@model';
-import type { IModelHandler } from '../modelHandlers';
-import type { ProviderMessage } from '../modelHandlers/types/ProviderMessage';
 import { BaseTool } from '@tools/core/base';
 import { ToolResult } from '@tools/result';
 import xmlUtils from '@utils/text/xmlUtils';
-import { maybeSaveDebugObject } from '@agent/utils/debugMessageSaver';
-import { ToolState } from './ToolState';
 
 export interface ToolUseCycleOptions {
   /** Model handler for API interactions */

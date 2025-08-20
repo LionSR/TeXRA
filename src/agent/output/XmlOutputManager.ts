@@ -1,20 +1,23 @@
+// Standard library imports
 import * as path from 'path';
+
+// Third-party imports
 import { XMLParser } from 'fast-xml-parser';
 
-import { AgentSetting } from '@agent/core/AgentDataclass';
+// Local imports - agent
+import { NamedOutputFile } from './types';
 import type { AgentConfig } from '@agent/core/AgentConfig';
+import { AgentSetting } from '@agent/core/AgentDataclass';
+import { getOutputFileName } from '@agent/utils/outputFileUtils';
 import { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
-import { WorkspaceFS } from '@utils/files';
-import xmlUtils from '@utils/text/xmlUtils';
-import { getOutputFileName } from '@agent/utils/outputFileUtils';
 import {
   applyReplacements,
   getReplacementsByCategory,
 } from '@replacement/engine';
 import replacementEngine from '@replacement/engine';
-
-import { NamedOutputFile } from './types';
+import { WorkspaceFS } from '@utils/files';
+import xmlUtils from '@utils/text/xmlUtils';
 
 export class XmlOutputManager {
   constructor(

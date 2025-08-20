@@ -1,21 +1,21 @@
+// Standard library imports
+import * as path from 'path';
+
 // Third-party imports
 import * as vscode from 'vscode';
 
+// Local imports - commands
+import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
+
 // Local imports - log
 import * as logger from '@logger/logUtils';
-
-// Local imports - utilities
-import * as path from 'path';
-
 import { StorageFS } from '@utils/files';
 import { PASTED_DIR } from '@utils/files/pastedImageUtils';
+import { sleep } from '@utils/helpers';
 import {
   polishTextWithAI,
   FileContext,
 } from '@utils/text/textEnhancementUtils';
-import { sleep } from '@utils/helpers';
-// Local imports - commands
-import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
 
 const CHANNEL = 'InstructionManager';
 logger.initialize(CHANNEL);
