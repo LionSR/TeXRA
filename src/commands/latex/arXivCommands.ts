@@ -82,7 +82,7 @@ export function registerArXivCommands(context: vscode.ExtensionContext) {
         // Show success message with a button to open the extracted folder AFTER the progress window completes
         const openFolderAction = 'Open Folder';
         const result = await vscode.window.showInformationMessage(
-          `arXiv source downloaded and extracted to ${path.basename(extractedPath)}${
+          `arXiv source downloaded to ${path.basename(extractedPath)}${
             autoIndent ? ' with LaTeX files indented' : ''
           }`,
           openFolderAction,
