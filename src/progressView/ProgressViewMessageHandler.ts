@@ -1,9 +1,13 @@
+// Third-party imports
 import * as vscode from 'vscode';
+
+// Local imports - progress view
+import type { ProgressViewProvider } from './ProgressViewProvider';
 import {
   BaseViewMessageHandler,
   MessageHandler,
 } from '@common/webview/BaseViewMessageHandler';
-import type { ProgressViewProvider } from './ProgressViewProvider';
+
 // @ts-ignore - Import JavaScript module
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 

@@ -1,9 +1,10 @@
-import { vscode } from '@common/webviewContext.js';
+// Local imports - history view
 import { historyViewDomHandler } from './modules/domHandlers.js';
 import { historyViewState } from './modules/historyViewState.js';
 import { messageHandler } from './modules/messageHandlers.js';
-import { HISTORY_VIEW_COMMANDS } from '@common/webview/commands.js';
 import { initializeIconButtons } from '@common/iconButtonInitializer.js';
+import { HISTORY_VIEW_COMMANDS } from '@common/webview/commands.js';
+import { vscode } from '@common/webviewContext.js';
 
 historyViewState.initialize();
 

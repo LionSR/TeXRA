@@ -4,13 +4,15 @@ import * as path from 'path';
 // Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - log
-import * as logger from '@logger/logUtils';
+// Local imports - utils
 import { AbsoluteFS } from './absoluteFS';
 import {
   showLoggedErrorMessage,
   showLoggedMessage,
 } from '@common/errors/errorHandlingUtils';
+
+// Local imports - log
+import * as logger from '@logger/logUtils';
 
 const CHANNEL = 'workspaceFS';
 logger.initialize(CHANNEL);

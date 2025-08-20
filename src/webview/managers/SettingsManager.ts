@@ -1,4 +1,4 @@
-// Local imports
+// Local imports - webview
 import { safeExecuteCommand } from '@utils/system';
 
 const CHANNEL = 'SettingsManager';

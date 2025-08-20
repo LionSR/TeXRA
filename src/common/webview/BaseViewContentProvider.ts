@@ -1,6 +1,9 @@
+// Third-party imports
 import * as vscode from 'vscode';
-import * as logger from '@logger/logUtils';
+
+// Local imports - common
 import { buildWebviewHtml } from '@frontend/webview/html';
+import * as logger from '@logger/logUtils';
 
 /**
  * Base class for all webview content providers.

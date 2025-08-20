@@ -1,9 +1,10 @@
+// Local imports - progress view
+import { COMMANDS, ELEMENT_IDS } from '../constants.js';
 // Local imports
 import { formatTokens } from '../formatters.js';
-import { COMMANDS, ELEMENT_IDS } from '../constants.js';
-import { vscode } from '@common/webviewContext.js';
-import { createFromTemplate } from '@common/templateUtils.js';
 import { initializeIconButtons } from '@common/iconButtonInitializer.js';
+import { createFromTemplate } from '@common/templateUtils.js';
+import { vscode } from '@common/webviewContext.js';
 
 /**
  * Manages file list rendering.

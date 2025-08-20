@@ -1,3 +1,4 @@
+// Standard library imports
 import { EventEmitter } from 'events';
 
 // Maximum number of events to buffer when no listeners are registered

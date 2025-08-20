@@ -1,5 +1,10 @@
+// Standard library imports
 import { strict as assert } from 'assert';
+
+// Third-party imports
 import * as vscode from 'vscode';
+
+// Local imports - test
 import {
   registerMainViewCommands,
   mainViewCommands,
