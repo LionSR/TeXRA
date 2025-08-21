@@ -205,6 +205,7 @@ export class ModelHandlerOpenAI extends ModelHandler<
           if (reasoningDelta) thinking.append(reasoningDelta);
         }
 
+        // Note that there is no second consumption problem as per openai sdk examples
         response = await stream.finalChatCompletion();
         const finalReasoning = this.processThinkingBlock(response);
         thinking.finalize(finalReasoning ?? undefined);
