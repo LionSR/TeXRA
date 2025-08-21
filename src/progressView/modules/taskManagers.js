@@ -344,7 +344,8 @@ export class LogEntryManager {
           // If this is a log message, extract its timestamp
           else if (
             child.classList.contains('log-line') ||
-            child.classList.contains('model-response-line')
+            child.classList.contains('model-response-line') ||
+            child.classList.contains('special-details')
           ) {
             // Try to get the full timestamp from data attribute
             const childFullTimestamp = child.dataset.fullTimestamp;
@@ -379,7 +380,23 @@ export class LogEntryManager {
   update(logMessage) {
     const existing = document.querySelector(`[data-log-id="${logMessage.id}"]`);
     if (existing) {
+      // Preserve the expanded/collapsed state for thinking and scratchpad
+      const wasOpen = existing.hasAttribute('open');
       const newEl = this.entryFormatter.format(logMessage);
+
+      // Restore the expanded state if it was open
+      if (
+        wasOpen &&
+        (logMessage.messageType === 'thinking' ||
+          logMessage.messageType === 'scratchpad')
+      ) {
+        newEl.setAttribute('open', '');
+        const toggleIcon = newEl.querySelector('.toggle-icon');
+        if (toggleIcon) {
+          toggleIcon.className = 'codicon codicon-chevron-down toggle-icon';
+        }
+      }
+
       existing.replaceWith(newEl);
     }
   }

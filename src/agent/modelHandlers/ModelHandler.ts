@@ -123,44 +123,69 @@ export abstract class ModelHandler<
     const streamId = this.logger.channelId;
     const id = randomUUID();
     let buffer = '';
-
-    bus.emit('addLogMessage', {
-      stream: streamId,
-      logMessage: {
-        id,
-        text: '',
-        level: 'info',
-        timestamp: Date.now(),
-        groupId,
-        messageType: MESSAGE_TYPES.THINKING,
-      },
-    });
+    let isFirstUpdate = true;
 
     return {
       append: (text: string) => {
         if (!text) return;
         buffer += text;
-        bus.emit('updateLogMessage', {
-          stream: streamId,
-          logMessage: {
-            id,
-            text: encodeHtml(buffer),
-            messageType: MESSAGE_TYPES.THINKING,
-          },
-        });
+
+        // Use addLogMessage for the first update, updateLogMessage for subsequent ones
+        if (isFirstUpdate) {
+          bus.emit('addLogMessage', {
+            stream: streamId,
+            logMessage: {
+              id,
+              text: encodeHtml(buffer),
+              level: 'info',
+              timestamp: Date.now(),
+              groupId,
+              messageType: MESSAGE_TYPES.THINKING,
+            },
+          });
+          isFirstUpdate = false;
+        } else {
+          bus.emit('updateLogMessage', {
+            stream: streamId,
+            logMessage: {
+              id,
+              text: encodeHtml(buffer),
+              groupId,
+              messageType: MESSAGE_TYPES.THINKING,
+            },
+          });
+        }
       },
       finalize: (finalText?: string) => {
         if (typeof finalText === 'string') {
           buffer = finalText;
         }
-        bus.emit('updateLogMessage', {
-          stream: streamId,
-          logMessage: {
-            id,
-            text: encodeHtml(buffer),
-            messageType: MESSAGE_TYPES.THINKING,
-          },
-        });
+
+        // If we never appended anything, create the initial entry
+        if (isFirstUpdate) {
+          bus.emit('addLogMessage', {
+            stream: streamId,
+            logMessage: {
+              id,
+              text: encodeHtml(buffer),
+              level: 'info',
+              timestamp: Date.now(),
+              groupId,
+              messageType: MESSAGE_TYPES.THINKING,
+            },
+          });
+        } else {
+          bus.emit('updateLogMessage', {
+            stream: streamId,
+            logMessage: {
+              id,
+              text: encodeHtml(buffer),
+              groupId,
+              messageType: MESSAGE_TYPES.THINKING,
+            },
+          });
+        }
+
         this.logger.debug(`Final reasoning length: ${buffer.length}`, groupId);
         return buffer;
       },
