@@ -4,6 +4,27 @@ import { TaskGroupHeaderFormatter, LogEntryFormatter } from './formatters.js';
 // Local imports
 import { progressViewState } from './progressViewState.js';
 
+// Constants
+const DECIMAL_RADIX = 10; // Explicit base-10 for parseInt to avoid octal interpretation
+
+/**
+ * Parse a timestamp that could be either numeric or ISO-8601 string
+ * @param {string} timestampStr - Timestamp string from dataset attribute
+ * @returns {Date} Parsed date object
+ */
+function parseTimestamp(timestampStr) {
+  if (!timestampStr) return new Date();
+
+  // Try parsing as a number first (for numeric timestamps)
+  const numericValue = parseInt(timestampStr, DECIMAL_RADIX);
+  if (!isNaN(numericValue) && numericValue > 0) {
+    return new Date(numericValue);
+  }
+
+  // Fall back to ISO-8601 string parsing
+  return new Date(timestampStr);
+}
+
 /**
  * Manages task group DOM operations.
  */
@@ -87,7 +108,7 @@ export class TaskGroupManager {
               sibling.querySelector('.group-start-time')?.dataset.start;
             if (
               siblingStartTime &&
-              parseInt(siblingStartTime, 10) > group.startTime
+              parseInt(siblingStartTime, DECIMAL_RADIX) > group.startTime
             ) {
               insertPosition = sibling;
               break;
@@ -100,9 +121,7 @@ export class TaskGroupManager {
           ) {
             // Extract full timestamp from data attribute if available
             const msgFullTimestamp = sibling.dataset.fullTimestamp;
-            const msgTime = msgFullTimestamp
-              ? new Date(msgFullTimestamp)
-              : new Date();
+            const msgTime = parseTimestamp(msgFullTimestamp);
 
             if (group.startTime < msgTime.getTime()) {
               insertPosition = sibling;
@@ -129,7 +148,7 @@ export class TaskGroupManager {
         existingGroup.querySelector('.group-start-time')?.dataset.start;
       if (
         existingStartTime &&
-        parseInt(existingStartTime, 10) > group.startTime
+        parseInt(existingStartTime, DECIMAL_RADIX) > group.startTime
       ) {
         insertPosition = existingGroup;
         break;
@@ -331,7 +350,7 @@ export class LogEntryManager {
             if (startTimeElem) {
               const groupStartTime = startTimeElem.dataset.start;
               if (groupStartTime) {
-                const startTime = parseInt(groupStartTime, 10);
+                const startTime = parseInt(groupStartTime, DECIMAL_RADIX);
                 // If the message timestamp is earlier than the group start time,
                 // insert before this group
                 if (msgDate.getTime() < startTime) {
@@ -344,12 +363,13 @@ export class LogEntryManager {
           // If this is a log message, extract its timestamp
           else if (
             child.classList.contains('log-line') ||
-            child.classList.contains('model-response-line')
+            child.classList.contains('model-response-line') ||
+            child.classList.contains('special-details')
           ) {
             // Try to get the full timestamp from data attribute
             const childFullTimestamp = child.dataset.fullTimestamp;
             if (childFullTimestamp) {
-              const childDate = new Date(childFullTimestamp);
+              const childDate = parseTimestamp(childFullTimestamp);
               if (msgDate < childDate) {
                 insertPosition = child;
                 break;
@@ -379,7 +399,23 @@ export class LogEntryManager {
   update(logMessage) {
     const existing = document.querySelector(`[data-log-id="${logMessage.id}"]`);
     if (existing) {
+      // Preserve the expanded/collapsed state for thinking and scratchpad
+      const wasOpen = existing.hasAttribute('open');
       const newEl = this.entryFormatter.format(logMessage);
+
+      // Restore the expanded state if it was open
+      if (
+        wasOpen &&
+        (logMessage.messageType === 'thinking' ||
+          logMessage.messageType === 'scratchpad')
+      ) {
+        newEl.setAttribute('open', '');
+        const toggleIcon = newEl.querySelector('.toggle-icon');
+        if (toggleIcon) {
+          toggleIcon.className = 'codicon codicon-chevron-down toggle-icon';
+        }
+      }
+
       existing.replaceWith(newEl);
     }
   }
