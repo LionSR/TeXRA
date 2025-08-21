@@ -70,6 +70,23 @@ export const INLINE_MATH_REPLACEMENTS: ReplacementCategory = {
   },
 };
 
+/**
+ * LATEXDIFF USAGE NOTE:
+ *
+ * For commands that should not have their arguments split by latexdiff,
+ * use the --append-safecmd option:
+ *
+ * latexdiff --append-safecmd="bze,hbze,mycommand" old.tex new.tex
+ *
+ * This tells latexdiff to treat these commands and their arguments as
+ * atomic units that should not be split across \DIFdel/\DIFadd blocks.
+ *
+ * Common commands to add as safecmd:
+ * - Custom macros with mathematical arguments
+ * - Commands with complex subscripts/superscripts
+ * - Commands whose arguments must remain intact for compilation
+ */
+
 // Latexdiff markup fixes using regex
 export const LATEXDIFF_MARKUP_REPLACEMENTS: ReplacementCategory = {
   name: 'latexdiff_markup',
@@ -82,15 +99,102 @@ export const LATEXDIFF_MARKUP_REPLACEMENTS: ReplacementCategory = {
     '\n[ \t]*\n[ \t]*\\}\\\\end\\{(align|aligned)(\\*?)\\}%DIFAUXCMD':
       '\n}\\end{$1$2}%DIFAUXCMD',
 
-    // fix \DIFdel{_I()}%DIFDELCMD
-    // '\\\\DIFdel\\{^([a-zA-Z])[^\\n\\}]*\\}%DIFDELCMD':
-    // '\\DIFdel{$^$1($}%DIFDELCMD',
-    '\\\\DIFdel\\{_([a-zA-Z])[^\\n\\}]{0,10}\\}%DIFDELCMD':
-      '\\DIFdel{$^$1($}%DIFDELCMD',
-    // There are more edge cases like:
-    // \DIFdel{_{t-1})D_{t-1}(}%DIFDELCMD < \bze%%%
-    // \DIFdel{_{t}|}%DIFDELCMD < \bze%%%
-    // \DIFdel{_{t-1})
+    // === Fix broken subscripts/superscripts in \DIFdel commands ===
+    // These patterns wrap math fragments in dollar signs to preserve math mode
+    //
+    // LIMITATION: These patterns only fix isolated subscript/superscript fragments.
+    // If there's additional content after (like in \DIFdel{_{t-1})F_{t-1|t}(}),
+    // the additional content is NOT processed to avoid overly aggressive replacements.
+    //
+    // TODO: Consider multi-pass processing or more sophisticated parsing for complex cases
+    // with multiple math fragments within a single \DIFdel block
+
+    // Pattern 1: Numeric subscripts
+    // Example: \DIFdel{_1|}%DIFDELCMD → \DIFdel{$_1$}%DIFDELCMD
+    // Example: \DIFdel{_0)}%DIFDELCMD → \DIFdel{$_0$}%DIFDELCMD
+    '\\\\DIFdel\\{_(\\d+)[\\)\\|]?\\}%DIFDELCMD': '\\DIFdel{$_$1$}%DIFDELCMD',
+
+    // Pattern 2: Prime symbols (derivatives)
+    // Example: \DIFdel{'_0)}%DIFDELCMD → \DIFdel{$'_0$}%DIFDELCMD
+    // Example: \DIFdel{''_t}%DIFDELCMD → \DIFdel{$''_t$}%DIFDELCMD
+    "\\\\DIFdel\\{('+)_([a-zA-Z\\d]+)[\\)\\|]?\\}%DIFDELCMD":
+      '\\DIFdel{$$1_$2$}%DIFDELCMD',
+
+    // Pattern 3: Subscript with braces and arithmetic
+    // Example: \DIFdel{_{t-1})}%DIFDELCMD → \DIFdel{$_{t-1}$}%DIFDELCMD
+    // Example: \DIFdel{_{n+2}}%DIFDELCMD → \DIFdel{$_{n+2}$}%DIFDELCMD
+    '\\\\DIFdel\\{_\\{([a-zA-Z][+-]?\\d*)\\}[\\)\\|]?\\}%DIFDELCMD':
+      '\\DIFdel{$_{$1}$}%DIFDELCMD',
+
+    // Pattern 4: Simple subscript with optional arithmetic
+    // Example: \DIFdel{_{t}|}%DIFDELCMD → \DIFdel{$_t$}%DIFDELCMD
+    // Example: \DIFdel{_{k-1})}%DIFDELCMD → \DIFdel{$_{k-1}$}%DIFDELCMD
+    '\\\\DIFdel\\{_([a-zA-Z](?:[+-]\\d+)?)[\\)\\|]?\\}%DIFDELCMD':
+      '\\DIFdel{$_$1$}%DIFDELCMD',
+
+    // Pattern 5: Numeric superscripts
+    // Example: \DIFdel{^2}%DIFDELCMD → \DIFdel{$^2$}%DIFDELCMD
+    // Example: \DIFdel{^{10}}%DIFDELCMD → \DIFdel{$^{10}$}%DIFDELCMD
+    '\\\\DIFdel\\{\\^(\\d+)[\\)\\|]?\\}%DIFDELCMD': '\\DIFdel{$^$1$}%DIFDELCMD',
+
+    // Pattern 6: Superscript with braces and arithmetic
+    // Example: \DIFdel{^{t-1}}%DIFDELCMD → \DIFdel{$^{t-1}$}%DIFDELCMD
+    // Example: \DIFdel{^{n+2})}%DIFDELCMD → \DIFdel{$^{n+2}$}%DIFDELCMD
+    '\\\\DIFdel\\{\\^\\{([a-zA-Z][+-]?\\d*)\\}[\\)\\|]?\\}%DIFDELCMD':
+      '\\DIFdel{$^{$1}$}%DIFDELCMD',
+
+    // Pattern 7: Simple superscript with optional arithmetic
+    // Example: \DIFdel{^t|}%DIFDELCMD → \DIFdel{$^t$}%DIFDELCMD
+    // Example: \DIFdel{^{k-1}}%DIFDELCMD → \DIFdel{$^{k-1}$}%DIFDELCMD
+    '\\\\DIFdel\\{\\^([a-zA-Z](?:[+-]\\d+)?)[\\)\\|]?\\}%DIFDELCMD':
+      '\\DIFdel{$^$1$}%DIFDELCMD',
+
+    // Pattern 8: Special cases for LaTeX commands as subscripts
+    // Example: \DIFdel{_\tf}%DIFDELCMD → \DIFdel{$_\tf$}%DIFDELCMD
+    // Example: \DIFdel{_\tauf}%DIFDELCMD → \DIFdel{$_\tauf$}%DIFDELCMD
+    // Example: \DIFdel{_{\tf-1}}%DIFDELCMD → \DIFdel{$_{\tf-1}$}%DIFDELCMD
+    '\\\\DIFdel\\{_\\{?(\\\\(?:tf|tauf)(?:[+-]\\d+)?)[\\}\\)\\|]?\\}%DIFDELCMD':
+      '\\DIFdel{$_$1$}%DIFDELCMD',
+
+    // Pattern 9: Fallback for simple single-letter subscripts
+    // Example: \DIFdel{_I()}%DIFDELCMD → \DIFdel{$_I$}%DIFDELCMD
+    // Example: \DIFdel{_x|}%DIFDELCMD → \DIFdel{$_x$}%DIFDELCMD
+    '\\\\DIFdel\\{_([a-zA-Z])[\\(\\)\\|]?\\}%DIFDELCMD':
+      '\\DIFdel{$_$1$}%DIFDELCMD',
+
+    // === Fix broken math fragments with \DIFadd commands ===
+    // Similar conservative patterns for \DIFadd commands
+
+    // Numeric subscripts in \DIFadd
+    // Example: \DIFadd{_1|}%DIFADDCMD → \DIFadd{$_1$}%DIFADDCMD
+    '\\\\DIFadd\\{_(\\d+)[\\)\\|]?\\}%DIFADDCMD': '\\DIFadd{$_$1$}%DIFADDCMD',
+
+    // Prime symbols in \DIFadd
+    // Example: \DIFadd{'_0)}%DIFADDCMD → \DIFadd{$'_0$}%DIFADDCMD
+    "\\\\DIFadd\\{('+)_([a-zA-Z\\d]+)[\\)\\|]?\\}%DIFADDCMD":
+      '\\DIFadd{$$1_$2$}%DIFADDCMD',
+
+    // Example: \DIFadd{_{t-1}}%DIFADDCMD → \DIFadd{$_{t-1}$}%DIFADDCMD
+    '\\\\DIFadd\\{_\\{([a-zA-Z][+-]?\\d*)\\}[\\)\\|]?\\}%DIFADDCMD':
+      '\\DIFadd{$_{$1}$}%DIFADDCMD',
+
+    // Example: \DIFadd{_{k})}%DIFADDCMD → \DIFadd{$_k$}%DIFADDCMD
+    '\\\\DIFadd\\{_([a-zA-Z](?:[+-]\\d+)?)[\\)\\|]?\\}%DIFADDCMD':
+      '\\DIFadd{$_$1$}%DIFADDCMD',
+
+    // Numeric superscripts in \DIFadd
+    // Example: \DIFadd{^2}%DIFADDCMD → \DIFadd{$^2$}%DIFADDCMD
+    '\\\\DIFadd\\{\\^(\\d+)[\\)\\|]?\\}%DIFADDCMD': '\\DIFadd{$^$1$}%DIFADDCMD',
+
+    // Special cases for LaTeX commands as subscripts in \DIFadd
+    // Example: \DIFadd{_\tf}%DIFADDCMD → \DIFadd{$_\tf$}%DIFADDCMD
+    // Example: \DIFadd{_{\tauf-1}}%DIFADDCMD → \DIFadd{$_{\tauf-1}$}%DIFADDCMD
+    '\\\\DIFadd\\{_\\{?(\\\\(?:tf|tauf)(?:[+-]\\d+)?)[\\}\\)\\|]?\\}%DIFADDCMD':
+      '\\DIFadd{$_$1$}%DIFADDCMD',
+
+    // Note: For commands like \bze that should not be split, use:
+    // latexdiff --append-safecmd="bze,hbze" old.tex new.tex
+    // This prevents latexdiff from splitting the command and its arguments
   },
 };
 
