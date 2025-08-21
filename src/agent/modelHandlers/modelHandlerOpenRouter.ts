@@ -85,6 +85,9 @@ export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
           (chunk.choices[0]?.delta as any)?.reasoning_content ?? '';
         if (reasoningDelta) thinking.append(reasoningDelta);
       }
+
+      // Note that there is no second consumption problem
+      // But i am not sure about openrouter's stream api, whether it works for every model.
       const response = await stream.finalChatCompletion();
       const finalReasoning = this.processThinkingBlock(response);
       thinking.finalize(finalReasoning ?? undefined);
