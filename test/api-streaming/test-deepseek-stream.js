@@ -49,7 +49,6 @@ async function run() {
       const choice = lastChunk.choices[0];
       console.log('\n--- Finish Information ---');
       console.log('Finish reason:', choice.finish_reason);
-      console.log('Stop reason:', choice.stop_reason);
     }
 
     // Try the non-streaming approach for comparison
