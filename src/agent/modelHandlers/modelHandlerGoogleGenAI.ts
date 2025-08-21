@@ -322,7 +322,9 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         };
         const stream = await chat.sendMessageStream(streamParams);
 
-        const thinking = this.createThinkingStream();
+        const thinking = this.createThinkingStream(
+          this.logger.getActiveGroupId(),
+        );
         const fullParts: Part[] = [];
         let lastCandidate: Candidate | undefined;
         let finalUsage: GenerateContentResponseUsageMetadata | undefined;

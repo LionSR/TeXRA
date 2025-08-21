@@ -157,7 +157,9 @@ export class ModelHandlerOpenAI extends ModelHandler<
         const stream = client.chat.completions.stream(kwargs as any, {
           signal,
         });
-        const thinking = this.createThinkingStream();
+        const thinking = this.createThinkingStream(
+          this.logger.getActiveGroupId(),
+        );
 
         if (this.config.fullName.includes('deepseek')) {
           // Aggregate stream chunks manually for DeepSeek models
