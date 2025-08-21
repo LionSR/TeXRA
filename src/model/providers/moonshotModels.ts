@@ -77,4 +77,20 @@ export const MOONSHOT_MODELS: Record<string, ModelConfig> = {
     } satisfies ModelCapabilities,
     openRouterOnly: false,
   },
+  kimi2turbo: {
+    name: 'kimi2turbo',
+    fullName: 'kimi-k2-0711-turbo-preview',
+    openrouterFullName: 'moonshotai/kimi-k2-turbo',
+    provider: ModelProvider.MOONSHOT,
+    maxOutputTokens: 64000,
+    contextWindow: 131072,
+    inputPrice: 0.57 * 4,
+    outputPrice: 2.3 * 4,
+    capabilities: {
+      ...MOONSHOT_DEFAULT_CAPABILITIES,
+      supportsVision: false,
+      supportsReasoning: false,
+    } satisfies ModelCapabilities,
+    openRouterOnly: false,
+  },
 };
