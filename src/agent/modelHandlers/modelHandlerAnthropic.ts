@@ -223,6 +223,8 @@ export class ModelHandlerAnthropic extends ModelHandler<
         stream.on('thinking', (delta: string) => {
           thinking.append(delta);
         });
+
+        // Note that there is no second consumption problem as per anthropic sdk examples
         response = await stream.finalMessage();
         const finalReasoning = this.processThinkingBlock(response);
         thinking.finalize(finalReasoning ?? undefined);

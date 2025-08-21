@@ -242,6 +242,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
           thinking.append((event as any).delta);
         }
       }
+
+      // Note that there is no second consumption problem as per openai sdk examples
       const response = await stream.finalResponse();
       const finalReasoning = this.processThinkingBlock(response);
       thinking.finalize(finalReasoning ?? undefined);
