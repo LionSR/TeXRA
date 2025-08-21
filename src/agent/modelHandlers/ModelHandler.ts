@@ -1,8 +1,10 @@
 // Standard library imports
 import * as path from 'path';
+import { randomUUID } from 'crypto';
 
 // Third-party imports
 import { FinishReason } from '@google/genai';
+import { encode as encodeHtml } from 'he';
 
 // Local imports - agent components
 import type { AgentConfig } from '../core/AgentConfig';
@@ -25,6 +27,9 @@ import {
   processPdf2Png,
 } from '@frontend/media/img';
 import { SecretManager, ApiProvider } from '@frontend/secretManager';
+
+// Local imports - events
+import { bus } from '@eventBus/ProgressEventBus';
 
 // Local imports - log
 import { AgentLogger } from '@logger/AgentLogger';
@@ -105,6 +110,61 @@ export abstract class ModelHandler<
    */
   public setLogger(logger: AgentLogger): void {
     this.logger = logger;
+  }
+
+  /**
+   * Creates a thinking stream that aggregates reasoning chunks and streams them
+   * to the Progress view.
+   *
+   * @param groupId Optional log group identifier.
+   * @returns Object with `append` and `finalize` helpers.
+   */
+  protected createThinkingStream(groupId?: string) {
+    const streamId = this.logger.channelId;
+    const id = randomUUID();
+    let buffer = '';
+
+    bus.emit('addLogMessage', {
+      stream: streamId,
+      logMessage: {
+        id,
+        text: '',
+        level: 'info',
+        timestamp: Date.now(),
+        groupId,
+        messageType: MESSAGE_TYPES.THINKING,
+      },
+    });
+
+    return {
+      append: (text: string) => {
+        if (!text) return;
+        buffer += text;
+        bus.emit('updateLogMessage', {
+          stream: streamId,
+          logMessage: {
+            id,
+            text: encodeHtml(buffer),
+            messageType: MESSAGE_TYPES.THINKING,
+          },
+        });
+      },
+      finalize: (finalText?: string) => {
+        if (typeof finalText === 'string') {
+          buffer = finalText;
+        }
+        bus.emit('updateLogMessage', {
+          stream: streamId,
+          logMessage: {
+            id,
+            text: encodeHtml(buffer),
+            messageType: MESSAGE_TYPES.THINKING,
+          },
+        });
+        this.logger.debug(`Final reasoning length: ${buffer.length}`, groupId);
+        return buffer;
+      },
+    };
   }
 
   /**

@@ -160,8 +160,9 @@ export async function runResponseCycle(
       taskGroupId,
       toolState,
     );
+    const useStreaming = modelHandler.getStreamingConfig();
 
-    if (thinkingContent) {
+    if (thinkingContent && !useStreaming) {
       const formatted = await xmlUtils.formatContent(thinkingContent);
       logger.info(formatted, taskGroupId, MESSAGE_TYPES.THINKING);
     }

@@ -18,4 +18,3 @@ export {
 } from './modelHandlerOpenRouter';
 export { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 export { ModelHandlerOpenAIResponse } from './modelHandlerOpenAIResponse';
-export { streamReasoningToProgressView } from './streamUtils';
