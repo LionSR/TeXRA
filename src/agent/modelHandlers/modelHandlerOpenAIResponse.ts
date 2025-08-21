@@ -231,7 +231,18 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
       const stream = client.responses.stream(params, {
         signal,
       });
+      const thinking = this.createThinkingStream();
+      for await (const event of stream) {
+        if (
+          event.type === 'response.reasoning_text.delta' ||
+          event.type === 'response.reasoning_summary_text.delta'
+        ) {
+          thinking.append((event as any).delta);
+        }
+      }
       const response = await stream.finalResponse();
+      const finalReasoning = this.processThinkingBlock(response);
+      thinking.finalize(finalReasoning ?? undefined);
       // this.logger.debug(
       //   `OpenAI Responses final response: ${JSON.stringify(response)}`,
       // );
