@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 TeXRA is a VS Code extension that serves as an AI-powered LaTeX research assistant. It uses Large Language Models to help academics with writing, research, and document processing.
 
-**Documentation Note**: When updating the CHANGELOG or release notes, focus on user-facing features, bug fixes, and improvements that directly impact the user experience.
+**Documentation Note**: When updating the CHANGELOG or release notes, focus on user-facing features, bug fixes, and improvements that directly impact the user experience. Never document intermediate bugs that were introduced and fixed within the same PR - only document issues that affected released versions.
 
 ## Development Commands
 
@@ -146,6 +146,13 @@ When creating a new release:
    - Follow the format: `## [x.x.x] - YYYY-MM-DD`
    - Group changes into Features, Bug Fixes, and Improvements
    - Focus only on user-visible changes
+   - **Writing Standards:**
+     - Keep entries concise and focused on what users will experience
+     - Don't mention intermediate bugs that were introduced and fixed within the same PR
+     - Don't include implementation details unless they directly affect usage
+     - Use present tense for features ("Add", "Support", "Enable")
+     - Example: "Add real-time streaming display for model reasoning" ✓
+     - Avoid: "Fix thinking blocks not appearing as subgroups" ✗ (if this bug wasn't in production)
 
 2. **Build the VSIX package**
 
