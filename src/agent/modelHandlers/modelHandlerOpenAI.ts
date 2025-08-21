@@ -157,6 +157,7 @@ export class ModelHandlerOpenAI extends ModelHandler<
         const stream = client.chat.completions.stream(kwargs as any, {
           signal,
         });
+        const thinking = this.createThinkingStream();
 
         if (this.config.fullName.includes('deepseek')) {
           // Aggregate stream chunks manually for DeepSeek models
@@ -165,11 +166,13 @@ export class ModelHandlerOpenAI extends ModelHandler<
           let lastChunk: any;
           for await (const chunk of stream) {
             lastChunk = chunk;
-            fullContent += (chunk.choices[0]?.delta as any)?.content ?? '';
-            reasoning +=
-              (chunk.choices[0]?.delta as any)?.reasoning_content ?? '';
+            const delta = (chunk.choices[0]?.delta as any) || {};
+            fullContent += delta.content ?? '';
+            const reasonChunk = delta.reasoning_content ?? '';
+            reasoning += reasonChunk;
+            thinking.append(reasonChunk);
           }
-          return {
+          const finalResponse = {
             id: lastChunk?.id,
             object: 'chat.completion',
             created: lastChunk?.created,
@@ -188,9 +191,18 @@ export class ModelHandlerOpenAI extends ModelHandler<
               },
             ],
           };
+          const finalReason = this.processThinkingBlock(finalResponse);
+          thinking.finalize(finalReason || reasoning);
+          return finalResponse;
         }
 
+        for await (const chunk of stream) {
+          thinking.append(
+            (chunk.choices[0]?.delta as any)?.reasoning_content ?? '',
+          );
+        }
         response = await stream.finalChatCompletion();
+        thinking.finalize(this.processThinkingBlock(response) || undefined);
 
         // in the future we can add: stream_options: {"include_usage": true} to get usage statistics
         // in the future if we pass stream to outside (signal: controller.signal)), calling stream.controller.abort() will abort the stream; which will be very useful for our stop button (controller.abort();)

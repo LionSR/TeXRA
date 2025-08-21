@@ -217,7 +217,17 @@ export class ModelHandlerAnthropic extends ModelHandler<
         // in the future if we pass stream to outside, calling stream.controller.abort() will abort the stream; which will be very useful for our stop button
         // we should also make sure partial results can be returned in the presence of errors!
         const stream = client.beta.messages.stream(options, { signal });
+        const thinking = this.createThinkingStream();
+        for await (const event of stream) {
+          if (
+            event.type === 'content_block_delta' &&
+            (event.delta as any)?.type === 'thinking_delta'
+          ) {
+            thinking.append((event.delta as any).text ?? '');
+          }
+        }
         response = await stream.finalMessage();
+        thinking.finalize(this.processThinkingBlock(response) || undefined);
       } else {
         response = await client.beta.messages.create(options, { signal });
       }
