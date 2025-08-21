@@ -126,7 +126,8 @@ export async function runToolUseCycle(
       groupId,
       toolState,
     );
-    if (thinking) {
+    const useStreaming = modelHandler.getStreamingConfig();
+    if (thinking && !useStreaming) {
       const formatted = await xmlUtils.formatContent(thinking);
       logger.info(formatted, groupId, MESSAGE_TYPES.THINKING);
     }

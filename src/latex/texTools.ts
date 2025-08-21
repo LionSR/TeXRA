@@ -85,6 +85,7 @@ export async function compileLatex2Pdf(
       ? [
           'latexmk',
           '-pdf',
+          '-f',
           '-interaction=nonstopmode',
           `-output-directory=${outDir}`,
           latexFile,
