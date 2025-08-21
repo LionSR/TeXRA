@@ -4,6 +4,9 @@ import { TaskGroupHeaderFormatter, LogEntryFormatter } from './formatters.js';
 // Local imports
 import { progressViewState } from './progressViewState.js';
 
+// Constants
+const DECIMAL_RADIX = 10; // Explicit base-10 for parseInt to avoid octal interpretation
+
 /**
  * Manages task group DOM operations.
  */
@@ -87,7 +90,7 @@ export class TaskGroupManager {
               sibling.querySelector('.group-start-time')?.dataset.start;
             if (
               siblingStartTime &&
-              parseInt(siblingStartTime, 10) > group.startTime
+              parseInt(siblingStartTime, DECIMAL_RADIX) > group.startTime
             ) {
               insertPosition = sibling;
               break;
@@ -101,7 +104,7 @@ export class TaskGroupManager {
             // Extract full timestamp from data attribute if available
             const msgFullTimestamp = sibling.dataset.fullTimestamp;
             const msgTime = msgFullTimestamp
-              ? new Date(msgFullTimestamp)
+              ? new Date(parseInt(msgFullTimestamp, DECIMAL_RADIX))
               : new Date();
 
             if (group.startTime < msgTime.getTime()) {
@@ -129,7 +132,7 @@ export class TaskGroupManager {
         existingGroup.querySelector('.group-start-time')?.dataset.start;
       if (
         existingStartTime &&
-        parseInt(existingStartTime, 10) > group.startTime
+        parseInt(existingStartTime, DECIMAL_RADIX) > group.startTime
       ) {
         insertPosition = existingGroup;
         break;
@@ -331,7 +334,7 @@ export class LogEntryManager {
             if (startTimeElem) {
               const groupStartTime = startTimeElem.dataset.start;
               if (groupStartTime) {
-                const startTime = parseInt(groupStartTime, 10);
+                const startTime = parseInt(groupStartTime, DECIMAL_RADIX);
                 // If the message timestamp is earlier than the group start time,
                 // insert before this group
                 if (msgDate.getTime() < startTime) {
@@ -350,7 +353,9 @@ export class LogEntryManager {
             // Try to get the full timestamp from data attribute
             const childFullTimestamp = child.dataset.fullTimestamp;
             if (childFullTimestamp) {
-              const childDate = new Date(childFullTimestamp);
+              const childDate = new Date(
+                parseInt(childFullTimestamp, DECIMAL_RADIX),
+              );
               if (msgDate < childDate) {
                 insertPosition = child;
                 break;
