@@ -189,8 +189,9 @@ export class ModelHandlerOpenAI extends ModelHandler<
                   reasoning_content: reasoning,
                 },
                 finish_reason: lastChunk?.choices?.[0]?.finish_reason,
-                stop_reason: (lastChunk?.choices?.[0] as any)?.stop_reason,
+                // stop_reason: (lastChunk?.choices?.[0] as any)?.stop_reason,
                 // this might be related to the bug of deepseek that length is not recognized as the stop reason
+                // Be caraful with gemini via openai api though..
               },
             ],
           };
