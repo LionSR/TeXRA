@@ -162,6 +162,9 @@ export async function runResponseCycle(
     );
     const useStreaming = modelHandler.getStreamingConfig();
 
+    // Only log thinking content for non-streaming responses
+    // Streaming responses display thinking content progressively via createThinkingStream()
+    // so we avoid duplicate logging here
     if (thinkingContent && !useStreaming) {
       const formatted = await xmlUtils.formatContent(thinkingContent);
       logger.info(formatted, taskGroupId, MESSAGE_TYPES.THINKING);
