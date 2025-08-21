@@ -103,14 +103,24 @@ export class ProgressViewMessageHandler {
       sortedMessages.forEach((msg) => {
         if (msg.groupId) {
           if (!dom.logEntries.append(msg)) {
-            const el = document.createElement('div');
-            el.innerHTML = this._entryFormatter.format(msg);
-            logContent.appendChild(el.firstElementChild);
+            const formatted = this._entryFormatter.format(msg);
+            if (formatted instanceof HTMLElement) {
+              logContent.appendChild(formatted);
+            } else {
+              const el = document.createElement('div');
+              el.innerHTML = formatted;
+              logContent.appendChild(el.firstElementChild);
+            }
           }
         } else {
-          const el = document.createElement('div');
-          el.innerHTML = this._entryFormatter.format(msg);
-          logContent.appendChild(el.firstElementChild);
+          const formatted = this._entryFormatter.format(msg);
+          if (formatted instanceof HTMLElement) {
+            logContent.appendChild(formatted);
+          } else {
+            const el = document.createElement('div');
+            el.innerHTML = formatted;
+            logContent.appendChild(el.firstElementChild);
+          }
         }
       });
       logContent.scrollTop = logContent.scrollHeight;
@@ -137,9 +147,23 @@ export class ProgressViewMessageHandler {
       const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
       const addedToGroup = dom.logEntries.append(message.logMessage);
       if (!addedToGroup) {
-        const el = document.createElement('div');
-        el.innerHTML = this._entryFormatter.format(message.logMessage);
-        logContent.appendChild(el.firstElementChild);
+        const formatted = this._entryFormatter.format(message.logMessage);
+        if (formatted instanceof HTMLElement) {
+          // For thinking and scratchpad, auto-expand when live streaming
+          const messageType = message.logMessage.messageType;
+          if (messageType === 'thinking' || messageType === 'scratchpad') {
+            formatted.setAttribute('open', '');
+            const toggleIcon = formatted.querySelector('.toggle-icon');
+            if (toggleIcon) {
+              toggleIcon.className = 'codicon codicon-chevron-down toggle-icon';
+            }
+          }
+          logContent.appendChild(formatted);
+        } else {
+          const el = document.createElement('div');
+          el.innerHTML = formatted;
+          logContent.appendChild(el.firstElementChild);
+        }
       }
       logContent.scrollTop = logContent.scrollHeight;
     }

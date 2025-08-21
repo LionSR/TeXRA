@@ -157,6 +157,9 @@ export class ModelHandlerOpenAI extends ModelHandler<
         const stream = client.chat.completions.stream(kwargs as any, {
           signal,
         });
+        const thinking = this.createThinkingStream(
+          this.logger.getActiveGroupId(),
+        );
 
         if (this.config.fullName.includes('deepseek')) {
           // Aggregate stream chunks manually for DeepSeek models
@@ -165,11 +168,13 @@ export class ModelHandlerOpenAI extends ModelHandler<
           let lastChunk: any;
           for await (const chunk of stream) {
             lastChunk = chunk;
-            fullContent += (chunk.choices[0]?.delta as any)?.content ?? '';
-            reasoning +=
-              (chunk.choices[0]?.delta as any)?.reasoning_content ?? '';
+            const delta: any = chunk.choices[0]?.delta;
+            const reasoningDelta = delta?.reasoning_content ?? '';
+            if (reasoningDelta) thinking.append(reasoningDelta);
+            fullContent += delta?.content ?? '';
+            reasoning += reasoningDelta;
           }
-          return {
+          const finalResponse = {
             id: lastChunk?.id,
             object: 'chat.completion',
             created: lastChunk?.created,
@@ -184,13 +189,27 @@ export class ModelHandlerOpenAI extends ModelHandler<
                   reasoning_content: reasoning,
                 },
                 finish_reason: lastChunk?.choices?.[0]?.finish_reason,
-                stop_reason: (lastChunk?.choices?.[0] as any)?.stop_reason,
+                // stop_reason: (lastChunk?.choices?.[0] as any)?.stop_reason,
+                // this might be related to the bug of deepseek that length is not recognized as the stop reason
+                // Be caraful with gemini via openai api though..
               },
             ],
           };
+          const finalReasoning = this.processThinkingBlock(finalResponse);
+          thinking.finalize(finalReasoning ?? undefined);
+          return finalResponse;
         }
 
+        for await (const chunk of stream) {
+          const reasoningDelta =
+            (chunk.choices[0]?.delta as any)?.reasoning_content ?? '';
+          if (reasoningDelta) thinking.append(reasoningDelta);
+        }
+
+        // Note that there is no second consumption problem as per openai sdk examples
         response = await stream.finalChatCompletion();
+        const finalReasoning = this.processThinkingBlock(response);
+        thinking.finalize(finalReasoning ?? undefined);
 
         // in the future we can add: stream_options: {"include_usage": true} to get usage statistics
         // in the future if we pass stream to outside (signal: controller.signal)), calling stream.controller.abort() will abort the stream; which will be very useful for our stop button (controller.abort();)
@@ -885,11 +904,25 @@ export class ModelHandlerOpenAI extends ModelHandler<
    * @returns Always returns null as OpenAI doesn't support thinking blocks
    */
   processThinkingBlock(
-    _responseObject: any,
-    _groupId?: string,
-    _toolState?: ToolState,
+    responseObject: any,
+    groupId?: string,
+    toolState?: ToolState,
   ): string | null {
-    return null;
+    const reasoning = responseObject?.choices?.[0]?.message?.reasoning_content;
+    if (typeof reasoning !== 'string' || !reasoning.trim()) {
+      return null;
+    }
+
+    if (toolState && !toolState.thinkingAdded) {
+      toolState.thinkingBlocks = [{ type: 'thinking', thinking: reasoning }];
+      toolState.thinkingAdded = true;
+    }
+
+    this.logger.debug(
+      `OpenAI reasoning preview: ${reasoning.substring(0, K_SLICE)}...`,
+      groupId,
+    );
+    return reasoning;
   }
 
   extractToolUse(responseObject: any): string | null {

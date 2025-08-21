@@ -226,18 +226,35 @@ export class LogEntryFormatter {
    */
   _getFormatters() {
     return {
-      thinking: (text, id) =>
+      thinking: (text, id, groupId, timestamp) =>
         this._safeFormat(
-          () => this._formatSpecialContent(text, 'Thinking', id),
+          () =>
+            this._formatSpecialContent(
+              text,
+              'Thinking',
+              id,
+              groupId,
+              timestamp,
+            ),
           'thinking',
         ),
-      scratchpad: (text, id) =>
+      scratchpad: (text, id, groupId, timestamp) =>
         this._safeFormat(
-          () => this._formatSpecialContent(text, 'Scratchpad', id),
+          () =>
+            this._formatSpecialContent(
+              text,
+              'Scratchpad',
+              id,
+              groupId,
+              timestamp,
+            ),
           'scratchpad',
         ),
-      toolUse: (text, id) =>
-        this._safeFormat(() => this._formatToolUse(text, id), 'tool use'),
+      toolUse: (text, id, groupId, timestamp) =>
+        this._safeFormat(
+          () => this._formatToolUse(text, id, groupId, timestamp),
+          'tool use',
+        ),
       modelResponse: (params) =>
         this._safeFormat(
           () => this._formatModelResponse(params),
@@ -328,8 +345,9 @@ export class LogEntryFormatter {
         messageType === 'scratchpad' ||
         messageType === 'toolUse'
       ) {
-        // These only need text and id
-        result = formatter(text, id);
+        // Pass the full logMessage for access to groupId and timestamp
+        // Note: timestamp here is numeric (from Date.now())
+        result = formatter(text, id, groupId, timestamp);
       } else if (messageType === 'userMessage') {
         // User message needs text, id, and timestamp
         result = formatter(text, id, timestamp);
@@ -366,7 +384,7 @@ export class LogEntryFormatter {
     return wrapper.firstElementChild;
   }
 
-  _formatSpecialContent(content, contentType, logId) {
+  _formatSpecialContent(content, contentType, logId, groupId, timestamp) {
     const parsedMarkdown = this._processMarkdownContent(content);
     const element = createFromTemplate('specialDetailsTemplate');
     if (!element) return null;
@@ -375,7 +393,16 @@ export class LogEntryFormatter {
     const labelText = isThinking ? 'Thinking' : 'Scratchpad';
     const icon = isThinking ? 'codicon-lightbulb' : 'codicon-pencil';
 
+    // Add necessary attributes for proper group placement (but not log-line class which affects whitespace)
+    if (logId) element.dataset.logId = logId;
+    if (groupId) element.dataset.groupId = groupId;
+    if (timestamp) element.dataset.fullTimestamp = timestamp;
+
+    // Default to collapsed state - will be expanded in handleAppendLog if it's live
+    // This ensures historical loads stay collapsed
+
     const toggleIcon = element.querySelector('.toggle-icon');
+    // Use right chevron for collapsed state by default
     if (toggleIcon) toggleIcon.className = `${CHEVRON_RIGHT_CLASS} toggle-icon`;
 
     const iconElem = element.querySelector('.icon');
@@ -387,15 +414,20 @@ export class LogEntryFormatter {
     const contentElem = element.querySelector('.special-content');
     if (contentElem) {
       contentElem.innerHTML = parsedMarkdown;
-      if (logId) contentElem.dataset.logId = logId;
     }
 
     return element;
   }
 
-  _formatToolUse(content, logId) {
+  _formatToolUse(content, logId, groupId, timestamp) {
     const element = createFromTemplate('toolUseTemplate');
     if (!element) return null;
+
+    // Add necessary attributes for proper group placement (but not log-line class which affects whitespace)
+    if (logId) element.dataset.logId = logId;
+    if (groupId) element.dataset.groupId = groupId;
+    if (timestamp) element.dataset.fullTimestamp = timestamp;
+
     let formattedContent;
     try {
       // Try to parse as JSON first - don't decode HTML entities
@@ -439,7 +471,6 @@ export class LogEntryFormatter {
     const contentElem = element.querySelector('.special-content');
     if (contentElem) {
       contentElem.innerHTML = formattedContent;
-      if (logId) contentElem.dataset.logId = logId;
     }
 
     return element;
