@@ -16,6 +16,37 @@ const DEEPSEEK_DEFAULT_CAPABILITIES: ModelCapabilities = {
 };
 
 export const DEEPSEEK_MODELS: Record<string, ModelConfig> = {
+  deepseek: {
+    name: 'deepseek',
+    fullName: 'deepseek-chat',
+    openrouterFullName: 'deepseek/deepseek-chat-v3.1',
+    provider: ModelProvider.DEEPSEEK,
+    maxOutputTokens: 64000,
+    contextWindow: 128000,
+    inputPrice: 0.56,
+    outputPrice: 1.68,
+    capabilities: {
+      ...DEEPSEEK_DEFAULT_CAPABILITIES,
+      supportsAssistantPrefill: true,
+    } satisfies ModelCapabilities,
+    openRouterOnly: false,
+  },
+  deepseekT: {
+    name: 'deepseekT',
+    fullName: 'deepseek-reasoner',
+    openrouterFullName: 'deepseek/deepseek-reasoner-v3.1',
+    provider: ModelProvider.DEEPSEEK,
+    maxOutputTokens: 65536,
+    contextWindow: 128000,
+    inputPrice: 0.56,
+    outputPrice: 1.68,
+    capabilities: {
+      ...DEEPSEEK_DEFAULT_CAPABILITIES,
+      supportsReasoning: true,
+      supportsReasoningEffort: false,
+    } satisfies ModelCapabilities,
+    openRouterOnly: false,
+  },
   dsv3: {
     name: 'dsv3',
     fullName: 'deepseek-chat',
