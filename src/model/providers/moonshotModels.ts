@@ -20,7 +20,7 @@ export const MOONSHOT_MODELS: Record<string, ModelConfig> = {
     fullName: 'moonshot-v1-128k',
     openrouterFullName: 'moonshotai/moonshot-v1-128k',
     provider: ModelProvider.MOONSHOT,
-    maxOutputTokens: 640000,
+    maxOutputTokens: 64000,
     contextWindow: 128000,
     inputPrice: 0.28,
     outputPrice: 1.12,
