@@ -77,7 +77,16 @@ export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
     if (useStreaming) {
       kwargs.stream_options = { include_usage: true }; // Assuming OpenRouter passes this through
       const stream = client.chat.completions.stream(kwargs, { signal });
-      return await stream.finalChatCompletion();
+      const thinking = this.createThinkingStream();
+      for await (const chunk of stream) {
+        const reasoningDelta =
+          (chunk.choices[0]?.delta as any)?.reasoning_content ?? '';
+        if (reasoningDelta) thinking.append(reasoningDelta);
+      }
+      const response = await stream.finalChatCompletion();
+      const finalReasoning = this.processThinkingBlock(response);
+      thinking.finalize(finalReasoning ?? undefined);
+      return response;
     } else {
       return await client.chat.completions.create(kwargs, { signal });
     }

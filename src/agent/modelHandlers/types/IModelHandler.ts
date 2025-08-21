@@ -39,6 +39,9 @@ export interface IModelHandler<
   /** Indicates if the model is served by Anthropic. */
   readonly isAnthropic: boolean;
 
+  /** Determine if streaming should be used for the current model. */
+  getStreamingConfig(): boolean;
+
   /** Indicates if the model is served by Google. */
   readonly isGoogle: boolean;
 
