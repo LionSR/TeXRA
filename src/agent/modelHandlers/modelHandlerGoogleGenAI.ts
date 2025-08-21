@@ -322,6 +322,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         };
         const stream = await chat.sendMessageStream(streamParams);
 
+        const thinking = this.createThinkingStream();
         const fullParts: Part[] = [];
         let lastCandidate: Candidate | undefined;
         let finalUsage: GenerateContentResponseUsageMetadata | undefined;
@@ -332,6 +333,11 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
             const parts = chunk.candidates[0]?.content?.parts;
             if (parts) {
               fullParts.push(...parts);
+              for (const part of parts) {
+                if ((part as any).thought && typeof part.text === 'string') {
+                  thinking.append(part.text);
+                }
+              }
             }
           }
           if (chunk.usageMetadata) {
@@ -362,6 +368,8 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
           },
         ];
 
+        const finalReasoning = this.processThinkingBlock(finalResponse);
+        thinking.finalize(finalReasoning ?? undefined);
         return finalResponse;
       }
 
