@@ -188,6 +188,7 @@ export class ModelHandlerOpenAI extends ModelHandler<
                 },
                 finish_reason: lastChunk?.choices?.[0]?.finish_reason,
                 stop_reason: (lastChunk?.choices?.[0] as any)?.stop_reason,
+                // this might be related to the bug of deepseek that length is not recognized as the stop reason
               },
             ],
           };
