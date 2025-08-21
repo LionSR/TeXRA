@@ -8,6 +8,24 @@ import { progressViewState } from './progressViewState.js';
 const DECIMAL_RADIX = 10; // Explicit base-10 for parseInt to avoid octal interpretation
 
 /**
+ * Parse a timestamp that could be either numeric or ISO-8601 string
+ * @param {string} timestampStr - Timestamp string from dataset attribute
+ * @returns {Date} Parsed date object
+ */
+function parseTimestamp(timestampStr) {
+  if (!timestampStr) return new Date();
+
+  // Try parsing as a number first (for numeric timestamps)
+  const numericValue = parseInt(timestampStr, DECIMAL_RADIX);
+  if (!isNaN(numericValue) && numericValue > 0) {
+    return new Date(numericValue);
+  }
+
+  // Fall back to ISO-8601 string parsing
+  return new Date(timestampStr);
+}
+
+/**
  * Manages task group DOM operations.
  */
 export class TaskGroupManager {
@@ -103,9 +121,7 @@ export class TaskGroupManager {
           ) {
             // Extract full timestamp from data attribute if available
             const msgFullTimestamp = sibling.dataset.fullTimestamp;
-            const msgTime = msgFullTimestamp
-              ? new Date(parseInt(msgFullTimestamp, DECIMAL_RADIX))
-              : new Date();
+            const msgTime = parseTimestamp(msgFullTimestamp);
 
             if (group.startTime < msgTime.getTime()) {
               insertPosition = sibling;
@@ -353,9 +369,7 @@ export class LogEntryManager {
             // Try to get the full timestamp from data attribute
             const childFullTimestamp = child.dataset.fullTimestamp;
             if (childFullTimestamp) {
-              const childDate = new Date(
-                parseInt(childFullTimestamp, DECIMAL_RADIX),
-              );
+              const childDate = parseTimestamp(childFullTimestamp);
               if (msgDate < childDate) {
                 insertPosition = child;
                 break;
