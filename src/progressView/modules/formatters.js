@@ -346,6 +346,7 @@ export class LogEntryFormatter {
         messageType === 'toolUse'
       ) {
         // Pass the full logMessage for access to groupId and timestamp
+        // Note: timestamp here is numeric (from Date.now())
         result = formatter(text, id, groupId, timestamp);
       } else if (messageType === 'userMessage') {
         // User message needs text, id, and timestamp
