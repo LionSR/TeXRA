@@ -231,7 +231,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
       const stream = client.responses.stream(params, {
         signal,
       });
-      const thinking = this.createThinkingStream();
+      const thinking = this.createThinkingStream(
+        this.logger.getActiveGroupId(),
+      );
       for await (const event of stream) {
         if (
           event.type === 'response.reasoning_text.delta' ||
