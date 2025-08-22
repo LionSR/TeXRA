@@ -38,7 +38,6 @@ export class FileInputManager extends BaseUIManager {
     this.fileSelect = select;
     this.outputFilesManager = outputMgr;
     this._sortables = [];
-    this._inputTipShown = false;
   }
 
   _setupSortable() {
@@ -57,14 +56,11 @@ export class FileInputManager extends BaseUIManager {
   _setupSingleFileSelectors() {
     this.addListener(INPUT_FILE, 'change', (e) => {
       const inputFile = e.target.value;
-      if (!this._inputTipShown) {
-        this._inputTipShown = true;
-        this.vscode.postMessage({
-          command: MAIN_VIEW_COMMANDS.SHOW_INSTRUCTION,
-          key: 'inputFileSelect',
-          text: 'Choose the main LaTeX file to process. Use the Current button to pick the active editor.',
-        });
-      }
+      this.vscode.postMessage({
+        command: MAIN_VIEW_COMMANDS.SHOW_INSTRUCTION,
+        key: 'inputFileSelect',
+        text: 'Choose the main LaTeX file to process. Use the Current button to pick the active editor.',
+      });
       this.vscode.postMessage({
         command: MAIN_VIEW_COMMANDS.INPUT_FILE_SELECTED,
         filePath: inputFile,
