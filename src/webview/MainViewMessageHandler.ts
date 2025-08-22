@@ -19,6 +19,7 @@ import {
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
 import { getConfig } from '@utils/config';
 import { safeExecuteCommand } from '@utils/system';
+import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 
 export class MainViewMessageHandler extends BaseViewMessageHandler {
   private readonly settingsManager: SettingsManager;
@@ -48,6 +49,8 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
       // Core functionality
       [MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE]:
         this.handleInfoMessage.bind(this),
+      [MAIN_VIEW_COMMANDS.SHOW_INSTRUCTION]: async (m) =>
+        showInstructionWithSuppress(m.key, m.text),
       [MAIN_VIEW_COMMANDS.GET_THEME]: this.handleThemeRequest.bind(this),
       [MAIN_VIEW_COMMANDS.GET_DEBUG_MODE]:
         this.handleDebugModeRequest.bind(this),
