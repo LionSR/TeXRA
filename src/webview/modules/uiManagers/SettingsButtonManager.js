@@ -24,6 +24,8 @@ export class SettingsButtonManager extends BaseUIManager {
     this.toggleManager = toggleManager;
     this.latexdiffManager = latexdiffManager;
     this.state = state;
+    this._agentTipShown = false;
+    this._modelTipShown = false;
   }
 
   _setupToggles() {
@@ -85,6 +87,14 @@ export class SettingsButtonManager extends BaseUIManager {
   _setupDropdowns() {
     this.addListener('agent', 'change', (e) => {
       const selectedAgent = e.target.value;
+      if (!this._agentTipShown) {
+        this._agentTipShown = true;
+        this.vscode.postMessage({
+          command: MAIN_VIEW_COMMANDS.SHOW_INSTRUCTION,
+          key: 'agentPicker',
+          text: 'Select which agent will handle your request.',
+        });
+      }
       const reflectCheckbox = safeGetElementById('reflect');
       if (reflectCheckbox) {
         reflectCheckbox.checked = !selectedAgent.startsWith('correct');
@@ -100,6 +110,14 @@ export class SettingsButtonManager extends BaseUIManager {
     });
 
     this.addListener('model', 'change', (e) => {
+      if (!this._modelTipShown) {
+        this._modelTipShown = true;
+        this.vscode.postMessage({
+          command: MAIN_VIEW_COMMANDS.SHOW_INSTRUCTION,
+          key: 'modelPicker',
+          text: 'Choose the AI model used by the selected agent.',
+        });
+      }
       this.vscode.postMessage({
         command: MAIN_VIEW_COMMANDS.MODEL_SELECTED,
         model: e.target.value,
