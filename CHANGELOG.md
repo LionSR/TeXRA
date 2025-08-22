@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 
 - Detect arXiv source file type and handle plain `.tex` downloads without extraction
 - Add descriptive tooltips for Input, Reference, Auxiliary and Media file selectors in the main webview
+- Show onboarding tooltips on first use of the input file selector or model picker, with a "Never remind again" option
 - Add real-time streaming display for model reasoning/thinking processes (Claude, DeepSeek, o1)
 
 ## [0.33.0] - 2025-08-19 🎂 Birthday Edition
