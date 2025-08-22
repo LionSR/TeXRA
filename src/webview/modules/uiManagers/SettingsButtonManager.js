@@ -83,6 +83,15 @@ export class SettingsButtonManager extends BaseUIManager {
   }
 
   _setupDropdowns() {
+    // Show instruction on focus, before user makes selection
+    this.addListener('agent', 'focus', () => {
+      this.vscode.postMessage({
+        command: MAIN_VIEW_COMMANDS.SHOW_INSTRUCTION,
+        key: 'agentPicker',
+        text: 'Select which agent will handle your request.',
+      });
+    });
+
     this.addListener('agent', 'change', (e) => {
       const selectedAgent = e.target.value;
       const reflectCheckbox = safeGetElementById('reflect');
@@ -97,6 +106,15 @@ export class SettingsButtonManager extends BaseUIManager {
         agent: selectedAgent,
       });
       this.state.save();
+    });
+
+    // Show instruction on focus, before user makes selection
+    this.addListener('model', 'focus', () => {
+      this.vscode.postMessage({
+        command: MAIN_VIEW_COMMANDS.SHOW_INSTRUCTION,
+        key: 'modelPicker',
+        text: 'Choose the AI model used by the selected agent.',
+      });
     });
 
     this.addListener('model', 'change', (e) => {
