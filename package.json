@@ -1275,7 +1275,7 @@
     "mime-types": "^3.0.1",
     "nanoid": "^5.1.5",
     "node-pandoc": "^0.3.0",
-    "openai": "^5.13.1",
+    "openai": "^5.15.0",
     "pdf2pic": "^3.2.0",
     "shell-quote": "^1.8.3",
     "sortablejs": "^1.15.6",
