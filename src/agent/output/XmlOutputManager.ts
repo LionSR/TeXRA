@@ -48,6 +48,19 @@ export class XmlOutputManager {
     documentTag: string,
   ): string | null {
     try {
+      const documents = xmlUtils.extractMultipleTextFromTag(outputContent);
+      if (documents && documents.length > 0) {
+        const filename = path.basename(this.agentConfig.inputFile);
+        const match = documents.find((doc) => doc.name === filename);
+        if (match && match.content) {
+          this.logger.info(
+            `Recovered ${documentTag} from named document tag`,
+            undefined,
+            MESSAGE_TYPES.INTERNAL,
+          );
+          return match.content;
+        }
+      }
       const fallbackContent = xmlUtils.extractTextFromTag(
         outputContent,
         documentTag,
@@ -68,19 +81,6 @@ export class XmlOutputManager {
           MESSAGE_TYPES.INTERNAL,
         );
         return markdownFallback;
-      }
-      const documents = xmlUtils.extractMultipleTextFromTag(outputContent);
-      if (documents && documents.length > 0) {
-        const filename = path.basename(this.agentConfig.inputFile);
-        const match = documents.find((doc) => doc.name === filename);
-        if (match && match.content) {
-          this.logger.info(
-            `Recovered ${documentTag} from named document tag`,
-            undefined,
-            MESSAGE_TYPES.INTERNAL,
-          );
-          return match.content;
-        }
       }
       const latexFallback =
         xmlUtils.extractLatexBetweenDocumentClass(outputContent);
