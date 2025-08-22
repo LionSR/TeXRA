@@ -59,6 +59,7 @@ export const MAIN_VIEW_COMMANDS = {
 
   // Other operations
   SHOW_INFORMATION_MESSAGE: 'showInformationMessage',
+  SHOW_INSTRUCTION: 'showInstruction',
   GET_THEME: 'getTheme',
   GET_DEBUG_MODE: 'getDebugMode',
   GET_CURRENT_FILE: 'getCurrentFile',
