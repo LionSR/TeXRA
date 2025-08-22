@@ -62,7 +62,7 @@ Configure how TeXRA connects to AI model providers:
 
 - `useOpenRouter`: Access models through OpenRouter instead of direct APIs
 - `useImprovedConnection`: Route all API requests through a proxy server
-- `improvedConnectionDomain`: Custom proxy domain when `useImprovedConnection` is enabled. Leave blank to use the built-in default.
+- `improvedConnectionDomain`: Custom proxy domain when `useImprovedConnection` is enabled. Defaults to the built-in proxy when unset.
   - ⚠️ **Security Warning:** When using a proxy, ensure you trust the proxy server as it will receive your API keys. Only use proxies from trusted sources.
 - `baseUrlDeepSeek`: Custom base URL for DeepSeek models; overrides the default `https://api.deepseek.com` endpoint
 - `useStreaming`: Enable streaming responses for better handling of long outputs
