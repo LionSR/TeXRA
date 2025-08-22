@@ -131,6 +131,7 @@
           "texra.model.improvedConnectionDomain": {
             "type": "string",
             "description": "Domain to use when using improved connection",
+            "default": "proxy.texra.ai",
             "scope": "resource"
           },
           "texra.model.useStreaming": {
