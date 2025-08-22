@@ -371,3 +371,19 @@ export function fixLatexQuoteIssues(text: string): string {
 
   return text;
 }
+
+/**
+ * Wrap bare \critique commands in align environments with \intertext.
+ *
+ * @param text LaTeX document text
+ * @returns Text with \critique commands wrapped in \intertext within align blocks
+ */
+export function wrapCritiqueInAlign(text: string): string {
+  const alignRegex = /\\begin\{align\\*?}[\\s\\S]*?\\end\{align\\*?}/g;
+  return text.replace(alignRegex, (block) =>
+    block.replace(
+      /(?<!\\intertext\\{)\\critique{([^}]*)}/g,
+      '\\intertext{\\critique{$1}}',
+    ),
+  );
+}
