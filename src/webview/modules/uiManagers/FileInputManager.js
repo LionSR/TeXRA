@@ -54,13 +54,17 @@ export class FileInputManager extends BaseUIManager {
   }
 
   _setupSingleFileSelectors() {
-    this.addListener(INPUT_FILE, 'change', (e) => {
-      const inputFile = e.target.value;
+    // Show instruction on focus, before user makes selection
+    this.addListener(INPUT_FILE, 'focus', () => {
       this.vscode.postMessage({
         command: MAIN_VIEW_COMMANDS.SHOW_INSTRUCTION,
         key: 'inputFileSelect',
         text: 'Choose the main LaTeX file to process. Use the Current button to pick the active editor.',
       });
+    });
+
+    this.addListener(INPUT_FILE, 'change', (e) => {
+      const inputFile = e.target.value;
       this.vscode.postMessage({
         command: MAIN_VIEW_COMMANDS.INPUT_FILE_SELECTED,
         filePath: inputFile,
