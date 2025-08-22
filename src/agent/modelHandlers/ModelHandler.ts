@@ -237,10 +237,14 @@ export abstract class ModelHandler<
     );
     let improvedConnectionDomain = getConfig<string>(
       'model.improvedConnectionDomain',
-      'proxy.texra.ai',
-    );
+      '',
+    ).trim();
 
-    if (useImprovedConnection && improvedConnectionDomain) {
+    if (!improvedConnectionDomain) {
+      improvedConnectionDomain = 'proxy.texra.ai';
+    }
+
+    if (useImprovedConnection) {
       // Normalize proxy domain
       improvedConnectionDomain = normalizeUrl(improvedConnectionDomain);
 
