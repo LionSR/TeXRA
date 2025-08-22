@@ -16,6 +16,7 @@ import {
   applyLatexQuotesFormatting,
   replaceMathUnicode,
   fixLatexQuoteIssues,
+  wrapCritiqueInAlign,
 } from './advanced';
 
 import {
@@ -56,7 +57,9 @@ class ReplacementEngineImpl implements ReplacementEngine {
    * @remarks Reads extension settings to determine enabled categories.
    */
   applyNonRegex(text: string): string {
-    return applyReplacements(text, getAllReplacements()).trim();
+    let processed = applyReplacements(text, getAllReplacements()).trim();
+    processed = wrapCritiqueInAlign(processed);
+    return processed;
   }
 
   /**
@@ -313,7 +316,7 @@ export function applyReplacements(
 export function cleanFileContent(content: string): string {
   let cleaned = applyReplacements(content, getAllReplacements()).trim();
   cleaned = applyReplacements(cleaned, getAllReplacementsRegex()).trim();
-  return cleaned;
+  return wrapCritiqueInAlign(cleaned);
 }
 
 /**
