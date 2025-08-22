@@ -53,6 +53,11 @@ You can download our [example document](/examples/draft.tex) to try TeXRA with a
 1. In the TeXRA panel, click the "Current" button next to "Input" to set your active document as the input file
 2. (Optional) Add reference, auxiliary, or figure files if needed for your task
 
+::: tip Onboarding Prompt
+The first time you choose an input file, TeXRA shows a tooltip explaining the selector.
+Select **Never remind again** to hide it permanently.
+:::
+
 ::: info Multiple Files
 For complex documents with multiple input files, use the "Multiple" dropdown to select additional files.
 :::
@@ -64,6 +69,11 @@ For complex documents with multiple input files, use the "Multiple" dropdown to 
 1. In the dropdown menus at the bottom of the instruction box, select:
    - **Agent**: `polish` (for improving writing)
    - **Model**: `sonnet37` (Claude 3.7 Sonnet) or another available model
+
+::: tip Onboarding Prompt
+When you first open the agent or model dropdown, a tooltip explains its role.
+You can dismiss these prompts with **Never remind again**.
+:::
 
 ![Agent and Model Selection](/images/agent-model-selection.png)
 
