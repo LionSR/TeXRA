@@ -15,7 +15,7 @@ const anthropic = new Anthropic({
 // OpenAI: Stream to user + get final response
 async function testOpenAIStreamingBoth() {
   console.log('=== OpenAI: Stream + Final Response ===\n');
-  
+
   const stream = await openai.chat.completions.create({
     model: 'o1-mini',
     messages: [
@@ -29,7 +29,7 @@ async function testOpenAIStreamingBoth() {
   });
 
   console.log('Streaming to user:\n');
-  
+
   // Process chunks for real-time display
   for await (const chunk of stream) {
     // Stream content to user
@@ -37,29 +37,29 @@ async function testOpenAIStreamingBoth() {
     if (content) {
       process.stdout.write(content); // This would be sent to user in real app
     }
-    
+
     // For o1 models, also stream reasoning
     const reasoning = chunk.choices[0]?.delta?.reasoning_content || '';
     if (reasoning) {
       process.stdout.write(`[REASONING] ${reasoning}\n`);
     }
   }
-  
+
   // After streaming completes, get the final assembled response
   const finalResponse = await stream.finalChatCompletion();
-  
+
   console.log('\n\n--- Final Assembled Response ---');
   console.log('Full content:', finalResponse.choices[0].message.content);
   console.log('Usage:', finalResponse.usage);
   console.log('Finish reason:', finalResponse.choices[0].finish_reason);
-  
+
   return finalResponse; // Can use this for further processing
 }
 
 // Anthropic: Stream to user + get final response
 async function testAnthropicStreamingBoth() {
   console.log('\n\n=== Anthropic: Stream + Final Response ===\n');
-  
+
   // Must use beta.messages.stream for finalMessage()
   const stream = anthropic.beta.messages.stream({
     model: 'claude-3-5-haiku-20241205',
@@ -73,36 +73,39 @@ async function testAnthropicStreamingBoth() {
   });
 
   console.log('Streaming to user:\n');
-  
+
   // Option 1: Use event handlers
   stream.on('text', (text) => {
     process.stdout.write(text); // Stream to user
   });
-  
+
   // You can also handle other events
   stream.on('message_start', (message) => {
     console.log(`\n[Started message ${message.id}]\n`);
   });
-  
+
   stream.on('message_stop', () => {
     console.log('\n[Message complete]');
   });
-  
+
   // Wait for completion and get final message
   const finalMessage = await stream.finalMessage();
-  
+
   console.log('\n--- Final Assembled Response ---');
-  console.log('Full content:', finalMessage.content.map(c => c.text).join(''));
+  console.log(
+    'Full content:',
+    finalMessage.content.map((c) => c.text).join(''),
+  );
   console.log('Usage:', finalMessage.usage);
   console.log('Stop reason:', finalMessage.stop_reason);
-  
+
   return finalMessage; // Can use this for further processing
 }
 
 // Alternative Anthropic approach with manual iteration
 async function testAnthropicManualIteration() {
   console.log('\n\n=== Anthropic: Manual Iteration + Final Response ===\n');
-  
+
   const stream = anthropic.beta.messages.stream({
     model: 'claude-3-5-haiku-20241205',
     max_tokens: 1024,
@@ -121,18 +124,18 @@ async function testAnthropicManualIteration() {
     }
     // Handle other event types as needed
   }
-  
+
   // Still get the final message!
   const finalMessage = await stream.finalMessage();
   console.log('\n\nFinal:', finalMessage.content[0].text);
-  
+
   return finalMessage;
 }
 
 // Practical example: Stream with processing
 async function practicalExample() {
   console.log('\n\n=== Practical Example: Stream + Process + Store ===\n');
-  
+
   const stream = await openai.chat.completions.create({
     model: 'gpt-4o-mini',
     messages: [
@@ -147,7 +150,7 @@ async function practicalExample() {
 
   // Track streaming for user feedback
   let streamedChunks = [];
-  
+
   console.log('User sees this in real-time:\n');
   for await (const chunk of stream) {
     const content = chunk.choices[0]?.delta?.content || '';
@@ -156,10 +159,10 @@ async function practicalExample() {
       streamedChunks.push(content); // Optional: track chunks
     }
   }
-  
+
   // Get final response for database/logging/processing
   const finalResponse = await stream.finalChatCompletion();
-  
+
   console.log('\n\n--- What gets saved to database ---');
   const dataToSave = {
     id: finalResponse.id,
@@ -169,7 +172,7 @@ async function practicalExample() {
     timestamp: new Date().toISOString(),
   };
   console.log(JSON.stringify(dataToSave, null, 2));
-  
+
   return dataToSave;
 }
 
