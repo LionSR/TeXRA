@@ -96,6 +96,29 @@ describe('XmlOutputManager markdown fallback', () => {
     await WorkspaceFS.delete(texPath);
   });
 
+  it('prefers named document over latex_document when both present', async () => {
+    const logger = new AgentLogger('TestXmlOutput');
+    const manager = new XmlOutputManager(setting, config, logger);
+    const outputXml = 'both_tags.xml';
+    const xmlContent =
+      '<latex_document><![CDATA[\\begin{document}wrong\\end{document}]]></latex_document>' +
+      '<document name="input.tex"><![CDATA[\\begin{document}right\\end{document}]]></document><';
+
+    await WorkspaceFS.writeFile(outputXml, xmlContent);
+
+    const texPath = await manager.splitScratchpadOutputXml(
+      outputXml,
+      setting.documentTag,
+    );
+
+    const written = await WorkspaceFS.readFile('both_tags.tex');
+    assert.ok(written.includes('right'));
+    assert.ok(!written.includes('wrong'));
+
+    await WorkspaceFS.delete(outputXml);
+    await WorkspaceFS.delete(texPath);
+  });
+
   it('writes tex file from plain LaTeX document block', async () => {
     const logger = new AgentLogger('TestXmlOutput');
     const manager = new XmlOutputManager(setting, config, logger);
