@@ -245,9 +245,7 @@ export abstract class ModelHandler<
     let improvedConnectionDomain = (configValue || '').trim();
 
     if (!improvedConnectionDomain) {
-      this.logger.debug(
-        `Using default proxy domain: ${DEFAULT_PROXY_DOMAIN}`,
-      );
+      this.logger.debug(`Using default proxy domain: ${DEFAULT_PROXY_DOMAIN}`);
       improvedConnectionDomain = DEFAULT_PROXY_DOMAIN;
     }
 
