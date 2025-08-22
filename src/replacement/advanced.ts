@@ -374,15 +374,16 @@ export function fixLatexQuoteIssues(text: string): string {
 
 /**
  * Wrap bare \critique commands in align environments with \intertext.
+ * Handles simple nested braces within critique content.
  *
  * @param text LaTeX document text
  * @returns Text with \critique commands wrapped in \intertext within align blocks
  */
 export function wrapCritiqueInAlign(text: string): string {
-  const alignRegex = /\\begin\{align\\*?}[\\s\\S]*?\\end\{align\\*?}/g;
+  const alignRegex = /\\begin\{align\\*?\}[\\s\\S]*?\\end\{align\\*?\}/g;
   return text.replace(alignRegex, (block) =>
     block.replace(
-      /(?<!\\intertext\\{)\\critique{([^}]*)}/g,
+      /(?<!\\intertext\\{)\\critique{((?:[^{}]|{[^{}]*})*)}/g,
       '\\intertext{\\critique{$1}}',
     ),
   );
