@@ -54,6 +54,9 @@ const DEFAULT_CONTINUE_LIMIT = 10;
 const DEFAULT_INPUT_TOKEN_LIMIT = 1500000;
 const DEFAULT_OUTPUT_TOKEN_LIMIT_FACTOR = 2.5;
 
+// Default proxy domain
+const DEFAULT_PROXY_DOMAIN = 'proxy.texra.ai';
+
 /** Flags for token-based stop conditions. */
 interface TokenFlags {
   continuationLimit: boolean;
@@ -235,13 +238,17 @@ export abstract class ModelHandler<
       'model.useImprovedConnection',
       false,
     );
-    let improvedConnectionDomain = getConfig<string>(
+    const configValue = getConfig<string>(
       'model.improvedConnectionDomain',
-      '',
-    ).trim();
+      DEFAULT_PROXY_DOMAIN,
+    );
+    let improvedConnectionDomain = (configValue || '').trim();
 
     if (!improvedConnectionDomain) {
-      improvedConnectionDomain = 'proxy.texra.ai';
+      this.logger.debug(
+        `Using default proxy domain: ${DEFAULT_PROXY_DOMAIN}`,
+      );
+      improvedConnectionDomain = DEFAULT_PROXY_DOMAIN;
     }
 
     if (useImprovedConnection) {
