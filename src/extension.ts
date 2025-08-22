@@ -30,8 +30,8 @@ let statusBarItem: vscode.StatusBarItem | undefined;
 let disposeStatusListener: (() => void) | undefined;
 
 export async function activate(context: vscode.ExtensionContext) {
-  const workspaceRoot = vscode.workspace.workspaceFolders?.[0].uri.fsPath;
-  if (!workspaceRoot) {
+  const workspaceFolders = vscode.workspace.workspaceFolders;
+  if (!workspaceFolders || workspaceFolders.length === 0) {
     const openAction = 'Open Folder';
     vscode.window
       .showInformationMessage(
@@ -45,6 +45,23 @@ export async function activate(context: vscode.ExtensionContext) {
       });
     return; // Exit before further initialization
   }
+
+  if (workspaceFolders.length > 1) {
+    const openAction = 'Open Folder';
+    vscode.window
+      .showInformationMessage(
+        'TeXRA does not support multi-root workspaces. Please open a single folder to enable the extension.',
+        openAction,
+      )
+      .then((choice) => {
+        if (choice === openAction) {
+          vscode.commands.executeCommand('workbench.action.files.openFolder');
+        }
+      });
+    return; // Exit before further initialization
+  }
+
+  const workspaceRoot = workspaceFolders[0].uri.fsPath;
 
   dotenv.config({
     path: path.join(workspaceRoot, '.env'),
