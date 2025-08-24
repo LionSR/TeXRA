@@ -1,0 +1,14 @@
+.log-placeholder {
+  padding: 1rem;
+  text-align: center;
+  color: var(--vscode-descriptionForeground);
+}
+
+.log-placeholder a {
+  color: var(--vscode-textLink-foreground);
+  text-decoration: none;
+}
+
+.log-placeholder a:hover {
+  text-decoration: underline;
+}

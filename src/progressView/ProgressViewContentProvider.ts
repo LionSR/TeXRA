@@ -54,6 +54,10 @@ export class ProgressViewContentProvider extends BaseViewContentProvider {
         webview,
         'modules/uiManagers/EventsManager.js',
       ),
+      emptyStateUri: this.getWebviewUri(
+        webview,
+        'modules/uiManagers/EmptyState.js',
+      ),
     };
   }
 }
