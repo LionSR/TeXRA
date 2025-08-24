@@ -18,6 +18,7 @@ export const ELEMENT_IDS = {
   TOOLBAR_CONTAINER: 'toolbarContainer',
   FILE_ITEM_TEMPLATE: 'fileItemTemplate',
   DELETE_ALL_BTN: 'deleteAllBtn',
+  LOG_PLACEHOLDER: 'logPlaceholder',
   SORT_TIME_BTN: 'sortTimeBtn',
   SORT_FILE_BTN: 'sortFileBtn',
   SORT_AGENT_BTN: 'sortAgentBtn',

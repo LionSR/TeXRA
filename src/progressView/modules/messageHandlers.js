@@ -64,6 +64,12 @@ export class ProgressViewMessageHandler {
     });
     dom.streamTabs.update(message.streams, message.activeStream);
 
+    if (!message.streams || message.streams.length === 0) {
+      dom.emptyState.show();
+    } else {
+      dom.emptyState.hide();
+    }
+
     const container = document.getElementById(ELEMENT_IDS.FOLLOW_UP_CONTAINER);
     if (container) {
       const active = message.streams.find(
@@ -84,35 +90,29 @@ export class ProgressViewMessageHandler {
 
   handleUpdateLogs(message) {
     const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
-    if (message.stream === state.activeStream) {
-      logContent.innerHTML = '';
-      state.taskGroups.clear();
-      if (message.groups && message.groups.length > 0) {
-        const parentGroups = message.groups.filter((g) => !g.parentGroupId);
-        const childGroups = message.groups.filter((g) => g.parentGroupId);
-        parentGroups
-          .sort((a, b) => a.startTime - b.startTime)
-          .forEach((g) => dom.taskGroups.add(g));
-        childGroups
-          .sort((a, b) => a.startTime - b.startTime)
-          .forEach((g) => dom.taskGroups.add(g));
-      }
-      const sortedMessages = [...message.messages].sort(
-        (a, b) => a.timestamp - b.timestamp,
-      );
-      sortedMessages.forEach((msg) => {
-        if (msg.groupId) {
-          if (!dom.logEntries.append(msg)) {
-            const formatted = this._entryFormatter.format(msg);
-            if (formatted instanceof HTMLElement) {
-              logContent.appendChild(formatted);
-            } else {
-              const el = document.createElement('div');
-              el.innerHTML = formatted;
-              logContent.appendChild(el.firstElementChild);
-            }
-          }
-        } else {
+    if (!message.stream || message.stream !== state.activeStream) {
+      return;
+    }
+
+    dom.emptyState.hide();
+    logContent.innerHTML = '';
+    state.taskGroups.clear();
+    if (message.groups && message.groups.length > 0) {
+      const parentGroups = message.groups.filter((g) => !g.parentGroupId);
+      const childGroups = message.groups.filter((g) => g.parentGroupId);
+      parentGroups
+        .sort((a, b) => a.startTime - b.startTime)
+        .forEach((g) => dom.taskGroups.add(g));
+      childGroups
+        .sort((a, b) => a.startTime - b.startTime)
+        .forEach((g) => dom.taskGroups.add(g));
+    }
+    const sortedMessages = [...message.messages].sort(
+      (a, b) => a.timestamp - b.timestamp,
+    );
+    sortedMessages.forEach((msg) => {
+      if (msg.groupId) {
+        if (!dom.logEntries.append(msg)) {
           const formatted = this._entryFormatter.format(msg);
           if (formatted instanceof HTMLElement) {
             logContent.appendChild(formatted);
@@ -122,12 +122,21 @@ export class ProgressViewMessageHandler {
             logContent.appendChild(el.firstElementChild);
           }
         }
-      });
-      logContent.scrollTop = logContent.scrollHeight;
+      } else {
+        const formatted = this._entryFormatter.format(msg);
+        if (formatted instanceof HTMLElement) {
+          logContent.appendChild(formatted);
+        } else {
+          const el = document.createElement('div');
+          el.innerHTML = formatted;
+          logContent.appendChild(el.firstElementChild);
+        }
+      }
+    });
+    logContent.scrollTop = logContent.scrollHeight;
 
-      // Recalculate cumulative usage after loading groups
-      dom.usageSummary.update();
-    }
+    // Recalculate cumulative usage after loading groups
+    dom.usageSummary.update();
   }
 
   handleClearLogs() {
@@ -140,11 +149,15 @@ export class ProgressViewMessageHandler {
     }
     state.taskGroups.clear();
     state.toggleStates.clear(groupIds);
+    if (!state.activeStream) {
+      dom.emptyState.show();
+    }
   }
 
   handleAppendLog(message) {
     if (message.stream === state.activeStream) {
       const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
+      dom.emptyState.hide();
       const addedToGroup = dom.logEntries.append(message.logMessage);
       if (!addedToGroup) {
         const formatted = this._entryFormatter.format(message.logMessage);
@@ -178,6 +191,7 @@ export class ProgressViewMessageHandler {
   handleAddTaskGroup(message) {
     if (message.stream === state.activeStream) {
       const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
+      dom.emptyState.hide();
       dom.taskGroups.add(message.group);
       logContent.scrollTop = logContent.scrollHeight;
     }
