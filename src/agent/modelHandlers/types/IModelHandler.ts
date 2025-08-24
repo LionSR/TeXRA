@@ -42,6 +42,12 @@ export interface IModelHandler<
   /** Determine if streaming should be used for the current model. */
   getStreamingConfig(): boolean;
 
+  /** Enable or disable streaming of model output text. */
+  setOutputStreaming(enabled: boolean): void;
+
+  /** Check if output streaming is enabled. */
+  isOutputStreamingEnabled(): boolean;
+
   /** Indicates if the model is served by Google. */
   readonly isGoogle: boolean;
 

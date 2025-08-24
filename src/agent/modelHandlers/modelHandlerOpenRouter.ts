@@ -77,13 +77,17 @@ export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
     if (useStreaming) {
       kwargs.stream_options = { include_usage: true }; // Assuming OpenRouter passes this through
       const stream = client.chat.completions.stream(kwargs, { signal });
-      const thinking = this.createThinkingStream(
-        this.logger.getActiveGroupId(),
-      );
+      const groupId = this.logger.getActiveGroupId();
+      const thinking = this.createThinkingStream(groupId);
+      const output = this.isOutputStreamingEnabled()
+        ? this.createOutputStream(groupId)
+        : undefined;
       for await (const chunk of stream) {
         const reasoningDelta =
           (chunk.choices[0]?.delta as any)?.reasoning_content ?? '';
+        const contentDelta = chunk.choices[0]?.delta?.content ?? '';
         if (reasoningDelta) thinking.append(reasoningDelta);
+        if (contentDelta) output?.append(contentDelta);
       }
 
       // Note that there is no second consumption problem
@@ -91,6 +95,8 @@ export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
       const response = await stream.finalChatCompletion();
       const finalReasoning = this.processThinkingBlock(response);
       thinking.finalize(finalReasoning ?? undefined);
+      const finalOutput = response.choices?.[0]?.message?.content ?? '';
+      if (output) output.finalize(finalOutput);
       return response;
     } else {
       return await client.chat.completions.create(kwargs, { signal });

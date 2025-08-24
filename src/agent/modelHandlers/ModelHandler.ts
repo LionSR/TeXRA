@@ -33,7 +33,7 @@ import { bus } from '@eventBus/ProgressEventBus';
 
 // Local imports - log
 import { AgentLogger } from '@logger/AgentLogger';
-import { MESSAGE_TYPES } from '@logger/messageTypes';
+import { MESSAGE_TYPES, MessageType } from '@logger/messageTypes';
 import type { ToolDefinition } from '@model';
 import {
   ModelConfig,
@@ -82,6 +82,7 @@ export abstract class ModelHandler<
   public inputTokenLimit: number;
   public maxOutputTokensFactor: number;
   protected logger: AgentLogger;
+  protected outputStreaming = false;
 
   constructor(config: ModelConfig) {
     this.config = {
@@ -113,13 +114,27 @@ export abstract class ModelHandler<
   }
 
   /**
-   * Creates a thinking stream that aggregates reasoning chunks and streams them
-   * to the Progress view.
+   * Enables or disables streaming of model output text.
+   */
+  public setOutputStreaming(enabled: boolean): void {
+    this.outputStreaming = enabled;
+  }
+
+  /**
+   * Indicates whether model output streaming is enabled.
+   */
+  public isOutputStreamingEnabled(): boolean {
+    return this.outputStreaming;
+  }
+
+  /**
+   * Creates a log stream for progressive updates to the Progress view.
    *
+   * @param type Message type for the stream.
    * @param groupId Optional log group identifier.
    * @returns Object with `append` and `finalize` helpers.
    */
-  protected createThinkingStream(groupId?: string) {
+  protected createLogStream(type: MessageType, groupId?: string) {
     const streamId = this.logger.channelId;
     const id = randomUUID();
     let buffer = '';
@@ -140,7 +155,7 @@ export abstract class ModelHandler<
               level: 'info',
               timestamp: Date.now(),
               groupId,
-              messageType: MESSAGE_TYPES.THINKING,
+              messageType: type,
             },
           });
           isFirstUpdate = false;
@@ -151,7 +166,7 @@ export abstract class ModelHandler<
               id,
               text: encodeHtml(buffer),
               groupId,
-              messageType: MESSAGE_TYPES.THINKING,
+              messageType: type,
             },
           });
         }
@@ -171,7 +186,7 @@ export abstract class ModelHandler<
               level: 'info',
               timestamp: Date.now(),
               groupId,
-              messageType: MESSAGE_TYPES.THINKING,
+              messageType: type,
             },
           });
         } else {
@@ -181,15 +196,29 @@ export abstract class ModelHandler<
               id,
               text: encodeHtml(buffer),
               groupId,
-              messageType: MESSAGE_TYPES.THINKING,
+              messageType: type,
             },
           });
         }
 
-        this.logger.debug(`Final reasoning length: ${buffer.length}`, groupId);
+        this.logger.debug(`Final ${type} length: ${buffer.length}`, groupId);
         return buffer;
       },
     };
+  }
+
+  /**
+   * Convenience wrapper for thinking streams.
+   */
+  protected createThinkingStream(groupId?: string) {
+    return this.createLogStream(MESSAGE_TYPES.THINKING, groupId);
+  }
+
+  /**
+   * Convenience wrapper for output streams.
+   */
+  protected createOutputStream(groupId?: string) {
+    return this.createLogStream(MESSAGE_TYPES.MODEL_RESPONSE, groupId);
   }
 
   /**
