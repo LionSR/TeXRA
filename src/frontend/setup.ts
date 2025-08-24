@@ -6,7 +6,7 @@ import * as vscode from 'vscode';
 
 // Local imports
 import * as logger from '@logger/logUtils';
-import { AbsoluteFS, GlobalStorageFS, StorageFS } from '@utils/files';
+import { GlobalStorageFS, StorageFS, copyDirToFS } from '@utils/files';
 import { GlobalStateKey, globalSM } from '@common/state/stateManager';
 import { safeExecuteCommand } from '@utils/system';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
@@ -53,31 +53,9 @@ export async function copyDefaultAgents(context: vscode.ExtensionContext) {
     await GlobalStorageFS.ensureDir('tool_use_agents');
     console.log('Created or verified global storage directory');
 
-    // Recursive function to copy files and directories
-    // Consider the native recursive copy available in Node 16+?
-    const copyRecursively = async (
-      sourcePath: string,
-      targetRelativePath: string,
-    ) => {
-      const stats = AbsoluteFS.statSync(sourcePath);
-
-      if (stats.isDirectory()) {
-        await GlobalStorageFS.createDir(targetRelativePath);
-        const files = AbsoluteFS.readDirSync(sourcePath);
-        for (const file of files) {
-          const sourceFilePath = path.join(sourcePath, file);
-          const targetFileRelativePath = path.join(targetRelativePath, file);
-          await copyRecursively(sourceFilePath, targetFileRelativePath);
-        }
-      } else {
-        const content = AbsoluteFS.readBytesSync(sourcePath);
-        await GlobalStorageFS.write(targetRelativePath, content);
-      }
-    };
-
     // Start recursive copy from root
-    await copyRecursively(resourcesPath, 'agents');
-    await copyRecursively(resourcesToolUse, 'tool_use_agents');
+    await copyDirToFS(resourcesPath, 'agents', GlobalStorageFS);
+    await copyDirToFS(resourcesToolUse, 'tool_use_agents', GlobalStorageFS);
 
     // Update the stored version after successful copy
     await globalSM.update(GlobalStateKey.LAST_KNOWN_VERSION, currentVersion);

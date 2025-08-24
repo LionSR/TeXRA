@@ -21,7 +21,8 @@
     "onView:texra.mainView",
     "onView:texra.folderExplorer",
     "onView:texra.progressView",
-    "onColorTheme"
+    "onColorTheme",
+    "onCommand:texra.createSampleProject"
   ],
   "main": "./dist/extension.js",
   "contributes": {
@@ -750,6 +751,11 @@
       }
     ],
     "commands": [
+      {
+        "command": "texra.createSampleProject",
+        "title": "Create Sample Project",
+        "category": "TeXRA"
+      },
       {
         "command": "texra.cleanOutput",
         "title": "Clean All LLM Output Files",
