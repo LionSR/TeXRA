@@ -8,3 +8,4 @@ export * from './fileMappingUtils';
 export * from './pathUtils';
 export * from './mimeUtils';
 export * from './taskRunStorage';
+export * from './copyUtils';

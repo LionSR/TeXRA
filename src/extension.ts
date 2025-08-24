@@ -138,16 +138,26 @@ export async function activate(context: vscode.ExtensionContext) {
     folderExplorer.refresh();
   });
 
-  await showInstructionWithSuppress('welcome', 'Welcome to TeXRA…', [
-    {
-      title: 'Open Guide',
-      callback: async () => {
-        await vscode.env.openExternal(
-          vscode.Uri.parse('https://texra.ai/guide/'),
-        );
+  await showInstructionWithSuppress(
+    'welcome',
+    'Welcome to TeXRA! Run "TeXRA: Create Sample Project" to add a draft.tex example, set your API keys, choose an agent and model, then write instructions and execute.',
+    [
+      {
+        title: 'Open Guide',
+        callback: async () => {
+          await vscode.env.openExternal(
+            vscode.Uri.parse('https://texra.ai/guide/'),
+          );
+        },
       },
-    },
-  ]);
+      {
+        title: 'Create Sample Project',
+        callback: async () => {
+          await vscode.commands.executeCommand('texra.createSampleProject');
+        },
+      },
+    ],
+  );
 }
 
 export function deactivate() {
