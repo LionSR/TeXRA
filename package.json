@@ -36,6 +36,7 @@
               "type": "string"
             },
             "default": [
+              "chat",
               "correct",
               "polish",
               "draw",
