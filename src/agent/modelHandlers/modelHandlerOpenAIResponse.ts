@@ -231,9 +231,11 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
       const stream = client.responses.stream(params, {
         signal,
       });
-      const thinking = this.createThinkingStream(
-        this.logger.getActiveGroupId(),
-      );
+      const groupId = this.logger.getActiveGroupId();
+      const thinking = this.createThinkingStream(groupId);
+      const output = this.isOutputStreamingEnabled()
+        ? this.createOutputStream(groupId)
+        : undefined;
       for await (const event of stream) {
         if (
           event.type === 'response.reasoning_text.delta' ||
@@ -241,12 +243,17 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
         ) {
           thinking.append((event as any).delta);
         }
+        if (event.type === 'response.output_text.delta') {
+          output?.append((event as any).delta);
+        }
       }
 
       // Note that there is no second consumption problem as per openai sdk examples
       const response = await stream.finalResponse();
       const finalReasoning = this.processThinkingBlock(response);
       thinking.finalize(finalReasoning ?? undefined);
+      const [finalText] = this.extractResponse(response, '');
+      if (output) output.finalize(finalText);
       // this.logger.debug(
       //   `OpenAI Responses final response: ${JSON.stringify(response)}`,
       // );

@@ -91,6 +91,7 @@ export async function runToolUseCycle(
     let response: any;
     const startTime = Date.now();
     try {
+      modelHandler.setOutputStreaming(true);
       response = await modelHandler.createResponse(
         client,
         messages,
@@ -142,8 +143,10 @@ export async function runToolUseCycle(
     );
     if (text) {
       logger.debug(`Model response: ${text.slice(0, 100)}`, groupId);
-      const formatted = await xmlUtils.formatContent(text);
-      logger.info(formatted, groupId, MESSAGE_TYPES.MODEL_RESPONSE);
+      if (!useStreaming) {
+        const formatted = await xmlUtils.formatContent(text);
+        logger.info(formatted, groupId, MESSAGE_TYPES.MODEL_RESPONSE);
+      }
     }
     if (usage) {
       const normalized = modelHandler.computeResponseUsage(usage, responseTime);
