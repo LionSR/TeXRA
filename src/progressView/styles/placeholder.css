@@ -1,0 +1,15 @@
+/**
+ * Placeholder styles for ProgressView
+ * Displayed when no streams are available
+ */
+
+.log-placeholder {
+  text-align: center;
+  color: var(--vscode-descriptionForeground);
+  padding: var(--spacing-large) var(--spacing-medium);
+}
+
+.log-placeholder a {
+  color: var(--vscode-textLink-foreground);
+  text-decoration: underline;
+}
