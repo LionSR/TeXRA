@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.33.1] - Unreleased
+## [0.33.1] - 2025-08-22
 
 ### Features
 
@@ -10,6 +10,10 @@ All notable changes to this project will be documented in this file.
 - Add descriptive tooltips for Input, Reference, Auxiliary and Media file selectors in the main webview
 - Show onboarding tooltips on first use of the input file selector or model picker, with a "Never remind again" option
 - Add real-time streaming display for model reasoning/thinking processes (Claude, DeepSeek, o1)
+
+### Bug Fixes
+
+- Restrict extension to single workspace folder to prevent initialization issues
 
 ## [0.33.0] - 2025-08-19 🎂 Birthday Edition
 
