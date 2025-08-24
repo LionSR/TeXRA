@@ -38,6 +38,7 @@ document.addEventListener('DOMContentLoaded', () => {
   ]);
   initializeIconButtons();
   progressViewDomHandler.toolbar.render();
+  progressViewDomHandler.placeholder.show();
   // Setup UI event listeners
   progressViewDomHandler.events.setupEventListeners();
 

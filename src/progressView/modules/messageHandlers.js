@@ -64,6 +64,12 @@ export class ProgressViewMessageHandler {
     });
     dom.streamTabs.update(message.streams, message.activeStream);
 
+    if (message.streams.length === 0) {
+      dom.placeholder.show();
+    } else {
+      dom.placeholder.hide();
+    }
+
     const container = document.getElementById(ELEMENT_IDS.FOLLOW_UP_CONTAINER);
     if (container) {
       const active = message.streams.find(
