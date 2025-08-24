@@ -45,7 +45,7 @@ Let's go through an example to illustrate the basic workflow.
 3. Open or create a LaTeX document from the workspace you'd like to improve
 
 ::: tip Example
-You can download our [example document](/examples/draft.tex) to try TeXRA with a ready-made sample file.
+Run **TeXRA: Create Sample Project** from the Command Palette to add a ready-made example to your workspace. This creates a `draft.tex` file under `texra-sample/`. Open it, run **TeXRA: Set API Key** to add your credentials, then select an agent and model in the TeXRA panel. Finally, write your instruction and execute the agent to see results.
 :::
 
 ### Step 2: Select Files
