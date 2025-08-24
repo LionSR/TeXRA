@@ -110,6 +110,7 @@ export async function runResponseCycle(
 
     const abortController = new AbortController();
     setAbortController(abortController);
+    modelHandler.setOutputStreaming(false);
     let responseObject;
     try {
       responseObject = await modelHandler.createResponse(
@@ -161,6 +162,18 @@ export async function runResponseCycle(
       toolState,
     );
     const useStreaming = modelHandler.getStreamingConfig();
+
+    if (newResponse) {
+      logger.debug(`Model response: ${newResponse.slice(0, 100)}`, taskGroupId);
+      if (!useStreaming) {
+        const formattedResponse = await xmlUtils.formatContent(newResponse);
+        logger.info(
+          formattedResponse,
+          taskGroupId,
+          MESSAGE_TYPES.MODEL_RESPONSE,
+        );
+      }
+    }
 
     // Only log thinking content for non-streaming responses
     // Streaming responses display thinking content progressively via createThinkingStream()
