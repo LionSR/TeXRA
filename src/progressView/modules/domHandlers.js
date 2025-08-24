@@ -7,6 +7,7 @@ import { EventsManager } from './uiManagers/EventsManager.js';
 import { FileList } from './uiManagers/FileList.js';
 import { Status } from './uiManagers/Status.js';
 import { StreamTabs } from './uiManagers/StreamTabs.js';
+import { Placeholder } from './uiManagers/Placeholder.js';
 import { Toolbar } from './uiManagers/Toolbar.js';
 import { UsageSummary, UsageGroup } from './usageManagers.js';
 
@@ -25,6 +26,7 @@ export class ProgressViewDomHandler {
     this.taskGroups = new TaskGroupManager();
     this.logEntries = new LogEntryManager();
     this.events = new EventsManager();
+    this.placeholder = new Placeholder();
   }
 }
 
