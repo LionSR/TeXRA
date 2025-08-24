@@ -1,0 +1,10 @@
+name: chat
+settings:
+  agentType: toolUse
+  tools: [bash, file_op]
+prompts:
+  systemPrompt: |
+    You are a scientist. Reason deeply.
+    Use \begin{aligned} … \end{aligned} for derivations.
+    Converse with the user and ensure mathematical accuracy.
+  userRequest: '{{INSTRUCTION}}'
