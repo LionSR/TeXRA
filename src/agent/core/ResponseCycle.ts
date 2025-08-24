@@ -162,11 +162,10 @@ export async function runResponseCycle(
       toolState,
     );
     const useStreaming = modelHandler.getStreamingConfig();
-    const streamOutput = modelHandler.isOutputStreamingEnabled();
 
     if (newResponse) {
       logger.debug(`Model response: ${newResponse.slice(0, 100)}`, taskGroupId);
-      if (!streamOutput) {
+      if (!useStreaming) {
         const formattedResponse = await xmlUtils.formatContent(newResponse);
         logger.info(
           formattedResponse,
