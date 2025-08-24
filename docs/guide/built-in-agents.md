@@ -8,6 +8,15 @@ The underlying prompts and specific behaviors of these built-in agents may chang
 
 For details on the underlying structure and execution flow common to all agents, see the [Agent Architecture & Execution Flow](./agent-architecture.md) guide.
 
+## Conversational Agents
+
+### `chat`
+
+The `chat` agent acts as a friendly scientist focused on careful reasoning during conversation.
+It can execute `bash` commands and manipulate files using the `file_op` tool.
+When derivations are required, it presents steps inside `\begin{aligned} ... \end{aligned}` blocks
+to keep mathematical discussions accurate.
+
 ## Correction & Polishing Agents
 
 ### `correct`
