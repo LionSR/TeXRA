@@ -157,9 +157,11 @@ export class ModelHandlerOpenAI extends ModelHandler<
         const stream = client.chat.completions.stream(kwargs as any, {
           signal,
         });
-        const thinking = this.createThinkingStream(
-          this.logger.getActiveGroupId(),
-        );
+        const groupId = this.logger.getActiveGroupId();
+        const thinking = this.createThinkingStream(groupId);
+        const output = this.isOutputStreamingEnabled()
+          ? this.createOutputStream(groupId)
+          : undefined;
 
         if (this.config.fullName.includes('deepseek')) {
           // Aggregate stream chunks manually for DeepSeek models
@@ -170,8 +172,10 @@ export class ModelHandlerOpenAI extends ModelHandler<
             lastChunk = chunk;
             const delta: any = chunk.choices[0]?.delta;
             const reasoningDelta = delta?.reasoning_content ?? '';
+            const contentDelta = delta?.content ?? '';
             if (reasoningDelta) thinking.append(reasoningDelta);
-            fullContent += delta?.content ?? '';
+            if (contentDelta) output?.append(contentDelta);
+            fullContent += contentDelta;
             reasoning += reasoningDelta;
           }
           const finalResponse = {
@@ -197,19 +201,24 @@ export class ModelHandlerOpenAI extends ModelHandler<
           };
           const finalReasoning = this.processThinkingBlock(finalResponse);
           thinking.finalize(finalReasoning ?? undefined);
+          if (output) output.finalize(fullContent);
           return finalResponse;
         }
 
         for await (const chunk of stream) {
           const reasoningDelta =
             (chunk.choices[0]?.delta as any)?.reasoning_content ?? '';
+          const contentDelta = chunk.choices[0]?.delta?.content ?? '';
           if (reasoningDelta) thinking.append(reasoningDelta);
+          if (contentDelta) output?.append(contentDelta);
         }
 
         // Note that there is no second consumption problem as per openai sdk examples
         response = await stream.finalChatCompletion();
         const finalReasoning = this.processThinkingBlock(response);
         thinking.finalize(finalReasoning ?? undefined);
+        const finalOutput = response.choices?.[0]?.message?.content ?? '';
+        if (output) output.finalize(finalOutput);
 
         // in the future we can add: stream_options: {"include_usage": true} to get usage statistics
         // in the future if we pass stream to outside (signal: controller.signal)), calling stream.controller.abort() will abort the stream; which will be very useful for our stop button (controller.abort();)
