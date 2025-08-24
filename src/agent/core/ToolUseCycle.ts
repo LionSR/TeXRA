@@ -128,7 +128,6 @@ export async function runToolUseCycle(
       toolState,
     );
     const useStreaming = modelHandler.getStreamingConfig();
-    const streamOutput = modelHandler.isOutputStreamingEnabled();
     if (thinking && !useStreaming) {
       const formatted = await xmlUtils.formatContent(thinking);
       logger.info(formatted, groupId, MESSAGE_TYPES.THINKING);
@@ -144,7 +143,7 @@ export async function runToolUseCycle(
     );
     if (text) {
       logger.debug(`Model response: ${text.slice(0, 100)}`, groupId);
-      if (!streamOutput) {
+      if (!useStreaming) {
         const formatted = await xmlUtils.formatContent(text);
         logger.info(formatted, groupId, MESSAGE_TYPES.MODEL_RESPONSE);
       }
