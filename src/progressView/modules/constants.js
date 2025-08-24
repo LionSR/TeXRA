@@ -10,6 +10,7 @@ export const STATUS = {
 // DOM element IDs used across the progress view
 export const ELEMENT_IDS = {
   LOG_CONTENT: 'logContent',
+  LOG_PLACEHOLDER: 'logPlaceholder',
   GENERATED_FILES: 'generatedFiles',
   STREAM_TABS: 'streamTabs',
   ACTIVE_STREAM_NAME: 'activeStreamName',
