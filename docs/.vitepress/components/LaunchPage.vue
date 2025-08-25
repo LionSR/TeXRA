@@ -88,27 +88,10 @@
       </div>
 
       <div v-if="repoType === 'overleaf'" class="git-config-section">
-        <h4>Git Configuration (Optional)</h4>
-        <div class="form-group">
-          <label for="git-name">Git User Name (for commits)</label>
-          <input
-            id="git-name"
-            v-model="gitName"
-            type="text"
-            placeholder="Your Name"
-          />
-        </div>
-
-        <div class="form-group">
-          <label for="git-email">Git User Email (for commits)</label>
-          <input
-            id="git-email"
-            v-model="gitEmail"
-            type="email"
-            placeholder="your@email.com"
-          />
-        </div>
-        <small>Leave empty to use defaults</small>
+        <h4>Git Configuration</h4>
+        <small
+          >By default, your Overleaf email will be used for git commits</small
+        >
       </div>
 
       <div class="button-group">
@@ -155,8 +138,6 @@ const repoType = ref('github-public');
 const repoUrl = ref('');
 const username = ref('');
 const password = ref('');
-const gitName = ref('');
-const gitEmail = ref('');
 const loading = ref(false);
 const error = ref('');
 
@@ -216,11 +197,12 @@ const launchCodespace = async () => {
       config.password = password.value;
     }
 
-    // For GitHub repos, we'll use GitHub user info automatically
-    // For Overleaf, use provided values or defaults
+    // For Overleaf repos, use the Overleaf email for git config
     if (repoType.value === 'overleaf') {
-      config.gitName = gitName.value || null;
-      config.gitEmail = gitEmail.value || null;
+      // Use the username (Overleaf email) for both git name and email
+      config.gitEmail = username.value;
+      // Extract name from email (part before @) or use full email
+      config.gitName = username.value.split('@')[0];
     }
 
     // Encode configuration as base64
