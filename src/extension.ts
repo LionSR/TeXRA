@@ -151,27 +151,31 @@ export async function activate(context: vscode.ExtensionContext) {
     watcherManager.setup();
     folderExplorer.refresh();
   });
-
-  await showInstructionWithSuppress(
-    'welcome',
-    'Welcome to TeXRA! Run "TeXRA: Create Sample Project" to add a draft.tex example, set your API keys, choose an agent and model, then write instructions and execute.',
-    [
-      {
-        title: 'Open Guide',
-        callback: async () => {
-          await vscode.env.openExternal(
-            vscode.Uri.parse('https://texra.ai/guide/'),
-          );
-        },
-      },
-      {
-        title: 'Create Sample Project',
-        callback: async () => {
-          await vscode.commands.executeCommand('texra.createSampleProject');
-        },
-      },
-    ],
-  );
+  if (!context.globalState.get('texra.welcomeShown')) {
+    setTimeout(() => {
+      showInstructionWithSuppress(
+        'welcome',
+        'Welcome to TeXRA! Run "TeXRA: Create Sample Project" to add a draft.tex example, set your API keys, choose an agent and model, then write instructions and execute.',
+        [
+          {
+            title: 'Open Guide',
+            callback: async () => {
+              await vscode.env.openExternal(
+                vscode.Uri.parse('https://texra.ai/guide/'),
+              );
+            },
+          },
+          {
+            title: 'Create Sample Project',
+            callback: async () => {
+              await vscode.commands.executeCommand('texra.createSampleProject');
+            },
+          },
+        ],
+      ).catch(console.error);
+    }, 0);
+    await context.globalState.update('texra.welcomeShown', true);
+  }
 }
 
 export function deactivate() {
