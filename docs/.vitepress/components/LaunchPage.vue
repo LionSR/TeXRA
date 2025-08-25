@@ -100,7 +100,7 @@
                 target="_blank"
                 class="setup-link"
               >
-                📚 Get Overleaf Git token
+                📚 How to get token
               </a>
             </div>
           </div>
