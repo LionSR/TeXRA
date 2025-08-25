@@ -22,6 +22,18 @@ export class ProgressViewMessageHandler {
     };
   }
 
+  /**
+   * Toggle the placeholder based on active stream and log content
+   */
+  _updatePlaceholderVisibility() {
+    const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
+    if (!state.activeStream && logContent.children.length === 0) {
+      dom.placeholder.show();
+    } else {
+      dom.placeholder.hide();
+    }
+  }
+
   _createHandlers() {
     return {
       [COMMANDS.UPDATE_STREAMS]: (m) => this.handleUpdateStreams(m),
@@ -64,11 +76,7 @@ export class ProgressViewMessageHandler {
     });
     dom.streamTabs.update(message.streams, message.activeStream);
 
-    if (message.streams.length === 0) {
-      dom.placeholder.show();
-    } else {
-      dom.placeholder.hide();
-    }
+    this._updatePlaceholderVisibility();
 
     const container = document.getElementById(ELEMENT_IDS.FOLLOW_UP_CONTAINER);
     if (container) {
@@ -135,11 +143,7 @@ export class ProgressViewMessageHandler {
       dom.usageSummary.update();
     }
 
-    if (!state.activeStream && logContent.children.length === 0) {
-      dom.placeholder.show();
-    } else {
-      dom.placeholder.hide();
-    }
+    this._updatePlaceholderVisibility();
   }
 
   handleClearLogs() {
@@ -153,11 +157,7 @@ export class ProgressViewMessageHandler {
     state.taskGroups.clear();
     state.toggleStates.clear(groupIds);
 
-    if (!state.activeStream && logContent.children.length === 0) {
-      dom.placeholder.show();
-    } else {
-      dom.placeholder.hide();
-    }
+    this._updatePlaceholderVisibility();
   }
 
   handleAppendLog(message) {
