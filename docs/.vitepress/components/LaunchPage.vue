@@ -105,21 +105,19 @@
       </div>
 
       <div class="info-box">
-        <h4>What happens next?</h4>
-        <ul>
-          <li>A new GitHub Codespace will open with TeXLive pre-installed</li>
-          <li>
-            Your repository will be automatically cloned to the workspace root
-          </li>
-          <li>TeXRA extension will be available in VS Code</li>
-          <li>You can start editing and committing immediately</li>
-        </ul>
+        <h4>How it works</h4>
+        <ol>
+          <li>Click "Launch Codespace" to open GitHub Codespaces</li>
+          <li>Wait for the Codespace to start (2-3 minutes first time)</li>
+          <li>Copy and run the setup command shown after clicking Launch</li>
+          <li>Your repository will be cloned and configured automatically</li>
+        </ol>
         <p
           style="margin-top: 1rem; color: var(--vp-c-text-3); font-size: 0.9rem"
         >
-          <strong>⏱️ Note:</strong> First-time setup takes ~2 minutes to
-          download TeXLive packages. Subsequent launches will be much faster
-          thanks to Docker caching.
+          <strong>💡 Note:</strong> The setup script runs automatically on
+          Codespace creation, but requires the config command to be run once to
+          pass your repository details.
         </p>
       </div>
     </div>
@@ -230,7 +228,7 @@ const launchCodespace = async () => {
     window.open(codespaceUrl.toString(), '_blank');
 
     // Show success message with instructions
-    error.value = `✅ Codespace creation page opened!\n\n📋 After the Codespace starts (~2 min first time), run this in the terminal:\n\necho '${configBase64}' | base64 -d > /tmp/texra-config.json && bash /workspaces/texra-workspace/.devcontainer/auto-setup.sh\n\n⚡ This will clone your repository and configure git. Future launches will be much faster!`;
+    error.value = `✅ Codespace creation page opened!\n\n📋 After the Codespace starts, paste this ONE command in the terminal:\n\necho '${configBase64}' | base64 -d > /tmp/texra-config.json && bash /workspaces/texra-workspace/.devcontainer/auto-setup.sh\n\n⚡ The setup script will automatically:\n• Clone your repository\n• Configure git with your credentials\n• Set up the TeXRA environment\n\n💡 Tip: The script runs automatically if config is present, but GitHub Codespaces doesn't support passing data via URL yet.`;
   } catch (err) {
     error.value = `Error: ${err.message}`;
   } finally {
