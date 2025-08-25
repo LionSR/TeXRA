@@ -35,56 +35,90 @@
         </small>
       </div>
 
-      <div v-if="repoType !== 'github-public'" class="auth-section">
-        <h3>Authentication</h3>
-
-        <div class="form-group">
-          <label for="username">
-            {{ repoType === 'overleaf' ? 'Overleaf Email' : 'GitHub Username' }}
+      <div v-if="repoType === 'overleaf'" class="auth-selection">
+        <h3>Authentication Method</h3>
+        <div class="auth-options">
+          <label class="auth-option">
+            <input type="radio" v-model="authMethod" value="manual" />
+            <span
+              >📝 Enter credentials manually (Recommended for first-time
+              users)</span
+            >
           </label>
+          <label class="auth-option">
+            <input type="radio" v-model="authMethod" value="secrets" />
+            <span>🔐 Use Codespace Secrets (Best for regular use)</span>
+          </label>
+        </div>
+
+        <div v-if="authMethod === 'secrets'" class="secrets-info">
+          <p>
+            ✅ Make sure you've set up these secrets at
+            <a href="https://github.com/settings/codespaces" target="_blank"
+              >GitHub Codespace Settings</a
+            >:
+          </p>
+          <ul>
+            <li><code>OVERLEAF_EMAIL</code></li>
+            <li><code>OVERLEAF_TOKEN</code></li>
+            <li>Repository access: <code>texra-ai/texra-workspace</code></li>
+          </ul>
+        </div>
+
+        <div v-if="authMethod === 'manual'" class="auth-fields">
+          <div class="form-group">
+            <label for="username">Overleaf Email</label>
+            <input
+              id="username"
+              v-model="username"
+              type="text"
+              placeholder="your@email.com"
+            />
+          </div>
+          <div class="form-group">
+            <label for="password">Overleaf Git Token</label>
+            <input
+              id="password"
+              v-model="password"
+              type="password"
+              placeholder="Your Overleaf Git token"
+            />
+            <small>
+              <a
+                href="https://www.overleaf.com/learn/how-to/Git_integration_authentication_tokens"
+                target="_blank"
+              >
+                Learn how to create an Overleaf Git token
+              </a>
+            </small>
+          </div>
+        </div>
+      </div>
+
+      <div v-else-if="repoType === 'github-private'" class="auth-section">
+        <h3>Authentication</h3>
+        <div class="form-group">
+          <label for="username">GitHub Username</label>
           <input
             id="username"
             v-model="username"
             type="text"
-            :placeholder="
-              repoType === 'overleaf' ? 'your@email.com' : 'github-username'
-            "
+            placeholder="github-username"
           />
         </div>
-
         <div class="form-group">
-          <label for="password">
-            {{
-              repoType === 'overleaf'
-                ? 'Overleaf Git Token'
-                : 'GitHub Personal Access Token'
-            }}
-          </label>
+          <label for="password">GitHub Personal Access Token</label>
           <input
             id="password"
             v-model="password"
             type="password"
-            :placeholder="
-              repoType === 'overleaf'
-                ? 'Your Overleaf Git token'
-                : 'ghp_xxxxxxxxxxxx'
-            "
+            placeholder="ghp_xxxxxxxxxxxx"
           />
-          <small v-if="repoType === 'github-private'">
+          <small>
             <a href="https://github.com/settings/tokens/new" target="_blank"
               >Create a token</a
             >
             with 'repo' scope
-          </small>
-          <small v-if="repoType === 'overleaf'">
-            <a
-              href="https://www.overleaf.com/learn/how-to/Git_integration_authentication_tokens"
-              target="_blank"
-            >
-              Learn how to create an Overleaf Git token
-            </a>
-            <br />
-            Your Overleaf email will be used for git commits
           </small>
         </div>
       </div>
@@ -105,57 +139,18 @@
       </div>
 
       <div class="info-box">
-        <h4>Setup Options</h4>
-
-        <div v-if="repoType === 'overleaf'" class="setup-option">
-          <h5>🔐 Option 1: Automatic with Codespace Secrets (Recommended)</h5>
-          <ol>
-            <li>
-              <a href="https://github.com/settings/codespaces" target="_blank"
-                >Set up Codespace secrets</a
-              >
-              (click "New secret" for each):
-              <ul>
-                <li>
-                  <code>OVERLEAF_EMAIL</code> - Enter your Overleaf email in the
-                  value field
-                </li>
-                <li>
-                  <code>OVERLEAF_TOKEN</code> - Enter your Overleaf Git token in
-                  the value field
-                </li>
-                <li>
-                  <strong>Important:</strong> Select
-                  <code>texra-ai/texra-workspace</code> in "Repository access"
-                </li>
-              </ul>
-            </li>
-            <li>
-              Click "Launch Codespace" - authentication will be automatic!
-            </li>
-            <li>
-              Still run the command shown (it provides the repository URL)
-            </li>
-          </ol>
-        </div>
-
-        <div class="setup-option">
-          <h5>
-            📋 Option {{ repoType === 'overleaf' ? '2' : '1' }}: Manual Setup
-          </h5>
-          <ol>
-            <li>Click "Launch Codespace" to open GitHub Codespaces</li>
-            <li>Wait for the Codespace to start (2-3 minutes first time)</li>
-            <li>Copy and run the setup command shown after clicking Launch</li>
-            <li>Your repository will be cloned and configured automatically</li>
-          </ol>
-        </div>
-
+        <h4>How it works</h4>
+        <ol>
+          <li>Click "Launch Codespace" to open GitHub Codespaces</li>
+          <li>Wait for the Codespace to start (2-3 minutes first time)</li>
+          <li>Copy and run the setup command shown after clicking Launch</li>
+          <li>Your repository will be cloned and configured automatically</li>
+        </ol>
         <p
           style="margin-top: 1rem; color: var(--vp-c-text-3); font-size: 0.9rem"
         >
-          <strong>💡 Tip:</strong> Codespace secrets are persistent and secure -
-          set them once, use for all your Overleaf projects!
+          <strong>⏱️ Note:</strong> First-time setup takes ~2 minutes to
+          download TeXLive packages. Subsequent launches will be much faster.
         </p>
       </div>
     </div>
@@ -169,6 +164,7 @@ const repoType = ref('github-public');
 const repoUrl = ref('');
 const username = ref('');
 const password = ref('');
+const authMethod = ref('manual'); // Default to manual for first-time users
 const loading = ref(false);
 const error = ref('');
 
@@ -204,7 +200,14 @@ const isValid = computed(() => {
   }
 
   // Check auth requirements
-  if (repoType.value !== 'github-public') {
+  if (repoType.value === 'overleaf') {
+    // If using secrets, we don't need credentials in the form
+    if (authMethod.value === 'secrets') {
+      return true;
+    }
+    // If manual, check for credentials
+    if (!username.value || !password.value) return false;
+  } else if (repoType.value === 'github-private') {
     if (!username.value || !password.value) return false;
   }
 
@@ -223,13 +226,21 @@ const launchCodespace = async () => {
     };
 
     // Add auth if needed
-    if (repoType.value !== 'github-public') {
+    if (repoType.value === 'overleaf') {
+      // Only add credentials if using manual auth
+      if (authMethod.value === 'manual') {
+        config.username = username.value;
+        config.password = password.value;
+      }
+      // Always indicate auth method for Overleaf
+      config.authMethod = authMethod.value;
+    } else if (repoType.value === 'github-private') {
       config.username = username.value;
       config.password = password.value;
     }
 
-    // For Overleaf repos, use the Overleaf email for git config
-    if (repoType.value === 'overleaf') {
+    // For Overleaf repos with manual auth, use the email for git config
+    if (repoType.value === 'overleaf' && authMethod.value === 'manual') {
       // Use the username (Overleaf email) for both git name and email
       config.gitEmail = username.value;
       // Extract name from email (part before @) or use full email
@@ -267,7 +278,11 @@ const launchCodespace = async () => {
 
     // Show success message with instructions
     if (repoType.value === 'overleaf') {
-      error.value = `✅ Codespace creation page opened!\n\n🔐 If you have Codespace secrets set up (OVERLEAF_EMAIL & OVERLEAF_TOKEN):\n• The script will use them automatically!\n• Still run the command below (it provides the repository URL)\n\n📋 Paste this ONE command in the terminal:\n\necho '${configBase64}' | base64 -d > /tmp/texra-config.json && bash /workspaces/texra-workspace/.devcontainer/auto-setup.sh\n\n💡 Set up secrets at github.com/settings/codespaces to avoid entering credentials!`;
+      if (authMethod.value === 'secrets') {
+        error.value = `✅ Codespace creation page opened!\n\n🔐 Using Codespace Secrets for authentication\n\n📋 After the Codespace starts, paste this command in the terminal:\n\necho '${configBase64}' | base64 -d > /tmp/texra-config.json && bash /workspaces/texra-workspace/.devcontainer/auto-setup.sh\n\n⚡ The script will:\n• Use your OVERLEAF_EMAIL and OVERLEAF_TOKEN secrets\n• Clone your repository automatically\n• Configure git for you`;
+      } else {
+        error.value = `✅ Codespace creation page opened!\n\n📋 After the Codespace starts, paste this command in the terminal:\n\necho '${configBase64}' | base64 -d > /tmp/texra-config.json && bash /workspaces/texra-workspace/.devcontainer/auto-setup.sh\n\n⚡ The script will:\n• Use the credentials you provided\n• Clone your repository\n• Configure git with your email`;
+      }
     } else {
       error.value = `✅ Codespace creation page opened!\n\n📋 After the Codespace starts, paste this ONE command in the terminal:\n\necho '${configBase64}' | base64 -d > /tmp/texra-config.json && bash /workspaces/texra-workspace/.devcontainer/auto-setup.sh\n\n⚡ The setup script will automatically:\n• Clone your repository\n• Configure git with your credentials\n• Set up the TeXRA environment`;
     }
@@ -473,5 +488,66 @@ const launchCodespace = async () => {
   border-radius: 3px;
   font-size: 0.9rem;
   color: var(--vp-c-text-code);
+}
+
+.auth-selection {
+  margin: 1.5rem 0;
+}
+
+.auth-options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin: 1rem 0;
+}
+
+.auth-option {
+  display: flex;
+  align-items: center;
+  padding: 0.75rem;
+  background: var(--vp-c-bg);
+  border: 2px solid var(--vp-c-divider);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.auth-option:hover {
+  border-color: var(--vp-c-brand);
+  background: var(--vp-c-bg-soft);
+}
+
+.auth-option input[type='radio'] {
+  margin-right: 0.75rem;
+}
+
+.auth-option input[type='radio']:checked + span {
+  font-weight: 500;
+  color: var(--vp-c-brand);
+}
+
+.secrets-info,
+.auth-fields {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: var(--vp-c-bg);
+  border-radius: 6px;
+  border: 1px solid var(--vp-c-divider-light);
+}
+
+.secrets-info p {
+  margin-bottom: 0.5rem;
+}
+
+.secrets-info ul {
+  margin: 0.5rem 0;
+  padding-left: 1.5rem;
+}
+
+.secrets-info code {
+  background: var(--vp-c-bg-soft);
+  padding: 0.2rem 0.4rem;
+  border-radius: 3px;
+  font-size: 0.9rem;
 }
 </style>
