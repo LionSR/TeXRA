@@ -160,7 +160,7 @@ function getAgentName(
 /**
  * Common function to execute any agent with proper logging and status handling
  */
-async function executeAgentWithLogging<T extends IAgent>(
+export async function executeAgentWithLogging<T extends IAgent>(
   agentName: string,
   createAgentFn: () => Promise<{ agent: T; agentType?: AgentType }>,
   context: vscode.ExtensionContext,

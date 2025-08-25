@@ -3,6 +3,7 @@ import type { AgentConfig } from '../core/AgentConfig';
 import { AgentPrompt, AgentSetting } from '../core/AgentDataclass';
 import { ToolState } from '../core/ToolState';
 import { runToolUseCycle } from '../core/ToolUseCycle';
+import { ActiveAgentManager } from '@agent/runtime/ActiveAgentManager';
 import type { IModelHandler } from '../modelHandlers';
 import type { ProviderMessage } from '../modelHandlers/types/ProviderMessage';
 import { getSystemPromptWithRules } from '../utils/promptHelpers';
@@ -24,6 +25,7 @@ export class BaseToolUseAgent extends BaseAgent {
   private followUpResolver: ((v: string | null) => void) | null = null;
   private messages: ProviderMessage[] = [];
   private toolState: ToolState | null = null;
+  private initialCycleCompleted = false;
 
   constructor(
     modelHandler: IModelHandler,
@@ -34,6 +36,7 @@ export class BaseToolUseAgent extends BaseAgent {
   ) {
     super(modelHandler, agentConfig, agentSetting, agentPrompt, agentPath);
     this.toolRegistry = DEFAULT_TOOL_REGISTRY;
+    this.initialCycleCompleted = false;
   }
 
   private getTools(): ToolDefinition[] {
@@ -88,29 +91,88 @@ export class BaseToolUseAgent extends BaseAgent {
     }
   }
 
+  public override serializeState(): any {
+    return {
+      messages: this.messages,
+      toolState: this.toolState,
+      executionId: this.executionId,
+      initialCycleCompleted: this.initialCycleCompleted,
+    };
+  }
+
+  public override restoreState(state: any): void {
+    this.messages = state.messages || [];
+    this.toolState = state.toolState
+      ? ToolState.deserialize(state.toolState)
+      : null;
+    if (state.executionId) {
+      this.executionId = state.executionId;
+    }
+    this.initialCycleCompleted = state.initialCycleCompleted || false;
+  }
+
+  private async followUpLoop(cycleOptions: any): Promise<void> {
+    try {
+      while (true) {
+        const followUp = await this.waitForFollowUp();
+        if (!followUp || this.checkInterruption()) break;
+        this.logger.userMessage(followUp, this.runGroupId);
+        this.messages = await this.modelHandler.createUserFollowUpMessages(
+          this.messages,
+          followUp,
+        );
+        await runToolUseCycle(cycleOptions, this.messages, this.runGroupId);
+        if (this.checkInterruption()) break;
+        if (!this.checkInterruption() && this.messages.length > 0) {
+          await ActiveAgentManager.save(this.serialize());
+        }
+      }
+    } finally {
+      this.followUpResolver = null;
+      await ActiveAgentManager.clear();
+    }
+  }
+
+  public serialize(): any {
+    return {
+      type: 'toolUse',
+      agentConfig: this.agentConfig,
+      agentSetting: this.agentSetting,
+      agentPrompt: this.agentPrompt,
+      agentPath: this.agentPath,
+      messages: this.messages,
+      toolState: this.toolState,
+      executionId: this.executionId,
+      initialCycleCompleted: this.initialCycleCompleted,
+    };
+  }
+
   public async run(): Promise<void> {
     await this.startRunGroup();
     try {
       await this.init(this.runGroupId);
       await this.initializeClient();
+      const isResuming = this.messages.length > 0;
+      if (!isResuming) {
+        const [systemPrompt, userRequest, userPrefix] = await Promise.all([
+          getSystemPromptWithRules(
+            `${this.agentPrompt.systemPrompt}\n${TOOL_USE_INSTRUCTIONS}`,
+            this.userVars,
+          ),
+          renderPrompt(this.agentPrompt.userRequest, this.userVars),
+          renderPrompt(this.agentPrompt.userPrefix, this.userVars),
+        ]);
 
-      const [systemPrompt, userRequest, userPrefix] = await Promise.all([
-        getSystemPromptWithRules(
-          `${this.agentPrompt.systemPrompt}\n${TOOL_USE_INSTRUCTIONS}`,
-          this.userVars,
-        ),
-        renderPrompt(this.agentPrompt.userRequest, this.userVars),
-        renderPrompt(this.agentPrompt.userPrefix, this.userVars),
-      ]);
+        this.messages = await this.modelHandler.initializeMessages(
+          userPrefix,
+          userRequest,
+          undefined,
+          systemPrompt,
+        );
+        this.toolState = new ToolState();
+      }
 
-      this.messages = await this.modelHandler.initializeMessages(
-        userPrefix,
-        userRequest,
-        undefined,
-        systemPrompt,
-      );
-
-      this.toolState = new ToolState();
+      this.toolState = this.toolState ?? new ToolState();
 
       const resolvedSetting = {
         ...this.agentSetting,
@@ -132,18 +194,21 @@ export class BaseToolUseAgent extends BaseAgent {
         toolState: this.toolState,
         modelName: this.agentConfig.model,
       } as const;
-
-      while (true) {
+      const needsInitialCycle = !this.initialCycleCompleted;
+      if (needsInitialCycle) {
         await runToolUseCycle(cycleOptions, this.messages, this.runGroupId);
-        if (this.checkInterruption()) break;
-        const followUp = await this.waitForFollowUp();
-        if (!followUp || this.checkInterruption()) break;
-        this.logger.userMessage(followUp, this.runGroupId);
-        this.messages = await this.modelHandler.createUserFollowUpMessages(
-          this.messages,
-          followUp,
-        );
+        if (this.checkInterruption()) {
+          await ActiveAgentManager.clear();
+          this.endRunGroup('stopped');
+          return;
+        }
+        this.initialCycleCompleted = true;
+        if (this.messages.length > 0) {
+          await ActiveAgentManager.save(this.serialize());
+        }
       }
+
+      await this.followUpLoop(cycleOptions);
 
       this.endRunGroup('stopped');
     } catch (err) {

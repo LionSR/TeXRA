@@ -4,9 +4,6 @@ import * as vscode from 'vscode';
 // Local imports - commands
 import { BaseAgent } from '@agent/implementations/BaseAgent';
 
-const CHANNEL = 'followUpCommand';
-console.log(`[${CHANNEL}] command registered`);
-
 export function registerFollowUpCommand(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand(

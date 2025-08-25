@@ -196,5 +196,14 @@ export abstract class BaseAgent implements IAgent {
     BaseAgent.runningAgents.delete(streamTabId);
   }
 
+  // Serialization hooks for subclasses
+  public serializeState(): any {
+    return {};
+  }
+
+  public restoreState(_state: any): void {
+    // Default no-op
+  }
+
   abstract run(): Promise<void>;
 }

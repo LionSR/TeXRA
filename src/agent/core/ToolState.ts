@@ -55,6 +55,36 @@ export class ToolState implements IToolState {
   }
 
   /**
+   * Reconstruct a ToolState instance from a plain object.
+   * @param data Serialized tool state
+   */
+  static deserialize(data: any): ToolState {
+    const state = new ToolState();
+    if (!data || typeof data !== 'object') {
+      return state;
+    }
+    state.texcountStats = data.texcountStats ?? null;
+    state.firstKCharsFromInput = data.firstKCharsFromInput ?? null;
+    state.lastResponse = data.lastResponse ?? '';
+    state.accumulatedOutput = data.accumulatedOutput ?? '';
+    state.mediaFiles = Array.isArray(data.mediaFiles)
+      ? data.mediaFiles.filter(
+          (f: unknown): f is string => typeof f === 'string',
+        )
+      : [];
+    state.thinkingBlocks = Array.isArray(data.thinkingBlocks)
+      ? data.thinkingBlocks
+          .filter(
+            (b: unknown): b is Record<string, unknown> =>
+              !!b && typeof b === 'object',
+          )
+          .map((b: Record<string, unknown>) => JSON.parse(JSON.stringify(b)))
+      : [];
+    state.thinkingAdded = data.thinkingAdded ?? false;
+    return state;
+  }
+
+  /**
    * Updates the most recent model response.
    * @param response New response text from the model
    */

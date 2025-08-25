@@ -22,7 +22,8 @@
     "onView:texra.folderExplorer",
     "onView:texra.progressView",
     "onColorTheme",
-    "onCommand:texra.createSampleProject"
+    "onCommand:texra.createSampleProject",
+    "onCommand:texra.resumeAgent"
   ],
   "main": "./dist/extension.js",
   "contributes": {
@@ -53,6 +54,18 @@
             "default": false,
             "description": "Include built-in tool-use agents (e.g., xml_validator, tex_linter_fix) in the agent list",
             "scope": "resource"
+          },
+          "texra.agent.persistSessions": {
+            "type": "boolean",
+            "default": true,
+            "description": "Persist active ToolUse agent sessions across reloads",
+            "scope": "window"
+          },
+          "texra.agent.sessionTtlHours": {
+            "type": "number",
+            "default": 24,
+            "description": "Hours before a persisted agent session expires",
+            "scope": "window"
           },
           "texra.models": {
             "type": "array",
@@ -884,6 +897,11 @@
       {
         "command": "texra.stopAgent",
         "title": "Stop Agent",
+        "category": "TeXRA"
+      },
+      {
+        "command": "texra.resumeAgent",
+        "title": "Resume Agent",
         "category": "TeXRA"
       },
       {
