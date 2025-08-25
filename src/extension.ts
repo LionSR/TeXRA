@@ -93,7 +93,30 @@ export async function activate(context: vscode.ExtensionContext) {
 
   const savedState = await ActiveAgentManager.getState();
   if (savedState) {
-    await vscode.commands.executeCommand('texra.resumeAgent');
+    const resume = 'Resume session';
+    const dismiss = 'Dismiss';
+    const choice = await vscode.window.showInformationMessage(
+      'An agent session was interrupted. Resume it?',
+      resume,
+      dismiss,
+    );
+    if (choice === resume) {
+      try {
+        await vscode.commands.executeCommand('texra.resumeAgent');
+      } catch (err) {
+        logger.error(
+          'extension',
+          'Failed to resume agent',
+          undefined,
+          undefined,
+          false,
+          err,
+        );
+        await ActiveAgentManager.clear();
+      }
+    } else {
+      await ActiveAgentManager.clear();
+    }
   }
 
   // Create a status bar item to show TeXRA progress

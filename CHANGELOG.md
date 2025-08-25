@@ -7,6 +7,8 @@ All notable changes to this project will be documented in this file.
 ### Bug Fixes
 
 - Harden persistent tool-use agent sessions with state validation and optional session expiry
+- Ensure resumed tool-use agents process initial requests and only save state when uninterrupted
+- Prompt before resuming saved sessions on startup to avoid unexpected costs
 
 ## [0.33.1] - 2025-08-22
 

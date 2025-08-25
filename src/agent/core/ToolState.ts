@@ -67,9 +67,18 @@ export class ToolState implements IToolState {
     state.firstKCharsFromInput = data.firstKCharsFromInput ?? null;
     state.lastResponse = data.lastResponse ?? '';
     state.accumulatedOutput = data.accumulatedOutput ?? '';
-    state.mediaFiles = Array.isArray(data.mediaFiles) ? data.mediaFiles : [];
+    state.mediaFiles = Array.isArray(data.mediaFiles)
+      ? data.mediaFiles.filter(
+          (f: unknown): f is string => typeof f === 'string',
+        )
+      : [];
     state.thinkingBlocks = Array.isArray(data.thinkingBlocks)
       ? data.thinkingBlocks
+          .filter(
+            (b: unknown): b is Record<string, unknown> =>
+              !!b && typeof b === 'object',
+          )
+          .map((b: Record<string, unknown>) => JSON.parse(JSON.stringify(b)))
       : [];
     state.thinkingAdded = data.thinkingAdded ?? false;
     return state;

@@ -25,6 +25,7 @@ export class BaseToolUseAgent extends BaseAgent {
   private followUpResolver: ((v: string | null) => void) | null = null;
   private messages: ProviderMessage[] = [];
   private toolState: ToolState | null = null;
+  private initialCycleCompleted = false;
 
   constructor(
     modelHandler: IModelHandler,
@@ -94,6 +95,7 @@ export class BaseToolUseAgent extends BaseAgent {
       messages: this.messages,
       toolState: this.toolState,
       executionId: this.executionId,
+      initialCycleCompleted: this.initialCycleCompleted,
     };
   }
 
@@ -105,6 +107,7 @@ export class BaseToolUseAgent extends BaseAgent {
     if (state.executionId) {
       this.executionId = state.executionId;
     }
+    this.initialCycleCompleted = state.initialCycleCompleted || false;
   }
 
   private async followUpLoop(cycleOptions: any): Promise<void> {
@@ -119,7 +122,9 @@ export class BaseToolUseAgent extends BaseAgent {
         );
         await runToolUseCycle(cycleOptions, this.messages, this.runGroupId);
         if (this.checkInterruption()) break;
-        await ActiveAgentManager.save(this.serialize());
+        if (!this.checkInterruption()) {
+          await ActiveAgentManager.save(this.serialize());
+        }
       }
     } finally {
       this.followUpResolver = null;
@@ -137,6 +142,7 @@ export class BaseToolUseAgent extends BaseAgent {
       messages: this.messages,
       toolState: this.toolState,
       executionId: this.executionId,
+      initialCycleCompleted: this.initialCycleCompleted,
     };
   }
 
@@ -187,19 +193,20 @@ export class BaseToolUseAgent extends BaseAgent {
         toolState: this.toolState,
         modelName: this.agentConfig.model,
       } as const;
-
-      if (!isResuming) {
+      const needsInitialCycle = !this.initialCycleCompleted;
+      if (needsInitialCycle) {
         await runToolUseCycle(cycleOptions, this.messages, this.runGroupId);
         if (this.checkInterruption()) {
           await ActiveAgentManager.clear();
           this.endRunGroup('stopped');
           return;
         }
+        this.initialCycleCompleted = true;
+        if (this.messages.length > 0) {
+          await ActiveAgentManager.save(this.serialize());
+        }
       }
 
-      if (this.messages.length > 0) {
-        await ActiveAgentManager.save(this.serialize());
-      }
       await this.followUpLoop(cycleOptions);
 
       this.endRunGroup('stopped');
