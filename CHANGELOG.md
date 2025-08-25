@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 - Automatically resume saved sessions on startup with error handling
 - Fix false "Task is already running" error when resuming sessions
 - Prevent empty or partial saves during tool-use agent follow-ups
+- Load persisted tool-use sessions after reload by resuming only after the progress view registers
 
 ## [0.33.1] - 2025-08-22
 

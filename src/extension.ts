@@ -91,23 +91,6 @@ export async function activate(context: vscode.ExtensionContext) {
   // Register commands first - this will create and store the MainViewProvider
   registerCommands(context);
 
-  const savedState = await ActiveAgentManager.getState();
-  if (savedState) {
-    try {
-      await vscode.commands.executeCommand('texra.resumeAgent');
-    } catch (err) {
-      logger.error(
-        'extension',
-        'Failed to resume agent',
-        undefined,
-        undefined,
-        false,
-        err,
-      );
-      await ActiveAgentManager.clear();
-    }
-  }
-
   // Create a status bar item to show TeXRA progress
   statusBarItem = vscode.window.createStatusBarItem(
     vscode.StatusBarAlignment.Left,
@@ -163,6 +146,24 @@ export async function activate(context: vscode.ExtensionContext) {
     // Add disposable for cleanup
     { dispose: () => watcherManager.dispose() },
   );
+
+  const savedState = await ActiveAgentManager.getState();
+  if (savedState) {
+    try {
+      await vscode.commands.executeCommand('texra.resumeAgent');
+      await vscode.commands.executeCommand('texra.showProgressView');
+    } catch (err) {
+      logger.error(
+        'extension',
+        'Failed to resume agent',
+        undefined,
+        undefined,
+        false,
+        err,
+      );
+      await ActiveAgentManager.clear();
+    }
+  }
 
   // Watch for agents directory changes
   watchConfig(context, 'texra.explorer.agentsDirectory', () => {
