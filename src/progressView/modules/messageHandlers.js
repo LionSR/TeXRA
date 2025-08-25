@@ -134,6 +134,12 @@ export class ProgressViewMessageHandler {
       // Recalculate cumulative usage after loading groups
       dom.usageSummary.update();
     }
+
+    if (!state.activeStream && logContent.children.length === 0) {
+      dom.placeholder.show();
+    } else {
+      dom.placeholder.hide();
+    }
   }
 
   handleClearLogs() {
@@ -146,6 +152,12 @@ export class ProgressViewMessageHandler {
     }
     state.taskGroups.clear();
     state.toggleStates.clear(groupIds);
+
+    if (!state.activeStream && logContent.children.length === 0) {
+      dom.placeholder.show();
+    } else {
+      dom.placeholder.hide();
+    }
   }
 
   handleAppendLog(message) {
