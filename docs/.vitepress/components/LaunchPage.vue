@@ -113,13 +113,25 @@
             <li>
               <a href="https://github.com/settings/codespaces" target="_blank"
                 >Set up Codespace secrets</a
-              >:
+              >
+              (click "New secret" for each):
               <ul>
-                <li><code>OVERLEAF_EMAIL</code> - Your Overleaf email</li>
-                <li><code>OVERLEAF_TOKEN</code> - Your Overleaf Git token</li>
+                <li>
+                  <code>OVERLEAF_EMAIL</code> - Enter your Overleaf email in the
+                  value field
+                </li>
+                <li>
+                  <code>OVERLEAF_TOKEN</code> - Enter your Overleaf Git token in
+                  the value field
+                </li>
               </ul>
             </li>
-            <li>Click "Launch Codespace" - setup will be automatic!</li>
+            <li>
+              Click "Launch Codespace" - authentication will be automatic!
+            </li>
+            <li>
+              Still run the command shown (it provides the repository URL)
+            </li>
           </ol>
         </div>
 
