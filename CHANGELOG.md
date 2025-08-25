@@ -14,6 +14,7 @@ All notable changes to this project will be documented in this file.
 ### Bug Fixes
 
 - Restrict extension to single workspace folder to prevent initialization issues
+- Set welcome dialog flag only after the dialog displays to avoid missing messages
 
 ## [0.33.0] - 2025-08-19 🎂 Birthday Edition
 
