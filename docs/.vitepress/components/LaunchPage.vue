@@ -105,19 +105,41 @@
       </div>
 
       <div class="info-box">
-        <h4>How it works</h4>
-        <ol>
-          <li>Click "Launch Codespace" to open GitHub Codespaces</li>
-          <li>Wait for the Codespace to start (2-3 minutes first time)</li>
-          <li>Copy and run the setup command shown after clicking Launch</li>
-          <li>Your repository will be cloned and configured automatically</li>
-        </ol>
+        <h4>Setup Options</h4>
+
+        <div v-if="repoType === 'overleaf'" class="setup-option">
+          <h5>🔐 Option 1: Automatic with Codespace Secrets (Recommended)</h5>
+          <ol>
+            <li>
+              <a href="https://github.com/settings/codespaces" target="_blank"
+                >Set up Codespace secrets</a
+              >:
+              <ul>
+                <li><code>OVERLEAF_EMAIL</code> - Your Overleaf email</li>
+                <li><code>OVERLEAF_TOKEN</code> - Your Overleaf Git token</li>
+              </ul>
+            </li>
+            <li>Click "Launch Codespace" - setup will be automatic!</li>
+          </ol>
+        </div>
+
+        <div class="setup-option">
+          <h5>
+            📋 Option {{ repoType === 'overleaf' ? '2' : '1' }}: Manual Setup
+          </h5>
+          <ol>
+            <li>Click "Launch Codespace" to open GitHub Codespaces</li>
+            <li>Wait for the Codespace to start (2-3 minutes first time)</li>
+            <li>Copy and run the setup command shown after clicking Launch</li>
+            <li>Your repository will be cloned and configured automatically</li>
+          </ol>
+        </div>
+
         <p
           style="margin-top: 1rem; color: var(--vp-c-text-3); font-size: 0.9rem"
         >
-          <strong>💡 Note:</strong> The setup script runs automatically on
-          Codespace creation, but requires the config command to be run once to
-          pass your repository details.
+          <strong>💡 Tip:</strong> Codespace secrets are persistent and secure -
+          set them once, use for all your Overleaf projects!
         </p>
       </div>
     </div>
@@ -228,7 +250,11 @@ const launchCodespace = async () => {
     window.open(codespaceUrl.toString(), '_blank');
 
     // Show success message with instructions
-    error.value = `✅ Codespace creation page opened!\n\n📋 After the Codespace starts, paste this ONE command in the terminal:\n\necho '${configBase64}' | base64 -d > /tmp/texra-config.json && bash /workspaces/texra-workspace/.devcontainer/auto-setup.sh\n\n⚡ The setup script will automatically:\n• Clone your repository\n• Configure git with your credentials\n• Set up the TeXRA environment\n\n💡 Tip: The script runs automatically if config is present, but GitHub Codespaces doesn't support passing data via URL yet.`;
+    if (repoType.value === 'overleaf') {
+      error.value = `✅ Codespace creation page opened!\n\n🔐 If you have Codespace secrets set up (OVERLEAF_EMAIL & OVERLEAF_TOKEN):\n• The script will use them automatically!\n• Still run the command below (it provides the repository URL)\n\n📋 Paste this ONE command in the terminal:\n\necho '${configBase64}' | base64 -d > /tmp/texra-config.json && bash /workspaces/texra-workspace/.devcontainer/auto-setup.sh\n\n💡 Set up secrets at github.com/settings/codespaces to avoid entering credentials!`;
+    } else {
+      error.value = `✅ Codespace creation page opened!\n\n📋 After the Codespace starts, paste this ONE command in the terminal:\n\necho '${configBase64}' | base64 -d > /tmp/texra-config.json && bash /workspaces/texra-workspace/.devcontainer/auto-setup.sh\n\n⚡ The setup script will automatically:\n• Clone your repository\n• Configure git with your credentials\n• Set up the TeXRA environment`;
+    }
   } catch (err) {
     error.value = `Error: ${err.message}`;
   } finally {
@@ -404,5 +430,32 @@ const launchCodespace = async () => {
 .info-box li {
   margin: 0.25rem 0;
   color: var(--vp-c-text-2);
+}
+
+.setup-option {
+  margin: 1.5rem 0;
+  padding: 1rem;
+  background: var(--vp-c-bg);
+  border-radius: 6px;
+  border: 1px solid var(--vp-c-divider-light);
+}
+
+.setup-option h5 {
+  margin-top: 0;
+  margin-bottom: 0.75rem;
+  color: var(--vp-c-brand);
+}
+
+.setup-option ul {
+  margin: 0.5rem 0;
+  padding-left: 1.5rem;
+}
+
+.setup-option code {
+  background: var(--vp-c-bg-soft);
+  padding: 0.2rem 0.4rem;
+  border-radius: 3px;
+  font-size: 0.9rem;
+  color: var(--vp-c-text-code);
 }
 </style>
