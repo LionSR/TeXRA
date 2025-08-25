@@ -11,3 +11,8 @@ releases/
 **/.claude/settings.local.json
 webview-common/
 .vscode-test/
+
+# VitePress
+docs/.vitepress/cache/
+docs/.vitepress/dist/
+docs/.vitepress/.temp/
