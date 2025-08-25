@@ -15,9 +15,9 @@
           v-model="repoType"
           @change="handleRepoTypeChange"
         >
-          <option value="github-public">GitHub (Public)</option>
-          <option value="github-private">GitHub (Private)</option>
           <option value="overleaf">Overleaf Git</option>
+          <option value="github-private">GitHub (Private)</option>
+          <option value="github-public">GitHub (Public)</option>
         </select>
       </div>
 
@@ -157,7 +157,57 @@
         </button>
       </div>
 
-      <div v-if="error" class="error-message">
+      <div v-if="error === 'success' && setupCommand" class="success-message">
+        <h3>✅ Codespace creation page opened!</h3>
+
+        <div
+          v-if="repoType === 'overleaf' && authMethod === 'secrets'"
+          class="auth-info"
+        >
+          🔐 Using Codespace Secrets for authentication
+        </div>
+
+        <div class="command-section">
+          <p>
+            📋 After the Codespace starts, paste this command in the terminal:
+          </p>
+          <div class="command-box">
+            <code>{{ setupCommand }}</code>
+            <button @click="copyToClipboard" class="copy-button">
+              {{ copySuccess ? '✓ Copied!' : '📋 Copy' }}
+            </button>
+          </div>
+        </div>
+
+        <div class="script-info">
+          <p>⚡ The script will:</p>
+          <ul v-if="repoType === 'overleaf' && authMethod === 'secrets'">
+            <li>Use your OVERLEAF_EMAIL and OVERLEAF_TOKEN secrets</li>
+            <li>Clone your repository automatically</li>
+            <li>Configure git for you</li>
+          </ul>
+          <ul v-else-if="repoType === 'overleaf'">
+            <li>Use the credentials you provided</li>
+            <li>Clone your repository</li>
+            <li>Configure git with your email</li>
+          </ul>
+          <ul v-else>
+            <li>Clone your repository</li>
+            <li>Configure git with your credentials</li>
+            <li>Set up the TeXRA environment</li>
+          </ul>
+        </div>
+
+        <p class="bookmark-tip">
+          💡 Tip: Bookmark your Codespace URL to quickly resume work next time!
+        </p>
+        <p class="secrets-tip">
+          🔑 You can also add API keys as Codespace secrets (e.g.,
+          ANTHROPIC_API_KEY, OPENAI_API_KEY) to avoid entering them each time.
+        </p>
+      </div>
+
+      <div v-else-if="error && error !== 'success'" class="error-message">
         {{ error }}
       </div>
 
@@ -183,13 +233,15 @@
 <script setup>
 import { ref, computed } from 'vue';
 
-const repoType = ref('github-public');
+const repoType = ref('overleaf');
 const repoUrl = ref('');
 const username = ref('');
 const password = ref('');
 const authMethod = ref('manual'); // Default to manual for first-time users
 const loading = ref(false);
 const error = ref('');
+const setupCommand = ref('');
+const copySuccess = ref(false);
 
 const handleRepoTypeChange = () => {
   // Clear auth fields when switching to public
@@ -198,6 +250,20 @@ const handleRepoTypeChange = () => {
     password.value = '';
   }
   error.value = '';
+};
+
+const copyToClipboard = async () => {
+  if (!setupCommand.value) return;
+
+  try {
+    await navigator.clipboard.writeText(setupCommand.value);
+    copySuccess.value = true;
+    setTimeout(() => {
+      copySuccess.value = false;
+    }, 2000);
+  } catch (err) {
+    console.error('Failed to copy:', err);
+  }
 };
 
 const isValid = computed(() => {
@@ -303,15 +369,18 @@ const launchCodespace = async () => {
     // Open the Codespace creation page
     window.open(codespaceUrl.toString(), '_blank');
 
+    // Store the setup command
+    setupCommand.value = `echo '${configBase64}' | base64 -d > /tmp/texra-config.json && bash /workspaces/texra-workspace/.devcontainer/auto-setup.sh`;
+
     // Show success message with instructions
     if (repoType.value === 'overleaf') {
       if (authMethod.value === 'secrets') {
-        error.value = `✅ Codespace creation page opened!\n\n🔐 Using Codespace Secrets for authentication\n\n📋 After the Codespace starts, paste this command in the terminal:\n\necho '${configBase64}' | base64 -d > /tmp/texra-config.json && bash /workspaces/texra-workspace/.devcontainer/auto-setup.sh\n\n⚡ The script will:\n• Use your OVERLEAF_EMAIL and OVERLEAF_TOKEN secrets\n• Clone your repository automatically\n• Configure git for you`;
+        error.value = `success`;
       } else {
-        error.value = `✅ Codespace creation page opened!\n\n📋 After the Codespace starts, paste this command in the terminal:\n\necho '${configBase64}' | base64 -d > /tmp/texra-config.json && bash /workspaces/texra-workspace/.devcontainer/auto-setup.sh\n\n⚡ The script will:\n• Use the credentials you provided\n• Clone your repository\n• Configure git with your email`;
+        error.value = `success`;
       }
     } else {
-      error.value = `✅ Codespace creation page opened!\n\n📋 After the Codespace starts, paste this ONE command in the terminal:\n\necho '${configBase64}' | base64 -d > /tmp/texra-config.json && bash /workspaces/texra-workspace/.devcontainer/auto-setup.sh\n\n⚡ The setup script will automatically:\n• Clone your repository\n• Configure git with your credentials\n• Set up the TeXRA environment`;
+      error.value = `success`;
     }
   } catch (err) {
     error.value = `Error: ${err.message}`;
@@ -412,19 +481,6 @@ const launchCodespace = async () => {
   font-size: 1.1rem;
 }
 
-.git-config-section {
-  background: var(--vp-c-bg);
-  border-radius: 4px;
-  padding: 1rem;
-  margin: 1.5rem 0;
-}
-
-.git-config-section h4 {
-  margin-bottom: 1rem;
-  font-size: 1rem;
-  color: var(--vp-c-text-2);
-}
-
 .button-group {
   margin-top: 2rem;
 }
@@ -449,6 +505,109 @@ const launchCodespace = async () => {
 .launch-button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.success-message {
+  margin-top: 1rem;
+  padding: 1.5rem;
+  background: var(--vp-c-success-soft);
+  border: 1px solid var(--vp-c-success);
+  border-radius: 8px;
+}
+
+.success-message h3 {
+  margin: 0 0 1rem 0;
+  color: var(--vp-c-success-dark);
+  font-size: 1.2rem;
+}
+
+.auth-info {
+  margin-bottom: 1rem;
+  color: var(--vp-c-text-2);
+  font-size: 0.95rem;
+}
+
+.command-section {
+  margin: 1rem 0;
+}
+
+.command-section p {
+  margin-bottom: 0.5rem;
+  color: var(--vp-c-text-1);
+  font-weight: 500;
+}
+
+.command-box {
+  display: flex;
+  align-items: center;
+  background: var(--vp-c-bg);
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 6px;
+  padding: 0.5rem;
+  gap: 0.5rem;
+}
+
+.command-box code {
+  flex: 1;
+  padding: 0.5rem;
+  font-family: monospace;
+  font-size: 0.85rem;
+  word-break: break-all;
+  overflow-wrap: break-word;
+  color: var(--vp-c-text-1);
+  background: transparent;
+}
+
+.copy-button {
+  flex-shrink: 0;
+  padding: 0.5rem 1rem;
+  background: var(--vp-c-brand);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.copy-button:hover {
+  background: var(--vp-c-brand-dark);
+  transform: translateY(-1px);
+}
+
+.script-info {
+  margin: 1rem 0;
+  padding: 1rem;
+  background: var(--vp-c-bg);
+  border-radius: 6px;
+}
+
+.script-info p {
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+  color: var(--vp-c-text-1);
+}
+
+.script-info ul {
+  margin: 0;
+  padding-left: 1.5rem;
+  color: var(--vp-c-text-2);
+}
+
+.script-info li {
+  margin: 0.25rem 0;
+}
+
+.bookmark-tip,
+.secrets-tip {
+  margin-top: 1rem;
+  padding: 0.75rem;
+  background: var(--vp-c-tip-bg);
+  border-left: 3px solid var(--vp-c-brand);
+  border-radius: 4px;
+  color: var(--vp-c-text-2);
+  font-size: 0.95rem;
 }
 
 .error-message {
