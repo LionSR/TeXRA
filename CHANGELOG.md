@@ -8,7 +8,7 @@ All notable changes to this project will be documented in this file.
 
 - Harden persistent tool-use agent sessions with state validation and optional session expiry
 - Ensure resumed tool-use agents process initial requests and only save state when uninterrupted
-- Automatically resume saved sessions on startup with error handling
+- Resume saved sessions only when sending a follow-up, preventing duplicate initial prompts after reload
 - Fix false "Task is already running" error when resuming sessions
 - Prevent empty or partial saves during tool-use agent follow-ups
 - Load persisted tool-use sessions after reload by resuming only after the progress view registers

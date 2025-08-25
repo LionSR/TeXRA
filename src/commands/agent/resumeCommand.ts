@@ -50,12 +50,14 @@ export function registerResumeCommand(context: vscode.ExtensionContext) {
         await ActiveAgentManager.clear();
         return;
       }
-      await executeAgentWithLogging(
+      executeAgentWithLogging(
         agentConfig.agent,
         async () => ({ agent, agentType: agentSetting.agentType }),
         context,
         state.executionId,
-      );
+      ).catch((err) => {
+        console.error(`Failed to run agent: ${String(err)}`);
+      });
     }),
   );
 }

@@ -25,7 +25,6 @@ import { ExplorerOperations } from './explorer/ExplorerOperations';
 import { ExplorerCommands } from './explorer/ExplorerCommands';
 import { WatcherManager } from './explorer/WatcherManager';
 import { registerCommands } from './commands';
-import { ActiveAgentManager } from '@agent/runtime/ActiveAgentManager';
 
 let statusBarItem: vscode.StatusBarItem | undefined;
 let disposeStatusListener: (() => void) | undefined;
@@ -146,24 +145,6 @@ export async function activate(context: vscode.ExtensionContext) {
     // Add disposable for cleanup
     { dispose: () => watcherManager.dispose() },
   );
-
-  const savedState = await ActiveAgentManager.getState();
-  if (savedState) {
-    try {
-      await vscode.commands.executeCommand('texra.resumeAgent');
-      await vscode.commands.executeCommand('texra.showProgressView');
-    } catch (err) {
-      logger.error(
-        'extension',
-        'Failed to resume agent',
-        undefined,
-        undefined,
-        false,
-        err,
-      );
-      await ActiveAgentManager.clear();
-    }
-  }
 
   // Watch for agents directory changes
   watchConfig(context, 'texra.explorer.agentsDirectory', () => {
