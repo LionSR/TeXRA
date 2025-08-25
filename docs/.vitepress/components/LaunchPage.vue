@@ -27,11 +27,15 @@
           id="repo-url"
           v-model="repoUrl"
           type="text"
-          placeholder="https://github.com/username/repo or https://git.overleaf.com/..."
+          :placeholder="
+            repoType === 'overleaf'
+              ? 'https://git.overleaf.com/[24-char-project-id]'
+              : 'https://github.com/username/repo'
+          "
           required
         />
         <small v-if="repoType === 'overleaf'">
-          Get your Overleaf Git URL from Menu → Git in your Overleaf project
+          Copy the Git URL from Menu → Git in your Overleaf project
         </small>
       </div>
 
@@ -199,23 +203,27 @@ const handleRepoTypeChange = () => {
 const isValid = computed(() => {
   if (!repoUrl.value) return false;
 
-  // Validate URL format
-  try {
-    const url = new URL(repoUrl.value);
-    if (
-      repoType.value === 'overleaf' &&
-      !url.hostname.includes('overleaf.com')
-    ) {
+  // For Overleaf, accept Git URLs with project IDs
+  if (repoType.value === 'overleaf') {
+    // Check if it contains a 24-character hex project ID
+    const projectIdMatch = repoUrl.value.match(/[a-f0-9]{24}/);
+    if (!projectIdMatch) return false;
+
+    // Check if it's from overleaf.com domain
+    if (!repoUrl.value.includes('overleaf.com')) return false;
+  } else {
+    // Validate URL format for GitHub
+    try {
+      const url = new URL(repoUrl.value);
+      if (
+        repoType.value.startsWith('github') &&
+        !url.hostname.includes('github.com')
+      ) {
+        return false;
+      }
+    } catch {
       return false;
     }
-    if (
-      repoType.value.startsWith('github') &&
-      !url.hostname.includes('github.com')
-    ) {
-      return false;
-    }
-  } catch {
-    return false;
   }
 
   // Check auth requirements
