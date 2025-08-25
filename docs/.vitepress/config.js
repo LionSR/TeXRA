@@ -102,6 +102,7 @@ const baseConfig = {
     nav: [
       { text: 'Home', link: '/' },
       { text: 'Guide', link: '/guide/' },
+      { text: 'Launch', link: '/launch' },
       { text: 'Reference', link: '/reference/' },
       { text: 'GitHub', link: 'https://github.com/texra-ai/texra-issues' },
     ],
