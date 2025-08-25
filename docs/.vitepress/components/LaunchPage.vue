@@ -77,6 +77,14 @@
         </div>
 
         <div v-if="authMethod === 'manual'" class="auth-fields">
+          <div class="quick-guide">
+            <h5>🚀 Quick steps to get your token:</h5>
+            <ol>
+              <li>In Overleaf: Menu → Git</li>
+              <li>Click "Generate token" (or use existing one)</li>
+              <li>Copy the token and paste it below</li>
+            </ol>
+          </div>
           <div class="form-group">
             <label for="username">Overleaf Email</label>
             <input
@@ -94,15 +102,16 @@
               type="password"
               placeholder="Your Overleaf Git token"
             />
-            <div style="margin-top: 0.5rem">
+            <small style="display: block; margin-top: 0.5rem">
+              Token is the password shown when you click Menu → Git in Overleaf
               <a
                 href="https://www.overleaf.com/learn/how-to/Git_integration_authentication_tokens"
                 target="_blank"
-                class="setup-link"
+                style="margin-left: 0.5rem"
               >
-                📚 How to get token
+                (Full guide)
               </a>
-            </div>
+            </small>
           </div>
         </div>
       </div>
@@ -541,6 +550,31 @@ const launchCodespace = async () => {
   gap: 1rem;
   margin-top: 1rem;
   flex-wrap: wrap;
+}
+
+.quick-guide {
+  background: var(--vp-c-bg-alt);
+  padding: 1rem;
+  border-radius: 6px;
+  margin-bottom: 1rem;
+  border-left: 3px solid var(--vp-c-brand);
+}
+
+.quick-guide h5 {
+  margin: 0 0 0.75rem 0;
+  color: var(--vp-c-text-1);
+  font-size: 0.95rem;
+}
+
+.quick-guide ol {
+  margin: 0;
+  padding-left: 1.5rem;
+  color: var(--vp-c-text-2);
+  font-size: 0.9rem;
+}
+
+.quick-guide li {
+  margin: 0.25rem 0;
 }
 
 .setup-link {
