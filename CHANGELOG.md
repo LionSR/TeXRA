@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.33.2] - 2025-08-25
+
+### Features
+
+- Add sample project command (`texra.createSampleProject`) to help new users get started with a complete example
+- Add chat tool-use agent for interactive document-based conversations
+- Stream model responses separately from reasoning for better visibility into agent thinking
+- Show helpful empty-state placeholder in progress view with quick links when no tasks are running
+- Add interactive launch page to documentation site with repository configuration forms
+
+### Bug Fixes
+
+- Show welcome dialog asynchronously to ensure it displays properly on first launch
+- Use active task output selection for pack and clean operations
+- Toggle placeholder visibility correctly when clearing progress view logs
+
+### Improvements
+
+- Enhanced progress view with better empty state handling and clearer visual feedback
+
 ## [0.33.1] - 2025-08-22
 
 ### Features
