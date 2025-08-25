@@ -52,17 +52,28 @@
         </div>
 
         <div v-if="authMethod === 'secrets'" class="secrets-info">
-          <p>
-            ✅ Make sure you've set up these secrets at
-            <a href="https://github.com/settings/codespaces" target="_blank"
-              >GitHub Codespace Settings</a
-            >:
-          </p>
+          <p>✅ Make sure you've set up these secrets:</p>
           <ul>
-            <li><code>OVERLEAF_EMAIL</code></li>
-            <li><code>OVERLEAF_TOKEN</code></li>
+            <li><code>OVERLEAF_EMAIL</code> - Your Overleaf email</li>
+            <li><code>OVERLEAF_TOKEN</code> - Your Overleaf Git token</li>
             <li>Repository access: <code>texra-ai/texra-workspace</code></li>
           </ul>
+          <div class="secret-links">
+            <a
+              href="https://github.com/settings/codespaces"
+              target="_blank"
+              class="setup-link"
+            >
+              🔧 Set up Codespace secrets
+            </a>
+            <a
+              href="https://www.overleaf.com/learn/how-to/Git_integration_authentication_tokens"
+              target="_blank"
+              class="setup-link"
+            >
+              📚 Get Overleaf Git token
+            </a>
+          </div>
         </div>
 
         <div v-if="authMethod === 'manual'" class="auth-fields">
@@ -549,5 +560,32 @@ const launchCodespace = async () => {
   padding: 0.2rem 0.4rem;
   border-radius: 3px;
   font-size: 0.9rem;
+}
+
+.secret-links {
+  display: flex;
+  gap: 1rem;
+  margin-top: 1rem;
+  flex-wrap: wrap;
+}
+
+.setup-link {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.5rem 1rem;
+  background: var(--vp-c-brand-soft);
+  color: var(--vp-c-brand);
+  text-decoration: none;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  transition: all 0.2s;
+  border: 1px solid var(--vp-c-brand-dimm);
+}
+
+.setup-link:hover {
+  background: var(--vp-c-brand);
+  color: white;
+  transform: translateY(-2px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 </style>
