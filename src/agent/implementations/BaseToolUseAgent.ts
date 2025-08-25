@@ -36,6 +36,7 @@ export class BaseToolUseAgent extends BaseAgent {
   ) {
     super(modelHandler, agentConfig, agentSetting, agentPrompt, agentPath);
     this.toolRegistry = DEFAULT_TOOL_REGISTRY;
+    this.initialCycleCompleted = false;
   }
 
   private getTools(): ToolDefinition[] {
@@ -122,7 +123,7 @@ export class BaseToolUseAgent extends BaseAgent {
         );
         await runToolUseCycle(cycleOptions, this.messages, this.runGroupId);
         if (this.checkInterruption()) break;
-        if (!this.checkInterruption()) {
+        if (!this.checkInterruption() && this.messages.length > 0) {
           await ActiveAgentManager.save(this.serialize());
         }
       }
