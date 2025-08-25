@@ -94,14 +94,15 @@
               type="password"
               placeholder="Your Overleaf Git token"
             />
-            <small>
+            <div style="margin-top: 0.5rem">
               <a
                 href="https://www.overleaf.com/learn/how-to/Git_integration_authentication_tokens"
                 target="_blank"
+                class="setup-link"
               >
-                Learn how to create an Overleaf Git token
+                📚 Get Overleaf Git token
               </a>
-            </small>
+            </div>
           </div>
         </div>
       </div>
@@ -472,33 +473,6 @@ const launchCodespace = async () => {
 .info-box li {
   margin: 0.25rem 0;
   color: var(--vp-c-text-2);
-}
-
-.setup-option {
-  margin: 1.5rem 0;
-  padding: 1rem;
-  background: var(--vp-c-bg);
-  border-radius: 6px;
-  border: 1px solid var(--vp-c-divider-light);
-}
-
-.setup-option h5 {
-  margin-top: 0;
-  margin-bottom: 0.75rem;
-  color: var(--vp-c-brand);
-}
-
-.setup-option ul {
-  margin: 0.5rem 0;
-  padding-left: 1.5rem;
-}
-
-.setup-option code {
-  background: var(--vp-c-bg-soft);
-  padding: 0.2rem 0.4rem;
-  border-radius: 3px;
-  font-size: 0.9rem;
-  color: var(--vp-c-text-code);
 }
 
 .auth-selection {
