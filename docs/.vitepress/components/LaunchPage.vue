@@ -83,15 +83,10 @@
             >
               Learn how to create an Overleaf Git token
             </a>
+            <br />
+            Your Overleaf email will be used for git commits
           </small>
         </div>
-      </div>
-
-      <div v-if="repoType === 'overleaf'" class="git-config-section">
-        <h4>Git Configuration</h4>
-        <small
-          >By default, your Overleaf email will be used for git commits</small
-        >
       </div>
 
       <div class="button-group">
@@ -246,7 +241,8 @@ const launchCodespace = async () => {
 
 <style scoped>
 .launch-container {
-  max-width: 600px;
+  max-width: 800px;
+  width: 90%;
   margin: 2rem auto;
   padding: 2rem;
 }
@@ -269,7 +265,18 @@ const launchCodespace = async () => {
 .launch-form {
   background: var(--vp-c-bg-soft);
   border-radius: 8px;
-  padding: 1.5rem;
+  padding: 2rem;
+}
+
+@media (max-width: 768px) {
+  .launch-container {
+    width: 95%;
+    padding: 1rem;
+  }
+
+  .launch-form {
+    padding: 1.5rem;
+  }
 }
 
 .form-group {
