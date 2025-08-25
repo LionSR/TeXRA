@@ -25,6 +25,7 @@ import { ExplorerOperations } from './explorer/ExplorerOperations';
 import { ExplorerCommands } from './explorer/ExplorerCommands';
 import { WatcherManager } from './explorer/WatcherManager';
 import { registerCommands } from './commands';
+import { ActiveAgentManager } from '@agent/runtime/ActiveAgentManager';
 
 let statusBarItem: vscode.StatusBarItem | undefined;
 let disposeStatusListener: (() => void) | undefined;
@@ -89,6 +90,11 @@ export async function activate(context: vscode.ExtensionContext) {
 
   // Register commands first - this will create and store the MainViewProvider
   registerCommands(context);
+
+  const savedState = await ActiveAgentManager.getState();
+  if (savedState) {
+    await vscode.commands.executeCommand('texra.resumeAgent');
+  }
 
   // Create a status bar item to show TeXRA progress
   statusBarItem = vscode.window.createStatusBarItem(

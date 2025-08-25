@@ -22,7 +22,8 @@
     "onView:texra.folderExplorer",
     "onView:texra.progressView",
     "onColorTheme",
-    "onCommand:texra.createSampleProject"
+    "onCommand:texra.createSampleProject",
+    "onCommand:texra.resumeAgent"
   ],
   "main": "./dist/extension.js",
   "contributes": {
@@ -884,6 +885,11 @@
       {
         "command": "texra.stopAgent",
         "title": "Stop Agent",
+        "category": "TeXRA"
+      },
+      {
+        "command": "texra.resumeAgent",
+        "title": "Resume Agent",
         "category": "TeXRA"
       },
       {
