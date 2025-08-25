@@ -154,7 +154,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
   const welcomeKey = 'texra.welcomeShown';
   if (!context.globalState.get<boolean>(welcomeKey)) {
-    showInstructionWithSuppress(
+    void showInstructionWithSuppress(
       'welcome',
       'Welcome to TeXRA! Run "TeXRA: Create Sample Project" to add a draft.tex example, set your API keys, choose an agent and model, then write instructions and execute.',
       [
@@ -173,8 +173,9 @@ export async function activate(context: vscode.ExtensionContext) {
           },
         },
       ],
-    ).catch(console.error);
-    void context.globalState.update(welcomeKey, true);
+    )
+      .then(() => context.globalState.update(welcomeKey, true))
+      .catch(console.error);
   }
 }
 
