@@ -3,6 +3,7 @@
   "version": "0.2.0",
   "main": "index.js",
   "scripts": {
+    "dev": "vitepress dev .",
     "docs:build": "vitepress build .",
     "docs:serve": "vitepress serve .",
     "docs:deploy": "npm run docs:build && gh-pages --cname texra.ai -d .vitepress/dist -m \"Deploy docs [ci skip]\""
