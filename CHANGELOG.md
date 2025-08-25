@@ -10,6 +10,8 @@ All notable changes to this project will be documented in this file.
 - Ensure resumed tool-use agents process initial requests and only save state when uninterrupted
 - Prompt before resuming saved sessions on startup to avoid unexpected costs
 - Prevent empty or partial saves during tool-use agent follow-ups
+- Support resuming multiple tool-use sessions and continue follow-ups after restart
+- Fix false "Task already running" errors when resuming sessions
 
 ## [0.33.1] - 2025-08-22
 

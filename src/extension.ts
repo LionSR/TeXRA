@@ -91,18 +91,18 @@ export async function activate(context: vscode.ExtensionContext) {
   // Register commands first - this will create and store the MainViewProvider
   registerCommands(context);
 
-  const savedState = await ActiveAgentManager.getState();
-  if (savedState) {
+  const savedStates = await ActiveAgentManager.getStates();
+  for (const [streamId, state] of Object.entries(savedStates)) {
     const resume = 'Resume session';
     const dismiss = 'Dismiss';
     const choice = await vscode.window.showInformationMessage(
-      'An agent session was interrupted. Resume it?',
+      `An agent session (${state.agentConfig.agent}@${state.agentConfig.model}) was interrupted. Resume it?`,
       resume,
       dismiss,
     );
     if (choice === resume) {
       try {
-        await vscode.commands.executeCommand('texra.resumeAgent');
+        await vscode.commands.executeCommand('texra.resumeAgent', streamId);
       } catch (err) {
         logger.error(
           'extension',
@@ -112,10 +112,10 @@ export async function activate(context: vscode.ExtensionContext) {
           false,
           err,
         );
-        await ActiveAgentManager.clear();
+        await ActiveAgentManager.clear(streamId);
       }
     } else {
-      await ActiveAgentManager.clear();
+      await ActiveAgentManager.clear(streamId);
     }
   }
 

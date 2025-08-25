@@ -3,6 +3,7 @@ import { workspaceSM, WorkspaceStateKey } from '@common/state/stateManager';
 
 // Local imports - utils
 import { getConfig } from '@utils/config';
+import { getStreamTabId } from '@/logger/streamUtils';
 
 // Third-party imports
 import { z } from 'zod';
@@ -43,36 +44,84 @@ const PersistedToolUseAgentStateSchema = z.object({
   timestamp: z.number(),
 });
 
+type PersistedStateMap = Record<string, PersistedToolUseAgentState>;
+
 export class ActiveAgentManager {
-  public static async save(state: SaveableToolUseAgentState): Promise<void> {
-    if (!getConfig<boolean>('agent.persistSessions', true)) return;
-    const toSave = { ...state, timestamp: Date.now() };
-    await workspaceSM.update(WorkspaceStateKey.ACTIVE_AGENT_STATE, toSave);
+  private static computeStreamId(config: AgentConfig): string {
+    return getStreamTabId(config.agent, config.model, config.inputFile);
   }
 
-  public static async getState(): Promise<
-    PersistedToolUseAgentState | undefined
-  > {
+  private static async getAllStates(): Promise<PersistedStateMap> {
+    return (
+      workspaceSM.get<PersistedStateMap>(
+        WorkspaceStateKey.ACTIVE_AGENT_STATE,
+        {},
+      ) || {}
+    );
+  }
+
+  public static async save(state: SaveableToolUseAgentState): Promise<void> {
+    if (!getConfig<boolean>('agent.persistSessions', true)) return;
+    const streamId = this.computeStreamId(state.agentConfig);
+    const all = await this.getAllStates();
+    all[streamId] = { ...state, timestamp: Date.now() };
+    await workspaceSM.update(WorkspaceStateKey.ACTIVE_AGENT_STATE, all);
+  }
+
+  public static async getState(
+    streamId: string,
+  ): Promise<PersistedToolUseAgentState | undefined> {
     if (!getConfig<boolean>('agent.persistSessions', true)) return undefined;
-    const raw = workspaceSM.get<any>(WorkspaceStateKey.ACTIVE_AGENT_STATE);
-    if (!raw) return undefined;
-    let parsed: PersistedToolUseAgentState;
+    const all = await this.getAllStates();
+    const state = all[streamId];
+    if (!state) return undefined;
     try {
-      parsed = PersistedToolUseAgentStateSchema.parse(
-        raw,
-      ) as PersistedToolUseAgentState;
+      PersistedToolUseAgentStateSchema.parse(state);
     } catch {
+      await this.clear(streamId);
       return undefined;
     }
     const ttl = getConfig<number>('agent.sessionTtlHours', 24) * 3600000;
-    if (Date.now() - parsed.timestamp > ttl) {
-      await this.clear();
+    if (Date.now() - state.timestamp > ttl) {
+      await this.clear(streamId);
       return undefined;
     }
-    return parsed;
+    return state;
   }
 
-  public static async clear(): Promise<void> {
-    await workspaceSM.update(WorkspaceStateKey.ACTIVE_AGENT_STATE, undefined);
+  public static async getStates(): Promise<PersistedStateMap> {
+    if (!getConfig<boolean>('agent.persistSessions', true)) return {};
+    const all = await this.getAllStates();
+    const ttl = getConfig<number>('agent.sessionTtlHours', 24) * 3600000;
+    const now = Date.now();
+    let changed = false;
+    for (const [id, state] of Object.entries(all)) {
+      if (now - state.timestamp > ttl) {
+        delete all[id];
+        changed = true;
+      } else {
+        try {
+          PersistedToolUseAgentStateSchema.parse(state);
+        } catch {
+          delete all[id];
+          changed = true;
+        }
+      }
+    }
+    if (changed) {
+      await workspaceSM.update(WorkspaceStateKey.ACTIVE_AGENT_STATE, all);
+    }
+    return all;
+  }
+
+  public static async clear(arg?: string | AgentConfig): Promise<void> {
+    const all = await this.getAllStates();
+    if (!arg) {
+      await workspaceSM.update(WorkspaceStateKey.ACTIVE_AGENT_STATE, {});
+      return;
+    }
+    const streamId = typeof arg === 'string' ? arg : this.computeStreamId(arg);
+    delete all[streamId];
+    await workspaceSM.update(WorkspaceStateKey.ACTIVE_AGENT_STATE, all);
   }
 }

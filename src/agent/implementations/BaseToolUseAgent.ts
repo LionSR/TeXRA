@@ -129,7 +129,7 @@ export class BaseToolUseAgent extends BaseAgent {
       }
     } finally {
       this.followUpResolver = null;
-      await ActiveAgentManager.clear();
+      await ActiveAgentManager.clear(this.agentConfig);
     }
   }
 
@@ -198,7 +198,7 @@ export class BaseToolUseAgent extends BaseAgent {
       if (needsInitialCycle) {
         await runToolUseCycle(cycleOptions, this.messages, this.runGroupId);
         if (this.checkInterruption()) {
-          await ActiveAgentManager.clear();
+          await ActiveAgentManager.clear(this.agentConfig);
           this.endRunGroup('stopped');
           return;
         }
