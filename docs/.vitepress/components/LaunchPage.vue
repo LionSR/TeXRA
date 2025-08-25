@@ -124,6 +124,10 @@
                   <code>OVERLEAF_TOKEN</code> - Enter your Overleaf Git token in
                   the value field
                 </li>
+                <li>
+                  <strong>Important:</strong> Select
+                  <code>texra-ai/texra-workspace</code> in "Repository access"
+                </li>
               </ul>
             </li>
             <li>
