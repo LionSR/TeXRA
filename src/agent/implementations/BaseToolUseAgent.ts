@@ -100,7 +100,7 @@ export class BaseToolUseAgent extends BaseAgent {
   public override restoreState(state: any): void {
     this.messages = state.messages || [];
     this.toolState = state.toolState
-      ? Object.assign(new ToolState(), state.toolState)
+      ? ToolState.deserialize(state.toolState)
       : null;
     if (state.executionId) {
       this.executionId = state.executionId;
@@ -108,19 +108,23 @@ export class BaseToolUseAgent extends BaseAgent {
   }
 
   private async followUpLoop(cycleOptions: any): Promise<void> {
-    while (true) {
-      const followUp = await this.waitForFollowUp();
-      if (!followUp || this.checkInterruption()) break;
-      this.logger.userMessage(followUp, this.runGroupId);
-      this.messages = await this.modelHandler.createUserFollowUpMessages(
-        this.messages,
-        followUp,
-      );
-      await runToolUseCycle(cycleOptions, this.messages, this.runGroupId);
-      if (this.checkInterruption()) break;
-      await ActiveAgentManager.save(this.serialize());
+    try {
+      while (true) {
+        const followUp = await this.waitForFollowUp();
+        if (!followUp || this.checkInterruption()) break;
+        this.logger.userMessage(followUp, this.runGroupId);
+        this.messages = await this.modelHandler.createUserFollowUpMessages(
+          this.messages,
+          followUp,
+        );
+        await runToolUseCycle(cycleOptions, this.messages, this.runGroupId);
+        if (this.checkInterruption()) break;
+        await ActiveAgentManager.save(this.serialize());
+      }
+    } finally {
+      this.followUpResolver = null;
+      await ActiveAgentManager.clear();
     }
-    await ActiveAgentManager.clear();
   }
 
   public serialize(): any {
@@ -141,7 +145,8 @@ export class BaseToolUseAgent extends BaseAgent {
     try {
       await this.init(this.runGroupId);
       await this.initializeClient();
-      if (this.messages.length === 0) {
+      const isResuming = this.messages.length > 0;
+      if (!isResuming) {
         const [systemPrompt, userRequest, userPrefix] = await Promise.all([
           getSystemPromptWithRules(
             `${this.agentPrompt.systemPrompt}\n${TOOL_USE_INSTRUCTIONS}`,
@@ -183,7 +188,7 @@ export class BaseToolUseAgent extends BaseAgent {
         modelName: this.agentConfig.model,
       } as const;
 
-      if (this.messages.length === 0) {
+      if (!isResuming) {
         await runToolUseCycle(cycleOptions, this.messages, this.runGroupId);
         if (this.checkInterruption()) {
           await ActiveAgentManager.clear();
@@ -192,7 +197,9 @@ export class BaseToolUseAgent extends BaseAgent {
         }
       }
 
-      await ActiveAgentManager.save(this.serialize());
+      if (this.messages.length > 0) {
+        await ActiveAgentManager.save(this.serialize());
+      }
       await this.followUpLoop(cycleOptions);
 
       this.endRunGroup('stopped');

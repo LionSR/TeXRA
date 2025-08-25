@@ -26,6 +26,13 @@ export function registerResumeCommand(context: vscode.ExtensionContext) {
       const agentConfig = AgentConfigSchema.parse(state.agentConfig);
       const modelName = agentConfig.model;
       const modelConfig = MODEL_CONFIGS[modelName];
+      if (!modelConfig) {
+        vscode.window.showErrorMessage(
+          `Model configuration for ${modelName} not found`,
+        );
+        await ActiveAgentManager.clear();
+        return;
+      }
       modelConfig.toolConfig = agentConfig.toolConfig;
       const modelHandler = ModelFactory.createHandler(modelConfig);
       const agentPath = state.agentPath;
@@ -40,7 +47,15 @@ export function registerResumeCommand(context: vscode.ExtensionContext) {
         agentPrompt,
         agentPath,
       );
-      agent.restoreState(state);
+      try {
+        agent.restoreState(state);
+      } catch (error: any) {
+        vscode.window.showErrorMessage(
+          `Failed to restore agent state: ${error.message}`,
+        );
+        await ActiveAgentManager.clear();
+        return;
+      }
       const streamTabId = getStreamTabId(
         agentConfig.agent,
         agentConfig.model,

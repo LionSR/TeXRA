@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.33.2] - 2025-08-23
+
+### Bug Fixes
+
+- Harden persistent tool-use agent sessions with state validation and optional session expiry
+
 ## [0.33.1] - 2025-08-22
 
 ### Features
