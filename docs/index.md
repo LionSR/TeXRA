@@ -15,6 +15,9 @@ hero:
       text: Install from Marketplace
       link: https://marketplace.visualstudio.com/items?itemName=texra-ai.texra
     - theme: alt
+      text: Try it on Web
+      link: /launch
+    - theme: alt
       text: View on GitHub
       link: https://github.com/texra-ai/texra-issues
 ---
