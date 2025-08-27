@@ -69,8 +69,7 @@ export class SecretManager {
 
   public static async anyApiKeyExists(): Promise<boolean> {
     for (const provider of this.API_PROVIDERS) {
-      const key = await this.get(this.getApiKeySecretName(provider));
-      if (key) {
+      if (await this.apiKeyExists(provider)) {
         return true;
       }
     }
