@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 ### Bug Fixes
 
 - Restrict GPT OSS models to OpenRouter only
+- Consider environment variables when checking for API keys to prevent false missing-key alerts
 
 ## [0.33.2] - 2025-08-25
 
