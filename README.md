@@ -1,144 +1,65 @@
-# TeXRA: Your Intelligent TeXRA for Academic Research
+# TeXRA: AI TeX Research Assistant for VS Code
 
-TeXRA is a powerful VS Code extension designed to help frustrated academics with their writing and research by leveraging the power of large language models (LLMs). It provides a seamless AI-assisted writing experience through an intuitive interface integrated directly into VS Code.
+TeXRA brings large language models to your academic writing workflow. The
+extension embeds AI-powered agents directly in VS Code so you can draft,
+revise, and manage LaTeX projects without leaving your editor.
 
-See [texra.ai](https://texra.ai). For detailed guides and usage instructions, visit the [**Full Documentation Site**](https://texra.ai/guide/).
+See [texra.ai](https://texra.ai) or the
+[full documentation](https://texra.ai/guide/) for tutorials and a web-based
+launch page.
 
-## UI Features
+## Why TeXRA
 
-- Enhanced file selection interface with improved multiple file selection and management
-- Streamlined agent execution process with clearer options and feedback
-- Improved error handling and user notifications for a smoother experience
-- Automatic adaptation to VS Code's light and dark themes, ensuring a consistent and comfortable viewing experience
-- Integrated LaTeX support with intelligent document processing
-- Built-in version control features including LaTeX diff functionality
-- Advanced PDF and image handling capabilities:
-  - PDF page counting and conversion to images
-  - Image encoding and processing
-  - Support for various image formats (PNG, JPG, PDF,etc.)
-- LaTeX-specific tools:
-  - Automatic document indentation
-  - Word and element counting (text, headers, captions, math)
-  - Smart merging of included files
-  - DiagnosticsTool for listing linter diagnostics
-- YAML and XML configuration support
-- Git integration for version control
-- ProgressBoard view for detailed logs and re-running tasks
-- Clickable references in the ProgressBoard jump to their \label definitions
-- Syntax-highlighted code blocks in ProgressBoard logs
-- Multiple output support and intelligent merge tools
+- **AI agents for every task** – polish prose, fix LaTeX, draw TikZ, convert
+  papers to slides, perform OCR, or chat with interactive tool-use agents that
+  can search the web or run code. Follow up directly in the progress view.
+- **Transparent streaming** – watch model reasoning stream separately from
+  final responses for Claude, DeepSeek, o1, and more.
+- **Progress view** – detailed logs, clickable references, syntax-highlighted
+  code, re-run buttons, and status-bar updates. Helpful empty states guide new
+  users, and a sample project command provides a ready-made example.
+- **LaTeX-first workflow** – automatic figure extraction, PDF and image
+  conversion, indentation, word counts, diffing, and multi-file selection. The
+  extension detects TeX tools on all platforms and integrates with Overleaf and
+  LaTeX Workshop.
+- **Broad model support** – OpenAI (GPT‑5 family, GPT‑OSS), Anthropic (Claude
+  Opus 4.1 and Sonnet), Google Gemini, DeepSeek, Moonshot (Kimi), DashScope
+  (Qwen), GitHub Copilot, and more. Optional OpenRouter routing keeps API keys
+  flexible.
 
-## Architecture
+## Quick Start
 
-TeXRA is built as a TypeScript-based VS Code extension that provides:
+1. Install the extension from the VS Code Marketplace.
+2. Run **`TeXRA: Create Sample Project`** from the command palette to explore a
+   fully configured workspace.
+3. Open the TeXRA sidebar, pick an agent, select your files, and click
+   **Execute**. Follow-up chat is available for tool-use agents.
 
-- Multiple AI agent support: correct, polish, draw, adapt, and more
-- LaTeX document processing and enhancement
-- Automatic figure and TikZ extraction
-- Version control integration (latexdiff functionality)
-- Customizable prompts and settings
-- Direct integration with OpenAI, Anthropic, Google, DeepSeek, Moonshot (Kimi), and DashScope (Qwen) APIs with optional OpenRouter routing
+## Installation
 
-## Installation Guide
+Set your API keys in VS Code settings or a workspace `.env` file using variables
+like `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or `GEMINI_API_KEY`. TeXRA loads the
+file automatically at startup.
 
-After installing the extension, you can configure your API keys in VS Code settings:
-
-- OpenAI API key
-- Anthropic API key
-- Gemini API key
-- Other (xAI, deepseek, OpenRouter, Qwen, Kimi, etc.) API keys
-
-You can store these keys in a `.env` file in your workspace using variables like `OPENAI_API_KEY`. TeXRA loads this file automatically at startup.
-
-## Required Dependencies
-
-TeXRA requires several system dependencies for full functionality. See the [**Installation Guide**](https://texra.ai/guide/installation.html) in the full documentation for detailed setup instructions for your operating system.
-
-### LaTeX Distribution
-
-- Install a LaTeX distribution:
-  - Windows:
-    - MiKTeX ([download](https://miktex.org/download)) or
-    - TeX Live ([download](https://tug.org/texlive/windows.html))
-  - macOS: MacTeX ([download](https://www.tug.org/mactex/mactex-download.html)) or via homebrew (`brew install texlive`)
-  - Linux: TeX Live (`sudo apt-get install texlive-full` for Ubuntu)
-
-### Perl
-
-- Required for LaTeX tools and document processing
-- Windows: Included with MiKTeX
-- macOS: Pre-installed
-- Linux: Install via package manager (`sudo apt-get install perl` for Ubuntu)
-
-Optionally, you can also install GraphicsMagick/ImageMagick & Ghostscript for the fallback of the pdf to image conversion.
-
-See the [Installation Guide](https://texra.ai/guide/installation.html) for setup details if needed.
-
-After installing these dependencies, ensure they are accessible from the command line by adding them to your system's PATH if necessary. When VS Code is started from a system menu rather than a terminal, it may not inherit your full shell
-environment. TeXRA searches common locations for tools, including Homebrew, Linuxbrew, TeX Live and MiKTeX bins. Newer TeX Live installations are preferred when multiple versions are found. Launching VS Code from a configured terminal is still the most reliable approach.
-
-## Basic Usage
-
-1. Open a LaTeX or text file in VS Code
-2. Access the TeXRA sidebar (look for the logo icon in the Activity Bar)
-3. Select your desired agent (e.g., polish, correct, draw)
-4. Choose your input file(s) and any additional options
-5. (Optional) Select auxiliary files or figures
-6. Choose your preferred AI model
-7. Write specific instructions for the agent (vague requests like "make it better" can lead to unpredictable results!).
-8. Click "Execute" to run the AI-assisted agent
-9. Review the output in the newly created file
-
-Although many models are supported, we recommend using Anthropic sonnet\*/opus or O1/O3-series or Gemini 2 Flash/Thinking models for the best experience. You can also experiment with GitHub Copilot models via the new VS Code Language Model API.
-
-## Available AI Agents
-
-TeXRA provides agents optimized for various academic tasks. Some core examples include:
-
-- `correct`: Fix typos, grammatical errors, and LaTeX syntax issues.
-- `polish`: Improve writing style, clarity, and flow.
-- `draw`: Create or enhance TikZ figures from descriptions.
-- `paper2slide`: Convert research papers into presentation slides.
-- `ocr`: Convert images or PDF documents to LaTeX code.
-- `transcribe_audio`: Transcribe audio files to transcript.
-
-See the [**Built-in Agents Guide**](https://texra.ai/guide/built-in-agents.html) for the full default list and detailed descriptions.
-
-This list can also be customized in the VS Code settings.
+TeXRA relies on a LaTeX distribution and Perl. Optional tools such as
+GraphicsMagick/ImageMagick and Ghostscript enable advanced PDF and image
+handling. Refer to the
+[installation guide](https://texra.ai/guide/installation.html) for platform
+instructions.
 
 ## Customization
 
-TeXRA offers various customization options through VS Code settings:
-
-- Configure available AI agents and their parameters
-- Adjust included directories and file types
-- Fine-tune prompts for specific agents
-- Customize model parameters like temperature and max tokens
-- Set up output directories and file handling preferences
-
-## Advanced Features
-
-- Multi-file processing for complex projects
-- Automatic TikZ figure extraction and compilation
-- Automatic compilation of input and output LaTeX files to PDFs
-- LaTeX diff functionality for version comparison
-- Git integration for accessing recent commits
-- Intelligent document merging with conflict resolution
-- Custom prompt templates for specialized tasks
-- PDF processing capabilities:
-  - Convert PDFs to high-quality images
-- LaTeX document analysis:
-  - Word count statistics
-- File organization tools:
-  - Automatic build directory management
-  - Smart file backup and versioning
-  - Cross-platform path handling
+Configure available agents, prompts, and model parameters in VS Code settings.
+You can tailor directories, file types, output locations, and more to suit your
+workflow. Advanced users can define custom agents in YAML or extend the
+extension with new model handlers.
 
 ## Support & Feedback
 
-Encountering issues or have suggestions? Please report them on our [**GitHub Issues page**](https://github.com/texra-ai/texra-issues/issues).
-For urgent bugs, you can also reach us directly at [contact@texra.ai](mailto:contact@texra.ai).
+Report issues and feature requests on the
+[GitHub issues page](https://github.com/texra-ai/texra-issues/issues) or email
+[contact@texra.ai](mailto:contact@texra.ai).
 
 ## License
 
-© [TeXRA Team] [2025]. All rights reserved.
+© TeXRA Team 2025. All rights reserved.
