@@ -1,5 +1,8 @@
 # TeXRA: AI TeX Research Assistant for VS Code
 
+[![VS Code Marketplace](https://img.shields.io/visual-studio-marketplace/v/TeXRA.texra)](https://marketplace.visualstudio.com/items?itemName=TeXRA.texra)
+[![License](https://img.shields.io/badge/license-Proprietary-blue)](LICENSE)
+
 TeXRA brings large language models to your academic writing workflow. The
 extension embeds AI-powered agents directly in VS Code so you can draft,
 revise, and manage LaTeX projects without leaving your editor.
@@ -12,7 +15,7 @@ launch page.
 
 - **AI agents for every task** – polish prose, fix LaTeX, draw TikZ, convert
   papers to slides, perform OCR, or chat with interactive tool-use agents that
-  can search the web or run code. Follow up directly in the progress view.
+  can run code. Follow up directly in the progress view.
 - **Transparent streaming** – watch model reasoning stream separately from
   final responses for Claude, DeepSeek, o1, and more.
 - **Progress view** – detailed logs, clickable references, syntax-highlighted
@@ -29,23 +32,30 @@ launch page.
 
 ## Quick Start
 
-1. Install the extension from the VS Code Marketplace.
+1. Install the extension from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=TeXRA.texra).
 2. Run **`TeXRA: Create Sample Project`** from the command palette to explore a
    fully configured workspace.
 3. Open the TeXRA sidebar, pick an agent, select your files, and click
    **Execute**. Follow-up chat is available for tool-use agents.
 
+## Requirements
+
+- **LaTeX distribution** (TeX Live, MiKTeX, or MacTeX)
+- **Perl** (required for LaTeX formatting tools)
+- **Optional**: GraphicsMagick/ImageMagick and Ghostscript for PDF and image processing
+
 ## Installation
 
-Set your API keys in VS Code settings or a workspace `.env` file using variables
-like `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or `GEMINI_API_KEY`. TeXRA loads the
-file automatically at startup.
+Set your API keys in VS Code settings or create a workspace `.env` file:
 
-TeXRA relies on a LaTeX distribution and Perl. Optional tools such as
-GraphicsMagick/ImageMagick and Ghostscript enable advanced PDF and image
-handling. Refer to the
-[installation guide](https://texra.ai/guide/installation.html) for platform
-instructions.
+```env
+OPENAI_API_KEY=your_openai_key_here
+ANTHROPIC_API_KEY=your_anthropic_key_here
+GEMINI_API_KEY=your_gemini_key_here
+```
+
+TeXRA loads the `.env` file automatically at startup. For detailed setup
+instructions, see the [installation guide](https://texra.ai/guide/installation.html).
 
 ## Customization
 
