@@ -173,7 +173,7 @@ export const OPENAI_REASONING_MODELS: Record<string, ModelConfig> = {
       ...OPENAI_REASONING_DEFAULT_CAPABILITIES,
       supportsVision: false,
     } satisfies ModelCapabilities,
-    openRouterOnly: false,
+    openRouterOnly: true,
   },
   'gptoss-': {
     name: 'gptoss-',
@@ -188,7 +188,7 @@ export const OPENAI_REASONING_MODELS: Record<string, ModelConfig> = {
       ...OPENAI_REASONING_DEFAULT_CAPABILITIES,
       supportsVision: false,
     } satisfies ModelCapabilities,
-    openRouterOnly: false,
+    openRouterOnly: true,
   },
   gpt5: {
     name: 'gpt5',
