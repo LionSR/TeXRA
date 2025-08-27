@@ -1,6 +1,6 @@
 # TeXRA: AI TeX Research Assistant for VS Code
 
-[![VS Code Marketplace](https://img.shields.io/visual-studio-marketplace/v/TeXRA.texra)](https://marketplace.visualstudio.com/items?itemName=TeXRA.texra)
+[![VS Code Marketplace](https://img.shields.io/visual-studio-marketplace/v/texra-ai.texra)](https://marketplace.visualstudio.com/items?itemName=texra-ai.texra)
 [![License](https://img.shields.io/badge/license-Proprietary-blue)](LICENSE)
 
 TeXRA brings large language models to your academic writing workflow. The
@@ -32,7 +32,7 @@ launch page.
 
 ## Quick Start
 
-1. Install the extension from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=TeXRA.texra).
+1. Install the extension from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=texra-ai.texra).
 2. Run **`TeXRA: Create Sample Project`** from the command palette to explore a
    fully configured workspace.
 3. Open the TeXRA sidebar, pick an agent, select your files, and click
