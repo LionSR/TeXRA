@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.33.3] - 2025-08-26
+
+### Bug Fixes
+
+- Restrict GPT OSS models to OpenRouter only
+
 ## [0.33.2] - 2025-08-25
 
 ### Features
