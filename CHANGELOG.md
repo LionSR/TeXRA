@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## [0.33.3] - 2025-08-26
 
+### Features
+
+- Include `.bbl` files when searching for reference files
+
 ### Bug Fixes
 
 - Restrict GPT OSS models to OpenRouter only
