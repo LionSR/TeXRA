@@ -108,6 +108,12 @@ Control which file types TeXRA includes:
   ".tex",
   ".md"
 ],
+"texra.files.included.referenceExtensions": [
+  ".txt",
+  ".tex",
+  ".md",
+  ".bbl"
+],
 "texra.files.included.mediaExtensions": [
   ".png",
   ".pdf",
