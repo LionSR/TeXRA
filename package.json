@@ -261,7 +261,8 @@
             "default": [
               ".txt",
               ".tex",
-              ".md"
+              ".md",
+              ".bbl"
             ],
             "description": "File extensions to include when searching for reference files",
             "editPresentation": "multilineText",
