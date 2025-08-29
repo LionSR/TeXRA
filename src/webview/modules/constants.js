@@ -96,4 +96,7 @@ export const ELEMENT_IDS = {
   OUTPUT_FILES_CONTAINER: 'outputFilesContainer',
   TOGGLE_OUTPUT_FILES: 'toggleOutputFiles',
   INSTRUCTION: 'instruction',
+  API_KEY_BANNER: 'apiKeyBanner',
+  SET_API_KEY_BUTTON: 'setApiKeyButton',
+  DISMISS_API_KEY_BANNER: 'dismissApiKeyBanner',
 };

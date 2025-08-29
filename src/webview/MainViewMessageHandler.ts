@@ -20,6 +20,7 @@ import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
 import { getConfig } from '@utils/config';
 import { safeExecuteCommand } from '@utils/system';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
+import { SecretManager } from '@frontend/secretManager';
 
 export class MainViewMessageHandler extends BaseViewMessageHandler {
   private readonly settingsManager: SettingsManager;
@@ -132,6 +133,14 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         this.settingsManager.openAgentSettings(),
       [MAIN_VIEW_COMMANDS.OPEN_MODEL_SETTINGS]: async () =>
         this.settingsManager.openModelSettings(),
+      [MAIN_VIEW_COMMANDS.SET_API_KEY]: async (_m, w) => {
+        await vscode.commands.executeCommand('texra.setApiKey');
+        if (await SecretManager.anyApiKeyExists()) {
+          w.webview.postMessage({
+            command: MAIN_VIEW_COMMANDS.HIDE_API_KEY_BANNER,
+          });
+        }
+      },
 
       // Instruction commands
       [MAIN_VIEW_COMMANDS.POLISH_INSTRUCTION_TEXT]: async (m, w) =>

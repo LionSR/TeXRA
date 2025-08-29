@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 ### Features
 
 - Include `.bbl` files when searching for reference files
+- Show Set API Key banner in main view when no API keys are configured
 
 ### Bug Fixes
 

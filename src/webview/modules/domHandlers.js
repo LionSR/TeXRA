@@ -13,6 +13,7 @@ import { RecordingManager } from './uiManagers/RecordingManager.js';
 import { SettingsButtonManager } from './uiManagers/SettingsButtonManager.js';
 import { ToggleManager } from './uiManagers/ToggleManager.js';
 import { vscode } from '@common/webviewContext.js';
+import { ApiKeyBannerManager } from './uiManagers/ApiKeyBannerManager.js';
 
 export const instructionManager = new InstructionManager(
   'instruction',
@@ -21,6 +22,7 @@ export const instructionManager = new InstructionManager(
 );
 export const toggleManager = new ToggleManager();
 export const recordingManager = new RecordingManager(vscode, webviewEventBus);
+export const apiKeyBannerManager = new ApiKeyBannerManager(vscode);
 
 /**
  * Coordinates UI managers for the main webview.
@@ -30,6 +32,7 @@ export class MainViewDomHandler {
     this.fileInputManager = null;
     this.actionButtonManager = null;
     this.settingsButtonManager = null;
+    this.apiKeyBannerManager = null;
     this.debugMode = false;
   }
 
@@ -70,11 +73,13 @@ export class MainViewDomHandler {
       latexdiffManager,
       mainViewState,
     );
+    this.apiKeyBannerManager = apiKeyBannerManager;
 
     this.fileInputManager.setup();
     this.actionButtonManager.setup();
     this.settingsButtonManager.setup();
     recordingManager.setupRecordButton();
+    this.apiKeyBannerManager.setup();
   }
 
   cleanupUI() {
@@ -89,6 +94,10 @@ export class MainViewDomHandler {
     if (this.settingsButtonManager) {
       this.settingsButtonManager.cleanup();
       this.settingsButtonManager = null;
+    }
+    if (this.apiKeyBannerManager) {
+      this.apiKeyBannerManager.cleanup();
+      this.apiKeyBannerManager = null;
     }
   }
 }

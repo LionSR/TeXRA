@@ -25,6 +25,7 @@
           "./modules/uiManagers/InstructionManager.js": "${instructionManagerUri}",
           "./modules/uiManagers/OutputFilesManager.js": "${outputFilesManagerUri}",
           "./modules/uiManagers/LatexdiffManager.js": "${latexdiffManagerUri}",
+          "./modules/uiManagers/ApiKeyBannerManager.js": "${apiKeyBannerManagerUri}",
           "./modules/domHandlers.js": "${domHandlersUri}",
           "./modules/eventBus.js": "${eventBusUri}",
           "./modules/constants.js": "${constantsUri}",
@@ -50,6 +51,11 @@
 
   <body>
     <div class="content-wrapper">
+      <div id="apiKeyBanner" class="api-key-banner">
+        <span>TeXRA requires an API key.</span>
+        <button id="setApiKeyButton" class="vscode-button">Set API Key</button>
+        <span id="dismissApiKeyBanner" class="codicon codicon-close"></span>
+      </div>
       <div class="main-content">
         <div class="file-selection-group">
           <div class="file-select">

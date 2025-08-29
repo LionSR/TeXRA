@@ -71,6 +71,7 @@ export const MAIN_VIEW_COMMANDS = {
   SHOW_AGENT_HISTORY: 'showAgentHistory',
   OPEN_AGENT_SETTINGS: 'openAgentSettings',
   OPEN_MODEL_SETTINGS: 'openModelSettings',
+  SET_API_KEY: 'setApiKey',
   CLIPBOARD_IMAGE: 'clipboardImage',
 
   // Extension response events
@@ -91,6 +92,8 @@ export const MAIN_VIEW_COMMANDS = {
   SET_CURRENT_FILE: 'setCurrentFile',
   SET_OPENED_FILES: 'setOpenedFiles',
   SET_BASE_FILE: 'setBaseFile',
+  SHOW_API_KEY_BANNER: 'showApiKeyBanner',
+  HIDE_API_KEY_BANNER: 'hideApiKeyBanner',
 
   // File refresh and update operations
   REFRESH_ALL_FILES: 'refreshAllFiles',

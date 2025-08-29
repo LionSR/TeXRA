@@ -9,7 +9,7 @@ import {
   BASE_FILE,
   ELEMENT_IDS,
 } from './constants.js';
-import { mainViewDomHandler } from './domHandlers.js';
+import { mainViewDomHandler, apiKeyBannerManager } from './domHandlers.js';
 import { webviewEventBus } from './eventBus.js';
 import { createFileHandlers } from './handlers/fileHandlers.js';
 import { createRecordingHandlers } from './handlers/recordingHandlers.js';
@@ -61,6 +61,7 @@ export class MainViewMessageHandler {
       ...this._createInstructionHandlers(),
       ...createRecordingHandlers({ postHandle: ctx.postHandle }),
       ...createFileHandlers(ctx),
+      ...this._createApiKeyHandlers(),
     };
   }
 
@@ -69,6 +70,15 @@ export class MainViewMessageHandler {
       [MAIN_VIEW_COMMANDS.STATE_RESTORE]: (m) => this.handleRestoreState(m),
       [MAIN_VIEW_COMMANDS.CHECK_RESTORED_BASE_FILE]: () =>
         this.handleCheckRestoredBaseFile(),
+    };
+  }
+
+  _createApiKeyHandlers() {
+    return {
+      [MAIN_VIEW_COMMANDS.SHOW_API_KEY_BANNER]: () =>
+        apiKeyBannerManager.show(),
+      [MAIN_VIEW_COMMANDS.HIDE_API_KEY_BANNER]: () =>
+        apiKeyBannerManager.hide(),
     };
   }
 

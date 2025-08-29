@@ -1,0 +1,18 @@
+#apiKeyBanner {
+  display: none;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  background-color: var(--vscode-notificationsWarningBackground);
+  color: var(--vscode-notificationsWarningForeground);
+  border-bottom: 1px solid var(--vscode-notificationsWarningBorder);
+}
+
+#dismissApiKeyBanner {
+  margin-left: auto;
+  cursor: pointer;
+}
+
+#setApiKeyButton {
+  margin-left: 0.5rem;
+}

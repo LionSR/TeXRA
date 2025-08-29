@@ -93,6 +93,10 @@ export class MainViewContentProvider extends BaseViewContentProvider {
         webview,
         'modules/uiManagers/LatexdiffManager.js',
       ),
+      apiKeyBannerManagerUri: this.getWebviewUri(
+        webview,
+        'modules/uiManagers/ApiKeyBannerManager.js',
+      ),
     };
   }
 
