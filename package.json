@@ -116,6 +116,17 @@
         }
       },
       {
+        "title": "User Interface",
+        "properties": {
+          "texra.ui.showApiKeyReminders": {
+            "type": "boolean",
+            "default": true,
+            "description": "Show API key reminders in the status bar and main view when no API keys are configured",
+            "scope": "resource"
+          }
+        }
+      },
+      {
         "title": "Model Settings",
         "properties": {
           "texra.model.useOpenRouter": {
