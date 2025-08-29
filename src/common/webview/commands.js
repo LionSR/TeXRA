@@ -73,6 +73,7 @@ export const MAIN_VIEW_COMMANDS = {
   OPEN_MODEL_SETTINGS: 'openModelSettings',
   CLIPBOARD_IMAGE: 'clipboardImage',
   OPEN_SET_API_KEY: 'openSetApiKey',
+  OPEN_API_KEY_GUIDE: 'openApiKeyGuide',
   SHOW_API_KEY_BANNER: 'showApiKeyBanner',
   HIDE_API_KEY_BANNER: 'hideApiKeyBanner',
 

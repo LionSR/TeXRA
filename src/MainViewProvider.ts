@@ -160,12 +160,11 @@ export class MainViewProvider implements vscode.WebviewViewProvider {
 
     this.setupInitialState(webviewView);
 
-    // Check if any API keys are set and display notification if needed
+    // Check if any API keys are set and display banner if needed
     const config = vscode.workspace.getConfiguration('texra');
     const showReminders = config.get<boolean>('ui.showApiKeyReminders', true);
 
     if (showReminders) {
-      SecretManager.checkAndNotifyMissingApiKeys();
       SecretManager.anyApiKeyExists().then((exists) => {
         if (!exists) {
           webviewView.webview.postMessage({
