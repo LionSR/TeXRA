@@ -12,6 +12,7 @@ import { outputFilesManager } from './uiManagers/OutputFilesManager.js';
 import { RecordingManager } from './uiManagers/RecordingManager.js';
 import { SettingsButtonManager } from './uiManagers/SettingsButtonManager.js';
 import { ToggleManager } from './uiManagers/ToggleManager.js';
+import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
 import { vscode } from '@common/webviewContext.js';
 
 export const instructionManager = new InstructionManager(
@@ -31,6 +32,7 @@ export class MainViewDomHandler {
     this.actionButtonManager = null;
     this.settingsButtonManager = null;
     this.debugMode = false;
+    this.apiKeyButtonHandler = null;
   }
 
   _updateDebugButtonVisibility() {
@@ -75,6 +77,18 @@ export class MainViewDomHandler {
     this.actionButtonManager.setup();
     this.settingsButtonManager.setup();
     recordingManager.setupRecordButton();
+
+    const apiKeyButton = document.getElementById(
+      ELEMENT_IDS.API_KEY_BANNER_BUTTON,
+    );
+    if (apiKeyButton) {
+      this.apiKeyButtonHandler = () => {
+        vscode.postMessage({
+          command: MAIN_VIEW_COMMANDS.OPEN_SET_API_KEY,
+        });
+      };
+      apiKeyButton.addEventListener('click', this.apiKeyButtonHandler);
+    }
   }
 
   cleanupUI() {
@@ -89,6 +103,13 @@ export class MainViewDomHandler {
     if (this.settingsButtonManager) {
       this.settingsButtonManager.cleanup();
       this.settingsButtonManager = null;
+    }
+    const apiKeyButton = document.getElementById(
+      ELEMENT_IDS.API_KEY_BANNER_BUTTON,
+    );
+    if (apiKeyButton && this.apiKeyButtonHandler) {
+      apiKeyButton.removeEventListener('click', this.apiKeyButtonHandler);
+      this.apiKeyButtonHandler = null;
     }
   }
 }
