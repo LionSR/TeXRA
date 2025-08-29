@@ -179,6 +179,12 @@ TeXRA also loads environment variables from a `.env` file in your workspace. Def
 - **OpenAI API Key**: Available from [OpenAI API](https://platform.openai.com/api-keys)
 - **Anthropic API Key**: Available from [Anthropic Console](https://console.anthropic.com/)
 - **Google API Key**: Available from [Google AI Studio](https://aistudio.google.com/app/apikey)
+- **OpenRouter API Key**: Available from [OpenRouter Dashboard](https://openrouter.ai/keys)
+- **xAI API Key**: Available from [xAI Console](https://console.x.ai/)
+- **DeepSeek API Key**: Available from [DeepSeek Platform](https://platform.deepseek.com/api_keys)
+- **Moonshot API Key**: Available from [Moonshot Console](https://platform.moonshot.cn/console)
+- **DashScope API Key**: Available from [DashScope Console](https://dashscope.aliyun.com/api-console/)
+- **Wolfram LLM API Key**: Available from [Wolfram LLM App](https://llm-api.wolframalpha.com/)
   :::
 
 ## Verifying Installation
