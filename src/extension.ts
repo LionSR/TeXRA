@@ -34,16 +34,16 @@ async function refreshApiKeyStatus() {
   if (!apiKeyStatusBarItem) {
     return;
   }
-  
+
   // Check if reminders are enabled
   const config = vscode.workspace.getConfiguration('texra');
   const showReminders = config.get<boolean>('ui.showApiKeyReminders', true);
-  
+
   if (!showReminders) {
     apiKeyStatusBarItem.hide();
     return;
   }
-  
+
   const exists = await SecretManager.anyApiKeyExists();
   if (!exists) {
     apiKeyStatusBarItem.text = '$(warning) TeXRA: API Key Required';
