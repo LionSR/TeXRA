@@ -140,6 +140,8 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         this.instructionManager.handleTranscribeInstruction(w),
       [MAIN_VIEW_COMMANDS.CLIPBOARD_IMAGE]: async (m, w) =>
         this.instructionManager.handleClipboardImage(m, w),
+      [MAIN_VIEW_COMMANDS.OPEN_SET_API_KEY]: async () =>
+        safeExecuteCommand('texra.setApiKey'),
 
       // Recording commands
       [MAIN_VIEW_COMMANDS.START_RECORDING]: async (_m, w) =>
