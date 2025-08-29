@@ -218,30 +218,40 @@ export async function activate(context: vscode.ExtensionContext) {
   }
 
   const apiKeyIntroKey = 'texra.apiKeyIntroShown';
+  // Only show API key intro if not shown before AND no API keys are set
   if (!context.globalState.get<boolean>(apiKeyIntroKey)) {
-    void showInstructionWithSuppress(
-      'apiKeyIntro',
-      'TeXRA uses API keys to access language models. Learn how to obtain a key and set it here.',
-      [
-        {
-          title: 'Open API-Key Guide',
-          callback: async () => {
-            await vscode.env.openExternal(
-              vscode.Uri.parse(
-                'https://texra.ai/guide/installation#setting-up-api-keys',
-              ),
-            );
-          },
-        },
-        {
-          title: 'Set API Key',
-          callback: async () => {
-            await vscode.commands.executeCommand('texra.setApiKey');
-          },
-        },
-      ],
-    )
-      .then(() => context.globalState.update(apiKeyIntroKey, true))
+    SecretManager.anyApiKeyExists()
+      .then((hasKeys) => {
+        if (!hasKeys) {
+          void showInstructionWithSuppress(
+            'apiKeyIntro',
+            'TeXRA uses API keys to access language models. Learn how to obtain a key and set it here.',
+            [
+              {
+                title: 'Open API-Key Guide',
+                callback: async () => {
+                  await vscode.env.openExternal(
+                    vscode.Uri.parse(
+                      'https://texra.ai/guide/installation#setting-up-api-keys',
+                    ),
+                  );
+                },
+              },
+              {
+                title: 'Set API Key',
+                callback: async () => {
+                  await vscode.commands.executeCommand('texra.setApiKey');
+                },
+              },
+            ],
+          )
+            .then(() => context.globalState.update(apiKeyIntroKey, true))
+            .catch(console.error);
+        } else {
+          // Mark as shown if keys already exist
+          void context.globalState.update(apiKeyIntroKey, true);
+        }
+      })
       .catch(console.error);
   }
 }
