@@ -55,6 +55,8 @@ export function registerApiKeyCommands(context: vscode.ExtensionContext) {
         await vscode.env.openExternal(
           vscode.Uri.parse(PROVIDER_URLS[provider]),
         );
+        // User selected "Get API Key" - don't prompt for input
+        return;
       }
 
       const apiKey = await vscode.window.showInputBox({
