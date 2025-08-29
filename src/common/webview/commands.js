@@ -72,6 +72,9 @@ export const MAIN_VIEW_COMMANDS = {
   OPEN_AGENT_SETTINGS: 'openAgentSettings',
   OPEN_MODEL_SETTINGS: 'openModelSettings',
   CLIPBOARD_IMAGE: 'clipboardImage',
+  OPEN_SET_API_KEY: 'openSetApiKey',
+  SHOW_API_KEY_BANNER: 'showApiKeyBanner',
+  HIDE_API_KEY_BANNER: 'hideApiKeyBanner',
 
   // Extension response events
   CHECK_RESTORED_BASE_FILE: 'checkRestoredBaseFile',
