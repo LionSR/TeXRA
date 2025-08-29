@@ -2,23 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.33.3] - 2025-08-26
+## [0.33.3] - 2025-08-29
 
 ### Features
 
 - Include `.bbl` files when searching for reference files
+- Guide new users through API key setup with links to provider pages
+- Show persistent “Set API Key” banner and status bar warning until a key is configured
 
 ### Bug Fixes
 
 - Restrict GPT OSS models to OpenRouter only
-- Consider environment variables when checking for API keys to prevent false missing-key alerts
+- Improve API key detection to check environment variables and only show intro message when no keys are configured
 
-## [Unreleased]
-
-### Features
-
-- Guide new users through API key setup with links to provider pages
-- Show persistent “Set API Key” banner and status bar warning until a key is configured
 
 ## [0.33.2] - 2025-08-25
 
