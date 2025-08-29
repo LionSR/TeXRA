@@ -13,6 +13,13 @@ All notable changes to this project will be documented in this file.
 - Restrict GPT OSS models to OpenRouter only
 - Consider environment variables when checking for API keys to prevent false missing-key alerts
 
+## [Unreleased]
+
+### Features
+
+- Guide new users through API key setup with links to provider pages
+- Show persistent “Set API Key” banner and status bar warning until a key is configured
+
 ## [0.33.2] - 2025-08-25
 
 ### Features

@@ -99,14 +99,22 @@ export class SecretManager {
       const exists = await this.anyApiKeyExists();
       if (!exists) {
         const setKey = 'Set API Key';
+        const learnMore = 'Learn More';
         const result = await vscode.window.showErrorMessage(
           'No API keys found. TeXRA requires an API key to function properly.',
           { modal: true },
           setKey,
+          learnMore,
         );
 
         if (result === setKey) {
           vscode.commands.executeCommand('texra.setApiKey');
+        } else if (result === learnMore) {
+          void vscode.env.openExternal(
+            vscode.Uri.parse(
+              'https://texra.ai/guide/installation#setting-up-api-keys',
+            ),
+          );
         }
 
         this.apiKeyNotificationShown = true;

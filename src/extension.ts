@@ -27,7 +27,32 @@ import { WatcherManager } from './explorer/WatcherManager';
 import { registerCommands } from './commands';
 
 let statusBarItem: vscode.StatusBarItem | undefined;
+let apiKeyStatusBarItem: vscode.StatusBarItem | undefined;
 let disposeStatusListener: (() => void) | undefined;
+
+async function refreshApiKeyStatus() {
+  if (!apiKeyStatusBarItem) {
+    return;
+  }
+  
+  // Check if reminders are enabled
+  const config = vscode.workspace.getConfiguration('texra');
+  const showReminders = config.get<boolean>('ui.showApiKeyReminders', true);
+  
+  if (!showReminders) {
+    apiKeyStatusBarItem.hide();
+    return;
+  }
+  
+  const exists = await SecretManager.anyApiKeyExists();
+  if (!exists) {
+    apiKeyStatusBarItem.text = '$(warning) TeXRA: API Key Required';
+    apiKeyStatusBarItem.command = 'texra.setApiKey';
+    apiKeyStatusBarItem.show();
+  } else {
+    apiKeyStatusBarItem.hide();
+  }
+}
 
 export async function activate(context: vscode.ExtensionContext) {
   const workspaceFolders = vscode.workspace.workspaceFolders;
@@ -98,6 +123,13 @@ export async function activate(context: vscode.ExtensionContext) {
   statusBarItem.text = 'TeXRA: Idle';
   statusBarItem.show();
 
+  apiKeyStatusBarItem = vscode.window.createStatusBarItem(
+    vscode.StatusBarAlignment.Left,
+  );
+  context.subscriptions.push(apiKeyStatusBarItem);
+  // Non-blocking refresh to avoid delaying extension activation
+  refreshApiKeyStatus().catch(console.error);
+
   const runningStreams = new Set<string>();
   disposeStatusListener = bus.on(
     'updateStreamStatus',
@@ -116,7 +148,14 @@ export async function activate(context: vscode.ExtensionContext) {
     },
   );
 
-  context.subscriptions.push({ dispose: disposeStatusListener }, statusBarItem);
+  context.subscriptions.push(
+    { dispose: disposeStatusListener },
+    statusBarItem,
+    vscode.commands.registerCommand(
+      'texra.refreshApiKeyStatus',
+      refreshApiKeyStatus,
+    ),
+  );
 
   // Register the folder explorer with context
   const folderExplorer = new FolderExplorer(workspaceRoot, context);
@@ -175,6 +214,34 @@ export async function activate(context: vscode.ExtensionContext) {
       ],
     )
       .then(() => context.globalState.update(welcomeKey, true))
+      .catch(console.error);
+  }
+
+  const apiKeyIntroKey = 'texra.apiKeyIntroShown';
+  if (!context.globalState.get<boolean>(apiKeyIntroKey)) {
+    void showInstructionWithSuppress(
+      'apiKeyIntro',
+      'TeXRA uses API keys to access language models. Learn how to obtain a key and set it here.',
+      [
+        {
+          title: 'Open API-Key Guide',
+          callback: async () => {
+            await vscode.env.openExternal(
+              vscode.Uri.parse(
+                'https://texra.ai/guide/installation#setting-up-api-keys',
+              ),
+            );
+          },
+        },
+        {
+          title: 'Set API Key',
+          callback: async () => {
+            await vscode.commands.executeCommand('texra.setApiKey');
+          },
+        },
+      ],
+    )
+      .then(() => context.globalState.update(apiKeyIntroKey, true))
       .catch(console.error);
   }
 }
