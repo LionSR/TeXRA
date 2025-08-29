@@ -142,6 +142,13 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         this.instructionManager.handleClipboardImage(m, w),
       [MAIN_VIEW_COMMANDS.OPEN_SET_API_KEY]: async () =>
         safeExecuteCommand('texra.setApiKey'),
+      [MAIN_VIEW_COMMANDS.OPEN_API_KEY_GUIDE]: async () => {
+        await vscode.env.openExternal(
+          vscode.Uri.parse(
+            'https://texra.ai/guide/installation#setting-up-api-keys',
+          ),
+        );
+      },
 
       // Recording commands
       [MAIN_VIEW_COMMANDS.START_RECORDING]: async (_m, w) =>
