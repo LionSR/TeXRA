@@ -78,3 +78,16 @@
   color: var(--vscode-errorForeground);
   cursor: pointer;
 }
+
+/* API key reminder banner */
+.api-key-banner {
+  background-color: var(--vscode-inputValidation-warningBackground);
+  color: var(--vscode-inputValidation-warningForeground);
+  border: 1px solid var(--vscode-inputValidation-warningBorder);
+  border-radius: var(--border-radius);
+  padding: var(--spacing-small) var(--spacing-medium);
+  margin-bottom: var(--spacing-large);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}

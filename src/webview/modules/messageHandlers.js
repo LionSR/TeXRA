@@ -61,6 +61,18 @@ export class MainViewMessageHandler {
       ...this._createInstructionHandlers(),
       ...createRecordingHandlers({ postHandle: ctx.postHandle }),
       ...createFileHandlers(ctx),
+      [MAIN_VIEW_COMMANDS.SHOW_API_KEY_BANNER]: () => {
+        const element = this._getElement(ELEMENT_IDS.API_KEY_BANNER);
+        if (element) {
+          element.style.setProperty('display', 'flex');
+        }
+      },
+      [MAIN_VIEW_COMMANDS.HIDE_API_KEY_BANNER]: () => {
+        const element = this._getElement(ELEMENT_IDS.API_KEY_BANNER);
+        if (element) {
+          element.style.setProperty('display', 'none');
+        }
+      },
     };
   }
 

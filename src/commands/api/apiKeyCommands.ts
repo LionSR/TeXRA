@@ -3,6 +3,19 @@ import * as vscode from 'vscode';
 
 // Local imports
 import { SecretManager, ApiProvider } from '@frontend/secretManager';
+import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
+
+const PROVIDER_URLS: Record<ApiProvider, string> = {
+  openai: 'https://platform.openai.com/api-keys',
+  anthropic: 'https://console.anthropic.com/',
+  openRouter: 'https://openrouter.ai/keys',
+  google: 'https://aistudio.google.com/app/apikey',
+  xai: 'https://console.x.ai/',
+  deepseek: 'https://platform.deepseek.com/api_keys',
+  moonshot: 'https://platform.moonshot.cn/console',
+  dashscope: 'https://dashscope.aliyun.com/api-console/',
+  wolframllmapp: 'https://llm-api.wolframalpha.com/',
+};
 
 export const apiKeyCommands = {
   setApiKey: 'texra.setApiKey',
@@ -26,7 +39,26 @@ export function registerApiKeyCommands(context: vscode.ExtensionContext) {
         return;
       }
 
-      // Then get the API key
+      const enterKey = 'Enter Key';
+      const getApiKey = 'Get API Key';
+      const action = await vscode.window.showInformationMessage(
+        `Set your ${provider} API key`,
+        enterKey,
+        getApiKey,
+      );
+
+      if (!action) {
+        return;
+      }
+
+      if (action === getApiKey) {
+        await vscode.env.openExternal(
+          vscode.Uri.parse(PROVIDER_URLS[provider]),
+        );
+        // User selected "Get API Key" - don't prompt for input
+        return;
+      }
+
       const apiKey = await vscode.window.showInputBox({
         prompt: `Enter ${provider} API key`,
         password: true,
@@ -45,6 +77,13 @@ export function registerApiKeyCommands(context: vscode.ExtensionContext) {
         vscode.window.showInformationMessage(
           `${provider} API key has been set`,
         );
+        await vscode.commands.executeCommand('texra.refreshApiKeyStatus');
+        const view = await vscode.commands.executeCommand<vscode.WebviewView>(
+          'texra.getWebviewView',
+        );
+        view?.webview.postMessage({
+          command: MAIN_VIEW_COMMANDS.HIDE_API_KEY_BANNER,
+        });
       } catch (err) {
         vscode.window.showErrorMessage(
           `Failed to set ${provider} API key: ${err}`,
@@ -75,6 +114,16 @@ export function registerApiKeyCommands(context: vscode.ExtensionContext) {
         vscode.window.showInformationMessage(
           `${provider} API key has been removed`,
         );
+        await vscode.commands.executeCommand('texra.refreshApiKeyStatus');
+        const any = await SecretManager.anyApiKeyExists();
+        const view = await vscode.commands.executeCommand<vscode.WebviewView>(
+          'texra.getWebviewView',
+        );
+        view?.webview.postMessage({
+          command: any
+            ? MAIN_VIEW_COMMANDS.HIDE_API_KEY_BANNER
+            : MAIN_VIEW_COMMANDS.SHOW_API_KEY_BANNER,
+        });
       } catch (err) {
         vscode.window.showErrorMessage(
           `Failed to remove ${provider} API key: ${err}`,
