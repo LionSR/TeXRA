@@ -74,21 +74,42 @@ export class MainViewMessageHandler {
         }
       },
       [MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS]: (m) => {
-        const select = this._getElement('model');
-        if (select) {
-          const previous = select.value;
-          select.innerHTML = m.options;
-          if (previous) {
-            select.value = previous;
-          }
-          Array.from(select.options).forEach((opt) => {
-            if (opt.disabled) {
-              opt.style.color = 'var(--vscode-descriptionForeground)';
-            } else {
-              opt.style.removeProperty('color');
+        // Don't cache if element doesn't exist yet
+        const select = document.getElementById('model');
+        if (!select) {
+          // Queue for later when DOM is ready
+          setTimeout(() => {
+            const retrySelect = document.getElementById('model');
+            if (retrySelect) {
+              const previous = retrySelect.value;
+              retrySelect.innerHTML = m.options;
+              if (previous) {
+                retrySelect.value = previous;
+              }
+              Array.from(retrySelect.options).forEach((opt) => {
+                if (opt.disabled) {
+                  opt.classList.add('disabled-model');
+                } else {
+                  opt.classList.remove('disabled-model');
+                }
+              });
             }
-          });
+          }, 100);
+          return;
         }
+        
+        const previous = select.value;
+        select.innerHTML = m.options;
+        if (previous) {
+          select.value = previous;
+        }
+        Array.from(select.options).forEach((opt) => {
+          if (opt.disabled) {
+            opt.classList.add('disabled-model');
+          } else {
+            opt.classList.remove('disabled-model');
+          }
+        });
       },
     };
   }

@@ -50,11 +50,18 @@ export function registerMainViewCommands(context: vscode.ExtensionContext) {
         'mainViewCommands',
       );
       if (webviewView) {
-        const options = await computeModelOptions();
-        webviewView.webview.postMessage({
-          command: MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
-          options,
-        });
+        try {
+          const options = await computeModelOptions();
+          webviewView.webview.postMessage({
+            command: MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
+            options,
+          });
+        } catch (error) {
+          console.error('Failed to refresh model options:', error);
+          vscode.window.showErrorMessage(
+            'Failed to refresh model options. Please check the output console for details.',
+          );
+        }
       }
     },
   );
