@@ -14,7 +14,12 @@ import * as logger from '@logger/logUtils';
 import { WorkspaceFS } from '@utils/files';
 
 // Local imports - housekeeping
-import { PACK_EXTENSIONS, TEMP_EXTENSIONS, HISTORY_DIR, DEFAULT_MAX_ROUNDS } from './constants';
+import {
+  PACK_EXTENSIONS,
+  TEMP_EXTENSIONS,
+  HISTORY_DIR,
+  DEFAULT_MAX_ROUNDS,
+} from './constants';
 import {
   getAgentFirstNameChunk,
   getFilePatterns,
