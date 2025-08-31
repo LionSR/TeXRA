@@ -9,7 +9,6 @@ export interface ApiProviderQuickPickItem extends vscode.QuickPickItem {
 
 export class SecretManager {
   private static secretStorage: vscode.SecretStorage | undefined;
-  private static apiKeyNotificationShown = false;
 
   public static initialize(context: vscode.ExtensionContext): void {
     this.secretStorage = context.secrets;
@@ -84,44 +83,6 @@ export class SecretManager {
 
     const envKey = `${provider.toUpperCase()}_API_KEY`;
     return Boolean(process.env[envKey]);
-  }
-
-  /**
-   * Check if any API keys exist and show a notification if none do
-   */
-  public static async checkAndNotifyMissingApiKeys(): Promise<void> {
-    // Only show the notification once per session
-    if (this.apiKeyNotificationShown) {
-      return;
-    }
-
-    try {
-      const exists = await this.anyApiKeyExists();
-      if (!exists) {
-        const setKey = 'Set API Key';
-        const learnMore = 'Learn More';
-        const result = await vscode.window.showErrorMessage(
-          'No API keys found. TeXRA requires an API key to function properly.',
-          { modal: true },
-          setKey,
-          learnMore,
-        );
-
-        if (result === setKey) {
-          vscode.commands.executeCommand('texra.setApiKey');
-        } else if (result === learnMore) {
-          void vscode.env.openExternal(
-            vscode.Uri.parse(
-              'https://texra.ai/guide/installation#setting-up-api-keys',
-            ),
-          );
-        }
-
-        this.apiKeyNotificationShown = true;
-      }
-    } catch (error) {
-      console.error('Error checking API keys:', error);
-    }
   }
 
   public static async getApiProviderQuickPickItems(): Promise<
