@@ -20,6 +20,7 @@ import {
   getFilePatterns,
   findFilesFromPatterns,
 } from './utils';
+import { getConfig } from '@utils/config';
 
 const CHANNEL = 'Housekeeping';
 logger.initialize(CHANNEL);
@@ -208,10 +209,13 @@ export async function runPackMultiple(
 
     // Pack additional XML files
     const agentFirstNameChunk = getAgentFirstNameChunk(agent);
-    const additionalPatterns = [
-      `${baseName}_${agentFirstNameChunk}_r0_${model}.xml`,
-      `${baseName}_${agentFirstNameChunk}_r1_${model}.xml`,
-    ];
+    const maxRounds = getConfig<number>('agent.rounds', 2);
+    const additionalPatterns: string[] = [];
+    for (let i = 0; i < maxRounds; i++) {
+      additionalPatterns.push(
+        `${baseName}_${agentFirstNameChunk}_r${i}_${model}.xml`,
+      );
+    }
 
     for (const pattern of additionalPatterns) {
       const filePath = path.join(outputDir, pattern);
