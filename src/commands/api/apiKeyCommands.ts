@@ -78,6 +78,7 @@ export function registerApiKeyCommands(context: vscode.ExtensionContext) {
           `${provider} API key has been set`,
         );
         await vscode.commands.executeCommand('texra.refreshApiKeyStatus');
+        void vscode.commands.executeCommand('texra.refreshModelOptions');
         const view = await vscode.commands.executeCommand<vscode.WebviewView>(
           'texra.getWebviewView',
         );
@@ -115,6 +116,7 @@ export function registerApiKeyCommands(context: vscode.ExtensionContext) {
           `${provider} API key has been removed`,
         );
         await vscode.commands.executeCommand('texra.refreshApiKeyStatus');
+        void vscode.commands.executeCommand('texra.refreshModelOptions');
         const any = await SecretManager.anyApiKeyExists();
         const view = await vscode.commands.executeCommand<vscode.WebviewView>(
           'texra.getWebviewView',
