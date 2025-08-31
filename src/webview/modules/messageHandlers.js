@@ -73,6 +73,23 @@ export class MainViewMessageHandler {
           element.style.setProperty('display', 'none');
         }
       },
+      [MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS]: (m) => {
+        const select = this._getElement('model');
+        if (select) {
+          const previous = select.value;
+          select.innerHTML = m.options;
+          if (previous) {
+            select.value = previous;
+          }
+          Array.from(select.options).forEach((opt) => {
+            if (opt.disabled) {
+              opt.style.color = 'var(--vscode-descriptionForeground)';
+            } else {
+              opt.style.removeProperty('color');
+            }
+          });
+        }
+      },
     };
   }
 
