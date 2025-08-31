@@ -74,42 +74,54 @@ export class MainViewMessageHandler {
         }
       },
       [MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS]: (m) => {
+        // Validate that options are provided
+        if (!m.options) {
+          console.warn('SET_MODEL_OPTIONS: No options provided');
+          return;
+        }
+
+        // Helper function to apply options to select element
+        const applyOptions = (selectElement) => {
+          const previous = selectElement.value;
+          selectElement.innerHTML = m.options;
+          if (previous) {
+            selectElement.value = previous;
+          }
+          Array.from(selectElement.options).forEach((opt) => {
+            if (opt.disabled) {
+              opt.classList.add('disabled-model');
+            } else {
+              opt.classList.remove('disabled-model');
+            }
+          });
+        };
+
         // Don't cache if element doesn't exist yet
         const select = document.getElementById('model');
         if (!select) {
-          // Queue for later when DOM is ready
-          setTimeout(() => {
+          // Use a more robust retry mechanism with exponential backoff
+          let retryCount = 0;
+          const maxRetries = 5;
+          const retryDelay = [100, 200, 400, 800, 1600];
+          
+          const tryApplyOptions = () => {
             const retrySelect = document.getElementById('model');
             if (retrySelect) {
-              const previous = retrySelect.value;
-              retrySelect.innerHTML = m.options;
-              if (previous) {
-                retrySelect.value = previous;
-              }
-              Array.from(retrySelect.options).forEach((opt) => {
-                if (opt.disabled) {
-                  opt.classList.add('disabled-model');
-                } else {
-                  opt.classList.remove('disabled-model');
-                }
-              });
+              applyOptions(retrySelect);
+            } else if (retryCount < maxRetries) {
+              setTimeout(tryApplyOptions, retryDelay[retryCount]);
+              retryCount++;
+            } else {
+              console.warn('SET_MODEL_OPTIONS: Model select element not found after retries');
             }
-          }, 100);
+          };
+          
+          setTimeout(tryApplyOptions, retryDelay[0]);
+          retryCount = 1;
           return;
         }
         
-        const previous = select.value;
-        select.innerHTML = m.options;
-        if (previous) {
-          select.value = previous;
-        }
-        Array.from(select.options).forEach((opt) => {
-          if (opt.disabled) {
-            opt.classList.add('disabled-model');
-          } else {
-            opt.classList.remove('disabled-model');
-          }
-        });
+        applyOptions(select);
       },
     };
   }
