@@ -16,6 +16,7 @@ import { OutputHandler, NamedOutputFile, IOutputHandler } from '@agent/output';
 import {
   getSystemPromptWithRules,
   getPrefillForRound,
+  getReflectPromptForRound,
 } from '@agent/utils/promptHelpers';
 import {
   renderPrompt,
@@ -73,6 +74,8 @@ export abstract class BaseReflectionAgent extends BaseAgent {
   /** Handler for output file processing and validation. */
   protected outputHandler: IOutputHandler;
   protected latexMediaManager: LatexMediaManager;
+  public roundStates: AgentStateRound[] = [];
+  public toolStates: ToolState[] = [];
 
   constructor(
     modelHandler: IModelHandler,
@@ -410,7 +413,7 @@ export abstract class BaseReflectionAgent extends BaseAgent {
     messages: any[],
     toolState: ToolState,
     currRound: number = 1,
-  ): Promise<[AgentStateRound, AgentStateGlobal, any[], boolean]> {
+  ): Promise<[AgentStateRound, AgentStateGlobal, any[], boolean, ToolState]> {
     this.logger.debug(`Processing round ${currRound}`);
 
     // Create a dedicated group for round 1, as a child of the main run group
@@ -451,8 +454,12 @@ export abstract class BaseReflectionAgent extends BaseAgent {
       const stateRound = new AgentStateRound(currRound);
 
       // Prepare round message
+      const reflectTemplate = getReflectPromptForRound(
+        this.agentPrompt,
+        currRound,
+      );
       const userRequestReflect = await renderPrompt(
-        this.agentPrompt.userReflect,
+        reflectTemplate,
         this.userVars,
       );
       let userMessage = userRequestReflect ? `${userRequestReflect}\n` : '';
@@ -463,7 +470,7 @@ export abstract class BaseReflectionAgent extends BaseAgent {
       // Only proceed if there's actual content
       if (!userMessage.trim()) {
         this.logger.endGroup(round1GroupId, 'stopped');
-        return [stateRound, stateGlobal, messages, true];
+        return [stateRound, stateGlobal, messages, true, toolState];
       }
 
       const roundMessages = await this.modelHandler.createRoundMessages(
@@ -534,6 +541,7 @@ export abstract class BaseReflectionAgent extends BaseAgent {
           updatedStateGlobal,
           updatedMessages,
           newEndTurn,
+          updatedToolState,
         ];
       }
 
@@ -545,7 +553,7 @@ export abstract class BaseReflectionAgent extends BaseAgent {
       });
 
       this.logger.endGroup(round1GroupId, 'stopped');
-      return [stateRound, stateGlobal, updatedMessages, endTurn];
+      return [stateRound, stateGlobal, updatedMessages, endTurn, toolState];
     } catch (error) {
       // End the round group with error status in case of exceptions
       this.logger.endGroup(round1GroupId, 'error');
@@ -553,43 +561,60 @@ export abstract class BaseReflectionAgent extends BaseAgent {
     }
   }
 
+  private async runRound(
+    currRound: number,
+    stateGlobal: AgentStateGlobal,
+    messages: any[],
+    toolState: ToolState,
+  ): Promise<[AgentStateRound, AgentStateGlobal, any[], boolean, ToolState]> {
+    if (currRound === 0) {
+      return await this.process();
+    }
+    return await this.reflect(stateGlobal, messages, toolState, currRound);
+  }
+
   /**
    * Main execution method that processes inputs and generates outputs.
    */
   public async run(): Promise<void> {
-    // Create a dedicated run group for this agent execution
     await this.startRunGroup();
 
     try {
-      // Initialize agent variables within the run group
       await this.init(this.runGroupId);
-
-      // Initialize client before starting
       await this.initializeClient();
 
-      const [stateRound, stateGlobal, messages, endTurn, toolState] =
-        await this.process();
-      this.logger.debug(`Round 0 completed\n`, this.runGroupId);
+      let stateGlobal = new AgentStateGlobal();
+      let messages: any[] = [];
+      let continueRounds = true;
 
-      // Check for interruption before next round
-      if (
-        !this.isInterrupted &&
-        this.agentConfig.toolConfig.reflect &&
-        endTurn
-      ) {
-        const toolStateReflection = new ToolState();
-        await this.reflect(stateGlobal, messages, toolStateReflection);
-        this.logger.debug(`Round 1 completed\n`, this.runGroupId);
+      const totalRounds = this.getNumberOfRounds();
+      for (let currRound = 0; currRound < totalRounds; currRound++) {
+        if (
+          currRound > 0 &&
+          (!this.agentConfig.toolConfig.reflect ||
+            !continueRounds ||
+            this.isInterrupted)
+        ) {
+          break;
+        }
+
+        this.userVars.CURRENT_ROUND = currRound;
+        const toolState = new ToolState();
+        const [stateRound, updatedGlobal, newMessages, endTurn, usedToolState] =
+          await this.runRound(currRound, stateGlobal, messages, toolState);
+        this.roundStates.push(stateRound);
+        this.toolStates.push(usedToolState);
+        stateGlobal = updatedGlobal;
+        messages = newMessages;
+        continueRounds = endTurn;
+        stateGlobal.incrementRounds();
       }
 
-      // End the run group with success status
       this.endRunGroup('stopped');
     } catch (error) {
-      // End the run group with error status
       this.endRunGroup('error');
       throw error;
     } finally {
-      // Always clean up, whether execution completed or was interrupted
       this.cleanup();
     }
   }

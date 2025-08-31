@@ -58,8 +58,8 @@ export class OutputHandler implements IOutputHandler {
     this.agentSetting = agentSetting;
     this.agentConfig = agentConfig;
     this.logId = logId;
-    this.outputFiles = { 0: [], 1: [] };
-    this.outputMappings = { 0: [], 1: [] };
+    this.outputFiles = {};
+    this.outputMappings = {};
     this.baseFiles = baseFiles;
     this.logger = logger || new AgentLogger('OutputHandler');
     this.channel = this.logger.channelId;
@@ -77,6 +77,15 @@ export class OutputHandler implements IOutputHandler {
       this.channel,
     );
     this.diffStatsManager = new DiffStatsManager();
+  }
+
+  private ensureRound(round: number): void {
+    if (!this.outputFiles[round]) {
+      this.outputFiles[round] = [];
+    }
+    if (!this.outputMappings[round]) {
+      this.outputMappings[round] = [];
+    }
   }
 
   /**
@@ -159,6 +168,7 @@ export class OutputHandler implements IOutputHandler {
     currRound: number,
     groupId?: string,
   ): Promise<void> {
+    this.ensureRound(currRound);
     await this.diffManager.handleLatexdiffofOutput(currRound, groupId);
   }
 
@@ -168,7 +178,8 @@ export class OutputHandler implements IOutputHandler {
   public async gatherOutputFileInfo(
     currRound: number,
   ): Promise<OutputFileInfo[]> {
-    const roundOutputs = this.outputFiles[currRound] || [];
+    this.ensureRound(currRound);
+    const roundOutputs = this.outputFiles[currRound];
     const baseMap = createFileMapping(this.baseFiles, roundOutputs, 'contains');
     const prevMap =
       currRound > 0
@@ -281,6 +292,7 @@ export class OutputHandler implements IOutputHandler {
     options: { endTurn: boolean; groupId?: string },
   ): Promise<void> {
     const { endTurn, groupId } = options;
+    this.ensureRound(currRound);
     const fileInfos = await this.gatherOutputFileInfo(currRound);
 
     if (endTurn) {
@@ -315,6 +327,7 @@ export class OutputHandler implements IOutputHandler {
     groupId?: string,
   ): Promise<void> {
     const activeGroupId = groupId || this.logger.getActiveGroupId();
+    this.ensureRound(currRound);
 
     if (
       Array.isArray(this.agentConfig.outputFiles) &&
@@ -428,7 +441,8 @@ export class OutputHandler implements IOutputHandler {
     currRound: number = 0,
     roundGroupId?: string,
   ): Promise<string[]> {
-    return this.outputFiles[currRound] || [];
+    this.ensureRound(currRound);
+    return this.outputFiles[currRound];
   }
 }
 

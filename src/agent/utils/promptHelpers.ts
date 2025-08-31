@@ -4,6 +4,7 @@
 // Local imports
 import { renderPrompt } from './promptUtils';
 import { loadTexraRules } from '@frontend/files/rules';
+import type { AgentPrompt } from '@agent/core/AgentDataclass';
 
 /**
  * Combine the base system prompt with optional rules from `.texrarules`.
@@ -36,4 +37,24 @@ export function getPrefillForRound(
     return '';
   }
   return currRound < prefills.length ? prefills[currRound] : prefills[0];
+}
+
+/**
+ * Retrieve the reflection prompt template for a given round.
+ *
+ * @param agentPrompt The agent prompt configuration
+ * @param currRound Current conversation round index
+ * @returns Reflection prompt template string
+ */
+export function getReflectPromptForRound(
+  agentPrompt: AgentPrompt,
+  currRound: number,
+): string {
+  const { userReflect } = agentPrompt;
+  if (Array.isArray(userReflect)) {
+    return currRound < userReflect.length
+      ? userReflect[currRound]
+      : userReflect[0] || '';
+  }
+  return userReflect || '';
 }
