@@ -226,10 +226,14 @@ export class MainViewProvider implements vscode.WebviewViewProvider {
   }
 
   private async sendModelOptions(webviewView: vscode.WebviewView) {
-    const options = await computeModelOptions();
-    webviewView.webview.postMessage({
-      command: MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
-      options,
-    });
+    try {
+      const options = await computeModelOptions();
+      webviewView.webview.postMessage({
+        command: MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
+        options,
+      });
+    } catch (error) {
+      console.error('Failed to send model options:', error);
+    }
   }
 }

@@ -90,3 +90,8 @@
   opacity: var(--opacity-subtle);
   font-size: calc(var(--vscode-editor-font-size) * 0.9);
 }
+
+/* Disabled model option styling */
+.disabled-model {
+  color: var(--vscode-descriptionForeground);
+}

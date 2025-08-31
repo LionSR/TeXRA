@@ -21,13 +21,23 @@ export async function computeModelOptions(): Promise<string> {
         return `<option value="${model}">${model}</option>`;
       }
 
-      const provider = config.provider.toLowerCase();
+      const provider = config.provider;
       let available = false;
 
+      // Check if the provider requires an API key
       if (SecretManager.API_PROVIDERS.includes(provider as ApiProvider)) {
-        available = await SecretManager.apiKeyExists(provider as ApiProvider);
+        try {
+          available = await SecretManager.apiKeyExists(provider as ApiProvider);
+        } catch (error) {
+          console.warn(`Failed to check API key for ${provider}:`, error);
+          available = false;
+        }
+      } else {
+        // Models from providers that don't require API keys (like copilot) are always available
+        available = true;
       }
 
+      // Check OpenRouter availability only if not already available and model supports it
       if (!available && config.openrouterFullName && hasOpenRouter) {
         available = true;
       }
