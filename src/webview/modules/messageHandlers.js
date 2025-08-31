@@ -103,7 +103,7 @@ export class MainViewMessageHandler {
           let retryCount = 0;
           const maxRetries = 5;
           const retryDelay = [100, 200, 400, 800, 1600];
-          
+
           const tryApplyOptions = () => {
             const retrySelect = document.getElementById('model');
             if (retrySelect) {
@@ -112,15 +112,17 @@ export class MainViewMessageHandler {
               setTimeout(tryApplyOptions, retryDelay[retryCount]);
               retryCount++;
             } else {
-              console.warn('SET_MODEL_OPTIONS: Model select element not found after retries');
+              console.warn(
+                'SET_MODEL_OPTIONS: Model select element not found after retries',
+              );
             }
           };
-          
+
           setTimeout(tryApplyOptions, retryDelay[0]);
           retryCount = 1;
           return;
         }
-        
+
         applyOptions(select);
       },
     };
