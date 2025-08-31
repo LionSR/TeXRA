@@ -5,9 +5,11 @@ import * as vscode from 'vscode';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
 // Local imports - utilities
 import { safeExecuteCommand } from '@utils/system';
+import { computeModelOptions } from '@model/computeModelOptions';
 
 export const mainViewCommands = {
   reset: 'texra.mainView.reset',
+  refreshModelOptions: 'texra.refreshModelOptions',
 };
 
 /**
@@ -39,7 +41,25 @@ export function registerMainViewCommands(context: vscode.ExtensionContext) {
     },
   );
 
-  context.subscriptions.push(resetCommand);
+  const refreshModelOptionsCommand = vscode.commands.registerCommand(
+    mainViewCommands.refreshModelOptions,
+    async () => {
+      const webviewView = await safeExecuteCommand<vscode.WebviewView>(
+        'texra.getWebviewView',
+        [],
+        'mainViewCommands',
+      );
+      if (webviewView) {
+        const options = await computeModelOptions();
+        webviewView.webview.postMessage({
+          command: MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
+          options,
+        });
+      }
+    },
+  );
 
-  return { resetCommand };
+  context.subscriptions.push(resetCommand, refreshModelOptionsCommand);
+
+  return { resetCommand, refreshModelOptionsCommand };
 }
