@@ -168,6 +168,10 @@ export class AgentStateGlobal implements IAgentStateGlobal {
     this.totalResponseTime += stateRound.responseTime;
   }
 
+  incrementRounds(): void {
+    this.totalRounds += 1;
+  }
+
   // are the following two methods needed?
   /** Converts global state to a serializable object for persistence. */
   toObject(): Record<string, any> {

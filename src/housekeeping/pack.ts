@@ -14,12 +14,13 @@ import * as logger from '@logger/logUtils';
 import { WorkspaceFS } from '@utils/files';
 
 // Local imports - housekeeping
-import { PACK_EXTENSIONS, TEMP_EXTENSIONS, HISTORY_DIR } from './constants';
+import { PACK_EXTENSIONS, TEMP_EXTENSIONS, HISTORY_DIR, DEFAULT_MAX_ROUNDS } from './constants';
 import {
   getAgentFirstNameChunk,
   getFilePatterns,
   findFilesFromPatterns,
 } from './utils';
+import { getConfig } from '@utils/config';
 
 const CHANNEL = 'Housekeeping';
 logger.initialize(CHANNEL);
@@ -51,8 +52,9 @@ export async function runPackSingle(
   );
 
   const agentFirstNameChunk = getAgentFirstNameChunk(agent);
+  const maxRounds = getConfig<number>('agent.rounds', DEFAULT_MAX_ROUNDS);
   const filePatterns = [
-    ...getFilePatterns(baseName, model, agentFirstNameChunk),
+    ...getFilePatterns(baseName, model, agentFirstNameChunk, maxRounds),
     baseName,
   ];
   logger.debug(CHANNEL, `Generated patterns: ${filePatterns}`);
@@ -208,10 +210,13 @@ export async function runPackMultiple(
 
     // Pack additional XML files
     const agentFirstNameChunk = getAgentFirstNameChunk(agent);
-    const additionalPatterns = [
-      `${baseName}_${agentFirstNameChunk}_r0_${model}.xml`,
-      `${baseName}_${agentFirstNameChunk}_r1_${model}.xml`,
-    ];
+    const maxRounds = getConfig<number>('agent.rounds', DEFAULT_MAX_ROUNDS);
+    const additionalPatterns: string[] = [];
+    for (let i = 0; i < maxRounds; i++) {
+      additionalPatterns.push(
+        `${baseName}_${agentFirstNameChunk}_r${i}_${model}.xml`,
+      );
+    }
 
     for (const pattern of additionalPatterns) {
       const filePath = path.join(outputDir, pattern);
