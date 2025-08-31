@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.33.4] - 2025-08-31
+
+### Features
+
+- Support round-specific reflection prompts and iteration across multiple rounds
+- Record per-round agent and tool state for future analysis
+
+### Bug Fixes
+
+- Generalize output handling and packaging scripts to work with any round count
+- Track total executed rounds in agent statistics
+
 ## [0.33.3] - 2025-08-29
 
 ### Features
@@ -14,7 +26,6 @@ All notable changes to this project will be documented in this file.
 
 - Restrict GPT OSS models to OpenRouter only
 - Improve API key detection to check environment variables and only show intro message when no keys are configured
-
 
 ## [0.33.2] - 2025-08-25
 
