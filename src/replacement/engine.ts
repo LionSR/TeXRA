@@ -91,25 +91,6 @@ class ReplacementEngineImpl implements ReplacementEngine {
 
 // ===== LaTeX Content Formatting =====
 
-/**
- * Get enabled replacement categories from VS Code settings
- */
-function getEnabledReplacements(): string[] {
-  return getConfig('latex.enabledReplacements', [
-    'latex_spacing',
-    'equations',
-    'sections',
-    'characters',
-    'font_commands',
-    'latex_xml',
-    'latex_document',
-    'unicode',
-    'scratchpad_xml',
-    'gptness',
-    'latexdiff',
-  ]);
-}
-
 // Define all available non-regex categories
 const NON_REGEX_CATEGORIES: ReplacementCategory[] = [
   // LaTeX Content Formatting
@@ -141,39 +122,24 @@ const REGEX_CATEGORIES: ReplacementCategory[] = [
 ];
 
 /**
- * Get enabled regex replacement categories from VS Code settings
- */
-function getEnabledReplacementsRegex(): string[] {
-  return getConfig('latex.enabledReplacementsRegex', [
-    'inline_math',
-    'tikz',
-    'parentheses',
-    'latexdiff_markup',
-    'equation_style',
-  ]);
-}
-
-/**
- * Get custom replacements from VS Code settings
- */
-function getCustomReplacements(): { [key: string]: string } {
-  return getConfig('latex.customReplacements', {});
-}
-
-/**
- * Get custom regex replacements from VS Code settings
- */
-function getCustomReplacementsRegex(): { [key: string]: string } {
-  return getConfig('latex.customReplacementsRegex', {});
-}
-
-/**
  * Get all non-regex replacements combined into a single category.
  * These replacements are subject to user configuration via enabledReplacements.
  */
 export function getAllReplacements(): ReplacementCategory {
-  const enabledCategoryNames = getEnabledReplacements();
-  const customReplacements = getCustomReplacements();
+  const enabledCategoryNames = getConfig('latex.enabledReplacements', [
+    'latex_spacing',
+    'equations',
+    'sections',
+    'characters',
+    'font_commands',
+    'latex_xml',
+    'latex_document',
+    'unicode',
+    'scratchpad_xml',
+    'gptness',
+    'latexdiff',
+  ]);
+  const customReplacements = getConfig('latex.customReplacements', {});
 
   // Filter predefined categories based on user configuration
   const enabledCategories = NON_REGEX_CATEGORIES.filter((category) =>
@@ -203,8 +169,14 @@ export function getAllReplacements(): ReplacementCategory {
  * Also includes custom regex replacements from settings.
  */
 export function getAllReplacementsRegex(): ReplacementCategory[] {
-  const enabledCategoryNames = getEnabledReplacementsRegex();
-  const customReplacements = getCustomReplacementsRegex();
+  const enabledCategoryNames = getConfig('latex.enabledReplacementsRegex', [
+    'inline_math',
+    'tikz',
+    'parentheses',
+    'latexdiff_markup',
+    'equation_style',
+  ]);
+  const customReplacements = getConfig('latex.customReplacementsRegex', {});
 
   // Filter predefined categories based on user configuration
   let enabledCategories = REGEX_CATEGORIES.filter((category) =>
