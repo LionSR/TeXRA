@@ -33,6 +33,7 @@ export class MainViewDomHandler {
     this.settingsButtonManager = null;
     this.debugMode = false;
     this.apiKeyButtonHandler = null;
+    this.apiKeyGuideButtonHandler = null;
   }
 
   _updateDebugButtonVisibility() {
@@ -89,6 +90,21 @@ export class MainViewDomHandler {
       };
       apiKeyButton.addEventListener('click', this.apiKeyButtonHandler);
     }
+
+    const apiKeyGuideButton = document.getElementById(
+      ELEMENT_IDS.API_KEY_GUIDE_BUTTON,
+    );
+    if (apiKeyGuideButton) {
+      this.apiKeyGuideButtonHandler = () => {
+        vscode.postMessage({
+          command: MAIN_VIEW_COMMANDS.OPEN_API_KEY_GUIDE,
+        });
+      };
+      apiKeyGuideButton.addEventListener(
+        'click',
+        this.apiKeyGuideButtonHandler,
+      );
+    }
   }
 
   cleanupUI() {
@@ -110,6 +126,16 @@ export class MainViewDomHandler {
     if (apiKeyButton && this.apiKeyButtonHandler) {
       apiKeyButton.removeEventListener('click', this.apiKeyButtonHandler);
       this.apiKeyButtonHandler = null;
+    }
+    const apiKeyGuideButton = document.getElementById(
+      ELEMENT_IDS.API_KEY_GUIDE_BUTTON,
+    );
+    if (apiKeyGuideButton && this.apiKeyGuideButtonHandler) {
+      apiKeyGuideButton.removeEventListener(
+        'click',
+        this.apiKeyGuideButtonHandler,
+      );
+      this.apiKeyGuideButtonHandler = null;
     }
   }
 }
