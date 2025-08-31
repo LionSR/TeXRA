@@ -14,7 +14,7 @@ import * as logger from '@logger/logUtils';
 import { WorkspaceFS } from '@utils/files';
 
 // Local imports - housekeeping
-import { PACK_EXTENSIONS, TEMP_EXTENSIONS, HISTORY_DIR } from './constants';
+import { PACK_EXTENSIONS, TEMP_EXTENSIONS, HISTORY_DIR, DEFAULT_MAX_ROUNDS } from './constants';
 import {
   getAgentFirstNameChunk,
   getFilePatterns,
@@ -52,8 +52,9 @@ export async function runPackSingle(
   );
 
   const agentFirstNameChunk = getAgentFirstNameChunk(agent);
+  const maxRounds = getConfig<number>('agent.rounds', DEFAULT_MAX_ROUNDS);
   const filePatterns = [
-    ...getFilePatterns(baseName, model, agentFirstNameChunk),
+    ...getFilePatterns(baseName, model, agentFirstNameChunk, maxRounds),
     baseName,
   ];
   logger.debug(CHANNEL, `Generated patterns: ${filePatterns}`);
@@ -209,7 +210,7 @@ export async function runPackMultiple(
 
     // Pack additional XML files
     const agentFirstNameChunk = getAgentFirstNameChunk(agent);
-    const maxRounds = getConfig<number>('agent.rounds', 2);
+    const maxRounds = getConfig<number>('agent.rounds', DEFAULT_MAX_ROUNDS);
     const additionalPatterns: string[] = [];
     for (let i = 0; i < maxRounds; i++) {
       additionalPatterns.push(
