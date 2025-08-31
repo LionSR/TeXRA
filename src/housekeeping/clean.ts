@@ -59,7 +59,12 @@ export async function runCleanSingle(
 
   const agentFirstNameChunk = getAgentFirstNameChunk(agent);
   const maxRounds = getConfig<number>('agent.rounds', DEFAULT_MAX_ROUNDS);
-  const filePatterns = getFilePatterns(baseName, model, agentFirstNameChunk, maxRounds);
+  const filePatterns = getFilePatterns(
+    baseName,
+    model,
+    agentFirstNameChunk,
+    maxRounds,
+  );
   logger.debug(CHANNEL, `Generated patterns: ${filePatterns}`);
 
   const extensions = [...TEMP_EXTENSIONS, ...PACK_EXTENSIONS];
