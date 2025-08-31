@@ -20,6 +20,7 @@ import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
 import { getConfig } from '@utils/config';
 import { safeExecuteCommand } from '@utils/system';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
+import { computeModelOptions } from '@model/computeModelOptions';
 
 export class MainViewMessageHandler extends BaseViewMessageHandler {
   private readonly settingsManager: SettingsManager;
@@ -257,5 +258,26 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
     webviewView: vscode.WebviewView,
   ): Promise<void> {
     await safeExecuteCommand('texra.showAgentHistory', [], this.viewName);
+  }
+
+  protected async handleWebviewReady(
+    _message: any,
+    webviewView: vscode.WebviewView,
+  ): Promise<void> {
+    await super.handleWebviewReady(_message, webviewView);
+    try {
+      const options = await computeModelOptions();
+      webviewView.webview.postMessage({
+        command: MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
+        options,
+      });
+    } catch (error) {
+      this.logger.error(
+        this.channel,
+        `Failed to compute model options: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
   }
 }
