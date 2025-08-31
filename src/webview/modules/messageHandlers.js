@@ -73,6 +73,56 @@ export class MainViewMessageHandler {
           element.style.setProperty('display', 'none');
         }
       },
+      [MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS]: (m) => {
+        // Validate that options are provided
+        if (!m.options) {
+          console.warn('SET_MODEL_OPTIONS: No options provided');
+          return;
+        }
+
+        // Helper function to apply options to select element
+        const applyOptions = (selectElement) => {
+          const previous = selectElement.value;
+          selectElement.innerHTML = m.options;
+          if (previous) {
+            selectElement.value = previous;
+          }
+          Array.from(selectElement.options).forEach((opt) => {
+            if (opt.disabled) {
+              opt.classList.add('disabled-model');
+            } else {
+              opt.classList.remove('disabled-model');
+            }
+          });
+        };
+
+        // Don't cache if element doesn't exist yet
+        const select = document.getElementById('model');
+        if (!select) {
+          // Use a more robust retry mechanism with exponential backoff
+          let retryCount = 0;
+          const maxRetries = 5;
+          const retryDelay = [100, 200, 400, 800, 1600];
+          
+          const tryApplyOptions = () => {
+            const retrySelect = document.getElementById('model');
+            if (retrySelect) {
+              applyOptions(retrySelect);
+            } else if (retryCount < maxRetries) {
+              setTimeout(tryApplyOptions, retryDelay[retryCount]);
+              retryCount++;
+            } else {
+              console.warn('SET_MODEL_OPTIONS: Model select element not found after retries');
+            }
+          };
+          
+          setTimeout(tryApplyOptions, retryDelay[0]);
+          retryCount = 1;
+          return;
+        }
+        
+        applyOptions(select);
+      },
     };
   }
 
