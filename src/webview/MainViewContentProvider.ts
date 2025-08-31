@@ -116,9 +116,13 @@ export class MainViewContentProvider extends BaseViewContentProvider {
       .map((agent) => `<option value="${agent}">${agent}</option>`)
       .join('\n');
 
-    // Model options are provided asynchronously after the webview loads
-    // to reflect current API key availability.
-    const modelOptions = '';
+    // Provide initial model options from configuration; detailed availability
+    // (e.g. disabled states based on API keys) is refreshed after the webview
+    // loads to avoid showing an empty selector.
+    const models = getConfig<string[]>('models', []);
+    const modelOptions = models
+      .map((model) => `<option value="${model}">${model}</option>`)
+      .join('\n');
 
     return {
       agentOptions,
