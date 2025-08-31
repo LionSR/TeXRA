@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.33.4] - 2025-09-01
+
+### Bug Fixes
+
+- Consolidate API key setup alerts into banner to avoid multiple popups
+
 ## [0.33.3] - 2025-08-29
 
 ### Features
@@ -14,7 +20,6 @@ All notable changes to this project will be documented in this file.
 
 - Restrict GPT OSS models to OpenRouter only
 - Improve API key detection to check environment variables and only show intro message when no keys are configured
-
 
 ## [0.33.2] - 2025-08-25
 
