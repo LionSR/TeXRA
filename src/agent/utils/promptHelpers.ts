@@ -40,10 +40,23 @@ export function getPrefillForRound(
 }
 
 /**
+ * Convert reflection round number to array index.
+ * Reflection rounds start at 1, arrays start at 0.
+ *
+ * @param reflectionRound The reflection round number (1-based)
+ * @returns Array index (0-based)
+ */
+export function reflectionRoundToIndex(reflectionRound: number): number {
+  // Round 0 is the initial process, reflection starts at round 1
+  // So round 1 should map to index 0, round 2 to index 1, etc.
+  return Math.max(0, reflectionRound - 1);
+}
+
+/**
  * Retrieve the reflection prompt template for a given round.
  *
  * @param agentPrompt The agent prompt configuration
- * @param currRound Current conversation round index
+ * @param currRound Current conversation round index (1-based for reflections)
  * @returns Reflection prompt template string
  */
 export function getReflectPromptForRound(
@@ -52,8 +65,10 @@ export function getReflectPromptForRound(
 ): string {
   const { userReflect } = agentPrompt;
   if (Array.isArray(userReflect)) {
-    return currRound < userReflect.length
-      ? userReflect[currRound]
+    const index = reflectionRoundToIndex(currRound);
+    // Use the specific round template if available, otherwise fall back to first
+    return index < userReflect.length
+      ? userReflect[index]
       : userReflect[0] || '';
   }
   return userReflect || '';

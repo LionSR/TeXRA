@@ -35,12 +35,18 @@ export function getFilePatterns(
     patterns.push(
       `${base}_${agentFirstNameChunk}_r${round}_${model}`,
       `${base}_${agentFirstNameChunk}_r${round}_${model}_diff`,
-      `${base}_${agentFirstNameChunk}_r${round}_${model}_diffr${round}r${round - 1}`,
       `${base}_${agentFirstNameChunk}_r${round}_full_${model}`,
       `${base}_${agentFirstNameChunk}_r${round}_full_${model}_diff`,
-      `${base}_${agentFirstNameChunk}_r${round}_full_${model}_diffr${round}r${round - 1}`,
       `${base}_${agentFirstNameChunk}_r${round}_${model}_thinking`,
     );
+
+    // Only add diff patterns for rounds > 0 to avoid negative references
+    if (round > 0) {
+      patterns.push(
+        `${base}_${agentFirstNameChunk}_r${round}_${model}_diffr${round}r${round - 1}`,
+        `${base}_${agentFirstNameChunk}_r${round}_full_${model}_diffr${round}r${round - 1}`,
+      );
+    }
   }
   return patterns;
 }
