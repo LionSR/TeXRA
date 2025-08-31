@@ -98,4 +98,5 @@ export const ELEMENT_IDS = {
   INSTRUCTION: 'instruction',
   API_KEY_BANNER: 'apiKeyBanner',
   API_KEY_BANNER_BUTTON: 'apiKeyBannerButton',
+  API_KEY_GUIDE_BUTTON: 'apiKeyGuideButton',
 };
