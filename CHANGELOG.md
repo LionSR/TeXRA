@@ -2,10 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.33.4] - 2025-09-01
+## [0.33.4] - 2025-08-31
+
+### Features
+
+- Support round-specific reflection prompts and iteration across multiple rounds
+- Record per-round agent and tool state for future analysis
 
 ### Bug Fixes
 
+- Generalize output handling and packaging scripts to work with any round count
+- Track total executed rounds in agent statistics
 - Consolidate API key setup alerts into banner to avoid multiple popups
 
 ## [0.33.3] - 2025-08-29

@@ -20,12 +20,14 @@ import {
   TEMP_EXTENSIONS,
   PACK_EXTENSIONS,
   MODELS,
+  DEFAULT_MAX_ROUNDS,
 } from './constants';
 import {
   getAgentFirstNameChunk,
   getFilePatterns,
   findFilesFromPatterns,
 } from './utils';
+import { getConfig } from '@utils/config';
 
 const CHANNEL = 'Housekeeping';
 logger.initialize(CHANNEL);
@@ -56,7 +58,8 @@ export async function runCleanSingle(
   );
 
   const agentFirstNameChunk = getAgentFirstNameChunk(agent);
-  const filePatterns = getFilePatterns(baseName, model, agentFirstNameChunk);
+  const maxRounds = getConfig<number>('agent.rounds', DEFAULT_MAX_ROUNDS);
+  const filePatterns = getFilePatterns(baseName, model, agentFirstNameChunk, maxRounds);
   logger.debug(CHANNEL, `Generated patterns: ${filePatterns}`);
 
   const extensions = [...TEMP_EXTENSIONS, ...PACK_EXTENSIONS];
