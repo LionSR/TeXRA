@@ -84,7 +84,7 @@ export const AgentPromptSchema = z
     systemPrompt: z.string().default(''),
     userPrefix: z.string().default(''),
     userRequest: z.string().default(''),
-    userReflect: z.string().default(''),
+    userReflect: z.union([z.string(), z.array(z.string())]).default(''),
   })
   .strict();
 
