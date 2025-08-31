@@ -7,6 +7,7 @@ import { MainViewContentProvider } from './webview/MainViewContentProvider';
 import { SecretManager } from '@frontend/secretManager';
 import { watchConfig } from '@utils/config';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
+import { computeModelOptions } from '@model/computeModelOptions';
 
 export class MainViewProvider implements vscode.WebviewViewProvider {
   private messageHandler: MainViewMessageHandler;
@@ -85,11 +86,12 @@ export class MainViewProvider implements vscode.WebviewViewProvider {
     );
   }
 
-  private refreshOptionsAndView() {
+  private async refreshOptionsAndView() {
     if (this.webviewView) {
       this.webviewView.webview.html = this.contentProvider.getHtmlContent(
         this.webviewView.webview,
       );
+      await this.sendModelOptions(this.webviewView);
     }
   }
 
@@ -159,6 +161,7 @@ export class MainViewProvider implements vscode.WebviewViewProvider {
     });
 
     this.setupInitialState(webviewView);
+    void this.sendModelOptions(webviewView);
 
     // Check if any API keys are set and display banner if needed
     const config = vscode.workspace.getConfiguration('texra');
@@ -219,6 +222,18 @@ export class MainViewProvider implements vscode.WebviewViewProvider {
       } catch (error) {
         console.error('Error restoring state from context:', error);
       }
+    }
+  }
+
+  private async sendModelOptions(webviewView: vscode.WebviewView) {
+    try {
+      const options = await computeModelOptions();
+      webviewView.webview.postMessage({
+        command: MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
+        options,
+      });
+    } catch (error) {
+      console.error('Failed to send model options:', error);
     }
   }
 }

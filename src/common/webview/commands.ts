@@ -95,6 +95,7 @@ export const MAIN_VIEW_COMMANDS = {
   SET_CURRENT_FILE: 'setCurrentFile',
   SET_OPENED_FILES: 'setOpenedFiles',
   SET_BASE_FILE: 'setBaseFile',
+  SET_MODEL_OPTIONS: 'setModelOptions',
 
   // File refresh and update operations
   REFRESH_ALL_FILES: 'refreshAllFiles',
