@@ -61,9 +61,13 @@ export class MainViewMessageHandler {
       ...this._createInstructionHandlers(),
       ...createRecordingHandlers({ postHandle: ctx.postHandle }),
       ...createFileHandlers(ctx),
-      [MAIN_VIEW_COMMANDS.SHOW_API_KEY_BANNER]: () => {
+      [MAIN_VIEW_COMMANDS.SHOW_API_KEY_BANNER]: (m) => {
         const element = this._getElement(ELEMENT_IDS.API_KEY_BANNER);
         if (element) {
+          const textSpan = element.querySelector('span');
+          if (textSpan && m?.provider) {
+            textSpan.textContent = `Missing ${m.provider} API key.`;
+          }
           element.style.setProperty('display', 'flex');
         }
       },
