@@ -92,6 +92,8 @@
 }
 
 /* Disabled model option styling */
-.disabled-model {
+option.disabled-model,
+option[data-requires-key='true'],
+option[disabled] {
   color: var(--vscode-descriptionForeground);
 }

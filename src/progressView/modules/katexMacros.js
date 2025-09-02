@@ -206,7 +206,6 @@ export const katexMacros = {
   '\\tp': '\\tilde{p}',
   '\\tv': '\\tilde{v}',
   '\\trho': '\\tilde{\\rho}',
-  '\\tphi': '\\tilde{\\phi}',
 
   // More special symbols
   '\\bksl': '\\backslash',
