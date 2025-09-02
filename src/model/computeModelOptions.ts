@@ -25,7 +25,8 @@ function formatCost(inputPrice?: number, outputPrice?: number): string {
 
 /**
  * Compute model <option> tags based on available API keys.
- * Models without a required key are marked as disabled with a "(no key)" label.
+ * Models without a required key are marked as disabled with a "(no key)" label
+ * and include both disabled and data-requires-key attributes for proper handling.
  */
 export async function computeModelOptions(): Promise<string> {
   const models = getConfig<string[]>('models', []);
@@ -60,7 +61,9 @@ export async function computeModelOptions(): Promise<string> {
       }
 
       const label = available ? model : `${model} (no key)`;
-      const disabledAttr = available ? '' : ' disabled';
+      const requiresKeyAttr = available
+        ? ''
+        : ' disabled data-requires-key="true" class="disabled-model"';
 
       // Build data attributes, only including them if values are defined
       const providerAttr = provider ? ` data-provider="${provider}"` : '';
@@ -72,7 +75,7 @@ export async function computeModelOptions(): Promise<string> {
         ? ` data-cost="${formatCost(config.inputPrice, config.outputPrice)}"`
         : '';
 
-      return `<option value="${model}"${disabledAttr}${providerAttr}${contextAttr}${costAttr}>${label}</option>`;
+      return `<option value="${model}"${requiresKeyAttr}${providerAttr}${contextAttr}${costAttr}>${label}</option>`;
     }),
   );
 

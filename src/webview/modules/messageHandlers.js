@@ -97,11 +97,8 @@ export class MainViewMessageHandler {
             selectElement.value = previous;
           }
           Array.from(selectElement.options).forEach((opt) => {
-            if (opt.disabled) {
-              opt.classList.add('disabled-model');
-            } else {
-              opt.classList.remove('disabled-model');
-            }
+            // Note: disabled-model class is already set server-side in computeModelOptions
+            // We only need to add tooltips here
             const { provider, context, cost } = opt.dataset;
             if (provider || context || cost) {
               opt.title = `Provider: ${provider ?? 'N/A'}, Context: ${context ?? 'N/A'}, Cost: ${cost ?? 'N/A'}`;
