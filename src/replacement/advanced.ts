@@ -386,7 +386,7 @@ export function wrapCritiqueInAlign(text: string): string {
     // For each command, wrap bare instances not already inside \intertext
     for (const cmd of ['critique', 'comment']) {
       const regex = new RegExp(
-        `(?<!\\\\intertext\\\\{)\\\\${cmd}{((?:[^{}]|{[^{}]*})*)}`,
+        `(?<!\\\\intertext{)\\\\${cmd}{((?:[^{}]|{[^{}]*})*)}`,
         'g',
       );
       block = block.replace(regex, `\\intertext{\\${cmd}{$1}}`);
