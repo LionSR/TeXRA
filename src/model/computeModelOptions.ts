@@ -61,16 +61,17 @@ export async function computeModelOptions(): Promise<string> {
 
       const label = available ? model : `${model} (no key)`;
       const disabledAttr = available ? '' : ' disabled';
-      
+
       // Build data attributes, only including them if values are defined
       const providerAttr = provider ? ` data-provider="${provider}"` : '';
-      const contextAttr = config.contextWindow !== undefined 
-        ? ` data-context="${formatContext(config.contextWindow)}"` 
+      const contextAttr =
+        config.contextWindow !== undefined
+          ? ` data-context="${formatContext(config.contextWindow)}"`
+          : '';
+      const costAttr = formatCost(config.inputPrice, config.outputPrice)
+        ? ` data-cost="${formatCost(config.inputPrice, config.outputPrice)}"`
         : '';
-      const costAttr = formatCost(config.inputPrice, config.outputPrice) 
-        ? ` data-cost="${formatCost(config.inputPrice, config.outputPrice)}"` 
-        : '';
-        
+
       return `<option value="${model}"${disabledAttr}${providerAttr}${contextAttr}${costAttr}>${label}</option>`;
     }),
   );
