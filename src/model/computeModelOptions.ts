@@ -44,7 +44,10 @@ export async function computeModelOptions(): Promise<string> {
 
       const label = available ? model : `${model} (no key)`;
       const disabledAttr = available ? '' : ' disabled';
-      return `<option value="${model}"${disabledAttr}>${label}</option>`;
+      const providerAttr = ` data-provider="${provider}"`;
+      const contextAttr = ` data-context="${config.contextWindow}"`;
+      const costAttr = ` data-cost="$${config.inputPrice}/$${config.outputPrice}"`;
+      return `<option value="${model}"${disabledAttr}${providerAttr}${contextAttr}${costAttr}>${label}</option>`;
     }),
   );
 
