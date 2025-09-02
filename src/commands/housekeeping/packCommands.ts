@@ -9,6 +9,7 @@ import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
 import { getStreamTabId } from '@/logger/streamUtils';
+import { WorkspaceFS } from '@utils/files';
 
 // Local imports - housekeeping
 import { runPack, runPackSingle, runPackMultiple } from '@housekeeping';
@@ -26,16 +27,17 @@ function showPackResult(result: FileOpResult, inputFile: string): void {
     case 'success':
       if (result.outputFolder) {
         const openFolder = 'Open Folder';
+        const outputFolder = result.outputFolder;
         vscode.window
           .showInformationMessage(
-            `Files packed into ${result.outputFolder}`,
+            `Files packed into ${outputFolder}`,
             openFolder,
           )
           .then((selection) => {
             if (selection === openFolder) {
               void vscode.commands.executeCommand(
                 'revealFileInOS',
-                vscode.Uri.file(result.outputFolder!),
+                vscode.Uri.file(WorkspaceFS.fullPath(outputFolder)),
               );
             }
           });
