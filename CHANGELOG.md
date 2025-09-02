@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.33.5] - 2025-09-02
+
+### Features
+
+- Highlight missing API keys for models with provider-specific banner and setup links
+
 ## [0.33.4] - 2025-08-31
 
 ### Features
