@@ -19,13 +19,14 @@ function formatContext(context: number): string {
  * Format cost values for display
  */
 function formatCost(inputPrice?: number, outputPrice?: number): string {
-  if (inputPrice === undefined || outputPrice === undefined) return '';
+  if (inputPrice == null || outputPrice == null) return '';
   return `$${inputPrice.toFixed(3)}/$${outputPrice.toFixed(3)}`;
 }
 
 /**
  * Compute model <option> tags based on available API keys.
- * Models without a required key are marked as disabled with a "(no key)" label.
+ * Models without a required key are marked as disabled with a "(no key)" label
+ * and include both disabled and data-requires-key attributes for proper handling.
  */
 export async function computeModelOptions(): Promise<string> {
   const models = getConfig<string[]>('models', []);
@@ -62,7 +63,7 @@ export async function computeModelOptions(): Promise<string> {
       const label = available ? model : `${model} (no key)`;
       const requiresKeyAttr = available
         ? ''
-        : ' data-requires-key="true" class="disabled-model"';
+        : ' disabled data-requires-key="true" class="disabled-model"';
 
       // Build data attributes, only including them if values are defined
       const providerAttr = provider ? ` data-provider="${provider}"` : '';
