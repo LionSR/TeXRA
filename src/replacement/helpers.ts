@@ -126,6 +126,8 @@ export function generateXmlLatexConversions(environments: string[]): {
     patterns[`<${env}}`] = `\\begin{${env}}`;
     patterns[`</${env}}`] = `\\end{${env}}`;
 
+    patterns[`</${env}\n`] = `\\end{${env}}\n`;
+
     // LaTeX with incorrect XML ending
     patterns[`\\end{${env}>}`] = `\\end{${env}}`;
     patterns[`\\end{${env}>`] = `\\end{${env}}`;
