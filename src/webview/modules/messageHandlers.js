@@ -69,7 +69,8 @@ export class MainViewMessageHandler {
           const textSpan = element.querySelector('span');
           if (textSpan && m?.provider) {
             // Capitalize provider name for better UX
-            const providerName = m.provider.charAt(0).toUpperCase() + m.provider.slice(1);
+            const providerName =
+              m.provider.charAt(0).toUpperCase() + m.provider.slice(1);
             textSpan.textContent = `Missing ${providerName} API key.`;
           }
           element.style.setProperty('display', 'flex');
@@ -116,7 +117,7 @@ export class MainViewMessageHandler {
             console.warn('SET_MODEL_OPTIONS: Retry already in progress');
             return;
           }
-          
+
           // Use a more robust retry mechanism with exponential backoff
           this._modelOptionsRetryInProgress = true;
           let retryCount = 0;
