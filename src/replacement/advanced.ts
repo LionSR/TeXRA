@@ -373,18 +373,25 @@ export function fixLatexQuoteIssues(text: string): string {
 }
 
 /**
- * Wrap bare \critique commands in align environments with \intertext.
- * Handles simple nested braces within critique content.
+ * Wrap bare \critique and \comment commands in align environments with \intertext.
+ * Handles simple nested braces within critique/comment content.
  *
  * @param text LaTeX document text
- * @returns Text with \critique commands wrapped in \intertext within align blocks
+ * @returns Text with \critique and \comment commands wrapped in \intertext within align blocks
  */
 export function wrapCritiqueInAlign(text: string): string {
-  const alignRegex = /\\begin\{align\\*?\}[\\s\\S]*?\\end\{align\\*?\}/g;
-  return text.replace(alignRegex, (block) =>
-    block.replace(
-      /(?<!\\intertext\\{)\\critique{((?:[^{}]|{[^{}]*})*)}/g,
-      '\\intertext{\\critique{$1}}',
-    ),
-  );
+  const alignRegex = /\\begin\{align\*?\}[\s\S]*?\\end\{align\*?\}/g;
+  // Helper to wrap both \critique and \comment
+  function wrapCommands(block: string): string {
+    // For each command, wrap bare instances not already inside \intertext
+    for (const cmd of ['critique', 'comment']) {
+      const regex = new RegExp(
+        `(?<!\\\\intertext\\\\{)\\\\${cmd}{((?:[^{}]|{[^{}]*})*)}`,
+        'g',
+      );
+      block = block.replace(regex, `\\intertext{\\${cmd}{$1}}`);
+    }
+    return block;
+  }
+  return text.replace(alignRegex, wrapCommands);
 }
