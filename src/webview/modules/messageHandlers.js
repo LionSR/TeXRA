@@ -47,6 +47,8 @@ export class MainViewMessageHandler {
     this._elementCache = new Map();
     // Track file list event handlers for cleanup
     this._fileListHandlers = {};
+    // Flag to prevent concurrent retry attempts for model options
+    this._modelOptionsRetryInProgress = false;
 
     const ctx = {
       postHandle: this._postHandle.bind(this),
@@ -66,7 +68,9 @@ export class MainViewMessageHandler {
         if (element) {
           const textSpan = element.querySelector('span');
           if (textSpan && m?.provider) {
-            textSpan.textContent = `Missing ${m.provider} API key.`;
+            // Capitalize provider name for better UX
+            const providerName = m.provider.charAt(0).toUpperCase() + m.provider.slice(1);
+            textSpan.textContent = `Missing ${providerName} API key.`;
           }
           element.style.setProperty('display', 'flex');
         }
@@ -103,7 +107,14 @@ export class MainViewMessageHandler {
         // Don't cache if element doesn't exist yet
         const select = document.getElementById('model');
         if (!select) {
+          // Prevent concurrent retry attempts
+          if (this._modelOptionsRetryInProgress) {
+            console.warn('SET_MODEL_OPTIONS: Retry already in progress');
+            return;
+          }
+          
           // Use a more robust retry mechanism with exponential backoff
+          this._modelOptionsRetryInProgress = true;
           let retryCount = 0;
           const maxRetries = 5;
           const retryDelay = [100, 200, 400, 800, 1600];
@@ -112,6 +123,7 @@ export class MainViewMessageHandler {
             const retrySelect = document.getElementById('model');
             if (retrySelect) {
               applyOptions(retrySelect);
+              this._modelOptionsRetryInProgress = false;
             } else if (retryCount < maxRetries) {
               setTimeout(tryApplyOptions, retryDelay[retryCount]);
               retryCount++;
@@ -119,6 +131,7 @@ export class MainViewMessageHandler {
               console.warn(
                 'SET_MODEL_OPTIONS: Model select element not found after retries',
               );
+              this._modelOptionsRetryInProgress = false;
             }
           };
 
