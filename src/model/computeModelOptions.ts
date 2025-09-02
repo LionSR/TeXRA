@@ -44,7 +44,8 @@ export async function computeModelOptions(): Promise<string> {
 
       const label = available ? model : `${model} (no key)`;
       const disabledAttr = available ? '' : ' disabled';
-      return `<option value="${model}"${disabledAttr}>${label}</option>`;
+      const providerAttr = ` data-provider="${provider}"`;
+      return `<option value="${model}"${providerAttr}${disabledAttr}>${label}</option>`;
     }),
   );
 
