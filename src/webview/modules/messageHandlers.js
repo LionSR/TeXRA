@@ -93,6 +93,10 @@ export class MainViewMessageHandler {
             } else {
               opt.classList.remove('disabled-model');
             }
+            const { provider, context, cost } = opt.dataset;
+            if (provider || context || cost) {
+              opt.title = `Provider: ${provider ?? 'N/A'}, Context: ${context ?? 'N/A'}, Cost: ${cost ?? 'N/A'}`;
+            }
           });
         };
 
