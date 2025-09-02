@@ -117,28 +117,48 @@ export class SettingsButtonManager extends BaseUIManager {
       });
     });
 
-    this.addListener('model', 'change', (e) => {
-      this.vscode.postMessage({
-        command: MAIN_VIEW_COMMANDS.MODEL_SELECTED,
-        model: e.target.value,
-      });
-      this.state.save();
+    // Track the previous valid selection
+    let previousModelValue = null;
+    
+    this.addListener('model', 'focus', (e) => {
+      // Store the current value when focus is gained
+      previousModelValue = e.target.value;
     });
 
-    // Listen for clicks on disabled model options to guide API key setup
-    this.addListener('model', 'click', (e) => {
-      const option = e.target;
-      if (option.tagName === 'OPTION' && option.disabled) {
-        const provider = option.dataset.provider;
+    this.addListener('model', 'change', (e) => {
+      const selectElement = e.target;
+      const selectedOption = selectElement.options[selectElement.selectedIndex];
+      
+      // Check if the selected option is disabled
+      if (selectedOption && selectedOption.disabled) {
+        // Revert to previous value
+        if (previousModelValue !== null) {
+          selectElement.value = previousModelValue;
+        }
+        
+        // Get provider from the disabled option
+        const provider = selectedOption.dataset?.provider || 'Unknown';
+        
+        // Open appropriate API key setup
         const command =
-          provider && provider.toLowerCase() === 'openrouter'
+          provider.toLowerCase() === 'openrouter'
             ? MAIN_VIEW_COMMANDS.OPEN_API_KEY_GUIDE
             : MAIN_VIEW_COMMANDS.OPEN_SET_API_KEY;
         this.vscode.postMessage({ command });
+        
+        // Show banner with provider info
         this.vscode.postMessage({
           command: MAIN_VIEW_COMMANDS.SHOW_API_KEY_BANNER,
           provider,
         });
+      } else {
+        // Valid selection - update the previous value and proceed normally
+        previousModelValue = selectElement.value;
+        this.vscode.postMessage({
+          command: MAIN_VIEW_COMMANDS.MODEL_SELECTED,
+          model: selectElement.value,
+        });
+        this.state.save();
       }
     });
   }
