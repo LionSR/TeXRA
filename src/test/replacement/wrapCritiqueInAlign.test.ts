@@ -15,6 +15,12 @@ describe('wrapCritiqueInAlign', () => {
     assert.strictEqual(wrapCritiqueInAlign(input), expected);
   });
 
+  it('wraps bare comment inside align', () => {
+    const input = `\\begin{align}\n\\comment{note}\n\\end{align}`;
+    const expected = `\\begin{align}\n\\intertext{\\comment{note}}\n\\end{align}`;
+    assert.strictEqual(wrapCritiqueInAlign(input), expected);
+  });
+
   it('wraps multiple critiques in same align block', () => {
     const input = `\\begin{align}\na &= b \\\\n\\critique{first}\nc &= d \\\\n\\critique{second}\n\\end{align}`;
     const expected = `\\begin{align}\na &= b \\\\n\\intertext{\\critique{first}}\nc &= d \\\\n\\intertext{\\critique{second}}\n\\end{align}`;
@@ -30,6 +36,12 @@ describe('wrapCritiqueInAlign', () => {
   it('leaves existing intertext wrapping unchanged', () => {
     const input = `\\begin{align}\n\\intertext{\\critique{note}}\n\\end{align}`;
     assert.strictEqual(wrapCritiqueInAlign(input), input);
+  });
+
+  it('is idempotent for comment', () => {
+    const input = `\\begin{align}\n\\comment{note}\n\\end{align}`;
+    const once = wrapCritiqueInAlign(input);
+    assert.strictEqual(wrapCritiqueInAlign(once), once);
   });
 
   it('does not touch critique outside align', () => {
