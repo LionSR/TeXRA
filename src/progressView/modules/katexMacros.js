@@ -66,6 +66,7 @@ export const katexMacros = {
   '\\bla': '\\boldsymbol{\\lambda}',
   '\\bGa': '\\boldsymbol{\\Gamma}',
   '\\bLa': '\\boldsymbol{\\Lambda}',
+  '\\bta': '\\boldsymbol{\\theta}',
 
   // Mathcal shortcuts
   '\\cH': '\\mathcal{H}',
@@ -200,6 +201,13 @@ export const katexMacros = {
   '\\nadi': '\\text{nadi}',
   '\\adi': '\\text{adi}',
 
+  // Tilde
+  '\\ttau': '\\tilde{\\tau}',
+  '\\tp': '\\tilde{p}',
+  '\\tv': '\\tilde{v}',
+  '\\trho': '\\tilde{\\rho}',
+  '\\tphi': '\\tilde{\\phi}',
+
   // More special symbols
   '\\bksl': '\\backslash',
   '\\nimplies': '\\not\\implies',
@@ -231,4 +239,15 @@ export const katexMacros = {
   '\\Tr': '\\operatorname{Tr}',
   '\\sign': '\\operatorname{sign}',
   '\\Cov': '\\operatorname{Cov}',
+  '\\Unif': '\\operatorname{Unif}',
+  '\\Bern': '\\operatorname{Bern}',
+  '\\ReLU': '\\operatorname{ReLU}',
+  '\\Concat': '\\operatorname{Concat}',
+  '\\Skip': '\\operatorname{Skip}',
+  '\\Upsample': '\\operatorname{Upsample}',
+  '\\Softmax': '\\operatorname{Softmax}',
+  '\\Conv': '\\operatorname{Conv}',
+  '\\BatchNorm': '\\operatorname{BatchNorm}',
+  '\\LayerNorm': '\\operatorname{LayerNorm}',
+  '\\MaxPool': '\\operatorname{MaxPool}',
 };
