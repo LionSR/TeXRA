@@ -45,12 +45,29 @@ export async function computeModelOptions(): Promise<string> {
       const label = available ? model : `${model} (no key)`;
       const disabledAttr = available ? '' : ' disabled';
 
-      const providerLabel = `${provider.charAt(0).toUpperCase()}${provider.slice(1)}`;
-      const title = [
-        `Provider: ${providerLabel}`,
-        `Tokens (ctx/out): ${config.contextWindow.toLocaleString()}/${config.maxOutputTokens.toLocaleString()}`,
-        `Pricing (in/out per 1M): $${config.inputPrice}/${config.outputPrice}`,
-      ].join('&#10;');
+      // Format provider name to handle multi-word providers (e.g., "openRouter" -> "OpenRouter")
+      const providerLabel = provider
+        .replace(/([a-z])([A-Z])/g, '$1 $2') // Add space before capital letters
+        .replace(/^./, (str) => str.toUpperCase()); // Capitalize first letter
+
+      // Build tooltip with proper validation
+      const tooltipParts: string[] = [`Provider: ${providerLabel}`];
+      
+      // Add token limits if available
+      if (config.contextWindow !== undefined && config.maxOutputTokens !== undefined) {
+        tooltipParts.push(
+          `Tokens (ctx/out): ${config.contextWindow.toLocaleString()}/${config.maxOutputTokens.toLocaleString()}`
+        );
+      }
+      
+      // Add pricing if available
+      if (config.inputPrice !== undefined && config.outputPrice !== undefined) {
+        tooltipParts.push(
+          `Pricing (in/out per 1M): $${config.inputPrice}/${config.outputPrice}`
+        );
+      }
+      
+      const title = tooltipParts.join('&#10;');
 
       return `<option value="${model}"${disabledAttr} title="${title}">${label}</option>`;
     }),
