@@ -12,6 +12,7 @@ TeXRA primarily integrates with models from:
 4.  **Other Providers** (via OpenRouter, including Grok, DeepSeek)
 
 You can select the desired model from the dropdown list in the TeXRA UI.
+Hovering over an option shows its provider, context window, and estimated cost.
 
 ## Default Model Selection
 
