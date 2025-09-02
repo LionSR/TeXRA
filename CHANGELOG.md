@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Features
+
+- Add model metadata tooltips showing provider, context window, and cost in model selector dropdown
+
+### Bug Fixes
+
+- Fix undefined values displaying as "undefined" in model dropdown tooltips
+
 ## [0.33.4] - 2025-08-31
 
 ### Features
