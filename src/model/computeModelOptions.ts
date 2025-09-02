@@ -20,7 +20,7 @@ function formatContext(context: number): string {
  */
 function formatCost(inputPrice?: number, outputPrice?: number): string {
   if (inputPrice == null || outputPrice == null) return '';
-  return `$${inputPrice.toFixed(4)}/$${outputPrice.toFixed(4)}`;
+  return `$${inputPrice.toFixed(3)}/$${outputPrice.toFixed(3)}`;
 }
 
 /**
