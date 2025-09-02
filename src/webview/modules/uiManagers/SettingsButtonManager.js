@@ -129,7 +129,8 @@ export class SettingsButtonManager extends BaseUIManager {
       const selectElement = e.target;
       const selectedOption = selectElement.options[selectElement.selectedIndex];
 
-      // Check if the selected option requires an API key
+      // Check if the selected option requires an API key (using data attribute)
+      // The disabled attribute prevents selection in most browsers, but this is a fallback
       if (selectedOption?.dataset?.requiresKey) {
         // Revert to previous value
         if (previousModelValue !== null) {
@@ -137,7 +138,7 @@ export class SettingsButtonManager extends BaseUIManager {
         }
 
         // Get provider from the option
-        const provider = selectedOption.dataset?.provider || 'Unknown';
+        const provider = selectedOption?.dataset?.provider || 'Unknown';
 
         // Open appropriate API key setup
         const command =
