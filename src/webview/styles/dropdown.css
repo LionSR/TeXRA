@@ -95,3 +95,9 @@
 .disabled-model {
   color: var(--vscode-descriptionForeground);
 }
+
+/* Standard <select> options */
+select option {
+  color: var(--vscode-foreground);
+  background: var(--vscode-menu-background);
+}

@@ -44,7 +44,15 @@ export async function computeModelOptions(): Promise<string> {
 
       const label = available ? model : `${model} (no key)`;
       const disabledAttr = available ? '' : ' disabled';
-      return `<option value="${model}"${disabledAttr}>${label}</option>`;
+
+      const providerLabel = `${provider.charAt(0).toUpperCase()}${provider.slice(1)}`;
+      const title = [
+        `Provider: ${providerLabel}`,
+        `Tokens (ctx/out): ${config.contextWindow.toLocaleString()}/${config.maxOutputTokens.toLocaleString()}`,
+        `Pricing (in/out per 1M): $${config.inputPrice}/${config.outputPrice}`,
+      ].join('&#10;');
+
+      return `<option value="${model}"${disabledAttr} title="${title}">${label}</option>`;
     }),
   );
 
