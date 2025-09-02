@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 
 - Support round-specific reflection prompts and iteration across multiple rounds
 - Record per-round agent and tool state for future analysis
+- Highlight missing API keys for models with provider-specific banner and setup links
 
 ### Bug Fixes
 
