@@ -7,6 +7,23 @@ import { SecretManager, ApiProvider } from '@frontend/secretManager';
 import { getConfig } from '@utils/config';
 
 /**
+ * Format context window number for display
+ */
+function formatContext(context: number): string {
+  if (context >= 1000000) return `${(context / 1000000).toFixed(1)}M`;
+  if (context >= 1000) return `${Math.round(context / 1000)}K`;
+  return context.toString();
+}
+
+/**
+ * Format cost values for display
+ */
+function formatCost(inputPrice?: number, outputPrice?: number): string {
+  if (inputPrice == null || outputPrice == null) return '';
+  return `$${inputPrice.toFixed(3)}/$${outputPrice.toFixed(3)}`;
+}
+
+/**
  * Compute model <option> tags based on available API keys.
  * Models without a required key are marked as disabled with a "(no key)" label.
  */
@@ -44,8 +61,17 @@ export async function computeModelOptions(): Promise<string> {
 
       const label = available ? model : `${model} (no key)`;
       const disabledAttr = available ? '' : ' disabled';
-      const providerAttr = ` data-provider="${provider}"`;
-      return `<option value="${model}"${providerAttr}${disabledAttr}>${label}</option>`;
+      
+      // Build data attributes, only including them if values are defined
+      const providerAttr = provider ? ` data-provider="${provider}"` : '';
+      const contextAttr = config.contextWindow !== undefined 
+        ? ` data-context="${formatContext(config.contextWindow)}"` 
+        : '';
+      const costAttr = formatCost(config.inputPrice, config.outputPrice) 
+        ? ` data-cost="${formatCost(config.inputPrice, config.outputPrice)}"` 
+        : '';
+        
+      return `<option value="${model}"${disabledAttr}${providerAttr}${contextAttr}${costAttr}>${label}</option>`;
     }),
   );
 
