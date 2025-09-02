@@ -97,7 +97,7 @@ export class MainViewMessageHandler {
             selectElement.value = previous;
           }
           Array.from(selectElement.options).forEach((opt) => {
-            if (opt.disabled) {
+            if (opt.dataset.requiresKey) {
               opt.classList.add('disabled-model');
             } else {
               opt.classList.remove('disabled-model');
