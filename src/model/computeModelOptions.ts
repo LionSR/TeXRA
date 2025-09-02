@@ -19,7 +19,7 @@ function formatContext(context: number): string {
  * Format cost values for display
  */
 function formatCost(inputPrice?: number, outputPrice?: number): string {
-  if (inputPrice == null || outputPrice == null) return '';
+  if (inputPrice === undefined || outputPrice === undefined) return '';
   return `$${inputPrice.toFixed(3)}/$${outputPrice.toFixed(3)}`;
 }
 
@@ -60,7 +60,9 @@ export async function computeModelOptions(): Promise<string> {
       }
 
       const label = available ? model : `${model} (no key)`;
-      const disabledAttr = available ? '' : ' disabled';
+      const requiresKeyAttr = available
+        ? ''
+        : ' data-requires-key="true" class="disabled-model"';
 
       // Build data attributes, only including them if values are defined
       const providerAttr = provider ? ` data-provider="${provider}"` : '';
@@ -72,7 +74,7 @@ export async function computeModelOptions(): Promise<string> {
         ? ` data-cost="${formatCost(config.inputPrice, config.outputPrice)}"`
         : '';
 
-      return `<option value="${model}"${disabledAttr}${providerAttr}${contextAttr}${costAttr}>${label}</option>`;
+      return `<option value="${model}"${requiresKeyAttr}${providerAttr}${contextAttr}${costAttr}>${label}</option>`;
     }),
   );
 
