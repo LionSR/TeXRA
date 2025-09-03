@@ -130,7 +130,11 @@ export abstract class BaseReflectionAgent extends BaseAgent {
    * Returns the configured number of conversation rounds.
    */
   protected getNumberOfRounds(): number {
-    return this.agentSetting.rounds ?? 2;
+    const configuredRounds = this.agentSetting.rounds ?? 2;
+    const reflectRounds = Array.isArray(this.agentPrompt.userReflect)
+      ? this.agentPrompt.userReflect.length + 1
+      : 0;
+    return Math.max(configuredRounds, reflectRounds);
   }
 
   /**
