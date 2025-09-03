@@ -228,8 +228,13 @@ export const EQUATION_STYLE_REPLACEMENTS: ReplacementCategory = {
     '([Aa]ppendix|[Pp]roblem|[Ss]olution|[Cc]hapter|[Aa]lgorithm|[Ff]igure|[Tt]able|[Ss]ection|[Ee]quation|[Ll]emma|[Cc]orollary|[Pp]roposition|[Tt]heorem|[Ee]qns\\.|[Ee]q\\.)~?\\s*\\ref':
       '$1~\\ref',
 
-    // Unescape underscores in reference commands
-    '(?<=\\(?:cref|ref|eqref)\\{[^{}]*)\\_': '_',
+    // Unescape underscores in reference commands - first pass
+    // LaTeX references (label names) don't require escaped underscores
+    '(\\\\(?:cref|ref|eqref)\\{[^{}]*?)\\\\(_)': '$1$2',
+    // Second pass to handle multiple underscores
+    '(\\\\(?:cref|ref|eqref)\\{[^{}]*?)\\\\(_)': '$1$2',
+    // Third pass for edge cases with many underscores
+    '(\\\\(?:cref|ref|eqref)\\{[^{}]*?)\\\\(_)': '$1$2',
 
     // Fix inconsistent blank lines after environments (universally preferred)
     '(\\\\end\\{(equation|align|figure|table|itemize|enumerate|description)\\})([A-Za-z])':
