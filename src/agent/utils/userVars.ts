@@ -4,7 +4,7 @@ import * as path from 'path';
 
 // Local imports - agent
 import type { AgentConfig } from '../core/AgentConfig';
-import { AgentSetting } from '../core/AgentDataclass';
+import { AgentSetting, AgentPrompt } from '../core/AgentDataclass';
 import type { IModelHandler } from '@agent/modelHandlers';
 import {
   getXmlFormatFromFiles,
@@ -23,6 +23,7 @@ import { WorkspaceFS } from '@utils/files';
 export async function buildUserVars(
   agentConfig: AgentConfig,
   agentSetting: AgentSetting,
+  agentPrompt: AgentPrompt,
   agentPath: string,
   modelHandler: IModelHandler,
   logger: AgentLogger,
@@ -50,7 +51,7 @@ export async function buildUserVars(
   allLoadedFiles.push(...patternFiles);
 
   Object.assign(userVars, getOutputFilesOrder(agentConfig, agentSetting));
-  Object.assign(userVars, getToolFlags(agentConfig, agentSetting));
+  Object.assign(userVars, getToolFlags(agentConfig, agentSetting, agentPrompt));
 
   // Emit aggregated file list if any files were loaded
   if (allLoadedFiles.length > 0) {
@@ -306,9 +307,14 @@ function getOutputFilesOrder(
 function getToolFlags(
   agentConfig: AgentConfig,
   agentSetting: AgentSetting,
+  agentPrompt: AgentPrompt,
 ): Record<string, any> {
+  const configuredRounds = agentSetting.rounds ?? 2;
+  const reflectRounds = Array.isArray(agentPrompt.userReflect)
+    ? agentPrompt.userReflect.length + 1
+    : 0;
   return {
-    ROUNDS: agentSetting.rounds ?? 2,
+    ROUNDS: Math.max(configuredRounds, reflectRounds),
     AUTO_EXTRACT_FIGURE: agentConfig.toolConfig.autoExtractFigure,
     AUTO_EXTRACT_TIKZ_FIGURE: agentConfig.toolConfig.autoExtractTikzFigure,
     INCLUDE_TEX_COUNT: agentConfig.toolConfig.attachTeXCount,
