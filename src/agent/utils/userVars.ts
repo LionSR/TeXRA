@@ -10,6 +10,7 @@ import {
   getXmlFormatFromFiles,
   getListOfFiles,
 } from '@agent/utils/promptUtils';
+import { calculateTotalRounds } from '@agent/utils/roundUtils';
 import { setVarFromFile } from '@frontend/files/vars';
 
 // Local imports
@@ -309,12 +310,8 @@ function getToolFlags(
   agentSetting: AgentSetting,
   agentPrompt: AgentPrompt,
 ): Record<string, any> {
-  const configuredRounds = agentSetting.rounds ?? 2;
-  const reflectRounds = Array.isArray(agentPrompt.userReflect)
-    ? agentPrompt.userReflect.length + 1
-    : 0;
   return {
-    ROUNDS: Math.max(configuredRounds, reflectRounds),
+    ROUNDS: calculateTotalRounds(agentSetting.rounds, agentPrompt.userReflect),
     AUTO_EXTRACT_FIGURE: agentConfig.toolConfig.autoExtractFigure,
     AUTO_EXTRACT_TIKZ_FIGURE: agentConfig.toolConfig.autoExtractTikzFigure,
     INCLUDE_TEX_COUNT: agentConfig.toolConfig.attachTeXCount,
