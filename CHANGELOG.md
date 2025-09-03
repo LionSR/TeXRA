@@ -16,6 +16,7 @@ All notable changes to this project will be documented in this file.
 - Generalize output handling and packaging scripts to work with any round count
 - Track total executed rounds in agent statistics
 - Consolidate API key setup alerts into banner to avoid multiple popups
+- Unescape underscores in LaTeX references to remove unnecessary escape characters
 
 ## [0.33.3] - 2025-08-29
 
