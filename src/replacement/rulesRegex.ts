@@ -228,6 +228,9 @@ export const EQUATION_STYLE_REPLACEMENTS: ReplacementCategory = {
     '([Aa]ppendix|[Pp]roblem|[Ss]olution|[Cc]hapter|[Aa]lgorithm|[Ff]igure|[Tt]able|[Ss]ection|[Ee]quation|[Ll]emma|[Cc]orollary|[Pp]roposition|[Tt]heorem|[Ee]qns\\.|[Ee]q\\.)~?\\s*\\ref':
       '$1~\\ref',
 
+    // Unescape underscores in reference commands
+    '(?<=\\(?:cref|ref|eqref)\\{[^{}]*)\\_': '_',
+
     // Fix inconsistent blank lines after environments (universally preferred)
     '(\\\\end\\{(equation|align|figure|table|itemize|enumerate|description)\\})([A-Za-z])':
       '$1\n\n$3',
