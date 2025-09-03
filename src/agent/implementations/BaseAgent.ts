@@ -89,6 +89,7 @@ export abstract class BaseAgent implements IAgent {
     return buildUserVars(
       this.agentConfig,
       this.agentSetting,
+      this.agentPrompt,
       this.agentPath,
       this.modelHandler,
       this.logger,
