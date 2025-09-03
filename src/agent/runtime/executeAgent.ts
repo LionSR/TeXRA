@@ -429,6 +429,7 @@ export async function executeAgent(
 
       // Create model handler
       const modelHandler = ModelFactory.createHandler(modelConfig);
+      await modelHandler.getApiKey();
 
       // Get agent path
       const agentPath = await getAgentPath(fullConfig.agent, context);
@@ -492,6 +493,7 @@ export async function executeMergeAgent(
 
       const modelConfig = MODEL_CONFIGS[model];
       const modelHandler = ModelFactory.createHandler(modelConfig);
+      await modelHandler.getApiKey();
 
       // Get agent path and load settings/prompts
       const agentPath = await getAgentPath('merge', context);
