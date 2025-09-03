@@ -44,6 +44,7 @@ import { getConfig } from '@utils/config';
 import { K_SLICE } from '@utils/config';
 
 // Local imports - utilities
+import { calculateTotalRounds } from '@agent/utils/roundUtils';
 import { WorkspaceFS } from '@utils/files';
 
 /**
@@ -130,7 +131,10 @@ export abstract class BaseReflectionAgent extends BaseAgent {
    * Returns the configured number of conversation rounds.
    */
   protected getNumberOfRounds(): number {
-    return this.agentSetting.rounds ?? 2;
+    return calculateTotalRounds(
+      this.agentSetting.rounds,
+      this.agentPrompt.userReflect,
+    );
   }
 
   /**
