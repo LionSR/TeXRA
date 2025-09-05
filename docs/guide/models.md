@@ -112,11 +112,37 @@ miss), $2.50/million output tokens. [Tech blog](https://moonshotai.github.io/Kim
 
 Cost-effective models from Alibaba with strong multilingual capabilities.
 
-| Model ID    | Key Strength / Use Case       | Relative Cost | Relative Speed | Notes      |
-| :---------- | :---------------------------- | :------------ | :------------- | :--------- |
-| `qwenmax`   | Advanced reasoning            | $$            | Medium         | Qwen Max   |
-| `qwenplus`  | Large context general purpose | $$            | Medium         | Qwen Plus  |
-| `qwenturbo` | Fast responses                | $             | Fast           | Qwen Turbo |
+| Model ID    | Key Strength / Use Case                    | Relative Cost | Relative Speed | Notes                       |
+| :---------- | :----------------------------------------- | :------------ | :------------- | :-------------------------- |
+| `qwen3max`  | Best-in-class reasoning, 256k ctx          | $$$           | Medium         | Qwen3 Max, no deep thinking |
+| `qwenplus`  | Hybrid reasoning, 1M ctx                   | $$            | Medium         | Qwen3 Plus, enable_thinking |
+| `qwenturbo` | Fast responses with optional thinking mode | $             | Fast           | Qwen Turbo, enable_thinking |
+
+Deep thinking models first stream their reasoning before the final answer.
+`qwenplus` and `qwenturbo` support this mode. Pass `enable_thinking: true`
+in the request body to turn it on; commercial tiers disable it by default.
+`qwen3max` always runs in non-thinking mode.
+
+```python
+from openai import OpenAI
+import os
+
+client = OpenAI(
+    api_key=os.getenv("DASHSCOPE_API_KEY"),
+    base_url="https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+)
+
+resp = client.chat.completions.create(
+    model="qwen-plus-2025-07-28",
+    messages=[{"role": "user", "content": "Who are you?"}],
+    extra_body={"enable_thinking": True},
+)
+print(resp.choices[0].message.reasoning_content)
+print(resp.choices[0].message.content)
+```
+
+Use the `thinking_budget` parameter to cap how many tokens the reasoning step
+can consume.
 
 ### Copilot Models
 
