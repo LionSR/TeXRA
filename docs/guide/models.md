@@ -87,12 +87,26 @@ supports function calling so agents can use external tools during a run.
 
 High context models from Moonshot, suitable for complex reasoning and large documents.
 
-| Model ID | Key Strength / Use Case        | Relative Cost | Relative Speed | Notes                 |
-| :------- | :----------------------------- | :------------ | :------------- | :-------------------- |
-| `kimit`  | Detailed reasoning with vision | $$$           | Medium         | Kimi Thinking Preview |
-| `kimi`   | Large context, general tasks   | $$            | Medium         | 128k context          |
-| `kimiv`  | Vision-enabled variant         | $$            | Medium         | 128k context, vision  |
-| `kimi2`  | Agent tasks                    | $$$           | Medium         | Kimi K2 0711 Preview  |
+**Kimi K2** is Moonshot's open-source 1T‑parameter MoE model (32B active).
+It excels at coding and agentic tasks but currently lacks multimodal and
+thought-mode support. The 0905 preview offers a 256k context window, and a
+high-speed turbo variant is also available.
+
+| Model ID     | Key Strength / Use Case        | Relative Cost | Relative Speed | Notes                                              |
+| :----------- | :----------------------------- | :------------ | :------------- | :------------------------------------------------- |
+| `kimit`      | Detailed reasoning with vision | $$$           | Medium         | Kimi Thinking Preview                              |
+| `kimi`       | Large context, general tasks   | $$            | Medium         | 128k context                                       |
+| `kimiv`      | Vision-enabled variant         | $$            | Medium         | 128k context, vision                               |
+| `kimi2`      | Agent tasks, 256k context      | $$$           | Medium         | Kimi K2 0905 Preview (`moonshotai/kimi-k2-0905`)   |
+| `kimi2turbo` | Fast agent tasks               | $$$$          | Very Fast      | Kimi K2 Turbo Preview (`moonshotai/kimi-k2-turbo`) |
+
+The earlier Kimi K2 0711 model remains available on OpenRouter as `moonshotai/kimi-k2`.
+
+Additional resources: [API](https://platform.moonshot.ai) –
+$0.15/million input tokens (cache hit), $0.60/million input tokens (cache
+miss), $2.50/million output tokens. [Tech blog](https://moonshotai.github.io/Kimi-K2/),
+[Weights & code](https://huggingface.co/moonshotai),
+[GitHub](https://github.com/MoonshotAI/Kimi-K2).
 
 ### DashScope Qwen Models
 
