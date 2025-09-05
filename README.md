@@ -26,7 +26,7 @@ launch page.
   extension detects TeX tools on all platforms and integrates with Overleaf and
   LaTeX Workshop.
 - **Broad model support** – OpenAI (GPT‑5 family, GPT‑OSS), Anthropic (Claude
-  Opus 4.1 and Sonnet), Google Gemini, DeepSeek, Moonshot (Kimi), DashScope
+  Opus 4.1 and Sonnet), Google Gemini, DeepSeek, Moonshot (Kimi K2), DashScope
   (Qwen), GitHub Copilot, and more. Optional OpenRouter routing keeps API keys
   flexible.
 
