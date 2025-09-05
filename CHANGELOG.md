@@ -2,10 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.33.5] - 2025-09-05
 
 ### Features
 
+- Replace Qwen Max with Qwen3 Max for improved reasoning and 256k context
+- Update Qwen Plus to 2025-07-28 snapshot with hybrid reasoning and 1M context
+- Mark Qwen Plus and Qwen Turbo as deep thinking models with optional `enable_thinking`
 - Update Moonshot Kimi models to K2 0905 preview and add turbo variant
 
 ## [0.33.4] - 2025-09-03
