@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Features
+
+- Update Moonshot Kimi models to K2 0905 preview and add turbo variant
+
 ## [0.33.4] - 2025-09-03
 
 ### Features
