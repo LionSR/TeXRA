@@ -9,7 +9,6 @@ import {
   BASE_FILE,
   ELEMENT_IDS,
 } from './constants.js';
-import { mainViewDomHandler } from './domHandlers.js';
 import { webviewEventBus } from './eventBus.js';
 import { createFileHandlers } from './handlers/fileHandlers.js';
 import { createRecordingHandlers } from './handlers/recordingHandlers.js';
@@ -19,7 +18,6 @@ import { createThemeHandlers } from './handlers/themeHandlers.js';
 import { mainViewState } from './mainViewState.js';
 
 // Local imports - UI managers
-import { fileList } from './uiManagers/FileList.js';
 import { fileSelect } from './uiManagers/FileSelect.js';
 import {
   safeSetElementValue,
@@ -67,11 +65,29 @@ export class MainViewMessageHandler {
         const element = this._getElement(ELEMENT_IDS.API_KEY_BANNER);
         if (element) {
           const textSpan = element.querySelector('span');
-          if (textSpan && m?.provider) {
-            // Capitalize provider name for better UX
-            const providerName =
-              m.provider.charAt(0).toUpperCase() + m.provider.slice(1);
-            textSpan.textContent = `Missing ${providerName} API key.`;
+          const setButton = element.querySelector('#apiKeyBannerButton');
+          const getButton = element.querySelector('#apiKeyGuideButton');
+
+          if (textSpan && setButton && getButton) {
+            if (m?.provider) {
+              // Provider-specific context
+              const providerName =
+                m.provider.charAt(0).toUpperCase() + m.provider.slice(1);
+              textSpan.innerHTML = `<strong>${providerName}</strong> API key missing.`;
+              setButton.textContent = `Set Key`;
+              getButton.textContent = `Get Key`;
+
+              // Store provider info for click handlers
+              element.dataset.provider = m.provider;
+            } else {
+              // General context (no specific provider)
+              textSpan.textContent = `TeXRA requires an API key to run.`;
+              setButton.textContent = `Set API Key`;
+              getButton.textContent = `API Key Guide`;
+
+              // Clear provider info
+              delete element.dataset.provider;
+            }
           }
           element.style.setProperty('display', 'flex');
         }
