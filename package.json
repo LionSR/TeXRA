@@ -407,7 +407,6 @@
               "history",
               "stuff",
               "draft",
-              "diff",
               "miscellaneous",
               "venv"
             ],
@@ -426,7 +425,6 @@
               "_log",
               "_thinking",
               "_diff",
-              "diff",
               "draw",
               "versions",
               "history",
