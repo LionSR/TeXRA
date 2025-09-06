@@ -50,17 +50,6 @@
 
   <body>
     <div class="content-wrapper">
-      <div id="apiKeyBanner" class="api-key-banner" style="display: none">
-        <span>TeXRA requires an API key to run.</span>
-        <div class="actions">
-          <button id="apiKeyBannerButton" class="vscode-button" data-icon="key">
-            Set API Key
-          </button>
-          <button id="apiKeyGuideButton" class="vscode-button" data-icon="book">
-            API Key Guide
-          </button>
-        </div>
-      </div>
       <div class="main-content">
         <div class="file-selection-group">
           <div class="file-select">
@@ -489,7 +478,29 @@
             data-icon="play"
           ></button>
         </div>
+
+        <!-- API Key Banner -->
+        <div id="apiKeyBanner" class="api-key-banner" style="display: none">
+          <span>TeXRA requires an API key to run.</span>
+          <div class="actions">
+            <button
+              id="apiKeyBannerButton"
+              class="vscode-button"
+              data-icon="key"
+            >
+              Set API Key
+            </button>
+            <button
+              id="apiKeyGuideButton"
+              class="vscode-button"
+              data-icon="book"
+            >
+              API Key Guide
+            </button>
+          </div>
+        </div>
       </div>
+
       <div class="latexdiffs-section">
         <div class="file-select-header">
           <div class="file-select-label-group">
