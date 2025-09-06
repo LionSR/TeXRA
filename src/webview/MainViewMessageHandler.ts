@@ -21,6 +21,7 @@ import { getConfig } from '@utils/config';
 import { safeExecuteCommand } from '@utils/system';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { computeModelOptions } from '@model/computeModelOptions';
+import { computeAgentOptions } from '@agent/computeAgentOptions';
 import { PROVIDER_URLS } from '@commands/api/apiKeyCommands';
 
 export class MainViewMessageHandler extends BaseViewMessageHandler {
@@ -290,15 +291,20 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
   ): Promise<void> {
     await super.handleWebviewReady(_message, webviewView);
     try {
-      const options = await computeModelOptions();
+      const modelOptions = await computeModelOptions();
       webviewView.webview.postMessage({
         command: MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
-        options,
+        options: modelOptions,
+      });
+      const agentOptions = computeAgentOptions();
+      webviewView.webview.postMessage({
+        command: MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
+        options: agentOptions,
       });
     } catch (error) {
       this.logger.error(
         this.channel,
-        `Failed to compute model options: ${
+        `Failed to compute dropdown options: ${
           error instanceof Error ? error.message : String(error)
         }`,
       );

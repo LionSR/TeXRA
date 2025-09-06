@@ -164,6 +164,12 @@ export async function handleLoadSpecificAgent(
 
     // Use getAgentPath to find the agent's directory
     const agentPath = await getAgentPath(agentName, context);
+    if (!agentPath) {
+      vscode.window.showWarningMessage(
+        `Agent "${agentName}" configuration not found. Configure the agent and try again.`,
+      );
+      return;
+    }
     logger.info(CHANNEL, `Loading from path: ${agentPath}`);
 
     // Load and display the agent configuration

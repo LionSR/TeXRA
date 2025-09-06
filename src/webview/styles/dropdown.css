@@ -93,6 +93,7 @@
 
 /* Disabled model option styling */
 option.disabled-model,
+option.disabled-agent,
 option[data-requires-key='true'] {
   color: var(--vscode-descriptionForeground);
   opacity: 0.6;

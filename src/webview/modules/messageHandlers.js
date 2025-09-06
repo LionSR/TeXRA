@@ -47,6 +47,8 @@ export class MainViewMessageHandler {
     this._fileListHandlers = {};
     // Flag to prevent concurrent retry attempts for model options
     this._modelOptionsRetryInProgress = false;
+    // Flag to prevent concurrent retry attempts for agent options
+    this._agentOptionsRetryInProgress = false;
 
     const ctx = {
       postHandle: this._postHandle.bind(this),
@@ -154,6 +156,54 @@ export class MainViewMessageHandler {
           };
 
           setTimeout(tryApplyOptions, retryDelay[0]);
+          retryCount = 1;
+          return;
+        }
+
+        applyOptions(select);
+      },
+      [MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS]: (m) => {
+        if (!m.options) {
+          console.warn('SET_AGENT_OPTIONS: No options provided');
+          return;
+        }
+
+        const applyOptions = (selectElement) => {
+          const previous = selectElement.value;
+          selectElement.innerHTML = m.options;
+          if (previous) {
+            selectElement.value = previous;
+          }
+        };
+
+        const select = document.getElementById('agent');
+        if (!select) {
+          if (this._agentOptionsRetryInProgress) {
+            console.warn('SET_AGENT_OPTIONS: Retry already in progress');
+            return;
+          }
+          this._agentOptionsRetryInProgress = true;
+          let retryCount = 0;
+          const maxRetries = 5;
+          const retryDelay = [100, 200, 400, 800, 1600];
+
+          const tryApply = () => {
+            const retrySelect = document.getElementById('agent');
+            if (retrySelect) {
+              applyOptions(retrySelect);
+              this._agentOptionsRetryInProgress = false;
+            } else if (retryCount < maxRetries) {
+              setTimeout(tryApply, retryDelay[retryCount]);
+              retryCount++;
+            } else {
+              console.warn(
+                'SET_AGENT_OPTIONS: Agent select element not found after retries',
+              );
+              this._agentOptionsRetryInProgress = false;
+            }
+          };
+
+          setTimeout(tryApply, retryDelay[0]);
           retryCount = 1;
           return;
         }

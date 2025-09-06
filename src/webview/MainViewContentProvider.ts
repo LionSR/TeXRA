@@ -1,5 +1,4 @@
 // Standard library imports
-import * as path from 'path';
 
 // Third-party imports
 import * as vscode from 'vscode';
@@ -7,7 +6,7 @@ import * as vscode from 'vscode';
 // Local imports - webview
 import { BaseViewContentProvider } from '@common/webview/BaseViewContentProvider';
 import { getConfig } from '@utils/config';
-import { GlobalStorageFS, AbsoluteFS } from '@utils/files';
+import { computeAgentOptions } from '@agent/computeAgentOptions';
 
 export class MainViewContentProvider extends BaseViewContentProvider {
   constructor(context: vscode.ExtensionContext) {
@@ -97,25 +96,7 @@ export class MainViewContentProvider extends BaseViewContentProvider {
   }
 
   protected getTemplateVariables(): Record<string, any> {
-    const agents = getConfig<string[]>('agents', []);
-    const includeToolUse = getConfig<boolean>('includeToolUseAgents', false);
-    const toolUseDir = GlobalStorageFS.fullPath('tool_use_agents');
-    let extraAgents: string[] = [];
-    if (includeToolUse) {
-      try {
-        const files = AbsoluteFS.readDirSync(toolUseDir);
-        extraAgents = files
-          .filter((f) => f.endsWith('.yaml'))
-          .map((f) => path.basename(f, '.yaml'));
-      } catch {
-        extraAgents = [];
-      }
-    }
-    const allAgents = Array.from(new Set([...agents, ...extraAgents]));
-    const agentOptions = allAgents
-      .map((agent) => `<option value="${agent}">${agent}</option>`)
-      .join('\n');
-
+    const agentOptions = computeAgentOptions();
     const models = getConfig<string[]>('models', []);
     const modelOptions = models
       .map((model) => `<option value="${model}">${model}</option>`)

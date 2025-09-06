@@ -60,7 +60,7 @@ type AgentConstructor = {
 export async function getAgentPath(
   agentName: string,
   context: vscode.ExtensionContext,
-): Promise<string> {
+): Promise<string | undefined> {
   try {
     // First check custom agents directory
     const customDir = await agentDirectories.custom();
@@ -98,25 +98,22 @@ export async function getAgentPath(
     const allMatches = [...builtInMatches, ...toolUseMatches];
 
     if (allMatches.length === 0) {
+      logger.warn(`Could not find yaml file for agent: ${agentName}`);
       const configureButton = 'Open Settings';
-      await showInstructionWithSuppress(
-        'agentNotFound',
-        'Agent configuration is missing. Configure your custom agents directory and ensure the YAML file exists.',
-        [
-          {
-            title: configureButton,
-            callback: () =>
-              vscode.commands.executeCommand(
-                'workbench.action.openSettings',
-                '@ext:texra-ai.texra explorer.agentsDirectory',
-              ),
-          },
-        ],
-        false,
-      );
-
-      const errorMsg = `Could not find yaml file for agent: ${agentName}`;
-      throw new Error(errorMsg);
+      vscode.window
+        .showWarningMessage(
+          'Agent configuration is missing. Configure your custom agents directory and ensure the YAML file exists.',
+          configureButton,
+        )
+        .then((selection) => {
+          if (selection === configureButton) {
+            vscode.commands.executeCommand(
+              'workbench.action.openSettings',
+              '@ext:texra-ai.texra explorer.agentsDirectory',
+            );
+          }
+        });
+      return undefined;
     }
 
     // Return the directory containing the yaml file
@@ -126,8 +123,9 @@ export async function getAgentPath(
     return path.join(builtInToolUseDir, path.dirname(toolUseMatches[0]));
   } catch (err) {
     const errorMsg = `Error finding agent path: ${err instanceof Error ? err.message : String(err)}`;
-    vscode.window.showErrorMessage(errorMsg);
-    throw new Error(errorMsg);
+    logger.warn(errorMsg);
+    vscode.window.showWarningMessage(errorMsg);
+    return undefined;
   }
 }
 
@@ -398,40 +396,43 @@ export async function executeAgent(
 
   const agentName = getAgentName(agentConfig.agent, agentConfig.outputFiles);
 
+  // Create full agent config
+  const fullConfig = AgentConfigSchema.parse(agentConfig);
+
+  // Get model configuration
+  const modelName = fullConfig.model;
+  if (!(modelName in MODEL_CONFIGS)) {
+    const openDocs = 'Model Documentation';
+    await showInstructionWithSuppress(
+      'modelNotRecognized',
+      `Model "${modelName}" is not recognized. Review the documentation for supported models.`,
+      [
+        {
+          title: openDocs,
+          callback: () =>
+            vscode.commands.executeCommand('texra.openDoc', 'models'),
+        },
+      ],
+      false,
+    );
+    throw new Error(`Model ${modelName} not found in MODEL_CONFIGS`);
+  }
+
+  const modelConfig = MODEL_CONFIGS[modelName];
+  modelConfig.toolConfig = fullConfig.toolConfig;
+
+  const agentPath = await getAgentPath(fullConfig.agent, context);
+  if (!agentPath) {
+    vscode.window.showWarningMessage(
+      `Agent "${fullConfig.agent}" is unavailable. Configure the agent and try again.`,
+    );
+    return;
+  }
+
   await executeAgentWithLogging(
     agentName,
     async () => {
-      // Create full agent config
-      const fullConfig = AgentConfigSchema.parse(agentConfig);
-
-      // Get model configuration
-      const modelName = fullConfig.model;
-      if (!(modelName in MODEL_CONFIGS)) {
-        const openDocs = 'Model Documentation';
-        await showInstructionWithSuppress(
-          'modelNotRecognized',
-          `Model "${modelName}" is not recognized. Review the documentation for supported models.`,
-          [
-            {
-              title: openDocs,
-              callback: () =>
-                vscode.commands.executeCommand('texra.openDoc', 'models'),
-            },
-          ],
-          false,
-        );
-        throw new Error(`Model ${modelName} not found in MODEL_CONFIGS`);
-      }
-
-      const modelConfig = MODEL_CONFIGS[modelName];
-      // Only set toolConfig reference - no need to override openRouterOnly
-      modelConfig.toolConfig = fullConfig.toolConfig;
-
-      // Create model handler
       const modelHandler = ModelFactory.createHandler(modelConfig);
-
-      // Get agent path
-      const agentPath = await getAgentPath(fullConfig.agent, context);
 
       // Load settings and prompts
       const [agentSetting, agentPrompt] = await loadAgentSettingAndPrompts(
@@ -465,11 +466,17 @@ export async function executeMergeAgent(
   context: vscode.ExtensionContext,
 ): Promise<void> {
   const agentName = 'merge';
+  const agentPath = await getAgentPath('merge', context);
+  if (!agentPath) {
+    vscode.window.showWarningMessage(
+      'Merge agent configuration is missing. Configure the agent and try again.',
+    );
+    return;
+  }
 
   await executeAgentWithLogging(
     agentName,
     async () => {
-      // Create agent config for merge operation
       const agentConfig = AgentConfigSchema.parse({
         agent: 'merge',
         model,
@@ -477,7 +484,6 @@ export async function executeMergeAgent(
         editedFile,
       });
 
-      // Get model configuration
       if (!(model in MODEL_CONFIGS)) {
         const openDocs = 'Model Documentation';
         const choice = await vscode.window.showErrorMessage(
@@ -492,9 +498,6 @@ export async function executeMergeAgent(
 
       const modelConfig = MODEL_CONFIGS[model];
       const modelHandler = ModelFactory.createHandler(modelConfig);
-
-      // Get agent path and load settings/prompts
-      const agentPath = await getAgentPath('merge', context);
       const [agentSetting, agentPrompt] = await loadAgentSettingAndPrompts(
         agentPath,
         'merge',

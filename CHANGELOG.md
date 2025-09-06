@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Features
+
+- Disable agents with missing YAML in the picker and allow refreshing options
+
+### Bug Fixes
+
+- Warn instead of throwing when agent configuration is missing
+
 ## [0.33.5] - 2025-09-05
 
 ### Features

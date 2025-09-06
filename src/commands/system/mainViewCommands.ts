@@ -6,10 +6,12 @@ import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
 // Local imports - utilities
 import { safeExecuteCommand } from '@utils/system';
 import { computeModelOptions } from '@model/computeModelOptions';
+import { computeAgentOptions } from '@agent/computeAgentOptions';
 
 export const mainViewCommands = {
   reset: 'texra.mainView.reset',
   refreshModelOptions: 'texra.refreshModelOptions',
+  refreshAgentOptions: 'texra.refreshAgentOptions',
 };
 
 /**
@@ -66,7 +68,40 @@ export function registerMainViewCommands(context: vscode.ExtensionContext) {
     },
   );
 
-  context.subscriptions.push(resetCommand, refreshModelOptionsCommand);
+  const refreshAgentOptionsCommand = vscode.commands.registerCommand(
+    mainViewCommands.refreshAgentOptions,
+    async () => {
+      const webviewView = await safeExecuteCommand<vscode.WebviewView>(
+        'texra.getWebviewView',
+        [],
+        'mainViewCommands',
+      );
+      if (webviewView) {
+        try {
+          const options = computeAgentOptions();
+          webviewView.webview.postMessage({
+            command: MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
+            options,
+          });
+        } catch (error) {
+          console.error('Failed to refresh agent options:', error);
+          vscode.window.showErrorMessage(
+            'Failed to refresh agent options. Please check the output console for details.',
+          );
+        }
+      }
+    },
+  );
 
-  return { resetCommand, refreshModelOptionsCommand };
+  context.subscriptions.push(
+    resetCommand,
+    refreshModelOptionsCommand,
+    refreshAgentOptionsCommand,
+  );
+
+  return {
+    resetCommand,
+    refreshModelOptionsCommand,
+    refreshAgentOptionsCommand,
+  };
 }
