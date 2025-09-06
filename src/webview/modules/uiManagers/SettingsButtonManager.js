@@ -117,49 +117,33 @@ export class SettingsButtonManager extends BaseUIManager {
       });
     });
 
-    // Track the previous valid selection
-    let previousModelValue = null;
-
-    this.addListener('model', 'focus', (e) => {
-      // Store the current value when focus is gained
-      previousModelValue = e.target.value;
-    });
-
     this.addListener('model', 'change', (e) => {
       const selectElement = e.target;
       const selectedOption = selectElement.options[selectElement.selectedIndex];
 
-      // Check if the selected option requires an API key (using data attribute)
-      // The disabled attribute prevents selection in most browsers, but this is a fallback
-      if (selectedOption?.dataset?.requiresKey) {
-        // Revert to previous value
-        if (previousModelValue !== null) {
-          selectElement.value = previousModelValue;
-        }
+      // Always notify about model selection
+      this.vscode.postMessage({
+        command: MAIN_VIEW_COMMANDS.MODEL_SELECTED,
+        model: selectElement.value,
+      });
+      this.state.save();
 
+      // Check if the selected option requires an API key (using data attribute)
+      // Show banner to guide API key setup if needed
+      if (selectedOption?.dataset?.requiresKey === 'true') {
         // Get provider from the option
         const provider = selectedOption?.dataset?.provider || 'Unknown';
 
-        // Open appropriate API key setup
-        const command =
-          provider.toLowerCase() === 'openrouter'
-            ? MAIN_VIEW_COMMANDS.OPEN_API_KEY_GUIDE
-            : MAIN_VIEW_COMMANDS.OPEN_SET_API_KEY;
-        this.vscode.postMessage({ command });
-
-        // Show banner with provider info
+        // Show banner with provider info - user can click banner button to access setup
         this.vscode.postMessage({
           command: MAIN_VIEW_COMMANDS.SHOW_API_KEY_BANNER,
           provider,
         });
       } else {
-        // Valid selection - update the previous value and proceed normally
-        previousModelValue = selectElement.value;
+        // Hide banner for models that don't require API keys
         this.vscode.postMessage({
-          command: MAIN_VIEW_COMMANDS.MODEL_SELECTED,
-          model: selectElement.value,
+          command: MAIN_VIEW_COMMANDS.HIDE_API_KEY_BANNER,
         });
-        this.state.save();
       }
     });
   }

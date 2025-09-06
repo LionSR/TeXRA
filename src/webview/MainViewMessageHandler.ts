@@ -21,6 +21,7 @@ import { getConfig } from '@utils/config';
 import { safeExecuteCommand } from '@utils/system';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { computeModelOptions } from '@model/computeModelOptions';
+import { PROVIDER_URLS } from '@commands/api/apiKeyCommands';
 
 export class MainViewMessageHandler extends BaseViewMessageHandler {
   private readonly settingsManager: SettingsManager;
@@ -143,12 +144,35 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         this.instructionManager.handleClipboardImage(m, w),
       [MAIN_VIEW_COMMANDS.OPEN_SET_API_KEY]: async () =>
         safeExecuteCommand('texra.setApiKey'),
+      [MAIN_VIEW_COMMANDS.OPEN_SET_PROVIDER_API_KEY]: async (m) => {
+        // Reuse existing setApiKey command with provider parameter
+        if (m?.provider) {
+          await safeExecuteCommand('texra.setApiKey', m.provider);
+        }
+      },
+      [MAIN_VIEW_COMMANDS.OPEN_PROVIDER_API_KEY_URL]: async (m) => {
+        // Open provider-specific API key page
+        if (m?.provider) {
+          const url = PROVIDER_URLS[m.provider as keyof typeof PROVIDER_URLS];
+          if (url) {
+            await vscode.env.openExternal(vscode.Uri.parse(url));
+          }
+        }
+      },
       [MAIN_VIEW_COMMANDS.OPEN_API_KEY_GUIDE]: async () => {
         await vscode.env.openExternal(
           vscode.Uri.parse(
             'https://texra.ai/guide/installation#setting-up-api-keys',
           ),
         );
+      },
+      [MAIN_VIEW_COMMANDS.SHOW_API_KEY_BANNER]: async (m, w) => {
+        /* Banner handled client-side */
+        w.webview.postMessage(m);
+      },
+      [MAIN_VIEW_COMMANDS.HIDE_API_KEY_BANNER]: async (m, w) => {
+        /* Banner handled client-side */
+        w.webview.postMessage(m);
       },
 
       // Recording commands
