@@ -5,7 +5,7 @@ import * as vscode from 'vscode';
 import { SecretManager, ApiProvider } from '@frontend/secretManager';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
 
-const PROVIDER_URLS: Record<ApiProvider, string> = {
+export const PROVIDER_URLS: Record<ApiProvider, string> = {
   openai: 'https://platform.openai.com/api-keys',
   anthropic: 'https://console.anthropic.com/',
   openRouter: 'https://openrouter.ai/keys',
@@ -22,74 +22,82 @@ export const apiKeyCommands = {
   removeApiKey: 'texra.removeApiKey',
 };
 
+// Helper function to set API key for a specific provider
+async function setApiKeyForProvider(
+  provider: ApiProvider,
+  skipDialog = false,
+): Promise<void> {
+  if (!skipDialog) {
+    const enterKey = 'Enter Key';
+    const getApiKey = 'Get API Key';
+    const action = await vscode.window.showInformationMessage(
+      `Set your ${provider} API key`,
+      enterKey,
+      getApiKey,
+    );
+
+    if (!action) {
+      return;
+    }
+
+    if (action === getApiKey) {
+      await vscode.env.openExternal(vscode.Uri.parse(PROVIDER_URLS[provider]));
+      return;
+    }
+  }
+
+  const apiKey = await vscode.window.showInputBox({
+    prompt: `Enter ${provider} API key`,
+    password: true,
+    placeHolder: '************************************',
+  });
+
+  if (!apiKey) {
+    return;
+  }
+
+  try {
+    await SecretManager.set(
+      SecretManager.getApiKeySecretName(provider),
+      apiKey,
+    );
+    vscode.window.showInformationMessage(`${provider} API key has been set`);
+    await vscode.commands.executeCommand('texra.refreshApiKeyStatus');
+    void vscode.commands.executeCommand('texra.refreshModelOptions');
+    const view = await vscode.commands.executeCommand<vscode.WebviewView>(
+      'texra.getWebviewView',
+    );
+    view?.webview.postMessage({
+      command: MAIN_VIEW_COMMANDS.HIDE_API_KEY_BANNER,
+    });
+  } catch (err) {
+    vscode.window.showErrorMessage(`Failed to set ${provider} API key: ${err}`);
+  }
+}
+
 export function registerApiKeyCommands(context: vscode.ExtensionContext) {
-  // Command to set API key
+  // Command to set API key (accepts optional provider parameter)
   const setApiKeyCommand = vscode.commands.registerCommand(
     apiKeyCommands.setApiKey,
-    async () => {
-      // First select the provider
-      const providerItems = await SecretManager.getApiProviderQuickPickItems();
-      const providerPick = await vscode.window.showQuickPick(providerItems, {
-        placeHolder: 'Select API provider',
-      });
+    async (provider?: ApiProvider) => {
+      let selectedProvider = provider;
+      const skipDialog = !!provider; // Skip dialog if provider was passed
 
-      const provider = providerPick?.provider;
-
-      if (!provider) {
-        return;
-      }
-
-      const enterKey = 'Enter Key';
-      const getApiKey = 'Get API Key';
-      const action = await vscode.window.showInformationMessage(
-        `Set your ${provider} API key`,
-        enterKey,
-        getApiKey,
-      );
-
-      if (!action) {
-        return;
-      }
-
-      if (action === getApiKey) {
-        await vscode.env.openExternal(
-          vscode.Uri.parse(PROVIDER_URLS[provider]),
-        );
-        // User selected "Get API Key" - don't prompt for input
-        return;
-      }
-
-      const apiKey = await vscode.window.showInputBox({
-        prompt: `Enter ${provider} API key`,
-        password: true,
-        placeHolder: '************************************',
-      });
-
-      if (!apiKey) {
-        return;
-      }
-
-      try {
-        await SecretManager.set(
-          SecretManager.getApiKeySecretName(provider as ApiProvider),
-          apiKey,
-        );
-        vscode.window.showInformationMessage(
-          `${provider} API key has been set`,
-        );
-        await vscode.commands.executeCommand('texra.refreshApiKeyStatus');
-        void vscode.commands.executeCommand('texra.refreshModelOptions');
-        const view = await vscode.commands.executeCommand<vscode.WebviewView>(
-          'texra.getWebviewView',
-        );
-        view?.webview.postMessage({
-          command: MAIN_VIEW_COMMANDS.HIDE_API_KEY_BANNER,
+      if (!selectedProvider) {
+        // Show provider selection if no provider specified
+        const providerItems =
+          await SecretManager.getApiProviderQuickPickItems();
+        const providerPick = await vscode.window.showQuickPick(providerItems, {
+          placeHolder: 'Select API provider',
         });
-      } catch (err) {
-        vscode.window.showErrorMessage(
-          `Failed to set ${provider} API key: ${err}`,
-        );
+        selectedProvider = providerPick?.provider;
       }
+
+      if (!selectedProvider) {
+        return;
+      }
+
+      await setApiKeyForProvider(selectedProvider, skipDialog);
     },
   );
 
