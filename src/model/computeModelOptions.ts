@@ -25,8 +25,8 @@ function formatCost(inputPrice?: number, outputPrice?: number): string {
 
 /**
  * Compute model <option> tags based on available API keys.
- * Models without a required key are marked as disabled with a "(no key)" label
- * and include both disabled and data-requires-key attributes for proper handling.
+ * Models missing a required key receive a "(no key)" label and attributes so the
+ * webview can handle API key setup prompts.
  */
 export async function computeModelOptions(): Promise<string> {
   const models = getConfig<string[]>('models', []);
@@ -63,7 +63,7 @@ export async function computeModelOptions(): Promise<string> {
       const label = available ? model : `${model} (no key)`;
       const requiresKeyAttr = available
         ? ''
-        : ' disabled data-requires-key="true" class="disabled-model"';
+        : ' data-requires-key="true" class="disabled-model"';
 
       // Build data attributes, only including them if values are defined
       const providerAttr = provider ? ` data-provider="${provider}"` : '';
