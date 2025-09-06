@@ -84,9 +84,22 @@ export class MainViewDomHandler {
     );
     if (apiKeyButton) {
       this.apiKeyButtonHandler = () => {
-        vscode.postMessage({
-          command: MAIN_VIEW_COMMANDS.OPEN_SET_API_KEY,
-        });
+        // Get provider from banner element to determine which setup to open
+        const banner = document.getElementById(ELEMENT_IDS.API_KEY_BANNER);
+        const provider = banner?.dataset?.provider;
+
+        if (provider) {
+          // Provider-specific context - use provider-specific API key setup
+          vscode.postMessage({
+            command: MAIN_VIEW_COMMANDS.OPEN_SET_PROVIDER_API_KEY,
+            provider,
+          });
+        } else {
+          // General context - use generic API key setup
+          vscode.postMessage({
+            command: MAIN_VIEW_COMMANDS.OPEN_SET_API_KEY,
+          });
+        }
       };
       apiKeyButton.addEventListener('click', this.apiKeyButtonHandler);
     }
@@ -96,9 +109,22 @@ export class MainViewDomHandler {
     );
     if (apiKeyGuideButton) {
       this.apiKeyGuideButtonHandler = () => {
-        vscode.postMessage({
-          command: MAIN_VIEW_COMMANDS.OPEN_API_KEY_GUIDE,
-        });
+        // Get provider from banner element to determine which action to take
+        const banner = document.getElementById(ELEMENT_IDS.API_KEY_BANNER);
+        const provider = banner?.dataset?.provider;
+
+        if (provider) {
+          // Provider-specific context - open provider's API key page
+          vscode.postMessage({
+            command: MAIN_VIEW_COMMANDS.OPEN_PROVIDER_API_KEY_URL,
+            provider,
+          });
+        } else {
+          // General context - open TeXRA's API key guide
+          vscode.postMessage({
+            command: MAIN_VIEW_COMMANDS.OPEN_API_KEY_GUIDE,
+          });
+        }
       };
       apiKeyGuideButton.addEventListener(
         'click',
