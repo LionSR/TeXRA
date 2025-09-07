@@ -91,11 +91,17 @@
   font-size: calc(var(--vscode-editor-font-size) * 0.9);
 }
 
-/* Disabled model option styling */
+/* Disabled option styling - shared across dropdowns */
+option.disabled-option,
 option.disabled-model,
+option.disabled-agent,
 option[data-requires-key='true'] {
   color: var(--vscode-descriptionForeground);
   opacity: 0.6;
   font-style: italic;
   background-color: var(--vscode-input-background);
+}
+
+option[data-multiple='true'] {
+  font-family: codicon, var(--vscode-font-family);
 }
