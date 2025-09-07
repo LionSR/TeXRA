@@ -32,13 +32,32 @@ export async function computeAgentOptions(
   context: vscode.ExtensionContext,
 ): Promise<string> {
   const agents = getConfig<string[]>('agents', []);
+  const includeToolUse = getConfig<boolean>('includeToolUseAgents', false);
+
+  // Get tool-use agents if enabled
+  let allAgents = [...agents];
+  if (includeToolUse) {
+    const toolUseDir = await agentDirectories.builtInToolUse(context);
+    try {
+      const toolUseFiles = await glob('**/*.yaml', {
+        cwd: toolUseDir,
+        dot: false,
+        nodir: true,
+        absolute: false,
+      });
+      const toolUseAgents = toolUseFiles.map((f) => f.replace(/\.yaml$/, '').replace(/.*\//, ''));
+      allAgents = Array.from(new Set([...agents, ...toolUseAgents]));
+    } catch {
+      // If tool-use directory doesn't exist or can't be read, just use base agents
+    }
+  }
 
   const customDir = await agentDirectories.custom();
   const builtInDir = await agentDirectories.builtIn(context);
   const builtInToolUseDir = await agentDirectories.builtInToolUse(context);
 
   const optionTags = await Promise.all(
-    agents.map(async (agent) => {
+    allAgents.map(async (agent) => {
       const yamlExists =
         (await fileExists(customDir, `**/${agent}.yaml`)) ||
         (await fileExists(builtInDir, `**/${agent}.yaml`)) ||
@@ -49,7 +68,9 @@ export async function computeAgentOptions(
         (await fileExists(builtInDir, `**/${agent}_multiple.yaml`)) ||
         (await fileExists(builtInToolUseDir, `**/${agent}_multiple.yaml`));
 
-      const disabledAttr = yamlExists ? '' : ' class="disabled-option disabled-agent"';
+      const disabledAttr = yamlExists
+        ? ''
+        : ' class="disabled-option disabled-agent"';
       const multipleAttr = multipleExists ? ' data-multiple="true"' : '';
 
       return `<option value="${agent}"${disabledAttr}${multipleAttr}>${agent}</option>`;
