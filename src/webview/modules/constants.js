@@ -99,4 +99,8 @@ export const ELEMENT_IDS = {
   API_KEY_BANNER: 'apiKeyBanner',
   API_KEY_BANNER_BUTTON: 'apiKeyBannerButton',
   API_KEY_GUIDE_BUTTON: 'apiKeyGuideButton',
+  AGENT_CONFIG_BANNER: 'agentConfigBanner',
+  AGENT_CONFIG_EDIT_BUTTON: 'agentConfigEditButton',
+  AGENT_CONFIG_DIR_BUTTON: 'agentConfigDirButton',
+  AGENT_CONFIG_DOC_BUTTON: 'agentConfigDocButton',
 };
