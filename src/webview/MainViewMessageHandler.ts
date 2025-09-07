@@ -21,6 +21,8 @@ import { getConfig } from '@utils/config';
 import { safeExecuteCommand } from '@utils/system';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { computeModelOptions } from '@model/computeModelOptions';
+import { computeAgentOptions } from '@agent/computeAgentOptions';
+import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { PROVIDER_URLS } from '@commands/api/apiKeyCommands';
 
 export class MainViewMessageHandler extends BaseViewMessageHandler {
@@ -134,6 +136,25 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         this.settingsManager.openAgentSettings(),
       [MAIN_VIEW_COMMANDS.OPEN_MODEL_SETTINGS]: async () =>
         this.settingsManager.openModelSettings(),
+      [MAIN_VIEW_COMMANDS.OPEN_AGENT_DIRECTORY]: async (m) => {
+        if (m?.customDirSet) {
+          const dir = await agentDirectories.custom();
+          if (dir) {
+            await vscode.commands.executeCommand(
+              'revealFileInOS',
+              vscode.Uri.file(dir),
+            );
+          }
+        } else {
+          await safeExecuteCommand(
+            'workbench.action.openSettings',
+            ['@ext:texra-ai.texra explorer.agentsDirectory'],
+            this.viewName,
+          );
+        }
+      },
+      [MAIN_VIEW_COMMANDS.OPEN_AGENT_DOCS]: async () =>
+        safeExecuteCommand('texra.openDoc', ['agent-explorer'], this.viewName),
 
       // Instruction commands
       [MAIN_VIEW_COMMANDS.POLISH_INSTRUCTION_TEXT]: async (m, w) =>
@@ -290,15 +311,20 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
   ): Promise<void> {
     await super.handleWebviewReady(_message, webviewView);
     try {
-      const options = await computeModelOptions();
+      const modelOptions = await computeModelOptions();
       webviewView.webview.postMessage({
         command: MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
-        options,
+        options: modelOptions,
+      });
+      const agentOptions = await computeAgentOptions(this.context);
+      webviewView.webview.postMessage({
+        command: MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
+        options: agentOptions,
       });
     } catch (error) {
       this.logger.error(
         this.channel,
-        `Failed to compute model options: ${
+        `Failed to compute options: ${
           error instanceof Error ? error.message : String(error)
         }`,
       );

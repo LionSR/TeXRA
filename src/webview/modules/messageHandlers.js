@@ -98,6 +98,31 @@ export class MainViewMessageHandler {
           element.style.setProperty('display', 'none');
         }
       },
+      [MAIN_VIEW_COMMANDS.SHOW_AGENT_CONFIG_BANNER]: (m) => {
+        const element = this._getElement(ELEMENT_IDS.AGENT_CONFIG_BANNER);
+        if (element) {
+          const textSpan = element.querySelector('span');
+          const dirButton = element.querySelector('#agentConfigDirButton');
+          if (textSpan) {
+            textSpan.textContent = m?.agentName
+              ? `Configuration for "${m.agentName}" is missing.`
+              : 'Agent configuration is missing.';
+          }
+          if (dirButton) {
+            dirButton.textContent = m?.customDirSet
+              ? 'Open Directory'
+              : 'Set Directory';
+          }
+          element.dataset.customDirSet = m?.customDirSet ? 'true' : 'false';
+          element.style.setProperty('display', 'flex');
+        }
+      },
+      [MAIN_VIEW_COMMANDS.HIDE_AGENT_CONFIG_BANNER]: () => {
+        const element = this._getElement(ELEMENT_IDS.AGENT_CONFIG_BANNER);
+        if (element) {
+          element.style.setProperty('display', 'none');
+        }
+      },
       [MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS]: (m) => {
         // Validate that options are provided
         if (!m.options) {
@@ -159,6 +184,28 @@ export class MainViewMessageHandler {
         }
 
         applyOptions(select);
+      },
+      [MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS]: (m) => {
+        if (!m.options) {
+          console.warn('SET_AGENT_OPTIONS: No options provided');
+          return;
+        }
+        const select = document.getElementById('agent');
+        if (!select) {
+          console.warn('SET_AGENT_OPTIONS: Agent select element not found');
+          return;
+        }
+        const previous = select.value;
+        select.innerHTML = m.options;
+        if (previous) {
+          select.value = previous;
+        }
+        Array.from(select.options).forEach((opt) => {
+          if (opt.dataset.multiple === 'true') {
+            opt.textContent = `${String.fromCharCode(0xeb36)} ${opt.textContent}`;
+            opt.style.fontFamily = 'codicon, var(--vscode-font-family)';
+          }
+        });
       },
     };
   }

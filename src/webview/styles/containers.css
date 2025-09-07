@@ -69,7 +69,8 @@
   align-items: center;
 }
 
-.api-key-banner .actions {
+.api-key-banner .actions,
+.agent-config-banner .actions {
   display: flex;
   gap: var(--spacing-small);
 }
@@ -84,8 +85,9 @@
   cursor: pointer;
 }
 
-/* API key reminder banner */
-.api-key-banner {
+/* Banners */
+.api-key-banner,
+.agent-config-banner {
   background-color: var(--vscode-inputValidation-warningBackground);
   color: var(--vscode-inputValidation-warningForeground);
   border: 1px solid var(--vscode-inputValidation-warningBorder);
