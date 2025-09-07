@@ -49,7 +49,7 @@ export async function computeAgentOptions(
         (await fileExists(builtInDir, `**/${agent}_multiple.yaml`)) ||
         (await fileExists(builtInToolUseDir, `**/${agent}_multiple.yaml`));
 
-      const disabledAttr = yamlExists ? '' : ' class="disabled-agent" disabled';
+      const disabledAttr = yamlExists ? '' : ' class="disabled-agent"';
       const multipleAttr = multipleExists ? ' data-multiple="true"' : '';
 
       return `<option value="${agent}"${disabledAttr}${multipleAttr}>${agent}</option>`;

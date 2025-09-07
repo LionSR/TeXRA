@@ -119,7 +119,10 @@ export async function getAgentPath(
     return path.join(builtInToolUseDir, path.dirname(toolUseMatches[0]));
   } catch (err) {
     const errorMsg = `Error finding agent path: ${err instanceof Error ? err.message : String(err)}`;
-    vscode.window.showErrorMessage(errorMsg);
+    // Don't show error notification for missing YAML files - we handle it with banner
+    if (!err?.toString().includes('Could not find yaml file for agent')) {
+      vscode.window.showErrorMessage(errorMsg);
+    }
     throw new Error(errorMsg);
   }
 }
