@@ -19,7 +19,7 @@ function formatContext(context: number): string {
  * Format cost values for display
  */
 function formatCost(inputPrice?: number, outputPrice?: number): string {
-  if (inputPrice == null || outputPrice == null) return '';
+  if (inputPrice === undefined || outputPrice === undefined) return '';
   return `$${inputPrice.toFixed(3)}/$${outputPrice.toFixed(3)}`;
 }
 
