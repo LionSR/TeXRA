@@ -78,7 +78,10 @@
                   title="Empty"
                   data-icon="close"
                 ></button>
-                <span id="toggleInputFiles" class="toggle-icon" title="Multiple"
+                <span
+                  id="toggleInputFiles"
+                  class="toggle-icon"
+                  title="Show or hide additional input files"
                   ><i class="codicon codicon-chevron-down"></i
                 ></span>
                 <button
@@ -141,7 +144,7 @@
                 <span
                   id="toggleReferenceFiles"
                   class="toggle-icon"
-                  title="Multiple"
+                  title="Show or hide additional reference files"
                   ><i class="codicon codicon-chevron-down"></i
                 ></span>
                 <button
@@ -204,7 +207,7 @@
                 <span
                   id="toggleAuxiliaryFiles"
                   class="toggle-icon"
-                  title="Multiple"
+                  title="Show or hide additional auxiliary files"
                   ><i class="codicon codicon-chevron-down"></i
                 ></span>
                 <button
@@ -294,7 +297,10 @@
                   title="Empty"
                   data-icon="close"
                 ></button>
-                <span id="toggleMediaFiles" class="toggle-icon" title="Multiple"
+                <span
+                  id="toggleMediaFiles"
+                  class="toggle-icon"
+                  title="Show or hide additional media files"
                   ><i class="codicon codicon-chevron-down"></i
                 ></span>
                 <button
@@ -330,10 +336,14 @@
                 <span
                   id="toggleOutputFiles"
                   class="toggle-icon"
-                  title="Multiple"
+                  title="Show or hide additional files for the agent’s output"
                   ><i class="codicon codicon-chevron-down"></i
                 ></span>
-                <span class="optional-label">Multiple Outputs</span>
+                <span
+                  class="optional-label"
+                  title="List the files that should receive the agent’s output"
+                  >Multiple Outputs</span
+                >
               </div>
               <div class="file-select-actions button-group">
                 <button
@@ -574,7 +584,9 @@
           <div class="file-select">
             <div class="file-select-header">
               <div class="file-select-label-group">
-                <label for="editedFile"
+                <label
+                  for="editedFile"
+                  title="File containing edits to merge into the base file"
                   ><i
                     class="codicon codicon-edit clickable"
                     title="Edited (Click to refresh)"
