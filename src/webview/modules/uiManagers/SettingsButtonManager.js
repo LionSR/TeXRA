@@ -99,7 +99,7 @@ export class SettingsButtonManager extends BaseUIManager {
       // Hide agent config banner if a valid (non-disabled) agent is selected
       if (
         selectedOption &&
-        !selectedOption.classList.contains('disabled-agent')
+        !selectedOption.classList.contains('disabled-option')
       ) {
         this.vscode.postMessage({
           command: MAIN_VIEW_COMMANDS.HIDE_AGENT_CONFIG_BANNER,
