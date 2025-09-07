@@ -93,9 +93,14 @@
 
 /* Disabled model option styling */
 option.disabled-model,
+option.disabled-agent,
 option[data-requires-key='true'] {
   color: var(--vscode-descriptionForeground);
   opacity: 0.6;
   font-style: italic;
   background-color: var(--vscode-input-background);
+}
+
+option[data-multiple='true'] {
+  font-family: codicon, var(--vscode-font-family);
 }

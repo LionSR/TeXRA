@@ -31,10 +31,16 @@ Control which agents are available in the dropdown menu. Below is the default li
   "paper2note",
   "polish_cover",
   "solve_qi",
-  "transcribe_audio"
+"transcribe_audio"
   // Additional custom agents can be added here
 ]
 ```
+
+If an agent listed here lacks a corresponding `.yaml` file, it appears disabled
+in the main view. A banner provides quick actions to edit the list, set or open
+the custom agents directory, or read the documentation. Agents with a matching
+`_multiple.yaml` file show a codicon next to their name to indicate multi-output
+support.
 
 ### Model Configuration
 
