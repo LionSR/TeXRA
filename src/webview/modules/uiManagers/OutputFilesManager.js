@@ -59,6 +59,14 @@ export class OutputFilesManager {
       this.fileList.add(OUTPUT_FILES_ID, file);
     });
 
+    if (outputFilesDiv.children.length === 0) {
+      const placeholder = document.createElement('div');
+      placeholder.className = 'file-list-placeholder';
+      placeholder.textContent =
+        'No extra outputs selected. Click "Add" to choose files.';
+      outputFilesDiv.appendChild(placeholder);
+    }
+
     this.state.save();
   }
 
