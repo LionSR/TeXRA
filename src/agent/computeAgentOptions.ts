@@ -9,7 +9,9 @@ import { getConfig } from '@utils/config';
 /**
  * Get all available agents including tool-use agents if enabled.
  */
-export async function getAllAgents(context: vscode.ExtensionContext): Promise<string[]> {
+export async function getAllAgents(
+  context: vscode.ExtensionContext,
+): Promise<string[]> {
   const agents = getConfig<string[]>('agents', []);
   const includeToolUse = getConfig<boolean>('includeToolUseAgents', false);
 
@@ -26,7 +28,9 @@ export async function getAllAgents(context: vscode.ExtensionContext): Promise<st
       nodir: true,
       absolute: false,
     });
-    const toolUseAgents = toolUseFiles.map((f) => f.replace(/\.yaml$/, '').replace(/.*\//, ''));
+    const toolUseAgents = toolUseFiles.map((f) =>
+      f.replace(/\.yaml$/, '').replace(/.*\//, ''),
+    );
     return Array.from(new Set([...agents, ...toolUseAgents]));
   } catch {
     // If tool-use directory doesn't exist or can't be read, just use base agents
