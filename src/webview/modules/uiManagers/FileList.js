@@ -29,6 +29,11 @@ export class FileList {
     const toggleIcon = safeGetElementById(`toggle${capitalize(containerId)}`);
     if (!container || !toggleIcon) return;
 
+    const placeholder = container.querySelector('.file-list-placeholder');
+    if (placeholder) {
+      container.removeChild(placeholder);
+    }
+
     const fileElement = createFromTemplate('fileListEntryTemplate', {
       text: { '.file-name': file },
       dataset: { '': { path: file } },
