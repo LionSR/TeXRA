@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.33.6] - 2025-09-06
+
+### Features
+
+- Add setting to disable GPT-5 reasoning summaries
+
 ## [0.33.5] - 2025-09-05
 
 ### Features

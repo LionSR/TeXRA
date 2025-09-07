@@ -27,7 +27,7 @@ import { OPENAI_CHAT_FINISH } from './types/StopReasonTypes';
 import { calculateTokenPrice } from '@agent/utils/priceUtils';
 import { logErrorMessage } from '@common/errors/errorHandlingUtils';
 import type { ToolDefinition } from '@model';
-import { K_SLICE } from '@utils/config';
+import { K_SLICE, getConfig } from '@utils/config';
 
 // import { ResponseCreateParams } from 'openai/src/resources/responses/response';
 // this is incorrect now, but would be nice to use
@@ -206,9 +206,13 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
     if (this.capabilities.supportsReasoning) {
       // Different models support different reasoning summarizers—for example, our computer use model supports the concise summarizer, while o4-mini supports detailed. To simply access the most detailed summarizer available, set the value of this parameter to auto and view the reasoning summary as part of the summary array in the reasoning output item.
       // This feature is also supported with streaming, and across the following reasoning models: o4-mini, o3, o3-mini and o1.
-      params.reasoning = {
-        summary: 'auto', // or "detailed",
-      };
+      const isGpt5 = this.config.name.startsWith('gpt5');
+      const includeSummary =
+        !isGpt5 || getConfig<boolean>('model.gpt5ReasoningSummary', false);
+      params.reasoning = {};
+      if (includeSummary) {
+        params.reasoning.summary = 'auto'; // or "detailed"
+      }
       if (this.capabilities.supportsReasoningEffort) {
         params.reasoning.effort = 'high'; // or "medium" or "low"
       }
