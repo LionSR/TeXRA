@@ -37,6 +37,7 @@ import { MODEL_CONFIGS } from '@model/ModelRegistry';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import { agentConfigToTaskState } from '@utils/config';
 import { ensureRunDir } from '@utils/files/taskRunStorage';
+import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
 
 const CHANNEL = 'executeAgent';
 const logger = new AgentLogger(CHANNEL);
@@ -98,23 +99,15 @@ export async function getAgentPath(
     const allMatches = [...builtInMatches, ...toolUseMatches];
 
     if (allMatches.length === 0) {
-      const configureButton = 'Open Settings';
-      await showInstructionWithSuppress(
-        'agentNotFound',
-        'Agent configuration is missing. Configure your custom agents directory and ensure the YAML file exists.',
-        [
-          {
-            title: configureButton,
-            callback: () =>
-              vscode.commands.executeCommand(
-                'workbench.action.openSettings',
-                '@ext:texra-ai.texra explorer.agentsDirectory',
-              ),
-          },
-        ],
-        false,
+      const view = await vscode.commands.executeCommand<vscode.WebviewView>(
+        'texra.getWebviewView',
       );
-
+      const customDir = await agentDirectories.custom();
+      view?.webview.postMessage({
+        command: MAIN_VIEW_COMMANDS.SHOW_AGENT_CONFIG_BANNER,
+        agentName,
+        customDirSet: !!customDir,
+      });
       const errorMsg = `Could not find yaml file for agent: ${agentName}`;
       throw new Error(errorMsg);
     }
