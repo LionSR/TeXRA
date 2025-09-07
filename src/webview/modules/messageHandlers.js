@@ -105,7 +105,7 @@ export class MainViewMessageHandler {
           const dirButton = element.querySelector('#agentConfigDirButton');
           if (textSpan) {
             textSpan.textContent = m?.agentName
-              ? `Configuration for "${m.agentName}" is missing.`
+              ? `Agent file for "${m.agentName}" is missing.`
               : 'Agent configuration is missing.';
           }
           if (dirButton) {
@@ -202,8 +202,8 @@ export class MainViewMessageHandler {
         }
         Array.from(select.options).forEach((opt) => {
           if (opt.dataset.multiple === 'true') {
-            opt.textContent = `${String.fromCharCode(0xeb36)} ${opt.textContent}`;
-            opt.style.fontFamily = 'codicon, var(--vscode-font-family)';
+            opt.textContent = `${opt.textContent} ∶∶`;
+            opt.style.opacity = '0.9';
           }
         });
       },
