@@ -34,6 +34,9 @@ export class MainViewDomHandler {
     this.debugMode = false;
     this.apiKeyButtonHandler = null;
     this.apiKeyGuideButtonHandler = null;
+    this.agentEditButtonHandler = null;
+    this.agentDirButtonHandler = null;
+    this.agentDocButtonHandler = null;
   }
 
   _updateDebugButtonVisibility() {
@@ -131,6 +134,45 @@ export class MainViewDomHandler {
         this.apiKeyGuideButtonHandler,
       );
     }
+
+    const agentEditButton = document.getElementById(
+      ELEMENT_IDS.AGENT_CONFIG_EDIT_BUTTON,
+    );
+    if (agentEditButton) {
+      this.agentEditButtonHandler = () => {
+        vscode.postMessage({
+          command: MAIN_VIEW_COMMANDS.OPEN_AGENT_SETTINGS,
+        });
+      };
+      agentEditButton.addEventListener('click', this.agentEditButtonHandler);
+    }
+
+    const agentDirButton = document.getElementById(
+      ELEMENT_IDS.AGENT_CONFIG_DIR_BUTTON,
+    );
+    if (agentDirButton) {
+      this.agentDirButtonHandler = () => {
+        const banner = document.getElementById(ELEMENT_IDS.AGENT_CONFIG_BANNER);
+        const customDirSet = banner?.dataset?.customDirSet === 'true';
+        vscode.postMessage({
+          command: MAIN_VIEW_COMMANDS.OPEN_AGENT_DIRECTORY,
+          customDirSet,
+        });
+      };
+      agentDirButton.addEventListener('click', this.agentDirButtonHandler);
+    }
+
+    const agentDocButton = document.getElementById(
+      ELEMENT_IDS.AGENT_CONFIG_DOC_BUTTON,
+    );
+    if (agentDocButton) {
+      this.agentDocButtonHandler = () => {
+        vscode.postMessage({
+          command: MAIN_VIEW_COMMANDS.OPEN_AGENT_DOCS,
+        });
+      };
+      agentDocButton.addEventListener('click', this.agentDocButtonHandler);
+    }
   }
 
   cleanupUI() {
@@ -162,6 +204,27 @@ export class MainViewDomHandler {
         this.apiKeyGuideButtonHandler,
       );
       this.apiKeyGuideButtonHandler = null;
+    }
+    const agentEditButton = document.getElementById(
+      ELEMENT_IDS.AGENT_CONFIG_EDIT_BUTTON,
+    );
+    if (agentEditButton && this.agentEditButtonHandler) {
+      agentEditButton.removeEventListener('click', this.agentEditButtonHandler);
+      this.agentEditButtonHandler = null;
+    }
+    const agentDirButton = document.getElementById(
+      ELEMENT_IDS.AGENT_CONFIG_DIR_BUTTON,
+    );
+    if (agentDirButton && this.agentDirButtonHandler) {
+      agentDirButton.removeEventListener('click', this.agentDirButtonHandler);
+      this.agentDirButtonHandler = null;
+    }
+    const agentDocButton = document.getElementById(
+      ELEMENT_IDS.AGENT_CONFIG_DOC_BUTTON,
+    );
+    if (agentDocButton && this.agentDocButtonHandler) {
+      agentDocButton.removeEventListener('click', this.agentDocButtonHandler);
+      this.agentDocButtonHandler = null;
     }
   }
 }

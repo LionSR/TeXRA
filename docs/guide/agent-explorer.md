@@ -43,3 +43,11 @@ Available actions for **Custom Agents** include:
 ## Relationship to Custom Agent Creation
 
 The Agent Explorer is where you manage the files you create following the steps in the [Custom Agents](./custom-agents.md) guide. Use the explorer to organize your agent `.yaml` files effectively.
+
+## Agent Configuration Alerts
+
+When an agent name is listed in `texra.agents` but its YAML file is missing, the
+agent appears disabled in the main view dropdown. Choosing such an entry shows a
+banner offering to edit the agent list, open or set the custom agents directory,
+or view documentation. Agents that include a companion `<agent>_multiple.yaml`
+are flagged with a codicon in the dropdown to indicate multi-output support.
