@@ -2,20 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.33.6] - 2025-09-06
-
-### Features
-
-- Add setting to disable GPT-5 reasoning summaries
-
-## [0.33.5] - 2025-09-05
+## [0.33.5] - 2025-09-07 💪
 
 ### Features
 
 - Replace Qwen Max with Qwen3 Max for improved reasoning and 256k context
 - Update Qwen Plus to 2025-07-28 snapshot with hybrid reasoning and 1M context
-- Mark Qwen Plus and Qwen Turbo as deep thinking models with optional `enable_thinking`
+- Mark Qwen Plus and Qwen Turbo as reasoning models with optional `enable_thinking`
 - Update Moonshot Kimi models to K2 0905 preview and add turbo variant
+- Add setting to enable/disable GPT-5 reasoning summaries due to user tier limitations
+- Add configuration banner for missing agent files with quick setup actions
+- Add visual indicator for agents with multiple output support in dropdown
+- Replace "(no key)" with ✗ symbol for cleaner model dropdown display
 
 ## [0.33.4] - 2025-09-03
 
