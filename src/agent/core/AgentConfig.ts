@@ -35,7 +35,7 @@ export const AgentConfigSchema = z
     outputFiles: z.array(z.string()).nullable().default(null),
     editedFile: z.string().nullable().default(null),
 
-    toolConfig: ToolConfigSchema.default({}),
+    toolConfig: ToolConfigSchema,
   })
   .strict()
   .refine(validateOutputFiles, {

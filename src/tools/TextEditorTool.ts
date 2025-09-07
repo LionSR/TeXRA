@@ -5,7 +5,7 @@ import * as path from 'path';
 // Third-party imports
 import * as vscode from 'vscode';
 import { z } from 'zod';
-import { zodToJsonSchema } from 'zod-to-json-schema';
+import { zodToJsonSchema } from '@alcyone-labs/zod-to-json-schema';
 
 // Local imports - tools
 

@@ -1,6 +1,6 @@
 // Third-party imports
 import { z } from 'zod';
-import { zodToJsonSchema } from 'zod-to-json-schema';
+import { zodToJsonSchema } from '@alcyone-labs/zod-to-json-schema';
 
 // Local imports - tools
 import { BaseTool } from './core/base';

@@ -13,7 +13,7 @@ export const ToolDefinitionSchema = z
     /** Optional description for the model */
     description: z.string().optional(),
     /** Parameter schema or provider specific metadata */
-    parameters: z.record(z.unknown()).optional(),
+    parameters: z.record(z.string(), z.unknown()).optional(),
   })
   .strict();
 

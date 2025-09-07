@@ -37,8 +37,12 @@ export const AgentSettingSchema = z
     outputExt: z.string().default('txt'),
     endTag: z.string().default('</latex_document>'),
 
-    requiredFiles: z.record(z.string()).default({}),
-    requiredFilesInternal: z.record(z.string()).default({}),
+    requiredFiles: z
+      .record(z.string(), z.string())
+      .default({} as Record<string, string>),
+    requiredFilesInternal: z
+      .record(z.string(), z.string())
+      .default({} as Record<string, string>),
     defaultOutputFiles: z.array(z.string()).default([]),
     filePatternsContain: z
       .array(
@@ -99,8 +103,8 @@ export const AgentDefinitionSchema = z
   .object({
     name: z.string().trim().min(1),
     inherits: z.string().optional(),
-    settings: z.record(z.unknown()).optional(),
-    prompts: z.record(z.unknown()).optional(),
+    settings: z.record(z.string(), z.unknown()).optional(),
+    prompts: z.record(z.string(), z.unknown()).optional(),
   })
   .strict();
 

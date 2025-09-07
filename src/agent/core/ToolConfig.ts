@@ -19,6 +19,15 @@ export const ToolConfigSchema = z
     autoCompileInputPdf: z.boolean().default(false),
   })
   .strict()
-  .default({});
+  .default({
+    reflect: false,
+    usePrefillFromInput: false,
+    autoExtractFigure: false,
+    autoExtractTikzFigure: false,
+    attachTeXCount: false,
+    attachDiagnostics: false,
+    printInputPrompt: false,
+    autoCompileInputPdf: false,
+  });
 
 export type ToolConfig = z.infer<typeof ToolConfigSchema>;
