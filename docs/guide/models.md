@@ -61,6 +61,8 @@ Known for strong reasoning and creative capabilities.
 | `gptoss`  | Open-weight reasoning, large context  | $$            | Medium         | `gpt-oss-120b` (OpenRouter only) |
 | `gptoss-` | Open-weight reasoning, cost-effective | $             | Fast           | `gpt-oss-20b` (OpenRouter only)  |
 
+> **Note:** GPT-5 reasoning summaries require additional account verification. TeXRA disables them by default—enable `"texra.model.gpt5ReasoningSummary": true` if your account supports this feature.
+
 ### Google Models
 
 Known for large context windows, multimodality, and speed/cost efficiency.
