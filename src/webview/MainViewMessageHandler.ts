@@ -195,6 +195,14 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         /* Banner handled client-side */
         w.webview.postMessage(m);
       },
+      [MAIN_VIEW_COMMANDS.SHOW_AGENT_CONFIG_BANNER]: async (m, w) => {
+        /* Banner handled client-side */
+        w.webview.postMessage(m);
+      },
+      [MAIN_VIEW_COMMANDS.HIDE_AGENT_CONFIG_BANNER]: async (m, w) => {
+        /* Banner handled client-side */
+        w.webview.postMessage(m);
+      },
 
       // Recording commands
       [MAIN_VIEW_COMMANDS.START_RECORDING]: async (_m, w) =>
