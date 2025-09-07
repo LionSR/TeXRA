@@ -97,6 +97,8 @@ export class MainViewContentProvider extends BaseViewContentProvider {
   }
 
   protected getTemplateVariables(): Record<string, any> {
+    // Note: This uses synchronous approach for template generation
+    // Agent options with metadata are computed asynchronously via computeAgentOptions
     const agents = getConfig<string[]>('agents', []);
     const includeToolUse = getConfig<boolean>('includeToolUseAgents', false);
     const toolUseDir = GlobalStorageFS.fullPath('tool_use_agents');
