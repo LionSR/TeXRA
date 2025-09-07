@@ -63,7 +63,7 @@ export class OutputFilesManager {
       const placeholder = document.createElement('div');
       placeholder.className = 'file-list-placeholder';
       placeholder.textContent =
-        'No extra outputs selected. Click ‘Add’ to choose files.';
+        'No extra outputs selected. Click "Add" to choose files.';
       outputFilesDiv.appendChild(placeholder);
     }
 
