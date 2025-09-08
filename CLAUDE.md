@@ -176,4 +176,9 @@ When creating a new release:
    vsce publish
    ```
 
-5. **Version bump**: A GitHub Action automatically creates a PR to bump the version after release
+5. Publish to Open VSX Marketplace
+   ```bash
+   ovsx publish
+   ```
+
+6. **Version bump**: A GitHub Action automatically creates a PR to bump the version after release
