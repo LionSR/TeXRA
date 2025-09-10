@@ -140,7 +140,7 @@ async function handleAcceptEdited(
     }
 
     // Read content from edited file using workspace utilities
-    const editedContent = await WorkspaceFS.readFile(editedFile);
+    const editedContent = await WorkspaceFS.read(editedFile);
 
     // Confirm with user
     const baseFileName = path.basename(fileToUse);
@@ -158,7 +158,7 @@ async function handleAcceptEdited(
     }
 
     // Write content to base file using workspace utilities
-    await WorkspaceFS.writeFile(fileToUse, editedContent);
+    await WorkspaceFS.write(fileToUse, editedContent);
 
     vscode.window.showInformationMessage(
       `Successfully replaced '${baseFileName}' with content from '${editedFileName}'`,
