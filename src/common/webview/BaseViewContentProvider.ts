@@ -150,6 +150,10 @@ export abstract class BaseViewContentProvider {
         'modules/webviewContext.js',
       ),
       commandsUri: this.getCommonUri(webview, 'webview/commands.js'),
+      webviewThemeHandlersUri: this.getCommonUri(
+        webview,
+        'webview/themeHandlers.js',
+      ),
       templateUtilsUri: this.getCommonUri(webview, 'modules/templateUtils.js'),
       iconButtonInitializerUri: this.getCommonUri(
         webview,
