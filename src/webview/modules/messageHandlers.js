@@ -30,15 +30,16 @@ import { createFromTemplate } from '@common/templateUtils.js';
 // Import standardized commands
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
 // Local imports - webview context
-import { vscode, registerMessageHandlers } from '@common/webviewContext.js';
+import { vscode } from '@common/webviewContext.js';
+import { BaseWebviewMessageHandler } from '@common/BaseWebviewMessageHandler.js';
 
 /**
  * Handles messages from the extension and syncs the webview state.
  */
-export class MainViewMessageHandler {
+export class MainViewMessageHandler extends BaseWebviewMessageHandler {
   constructor() {
+    super();
     this._skipNextRestoreState = false;
-    this._cleanupFn = null;
 
     // Cached DOM elements
     this._instructionEl = null;
@@ -238,19 +239,14 @@ export class MainViewMessageHandler {
   /** Register handlers and optionally request initial data. */
   setup(options = {}) {
     const { requestData = true } = options;
-    if (!this._cleanupFn) {
-      this._cleanupFn = registerMessageHandlers(this._handlers);
-    }
+    super.setup();
     if (requestData) {
       this._initializeDataRequests();
     }
   }
 
   cleanup() {
-    if (this._cleanupFn) {
-      this._cleanupFn();
-      this._cleanupFn = null;
-    }
+    super.cleanup();
     Object.values(this._fileListHandlers).forEach(({ container, handler }) => {
       container.removeEventListener('click', handler);
     });
