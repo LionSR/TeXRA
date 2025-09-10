@@ -1,8 +1,11 @@
 // Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - commands
+// Local imports - agent
 import { BaseAgent } from '@agent/implementations/BaseAgent';
+
+// Local imports - utilities
+import { showLoggedErrorMessage } from '@common/errors/errorHandlingUtils';
 
 const CHANNEL = 'followUpCommand';
 console.log(`[${CHANNEL}] command registered`);
@@ -17,7 +20,11 @@ export function registerFollowUpCommand(context: vscode.ExtensionContext) {
           try {
             (agent as any).appendFollowUp(payload.text);
           } catch (err) {
-            console.error(`Failed to send follow-up: ${String(err)}`);
+            await showLoggedErrorMessage(
+              CHANNEL,
+              'Failed to send follow-up',
+              err,
+            );
           }
         }
       },
