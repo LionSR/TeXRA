@@ -95,7 +95,7 @@ export async function getFilesRecursively(
         !name.startsWith('.') &&
         !normalizedExcludeDirs.has(nameLower)
       ) {
-        return await getFilesRecursively(
+        return getFilesRecursively(
           fullPath,
           root,
           includeExtensions,
