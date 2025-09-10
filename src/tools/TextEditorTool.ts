@@ -81,82 +81,72 @@ export class TextEditorTool extends BaseTool<TextEditorInput> {
    * @param input - Tool call input parameters
    */
   protected async execute(input: TextEditorInput): Promise<ToolResult> {
-    try {
-      const { command, path: filePath } = input;
+    const { command, path: filePath } = input;
 
-      // Validate the path and command
-      await this.validatePath(command, filePath);
+    // Validate the path and command
+    await this.validatePath(command, filePath);
 
-      // Execute the appropriate command
-      switch (command) {
-        case 'view':
-          return await this.view(filePath, input.view_range);
-        case 'create':
-          if (!input.file_text) {
-            throw new ToolError(
-              'Parameter `file_text` is required for command: create',
-            );
-          }
-          logger.info(CHANNEL, `create: ${filePath}`);
-          return await this.create(filePath, input.file_text);
-        case 'str_replace':
-          if (!input.old_str) {
-            throw new ToolError(
-              'Parameter `old_str` is required for command: str_replace',
-            );
-          }
-          logger.info(
-            CHANNEL,
-            `str_replace: ${input.old_str} -> ${input.new_str}`,
-          );
-          return await this.strReplace(
-            filePath,
-            input.old_str,
-            input.new_str ?? '',
-          );
-
-        case 'insert':
-          if (input.insert_line === undefined) {
-            throw new ToolError(
-              'Parameter `insert_line` is required for command: insert',
-            );
-          }
-          if (!input.new_str) {
-            throw new ToolError(
-              'Parameter `new_str` is required for command: insert',
-            );
-          }
-          logger.info(
-            CHANNEL,
-            `insert: ${input.insert_line} -> ${input.new_str}`,
-          );
-          return await this.insert(filePath, input.insert_line, input.new_str);
-        case 'undo_edit':
-          // Claude 4 models don't support undo_edit command
-          if (this.apiType === 'text_editor_20250429') {
-            throw new ToolError(
-              `The 'undo_edit' command is not supported in Claude 4 models. Use the str_replace_based_edit_tool with explicit content instead.`,
-            );
-          }
-          logger.info(CHANNEL, `undo_edit: ${filePath}`);
-          return await this.undoEdit(filePath);
-        default:
-          const allowedCommands =
-            this.apiType === 'text_editor_20250429'
-              ? 'view, create, str_replace, insert'
-              : 'view, create, str_replace, insert, undo_edit';
+    // Execute the appropriate command
+    switch (command) {
+      case 'view':
+        return await this.view(filePath, input.view_range);
+      case 'create':
+        if (!input.file_text) {
           throw new ToolError(
-            `Unrecognized command ${command}. The allowed commands for the ${this.name} tool are: ${allowedCommands}`,
+            'Parameter `file_text` is required for command: create',
           );
-      }
-    } catch (error) {
-      if (error instanceof ToolError) {
-        return new ToolResult({ error: error.message, isError: true });
-      }
-      return new ToolResult({
-        error: `Unexpected error: ${String(error)}`,
-        isError: true,
-      });
+        }
+        logger.info(CHANNEL, `create: ${filePath}`);
+        return await this.create(filePath, input.file_text);
+      case 'str_replace':
+        if (!input.old_str) {
+          throw new ToolError(
+            'Parameter `old_str` is required for command: str_replace',
+          );
+        }
+        logger.info(
+          CHANNEL,
+          `str_replace: ${input.old_str} -> ${input.new_str}`,
+        );
+        return await this.strReplace(
+          filePath,
+          input.old_str,
+          input.new_str ?? '',
+        );
+
+      case 'insert':
+        if (input.insert_line === undefined) {
+          throw new ToolError(
+            'Parameter `insert_line` is required for command: insert',
+          );
+        }
+        if (!input.new_str) {
+          throw new ToolError(
+            'Parameter `new_str` is required for command: insert',
+          );
+        }
+        logger.info(
+          CHANNEL,
+          `insert: ${input.insert_line} -> ${input.new_str}`,
+        );
+        return await this.insert(filePath, input.insert_line, input.new_str);
+      case 'undo_edit':
+        // Claude 4 models don't support undo_edit command
+        if (this.apiType === 'text_editor_20250429') {
+          throw new ToolError(
+            `The 'undo_edit' command is not supported in Claude 4 models. Use the str_replace_based_edit_tool with explicit content instead.`,
+          );
+        }
+        logger.info(CHANNEL, `undo_edit: ${filePath}`);
+        return await this.undoEdit(filePath);
+      default:
+        const allowedCommands =
+          this.apiType === 'text_editor_20250429'
+            ? 'view, create, str_replace, insert'
+            : 'view, create, str_replace, insert, undo_edit';
+        throw new ToolError(
+          `Unrecognized command ${command}. The allowed commands for the ${this.name} tool are: ${allowedCommands}`,
+        );
     }
   }
 
