@@ -81,82 +81,72 @@ export class TextEditorTool extends BaseTool<TextEditorInput> {
    * @param input - Tool call input parameters
    */
   protected async execute(input: TextEditorInput): Promise<ToolResult> {
-    try {
-      const { command, path: filePath } = input;
+    const { command, path: filePath } = input;
 
-      // Validate the path and command
-      await this.validatePath(command, filePath);
+    // Validate the path and command
+    await this.validatePath(command, filePath);
 
-      // Execute the appropriate command
-      switch (command) {
-        case 'view':
-          return await this.view(filePath, input.view_range);
-        case 'create':
-          if (!input.file_text) {
-            throw new ToolError(
-              'Parameter `file_text` is required for command: create',
-            );
-          }
-          logger.info(CHANNEL, `create: ${filePath}`);
-          return await this.create(filePath, input.file_text);
-        case 'str_replace':
-          if (!input.old_str) {
-            throw new ToolError(
-              'Parameter `old_str` is required for command: str_replace',
-            );
-          }
-          logger.info(
-            CHANNEL,
-            `str_replace: ${input.old_str} -> ${input.new_str}`,
-          );
-          return await this.strReplace(
-            filePath,
-            input.old_str,
-            input.new_str ?? '',
-          );
-
-        case 'insert':
-          if (input.insert_line === undefined) {
-            throw new ToolError(
-              'Parameter `insert_line` is required for command: insert',
-            );
-          }
-          if (!input.new_str) {
-            throw new ToolError(
-              'Parameter `new_str` is required for command: insert',
-            );
-          }
-          logger.info(
-            CHANNEL,
-            `insert: ${input.insert_line} -> ${input.new_str}`,
-          );
-          return await this.insert(filePath, input.insert_line, input.new_str);
-        case 'undo_edit':
-          // Claude 4 models don't support undo_edit command
-          if (this.apiType === 'text_editor_20250429') {
-            throw new ToolError(
-              `The 'undo_edit' command is not supported in Claude 4 models. Use the str_replace_based_edit_tool with explicit content instead.`,
-            );
-          }
-          logger.info(CHANNEL, `undo_edit: ${filePath}`);
-          return await this.undoEdit(filePath);
-        default:
-          const allowedCommands =
-            this.apiType === 'text_editor_20250429'
-              ? 'view, create, str_replace, insert'
-              : 'view, create, str_replace, insert, undo_edit';
+    // Execute the appropriate command
+    switch (command) {
+      case 'view':
+        return await this.view(filePath, input.view_range);
+      case 'create':
+        if (!input.file_text) {
           throw new ToolError(
-            `Unrecognized command ${command}. The allowed commands for the ${this.name} tool are: ${allowedCommands}`,
+            'Parameter `file_text` is required for command: create',
           );
-      }
-    } catch (error) {
-      if (error instanceof ToolError) {
-        return new ToolResult({ error: error.message, isError: true });
-      }
-      return new ToolResult({
-        error: `Unexpected error: ${String(error)}`,
-        isError: true,
-      });
+        }
+        logger.info(CHANNEL, `create: ${filePath}`);
+        return await this.create(filePath, input.file_text);
+      case 'str_replace':
+        if (!input.old_str) {
+          throw new ToolError(
+            'Parameter `old_str` is required for command: str_replace',
+          );
+        }
+        logger.info(
+          CHANNEL,
+          `str_replace: ${input.old_str} -> ${input.new_str}`,
+        );
+        return await this.strReplace(
+          filePath,
+          input.old_str,
+          input.new_str ?? '',
+        );
+
+      case 'insert':
+        if (input.insert_line === undefined) {
+          throw new ToolError(
+            'Parameter `insert_line` is required for command: insert',
+          );
+        }
+        if (!input.new_str) {
+          throw new ToolError(
+            'Parameter `new_str` is required for command: insert',
+          );
+        }
+        logger.info(
+          CHANNEL,
+          `insert: ${input.insert_line} -> ${input.new_str}`,
+        );
+        return await this.insert(filePath, input.insert_line, input.new_str);
+      case 'undo_edit':
+        // Claude 4 models don't support undo_edit command
+        if (this.apiType === 'text_editor_20250429') {
+          throw new ToolError(
+            `The 'undo_edit' command is not supported in Claude 4 models. Use the str_replace_based_edit_tool with explicit content instead.`,
+          );
+        }
+        logger.info(CHANNEL, `undo_edit: ${filePath}`);
+        return await this.undoEdit(filePath);
+      default:
+        const allowedCommands =
+          this.apiType === 'text_editor_20250429'
+            ? 'view, create, str_replace, insert'
+            : 'view, create, str_replace, insert, undo_edit';
+        throw new ToolError(
+          `Unrecognized command ${command}. The allowed commands for the ${this.name} tool are: ${allowedCommands}`,
+        );
     }
   }
 
@@ -241,7 +231,7 @@ export class TextEditorTool extends BaseTool<TextEditorInput> {
       }
 
       // Read file contents
-      let fileContent = await WorkspaceFS.readFile(filePath);
+      let fileContent = await WorkspaceFS.read(filePath);
       let initLine = 1;
 
       // Handle view range if provided
@@ -312,7 +302,7 @@ export class TextEditorTool extends BaseTool<TextEditorInput> {
       }
 
       // Write file content
-      await WorkspaceFS.writeFile(filePath, content);
+      await WorkspaceFS.write(filePath, content);
 
       return new ToolResult({
         output: `File created successfully at: ${filePath}`,
@@ -336,7 +326,7 @@ export class TextEditorTool extends BaseTool<TextEditorInput> {
   ): Promise<ToolResult> {
     try {
       // Read file content
-      const fileContent = await WorkspaceFS.readFile(filePath);
+      const fileContent = await WorkspaceFS.read(filePath);
 
       // Expand tabs in content and search string
       const expandedFileContent = fileContent.replace(/\t/g, '    ');
@@ -374,7 +364,7 @@ export class TextEditorTool extends BaseTool<TextEditorInput> {
         expandedOldStr,
         expandedNewStr,
       );
-      await WorkspaceFS.writeFile(filePath, newFileContent);
+      await WorkspaceFS.write(filePath, newFileContent);
 
       // Create a snippet of the edited section
       const textBeforeReplacement =
@@ -422,7 +412,7 @@ export class TextEditorTool extends BaseTool<TextEditorInput> {
   ): Promise<ToolResult> {
     try {
       // Read file content
-      const fileContent = await WorkspaceFS.readFile(filePath);
+      const fileContent = await WorkspaceFS.read(filePath);
 
       // Expand tabs in content and new string
       const expandedFileContent = fileContent.replace(/\t/g, '    ');
@@ -459,7 +449,7 @@ export class TextEditorTool extends BaseTool<TextEditorInput> {
 
       // Write new content to file
       const newFileContent = newFileLines.join('\n');
-      await WorkspaceFS.writeFile(filePath, newFileContent);
+      await WorkspaceFS.write(filePath, newFileContent);
 
       // Prepare success message
       const snippetText = snippetLines.join('\n');
@@ -499,7 +489,7 @@ export class TextEditorTool extends BaseTool<TextEditorInput> {
 
       // Restore previous content
       const oldContent = history.pop()!;
-      await WorkspaceFS.writeFile(filePath, oldContent);
+      await WorkspaceFS.write(filePath, oldContent);
 
       // If the history is now empty, delete the entry
       if (history.length === 0) {

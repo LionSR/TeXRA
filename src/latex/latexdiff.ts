@@ -124,7 +124,7 @@ export class LaTeXdiffService {
       }
 
       // Write and process output
-      await WorkspaceFS.writeFile(outputPath, result.stdout);
+      await WorkspaceFS.write(outputPath, result.stdout);
       await this.fileProcessor.processDiffFile(outputPath);
 
       logger.debug(
@@ -308,7 +308,7 @@ export class LaTeXdiffService {
     ...files: string[]
   ): Promise<boolean> {
     for (const file of files) {
-      const content = await WorkspaceFS.readFile(file);
+      const content = await WorkspaceFS.read(file);
       if (
         !content.includes('\\begin{document}') ||
         !content.includes('\\end{document}')
