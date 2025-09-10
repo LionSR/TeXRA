@@ -1,5 +1,6 @@
 // Local imports - progress view
 // Local imports
+import { PersistentMapManager } from '../persistence/PersistentMapManager';
 import { StatePersistenceManager } from '../persistence/StatePersistenceManager';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import { WorkspaceStateKey } from '@common/state/stateManager';
@@ -12,11 +13,14 @@ import { TaskGroup } from '@logger/LogTypes';
  * Manages task groups collection with persistence.
  * Handles adding, updating, and managing task groups for different streams.
  */
-export class TaskGroupManager {
-  private _groups: Map<StreamTabId, Map<string, TaskGroup>> = new Map();
+export class TaskGroupManager extends PersistentMapManager<
+  StreamTabId,
+  Map<string, TaskGroup>
+> {
   private readonly logger: AgentLogger;
 
-  constructor(private persistence: StatePersistenceManager) {
+  constructor(persistence: StatePersistenceManager) {
+    super(persistence, WorkspaceStateKey.TASK_GROUPS, 'texra.logGroups');
     this.logger = new AgentLogger('TaskGroupManager');
   }
 
@@ -24,11 +28,11 @@ export class TaskGroupManager {
    * Add a task group to a stream
    */
   addGroup(stream: StreamTabId, groupId: string, group: TaskGroup): void {
-    if (!this._groups.has(stream)) {
-      this._groups.set(stream, new Map());
+    if (!this.has(stream)) {
+      this.items.set(stream, new Map());
     }
 
-    const streamGroups = this._groups.get(stream)!;
+    const streamGroups = this.get(stream)!;
     streamGroups.set(groupId, { ...group });
     this.save();
   }
@@ -41,7 +45,7 @@ export class TaskGroupManager {
     groupId: string,
     updates: Partial<TaskGroup>,
   ): void {
-    const streamGroups = this._groups.get(stream);
+    const streamGroups = this.get(stream);
     if (!streamGroups) {
       this.logger.warn(
         `Cannot update group ${groupId}: stream ${stream} not found`,
@@ -67,7 +71,7 @@ export class TaskGroupManager {
    * Get a specific task group
    */
   getGroup(stream: StreamTabId, groupId: string): TaskGroup | undefined {
-    const streamGroups = this._groups.get(stream);
+    const streamGroups = this.get(stream);
     return streamGroups?.get(groupId);
   }
 
@@ -75,97 +79,78 @@ export class TaskGroupManager {
    * Get all groups for a stream
    */
   getStreamGroups(stream: StreamTabId): Map<string, TaskGroup> {
-    return this._groups.get(stream) || new Map();
-  }
-
-  /**
-   * Get all groups across all streams
-   */
-  getAll(): Map<StreamTabId, Map<string, TaskGroup>> {
-    return new Map(this._groups);
+    return this.get(stream) || new Map();
   }
 
   /**
    * Check if a stream has groups
    */
   hasStream(stream: StreamTabId): boolean {
-    return this._groups.has(stream);
+    return this.has(stream);
   }
 
   /**
    * Delete all groups for a stream
    */
   deleteStream(stream: StreamTabId): void {
-    this._groups.delete(stream);
-    this.save();
+    this.delete(stream);
   }
 
   /**
    * Clear all groups
    */
   clear(): void {
-    this._groups.clear();
-    this.save();
+    super.clear();
   }
 
   /**
    * Set all groups (used during loading)
    */
   setAll(groups: Map<StreamTabId, Map<string, TaskGroup>>): void {
-    this._groups = new Map(groups);
+    super.setAll(groups);
   }
 
   /**
    * Load task groups from persistence
    */
   async load(): Promise<void> {
-    const savedGroups = await this.persistence.loadWithMigration<{
-      [key: string]: { [groupId: string]: TaskGroup };
-    }>(WorkspaceStateKey.TASK_GROUPS, 'texra.logGroups', {});
-
-    if (savedGroups && Object.keys(savedGroups).length > 0) {
-      const processedGroups = new Map<StreamTabId, Map<string, TaskGroup>>();
-
-      for (const [streamId, groups] of Object.entries(savedGroups)) {
-        const streamGroupsMap = new Map<string, TaskGroup>();
-
-        for (const [id, group] of Object.entries(groups)) {
-          // Normalize timestamp fields
-          const normalizedGroup: TaskGroup = {
-            ...group,
-            startTime:
-              typeof group.startTime === 'string'
-                ? new Date(group.startTime).getTime()
-                : group.startTime,
-            endTime:
-              group.endTime !== undefined
-                ? typeof group.endTime === 'string'
-                  ? new Date(group.endTime).getTime()
-                  : group.endTime
-                : undefined,
-          };
-
-          streamGroupsMap.set(id, normalizedGroup);
-        }
-
-        processedGroups.set(streamId, streamGroupsMap);
-      }
-
-      this._groups = processedGroups;
-      this.logger.debug(`Loaded task groups for ${this._groups.size} streams`);
-    } else {
-      this._groups.clear();
+    await super.load();
+    if (this.items.size > 0) {
+      this.logger.debug(`Loaded task groups for ${this.items.size} streams`);
     }
   }
 
-  /**
-   * Save task groups to persistence
-   */
-  save(): void {
-    const persistentGroups = Array.from(this._groups.entries()).map(
-      ([streamId, groups]) => [streamId, Object.fromEntries(groups.entries())],
-    );
-    const groupsObj = Object.fromEntries(persistentGroups);
-    this.persistence.save(WorkspaceStateKey.TASK_GROUPS, groupsObj);
+  /** Convert groups map to plain object */
+  protected override serialize(
+    value: Map<string, TaskGroup>,
+    _key: StreamTabId,
+  ): unknown {
+    return Object.fromEntries(value.entries());
+  }
+
+  /** Normalize loaded groups */
+  protected override async deserialize(
+    data: unknown,
+    _key: StreamTabId,
+  ): Promise<Map<string, TaskGroup>> {
+    const groups = data as Record<string, TaskGroup>;
+    const map = new Map<string, TaskGroup>();
+    for (const [id, group] of Object.entries(groups)) {
+      const normalized: TaskGroup = {
+        ...group,
+        startTime:
+          typeof group.startTime === 'string'
+            ? new Date(group.startTime).getTime()
+            : group.startTime,
+        endTime:
+          group.endTime !== undefined
+            ? typeof group.endTime === 'string'
+              ? new Date(group.endTime).getTime()
+              : group.endTime
+            : undefined,
+      };
+      map.set(id, normalized);
+    }
+    return map;
   }
 }
