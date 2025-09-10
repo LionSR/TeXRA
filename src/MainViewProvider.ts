@@ -5,7 +5,7 @@ import * as vscode from 'vscode';
 import { MainViewMessageHandler } from './webview/MainViewMessageHandler';
 import { MainViewContentProvider } from './webview/MainViewContentProvider';
 import { SecretManager } from '@frontend/secretManager';
-import { watchConfig } from '@utils/config';
+import { watchConfig, getConfig } from '@utils/config';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
 
 export class MainViewProvider implements vscode.WebviewViewProvider {
@@ -161,8 +161,7 @@ export class MainViewProvider implements vscode.WebviewViewProvider {
     this.setupInitialState(webviewView);
 
     // Check if any API keys are set and display banner if needed
-    const config = vscode.workspace.getConfiguration('texra');
-    const showReminders = config.get<boolean>('ui.showApiKeyReminders', true);
+    const showReminders = getConfig<boolean>('ui.showApiKeyReminders', true);
 
     if (showReminders) {
       SecretManager.anyApiKeyExists().then((exists) => {
