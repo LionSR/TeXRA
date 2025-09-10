@@ -8,6 +8,9 @@ import * as vscode from 'vscode';
 // Local imports - log
 import * as logger from '@logger/logUtils';
 
+// Local imports - utils
+import { ensureDirCommon } from './ensureDirCommon';
+
 const CHANNEL = 'absoluteFS';
 logger.initialize(CHANNEL);
 
@@ -92,18 +95,11 @@ export class AbsoluteFS {
    */
   public static async ensureDir(filePath: string): Promise<void> {
     this.validatePath(filePath, 'ensureDir');
-    try {
-      const exists = await this.exists(filePath);
-      if (!exists) {
-        await this.createDir(filePath);
-      }
-    } catch (err) {
-      // If error is because directory already exists, ignore it
-      if (err instanceof vscode.FileSystemError && err.code === 'FileExists') {
-        return;
-      }
-      throw err;
-    }
+    await ensureDirCommon(
+      filePath,
+      this.exists.bind(this),
+      this.createDir.bind(this),
+    );
   }
 
   /**

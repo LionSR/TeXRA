@@ -15,7 +15,7 @@ logger.initialize(CHANNEL);
  */
 async function hasChinesePackages(filePath: string): Promise<boolean> {
   try {
-    const content = await WorkspaceFS.readFile(filePath);
+    const content = await WorkspaceFS.read(filePath);
     const chinesePackages = [
       'xeCJK',
       'ctexart',
