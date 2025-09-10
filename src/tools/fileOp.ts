@@ -48,7 +48,10 @@ export class FileOpTool extends BaseTool<FileOpInput> {
       }
       case 'append': {
         if (content === undefined) {
-          throw new ToolError('File operation error: Content parameter is required for append command');
+          return new ToolResult({
+            error: 'content parameter is required for append',
+            isError: true,
+          });
         }
         await WorkspaceFS.appendFile(path, content);
         return new ToolResult({ output: 'appended' });
