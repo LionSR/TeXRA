@@ -127,6 +127,12 @@
             "default": true,
             "description": "Show API key reminders in the status bar and main view when no API keys are configured",
             "scope": "resource"
+          },
+          "texra.ui.showDependencyReminders": {
+            "type": "boolean",
+            "default": true,
+            "description": "Show dependency check reminders in the main view when core dependencies are missing",
+            "scope": "resource"
           }
         }
       },
