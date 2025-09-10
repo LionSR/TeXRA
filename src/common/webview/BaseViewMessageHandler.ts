@@ -25,13 +25,27 @@ export abstract class BaseViewMessageHandler<
     this.logger = logger;
     this.channel = `${viewName}MessageHandler`;
     logger.initialize(this.channel);
-    this.handlers = this.createHandlers();
+    this.handlers = {
+      ...this.getBaseHandlers(),
+      ...this.createHandlers(),
+    };
   }
 
   /**
    * Subclasses must implement this to provide their specific handlers
    */
   protected abstract createHandlers(): Record<string, MessageHandler<T>>;
+
+  /**
+   * Base handlers shared across all webviews
+   */
+  protected getBaseHandlers(): Record<string, MessageHandler<T>> {
+    return {
+      [COMMON_COMMANDS.THEME_SET]: (m, w) => this.handleTheme(m, w),
+      [COMMON_COMMANDS.DEBUG_MODE_SET]: (m, w) => this.handleDebugMode(m, w),
+      [COMMON_COMMANDS.WEBVIEW_READY]: (m, w) => this.handleWebviewReady(m, w),
+    };
+  }
 
   /**
    * Standard message handling with consistent error handling and logging

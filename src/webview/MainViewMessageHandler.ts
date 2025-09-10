@@ -49,11 +49,6 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
     MessageHandler<vscode.WebviewView>
   > {
     return {
-      // Common handlers
-      [MAIN_VIEW_COMMANDS.THEME_SET]: this.handleTheme.bind(this),
-      [MAIN_VIEW_COMMANDS.DEBUG_MODE_SET]: this.handleDebugMode.bind(this),
-      [MAIN_VIEW_COMMANDS.WEBVIEW_READY]: this.handleWebviewReady.bind(this),
-
       // Core functionality
       [MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE]:
         this.handleInfoMessage.bind(this),

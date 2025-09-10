@@ -1,4 +1,10 @@
+/* eslint-env mocha */
+
+// Third-party imports
 import * as assert from 'assert';
+import { suite, test } from 'mocha';
+
+// Local imports
 import { getBasename } from '../../../common/modules/pathUtils.js';
 
 suite('pathUtils.js Test Suite', () => {
@@ -12,12 +18,21 @@ suite('pathUtils.js Test Suite', () => {
     test('should extract basename from Windows paths', () => {
       assert.strictEqual(getBasename('C:\\Users\\file.txt'), 'file.txt');
       assert.strictEqual(getBasename('C:\\Program Files\\app.exe'), 'app.exe');
-      assert.strictEqual(getBasename('D:\\Documents\\report.docx'), 'report.docx');
+      assert.strictEqual(
+        getBasename('D:\\Documents\\report.docx'),
+        'report.docx',
+      );
     });
 
     test('should handle mixed path separators', () => {
-      assert.strictEqual(getBasename('C:/Users\\Documents/file.txt'), 'file.txt');
-      assert.strictEqual(getBasename('/home\\user/document.pdf'), 'document.pdf');
+      assert.strictEqual(
+        getBasename('C:/Users\\Documents/file.txt'),
+        'file.txt',
+      );
+      assert.strictEqual(
+        getBasename('/home\\user/document.pdf'),
+        'document.pdf',
+      );
     });
 
     test('should handle paths with trailing slashes', () => {
@@ -37,14 +52,26 @@ suite('pathUtils.js Test Suite', () => {
 
     test('should handle files with multiple dots', () => {
       assert.strictEqual(getBasename('/path/to/file.tar.gz'), 'file.tar.gz');
-      assert.strictEqual(getBasename('archive.backup.zip'), 'archive.backup.zip');
+      assert.strictEqual(
+        getBasename('archive.backup.zip'),
+        'archive.backup.zip',
+      );
       assert.strictEqual(getBasename('/home/user/.bashrc'), '.bashrc');
     });
 
     test('should handle special characters in filenames', () => {
-      assert.strictEqual(getBasename('/path/to/file with spaces.txt'), 'file with spaces.txt');
-      assert.strictEqual(getBasename('/path/to/file-with-dashes.txt'), 'file-with-dashes.txt');
-      assert.strictEqual(getBasename('/path/to/file_with_underscores.txt'), 'file_with_underscores.txt');
+      assert.strictEqual(
+        getBasename('/path/to/file with spaces.txt'),
+        'file with spaces.txt',
+      );
+      assert.strictEqual(
+        getBasename('/path/to/file-with-dashes.txt'),
+        'file-with-dashes.txt',
+      );
+      assert.strictEqual(
+        getBasename('/path/to/file_with_underscores.txt'),
+        'file_with_underscores.txt',
+      );
     });
 
     test('should handle relative paths', () => {

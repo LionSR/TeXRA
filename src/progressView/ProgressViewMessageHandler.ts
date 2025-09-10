@@ -21,12 +21,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     MessageHandler<vscode.WebviewView>
   > {
     return {
-      // Common handlers
-      [PROGRESS_VIEW_COMMANDS.THEME_SET]: this.handleTheme.bind(this),
-      [PROGRESS_VIEW_COMMANDS.DEBUG_MODE_SET]: this.handleDebugMode.bind(this),
-      [PROGRESS_VIEW_COMMANDS.WEBVIEW_READY]:
-        this.handleWebviewReady.bind(this),
-
       // Stream management
       [PROGRESS_VIEW_COMMANDS.SWITCH_STREAM]:
         this.handleSwitchStream.bind(this),
