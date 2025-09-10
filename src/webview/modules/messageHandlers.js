@@ -19,6 +19,7 @@ import { mainViewState } from './mainViewState.js';
 
 // Local imports - UI managers
 import { fileSelect } from './uiManagers/FileSelect.js';
+import { bannerManager } from './uiManagers/BannerManager.js';
 import {
   safeSetElementValue,
   safeGetElementById,
@@ -62,76 +63,20 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       ...this._createInstructionHandlers(),
       ...createRecordingHandlers({ postHandle: ctx.postHandle }),
       ...createFileHandlers(ctx),
-      [MAIN_VIEW_COMMANDS.SHOW_API_KEY_BANNER]: (m) => {
-        const element = this._getElement(ELEMENT_IDS.API_KEY_BANNER);
-        if (element) {
-          const textSpan = element.querySelector('span');
-          const setButton = element.querySelector('#apiKeyBannerButton');
-          const getButton = element.querySelector('#apiKeyGuideButton');
-
-          if (textSpan && setButton && getButton) {
-            if (m?.provider) {
-              // Provider-specific context
-              const providerName =
-                m.provider.charAt(0).toUpperCase() + m.provider.slice(1);
-              textSpan.innerHTML = `<strong>${providerName}</strong> API key missing.`;
-              setButton.textContent = `Set Key`;
-              getButton.textContent = `Get Key`;
-
-              // Store provider info for click handlers
-              element.dataset.provider = m.provider;
-            } else {
-              // General context (no specific provider)
-              textSpan.textContent = `TeXRA requires an API key to run.`;
-              setButton.textContent = `Set API Key`;
-              getButton.textContent = `API Key Guide`;
-
-              // Clear provider info
-              delete element.dataset.provider;
-            }
-          }
-          element.style.setProperty('display', 'flex');
-        }
-      },
-      [MAIN_VIEW_COMMANDS.HIDE_API_KEY_BANNER]: () => {
-        const element = this._getElement(ELEMENT_IDS.API_KEY_BANNER);
-        if (element) {
-          element.style.setProperty('display', 'none');
-        }
-      },
-      [MAIN_VIEW_COMMANDS.SHOW_AGENT_CONFIG_BANNER]: (m) => {
-        const element = this._getElement(ELEMENT_IDS.AGENT_CONFIG_BANNER);
-        if (element) {
-          const textSpan = element.querySelector('span');
-          const dirButton = element.querySelector('#agentConfigDirButton');
-          if (textSpan) {
-            textSpan.textContent = m?.agentName
-              ? `Agent file for "${m.agentName}" is missing.`
-              : 'Agent configuration is missing.';
-          }
-          if (dirButton) {
-            dirButton.textContent = m?.customDirSet
-              ? 'Open Directory'
-              : 'Set Directory';
-          }
-          element.dataset.customDirSet = m?.customDirSet ? 'true' : 'false';
-          element.style.setProperty('display', 'flex');
-        }
-      },
-      [MAIN_VIEW_COMMANDS.HIDE_AGENT_CONFIG_BANNER]: () => {
-        const element = this._getElement(ELEMENT_IDS.AGENT_CONFIG_BANNER);
-        if (element) {
-          element.style.setProperty('display', 'none');
-        }
-      },
-      [MAIN_VIEW_COMMANDS.SHOW_DEPENDENCY_BANNER]: (m) => {
+      [MAIN_VIEW_COMMANDS.SHOW_API_KEY_BANNER]: (m) =>
+        bannerManager.showBanner(ELEMENT_IDS.API_KEY_BANNER, m),
+      [MAIN_VIEW_COMMANDS.HIDE_API_KEY_BANNER]: () =>
+        bannerManager.hideBanner(ELEMENT_IDS.API_KEY_BANNER),
+      [MAIN_VIEW_COMMANDS.SHOW_AGENT_CONFIG_BANNER]: (m) =>
+        bannerManager.showBanner(ELEMENT_IDS.AGENT_CONFIG_BANNER, m),
+      [MAIN_VIEW_COMMANDS.HIDE_AGENT_CONFIG_BANNER]: () =>
+        bannerManager.hideBanner(ELEMENT_IDS.AGENT_CONFIG_BANNER),
+      [MAIN_VIEW_COMMANDS.SHOW_DEPENDENCY_BANNER]: (m) =>
         webviewEventBus.dispatchEvent(
           new CustomEvent('showDependencyBanner', { detail: m }),
-        );
-      },
-      [MAIN_VIEW_COMMANDS.HIDE_DEPENDENCY_BANNER]: () => {
-        webviewEventBus.dispatchEvent(new CustomEvent('hideDependencyBanner'));
-      },
+        ),
+      [MAIN_VIEW_COMMANDS.HIDE_DEPENDENCY_BANNER]: () =>
+        webviewEventBus.dispatchEvent(new CustomEvent('hideDependencyBanner')),
       [MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS]: (m) => {
         // Validate that options are provided
         if (!m.options) {
