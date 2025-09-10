@@ -3,6 +3,8 @@ import * as vscode from 'vscode';
 
 // Local imports - progress view
 import type { ProgressViewProvider } from './ProgressViewProvider';
+
+// Local imports - common
 import {
   BaseViewMessageHandler,
   MessageHandler,
@@ -61,6 +63,13 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
   }
 
   // Handler implementations
+  protected async handleWebviewReady(
+    message: any,
+    webviewView: vscode.WebviewView,
+  ): Promise<void> {
+    this.provider.onWebviewReady();
+  }
+
   private async handleSwitchStream(
     message: any,
     webviewView: vscode.WebviewView,

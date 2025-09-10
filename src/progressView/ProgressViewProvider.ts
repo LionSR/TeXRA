@@ -1,5 +1,4 @@
 // Third-party imports
-// Third-party imports
 import * as vscode from 'vscode';
 
 // Local imports - progress view
@@ -7,21 +6,22 @@ import { ProgressEventHandler } from './events/ProgressEventHandler';
 import { WebviewUpdater } from './managers';
 
 // @ts-ignore - Import JavaScript module
-import { STATUS, COMMANDS } from './modules/constants.js';
+import { STATUS } from './modules/constants.js';
 
 // Local imports - new architecture
 import { StatePersistenceManager } from './persistence/StatePersistenceManager';
+import { ProgressViewState } from './state/ProgressViewState';
 
 // Local imports - existing components
 import { ProgressViewContentProvider } from './ProgressViewContentProvider';
 import { ProgressViewMessageHandler } from './ProgressViewMessageHandler';
-import { ProgressViewState } from './state/ProgressViewState';
+
+// Local imports - common
+import { BaseWebviewProvider } from '@common/webview/BaseWebviewProvider';
 
 // Types
-import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
-import type { TokenUsageStats } from '@agent/types/UsageTypes';
+import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import { AgentLogger } from '@logger/AgentLogger';
-import { LogMessageData } from '@logger/LogTypes';
 import { TaskState } from '@logger/TaskState';
 
 // Type aliases for status values
@@ -35,22 +35,19 @@ type StreamStatusType =
  * This class now focuses on orchestration and delegation to focused managers,
  * following the design principles from AGENTS.md.
  */
-export class ProgressViewProvider implements vscode.WebviewViewProvider {
+export class ProgressViewProvider
+  extends BaseWebviewProvider<vscode.WebviewView>
+  implements vscode.WebviewViewProvider
+{
   private static _instance: ProgressViewProvider | undefined;
-  private _view?: vscode.WebviewView;
 
   // New modular architecture components
   public readonly state: ProgressViewState;
   public readonly eventHandler: ProgressEventHandler;
   public readonly webviewUpdater: WebviewUpdater;
 
-  // Existing components (will be gradually updated)
-  private readonly contentProvider: ProgressViewContentProvider;
-  private readonly messageHandler: ProgressViewMessageHandler;
-
   // Infrastructure
   private _disposables: vscode.Disposable[] = [];
-  private _viewDisposables: vscode.Disposable[] = [];
   private readonly _extensionUri: vscode.Uri;
   private readonly _viewTitle: string;
   private _webviewReady = false;
@@ -58,10 +55,8 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   private _hasResolved = false;
   private readonly logger: AgentLogger;
 
-  constructor(
-    private readonly context: vscode.ExtensionContext,
-    title: string = 'Tasks',
-  ) {
+  constructor(context: vscode.ExtensionContext, title: string = 'Tasks') {
+    super(context);
     this._extensionUri = context.extensionUri;
     this._viewTitle = title;
     this.logger = new AgentLogger('ProgressViewProviderNew');
@@ -71,7 +66,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       context.workspaceState,
     );
     this.state = new ProgressViewState(persistenceManager);
-    this.webviewUpdater = new WebviewUpdater(() => this._view?.webview);
+    this.webviewUpdater = new WebviewUpdater(() => this.view?.webview);
     this.eventHandler = new ProgressEventHandler(
       this.state,
       this.webviewUpdater,
@@ -116,10 +111,8 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     this.cleanupView();
   }
 
-  private cleanupView(): void {
-    this._viewDisposables.forEach((d) => d.dispose());
-    this._viewDisposables = [];
-    this._view = undefined;
+  protected cleanupView(): void {
+    super.cleanupView();
     this._webviewReady = false;
     this._pendingUpdate = false;
   }
@@ -135,7 +128,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
 
     this._webviewReady = false;
     this._pendingUpdate = false;
-    this._view = webviewView;
 
     this.setupWebview(webviewView);
     this.updateWebview();
@@ -166,34 +158,21 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
 
     webviewView.title = this._viewTitle;
 
-    // Set initial HTML content
-    webviewView.webview.html = this.contentProvider.getHtmlContent(
-      webviewView.webview,
-    );
+    super.resolveWebviewView(webviewView);
 
     // Setup event handlers
-    this._viewDisposables.push(
+    this.registerViewDisposable(
       webviewView.onDidChangeVisibility(() => {
         if (webviewView.visible) {
           this.updateWebview();
         }
       }),
+    );
+    this.registerViewDisposable(
       vscode.window.onDidChangeActiveColorTheme(() => {
         if (webviewView.visible) {
           this.updateWebview();
         }
-      }),
-      webviewView.webview.onDidReceiveMessage(async (message) => {
-        if (message.command === COMMANDS.WEBVIEW_READY) {
-          this._webviewReady = true;
-          // Always update webview when it becomes ready to ensure all streams are shown
-          this.updateWebview();
-          return;
-        }
-        await this.messageHandler.handleMessage(message, webviewView);
-      }),
-      webviewView.onDidDispose(() => {
-        this.cleanupView();
       }),
     );
   }
@@ -202,7 +181,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
    * Update webview content using the new architecture
    */
   public updateWebview(): void {
-    if (!this._view) return;
+    if (!this.view) return;
 
     if (!this._webviewReady) {
       this._pendingUpdate = true;
@@ -240,6 +219,11 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     this._pendingUpdate = false;
   }
 
+  public onWebviewReady(): void {
+    this._webviewReady = true;
+    this.updateWebview();
+  }
+
   // Public API methods - these delegate to the new architecture
 
   /**
@@ -270,7 +254,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
    * Check if view is visible (legacy compatibility)
    */
   public isViewVisible(): boolean {
-    return this._view?.visible ?? false;
+    return this.view?.visible ?? false;
   }
 
   /**
