@@ -89,6 +89,7 @@ export async function getTeXCount(
       const result = await runToolWithCheck('texcount', args, {
         channel,
         truncate: false, // Don't truncate texcount output as we need the full statistics
+        showError: true, // Show error for missing texcount
       });
       if (!result) {
         return null;
