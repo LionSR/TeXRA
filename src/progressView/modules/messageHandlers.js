@@ -5,7 +5,7 @@ import { createThemeHandlers } from './handlers/themeHandlers.js';
 import { appendFormatted } from './utils.js';
 // Local imports - log state
 import { progressViewState } from './progressViewState.js';
-import { registerMessageHandlers } from '@common/webviewContext.js';
+import { BaseWebviewMessageHandler } from '@common/BaseWebviewMessageHandler.js';
 
 // Create shorter aliases for internal use
 const state = progressViewState;
@@ -13,9 +13,9 @@ const dom = progressViewDomHandler;
 
 // Create formatter instances
 
-export class ProgressViewMessageHandler {
+export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   constructor() {
-    this._cleanupFn = null;
+    super();
     this._entryFormatter = new LogEntryFormatter();
     this._handlers = {
       ...createThemeHandlers(),
@@ -53,17 +53,6 @@ export class ProgressViewMessageHandler {
       [COMMANDS.DELETE_STREAM]: (m) => this.handleDeleteStream(m),
       [COMMANDS.DELETE_ALL]: () => this.handleDeleteAll(),
     };
-  }
-
-  setup() {
-    this._cleanupFn = registerMessageHandlers(this._handlers);
-  }
-
-  cleanup() {
-    if (this._cleanupFn) {
-      this._cleanupFn();
-      this._cleanupFn = null;
-    }
   }
 
   handleUpdateStreams(message) {
@@ -188,7 +177,8 @@ export class ProgressViewMessageHandler {
               formatted.setAttribute('open', '');
               const toggleIcon = formatted.querySelector('.toggle-icon');
               if (toggleIcon) {
-                toggleIcon.className = 'codicon codicon-chevron-down toggle-icon';
+                toggleIcon.className =
+                  'codicon codicon-chevron-down toggle-icon';
               }
             }
           }
