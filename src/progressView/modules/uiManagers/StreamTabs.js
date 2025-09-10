@@ -3,6 +3,7 @@
 import { ELEMENT_IDS } from '../constants.js';
 import { initializeIconButtons } from '@common/iconButtonInitializer.js';
 import { createFromTemplate } from '@common/templateUtils.js';
+import { formatRelativeTime } from '@common/stringUtils.js';
 
 const AGENT_ICONS = {
   CoT: 'terminal',
@@ -40,7 +41,7 @@ export class StreamTabs {
         text: {
           '.tab-title': info.label || info.name,
           '.model': info.model || '',
-          '.last-active': this.formatRelativeTime(info.lastTimestamp),
+          '.last-active': formatRelativeTime(info.lastTimestamp),
         },
         attributes: {
           '.tab': { title: info.name },
@@ -88,20 +89,5 @@ export class StreamTabs {
     if (streamNameElem) {
       streamNameElem.textContent = activeStream || '';
     }
-  }
-
-  formatRelativeTime(timestamp) {
-    if (!timestamp) return '';
-    const diff = Date.now() - timestamp;
-    const minutes = Math.floor(diff / 60000);
-    if (minutes < 1) return 'just now';
-    if (minutes === 1) return '1 min ago';
-    if (minutes < 60) return `${minutes} mins ago`;
-    const hours = Math.floor(minutes / 60);
-    if (hours === 1) return '1 hr ago';
-    if (hours < 24) return `${hours} hrs ago`;
-    const days = Math.floor(hours / 24);
-    if (days === 1) return '1 day ago';
-    return `${days} days ago`;
   }
 }
