@@ -85,31 +85,38 @@ class VSCodeTransport extends Transport {
   log(info: any, callback: () => void) {
     const { level, message, timestamp, messageType } = info;
     const structuredData = serializeLogData(info.data);
-    // Use the provided groupId or fall back to the activeGroupId if available
     const groupId = info.groupId || this.activeGroupId;
 
+    this.writeToChannel(level, message, timestamp, structuredData);
+
+    if (!this.shouldEmitToProgressView(level, messageType)) {
+      callback();
+      return;
+    }
+
+    this.emitToProgressView(
+      level,
+      message,
+      timestamp,
+      groupId,
+      messageType,
+      structuredData,
+    );
+
+    callback();
+  }
+
+  private writeToChannel(
+    level: string,
+    message: string,
+    timestamp: string,
+    structuredData: unknown,
+  ): void {
     const emoji = getColorForLevel(level);
-
-    // Extract parts of the timestamp for display formatting
-    // Full format is: YYYY-MM-DD HH:mm:ss.SSS
-
-    // For non-agent channels include the source name in the message
     const channelPrefix = this.isAgentChannel ? '' : `[${this.streamName}] `;
-
-    // Plain format for output channel - no escaping needed but include better formatting
-    // const formattedMessage = `${emoji} [${timestamp}] ${level.toUpperCase().padEnd(7)} ${channelPrefix}${message}`;
     const formattedMessage = `${emoji} [${timestamp}] ${channelPrefix}${message}`;
-
-    // Skip output channel logging for special structured messages
-    // if (
-    //   messageType !== MESSAGE_TYPES.FILE_LIST &&
-    //   messageType !== MESSAGE_TYPES.MISSING_OUTPUTS &&
-    //   messageType !== MESSAGE_TYPES.LATEXDIFF
-    // ) {
-    //   // Always write to the configured output channel
-    //   this.channel.appendLine(formattedMessage);
-    // }
     this.channel.appendLine(formattedMessage);
+
     if (
       structuredData !== undefined &&
       getConfig<boolean>('logger.debugMode', false)
@@ -120,35 +127,39 @@ class VSCodeTransport extends Transport {
           : JSON.stringify(structuredData, null, 2);
       this.channel.appendLine(dataString);
     }
+  }
 
-    // Skip debug messages in ProgressView if debug mode is disabled
+  private shouldEmitToProgressView(
+    level: string,
+    messageType?: MessageType,
+  ): boolean {
     if (level === 'debug' && !getConfig<boolean>('logger.debugMode', false)) {
-      callback();
-      return;
+      return false;
     }
-
-    // Skip progress view updates for internal messages
     if (messageType === MESSAGE_TYPES.INTERNAL) {
-      callback();
-      return;
+      return false;
     }
-
-    // Skip progress view updates for non-agent channels
     if (!this.isAgentChannel) {
-      callback();
-      return;
+      return false;
     }
+    return true;
+  }
 
+  private emitToProgressView(
+    level: string,
+    message: string,
+    timestamp: string,
+    groupId: string | undefined,
+    messageType: MessageType | undefined,
+    structuredData: unknown,
+  ): void {
     const processedMessage = encodeHtml(message);
-
     const msgType: MessageType = isValidMessageType(messageType)
       ? messageType
       : MESSAGE_TYPES.DEFAULT;
-
     const isVerbose = getConfig<boolean>('logger.debugMode', false);
     const id = randomUUID();
     const numericTimestamp = new Date(timestamp).getTime();
-
     const logMessage = {
       id,
       text: processedMessage,
@@ -159,13 +170,10 @@ class VSCodeTransport extends Transport {
       verbose: isVerbose,
       data: structuredData,
     } satisfies import('./LogTypes').LogMessageData;
-
     bus.emit('addLogMessage', {
       stream: this.streamName,
       logMessage,
     });
-
-    callback();
   }
 
   // Create a new log group and make it active
