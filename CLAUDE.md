@@ -177,6 +177,7 @@ When creating a new release:
    ```
 
 5. Publish to Open VSX Marketplace
+
    ```bash
    ovsx publish
    ```

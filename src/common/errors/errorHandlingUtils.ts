@@ -24,10 +24,10 @@ import * as logger from '@logger/logUtils';
  * Valid documentation identifiers for error messages.
  * This ensures type safety when referencing documentation sections.
  */
-export type DocId = 
-  | 'intelligent-merge' 
-  | 'custom-agents' 
-  | 'tool-integration' 
+export type DocId =
+  | 'intelligent-merge'
+  | 'custom-agents'
+  | 'tool-integration'
   | 'latex-diff';
 
 /** Maximum length for error details before truncation */
@@ -59,12 +59,12 @@ const MAX_ERROR_LENGTH = 500;
  */
 export function formatError(prefix: string, err: unknown): string {
   let detail = err instanceof Error ? err.message : String(err);
-  
+
   // Truncate overly long error details for better readability
   if (detail.length > MAX_ERROR_LENGTH) {
     detail = detail.substring(0, MAX_ERROR_LENGTH) + '...';
   }
-  
+
   return `${prefix}: ${detail}`;
 }
 
