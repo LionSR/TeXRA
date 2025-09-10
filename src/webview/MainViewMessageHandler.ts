@@ -155,6 +155,8 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
       },
       [MAIN_VIEW_COMMANDS.OPEN_AGENT_DOCS]: async () =>
         safeExecuteCommand('texra.openDoc', ['agent-explorer'], this.viewName),
+      [MAIN_VIEW_COMMANDS.OPEN_INSTALLATION_DOCS]: async () =>
+        safeExecuteCommand('texra.openDoc', ['installation'], this.viewName),
 
       // Instruction commands
       [MAIN_VIEW_COMMANDS.POLISH_INSTRUCTION_TEXT]: async (m, w) =>
@@ -200,6 +202,14 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         w.webview.postMessage(m);
       },
       [MAIN_VIEW_COMMANDS.HIDE_AGENT_CONFIG_BANNER]: async (m, w) => {
+        /* Banner handled client-side */
+        w.webview.postMessage(m);
+      },
+      [MAIN_VIEW_COMMANDS.SHOW_DEPENDENCY_BANNER]: async (m, w) => {
+        /* Banner handled client-side */
+        w.webview.postMessage(m);
+      },
+      [MAIN_VIEW_COMMANDS.HIDE_DEPENDENCY_BANNER]: async (m, w) => {
         /* Banner handled client-side */
         w.webview.postMessage(m);
       },
