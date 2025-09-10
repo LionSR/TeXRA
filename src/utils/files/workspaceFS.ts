@@ -44,6 +44,34 @@ export class WorkspaceFS extends RelativeFS {
     return workspacePath ? path.relative(workspacePath, filePath) : filePath;
   }
 
+  /**
+   * Delete a file or directory. Tolerant of missing files (idempotent).
+   * @param relativePath The path to delete
+   * @param options Optional deletion options
+   */
+  public static async delete(
+    relativePath: string,
+    options?: { recursive?: boolean; useTrash?: boolean },
+  ): Promise<void> {
+    try {
+      await super.delete(relativePath, options);
+    } catch (err) {
+      // Make delete idempotent - if file doesn't exist, that's fine
+      if (
+        err instanceof vscode.FileSystemError &&
+        err.code === 'FileNotFound'
+      ) {
+        logger.debug(
+          CHANNEL,
+          `Skipping deletion of non-existent file: ${relativePath}`,
+        );
+        return;
+      }
+      // Re-throw other errors
+      throw err;
+    }
+  }
+
   public static async appendFile(
     filePath: string,
     content: string,
