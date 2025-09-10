@@ -4,7 +4,6 @@ import * as os from 'os';
 import * as path from 'path';
 
 // Third-party imports
-import * as vscode from 'vscode';
 import { PDFDocument } from '@cantoo/pdf-lib';
 import { fromPath } from 'pdf2pic';
 
@@ -12,6 +11,7 @@ import { fromPath } from 'pdf2pic';
 import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
+import { getConfig } from '@utils/config';
 import { WorkspaceFS, AbsoluteFS, getMimeType } from '@utils/files';
 import { checkMultipleToolsInstalled } from '@utils/system';
 import { executeCommand } from '@utils/system/execUtils';
@@ -24,8 +24,7 @@ logger.initialize(CHANNEL);
  * @returns Maximum image dimension (defaults to 2000)
  */
 function getMaxImageDimension(): number {
-  const config = vscode.workspace.getConfiguration('texra');
-  return config.get<number>('maxImageDimension', 2000);
+  return getConfig<number>('maxImageDimension', 2000);
 }
 
 // Define the temporary directory path
