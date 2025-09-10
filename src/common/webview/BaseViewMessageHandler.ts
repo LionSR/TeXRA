@@ -5,11 +5,9 @@ import * as vscode from 'vscode';
 import { COMMON_COMMANDS } from './commands';
 import * as logger from '@logger/logUtils';
 
-export type MessageHandler<T extends vscode.WebviewView | vscode.WebviewPanel> =
-  (
-    message: any,
-    webviewView: T,
-  ) => Promise<void>;
+export type MessageHandler<
+  T extends vscode.WebviewView | vscode.WebviewPanel = vscode.WebviewView,
+> = (message: any, webviewView: T) => Promise<void>;
 
 /**
  * Base class for all webview message handlers.
