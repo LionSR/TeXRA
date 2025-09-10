@@ -46,7 +46,7 @@ export class DiagnosticsTool extends BaseTool<DiagnosticsInput> {
         return new ToolResult({ output: JSON.stringify(counts) });
       }
       default:
-        throw new ToolError(`Unrecognized command: ${command}`);
+        throw new ToolError(`Diagnostics tool error: Unrecognized command '${command}'. Expected 'list' or 'count'.`);
     }
   }
 }
