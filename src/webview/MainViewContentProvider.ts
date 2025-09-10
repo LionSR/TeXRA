@@ -5,11 +5,56 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 // Local imports - webview
-import { BaseViewContentProvider } from '@common/webview/BaseViewContentProvider';
+import {
+  BaseViewContentProvider,
+  ModuleDescriptor,
+} from '@common/webview/BaseViewContentProvider';
 import { getConfig } from '@utils/config';
 import { GlobalStorageFS, AbsoluteFS } from '@utils/files';
 
 export class MainViewContentProvider extends BaseViewContentProvider {
+  private readonly moduleDescriptors: ModuleDescriptor[] = [
+    { key: 'webviewStateModuleUri', path: 'modules/mainViewState.js' },
+    { key: 'themeHandlersUri', path: 'modules/handlers/themeHandlers.js' },
+    { key: 'fileMessageHandlersUri', path: 'modules/handlers/fileHandlers.js' },
+    {
+      key: 'recordingHandlersUri',
+      path: 'modules/handlers/recordingHandlers.js',
+    },
+    { key: 'eventBusUri', path: 'modules/eventBus.js' },
+    { key: 'fileListUri', path: 'modules/uiManagers/FileList.js' },
+    { key: 'fileSelectUri', path: 'modules/uiManagers/FileSelect.js' },
+    { key: 'toggleManagerUri', path: 'modules/uiManagers/ToggleManager.js' },
+    { key: 'baseUIManagerUri', path: 'modules/uiManagers/BaseUIManager.js' },
+    {
+      key: 'fileInputManagerUri',
+      path: 'modules/uiManagers/FileInputManager.js',
+    },
+    {
+      key: 'actionButtonManagerUri',
+      path: 'modules/uiManagers/ActionButtonManager.js',
+    },
+    {
+      key: 'settingsButtonManagerUri',
+      path: 'modules/uiManagers/SettingsButtonManager.js',
+    },
+    {
+      key: 'recordingManagerUri',
+      path: 'modules/uiManagers/RecordingManager.js',
+    },
+    {
+      key: 'instructionManagerUri',
+      path: 'modules/uiManagers/InstructionManager.js',
+    },
+    {
+      key: 'outputFilesManagerUri',
+      path: 'modules/uiManagers/OutputFilesManager.js',
+    },
+    {
+      key: 'latexdiffManagerUri',
+      path: 'modules/uiManagers/LatexdiffManager.js',
+    },
+  ];
   constructor(context: vscode.ExtensionContext) {
     super(context, 'MainView');
   }
@@ -19,81 +64,15 @@ export class MainViewContentProvider extends BaseViewContentProvider {
   }
 
   protected getModuleUris(webview: vscode.Webview): Record<string, vscode.Uri> {
-    return {
-      styleUri: this.getWebviewUri(webview, 'styles/index.css'),
-      scriptUri: this.getWebviewUri(webview, 'script.js'),
-
-      // Main view specific modules
-      webviewStateModuleUri: this.getWebviewUri(
-        webview,
-        'modules/mainViewState.js',
-      ),
-      messageHandlersUri: this.getWebviewUri(
-        webview,
-        'modules/messageHandlers.js',
-      ),
-      themeHandlersUri: this.getWebviewUri(
-        webview,
-        'modules/handlers/themeHandlers.js',
-      ),
-      fileMessageHandlersUri: this.getWebviewUri(
-        webview,
-        'modules/handlers/fileHandlers.js',
-      ),
-      recordingHandlersUri: this.getWebviewUri(
-        webview,
-        'modules/handlers/recordingHandlers.js',
-      ),
-      domHandlersUri: this.getWebviewUri(webview, 'modules/domHandlers.js'),
-      constantsUri: this.getWebviewUri(webview, 'modules/constants.js'),
-      eventBusUri: this.getWebviewUri(webview, 'modules/eventBus.js'),
-
-      // UI managers
-      fileListUri: this.getWebviewUri(
-        webview,
-        'modules/uiManagers/FileList.js',
-      ),
-      fileSelectUri: this.getWebviewUri(
-        webview,
-        'modules/uiManagers/FileSelect.js',
-      ),
-      toggleManagerUri: this.getWebviewUri(
-        webview,
-        'modules/uiManagers/ToggleManager.js',
-      ),
-      baseUIManagerUri: this.getWebviewUri(
-        webview,
-        'modules/uiManagers/BaseUIManager.js',
-      ),
-      fileInputManagerUri: this.getWebviewUri(
-        webview,
-        'modules/uiManagers/FileInputManager.js',
-      ),
-      actionButtonManagerUri: this.getWebviewUri(
-        webview,
-        'modules/uiManagers/ActionButtonManager.js',
-      ),
-      settingsButtonManagerUri: this.getWebviewUri(
-        webview,
-        'modules/uiManagers/SettingsButtonManager.js',
-      ),
-      recordingManagerUri: this.getWebviewUri(
-        webview,
-        'modules/uiManagers/RecordingManager.js',
-      ),
-      instructionManagerUri: this.getWebviewUri(
-        webview,
-        'modules/uiManagers/InstructionManager.js',
-      ),
-      outputFilesManagerUri: this.getWebviewUri(
-        webview,
-        'modules/uiManagers/OutputFilesManager.js',
-      ),
-      latexdiffManagerUri: this.getWebviewUri(
-        webview,
-        'modules/uiManagers/LatexdiffManager.js',
-      ),
-    };
+    const modules = [
+      ...this.sharedModuleDescriptors,
+      ...this.moduleDescriptors,
+    ];
+    const uris: Record<string, vscode.Uri> = {};
+    for (const { key, path } of modules) {
+      uris[key] = this.getWebviewUri(webview, path);
+    }
+    return uris;
   }
 
   protected getTemplateVariables(): Record<string, any> {

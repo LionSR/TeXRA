@@ -2,9 +2,26 @@
 import * as vscode from 'vscode';
 
 // Local imports - progress view
-import { BaseViewContentProvider } from '@common/webview/BaseViewContentProvider';
+import {
+  BaseViewContentProvider,
+  ModuleDescriptor,
+} from '@common/webview/BaseViewContentProvider';
 
 export class ProgressViewContentProvider extends BaseViewContentProvider {
+  private readonly moduleDescriptors: ModuleDescriptor[] = [
+    { key: 'progressViewStateUri', path: 'modules/progressViewState.js' },
+    { key: 'formattersUri', path: 'modules/formatters.js' },
+    { key: 'taskManagersUri', path: 'modules/taskManagers.js' },
+    { key: 'usageManagersUri', path: 'modules/usageManagers.js' },
+    { key: 'katexMacrosUri', path: 'modules/katexMacros.js' },
+    { key: 'themeHandlersUri', path: 'modules/handlers/themeHandlers.js' },
+    { key: 'streamTabsUri', path: 'modules/uiManagers/StreamTabs.js' },
+    { key: 'toolbarUri', path: 'modules/uiManagers/Toolbar.js' },
+    { key: 'statusUri', path: 'modules/uiManagers/Status.js' },
+    { key: 'fileListUri', path: 'modules/uiManagers/FileList.js' },
+    { key: 'eventsUri', path: 'modules/uiManagers/EventsManager.js' },
+    { key: 'placeholderUri', path: 'modules/uiManagers/Placeholder.js' },
+  ];
   constructor(context: vscode.ExtensionContext) {
     super(context, 'ProgressView');
   }
@@ -14,50 +31,16 @@ export class ProgressViewContentProvider extends BaseViewContentProvider {
   }
 
   protected getModuleUris(webview: vscode.Webview): Record<string, vscode.Uri> {
-    return {
-      styleUri: this.getWebviewUri(webview, 'styles/index.css'),
-      scriptUri: this.getWebviewUri(webview, 'script.js'),
+    const modules = [
+      ...this.sharedModuleDescriptors,
+      ...this.moduleDescriptors,
+    ];
+    const uris: Record<string, vscode.Uri> = {
       splitJsUri: this.getNodeModulesUri(webview, 'split.js/dist/split.es.js'),
-
-      // Progress view specific modules
-      progressViewStateUri: this.getWebviewUri(
-        webview,
-        'modules/progressViewState.js',
-      ),
-      messageHandlersUri: this.getWebviewUri(
-        webview,
-        'modules/messageHandlers.js',
-      ),
-      domHandlersUri: this.getWebviewUri(webview, 'modules/domHandlers.js'),
-      formattersUri: this.getWebviewUri(webview, 'modules/formatters.js'),
-      taskManagersUri: this.getWebviewUri(webview, 'modules/taskManagers.js'),
-      usageManagersUri: this.getWebviewUri(webview, 'modules/usageManagers.js'),
-      constantsUri: this.getWebviewUri(webview, 'modules/constants.js'),
-      katexMacrosUri: this.getWebviewUri(webview, 'modules/katexMacros.js'),
-      themeHandlersUri: this.getWebviewUri(
-        webview,
-        'modules/handlers/themeHandlers.js',
-      ),
-
-      // UI managers
-      streamTabsUri: this.getWebviewUri(
-        webview,
-        'modules/uiManagers/StreamTabs.js',
-      ),
-      toolbarUri: this.getWebviewUri(webview, 'modules/uiManagers/Toolbar.js'),
-      statusUri: this.getWebviewUri(webview, 'modules/uiManagers/Status.js'),
-      fileListUri: this.getWebviewUri(
-        webview,
-        'modules/uiManagers/FileList.js',
-      ),
-      eventsUri: this.getWebviewUri(
-        webview,
-        'modules/uiManagers/EventsManager.js',
-      ),
-      placeholderUri: this.getWebviewUri(
-        webview,
-        'modules/uiManagers/Placeholder.js',
-      ),
     };
+    for (const { key, path } of modules) {
+      uris[key] = this.getWebviewUri(webview, path);
+    }
+    return uris;
   }
 }

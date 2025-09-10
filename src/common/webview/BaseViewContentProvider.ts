@@ -5,6 +5,12 @@ import * as vscode from 'vscode';
 import { buildWebviewHtml } from '@frontend/webview/html';
 import * as logger from '@logger/logUtils';
 
+/** Descriptor mapping a template key to its module path */
+export interface ModuleDescriptor {
+  key: string;
+  path: string;
+}
+
 /**
  * Base class for all webview content providers.
  * Eliminates code duplication and provides consistent patterns.
@@ -12,6 +18,15 @@ import * as logger from '@logger/logUtils';
 export abstract class BaseViewContentProvider {
   protected readonly logger: any;
   protected readonly channel: string;
+
+  /** Modules shared by all view providers */
+  protected readonly sharedModuleDescriptors: ModuleDescriptor[] = [
+    { key: 'styleUri', path: 'styles/index.css' },
+    { key: 'scriptUri', path: 'script.js' },
+    { key: 'domHandlersUri', path: 'modules/domHandlers.js' },
+    { key: 'constantsUri', path: 'modules/constants.js' },
+    { key: 'messageHandlersUri', path: 'modules/messageHandlers.js' },
+  ];
 
   constructor(
     protected readonly context: vscode.ExtensionContext,
