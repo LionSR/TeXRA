@@ -156,6 +156,8 @@ export class ModelHandlerOpenAI extends ModelHandler<
 
     if (useStreaming) {
       let response: any;
+      let partialContent = '';
+      let partialReasoning = '';
       kwargs.stream_options = { include_usage: true };
       try {
         const stream = client.chat.completions.stream(kwargs as any, {
@@ -213,8 +215,14 @@ export class ModelHandlerOpenAI extends ModelHandler<
           const reasoningDelta =
             (chunk.choices[0]?.delta as any)?.reasoning_content ?? '';
           const contentDelta = chunk.choices[0]?.delta?.content ?? '';
-          if (reasoningDelta) thinking.append(reasoningDelta);
-          if (contentDelta) output?.append(contentDelta);
+          if (reasoningDelta) {
+            thinking.append(reasoningDelta);
+            partialReasoning += reasoningDelta;
+          }
+          if (contentDelta) {
+            output?.append(contentDelta);
+            partialContent += contentDelta;
+          }
         }
 
         // Note that there is no second consumption problem as per openai sdk examples
@@ -237,24 +245,87 @@ export class ModelHandlerOpenAI extends ModelHandler<
           undefined,
           err,
         );
+        
+        // If we have partial content, try to return it gracefully
+        if (partialContent || partialReasoning) {
+          this.logger.warn(
+            `Returning partial streaming response: ${partialContent.length} chars of content, ${partialReasoning.length} chars of reasoning`
+          );
+          
+          // Create a partial response object matching the expected format
+          const partialResponse = {
+            id: 'partial-' + Date.now(),
+            object: 'chat.completion',
+            created: Math.floor(Date.now() / 1000),
+            model: this.config.fullName,
+            choices: [
+              {
+                index: 0,
+                message: {
+                  content: partialContent,
+                  reasoning_content: partialReasoning || undefined,
+                },
+                finish_reason: 'stop', // Mark as stopped due to error
+              },
+            ],
+            usage: {
+              prompt_tokens: 0,
+              completion_tokens: 0,
+              total_tokens: 0,
+            },
+          };
+          
+          // Show error notification but return partial results
+          if (info) {
+            const actions = info.link
+              ? [
+                  {
+                    title: 'Open Status Page',
+                    callback: () => {
+                      if (info.link) {
+                        void vscode.env.openExternal(vscode.Uri.parse(info.link));
+                      }
+                    },
+                  },
+                ]
+              : undefined;
+            // Show instruction with suppress (combines message and remediation)
+            await showInstructionWithSuppress(
+              info.key,
+              `${info.userMessage} ${info.remediation} (Partial response returned)`,
+              actions,
+              false,
+            );
+          } else {
+            vscode.window.showErrorMessage(
+              `${getSdkErrorMessage(err)} (Partial response returned)`
+            );
+          }
+          
+          return partialResponse;
+        }
+        
+        // No partial content available, show error and throw
         if (info) {
           const actions = info.link
             ? [
                 {
                   title: 'Open Status Page',
                   callback: () => {
-                    void vscode.env.openExternal(vscode.Uri.parse(info.link!));
+                    if (info.link) {
+                      void vscode.env.openExternal(vscode.Uri.parse(info.link));
+                    }
                   },
                 },
               ]
             : undefined;
+          // Show instruction with suppress (combines message and remediation)
           await showInstructionWithSuppress(
             info.key,
-            info.remediation,
+            `${info.userMessage} ${info.remediation}`,
             actions,
             false,
           );
-          vscode.window.showErrorMessage(info.userMessage);
         } else {
           vscode.window.showErrorMessage(getSdkErrorMessage(err));
         }
@@ -283,18 +354,20 @@ export class ModelHandlerOpenAI extends ModelHandler<
                 {
                   title: 'Open Status Page',
                   callback: () => {
-                    void vscode.env.openExternal(vscode.Uri.parse(info.link!));
+                    if (info.link) {
+                      void vscode.env.openExternal(vscode.Uri.parse(info.link));
+                    }
                   },
                 },
               ]
             : undefined;
+          // Show instruction with suppress (combines message and remediation)
           await showInstructionWithSuppress(
             info.key,
-            info.remediation,
+            `${info.userMessage} ${info.remediation}`,
             actions,
             false,
           );
-          vscode.window.showErrorMessage(info.userMessage);
         } else {
           vscode.window.showErrorMessage(getSdkErrorMessage(err));
         }

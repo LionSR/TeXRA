@@ -42,8 +42,20 @@ import { getConfig } from '@utils/config';
 
 /**
  * Returns a human-readable message for common SDK errors.
- * In debug mode (logger.debugMode = true), returns the full error message.
- * Otherwise, returns a graceful, user-friendly message.
+ * 
+ * @param err - The error object from an SDK call
+ * @returns A user-friendly error message. In debug mode (logger.debugMode = true),
+ *          returns the full error message. Otherwise, returns a graceful message.
+ * 
+ * @example
+ * ```typescript
+ * try {
+ *   await client.chat.completions.create(params);
+ * } catch (err) {
+ *   const message = getSdkErrorMessage(err);
+ *   vscode.window.showErrorMessage(message);
+ * }
+ * ```
  */
 export function getSdkErrorMessage(err: unknown): string {
   const isDebugMode = getConfig<boolean>('logger.debugMode', false);
@@ -107,11 +119,24 @@ export function getSdkErrorMessage(err: unknown): string {
   if (err instanceof OpenAIAPIError || err instanceof AnthropicAPIError) {
     return 'API error occurred.';
   }
-  if ((err as Error)?.name === 'ClientError') {
-    return 'Google GenAI client error occurred.';
+  // Google GenAI SDK v1.5.1+ detection - these error names are from runtime inspection
+  // TODO: Update when Google exports proper error classes
+  const errorName = (err as Error)?.name;
+  const errorMessage = (err as Error)?.message;
+  
+  if (errorName === 'ClientError') {
+    // Check for specific Google GenAI patterns in the message if available
+    if (errorMessage?.includes('Google') || errorMessage?.includes('GenAI')) {
+      return 'Google GenAI client error occurred.';
+    }
+    return 'Client error occurred.';
   }
-  if ((err as Error)?.name === 'ServerError') {
-    return 'Google GenAI server error occurred.';
+  if (errorName === 'ServerError') {
+    // Check for specific Google GenAI patterns in the message if available
+    if (errorMessage?.includes('Google') || errorMessage?.includes('GenAI')) {
+      return 'Google GenAI server error occurred.';
+    }
+    return 'Server error occurred.';
   }
 
   return 'An unexpected error occurred.';
@@ -128,7 +153,24 @@ export interface SdkErrorInfo {
 }
 
 /**
- * Map common network and rate-limit errors to user messages and remediation links.
+ * Maps common network and rate-limit errors to user guidance and status page links.
+ * 
+ * @param err - The error object from an SDK call
+ * @returns An object containing user-friendly message, remediation guidance, 
+ *          optional status page link, and a unique key for the error type.
+ *          Returns null if the error doesn't match known patterns.
+ * 
+ * @example
+ * ```typescript
+ * const info = getSdkErrorInfo(err);
+ * if (info) {
+ *   await showInstructionWithSuppress(
+ *     info.key,
+ *     `${info.userMessage} ${info.remediation}`,
+ *     info.link ? [{ title: 'Open Status Page', callback: () => {...} }] : undefined
+ *   );
+ * }
+ * ```
  */
 export function getSdkErrorInfo(err: unknown): SdkErrorInfo | null {
   const provider =
