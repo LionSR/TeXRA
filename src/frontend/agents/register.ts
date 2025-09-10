@@ -7,7 +7,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as logger from '@logger/logUtils';
 import { isValidAgentYaml } from '@agent/runtime/agentLoad';
-import { getConfig } from '@utils/config';
+import { getConfig, setConfig } from '@utils/config';
 
 const CHANNEL = 'AgentRegister';
 logger.initialize(CHANNEL);
@@ -20,8 +20,7 @@ export async function promptToAddAgentToConfig(
   agentName: string,
   autoAdd = false,
 ): Promise<void> {
-  const config = vscode.workspace.getConfiguration();
-  const current = config.get<string[]>('texra.agents', []);
+  const current = getConfig<string[]>('agents', []);
 
   const baseName = agentName.endsWith('_multiple')
     ? agentName.replace(/_multiple$/, '')
@@ -59,11 +58,7 @@ export async function promptToAddAgentToConfig(
 
   if (autoAdd) {
     current.push(agentName);
-    await config.update(
-      'texra.agents',
-      current,
-      vscode.ConfigurationTarget.Workspace,
-    );
+    await setConfig('agents', current, vscode.ConfigurationTarget.Workspace);
     vscode.window.showInformationMessage(
       `Added "${agentName}" to texra.agents`,
     );
@@ -79,11 +74,7 @@ export async function promptToAddAgentToConfig(
 
   if (choice === addButton) {
     current.push(agentName);
-    await config.update(
-      'texra.agents',
-      current,
-      vscode.ConfigurationTarget.Workspace,
-    );
+    await setConfig('agents', current, vscode.ConfigurationTarget.Workspace);
     vscode.window.showInformationMessage(
       `Added "${agentName}" to texra.agents`,
     );
@@ -123,7 +114,7 @@ export async function validateYamlAndPromptAdd(
     return;
   }
 
-  const configuredAgents = getConfig<string[]>('texra.agents', []);
+  const configuredAgents = getConfig<string[]>('agents', []);
   if (!configuredAgents.includes(filenameBase)) {
     await promptToAddAgentToConfig(filenameBase, !prompt);
   }
