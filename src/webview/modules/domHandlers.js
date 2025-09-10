@@ -12,9 +12,9 @@ import { outputFilesManager } from './uiManagers/OutputFilesManager.js';
 import { RecordingManager } from './uiManagers/RecordingManager.js';
 import { SettingsButtonManager } from './uiManagers/SettingsButtonManager.js';
 import { ToggleManager } from './uiManagers/ToggleManager.js';
-import { BaseUIManager } from './uiManagers/BaseUIManager.js';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
 import { vscode } from '@common/webviewContext.js';
+import { BaseDomHandler } from '@common/BaseDomHandler.js';
 
 export const instructionManager = new InstructionManager(
   'instruction',
@@ -27,12 +27,30 @@ export const recordingManager = new RecordingManager(vscode, webviewEventBus);
 /**
  * Coordinates UI managers for the main webview.
  */
-export class MainViewDomHandler extends BaseUIManager {
+class MainViewDomHandler extends BaseDomHandler {
   constructor() {
-    super();
-    this.fileInputManager = null;
-    this.actionButtonManager = null;
-    this.settingsButtonManager = null;
+    super({
+      fileInputManager: new FileInputManager(
+        vscode,
+        mainViewState,
+        fileList,
+        fileSelect,
+        outputFilesManager,
+      ),
+      actionButtonManager: new ActionButtonManager(
+        vscode,
+        fileList,
+        mainViewState,
+        instructionManager,
+      ),
+      settingsButtonManager: new SettingsButtonManager(
+        vscode,
+        toggleManager,
+        latexdiffManager,
+        mainViewState,
+        webviewEventBus,
+      ),
+    });
     this.debugMode = false;
   }
 
@@ -53,27 +71,6 @@ export class MainViewDomHandler extends BaseUIManager {
 
   initializeUI() {
     this._updateDebugButtonVisibility();
-
-    this.fileInputManager = new FileInputManager(
-      vscode,
-      mainViewState,
-      fileList,
-      fileSelect,
-      outputFilesManager,
-    );
-    this.actionButtonManager = new ActionButtonManager(
-      vscode,
-      fileList,
-      mainViewState,
-      instructionManager,
-    );
-    this.settingsButtonManager = new SettingsButtonManager(
-      vscode,
-      toggleManager,
-      latexdiffManager,
-      mainViewState,
-      webviewEventBus,
-    );
 
     this.fileInputManager.setup();
     this.actionButtonManager.setup();
@@ -141,18 +138,6 @@ export class MainViewDomHandler extends BaseUIManager {
   }
 
   cleanupUI() {
-    if (this.fileInputManager) {
-      this.fileInputManager.cleanup();
-      this.fileInputManager = null;
-    }
-    if (this.actionButtonManager) {
-      this.actionButtonManager.cleanup();
-      this.actionButtonManager = null;
-    }
-    if (this.settingsButtonManager) {
-      this.settingsButtonManager.cleanup();
-      this.settingsButtonManager = null;
-    }
     this.cleanup();
   }
 }
