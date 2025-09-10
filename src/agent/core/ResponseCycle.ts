@@ -234,7 +234,7 @@ export async function runResponseCycle(
 
     if (!exists) {
       logger.debug(`Creating new file: ${outputFile}`, taskGroupId);
-      await WorkspaceFS.writeFile(outputFile, processedResponse);
+      await WorkspaceFS.write(outputFile, processedResponse);
     } else {
       logger.debug(`Appending to existing file: ${outputFile}`, taskGroupId);
       await WorkspaceFS.appendFile(
