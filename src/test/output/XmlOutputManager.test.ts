@@ -60,14 +60,14 @@ describe('XmlOutputManager markdown fallback', () => {
     const markdownContent =
       '```latex\n\\begin{document}\nhello\n\\end{document}\n```';
 
-    await WorkspaceFS.writeFile(outputXml, markdownContent);
+    await WorkspaceFS.write(outputXml, markdownContent);
 
     const texPath = await manager.splitScratchpadOutputXml(
       outputXml,
       setting.documentTag,
     );
 
-    const written = await WorkspaceFS.readFile('markdown_only.tex');
+    const written = await WorkspaceFS.read('markdown_only.tex');
     assert.ok(written.includes('hello'));
 
     await WorkspaceFS.delete(outputXml);
@@ -81,14 +81,14 @@ describe('XmlOutputManager markdown fallback', () => {
     const xmlContent =
       '<document name="input.tex"><![CDATA[\\begin{document}\nhello\n\\end{document}]]></document>';
 
-    await WorkspaceFS.writeFile(outputXml, xmlContent);
+    await WorkspaceFS.write(outputXml, xmlContent);
 
     const texPath = await manager.splitScratchpadOutputXml(
       outputXml,
       setting.documentTag,
     );
 
-    const written = await WorkspaceFS.readFile('named_document.tex');
+    const written = await WorkspaceFS.read('named_document.tex');
     assert.ok(written.includes('hello'));
     assert.ok(!written.includes('CDATA'));
 
@@ -104,14 +104,14 @@ describe('XmlOutputManager markdown fallback', () => {
       '<latex_document><![CDATA[\\begin{document}wrong\\end{document}]]></latex_document>' +
       '<document name="input.tex"><![CDATA[\\begin{document}right\\end{document}]]></document><';
 
-    await WorkspaceFS.writeFile(outputXml, xmlContent);
+    await WorkspaceFS.write(outputXml, xmlContent);
 
     const texPath = await manager.splitScratchpadOutputXml(
       outputXml,
       setting.documentTag,
     );
 
-    const written = await WorkspaceFS.readFile('both_tags.tex');
+    const written = await WorkspaceFS.read('both_tags.tex');
     assert.ok(written.includes('right'));
     assert.ok(!written.includes('wrong'));
 
@@ -126,14 +126,14 @@ describe('XmlOutputManager markdown fallback', () => {
     const content =
       'some explanation\n\\documentclass{article}\n\\begin{document}\nhello\n\\end{document}\nmore text';
 
-    await WorkspaceFS.writeFile(outputXml, content);
+    await WorkspaceFS.write(outputXml, content);
 
     const texPath = await manager.splitScratchpadOutputXml(
       outputXml,
       setting.documentTag,
     );
 
-    const written = await WorkspaceFS.readFile('plain_latex.tex');
+    const written = await WorkspaceFS.read('plain_latex.tex');
     assert.ok(written.includes('\\documentclass'));
     assert.ok(written.includes('\\end{document}'));
     assert.ok(!written.includes('some explanation'));

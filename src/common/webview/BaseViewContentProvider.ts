@@ -155,6 +155,7 @@ export abstract class BaseViewContentProvider {
         webview,
         'modules/iconButtonInitializer.js',
       ),
+      iconConstantsUri: this.getCommonUri(webview, 'modules/iconConstants.js'),
       domUtilsUri: this.getCommonUri(webview, 'modules/domUtils.js'),
       stringUtilsUri: this.getCommonUri(webview, 'modules/stringUtils.js'),
       codiconUri: this.getNodeModulesUri(
