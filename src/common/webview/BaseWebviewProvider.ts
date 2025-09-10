@@ -26,7 +26,15 @@ export abstract class BaseWebviewProvider<
 
   constructor(protected readonly context: vscode.ExtensionContext) {}
 
-  public resolveWebviewView(webviewView: T): void {
+  public resolveWebviewView(
+    webviewView: vscode.WebviewView,
+    context: vscode.WebviewViewResolveContext,
+    token: vscode.CancellationToken,
+  ): void {
+    this.resolveWebviewViewInternal(webviewView as T);
+  }
+
+  protected resolveWebviewViewInternal(webviewView: T): void {
     this.cleanupView();
     this._view = webviewView;
 
