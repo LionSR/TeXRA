@@ -116,7 +116,10 @@ const TOOL_CONFIGS: Record<string, ToolConfig> = {
     openDocsCommand: 'texra.openDoc,installation',
   },
   gs: {
-    command: 'gs --version',
+    command:
+      process.platform === 'win32'
+        ? ['gswin64c --version', 'gswin32c --version', 'gs --version']
+        : 'gs --version',
     errorMessage:
       'Ghostscript is not installed. Please install Ghostscript to use PDF to PNG conversion.\n' +
       GHOSTSCRIPT_INSTRUCTIONS,
