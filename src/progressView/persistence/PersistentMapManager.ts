@@ -103,6 +103,6 @@ export abstract class PersistentMapManager<K extends string, V> {
       this.serialize(value, key),
     ]);
     const obj = Object.fromEntries(serialized);
-    this.persistence.save(this.storageKey, obj as any);
+    this.persistence.save(this.storageKey, obj);
   }
 }
