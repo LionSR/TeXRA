@@ -1,10 +1,18 @@
+import type { ZodIssue } from 'zod';
+
+// Define proper type for diagnostic information
+export type ErrorDiagnostics = 
+  | ZodIssue[]  // For validation errors
+  | { name: string; stack?: string }  // For regular errors
+  | unknown;  // For other types of diagnostics
+
 export class ToolResult {
   output?: string;
   error?: string;
   base64Image?: string;
   system?: string;
   isError: boolean;
-  diagnostics?: any; // Additional error details like validation issues
+  diagnostics?: ErrorDiagnostics; // Additional error details like validation issues
 
   constructor({
     output,
@@ -19,7 +27,7 @@ export class ToolResult {
     base64Image?: string;
     system?: string;
     isError?: boolean;
-    diagnostics?: any;
+    diagnostics?: ErrorDiagnostics;
   }) {
     this.output = output;
     this.error = error;

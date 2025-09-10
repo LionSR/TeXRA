@@ -16,7 +16,10 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     super('ProgressView');
   }
 
-  protected createHandlers(): Record<string, MessageHandler> {
+  protected createHandlers(): Record<
+    string,
+    MessageHandler<vscode.WebviewView>
+  > {
     return {
       // Common handlers
       [PROGRESS_VIEW_COMMANDS.THEME_SET]: this.handleTheme.bind(this),
@@ -61,6 +64,18 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
   }
 
   // Handler implementations
+  /**
+   * Override to notify the provider when webview is ready.
+   * This allows the provider to process any pending updates that
+   * were queued while the webview was initializing.
+   */
+  protected override async handleWebviewReady(
+    message: any,
+    webviewView: vscode.WebviewView,
+  ): Promise<void> {
+    this.provider.markWebviewReady();
+  }
+
   private async handleSwitchStream(
     message: any,
     webviewView: vscode.WebviewView,

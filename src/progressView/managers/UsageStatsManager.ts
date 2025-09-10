@@ -1,5 +1,6 @@
 // Local imports - progress view
 // Local imports
+import { PersistentMapManager } from '../persistence/PersistentMapManager';
 import { StatePersistenceManager } from '../persistence/StatePersistenceManager';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 
@@ -12,11 +13,14 @@ import { AgentLogger } from '@logger/AgentLogger';
  * Manages usage statistics collection with persistence.
  * Handles tracking and updating token usage and costs for different streams.
  */
-export class UsageStatsManager {
-  private _usageStats: Map<StreamTabId, TokenUsageStats> = new Map();
+export class UsageStatsManager extends PersistentMapManager<
+  StreamTabId,
+  TokenUsageStats
+> {
   private readonly logger: AgentLogger;
 
-  constructor(private persistence: StatePersistenceManager) {
+  constructor(persistence: StatePersistenceManager) {
+    super(persistence, WorkspaceStateKey.USAGE_STATS);
     this.logger = new AgentLogger('UsageStatsManager');
   }
 
@@ -24,15 +28,14 @@ export class UsageStatsManager {
    * Update usage statistics for a stream
    */
   updateStreamUsage(stream: StreamTabId, usage: TokenUsageStats): void {
-    this._usageStats.set(stream, { ...usage });
-    this.save();
+    this.add(stream, { ...usage });
   }
 
   /**
    * Add usage to existing stream statistics
    */
   addToStreamUsage(stream: StreamTabId, usage: TokenUsageStats): void {
-    const existing = this._usageStats.get(stream) || {
+    const existing = this.get(stream) || {
       inputTokens: 0,
       outputTokens: 0,
       cost: 0,
@@ -44,45 +47,35 @@ export class UsageStatsManager {
       cost: existing.cost + (usage.cost || 0),
     };
 
-    this._usageStats.set(stream, updated);
-    this.save();
+    this.add(stream, updated);
   }
 
   /**
    * Get usage statistics for a stream
    */
   getStreamUsage(stream: StreamTabId): TokenUsageStats | undefined {
-    return this._usageStats.get(stream);
-  }
-
-  /**
-   * Get all usage statistics
-   */
-  getAll(): Map<StreamTabId, TokenUsageStats> {
-    return new Map(this._usageStats);
+    return this.get(stream);
   }
 
   /**
    * Delete usage statistics for a stream
    */
   deleteStream(stream: StreamTabId): void {
-    this._usageStats.delete(stream);
-    this.save();
+    this.delete(stream);
   }
 
   /**
    * Clear all usage statistics
    */
   clear(): void {
-    this._usageStats.clear();
-    this.save();
+    super.clear();
   }
 
   /**
    * Set all usage statistics (used during loading)
    */
   setAll(stats: Map<StreamTabId, TokenUsageStats>): void {
-    this._usageStats = new Map(stats);
+    super.setAll(stats);
   }
 
   /**
@@ -95,7 +88,7 @@ export class UsageStatsManager {
       cost: 0,
     };
 
-    for (const usage of this._usageStats.values()) {
+    for (const usage of this.items.values()) {
       total.inputTokens += usage.inputTokens || 0;
       total.outputTokens += usage.outputTokens || 0;
       total.cost += usage.cost || 0;
@@ -108,56 +101,42 @@ export class UsageStatsManager {
    * Get streams with usage statistics
    */
   getStreamsWithUsage(): StreamTabId[] {
-    return Array.from(this._usageStats.keys());
+    return this.keys();
   }
 
   /**
    * Check if stream has usage statistics
    */
   hasUsage(stream: StreamTabId): boolean {
-    return this._usageStats.has(stream);
+    return this.has(stream);
   }
 
   /**
    * Load usage statistics from persistence
    */
   async load(): Promise<void> {
-    const savedUsage = await this.persistence.load<{
-      [key: string]: {
-        inputTokens: number;
-        outputTokens: number;
-        cost: number;
-      };
-    }>(WorkspaceStateKey.USAGE_STATS, {});
-
-    if (savedUsage && Object.keys(savedUsage).length > 0) {
-      const processedUsage = new Map<StreamTabId, TokenUsageStats>();
-
-      for (const [stream, usage] of Object.entries(savedUsage)) {
-        // Ensure all required fields are present
-        const normalizedUsage: TokenUsageStats = {
-          inputTokens: usage.inputTokens || 0,
-          outputTokens: usage.outputTokens || 0,
-          cost: usage.cost || 0,
-        };
-
-        processedUsage.set(stream, normalizedUsage);
-      }
-
-      this._usageStats = processedUsage;
+    await super.load();
+    if (this.items.size > 0) {
       this.logger.debug(
-        `Loaded usage statistics for ${this._usageStats.size} streams`,
+        `Loaded usage statistics for ${this.items.size} streams`,
       );
-    } else {
-      this._usageStats.clear();
     }
   }
 
-  /**
-   * Save usage statistics to persistence
-   */
-  save(): void {
-    const usageObj = Object.fromEntries(this._usageStats.entries());
-    this.persistence.save(WorkspaceStateKey.USAGE_STATS, usageObj);
+  /** Normalize loaded usage records */
+  protected override async deserialize(
+    data: unknown,
+    _key: StreamTabId,
+  ): Promise<TokenUsageStats> {
+    const usage = (data as TokenUsageStats) || {
+      inputTokens: 0,
+      outputTokens: 0,
+      cost: 0,
+    };
+    return {
+      inputTokens: usage.inputTokens || 0,
+      outputTokens: usage.outputTokens || 0,
+      cost: usage.cost || 0,
+    };
   }
 }
