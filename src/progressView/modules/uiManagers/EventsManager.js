@@ -8,11 +8,11 @@ import { COMMANDS, SPLIT_SIZES, ELEMENT_IDS } from '../constants.js';
 // Local imports
 import { progressViewState } from '../progressViewState.js';
 import { addEventListenerSafely } from '@common/domUtils.js';
+import { vscode } from '@common/webviewContext.js';
 import {
   CHEVRON_RIGHT_CLASS,
   CHEVRON_DOWN_CLASS,
-  vscode,
-} from '@common/webviewContext.js';
+} from '@common/iconConstants.js';
 
 /**
  * Manages event handling and state application.
