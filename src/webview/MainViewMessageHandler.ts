@@ -17,7 +17,7 @@ import {
 
 // @ts-ignore - Import JavaScript module
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
-import { getConfig } from '@utils/config';
+import { getConfig, setConfig } from '@utils/config';
 import { safeExecuteCommand } from '@utils/system';
 import { SETTINGS_QUERY } from '@utils/settingsQueries';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
@@ -159,6 +159,8 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
       },
       [MAIN_VIEW_COMMANDS.OPEN_AGENT_DOCS]: async () =>
         safeExecuteCommand('texra.openDoc', ['agent-explorer'], this.viewName),
+      [MAIN_VIEW_COMMANDS.OPEN_INSTALLATION_DOCS]: async () =>
+        safeExecuteCommand('texra.openDoc', ['installation'], this.viewName),
 
       // Instruction commands
       [MAIN_VIEW_COMMANDS.POLISH_INSTRUCTION_TEXT]: async (m, w) =>
@@ -206,6 +208,17 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
       [MAIN_VIEW_COMMANDS.HIDE_AGENT_CONFIG_BANNER]: async (m, w) => {
         /* Banner handled client-side */
         w.webview.postMessage(m);
+      },
+      [MAIN_VIEW_COMMANDS.SHOW_DEPENDENCY_BANNER]: async (m, w) => {
+        /* Banner handled client-side */
+        w.webview.postMessage(m);
+      },
+      [MAIN_VIEW_COMMANDS.HIDE_DEPENDENCY_BANNER]: async (m, w) => {
+        /* Banner handled client-side */
+        w.webview.postMessage(m);
+      },
+      [MAIN_VIEW_COMMANDS.UPDATE_DEPENDENCY_REMINDER_SETTING]: async (m) => {
+        await setConfig('ui.showDependencyReminders', m.value);
       },
 
       // Recording commands

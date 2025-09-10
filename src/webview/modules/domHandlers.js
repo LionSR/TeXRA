@@ -72,6 +72,7 @@ export class MainViewDomHandler {
       toggleManager,
       latexdiffManager,
       mainViewState,
+      webviewEventBus,
     );
 
     this.fileInputManager.setup();
