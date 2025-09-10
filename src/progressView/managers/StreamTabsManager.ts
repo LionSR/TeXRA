@@ -23,6 +23,7 @@ export class StreamTabsManager extends PersistentMapManager<
   StreamTabId,
   LogMessageData[]
 > {
+  private static readonly MAX_MESSAGE_HISTORY = 1000;
   private readonly logger: AgentLogger;
 
   constructor(persistence: StatePersistenceManager) {
@@ -48,8 +49,8 @@ export class StreamTabsManager extends PersistentMapManager<
     messages.push(message);
 
     // Limit message history to prevent memory issues
-    if (messages.length > 1000) {
-      messages.splice(0, messages.length - 1000);
+    if (messages.length > StreamTabsManager.MAX_MESSAGE_HISTORY) {
+      messages.splice(0, messages.length - StreamTabsManager.MAX_MESSAGE_HISTORY);
     }
 
     this.save();
