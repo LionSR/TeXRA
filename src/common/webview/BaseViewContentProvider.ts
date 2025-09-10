@@ -122,6 +122,10 @@ export abstract class BaseViewContentProvider {
       ),
       domUtilsUri: this.getCommonUri(webview, 'modules/domUtils.js'),
       stringUtilsUri: this.getCommonUri(webview, 'modules/stringUtils.js'),
+      themeHandlerFactoryUri: this.getCommonUri(
+        webview,
+        'themeHandlerFactory.js',
+      ),
       codiconUri: this.getNodeModulesUri(
         webview,
         '@vscode/codicons/dist/codicon.css',
