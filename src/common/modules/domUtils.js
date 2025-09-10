@@ -60,6 +60,20 @@ export function safeGetElementChecked(id) {
   return element.checked;
 }
 
+export function setElementsDisabled(idsOrElements, disabled) {
+  const elements = Array.isArray(idsOrElements)
+    ? idsOrElements
+    : [idsOrElements];
+  elements.forEach((el) => {
+    if (typeof el === 'string') {
+      const elem = document.getElementById(el);
+      if (elem) elem.disabled = disabled;
+    } else if (el) {
+      el.disabled = disabled;
+    }
+  });
+}
+
 /**
  * Set a chevron icon to indicate expanded/collapsed state.
  * @param {HTMLElement} element - The icon container or <i> element.
