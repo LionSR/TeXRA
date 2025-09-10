@@ -111,7 +111,14 @@ export class SettingsButtonManager extends BaseUIManager {
       if (element) {
         const textSpan = element.querySelector('span');
         if (textSpan) {
-          textSpan.textContent = `Missing dependencies: ${missing.join(', ')}`;
+          // Format the display of missing tools more nicely
+          const formattedTools = missing.map(tool => {
+            if (tool === 'gm/magick') {
+              return 'GraphicsMagick or ImageMagick';
+            }
+            return tool;
+          });
+          textSpan.textContent = `Missing dependencies: ${formattedTools.join(', ')}`;
         }
         element.style.setProperty('display', 'flex');
       }
