@@ -90,10 +90,6 @@ export class ModelHandlerXAI extends ModelHandlerOpenAI {
     return reasoningContent;
   }
 
-  extractToolUse(_responseObject: any): string | null {
-    return null;
-  }
-
   /** Extracts response text and usage statistics from API response. */
   extractResponse(
     responseObject: any,

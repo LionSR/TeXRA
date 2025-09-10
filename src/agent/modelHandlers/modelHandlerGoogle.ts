@@ -97,8 +97,4 @@ export class ModelHandlerGoogle extends ModelHandlerOpenAI {
   ): boolean {
     return !hasEndTag(agentSetting, newResponse);
   }
-
-  extractToolUse(_responseObject: any): string | null {
-    return null;
-  }
 }
