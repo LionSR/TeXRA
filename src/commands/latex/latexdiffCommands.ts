@@ -26,22 +26,19 @@ import {
 // Import agent utilities
 import { getAgentFirstNameChunk } from '@housekeeping/utils';
 
+// Local imports - errors
+import {
+  showLoggedErrorMessage,
+  showLoggedMessage,
+  showLoggedMessageWithDocs,
+} from '@common/errors/errorHandlingUtils';
+
 const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);
 
 const service = new LaTeXdiffService(CHANNEL);
 
-/**
- * Show an error message and optionally open Latexdiff documentation.
- * @param message The error message to display.
- */
-async function showLatexdiffError(message: string) {
-  const docsAction = 'Latexdiff Docs';
-  const selection = await vscode.window.showErrorMessage(message, docsAction);
-  if (selection === docsAction) {
-    await vscode.commands.executeCommand('texra.openDoc', 'latex-diff');
-  }
-}
+// Removed showLatexdiffError wrapper - using showLoggedMessageWithDocs directly
 
 export function registerLatexdiffCommands(context: vscode.ExtensionContext) {
   context.subscriptions.push(
@@ -73,11 +70,21 @@ async function handleLatexdiff(
   editedFile: string,
 ) {
   if (!(baseFile || inputFile)) {
-    await showLatexdiffError('No base file specified for latexdiff');
+    await showLoggedMessageWithDocs(
+      CHANNEL,
+      'No base file specified for latexdiff',
+      'latex-diff',
+      'Latexdiff Docs',
+    );
     return;
   }
   if (!editedFile) {
-    await showLatexdiffError('No revised file specified for latexdiff');
+    await showLoggedMessageWithDocs(
+      CHANNEL,
+      'No revised file specified for latexdiff',
+      'latex-diff',
+      'Latexdiff Docs',
+    );
     return;
   }
 
@@ -101,7 +108,8 @@ async function handleLatexdiff(
       result.diffFileName,
     );
     if (!(await WorkspaceFS.exists(filePathRelative))) {
-      vscode.window.showErrorMessage(
+      await showLoggedMessage(
+        CHANNEL,
         `Diff file could not be found. Expected path: ${filePathRelative}`,
       );
       return;
@@ -109,9 +117,7 @@ async function handleLatexdiff(
 
     await openBuildDisplayIfTex(filePathRelative, { preserveFocus: true });
   } catch (err) {
-    vscode.window.showErrorMessage(
-      `Error creating LaTeX diff: ${err instanceof Error ? err.message : String(err)}`,
-    );
+    await showLoggedErrorMessage(CHANNEL, 'Error creating LaTeX diff', err);
   }
 }
 
@@ -140,7 +146,8 @@ async function handleLatexdiffvc(
       result.diffFileName,
     );
     if (!(await WorkspaceFS.exists(filePathRelative))) {
-      vscode.window.showErrorMessage(
+      await showLoggedMessage(
+        CHANNEL,
         `Diff file could not be found. Expected path: ${filePathRelative}`,
       );
       return;
@@ -148,9 +155,7 @@ async function handleLatexdiffvc(
 
     await openBuildDisplayIfTex(filePathRelative, { preserveFocus: true });
   } catch (err) {
-    vscode.window.showErrorMessage(
-      `Error creating LaTeX diff: ${err instanceof Error ? err.message : String(err)}`,
-    );
+    await showLoggedErrorMessage(CHANNEL, 'Error creating LaTeX diff', err);
   }
 }
 
@@ -173,9 +178,7 @@ async function handlePackLatexdiffvc(
     const fileToUse = baseFile || inputFile;
     await runPackLatexdiffvc(fileToUse, commitHash, clean);
   } catch (err) {
-    vscode.window.showErrorMessage(
-      `Error packing LaTeX diff: ${err instanceof Error ? err.message : String(err)}`,
-    );
+    await showLoggedErrorMessage(CHANNEL, 'Error packing LaTeX diff', err);
   }
 }
 
@@ -197,9 +200,7 @@ async function handlePackLatexdiffvcMultiple(
     logger.debug(CHANNEL, `Input files: ${inputFiles.join(', ')}`);
     await runPackLatexdiffvcMultiple(inputFiles, commitHash, clean);
   } catch (err) {
-    vscode.window.showErrorMessage(
-      `Error packing LaTeX diffs: ${err instanceof Error ? err.message : String(err)}`,
-    );
+    await showLoggedErrorMessage(CHANNEL, 'Error packing LaTeX diffs', err);
   }
 }
 
@@ -221,9 +222,7 @@ async function handleCleanLatexdiffvc(
     const fileToUse = baseFile || inputFile;
     await runCleanLatexdiffvc(fileToUse, commitHash);
   } catch (err) {
-    vscode.window.showErrorMessage(
-      `Error cleaning LaTeX diff: ${err instanceof Error ? err.message : String(err)}`,
-    );
+    await showLoggedErrorMessage(CHANNEL, 'Error cleaning LaTeX diff', err);
   }
 }
 
@@ -241,9 +240,7 @@ async function handleCleanLatexdiffvcMultiple(
     logger.debug(CHANNEL, `Input files: ${inputFiles.join(', ')}`);
     await runCleanLatexdiffvcMultiple(inputFiles, commitHash);
   } catch (err) {
-    vscode.window.showErrorMessage(
-      `Error cleaning LaTeX diffs: ${err instanceof Error ? err.message : String(err)}`,
-    );
+    await showLoggedErrorMessage(CHANNEL, 'Error cleaning LaTeX diffs', err);
   }
 }
 
@@ -267,7 +264,8 @@ async function handleRunLatexdiff(config: any) {
     const { agent, model, inputFile, outputFiles } = config;
 
     if (!agent || !model || !inputFile) {
-      vscode.window.showErrorMessage(
+      await showLoggedMessage(
+        CHANNEL,
         'Missing required configuration parameters',
       );
       return;
@@ -487,7 +485,7 @@ async function handleRunLatexdiff(config: any) {
         const successCount = results.filter((r) => r.success).length;
 
         if (successCount === 0) {
-          vscode.window.showErrorMessage('All LaTeX diff operations failed');
+          await showLoggedMessage(CHANNEL, 'All LaTeX diff operations failed');
         } else if (successCount < totalOperations) {
           vscode.window.showWarningMessage(
             `${successCount} of ${totalOperations} LaTeX diff operations completed successfully`,
@@ -515,9 +513,7 @@ async function handleRunLatexdiff(config: any) {
       },
     );
   } catch (err) {
-    vscode.window.showErrorMessage(
-      `Error running LaTeX diffs: ${err instanceof Error ? err.message : String(err)}`,
-    );
+    await showLoggedErrorMessage(CHANNEL, 'Error running LaTeX diffs', err);
   }
 }
 
