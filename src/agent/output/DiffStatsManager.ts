@@ -20,14 +20,14 @@ export class DiffStatsManager {
   ): Promise<DiffStats> {
     try {
       if (!baseFile) {
-        const outContent = await WorkspaceFS.readFile(outputFile);
+        const outContent = await WorkspaceFS.read(outputFile);
         const added = this.countLines(outContent);
         return { added };
       }
 
       const [baseContent, outContent] = await Promise.all([
-        WorkspaceFS.readFile(baseFile),
-        WorkspaceFS.readFile(outputFile),
+        WorkspaceFS.read(baseFile),
+        WorkspaceFS.read(outputFile),
       ]);
 
       const dmp = new diff_match_patch();
