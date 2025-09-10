@@ -9,8 +9,11 @@ import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
 
 // Local imports - log
 import * as logger from '@logger/logUtils';
+
+// Local imports - utils
 import { StorageFS } from '@utils/files';
 import { PASTED_DIR } from '@utils/files/pastedImageUtils';
+import { THREE_DAYS_MS } from '@utils/config';
 import { sleep } from '@utils/helpers';
 import {
   polishTextWithAI,
@@ -24,9 +27,7 @@ export class InstructionManager {
   constructor(private readonly _context: vscode.ExtensionContext) {
     setTimeout(() => {
       StorageFS.ensureDir(PASTED_DIR)
-        .then(() =>
-          StorageFS.cleanupOldFiles(PASTED_DIR, 3 * 24 * 60 * 60 * 1000),
-        )
+        .then(() => StorageFS.cleanupOldFiles(PASTED_DIR, THREE_DAYS_MS))
         .catch((e) =>
           logger.warn(
             CHANNEL,
@@ -180,7 +181,7 @@ export class InstructionManager {
       await StorageFS.ensureDir(PASTED_DIR);
       const relativePath = path.join(PASTED_DIR, fileName);
       await StorageFS.write(relativePath, Buffer.from(base64, 'base64'));
-      await StorageFS.cleanupOldFiles(PASTED_DIR, 3 * 24 * 60 * 60 * 1000);
+      await StorageFS.cleanupOldFiles(PASTED_DIR, THREE_DAYS_MS);
       webviewView.webview.postMessage({
         command: MAIN_VIEW_COMMANDS.ADD_MEDIA_FILE,
         file: fileName,
