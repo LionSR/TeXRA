@@ -1,9 +1,5 @@
 // Third-party imports
 import { countTokens } from 'gpt-tokenizer';
-// Standard library imports
-// (none needed)
-
-// Third-party imports
 import OpenAI from 'openai';
 import {
   ChatCompletionContentPart,
@@ -11,6 +7,10 @@ import {
   ChatCompletionToolMessageParam,
   ChatCompletionMessageParam,
 } from 'openai/resources/chat/completions';
+import * as vscode from 'vscode';
+
+// Standard library imports
+// (none needed)
 
 // Local imports - agent
 
@@ -30,11 +30,15 @@ import type { ProviderStopReason } from './types/StopReasonTypes';
 import { OPENAI_CHAT_FINISH } from './types/StopReasonTypes';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import { calculateTokenPrice } from '@agent/utils/priceUtils';
-import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
+import {
+  getSdkErrorMessage,
+  getSdkErrorInfo,
+} from '@common/errors/sdkErrorUtils';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import type { ToolDefinition } from '@model';
 import { cleanFileContent } from '@replacement/engine';
 import { K_SLICE } from '@utils/config';
+import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 
 // Local imports - utilities
 import { WorkspaceFS } from '@utils/files';
@@ -224,12 +228,36 @@ export class ModelHandlerOpenAI extends ModelHandler<
         // in the future if we pass stream to outside (signal: controller.signal)), calling stream.controller.abort() will abort the stream; which will be very useful for our stop button (controller.abort();)
         // we should also make sure partial results can be returned in the presence of errors!
       } catch (err) {
+        const info = getSdkErrorInfo(err);
         this.logger.error(
-          `Error in createResponse(streaming): ${getSdkErrorMessage(err)}`,
+          `Error in createResponse(streaming): ${
+            err instanceof Error ? err.message : String(err)
+          }`,
           undefined,
           undefined,
           err,
         );
+        if (info) {
+          const actions = info.link
+            ? [
+                {
+                  title: 'Open Status Page',
+                  callback: () => {
+                    void vscode.env.openExternal(vscode.Uri.parse(info.link!));
+                  },
+                },
+              ]
+            : undefined;
+          await showInstructionWithSuppress(
+            info.key,
+            info.remediation,
+            actions,
+            false,
+          );
+          vscode.window.showErrorMessage(info.userMessage);
+        } else {
+          vscode.window.showErrorMessage(getSdkErrorMessage(err));
+        }
         throw err;
       }
       return response;
@@ -240,12 +268,36 @@ export class ModelHandlerOpenAI extends ModelHandler<
         });
         return response;
       } catch (err) {
+        const info = getSdkErrorInfo(err);
         this.logger.error(
-          `Error in createResponse: ${getSdkErrorMessage(err)}`,
+          `Error in createResponse: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
           undefined,
           undefined,
           err,
         );
+        if (info) {
+          const actions = info.link
+            ? [
+                {
+                  title: 'Open Status Page',
+                  callback: () => {
+                    void vscode.env.openExternal(vscode.Uri.parse(info.link!));
+                  },
+                },
+              ]
+            : undefined;
+          await showInstructionWithSuppress(
+            info.key,
+            info.remediation,
+            actions,
+            false,
+          );
+          vscode.window.showErrorMessage(info.userMessage);
+        } else {
+          vscode.window.showErrorMessage(getSdkErrorMessage(err));
+        }
         throw err;
       }
     }

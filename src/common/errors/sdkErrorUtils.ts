@@ -116,3 +116,67 @@ export function getSdkErrorMessage(err: unknown): string {
 
   return 'An unexpected error occurred.';
 }
+
+/**
+ * Information for guiding users on resolving SDK errors.
+ */
+export interface SdkErrorInfo {
+  userMessage: string;
+  remediation: string;
+  link?: string;
+  key: string;
+}
+
+/**
+ * Map common network and rate-limit errors to user messages and remediation links.
+ */
+export function getSdkErrorInfo(err: unknown): SdkErrorInfo | null {
+  const provider =
+    err instanceof OpenAIConnectionError ||
+    err instanceof OpenAIConnectionTimeoutError ||
+    err instanceof OpenAIRateLimitError
+      ? 'openai'
+      : err instanceof AnthropicConnectionError ||
+          err instanceof AnthropicConnectionTimeoutError ||
+          err instanceof AnthropicRateLimitError
+        ? 'anthropic'
+        : undefined;
+
+  const statusLink =
+    provider === 'openai'
+      ? 'https://status.openai.com/'
+      : provider === 'anthropic'
+        ? 'https://status.anthropic.com/'
+        : undefined;
+
+  if (
+    err instanceof OpenAIConnectionError ||
+    err instanceof OpenAIConnectionTimeoutError ||
+    err instanceof AnthropicConnectionError ||
+    err instanceof AnthropicConnectionTimeoutError ||
+    (err as { status?: number; code?: number })?.status === 503 ||
+    (err as { status?: number; code?: number })?.code === 503
+  ) {
+    return {
+      userMessage: 'Network error occurred.',
+      remediation: 'Check API status page.',
+      link: statusLink,
+      key: `${provider ?? 'api'}NetworkError`,
+    };
+  }
+
+  if (
+    err instanceof OpenAIRateLimitError ||
+    err instanceof AnthropicRateLimitError ||
+    (err as { status?: number; code?: number })?.status === 429 ||
+    (err as { status?: number; code?: number })?.code === 429
+  ) {
+    return {
+      userMessage: 'Rate limit exceeded.',
+      remediation: 'Retry later.',
+      key: `${provider ?? 'api'}RateLimit`,
+    };
+  }
+
+  return null;
+}
