@@ -36,6 +36,6 @@ export class WolframTool extends BaseTool<WolframInput> {
     if (result.success) {
       return new ToolResult({ output: result.output ?? '' });
     }
-    throw new ToolError(result.error ?? 'Unknown error executing Wolfram code');
+    throw new ToolError(`Wolfram execution failed: ${result.error ?? 'No error details available'}`);
   }
 }

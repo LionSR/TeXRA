@@ -32,6 +32,6 @@ export class BashTool extends BaseTool<BashInput> {
     if (result.success) {
       return new ToolResult({ output: result.stdout || '' });
     }
-    throw new ToolError(result.stderr || 'Command failed');
+    throw new ToolError(`Bash command failed: ${result.stderr || 'No error output available'}`);
   }
 }
