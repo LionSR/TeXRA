@@ -17,17 +17,6 @@ import { K_SLICE } from '@utils/config';
  * Handler for models accessed through OpenRouter.
  */
 export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
-  /** Returns OpenAI client configured with OpenRouter settings. */
-  async getClient(): Promise<OpenAI> {
-    const apiKey = await this.getApiKey();
-    const baseURL = this.getBaseUrl();
-    this.logger.debug(`Using OpenRouter API key. Base URL: ${baseURL}`);
-    return new OpenAI({
-      apiKey,
-      baseURL,
-    });
-  }
-
   /** Creates a response using OpenRouter's API with model-specific configuration. */
   async createResponse(
     client: OpenAI,
@@ -149,19 +138,6 @@ export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
  * Handler for Anthropic models using OpenAI-compatible API via OpenRouter.
  */
 export class ModelHandlerAnthropicViaOpenRouter extends ModelHandlerOpenRouter {
-  /** Returns OpenAI client configured with OpenRouter settings for Anthropic models. */
-  async getClient(): Promise<OpenAI> {
-    const apiKey = await this.getApiKey();
-    const baseURL = this.getBaseUrl();
-    this.logger.debug(
-      `Using OpenRouter API key for Anthropic model. Base URL: ${baseURL}`,
-    );
-    return new OpenAI({
-      apiKey,
-      baseURL,
-    });
-  }
-
   updateMessageContentWithPrefill(
     messages: any[],
     bestConnector: string,
@@ -207,17 +183,4 @@ export class ModelHandlerAnthropicViaOpenRouter extends ModelHandlerOpenRouter {
   }
 }
 
-export class ModelHandlerDeepSeekViaOpenRouter extends ModelHandlerOpenRouter {
-  /** Returns OpenAI client configured with OpenRouter settings for DeepSeek models. */
-  async getClient(): Promise<OpenAI> {
-    const apiKey = await this.getApiKey();
-    const baseURL = this.getBaseUrl();
-    this.logger.debug(
-      `Using OpenRouter API key for DeepSeek model. Base URL: ${baseURL}`,
-    );
-    return new OpenAI({
-      apiKey,
-      baseURL,
-    });
-  }
-}
+export class ModelHandlerDeepSeekViaOpenRouter extends ModelHandlerOpenRouter {}
