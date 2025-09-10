@@ -71,9 +71,11 @@ export class MainViewMessageHandler {
       [MAIN_VIEW_COMMANDS.HIDE_AGENT_CONFIG_BANNER]: () =>
         bannerManager.hideBanner(ELEMENT_IDS.AGENT_CONFIG_BANNER),
       [MAIN_VIEW_COMMANDS.SHOW_DEPENDENCY_BANNER]: (m) =>
-        bannerManager.showBanner(ELEMENT_IDS.DEPENDENCY_BANNER, m),
+        webviewEventBus.dispatchEvent(
+          new CustomEvent('showDependencyBanner', { detail: m }),
+        ),
       [MAIN_VIEW_COMMANDS.HIDE_DEPENDENCY_BANNER]: () =>
-        bannerManager.hideBanner(ELEMENT_IDS.DEPENDENCY_BANNER),
+        webviewEventBus.dispatchEvent(new CustomEvent('hideDependencyBanner')),
       [MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS]: (m) => {
         // Validate that options are provided
         if (!m.options) {
