@@ -7,8 +7,9 @@ import {
 import { ELEMENT_IDS } from '../constants.js';
 import { handleCheckboxChange } from '../fileHandlers.js';
 import { mainViewState } from '../mainViewState.js';
-import { BaseUIManager } from './BaseUIManager.js';
 import { webviewEventBus } from '../eventBus.js';
+// Local imports - common
+import { BaseUIManager } from '@common/BaseUIManager.js';
 import { safeGetElementById } from '@common/domUtils.js';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
 import { vscode } from '@common/webviewContext.js';
@@ -112,7 +113,7 @@ export class SettingsButtonManager extends BaseUIManager {
         const textSpan = element.querySelector('span');
         if (textSpan) {
           // Format the display of missing tools more nicely
-          const formattedTools = missing.map(tool => {
+          const formattedTools = missing.map((tool) => {
             if (tool === 'gm/magick') {
               return 'GraphicsMagick or ImageMagick';
             }

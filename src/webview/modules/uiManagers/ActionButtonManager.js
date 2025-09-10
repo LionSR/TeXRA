@@ -6,7 +6,8 @@ import {
   BASE_FILE,
   EDITED_FILE,
 } from '../constants.js';
-import { BaseUIManager } from './BaseUIManager.js';
+// Local imports - common
+import { BaseUIManager } from '@common/BaseUIManager.js';
 import {
   safeGetElementById,
   safeGetElementValue,

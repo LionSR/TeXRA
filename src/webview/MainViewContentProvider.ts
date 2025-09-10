@@ -33,7 +33,6 @@ export class MainViewContentProvider extends BaseViewContentProvider {
     { key: 'fileListUri', path: 'modules/uiManagers/FileList.js' },
     { key: 'fileSelectUri', path: 'modules/uiManagers/FileSelect.js' },
     { key: 'toggleManagerUri', path: 'modules/uiManagers/ToggleManager.js' },
-    { key: 'baseUIManagerUri', path: 'modules/uiManagers/BaseUIManager.js' },
     {
       key: 'fileInputManagerUri',
       path: 'modules/uiManagers/FileInputManager.js',

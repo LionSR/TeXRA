@@ -12,7 +12,8 @@ import { outputFilesManager } from './uiManagers/OutputFilesManager.js';
 import { RecordingManager } from './uiManagers/RecordingManager.js';
 import { SettingsButtonManager } from './uiManagers/SettingsButtonManager.js';
 import { ToggleManager } from './uiManagers/ToggleManager.js';
-import { BaseUIManager } from './uiManagers/BaseUIManager.js';
+// Local imports - common
+import { BaseUIManager } from '@common/BaseUIManager.js';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
 import { vscode } from '@common/webviewContext.js';
 

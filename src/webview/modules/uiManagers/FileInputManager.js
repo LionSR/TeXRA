@@ -14,10 +14,11 @@ import {
   BASE_FILE,
 } from '../constants.js';
 import { mainViewState } from '../mainViewState.js';
-import { BaseUIManager } from './BaseUIManager.js';
 import { fileList } from './FileList.js';
 import { fileSelect } from './FileSelect.js';
 import { outputFilesManager } from './OutputFilesManager.js';
+// Local imports - common
+import { BaseUIManager } from '@common/BaseUIManager.js';
 import { safeGetElementById, safeGetElementValue } from '@common/domUtils.js';
 import { capitalize } from '@common/stringUtils.js';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';

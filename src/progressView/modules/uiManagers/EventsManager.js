@@ -1,13 +1,11 @@
 // Third-party imports
-// Third-party imports
 import Split from 'split.js';
 
 // Local imports - progress view
 import { COMMANDS, SPLIT_SIZES, ELEMENT_IDS } from '../constants.js';
-
-// Local imports
 import { progressViewState } from '../progressViewState.js';
-import { addEventListenerSafely } from '@common/domUtils.js';
+// Local imports - common
+import { BaseUIManager } from '@common/BaseUIManager.js';
 import { vscode } from '@common/webviewContext.js';
 import {
   CHEVRON_RIGHT_CLASS,
@@ -17,7 +15,11 @@ import {
 /**
  * Manages event handling and state application.
  */
-export class EventsManager {
+export class EventsManager extends BaseUIManager {
+  constructor() {
+    super();
+  }
+
   /**
    * Apply saved toggle states to any groups already in the DOM
    */
@@ -38,7 +40,7 @@ export class EventsManager {
    */
   setupEventListeners() {
     // Stream tab click handler
-    addEventListenerSafely(ELEMENT_IDS.STREAM_TABS, 'click', (e) => {
+    this.addListener(ELEMENT_IDS.STREAM_TABS, 'click', (e) => {
       const tabButton = e.target.closest('.tab');
       const deleteButton = e.target.closest('.tab-delete');
 
@@ -56,7 +58,7 @@ export class EventsManager {
     });
 
     // Toolbar click handler
-    addEventListenerSafely(ELEMENT_IDS.TOOLBAR_CONTAINER, 'click', (e) => {
+    this.addListener(ELEMENT_IDS.TOOLBAR_CONTAINER, 'click', (e) => {
       const button = e.target.closest('button[data-command]');
       if (!button || button.disabled) return;
 
@@ -72,7 +74,7 @@ export class EventsManager {
     // This appears to be orphaned code from a previous design
 
     // File list button handler
-    addEventListenerSafely(
+    this.addListener(
       ELEMENT_IDS.GENERATED_FILES,
       'click',
       (e) => {
@@ -89,11 +91,11 @@ export class EventsManager {
     );
 
     // Delete all button handler
-    addEventListenerSafely(ELEMENT_IDS.DELETE_ALL_BTN, 'click', () => {
+    this.addListener(ELEMENT_IDS.DELETE_ALL_BTN, 'click', () => {
       vscode.postMessage({ command: COMMANDS.DELETE_ALL });
     });
 
-    addEventListenerSafely('sortButtons', 'click', (e) => {
+    this.addListener('sortButtons', 'click', (e) => {
       const btn = e.target.closest('.sort-btn');
       if (btn && btn.dataset.sort) {
         vscode.postMessage({
@@ -116,12 +118,8 @@ export class EventsManager {
       });
       followInput.value = '';
     };
-    addEventListenerSafely(
-      ELEMENT_IDS.SEND_FOLLOW_UP_BTN,
-      'click',
-      sendFollowUp,
-    );
-    addEventListenerSafely(ELEMENT_IDS.FOLLOW_UP_INPUT, 'keydown', (e) => {
+    this.addListener(ELEMENT_IDS.SEND_FOLLOW_UP_BTN, 'click', sendFollowUp);
+    this.addListener(ELEMENT_IDS.FOLLOW_UP_INPUT, 'keydown', (e) => {
       // Enter sends, Shift+Enter adds new line
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
@@ -138,7 +136,8 @@ export class EventsManager {
     });
 
     // Handle special-details and file-list-details toggle events
-    document.addEventListener(
+    this.addListener(
+      document,
       'toggle',
       (e) => {
         if (
@@ -161,7 +160,7 @@ export class EventsManager {
     );
 
     // Handle clicks on file links inside file-list-details blocks
-    document.addEventListener('click', (e) => {
+    this.addListener(document, 'click', (e) => {
       const link = e.target.closest('.file-link');
       if (link && link.dataset.file) {
         vscode.postMessage({
@@ -172,7 +171,7 @@ export class EventsManager {
     });
 
     // Handle clicks on LaTeX references within logs
-    document.addEventListener('click', (e) => {
+    this.addListener(document, 'click', (e) => {
       const ref = e.target.closest('.latex-ref');
       if (ref && ref.dataset.label) {
         vscode.postMessage({

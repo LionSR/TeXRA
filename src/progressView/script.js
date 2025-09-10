@@ -14,6 +14,7 @@ progressViewState.initialize();
 messageHandler.setup();
 
 window.addEventListener('beforeunload', () => {
+  progressViewDomHandler.events.cleanup();
   messageHandler.cleanup();
 });
 

@@ -1,14 +1,15 @@
 // Local imports - history view
 import { ELEMENT_IDS } from '../constants.js';
-import { addEventListenerSafely } from '@common/domUtils.js';
+// Local imports - common
+import { BaseUIManager } from '@common/BaseUIManager.js';
 
 /**
  * Registers global event listeners for the history view.
  */
-export class HistoryEventsManager {
+export class HistoryEventsManager extends BaseUIManager {
   constructor(searchManager) {
+    super();
     this.searchManager = searchManager;
-    this.handlers = [];
   }
 
   _debounce(fn, delay) {
@@ -20,39 +21,17 @@ export class HistoryEventsManager {
   }
 
   setupEventListeners() {
-    const searchInput = document.getElementById(ELEMENT_IDS.SEARCH_INPUT);
     const searchHandler = this._debounce((e) => {
       const term = e.target.value.trim();
       this.searchManager.search(term);
     }, 300);
-    addEventListenerSafely(ELEMENT_IDS.SEARCH_INPUT, 'input', searchHandler);
-    if (searchInput) {
-      this.handlers.push({
-        element: searchInput,
-        type: 'input',
-        handler: searchHandler,
-      });
-    }
+    this.addListener(ELEMENT_IDS.SEARCH_INPUT, 'input', searchHandler);
 
     const prevHandler = () => this.searchManager.navigatePrev();
-    addEventListenerSafely(ELEMENT_IDS.PREV_MATCH, 'click', prevHandler);
-    const prevEl = document.getElementById(ELEMENT_IDS.PREV_MATCH);
-    if (prevEl)
-      this.handlers.push({
-        element: prevEl,
-        type: 'click',
-        handler: prevHandler,
-      });
+    this.addListener(ELEMENT_IDS.PREV_MATCH, 'click', prevHandler);
 
     const nextHandler = () => this.searchManager.navigateNext();
-    addEventListenerSafely(ELEMENT_IDS.NEXT_MATCH, 'click', nextHandler);
-    const nextEl = document.getElementById(ELEMENT_IDS.NEXT_MATCH);
-    if (nextEl)
-      this.handlers.push({
-        element: nextEl,
-        type: 'click',
-        handler: nextHandler,
-      });
+    this.addListener(ELEMENT_IDS.NEXT_MATCH, 'click', nextHandler);
 
     const keyHandler = (e) => {
       if (e.key === 'Enter') {
@@ -64,20 +43,10 @@ export class HistoryEventsManager {
         }
       }
     };
-    addEventListenerSafely(ELEMENT_IDS.SEARCH_INPUT, 'keydown', keyHandler);
-    if (searchInput) {
-      this.handlers.push({
-        element: searchInput,
-        type: 'keydown',
-        handler: keyHandler,
-      });
-    }
+    this.addListener(ELEMENT_IDS.SEARCH_INPUT, 'keydown', keyHandler);
   }
 
   dispose() {
-    this.handlers.forEach(({ element, type, handler }) => {
-      element.removeEventListener(type, handler);
-    });
-    this.handlers = [];
+    this.cleanup();
   }
 }
