@@ -3,27 +3,7 @@ import { ELEMENT_IDS } from './constants.js';
 import { TaskGroupHeaderFormatter, LogEntryFormatter } from './formatters.js';
 // Local imports
 import { progressViewState } from './progressViewState.js';
-
-// Constants
-const DECIMAL_RADIX = 10; // Explicit base-10 for parseInt to avoid octal interpretation
-
-/**
- * Parse a timestamp that could be either numeric or ISO-8601 string
- * @param {string} timestampStr - Timestamp string from dataset attribute
- * @returns {Date} Parsed date object
- */
-function parseTimestamp(timestampStr) {
-  if (!timestampStr) return new Date();
-
-  // Try parsing as a number first (for numeric timestamps)
-  const numericValue = parseInt(timestampStr, DECIMAL_RADIX);
-  if (!isNaN(numericValue) && numericValue > 0) {
-    return new Date(numericValue);
-  }
-
-  // Fall back to ISO-8601 string parsing
-  return new Date(timestampStr);
-}
+import { insertChronologically } from './utils.js';
 
 /**
  * Manages task group DOM operations.
@@ -92,7 +72,6 @@ export class TaskGroupManager {
 
     // Insert the group at the right position in the parent
     const container = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
-    let insertPosition = null;
 
     if (group.parentGroupId) {
       // Find the parent group and append to its content container
@@ -100,66 +79,13 @@ export class TaskGroupManager {
         `group-content-${group.parentGroupId}`,
       );
       if (parentGroupContent) {
-        const siblings = Array.from(parentGroupContent.children);
-        for (const sibling of siblings) {
-          // If sibling is a log group, compare by timestamp
-          if (sibling.classList.contains('log-group')) {
-            const siblingStartTime =
-              sibling.querySelector('.group-start-time')?.dataset.start;
-            if (
-              siblingStartTime &&
-              parseInt(siblingStartTime, DECIMAL_RADIX) > group.startTime
-            ) {
-              insertPosition = sibling;
-              break;
-            }
-          }
-          // If sibling is a log message, check if group should come before it
-          else if (
-            sibling.classList.contains('log-line') ||
-            sibling.classList.contains('model-response-line')
-          ) {
-            // Extract full timestamp from data attribute if available
-            const msgFullTimestamp = sibling.dataset.fullTimestamp;
-            const msgTime = parseTimestamp(msgFullTimestamp);
-
-            if (group.startTime < msgTime.getTime()) {
-              insertPosition = sibling;
-              break;
-            }
-          }
-        }
-
-        if (insertPosition) {
-          parentGroupContent.insertBefore(detailsElem, insertPosition);
-        } else {
-          parentGroupContent.appendChild(detailsElem);
-        }
+        insertChronologically(parentGroupContent, detailsElem, group.startTime);
         return;
       }
     }
 
     // For top-level groups, insert in chronological order
-    const allGroups = Array.from(
-      container.querySelectorAll(':scope > .log-group'),
-    );
-    for (const existingGroup of allGroups) {
-      const existingStartTime =
-        existingGroup.querySelector('.group-start-time')?.dataset.start;
-      if (
-        existingStartTime &&
-        parseInt(existingStartTime, DECIMAL_RADIX) > group.startTime
-      ) {
-        insertPosition = existingGroup;
-        break;
-      }
-    }
-
-    if (insertPosition) {
-      container.insertBefore(detailsElem, insertPosition);
-    } else {
-      container.appendChild(detailsElem);
-    }
+    insertChronologically(container, detailsElem, group.startTime);
 
     // For top-level groups, update current group and collapse the previous active group
     if (!group.parentGroupId) {
@@ -336,54 +262,7 @@ export class LogEntryManager {
         // Extract timestamp from the message for chronological ordering
         const msgDate = new Date(logMessage.timestamp);
 
-        // Find where to insert this message chronologically
-        let insertPosition = null;
-
-        // Get all child elements (both messages and child group containers)
-        const childElements = Array.from(groupContent.children);
-
-        // Find the right position based on timestamp
-        for (const child of childElements) {
-          // If this is a log group (nested group)
-          if (child.classList.contains('log-group')) {
-            const startTimeElem = child.querySelector('.group-start-time');
-            if (startTimeElem) {
-              const groupStartTime = startTimeElem.dataset.start;
-              if (groupStartTime) {
-                const startTime = parseInt(groupStartTime, DECIMAL_RADIX);
-                // If the message timestamp is earlier than the group start time,
-                // insert before this group
-                if (msgDate.getTime() < startTime) {
-                  insertPosition = child;
-                  break;
-                }
-              }
-            }
-          }
-          // If this is a log message, extract its timestamp
-          else if (
-            child.classList.contains('log-line') ||
-            child.classList.contains('model-response-line') ||
-            child.classList.contains('special-details')
-          ) {
-            // Try to get the full timestamp from data attribute
-            const childFullTimestamp = child.dataset.fullTimestamp;
-            if (childFullTimestamp) {
-              const childDate = parseTimestamp(childFullTimestamp);
-              if (msgDate < childDate) {
-                insertPosition = child;
-                break;
-              }
-            }
-          }
-        }
-
-        // Insert the message at the right position or append to the end
-        if (insertPosition) {
-          groupContent.insertBefore(logLineElement, insertPosition);
-        } else {
-          groupContent.appendChild(logLineElement);
-        }
+        insertChronologically(groupContent, logLineElement, msgDate);
 
         return true;
       }
