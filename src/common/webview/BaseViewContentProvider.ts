@@ -158,6 +158,7 @@ export abstract class BaseViewContentProvider {
       iconConstantsUri: this.getCommonUri(webview, 'modules/iconConstants.js'),
       domUtilsUri: this.getCommonUri(webview, 'modules/domUtils.js'),
       stringUtilsUri: this.getCommonUri(webview, 'modules/stringUtils.js'),
+      pathUtilsUri: this.getCommonUri(webview, 'modules/pathUtils.js'),
       codiconUri: this.getNodeModulesUri(
         webview,
         '@vscode/codicons/dist/codicon.css',

@@ -13,3 +13,13 @@ export function resolveFilePath(file: string): string {
 export function isTexFile(file: string): boolean {
   return file.toLowerCase().endsWith('.tex');
 }
+
+/**
+ * Get the base name of a path.
+ * Handles platform-specific separators.
+ * @param filePath - Path to evaluate
+ * @returns Basename of the provided path
+ */
+export function getBasename(filePath: string): string {
+  return path.basename(filePath);
+}
