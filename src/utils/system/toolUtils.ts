@@ -327,6 +327,13 @@ export async function checkCoreDependencies(
   showError: boolean = true,
 ): Promise<string[]> {
   const tools = ['latexindent', 'perl', 'gs', 'gm'];
-  const results = await checkMultipleToolsInstalled(tools, showError);
-  return tools.filter((_, i) => !results[i]);
+  try {
+    const results = await checkMultipleToolsInstalled(tools, showError);
+    return tools.filter((_, i) => !results[i]);
+  } catch (error) {
+    // If checking fails, assume all tools are missing to prompt user to check
+    // This is safer than silently ignoring the error
+    console.error('Failed to check core dependencies:', error);
+    return tools;
+  }
 }
