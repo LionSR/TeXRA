@@ -95,10 +95,7 @@ export async function maybeSaveDebugObject({
     if (executionId) {
       await StorageFS.write(debugFilePath, content);
     } else {
-      await WorkspaceFS.writeFile(
-        WorkspaceFS.relativePath(debugFilePath),
-        content,
-      );
+      await WorkspaceFS.write(WorkspaceFS.relativePath(debugFilePath), content);
     }
     logger.info(`Saved ${objectType} object to ${debugFilePath}`, groupId);
   } catch (error) {

@@ -27,7 +27,7 @@ export async function setVarFromFile(
   try {
     const fileContent = absolute
       ? await AbsoluteFS.read(filePath)
-      : await WorkspaceFS.readFile(filePath);
+      : await WorkspaceFS.read(filePath);
     userVars[`${varName}_FILE`] = filePath;
     userVars[`${varName}_CONTENT`] = fileContent;
     // No logging here - will be aggregated in buildUserVars

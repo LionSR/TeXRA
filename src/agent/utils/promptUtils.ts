@@ -23,7 +23,7 @@ logger.initialize(CHANNEL);
  */
 export async function getXmlFormatFromFile(file: string): Promise<string> {
   try {
-    const content = await WorkspaceFS.readFile(file);
+    const content = await WorkspaceFS.read(file);
     return `<document name="${file}">\n${content}\n</document>`;
   } catch (err) {
     logger.error(
@@ -142,7 +142,7 @@ export async function getFirstKCharsFromDocument(
   k: number,
 ): Promise<string | null> {
   try {
-    const content = await WorkspaceFS.readFile(inputFile);
+    const content = await WorkspaceFS.read(inputFile);
     return content ? content.slice(0, k).trim() : null;
   } catch (err) {
     logger.error(
@@ -177,7 +177,7 @@ export async function writePromptToXml(
     logger.debug(CHANNEL, `Writing input prompt to ${outputFile}`);
 
     const fullPrompt = `\n<system>${systemPrompt}</system>\n\n${userPrefix}\n${userRequest}\n`;
-    await WorkspaceFS.writeFile(outputFile, fullPrompt);
+    await WorkspaceFS.write(outputFile, fullPrompt);
 
     return outputFile;
   } catch (err) {
