@@ -5,6 +5,7 @@ import { formatTokens } from '../formatters.js';
 import { initializeIconButtons } from '@common/iconButtonInitializer.js';
 import { createFromTemplate } from '@common/templateUtils.js';
 import { vscode } from '@common/webviewContext.js';
+import { getBasename } from '@common/pathUtils.js';
 
 /**
  * Manages file list rendering.
@@ -108,9 +109,12 @@ export class FileList {
 
         // Use original name if available, otherwise use generated path
         const displayPath = file.original || file.path;
-        const parts = displayPath.split('/');
-        const basename = parts.pop() || '';
-        const dirPath = parts.length > 0 ? parts.join('/') + '/' : '';
+        const basename = getBasename(displayPath);
+        const idx = Math.max(
+          displayPath.lastIndexOf('/'),
+          displayPath.lastIndexOf('\\'),
+        );
+        const dirPath = idx >= 0 ? displayPath.slice(0, idx + 1) : '';
 
         // Set file data attributes
         if (fileItem) {
