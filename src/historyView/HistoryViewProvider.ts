@@ -9,9 +9,10 @@ import { BaseWebviewProvider } from '@common/webview/BaseWebviewProvider';
 import { HistoryViewContentProvider } from './HistoryViewContentProvider';
 import { HistoryViewMessageHandler } from './HistoryViewMessageHandler';
 
-export class HistoryViewProvider extends BaseWebviewProvider<
-  vscode.WebviewView | vscode.WebviewPanel
-> {
+export class HistoryViewProvider
+  extends BaseWebviewProvider
+  implements vscode.WebviewViewProvider
+{
   public static readonly viewType = 'texra.historyView';
   protected contentProvider: HistoryViewContentProvider;
   protected messageHandler: HistoryViewMessageHandler;
