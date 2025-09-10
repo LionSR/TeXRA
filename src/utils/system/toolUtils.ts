@@ -43,6 +43,18 @@ const TEXCOUNT_INSTRUCTIONS =
   '- Ubuntu: sudo apt-get install texlive-extra-utils\n' +
   '- Windows: Install through MiKTeX or TeX Live package manager';
 
+const PERL_INSTRUCTIONS =
+  'Installation instructions:\n' +
+  '- Mac: brew install perl\n' +
+  '- Ubuntu: sudo apt-get install perl\n' +
+  '- Windows: Download from https://strawberryperl.com/';
+
+const GHOSTSCRIPT_INSTRUCTIONS =
+  'Installation instructions:\n' +
+  '- Mac: brew install ghostscript\n' +
+  '- Ubuntu: sudo apt-get install ghostscript\n' +
+  '- Windows: Download from https://ghostscript.com/releases/gsdnld.html';
+
 const GM_INSTRUCTIONS =
   'Installation instructions:\n' +
   '- Mac: brew install graphicsmagick\n' +
@@ -94,6 +106,21 @@ const TOOL_CONFIGS: Record<string, ToolConfig> = {
     errorMessage:
       'GraphicsMagick is not installed. Please install GraphicsMagick to use PDF to PNG conversion.\n' +
       GM_INSTRUCTIONS,
+  },
+
+  // System dependencies
+  perl: {
+    command: 'perl --version',
+    errorMessage:
+      'Perl is not installed. latexindent requires Perl.\n' + PERL_INSTRUCTIONS,
+    openDocsCommand: 'texra.openDoc,installation',
+  },
+  gs: {
+    command: 'gs --version',
+    errorMessage:
+      'Ghostscript is not installed. Please install Ghostscript to use PDF to PNG conversion.\n' +
+      GHOSTSCRIPT_INSTRUCTIONS,
+    openDocsCommand: 'texra.openDoc,installation',
   },
 
   // Wolfram tools
@@ -288,4 +315,18 @@ export async function checkMultipleToolsInstalled(
     configs.map((config) => checkToolInstalled(config, showError)),
   );
   return results;
+}
+
+/**
+ * Check core dependencies required by TeXRA features
+ * (latexindent, Perl, Ghostscript, GraphicsMagick).
+ * @param showError Whether to show error messages for missing tools
+ * @returns Promise<string[]> Array of missing tool names
+ */
+export async function checkCoreDependencies(
+  showError: boolean = true,
+): Promise<string[]> {
+  const tools = ['latexindent', 'perl', 'gs', 'gm'];
+  const results = await checkMultipleToolsInstalled(tools, showError);
+  return tools.filter((_, i) => !results[i]);
 }
