@@ -161,3 +161,27 @@ export async function showLoggedMessage(
   await vscode.window.showErrorMessage(message);
   return message;
 }
+
+/**
+ * Log an error message, display it with a docs action and open the docs if selected.
+ *
+ * This helper keeps messaging consistent when providing quick access to
+ * documentation for resolving the error.
+ *
+ * @param channel - The logging channel to use (e.g., "Configuration")
+ * @param message - The error message to log and display
+ * @param docId - Identifier for the documentation to open
+ * @param actionLabel - Label for the docs action button (defaults to 'View Docs')
+ */
+export async function showLoggedMessageWithDocs(
+  channel: string,
+  message: string,
+  docId: string,
+  actionLabel = 'View Docs',
+): Promise<void> {
+  logger.error(channel, message);
+  const selection = await vscode.window.showErrorMessage(message, actionLabel);
+  if (selection === actionLabel) {
+    await vscode.commands.executeCommand('texra.openDoc', docId);
+  }
+}
