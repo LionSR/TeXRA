@@ -51,14 +51,6 @@ import { K_SLICE, MESSAGE_PREVIEW_LENGTH } from '@utils/config';
  * Handler for DeepSeek models using OpenAI-compatible API.
  */
 export class ModelHandlerDeepSeek extends ModelHandlerOpenAI {
-  /** Returns OpenAI client configured with DeepSeek's base URL. */
-  async getClient(): Promise<OpenAI> {
-    const apiKey = await this.getApiKey();
-    const baseURL = this.getBaseUrl();
-    this.logger.debug(`Using DeepSeek API key. Base URL: ${baseURL}`);
-    return new OpenAI({ apiKey, baseURL });
-  }
-
   /**
    * Process thinking blocks for DeepSeek models
    * @param responseObject The raw response object from the model
