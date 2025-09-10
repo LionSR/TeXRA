@@ -2,6 +2,7 @@ export { WorkspaceFS } from './workspaceFS';
 export { AbsoluteFS } from './absoluteFS';
 export { StorageFS, GlobalStorageFS } from './storageFS';
 export { RelativeFS } from './relativeFS';
+export { ensureDirCommon } from './ensureDirCommon';
 export * from './pastedImageUtils';
 export * from './baseFileUtils';
 export * from './fileMappingUtils';

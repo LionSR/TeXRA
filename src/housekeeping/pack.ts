@@ -118,7 +118,7 @@ export async function runPackSingle(
       for (const file of movedFiles) {
         const destination = path.join(outputFolder, path.basename(file));
         operations.push(`Moving: ${file} -> ${destination}`);
-        await WorkspaceFS.move(file, destination);
+        await WorkspaceFS.rename(file, destination);
       }
       for (const file of copiedFiles) {
         const destination = path.join(outputFolder, path.basename(file));
@@ -230,7 +230,7 @@ export async function runPackMultiple(
           await WorkspaceFS.createDir(commonOutputFolder);
         }
         logger.debug(CHANNEL, `Found additional XML file: ${filePath}`);
-        await WorkspaceFS.move(
+        await WorkspaceFS.rename(
           filePath,
           path.join(commonOutputFolder, pattern),
         );

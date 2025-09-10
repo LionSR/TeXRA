@@ -89,7 +89,7 @@ export async function runPackLatexdiffvc(
             logger.debug(CHANNEL, `Created output directory: ${outputFolder}`);
             anyFilesPacked = true;
           }
-          await WorkspaceFS.move(
+          await WorkspaceFS.rename(
             file,
             path.join(outputFolder, path.basename(file)),
           );
