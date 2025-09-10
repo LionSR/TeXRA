@@ -62,7 +62,7 @@ export async function extractFigurePathsFromLatex(
     ];
 
     // Read file content
-    const content = await WorkspaceFS.readFile(latexFile);
+    const content = await WorkspaceFS.read(latexFile);
 
     // Parse graphicspaths
     const paths = parseGraphicspath(content);

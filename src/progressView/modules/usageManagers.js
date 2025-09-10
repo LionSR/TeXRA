@@ -24,20 +24,8 @@ export class UsageSummary {
       this._summaryElem = document.getElementById(ELEMENT_IDS.RUN_SUMMARY);
     }
     if (!this._summaryElem) return;
-
-    let totals = usage;
-
     // If usage is not provided, compute it from existing log groups
-    if (!totals) {
-      totals = { inputTokens: 0, outputTokens: 0, cost: 0 };
-      for (const group of progressViewState.taskGroups.getAll().values()) {
-        if (group.usage) {
-          totals.inputTokens += group.usage.inputTokens || 0;
-          totals.outputTokens += group.usage.outputTokens || 0;
-          totals.cost += group.usage.cost || 0;
-        }
-      }
-    }
+    const totals = usage ?? this.computeTotal();
 
     // Clear the summary - we're showing total usage in the files section now
     this._summaryElem.textContent = '';
