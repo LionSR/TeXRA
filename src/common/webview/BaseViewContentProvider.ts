@@ -5,6 +5,12 @@ import * as vscode from 'vscode';
 import { buildWebviewHtml } from '@frontend/webview/html';
 import * as logger from '@logger/logUtils';
 
+/** Descriptor for a webview module resource. */
+export interface ModuleDescriptor {
+  key: string;
+  path: string;
+}
+
 /**
  * Base class for all webview content providers.
  * Eliminates code duplication and provides consistent patterns.
@@ -41,6 +47,15 @@ export abstract class BaseViewContentProvider {
     return {};
   }
 
+  /** Shared module descriptors available to all views */
+  private readonly sharedModuleDescriptors: ModuleDescriptor[] = [
+    { key: 'styleUri', path: 'styles/index.css' },
+    { key: 'scriptUri', path: 'script.js' },
+    { key: 'domHandlersUri', path: 'modules/domHandlers.js' },
+    { key: 'constantsUri', path: 'modules/constants.js' },
+    { key: 'messageHandlersUri', path: 'modules/messageHandlers.js' },
+  ];
+
   /**
    * Common method to get webview paths
    */
@@ -72,6 +87,24 @@ export abstract class BaseViewContentProvider {
     );
   }
 
+  /** Convert an array of descriptors into a URI record */
+  protected buildUriRecord(
+    webview: vscode.Webview,
+    descriptors: ModuleDescriptor[],
+  ): Record<string, vscode.Uri> {
+    return descriptors.reduce<Record<string, vscode.Uri>>((acc, d) => {
+      acc[d.key] = this.getWebviewUri(webview, d.path);
+      return acc;
+    }, {});
+  }
+
+  /** URIs shared by all views */
+  private getSharedModuleUris(
+    webview: vscode.Webview,
+  ): Record<string, vscode.Uri> {
+    return this.buildUriRecord(webview, this.sharedModuleDescriptors);
+  }
+
   /**
    * Standard implementation that subclasses can override if needed
    */
@@ -79,6 +112,7 @@ export abstract class BaseViewContentProvider {
     try {
       const htmlPath = this.getWebviewPath('index.html');
       const commonUris = this.getCommonModuleUris(webview);
+      const sharedUris = this.getSharedModuleUris(webview);
       const specificUris = this.getModuleUris(webview);
       const templateVariables = this.getTemplateVariables();
 
@@ -89,6 +123,7 @@ export abstract class BaseViewContentProvider {
 
       return buildWebviewHtml(webview, htmlPath, {
         ...commonUris,
+        ...sharedUris,
         ...specificUris,
         ...templateVariables,
       });
