@@ -1,18 +1,13 @@
 // Third-party imports
-// Third-party imports
 import Split from 'split.js';
 
 // Local imports - progress view
 import { COMMANDS, SPLIT_SIZES, ELEMENT_IDS } from '../constants.js';
+import { progressViewState } from '../progressViewState.js';
 
 // Local imports
-import { progressViewState } from '../progressViewState.js';
-import { addEventListenerSafely } from '@common/domUtils.js';
+import { addEventListenerSafely, setChevronIcon } from '@common/domUtils.js';
 import { vscode } from '@common/webviewContext.js';
-import {
-  CHEVRON_RIGHT_CLASS,
-  CHEVRON_DOWN_CLASS,
-} from '@common/iconConstants.js';
 
 /**
  * Manages event handling and state application.
@@ -151,9 +146,7 @@ export class EventsManager {
           const toggleIcon = e.target.querySelector('.toggle-icon');
           if (toggleIcon) {
             const isOpen = e.target.open;
-            toggleIcon.className = `${
-              isOpen ? CHEVRON_DOWN_CLASS : CHEVRON_RIGHT_CLASS
-            } toggle-icon`;
+            setChevronIcon(toggleIcon, isOpen);
           }
         }
       },
