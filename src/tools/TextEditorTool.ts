@@ -241,7 +241,7 @@ export class TextEditorTool extends BaseTool<TextEditorInput> {
       }
 
       // Read file contents
-      let fileContent = await WorkspaceFS.readFile(filePath);
+      let fileContent = await WorkspaceFS.read(filePath);
       let initLine = 1;
 
       // Handle view range if provided
@@ -312,7 +312,7 @@ export class TextEditorTool extends BaseTool<TextEditorInput> {
       }
 
       // Write file content
-      await WorkspaceFS.writeFile(filePath, content);
+      await WorkspaceFS.write(filePath, content);
 
       return new ToolResult({
         output: `File created successfully at: ${filePath}`,
@@ -336,7 +336,7 @@ export class TextEditorTool extends BaseTool<TextEditorInput> {
   ): Promise<ToolResult> {
     try {
       // Read file content
-      const fileContent = await WorkspaceFS.readFile(filePath);
+      const fileContent = await WorkspaceFS.read(filePath);
 
       // Expand tabs in content and search string
       const expandedFileContent = fileContent.replace(/\t/g, '    ');
@@ -374,7 +374,7 @@ export class TextEditorTool extends BaseTool<TextEditorInput> {
         expandedOldStr,
         expandedNewStr,
       );
-      await WorkspaceFS.writeFile(filePath, newFileContent);
+      await WorkspaceFS.write(filePath, newFileContent);
 
       // Create a snippet of the edited section
       const textBeforeReplacement =
@@ -422,7 +422,7 @@ export class TextEditorTool extends BaseTool<TextEditorInput> {
   ): Promise<ToolResult> {
     try {
       // Read file content
-      const fileContent = await WorkspaceFS.readFile(filePath);
+      const fileContent = await WorkspaceFS.read(filePath);
 
       // Expand tabs in content and new string
       const expandedFileContent = fileContent.replace(/\t/g, '    ');
@@ -459,7 +459,7 @@ export class TextEditorTool extends BaseTool<TextEditorInput> {
 
       // Write new content to file
       const newFileContent = newFileLines.join('\n');
-      await WorkspaceFS.writeFile(filePath, newFileContent);
+      await WorkspaceFS.write(filePath, newFileContent);
 
       // Prepare success message
       const snippetText = snippetLines.join('\n');
@@ -499,7 +499,7 @@ export class TextEditorTool extends BaseTool<TextEditorInput> {
 
       // Restore previous content
       const oldContent = history.pop()!;
-      await WorkspaceFS.writeFile(filePath, oldContent);
+      await WorkspaceFS.write(filePath, oldContent);
 
       // If the history is now empty, delete the entry
       if (history.length === 0) {
