@@ -17,7 +17,7 @@ import {
 
 // @ts-ignore - Import JavaScript module
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
-import { getConfig } from '@utils/config';
+import { getConfig, setConfig } from '@utils/config';
 import { safeExecuteCommand } from '@utils/system';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { computeModelOptions } from '@model/computeModelOptions';
@@ -212,6 +212,9 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
       [MAIN_VIEW_COMMANDS.HIDE_DEPENDENCY_BANNER]: async (m, w) => {
         /* Banner handled client-side */
         w.webview.postMessage(m);
+      },
+      [MAIN_VIEW_COMMANDS.UPDATE_DEPENDENCY_REMINDER_SETTING]: async (m) => {
+        await setConfig('ui.showDependencyReminders', m.value);
       },
 
       // Recording commands
