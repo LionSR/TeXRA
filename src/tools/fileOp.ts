@@ -8,7 +8,7 @@ import { zodToJsonSchema } from 'zod-to-json-schema';
 // Local imports - tools
 import { BaseTool } from './core/base';
 import type { ToolDefinition } from '@model';
-import { ToolResult } from '@tools/result';
+import { ToolResult, ToolError } from '@tools/result';
 import { WorkspaceFS } from '@utils/files';
 
 const FileOpInputSchema = z.object({
@@ -31,40 +31,27 @@ export class FileOpTool extends BaseTool<FileOpInput> {
 
   protected async execute(input: FileOpInput): Promise<ToolResult> {
     const { command, path, content } = input;
-    try {
-      switch (command) {
-        case 'read': {
-          const data = await WorkspaceFS.readFile(path);
-          return new ToolResult({ output: data });
-        }
-        case 'write': {
-          if (content === undefined) {
-            return new ToolResult({
-              error: 'content parameter is required for write',
-              isError: true,
-            });
-          }
-          await WorkspaceFS.writeFile(path, content);
-          return new ToolResult({ output: 'written' });
-        }
-        case 'append': {
-          if (content === undefined) {
-            return new ToolResult({
-              error: 'content parameter is required for append',
-              isError: true,
-            });
-          }
-          await WorkspaceFS.appendFile(path, content);
-          return new ToolResult({ output: 'appended' });
-        }
-        default:
-          return new ToolResult({ error: 'unknown command', isError: true });
+    switch (command) {
+      case 'read': {
+        const data = await WorkspaceFS.readFile(path);
+        return new ToolResult({ output: data });
       }
-    } catch (err) {
-      return new ToolResult({
-        error: err instanceof Error ? err.message : String(err),
-        isError: true,
-      });
+      case 'write': {
+        if (content === undefined) {
+          throw new ToolError('File operation error: Content parameter is required for write command');
+        }
+        await WorkspaceFS.writeFile(path, content);
+        return new ToolResult({ output: 'written' });
+      }
+      case 'append': {
+        if (content === undefined) {
+          throw new ToolError('File operation error: Content parameter is required for append command');
+        }
+        await WorkspaceFS.appendFile(path, content);
+        return new ToolResult({ output: 'appended' });
+      }
+      default:
+        throw new ToolError(`File operation error: Unknown command '${command}'. Expected 'read', 'write', or 'append'.`);
     }
   }
 }

@@ -34,26 +34,19 @@ export class DiagnosticsTool extends BaseTool<DiagnosticsInput> {
   }
 
   protected async execute(input: DiagnosticsInput): Promise<ToolResult> {
-    try {
-      const { command, path } = input;
-      switch (command) {
-        case 'list': {
-          const messages = await getLinterMessages(path);
-          return new ToolResult({ output: JSON.stringify(messages) });
-        }
-        case 'count': {
-          const messages = await getLinterMessages(path);
-          const counts = countDiagnosticsBySeverity(messages);
-          return new ToolResult({ output: JSON.stringify(counts) });
-        }
-        default:
-          throw new ToolError(`Unrecognized command: ${command}`);
+    const { command, path } = input;
+    switch (command) {
+      case 'list': {
+        const messages = await getLinterMessages(path);
+        return new ToolResult({ output: JSON.stringify(messages) });
       }
-    } catch (err) {
-      if (err instanceof ToolError) {
-        return new ToolResult({ error: err.message, isError: true });
+      case 'count': {
+        const messages = await getLinterMessages(path);
+        const counts = countDiagnosticsBySeverity(messages);
+        return new ToolResult({ output: JSON.stringify(counts) });
       }
-      return new ToolResult({ error: String(err), isError: true });
+      default:
+        throw new ToolError(`Diagnostics tool error: Unrecognized command '${command}'. Expected 'list' or 'count'.`);
     }
   }
 }
