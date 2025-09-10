@@ -18,7 +18,7 @@ import { BaseUIManager } from './BaseUIManager.js';
 import { fileList } from './FileList.js';
 import { fileSelect } from './FileSelect.js';
 import { outputFilesManager } from './OutputFilesManager.js';
-import { safeGetElementById, safeGetElementValue } from '@common/domUtils.js';
+import { safeElementProperty, safeGetElementById } from '@common/domUtils.js';
 import { capitalize } from '@common/stringUtils.js';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
 import { vscode } from '@common/webviewContext.js';
@@ -80,7 +80,7 @@ export class FileInputManager extends BaseUIManager {
     });
 
     this.addListener(BASE_FILE, 'change', () => {
-      const baseFile = safeGetElementValue(BASE_FILE);
+      const baseFile = safeElementProperty(BASE_FILE, 'value');
       this.vscode.postMessage({
         command: MAIN_VIEW_COMMANDS.REQUEST_EDITED_FILE,
         baseFile,
@@ -105,7 +105,7 @@ export class FileInputManager extends BaseUIManager {
     selectors.forEach(({ id, selectId }) => {
       const buttonId = `select${id}Button`;
       this.addListener(buttonId, 'click', () => {
-        const currentFile = safeGetElementValue(selectId);
+        const currentFile = safeElementProperty(selectId, 'value');
         this.vscode.postMessage({
           command: MAIN_VIEW_COMMANDS.SELECT_MULTIPLE_FILES,
           fileType: id,
@@ -135,7 +135,7 @@ export class FileInputManager extends BaseUIManager {
 
     ['base', 'edited'].forEach((type) => {
       this.addListener(`current${capitalize(type)}FileButton`, 'click', () => {
-        const baseFile = safeGetElementValue(BASE_FILE);
+        const baseFile = safeElementProperty(BASE_FILE, 'value');
         this.vscode.postMessage({
           command: MAIN_VIEW_COMMANDS.GET_CURRENT_FILE,
           fileType: type,

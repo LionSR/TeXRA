@@ -20,7 +20,7 @@ import { mainViewState } from './mainViewState.js';
 // Local imports - UI managers
 import { fileSelect } from './uiManagers/FileSelect.js';
 import {
-  safeSetElementValue,
+  safeElementProperty,
   safeGetElementById,
   setChevronIcon,
 } from '@common/domUtils.js';
@@ -361,8 +361,8 @@ export class MainViewMessageHandler {
   }
 
   _restoreFormFields(state, savedState) {
-    if (state.agent) safeSetElementValue('agent', state.agent);
-    if (state.model) safeSetElementValue('model', state.model);
+    if (state.agent) safeElementProperty('agent', 'value', state.agent);
+    if (state.model) safeElementProperty('model', 'value', state.model);
 
     const instructionContent = state.instruction || '';
     const instruction =
@@ -373,12 +373,14 @@ export class MainViewMessageHandler {
       instruction.dispatchEvent(new Event('input'));
     }
 
-    if (state.inputFile) safeSetElementValue(INPUT_FILE, state.inputFile);
+    if (state.inputFile)
+      safeElementProperty(INPUT_FILE, 'value', state.inputFile);
     if (state.referenceFile)
-      safeSetElementValue(REFERENCE_FILE, state.referenceFile);
+      safeElementProperty(REFERENCE_FILE, 'value', state.referenceFile);
     if (state.auxiliaryFile)
-      safeSetElementValue(AUXILIARY_FILE, state.auxiliaryFile);
-    if (state.mediaFile) safeSetElementValue(MEDIA_FILE, state.mediaFile);
+      safeElementProperty(AUXILIARY_FILE, 'value', state.auxiliaryFile);
+    if (state.mediaFile)
+      safeElementProperty(MEDIA_FILE, 'value', state.mediaFile);
 
     const toolConfig = state.toolConfig || {};
     Object.assign(savedState, {

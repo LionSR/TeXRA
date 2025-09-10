@@ -5,8 +5,8 @@ import {
   ELEMENT_IDS,
 } from '../constants.js';
 import {
+  safeElementProperty,
   safeGetElementById,
-  safeGetElementChecked,
   setChevronIcon,
 } from '@common/domUtils.js';
 import { createCodicon } from '@common/templateUtils.js';
@@ -17,7 +17,7 @@ export class ToggleManager {
   }
 
   hasAnyChecked(checkboxIds) {
-    return checkboxIds.some((id) => safeGetElementChecked(id));
+    return checkboxIds.some((id) => safeElementProperty(id, 'checked'));
   }
 
   setToggleIcon(toggle, icon, visible, active) {

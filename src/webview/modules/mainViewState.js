@@ -9,11 +9,8 @@ import {
 } from './constants.js';
 import { fileList } from './uiManagers/FileList.js';
 import {
-  safeGetElementValue,
+  safeElementProperty,
   safeGetElementById,
-  safeGetElementChecked,
-  safeSetElementValue,
-  safeSetElementChecked,
   setChevronIcon,
 } from '@common/domUtils.js';
 import { capitalize } from '@common/stringUtils.js';
@@ -82,11 +79,15 @@ export class MainViewState {
       const defaults = { agent: 'correct', model: 'gemini25p', commit: 'HEAD' };
 
       VALUE_ELEMENTS.forEach((id) => {
-        safeSetElementValue(id, previousState[id] ?? defaults[id] ?? '');
+        safeElementProperty(
+          id,
+          'value',
+          previousState[id] ?? defaults[id] ?? '',
+        );
       });
 
       CHECK_BOXES.forEach((id) => {
-        safeSetElementChecked(id, previousState[id] ?? false);
+        safeElementProperty(id, 'checked', previousState[id] ?? false);
       });
 
       const autoExtractToggle = safeGetElementById(
@@ -96,7 +97,7 @@ export class MainViewState {
         ELEMENT_IDS.AUTO_EXTRACT_OPTIONS,
       );
       const hasAutoExtractChecked = CHECK_BOXES_AUTO_EXTRACT.some((id) =>
-        safeGetElementChecked(id),
+        safeElementProperty(id, 'checked'),
       );
       if (autoExtractToggle && autoExtractOptions) {
         autoExtractToggle.classList.toggle('active', hasAutoExtractChecked);
@@ -111,7 +112,7 @@ export class MainViewState {
         ELEMENT_IDS.TOOL_CONFIG_OPTIONS,
       );
       const hasToolConfigChecked = CHECK_BOXES_TOOL_USE.some((id) =>
-        safeGetElementChecked(id),
+        safeElementProperty(id, 'checked'),
       );
       if (toggleToolConfig && toolConfigOptions) {
         toggleToolConfig.classList.toggle('active', hasToolConfigChecked);
@@ -172,14 +173,14 @@ export class MainViewState {
     };
 
     VALUE_ELEMENTS.forEach((id) => {
-      const value = safeGetElementValue(id);
+      const value = safeElementProperty(id, 'value');
       if (value !== undefined) {
         state[id] = value;
       }
     });
 
     CHECK_BOXES.forEach((id) => {
-      state[id] = safeGetElementChecked(id);
+      state[id] = safeElementProperty(id, 'checked');
     });
 
     MULTIPLE_SELECTIONS.forEach((id) => {

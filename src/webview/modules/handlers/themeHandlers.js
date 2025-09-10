@@ -1,7 +1,7 @@
 // Local imports - webview
 import { mainViewDomHandler } from '../domHandlers.js';
 // Local imports - DOM utilities
-import { safeSetElementValue } from '@common/domUtils.js';
+import { safeElementProperty } from '@common/domUtils.js';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
 
 /**
@@ -24,7 +24,7 @@ export function createThemeHandlers({ postHandle }) {
       postHandle();
     },
     [MAIN_VIEW_COMMANDS.MODEL_SELECTED]: (message) => {
-      safeSetElementValue('model', message.model);
+      safeElementProperty('model', 'value', message.model);
       postHandle();
     },
   };

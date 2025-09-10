@@ -12,7 +12,7 @@ import {
 import { mainViewState } from '../mainViewState.js';
 import { fileList } from '../uiManagers/FileList.js';
 import { fileSelect } from '../uiManagers/FileSelect.js';
-import { safeSetElementValue } from '@common/domUtils.js';
+import { safeElementProperty } from '@common/domUtils.js';
 import { capitalize, uncapitalize } from '@common/stringUtils.js';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
 // Local imports - utilities
@@ -55,27 +55,27 @@ export function createFileHandlers(ctx) {
   }
 
   function handleInputFileSelected(message) {
-    safeSetElementValue(INPUT_FILE, message.filePath);
+    safeElementProperty(INPUT_FILE, 'value', message.filePath);
     postHandle();
   }
 
   function handleReferenceFileSelected(message) {
-    safeSetElementValue(REFERENCE_FILE, message.filePath);
+    safeElementProperty(REFERENCE_FILE, 'value', message.filePath);
     postHandle();
   }
 
   function handleAuxiliaryFileSelected(message) {
-    safeSetElementValue(AUXILIARY_FILE, message.filePath);
+    safeElementProperty(AUXILIARY_FILE, 'value', message.filePath);
     postHandle();
   }
 
   function handleMediaFileSelected(message) {
-    safeSetElementValue(MEDIA_FILE, message.filePath);
+    safeElementProperty(MEDIA_FILE, 'value', message.filePath);
     postHandle();
   }
 
   function handleEditedFileSelected(message) {
-    safeSetElementValue(EDITED_FILE, message.filePath);
+    safeElementProperty(EDITED_FILE, 'value', message.filePath);
     postHandle();
   }
 

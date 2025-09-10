@@ -1,6 +1,6 @@
 // Local imports - webview
 import { ELEMENT_IDS, EDITED_FILE } from '../constants.js';
-import { safeGetElementById, safeSetElementValue } from '@common/domUtils.js';
+import { safeElementProperty, safeGetElementById } from '@common/domUtils.js';
 import { capitalize, uncapitalize } from '@common/stringUtils.js';
 import { createFromTemplate } from '@common/templateUtils.js';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
@@ -100,7 +100,7 @@ export class FileSelect {
 
     const options = Array.from(fileDiv.options);
     if (options.some((o) => o.value === filePath)) {
-      safeSetElementValue(fileId, filePath);
+      safeElementProperty(fileId, 'value', filePath);
       fileDiv.dispatchEvent(new Event('change'));
     } else {
       vscode.postMessage({

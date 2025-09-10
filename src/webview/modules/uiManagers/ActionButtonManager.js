@@ -7,11 +7,7 @@ import {
   EDITED_FILE,
 } from '../constants.js';
 import { BaseUIManager } from './BaseUIManager.js';
-import {
-  safeGetElementById,
-  safeGetElementValue,
-  safeGetElementChecked,
-} from '@common/domUtils.js';
+import { safeElementProperty, safeGetElementById } from '@common/domUtils.js';
 import { capitalize } from '@common/stringUtils.js';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
 import { vscode } from '@common/webviewContext.js';
@@ -28,7 +24,7 @@ export class ActionButtonManager extends BaseUIManager {
   _getSingleFileData(fileTypes = ['input', 'reference', 'auxiliary', 'media']) {
     const data = {};
     fileTypes.forEach((type) => {
-      data[`${type}File`] = safeGetElementValue(`${type}File`);
+      data[`${type}File`] = safeElementProperty(`${type}File`, 'value');
     });
     return data;
   }
@@ -68,8 +64,8 @@ export class ActionButtonManager extends BaseUIManager {
     this.addListener(ELEMENT_IDS.MAGIC_POLISH_BUTTON, 'click', () => {
       const instruction = safeGetElementById(ELEMENT_IDS.INSTRUCTION);
       if (instruction && instruction.value.trim()) {
-        const agent = safeGetElementValue('agent');
-        const model = safeGetElementValue('model');
+        const agent = safeElementProperty('agent', 'value');
+        const model = safeElementProperty('model', 'value');
         const singleFiles = this._getSingleFileData();
         const multipleFilesData = this._getMultipleFileData(singleFiles);
 
@@ -87,15 +83,15 @@ export class ActionButtonManager extends BaseUIManager {
 
   _setupExecuteButtons() {
     this.addListener(ELEMENT_IDS.EXECUTE_BUTTON, 'click', () => {
-      const agent = safeGetElementValue('agent');
-      const model = safeGetElementValue('model');
-      const instruction = safeGetElementValue(ELEMENT_IDS.INSTRUCTION);
+      const agent = safeElementProperty('agent', 'value');
+      const model = safeElementProperty('model', 'value');
+      const instruction = safeElementProperty(ELEMENT_IDS.INSTRUCTION, 'value');
       const singleFiles = this._getSingleFileData();
       const multipleFilesData = this._getMultipleFileData(singleFiles);
 
       const checkboxValues = {};
       CHECK_BOXES.forEach((id) => {
-        checkboxValues[id] = safeGetElementChecked(id);
+        checkboxValues[id] = safeElementProperty(id, 'checked');
       });
 
       this.vscode.postMessage({
@@ -111,7 +107,7 @@ export class ActionButtonManager extends BaseUIManager {
 
     this.addListener(ELEMENT_IDS.MERGE_BUTTON, 'click', () => {
       const { inputFile } = this._getSingleFileData(['input']);
-      const editedFile = safeGetElementValue(EDITED_FILE);
+      const editedFile = safeElementProperty(EDITED_FILE, 'value');
 
       this.vscode.postMessage({
         command: MAIN_VIEW_COMMANDS.MERGE,
@@ -131,8 +127,8 @@ export class ActionButtonManager extends BaseUIManager {
     ].forEach(({ id, action }) => {
       this.addListener(id, 'click', () => {
         const { inputFile } = this._getSingleFileData(['input']);
-        const agent = safeGetElementValue('agent');
-        const model = safeGetElementValue('model');
+        const agent = safeElementProperty('agent', 'value');
+        const model = safeElementProperty('model', 'value');
 
         const outputFiles = this.fileList.getSelected(
           safeGetElementById(ELEMENT_IDS.OUTPUT_FILES),
@@ -194,8 +190,8 @@ export class ActionButtonManager extends BaseUIManager {
   _setupLatexdiffButtons() {
     this.addListener(ELEMENT_IDS.LATEXDIFF_BUTTON, 'click', () => {
       const { inputFile } = this._getSingleFileData(['input']);
-      const baseFile = safeGetElementValue(BASE_FILE);
-      const editedFile = safeGetElementValue(EDITED_FILE);
+      const baseFile = safeElementProperty(BASE_FILE, 'value');
+      const editedFile = safeElementProperty(EDITED_FILE, 'value');
 
       this.vscode.postMessage({
         command: MAIN_VIEW_COMMANDS.LATEXDIFF,
@@ -212,8 +208,11 @@ export class ActionButtonManager extends BaseUIManager {
 
     this.addListener(ELEMENT_IDS.LATEXDIFF_VC_BUTTON, 'click', () => {
       const { inputFile } = this._getSingleFileData(['input']);
-      const baseFile = safeGetElementValue(BASE_FILE);
-      const commitHash = safeGetElementValue(ELEMENT_IDS.COMMIT_SELECT);
+      const baseFile = safeElementProperty(BASE_FILE, 'value');
+      const commitHash = safeElementProperty(
+        ELEMENT_IDS.COMMIT_SELECT,
+        'value',
+      );
 
       this.vscode.postMessage({
         command: MAIN_VIEW_COMMANDS.LATEXDIFFVC,
@@ -234,8 +233,11 @@ export class ActionButtonManager extends BaseUIManager {
     ].forEach(({ id, action }) => {
       this.addListener(id, 'click', () => {
         const { inputFile } = this._getSingleFileData(['input']);
-        const baseFile = safeGetElementValue(BASE_FILE);
-        const commitHash = safeGetElementValue(ELEMENT_IDS.COMMIT_SELECT);
+        const baseFile = safeElementProperty(BASE_FILE, 'value');
+        const commitHash = safeElementProperty(
+          ELEMENT_IDS.COMMIT_SELECT,
+          'value',
+        );
 
         const command =
           action === 'pack'
@@ -259,8 +261,8 @@ export class ActionButtonManager extends BaseUIManager {
 
   _setupCompareButtons() {
     this.addListener(ELEMENT_IDS.COMPARE_BUTTON, 'click', () => {
-      const baseFile = safeGetElementValue(BASE_FILE);
-      const editedFile = safeGetElementValue(EDITED_FILE);
+      const baseFile = safeElementProperty(BASE_FILE, 'value');
+      const editedFile = safeElementProperty(EDITED_FILE, 'value');
       if (baseFile && editedFile) {
         this.vscode.postMessage({
           command: MAIN_VIEW_COMMANDS.COMPARE,
@@ -276,8 +278,8 @@ export class ActionButtonManager extends BaseUIManager {
     });
 
     this.addListener(ELEMENT_IDS.ACCEPT_BUTTON, 'click', () => {
-      const baseFile = safeGetElementValue(BASE_FILE);
-      const editedFile = safeGetElementValue(EDITED_FILE);
+      const baseFile = safeElementProperty(BASE_FILE, 'value');
+      const editedFile = safeElementProperty(EDITED_FILE, 'value');
       if (baseFile && editedFile) {
         this.vscode.postMessage({
           command: MAIN_VIEW_COMMANDS.ACCEPT_EDITED,

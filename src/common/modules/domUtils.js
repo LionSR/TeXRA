@@ -12,24 +12,6 @@ export function addEventListenerSafely(elementOrId, event, handler) {
   }
 }
 
-export function safeSetElementValue(id, value) {
-  const element = document.getElementById(id);
-  if (!element) {
-    console.warn(`Element with id '${id}' not found`);
-    return;
-  }
-  element.value = value;
-}
-
-export function safeSetElementChecked(id, checked) {
-  const element = document.getElementById(id);
-  if (!element) {
-    console.warn(`Element with id '${id}' not found`);
-    return;
-  }
-  element.checked = checked;
-}
-
 export function safeGetElementById(id) {
   const element = document.getElementById(id);
   if (!element) {
@@ -38,22 +20,24 @@ export function safeGetElementById(id) {
   return element;
 }
 
-export function safeGetElementValue(id) {
-  const element = document.getElementById(id);
-  if (!element) {
-    console.warn(`Element with id '${id}' not found`);
-    return '';
-  }
-  return element.value;
-}
+const DEFAULTS = { value: '', checked: false };
 
-export function safeGetElementChecked(id) {
+export function safeElementProperty(
+  id,
+  key,
+  value,
+  defaultValue = DEFAULTS[key],
+) {
   const element = document.getElementById(id);
   if (!element) {
     console.warn(`Element with id '${id}' not found`);
-    return false;
+    if (value === undefined) return defaultValue;
+    return;
   }
-  return element.checked;
+  if (value === undefined) {
+    return element[key] ?? defaultValue;
+  }
+  element[key] = value;
 }
 
 /**
