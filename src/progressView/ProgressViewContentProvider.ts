@@ -31,6 +31,7 @@ export class ProgressViewContentProvider extends BaseViewContentProvider {
       domHandlersUri: this.getWebviewUri(webview, 'modules/domHandlers.js'),
       formattersUri: this.getWebviewUri(webview, 'modules/formatters.js'),
       taskManagersUri: this.getWebviewUri(webview, 'modules/taskManagers.js'),
+      utilsUri: this.getWebviewUri(webview, 'modules/utils.js'),
       usageManagersUri: this.getWebviewUri(webview, 'modules/usageManagers.js'),
       constantsUri: this.getWebviewUri(webview, 'modules/constants.js'),
       katexMacrosUri: this.getWebviewUri(webview, 'modules/katexMacros.js'),
