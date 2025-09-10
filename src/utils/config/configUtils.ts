@@ -38,26 +38,52 @@ export function getConfig<T>(path: string, defaultValue?: T): T {
 }
 
 /**
- * Sets a configuration value in VS Code settings.
+ * Updates a configuration value in VS Code settings.
  *
  * Path conventions:
- * - Use dot notation without the 'texra' prefix (e.g., 'agents', 'api.engine')
- * - The function will automatically add the 'texra.' prefix
+ * - Use dot notation without the 'texra' prefix for extension settings
+ *   (e.g., 'agents', 'api.engine')
+ * - Non-extension settings should set `prefix` to false and pass the full key
  *
- * @param path Configuration path without 'texra' prefix (e.g., 'agents')
+ * @param path Configuration path
  * @param value The value to set
- * @param target Configuration target (defaults to Workspace)
+ * @param options Additional options for the update
  * @returns Promise that resolves when configuration is updated
  */
-export async function setConfig<T>(
+export async function updateConfig<T>(
   path: string,
   value: T,
-  target: vscode.ConfigurationTarget = vscode.ConfigurationTarget.Workspace,
+  options: {
+    target?: vscode.ConfigurationTarget;
+    prefix?: boolean;
+    ifUnset?: boolean;
+  } = {},
 ): Promise<void> {
-  await vscode.workspace
-    .getConfiguration()
-    .update(`texra.${path}`, value, target);
+  const {
+    target = vscode.ConfigurationTarget.Workspace,
+    prefix = true,
+    ifUnset = false,
+  } = options;
+
+  const key = prefix && !path.startsWith('texra.') ? `texra.${path}` : path;
+
+  if (ifUnset) {
+    const setting = vscode.workspace.getConfiguration().inspect(key);
+    if (
+      setting &&
+      setting.globalValue === undefined &&
+      setting.workspaceValue === undefined &&
+      setting.workspaceFolderValue === undefined
+    ) {
+      await vscode.workspace.getConfiguration().update(key, value, target);
+    }
+  } else {
+    await vscode.workspace.getConfiguration().update(key, value, target);
+  }
 }
+
+// Backwards-compatible alias
+export const setConfig = updateConfig;
 
 /**
  * Register a listener for configuration changes on the given keys.
