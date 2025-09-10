@@ -47,6 +47,7 @@ CLAUDE.md
 
 !src/common/styles/*.css
 !src/common/webviewState.js
+!src/common/themeHandlerFactory.js
 !src/common/webview/*.js
 !src/common/webview/commands.js
 !src/common/modules/*.js

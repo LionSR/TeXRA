@@ -1,4 +1,21 @@
-// Factory creator for theme-related message handlers
+/**
+ * @typedef {Object} ThemeHandlerFactoryOptions
+ * @property {(theme: string, message: any) => void} [onTheme] - Callback when theme is set
+ * @property {(message: any) => void} [onDebug] - Callback when debug mode is updated
+ * @property {Record<string, (message: any) => void>} [extraHandlers] - Additional handlers keyed by command name
+ */
+
+/**
+ * @typedef {Object} ThemeHandlerContext
+ * @property {() => void} [postHandle] - Callback executed after every handler
+ */
+
+/**
+ * Factory creator for theme-related message handlers.
+ * @param {Record<string, string>} commands - Command constants containing THEME_SET and DEBUG_MODE_SET
+ * @param {ThemeHandlerFactoryOptions} [options={}] - Optional callbacks for view-specific behavior
+ * @returns {(context?: ThemeHandlerContext) => Record<string, (message: any) => void>} Factory function that creates theme handlers
+ */
 export function createThemeHandlerFactory(
   commands,
   { onTheme, onDebug, extraHandlers = {} } = {},
