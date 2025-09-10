@@ -21,6 +21,19 @@ import * as vscode from 'vscode';
 import * as logger from '@logger/logUtils';
 
 /**
+ * Valid documentation identifiers for error messages.
+ * This ensures type safety when referencing documentation sections.
+ */
+export type DocId = 
+  | 'intelligent-merge' 
+  | 'custom-agents' 
+  | 'tool-integration' 
+  | 'latex-diff';
+
+/** Maximum length for error details before truncation */
+const MAX_ERROR_LENGTH = 500;
+
+/**
  * Format an error with a prefix for logging or user messages.
  *
  * This is the core formatting function used by all other error handling utilities.
@@ -45,7 +58,13 @@ import * as logger from '@logger/logUtils';
  * ```
  */
 export function formatError(prefix: string, err: unknown): string {
-  const detail = err instanceof Error ? err.message : String(err);
+  let detail = err instanceof Error ? err.message : String(err);
+  
+  // Truncate overly long error details for better readability
+  if (detail.length > MAX_ERROR_LENGTH) {
+    detail = detail.substring(0, MAX_ERROR_LENGTH) + '...';
+  }
+  
   return `${prefix}: ${detail}`;
 }
 
@@ -170,13 +189,13 @@ export async function showLoggedMessage(
  *
  * @param channel - The logging channel to use (e.g., "Configuration")
  * @param message - The error message to log and display
- * @param docId - Identifier for the documentation to open
+ * @param docId - Identifier for the documentation to open (must be a valid DocId)
  * @param actionLabel - Label for the docs action button (defaults to 'View Docs')
  */
 export async function showLoggedMessageWithDocs(
   channel: string,
   message: string,
-  docId: string,
+  docId: DocId,
   actionLabel = 'View Docs',
 ): Promise<void> {
   logger.error(channel, message);
