@@ -16,32 +16,33 @@ const CHANNEL = 'AgentLoad';
 logger.initialize(CHANNEL);
 
 export class AgentDirectoryManager {
-  async builtIn(context: vscode.ExtensionContext): Promise<string> {
+  /**
+   * Ensure a built-in agents directory exists and return its path.
+   */
+  private async ensureBuiltInDir(
+    context: vscode.ExtensionContext,
+    dirName: string,
+  ): Promise<string> {
     if (!context) {
       throw new Error('Extension context required for built-in agents');
     }
 
     StorageFS.initialize(context);
-    await GlobalStorageFS.ensureDir('agents');
+    await GlobalStorageFS.ensureDir(dirName);
 
-    const basePath = GlobalStorageFS.fullPath('agents');
-    logger.debug(CHANNEL, `Using built-in agents directory: ${basePath}`);
+    const basePath = GlobalStorageFS.fullPath(dirName);
+    const label = dirName === 'tool_use_agents' ? 'tool-use' : dirName;
+    logger.debug(CHANNEL, `Using built-in ${label} directory: ${basePath}`);
 
     return basePath;
   }
 
+  async builtIn(context: vscode.ExtensionContext): Promise<string> {
+    return this.ensureBuiltInDir(context, 'agents');
+  }
+
   async builtInToolUse(context: vscode.ExtensionContext): Promise<string> {
-    if (!context) {
-      throw new Error('Extension context required for built-in agents');
-    }
-
-    StorageFS.initialize(context);
-    await GlobalStorageFS.ensureDir('tool_use_agents');
-
-    const basePath = GlobalStorageFS.fullPath('tool_use_agents');
-    logger.debug(CHANNEL, `Using built-in tool-use directory: ${basePath}`);
-
-    return basePath;
+    return this.ensureBuiltInDir(context, 'tool_use_agents');
   }
 
   async custom(): Promise<string> {
