@@ -122,10 +122,16 @@ export class HistoryViewProvider extends BaseWebviewProvider<
    */
   private async updateWebviewContent() {
     if (this._view) {
-      setTimeout(
-        () => this.messageHandler.sendHistoryData(this._view!.webview),
-        100,
+      // Set the HTML content first
+      this._view.webview.html = this.contentProvider.getHtmlContent(
+        this._view.webview,
       );
+      // Then send the history data after a short delay
+      setTimeout(() => {
+        if (this._view) {
+          this.messageHandler.sendHistoryData(this._view.webview);
+        }
+      }, 100);
     }
   }
 }
