@@ -54,9 +54,8 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         this.handleInfoMessage.bind(this),
       [MAIN_VIEW_COMMANDS.SHOW_INSTRUCTION]: async (m) =>
         showInstructionWithSuppress(m.key, m.text),
-      [MAIN_VIEW_COMMANDS.GET_THEME]: this.handleThemeRequest.bind(this),
-      [MAIN_VIEW_COMMANDS.GET_DEBUG_MODE]:
-        this.handleDebugModeRequest.bind(this),
+      [MAIN_VIEW_COMMANDS.GET_THEME]: this.handleGetTheme.bind(this),
+      [MAIN_VIEW_COMMANDS.GET_DEBUG_MODE]: this.handleGetDebugMode.bind(this),
       [MAIN_VIEW_COMMANDS.MODEL_SELECTED]: this.handleModelSelection.bind(this),
       [MAIN_VIEW_COMMANDS.EXECUTE]: async (m) =>
         this.executionManager.handleExecute(m),
@@ -281,8 +280,8 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
     this.logger.debug(`Information message: ${message.text}`);
   }
 
-  private async handleThemeRequest(
-    message: any,
+  private async handleGetTheme(
+    _message: any,
     webviewView: vscode.WebviewView,
   ): Promise<void> {
     const theme =
@@ -295,8 +294,8 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
     });
   }
 
-  private async handleDebugModeRequest(
-    message: any,
+  private async handleGetDebugMode(
+    _message: any,
     webviewView: vscode.WebviewView,
   ): Promise<void> {
     const debugMode = getConfig<boolean>('logger.debugMode', false);
