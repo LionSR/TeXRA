@@ -61,6 +61,11 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
   }
 
   // Handler implementations
+  /**
+   * Override to notify the provider when webview is ready.
+   * This allows the provider to process any pending updates that
+   * were queued while the webview was initializing.
+   */
   protected override async handleWebviewReady(
     message: any,
     webviewView: vscode.WebviewView,
