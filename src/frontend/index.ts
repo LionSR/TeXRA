@@ -1,6 +1,5 @@
 export * from './files/fileLister';
 export * from './files/listing';
-export * from './files/dialog';
 export * from './files/vars';
 export * from './files/rules';
 export * from './latex/openBuild';
