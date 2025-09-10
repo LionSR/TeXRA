@@ -18,101 +18,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
   }
 
   /**
-   * Map webview commands to VS Code commands or state mutators
-   */
-  private readonly commandMap: Record<
-    string,
-    string | ((message: any) => Promise<boolean> | boolean)
-  > = {
-    // Stream management - state mutators
-    [PROGRESS_VIEW_COMMANDS.SWITCH_STREAM]: (m) => {
-      this.provider.setActiveStream(m.stream);
-      return false; // setActiveStream already calls updateWebview
-    },
-    [PROGRESS_VIEW_COMMANDS.DELETE_STREAM]: (m) => {
-      this.provider.state.clearStream(m.stream);
-      return true;
-    },
-    [PROGRESS_VIEW_COMMANDS.ERASE_STREAM]: (m) => {
-      this.provider.state.eraseStreamContent(m.stream);
-      return true;
-    },
-    [PROGRESS_VIEW_COMMANDS.DELETE_ALL]: () => {
-      this.provider.state.clearAll();
-      return true;
-    },
-    [PROGRESS_VIEW_COMMANDS.SORT_STREAMS]: (m) => {
-      this.provider.state.streamSortOrder = m.sortBy ?? 'time';
-      return true;
-    },
-
-    // Stream management - VS Code commands
-    [PROGRESS_VIEW_COMMANDS.STOP_STREAM]: 'texra.stopAgent',
-
-    // Actions requiring additional logic
-    [PROGRESS_VIEW_COMMANDS.RUN_AGAIN]: async (m) => {
-      const taskState = this.provider.state.getTaskState(m.stream);
-      if (taskState) {
-        await safeExecuteCommand(
-          'texra.execute',
-          [taskState.agentConfig],
-          this.viewName,
-        );
-      }
-      return false;
-    },
-    [PROGRESS_VIEW_COMMANDS.DIFF_STREAM]: async (m) => {
-      const taskState = this.provider.state.getTaskState(m.stream);
-      if (taskState) {
-        await safeExecuteCommand(
-          'texra.runLatexdiff',
-          [
-            {
-              agent: taskState.agentConfig.agent,
-              model: taskState.agentConfig.model,
-              inputFile: taskState.agentConfig.inputFile,
-              outputFiles: taskState.agentConfig.outputFiles,
-              outputFilesActive: taskState.activeFiles.output,
-            },
-          ],
-          this.viewName,
-        );
-      }
-      return false;
-    },
-    [PROGRESS_VIEW_COMMANDS.PACK_STREAM]: async (m) => {
-      await this.handleFileOperation(m.stream, 'texra.pack');
-      return false;
-    },
-    [PROGRESS_VIEW_COMMANDS.CLEAN_STREAM]: async (m) => {
-      await this.handleFileOperation(m.stream, 'texra.clean');
-      return false;
-    },
-    [PROGRESS_VIEW_COMMANDS.RESTORE_STATE]: async (m) => {
-      const taskState = this.provider.state.getTaskState(m.stream);
-      if (taskState) {
-        await safeExecuteCommand(
-          'texra.restoreState',
-          [taskState],
-          this.viewName,
-        );
-      }
-      return false;
-    },
-
-    // Simple VS Code command mappings
-    [PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP]: 'texra.sendFollowUp',
-    [PROGRESS_VIEW_COMMANDS.OPEN_FILE]: 'texra.openFile',
-    [PROGRESS_VIEW_COMMANDS.OPEN_FILE_COMPILE]: 'texra.openFileCompile',
-    [PROGRESS_VIEW_COMMANDS.COMPARE_ORIGINAL]: 'texra.compare',
-    [PROGRESS_VIEW_COMMANDS.COMPARE_PREVIOUS]: 'texra.compare',
-    [PROGRESS_VIEW_COMMANDS.ACCEPT_FILE]: 'texra.acceptEdited',
-    [PROGRESS_VIEW_COMMANDS.MERGE_FILE]: 'texra.merge',
-    [PROGRESS_VIEW_COMMANDS.LATEXDIFF_FILE]: 'texra.latexdiff',
-    [PROGRESS_VIEW_COMMANDS.OPEN_LABEL]: 'texra.openLabel',
-  };
-
-  /**
    * Argument extractors for VS Code commands
    */
   private readonly argExtractors: Record<string, (m: any) => any[]> = {
@@ -138,7 +43,106 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     [PROGRESS_VIEW_COMMANDS.OPEN_LABEL]: (m) => [m.label],
   };
 
+  /**
+   * Get command map - lazy initialization to avoid initialization order issues
+   * @returns Map of webview commands to VS Code commands or state mutators
+   */
+  private getCommandMap(): Record<
+    string,
+    string | ((message: any) => Promise<boolean> | boolean)
+  > {
+    return {
+      // Stream management - state mutators
+      [PROGRESS_VIEW_COMMANDS.SWITCH_STREAM]: (m) => {
+        this.provider.setActiveStream(m.stream);
+        return false; // setActiveStream already calls updateWebview
+      },
+      [PROGRESS_VIEW_COMMANDS.DELETE_STREAM]: (m) => {
+        this.provider.state.clearStream(m.stream);
+        return true;
+      },
+      [PROGRESS_VIEW_COMMANDS.ERASE_STREAM]: (m) => {
+        this.provider.state.eraseStreamContent(m.stream);
+        return true;
+      },
+      [PROGRESS_VIEW_COMMANDS.DELETE_ALL]: () => {
+        this.provider.state.clearAll();
+        return true;
+      },
+      [PROGRESS_VIEW_COMMANDS.SORT_STREAMS]: (m) => {
+        this.provider.state.streamSortOrder = m.sortBy ?? 'time';
+        return true;
+      },
+
+      // Stream management - VS Code commands
+      [PROGRESS_VIEW_COMMANDS.STOP_STREAM]: 'texra.stopAgent',
+
+      // Actions requiring additional logic
+      [PROGRESS_VIEW_COMMANDS.RUN_AGAIN]: async (m) => {
+        const taskState = this.provider.state.getTaskState(m.stream);
+        if (taskState) {
+          await safeExecuteCommand(
+            'texra.execute',
+            [taskState.agentConfig],
+            this.viewName,
+          );
+        }
+        return false;
+      },
+      [PROGRESS_VIEW_COMMANDS.DIFF_STREAM]: async (m) => {
+        const taskState = this.provider.state.getTaskState(m.stream);
+        if (taskState) {
+          await safeExecuteCommand(
+            'texra.runLatexdiff',
+            [
+              {
+                agent: taskState.agentConfig.agent,
+                model: taskState.agentConfig.model,
+                inputFile: taskState.agentConfig.inputFile,
+                outputFiles: taskState.agentConfig.outputFiles,
+                outputFilesActive: taskState.activeFiles.output,
+              },
+            ],
+            this.viewName,
+          );
+        }
+        return false;
+      },
+      [PROGRESS_VIEW_COMMANDS.PACK_STREAM]: async (m) => {
+        await this.handleFileOperation(m.stream, 'texra.pack');
+        return false;
+      },
+      [PROGRESS_VIEW_COMMANDS.CLEAN_STREAM]: async (m) => {
+        await this.handleFileOperation(m.stream, 'texra.clean');
+        return false;
+      },
+      [PROGRESS_VIEW_COMMANDS.RESTORE_STATE]: async (m) => {
+        const taskState = this.provider.state.getTaskState(m.stream);
+        if (taskState) {
+          await safeExecuteCommand(
+            'texra.restoreState',
+            [taskState],
+            this.viewName,
+          );
+        }
+        return false;
+      },
+
+      // Simple VS Code command mappings
+      [PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP]: 'texra.sendFollowUp',
+      [PROGRESS_VIEW_COMMANDS.OPEN_FILE]: 'texra.openFile',
+      [PROGRESS_VIEW_COMMANDS.OPEN_FILE_COMPILE]: 'texra.openFileCompile',
+      [PROGRESS_VIEW_COMMANDS.COMPARE_ORIGINAL]: 'texra.compare',
+      [PROGRESS_VIEW_COMMANDS.COMPARE_PREVIOUS]: 'texra.compare',
+      [PROGRESS_VIEW_COMMANDS.ACCEPT_FILE]: 'texra.acceptEdited',
+      [PROGRESS_VIEW_COMMANDS.MERGE_FILE]: 'texra.merge',
+      [PROGRESS_VIEW_COMMANDS.LATEXDIFF_FILE]: 'texra.latexdiff',
+      [PROGRESS_VIEW_COMMANDS.OPEN_LABEL]: 'texra.openLabel',
+    };
+  }
+
   protected createHandlers(): Record<string, MessageHandler> {
+    const commandMap = this.getCommandMap();
     const dispatch = this.dispatchCommand.bind(this);
     const handlers: Record<string, MessageHandler> = {
       // Common handlers
@@ -148,7 +152,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
         this.handleWebviewReady.bind(this),
     };
 
-    for (const command of Object.keys(this.commandMap)) {
+    for (const command of Object.keys(commandMap)) {
       handlers[command] = (m, w) => dispatch(command, m, w);
     }
 
@@ -160,7 +164,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     message: any,
     _webviewView: vscode.WebviewView,
   ): Promise<void> {
-    const mapping = this.commandMap[command];
+    const commandMap = this.getCommandMap();
+    const mapping = commandMap[command];
     if (!mapping) {
       return;
     }
