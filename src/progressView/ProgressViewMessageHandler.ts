@@ -26,8 +26,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
   > = {
     // Stream management - state mutators
     [PROGRESS_VIEW_COMMANDS.SWITCH_STREAM]: (m) => {
-      this.provider.state.activeStream = m.stream;
-      return true;
+      this.provider.setActiveStream(m.stream);
+      return false; // setActiveStream already calls updateWebview
     },
     [PROGRESS_VIEW_COMMANDS.DELETE_STREAM]: (m) => {
       this.provider.state.clearStream(m.stream);
