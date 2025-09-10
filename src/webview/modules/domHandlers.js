@@ -32,11 +32,8 @@ export class MainViewDomHandler {
     this.actionButtonManager = null;
     this.settingsButtonManager = null;
     this.debugMode = false;
-    this.apiKeyButtonHandler = null;
-    this.apiKeyGuideButtonHandler = null;
-    this.agentEditButtonHandler = null;
-    this.agentDirButtonHandler = null;
-    this.agentDocButtonHandler = null;
+    this.buttonHandlers = new Map();
+    this.buttonConfigs = [];
   }
 
   _updateDebugButtonVisibility() {
@@ -82,97 +79,87 @@ export class MainViewDomHandler {
     this.settingsButtonManager.setup();
     recordingManager.setupRecordButton();
 
-    const apiKeyButton = document.getElementById(
-      ELEMENT_IDS.API_KEY_BANNER_BUTTON,
-    );
-    if (apiKeyButton) {
-      this.apiKeyButtonHandler = () => {
-        // Get provider from banner element to determine which setup to open
-        const banner = document.getElementById(ELEMENT_IDS.API_KEY_BANNER);
-        const provider = banner?.dataset?.provider;
+    this.buttonConfigs = [
+      {
+        id: ELEMENT_IDS.API_KEY_BANNER_BUTTON,
+        handler: () => {
+          // Get provider from banner element to determine which setup to open
+          const banner = document.getElementById(ELEMENT_IDS.API_KEY_BANNER);
+          const provider = banner?.dataset?.provider;
 
-        if (provider) {
-          // Provider-specific context - use provider-specific API key setup
+          if (provider) {
+            // Provider-specific context - use provider-specific API key setup
+            vscode.postMessage({
+              command: MAIN_VIEW_COMMANDS.OPEN_SET_PROVIDER_API_KEY,
+              provider,
+            });
+          } else {
+            // General context - use generic API key setup
+            vscode.postMessage({
+              command: MAIN_VIEW_COMMANDS.OPEN_SET_API_KEY,
+            });
+          }
+        },
+      },
+      {
+        id: ELEMENT_IDS.API_KEY_GUIDE_BUTTON,
+        handler: () => {
+          // Get provider from banner element to determine which action to take
+          const banner = document.getElementById(ELEMENT_IDS.API_KEY_BANNER);
+          const provider = banner?.dataset?.provider;
+
+          if (provider) {
+            // Provider-specific context - open provider's API key page
+            vscode.postMessage({
+              command: MAIN_VIEW_COMMANDS.OPEN_PROVIDER_API_KEY_URL,
+              provider,
+            });
+          } else {
+            // General context - open TeXRA's API key guide
+            vscode.postMessage({
+              command: MAIN_VIEW_COMMANDS.OPEN_API_KEY_GUIDE,
+            });
+          }
+        },
+      },
+      {
+        id: ELEMENT_IDS.AGENT_CONFIG_EDIT_BUTTON,
+        handler: () => {
           vscode.postMessage({
-            command: MAIN_VIEW_COMMANDS.OPEN_SET_PROVIDER_API_KEY,
-            provider,
+            command: MAIN_VIEW_COMMANDS.OPEN_AGENT_SETTINGS,
           });
-        } else {
-          // General context - use generic API key setup
+        },
+      },
+      {
+        id: ELEMENT_IDS.AGENT_CONFIG_DIR_BUTTON,
+        handler: () => {
+          const banner = document.getElementById(
+            ELEMENT_IDS.AGENT_CONFIG_BANNER,
+          );
+          const customDirSet = banner?.dataset?.customDirSet === 'true';
           vscode.postMessage({
-            command: MAIN_VIEW_COMMANDS.OPEN_SET_API_KEY,
+            command: MAIN_VIEW_COMMANDS.OPEN_AGENT_DIRECTORY,
+            customDirSet,
           });
-        }
-      };
-      apiKeyButton.addEventListener('click', this.apiKeyButtonHandler);
-    }
-
-    const apiKeyGuideButton = document.getElementById(
-      ELEMENT_IDS.API_KEY_GUIDE_BUTTON,
-    );
-    if (apiKeyGuideButton) {
-      this.apiKeyGuideButtonHandler = () => {
-        // Get provider from banner element to determine which action to take
-        const banner = document.getElementById(ELEMENT_IDS.API_KEY_BANNER);
-        const provider = banner?.dataset?.provider;
-
-        if (provider) {
-          // Provider-specific context - open provider's API key page
+        },
+      },
+      {
+        id: ELEMENT_IDS.AGENT_CONFIG_DOC_BUTTON,
+        handler: () => {
           vscode.postMessage({
-            command: MAIN_VIEW_COMMANDS.OPEN_PROVIDER_API_KEY_URL,
-            provider,
+            command: MAIN_VIEW_COMMANDS.OPEN_AGENT_DOCS,
           });
-        } else {
-          // General context - open TeXRA's API key guide
-          vscode.postMessage({
-            command: MAIN_VIEW_COMMANDS.OPEN_API_KEY_GUIDE,
-          });
-        }
-      };
-      apiKeyGuideButton.addEventListener(
-        'click',
-        this.apiKeyGuideButtonHandler,
-      );
-    }
+        },
+      },
+    ];
 
-    const agentEditButton = document.getElementById(
-      ELEMENT_IDS.AGENT_CONFIG_EDIT_BUTTON,
-    );
-    if (agentEditButton) {
-      this.agentEditButtonHandler = () => {
-        vscode.postMessage({
-          command: MAIN_VIEW_COMMANDS.OPEN_AGENT_SETTINGS,
-        });
-      };
-      agentEditButton.addEventListener('click', this.agentEditButtonHandler);
-    }
-
-    const agentDirButton = document.getElementById(
-      ELEMENT_IDS.AGENT_CONFIG_DIR_BUTTON,
-    );
-    if (agentDirButton) {
-      this.agentDirButtonHandler = () => {
-        const banner = document.getElementById(ELEMENT_IDS.AGENT_CONFIG_BANNER);
-        const customDirSet = banner?.dataset?.customDirSet === 'true';
-        vscode.postMessage({
-          command: MAIN_VIEW_COMMANDS.OPEN_AGENT_DIRECTORY,
-          customDirSet,
-        });
-      };
-      agentDirButton.addEventListener('click', this.agentDirButtonHandler);
-    }
-
-    const agentDocButton = document.getElementById(
-      ELEMENT_IDS.AGENT_CONFIG_DOC_BUTTON,
-    );
-    if (agentDocButton) {
-      this.agentDocButtonHandler = () => {
-        vscode.postMessage({
-          command: MAIN_VIEW_COMMANDS.OPEN_AGENT_DOCS,
-        });
-      };
-      agentDocButton.addEventListener('click', this.agentDocButtonHandler);
-    }
+    this.buttonConfigs.forEach(({ id, handler }) => {
+      const element = document.getElementById(id);
+      if (element) {
+        element.addEventListener('click', handler);
+        this.buttonHandlers.set(id, handler);
+      }
+    });
   }
 
   cleanupUI() {
@@ -188,44 +175,14 @@ export class MainViewDomHandler {
       this.settingsButtonManager.cleanup();
       this.settingsButtonManager = null;
     }
-    const apiKeyButton = document.getElementById(
-      ELEMENT_IDS.API_KEY_BANNER_BUTTON,
-    );
-    if (apiKeyButton && this.apiKeyButtonHandler) {
-      apiKeyButton.removeEventListener('click', this.apiKeyButtonHandler);
-      this.apiKeyButtonHandler = null;
-    }
-    const apiKeyGuideButton = document.getElementById(
-      ELEMENT_IDS.API_KEY_GUIDE_BUTTON,
-    );
-    if (apiKeyGuideButton && this.apiKeyGuideButtonHandler) {
-      apiKeyGuideButton.removeEventListener(
-        'click',
-        this.apiKeyGuideButtonHandler,
-      );
-      this.apiKeyGuideButtonHandler = null;
-    }
-    const agentEditButton = document.getElementById(
-      ELEMENT_IDS.AGENT_CONFIG_EDIT_BUTTON,
-    );
-    if (agentEditButton && this.agentEditButtonHandler) {
-      agentEditButton.removeEventListener('click', this.agentEditButtonHandler);
-      this.agentEditButtonHandler = null;
-    }
-    const agentDirButton = document.getElementById(
-      ELEMENT_IDS.AGENT_CONFIG_DIR_BUTTON,
-    );
-    if (agentDirButton && this.agentDirButtonHandler) {
-      agentDirButton.removeEventListener('click', this.agentDirButtonHandler);
-      this.agentDirButtonHandler = null;
-    }
-    const agentDocButton = document.getElementById(
-      ELEMENT_IDS.AGENT_CONFIG_DOC_BUTTON,
-    );
-    if (agentDocButton && this.agentDocButtonHandler) {
-      agentDocButton.removeEventListener('click', this.agentDocButtonHandler);
-      this.agentDocButtonHandler = null;
-    }
+    this.buttonConfigs.forEach(({ id }) => {
+      const element = document.getElementById(id);
+      const handler = this.buttonHandlers.get(id);
+      if (element && handler) {
+        element.removeEventListener('click', handler);
+        this.buttonHandlers.delete(id);
+      }
+    });
   }
 }
 
