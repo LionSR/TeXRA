@@ -16,20 +16,19 @@ export interface WolframScriptResult {
   error: string | null;
 }
 
+interface RunWolframOptions {
+  timeout?: number;
+  showErrorsToUser?: boolean;
+}
+
 /**
- * Execute Wolfram Language code through wolframscript
- * @param code The Wolfram Language code to execute
- * @param options Additional options for execution
- * @returns A promise that resolves to the execution result
+ * Internal helper that ensures wolframscript is installed and executes it
+ * with the provided arguments.
  */
-export async function executeWolframCode(
-  code: string,
-  options: {
-    timeout?: number;
-    showErrorsToUser?: boolean;
-  } = {},
+async function runWolfram(
+  commandArgs: string[],
+  options: RunWolframOptions = {},
 ): Promise<WolframScriptResult> {
-  // Check if wolframscript is installed before attempting to run code
   const isInstalled = await checkToolInstalled(
     'wolframscript',
     options.showErrorsToUser,
@@ -43,11 +42,9 @@ export async function executeWolframCode(
   }
 
   try {
-    const command = ['wolframscript', '-code', code];
-
-    const result = await executeCommand(command, {
+    const result = await executeCommand(['wolframscript', ...commandArgs], {
       truncate: false,
-      timeout: options.timeout || 30000, // Default 30 second timeout
+      timeout: options.timeout || 30000,
       channel: 'WolframTool',
     });
 
@@ -61,7 +58,7 @@ export async function executeWolframCode(
 
     if (options.showErrorsToUser) {
       vscode.window.showErrorMessage(
-        `Error executing Wolfram code: ${errorMessage}`,
+        `Error executing Wolfram command: ${errorMessage}`,
       );
     }
 
@@ -74,6 +71,22 @@ export async function executeWolframCode(
 }
 
 /**
+ * Execute Wolfram Language code through wolframscript
+ * @param code The Wolfram Language code to execute
+ * @param options Additional options for execution
+ * @returns A promise that resolves to the execution result
+ */
+export async function executeWolframCode(
+  code: string,
+  options: RunWolframOptions = {},
+): Promise<WolframScriptResult> {
+  return runWolfram(['-code', code], {
+    timeout: options.timeout || 30000,
+    showErrorsToUser: options.showErrorsToUser,
+  });
+}
+
+/**
  * Execute a Wolfram Language script file
  * @param filePath Path to the Wolfram Language script file
  * @param options Additional options for execution
@@ -81,53 +94,12 @@ export async function executeWolframCode(
  */
 export async function executeWolframScriptFile(
   filePath: string,
-  options: {
-    timeout?: number;
-    showErrorsToUser?: boolean;
-  } = {},
+  options: RunWolframOptions = {},
 ): Promise<WolframScriptResult> {
-  // Check if wolframscript is installed before attempting to run the script
-  const isInstalled = await checkToolInstalled(
-    'wolframscript',
-    options.showErrorsToUser,
-  );
-  if (!isInstalled) {
-    return {
-      success: false,
-      output: null,
-      error: 'Mathematica/wolframscript is not installed or not in your PATH.',
-    };
-  }
-
-  try {
-    const command = ['wolframscript', '-file', filePath];
-
-    const result = await executeCommand(command, {
-      truncate: false,
-      timeout: options.timeout || 60000, // Default 1 minute timeout for script files
-      channel: 'WolframTool',
-    });
-
-    return {
-      success: result.success,
-      output: result.stdout,
-      error: result.stderr,
-    };
-  } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : String(err);
-
-    if (options.showErrorsToUser) {
-      vscode.window.showErrorMessage(
-        `Error executing Wolfram script file: ${errorMessage}`,
-      );
-    }
-
-    return {
-      success: false,
-      output: null,
-      error: errorMessage,
-    };
-  }
+  return runWolfram(['-file', filePath], {
+    timeout: options.timeout || 60000,
+    showErrorsToUser: options.showErrorsToUser,
+  });
 }
 
 // The verifyMathematicalExpression helper has been removed. It previously
