@@ -85,6 +85,7 @@ export const MAIN_VIEW_COMMANDS = {
   HIDE_AGENT_CONFIG_BANNER: 'hideAgentConfigBanner',
   SHOW_DEPENDENCY_BANNER: 'showDependencyBanner',
   HIDE_DEPENDENCY_BANNER: 'hideDependencyBanner',
+  UPDATE_DEPENDENCY_REMINDER_SETTING: 'updateDependencyReminderSetting',
 
   // Extension response events
   CHECK_RESTORED_BASE_FILE: 'checkRestoredBaseFile',
