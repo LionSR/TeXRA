@@ -42,39 +42,37 @@ export class DiffManager {
     );
   }
 
-  async handleRequestRecentCommits(
-    webviewView: vscode.WebviewView,
-  ): Promise<void> {
+  private async _fetchRecentCommits(): Promise<{
+    commits: string[];
+    isGitRepo: boolean;
+  }> {
     const isGitRepo = await vscode.commands.executeCommand<boolean>(
       'texra.isGitRepository',
     );
-    const commits = isGitRepo
-      ? await vscode.commands.executeCommand<string[]>('texra.getRecentCommits')
-      : [];
+    if (!isGitRepo) {
+      return { commits: [], isGitRepo: false };
+    }
+    const commits = await vscode.commands.executeCommand<string[]>(
+      'texra.getRecentCommits',
+    );
+    return { commits, isGitRepo: true };
+  }
+
+  async handleRequestRecentCommits(
+    webviewView: vscode.WebviewView,
+  ): Promise<void> {
+    const result = await this._fetchRecentCommits();
     webviewView.webview.postMessage({
       command: MAIN_VIEW_COMMANDS.SET_RECENT_COMMITS,
-      commits,
-      isGitRepo,
+      ...result,
     });
   }
 
   async handleRefreshCommits(webviewView: vscode.WebviewView): Promise<void> {
-    const isGitRepoRefresh = await vscode.commands.executeCommand<boolean>(
-      'texra.isGitRepository',
-    );
-    if (isGitRepoRefresh) {
-      const commitsRefresh = await vscode.commands.executeCommand<string[]>(
-        'texra.getRecentCommits',
-      );
-      webviewView.webview.postMessage({
-        command: MAIN_VIEW_COMMANDS.SET_RECENT_COMMITS,
-        commits: commitsRefresh,
-      });
-    } else {
-      webviewView.webview.postMessage({
-        command: MAIN_VIEW_COMMANDS.SET_RECENT_COMMITS,
-        isGitRepo: false,
-      });
-    }
+    const result = await this._fetchRecentCommits();
+    webviewView.webview.postMessage({
+      command: MAIN_VIEW_COMMANDS.SET_RECENT_COMMITS,
+      ...result,
+    });
   }
 }
