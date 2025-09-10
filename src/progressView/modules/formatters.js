@@ -27,7 +27,7 @@ import { createFromTemplate } from '@common/templateUtils.js';
 import {
   CHEVRON_RIGHT_CLASS,
   CHEVRON_DOWN_CLASS,
-} from '@common/webviewContext.js';
+} from '@common/iconConstants.js';
 
 // Constants
 export const BULLET_MARKUP =
