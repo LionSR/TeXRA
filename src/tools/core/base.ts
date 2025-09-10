@@ -1,5 +1,5 @@
 // Third-party imports
-import { z } from 'zod';
+import { z, ZodError } from 'zod';
 
 // Local imports - tools
 import type { ToolDefinition } from '@model';
@@ -19,8 +19,26 @@ export abstract class BaseTool<T> {
   }
 
   async call(rawInput: unknown): Promise<ToolResult> {
-    const input = this.validate(rawInput);
-    return this.execute(input);
+    try {
+      const input = this.validate(rawInput);
+      return await this.execute(input);
+    } catch (err) {
+      if (err instanceof ZodError) {
+        return new ToolResult({
+          error: 'Invalid input',
+          isError: true,
+          diagnostics: err.issues,
+        });
+      }
+      const message = err instanceof Error ? err.message : String(err);
+      const diagnostics =
+        err instanceof Error ? { name: err.name, stack: err.stack } : undefined;
+      return new ToolResult({
+        error: message,
+        isError: true,
+        diagnostics,
+      });
+    }
   }
 
   protected abstract execute(input: T): Promise<ToolResult>;
