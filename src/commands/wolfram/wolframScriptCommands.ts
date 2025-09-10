@@ -1,6 +1,15 @@
 // Third-party imports
 import * as vscode from 'vscode';
 
+// Local imports - log
+import * as logger from '@logger/logUtils';
+
+// Local imports - errors
+import {
+  showLoggedMessage,
+  showLoggedMessageWithDocs,
+} from '@common/errors/errorHandlingUtils';
+
 // Standard library imports
 import * as path from 'path';
 
@@ -18,20 +27,14 @@ export const wolframScriptCommands = {
   wolframScriptRunFile: 'texra.wolframScriptRunFile',
 };
 
+const CHANNEL = 'WolframScriptCommands';
+logger.initialize(CHANNEL);
+
 /**
  * Show an error message with a link to Tool Integration docs.
  * @param message The error message to display.
  */
-async function showWolframError(message: string) {
-  const docsAction = 'Open Tool Integration Docs';
-  const selection = await vscode.window.showErrorMessage(
-    `${message} See Tool Integration for setup instructions.`,
-    docsAction,
-  );
-  if (selection === docsAction) {
-    await vscode.commands.executeCommand('texra.openDoc', 'tool-integration');
-  }
-}
+// Removed showWolframError wrapper - using showLoggedMessageWithDocs directly
 
 export function registerWolframScriptCommands(
   context: vscode.ExtensionContext,
@@ -58,17 +61,28 @@ export function registerWolframScriptCommands(
               `Wolframscript test successful: ${result.output}`,
             );
           } else {
-            await showWolframError(
-              `Wolframscript test failed: ${result.error}.`,
+            await showLoggedMessageWithDocs(
+              CHANNEL,
+              `Wolframscript test failed: ${result.error}. See Tool Integration for setup instructions.`,
+              'tool-integration',
+              'Open Tool Integration Docs',
             );
           }
         } else {
-          await showWolframError(
-            'Wolframscript is not properly installed or not available in PATH.',
+          await showLoggedMessageWithDocs(
+            CHANNEL,
+            'Wolframscript is not properly installed or not available in PATH. See Tool Integration for setup instructions.',
+            'tool-integration',
+            'Open Tool Integration Docs',
           );
         }
       } catch (err) {
-        await showWolframError(`Failed to test Wolframscript: ${err}`);
+        await showLoggedMessageWithDocs(
+          CHANNEL,
+          `Failed to test Wolframscript: ${err}. See Tool Integration for setup instructions.`,
+          'tool-integration',
+          'Open Tool Integration Docs',
+        );
       }
     },
   );
@@ -181,7 +195,12 @@ export function registerWolframScriptCommands(
           </html>
         `;
       } catch (err) {
-        await showWolframError(`Failed to execute Wolfram code: ${err}`);
+        await showLoggedMessageWithDocs(
+          CHANNEL,
+          `Failed to execute Wolfram code: ${err}. See Tool Integration for setup instructions.`,
+          'tool-integration',
+          'Open Tool Integration Docs',
+        );
       }
     },
   );
@@ -192,7 +211,7 @@ export function registerWolframScriptCommands(
     async () => {
       const editor = vscode.window.activeTextEditor;
       if (!editor) {
-        vscode.window.showErrorMessage('No file is currently open');
+        await showLoggedMessage(CHANNEL, 'No file is currently open');
         return;
       }
 
@@ -201,7 +220,8 @@ export function registerWolframScriptCommands(
 
       // Check if the file is a Wolfram Language file
       if (fileExtension !== '.wl' && fileExtension !== '.m') {
-        vscode.window.showErrorMessage(
+        await showLoggedMessage(
+          CHANNEL,
           'Current file is not a Wolfram Language file. Please open a .wl or .m file.',
         );
         return;
@@ -319,7 +339,12 @@ export function registerWolframScriptCommands(
           </html>
         `;
       } catch (err) {
-        await showWolframError(`Failed to execute Wolfram script file: ${err}`);
+        await showLoggedMessageWithDocs(
+          CHANNEL,
+          `Failed to execute Wolfram script file: ${err}. See Tool Integration for setup instructions.`,
+          'tool-integration',
+          'Open Tool Integration Docs',
+        );
       }
     },
   );
