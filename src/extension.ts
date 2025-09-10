@@ -7,7 +7,7 @@ import dotenv from 'dotenv';
 
 // Local imports - core
 import * as logger from '@logger/logUtils';
-import { watchConfig } from '@utils/config';
+import { watchConfig, getConfig } from '@utils/config';
 import { SecretManager } from '@frontend/secretManager';
 import { copyDefaultAgents, configureLatexSettings } from '@frontend/setup';
 import { disposeDiffRefresh } from '@frontend/ui/diffView';
@@ -36,8 +36,7 @@ async function refreshApiKeyStatus() {
   }
 
   // Check if reminders are enabled
-  const config = vscode.workspace.getConfiguration('texra');
-  const showReminders = config.get<boolean>('ui.showApiKeyReminders', true);
+  const showReminders = getConfig<boolean>('ui.showApiKeyReminders', true);
 
   if (!showReminders) {
     apiKeyStatusBarItem.hide();
