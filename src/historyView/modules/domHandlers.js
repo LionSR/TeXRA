@@ -4,15 +4,19 @@ import { HistoryEventsManager } from './uiManagers/HistoryEventsManager.js';
 // Local imports
 import { HistoryRenderer } from './uiManagers/HistoryRenderer.js';
 import { SearchManager } from './uiManagers/SearchManager.js';
+import { BaseDomHandler } from '@common/BaseDomHandler.js';
 
 /**
  * Coordinates the history view DOM managers.
  */
-export class HistoryViewDomHandler {
+class HistoryViewDomHandler extends BaseDomHandler {
   constructor() {
-    this.searchManager = new SearchManager(historyViewState);
-    this.renderer = new HistoryRenderer(this.searchManager);
-    this.events = new HistoryEventsManager(this.searchManager);
+    const searchManager = new SearchManager(historyViewState);
+    super({
+      searchManager,
+      renderer: new HistoryRenderer(searchManager),
+      events: new HistoryEventsManager(searchManager),
+    });
   }
 }
 
