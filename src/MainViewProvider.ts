@@ -11,7 +11,10 @@ import { SecretManager } from '@frontend/secretManager';
 import { watchConfig, getConfig } from '@utils/config';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
 
-export class MainViewProvider extends BaseWebviewProvider {
+export class MainViewProvider
+  extends BaseWebviewProvider
+  implements vscode.WebviewViewProvider
+{
   protected messageHandler: MainViewMessageHandler;
   protected contentProvider: MainViewContentProvider;
   private fileWatcher: vscode.FileSystemWatcher | undefined;

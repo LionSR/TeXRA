@@ -36,10 +36,7 @@ export abstract class BaseViewMessageHandler<
   /**
    * Standard message handling with consistent error handling and logging
    */
-  public async handleMessage(
-    message: any,
-    webviewView: T,
-  ): Promise<void> {
+  public async handleMessage(message: any, webviewView: T): Promise<void> {
     if (!message?.command) {
       this.logger.warn(
         this.channel,
@@ -77,10 +74,7 @@ export abstract class BaseViewMessageHandler<
   /**
    * Helper method for common theme handling
    */
-  protected async handleTheme(
-    message: any,
-    webviewView: T,
-  ): Promise<void> {
+  protected async handleTheme(message: any, webviewView: T): Promise<void> {
     if (!message?.theme) {
       this.logger.warn('Invalid theme message:', message);
       return;
@@ -95,10 +89,7 @@ export abstract class BaseViewMessageHandler<
   /**
    * Helper method for common debug mode handling
    */
-  protected async handleDebugMode(
-    message: any,
-    webviewView: T,
-  ): Promise<void> {
+  protected async handleDebugMode(message: any, webviewView: T): Promise<void> {
     webviewView.webview.postMessage({
       command: COMMON_COMMANDS.DEBUG_MODE_SET,
       debugMode: message.debugMode,
