@@ -1,14 +1,14 @@
 // Local imports - common
 import { CHEVRON_UP_CLASS, CHEVRON_DOWN_CLASS } from './iconConstants.js';
 
-export function addEventListenerSafely(elementOrId, event, handler) {
+export function addEventListenerSafely(elementOrId, event, handler, options) {
   const element =
     typeof elementOrId === 'string'
       ? safeGetElementById(elementOrId)
       : elementOrId;
 
   if (element) {
-    element.addEventListener(event, handler);
+    element.addEventListener(event, handler, options);
   }
 }
 
