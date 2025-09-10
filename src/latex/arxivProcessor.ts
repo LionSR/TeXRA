@@ -215,7 +215,7 @@ export class ArxivSourceProcessor {
       const downloadedRel = WorkspaceFS.relativePath(downloadedPath);
       const targetRel = path.join(paperDirRelative, 'main.tex');
       if (path.basename(downloadedPath) !== 'main.tex') {
-        await WorkspaceFS.move(downloadedRel, targetRel);
+        await WorkspaceFS.rename(downloadedRel, targetRel);
       }
     }
 
