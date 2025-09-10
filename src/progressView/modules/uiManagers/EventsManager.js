@@ -6,7 +6,10 @@ import { COMMANDS, SPLIT_SIZES, ELEMENT_IDS } from '../constants.js';
 import { progressViewState } from '../progressViewState.js';
 
 // Local imports
-import { addEventListenerSafely, setChevronIcon } from '@common/domUtils.js';
+import {
+  addEventListenerSafely,
+  setChevronIconHorizontal,
+} from '@common/domUtils.js';
 import { vscode } from '@common/webviewContext.js';
 
 /**
@@ -146,7 +149,7 @@ export class EventsManager {
           const toggleIcon = e.target.querySelector('.toggle-icon');
           if (toggleIcon) {
             const isOpen = e.target.open;
-            setChevronIcon(toggleIcon, isOpen);
+            setChevronIconHorizontal(toggleIcon, isOpen);
           }
         }
       },
