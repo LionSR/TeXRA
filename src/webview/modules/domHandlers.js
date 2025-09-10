@@ -12,9 +12,9 @@ import { outputFilesManager } from './uiManagers/OutputFilesManager.js';
 import { RecordingManager } from './uiManagers/RecordingManager.js';
 import { SettingsButtonManager } from './uiManagers/SettingsButtonManager.js';
 import { ToggleManager } from './uiManagers/ToggleManager.js';
-import { BaseUIManager } from './uiManagers/BaseUIManager.js';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
 import { vscode } from '@common/webviewContext.js';
+import { BaseDomHandler } from '@common/BaseDomHandler.js';
 
 export const instructionManager = new InstructionManager(
   'instruction',
@@ -27,7 +27,7 @@ export const recordingManager = new RecordingManager(vscode, webviewEventBus);
 /**
  * Coordinates UI managers for the main webview.
  */
-export class MainViewDomHandler extends BaseUIManager {
+class MainViewDomHandler extends BaseDomHandler {
   constructor() {
     super();
     this.fileInputManager = null;
