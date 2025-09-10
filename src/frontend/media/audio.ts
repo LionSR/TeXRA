@@ -13,6 +13,7 @@ import * as logger from '@logger/logUtils';
 import { AbsoluteFS, StorageFS } from '@utils/files';
 import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
 import { getConfig } from '@utils/config/configUtils';
+import { THREE_DAYS_MS } from '@utils/config';
 import { checkToolInstalled } from '@utils/system/toolUtils';
 import {
   extendEnvPath,
@@ -202,7 +203,7 @@ export async function stopRecordingAndTranscribe(
     // Clean up old recordings
     // Initialize StorageFS with context if not already done
     StorageFS.initialize(context);
-    await StorageFS.cleanupOldFiles(RECORDINGS_DIR, 3 * 24 * 60 * 60 * 1000);
+    await StorageFS.cleanupOldFiles(RECORDINGS_DIR, THREE_DAYS_MS);
 
     return { success: true, text: result.text };
   } catch (err) {
