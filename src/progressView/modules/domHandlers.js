@@ -10,27 +10,29 @@ import { StreamTabs } from './uiManagers/StreamTabs.js';
 import { Placeholder } from './uiManagers/Placeholder.js';
 import { Toolbar } from './uiManagers/Toolbar.js';
 import { UsageSummary, UsageGroup } from './usageManagers.js';
+import { BaseDomHandler } from '@common/BaseDomHandler.js';
 
 /**
  * Manages all DOM operations for the progress view.
  */
-export class ProgressViewDomHandler {
+class ProgressViewDomHandler extends BaseDomHandler {
   constructor() {
-    // Initialize managers
-    this.streamTabs = new StreamTabs();
-    this.toolbar = new Toolbar();
-    this.status = new Status();
-    this.usageSummary = new UsageSummary();
-    this.usageGroup = new UsageGroup(this.usageSummary); // Pass shared instance
-    this.fileList = new FileList(this.usageSummary); // Pass shared instance
-    this.taskGroups = new TaskGroupManager();
-    this.logEntries = new LogEntryManager();
-    this.events = new EventsManager();
-    this.placeholder = new Placeholder();
+    const usageSummary = new UsageSummary();
+    super({
+      streamTabs: new StreamTabs(),
+      toolbar: new Toolbar(),
+      status: new Status(),
+      usageSummary,
+      usageGroup: new UsageGroup(usageSummary),
+      fileList: new FileList(usageSummary),
+      taskGroups: new TaskGroupManager(),
+      logEntries: new LogEntryManager(),
+      events: new EventsManager(),
+      placeholder: new Placeholder(),
+    });
   }
 }
 
-// Create singleton instance
 export const progressViewDomHandler = new ProgressViewDomHandler();
 
 // Export formatter classes for reuse
