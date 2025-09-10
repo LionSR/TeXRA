@@ -22,6 +22,27 @@ export function parseTimestamp(timestampStr) {
 }
 
 /**
+ * Append formatted content to a container. Supports both DOM elements and
+ * HTML strings.
+ * @param {HTMLElement} container - Element to append to
+ * @param {HTMLElement|string} formatted - Element or HTML string to append
+ */
+export function appendFormatted(container, formatted) {
+  if (formatted instanceof HTMLElement) {
+    container.appendChild(formatted);
+    return;
+  }
+
+  if (typeof formatted === 'string') {
+    const wrapper = document.createElement('div');
+    wrapper.innerHTML = formatted;
+    if (wrapper.firstElementChild) {
+      container.appendChild(wrapper.firstElementChild);
+    }
+  }
+}
+
+/**
  * Insert an element into a container keeping children sorted chronologically.
  * Handles log groups and log entries by default, but a custom extractor can
  * be provided for specialized cases.
