@@ -50,30 +50,31 @@ export class FileLister {
 
   public refresh(): void {
     this.workspacePath = WorkspaceFS.getPath();
-    this.ignoredFileExtensions = getConfig<string[]>(
-      'files.ignored.fileExtensions',
-      [],
-    ).map((e) => e.toLowerCase());
-    this.ignoredDirectories = getConfig<string[]>(
-      'files.ignored.directories',
-      [],
-    ).map((d) => d.toLowerCase());
-    this.ignoredKeywords = getConfig<string[]>(
-      'files.ignored.keywords',
-      [],
-    ).map((k) => k.toLowerCase());
-    this.ignoredInputFiles = getConfig<string[]>(
-      'files.ignored.inputFiles',
-      [],
-    ).map((f) => f.toLowerCase());
-    this.ignoredAuxKeywords = getConfig<string[]>(
-      'files.ignored.auxiliaryKeywords',
-      [],
-    ).map((k) => k.toLowerCase());
-    this.ignoredMediaDirs = getConfig<string[]>(
-      'files.ignored.mediaDirectories',
-      [],
-    ).map((d) => d.toLowerCase());
+    type IgnoreListKey =
+      | 'ignoredFileExtensions'
+      | 'ignoredDirectories'
+      | 'ignoredKeywords'
+      | 'ignoredInputFiles'
+      | 'ignoredAuxKeywords'
+      | 'ignoredMediaDirs';
+
+    const mappings: Array<{ key: string; target: IgnoreListKey }> = [
+      { key: 'files.ignored.fileExtensions', target: 'ignoredFileExtensions' },
+      { key: 'files.ignored.directories', target: 'ignoredDirectories' },
+      { key: 'files.ignored.keywords', target: 'ignoredKeywords' },
+      { key: 'files.ignored.inputFiles', target: 'ignoredInputFiles' },
+      {
+        key: 'files.ignored.auxiliaryKeywords',
+        target: 'ignoredAuxKeywords',
+      },
+      { key: 'files.ignored.mediaDirectories', target: 'ignoredMediaDirs' },
+    ];
+
+    for (const { key, target } of mappings) {
+      this[target] = getConfig<string[]>(key, []).map((value) =>
+        value.toLowerCase(),
+      );
+    }
   }
 
   private get workspace(): string | null {
