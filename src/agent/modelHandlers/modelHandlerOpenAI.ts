@@ -49,14 +49,24 @@ export class ModelHandlerOpenAI extends ModelHandler<
   ExtendedCompletionUsage | null,
   OpenAIAPIResponseUsage
 > {
-  /** Returns OpenAI client with configured API key. */
-  async getClient(): Promise<OpenAI> {
+  /**
+   * Creates a new OpenAI client using the stored credentials.
+   * Handles API key retrieval, base URL resolution, and logging.
+   * @param providerName Optional name used for logging purposes
+   */
+  protected async createOpenAIClient(
+    providerName: string = this.config.provider,
+  ): Promise<OpenAI> {
     const apiKey = await this.getApiKey();
     const baseURL = this.getBaseUrl();
-    this.logger.debug('Using OpenAI API.');
-
-    // there is a time out parameter that be be set; default is 10 minutes
+    this.logger.debug(`Using ${providerName} API key. Base URL: ${baseURL}`);
+    // there is a time out parameter that can be set; default is 10 minutes
     return new OpenAI({ apiKey, baseURL });
+  }
+
+  /** Returns OpenAI client with configured API key. */
+  async getClient(): Promise<OpenAI> {
+    return this.createOpenAIClient();
   }
 
   /** Creates a chat completion with model-specific parameters. */
