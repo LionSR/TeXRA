@@ -72,6 +72,12 @@ export class HistoryViewProvider implements vscode.WebviewViewProvider {
             'codicons',
             'dist',
           ),
+          vscode.Uri.joinPath(
+            this.context.extensionUri,
+            'node_modules',
+            'perfect-debounce',
+            'dist',
+          ),
         ],
       },
     );
