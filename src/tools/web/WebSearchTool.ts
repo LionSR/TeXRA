@@ -8,7 +8,7 @@ import { zodToJsonSchema } from 'zod-to-json-schema';
 
 // Local imports - tools
 import { BaseTool } from '../core/base';
-import { ToolResult } from '../result';
+import { ToolResult, ToolError } from '../result';
 import type { ToolDefinition } from '@model';
 
 const WebSearchInputSchema = z.object({
@@ -30,31 +30,30 @@ export class WebSearchTool extends BaseTool<WebSearchInput> {
 
   protected async execute(input: WebSearchInput): Promise<ToolResult> {
     const { query, max_results = 3 } = input;
+    let response;
     try {
-      const response = await axios.get('https://api.duckduckgo.com/', {
+      response = await axios.get('https://api.duckduckgo.com/', {
         params: { q: query, format: 'json', no_redirect: 1, no_html: 1 },
       });
-      const data = response.data;
-      const results: string[] = [];
-      if (Array.isArray(data.RelatedTopics)) {
-        for (const item of data.RelatedTopics.slice(0, max_results)) {
-          if (
-            typeof item.Text === 'string' &&
-            typeof item.FirstURL === 'string'
-          ) {
-            results.push(`${item.Text} (${item.FirstURL})`);
-          }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new ToolError(`Web search failed: ${message}`);
+    }
+    const data = response.data;
+    const results: string[] = [];
+    if (Array.isArray(data.RelatedTopics)) {
+      for (const item of data.RelatedTopics.slice(0, max_results)) {
+        if (
+          typeof item.Text === 'string' &&
+          typeof item.FirstURL === 'string'
+        ) {
+          results.push(`${item.Text} (${item.FirstURL})`);
         }
       }
-      if (results.length === 0) {
-        return new ToolResult({ output: 'No results found.' });
-      }
-      return new ToolResult({ output: results.join('\n') });
-    } catch (err) {
-      return new ToolResult({
-        error: err instanceof Error ? err.message : String(err),
-        isError: true,
-      });
     }
+    if (results.length === 0) {
+      return new ToolResult({ output: 'No results found.' });
+    }
+    return new ToolResult({ output: results.join('\n') });
   }
 }
