@@ -38,20 +38,20 @@ export class FileOpTool extends BaseTool<FileOpInput> {
       }
       case 'write': {
         if (content === undefined) {
-          throw new ToolError('content parameter is required for write');
+          throw new ToolError('File operation error: Content parameter is required for write command');
         }
         await WorkspaceFS.writeFile(path, content);
         return new ToolResult({ output: 'written' });
       }
       case 'append': {
         if (content === undefined) {
-          throw new ToolError('content parameter is required for append');
+          throw new ToolError('File operation error: Content parameter is required for append command');
         }
         await WorkspaceFS.appendFile(path, content);
         return new ToolResult({ output: 'appended' });
       }
       default:
-        throw new ToolError(`unknown command: ${command}`);
+        throw new ToolError(`File operation error: Unknown command '${command}'. Expected 'read', 'write', or 'append'.`);
     }
   }
 }

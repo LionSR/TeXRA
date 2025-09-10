@@ -8,7 +8,7 @@ import { zodToJsonSchema } from 'zod-to-json-schema';
 
 // Local imports - tools
 import { BaseTool } from '../core/base';
-import { ToolResult } from '../result';
+import { ToolResult, ToolError } from '../result';
 import type { ToolDefinition } from '@model';
 
 const WebSearchInputSchema = z.object({
@@ -30,9 +30,15 @@ export class WebSearchTool extends BaseTool<WebSearchInput> {
 
   protected async execute(input: WebSearchInput): Promise<ToolResult> {
     const { query, max_results = 3 } = input;
-    const response = await axios.get('https://api.duckduckgo.com/', {
-      params: { q: query, format: 'json', no_redirect: 1, no_html: 1 },
-    });
+    let response;
+    try {
+      response = await axios.get('https://api.duckduckgo.com/', {
+        params: { q: query, format: 'json', no_redirect: 1, no_html: 1 },
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new ToolError(`Web search failed: ${message}`);
+    }
     const data = response.data;
     const results: string[] = [];
     if (Array.isArray(data.RelatedTopics)) {
