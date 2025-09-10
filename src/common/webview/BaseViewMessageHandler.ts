@@ -5,19 +5,23 @@ import * as vscode from 'vscode';
 import { COMMON_COMMANDS } from './commands';
 import * as logger from '@logger/logUtils';
 
-export type MessageHandler = (
-  message: any,
-  webviewView: vscode.WebviewView,
-) => Promise<void>;
+export type MessageHandler<T extends vscode.WebviewView | vscode.WebviewPanel> =
+  (
+    message: any,
+    webviewView: T,
+  ) => Promise<void>;
 
 /**
  * Base class for all webview message handlers.
  * Provides consistent error handling, logging, and common patterns.
+ * @template T - The webview type (WebviewView or WebviewPanel)
  */
-export abstract class BaseViewMessageHandler {
+export abstract class BaseViewMessageHandler<
+  T extends vscode.WebviewView | vscode.WebviewPanel = vscode.WebviewView,
+> {
   protected readonly logger: any;
   protected readonly channel: string;
-  protected readonly handlers: Record<string, MessageHandler>;
+  protected readonly handlers: Record<string, MessageHandler<T>>;
 
   constructor(protected readonly viewName: string) {
     this.logger = logger;
@@ -29,14 +33,14 @@ export abstract class BaseViewMessageHandler {
   /**
    * Subclasses must implement this to provide their specific handlers
    */
-  protected abstract createHandlers(): Record<string, MessageHandler>;
+  protected abstract createHandlers(): Record<string, MessageHandler<T>>;
 
   /**
    * Standard message handling with consistent error handling and logging
    */
   public async handleMessage(
     message: any,
-    webviewView: vscode.WebviewView,
+    webviewView: T,
   ): Promise<void> {
     if (!message?.command) {
       this.logger.warn(
@@ -77,7 +81,7 @@ export abstract class BaseViewMessageHandler {
    */
   protected async handleTheme(
     message: any,
-    webviewView: vscode.WebviewView,
+    webviewView: T,
   ): Promise<void> {
     if (!message?.theme) {
       this.logger.warn('Invalid theme message:', message);
@@ -95,7 +99,7 @@ export abstract class BaseViewMessageHandler {
    */
   protected async handleDebugMode(
     message: any,
-    webviewView: vscode.WebviewView,
+    webviewView: T,
   ): Promise<void> {
     webviewView.webview.postMessage({
       command: COMMON_COMMANDS.DEBUG_MODE_SET,
@@ -104,11 +108,13 @@ export abstract class BaseViewMessageHandler {
   }
 
   /**
-   * Helper method for webview ready state
+   * Helper method for webview ready state.
+   * Subclasses can override this method to perform custom initialization
+   * when the webview signals it is ready.
    */
   protected async handleWebviewReady(
     message: any,
-    webviewView: vscode.WebviewView,
+    webviewView: T,
   ): Promise<void> {
     this.logger.debug('Webview ready signal received');
     // Subclasses can override for custom ready handling

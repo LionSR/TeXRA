@@ -147,6 +147,11 @@ export class ProgressViewProvider extends BaseWebviewProvider {
 
     webviewView.title = this._viewTitle;
 
+    // Call super first to set up base functionality and clean up old disposables
+    super.resolveWebviewView(webviewView);
+
+    // Add visibility and theme listeners after super.resolveWebviewView
+    // This ensures they aren't cleared by the base class's cleanupView()
     this.addViewDisposables(
       webviewView.onDidChangeVisibility(() => {
         if (webviewView.visible) {
@@ -160,7 +165,6 @@ export class ProgressViewProvider extends BaseWebviewProvider {
       }),
     );
 
-    super.resolveWebviewView(webviewView);
     this.updateWebview();
   }
 
