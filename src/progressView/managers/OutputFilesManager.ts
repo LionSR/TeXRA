@@ -1,13 +1,15 @@
 // Local imports - progress view
-// Local imports
+import { PersistentMapManager } from '../persistence/PersistentMapManager';
 import { StatePersistenceManager } from '../persistence/StatePersistenceManager';
+
+// Local imports
+import { WorkspaceStateKey } from '@common/state/stateManager';
+import { AgentLogger } from '@logger/AgentLogger';
+import { WorkspaceFS } from '@utils/files';
 
 // Types
 import type { DiffStats } from '@agent/types/DiffTypes';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
-import { WorkspaceStateKey } from '@common/state/stateManager';
-import { AgentLogger } from '@logger/AgentLogger';
-import { WorkspaceFS } from '@utils/files';
 
 interface OutputFileInfo extends DiffStats {
   path: string;
@@ -20,33 +22,32 @@ interface OutputFileInfo extends DiffStats {
  * Manages output files collection with persistence and file existence validation.
  * Handles adding, updating, and managing output files for different streams.
  */
-export class OutputFilesManager {
-  private _outputFiles: Map<StreamTabId, { [key: number]: OutputFileInfo[] }> =
-    new Map();
+export class OutputFilesManager extends PersistentMapManager<
+  StreamTabId,
+  { [key: number]: OutputFileInfo[] }
+> {
   private _missingOutputs: Map<StreamTabId, { [key: number]: string[] }> =
     new Map();
   private readonly logger: AgentLogger;
+  private totalFilesProcessed = 0;
+  private totalFilesRemoved = 0;
 
-  constructor(private persistence: StatePersistenceManager) {
+  constructor(persistence: StatePersistenceManager) {
+    super(persistence, WorkspaceStateKey.OUTPUT_FILES);
     this.logger = new AgentLogger('OutputFilesManager');
   }
 
-  /**
-   * Add output files for a stream and round
-   */
+  /** Add output files for a stream and round */
   addFiles(
     stream: StreamTabId,
     filesByRound: { [key: number]: OutputFileInfo[] },
   ): void {
-    const existing = this._outputFiles.get(stream) || {};
+    const existing = this.get(stream) || {};
     const merged = { ...existing, ...filesByRound };
-    this._outputFiles.set(stream, merged);
-    this.save();
+    this.add(stream, merged);
   }
 
-  /**
-   * Update missing outputs for a stream
-   */
+  /** Update missing outputs for a stream */
   updateMissingOutputs(
     stream: StreamTabId,
     filesByRound: { [key: number]: string[] },
@@ -65,181 +66,83 @@ export class OutputFilesManager {
     this.saveMissingOutputs();
   }
 
-  /**
-   * Get output files for a stream
-   */
+  /** Get output files for a stream */
   getFiles(
     stream: StreamTabId,
   ): { [key: number]: OutputFileInfo[] } | undefined {
-    return this._outputFiles.get(stream);
+    return this.get(stream);
   }
 
-  /**
-   * Get missing outputs for a stream
-   */
+  /** Get missing outputs for a stream */
   getMissingOutputs(
     stream: StreamTabId,
   ): { [key: number]: string[] } | undefined {
     return this._missingOutputs.get(stream);
   }
 
-  /**
-   * Clear output files for a stream
-   */
+  /** Clear output files for a stream */
   clearFiles(stream: StreamTabId): void {
-    this._outputFiles.delete(stream);
-    this.save();
+    this.delete(stream);
   }
 
-  /**
-   * Clear missing outputs for a stream
-   */
+  /** Clear missing outputs for a stream */
   clearMissingOutputs(stream: StreamTabId): void {
     this._missingOutputs.delete(stream);
     this.saveMissingOutputs();
   }
 
-  /**
-   * Delete all files for a stream
-   */
+  /** Delete all files for a stream */
   deleteStream(stream: StreamTabId): void {
-    this._outputFiles.delete(stream);
+    super.delete(stream);
     this._missingOutputs.delete(stream);
-    this.save();
     this.saveMissingOutputs();
   }
 
-  /**
-   * Clear all output files
-   */
+  /** Clear all output files */
   clear(): void {
-    this._outputFiles.clear();
+    super.clear();
     this._missingOutputs.clear();
-    this.save();
     this.saveMissingOutputs();
   }
 
-  /**
-   * Get all output files
-   */
+  /** Get all output files */
   getAllFiles(): Map<StreamTabId, { [key: number]: OutputFileInfo[] }> {
-    return new Map(this._outputFiles);
+    return this.getAll();
   }
 
-  /**
-   * Get all missing outputs
-   */
+  /** Get all missing outputs */
   getAllMissingOutputs(): Map<StreamTabId, { [key: number]: string[] }> {
     return new Map(this._missingOutputs);
   }
 
-  /**
-   * Set all output files (used during loading)
-   */
+  /** Set all output files (used during loading) */
   setAllFiles(
     files: Map<StreamTabId, { [key: number]: OutputFileInfo[] }>,
   ): void {
-    this._outputFiles = new Map(files);
+    this.setAll(files);
   }
 
-  /**
-   * Set all missing outputs (used during loading)
-   */
+  /** Set all missing outputs (used during loading) */
   setAllMissingOutputs(
     missing: Map<StreamTabId, { [key: number]: string[] }>,
   ): void {
     this._missingOutputs = new Map(missing);
   }
 
-  /**
-   * Load output files from persistence and clean up missing files
-   */
+  /** Load output files from persistence and clean up missing files */
   async load(): Promise<void> {
-    await this.loadOutputFiles();
+    this.totalFilesProcessed = 0;
+    this.totalFilesRemoved = 0;
+    await super.load();
     await this.loadMissingOutputs();
-  }
-
-  /**
-   * Load output files and validate they still exist
-   */
-  private async loadOutputFiles(): Promise<void> {
-    const savedFiles = await this.persistence.load<{
-      [key: string]: { [key: number]: OutputFileInfo[] };
-    }>(WorkspaceStateKey.OUTPUT_FILES, {});
-
-    if (savedFiles && Object.keys(savedFiles).length > 0) {
-      const cleaned: [string, { [key: number]: OutputFileInfo[] }][] = [];
-      let totalFilesProcessed = 0;
-      let totalFilesRemoved = 0;
-
-      for (const [streamId, rounds] of Object.entries(savedFiles)) {
-        const roundMap: { [key: number]: OutputFileInfo[] } = {};
-        const streamFilesProcessed = Object.values(rounds).reduce(
-          (sum, files) => sum + files.length,
-          0,
-        );
-        totalFilesProcessed += streamFilesProcessed;
-
-        for (const [roundStr, infos] of Object.entries(rounds)) {
-          const roundNum = parseInt(roundStr, 10);
-          this.logger.debug(
-            `Checking ${infos.length} files in stream ${streamId}, round ${roundNum}`,
-          );
-
-          try {
-            const filtered = await WorkspaceFS.filterExistingFiles(infos);
-            const removedCount = infos.length - filtered.length;
-
-            if (removedCount > 0) {
-              this.logger.debug(
-                `Removed ${removedCount} missing file(s) from stream ${streamId}, round ${roundNum}`,
-              );
-              totalFilesRemoved += removedCount;
-
-              // Log which files were removed for debugging
-              const removedFiles = infos.filter(
-                (info) => !filtered.find((f) => f.path === info.path),
-              );
-              removedFiles.forEach((file) => {
-                this.logger.debug(`  - Removed missing file: ${file.path}`);
-              });
-            }
-
-            // Always preserve round structure, even if empty (for UI consistency)
-            // Only skip rounds that had no files to begin with
-            if (infos.length > 0) {
-              roundMap[roundNum] = filtered;
-            }
-          } catch (error) {
-            this.logger.warn(
-              `Error checking files in stream ${streamId}, round ${roundNum}: ${error instanceof Error ? error.message : String(error)}`,
-            );
-            // On error, preserve the original files to avoid data loss
-            roundMap[roundNum] = infos;
-          }
-        }
-
-        // Always preserve streams that had any rounds (even if they become empty)
-        if (Object.keys(rounds).length > 0) {
-          cleaned.push([streamId, roundMap]);
-        }
-      }
-
-      this._outputFiles = new Map(cleaned);
-
-      if (totalFilesRemoved > 0) {
-        this.logger.info(
-          `File cleanup completed: processed ${totalFilesProcessed} files, removed ${totalFilesRemoved} missing files`,
-        );
-      }
-    } else {
-      this._outputFiles.clear();
+    if (this.totalFilesRemoved > 0) {
+      this.logger.info(
+        `File cleanup completed: processed ${this.totalFilesProcessed} files, removed ${this.totalFilesRemoved} missing files`,
+      );
     }
   }
 
-  /**
-   * Load missing outputs from persistence
-   */
+  /** Load missing outputs from persistence */
   private async loadMissingOutputs(): Promise<void> {
     const saved = await this.persistence.load<{
       [key: string]: { [key: number]: string[] };
@@ -261,19 +164,61 @@ export class OutputFilesManager {
     }
   }
 
-  /**
-   * Save output files to persistence
-   */
-  save(): void {
-    const filesObj = Object.fromEntries(this._outputFiles.entries());
-    this.persistence.save(WorkspaceStateKey.OUTPUT_FILES, filesObj);
-  }
-
-  /**
-   * Save missing outputs to persistence
-   */
+  /** Save missing outputs to persistence */
   saveMissingOutputs(): void {
     const obj = Object.fromEntries(this._missingOutputs.entries());
     this.persistence.save(WorkspaceStateKey.MISSING_OUTPUTS, obj);
+  }
+
+  /** Validate and normalize loaded output files */
+  protected override async deserialize(
+    data: unknown,
+    streamId: StreamTabId,
+  ): Promise<{ [key: number]: OutputFileInfo[] }> {
+    const rounds = data as { [key: number]: OutputFileInfo[] };
+    const roundMap: { [key: number]: OutputFileInfo[] } = {};
+    const streamFilesProcessed = Object.values(rounds).reduce(
+      (sum, files) => sum + files.length,
+      0,
+    );
+    this.totalFilesProcessed += streamFilesProcessed;
+
+    for (const [roundStr, infos] of Object.entries(rounds)) {
+      const roundNum = parseInt(roundStr, 10);
+      this.logger.debug(
+        `Checking ${infos.length} files in stream ${streamId}, round ${roundNum}`,
+      );
+
+      try {
+        const filtered = await WorkspaceFS.filterExistingFiles(infos);
+        const removedCount = infos.length - filtered.length;
+
+        if (removedCount > 0) {
+          this.logger.debug(
+            `Removed ${removedCount} missing file(s) from stream ${streamId}, round ${roundNum}`,
+          );
+          this.totalFilesRemoved += removedCount;
+          const removedFiles = infos.filter(
+            (info) => !filtered.find((f) => f.path === info.path),
+          );
+          removedFiles.forEach((file) => {
+            this.logger.debug(`  - Removed missing file: ${file.path}`);
+          });
+        }
+
+        if (infos.length > 0) {
+          roundMap[roundNum] = filtered;
+        }
+      } catch (error) {
+        this.logger.warn(
+          `Error checking files in stream ${streamId}, round ${roundNum}: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+        roundMap[roundNum] = infos;
+      }
+    }
+
+    return roundMap;
   }
 }
