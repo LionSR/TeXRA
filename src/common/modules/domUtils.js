@@ -1,5 +1,9 @@
 // Local imports - common
-import { CHEVRON_UP_CLASS, CHEVRON_DOWN_CLASS } from './iconConstants.js';
+import {
+  CHEVRON_UP_CLASS,
+  CHEVRON_DOWN_CLASS,
+  CHEVRON_RIGHT_CLASS,
+} from './iconConstants.js';
 
 export function addEventListenerSafely(elementOrId, event, handler, options) {
   const element =
@@ -71,5 +75,47 @@ export function setChevronIcon(element, expanded) {
       element.appendChild(icon);
     }
   }
-  icon.className = expanded ? CHEVRON_UP_CLASS : CHEVRON_DOWN_CLASS;
+  const existingClasses = icon.className
+    .split(' ')
+    .filter(
+      (cls) =>
+        cls &&
+        !cls.startsWith('codicon-chevron-') &&
+        cls !== 'codicon',
+    )
+    .join(' ');
+  const chevronClass = expanded ? CHEVRON_UP_CLASS : CHEVRON_DOWN_CLASS;
+  icon.className = existingClasses
+    ? `${chevronClass} ${existingClasses}`
+    : chevronClass;
+}
+
+/**
+ * Set a chevron icon for horizontal expansion (right/down).
+ * @param {HTMLElement} element - The icon container or <i> element.
+ * @param {boolean} expanded - Whether the section is expanded.
+ */
+export function setChevronIconHorizontal(element, expanded) {
+  if (!element) return;
+  let icon = element;
+  if (icon.tagName.toLowerCase() !== 'i') {
+    icon = element.querySelector('i');
+    if (!icon) {
+      icon = document.createElement('i');
+      element.appendChild(icon);
+    }
+  }
+  const existingClasses = icon.className
+    .split(' ')
+    .filter(
+      (cls) =>
+        cls &&
+        !cls.startsWith('codicon-chevron-') &&
+        cls !== 'codicon',
+    )
+    .join(' ');
+  const chevronClass = expanded ? CHEVRON_DOWN_CLASS : CHEVRON_RIGHT_CLASS;
+  icon.className = existingClasses
+    ? `${chevronClass} ${existingClasses}`
+    : chevronClass;
 }
