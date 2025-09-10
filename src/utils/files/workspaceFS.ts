@@ -10,6 +10,7 @@ import {
   showLoggedErrorMessage,
   showLoggedMessage,
 } from '@common/errors/errorHandlingUtils';
+import { RelativeFS } from './relativeFS';
 
 // Local imports - log
 import * as logger from '@logger/logUtils';
@@ -17,53 +18,30 @@ import * as logger from '@logger/logUtils';
 const CHANNEL = 'workspaceFS';
 logger.initialize(CHANNEL);
 
-export class WorkspaceFS {
-  public static relativePath(filePath: string): string {
-    const workspacePath = this.getPath();
-    return workspacePath ? path.relative(workspacePath, filePath) : filePath;
-  }
-
-  public static getPath(): string | undefined {
+export class WorkspaceFS extends RelativeFS {
+  protected static override getBasePath(): string {
     const workspaceFolders = vscode.workspace.workspaceFolders;
     if (!workspaceFolders || workspaceFolders.length === 0) {
-      return undefined;
+      throw new Error('No workspace path found');
     }
     return workspaceFolders[0].uri.fsPath;
   }
 
-  public static fullPath(filePath: string): string {
-    const workspacePath = this.getPath();
-    if (!workspacePath) {
-      throw new Error('No workspace path found');
+  protected static override getChannel(): string {
+    return CHANNEL;
+  }
+
+  public static getPath(): string | undefined {
+    try {
+      return this.getBasePath();
+    } catch {
+      return undefined;
     }
-    return path.join(workspacePath, filePath);
   }
 
-  public static async readFile(filePath: string): Promise<string> {
-    const fullPath = this.fullPath(filePath);
-    const uri = vscode.Uri.file(fullPath);
-    const content = await vscode.workspace.fs.readFile(uri);
-    return Buffer.from(content).toString('utf-8');
-  }
-
-  public static async writeFile(
-    filePath: string,
-    content: string,
-  ): Promise<void> {
-    const fullPath = this.fullPath(filePath);
-    const uri = vscode.Uri.file(fullPath);
-    await vscode.workspace.fs.writeFile(uri, Buffer.from(content, 'utf-8'));
-  }
-
-  public static async write(
-    filePath: string,
-    content: string | Uint8Array,
-  ): Promise<void> {
-    const fullPath = this.fullPath(filePath);
-    const uri = vscode.Uri.file(fullPath);
-    const buffer =
-      typeof content === 'string' ? Buffer.from(content, 'utf-8') : content;
-    await vscode.workspace.fs.writeFile(uri, buffer);
+  public static relativePath(filePath: string): string {
+    const workspacePath = this.getPath();
+    return workspacePath ? path.relative(workspacePath, filePath) : filePath;
   }
 
   public static async appendFile(
@@ -71,24 +49,10 @@ export class WorkspaceFS {
     content: string,
   ): Promise<void> {
     try {
-      const fullPath = this.fullPath(filePath);
-      const uri = vscode.Uri.file(fullPath);
-
-      // Read existing content
-      let existingContent = '';
-      try {
-        const fileContent = await vscode.workspace.fs.readFile(uri);
-        existingContent = Buffer.from(fileContent).toString('utf-8');
-      } catch (err) {
-        // File might not exist yet, which is fine
-      }
-
-      // Append new content
-      const newContent = existingContent + content;
-      await vscode.workspace.fs.writeFile(
-        uri,
-        Buffer.from(newContent, 'utf-8'),
-      );
+      const existing = (await this.exists(filePath))
+        ? await this.read(filePath)
+        : '';
+      await this.write(filePath, existing + content);
       logger.debug(CHANNEL, `Successfully appended to file: ${filePath}`);
     } catch (err) {
       logger.error(
@@ -99,160 +63,9 @@ export class WorkspaceFS {
     }
   }
 
-  public static async delete(filePath: string): Promise<void> {
-    try {
-      const fullPath = this.fullPath(filePath);
-      const uri = vscode.Uri.file(fullPath);
-      await vscode.workspace.fs.delete(uri, { useTrash: false });
-      logger.debug(CHANNEL, `Deleted: ${filePath}`);
-    } catch (err) {
-      if (err instanceof vscode.FileSystemError) {
-        if (err.code === 'FileNotFound') {
-          logger.debug(CHANNEL, `File not found when deleting: ${filePath}`);
-        } else {
-          logger.warn(
-            CHANNEL,
-            `Unable to delete ${filePath}. It may be in use.`,
-          );
-          vscode.window.showWarningMessage(
-            `Unable to delete ${filePath}. It may be in use.`,
-          );
-        }
-      } else {
-        await showLoggedErrorMessage(
-          CHANNEL,
-          `Error deleting ${filePath}`,
-          err,
-        );
-      }
-    }
-  }
-
-  public static async move(source: string, destination: string): Promise<void> {
-    logger.debug(CHANNEL, `Moving file from ${source} to ${destination}`);
-    try {
-      const fullSourcePath = this.fullPath(source);
-      const fullDestPath = this.fullPath(destination);
-
-      const sourceUri = vscode.Uri.file(fullSourcePath);
-      const destUri = vscode.Uri.file(fullDestPath);
-
-      // Check if source exists
-      const sourceExists = await AbsoluteFS.exists(fullSourcePath);
-      if (!sourceExists) {
-        logger.warn(CHANNEL, `Source file doesn't exist: ${source}`);
-        return;
-      }
-
-      await vscode.workspace.fs.rename(sourceUri, destUri, { overwrite: true });
-      logger.info(CHANNEL, `Successfully moved: ${source} to ${destination}`);
-    } catch (err) {
-      await showLoggedErrorMessage(
-        CHANNEL,
-        `Error moving file from ${source} to ${destination}`,
-        err,
-      );
-    }
-  }
-
-  public static async copy(source: string, destination: string): Promise<void> {
-    logger.debug(CHANNEL, `Copying file from ${source} to ${destination}`);
-    try {
-      const fullSourcePath = this.fullPath(source);
-      const fullDestPath = this.fullPath(destination);
-
-      const sourceUri = vscode.Uri.file(fullSourcePath);
-      const destUri = vscode.Uri.file(fullDestPath);
-
-      // Check if source exists
-      const sourceExists = await AbsoluteFS.exists(fullSourcePath);
-      if (!sourceExists) {
-        logger.warn(CHANNEL, `Source file doesn't exist: ${source}`);
-        return;
-      }
-
-      await vscode.workspace.fs.copy(sourceUri, destUri, { overwrite: true });
-      logger.info(
-        CHANNEL,
-        `Successfully copied: source=${source} to destination=${destination}`,
-      );
-    } catch (err) {
-      await showLoggedErrorMessage(
-        CHANNEL,
-        `Error copying file from source=${source} to destination=${destination}`,
-        err,
-      );
-    }
-  }
-
-  public static async createDir(relativePath: string): Promise<void> {
-    try {
-      const fullPath = this.fullPath(relativePath);
-      await vscode.workspace.fs.createDirectory(vscode.Uri.file(fullPath));
-      logger.debug(CHANNEL, `Created directory: ${relativePath}`);
-    } catch (err) {
-      if (err instanceof vscode.FileSystemError) {
-        await showLoggedMessage(
-          CHANNEL,
-          `Unable to create directory ${relativePath}. Permission denied.`,
-        );
-        throw new Error(
-          `Unable to create directory ${relativePath}. Permission denied.`,
-        );
-      } else {
-        await showLoggedErrorMessage(
-          CHANNEL,
-          `Error creating directory ${relativePath}`,
-          err,
-        );
-        throw err;
-      }
-    }
-  }
-
-  /**
-   * Ensure a directory exists, creating it if necessary
-   */
-  public static async ensureDir(relativePath: string): Promise<void> {
-    try {
-      const exists = await this.exists(relativePath);
-      if (!exists) {
-        await this.createDir(relativePath);
-      }
-    } catch (err) {
-      // If error is because directory already exists, ignore it
-      if (err instanceof vscode.FileSystemError && err.code === 'FileExists') {
-        return;
-      }
-      throw err;
-    }
-  }
-
-  public static async readDir(
-    dirPath: string,
-  ): Promise<[string, vscode.FileType][]> {
-    try {
-      const fullPath = this.fullPath(dirPath);
-      const dirUri = vscode.Uri.file(fullPath);
-      return await vscode.workspace.fs.readDirectory(dirUri);
-    } catch (err) {
-      logger.error(
-        CHANNEL,
-        `Error reading directory ${dirPath}: ${err instanceof Error ? err.message : String(err)}`,
-      );
-      throw err;
-    }
-  }
-
-  public static async exists(filePath: string): Promise<boolean> {
-    const fullPath = this.fullPath(filePath);
-    return await AbsoluteFS.exists(fullPath);
-  }
-
   public static async existsAndNonTrivial(filePath: string): Promise<boolean> {
     return (
-      (await this.exists(filePath)) &&
-      (await this.readFile(filePath)).length > 15
+      (await this.exists(filePath)) && (await this.read(filePath)).length > 15
     );
   }
 
