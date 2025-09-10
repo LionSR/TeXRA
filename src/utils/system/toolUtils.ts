@@ -305,18 +305,26 @@ export async function checkToolInstalled(
 }
 
 /**
+ * Options for runToolWithCheck function
+ */
+export type RunToolOptions = {
+  /** Whether to show error messages for missing tools */
+  showError?: boolean;
+} & Parameters<typeof executeCommand>[1];
+
+/**
  * Run a tool after verifying it is installed.
  * @param toolName Name of the tool to execute
  * @param args Arguments to pass to the tool (without the tool name)
  * @param options Execution options and installation check settings
- * @returns ExecResult if the tool ran, or false if the tool is missing
+ * @returns Promise<ExecResult | false> if the tool ran, or false if the tool is missing
  */
 export async function runToolWithCheck(
   toolName: string,
   args: string[],
-  options: { showError?: boolean } & Parameters<typeof executeCommand>[1] = {},
+  options: RunToolOptions = {},
 ): Promise<ExecResult | false> {
-  const { showError, ...execOptions } = options;
+  const { showError = true, ...execOptions } = options;
   if (!(await checkToolInstalled(toolName, showError))) {
     return false;
   }
