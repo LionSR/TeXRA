@@ -1,6 +1,10 @@
 // Local imports - webview
 import { ELEMENT_IDS, EDITED_FILE } from '../constants.js';
-import { safeGetElementById, safeSetElementValue } from '@common/domUtils.js';
+import {
+  safeGetElementById,
+  safeSetElementValue,
+  setElementsDisabled,
+} from '@common/domUtils.js';
 import { capitalize, uncapitalize } from '@common/stringUtils.js';
 import { createFromTemplate } from '@common/templateUtils.js';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
@@ -57,17 +61,6 @@ export class FileSelect {
     if (option) select.appendChild(option);
   }
 
-  setElementsDisabled(elements, disabled) {
-    elements.forEach((el) => {
-      if (typeof el === 'string') {
-        const elem = document.getElementById(el);
-        if (elem) elem.disabled = disabled;
-      } else {
-        el.disabled = disabled;
-      }
-    });
-  }
-
   handleRecentCommits(message) {
     const commitButtons = [
       ELEMENT_IDS.PACK_LATEXDIFF_VC_BUTTON,
@@ -79,14 +72,14 @@ export class FileSelect {
 
     if (message.isGitRepo === false) {
       this.addOption(commitDiv, '', 'Not a Git repository');
-      this.setElementsDisabled([commitDiv, ...commitButtons], true);
+      setElementsDisabled([commitDiv, ...commitButtons], true);
     } else {
       this.addOption(commitDiv, 'HEAD', 'HEAD');
       message.commits.forEach((commit) => {
         const [commitHash] = commit.split(': ');
         this.addOption(commitDiv, commitHash, commit);
       });
-      this.setElementsDisabled([commitDiv, ...commitButtons], false);
+      setElementsDisabled([commitDiv, ...commitButtons], false);
     }
   }
 
