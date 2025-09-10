@@ -1,6 +1,12 @@
 // Third-party imports
 import * as vscode from 'vscode';
 
+// Local imports - log
+import * as logger from '@logger/logUtils';
+
+// Local imports - errors
+import { showLoggedMessageWithDocs } from '@common/errors/errorHandlingUtils';
+
 // Local imports - agent
 import { executeMergeAgent } from '@agent/runtime/executeAgent';
 
@@ -17,6 +23,9 @@ export function registerMergeCommands(context: vscode.ExtensionContext) {
   );
 }
 
+const CHANNEL = 'MergeCommands';
+logger.initialize(CHANNEL);
+
 async function handleMerge(
   context: vscode.ExtensionContext,
   inputFile: string,
@@ -24,16 +33,12 @@ async function handleMerge(
   editedFile: string,
 ) {
   if (!editedFile || (!baseFile && !inputFile)) {
-    const errorMsg =
-      'Both input file and edited file must be specified for merge operation';
-    const docsAction = 'View Merge Docs';
-    const selection = await vscode.window.showErrorMessage(
-      errorMsg,
-      docsAction,
+    await showLoggedMessageWithDocs(
+      CHANNEL,
+      'Both input file and edited file must be specified for merge operation',
+      'intelligent-merge',
+      'View Merge Docs',
     );
-    if (selection === docsAction) {
-      vscode.commands.executeCommand('texra.openDoc', 'intelligent-merge');
-    }
     return;
   }
 
