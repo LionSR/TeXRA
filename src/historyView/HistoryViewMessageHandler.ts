@@ -17,12 +17,17 @@ import { HISTORY_VIEW_COMMANDS } from '@common/webview/commands';
 import { AgentHistoryManager } from '@historyView/managers';
 import { agentConfigToTaskState } from '@utils/config';
 
-export class HistoryViewMessageHandler extends BaseViewMessageHandler {
+export class HistoryViewMessageHandler extends BaseViewMessageHandler<
+  vscode.WebviewView | vscode.WebviewPanel
+> {
   constructor(private readonly context: vscode.ExtensionContext) {
     super('HistoryView');
   }
 
-  protected createHandlers(): Record<string, MessageHandler> {
+  protected createHandlers(): Record<
+    string,
+    MessageHandler<vscode.WebviewView | vscode.WebviewPanel>
+  > {
     return {
       [HISTORY_VIEW_COMMANDS.GET_HISTORY_DATA]:
         this.handleGetHistoryData.bind(this),
@@ -43,14 +48,14 @@ export class HistoryViewMessageHandler extends BaseViewMessageHandler {
 
   private async handleGetHistoryData(
     _message: any,
-    view: vscode.WebviewView,
+    view: vscode.WebviewView | vscode.WebviewPanel,
   ): Promise<void> {
     await this.sendHistoryData(view.webview);
   }
 
   private async handleRerunAgent(
     message: any,
-    _view: vscode.WebviewView,
+    _view: vscode.WebviewView | vscode.WebviewPanel,
   ): Promise<void> {
     const historyId: string | undefined = message.historyId;
     if (!historyId) return;
@@ -73,7 +78,7 @@ export class HistoryViewMessageHandler extends BaseViewMessageHandler {
 
   private async handleRestoreAgent(
     message: any,
-    _view: vscode.WebviewView,
+    _view: vscode.WebviewView | vscode.WebviewPanel,
   ): Promise<void> {
     const historyId: string | undefined = message.historyId;
     if (!historyId) return;
@@ -97,7 +102,7 @@ export class HistoryViewMessageHandler extends BaseViewMessageHandler {
 
   private async handleDeleteAgent(
     message: any,
-    view: vscode.WebviewView,
+    view: vscode.WebviewView | vscode.WebviewPanel,
   ): Promise<void> {
     const historyId: string | undefined = message.historyId;
     if (!historyId) return;
@@ -122,7 +127,7 @@ export class HistoryViewMessageHandler extends BaseViewMessageHandler {
 
   private async handleClearHistory(
     _message: any,
-    view: vscode.WebviewView,
+    view: vscode.WebviewView | vscode.WebviewPanel,
   ): Promise<void> {
     try {
       await AgentHistoryManager.clearHistory();

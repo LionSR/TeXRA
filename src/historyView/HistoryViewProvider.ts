@@ -2,29 +2,64 @@
 // Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - history view
+// Local imports - common
+import { BaseWebviewProvider } from '@common/webview/BaseWebviewProvider';
 
 // Local imports - components
 import { HistoryViewContentProvider } from './HistoryViewContentProvider';
 import { HistoryViewMessageHandler } from './HistoryViewMessageHandler';
 
-export class HistoryViewProvider implements vscode.WebviewViewProvider {
+export class HistoryViewProvider
+  extends BaseWebviewProvider
+  implements vscode.WebviewViewProvider
+{
   public static readonly viewType = 'texra.historyView';
-  private _view?: vscode.WebviewPanel;
-  private readonly contentProvider: HistoryViewContentProvider;
-  private readonly messageHandler: HistoryViewMessageHandler;
+  protected contentProvider: HistoryViewContentProvider;
+  protected messageHandler: HistoryViewMessageHandler;
 
-  constructor(private readonly context: vscode.ExtensionContext) {
+  constructor(protected readonly context: vscode.ExtensionContext) {
+    super(context);
     this.contentProvider = new HistoryViewContentProvider(context);
     this.messageHandler = new HistoryViewMessageHandler(context);
   }
 
   /**
-   * This is required for the WebviewViewProvider interface but we won't use it
-   * as we're removing the sidebar integration
+   * Resolve webview for potential sidebar integration.
    */
   public resolveWebviewView(webviewView: vscode.WebviewView): void {
-    // We no longer use webview in the sidebar, but we need this method for the interface
+    webviewView.webview.options = {
+      enableScripts: true,
+      localResourceRoots: [
+        vscode.Uri.joinPath(this.context.extensionUri, 'src', 'historyView'),
+        vscode.Uri.joinPath(
+          this.context.extensionUri,
+          'src',
+          'common',
+          'styles',
+        ),
+        vscode.Uri.joinPath(
+          this.context.extensionUri,
+          'src',
+          'common',
+          'modules',
+        ),
+        vscode.Uri.joinPath(
+          this.context.extensionUri,
+          'src',
+          'common',
+          'webview',
+        ),
+        vscode.Uri.joinPath(
+          this.context.extensionUri,
+          'node_modules',
+          '@vscode',
+          'codicons',
+          'dist',
+        ),
+      ],
+    };
+
+    super.resolveWebviewViewInternal(webviewView);
   }
 
   /**
@@ -32,7 +67,7 @@ export class HistoryViewProvider implements vscode.WebviewViewProvider {
    */
   public async showHistoryView() {
     // If we already have a panel, show it
-    if (this._view) {
+    if (this._view && 'reveal' in this._view) {
       this._view.reveal(vscode.ViewColumn.One);
       return;
     }
@@ -76,20 +111,7 @@ export class HistoryViewProvider implements vscode.WebviewViewProvider {
       },
     );
 
-    // Handle webview disposal
-    this._view.onDidDispose(() => {
-      this._view = undefined;
-    });
-
-    // Handle messages from the webview
-    this._view.webview.onDidReceiveMessage(async (message) => {
-      await this.messageHandler.handleMessage(
-        message,
-        this._view as unknown as vscode.WebviewView,
-      );
-    });
-
-    // Set initial HTML content
+    super.resolveWebviewViewInternal(this._view);
     await this.updateWebviewContent();
   }
 
@@ -101,15 +123,16 @@ export class HistoryViewProvider implements vscode.WebviewViewProvider {
    */
   private async updateWebviewContent() {
     if (this._view) {
+      // Set the HTML content first
       this._view.webview.html = this.contentProvider.getHtmlContent(
         this._view.webview,
       );
-
-      // Send history data after a short delay to ensure the webview is ready
-      setTimeout(
-        () => this.messageHandler.sendHistoryData(this._view!.webview),
-        100,
-      );
+      // Then send the history data after a short delay
+      setTimeout(() => {
+        if (this._view) {
+          this.messageHandler.sendHistoryData(this._view.webview);
+        }
+      }, 100);
     }
   }
 }

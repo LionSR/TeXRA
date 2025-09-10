@@ -1,6 +1,9 @@
 // Third-party imports
 import * as vscode from 'vscode';
 
+// Local imports - common
+import { BaseWebviewProvider } from '@common/webview/BaseWebviewProvider';
+
 // Local imports - webview
 import { MainViewMessageHandler } from './webview/MainViewMessageHandler';
 import { MainViewContentProvider } from './webview/MainViewContentProvider';
@@ -8,16 +11,19 @@ import { SecretManager } from '@frontend/secretManager';
 import { watchConfig, getConfig } from '@utils/config';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
 
-export class MainViewProvider implements vscode.WebviewViewProvider {
-  private messageHandler: MainViewMessageHandler;
-  private contentProvider: MainViewContentProvider;
+export class MainViewProvider
+  extends BaseWebviewProvider
+  implements vscode.WebviewViewProvider
+{
+  protected messageHandler: MainViewMessageHandler;
+  protected contentProvider: MainViewContentProvider;
   private fileWatcher: vscode.FileSystemWatcher | undefined;
-  private webviewView: vscode.WebviewView | undefined;
 
   // Static flag to track if commands have been registered
   private static commandsRegistered = false;
 
-  constructor(private readonly context: vscode.ExtensionContext) {
+  constructor(protected readonly context: vscode.ExtensionContext) {
+    super(context);
     this.messageHandler = new MainViewMessageHandler(context);
     this.contentProvider = new MainViewContentProvider(context);
     this.setupFileWatcher();
@@ -35,7 +41,7 @@ export class MainViewProvider implements vscode.WebviewViewProvider {
           if (!commands.includes('texra.getWebviewView')) {
             this.context.subscriptions.push(
               vscode.commands.registerCommand('texra.getWebviewView', () => {
-                return this.webviewView;
+                return this._view as vscode.WebviewView;
               }),
             );
             MainViewProvider.commandsRegistered = true;
@@ -60,13 +66,13 @@ export class MainViewProvider implements vscode.WebviewViewProvider {
     // Always set up notifier for this instance, regardless of command registration
     this.context.subscriptions.push(
       vscode.window.onDidChangeActiveTextEditor(() => {
-        if (this.webviewView) {
+        if (this._view) {
           // Notify the webview that the active editor has changed
           // TODO: This command is sent but not handled in the webview (no handler in messageHandlers.js)
           // This appears to be an incomplete implementation from commit bb28ecbf
           const activeEditor = vscode.window.activeTextEditor;
           if (activeEditor && activeEditor.document) {
-            this.webviewView.webview.postMessage({
+            this._view.webview.postMessage({
               command: MAIN_VIEW_COMMANDS.ACTIVE_EDITOR_CHANGED,
               file: activeEditor.document.fileName,
             });
@@ -86,9 +92,9 @@ export class MainViewProvider implements vscode.WebviewViewProvider {
   }
 
   private async refreshOptionsAndView() {
-    if (this.webviewView) {
-      this.webviewView.webview.html = this.contentProvider.getHtmlContent(
-        this.webviewView.webview,
+    if (this._view) {
+      this._view.webview.html = this.contentProvider.getHtmlContent(
+        this._view.webview,
       );
     }
   }
@@ -108,16 +114,15 @@ export class MainViewProvider implements vscode.WebviewViewProvider {
   }
 
   private async refreshFiles() {
-    if (this.webviewView) {
+    if (this._view) {
       await this.messageHandler.handleMessage(
         { command: MAIN_VIEW_COMMANDS.REFRESH_ALL_FILES },
-        this.webviewView,
+        this._view as vscode.WebviewView,
       );
     }
   }
 
   resolveWebviewView(webviewView: vscode.WebviewView) {
-    this.webviewView = webviewView;
     webviewView.webview.options = {
       enableScripts: true,
       localResourceRoots: [
@@ -150,13 +155,7 @@ export class MainViewProvider implements vscode.WebviewViewProvider {
       ],
     };
 
-    webviewView.webview.html = this.contentProvider.getHtmlContent(
-      webviewView.webview,
-    );
-
-    webviewView.webview.onDidReceiveMessage(async (message) => {
-      await this.messageHandler.handleMessage(message, webviewView);
-    });
+    super.resolveWebviewViewInternal(webviewView);
 
     this.setupInitialState(webviewView);
 
