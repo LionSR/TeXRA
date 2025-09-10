@@ -28,6 +28,7 @@ import {
   CHEVRON_RIGHT_CLASS,
   CHEVRON_DOWN_CLASS,
 } from '@common/iconConstants.js';
+import { getBasename } from '@common/pathUtils.js';
 
 // Constants
 export const BULLET_MARKUP =
@@ -541,7 +542,7 @@ export class LogEntryFormatter {
         const escaped = encodeHtml(filePath);
 
         // Extract just the filename for display
-        const fileName = filePath.split('/').pop() || filePath;
+        const fileName = getBasename(filePath);
         const fileNameEscaped = encodeHtml(fileName);
 
         // Build metadata string
@@ -617,7 +618,7 @@ export class LogEntryFormatter {
       .map((f) => {
         const filePath = String(f);
         const escaped = encodeHtml(filePath);
-        const fileName = filePath.split('/').pop() || filePath;
+        const fileName = getBasename(filePath);
         const fileNameEscaped = encodeHtml(fileName);
         return `<li title="${escaped}"><i class="codicon codicon-warning"></i> <span class="file-link clickable-link" data-file="${escaped}">${fileNameEscaped}</span></li>`;
       })
@@ -627,7 +628,7 @@ export class LogEntryFormatter {
     let xmlLink = '';
     if (xmlFile) {
       const xmlEscaped = encodeHtml(xmlFile);
-      const xmlFileName = xmlFile.split('/').pop() || xmlFile;
+      const xmlFileName = getBasename(xmlFile);
       const xmlFileNameEscaped = encodeHtml(xmlFileName);
       const tagInfo = documentTag
         ? `<span class="document-tag">(Expected &lt;${encodeHtml(documentTag)}&gt; block)</span>`
@@ -702,8 +703,8 @@ export class LogEntryFormatter {
       const revisedEsc = encodeHtml(revisedPath);
       const outputEsc = encodeHtml(outputPath);
 
-      const baseName = basePath.split('/').pop() || basePath;
-      const revisedName = revisedPath.split('/').pop() || revisedPath;
+      const baseName = getBasename(basePath);
+      const revisedName = getBasename(revisedPath);
 
       let icon = 'codicon-question';
       if (d.status === 'success') {
