@@ -123,6 +123,14 @@ export class MainViewMessageHandler {
           element.style.setProperty('display', 'none');
         }
       },
+      [MAIN_VIEW_COMMANDS.SHOW_DEPENDENCY_BANNER]: (m) => {
+        webviewEventBus.dispatchEvent(
+          new CustomEvent('showDependencyBanner', { detail: m }),
+        );
+      },
+      [MAIN_VIEW_COMMANDS.HIDE_DEPENDENCY_BANNER]: () => {
+        webviewEventBus.dispatchEvent(new CustomEvent('hideDependencyBanner'));
+      },
       [MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS]: (m) => {
         // Validate that options are provided
         if (!m.options) {
