@@ -4,6 +4,7 @@ export * from './result';
 export * from './bash';
 export * from './fileOp';
 export * from './core/base';
+export * from './core/define';
 export * from './registry';
 export * from './wolfram';
 export * from './web/WebSearchTool';
