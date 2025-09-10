@@ -156,7 +156,7 @@ export class MainViewMessageHandler {
         };
 
         // Don't cache if element doesn't exist yet
-        const select = document.getElementById('model');
+        const select = safeGetElementById('model');
         if (!select) {
           // Prevent concurrent retry attempts
           if (this._modelOptionsRetryInProgress) {
@@ -171,7 +171,7 @@ export class MainViewMessageHandler {
           const retryDelay = [100, 200, 400, 800, 1600];
 
           const tryApplyOptions = () => {
-            const retrySelect = document.getElementById('model');
+            const retrySelect = safeGetElementById('model');
             if (retrySelect) {
               applyOptions(retrySelect);
               this._modelOptionsRetryInProgress = false;
@@ -198,11 +198,8 @@ export class MainViewMessageHandler {
           console.warn('SET_AGENT_OPTIONS: No options provided');
           return;
         }
-        const select = document.getElementById('agent');
-        if (!select) {
-          console.warn('SET_AGENT_OPTIONS: Agent select element not found');
-          return;
-        }
+        const select = safeGetElementById('agent');
+        if (!select) return;
         const previous = select.value;
         select.innerHTML = m.options;
         if (previous) {

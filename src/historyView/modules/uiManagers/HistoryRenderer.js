@@ -228,7 +228,7 @@ export class HistoryRenderer {
   applyToggleStates() {
     const entries = historyViewState.toggleStates.entries();
     for (const [id, expanded] of entries) {
-      const content = document.getElementById(`content-${id}`);
+      const content = safeGetElementById(`content-${id}`);
       const toggle = document.querySelector(
         `.${CLASS_NAMES.TOGGLE_BUTTON}[data-id="${id}"]`,
       );

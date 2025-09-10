@@ -24,11 +24,8 @@ export class FileSelect {
   }
 
   update(id, files) {
-    const selectDiv = document.getElementById(id);
-    if (!selectDiv) {
-      console.warn(`[FileSelect] Element with id '${id}' not found`);
-      return;
-    }
+    const selectDiv = safeGetElementById(id);
+    if (!selectDiv) return;
     selectDiv.innerHTML = '';
     this.addOption(selectDiv, '', 'None');
     files.forEach((f) => this.addOption(selectDiv, f, f));
@@ -60,7 +57,7 @@ export class FileSelect {
   setElementsDisabled(elements, disabled) {
     elements.forEach((el) => {
       if (typeof el === 'string') {
-        const elem = document.getElementById(el);
+        const elem = safeGetElementById(el);
         if (elem) elem.disabled = disabled;
       } else {
         el.disabled = disabled;
@@ -74,7 +71,8 @@ export class FileSelect {
       ELEMENT_IDS.CLEAN_LATEXDIFF_VC_BUTTON,
       ELEMENT_IDS.LATEXDIFF_VC_BUTTON,
     ];
-    const commitDiv = document.getElementById(ELEMENT_IDS.COMMIT_SELECT);
+    const commitDiv = safeGetElementById(ELEMENT_IDS.COMMIT_SELECT);
+    if (!commitDiv) return;
     commitDiv.innerHTML = '';
 
     if (message.isGitRepo === false) {
@@ -92,11 +90,8 @@ export class FileSelect {
 
   handleSetCurrentFile({ fileType, filePath }) {
     const fileId = `${uncapitalize(fileType)}File`;
-    const fileDiv = document.getElementById(fileId);
-    if (!fileDiv) {
-      console.warn(`Element with id '${fileId}' not found`);
-      return;
-    }
+    const fileDiv = safeGetElementById(fileId);
+    if (!fileDiv) return;
 
     const options = Array.from(fileDiv.options);
     if (options.some((o) => o.value === filePath)) {

@@ -6,6 +6,7 @@ import { appendFormatted } from './utils.js';
 // Local imports - log state
 import { progressViewState } from './progressViewState.js';
 import { registerMessageHandlers } from '@common/webviewContext.js';
+import { safeGetElementById } from '@common/domUtils.js';
 
 // Create shorter aliases for internal use
 const state = progressViewState;
@@ -27,7 +28,8 @@ export class ProgressViewMessageHandler {
    * Toggle the placeholder based on active stream and log content
    */
   _updatePlaceholderVisibility() {
-    const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
+    const logContent = safeGetElementById(ELEMENT_IDS.LOG_CONTENT);
+    if (!logContent) return;
     if (!state.activeStream && logContent.children.length === 0) {
       dom.placeholder.show();
     } else {
@@ -79,7 +81,7 @@ export class ProgressViewMessageHandler {
 
     this._updatePlaceholderVisibility();
 
-    const container = document.getElementById(ELEMENT_IDS.FOLLOW_UP_CONTAINER);
+    const container = safeGetElementById(ELEMENT_IDS.FOLLOW_UP_CONTAINER);
     if (container) {
       const active = message.streams.find(
         (s) => s.name === message.activeStream,
@@ -98,7 +100,7 @@ export class ProgressViewMessageHandler {
   }
 
   handleUpdateLogs(message) {
-    const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
+    const logContent = safeGetElementById(ELEMENT_IDS.LOG_CONTENT);
     if (message.stream === state.activeStream) {
       logContent.innerHTML = '';
       state.taskGroups.clear();
@@ -136,7 +138,7 @@ export class ProgressViewMessageHandler {
   }
 
   handleClearLogs() {
-    const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
+    const logContent = safeGetElementById(ELEMENT_IDS.LOG_CONTENT);
     logContent.innerHTML = '';
     const groupIds = [];
     const headers = Array.from(document.querySelectorAll('.log-group-header'));
@@ -151,7 +153,7 @@ export class ProgressViewMessageHandler {
 
   handleAppendLog(message) {
     if (message.stream === state.activeStream) {
-      const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
+      const logContent = safeGetElementById(ELEMENT_IDS.LOG_CONTENT);
       const addedToGroup = dom.logEntries.append(message.logMessage);
       if (!addedToGroup) {
         const formatted = this._entryFormatter.format(message.logMessage);
@@ -174,7 +176,7 @@ export class ProgressViewMessageHandler {
 
   handleUpdateLog(message) {
     if (message.stream === state.activeStream) {
-      const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
+      const logContent = safeGetElementById(ELEMENT_IDS.LOG_CONTENT);
       const updated = dom.logEntries.update(message.logMessage);
       if (!updated) {
         // Fallback: append as new log with proper group placement
@@ -188,7 +190,8 @@ export class ProgressViewMessageHandler {
               formatted.setAttribute('open', '');
               const toggleIcon = formatted.querySelector('.toggle-icon');
               if (toggleIcon) {
-                toggleIcon.className = 'codicon codicon-chevron-down toggle-icon';
+                toggleIcon.className =
+                  'codicon codicon-chevron-down toggle-icon';
               }
             }
           }
@@ -201,7 +204,7 @@ export class ProgressViewMessageHandler {
 
   handleAddTaskGroup(message) {
     if (message.stream === state.activeStream) {
-      const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
+      const logContent = safeGetElementById(ELEMENT_IDS.LOG_CONTENT);
       dom.taskGroups.add(message.group);
       logContent.scrollTop = logContent.scrollHeight;
     }

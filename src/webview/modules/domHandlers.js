@@ -15,6 +15,7 @@ import { ToggleManager } from './uiManagers/ToggleManager.js';
 import { BaseUIManager } from './uiManagers/BaseUIManager.js';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
 import { vscode } from '@common/webviewContext.js';
+import { safeGetElementById } from '@common/domUtils.js';
 
 export const instructionManager = new InstructionManager(
   'instruction',
@@ -37,8 +38,8 @@ export class MainViewDomHandler extends BaseUIManager {
   }
 
   _updateDebugButtonVisibility() {
-    const packBtn = document.getElementById(ELEMENT_IDS.PACK_BUTTON);
-    const cleanBtn = document.getElementById(ELEMENT_IDS.CLEAN_BUTTON);
+    const packBtn = safeGetElementById(ELEMENT_IDS.PACK_BUTTON);
+    const cleanBtn = safeGetElementById(ELEMENT_IDS.CLEAN_BUTTON);
     [packBtn, cleanBtn].forEach((btn) => {
       if (btn) {
         btn.style.display = this.debugMode ? '' : 'none';
@@ -82,7 +83,7 @@ export class MainViewDomHandler extends BaseUIManager {
 
     this.addListener(ELEMENT_IDS.API_KEY_BANNER_BUTTON, 'click', () => {
       // Get provider from banner element to determine which setup to open
-      const banner = document.getElementById(ELEMENT_IDS.API_KEY_BANNER);
+      const banner = safeGetElementById(ELEMENT_IDS.API_KEY_BANNER);
       const provider = banner?.dataset?.provider;
 
       if (provider) {
@@ -101,7 +102,7 @@ export class MainViewDomHandler extends BaseUIManager {
 
     this.addListener(ELEMENT_IDS.API_KEY_GUIDE_BUTTON, 'click', () => {
       // Get provider from banner element to determine which action to take
-      const banner = document.getElementById(ELEMENT_IDS.API_KEY_BANNER);
+      const banner = safeGetElementById(ELEMENT_IDS.API_KEY_BANNER);
       const provider = banner?.dataset?.provider;
 
       if (provider) {
@@ -125,7 +126,7 @@ export class MainViewDomHandler extends BaseUIManager {
     });
 
     this.addListener(ELEMENT_IDS.AGENT_CONFIG_DIR_BUTTON, 'click', () => {
-      const banner = document.getElementById(ELEMENT_IDS.AGENT_CONFIG_BANNER);
+      const banner = safeGetElementById(ELEMENT_IDS.AGENT_CONFIG_BANNER);
       const customDirSet = banner?.dataset?.customDirSet === 'true';
       vscode.postMessage({
         command: MAIN_VIEW_COMMANDS.OPEN_AGENT_DIRECTORY,

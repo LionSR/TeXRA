@@ -1,6 +1,7 @@
 // Local imports - progress view
 // Handler for theme-related messages in the progress view
 import { COMMON_COMMANDS } from '@common/webview/commands.js';
+import { safeGetElementById } from '@common/domUtils.js';
 
 /**
  * Create handlers for theme and debug mode updates.
@@ -8,7 +9,7 @@ import { COMMON_COMMANDS } from '@common/webview/commands.js';
  * @param {Function} ctx.postHandle Callback after handling a message.
  */
 export function createThemeHandlers({ postHandle } = {}) {
-  const link = document.getElementById('hljs-theme');
+  const link = safeGetElementById('hljs-theme');
   const updateHighlightTheme = (theme) => {
     if (!link) return;
     link.href = `https://cdn.jsdelivr.net/npm/highlight.js@11.11.1/styles/${theme === 'dark' ? 'github-dark' : 'github'}.css`;

@@ -1,5 +1,6 @@
 // Local imports - progress view
 import { ELEMENT_IDS } from '../constants.js';
+import { safeGetElementById } from '@common/domUtils.js';
 
 /**
  * Manages the empty state placeholder in the log view.
@@ -14,7 +15,7 @@ export class Placeholder {
    * Show the placeholder inside the log content container.
    */
   show() {
-    const container = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
+    const container = safeGetElementById(ELEMENT_IDS.LOG_CONTENT);
     if (!container) return;
 
     if (!this._element) {

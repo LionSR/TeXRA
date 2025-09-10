@@ -5,6 +5,7 @@ import { formatTokens } from '../formatters.js';
 import { initializeIconButtons } from '@common/iconButtonInitializer.js';
 import { createFromTemplate } from '@common/templateUtils.js';
 import { vscode } from '@common/webviewContext.js';
+import { safeGetElementById } from '@common/domUtils.js';
 
 /**
  * Manages file list rendering.
@@ -39,16 +40,13 @@ export class FileList {
    * @param {Object} filesByRound - Files organized by round
    */
   update(filesByRound) {
-    const container = document.getElementById(ELEMENT_IDS.GENERATED_FILES);
+    const container = safeGetElementById(ELEMENT_IDS.GENERATED_FILES);
     if (!container) return;
 
     container.innerHTML = '';
 
-    const template = document.getElementById(ELEMENT_IDS.FILE_ITEM_TEMPLATE);
-    if (!template) {
-      console.error('File item template not found');
-      return;
-    }
+    const template = safeGetElementById(ELEMENT_IDS.FILE_ITEM_TEMPLATE);
+    if (!template) return;
 
     if (!filesByRound || Object.keys(filesByRound).length === 0) {
       container.textContent = 'No generated files';

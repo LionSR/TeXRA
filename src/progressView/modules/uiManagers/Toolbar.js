@@ -2,17 +2,15 @@
 // Local imports
 import { TOOLBAR_BUTTONS, ELEMENT_IDS } from '../constants.js';
 import { createIconButton } from '@common/templateUtils.js';
+import { safeGetElementById } from '@common/domUtils.js';
 
 /**
  * Manages toolbar rendering.
  */
 export class Toolbar {
   render() {
-    const container = document.getElementById(ELEMENT_IDS.TOOLBAR_CONTAINER);
-    if (!container) {
-      console.error('Toolbar.render: toolbarContainer not found');
-      return;
-    }
+    const container = safeGetElementById(ELEMENT_IDS.TOOLBAR_CONTAINER);
+    if (!container) return;
     container.innerHTML = '';
     TOOLBAR_BUTTONS.forEach((def) => {
       try {

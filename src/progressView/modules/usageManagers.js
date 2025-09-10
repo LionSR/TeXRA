@@ -4,6 +4,7 @@ import { formatTokens, TaskGroupLevel } from './formatters.js';
 // Local imports
 import { progressViewState } from './progressViewState.js';
 import { createFromTemplate } from '@common/templateUtils.js';
+import { safeGetElementById } from '@common/domUtils.js';
 
 /**
  * Manages usage summary display.
@@ -21,7 +22,7 @@ export class UsageSummary {
   update(usage) {
     // Cache the summary element
     if (!this._summaryElem) {
-      this._summaryElem = document.getElementById(ELEMENT_IDS.RUN_SUMMARY);
+      this._summaryElem = safeGetElementById(ELEMENT_IDS.RUN_SUMMARY);
     }
     if (!this._summaryElem) return;
     // If usage is not provided, compute it from existing log groups
@@ -68,13 +69,8 @@ export class UsageGroup {
       return;
     }
 
-    const groupHeader = document.getElementById(`group-header-${groupId}`);
-    if (!groupHeader) {
-      console.warn(
-        `UsageGroup.update: Group header not found for ID: ${groupId}`,
-      );
-      return;
-    }
+    const groupHeader = safeGetElementById(`group-header-${groupId}`);
+    if (!groupHeader) return;
 
     // Find or create usage display element in the group header
     let usageElem = groupHeader.querySelector('.group-usage');

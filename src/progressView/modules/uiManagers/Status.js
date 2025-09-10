@@ -2,6 +2,7 @@
 import { STATUS, TOOLBAR_BUTTONS, ELEMENT_IDS } from '../constants.js';
 // Local imports
 import { progressViewState } from '../progressViewState.js';
+import { safeGetElementById } from '@common/domUtils.js';
 
 /**
  * Manages status display and button states.
@@ -54,16 +55,11 @@ export class Status {
    * @param {string} status - The status to set
    */
   update(status) {
-    const statusIndicator = document.getElementById(
-      ELEMENT_IDS.STATUS_INDICATOR,
-    );
-    if (!statusIndicator) {
-      console.error('Status.update: statusIndicator element not found');
-      return;
-    }
+    const statusIndicator = safeGetElementById(ELEMENT_IDS.STATUS_INDICATOR);
+    if (!statusIndicator) return;
 
     const buttons = (this._buttonElements ||= this.BUTTON_IDS.map((id) =>
-      document.getElementById(id),
+      safeGetElementById(id),
     ).filter(Boolean));
 
     buttons.forEach((b) => {
@@ -71,7 +67,7 @@ export class Status {
     });
 
     // Always enable the erase button regardless of status
-    const eraseBtn = document.getElementById(ELEMENT_IDS.ERASE_STREAM_BTN);
+    const eraseBtn = safeGetElementById(ELEMENT_IDS.ERASE_STREAM_BTN);
     if (eraseBtn) eraseBtn.disabled = false;
 
     statusIndicator.className = 'status-indicator';
@@ -95,7 +91,7 @@ export class Status {
       statusIndicator.dataset.status = cfg.label;
 
       cfg.enable.forEach((id) => {
-        const el = document.getElementById(id);
+        const el = safeGetElementById(id);
         if (el) el.disabled = false;
       });
 

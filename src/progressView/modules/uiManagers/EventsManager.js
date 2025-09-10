@@ -7,7 +7,10 @@ import { COMMANDS, SPLIT_SIZES, ELEMENT_IDS } from '../constants.js';
 
 // Local imports
 import { progressViewState } from '../progressViewState.js';
-import { addEventListenerSafely } from '@common/domUtils.js';
+import {
+  addEventListenerSafely,
+  safeGetElementById,
+} from '@common/domUtils.js';
 import { vscode } from '@common/webviewContext.js';
 import {
   CHEVRON_RIGHT_CLASS,
@@ -25,7 +28,7 @@ export class EventsManager {
     const taskGroups = progressViewState.taskGroups.getAll();
     for (const [groupId, _] of taskGroups) {
       const isCollapsed = progressViewState.toggleStates.get(groupId);
-      const detailsElem = document.getElementById(`group-${groupId}`);
+      const detailsElem = safeGetElementById(`group-${groupId}`);
 
       if (detailsElem && isCollapsed !== undefined) {
         detailsElem.open = !isCollapsed;
@@ -105,7 +108,7 @@ export class EventsManager {
 
     // Follow-up input handler
     const sendFollowUp = () => {
-      const followInput = document.getElementById(ELEMENT_IDS.FOLLOW_UP_INPUT);
+      const followInput = safeGetElementById(ELEMENT_IDS.FOLLOW_UP_INPUT);
       if (!followInput) return;
       const text = followInput.value.trim();
       if (!text) return;

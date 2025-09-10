@@ -1,9 +1,8 @@
+import { safeGetElementById } from './domUtils.js';
+
 export function renderTemplate(templateId) {
-  const template = document.getElementById(templateId);
-  if (!template) {
-    console.warn(`Template ${templateId} not found`);
-    return null;
-  }
+  const template = safeGetElementById(templateId);
+  if (!template) return null;
   return template.content.firstElementChild.cloneNode(true);
 }
 
@@ -43,14 +42,7 @@ export function createFromTemplate(templateId, replacements = {}) {
 }
 
 export function validateTemplates(templateIds) {
-  return templateIds.every((id) => {
-    const template = document.getElementById(id);
-    if (!template) {
-      console.error(`Template ${id} not found`);
-      return false;
-    }
-    return true;
-  });
+  return templateIds.every((id) => !!safeGetElementById(id));
 }
 
 export function createIconButton({

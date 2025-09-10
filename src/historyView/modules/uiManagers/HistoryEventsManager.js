@@ -1,6 +1,9 @@
 // Local imports - history view
 import { ELEMENT_IDS } from '../constants.js';
-import { addEventListenerSafely } from '@common/domUtils.js';
+import {
+  addEventListenerSafely,
+  safeGetElementById,
+} from '@common/domUtils.js';
 
 /**
  * Registers global event listeners for the history view.
@@ -20,7 +23,7 @@ export class HistoryEventsManager {
   }
 
   setupEventListeners() {
-    const searchInput = document.getElementById(ELEMENT_IDS.SEARCH_INPUT);
+    const searchInput = safeGetElementById(ELEMENT_IDS.SEARCH_INPUT);
     const searchHandler = this._debounce((e) => {
       const term = e.target.value.trim();
       this.searchManager.search(term);
@@ -36,7 +39,7 @@ export class HistoryEventsManager {
 
     const prevHandler = () => this.searchManager.navigatePrev();
     addEventListenerSafely(ELEMENT_IDS.PREV_MATCH, 'click', prevHandler);
-    const prevEl = document.getElementById(ELEMENT_IDS.PREV_MATCH);
+    const prevEl = safeGetElementById(ELEMENT_IDS.PREV_MATCH);
     if (prevEl)
       this.handlers.push({
         element: prevEl,
@@ -46,7 +49,7 @@ export class HistoryEventsManager {
 
     const nextHandler = () => this.searchManager.navigateNext();
     addEventListenerSafely(ELEMENT_IDS.NEXT_MATCH, 'click', nextHandler);
-    const nextEl = document.getElementById(ELEMENT_IDS.NEXT_MATCH);
+    const nextEl = safeGetElementById(ELEMENT_IDS.NEXT_MATCH);
     if (nextEl)
       this.handlers.push({
         element: nextEl,

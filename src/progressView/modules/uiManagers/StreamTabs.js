@@ -3,6 +3,7 @@
 import { ELEMENT_IDS } from '../constants.js';
 import { initializeIconButtons } from '@common/iconButtonInitializer.js';
 import { createFromTemplate } from '@common/templateUtils.js';
+import { safeGetElementById } from '@common/domUtils.js';
 
 const AGENT_ICONS = {
   CoT: 'terminal',
@@ -25,11 +26,8 @@ export class StreamTabs {
       console.error('StreamTabs.update: streams must be an array');
       return;
     }
-    const tabsContainer = document.getElementById(ELEMENT_IDS.STREAM_TABS);
-    if (!tabsContainer) {
-      console.error('StreamTabs.update: streamTabs container not found');
-      return;
-    }
+    const tabsContainer = safeGetElementById(ELEMENT_IDS.STREAM_TABS);
+    if (!tabsContainer) return;
     tabsContainer.innerHTML = '';
     streams.forEach((info) => {
       if (!info || typeof info !== 'object') {
@@ -82,9 +80,7 @@ export class StreamTabs {
     });
 
     // Update active stream name
-    const streamNameElem = document.getElementById(
-      ELEMENT_IDS.ACTIVE_STREAM_NAME,
-    );
+    const streamNameElem = safeGetElementById(ELEMENT_IDS.ACTIVE_STREAM_NAME);
     if (streamNameElem) {
       streamNameElem.textContent = activeStream || '';
     }

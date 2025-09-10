@@ -4,6 +4,7 @@ import { TaskGroupHeaderFormatter, LogEntryFormatter } from './formatters.js';
 // Local imports
 import { progressViewState } from './progressViewState.js';
 import { insertChronologically } from './utils.js';
+import { safeGetElementById } from '@common/domUtils.js';
 
 /**
  * Manages task group DOM operations.
@@ -21,7 +22,7 @@ export class TaskGroupManager {
   add(group) {
     // Check if this specific group (by ID) already exists in the DOM
     // This prevents duplicate groups from race conditions between UPDATE_LOGS and ADD_TASK_GROUP
-    const existingGroup = document.getElementById(`group-${group.id}`);
+    const existingGroup = safeGetElementById(`group-${group.id}`);
     if (existingGroup) {
       // Verify the group also exists in memory state
       if (!progressViewState.taskGroups.get(group.id)) {
@@ -71,11 +72,11 @@ export class TaskGroupManager {
     });
 
     // Insert the group at the right position in the parent
-    const container = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
+    const container = safeGetElementById(ELEMENT_IDS.LOG_CONTENT);
 
     if (group.parentGroupId) {
       // Find the parent group and append to its content container
-      const parentGroupContent = document.getElementById(
+      const parentGroupContent = safeGetElementById(
         `group-content-${group.parentGroupId}`,
       );
       if (parentGroupContent) {
@@ -110,7 +111,7 @@ export class TaskGroupManager {
     }
 
     // Update the header in the UI if it exists
-    const header = document.getElementById(`group-header-${groupId}`);
+    const header = safeGetElementById(`group-header-${groupId}`);
     if (header) {
       const level = this.headerFormatter._getGroupLevel(group);
       header.className = this.headerFormatter._getHeaderClass(group, level);
@@ -163,7 +164,7 @@ export class TaskGroupManager {
     }
 
     // Collapse this group
-    const detailsElem = document.getElementById(`group-${groupId}`);
+    const detailsElem = safeGetElementById(`group-${groupId}`);
     if (detailsElem) {
       detailsElem.open = false;
       progressViewState.toggleStates.set(groupId, true);
@@ -185,7 +186,7 @@ export class TaskGroupManager {
     let latestTime = 0;
 
     for (const [id, group] of progressViewState.taskGroups.getAll()) {
-      const detailsElem = document.getElementById(`group-${id}`);
+      const detailsElem = safeGetElementById(`group-${id}`);
       if (detailsElem && detailsElem.open && group.startTime > latestTime) {
         latestGroup = id;
         latestTime = group.startTime;
@@ -253,7 +254,7 @@ export class LogEntryManager {
   append(logMessage) {
     // If the message has a group ID, append it to the right group
     if (logMessage.groupId) {
-      const groupContent = document.getElementById(
+      const groupContent = safeGetElementById(
         `group-content-${logMessage.groupId}`,
       );
       if (groupContent) {

@@ -13,20 +13,14 @@ export function addEventListenerSafely(elementOrId, event, handler, options) {
 }
 
 export function safeSetElementValue(id, value) {
-  const element = document.getElementById(id);
-  if (!element) {
-    console.warn(`Element with id '${id}' not found`);
-    return;
-  }
+  const element = safeGetElementById(id);
+  if (!element) return;
   element.value = value;
 }
 
 export function safeSetElementChecked(id, checked) {
-  const element = document.getElementById(id);
-  if (!element) {
-    console.warn(`Element with id '${id}' not found`);
-    return;
-  }
+  const element = safeGetElementById(id);
+  if (!element) return;
   element.checked = checked;
 }
 
@@ -39,21 +33,13 @@ export function safeGetElementById(id) {
 }
 
 export function safeGetElementValue(id) {
-  const element = document.getElementById(id);
-  if (!element) {
-    console.warn(`Element with id '${id}' not found`);
-    return '';
-  }
-  return element.value;
+  const element = safeGetElementById(id);
+  return element ? element.value : '';
 }
 
 export function safeGetElementChecked(id) {
-  const element = document.getElementById(id);
-  if (!element) {
-    console.warn(`Element with id '${id}' not found`);
-    return false;
-  }
-  return element.checked;
+  const element = safeGetElementById(id);
+  return element ? element.checked : false;
 }
 
 /**
