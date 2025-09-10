@@ -21,14 +21,6 @@ import { K_SLICE, MESSAGE_PREVIEW_LENGTH } from '@utils/config';
  * Handler for Moonshot Kimi models using OpenAI-compatible API.
  */
 export class ModelHandlerKimi extends ModelHandlerOpenAI {
-  /** Returns OpenAI client configured with Moonshot's base URL. */
-  async getClient(): Promise<OpenAI> {
-    const apiKey = await this.getApiKey();
-    const baseURL = this.getBaseUrl();
-    this.logger.debug(`Using Moonshot API key. Base URL: ${baseURL}`);
-    return new OpenAI({ apiKey, baseURL });
-  }
-
   /**
    * Get the base URL for the Moonshot API.
    * The Moonshot API has a different base URL than OpenAI.
