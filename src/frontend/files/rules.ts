@@ -21,7 +21,7 @@ export async function loadTexraRules(): Promise<string> {
     const rulesFile = '.texrarules';
 
     if (workspacePath && (await WorkspaceFS.exists(rulesFile))) {
-      const content = await WorkspaceFS.readFile(rulesFile);
+      const content = await WorkspaceFS.read(rulesFile);
       if (content.trim()) {
         logger.debug(CHANNEL, `Loaded workspace ${rulesFile}`);
         return content.trim();
