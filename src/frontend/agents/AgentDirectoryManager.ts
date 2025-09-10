@@ -8,9 +8,9 @@ import * as vscode from 'vscode';
 import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
-import { getConfig } from '@utils/config';
+import { getConfig, updateConfig } from '@utils/config';
 import { GlobalStorageFS, StorageFS, AbsoluteFS } from '@utils/files';
-import { safeExecuteCommand } from '@utils/system';
+import { showLoggedMessageWithDocs } from '@common/errors/errorHandlingUtils';
 
 const CHANNEL = 'AgentLoad';
 logger.initialize(CHANNEL);
@@ -57,14 +57,11 @@ export class AgentDirectoryManager {
         CHANNEL,
         `Custom agents directory must be an absolute path: ${customPath}`,
       );
-      const docsAction = 'View Docs';
-      const selection = await vscode.window.showErrorMessage(
+      await showLoggedMessageWithDocs(
+        CHANNEL,
         'Custom agents directory must be an absolute path',
-        docsAction,
+        'custom-agents',
       );
-      if (selection === docsAction) {
-        await safeExecuteCommand('texra.openDoc', ['custom-agents'], CHANNEL);
-      }
       return '';
     }
 
@@ -86,12 +83,7 @@ export class AgentDirectoryManager {
     const selectedPath = folder[0].fsPath;
     await AbsoluteFS.ensureDir(selectedPath);
 
-    const config = vscode.workspace.getConfiguration();
-    await config.update(
-      'texra.explorer.agentsDirectory',
-      selectedPath,
-      vscode.ConfigurationTarget.Workspace,
-    );
+    await updateConfig('explorer.agentsDirectory', selectedPath);
 
     return selectedPath;
   }

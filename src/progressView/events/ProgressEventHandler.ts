@@ -318,7 +318,7 @@ export class ProgressEventHandler {
       return;
     }
 
-    this.state.streamTabs.add(stream, logMessage);
+    this.state.streamTabs.addMessage(stream, logMessage);
 
     if (this.webviewUpdater.isAvailable()) {
       this.webviewUpdater.appendLogMessage(stream, logMessage);
