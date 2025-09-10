@@ -14,6 +14,7 @@ import { SettingsButtonManager } from './uiManagers/SettingsButtonManager.js';
 import { ToggleManager } from './uiManagers/ToggleManager.js';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
 import { vscode } from '@common/webviewContext.js';
+import { applyButtonConfigs } from '@common/buttonUtils.js';
 
 export const instructionManager = new InstructionManager(
   'instruction',
@@ -153,14 +154,7 @@ export class MainViewDomHandler {
         },
       },
     ];
-
-    this.buttonConfigs.forEach(({ id, handler }) => {
-      const element = document.getElementById(id);
-      if (element) {
-        element.addEventListener('click', handler);
-        this.buttonHandlers.set(id, handler);
-      }
-    });
+    this.buttonHandlers = applyButtonConfigs(document, this.buttonConfigs);
   }
 
   cleanupUI() {

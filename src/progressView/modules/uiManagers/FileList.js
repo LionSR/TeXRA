@@ -5,6 +5,7 @@ import { formatTokens } from '../formatters.js';
 import { initializeIconButtons } from '@common/iconButtonInitializer.js';
 import { createFromTemplate } from '@common/templateUtils.js';
 import { vscode } from '@common/webviewContext.js';
+import { applyButtonConfigs } from '@common/buttonUtils.js';
 
 /**
  * Manages file list rendering.
@@ -165,51 +166,52 @@ export class FileList {
     const buttonConfigs = [
       {
         selector: '.compare-btn',
-        command: COMMANDS.COMPARE_ORIGINAL,
         condition: effectiveBase,
+        dataset: {
+          command: COMMANDS.COMPARE_ORIGINAL,
+          file: file.path,
+          base: effectiveBase,
+        },
       },
       {
         selector: '.accept-btn',
-        command: COMMANDS.ACCEPT_FILE,
         condition: effectiveBase,
+        dataset: {
+          command: COMMANDS.ACCEPT_FILE,
+          file: file.path,
+          base: effectiveBase,
+        },
       },
       {
         selector: '.merge-btn',
-        command: COMMANDS.MERGE_FILE,
         condition: effectiveBase,
+        dataset: {
+          command: COMMANDS.MERGE_FILE,
+          file: file.path,
+          base: effectiveBase,
+        },
       },
       {
         selector: '.diff-btn',
-        command: COMMANDS.LATEXDIFF_FILE,
         condition: effectiveBase,
+        dataset: {
+          command: COMMANDS.LATEXDIFF_FILE,
+          file: file.path,
+          base: effectiveBase,
+        },
       },
       {
         selector: '.prev-btn',
-        command: COMMANDS.COMPARE_PREVIOUS,
         condition: file.prev,
-        configure: (btn) => {
-          btn.dataset.prev = file.prev;
+        dataset: {
+          command: COMMANDS.COMPARE_PREVIOUS,
+          file: file.path,
+          prev: file.prev,
         },
       },
     ];
 
-    buttonConfigs.forEach(({ selector, command, condition, configure }) => {
-      const button = clone.querySelector(selector);
-      if (!button) {
-        return;
-      }
-      if (condition) {
-        button.dataset.command = command;
-        button.dataset.file = file.path;
-        if (configure) {
-          configure(button);
-        } else {
-          button.dataset.base = effectiveBase;
-        }
-      } else {
-        button.style.display = 'none';
-      }
-    });
+    applyButtonConfigs(clone, buttonConfigs);
 
     // Add dataset for the file path link
     const filePathSpan = clone.querySelector('.file-path');
