@@ -47,16 +47,38 @@ export class BannerManager extends BaseUIManager {
     }
   }
 
+  /**
+   * Configure API key banner with provider-specific content.
+   * @private
+   * @param {HTMLElement} element - The banner element
+   * @param {object} config - Configuration object
+   * @param {string} [config.provider] - API provider name
+   */
   _setupApiKeyBanner(element, config) {
     const textSpan = element.querySelector('span');
     const setButton = element.querySelector('#apiKeyBannerButton');
     const getButton = element.querySelector('#apiKeyGuideButton');
-    if (!(textSpan && setButton && getButton)) return;
+    
+    if (!(textSpan && setButton && getButton)) {
+      console.warn('[BannerManager] API key banner missing required elements');
+      return;
+    }
 
     if (config?.provider) {
       const providerName =
         config.provider.charAt(0).toUpperCase() + config.provider.slice(1);
-      textSpan.innerHTML = `<strong>${providerName}</strong> API key missing.`;
+      
+      // Clear existing content and use safe DOM manipulation
+      textSpan.textContent = '';
+      
+      // Create strong element for provider name
+      const strongElement = document.createElement('strong');
+      strongElement.textContent = providerName;
+      
+      // Append elements safely
+      textSpan.appendChild(strongElement);
+      textSpan.appendChild(document.createTextNode(' API key missing.'));
+      
       setButton.textContent = 'Set Key';
       getButton.textContent = 'Get Key';
       element.dataset.provider = config.provider;
@@ -68,31 +90,62 @@ export class BannerManager extends BaseUIManager {
     }
   }
 
+  /**
+   * Configure agent configuration banner.
+   * @private
+   * @param {HTMLElement} element - The banner element
+   * @param {object} config - Configuration object
+   * @param {string} [config.agentName] - Name of the missing agent
+   * @param {boolean} [config.customDirSet] - Whether custom directory is set
+   */
   _setupAgentConfigBanner(element, config) {
     const textSpan = element.querySelector('span');
     const dirButton = element.querySelector('#agentConfigDirButton');
+    
+    if (!textSpan && !dirButton) {
+      console.warn('[BannerManager] Agent config banner missing all expected elements');
+      return;
+    }
+    
     if (textSpan) {
       textSpan.textContent = config?.agentName
         ? `Agent file for "${config.agentName}" is missing.`
         : 'Agent configuration is missing.';
     }
+    
     if (dirButton) {
       dirButton.textContent = config?.customDirSet
         ? 'Open Directory'
         : 'Set Directory';
     }
+    
     element.dataset.customDirSet = config?.customDirSet ? 'true' : 'false';
   }
 
+  /**
+   * Configure dependency banner with missing tools.
+   * @private
+   * @param {HTMLElement} element - The banner element
+   * @param {object} config - Configuration object
+   * @param {string[]} [config.missingTools] - Array of missing tool names
+   */
   _setupDependencyBanner(element, config) {
     const textSpan = element.querySelector('span');
-    if (!textSpan) return;
+    
+    if (!textSpan) {
+      console.warn('[BannerManager] Dependency banner missing text element');
+      return;
+    }
+    
     const missing = config?.missingTools || [];
     const formatted = missing.map((tool) =>
       tool === 'gm/magick' ? 'GraphicsMagick or ImageMagick' : tool,
     );
+    
     if (formatted.length > 0) {
       textSpan.textContent = `Missing dependencies: ${formatted.join(', ')}`;
+    } else {
+      textSpan.textContent = 'Missing dependencies: none';
     }
   }
 }
