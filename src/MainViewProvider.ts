@@ -175,14 +175,17 @@ export class MainViewProvider implements vscode.WebviewViewProvider {
     }
 
     // Check for missing core dependencies and display banner if needed
-    checkCoreDependencies(false).then((missingTools) => {
-      if (missingTools.length > 0) {
-        webviewView.webview.postMessage({
-          command: MAIN_VIEW_COMMANDS.SHOW_DEPENDENCY_BANNER,
-          missingTools: missingTools,
-        });
-      }
-    });
+    const showDependencyReminders = getConfig<boolean>('ui.showDependencyReminders', true);
+    if (showDependencyReminders) {
+      checkCoreDependencies(false).then((missingTools) => {
+        if (missingTools.length > 0) {
+          webviewView.webview.postMessage({
+            command: MAIN_VIEW_COMMANDS.SHOW_DEPENDENCY_BANNER,
+            missingTools: missingTools,
+          });
+        }
+      });
+    }
   }
 
   private async setupInitialState(webviewView: vscode.WebviewView) {
