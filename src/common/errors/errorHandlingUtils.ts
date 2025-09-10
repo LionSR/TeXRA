@@ -21,6 +21,19 @@ import * as vscode from 'vscode';
 import * as logger from '@logger/logUtils';
 
 /**
+ * Valid documentation identifiers for error messages.
+ * This ensures type safety when referencing documentation sections.
+ */
+export type DocId =
+  | 'intelligent-merge'
+  | 'custom-agents'
+  | 'tool-integration'
+  | 'latex-diff';
+
+/** Maximum length for error details before truncation */
+const MAX_ERROR_LENGTH = 500;
+
+/**
  * Format an error with a prefix for logging or user messages.
  *
  * This is the core formatting function used by all other error handling utilities.
@@ -45,7 +58,13 @@ import * as logger from '@logger/logUtils';
  * ```
  */
 export function formatError(prefix: string, err: unknown): string {
-  const detail = err instanceof Error ? err.message : String(err);
+  let detail = err instanceof Error ? err.message : String(err);
+
+  // Truncate overly long error details for better readability
+  if (detail.length > MAX_ERROR_LENGTH) {
+    detail = detail.substring(0, MAX_ERROR_LENGTH) + '...';
+  }
+
   return `${prefix}: ${detail}`;
 }
 
@@ -160,4 +179,35 @@ export async function showLoggedMessage(
   logger.error(channel, message);
   await vscode.window.showErrorMessage(message);
   return message;
+}
+
+/**
+ * Log an error message, display it with a docs action and open the docs if selected.
+ *
+ * This helper keeps messaging consistent when providing quick access to
+ * documentation for resolving the error.
+ *
+ * @param channel - The logging channel to use (e.g., "Configuration")
+ * @param message - The error message to log and display
+ * @param docId - Identifier for the documentation to open (must be a valid DocId)
+ * @param actionLabel - Label for the docs action button (defaults to 'View Docs')
+ */
+export async function showLoggedMessageWithDocs(
+  channel: string,
+  message: string,
+  docId: DocId,
+  actionLabel = 'View Docs',
+): Promise<void> {
+  logger.error(channel, message);
+  const selection = await vscode.window.showErrorMessage(message, actionLabel);
+  if (selection === actionLabel) {
+    // Use try-catch to prevent uncaught errors if the command fails
+    // (e.g., during activation race conditions or if the command is not registered)
+    try {
+      await vscode.commands.executeCommand('texra.openDoc', docId);
+    } catch (err) {
+      // Log the error but don't show another error message to avoid error cascade
+      logger.error(channel, `Failed to open documentation: ${err}`);
+    }
+  }
 }
