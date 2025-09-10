@@ -12,11 +12,11 @@ export class DiffFileProcessor {
 
   async processDiffFile(diffFileName: string): Promise<void> {
     try {
-      const content = await WorkspaceFS.readFile(diffFileName);
+      const content = await WorkspaceFS.read(diffFileName);
       let processedContent = this.processStarEnvironments(content);
       processedContent = this.processLineByLine(processedContent);
       processedContent = replacementEngine.applyAll(processedContent);
-      await WorkspaceFS.writeFile(diffFileName, processedContent);
+      await WorkspaceFS.write(diffFileName, processedContent);
       await this.processTikzPictureEndings(diffFileName);
     } catch (err) {
       logger.error(
@@ -106,7 +106,7 @@ export class DiffFileProcessor {
   }
 
   private async processTikzPictureEndings(filePath: string): Promise<void> {
-    const content = await WorkspaceFS.readFile(filePath);
+    const content = await WorkspaceFS.read(filePath);
     let newContent = content;
 
     const patterns = [
@@ -118,6 +118,6 @@ export class DiffFileProcessor {
       newContent = newContent.replace(pattern, replacement as string);
     }
 
-    await WorkspaceFS.writeFile(filePath, newContent);
+    await WorkspaceFS.write(filePath, newContent);
   }
 }

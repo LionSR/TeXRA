@@ -568,9 +568,9 @@ export class ModelHandlerAnthropic extends ModelHandler<
           toolState.accumulatedOutput.includes('<scratchpad>') &&
           prefill === '<scratchpad>' // this is not so neat
         ) {
-          await WorkspaceFS.writeFile(outputFile, prefill);
+          await WorkspaceFS.write(outputFile, prefill);
         } else if (agentSetting.outputExt === 'xml') {
-          await WorkspaceFS.writeFile(outputFile, prefill + '\n');
+          await WorkspaceFS.write(outputFile, prefill + '\n');
         }
         messages.push({
           role: 'assistant',
@@ -596,7 +596,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     }
 
     // Get prefill from existing and non-trivial file
-    let fileContent = await WorkspaceFS.readFile(outputFile);
+    let fileContent = await WorkspaceFS.read(outputFile);
     fileContent = cleanFileContent(fileContent);
 
     // Extract any existing scratchpad content
@@ -608,7 +608,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       this.logger.info(scratchpad, groupId, MESSAGE_TYPES.SCRATCHPAD);
     }
 
-    await WorkspaceFS.writeFile(outputFile, fileContent);
+    await WorkspaceFS.write(outputFile, fileContent);
 
     // Update the toolState with the actual file content
     toolState.updateAccumulatedOutput(fileContent);
