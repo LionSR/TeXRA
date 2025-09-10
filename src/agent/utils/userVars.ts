@@ -103,7 +103,7 @@ async function getFileVars(
   for (const [prefix, filePath] of Object.entries(singleFileMappings)) {
     userVars[`${prefix}_FILE`] = filePath;
     userVars[`${prefix}_CONTENT`] = filePath
-      ? await WorkspaceFS.readFile(filePath)
+      ? await WorkspaceFS.read(filePath)
       : null;
   }
 

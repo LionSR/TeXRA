@@ -33,19 +33,25 @@ export class FileOpTool extends BaseTool<FileOpInput> {
     const { command, path, content } = input;
     switch (command) {
       case 'read': {
-        const data = await WorkspaceFS.readFile(path);
+        const data = await WorkspaceFS.read(path);
         return new ToolResult({ output: data });
       }
       case 'write': {
         if (content === undefined) {
-          throw new ToolError('File operation error: Content parameter is required for write command');
+          return new ToolResult({
+            error: 'content parameter is required for write',
+            isError: true,
+          });
         }
-        await WorkspaceFS.writeFile(path, content);
+        await WorkspaceFS.write(path, content);
         return new ToolResult({ output: 'written' });
       }
       case 'append': {
         if (content === undefined) {
-          throw new ToolError('File operation error: Content parameter is required for append command');
+          return new ToolResult({
+            error: 'content parameter is required for append',
+            isError: true,
+          });
         }
         await WorkspaceFS.appendFile(path, content);
         return new ToolResult({ output: 'appended' });

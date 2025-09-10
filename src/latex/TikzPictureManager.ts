@@ -58,7 +58,7 @@ export class TikzPictureManager {
     channel: string = this.channel,
   ): Promise<[string, string[]][]> {
     try {
-      const content = await WorkspaceFS.readFile(latexFile);
+      const content = await WorkspaceFS.read(latexFile);
 
       // Regular expressions to match figure environments and tikzpictures
       const figurePattern =
@@ -117,7 +117,7 @@ export class TikzPictureManager {
       const filename = suffix ? `${label}_${suffix}.tex` : `${label}.tex`;
       const filePath = path.join(buildDir, filename);
 
-      await WorkspaceFS.writeFile(filePath, standaloneContent);
+      await WorkspaceFS.write(filePath, standaloneContent);
       logger.debug(channel, `Created standalone LaTeX file: ${filePath}`);
 
       return filePath;

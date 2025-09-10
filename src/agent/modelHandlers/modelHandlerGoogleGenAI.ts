@@ -904,7 +904,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     this.logger.debug(
       `Output file ${outputFile} exists and is non-trivial. Reading content.`,
     );
-    let fileContent = await WorkspaceFS.readFile(outputFile);
+    let fileContent = await WorkspaceFS.read(outputFile);
     fileContent = cleanFileContent(fileContent);
 
     // Extract any existing scratchpad content
@@ -916,7 +916,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       this.logger.info(scratchpad, groupId, MESSAGE_TYPES.SCRATCHPAD);
     }
 
-    await WorkspaceFS.writeFile(outputFile, fileContent);
+    await WorkspaceFS.write(outputFile, fileContent);
     this.logger.debug(`Cleaned and saved existing content to ${outputFile}.`);
     messages.push({
       role: 'assistant',

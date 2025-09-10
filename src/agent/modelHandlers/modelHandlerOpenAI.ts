@@ -640,7 +640,7 @@ export class ModelHandlerOpenAI extends ModelHandler<
     }
 
     // Get prefill from existing and non-trivial file
-    let fileContent = await WorkspaceFS.readFile(outputFile);
+    let fileContent = await WorkspaceFS.read(outputFile);
     fileContent = cleanFileContent(fileContent);
 
     // Extract any existing scratchpad content
@@ -653,7 +653,7 @@ export class ModelHandlerOpenAI extends ModelHandler<
     }
 
     // Write file content to output file
-    await WorkspaceFS.writeFile(outputFile, fileContent);
+    await WorkspaceFS.write(outputFile, fileContent);
 
     messages.push({
       role: 'assistant',
@@ -693,7 +693,7 @@ export class ModelHandlerOpenAI extends ModelHandler<
       toolState.updateAccumulatedOutput(fileContent);
     } else {
       toolState.updateAccumulatedOutput(prefill + fileContent);
-      await WorkspaceFS.writeFile(outputFile, toolState.accumulatedOutput);
+      await WorkspaceFS.write(outputFile, toolState.accumulatedOutput);
     }
     const state = new AgentStateRound(0);
     toolState.lastResponse = toolState.accumulatedOutput;
