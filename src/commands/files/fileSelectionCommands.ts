@@ -5,11 +5,11 @@ import * as vscode from 'vscode';
 import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
-import { showInfoMessage, showErrorMessage } from '@frontend/ui/messageUtils';
+import { showInfoMessage } from '@frontend/ui/messageUtils';
 import { WorkspaceFS } from '@utils/files';
 import { fileLister } from '@frontend/files/fileLister';
 import { getIncludedExtensions } from '@common/files/fileTypeUtils';
-import { selectFile, selectFiles } from '@frontend/files/dialog';
+import { selectFile, selectFiles } from '@utils/dialogs';
 import { showLoggedErrorMessage } from '@common/errors/errorHandlingUtils';
 const CHANNEL = 'fileSelectionCommands';
 logger.initialize(CHANNEL);

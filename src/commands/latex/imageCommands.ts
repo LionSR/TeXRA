@@ -5,7 +5,7 @@ import * as vscode from 'vscode';
 import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
-import { WorkspaceFS } from '@utils/files';
+import { selectFile } from '@utils/dialogs';
 import {
   countPdfPages,
   getBase64EncodedMedia,
@@ -36,22 +36,13 @@ export function registerImageCommands(context: vscode.ExtensionContext) {
 
 async function handleCountPdfPages(): Promise<void> {
   try {
-    // Open file picker dialog
-    const fileUris = await vscode.window.showOpenDialog({
-      canSelectFiles: true,
-      canSelectFolders: false,
-      canSelectMany: false,
-      filters: {
-        'PDF files': ['pdf'],
-      },
-      title: 'Select PDF file to count pages',
+    const selectedFile = await selectFile({
+      openLabel: 'Select PDF file',
+      filters: { 'PDF files': ['pdf'] },
     });
-
-    if (!fileUris || fileUris.length === 0) {
+    if (!selectedFile) {
       return;
     }
-
-    const selectedFile = WorkspaceFS.relativePath(fileUris[0].fsPath);
     logger.debug(CHANNEL, `Processing PDF file: ${selectedFile}`);
 
     const pageCount = await countPdfPages(selectedFile);
@@ -71,23 +62,18 @@ async function handleCountPdfPages(): Promise<void> {
 
 async function handleEncodeImageToBase64(): Promise<string | undefined> {
   try {
-    // Open file picker dialog
-    const fileUris = await vscode.window.showOpenDialog({
-      canSelectFiles: true,
-      canSelectFolders: false,
-      canSelectMany: false,
+    const selectedFile = await selectFile({
+      openLabel: 'Select Media File',
       filters: {
         'Image files': ['png', 'jpg', 'jpeg', 'gif', 'heic', 'heif', 'webp'],
         'Audio files': ['wav', 'm4a', 'mp3', 'aiff', 'aac', 'ogg', 'flac'],
       },
-      title: 'Select image or audio file to encode',
     });
 
-    if (!fileUris || fileUris.length === 0) {
+    if (!selectedFile) {
       return undefined;
     }
 
-    const selectedFile = WorkspaceFS.relativePath(fileUris[0].fsPath);
     logger.debug(CHANNEL, `Processing image file: ${selectedFile}`);
 
     const base64String = await getBase64EncodedMedia(selectedFile);
@@ -114,22 +100,13 @@ async function handleConvertPdfToImages(): Promise<
   string[] | string | undefined
 > {
   try {
-    // Open file picker dialog
-    const fileUris = await vscode.window.showOpenDialog({
-      canSelectFiles: true,
-      canSelectFolders: false,
-      canSelectMany: false,
-      filters: {
-        'PDF files': ['pdf'],
-      },
-      title: 'Select PDF file to convert to images',
+    const selectedFile = await selectFile({
+      openLabel: 'Select PDF file',
+      filters: { 'PDF files': ['pdf'] },
     });
-
-    if (!fileUris || fileUris.length === 0) {
+    if (!selectedFile) {
       return undefined;
     }
-
-    const selectedFile = WorkspaceFS.relativePath(fileUris[0].fsPath);
     logger.debug(CHANNEL, `Processing PDF file: ${selectedFile}`);
 
     // Get quality from user
@@ -187,22 +164,13 @@ async function handleConvertPdfToImages(): Promise<
 
 async function handleTestPdfToImage(): Promise<string | undefined> {
   try {
-    // Open file picker dialog
-    const fileUris = await vscode.window.showOpenDialog({
-      canSelectFiles: true,
-      canSelectFolders: false,
-      canSelectMany: false,
-      filters: {
-        'PDF files': ['pdf'],
-      },
-      title: 'Select PDF file to test conversion',
+    const selectedFile = await selectFile({
+      openLabel: 'Select PDF file',
+      filters: { 'PDF files': ['pdf'] },
     });
-
-    if (!fileUris || fileUris.length === 0) {
+    if (!selectedFile) {
       return undefined;
     }
-
-    const selectedFile = WorkspaceFS.relativePath(fileUris[0].fsPath);
     logger.debug(CHANNEL, `Testing PDF to PNG conversion for: ${selectedFile}`);
 
     // Get page number from user
