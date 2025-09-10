@@ -1,13 +1,15 @@
 // Third-party imports
-// Third-party imports
 import * as vscode from 'vscode';
+
+// Local imports - common
+import { BaseWebviewProvider } from '@common/webview/BaseWebviewProvider';
 
 // Local imports - progress view
 import { ProgressEventHandler } from './events/ProgressEventHandler';
 import { WebviewUpdater } from './managers';
 
 // @ts-ignore - Import JavaScript module
-import { STATUS, COMMANDS } from './modules/constants.js';
+import { STATUS } from './modules/constants.js';
 
 // Local imports - new architecture
 import { StatePersistenceManager } from './persistence/StatePersistenceManager';
@@ -35,9 +37,8 @@ type StreamStatusType =
  * This class now focuses on orchestration and delegation to focused managers,
  * following the design principles from AGENTS.md.
  */
-export class ProgressViewProvider implements vscode.WebviewViewProvider {
+export class ProgressViewProvider extends BaseWebviewProvider {
   private static _instance: ProgressViewProvider | undefined;
-  private _view?: vscode.WebviewView;
 
   // New modular architecture components
   public readonly state: ProgressViewState;
@@ -45,12 +46,10 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   public readonly webviewUpdater: WebviewUpdater;
 
   // Existing components (will be gradually updated)
-  private readonly contentProvider: ProgressViewContentProvider;
-  private readonly messageHandler: ProgressViewMessageHandler;
+  protected readonly contentProvider: ProgressViewContentProvider;
+  protected readonly messageHandler: ProgressViewMessageHandler;
 
   // Infrastructure
-  private _disposables: vscode.Disposable[] = [];
-  private _viewDisposables: vscode.Disposable[] = [];
   private readonly _extensionUri: vscode.Uri;
   private readonly _viewTitle: string;
   private _webviewReady = false;
@@ -59,9 +58,10 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   private readonly logger: AgentLogger;
 
   constructor(
-    private readonly context: vscode.ExtensionContext,
+    protected readonly context: vscode.ExtensionContext,
     title: string = 'Tasks',
   ) {
+    super(context);
     this._extensionUri = context.extensionUri;
     this._viewTitle = title;
     this.logger = new AgentLogger('ProgressViewProviderNew');
@@ -111,22 +111,13 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     return this._instance;
   }
 
-  public dispose(): void {
-    this._disposables.forEach((d) => d.dispose());
-    this.cleanupView();
-  }
-
-  private cleanupView(): void {
-    this._viewDisposables.forEach((d) => d.dispose());
-    this._viewDisposables = [];
-    this._view = undefined;
+  protected override cleanupView(): void {
+    super.cleanupView();
     this._webviewReady = false;
     this._pendingUpdate = false;
   }
 
   public resolveWebviewView(webviewView: vscode.WebviewView): void {
-    this.cleanupView();
-
     // Mark running tasks as cancelled on subsequent webview resolves
     if (this._hasResolved) {
       this.resetRunningStreamStatuses();
@@ -135,16 +126,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
 
     this._webviewReady = false;
     this._pendingUpdate = false;
-    this._view = webviewView;
-
-    this.setupWebview(webviewView);
-    this.updateWebview();
-  }
-
-  /**
-   * Setup webview configuration and event handlers
-   */
-  private setupWebview(webviewView: vscode.WebviewView): void {
     webviewView.webview.options = {
       enableScripts: true,
       enableCommandUris: true,
@@ -166,13 +147,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
 
     webviewView.title = this._viewTitle;
 
-    // Set initial HTML content
-    webviewView.webview.html = this.contentProvider.getHtmlContent(
-      webviewView.webview,
-    );
-
-    // Setup event handlers
-    this._viewDisposables.push(
+    this.addViewDisposables(
       webviewView.onDidChangeVisibility(() => {
         if (webviewView.visible) {
           this.updateWebview();
@@ -183,19 +158,10 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
           this.updateWebview();
         }
       }),
-      webviewView.webview.onDidReceiveMessage(async (message) => {
-        if (message.command === COMMANDS.WEBVIEW_READY) {
-          this._webviewReady = true;
-          // Always update webview when it becomes ready to ensure all streams are shown
-          this.updateWebview();
-          return;
-        }
-        await this.messageHandler.handleMessage(message, webviewView);
-      }),
-      webviewView.onDidDispose(() => {
-        this.cleanupView();
-      }),
     );
+
+    super.resolveWebviewView(webviewView);
+    this.updateWebview();
   }
 
   /**
@@ -238,6 +204,14 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     }
 
     this._pendingUpdate = false;
+  }
+
+  /**
+   * Mark the webview as ready and process any pending updates.
+   */
+  public markWebviewReady(): void {
+    this._webviewReady = true;
+    this.updateWebview();
   }
 
   // Public API methods - these delegate to the new architecture
