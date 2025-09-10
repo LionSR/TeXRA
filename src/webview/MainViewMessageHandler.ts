@@ -19,6 +19,7 @@ import {
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
 import { getConfig } from '@utils/config';
 import { safeExecuteCommand } from '@utils/system';
+import { SETTINGS_QUERY } from '@utils/settingsQueries';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { computeModelOptions } from '@model/computeModelOptions';
 import { computeAgentOptions } from '@agent/computeAgentOptions';
@@ -133,9 +134,9 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
       [MAIN_VIEW_COMMANDS.SETTINGS_OPEN]: async () =>
         this.settingsManager.openSettings(),
       [MAIN_VIEW_COMMANDS.OPEN_AGENT_SETTINGS]: async () =>
-        this.settingsManager.openAgentSettings(),
+        this.settingsManager.openSettings(SETTINGS_QUERY.AGENTS),
       [MAIN_VIEW_COMMANDS.OPEN_MODEL_SETTINGS]: async () =>
-        this.settingsManager.openModelSettings(),
+        this.settingsManager.openSettings(SETTINGS_QUERY.MODELS),
       [MAIN_VIEW_COMMANDS.OPEN_AGENT_DIRECTORY]: async (m) => {
         if (m?.customDirSet) {
           const dir = await agentDirectories.custom();
@@ -148,7 +149,7 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         } else {
           await safeExecuteCommand(
             'workbench.action.openSettings',
-            ['@ext:texra-ai.texra explorer.agentsDirectory'],
+            [SETTINGS_QUERY.AGENT_DIRECTORY],
             this.viewName,
           );
         }
