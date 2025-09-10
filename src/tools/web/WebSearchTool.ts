@@ -4,12 +4,10 @@ import axios from 'axios';
 
 // Local imports - core
 import { z } from 'zod';
-import { zodToJsonSchema } from 'zod-to-json-schema';
+import { defineTool } from '../core/define';
 
 // Local imports - tools
-import { BaseTool } from '../core/base';
 import { ToolResult, ToolError } from '../result';
-import type { ToolDefinition } from '@model';
 
 const WebSearchInputSchema = z.object({
   query: z.string(),
@@ -18,16 +16,11 @@ const WebSearchInputSchema = z.object({
 
 export type WebSearchInput = z.infer<typeof WebSearchInputSchema>;
 
-export class WebSearchTool extends BaseTool<WebSearchInput> {
-  constructor() {
-    const definition: ToolDefinition = {
-      name: 'web_search',
-      description: 'Search the web and return top results',
-      parameters: zodToJsonSchema(WebSearchInputSchema),
-    };
-    super(definition, WebSearchInputSchema);
-  }
-
+export class WebSearchTool extends defineTool({
+  name: 'web_search',
+  description: 'Search the web and return top results',
+  schema: WebSearchInputSchema,
+}) {
   protected async execute(input: WebSearchInput): Promise<ToolResult> {
     const { query, max_results = 3 } = input;
     let response;
