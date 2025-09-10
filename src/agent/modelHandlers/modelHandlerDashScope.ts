@@ -36,10 +36,6 @@ export class ModelHandlerDashScope extends ModelHandlerOpenAI {
     return null;
   }
 
-  extractToolUse(_responseObject: any): string | null {
-    return null;
-  }
-
   /**
    * Preprocess messages array for DashScope Qwen models
    * Ensures compatibility with Qwen API format requirements
