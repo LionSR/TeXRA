@@ -43,6 +43,18 @@ const TEXCOUNT_INSTRUCTIONS =
   '- Ubuntu: sudo apt-get install texlive-extra-utils\n' +
   '- Windows: Install through MiKTeX or TeX Live package manager';
 
+const PERL_INSTRUCTIONS =
+  'Installation instructions:\n' +
+  '- Mac: brew install perl\n' +
+  '- Ubuntu: sudo apt-get install perl\n' +
+  '- Windows: Download from https://strawberryperl.com/';
+
+const GHOSTSCRIPT_INSTRUCTIONS =
+  'Installation instructions:\n' +
+  '- Mac: brew install ghostscript\n' +
+  '- Ubuntu: sudo apt-get install ghostscript\n' +
+  '- Windows: Download from https://ghostscript.com/releases/gsdnld.html';
+
 const GM_INSTRUCTIONS =
   'Installation instructions:\n' +
   '- Mac: brew install graphicsmagick\n' +
@@ -94,6 +106,24 @@ const TOOL_CONFIGS: Record<string, ToolConfig> = {
     errorMessage:
       'GraphicsMagick is not installed. Please install GraphicsMagick to use PDF to PNG conversion.\n' +
       GM_INSTRUCTIONS,
+  },
+
+  // System dependencies
+  perl: {
+    command: 'perl --version',
+    errorMessage:
+      'Perl is not installed. latexindent requires Perl.\n' + PERL_INSTRUCTIONS,
+    openDocsCommand: 'texra.openDoc,installation',
+  },
+  gs: {
+    command:
+      process.platform === 'win32'
+        ? ['gswin64c --version', 'gswin32c --version', 'gs --version']
+        : 'gs --version',
+    errorMessage:
+      'Ghostscript is not installed. Please install Ghostscript to use PDF to PNG conversion.\n' +
+      GHOSTSCRIPT_INSTRUCTIONS,
+    openDocsCommand: 'texra.openDoc,installation',
   },
 
   // Wolfram tools
@@ -288,4 +318,45 @@ export async function checkMultipleToolsInstalled(
     configs.map((config) => checkToolInstalled(config, showError)),
   );
   return results;
+}
+
+/**
+ * Check core dependencies required by TeXRA features
+ * (latexindent, Perl, Ghostscript, GraphicsMagick/ImageMagick).
+ * @param showError Whether to show error messages for missing tools
+ * @returns Promise<string[]> Array of missing tool names
+ */
+export async function checkCoreDependencies(
+  showError: boolean = true,
+): Promise<string[]> {
+  try {
+    // Check basic tools
+    const basicTools = ['latexindent', 'perl', 'gs'];
+    const basicResults = await checkMultipleToolsInstalled(basicTools, showError);
+    const missingBasicTools = basicTools.filter((_, i) => !basicResults[i]);
+    
+    // Check for either GraphicsMagick or ImageMagick
+    const [hasMagick, hasGm] = await checkMultipleToolsInstalled(
+      ['magick', 'gm'],
+      false, // Don't show errors since we're checking alternatives
+    );
+    
+    // Add image tool to missing list only if neither is installed
+    const missingTools = [...missingBasicTools];
+    if (!hasMagick && !hasGm) {
+      missingTools.push('gm/magick');
+      if (showError) {
+        const errorMsg = 'Neither GraphicsMagick nor ImageMagick is installed. Please install either tool for image processing.\n' +
+          'GraphicsMagick:\n' + GM_INSTRUCTIONS + '\n\nOR\n\nImageMagick:\n' + MAGICK_INSTRUCTIONS;
+        throw new Error(errorMsg);
+      }
+    }
+    
+    return missingTools;
+  } catch (error) {
+    // If checking fails, assume all tools are missing to prompt user to check
+    // This is safer than silently ignoring the error
+    console.error('Failed to check core dependencies:', error);
+    return ['latexindent', 'perl', 'gs', 'gm/magick'];
+  }
 }

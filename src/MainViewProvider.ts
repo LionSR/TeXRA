@@ -10,6 +10,7 @@ import { MainViewContentProvider } from './webview/MainViewContentProvider';
 import { SecretManager } from '@frontend/secretManager';
 import { watchConfig, getConfig } from '@utils/config';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
+import { checkCoreDependencies } from '@utils/system/toolUtils';
 
 export class MainViewProvider
   extends BaseWebviewProvider
@@ -167,6 +168,19 @@ export class MainViewProvider
         if (!exists) {
           webviewView.webview.postMessage({
             command: MAIN_VIEW_COMMANDS.SHOW_API_KEY_BANNER,
+          });
+        }
+      });
+    }
+
+    // Check for missing core dependencies and display banner if needed
+    const showDependencyReminders = getConfig<boolean>('ui.showDependencyReminders', true);
+    if (showDependencyReminders) {
+      checkCoreDependencies(false).then((missingTools) => {
+        if (missingTools.length > 0) {
+          webviewView.webview.postMessage({
+            command: MAIN_VIEW_COMMANDS.SHOW_DEPENDENCY_BANNER,
+            missingTools: missingTools,
           });
         }
       });
