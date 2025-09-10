@@ -8,7 +8,7 @@ import { zodToJsonSchema } from 'zod-to-json-schema';
 // Local imports - tools
 import { BaseTool } from './core/base';
 import type { ToolDefinition } from '@model';
-import { ToolResult } from '@tools/result';
+import { ToolResult, ToolError } from '@tools/result';
 import { executeCommand } from '@utils/system/execUtils';
 
 const BashInputSchema = z.object({
@@ -32,9 +32,6 @@ export class BashTool extends BaseTool<BashInput> {
     if (result.success) {
       return new ToolResult({ output: result.stdout || '' });
     }
-    return new ToolResult({
-      error: result.stderr || 'Command failed',
-      isError: true,
-    });
+    throw new ToolError(result.stderr || 'Command failed');
   }
 }
