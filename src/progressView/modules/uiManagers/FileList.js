@@ -162,66 +162,54 @@ export class FileList {
    * @private
    */
   updateFileButtons(clone, file, effectiveBase) {
-    const compareBtn = clone.querySelector('.compare-btn');
-    const acceptBtn = clone.querySelector('.accept-btn');
-    const mergeBtn = clone.querySelector('.merge-btn');
-    const diffBtn = clone.querySelector('.diff-btn');
-    const prevBtn = clone.querySelector('.prev-btn');
+    const buttonConfigs = [
+      {
+        selector: '.compare-btn',
+        command: COMMANDS.COMPARE_ORIGINAL,
+        condition: effectiveBase,
+      },
+      {
+        selector: '.accept-btn',
+        command: COMMANDS.ACCEPT_FILE,
+        condition: effectiveBase,
+      },
+      {
+        selector: '.merge-btn',
+        command: COMMANDS.MERGE_FILE,
+        condition: effectiveBase,
+      },
+      {
+        selector: '.diff-btn',
+        command: COMMANDS.LATEXDIFF_FILE,
+        condition: effectiveBase,
+      },
+      {
+        selector: '.prev-btn',
+        command: COMMANDS.COMPARE_PREVIOUS,
+        condition: file.prev,
+        configure: (btn) => {
+          btn.dataset.prev = file.prev;
+        },
+      },
+    ];
 
-    // Compare button - show only if there's a base file
-    if (compareBtn) {
-      if (effectiveBase) {
-        compareBtn.dataset.command = COMMANDS.COMPARE_ORIGINAL;
-        compareBtn.dataset.file = file.path;
-        compareBtn.dataset.base = effectiveBase;
-      } else {
-        compareBtn.style.display = 'none';
+    buttonConfigs.forEach(({ selector, command, condition, configure }) => {
+      const button = clone.querySelector(selector);
+      if (!button) {
+        return;
       }
-    }
-
-    // Accept button - show only if there's a base file
-    if (acceptBtn) {
-      if (effectiveBase) {
-        acceptBtn.dataset.command = COMMANDS.ACCEPT_FILE;
-        acceptBtn.dataset.file = file.path;
-        acceptBtn.dataset.base = effectiveBase;
+      if (condition) {
+        button.dataset.command = command;
+        button.dataset.file = file.path;
+        if (configure) {
+          configure(button);
+        } else {
+          button.dataset.base = effectiveBase;
+        }
       } else {
-        acceptBtn.style.display = 'none';
+        button.style.display = 'none';
       }
-    }
-
-    // Merge button - show only if there's a base file
-    if (mergeBtn) {
-      if (effectiveBase) {
-        mergeBtn.dataset.command = COMMANDS.MERGE_FILE;
-        mergeBtn.dataset.file = file.path;
-        mergeBtn.dataset.base = effectiveBase;
-      } else {
-        mergeBtn.style.display = 'none';
-      }
-    }
-
-    // LaTeX diff button - show only if there's a base file
-    if (diffBtn) {
-      if (effectiveBase) {
-        diffBtn.dataset.command = COMMANDS.LATEXDIFF_FILE;
-        diffBtn.dataset.file = file.path;
-        diffBtn.dataset.base = effectiveBase;
-      } else {
-        diffBtn.style.display = 'none';
-      }
-    }
-
-    // Previous round comparison button - show only if there's a previous version
-    if (prevBtn) {
-      if (file.prev) {
-        prevBtn.dataset.command = COMMANDS.COMPARE_PREVIOUS;
-        prevBtn.dataset.file = file.path;
-        prevBtn.dataset.prev = file.prev;
-      } else {
-        prevBtn.style.display = 'none';
-      }
-    }
+    });
 
     // Add dataset for the file path link
     const filePathSpan = clone.querySelector('.file-path');
