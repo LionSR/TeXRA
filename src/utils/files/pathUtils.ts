@@ -15,10 +15,16 @@ export function isTexFile(file: string): boolean {
 }
 
 /**
- * Get the base name of a path.
- * Handles platform-specific separators.
- * @param filePath - Path to evaluate
- * @returns Basename of the provided path
+ * Extract the base name (filename) from a file path.
+ * Handles platform-specific separators (\ on Windows, / on Unix).
+ * 
+ * @param filePath - Path to evaluate (can be absolute or relative)
+ * @returns Base name of the file/directory
+ * @example
+ * getBasename('/home/user/document.pdf') // returns 'document.pdf'
+ * getBasename('C:\\Users\\file.txt')     // returns 'file.txt'
+ * getBasename('/path/to/')               // returns 'to'
+ * getBasename('/')                       // returns ''
  */
 export function getBasename(filePath: string): string {
   return path.basename(filePath);
