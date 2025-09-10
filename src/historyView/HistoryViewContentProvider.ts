@@ -27,6 +27,12 @@ export class HistoryViewContentProvider extends BaseViewContentProvider {
   ];
 
   protected getModuleUris(webview: vscode.Webview): Record<string, vscode.Uri> {
-    return this.buildUriRecord(webview, this.moduleDescriptors);
+    return {
+      ...this.buildUriRecord(webview, this.moduleDescriptors),
+      perfectDebounceUri: this.getNodeModulesUri(
+        webview,
+        'perfect-debounce/dist/index.mjs',
+      ),
+    };
   }
 }

@@ -1,3 +1,6 @@
+// Third-party imports
+import debounce from 'perfect-debounce';
+
 // Local imports - history view
 import { ELEMENT_IDS } from '../constants.js';
 import { addEventListenerSafely } from '@common/domUtils.js';
@@ -11,17 +14,9 @@ export class HistoryEventsManager {
     this.handlers = [];
   }
 
-  _debounce(fn, delay) {
-    let timeout;
-    return (...args) => {
-      clearTimeout(timeout);
-      timeout = setTimeout(() => fn(...args), delay);
-    };
-  }
-
   setupEventListeners() {
     const searchInput = document.getElementById(ELEMENT_IDS.SEARCH_INPUT);
-    const searchHandler = this._debounce((e) => {
+    const searchHandler = debounce((e) => {
       const term = e.target.value.trim();
       this.searchManager.search(term);
     }, 300);

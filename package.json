@@ -1296,6 +1296,7 @@
     "node-pandoc": "^0.3.0",
     "openai": "^5.19.1",
     "pdf2pic": "^3.2.0",
+    "perfect-debounce": "^2.0.0",
     "shell-quote": "^1.8.3",
     "sortablejs": "^1.15.6",
     "split.js": "^1.6.5",
