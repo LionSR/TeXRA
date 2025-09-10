@@ -30,6 +30,7 @@ export class MainViewContentProvider extends BaseViewContentProvider {
       path: 'modules/handlers/recordingHandlers.js',
     },
     { key: 'eventBusUri', path: 'modules/eventBus.js' },
+    { key: 'apiKeyHelpersUri', path: 'modules/helpers/apiKeyHelpers.js' },
     { key: 'fileListUri', path: 'modules/uiManagers/FileList.js' },
     { key: 'fileSelectUri', path: 'modules/uiManagers/FileSelect.js' },
     { key: 'toggleManagerUri', path: 'modules/uiManagers/ToggleManager.js' },

@@ -12,6 +12,7 @@ import { outputFilesManager } from './uiManagers/OutputFilesManager.js';
 import { RecordingManager } from './uiManagers/RecordingManager.js';
 import { SettingsButtonManager } from './uiManagers/SettingsButtonManager.js';
 import { ToggleManager } from './uiManagers/ToggleManager.js';
+import { sendApiKeyMessage } from './helpers/apiKeyHelpers.js';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
 import { vscode } from '@common/webviewContext.js';
 
@@ -84,43 +85,17 @@ export class MainViewDomHandler {
       {
         id: ELEMENT_IDS.API_KEY_BANNER_BUTTON,
         handler: () => {
-          // Get provider from banner element to determine which setup to open
           const banner = document.getElementById(ELEMENT_IDS.API_KEY_BANNER);
           const provider = banner?.dataset?.provider;
-
-          if (provider) {
-            // Provider-specific context - use provider-specific API key setup
-            vscode.postMessage({
-              command: MAIN_VIEW_COMMANDS.OPEN_SET_PROVIDER_API_KEY,
-              provider,
-            });
-          } else {
-            // General context - use generic API key setup
-            vscode.postMessage({
-              command: MAIN_VIEW_COMMANDS.OPEN_SET_API_KEY,
-            });
-          }
+          sendApiKeyMessage(provider, MAIN_VIEW_COMMANDS.OPEN_SET_API_KEY);
         },
       },
       {
         id: ELEMENT_IDS.API_KEY_GUIDE_BUTTON,
         handler: () => {
-          // Get provider from banner element to determine which action to take
           const banner = document.getElementById(ELEMENT_IDS.API_KEY_BANNER);
           const provider = banner?.dataset?.provider;
-
-          if (provider) {
-            // Provider-specific context - open provider's API key page
-            vscode.postMessage({
-              command: MAIN_VIEW_COMMANDS.OPEN_PROVIDER_API_KEY_URL,
-              provider,
-            });
-          } else {
-            // General context - open TeXRA's API key guide
-            vscode.postMessage({
-              command: MAIN_VIEW_COMMANDS.OPEN_API_KEY_GUIDE,
-            });
-          }
+          sendApiKeyMessage(provider, MAIN_VIEW_COMMANDS.OPEN_API_KEY_GUIDE);
         },
       },
       {
