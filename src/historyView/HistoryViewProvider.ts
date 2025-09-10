@@ -9,7 +9,9 @@ import { BaseWebviewProvider } from '@common/webview/BaseWebviewProvider';
 import { HistoryViewContentProvider } from './HistoryViewContentProvider';
 import { HistoryViewMessageHandler } from './HistoryViewMessageHandler';
 
-export class HistoryViewProvider extends BaseWebviewProvider {
+export class HistoryViewProvider extends BaseWebviewProvider<
+  vscode.WebviewView | vscode.WebviewPanel
+> {
   public static readonly viewType = 'texra.historyView';
   protected contentProvider: HistoryViewContentProvider;
   protected messageHandler: HistoryViewMessageHandler;
@@ -64,8 +66,8 @@ export class HistoryViewProvider extends BaseWebviewProvider {
    */
   public async showHistoryView() {
     // If we already have a panel, show it
-    if (this._view) {
-      (this._view as vscode.WebviewPanel).reveal(vscode.ViewColumn.One);
+    if (this._view && 'reveal' in this._view) {
+      this._view.reveal(vscode.ViewColumn.One);
       return;
     }
 
