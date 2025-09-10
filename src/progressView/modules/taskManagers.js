@@ -274,6 +274,7 @@ export class LogEntryManager {
   /**
    * Update an existing log entry identified by ID
    * @param {Object} logMessage - The log message with updated content
+   * @returns {boolean} Whether the log entry was updated
    */
   update(logMessage) {
     const existing = document.querySelector(`[data-log-id="${logMessage.id}"]`);
@@ -296,6 +297,8 @@ export class LogEntryManager {
       }
 
       existing.replaceWith(newEl);
+      return true;
     }
+    return false;
   }
 }
