@@ -116,30 +116,38 @@ export class FileInputManager extends BaseUIManager {
   }
 
   _setupFileTypeButtons() {
-    const fileTypes = ['input', 'reference', 'auxiliary'];
-    fileTypes.forEach((type) => {
-      const cap = capitalize(type);
-      this.addListener(`addOpened${cap}FilesButton`, 'click', () => {
-        this.vscode.postMessage({
-          command: MAIN_VIEW_COMMANDS.ADD_OPENED_FILES,
-          fileType: type,
-        });
-      });
-      this.addListener(`current${cap}FileButton`, 'click', () => {
-        this.vscode.postMessage({
-          command: MAIN_VIEW_COMMANDS.GET_CURRENT_FILE,
-          fileType: type,
-        });
-      });
-    });
+    const baseTypes = FILE_TYPES.filter(
+      (type) => type !== 'media' && type !== 'output',
+    );
 
-    ['base', 'edited'].forEach((type) => {
-      this.addListener(`current${capitalize(type)}FileButton`, 'click', () => {
-        const baseFile = safeGetElementValue(BASE_FILE);
-        this.vscode.postMessage({
-          command: MAIN_VIEW_COMMANDS.GET_CURRENT_FILE,
-          fileType: type,
-          baseFile,
+    const buttonConfigs = [
+      {
+        prefix: 'addOpened',
+        suffix: 'FilesButton',
+        command: MAIN_VIEW_COMMANDS.ADD_OPENED_FILES,
+        types: baseTypes,
+      },
+      {
+        prefix: 'current',
+        suffix: 'FileButton',
+        command: MAIN_VIEW_COMMANDS.GET_CURRENT_FILE,
+        types: [...baseTypes, 'base', 'edited'],
+      },
+    ];
+
+    buttonConfigs.forEach(({ prefix, suffix, command, types }) => {
+      types.forEach((type) => {
+        const cap = capitalize(type);
+        const id = `${prefix}${cap}${suffix}`;
+        this.addListener(id, 'click', () => {
+          const payload = { command, fileType: type };
+          if (
+            type === 'edited' &&
+            command === MAIN_VIEW_COMMANDS.GET_CURRENT_FILE
+          ) {
+            payload.baseFile = safeGetElementValue(BASE_FILE);
+          }
+          this.vscode.postMessage(payload);
         });
       });
     });
