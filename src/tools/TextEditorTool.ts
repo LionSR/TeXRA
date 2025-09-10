@@ -5,18 +5,16 @@ import * as path from 'path';
 // Third-party imports
 import * as vscode from 'vscode';
 import { z } from 'zod';
-import { zodToJsonSchema } from 'zod-to-json-schema';
+import { defineTool } from './core/define';
 
 // Local imports - tools
 
 // Local imports - core
-import { BaseTool } from './core/base';
 import { ToolResult, CLIResult, ToolError } from './result';
 import { ToolCallInput, EditorCommand, FileHistoryEntry } from './types';
 
 // Local imports - Log
 import * as logger from '@logger/logUtils';
-import type { ToolDefinition } from '@model';
 
 // Local imports - utilities
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
@@ -40,7 +38,11 @@ export type TextEditorInput = z.infer<typeof TextEditorInputSchema>;
 /**
  * Implementation of Anthropic's text editor tool for VS Code
  */
-export class TextEditorTool extends BaseTool<TextEditorInput> {
+export class TextEditorTool extends defineTool({
+  name: 'str_replace_editor',
+  description: 'Edit files using search and replace or insertion operations',
+  schema: TextEditorInputSchema,
+}) {
   // Tool type and name
   private apiType:
     | 'text_editor_20250124'
@@ -65,13 +67,7 @@ export class TextEditorTool extends BaseTool<TextEditorInput> {
       apiType === 'text_editor_20250429'
         ? 'str_replace_based_edit_tool'
         : 'str_replace_editor';
-    const definition: ToolDefinition = {
-      name,
-      description:
-        'Edit files using search and replace or insertion operations',
-      parameters: zodToJsonSchema(TextEditorInputSchema),
-    };
-    super(definition, TextEditorInputSchema);
+    super({ name });
     this.apiType = apiType;
     this.name = name;
   }
