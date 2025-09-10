@@ -1,6 +1,15 @@
 // Third-party imports
 import * as vscode from 'vscode';
 
+// Local imports - log
+import * as logger from '@logger/logUtils';
+
+// Local imports - errors
+import {
+  showLoggedMessage,
+  showLoggedMessageWithDocs,
+} from '@common/errors/errorHandlingUtils';
+
 // Standard library imports
 import * as path from 'path';
 
@@ -18,19 +27,20 @@ export const wolframScriptCommands = {
   wolframScriptRunFile: 'texra.wolframScriptRunFile',
 };
 
+const CHANNEL = 'WolframScriptCommands';
+logger.initialize(CHANNEL);
+
 /**
  * Show an error message with a link to Tool Integration docs.
  * @param message The error message to display.
  */
 async function showWolframError(message: string) {
-  const docsAction = 'Open Tool Integration Docs';
-  const selection = await vscode.window.showErrorMessage(
+  await showLoggedMessageWithDocs(
+    CHANNEL,
     `${message} See Tool Integration for setup instructions.`,
-    docsAction,
+    'tool-integration',
+    'Open Tool Integration Docs',
   );
-  if (selection === docsAction) {
-    await vscode.commands.executeCommand('texra.openDoc', 'tool-integration');
-  }
 }
 
 export function registerWolframScriptCommands(
@@ -192,7 +202,7 @@ export function registerWolframScriptCommands(
     async () => {
       const editor = vscode.window.activeTextEditor;
       if (!editor) {
-        vscode.window.showErrorMessage('No file is currently open');
+        await showLoggedMessage(CHANNEL, 'No file is currently open');
         return;
       }
 
@@ -201,7 +211,8 @@ export function registerWolframScriptCommands(
 
       // Check if the file is a Wolfram Language file
       if (fileExtension !== '.wl' && fileExtension !== '.m') {
-        vscode.window.showErrorMessage(
+        await showLoggedMessage(
+          CHANNEL,
           'Current file is not a Wolfram Language file. Please open a .wl or .m file.',
         );
         return;
