@@ -148,7 +148,7 @@ export class ProgressViewProvider extends BaseWebviewProvider {
     webviewView.title = this._viewTitle;
 
     // Call super first to set up base functionality and clean up old disposables
-    super.resolveWebviewView(webviewView);
+    super.resolveWebviewViewInternal(webviewView);
 
     // Add visibility and theme listeners after super.resolveWebviewView
     // This ensures they aren't cleared by the base class's cleanupView()

@@ -152,7 +152,7 @@ export class MainViewProvider extends BaseWebviewProvider {
       ],
     };
 
-    super.resolveWebviewView(webviewView);
+    super.resolveWebviewViewInternal(webviewView);
 
     this.setupInitialState(webviewView);
 
