@@ -142,7 +142,7 @@ export class FileInputManager extends BaseUIManager {
         this.addListener(id, 'click', () => {
           const payload = { command, fileType: type };
           if (
-            type === 'edited' &&
+            (type === 'edited' || type === 'base') &&
             command === MAIN_VIEW_COMMANDS.GET_CURRENT_FILE
           ) {
             payload.baseFile = safeGetElementValue(BASE_FILE);
