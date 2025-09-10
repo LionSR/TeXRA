@@ -17,7 +17,7 @@ import {
   setChevronIcon,
 } from '@common/domUtils.js';
 import { capitalize } from '@common/stringUtils.js';
-import { CHEVRON_DOWN_CLASS } from '@common/webviewContext.js';
+import { CHEVRON_DOWN_CLASS } from '@common/iconConstants.js';
 import { WebviewStateManager } from '@common/webviewState.js';
 
 /**
