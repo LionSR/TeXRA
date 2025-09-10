@@ -6,7 +6,6 @@ import * as vscode from 'vscode';
 
 // Local imports - utilities
 import { WorkspaceFS } from '@utils/files';
-import { showErrorMessage } from '../ui/messageUtils';
 
 export interface FileDialogOptions {
   /** Whether multiple files can be selected */
@@ -43,7 +42,7 @@ export async function selectFiles(
       ? getDefaultUri(options.currentFile)
       : getDefaultUri(''));
   if (!defaultUri) {
-    showErrorMessage('No workspace folder open');
+    vscode.window.showErrorMessage('No workspace folder open');
     return null;
   }
 
