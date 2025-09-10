@@ -83,31 +83,25 @@ export class ExecutionManager {
     await vscode.commands.executeCommand('texra.execute', agentConfig);
   }
 
-  handleMerge(message: any): void {
+  private handleFileOperation(message: any): void {
     vscode.commands.executeCommand(
       `texra.${message.command}`,
       message.inputFile,
       message.baseFile,
       message.editedFile,
     );
+  }
+
+  handleMerge(message: any): void {
+    this.handleFileOperation(message);
   }
 
   handleCompare(message: any): void {
-    vscode.commands.executeCommand(
-      `texra.${message.command}`,
-      message.inputFile,
-      message.baseFile,
-      message.editedFile,
-    );
+    this.handleFileOperation(message);
   }
 
   handleAcceptEdited(message: any): void {
-    vscode.commands.executeCommand(
-      `texra.${message.command}`,
-      message.inputFile,
-      message.baseFile,
-      message.editedFile,
-    );
+    this.handleFileOperation(message);
   }
 
   handleHousekeeping(message: any): void {
