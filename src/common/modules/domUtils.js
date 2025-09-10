@@ -21,23 +21,48 @@ export function safeGetElementById(id) {
 }
 
 const DEFAULTS = { value: '', checked: false };
+const SUPPORTED_PROPERTIES = ['value', 'checked'];
 
+/**
+ * Get or set a DOM element property safely.
+ * @param {string|HTMLElement} elementOrId - Element ID or the element itself
+ * @param {string} key - Property name ('value', 'checked', etc.)
+ * @param {*} [value] - Value to set (omit to get current value)
+ * @param {*} [defaultValue] - Default value for getter mode
+ * @returns {*|boolean} Property value when getting, true on successful set, false on failure
+ */
 export function safeElementProperty(
-  id,
+  elementOrId,
   key,
   value,
   defaultValue = DEFAULTS[key],
 ) {
-  const element = document.getElementById(id);
+  // Support both element references and IDs for better performance
+  const element =
+    typeof elementOrId === 'string'
+      ? document.getElementById(elementOrId)
+      : elementOrId;
+  
   if (!element) {
+    const id = typeof elementOrId === 'string' ? elementOrId : 'provided element';
     console.warn(`Element with id '${id}' not found`);
     if (value === undefined) return defaultValue;
-    return;
+    return false;
   }
+  
+  // Warn about potentially unsupported properties
+  if (!SUPPORTED_PROPERTIES.includes(key) && defaultValue === undefined) {
+    console.warn(`Property '${key}' may not have a default value. Consider providing one.`);
+  }
+  
+  // Getter mode
   if (value === undefined) {
     return element[key] ?? defaultValue;
   }
+  
+  // Setter mode
   element[key] = value;
+  return true;
 }
 
 /**
