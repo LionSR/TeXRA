@@ -16,7 +16,7 @@ export class ProgressViewContentProvider extends BaseViewContentProvider {
     return 'progressView';
   }
 
-  private readonly moduleDescriptors: ModuleDescriptor[] = [
+  protected override moduleDescriptors: ModuleDescriptor[] = [
     { key: 'progressViewStateUri', path: 'modules/progressViewState.js' },
     { key: 'formattersUri', path: 'modules/formatters.js' },
     { key: 'taskManagersUri', path: 'modules/taskManagers.js' },
@@ -34,9 +34,11 @@ export class ProgressViewContentProvider extends BaseViewContentProvider {
     { key: 'placeholderUri', path: 'modules/uiManagers/Placeholder.js' },
   ];
 
-  protected getModuleUris(webview: vscode.Webview): Record<string, vscode.Uri> {
+  protected override getModuleUris(
+    webview: vscode.Webview,
+  ): Record<string, vscode.Uri> {
     return {
-      ...this.buildUriRecord(webview, this.moduleDescriptors),
+      ...super.getModuleUris(webview),
       splitJsUri: this.getNodeModulesUri(webview, 'split.js/dist/split.es.js'),
     };
   }

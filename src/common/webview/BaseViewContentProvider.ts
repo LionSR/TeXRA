@@ -18,6 +18,7 @@ export interface ModuleDescriptor {
 export abstract class BaseViewContentProvider {
   protected readonly logger: any;
   protected readonly channel: string;
+  protected moduleDescriptors: ModuleDescriptor[] = [];
 
   constructor(
     protected readonly context: vscode.ExtensionContext,
@@ -32,13 +33,6 @@ export abstract class BaseViewContentProvider {
    * Subclasses must provide the relative path to their view directory
    */
   protected abstract getViewPath(): string;
-
-  /**
-   * Subclasses must provide their specific module URIs
-   */
-  protected abstract getModuleUris(
-    webview: vscode.Webview,
-  ): Record<string, vscode.Uri>;
 
   /**
    * Optional: Override to provide additional template variables
@@ -103,6 +97,14 @@ export abstract class BaseViewContentProvider {
     webview: vscode.Webview,
   ): Record<string, vscode.Uri> {
     return this.buildUriRecord(webview, this.sharedModuleDescriptors);
+  }
+
+  /**
+   * View-specific module URIs built from {@link moduleDescriptors}.
+   * Subclasses may override for custom behavior.
+   */
+  protected getModuleUris(webview: vscode.Webview): Record<string, vscode.Uri> {
+    return this.buildUriRecord(webview, this.moduleDescriptors);
   }
 
   /**

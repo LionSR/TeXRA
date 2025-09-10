@@ -21,7 +21,7 @@ export class MainViewContentProvider extends BaseViewContentProvider {
     return 'webview';
   }
 
-  private readonly moduleDescriptors: ModuleDescriptor[] = [
+  protected override moduleDescriptors: ModuleDescriptor[] = [
     { key: 'webviewStateModuleUri', path: 'modules/mainViewState.js' },
     { key: 'themeHandlersUri', path: 'modules/handlers/themeHandlers.js' },
     { key: 'fileMessageHandlersUri', path: 'modules/handlers/fileHandlers.js' },
@@ -63,10 +63,6 @@ export class MainViewContentProvider extends BaseViewContentProvider {
       path: 'modules/uiManagers/LatexdiffManager.js',
     },
   ];
-
-  protected getModuleUris(webview: vscode.Webview): Record<string, vscode.Uri> {
-    return this.buildUriRecord(webview, this.moduleDescriptors);
-  }
 
   protected getTemplateVariables(): Record<string, any> {
     // Note: This uses synchronous approach for template generation
