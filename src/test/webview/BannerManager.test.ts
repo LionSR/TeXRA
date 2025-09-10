@@ -11,7 +11,11 @@ import { JSDOM } from 'jsdom';
 
 // Mock BannerManager implementation for testing
 class BannerManager {
-  private _listeners: Array<{ element: any; event: string; handler: Function }> = [];
+  private _listeners: Array<{
+    element: any;
+    event: string;
+    handler: (...args: any[]) => unknown;
+  }> = [];
 
   showBanner(id: string, config: any = {}) {
     const element = (global as any).safeGetElementById(id);
@@ -53,19 +57,20 @@ class BannerManager {
     }
 
     if (config.provider) {
-      const providerName = config.provider.charAt(0).toUpperCase() + config.provider.slice(1);
-      
+      const providerName =
+        config.provider.charAt(0).toUpperCase() + config.provider.slice(1);
+
       // Clear existing content and use safe DOM manipulation
       textSpan.textContent = '';
-      
+
       // Create strong element for provider name
       const strongElement = document.createElement('strong');
       strongElement.textContent = providerName;
-      
+
       // Append elements safely
       textSpan.appendChild(strongElement);
       textSpan.appendChild(document.createTextNode(' API key missing.'));
-      
+
       setButton.textContent = 'Set Key';
       getButton.textContent = 'Get Key';
       element.dataset.provider = config.provider;
@@ -88,11 +93,15 @@ class BannerManager {
     }
 
     if (dirButton) {
-      dirButton.textContent = config.customDirSet ? 'Open Directory' : 'Set Directory';
+      dirButton.textContent = config.customDirSet
+        ? 'Open Directory'
+        : 'Set Directory';
     }
 
     if (!textSpan && !dirButton) {
-      console.warn('[BannerManager] Agent config banner missing all expected elements');
+      console.warn(
+        '[BannerManager] Agent config banner missing all expected elements',
+      );
     }
 
     element.dataset.customDirSet = String(config.customDirSet || false);
@@ -113,15 +122,21 @@ class BannerManager {
       return tool;
     });
 
-    textSpan.textContent = missing.length > 0
-      ? `Missing dependencies: ${formattedTools.join(', ')}`
-      : 'Missing dependencies: none';
+    textSpan.textContent =
+      missing.length > 0
+        ? `Missing dependencies: ${formattedTools.join(', ')}`
+        : 'Missing dependencies: none';
   }
 
-  addListener(elementOrId: any, event: string, handler: Function) {
-    const element = typeof elementOrId === 'string'
-      ? (global as any).safeGetElementById(elementOrId)
-      : elementOrId;
+  addListener(
+    elementOrId: any,
+    event: string,
+    handler: (...args: any[]) => unknown,
+  ) {
+    const element =
+      typeof elementOrId === 'string'
+        ? (global as any).safeGetElementById(elementOrId)
+        : elementOrId;
     if (element) {
       element.addEventListener(event, handler);
       this._listeners.push({ element, event, handler });
@@ -158,22 +173,22 @@ describe('BannerManager', () => {
         <span></span>
       </div>
     </body></html>`);
-    
+
     global.document = dom.window.document as any;
     global.HTMLElement = dom.window.HTMLElement;
-    
+
     // Mock safeGetElementById
     (global as any).safeGetElementById = (id: string) => {
       return dom.window.document.getElementById(id);
     };
-    
+
     // Capture console warnings
     warnMessages = [];
     originalConsoleWarn = console.warn;
     console.warn = (message: string) => {
       warnMessages.push(message);
     };
-    
+
     manager = new BannerManager();
   });
 
@@ -217,9 +232,9 @@ describe('BannerManager', () => {
       const textSpan = banner.querySelector('span');
       const setButton = banner.querySelector('#apiKeyBannerButton');
       const getButton = banner.querySelector('#apiKeyGuideButton');
-      
+
       manager.showBanner('apiKeyBanner');
-      
+
       assert.equal(textSpan.textContent, 'TeXRA requires an API key to run.');
       assert.equal(setButton.textContent, 'Set API Key');
       assert.equal(getButton.textContent, 'API Key Guide');
@@ -231,15 +246,15 @@ describe('BannerManager', () => {
       const textSpan = banner.querySelector('span');
       const setButton = banner.querySelector('#apiKeyBannerButton');
       const getButton = banner.querySelector('#apiKeyGuideButton');
-      
+
       manager.showBanner('apiKeyBanner', { provider: 'openai' });
-      
+
       // Check that text is set safely without innerHTML
       assert.equal(textSpan.childNodes.length, 2);
       assert.equal(textSpan.childNodes[0].nodeName, 'STRONG');
       assert.equal(textSpan.childNodes[0].textContent, 'Openai');
       assert.equal(textSpan.childNodes[1].textContent, ' API key missing.');
-      
+
       assert.equal(setButton.textContent, 'Set Key');
       assert.equal(getButton.textContent, 'Get Key');
       assert.equal(banner.dataset.provider, 'openai');
@@ -248,24 +263,27 @@ describe('BannerManager', () => {
     it('should handle XSS attempt in provider name', () => {
       const banner = dom.window.document.getElementById('apiKeyBanner');
       const textSpan = banner.querySelector('span');
-      
-      manager.showBanner('apiKeyBanner', { 
-        provider: '<script>alert("xss")</script>' 
+
+      manager.showBanner('apiKeyBanner', {
+        provider: '<script>alert("xss")</script>',
       });
-      
+
       // Verify that script tag is escaped as text, not executed
       const strongElement = textSpan.querySelector('strong');
       assert.equal(strongElement.textContent, '<script>alert("xss")</script>');
-      assert.equal(strongElement.innerHTML, '&lt;script&gt;alert("xss")&lt;/script&gt;');
+      assert.equal(
+        strongElement.innerHTML,
+        '&lt;script&gt;alert("xss")&lt;/script&gt;',
+      );
     });
 
     it('should warn when API key banner missing elements', () => {
       // Remove required elements
       const banner = dom.window.document.getElementById('apiKeyBanner');
       banner.innerHTML = '<div></div>';
-      
+
       manager.showBanner('apiKeyBanner', { provider: 'test' });
-      
+
       assert.equal(warnMessages.length, 1);
       assert.ok(warnMessages[0].includes('missing required elements'));
     });
@@ -276,9 +294,9 @@ describe('BannerManager', () => {
       const banner = dom.window.document.getElementById('agentConfigBanner');
       const textSpan = banner.querySelector('span');
       const dirButton = banner.querySelector('#agentConfigDirButton');
-      
+
       manager.showBanner('agentConfigBanner');
-      
+
       assert.equal(textSpan.textContent, 'Agent configuration is missing.');
       assert.equal(dirButton.textContent, 'Set Directory');
       assert.equal(banner.dataset.customDirSet, 'false');
@@ -288,13 +306,16 @@ describe('BannerManager', () => {
       const banner = dom.window.document.getElementById('agentConfigBanner');
       const textSpan = banner.querySelector('span');
       const dirButton = banner.querySelector('#agentConfigDirButton');
-      
+
       manager.showBanner('agentConfigBanner', {
         agentName: 'TestAgent',
-        customDirSet: true
+        customDirSet: true,
       });
-      
-      assert.equal(textSpan.textContent, 'Agent file for "TestAgent" is missing.');
+
+      assert.equal(
+        textSpan.textContent,
+        'Agent file for "TestAgent" is missing.',
+      );
       assert.equal(dirButton.textContent, 'Open Directory');
       assert.equal(banner.dataset.customDirSet, 'true');
     });
@@ -302,11 +323,11 @@ describe('BannerManager', () => {
     it('should handle missing text span gracefully', () => {
       const banner = dom.window.document.getElementById('agentConfigBanner');
       banner.innerHTML = '<button id="agentConfigDirButton"></button>';
-      
+
       assert.doesNotThrow(() => {
         manager.showBanner('agentConfigBanner', { agentName: 'Test' });
       });
-      
+
       const dirButton = banner.querySelector('#agentConfigDirButton');
       assert.equal(dirButton.textContent, 'Set Directory');
     });
@@ -314,9 +335,9 @@ describe('BannerManager', () => {
     it('should warn when all elements are missing', () => {
       const banner = dom.window.document.getElementById('agentConfigBanner');
       banner.innerHTML = '';
-      
+
       manager.showBanner('agentConfigBanner');
-      
+
       assert.equal(warnMessages.length, 1);
       assert.ok(warnMessages[0].includes('missing all expected elements'));
     });
@@ -326,43 +347,43 @@ describe('BannerManager', () => {
     it('should display missing dependencies', () => {
       const banner = dom.window.document.getElementById('dependencyBanner');
       const textSpan = banner.querySelector('span');
-      
+
       manager.showBanner('dependencyBanner', {
-        missingTools: ['latex', 'gm/magick', 'nodejs']
+        missingTools: ['latex', 'gm/magick', 'nodejs'],
       });
-      
+
       assert.equal(
         textSpan.textContent,
-        'Missing dependencies: latex, GraphicsMagick or ImageMagick, nodejs'
+        'Missing dependencies: latex, GraphicsMagick or ImageMagick, nodejs',
       );
     });
 
     it('should handle empty dependencies array', () => {
       const banner = dom.window.document.getElementById('dependencyBanner');
       const textSpan = banner.querySelector('span');
-      
+
       manager.showBanner('dependencyBanner', { missingTools: [] });
-      
+
       assert.equal(textSpan.textContent, 'Missing dependencies: none');
     });
 
     it('should handle missing config gracefully', () => {
       const banner = dom.window.document.getElementById('dependencyBanner');
       const textSpan = banner.querySelector('span');
-      
+
       manager.showBanner('dependencyBanner');
-      
+
       assert.equal(textSpan.textContent, 'Missing dependencies: none');
     });
 
     it('should warn when text span is missing', () => {
       const banner = dom.window.document.getElementById('dependencyBanner');
       banner.innerHTML = '';
-      
+
       manager.showBanner('dependencyBanner', {
-        missingTools: ['test']
+        missingTools: ['test'],
       });
-      
+
       assert.equal(warnMessages.length, 1);
       assert.ok(warnMessages[0].includes('missing text element'));
     });
@@ -370,14 +391,14 @@ describe('BannerManager', () => {
     it('should properly format gm/magick tool name', () => {
       const banner = dom.window.document.getElementById('dependencyBanner');
       const textSpan = banner.querySelector('span');
-      
+
       manager.showBanner('dependencyBanner', {
-        missingTools: ['gm/magick']
+        missingTools: ['gm/magick'],
       });
-      
+
       assert.equal(
         textSpan.textContent,
-        'Missing dependencies: GraphicsMagick or ImageMagick'
+        'Missing dependencies: GraphicsMagick or ImageMagick',
       );
     });
   });
@@ -387,7 +408,7 @@ describe('BannerManager', () => {
       // Verify cleanup method exists (inherited from BaseUIManager)
       assert.equal(typeof manager.cleanup, 'function');
     });
-    
+
     it('should inherit addListener from BaseUIManager', () => {
       // Verify addListener method exists (inherited from BaseUIManager)
       assert.equal(typeof manager.addListener, 'function');
