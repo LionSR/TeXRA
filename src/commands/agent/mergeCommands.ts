@@ -5,9 +5,9 @@ import * as vscode from 'vscode';
 import * as logger from '@logger/logUtils';
 
 // Local imports - errors
-import { 
-  showLoggedMessageWithDocs, 
-  showLoggedErrorMessage 
+import {
+  showLoggedMessageWithDocs,
+  showLoggedErrorMessage,
 } from '@common/errors/errorHandlingUtils';
 
 // Local imports - agent
@@ -52,7 +52,11 @@ async function handleMerge(
     await executeMergeAgent(model, fileToUse, editedFile, context);
   } catch (err) {
     // Log the error before re-throwing
-    await showLoggedErrorMessage('MergeCommands', 'Merge operation failed', err);
+    await showLoggedErrorMessage(
+      'MergeCommands',
+      'Merge operation failed',
+      err,
+    );
     throw err;
   }
 }
