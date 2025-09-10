@@ -58,7 +58,7 @@ export class HistoryViewProvider extends BaseWebviewProvider<
       ],
     };
 
-    super.resolveWebviewView(webviewView);
+    super.resolveWebviewViewInternal(webviewView);
   }
 
   /**
@@ -110,7 +110,7 @@ export class HistoryViewProvider extends BaseWebviewProvider<
       },
     );
 
-    super.resolveWebviewView(this._view);
+    super.resolveWebviewViewInternal(this._view);
     await this.updateWebviewContent();
   }
 
