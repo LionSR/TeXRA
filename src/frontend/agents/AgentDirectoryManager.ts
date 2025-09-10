@@ -8,7 +8,7 @@ import * as vscode from 'vscode';
 import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
-import { getConfig } from '@utils/config';
+import { getConfig, updateConfig } from '@utils/config';
 import { GlobalStorageFS, StorageFS, AbsoluteFS } from '@utils/files';
 import { showLoggedMessageWithDocs } from '@common/errors/errorHandlingUtils';
 
@@ -83,12 +83,7 @@ export class AgentDirectoryManager {
     const selectedPath = folder[0].fsPath;
     await AbsoluteFS.ensureDir(selectedPath);
 
-    const config = vscode.workspace.getConfiguration();
-    await config.update(
-      'texra.explorer.agentsDirectory',
-      selectedPath,
-      vscode.ConfigurationTarget.Workspace,
-    );
+    await updateConfig('explorer.agentsDirectory', selectedPath);
 
     return selectedPath;
   }
