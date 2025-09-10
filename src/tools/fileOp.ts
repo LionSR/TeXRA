@@ -34,7 +34,7 @@ export class FileOpTool extends BaseTool<FileOpInput> {
     try {
       switch (command) {
         case 'read': {
-          const data = await WorkspaceFS.readFile(path);
+          const data = await WorkspaceFS.read(path);
           return new ToolResult({ output: data });
         }
         case 'write': {
@@ -44,7 +44,7 @@ export class FileOpTool extends BaseTool<FileOpInput> {
               isError: true,
             });
           }
-          await WorkspaceFS.writeFile(path, content);
+          await WorkspaceFS.write(path, content);
           return new ToolResult({ output: 'written' });
         }
         case 'append': {
