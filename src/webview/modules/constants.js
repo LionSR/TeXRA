@@ -105,4 +105,5 @@ export const ELEMENT_IDS = {
   AGENT_CONFIG_DOC_BUTTON: 'agentConfigDocButton',
   DEPENDENCY_BANNER: 'dependencyBanner',
   DEPENDENCY_DOCS_BUTTON: 'dependencyDocsButton',
+  DEPENDENCY_DISMISS_BUTTON: 'dependencyDismissButton',
 };

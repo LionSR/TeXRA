@@ -92,8 +92,21 @@ export class SettingsButtonManager extends BaseUIManager {
       });
     });
 
+    this.addListener(ELEMENT_IDS.DEPENDENCY_DISMISS_BUTTON, 'click', () => {
+      // Hide the banner
+      const element = safeGetElementById(ELEMENT_IDS.DEPENDENCY_BANNER);
+      if (element) {
+        element.style.setProperty('display', 'none');
+      }
+      // Update the setting to disable future reminders
+      this.vscode.postMessage({
+        command: MAIN_VIEW_COMMANDS.UPDATE_DEPENDENCY_REMINDER_SETTING,
+        value: false,
+      });
+    });
+
     this.eventBus.addEventListener('showDependencyBanner', (e) => {
-      const missing = e.detail?.missing || [];
+      const missing = e.detail?.missingTools || [];
       const element = safeGetElementById(ELEMENT_IDS.DEPENDENCY_BANNER);
       if (element) {
         const textSpan = element.querySelector('span');
