@@ -9,6 +9,13 @@ import { executeCommand, checkToolInstalled } from '@utils/system';
 
 // Wolfram configuration is now in toolUtils.ts
 
+// Constants
+const DEFAULT_CODE_TIMEOUT = 30000; // 30 seconds
+const DEFAULT_FILE_TIMEOUT = 60000; // 60 seconds
+const WOLFRAM_NOT_INSTALLED_ERROR =
+  'Mathematica/wolframscript is not installed or not in your PATH.';
+const WOLFRAM_CHANNEL = 'WolframTool';
+
 // Interface for execution result
 export interface WolframScriptResult {
   success: boolean;
@@ -18,6 +25,9 @@ export interface WolframScriptResult {
 
 /**
  * Internal helper to run wolframscript commands with installation check.
+ * @param commandArgs Array of command-line arguments to pass to wolframscript (e.g., ['-code', 'expr'] or ['-file', 'path'])
+ * @param opts Execution options including timeout and error display settings
+ * @returns Promise resolving to execution result with success status, output, and error information
  */
 async function runWolfram(
   commandArgs: string[],
@@ -31,7 +41,7 @@ async function runWolfram(
     return {
       success: false,
       output: null,
-      error: 'Mathematica/wolframscript is not installed or not in your PATH.',
+      error: WOLFRAM_NOT_INSTALLED_ERROR,
     };
   }
 
@@ -40,7 +50,7 @@ async function runWolfram(
     const result = await executeCommand(command, {
       truncate: false,
       timeout: opts.timeout,
-      channel: 'WolframTool',
+      channel: WOLFRAM_CHANNEL,
     });
 
     return {
@@ -79,7 +89,7 @@ export async function executeWolframCode(
   } = {},
 ): Promise<WolframScriptResult> {
   return runWolfram(['-code', code], {
-    timeout: options.timeout ?? 30000,
+    timeout: options.timeout ?? DEFAULT_CODE_TIMEOUT,
     showErrorsToUser: options.showErrorsToUser,
   });
 }
@@ -98,7 +108,7 @@ export async function executeWolframScriptFile(
   } = {},
 ): Promise<WolframScriptResult> {
   return runWolfram(['-file', filePath], {
-    timeout: options.timeout ?? 60000,
+    timeout: options.timeout ?? DEFAULT_FILE_TIMEOUT,
     showErrorsToUser: options.showErrorsToUser,
   });
 }
