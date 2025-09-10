@@ -10,9 +10,8 @@ import * as logger from '@logger/logUtils';
 // Local imports - utilities
 import { WorkspaceFS } from '@utils/files';
 import { getConfig } from '@utils/config';
-import { executeCommand } from '@utils/system';
 import { sleep } from '@utils/helpers';
-import { checkToolInstalled } from '@utils/system';
+import { runToolWithCheck } from '@utils/system';
 
 const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);
@@ -24,9 +23,6 @@ export async function runLatexIndent(filePath: string): Promise<boolean> {
       'latex.showLatexindentWarning',
       true,
     );
-    if (!(await checkToolInstalled('latexindent', showWarning))) {
-      return false;
-    }
 
     const workspacePath = WorkspaceFS.getPath();
     if (!workspacePath) {
@@ -38,14 +34,17 @@ export async function runLatexIndent(filePath: string): Promise<boolean> {
     const latexindentConfig = getConfig<string>('latex.latexindentConfig');
 
     // Build command array - note we're using -w (overwrite) and -s (silent)
-    const command = ['latexindent', '-w', '-s'];
+    const args = ['-w', '-s'];
     if (latexindentConfig) {
-      command.push(`-l=${latexindentConfig}`);
+      args.push(`-l=${latexindentConfig}`);
     }
-    command.push(filePath);
+    args.push(filePath);
 
-    const result = await executeCommand(command, { channel: CHANNEL });
-    if (!result.success) {
+    const result = await runToolWithCheck('latexindent', args, {
+      channel: CHANNEL,
+      showError: showWarning,
+    });
+    if (!result || !result.success) {
       return false;
     }
 
