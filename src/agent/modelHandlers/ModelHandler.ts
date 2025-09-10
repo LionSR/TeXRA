@@ -459,6 +459,48 @@ export abstract class ModelHandler<
     return effort;
   }
 
+  /**
+   * Adjusts request options to respect the model's context window.
+   *
+   * Throws an error if the input token count alone exceeds the context window.
+   * When the combined input and output tokens would overflow the context window,
+   * this helper reduces the configured max output tokens and invokes the
+   * optional provider-specific hook.
+   *
+   * @param inputTokens Number of tokens in the prompt.
+   * @param options Mutable options/kwargs object to adjust.
+   * @param maxOutputKey Property name containing the max output tokens.
+   * @param buffer Optional safety buffer to leave unused in the window.
+   * @param hooks Optional callbacks for provider-specific adjustments.
+   */
+  protected adjustForContextWindow(
+    inputTokens: number,
+    options: Record<string, any>,
+    maxOutputKey: string,
+    buffer = 0,
+    hooks?: { onMaxOutputTokensReduced?: (newMax: number) => void },
+  ): void {
+    if (inputTokens > this.config.contextWindow) {
+      const errMsg = `Token count of message exceeds context window: ${inputTokens} > ${this.config.contextWindow}`;
+      this.logger.error(errMsg);
+      throw new Error(errMsg);
+    }
+
+    const maxOutput = options[maxOutputKey];
+    if (
+      typeof maxOutput === 'number' &&
+      this.config.contextWindow - inputTokens < maxOutput
+    ) {
+      const newMax = this.config.contextWindow - inputTokens - buffer;
+      const warnMsg =
+        `Token count of message plus max tokens exceeds context window: ${inputTokens} + ${maxOutput} > ${this.config.contextWindow}. ` +
+        `Reducing ${maxOutputKey} to ${newMax}.`;
+      this.logger.warn(warnMsg);
+      options[maxOutputKey] = newMax;
+      hooks?.onMaxOutputTokensReduced?.(newMax);
+    }
+  }
+
   /** Determine if extension corresponds to an audio format. */
   private isAudio(ext: string): boolean {
     const mimeType = getMimeType(ext);

@@ -169,40 +169,35 @@ export class ModelHandlerAnthropic extends ModelHandler<
       this.logger.debug(
         `Token count of message: ${responseTokenCount.input_tokens}`,
       );
-      if (responseTokenCount.input_tokens > this.config.contextWindow) {
-        const errMsg = `Token count of message exceeds context window: ${responseTokenCount.input_tokens} > ${this.config.contextWindow}`;
-        this.logger.error(errMsg);
-        throw new Error(errMsg);
-      }
-      if (
-        this.config.contextWindow - responseTokenCount.input_tokens <
-        options.max_tokens
-      ) {
-        const warnMsg = `Token count of message plus max tokens exceeds context window: ${responseTokenCount.input_tokens} + ${options.max_tokens} > ${this.config.contextWindow}. Reducing max tokens to ${this.config.contextWindow - responseTokenCount.input_tokens}.`;
-        this.logger.warn(warnMsg);
-        options.max_tokens =
-          this.config.contextWindow - responseTokenCount.input_tokens - 10;
-
-        if (
-          this.capabilities.supportsReasoning &&
-          options.thinking &&
-          options.thinking.type === 'enabled'
-        ) {
-          const adjustedBudget = Math.max(
-            1,
-            Math.min(
-              options.thinking.budget_tokens,
-              Math.floor(options.max_tokens * 0.5),
-            ),
-          );
-          if (adjustedBudget !== options.thinking.budget_tokens) {
-            this.logger.debug(
-              `Adjusted thinking budget to ${adjustedBudget} due to reduced max_tokens`,
-            );
-            options.thinking.budget_tokens = adjustedBudget;
-          }
-        }
-      }
+      this.adjustForContextWindow(
+        responseTokenCount.input_tokens,
+        options,
+        'max_tokens',
+        10,
+        {
+          onMaxOutputTokensReduced: (newMax) => {
+            if (
+              this.capabilities.supportsReasoning &&
+              options.thinking &&
+              options.thinking.type === 'enabled'
+            ) {
+              const adjustedBudget = Math.max(
+                1,
+                Math.min(
+                  options.thinking.budget_tokens,
+                  Math.floor(newMax * 0.5),
+                ),
+              );
+              if (adjustedBudget !== options.thinking.budget_tokens) {
+                this.logger.debug(
+                  `Adjusted thinking budget to ${adjustedBudget} due to reduced max_tokens`,
+                );
+                options.thinking.budget_tokens = adjustedBudget;
+              }
+            }
+          },
+        },
+      );
       // in the future we log this in firstInputTokens of the AgentStateGlobal
     }
 

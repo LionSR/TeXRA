@@ -119,27 +119,15 @@ export class ModelHandlerOpenAI extends ModelHandler<
       this.logger.debug(
         `Approximate token count of message: ${approximateInputTokens}`,
       );
-
-      if (approximateInputTokens > this.config.contextWindow) {
-        const errorMsg = `Approximate token count of message exceeds context window: ${approximateInputTokens} > ${this.config.contextWindow}`;
-        this.logger.error(errorMsg);
-        throw new Error(errorMsg);
-      }
-
       const maxOutputKey = this.isOReasoningModel
         ? 'max_completion_tokens'
         : 'max_tokens';
-      if (
-        this.config.contextWindow - approximateInputTokens <
-        kwargs[maxOutputKey]
-      ) {
-        const originalMaxTokens = kwargs[maxOutputKey];
-        kwargs[maxOutputKey] =
-          this.config.contextWindow - approximateInputTokens - 5000; // Add a small buffer
-        this.logger.warn(
-          `Approximate token count (${approximateInputTokens}) + max tokens (${originalMaxTokens}) exceeds context window (${this.config.contextWindow}). Reducing max tokens to ${kwargs[maxOutputKey]}.`,
-        );
-      }
+      this.adjustForContextWindow(
+        approximateInputTokens,
+        kwargs,
+        maxOutputKey,
+        5000,
+      );
     } catch (err) {
       this.logger.error(
         `Token counting failed: ${getSdkErrorMessage(err)}. Proceeding without token adjustment.`,
