@@ -93,18 +93,20 @@ export async function compileLatex2Pdf(
       result = await runToolWithCheck('latexmk', latexmkArgs, {
         channel,
         env,
-        showError: false,
+        showError: false, // Suppress error for latexmk to try pdflatex as fallback
       });
       if (!result) {
         result = await runToolWithCheck('pdflatex', pdflatexArgs, {
           channel,
           env,
+          showError: true, // Show error if pdflatex also fails
         });
       }
     } else {
       result = await runToolWithCheck('pdflatex', pdflatexArgs, {
         channel,
         env,
+        showError: true, // Show error for missing pdflatex
       });
     }
 
