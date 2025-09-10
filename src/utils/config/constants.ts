@@ -44,3 +44,4 @@ export const WORD_WRAP_INIT_DELAY_MS = 200;
 export const DIFF_REGISTRATION_DELAY_MS = 300;
 export const LATEX_VIEWER_OPEN_DELAY_MS = 5000;
 export const LATEX_VIEWER_REFRESH_DELAY_MS = 5000;
+export const THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000;

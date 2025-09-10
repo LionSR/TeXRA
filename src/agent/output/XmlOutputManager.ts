@@ -149,7 +149,7 @@ export class XmlOutputManager {
     const { dir, name } = path.parse(outputFile);
     const texFile = path.join(dir, `${name}.tex`);
 
-    let outputContent = await WorkspaceFS.readFile(outputFile);
+    let outputContent = await WorkspaceFS.read(outputFile);
     const tagsToWrap = [documentTag, thinkingTag];
     outputContent = xmlUtils.addCdataToTags(outputContent, tagsToWrap);
 
@@ -169,7 +169,7 @@ export class XmlOutputManager {
         documentTag,
       );
       if (latexDocument) {
-        await WorkspaceFS.writeFile(texFile, latexDocument);
+        await WorkspaceFS.write(texFile, latexDocument);
         return texFile;
       }
       this.logger.debug(
@@ -182,7 +182,7 @@ export class XmlOutputManager {
         documentTag,
       );
       if (fallbackContent) {
-        await WorkspaceFS.writeFile(texFile, fallbackContent);
+        await WorkspaceFS.write(texFile, fallbackContent);
         return texFile;
       }
       throw new Error(
@@ -199,7 +199,7 @@ export class XmlOutputManager {
         documentTag,
       );
       if (fallbackContent) {
-        await WorkspaceFS.writeFile(texFile, fallbackContent);
+        await WorkspaceFS.write(texFile, fallbackContent);
         return texFile;
       }
       throw err;
@@ -211,7 +211,7 @@ export class XmlOutputManager {
     documentTag: string,
     thinkingTag: string = 'scratchpad',
   ): Promise<NamedOutputFile[]> {
-    let outputContent = await WorkspaceFS.readFile(outputFile);
+    let outputContent = await WorkspaceFS.read(outputFile);
 
     const tagsToWrap = [thinkingTag, 'document'];
     outputContent = xmlUtils.addCdataToTagsMultiple(outputContent, tagsToWrap);
@@ -305,7 +305,7 @@ export class XmlOutputManager {
         extension,
         currRound,
       );
-      await WorkspaceFS.writeFile(texFile, doc.content.trim());
+      await WorkspaceFS.write(texFile, doc.content.trim());
       outputFiles.push({ source, path: texFile });
       this.logger.debug(
         `XML Source: ${source} -> TeX file written: ${texFile}`,
@@ -323,7 +323,7 @@ export class XmlOutputManager {
       this.agentSetting.documentTag,
     );
 
-    const xmlContent = await WorkspaceFS.readFile(outputFile);
+    const xmlContent = await WorkspaceFS.read(outputFile);
     let original = '';
     const nameMatch = xmlContent.match(/<document[^>]*name="(.*?)"[^>]*>/);
     if (nameMatch && nameMatch[1]) {
@@ -354,7 +354,7 @@ export class XmlOutputManager {
     documentTag: string,
   ): Promise<void> {
     this.logger.debug(`Ensuring correct XML structure: ${filePath}`);
-    let content = await WorkspaceFS.readFile(filePath);
+    let content = await WorkspaceFS.read(filePath);
 
     content = await this.processXmlContent(content);
 
@@ -371,6 +371,6 @@ export class XmlOutputManager {
         }
       }
     }
-    await WorkspaceFS.writeFile(filePath, content);
+    await WorkspaceFS.write(filePath, content);
   }
 }

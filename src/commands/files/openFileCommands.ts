@@ -19,7 +19,7 @@ export async function openLabel(label: string): Promise<void> {
 
   for (const file of candidates) {
     try {
-      const content = await WorkspaceFS.readFile(file);
+      const content = await WorkspaceFS.read(file);
       const match = content.match(pattern);
       if (match && match.index !== undefined) {
         const doc = await vscode.workspace.openTextDocument(
