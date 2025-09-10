@@ -149,7 +149,7 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         } else {
           await safeExecuteCommand(
             'workbench.action.openSettings',
-            ['@ext:texra-ai.texra explorer.agentsDirectory'],
+            [SETTINGS_QUERY.AGENT_DIRECTORY],
             this.viewName,
           );
         }
