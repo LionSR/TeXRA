@@ -8,8 +8,8 @@ import * as vscode from 'vscode';
 
 // Local imports
 import { extendEnvPath, findToolInCommonPaths } from './platformPaths';
-
-// No local imports needed
+import { executeCommand } from './execUtils';
+import type { ExecResult } from '@agent/types/ResultTypes';
 
 // Interface for tool configuration
 export interface ToolConfig {
@@ -305,6 +305,25 @@ export async function checkToolInstalled(
 }
 
 /**
+ * Run a tool after verifying it is installed.
+ * @param toolName Name of the tool to execute
+ * @param args Arguments to pass to the tool (without the tool name)
+ * @param options Execution options and installation check settings
+ * @returns ExecResult if the tool ran, or false if the tool is missing
+ */
+export async function runToolWithCheck(
+  toolName: string,
+  args: string[],
+  options: { showError?: boolean } & Parameters<typeof executeCommand>[1] = {},
+): Promise<ExecResult | false> {
+  const { showError, ...execOptions } = options;
+  if (!(await checkToolInstalled(toolName, showError))) {
+    return false;
+  }
+  return executeCommand([toolName, ...args], execOptions);
+}
+
+/**
  * Check if multiple tools are installed
  * @param configs Array of tool configurations
  * @param showError Whether to show error messages for missing tools
@@ -332,26 +351,33 @@ export async function checkCoreDependencies(
   try {
     // Check basic tools
     const basicTools = ['latexindent', 'perl', 'gs'];
-    const basicResults = await checkMultipleToolsInstalled(basicTools, showError);
+    const basicResults = await checkMultipleToolsInstalled(
+      basicTools,
+      showError,
+    );
     const missingBasicTools = basicTools.filter((_, i) => !basicResults[i]);
-    
+
     // Check for either GraphicsMagick or ImageMagick
     const [hasMagick, hasGm] = await checkMultipleToolsInstalled(
       ['magick', 'gm'],
       false, // Don't show errors since we're checking alternatives
     );
-    
+
     // Add image tool to missing list only if neither is installed
     const missingTools = [...missingBasicTools];
     if (!hasMagick && !hasGm) {
       missingTools.push('gm/magick');
       if (showError) {
-        const errorMsg = 'Neither GraphicsMagick nor ImageMagick is installed. Please install either tool for image processing.\n' +
-          'GraphicsMagick:\n' + GM_INSTRUCTIONS + '\n\nOR\n\nImageMagick:\n' + MAGICK_INSTRUCTIONS;
+        const errorMsg =
+          'Neither GraphicsMagick nor ImageMagick is installed. Please install either tool for image processing.\n' +
+          'GraphicsMagick:\n' +
+          GM_INSTRUCTIONS +
+          '\n\nOR\n\nImageMagick:\n' +
+          MAGICK_INSTRUCTIONS;
         throw new Error(errorMsg);
       }
     }
-    
+
     return missingTools;
   } catch (error) {
     // If checking fails, assume all tools are missing to prompt user to check

@@ -3,29 +3,27 @@ import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
 import { getConfig } from '@utils/config';
-import { executeCommand, checkToolInstalled } from '@utils/system';
+import { runToolWithCheck } from '@utils/system';
 
 const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);
 
 export async function runTexFmt(filePath: string): Promise<boolean> {
   try {
-    if (!(await checkToolInstalled('tex-fmt'))) {
-      return false;
-    }
-
     const texfmtConfig = getConfig<string>('latex.texfmtConfig');
 
-    const command = ['tex-fmt'];
+    const args: string[] = [];
     if (texfmtConfig) {
-      command.push('--config', texfmtConfig);
+      args.push('--config', texfmtConfig);
     } else {
-      command.push('--nowrap');
+      args.push('--nowrap');
     }
-    command.push(filePath);
+    args.push(filePath);
 
-    const result = await executeCommand(command, { channel: CHANNEL });
-    if (!result.success) {
+    const result = await runToolWithCheck('tex-fmt', args, {
+      channel: CHANNEL,
+    });
+    if (!result || !result.success) {
       return false;
     }
 
