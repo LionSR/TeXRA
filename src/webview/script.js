@@ -11,25 +11,26 @@ import {
 } from './modules/messageHandlers.js';
 import { initializeIconButtons } from '@common/iconButtonInitializer.js';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
+import { bootstrap } from '@common/webview/bootstrap.js';
 import { vscode } from '@common/webviewContext.js';
 
-// Register handlers immediately so early messages aren't missed
-setupHandlers({ requestData: false });
-
-window.addEventListener('beforeunload', () => {
-  cleanupHandlers();
-  mainViewDomHandler.cleanupUI();
-});
-
-// Setup UI when DOM is loaded
-document.addEventListener('DOMContentLoaded', function () {
-  initializeIconButtons();
-  mainViewState.restore();
-  instructionManager.setup();
-  mainViewDomHandler.initializeUI();
-  toggleManager.updateToolConfigToggleState();
-  toggleManager.updateAutoToggleState();
-  toggleManager.setupDocumentListeners();
-  setupHandlers({ requestData: true });
-  vscode.postMessage({ command: MAIN_VIEW_COMMANDS.WEBVIEW_READY });
+bootstrap({
+  state: [mainViewState],
+  messageHandler: {
+    setup: () => setupHandlers({ requestData: false }),
+    cleanup: cleanupHandlers,
+  },
+  onDomContentLoaded: () => {
+    initializeIconButtons();
+    instructionManager.setup();
+    mainViewDomHandler.initializeUI();
+    toggleManager.updateToolConfigToggleState();
+    toggleManager.updateAutoToggleState();
+    toggleManager.setupDocumentListeners();
+    setupHandlers({ requestData: true });
+    vscode.postMessage({ command: MAIN_VIEW_COMMANDS.WEBVIEW_READY });
+  },
+  onBeforeUnload: () => {
+    mainViewDomHandler.cleanupUI();
+  },
 });
