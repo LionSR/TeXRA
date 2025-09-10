@@ -5,7 +5,7 @@ import * as path from 'path';
 import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
-import { executeCommand, checkToolInstalled } from '@utils/system';
+import { runToolWithCheck } from '@utils/system';
 import { getConfig } from '@utils/config';
 import { WorkspaceFS } from '@utils/files';
 // No additional imports needed
@@ -28,13 +28,6 @@ export async function compileLatex2Pdf(
   outputDirectory?: string,
   useLatexmk: boolean = false,
 ): Promise<boolean> {
-  const useLatexmkInstalled = useLatexmk
-    ? await checkToolInstalled('latexmk', false)
-    : false;
-  if (!useLatexmkInstalled && !(await checkToolInstalled('pdflatex'))) {
-    return false;
-  }
-
   try {
     const outDir = outputDirectory || path.dirname(latexFile);
     await WorkspaceFS.createDir(outDir);
@@ -81,24 +74,41 @@ export async function compileLatex2Pdf(
       logger.debug(channel, `Setting TEXINPUTS to: ${texInputs}`);
     }
 
-    const command = useLatexmkInstalled
-      ? [
-          'latexmk',
-          '-pdf',
-          '-f',
-          '-interaction=nonstopmode',
-          `-output-directory=${outDir}`,
-          latexFile,
-        ]
-      : [
-          'pdflatex',
-          '-interaction=nonstopmode',
-          `-output-directory=${outDir}`,
-          latexFile,
-        ];
+    const latexmkArgs = [
+      '-pdf',
+      '-f',
+      '-interaction=nonstopmode',
+      `-output-directory=${outDir}`,
+      latexFile,
+    ];
 
-    const result = await executeCommand(command, { channel, env });
-    if (result.success) {
+    const pdflatexArgs = [
+      '-interaction=nonstopmode',
+      `-output-directory=${outDir}`,
+      latexFile,
+    ];
+
+    let result: Awaited<ReturnType<typeof runToolWithCheck>>;
+    if (useLatexmk) {
+      result = await runToolWithCheck('latexmk', latexmkArgs, {
+        channel,
+        env,
+        showError: false,
+      });
+      if (!result) {
+        result = await runToolWithCheck('pdflatex', pdflatexArgs, {
+          channel,
+          env,
+        });
+      }
+    } else {
+      result = await runToolWithCheck('pdflatex', pdflatexArgs, {
+        channel,
+        env,
+      });
+    }
+
+    if (result && result.success) {
       logger.debug(channel, `Successfully compiled ${latexFile}`);
       return true;
     }
