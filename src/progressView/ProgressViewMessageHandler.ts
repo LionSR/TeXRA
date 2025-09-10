@@ -61,6 +61,13 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
   }
 
   // Handler implementations
+  protected override async handleWebviewReady(
+    message: any,
+    webviewView: vscode.WebviewView,
+  ): Promise<void> {
+    this.provider.markWebviewReady();
+  }
+
   private async handleSwitchStream(
     message: any,
     webviewView: vscode.WebviewView,
