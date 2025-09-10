@@ -40,6 +40,30 @@ export class FileInputManager extends BaseUIManager {
     this._sortables = [];
   }
 
+  _getFileIds(type) {
+    const cap = capitalize(type);
+    const ids = {
+      singleId: `${type}File`,
+      emptySingleId: `empty${cap}FileButton`,
+      listId: `${type}Files`,
+      toggleId: `toggle${cap}Files`,
+      emptyListId: `empty${cap}FilesButton`,
+    };
+
+    if (type === 'output') {
+      ids.singleId = undefined;
+      ids.emptySingleId = undefined;
+    }
+
+    if (type === 'base' || type === 'edited') {
+      ids.listId = undefined;
+      ids.toggleId = undefined;
+      ids.emptyListId = undefined;
+    }
+
+    return ids;
+  }
+
   _setupSortable() {
     MULTIPLE_SELECTIONS.forEach((id) => {
       const element = safeGetElementById(id);
@@ -92,7 +116,7 @@ export class FileInputManager extends BaseUIManager {
   _setupMultipleFileSelectors() {
     this._setupMultipleFileButtons();
     this._setupFileTypeButtons();
-    this._setupEmptyAndToggleButtons();
+    this._setupFileTypeHandlers();
     this._setupRefreshIcons();
   }
 
@@ -145,20 +169,37 @@ export class FileInputManager extends BaseUIManager {
     });
   }
 
-  _setupEmptyAndToggleButtons() {
-    MULTIPLE_SELECTIONS.forEach((id) => {
-      const toggleId = `toggle${capitalize(id)}`;
-      const emptyButtonId = `empty${capitalize(id)}Button`;
-      this.addListener(emptyButtonId, 'click', () =>
-        this.fileList.empty(id, toggleId),
-      );
-      this.addListener(toggleId, 'click', () => {
-        if (id === 'outputFiles') {
-          this.outputFilesManager.toggleOutputFiles();
-        } else {
-          this.fileList.toggle(id, toggleId);
-        }
-      });
+  _setupFileTypeHandlers() {
+    const allTypes = [...FILE_TYPES, 'base', 'edited'];
+    allTypes.forEach((type) => {
+      const { singleId, emptySingleId, listId, toggleId, emptyListId } =
+        this._getFileIds(type);
+
+      if (emptySingleId) {
+        this.addListener(emptySingleId, 'click', () => {
+          const selectEl = safeGetElementById(singleId);
+          if (selectEl) {
+            selectEl.value = '';
+            this.state.save();
+          }
+        });
+      }
+
+      if (emptyListId) {
+        this.addListener(emptyListId, 'click', () =>
+          this.fileList.empty(listId, toggleId),
+        );
+      }
+
+      if (toggleId) {
+        this.addListener(toggleId, 'click', () => {
+          if (type === 'output') {
+            this.outputFilesManager.toggleOutputFiles();
+          } else {
+            this.fileList.toggle(listId, toggleId);
+          }
+        });
+      }
     });
   }
 
@@ -178,26 +219,6 @@ export class FileInputManager extends BaseUIManager {
     });
   }
 
-  _setupEmptyButtons() {
-    const types = [
-      'input',
-      'reference',
-      'auxiliary',
-      'media',
-      'base',
-      'edited',
-    ];
-    types.forEach((type) => {
-      this.addListener(`empty${capitalize(type)}FileButton`, 'click', () => {
-        const selectEl = safeGetElementById(`${type}File`);
-        if (selectEl) {
-          selectEl.value = '';
-          this.state.save();
-        }
-      });
-    });
-  }
-
   _setupSaveListeners() {
     ELEMENTS_TO_SAVE.forEach((id) => {
       if (id === 'agent' || id === 'model') {
@@ -214,7 +235,6 @@ export class FileInputManager extends BaseUIManager {
     this._setupSortable();
     this._setupSingleFileSelectors();
     this._setupMultipleFileSelectors();
-    this._setupEmptyButtons();
     this._setupSaveListeners();
   }
 
