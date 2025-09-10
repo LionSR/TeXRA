@@ -322,21 +322,41 @@ export async function checkMultipleToolsInstalled(
 
 /**
  * Check core dependencies required by TeXRA features
- * (latexindent, Perl, Ghostscript, GraphicsMagick).
+ * (latexindent, Perl, Ghostscript, GraphicsMagick/ImageMagick).
  * @param showError Whether to show error messages for missing tools
  * @returns Promise<string[]> Array of missing tool names
  */
 export async function checkCoreDependencies(
   showError: boolean = true,
 ): Promise<string[]> {
-  const tools = ['latexindent', 'perl', 'gs', 'gm'];
   try {
-    const results = await checkMultipleToolsInstalled(tools, showError);
-    return tools.filter((_, i) => !results[i]);
+    // Check basic tools
+    const basicTools = ['latexindent', 'perl', 'gs'];
+    const basicResults = await checkMultipleToolsInstalled(basicTools, showError);
+    const missingBasicTools = basicTools.filter((_, i) => !basicResults[i]);
+    
+    // Check for either GraphicsMagick or ImageMagick
+    const [hasMagick, hasGm] = await checkMultipleToolsInstalled(
+      ['magick', 'gm'],
+      false, // Don't show errors since we're checking alternatives
+    );
+    
+    // Add image tool to missing list only if neither is installed
+    const missingTools = [...missingBasicTools];
+    if (!hasMagick && !hasGm) {
+      missingTools.push('gm/magick');
+      if (showError) {
+        const errorMsg = 'Neither GraphicsMagick nor ImageMagick is installed. Please install either tool for image processing.\n' +
+          'GraphicsMagick:\n' + GM_INSTRUCTIONS + '\n\nOR\n\nImageMagick:\n' + MAGICK_INSTRUCTIONS;
+        throw new Error(errorMsg);
+      }
+    }
+    
+    return missingTools;
   } catch (error) {
     // If checking fails, assume all tools are missing to prompt user to check
     // This is safer than silently ignoring the error
     console.error('Failed to check core dependencies:', error);
-    return tools;
+    return ['latexindent', 'perl', 'gs', 'gm/magick'];
   }
 }
