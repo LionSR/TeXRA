@@ -4,13 +4,9 @@ import * as vscode from 'vscode';
 /**
  * Base class for webview providers.
  * Handles HTML assignment, message routing, and disposable management.
- * @template T - The webview type (WebviewView or WebviewPanel)
  */
-export abstract class BaseWebviewProvider<
-  T extends vscode.WebviewView | vscode.WebviewPanel = vscode.WebviewView,
-> implements vscode.WebviewViewProvider
-{
-  protected _view?: T;
+export abstract class BaseWebviewProvider {
+  protected _view?: vscode.WebviewView | vscode.WebviewPanel;
   protected readonly _disposables: vscode.Disposable[] = [];
   protected _viewDisposables: vscode.Disposable[] = [];
 
@@ -20,7 +16,7 @@ export abstract class BaseWebviewProvider<
   protected abstract messageHandler: {
     handleMessage(
       message: any,
-      webviewView: T,
+      webviewView: vscode.WebviewView | vscode.WebviewPanel,
     ): Promise<void> | void;
   };
 
@@ -31,10 +27,12 @@ export abstract class BaseWebviewProvider<
     context: vscode.WebviewViewResolveContext,
     token: vscode.CancellationToken,
   ): void {
-    this.resolveWebviewViewInternal(webviewView as T);
+    this.resolveWebviewViewInternal(webviewView);
   }
 
-  protected resolveWebviewViewInternal(webviewView: T): void {
+  protected resolveWebviewViewInternal(
+    webviewView: vscode.WebviewView | vscode.WebviewPanel,
+  ): void {
     this.cleanupView();
     this._view = webviewView;
 

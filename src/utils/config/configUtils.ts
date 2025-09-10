@@ -3,14 +3,14 @@ import * as vscode from 'vscode';
 
 /**
  * Gets a configuration value from VS Code settings.
- * 
+ *
  * Path conventions:
  * - Use dot notation without the 'texra' prefix (e.g., 'agents', 'api.engine')
  * - The function will automatically try multiple namespaces:
  *   1. The path as given (for non-texra configs like 'latex.latexindentConfig')
  *   2. Under the 'texra' namespace
  *   3. With explicit 'texra.' prefix
- * 
+ *
  * @param path Configuration path (e.g., 'agents' or 'api.engine')
  * @param defaultValue Optional default value if configuration is not found
  * @returns The configuration value or default value
@@ -39,11 +39,11 @@ export function getConfig<T>(path: string, defaultValue?: T): T {
 
 /**
  * Sets a configuration value in VS Code settings.
- * 
+ *
  * Path conventions:
  * - Use dot notation without the 'texra' prefix (e.g., 'agents', 'api.engine')
  * - The function will automatically add the 'texra.' prefix
- * 
+ *
  * @param path Configuration path without 'texra' prefix (e.g., 'agents')
  * @param value The value to set
  * @param target Configuration target (defaults to Workspace)
