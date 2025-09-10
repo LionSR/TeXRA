@@ -7,7 +7,7 @@ import { zodToJsonSchema } from 'zod-to-json-schema';
 
 // Local imports - tools
 import { BaseTool } from '../core/base';
-import { ToolResult } from '../result';
+import { ToolResult, ToolError } from '../result';
 import { executeWolframCode } from './wolframScriptUtils';
 import type { ToolDefinition } from '@model';
 
@@ -36,9 +36,6 @@ export class WolframTool extends BaseTool<WolframInput> {
     if (result.success) {
       return new ToolResult({ output: result.output ?? '' });
     }
-    return new ToolResult({
-      error: result.error ?? 'Unknown error executing Wolfram code',
-      isError: true,
-    });
+    throw new ToolError(result.error ?? 'Unknown error executing Wolfram code');
   }
 }
