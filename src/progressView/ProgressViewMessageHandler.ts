@@ -1,5 +1,5 @@
 // Third-party imports
-import * as vscode from 'vscode';
+import type * as vscode from 'vscode';
 
 // Local imports - progress view
 import type { ProgressViewProvider } from './ProgressViewProvider';
@@ -10,245 +10,173 @@ import {
 
 // @ts-ignore - Import JavaScript module
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
+import { safeExecuteCommand } from '@utils/system';
 
 export class ProgressViewMessageHandler extends BaseViewMessageHandler {
   constructor(private readonly provider: ProgressViewProvider) {
     super('ProgressView');
   }
 
+  /**
+   * Map webview commands to VS Code commands or state mutators
+   */
+  private readonly commandMap: Record<
+    string,
+    string | ((message: any) => Promise<boolean> | boolean)
+  > = {
+    // Stream management - state mutators
+    [PROGRESS_VIEW_COMMANDS.SWITCH_STREAM]: (m) => {
+      this.provider.state.activeStream = m.stream;
+      return true;
+    },
+    [PROGRESS_VIEW_COMMANDS.DELETE_STREAM]: (m) => {
+      this.provider.state.clearStream(m.stream);
+      return true;
+    },
+    [PROGRESS_VIEW_COMMANDS.ERASE_STREAM]: (m) => {
+      this.provider.state.eraseStreamContent(m.stream);
+      return true;
+    },
+    [PROGRESS_VIEW_COMMANDS.DELETE_ALL]: () => {
+      this.provider.state.clearAll();
+      return true;
+    },
+    [PROGRESS_VIEW_COMMANDS.SORT_STREAMS]: (m) => {
+      this.provider.state.streamSortOrder = m.sortBy ?? 'time';
+      return true;
+    },
+
+    // Stream management - VS Code commands
+    [PROGRESS_VIEW_COMMANDS.STOP_STREAM]: 'texra.stopAgent',
+
+    // Actions requiring additional logic
+    [PROGRESS_VIEW_COMMANDS.RUN_AGAIN]: async (m) => {
+      const taskState = this.provider.state.getTaskState(m.stream);
+      if (taskState) {
+        await safeExecuteCommand(
+          'texra.execute',
+          [taskState.agentConfig],
+          this.viewName,
+        );
+      }
+      return false;
+    },
+    [PROGRESS_VIEW_COMMANDS.DIFF_STREAM]: async (m) => {
+      const taskState = this.provider.state.getTaskState(m.stream);
+      if (taskState) {
+        await safeExecuteCommand(
+          'texra.runLatexdiff',
+          [
+            {
+              agent: taskState.agentConfig.agent,
+              model: taskState.agentConfig.model,
+              inputFile: taskState.agentConfig.inputFile,
+              outputFiles: taskState.agentConfig.outputFiles,
+              outputFilesActive: taskState.activeFiles.output,
+            },
+          ],
+          this.viewName,
+        );
+      }
+      return false;
+    },
+    [PROGRESS_VIEW_COMMANDS.PACK_STREAM]: async (m) => {
+      await this.handleFileOperation(m.stream, 'texra.pack');
+      return false;
+    },
+    [PROGRESS_VIEW_COMMANDS.CLEAN_STREAM]: async (m) => {
+      await this.handleFileOperation(m.stream, 'texra.clean');
+      return false;
+    },
+    [PROGRESS_VIEW_COMMANDS.RESTORE_STATE]: async (m) => {
+      const taskState = this.provider.state.getTaskState(m.stream);
+      if (taskState) {
+        await safeExecuteCommand(
+          'texra.restoreState',
+          [taskState],
+          this.viewName,
+        );
+      }
+      return false;
+    },
+
+    // Simple VS Code command mappings
+    [PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP]: 'texra.sendFollowUp',
+    [PROGRESS_VIEW_COMMANDS.OPEN_FILE]: 'texra.openFile',
+    [PROGRESS_VIEW_COMMANDS.OPEN_FILE_COMPILE]: 'texra.openFileCompile',
+    [PROGRESS_VIEW_COMMANDS.COMPARE_ORIGINAL]: 'texra.compare',
+    [PROGRESS_VIEW_COMMANDS.COMPARE_PREVIOUS]: 'texra.compare',
+    [PROGRESS_VIEW_COMMANDS.ACCEPT_FILE]: 'texra.acceptEdited',
+    [PROGRESS_VIEW_COMMANDS.MERGE_FILE]: 'texra.merge',
+    [PROGRESS_VIEW_COMMANDS.LATEXDIFF_FILE]: 'texra.latexdiff',
+    [PROGRESS_VIEW_COMMANDS.OPEN_LABEL]: 'texra.openLabel',
+  };
+
+  /**
+   * Argument extractors for VS Code commands
+   */
+  private readonly argExtractors: Record<string, (m: any) => any[]> = {
+    [PROGRESS_VIEW_COMMANDS.STOP_STREAM]: (m) => [m.stream],
+    [PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP]: (m) => [
+      { stream: m.stream, text: m.text },
+    ],
+    [PROGRESS_VIEW_COMMANDS.OPEN_FILE]: (m) => [m.file],
+    [PROGRESS_VIEW_COMMANDS.OPEN_FILE_COMPILE]: (m) => [m.file],
+    [PROGRESS_VIEW_COMMANDS.COMPARE_ORIGINAL]: (m) => [
+      undefined,
+      m.base,
+      m.file,
+    ],
+    [PROGRESS_VIEW_COMMANDS.COMPARE_PREVIOUS]: (m) => [
+      undefined,
+      m.prev,
+      m.file,
+    ],
+    [PROGRESS_VIEW_COMMANDS.ACCEPT_FILE]: (m) => [undefined, m.base, m.file],
+    [PROGRESS_VIEW_COMMANDS.MERGE_FILE]: (m) => [undefined, m.base, m.file],
+    [PROGRESS_VIEW_COMMANDS.LATEXDIFF_FILE]: (m) => [undefined, m.base, m.file],
+    [PROGRESS_VIEW_COMMANDS.OPEN_LABEL]: (m) => [m.label],
+  };
+
   protected createHandlers(): Record<string, MessageHandler> {
-    return {
+    const dispatch = this.dispatchCommand.bind(this);
+    const handlers: Record<string, MessageHandler> = {
       // Common handlers
       [PROGRESS_VIEW_COMMANDS.THEME_SET]: this.handleTheme.bind(this),
       [PROGRESS_VIEW_COMMANDS.DEBUG_MODE_SET]: this.handleDebugMode.bind(this),
       [PROGRESS_VIEW_COMMANDS.WEBVIEW_READY]:
         this.handleWebviewReady.bind(this),
-
-      // Stream management
-      [PROGRESS_VIEW_COMMANDS.SWITCH_STREAM]:
-        this.handleSwitchStream.bind(this),
-      [PROGRESS_VIEW_COMMANDS.DELETE_STREAM]:
-        this.handleDeleteStream.bind(this),
-      [PROGRESS_VIEW_COMMANDS.ERASE_STREAM]: this.handleEraseStream.bind(this),
-      [PROGRESS_VIEW_COMMANDS.DELETE_ALL]: this.handleDeleteAll.bind(this),
-      [PROGRESS_VIEW_COMMANDS.STOP_STREAM]: this.handleStopStream.bind(this),
-
-      // Actions
-      [PROGRESS_VIEW_COMMANDS.RUN_AGAIN]: this.handleRunAgain.bind(this),
-      [PROGRESS_VIEW_COMMANDS.DIFF_STREAM]: this.handleDiffStream.bind(this),
-      [PROGRESS_VIEW_COMMANDS.PACK_STREAM]: this.handlePackStream.bind(this),
-      [PROGRESS_VIEW_COMMANDS.CLEAN_STREAM]: this.handleCleanStream.bind(this),
-      [PROGRESS_VIEW_COMMANDS.SORT_STREAMS]: this.handleSortStreams.bind(this),
-      [PROGRESS_VIEW_COMMANDS.RESTORE_STATE]:
-        this.handleRestoreState.bind(this),
-      [PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP]:
-        this.handleSendFollowUp.bind(this),
-
-      // File operations
-      [PROGRESS_VIEW_COMMANDS.OPEN_FILE]: this.handleOpenFile.bind(this),
-      [PROGRESS_VIEW_COMMANDS.OPEN_FILE_COMPILE]:
-        this.handleOpenFileCompile.bind(this),
-      [PROGRESS_VIEW_COMMANDS.COMPARE_ORIGINAL]:
-        this.handleCompareOriginal.bind(this),
-      [PROGRESS_VIEW_COMMANDS.COMPARE_PREVIOUS]:
-        this.handleComparePrevious.bind(this),
-      [PROGRESS_VIEW_COMMANDS.ACCEPT_FILE]: this.handleAcceptFile.bind(this),
-      [PROGRESS_VIEW_COMMANDS.MERGE_FILE]: this.handleMergeFile.bind(this),
-      [PROGRESS_VIEW_COMMANDS.LATEXDIFF_FILE]:
-        this.handleLatexdiffFile.bind(this),
-      [PROGRESS_VIEW_COMMANDS.OPEN_LABEL]: this.handleOpenLabel.bind(this),
     };
-  }
 
-  // Handler implementations
-  private async handleSwitchStream(
-    message: any,
-    webviewView: vscode.WebviewView,
-  ): Promise<void> {
-    this.provider.setActiveStream(message.stream);
-  }
-
-  private async handleDeleteStream(
-    message: any,
-    webviewView: vscode.WebviewView,
-  ): Promise<void> {
-    this.provider.state.clearStream(message.stream);
-    this.provider.updateWebview();
-  }
-
-  private async handleEraseStream(
-    message: any,
-    webviewView: vscode.WebviewView,
-  ): Promise<void> {
-    this.provider.state.eraseStreamContent(message.stream);
-    this.provider.updateWebview();
-  }
-
-  private async handleDeleteAll(
-    message: any,
-    webviewView: vscode.WebviewView,
-  ): Promise<void> {
-    this.provider.state.clearAll();
-    this.provider.updateWebview();
-  }
-
-  private async handleStopStream(
-    message: any,
-    webviewView: vscode.WebviewView,
-  ): Promise<void> {
-    await vscode.commands.executeCommand('texra.stopAgent', message.stream);
-  }
-
-  private async handleRunAgain(
-    message: any,
-    webviewView: vscode.WebviewView,
-  ): Promise<void> {
-    const taskState = this.provider.state.getTaskState(message.stream);
-    if (taskState) {
-      await vscode.commands.executeCommand(
-        'texra.execute',
-        taskState.agentConfig,
-      );
+    for (const command of Object.keys(this.commandMap)) {
+      handlers[command] = (m, w) => dispatch(command, m, w);
     }
+
+    return handlers;
   }
 
-  private async handleDiffStream(
-    message: any,
-    webviewView: vscode.WebviewView,
-  ): Promise<void> {
-    const taskState = this.provider.state.getTaskState(message.stream);
-    if (taskState) {
-      await vscode.commands.executeCommand('texra.runLatexdiff', {
-        agent: taskState.agentConfig.agent,
-        model: taskState.agentConfig.model,
-        inputFile: taskState.agentConfig.inputFile,
-        outputFiles: taskState.agentConfig.outputFiles,
-        outputFilesActive: taskState.activeFiles.output,
-      });
-    }
-  }
-
-  private async handlePackStream(
-    message: any,
-    webviewView: vscode.WebviewView,
-  ): Promise<void> {
-    await this.handleFileOperation(message.stream, 'texra.pack');
-  }
-
-  private async handleCleanStream(
-    message: any,
-    webviewView: vscode.WebviewView,
-  ): Promise<void> {
-    await this.handleFileOperation(message.stream, 'texra.clean');
-  }
-
-  private async handleSortStreams(
-    message: any,
-    webviewView: vscode.WebviewView,
-  ): Promise<void> {
-    this.provider.state.streamSortOrder = message.sortBy ?? 'time';
-    this.provider.updateWebview();
-  }
-
-  private async handleRestoreState(
-    message: any,
-    webviewView: vscode.WebviewView,
-  ): Promise<void> {
-    const taskState = this.provider.state.getTaskState(message.stream);
-    if (taskState) {
-      await vscode.commands.executeCommand('texra.restoreState', taskState);
-    }
-  }
-
-  private async handleSendFollowUp(
+  private async dispatchCommand(
+    command: string,
     message: any,
     _webviewView: vscode.WebviewView,
   ): Promise<void> {
-    await vscode.commands.executeCommand('texra.sendFollowUp', {
-      stream: message.stream,
-      text: message.text,
-    });
-  }
+    const mapping = this.commandMap[command];
+    if (!mapping) {
+      return;
+    }
 
-  private async handleOpenFile(
-    message: any,
-    webviewView: vscode.WebviewView,
-  ): Promise<void> {
-    await vscode.commands.executeCommand('texra.openFile', message.file);
-  }
+    if (typeof mapping === 'string') {
+      const args = this.argExtractors[command]
+        ? this.argExtractors[command](message)
+        : [];
+      await safeExecuteCommand(mapping, args, this.viewName);
+      return;
+    }
 
-  private async handleOpenFileCompile(
-    message: any,
-    webviewView: vscode.WebviewView,
-  ): Promise<void> {
-    await vscode.commands.executeCommand('texra.openFileCompile', message.file);
-  }
-
-  private async handleCompareOriginal(
-    message: any,
-    webviewView: vscode.WebviewView,
-  ): Promise<void> {
-    await vscode.commands.executeCommand(
-      'texra.compare',
-      undefined,
-      message.base,
-      message.file,
-    );
-  }
-
-  private async handleComparePrevious(
-    message: any,
-    webviewView: vscode.WebviewView,
-  ): Promise<void> {
-    await vscode.commands.executeCommand(
-      'texra.compare',
-      undefined,
-      message.prev,
-      message.file,
-    );
-  }
-
-  private async handleAcceptFile(
-    message: any,
-    webviewView: vscode.WebviewView,
-  ): Promise<void> {
-    await vscode.commands.executeCommand(
-      'texra.acceptEdited',
-      undefined,
-      message.base,
-      message.file,
-    );
-  }
-
-  private async handleMergeFile(
-    message: any,
-    webviewView: vscode.WebviewView,
-  ): Promise<void> {
-    await vscode.commands.executeCommand(
-      'texra.merge',
-      undefined,
-      message.base,
-      message.file,
-    );
-  }
-
-  private async handleLatexdiffFile(
-    message: any,
-    webviewView: vscode.WebviewView,
-  ): Promise<void> {
-    await vscode.commands.executeCommand(
-      'texra.latexdiff',
-      undefined,
-      message.base,
-      message.file,
-    );
-  }
-
-  private async handleOpenLabel(
-    message: any,
-    webviewView: vscode.WebviewView,
-  ): Promise<void> {
-    await vscode.commands.executeCommand('texra.openLabel', message.label);
+    const stateChanged = await mapping(message);
+    if (stateChanged) {
+      this.provider.updateWebview();
+    }
   }
 
   private async handleFileOperation(
@@ -273,15 +201,21 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
 
     const outputFilesArray = Array.from(allFiles);
     const outputActive = taskState.activeFiles.output;
-    await vscode.commands.executeCommand(command, {
-      streamId: stream,
-      agent: taskState.agentConfig.agent,
-      model: taskState.agentConfig.model,
-      inputFile: taskState.agentConfig.inputFile,
-      outputFiles: outputActive ? outputFilesArray : [],
-      activeFiles: {
-        output: outputActive,
-      },
-    });
+    await safeExecuteCommand(
+      command,
+      [
+        {
+          streamId: stream,
+          agent: taskState.agentConfig.agent,
+          model: taskState.agentConfig.model,
+          inputFile: taskState.agentConfig.inputFile,
+          outputFiles: outputActive ? outputFilesArray : [],
+          activeFiles: {
+            output: outputActive,
+          },
+        },
+      ],
+      this.viewName,
+    );
   }
 }
