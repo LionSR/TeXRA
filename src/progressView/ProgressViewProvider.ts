@@ -37,7 +37,10 @@ type StreamStatusType =
  * This class now focuses on orchestration and delegation to focused managers,
  * following the design principles from AGENTS.md.
  */
-export class ProgressViewProvider extends BaseWebviewProvider {
+export class ProgressViewProvider
+  extends BaseWebviewProvider
+  implements vscode.WebviewViewProvider
+{
   private static _instance: ProgressViewProvider | undefined;
 
   // New modular architecture components

@@ -43,7 +43,10 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
     this.instructionManager = new InstructionManager(context);
   }
 
-  protected createHandlers(): Record<string, MessageHandler> {
+  protected createHandlers(): Record<
+    string,
+    MessageHandler<vscode.WebviewView>
+  > {
     return {
       // Common handlers
       [MAIN_VIEW_COMMANDS.THEME_SET]: this.handleTheme.bind(this),

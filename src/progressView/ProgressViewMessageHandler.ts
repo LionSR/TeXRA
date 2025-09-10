@@ -16,7 +16,10 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     super('ProgressView');
   }
 
-  protected createHandlers(): Record<string, MessageHandler> {
+  protected createHandlers(): Record<
+    string,
+    MessageHandler<vscode.WebviewView>
+  > {
     return {
       // Common handlers
       [PROGRESS_VIEW_COMMANDS.THEME_SET]: this.handleTheme.bind(this),
