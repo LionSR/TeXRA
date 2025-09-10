@@ -47,6 +47,10 @@ export class MainViewContentProvider extends BaseViewContentProvider {
       path: 'modules/uiManagers/SettingsButtonManager.js',
     },
     {
+      key: 'bannerManagerUri',
+      path: 'modules/uiManagers/BannerManager.js',
+    },
+    {
       key: 'recordingManagerUri',
       path: 'modules/uiManagers/RecordingManager.js',
     },
