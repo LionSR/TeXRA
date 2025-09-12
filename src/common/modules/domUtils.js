@@ -92,10 +92,7 @@ export function setChevronIcon(element, expanded) {
   const existingClasses = icon.className
     .split(' ')
     .filter(
-      (cls) =>
-        cls &&
-        !cls.startsWith('codicon-chevron-') &&
-        cls !== 'codicon',
+      (cls) => cls && !cls.startsWith('codicon-chevron-') && cls !== 'codicon',
     )
     .join(' ');
   const chevronClass = expanded ? CHEVRON_UP_CLASS : CHEVRON_DOWN_CLASS;
@@ -122,10 +119,7 @@ export function setChevronIconHorizontal(element, expanded) {
   const existingClasses = icon.className
     .split(' ')
     .filter(
-      (cls) =>
-        cls &&
-        !cls.startsWith('codicon-chevron-') &&
-        cls !== 'codicon',
+      (cls) => cls && !cls.startsWith('codicon-chevron-') && cls !== 'codicon',
     )
     .join(' ');
   const chevronClass = expanded ? CHEVRON_DOWN_CLASS : CHEVRON_RIGHT_CLASS;
