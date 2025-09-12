@@ -20,14 +20,14 @@ export abstract class BaseTool<T> {
 
   /**
    * Execute the tool with centralized error handling.
-   * 
+   *
    * This method validates the input using Zod schema, executes the tool's
    * implementation, and wraps any errors in a ToolResult with diagnostic
    * information.
-   * 
+   *
    * @param rawInput - The raw input to validate and pass to the tool
    * @returns A ToolResult containing either the output or error information
-   * 
+   *
    * Error handling behavior:
    * - ZodError: Returns error result with validation issues in diagnostics
    * - ToolError or other Error: Returns error result with name and stack trace
