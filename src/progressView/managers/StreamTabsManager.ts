@@ -50,7 +50,10 @@ export class StreamTabsManager extends PersistentMapManager<
 
     // Limit message history to prevent memory issues
     if (messages.length > StreamTabsManager.MAX_MESSAGE_HISTORY) {
-      messages.splice(0, messages.length - StreamTabsManager.MAX_MESSAGE_HISTORY);
+      messages.splice(
+        0,
+        messages.length - StreamTabsManager.MAX_MESSAGE_HISTORY,
+      );
     }
 
     this.save();

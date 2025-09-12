@@ -112,7 +112,7 @@ export class SettingsButtonManager extends BaseUIManager {
         const textSpan = element.querySelector('span');
         if (textSpan) {
           // Format the display of missing tools more nicely
-          const formattedTools = missing.map(tool => {
+          const formattedTools = missing.map((tool) => {
             if (tool === 'gm/magick') {
               return 'GraphicsMagick or ImageMagick';
             }

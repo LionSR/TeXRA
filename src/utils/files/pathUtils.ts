@@ -17,7 +17,7 @@ export function isTexFile(file: string): boolean {
 /**
  * Extract the base name (filename) from a file path.
  * Handles platform-specific separators (\ on Windows, / on Unix).
- * 
+ *
  * @param filePath - Path to evaluate (can be absolute or relative)
  * @returns Base name of the file/directory
  * @example
