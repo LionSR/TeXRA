@@ -46,12 +46,16 @@ export class BaseWebviewMessageHandler {
     if (!this._cleanupFn) {
       // Validate handlers are defined
       if (!this._handlers || typeof this._handlers !== 'object') {
-        throw new Error('BaseWebviewMessageHandler: handlers must be an object');
+        throw new Error(
+          'BaseWebviewMessageHandler: handlers must be an object',
+        );
       }
 
       // Warn if no handlers are defined (but don't throw - could be intentional)
       if (Object.keys(this._handlers).length === 0) {
-        console.warn('BaseWebviewMessageHandler: No handlers defined for registration');
+        console.warn(
+          'BaseWebviewMessageHandler: No handlers defined for registration',
+        );
       }
 
       this._cleanupFn = registerMessageHandlers(this._handlers);

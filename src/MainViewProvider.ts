@@ -174,7 +174,10 @@ export class MainViewProvider
     }
 
     // Check for missing core dependencies and display banner if needed
-    const showDependencyReminders = getConfig<boolean>('ui.showDependencyReminders', true);
+    const showDependencyReminders = getConfig<boolean>(
+      'ui.showDependencyReminders',
+      true,
+    );
     if (showDependencyReminders) {
       checkCoreDependencies(false).then((missingTools) => {
         if (missingTools.length > 0) {
