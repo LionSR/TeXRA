@@ -258,6 +258,9 @@ export class LogEntryManager {
       );
       if (groupContent) {
         const logLineElement = this.entryFormatter.format(logMessage);
+        if (!logLineElement) {
+          return true;
+        }
 
         // Extract timestamp from the message for chronological ordering
         const msgDate = new Date(logMessage.timestamp);
@@ -282,6 +285,10 @@ export class LogEntryManager {
       // Preserve the expanded/collapsed state for thinking and scratchpad
       const wasOpen = existing.hasAttribute('open');
       const newEl = this.entryFormatter.format(logMessage);
+      if (!newEl) {
+        existing.remove();
+        return true;
+      }
 
       // Restore the expanded state if it was open
       if (
