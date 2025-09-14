@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.33.6] - 2025-09-12
+
+### Features
+
+- Show a banner when required dependencies are missing and check tools before running
+- Add `kimi2` to the model list
+- Clarify output file controls in the webview
+
+### Bug Fixes
+
+- Detect Ghostscript correctly on Windows and stop flagging GraphicsMagick when ImageMagick is installed
+- Show tool-use agents in the dropdown when enabled and restore agent configuration banners
+- Improve model API key banner behavior and multi-file toggle labels
+
 ## [0.33.5] - 2025-09-07 💪
 
 ### Features
