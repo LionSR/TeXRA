@@ -150,13 +150,27 @@ export abstract class BaseViewContentProvider {
         'modules/webviewContext.js',
       ),
       commandsUri: this.getCommonUri(webview, 'webview/commands.js'),
+      webviewThemeHandlersUri: this.getCommonUri(
+        webview,
+        'webview/themeHandlers.js',
+      ),
       templateUtilsUri: this.getCommonUri(webview, 'modules/templateUtils.js'),
       iconButtonInitializerUri: this.getCommonUri(
         webview,
         'modules/iconButtonInitializer.js',
       ),
+      iconConstantsUri: this.getCommonUri(webview, 'modules/iconConstants.js'),
+      baseWebviewMessageHandlerUri: this.getCommonUri(
+        webview,
+        'modules/BaseWebviewMessageHandler.js',
+      ),
       domUtilsUri: this.getCommonUri(webview, 'modules/domUtils.js'),
+      baseDomHandlerUri: this.getCommonUri(
+        webview,
+        'modules/BaseDomHandler.js',
+      ),
       stringUtilsUri: this.getCommonUri(webview, 'modules/stringUtils.js'),
+      pathUtilsUri: this.getCommonUri(webview, 'modules/pathUtils.js'),
       codiconUri: this.getNodeModulesUri(
         webview,
         '@vscode/codicons/dist/codicon.css',

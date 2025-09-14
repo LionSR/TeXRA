@@ -20,14 +20,6 @@ import { MESSAGE_PREVIEW_LENGTH } from '@utils/config';
  * Handler for DashScope Qwen models using OpenAI-compatible API.
  */
 export class ModelHandlerDashScope extends ModelHandlerOpenAI {
-  /** Returns OpenAI client configured with DashScope's base URL. */
-  async getClient(): Promise<OpenAI> {
-    const apiKey = await this.getApiKey();
-    const baseURL = this.getBaseUrl();
-    this.logger.debug(`Using DashScope API key. Base URL: ${baseURL}`);
-    return new OpenAI({ apiKey, baseURL });
-  }
-
   /**
    * Process thinking blocks for DashScope models
    * @param responseObject The raw response object from the model
@@ -41,10 +33,6 @@ export class ModelHandlerDashScope extends ModelHandlerOpenAI {
     toolState?: ToolState,
   ): string | null {
     // DashScope Qwen models don't currently support thinking blocks
-    return null;
-  }
-
-  extractToolUse(_responseObject: any): string | null {
     return null;
   }
 

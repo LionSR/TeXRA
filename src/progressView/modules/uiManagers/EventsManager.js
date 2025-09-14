@@ -1,17 +1,16 @@
 // Third-party imports
-// Third-party imports
 import Split from 'split.js';
 
 // Local imports - progress view
 import { COMMANDS, SPLIT_SIZES, ELEMENT_IDS } from '../constants.js';
+import { progressViewState } from '../progressViewState.js';
 
 // Local imports
-import { progressViewState } from '../progressViewState.js';
 import {
-  CHEVRON_RIGHT_CLASS,
-  CHEVRON_DOWN_CLASS,
-  vscode,
-} from '@common/webviewContext.js';
+  addEventListenerSafely,
+  setChevronIconHorizontal,
+} from '@common/domUtils.js';
+import { vscode } from '@common/webviewContext.js';
 
 /**
  * Manages event handling and state application.
@@ -37,45 +36,42 @@ export class EventsManager {
    */
   setupEventListeners() {
     // Stream tab click handler
-    document
-      .getElementById(ELEMENT_IDS.STREAM_TABS)
-      .addEventListener('click', (e) => {
-        const tabButton = e.target.closest('.tab');
-        const deleteButton = e.target.closest('.tab-delete');
+    addEventListenerSafely(ELEMENT_IDS.STREAM_TABS, 'click', (e) => {
+      const tabButton = e.target.closest('.tab');
+      const deleteButton = e.target.closest('.tab-delete');
 
-        if (tabButton && tabButton.dataset.stream) {
-          vscode.postMessage({
-            command: COMMANDS.SWITCH_STREAM,
-            stream: tabButton.dataset.stream,
-          });
-        } else if (deleteButton && deleteButton.dataset.stream) {
-          vscode.postMessage({
-            command: COMMANDS.DELETE_STREAM,
-            stream: deleteButton.dataset.stream,
-          });
-        }
-      });
+      if (tabButton && tabButton.dataset.stream) {
+        vscode.postMessage({
+          command: COMMANDS.SWITCH_STREAM,
+          stream: tabButton.dataset.stream,
+        });
+      } else if (deleteButton && deleteButton.dataset.stream) {
+        vscode.postMessage({
+          command: COMMANDS.DELETE_STREAM,
+          stream: deleteButton.dataset.stream,
+        });
+      }
+    });
 
     // Toolbar click handler
-    document
-      .getElementById(ELEMENT_IDS.TOOLBAR_CONTAINER)
-      .addEventListener('click', (e) => {
-        const button = e.target.closest('button[data-command]');
-        if (!button || button.disabled) return;
+    addEventListenerSafely(ELEMENT_IDS.TOOLBAR_CONTAINER, 'click', (e) => {
+      const button = e.target.closest('button[data-command]');
+      if (!button || button.disabled) return;
 
-        const command = button.dataset.command;
-        const activeStream = progressViewState.activeStream;
+      const command = button.dataset.command;
+      const activeStream = progressViewState.activeStream;
 
-        if (activeStream) {
-          vscode.postMessage({ command, stream: activeStream });
-        }
-      });
+      if (activeStream) {
+        vscode.postMessage({ command, stream: activeStream });
+      }
+    });
 
     // File list toggle - removed as filesToggle element doesn't exist in the HTML
     // This appears to be orphaned code from a previous design
 
     // File list button handler
-    document.getElementById(ELEMENT_IDS.GENERATED_FILES).addEventListener(
+    addEventListenerSafely(
+      ELEMENT_IDS.GENERATED_FILES,
       'click',
       (e) => {
         const element = e.target.closest('[data-command]');
@@ -91,49 +87,45 @@ export class EventsManager {
     );
 
     // Delete all button handler
-    const deleteAllBtn = document.getElementById(ELEMENT_IDS.DELETE_ALL_BTN);
-    if (deleteAllBtn) {
-      deleteAllBtn.addEventListener('click', () => {
-        vscode.postMessage({ command: COMMANDS.DELETE_ALL });
-      });
-    }
+    addEventListenerSafely(ELEMENT_IDS.DELETE_ALL_BTN, 'click', () => {
+      vscode.postMessage({ command: COMMANDS.DELETE_ALL });
+    });
 
-    const sortButtons = document.getElementById('sortButtons');
-    if (sortButtons) {
-      sortButtons.addEventListener('click', (e) => {
-        const btn = e.target.closest('.sort-btn');
-        if (btn && btn.dataset.sort) {
-          vscode.postMessage({
-            command: COMMANDS.SORT_STREAMS,
-            sortBy: btn.dataset.sort,
-          });
-        }
-      });
-    }
+    addEventListenerSafely('sortButtons', 'click', (e) => {
+      const btn = e.target.closest('.sort-btn');
+      if (btn && btn.dataset.sort) {
+        vscode.postMessage({
+          command: COMMANDS.SORT_STREAMS,
+          sortBy: btn.dataset.sort,
+        });
+      }
+    });
 
     // Follow-up input handler
-    const followInput = document.getElementById(ELEMENT_IDS.FOLLOW_UP_INPUT);
-    const followBtn = document.getElementById(ELEMENT_IDS.SEND_FOLLOW_UP_BTN);
-    if (followInput && followBtn) {
-      const send = () => {
-        const text = followInput.value.trim();
-        if (!text) return;
-        vscode.postMessage({
-          command: COMMANDS.SEND_FOLLOW_UP,
-          stream: progressViewState.activeStream,
-          text,
-        });
-        followInput.value = '';
-      };
-      followBtn.addEventListener('click', send);
-      followInput.addEventListener('keydown', (e) => {
-        // Enter sends, Shift+Enter adds new line
-        if (e.key === 'Enter' && !e.shiftKey) {
-          e.preventDefault();
-          send();
-        }
+    const sendFollowUp = () => {
+      const followInput = document.getElementById(ELEMENT_IDS.FOLLOW_UP_INPUT);
+      if (!followInput) return;
+      const text = followInput.value.trim();
+      if (!text) return;
+      vscode.postMessage({
+        command: COMMANDS.SEND_FOLLOW_UP,
+        stream: progressViewState.activeStream,
+        text,
       });
-    }
+      followInput.value = '';
+    };
+    addEventListenerSafely(
+      ELEMENT_IDS.SEND_FOLLOW_UP_BTN,
+      'click',
+      sendFollowUp,
+    );
+    addEventListenerSafely(ELEMENT_IDS.FOLLOW_UP_INPUT, 'keydown', (e) => {
+      // Enter sends, Shift+Enter adds new line
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendFollowUp();
+      }
+    });
 
     // Initialize split view
     Split(['.content-area', '.tabs'], {
@@ -157,9 +149,7 @@ export class EventsManager {
           const toggleIcon = e.target.querySelector('.toggle-icon');
           if (toggleIcon) {
             const isOpen = e.target.open;
-            toggleIcon.className = `${
-              isOpen ? CHEVRON_DOWN_CLASS : CHEVRON_RIGHT_CLASS
-            } toggle-icon`;
+            setChevronIconHorizontal(toggleIcon, isOpen);
           }
         }
       },

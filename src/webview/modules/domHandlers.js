@@ -14,6 +14,7 @@ import { SettingsButtonManager } from './uiManagers/SettingsButtonManager.js';
 import { ToggleManager } from './uiManagers/ToggleManager.js';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
 import { vscode } from '@common/webviewContext.js';
+import { BaseDomHandler } from '@common/BaseDomHandler.js';
 
 export const instructionManager = new InstructionManager(
   'instruction',
@@ -26,14 +27,13 @@ export const recordingManager = new RecordingManager(vscode, webviewEventBus);
 /**
  * Coordinates UI managers for the main webview.
  */
-export class MainViewDomHandler {
+class MainViewDomHandler extends BaseDomHandler {
   constructor() {
+    super();
     this.fileInputManager = null;
     this.actionButtonManager = null;
     this.settingsButtonManager = null;
     this.debugMode = false;
-    this.buttonHandlers = new Map();
-    this.buttonConfigs = [];
   }
 
   _updateDebugButtonVisibility() {
@@ -72,6 +72,7 @@ export class MainViewDomHandler {
       toggleManager,
       latexdiffManager,
       mainViewState,
+      webviewEventBus,
     );
 
     this.fileInputManager.setup();
@@ -79,86 +80,63 @@ export class MainViewDomHandler {
     this.settingsButtonManager.setup();
     recordingManager.setupRecordButton();
 
-    this.buttonConfigs = [
-      {
-        id: ELEMENT_IDS.API_KEY_BANNER_BUTTON,
-        handler: () => {
-          // Get provider from banner element to determine which setup to open
-          const banner = document.getElementById(ELEMENT_IDS.API_KEY_BANNER);
-          const provider = banner?.dataset?.provider;
+    this.addListener(ELEMENT_IDS.API_KEY_BANNER_BUTTON, 'click', () => {
+      // Get provider from banner element to determine which setup to open
+      const banner = document.getElementById(ELEMENT_IDS.API_KEY_BANNER);
+      const provider = banner?.dataset?.provider;
 
-          if (provider) {
-            // Provider-specific context - use provider-specific API key setup
-            vscode.postMessage({
-              command: MAIN_VIEW_COMMANDS.OPEN_SET_PROVIDER_API_KEY,
-              provider,
-            });
-          } else {
-            // General context - use generic API key setup
-            vscode.postMessage({
-              command: MAIN_VIEW_COMMANDS.OPEN_SET_API_KEY,
-            });
-          }
-        },
-      },
-      {
-        id: ELEMENT_IDS.API_KEY_GUIDE_BUTTON,
-        handler: () => {
-          // Get provider from banner element to determine which action to take
-          const banner = document.getElementById(ELEMENT_IDS.API_KEY_BANNER);
-          const provider = banner?.dataset?.provider;
-
-          if (provider) {
-            // Provider-specific context - open provider's API key page
-            vscode.postMessage({
-              command: MAIN_VIEW_COMMANDS.OPEN_PROVIDER_API_KEY_URL,
-              provider,
-            });
-          } else {
-            // General context - open TeXRA's API key guide
-            vscode.postMessage({
-              command: MAIN_VIEW_COMMANDS.OPEN_API_KEY_GUIDE,
-            });
-          }
-        },
-      },
-      {
-        id: ELEMENT_IDS.AGENT_CONFIG_EDIT_BUTTON,
-        handler: () => {
-          vscode.postMessage({
-            command: MAIN_VIEW_COMMANDS.OPEN_AGENT_SETTINGS,
-          });
-        },
-      },
-      {
-        id: ELEMENT_IDS.AGENT_CONFIG_DIR_BUTTON,
-        handler: () => {
-          const banner = document.getElementById(
-            ELEMENT_IDS.AGENT_CONFIG_BANNER,
-          );
-          const customDirSet = banner?.dataset?.customDirSet === 'true';
-          vscode.postMessage({
-            command: MAIN_VIEW_COMMANDS.OPEN_AGENT_DIRECTORY,
-            customDirSet,
-          });
-        },
-      },
-      {
-        id: ELEMENT_IDS.AGENT_CONFIG_DOC_BUTTON,
-        handler: () => {
-          vscode.postMessage({
-            command: MAIN_VIEW_COMMANDS.OPEN_AGENT_DOCS,
-          });
-        },
-      },
-    ];
-
-    this.buttonConfigs.forEach(({ id, handler }) => {
-      const element = document.getElementById(id);
-      if (element) {
-        element.addEventListener('click', handler);
-        this.buttonHandlers.set(id, handler);
+      if (provider) {
+        // Provider-specific context - use provider-specific API key setup
+        vscode.postMessage({
+          command: MAIN_VIEW_COMMANDS.OPEN_SET_PROVIDER_API_KEY,
+          provider,
+        });
+      } else {
+        // General context - use generic API key setup
+        vscode.postMessage({
+          command: MAIN_VIEW_COMMANDS.OPEN_SET_API_KEY,
+        });
       }
+    });
+
+    this.addListener(ELEMENT_IDS.API_KEY_GUIDE_BUTTON, 'click', () => {
+      // Get provider from banner element to determine which action to take
+      const banner = document.getElementById(ELEMENT_IDS.API_KEY_BANNER);
+      const provider = banner?.dataset?.provider;
+
+      if (provider) {
+        // Provider-specific context - open provider's API key page
+        vscode.postMessage({
+          command: MAIN_VIEW_COMMANDS.OPEN_PROVIDER_API_KEY_URL,
+          provider,
+        });
+      } else {
+        // General context - open TeXRA's API key guide
+        vscode.postMessage({
+          command: MAIN_VIEW_COMMANDS.OPEN_API_KEY_GUIDE,
+        });
+      }
+    });
+
+    this.addListener(ELEMENT_IDS.AGENT_CONFIG_EDIT_BUTTON, 'click', () => {
+      vscode.postMessage({
+        command: MAIN_VIEW_COMMANDS.OPEN_AGENT_SETTINGS,
+      });
+    });
+
+    this.addListener(ELEMENT_IDS.AGENT_CONFIG_DIR_BUTTON, 'click', () => {
+      const banner = document.getElementById(ELEMENT_IDS.AGENT_CONFIG_BANNER);
+      const customDirSet = banner?.dataset?.customDirSet === 'true';
+      vscode.postMessage({
+        command: MAIN_VIEW_COMMANDS.OPEN_AGENT_DIRECTORY,
+        customDirSet,
+      });
+    });
+
+    this.addListener(ELEMENT_IDS.AGENT_CONFIG_DOC_BUTTON, 'click', () => {
+      vscode.postMessage({
+        command: MAIN_VIEW_COMMANDS.OPEN_AGENT_DOCS,
+      });
     });
   }
 
@@ -175,14 +153,7 @@ export class MainViewDomHandler {
       this.settingsButtonManager.cleanup();
       this.settingsButtonManager = null;
     }
-    this.buttonConfigs.forEach(({ id }) => {
-      const element = document.getElementById(id);
-      const handler = this.buttonHandlers.get(id);
-      if (element && handler) {
-        element.removeEventListener('click', handler);
-        this.buttonHandlers.delete(id);
-      }
-    });
+    this.cleanup();
   }
 }
 

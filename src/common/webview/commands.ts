@@ -80,8 +80,12 @@ export const MAIN_VIEW_COMMANDS = {
   HIDE_API_KEY_BANNER: 'hideApiKeyBanner',
   OPEN_AGENT_DIRECTORY: 'openAgentDirectory',
   OPEN_AGENT_DOCS: 'openAgentDocs',
+  OPEN_INSTALLATION_DOCS: 'openInstallationDocs',
   SHOW_AGENT_CONFIG_BANNER: 'showAgentConfigBanner',
   HIDE_AGENT_CONFIG_BANNER: 'hideAgentConfigBanner',
+  SHOW_DEPENDENCY_BANNER: 'showDependencyBanner',
+  HIDE_DEPENDENCY_BANNER: 'hideDependencyBanner',
+  UPDATE_DEPENDENCY_REMINDER_SETTING: 'updateDependencyReminderSetting',
 
   // Extension response events
   CHECK_RESTORED_BASE_FILE: 'checkRestoredBaseFile',

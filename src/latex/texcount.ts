@@ -3,7 +3,7 @@ import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
 import { WorkspaceFS } from '@utils/files';
-import { executeCommand, checkToolInstalled } from '@utils/system';
+import { runToolWithCheck } from '@utils/system';
 
 const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);
@@ -15,7 +15,7 @@ logger.initialize(CHANNEL);
  */
 async function hasChinesePackages(filePath: string): Promise<boolean> {
   try {
-    const content = await WorkspaceFS.readFile(filePath);
+    const content = await WorkspaceFS.read(filePath);
     const chinesePackages = [
       'xeCJK',
       'ctexart',
@@ -52,11 +52,6 @@ export async function getTeXCount(
   channel: string = CHANNEL,
 ): Promise<string | null> {
   try {
-    // Check if texcount is installed
-    if (!(await checkToolInstalled('texcount'))) {
-      return null;
-    }
-
     // Convert single path to array
     const paths = Array.isArray(filePaths) ? filePaths : [filePaths];
     const allOutputs: string[] = [];
@@ -75,26 +70,30 @@ export async function getTeXCount(
         continue;
       }
 
-      const command = ['texcount'];
+      const args: string[] = [];
       if (merge) {
-        command.push('-merge');
+        args.push('-merge');
       }
 
       // Add Chinese counting support if Chinese packages are detected
       if (await hasChinesePackages(filePath)) {
-        command.push('-ch-only'); // Use Chinese-only mode for accurate character counting
+        args.push('-ch-only'); // Use Chinese-only mode for accurate character counting
         logger.debug(
           channel,
           `Chinese packages detected in ${filePath}, enabling Chinese character counting`,
         );
       }
 
-      command.push(filePath);
+      args.push(filePath);
 
-      const result = await executeCommand(command, {
+      const result = await runToolWithCheck('texcount', args, {
         channel,
         truncate: false, // Don't truncate texcount output as we need the full statistics
+        showError: true, // Show error for missing texcount
       });
+      if (!result) {
+        return null;
+      }
       if (result.success && result.stdout) {
         allOutputs.push(`TeX Count Results for ${filePath}:\n${result.stdout}`);
         logger.debug(channel, `Successfully counted ${filePath}`);

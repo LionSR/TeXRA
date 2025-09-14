@@ -2,7 +2,6 @@
 // (none needed)
 
 // Third-party imports
-import OpenAI from 'openai';
 
 // Local imports - agent
 import { ToolState } from '../core/ToolState';
@@ -16,14 +15,6 @@ import { K_SLICE } from '@utils/config';
  * Handler for xAI models using OpenAI-compatible API.
  */
 export class ModelHandlerXAI extends ModelHandlerOpenAI {
-  /** Returns OpenAI client configured with xAI's base URL. */
-  async getClient(): Promise<OpenAI> {
-    const apiKey = await this.getApiKey();
-    const baseURL = this.getBaseUrl();
-    this.logger.debug(`Using xAI API key. Base URL: ${baseURL}`);
-    return new OpenAI({ apiKey, baseURL });
-  }
-
   /**
    * Process thinking blocks for xAI models
    * @param responseObject The raw response object from the model
@@ -88,10 +79,6 @@ export class ModelHandlerXAI extends ModelHandlerOpenAI {
     );
 
     return reasoningContent;
-  }
-
-  extractToolUse(_responseObject: any): string | null {
-    return null;
   }
 
   /** Extracts response text and usage statistics from API response. */

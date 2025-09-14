@@ -44,6 +44,12 @@ export function getExtraDirs(): string[] {
       'C:\\Program Files\\MiKTeX\\miktex\\bin',
       'C:\\Program Files (x86)\\MiKTeX\\miktex\\bin',
       'C:\\Program Files (x86)\\MiKTeX 2.9\\miktex\\bin',
+      'C:\\Program Files\\gs\\gs9.56.1\\bin',
+      'C:\\Program Files\\gs\\gs9.55.0\\bin',
+      'C:\\Program Files\\gs\\gs9.54.0\\bin',
+      'C:\\Program Files (x86)\\gs\\gs9.56.1\\bin',
+      'C:\\Program Files (x86)\\gs\\gs9.55.0\\bin',
+      'C:\\Program Files (x86)\\gs\\gs9.54.0\\bin',
     );
     const localAppData = process.env.LOCALAPPDATA;
     if (localAppData) {
@@ -211,8 +217,14 @@ export function findToolInCommonPaths(tool: string): string | null {
   if (!tool.toLowerCase().endsWith('.pl')) {
     candidates.push(`${tool}.pl`);
   }
-  if (process.platform === 'win32' && !tool.toLowerCase().endsWith('.exe')) {
-    candidates.unshift(`${tool}.exe`);
+  if (process.platform === 'win32') {
+    // Special handling for Ghostscript on Windows
+    if (tool === 'gs') {
+      candidates.push('gswin64c', 'gswin32c');
+      candidates.push('gswin64c.exe', 'gswin32c.exe');
+    } else if (!tool.toLowerCase().endsWith('.exe')) {
+      candidates.unshift(`${tool}.exe`);
+    }
   }
 
   for (const dir of getExtraDirs()) {

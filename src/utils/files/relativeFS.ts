@@ -7,6 +7,9 @@ import * as vscode from 'vscode';
 // Local imports - log
 import * as logger from '@logger/logUtils';
 
+// Local imports - utils
+import { ensureDirCommon } from './ensureDirCommon';
+
 const CHANNEL = 'relativeFS';
 logger.initialize(CHANNEL);
 
@@ -92,17 +95,11 @@ export abstract class RelativeFS {
    * Ensure a directory exists, creating it if necessary.
    */
   public static async ensureDir(relativePath: string): Promise<void> {
-    try {
-      const exists = await this.exists(relativePath);
-      if (!exists) {
-        await this.createDir(relativePath);
-      }
-    } catch (err) {
-      if (err instanceof vscode.FileSystemError && err.code === 'FileExists') {
-        return;
-      }
-      throw err;
-    }
+    await ensureDirCommon(
+      relativePath,
+      this.exists.bind(this),
+      this.createDir.bind(this),
+    );
   }
 
   /**

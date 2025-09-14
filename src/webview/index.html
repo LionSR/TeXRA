@@ -21,6 +21,7 @@
           "./modules/uiManagers/FileInputManager.js": "${fileInputManagerUri}",
           "./modules/uiManagers/ActionButtonManager.js": "${actionButtonManagerUri}",
           "./modules/uiManagers/SettingsButtonManager.js": "${settingsButtonManagerUri}",
+          "./modules/uiManagers/BannerManager.js": "${bannerManagerUri}",
           "./modules/uiManagers/RecordingManager.js": "${recordingManagerUri}",
           "./modules/uiManagers/InstructionManager.js": "${instructionManagerUri}",
           "./modules/uiManagers/OutputFilesManager.js": "${outputFilesManagerUri}",
@@ -35,10 +36,14 @@
           "@common/webviewContext.js": "${webviewContextUri}",
           "@common/webviewState.js": "${webviewStateUri}",
           "@common/webview/commands.js": "${commandsUri}",
+          "@common/webview/themeHandlers.js": "${webviewThemeHandlersUri}",
           "@common/templateUtils.js": "${templateUtilsUri}",
           "@common/iconButtonInitializer.js": "${iconButtonInitializerUri}",
           "@common/domUtils.js": "${domUtilsUri}",
+          "@common/BaseDomHandler.js": "${baseDomHandlerUri}",
           "@common/stringUtils.js": "${stringUtilsUri}",
+          "@common/iconConstants.js": "${iconConstantsUri}",
+          "@common/BaseWebviewMessageHandler.js": "${baseWebviewMessageHandlerUri}",
           "sortablejs": "https://cdn.skypack.dev/sortablejs",
           "nanoid": "https://cdn.skypack.dev/nanoid"
         }
@@ -538,6 +543,32 @@
               data-icon="book"
             >
               API Key Guide
+            </button>
+          </div>
+        </div>
+
+        <!-- Dependency Banner -->
+        <div
+          id="dependencyBanner"
+          class="dependency-banner"
+          style="display: none"
+        >
+          <span>Required dependencies are missing.</span>
+          <div class="actions">
+            <button
+              id="dependencyDocsButton"
+              class="vscode-button"
+              data-icon="book"
+            >
+              Installation Guide
+            </button>
+            <button
+              id="dependencyDismissButton"
+              class="vscode-button secondary"
+              data-icon="close"
+              title="Dismiss (can be re-enabled in settings)"
+            >
+              Dismiss
             </button>
           </div>
         </div>

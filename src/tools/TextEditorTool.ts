@@ -5,18 +5,16 @@ import * as path from 'path';
 // Third-party imports
 import * as vscode from 'vscode';
 import { z } from 'zod';
-import { zodToJsonSchema } from 'zod-to-json-schema';
+import { defineTool } from './core/define';
 
 // Local imports - tools
 
 // Local imports - core
-import { BaseTool } from './core/base';
 import { ToolResult, CLIResult, ToolError } from './result';
 import { ToolCallInput, EditorCommand, FileHistoryEntry } from './types';
 
 // Local imports - Log
 import * as logger from '@logger/logUtils';
-import type { ToolDefinition } from '@model';
 
 // Local imports - utilities
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
@@ -40,7 +38,11 @@ export type TextEditorInput = z.infer<typeof TextEditorInputSchema>;
 /**
  * Implementation of Anthropic's text editor tool for VS Code
  */
-export class TextEditorTool extends BaseTool<TextEditorInput> {
+export class TextEditorTool extends defineTool({
+  name: 'str_replace_editor',
+  description: 'Edit files using search and replace or insertion operations',
+  schema: TextEditorInputSchema,
+}) {
   // Tool type and name
   private apiType:
     | 'text_editor_20250124'
@@ -65,13 +67,7 @@ export class TextEditorTool extends BaseTool<TextEditorInput> {
       apiType === 'text_editor_20250429'
         ? 'str_replace_based_edit_tool'
         : 'str_replace_editor';
-    const definition: ToolDefinition = {
-      name,
-      description:
-        'Edit files using search and replace or insertion operations',
-      parameters: zodToJsonSchema(TextEditorInputSchema),
-    };
-    super(definition, TextEditorInputSchema);
+    super({ name });
     this.apiType = apiType;
     this.name = name;
   }
@@ -231,7 +227,7 @@ export class TextEditorTool extends BaseTool<TextEditorInput> {
       }
 
       // Read file contents
-      let fileContent = await WorkspaceFS.readFile(filePath);
+      let fileContent = await WorkspaceFS.read(filePath);
       let initLine = 1;
 
       // Handle view range if provided
@@ -302,7 +298,7 @@ export class TextEditorTool extends BaseTool<TextEditorInput> {
       }
 
       // Write file content
-      await WorkspaceFS.writeFile(filePath, content);
+      await WorkspaceFS.write(filePath, content);
 
       return new ToolResult({
         output: `File created successfully at: ${filePath}`,
@@ -326,7 +322,7 @@ export class TextEditorTool extends BaseTool<TextEditorInput> {
   ): Promise<ToolResult> {
     try {
       // Read file content
-      const fileContent = await WorkspaceFS.readFile(filePath);
+      const fileContent = await WorkspaceFS.read(filePath);
 
       // Expand tabs in content and search string
       const expandedFileContent = fileContent.replace(/\t/g, '    ');
@@ -364,7 +360,7 @@ export class TextEditorTool extends BaseTool<TextEditorInput> {
         expandedOldStr,
         expandedNewStr,
       );
-      await WorkspaceFS.writeFile(filePath, newFileContent);
+      await WorkspaceFS.write(filePath, newFileContent);
 
       // Create a snippet of the edited section
       const textBeforeReplacement =
@@ -412,7 +408,7 @@ export class TextEditorTool extends BaseTool<TextEditorInput> {
   ): Promise<ToolResult> {
     try {
       // Read file content
-      const fileContent = await WorkspaceFS.readFile(filePath);
+      const fileContent = await WorkspaceFS.read(filePath);
 
       // Expand tabs in content and new string
       const expandedFileContent = fileContent.replace(/\t/g, '    ');
@@ -449,7 +445,7 @@ export class TextEditorTool extends BaseTool<TextEditorInput> {
 
       // Write new content to file
       const newFileContent = newFileLines.join('\n');
-      await WorkspaceFS.writeFile(filePath, newFileContent);
+      await WorkspaceFS.write(filePath, newFileContent);
 
       // Prepare success message
       const snippetText = snippetLines.join('\n');
@@ -489,7 +485,7 @@ export class TextEditorTool extends BaseTool<TextEditorInput> {
 
       // Restore previous content
       const oldContent = history.pop()!;
-      await WorkspaceFS.writeFile(filePath, oldContent);
+      await WorkspaceFS.write(filePath, oldContent);
 
       // If the history is now empty, delete the entry
       if (history.length === 0) {

@@ -8,6 +8,7 @@ import { ELEMENT_IDS } from '../constants.js';
 import { handleCheckboxChange } from '../fileHandlers.js';
 import { mainViewState } from '../mainViewState.js';
 import { BaseUIManager } from './BaseUIManager.js';
+import { webviewEventBus } from '../eventBus.js';
 import { safeGetElementById } from '@common/domUtils.js';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
 import { vscode } from '@common/webviewContext.js';
@@ -18,12 +19,14 @@ export class SettingsButtonManager extends BaseUIManager {
     toggleManager,
     latexdiffManager,
     state = mainViewState,
+    eventBus = webviewEventBus,
   ) {
     super();
     this.vscode = vscodeInstance;
     this.toggleManager = toggleManager;
     this.latexdiffManager = latexdiffManager;
     this.state = state;
+    this.eventBus = eventBus;
   }
 
   _setupToggles() {
@@ -79,6 +82,53 @@ export class SettingsButtonManager extends BaseUIManager {
       this.vscode.postMessage({
         command: MAIN_VIEW_COMMANDS.OPEN_MODEL_SETTINGS,
       });
+    });
+  }
+
+  _setupDependencyBanner() {
+    this.addListener(ELEMENT_IDS.DEPENDENCY_DOCS_BUTTON, 'click', () => {
+      this.vscode.postMessage({
+        command: MAIN_VIEW_COMMANDS.OPEN_INSTALLATION_DOCS,
+      });
+    });
+
+    this.addListener(ELEMENT_IDS.DEPENDENCY_DISMISS_BUTTON, 'click', () => {
+      // Hide the banner
+      const element = safeGetElementById(ELEMENT_IDS.DEPENDENCY_BANNER);
+      if (element) {
+        element.style.setProperty('display', 'none');
+      }
+      // Update the setting to disable future reminders
+      this.vscode.postMessage({
+        command: MAIN_VIEW_COMMANDS.UPDATE_DEPENDENCY_REMINDER_SETTING,
+        value: false,
+      });
+    });
+
+    this.eventBus.addEventListener('showDependencyBanner', (e) => {
+      const missing = e.detail?.missingTools || [];
+      const element = safeGetElementById(ELEMENT_IDS.DEPENDENCY_BANNER);
+      if (element) {
+        const textSpan = element.querySelector('span');
+        if (textSpan) {
+          // Format the display of missing tools more nicely
+          const formattedTools = missing.map((tool) => {
+            if (tool === 'gm/magick') {
+              return 'GraphicsMagick or ImageMagick';
+            }
+            return tool;
+          });
+          textSpan.textContent = `Missing dependencies: ${formattedTools.join(', ')}`;
+        }
+        element.style.setProperty('display', 'flex');
+      }
+    });
+
+    this.eventBus.addEventListener('hideDependencyBanner', () => {
+      const element = safeGetElementById(ELEMENT_IDS.DEPENDENCY_BANNER);
+      if (element) {
+        element.style.setProperty('display', 'none');
+      }
     });
   }
 
@@ -164,5 +214,6 @@ export class SettingsButtonManager extends BaseUIManager {
     this._setupToggles();
     this._setupSettingsButtons();
     this._setupDropdowns();
+    this._setupDependencyBanner();
   }
 }

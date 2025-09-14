@@ -1,10 +1,10 @@
 import type { ZodIssue } from 'zod';
 
 // Define proper type for diagnostic information
-export type ErrorDiagnostics = 
-  | ZodIssue[]  // For validation errors
-  | { name: string; stack?: string }  // For regular errors
-  | unknown;  // For other types of diagnostics
+export type ErrorDiagnostics =
+  | ZodIssue[] // For validation errors
+  | { name: string; stack?: string } // For regular errors
+  | unknown; // For other types of diagnostics
 
 export class ToolResult {
   output?: string;
