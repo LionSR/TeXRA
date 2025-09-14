@@ -15,6 +15,7 @@ All notable changes to this project will be documented in this file.
 - Detect Ghostscript correctly on Windows and stop flagging GraphicsMagick when ImageMagick is installed
 - Show tool-use agents in the dropdown when enabled and restore agent configuration banners
 - Improve model API key banner behavior and multi-file toggle labels
+- Hide file selection notification when choosing reference, auxiliary, or media files in the main view
 
 ## [0.33.5] - 2025-09-07 💪
 
@@ -28,10 +29,6 @@ All notable changes to this project will be documented in this file.
 - Add configuration banner for missing agent files with quick setup actions
 - Add visual indicator for agents with multiple output support in dropdown
 - Replace "(no key)" with ✗ symbol for cleaner model dropdown display
-
-### Bug Fixes
-
-- Hide file selection notification when choosing reference, auxiliary, or media files in the main view
 
 ## [0.33.4] - 2025-09-03
 
