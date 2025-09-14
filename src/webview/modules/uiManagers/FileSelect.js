@@ -1,10 +1,9 @@
 // Local imports - webview
 import { ELEMENT_IDS, EDITED_FILE } from '../constants.js';
 import { safeGetElementById, safeSetElementValue } from '@common/domUtils.js';
-import { capitalize, uncapitalize } from '@common/stringUtils.js';
 import { createFromTemplate } from '@common/templateUtils.js';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
-// Local imports
+import { getSingleFileId } from '@common/domIdUtils.js';
 import { vscode } from '@common/webviewContext.js';
 
 /**
@@ -91,7 +90,7 @@ export class FileSelect {
   }
 
   handleSetCurrentFile({ fileType, filePath }) {
-    const fileId = `${uncapitalize(fileType)}File`;
+    const fileId = getSingleFileId(fileType);
     const fileDiv = document.getElementById(fileId);
     if (!fileDiv) {
       console.warn(`Element with id '${fileId}' not found`);

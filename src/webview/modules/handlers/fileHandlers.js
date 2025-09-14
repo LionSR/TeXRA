@@ -13,7 +13,12 @@ import { mainViewState } from '../mainViewState.js';
 import { fileList } from '../uiManagers/FileList.js';
 import { fileSelect } from '../uiManagers/FileSelect.js';
 import { safeSetElementValue } from '@common/domUtils.js';
-import { capitalize, uncapitalize } from '@common/stringUtils.js';
+import {
+  getSingleFileId,
+  getMultipleFilesId,
+  getMultipleFilesContainerId,
+  getToggleId,
+} from '@common/domIdUtils.js';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
 // Local imports - utilities
 import { vscode } from '@common/webviewContext.js';
@@ -85,8 +90,9 @@ export function createFileHandlers(ctx) {
   }
 
   function handleSetInputFiles(message) {
-    fileList.update('inputFiles', 'toggleInputFiles', message.files);
-    const listEl = getElement('inputFiles');
+    const listId = getMultipleFilesId('input');
+    fileList.update(listId, getToggleId(listId), message.files);
+    const listEl = getElement(listId);
     if (listEl) {
       setupFileListHandler('input', listEl);
     }
@@ -94,8 +100,9 @@ export function createFileHandlers(ctx) {
   }
 
   function handleSetReferenceFiles(message) {
-    fileList.update('referenceFiles', 'toggleReferenceFiles', message.files);
-    const listEl = getElement('referenceFiles');
+    const listId = getMultipleFilesId('reference');
+    fileList.update(listId, getToggleId(listId), message.files);
+    const listEl = getElement(listId);
     if (listEl) {
       setupFileListHandler('reference', listEl);
     }
@@ -103,8 +110,9 @@ export function createFileHandlers(ctx) {
   }
 
   function handleSetAuxiliaryFiles(message) {
-    fileList.update('auxiliaryFiles', 'toggleAuxiliaryFiles', message.files);
-    const listEl = getElement('auxiliaryFiles');
+    const listId = getMultipleFilesId('auxiliary');
+    fileList.update(listId, getToggleId(listId), message.files);
+    const listEl = getElement(listId);
     if (listEl) {
       setupFileListHandler('auxiliary', listEl);
     }
@@ -112,8 +120,9 @@ export function createFileHandlers(ctx) {
   }
 
   function handleSetMediaFiles(message) {
-    fileList.update('mediaFiles', 'toggleMediaFiles', message.files);
-    const listEl = getElement('mediaFiles');
+    const listId = getMultipleFilesId('media');
+    fileList.update(listId, getToggleId(listId), message.files);
+    const listEl = getElement(listId);
     if (listEl) {
       setupFileListHandler('media', listEl);
     }
@@ -121,9 +130,10 @@ export function createFileHandlers(ctx) {
   }
 
   function handleAddMediaFile(message) {
-    const listDiv = getElement('mediaFiles');
+    const listId = getMultipleFilesId('media');
+    const listDiv = getElement(listId);
     const existingFiles = listDiv ? fileList.getSelected(listDiv) : [];
-    fileList.update('mediaFiles', 'toggleMediaFiles', [
+    fileList.update(listId, getToggleId(listId), [
       ...existingFiles,
       message.file,
     ]);
@@ -131,10 +141,10 @@ export function createFileHandlers(ctx) {
       setupFileListHandler('media', listDiv);
     }
 
-    const container = getElement('mediaFilesContainer');
+    const container = getElement(getMultipleFilesContainerId('media'));
     if (container && container.style.display === 'none') {
       container.style.display = 'block';
-      const toggleIcon = getElement('toggleMediaFiles');
+      const toggleIcon = getElement(getToggleId(listId));
       setToggleIcon(toggleIcon, true);
     }
 
@@ -170,9 +180,9 @@ export function createFileHandlers(ctx) {
   function handleSetOpenedFiles(message) {
     if (message.fileType) {
       const fileType = message.fileType.replace('Files', '');
-      const singleFileId = `${uncapitalize(fileType)}File`;
-      const multipleFileId = `${uncapitalize(fileType)}Files`;
-      const toggleId = `toggle${capitalize(fileType)}Files`;
+      const singleFileId = getSingleFileId(fileType);
+      const multipleFileId = getMultipleFilesId(fileType);
+      const toggleId = getToggleId(multipleFileId);
 
       let filesToAdd = message.files ?? [];
       if (message.shouldFilter) {

@@ -20,6 +20,11 @@ import { fileSelect } from './FileSelect.js';
 import { outputFilesManager } from './OutputFilesManager.js';
 import { safeGetElementById, safeGetElementValue } from '@common/domUtils.js';
 import { capitalize } from '@common/stringUtils.js';
+import {
+  getSingleFileId,
+  getMultipleFilesId,
+  getToggleId,
+} from '@common/domIdUtils.js';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
 import { vscode } from '@common/webviewContext.js';
 
@@ -98,8 +103,8 @@ export class FileInputManager extends BaseUIManager {
 
   _setupMultipleFileButtons() {
     const selectors = FILE_TYPES.map((type) => ({
-      id: `${capitalize(type)}Files`,
-      selectId: type === 'output' ? INPUT_FILE : `${type}File`,
+      id: capitalize(getMultipleFilesId(type)),
+      selectId: type === 'output' ? INPUT_FILE : getSingleFileId(type),
     }));
 
     selectors.forEach(({ id, selectId }) => {
@@ -147,7 +152,7 @@ export class FileInputManager extends BaseUIManager {
 
   _setupEmptyAndToggleButtons() {
     MULTIPLE_SELECTIONS.forEach((id) => {
-      const toggleId = `toggle${capitalize(id)}`;
+      const toggleId = getToggleId(id);
       const emptyButtonId = `empty${capitalize(id)}Button`;
       this.addListener(emptyButtonId, 'click', () =>
         this.fileList.empty(id, toggleId),
@@ -189,7 +194,7 @@ export class FileInputManager extends BaseUIManager {
     ];
     types.forEach((type) => {
       this.addListener(`empty${capitalize(type)}FileButton`, 'click', () => {
-        const selectEl = safeGetElementById(`${type}File`);
+        const selectEl = safeGetElementById(getSingleFileId(type));
         if (selectEl) {
           selectEl.value = '';
           this.state.save();

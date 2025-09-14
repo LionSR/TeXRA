@@ -4,7 +4,7 @@ import {
   safeGetElementById,
   setChevronIcon,
 } from '@common/domUtils.js';
-import { capitalize } from '@common/stringUtils.js';
+import { getToggleId } from '@common/domIdUtils.js';
 import { createFromTemplate } from '@common/templateUtils.js';
 
 /**
@@ -26,7 +26,7 @@ export class FileList {
    */
   add(containerId, file) {
     const container = safeGetElementById(containerId);
-    const toggleIcon = safeGetElementById(`toggle${capitalize(containerId)}`);
+    const toggleIcon = safeGetElementById(getToggleId(containerId));
     if (!container || !toggleIcon) return;
 
     const placeholder = container.querySelector('.file-list-placeholder');
@@ -48,7 +48,7 @@ export class FileList {
           container.removeChild(fileElement);
         }
         if (container.children.length === 0) {
-          this.empty(containerId, `toggle${capitalize(containerId)}`);
+          this.empty(containerId, getToggleId(containerId));
         }
         this._saveFn();
       });
@@ -122,7 +122,7 @@ export class FileList {
     ids.forEach((id) => {
       const selectDiv = safeGetElementById(id);
       if (!selectDiv) return;
-      const toggleId = `toggle${capitalize(id)}`;
+      const toggleId = getToggleId(id);
       if (selectDiv.children.length === 0) {
         this.setVisibility(id, toggleId, false);
       }

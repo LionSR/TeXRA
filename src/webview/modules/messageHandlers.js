@@ -25,6 +25,11 @@ import {
   setChevronIcon,
 } from '@common/domUtils.js';
 import { capitalize, uncapitalize } from '@common/stringUtils.js';
+import {
+  getMultipleFilesId,
+  getMultipleFilesContainerId,
+  getToggleId,
+} from '@common/domIdUtils.js';
 import { createFromTemplate } from '@common/templateUtils.js';
 
 // Import standardized commands
@@ -434,11 +439,11 @@ export class MainViewMessageHandler {
       savedState[targetArrayName] = filesArray;
       savedState[visibilityName] = isVisible;
 
-      const multipleFilesId = `${fileType}Files`;
+      const multipleFilesId = getMultipleFilesId(fileType);
       const multipleFiles = this._getElement(multipleFilesId);
       if (filesArray.length > 0 || isVisible) {
-        const containerId = `${fileType}FilesContainer`;
-        const toggleId = `toggle${capitalize(fileType)}Files`;
+        const containerId = getMultipleFilesContainerId(fileType);
+        const toggleId = getToggleId(multipleFilesId);
 
         const container = this._getElement(containerId);
         if (container) {
