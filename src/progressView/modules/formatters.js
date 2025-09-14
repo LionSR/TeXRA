@@ -360,6 +360,9 @@ export class LogEntryFormatter {
       if (result) {
         return result;
       }
+      if (messageType === 'thinking' || messageType === 'scratchpad') {
+        return null;
+      }
     }
 
     // Default formatting for regular log messages
@@ -386,6 +389,7 @@ export class LogEntryFormatter {
   }
 
   _formatSpecialContent(content, contentType, logId, groupId, timestamp) {
+    if (!content || !content.trim()) return null;
     const parsedMarkdown = this._processMarkdownContent(content);
     const element = createFromTemplate('specialDetailsTemplate');
     if (!element) return null;

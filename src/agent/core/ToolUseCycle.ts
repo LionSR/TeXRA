@@ -130,7 +130,9 @@ export async function runToolUseCycle(
     const useStreaming = modelHandler.getStreamingConfig();
     if (thinking && !useStreaming) {
       const formatted = await xmlUtils.formatContent(thinking);
-      logger.info(formatted, groupId, MESSAGE_TYPES.THINKING);
+      if (formatted.trim().length > 0) {
+        logger.info(formatted, groupId, MESSAGE_TYPES.THINKING);
+      }
     }
 
     const toolInfo = modelHandler.extractToolUse(response);
