@@ -13,7 +13,11 @@ import { mainViewState } from '../mainViewState.js';
 import { fileList } from '../uiManagers/FileList.js';
 import { fileSelect } from '../uiManagers/FileSelect.js';
 import { safeSetElementValue } from '@common/domUtils.js';
-import { capitalize, uncapitalize } from '@common/stringUtils.js';
+import {
+  getToggleId,
+  getSingleFileId,
+  getMultipleFilesId,
+} from '@common/domIdUtils.js';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
 // Local imports - utilities
 import { vscode } from '@common/webviewContext.js';
@@ -170,9 +174,9 @@ export function createFileHandlers(ctx) {
   function handleSetOpenedFiles(message) {
     if (message.fileType) {
       const fileType = message.fileType.replace('Files', '');
-      const singleFileId = `${uncapitalize(fileType)}File`;
-      const multipleFileId = `${uncapitalize(fileType)}Files`;
-      const toggleId = `toggle${capitalize(fileType)}Files`;
+      const singleFileId = getSingleFileId(fileType);
+      const multipleFileId = getMultipleFilesId(fileType);
+      const toggleId = getToggleId(multipleFileId);
 
       let filesToAdd = message.files ?? [];
       if (message.shouldFilter) {

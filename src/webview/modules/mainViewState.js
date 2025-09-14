@@ -16,7 +16,7 @@ import {
   safeSetElementChecked,
   setChevronIcon,
 } from '@common/domUtils.js';
-import { capitalize } from '@common/stringUtils.js';
+import { getToggleId } from '@common/domIdUtils.js';
 import { CHEVRON_DOWN_CLASS } from '@common/iconConstants.js';
 import { WebviewStateManager } from '@common/webviewState.js';
 
@@ -55,7 +55,7 @@ export class MainViewState {
     }
 
     MULTIPLE_SELECTIONS.forEach((id) => {
-      const toggleId = `toggle${capitalize(id)}`;
+      const toggleId = getToggleId(id);
       fileList.setVisibility(id, toggleId, false);
       const listDiv = safeGetElementById(id);
       if (listDiv) {
@@ -120,7 +120,7 @@ export class MainViewState {
       }
 
       MULTIPLE_SELECTIONS.forEach((id) => {
-        const toggleId = `toggle${capitalize(id)}`;
+        const toggleId = getToggleId(id);
         const selectDiv = safeGetElementById(id);
         if (!selectDiv) {
           console.warn(`Element with id '${id}' not found`);
