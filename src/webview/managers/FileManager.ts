@@ -77,9 +77,7 @@ export class FileManager {
   }
 
   handleGenericFileSelected(message: any): void {
-    vscode.window.showInformationMessage(
-      `${message.command}: ${message.filePath}`,
-    );
+    logger.debug(CHANNEL, `${message.command}: ${message.filePath}`);
   }
 
   async handleRequestInputFile(webviewView: vscode.WebviewView): Promise<void> {
