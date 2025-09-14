@@ -15,6 +15,10 @@ All notable changes to this project will be documented in this file.
 - Add visual indicator for agents with multiple output support in dropdown
 - Replace "(no key)" with ✗ symbol for cleaner model dropdown display
 
+### Bug Fixes
+
+- Hide file selection notification when choosing reference, auxiliary, or media files in the main view
+
 ## [0.33.4] - 2025-09-03
 
 ### Features
