@@ -2,13 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.33.6] - 2025-09-12
+## [0.33.6] - 2025-09-14
 
 ### Features
 
 - Show a banner when required dependencies are missing and check tools before running
 - Add `kimi2` to the model list
 - Clarify output file controls in the webview
+- Improve tool-use agent infrastructure with better tool definition and parsing
 
 ### Bug Fixes
 
@@ -16,6 +17,13 @@ All notable changes to this project will be documented in this file.
 - Show tool-use agents in the dropdown when enabled and restore agent configuration banners
 - Improve model API key banner behavior and multi-file toggle labels
 - Hide file selection notification when choosing reference, auxiliary, or media files in the main view
+- Skip empty thinking logs in model reasoning display
+
+### Improvements
+
+- Updated AI SDK packages: Anthropic SDK 0.62.0, Google GenAI 1.19.0, OpenAI 5.20.2
+- Enhanced webview infrastructure with centralized theme handling and message management
+- Improved file dialog helpers for better cross-platform compatibility
 
 ## [0.33.5] - 2025-09-07 💪
 
