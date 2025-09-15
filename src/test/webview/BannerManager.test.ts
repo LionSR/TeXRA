@@ -170,7 +170,11 @@ describe('BannerManager', () => {
         <button id="agentConfigDirButton"></button>
       </div>
       <div id="dependencyBanner" style="display: none;">
-        <span></span>
+        <span class="missing-tools"></span>
+        <div class="actions">
+          <button id="dependencyRecheckButton"></button>
+          <button id="dependencyDismissButton"></button>
+        </div>
       </div>
     </body></html>`);
 
@@ -344,62 +348,66 @@ describe('BannerManager', () => {
   });
 
   describe('Dependency Banner', () => {
-    it('should display missing dependencies', () => {
+    it('should display install buttons for missing tools', () => {
       const banner = dom.window.document.getElementById('dependencyBanner');
-      const textSpan = banner.querySelector('span');
 
-      manager.showBanner('dependencyBanner', {
-        missingTools: ['latex', 'gm/magick', 'nodejs'],
-      });
+      manager.showBanner('dependencyBanner', { missingTools: ['latex'] });
 
-      assert.equal(
-        textSpan.textContent,
-        'Missing dependencies: latex, GraphicsMagick or ImageMagick, nodejs',
+      const items = banner.querySelectorAll('.dependency-item');
+      assert.equal(items.length, 1);
+      const label = items[0].querySelector('span');
+      const button = items[0].querySelector('button');
+      assert.equal(label.textContent, 'latex');
+      assert.equal(button.textContent, 'Install');
+      assert.equal(button.dataset.tool, 'latex');
+    });
+
+    it('should handle gm/magick as two separate tools', () => {
+      const banner = dom.window.document.getElementById('dependencyBanner');
+
+      manager.showBanner('dependencyBanner', { missingTools: ['gm/magick'] });
+
+      const items = banner.querySelectorAll('.dependency-item');
+      assert.equal(items.length, 2);
+      const names = Array.from(items as any).map(
+        (i: any) => i.querySelector('span').textContent,
       );
+      assert.deepEqual(names, ['GraphicsMagick', 'ImageMagick']);
     });
 
     it('should handle empty dependencies array', () => {
       const banner = dom.window.document.getElementById('dependencyBanner');
-      const textSpan = banner.querySelector('span');
+      const container = banner.querySelector('.missing-tools');
 
       manager.showBanner('dependencyBanner', { missingTools: [] });
 
-      assert.equal(textSpan.textContent, 'Missing dependencies: none');
+      assert.equal(container.textContent, 'Missing dependencies: none');
     });
 
     it('should handle missing config gracefully', () => {
       const banner = dom.window.document.getElementById('dependencyBanner');
-      const textSpan = banner.querySelector('span');
+      const container = banner.querySelector('.missing-tools');
 
       manager.showBanner('dependencyBanner');
 
-      assert.equal(textSpan.textContent, 'Missing dependencies: none');
+      assert.equal(container.textContent, 'Missing dependencies: none');
     });
 
-    it('should warn when text span is missing', () => {
+    it('should warn when required elements are missing', () => {
       const banner = dom.window.document.getElementById('dependencyBanner');
       banner.innerHTML = '';
 
-      manager.showBanner('dependencyBanner', {
-        missingTools: ['test'],
-      });
+      manager.showBanner('dependencyBanner', { missingTools: ['test'] });
 
       assert.equal(warnMessages.length, 1);
-      assert.ok(warnMessages[0].includes('missing text element'));
+      assert.ok(warnMessages[0].includes('missing required elements'));
     });
 
-    it('should properly format gm/magick tool name', () => {
+    it('should ensure re-check button exists', () => {
       const banner = dom.window.document.getElementById('dependencyBanner');
-      const textSpan = banner.querySelector('span');
-
-      manager.showBanner('dependencyBanner', {
-        missingTools: ['gm/magick'],
-      });
-
-      assert.equal(
-        textSpan.textContent,
-        'Missing dependencies: GraphicsMagick or ImageMagick',
-      );
+      manager.showBanner('dependencyBanner', { missingTools: [] });
+      const recheck = banner.querySelector('#dependencyRecheckButton');
+      assert.equal(recheck.textContent, 'Re-check');
     });
   });
 
