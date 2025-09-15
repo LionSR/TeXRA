@@ -104,6 +104,6 @@ export const ELEMENT_IDS = {
   AGENT_CONFIG_DIR_BUTTON: 'agentConfigDirButton',
   AGENT_CONFIG_DOC_BUTTON: 'agentConfigDocButton',
   DEPENDENCY_BANNER: 'dependencyBanner',
-  DEPENDENCY_DOCS_BUTTON: 'dependencyDocsButton',
+  DEPENDENCY_RECHECK_BUTTON: 'dependencyRecheckButton',
   DEPENDENCY_DISMISS_BUTTON: 'dependencyDismissButton',
 };
