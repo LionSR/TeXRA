@@ -132,23 +132,72 @@ export class BannerManager extends BaseUIManager {
    * @param {string[]} [config.missingTools] - Array of missing tool names
    */
   _setupDependencyBanner(element, config) {
-    const textSpan = element.querySelector('span');
+    const container = element.querySelector('.missing-tools');
+    const actions = element.querySelector('.actions');
 
-    if (!textSpan) {
-      console.warn('[BannerManager] Dependency banner missing text element');
+    if (!(container && actions)) {
+      console.warn(
+        '[BannerManager] Dependency banner missing required elements',
+      );
       return;
     }
 
-    const missing = config?.missingTools || [];
-    const formatted = missing.map((tool) =>
-      tool === 'gm/magick' ? 'GraphicsMagick or ImageMagick' : tool,
-    );
+    // Clear existing content
+    container.textContent = '';
 
-    if (formatted.length > 0) {
-      textSpan.textContent = `Missing dependencies: ${formatted.join(', ')}`;
+    const missing = config?.missingTools || [];
+    if (missing.length > 0) {
+      const intro = document.createElement('span');
+      intro.textContent = 'Missing dependencies:';
+      container.appendChild(intro);
+
+      missing.forEach((tool) => {
+        if (tool === 'gm/magick') {
+          this._addDependencyItem(container, 'GraphicsMagick', 'gm');
+          this._addDependencyItem(container, 'ImageMagick', 'magick');
+        } else {
+          this._addDependencyItem(container, tool, tool);
+        }
+      });
     } else {
-      textSpan.textContent = 'Missing dependencies: none';
+      container.textContent = 'Missing dependencies: none';
     }
+
+    // Ensure re-check button exists
+    let recheckButton = actions.querySelector('#dependencyRecheckButton');
+    if (!recheckButton) {
+      recheckButton = document.createElement('button');
+      recheckButton.id = 'dependencyRecheckButton';
+      recheckButton.className = 'vscode-button';
+      recheckButton.dataset.icon = 'refresh';
+      recheckButton.textContent = 'Re-check';
+      actions.insertBefore(recheckButton, actions.firstChild);
+    }
+  }
+
+  /**
+   * Add a dependency item with install button to the container.
+   * @private
+   * @param {HTMLElement} container - container for dependency items
+   * @param {string} label - Display name of the tool
+   * @param {string} tool - Tool identifier for install command
+   */
+  _addDependencyItem(container, label, tool) {
+    const item = document.createElement('div');
+    item.classList.add('dependency-item');
+
+    const nameSpan = document.createElement('span');
+    nameSpan.textContent = label;
+
+    const button = document.createElement('button');
+    button.className = 'vscode-button secondary dependency-install-button';
+    button.textContent = 'Install';
+    button.dataset.icon = 'cloud-download';
+    button.dataset.tool = tool;
+
+    item.appendChild(nameSpan);
+    item.appendChild(button);
+    container.appendChild(item);
   }
 }
 
