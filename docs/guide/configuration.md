@@ -398,7 +398,6 @@ These settings, accessible directly in the main TeXRA webview, control how agent
 
 - **Reflect** (<i class="codicon codicon-refresh"></i>): Enables CoT agents to critique/improve their output (adds round 1). Increases cost/time, potentially quality.
 - **Attach TeX Count** (<i class="codicon codicon-symbol-numeric"></i>): Includes `texcount` output (word/header/math stats) in the agent's context. Requires `texcount` installed.
-- **Use Prefill from Input** (<i class="codicon codicon-edit"></i>): Uses the input file content to prefill the instruction box (if agent supports it).
 - **Print Input Prompt** (<i class="codicon codicon-file-code"></i>): Adds the full final prompt sent to the LLM to the ProgressBoard log (useful for debugging, increases log size).
 
 **Model/Agent Selection:**
