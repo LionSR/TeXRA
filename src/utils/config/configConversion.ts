@@ -70,7 +70,6 @@ export function objectToTaskState(obj: Record<string, any>): TaskState {
     autoExtractTikzFigure,
     autoCompileInputPdf,
     attachTeXCount,
-    usePrefillFromInput,
     printInputPrompt,
     reflect,
     ...agentConfigData
@@ -93,7 +92,6 @@ export function objectToTaskState(obj: Record<string, any>): TaskState {
     ...(autoExtractTikzFigure !== undefined && { autoExtractTikzFigure }),
     ...(autoCompileInputPdf !== undefined && { autoCompileInputPdf }),
     ...(attachTeXCount !== undefined && { attachTeXCount }),
-    ...(usePrefillFromInput !== undefined && { usePrefillFromInput }),
     ...(printInputPrompt !== undefined && { printInputPrompt }),
     ...(reflect !== undefined && { reflect }),
   };

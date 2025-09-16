@@ -349,8 +349,6 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
         state.attachTeXCount ?? toolConfig.attachTeXCount ?? false,
       attachDiagnostics:
         state.attachDiagnostics ?? toolConfig.attachDiagnostics ?? false,
-      usePrefillFromInput:
-        state.usePrefillFromInput ?? toolConfig.usePrefillFromInput ?? false,
       printInputPrompt:
         state.printInputPrompt ?? toolConfig.printInputPrompt ?? false,
       autoCompileInputPdf:
