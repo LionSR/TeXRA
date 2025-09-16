@@ -18,11 +18,7 @@ import {
   getPrefillForRound,
   getReflectPromptForRound,
 } from '@agent/utils/promptHelpers';
-import {
-  renderPrompt,
-  getFirstKCharsFromDocument,
-  writePromptToXml,
-} from '@agent/utils/promptUtils';
+import { renderPrompt, writePromptToXml } from '@agent/utils/promptUtils';
 import { bus } from '@eventBus/ProgressEventBus';
 // Standard library imports
 // (none needed)
@@ -39,9 +35,6 @@ import type { ToolDefinition } from '@model';
 
 // System imports - common utilities
 import { getConfig } from '@utils/config';
-
-// Shared constants
-import { K_SLICE } from '@utils/config';
 
 // Local imports - utilities
 import { calculateTotalRounds } from '@agent/utils/roundUtils';
@@ -235,14 +228,6 @@ export abstract class BaseReflectionAgent extends BaseAgent {
     this.logger.debug(`Processing round ${currRound}`);
 
     return this.withRoundGroup(`r${currRound}`, async (roundGroupId) => {
-      // Handle prefill from input if enabled
-      if (this.agentConfig.toolConfig.usePrefillFromInput) {
-        toolState.firstKCharsFromInput = await getFirstKCharsFromDocument(
-          this.agentConfig.inputFile,
-          K_SLICE,
-        );
-      }
-
       const extraMedia: string[] = [];
       if (this.modelHandler.capabilities.supportsVision) {
         if (
@@ -421,13 +406,6 @@ export abstract class BaseReflectionAgent extends BaseAgent {
             toolState,
           );
         }
-      }
-
-      if (this.agentConfig.toolConfig.usePrefillFromInput) {
-        toolState.firstKCharsFromInput = await getFirstKCharsFromDocument(
-          this.agentConfig.inputFile,
-          K_SLICE,
-        );
       }
 
       // Initialize round
