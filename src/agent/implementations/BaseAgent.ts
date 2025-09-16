@@ -162,6 +162,32 @@ export abstract class BaseAgent implements IAgent {
   }
 
   /**
+   * Run a callback within a nested log group tied to the current run.
+   * @param groupLabel Label to use for the new log group
+   * @param callback Callback to execute with the created group ID
+   */
+  protected async withRoundGroup<T>(
+    groupLabel: string,
+    callback: (groupId: string) => Promise<T>,
+  ): Promise<T> {
+    const groupId = await this.logger.startGroup(
+      groupLabel,
+      undefined,
+      this.runGroupId,
+    );
+
+    let status: 'stopped' | 'error' = 'stopped';
+    try {
+      return await callback(groupId);
+    } catch (error) {
+      status = 'error';
+      throw error;
+    } finally {
+      this.logger.endGroup(groupId, status);
+    }
+  }
+
+  /**
    * Start a log group for this agent's run and store its ID.
    * @param parentGroupId Optional parent group
    * @returns The created group ID
