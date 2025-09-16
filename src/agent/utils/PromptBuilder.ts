@@ -5,11 +5,7 @@ import type { AgentPrompt, AgentSetting } from '@agent/core/AgentDataclass';
 import type { AgentLogger } from '@logger/AgentLogger';
 
 // Local imports - utilities
-import {
-  getPrefillForRound,
-  getReflectPromptForRound,
-  getSystemPromptWithRules,
-} from './promptHelpers';
+import { getSystemPromptWithRules } from './promptHelpers';
 import { renderPrompt } from './promptUtils';
 
 /**
@@ -57,15 +53,36 @@ export class PromptBuilder {
    * Render the reflection prompt for the supplied round.
    *
    * @param currRound The reflection round (1-indexed for reflection rounds)
+   * @remarks Falls back to the first reflection template when a later round is undefined.
    */
   public async buildReflectPrompt(currRound: number): Promise<string> {
-    const reflectTemplate = getReflectPromptForRound(
-      this.agentPrompt,
-      currRound,
-    );
+    const groupId = this.logger?.getActiveGroupId();
+    const { userReflect } = this.agentPrompt;
+    const normalizedRound = Math.max(1, currRound);
+
+    let reflectTemplate: string | undefined;
+
+    if (Array.isArray(userReflect)) {
+      const index = normalizedRound - 1;
+      reflectTemplate = userReflect[index];
+
+      if (reflectTemplate === undefined) {
+        const fallback = userReflect[0];
+
+        if (fallback) {
+          this.logger?.debug(
+            `No reflection prompt configured for round ${currRound}. Falling back to first template.`,
+            groupId,
+          );
+        }
+
+        reflectTemplate = fallback;
+      }
+    } else {
+      reflectTemplate = userReflect;
+    }
 
     if (!reflectTemplate) {
-      const groupId = this.logger?.getActiveGroupId();
       this.logger?.warn(
         `No reflection prompt configured for round ${currRound}. Returning empty prompt.`,
         groupId,
@@ -80,9 +97,26 @@ export class PromptBuilder {
    * Return the prefill value that should seed the assistant response.
    *
    * @param currRound The current round number (0-based for process, 1+ for reflection)
+   * @remarks Reuses the first configured prefill when subsequent rounds omit a value.
    */
   public async buildPrefill(currRound: number): Promise<string> {
-    return getPrefillForRound(this.agentSetting.prefills, currRound);
+    const prefills = this.agentSetting.prefills;
+    if (!prefills || prefills.length === 0) {
+      return '';
+    }
+
+    const normalizedRound = Math.max(0, currRound);
+    if (normalizedRound < prefills.length) {
+      return prefills[normalizedRound] ?? '';
+    }
+
+    const groupId = this.logger?.getActiveGroupId();
+    this.logger?.debug(
+      `No prefill configured for round ${currRound}. Reusing first prefill.`,
+      groupId,
+    );
+
+    return prefills[0] ?? '';
   }
 }
 
