@@ -554,14 +554,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
     let endTurn = false;
 
     if (!(await WorkspaceFS.existsAndNonTrivial(outputFile))) {
-      if (
-        agentConfig.toolConfig.usePrefillFromInput &&
-        toolState.firstKCharsFromInput
-      ) {
-        prefill += toolState.firstKCharsFromInput;
-        toolState.updateAccumulatedOutput(toolState.firstKCharsFromInput);
-      }
-
       if (this.capabilities.supportsAssistantPrefill) {
         this.logger.debug(`Adding prefill message:\n${prefill}`);
         if (

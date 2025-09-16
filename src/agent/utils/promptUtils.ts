@@ -132,28 +132,6 @@ export async function renderPrompt(
 }
 
 /**
- * Get the first K characters from a document
- * @param inputFile Path to the input file
- * @param k Number of characters to return
- * @returns First K characters from the document, stripped of whitespace, or null if file cannot be read
- */
-export async function getFirstKCharsFromDocument(
-  inputFile: string,
-  k: number,
-): Promise<string | null> {
-  try {
-    const content = await WorkspaceFS.read(inputFile);
-    return content ? content.slice(0, k).trim() : null;
-  } catch (err) {
-    logger.error(
-      CHANNEL,
-      `Error reading first ${k} chars from ${inputFile}: ${err instanceof Error ? err.message : String(err)}`,
-    );
-    return null;
-  }
-}
-
-/**
  * Write the model's input prompt to an XML file
  * @param systemPrompt The system prompt
  * @param userPrefix The user prefix
