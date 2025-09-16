@@ -30,7 +30,7 @@ TeXRA's logging interface that shows detailed information about the processing s
 
 ### Tool Config
 
-Settings that control how TeXRA interacts with external tools and processes, including reflection, TeX counting, and prefilling options.
+Settings that control how TeXRA interacts with external tools and processes, including reflection, TeX counting, and prompt logging options.
 
 ### Auto Extract
 

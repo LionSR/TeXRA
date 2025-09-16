@@ -20,7 +20,6 @@ export const AUTO_EXTRACT_FIELDS = [
 ] as const;
 export const TOOL_CONFIG_FIELDS = [
   'attachTeXCount',
-  'usePrefillFromInput',
   'printInputPrompt',
   'reflect',
 ] as const;
