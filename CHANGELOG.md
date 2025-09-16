@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Features
+
+- Add install actions and re-check option to dependency banner
+
 ## [0.33.6] - 2025-09-14
 
 ### Features

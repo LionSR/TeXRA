@@ -98,6 +98,7 @@ const TOOL_CONFIGS: Record<string, ToolConfig> = {
     errorMessage:
       'ImageMagick is not installed. Please install ImageMagick to use PDF to PNG conversion.\n' +
       MAGICK_INSTRUCTIONS,
+    openDocsCommand: 'texra.openDoc,installation',
   },
 
   // GraphicsMagick
@@ -106,6 +107,7 @@ const TOOL_CONFIGS: Record<string, ToolConfig> = {
     errorMessage:
       'GraphicsMagick is not installed. Please install GraphicsMagick to use PDF to PNG conversion.\n' +
       GM_INSTRUCTIONS,
+    openDocsCommand: 'texra.openDoc,installation',
   },
 
   // System dependencies
@@ -345,6 +347,15 @@ export async function checkMultipleToolsInstalled(
     configs.map((config) => checkToolInstalled(config, showError)),
   );
   return results;
+}
+
+/**
+ * Get the documentation command for a given tool.
+ * @param tool Tool identifier
+ * @returns Command string or undefined if not available
+ */
+export function getToolDocsCommand(tool: string): string | undefined {
+  return TOOL_CONFIGS[tool]?.openDocsCommand;
 }
 
 /**
