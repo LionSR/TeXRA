@@ -3,9 +3,6 @@ export interface IToolState {
   /** Statistics about TeX document structure */
   texcountStats: string | null;
 
-  /** First K lines of TeX document */
-  firstKCharsFromInput: string | null;
-
   /** Most recent model response */
   lastResponse: string;
 
@@ -29,7 +26,6 @@ export interface IToolState {
 /** Manages tool-specific runtime state and operations within a conversation round. */
 export class ToolState implements IToolState {
   texcountStats: string | null;
-  firstKCharsFromInput: string | null;
   lastResponse: string;
   accumulatedOutput: string;
   mediaFiles: string[];
@@ -46,7 +42,6 @@ export class ToolState implements IToolState {
 
   constructor() {
     this.texcountStats = null;
-    this.firstKCharsFromInput = null;
     this.lastResponse = '';
     this.accumulatedOutput = '';
     this.mediaFiles = [];
