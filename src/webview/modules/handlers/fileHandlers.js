@@ -9,7 +9,11 @@ import { mainViewState } from '../mainViewState.js';
 import { fileList } from '../uiManagers/FileList.js';
 import { fileSelect } from '../uiManagers/FileSelect.js';
 import { safeSetElementValue } from '@common/domUtils.js';
-import { capitalize, uncapitalize } from '@common/stringUtils.js';
+import {
+  getMultipleFilesId,
+  getSingleFileId,
+  getToggleId,
+} from '@common/domIdUtils.js';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
 // Local imports - utilities
 
@@ -46,17 +50,19 @@ export function createFileHandlers(ctx) {
 
   for (const fileType of FILE_TYPES) {
     const listId =
-      fileType === 'output' ? ELEMENT_IDS.OUTPUT_FILES : `${fileType}Files`;
+      fileType === 'output'
+        ? ELEMENT_IDS.OUTPUT_FILES
+        : getMultipleFilesId(fileType);
     const toggleId =
       fileType === 'output'
         ? ELEMENT_IDS.TOGGLE_OUTPUT_FILES
-        : `toggle${capitalize(fileType)}Files`;
+        : getToggleId(fileType);
 
     handlers[MAIN_VIEW_COMMANDS[`SET_${fileType.toUpperCase()}_FILES`]] =
       createSetFilesHandler(fileType, listId, toggleId);
 
     if (fileType !== 'output') {
-      const domId = `${fileType}File`;
+      const domId = getSingleFileId(fileType);
       handlers[MAIN_VIEW_COMMANDS[`SET_${fileType.toUpperCase()}_FILE`]] =
         createSetFileHandler(fileType, domId);
       handlers[MAIN_VIEW_COMMANDS[`${fileType.toUpperCase()}_FILE_SELECTED`]] =
@@ -115,9 +121,9 @@ export function createFileHandlers(ctx) {
   function handleSetOpenedFiles(message) {
     if (message.fileType) {
       const fileType = message.fileType.replace('Files', '');
-      const singleFileId = `${uncapitalize(fileType)}File`;
-      const multipleFileId = `${uncapitalize(fileType)}Files`;
-      const toggleId = `toggle${capitalize(fileType)}Files`;
+      const singleFileId = getSingleFileId(fileType);
+      const multipleFileId = getMultipleFilesId(fileType);
+      const toggleId = getToggleId(fileType);
 
       let filesToAdd = message.files ?? [];
       if (message.shouldFilter) {

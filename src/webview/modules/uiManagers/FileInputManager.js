@@ -20,6 +20,16 @@ import { fileSelect } from './FileSelect.js';
 import { outputFilesManager } from './OutputFilesManager.js';
 import { safeGetElementById, safeGetElementValue } from '@common/domUtils.js';
 import { capitalize } from '@common/stringUtils.js';
+import {
+  getAddOpenedButtonId,
+  getCurrentFileButtonId,
+  getEmptyMultipleButtonId,
+  getEmptySingleButtonId,
+  getMultipleFilesId,
+  getSelectMultipleButtonId,
+  getSingleFileId,
+  getToggleId,
+} from '@common/domIdUtils.js';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
 import { vscode } from '@common/webviewContext.js';
 
@@ -41,13 +51,12 @@ export class FileInputManager extends BaseUIManager {
   }
 
   _getFileIds(type) {
-    const cap = capitalize(type);
     const ids = {
-      singleId: `${type}File`,
-      emptySingleId: `empty${cap}FileButton`,
-      listId: `${type}Files`,
-      toggleId: `toggle${cap}Files`,
-      emptyListId: `empty${cap}FilesButton`,
+      singleId: getSingleFileId(type),
+      emptySingleId: getEmptySingleButtonId(type),
+      listId: getMultipleFilesId(type),
+      toggleId: getToggleId(type),
+      emptyListId: getEmptyMultipleButtonId(type),
     };
 
     if (type === 'output') {
@@ -122,17 +131,18 @@ export class FileInputManager extends BaseUIManager {
 
   _setupMultipleFileButtons() {
     const selectors = FILE_TYPES.map((type) => ({
-      id: `${capitalize(type)}Files`,
-      selectId: type === 'output' ? INPUT_FILE : `${type}File`,
+      type,
+      commandType: `${capitalize(type)}Files`,
+      selectId: type === 'output' ? INPUT_FILE : getSingleFileId(type),
     }));
 
-    selectors.forEach(({ id, selectId }) => {
-      const buttonId = `select${id}Button`;
+    selectors.forEach(({ type, commandType, selectId }) => {
+      const buttonId = getSelectMultipleButtonId(type);
       this.addListener(buttonId, 'click', () => {
         const currentFile = safeGetElementValue(selectId);
         this.vscode.postMessage({
           command: MAIN_VIEW_COMMANDS.SELECT_MULTIPLE_FILES,
-          fileType: id,
+          fileType: commandType,
           currentFile,
         });
       });
@@ -146,23 +156,20 @@ export class FileInputManager extends BaseUIManager {
 
     const buttonConfigs = [
       {
-        prefix: 'addOpened',
-        suffix: 'FilesButton',
+        getId: getAddOpenedButtonId,
         command: MAIN_VIEW_COMMANDS.ADD_OPENED_FILES,
         types: baseTypes,
       },
       {
-        prefix: 'current',
-        suffix: 'FileButton',
+        getId: getCurrentFileButtonId,
         command: MAIN_VIEW_COMMANDS.GET_CURRENT_FILE,
         types: [...baseTypes, 'base', 'edited'],
       },
     ];
 
-    buttonConfigs.forEach(({ prefix, suffix, command, types }) => {
+    buttonConfigs.forEach(({ getId, command, types }) => {
       types.forEach((type) => {
-        const cap = capitalize(type);
-        const id = `${prefix}${cap}${suffix}`;
+        const id = getId(type);
         this.addListener(id, 'click', () => {
           const payload = { command, fileType: type };
           if (

@@ -4,7 +4,10 @@ import {
   safeGetElementById,
   setChevronIcon,
 } from '@common/domUtils.js';
-import { capitalize } from '@common/stringUtils.js';
+import {
+  getMultipleFilesContainerId,
+  getToggleId,
+} from '@common/domIdUtils.js';
 import { createFromTemplate } from '@common/templateUtils.js';
 
 /**
@@ -26,7 +29,7 @@ export class FileList {
    */
   add(containerId, file) {
     const container = safeGetElementById(containerId);
-    const toggleIcon = safeGetElementById(`toggle${capitalize(containerId)}`);
+    const toggleIcon = safeGetElementById(getToggleId(containerId));
     if (!container || !toggleIcon) return;
 
     const placeholder = container.querySelector('.file-list-placeholder');
@@ -48,7 +51,7 @@ export class FileList {
           container.removeChild(fileElement);
         }
         if (container.children.length === 0) {
-          this.empty(containerId, `toggle${capitalize(containerId)}`);
+          this.empty(containerId, getToggleId(containerId));
         }
         this._saveFn();
       });
@@ -70,7 +73,7 @@ export class FileList {
       listDiv.style.display = 'block';
       setChevronIcon(toggleIcon, true);
 
-      const container = safeGetElementById(`${listId}Container`);
+      const container = safeGetElementById(getMultipleFilesContainerId(listId));
       if (container) {
         container.style.display = 'block';
       }
@@ -86,7 +89,9 @@ export class FileList {
 
   /** Show or hide a file list container */
   setVisibility(containerId, toggleId, isVisible) {
-    const container = safeGetElementById(`${containerId}Container`);
+    const container = safeGetElementById(
+      getMultipleFilesContainerId(containerId),
+    );
     const toggleIcon = safeGetElementById(toggleId);
     if (!container || !toggleIcon) return;
     container.style.display = isVisible ? 'block' : 'none';
@@ -95,7 +100,9 @@ export class FileList {
 
   /** Toggle visibility of a file list container */
   toggle(containerId, toggleId) {
-    const container = safeGetElementById(`${containerId}Container`);
+    const container = safeGetElementById(
+      getMultipleFilesContainerId(containerId),
+    );
     if (!container) return;
     const isVisible = container.style.display !== 'none';
     this.setVisibility(containerId, toggleId, !isVisible);
@@ -105,7 +112,9 @@ export class FileList {
   /** Empty all files from a container and hide it */
   empty(containerId, toggleId) {
     const listDiv = safeGetElementById(containerId);
-    const container = safeGetElementById(`${containerId}Container`);
+    const container = safeGetElementById(
+      getMultipleFilesContainerId(containerId),
+    );
     if (!listDiv || !container) return;
 
     listDiv.innerHTML = '';
@@ -122,7 +131,7 @@ export class FileList {
     ids.forEach((id) => {
       const selectDiv = safeGetElementById(id);
       if (!selectDiv) return;
-      const toggleId = `toggle${capitalize(id)}`;
+      const toggleId = getToggleId(id);
       if (selectDiv.children.length === 0) {
         this.setVisibility(id, toggleId, false);
       }

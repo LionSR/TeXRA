@@ -1,4 +1,5 @@
 // Local imports - webview
+import { getMultipleFilesId } from '@common/domIdUtils.js';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
 
 // Basic file types
@@ -28,7 +29,9 @@ export const SINGLE_FILE_ELEMENTS = [
 ];
 
 // Multiple file selection element IDs (derived from FILE_TYPES)
-export const MULTIPLE_SELECTIONS = FILE_TYPES.map((type) => `${type}Files`);
+export const MULTIPLE_SELECTIONS = FILE_TYPES.map((type) =>
+  getMultipleFilesId(type),
+);
 
 // Auto extract checkboxes
 export const CHECK_BOXES_AUTO_EXTRACT = [

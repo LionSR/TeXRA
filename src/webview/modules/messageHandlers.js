@@ -25,8 +25,13 @@ import {
   safeGetElementById,
   setChevronIcon,
 } from '@common/domUtils.js';
-import { capitalize, uncapitalize } from '@common/stringUtils.js';
+import { capitalize } from '@common/stringUtils.js';
 import { createFromTemplate } from '@common/templateUtils.js';
+import {
+  getMultipleFilesContainerId,
+  getMultipleFilesId,
+  getToggleId,
+} from '@common/domIdUtils.js';
 
 // Import standardized commands
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
@@ -368,16 +373,16 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
         state[`multiple${capitalize(fileType)}FilesActive`] ||
         false;
 
-      const targetArrayName = `${fileType}Files`;
+      const targetArrayName = getMultipleFilesId(fileType);
       const visibilityName = `${targetArrayName}Active`;
       savedState[targetArrayName] = filesArray;
       savedState[visibilityName] = isVisible;
 
-      const multipleFilesId = `${fileType}Files`;
+      const multipleFilesId = getMultipleFilesId(fileType);
       const multipleFiles = this._getElement(multipleFilesId);
       if (filesArray.length > 0 || isVisible) {
-        const containerId = `${fileType}FilesContainer`;
-        const toggleId = `toggle${capitalize(fileType)}Files`;
+        const containerId = getMultipleFilesContainerId(fileType);
+        const toggleId = getToggleId(fileType);
 
         const container = this._getElement(containerId);
         if (container) {
