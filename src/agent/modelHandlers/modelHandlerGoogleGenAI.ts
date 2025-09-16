@@ -866,19 +866,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       this.logger.debug(
         `Output file ${outputFile} does not exist or is empty.`,
       );
-      if (
-        agentConfig.toolConfig.usePrefillFromInput &&
-        toolState.firstKCharsFromInput
-      ) {
-        prefill = `<${agentSetting.documentTag}>${toolState.firstKCharsFromInput}`;
-        toolState.updateAccumulatedOutput(prefill);
-        this.logger.debug(
-          `Using prefill from input file, updated prefill and toolState.`,
-        );
-      } else {
-        toolState.updateAccumulatedOutput(prefill);
-        // this.logger.debug(`Using standard prefill, updated toolState.`);
-      }
+      toolState.updateAccumulatedOutput(prefill);
 
       // Add pseudo-prefill instruction instead of skipping it
       const lastMessage = messages[messages.length - 1];
