@@ -25,7 +25,12 @@ import {
   safeGetElementById,
   setChevronIcon,
 } from '@common/domUtils.js';
-import { capitalize, uncapitalize } from '@common/stringUtils.js';
+import {
+  getFilesContainerId,
+  getMultipleFilesId,
+  getToggleId,
+} from '@common/domIdUtils.js';
+import { capitalize } from '@common/stringUtils.js';
 import { createFromTemplate } from '@common/templateUtils.js';
 
 // Import standardized commands
@@ -373,18 +378,20 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       savedState[targetArrayName] = filesArray;
       savedState[visibilityName] = isVisible;
 
-      const multipleFilesId = `${fileType}Files`;
+      const multipleFilesId = getMultipleFilesId(fileType);
+      if (!multipleFilesId) continue;
+
       const multipleFiles = this._getElement(multipleFilesId);
       if (filesArray.length > 0 || isVisible) {
-        const containerId = `${fileType}FilesContainer`;
-        const toggleId = `toggle${capitalize(fileType)}Files`;
+        const containerId = getFilesContainerId(fileType);
+        const toggleId = getToggleId(fileType);
 
-        const container = this._getElement(containerId);
+        const container = containerId ? this._getElement(containerId) : null;
         if (container) {
           container.style.display = isVisible ? 'block' : 'none';
         }
 
-        const toggleElement = this._getElement(toggleId);
+        const toggleElement = toggleId ? this._getElement(toggleId) : null;
         this._setToggleIcon(toggleElement, isVisible);
 
         if (filesArray.length > 0 && multipleFiles) {

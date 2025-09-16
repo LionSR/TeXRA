@@ -9,7 +9,12 @@ import { mainViewState } from '../mainViewState.js';
 import { fileList } from '../uiManagers/FileList.js';
 import { fileSelect } from '../uiManagers/FileSelect.js';
 import { safeSetElementValue } from '@common/domUtils.js';
-import { capitalize, uncapitalize } from '@common/stringUtils.js';
+import {
+  getFilesContainerId,
+  getMultipleFilesId,
+  getSingleFileId,
+  getToggleId,
+} from '@common/domIdUtils.js';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
 // Local imports - utilities
 
@@ -45,22 +50,21 @@ export function createFileHandlers(ctx) {
   const handlers = {};
 
   for (const fileType of FILE_TYPES) {
-    const listId =
-      fileType === 'output' ? ELEMENT_IDS.OUTPUT_FILES : `${fileType}Files`;
-    const toggleId =
-      fileType === 'output'
-        ? ELEMENT_IDS.TOGGLE_OUTPUT_FILES
-        : `toggle${capitalize(fileType)}Files`;
+    const listId = getMultipleFilesId(fileType) ?? ELEMENT_IDS.OUTPUT_FILES;
+    const toggleId = getToggleId(fileType) ?? ELEMENT_IDS.TOGGLE_OUTPUT_FILES;
 
     handlers[MAIN_VIEW_COMMANDS[`SET_${fileType.toUpperCase()}_FILES`]] =
       createSetFilesHandler(fileType, listId, toggleId);
 
     if (fileType !== 'output') {
-      const domId = `${fileType}File`;
-      handlers[MAIN_VIEW_COMMANDS[`SET_${fileType.toUpperCase()}_FILE`]] =
-        createSetFileHandler(fileType, domId);
-      handlers[MAIN_VIEW_COMMANDS[`${fileType.toUpperCase()}_FILE_SELECTED`]] =
-        createFileSelectedHandler(fileType, domId);
+      const domId = getSingleFileId(fileType);
+      if (domId) {
+        handlers[MAIN_VIEW_COMMANDS[`SET_${fileType.toUpperCase()}_FILE`]] =
+          createSetFileHandler(fileType, domId);
+        handlers[
+          MAIN_VIEW_COMMANDS[`${fileType.toUpperCase()}_FILE_SELECTED`]
+        ] = createFileSelectedHandler(fileType, domId);
+      }
     }
   }
 
@@ -74,20 +78,23 @@ export function createFileHandlers(ctx) {
   );
 
   function handleAddMediaFile(message) {
-    const listDiv = getElement('mediaFiles');
+    const listId = getMultipleFilesId('media');
+    const toggleId = getToggleId('media');
+    const listDiv = listId ? getElement(listId) : null;
     const existingFiles = listDiv ? fileList.getSelected(listDiv) : [];
-    fileList.update('mediaFiles', 'toggleMediaFiles', [
-      ...existingFiles,
-      message.file,
-    ]);
+    if (listId && toggleId) {
+      fileList.update(listId, toggleId, [...existingFiles, message.file]);
+    }
     if (listDiv) {
       setupFileListHandler('media', listDiv);
     }
 
-    const container = getElement('mediaFilesContainer');
+    const containerId = getFilesContainerId('media');
+    const container = containerId ? getElement(containerId) : null;
     if (container && container.style.display === 'none') {
       container.style.display = 'block';
-      const toggleIcon = getElement('toggleMediaFiles');
+      const toggleIconId = getToggleId('media');
+      const toggleIcon = toggleIconId ? getElement(toggleIconId) : null;
       setToggleIcon(toggleIcon, true);
     }
 
@@ -114,20 +121,21 @@ export function createFileHandlers(ctx) {
 
   function handleSetOpenedFiles(message) {
     if (message.fileType) {
-      const fileType = message.fileType.replace('Files', '');
-      const singleFileId = `${uncapitalize(fileType)}File`;
-      const multipleFileId = `${uncapitalize(fileType)}Files`;
-      const toggleId = `toggle${capitalize(fileType)}Files`;
+      const multipleFileId = getMultipleFilesId(message.fileType);
+      const toggleId = getToggleId(message.fileType);
+      const singleFileId = getSingleFileId(message.fileType);
 
       let filesToAdd = message.files ?? [];
       if (message.shouldFilter) {
-        const singleFileSelect = getElement(singleFileId);
+        const singleFileSelect = singleFileId ? getElement(singleFileId) : null;
         if (singleFileSelect && singleFileSelect.value) {
           filesToAdd = filesToAdd.filter((f) => f !== singleFileSelect.value);
         }
       }
 
-      fileList.update(multipleFileId, toggleId, filesToAdd);
+      if (multipleFileId && toggleId) {
+        fileList.update(multipleFileId, toggleId, filesToAdd);
+      }
     }
     postHandle();
   }

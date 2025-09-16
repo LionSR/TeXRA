@@ -16,7 +16,7 @@ import {
   safeSetElementChecked,
   setChevronIcon,
 } from '@common/domUtils.js';
-import { capitalize } from '@common/stringUtils.js';
+import { getFilesContainerId, getToggleId } from '@common/domIdUtils.js';
 import { CHEVRON_DOWN_CLASS } from '@common/iconConstants.js';
 import { WebviewStateManager } from '@common/webviewState.js';
 
@@ -55,8 +55,10 @@ export class MainViewState {
     }
 
     MULTIPLE_SELECTIONS.forEach((id) => {
-      const toggleId = `toggle${capitalize(id)}`;
-      fileList.setVisibility(id, toggleId, false);
+      const toggleId = getToggleId(id);
+      if (toggleId) {
+        fileList.setVisibility(id, toggleId, false);
+      }
       const listDiv = safeGetElementById(id);
       if (listDiv) {
         listDiv.innerHTML = '';
@@ -120,7 +122,7 @@ export class MainViewState {
       }
 
       MULTIPLE_SELECTIONS.forEach((id) => {
-        const toggleId = `toggle${capitalize(id)}`;
+        const toggleId = getToggleId(id);
         const selectDiv = safeGetElementById(id);
         if (!selectDiv) {
           console.warn(`Element with id '${id}' not found`);
@@ -135,13 +137,17 @@ export class MainViewState {
           filesArray.forEach((file) => {
             fileList.add(id, file);
           });
-          fileList.setVisibility(
-            id,
-            toggleId,
-            isVisible !== undefined ? isVisible : true,
-          );
+          if (toggleId) {
+            fileList.setVisibility(
+              id,
+              toggleId,
+              isVisible !== undefined ? isVisible : true,
+            );
+          }
         } else {
-          fileList.setVisibility(id, toggleId, false);
+          if (toggleId) {
+            fileList.setVisibility(id, toggleId, false);
+          }
         }
       });
 
@@ -185,9 +191,9 @@ export class MainViewState {
     MULTIPLE_SELECTIONS.forEach((id) => {
       const elementDiv = safeGetElementById(id);
       if (!elementDiv) return;
-      const containerDiv = safeGetElementById(`${id}Container`);
-      state[`${id}Visible`] =
-        containerDiv && containerDiv.style.display === 'block';
+      const containerId = getFilesContainerId(id);
+      const containerDiv = containerId ? safeGetElementById(containerId) : null;
+      state[`${id}Visible`] = containerDiv?.style.display === 'block';
       state[id] = fileList.getSelected(elementDiv);
     });
 

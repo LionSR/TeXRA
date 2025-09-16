@@ -12,6 +12,7 @@ import {
   safeGetElementValue,
   safeGetElementChecked,
 } from '@common/domUtils.js';
+import { getFilesContainerId, getSingleFileId } from '@common/domIdUtils.js';
 import { capitalize } from '@common/stringUtils.js';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
 import { vscode } from '@common/webviewContext.js';
@@ -28,7 +29,9 @@ export class ActionButtonManager extends BaseUIManager {
   _getSingleFileData(fileTypes = ['input', 'reference', 'auxiliary', 'media']) {
     const data = {};
     fileTypes.forEach((type) => {
-      data[`${type}File`] = safeGetElementValue(`${type}File`);
+      const singleId = getSingleFileId(type);
+      if (!singleId) return;
+      data[singleId] = safeGetElementValue(singleId);
     });
     return data;
   }
@@ -36,12 +39,13 @@ export class ActionButtonManager extends BaseUIManager {
   _getMultipleFileData(singleFiles = {}) {
     const multipleFilesData = {};
     MULTIPLE_SELECTIONS.forEach((id) => {
-      const container = safeGetElementById(`${id}Container`);
+      const containerId = getFilesContainerId(id);
+      const container = containerId ? safeGetElementById(containerId) : null;
       const isActive = container?.style.display !== 'none';
       multipleFilesData[`${id}Active`] = isActive;
 
-      const singleFileKey = id.replace('Files', 'File');
-      const singleFile = singleFiles[singleFileKey];
+      const singleFileKey = getSingleFileId(id);
+      const singleFile = singleFileKey ? singleFiles[singleFileKey] : undefined;
 
       const filesDiv = safeGetElementById(id);
       const files =
