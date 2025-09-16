@@ -512,27 +512,6 @@ export abstract class BaseReflectionAgent extends BaseAgent {
     });
   }
 
-  private async withRoundGroup<T>(
-    roundLabel: string,
-    callback: (groupId: string) => Promise<T>,
-  ): Promise<T> {
-    const groupId = await this.logger.startGroup(
-      roundLabel,
-      undefined,
-      this.runGroupId,
-    );
-
-    let status: 'stopped' | 'error' = 'stopped';
-    try {
-      return await callback(groupId);
-    } catch (error) {
-      status = 'error';
-      throw error;
-    } finally {
-      this.logger.endGroup(groupId, status);
-    }
-  }
-
   private async runRound(
     currRound: number,
     stateGlobal: AgentStateGlobal,
