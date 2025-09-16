@@ -28,6 +28,7 @@ export class SettingsButtonManager extends BaseUIManager {
     this.latexdiffManager = latexdiffManager;
     this.state = state;
     this.eventBus = eventBus;
+    this._dependencyInstallListeners = [];
   }
 
   _setupToggles() {
@@ -107,6 +108,7 @@ export class SettingsButtonManager extends BaseUIManager {
     });
 
     this.eventBus.addEventListener('showDependencyBanner', (e) => {
+      this._disposeDependencyInstallListeners();
       const missing = e.detail?.missingTools || [];
       bannerManager.showBanner(ELEMENT_IDS.DEPENDENCY_BANNER, {
         missingTools: missing,
@@ -117,11 +119,16 @@ export class SettingsButtonManager extends BaseUIManager {
         const buttons = element.querySelectorAll('.dependency-install-button');
         buttons.forEach((button) => {
           const tool = button.dataset.tool;
-          this.addListener(button, 'click', () => {
+          const handleInstallClick = () => {
             this.vscode.postMessage({
               command: MAIN_VIEW_COMMANDS.OPEN_INSTALL_GUIDE,
               tool,
             });
+          };
+          this.addListener(button, 'click', handleInstallClick);
+          this._dependencyInstallListeners.push({
+            element: button,
+            handler: handleInstallClick,
           });
         });
         element.style.setProperty('display', 'flex');
@@ -129,8 +136,16 @@ export class SettingsButtonManager extends BaseUIManager {
     });
 
     this.eventBus.addEventListener('hideDependencyBanner', () => {
+      this._disposeDependencyInstallListeners();
       bannerManager.hideBanner(ELEMENT_IDS.DEPENDENCY_BANNER);
     });
+  }
+
+  _disposeDependencyInstallListeners() {
+    this._dependencyInstallListeners.forEach(({ element, handler }) => {
+      this.removeListener(element, 'click', handler);
+    });
+    this._dependencyInstallListeners = [];
   }
 
   _setupDropdowns() {
