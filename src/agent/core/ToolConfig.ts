@@ -10,7 +10,6 @@ import { z } from 'zod';
 export const ToolConfigSchema = z
   .object({
     reflect: z.boolean().default(false),
-    usePrefillFromInput: z.boolean().default(false),
     autoExtractFigure: z.boolean().default(false),
     autoExtractTikzFigure: z.boolean().default(false),
     attachTeXCount: z.boolean().default(false),
