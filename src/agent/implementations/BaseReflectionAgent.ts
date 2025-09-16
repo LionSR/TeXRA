@@ -118,6 +118,7 @@ export abstract class BaseReflectionAgent extends BaseAgent {
         this.agentPrompt,
         this.agentSetting,
         this.userVars,
+        this.logger,
       );
     }
 
@@ -292,7 +293,7 @@ export abstract class BaseReflectionAgent extends BaseAgent {
       messages.push(...initialMessages);
 
       // Handle prefill
-      const prefill = promptBuilder.getPrefill(currRound);
+      const prefill = await promptBuilder.buildPrefill(currRound);
       toolState.updateAccumulatedOutput(prefill);
 
       // Initialize output and handle prefill
@@ -439,7 +440,7 @@ export abstract class BaseReflectionAgent extends BaseAgent {
       );
 
       // Handle prefill for round
-      const prefill = promptBuilder.getPrefill(currRound);
+      const prefill = await promptBuilder.buildPrefill(currRound);
       toolState.updateAccumulatedOutput(prefill);
 
       const [endTurn, updatedMessages] =
@@ -534,11 +535,7 @@ export abstract class BaseReflectionAgent extends BaseAgent {
 
     try {
       await this.init(this.runGroupId);
-      this.promptBuilder = new PromptBuilder(
-        this.agentPrompt,
-        this.agentSetting,
-        this.userVars,
-      );
+      this.promptBuilder = undefined;
       await this.initializeClient();
 
       let stateGlobal = new AgentStateGlobal();
