@@ -18,7 +18,11 @@ import {
 // @ts-ignore - Import JavaScript module
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
 import { getConfig, setConfig } from '@utils/config';
-import { safeExecuteCommand } from '@utils/system';
+import {
+  safeExecuteCommand,
+  checkCoreDependencies,
+  getToolDocsCommand,
+} from '@utils/system';
 import { SETTINGS_QUERY } from '@utils/settingsQueries';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { computeModelOptions } from '@model/computeModelOptions';
@@ -219,6 +223,26 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
       },
       [MAIN_VIEW_COMMANDS.UPDATE_DEPENDENCY_REMINDER_SETTING]: async (m) => {
         await setConfig('ui.showDependencyReminders', m.value);
+      },
+      [MAIN_VIEW_COMMANDS.OPEN_INSTALL_GUIDE]: async (m) => {
+        const cmd = getToolDocsCommand(m.tool);
+        if (cmd) {
+          const [command, ...args] = cmd.split(',');
+          await safeExecuteCommand(command, args);
+        }
+      },
+      [MAIN_VIEW_COMMANDS.RECHECK_DEPENDENCIES]: async (_m, w) => {
+        const missingTools = await checkCoreDependencies(true);
+        if (missingTools.length > 0) {
+          w.webview.postMessage({
+            command: MAIN_VIEW_COMMANDS.SHOW_DEPENDENCY_BANNER,
+            missingTools,
+          });
+        } else {
+          w.webview.postMessage({
+            command: MAIN_VIEW_COMMANDS.HIDE_DEPENDENCY_BANNER,
+          });
+        }
       },
 
       // Recording commands

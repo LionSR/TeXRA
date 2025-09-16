@@ -81,6 +81,8 @@ export const MAIN_VIEW_COMMANDS = {
   OPEN_AGENT_DIRECTORY: 'openAgentDirectory',
   OPEN_AGENT_DOCS: 'openAgentDocs',
   OPEN_INSTALLATION_DOCS: 'openInstallationDocs',
+  OPEN_INSTALL_GUIDE: 'openInstallGuide',
+  RECHECK_DEPENDENCIES: 'recheckDependencies',
   SHOW_AGENT_CONFIG_BANNER: 'showAgentConfigBanner',
   HIDE_AGENT_CONFIG_BANNER: 'hideAgentConfigBanner',
   SHOW_DEPENDENCY_BANNER: 'showDependencyBanner',
