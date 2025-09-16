@@ -91,7 +91,6 @@ export abstract class ModelHandler<
     this.config = {
       ...config,
       toolConfig: config.toolConfig || {
-        usePrefillFromInput: false,
         autoExtractFigure: false,
         autoExtractTikzFigure: false,
         reflect: false,

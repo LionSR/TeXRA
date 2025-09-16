@@ -621,15 +621,6 @@ export class ModelHandlerOpenAI extends ModelHandler<
     let endTurn = false;
 
     if (!(await WorkspaceFS.existsAndNonTrivial(outputFile))) {
-      if (
-        agentConfig.toolConfig.usePrefillFromInput &&
-        toolState.firstKCharsFromInput
-      ) {
-        prefill += toolState.firstKCharsFromInput;
-        toolState.updateAccumulatedOutput('');
-        prefill = `<${agentSetting.documentTag}>${toolState.firstKCharsFromInput}`;
-      }
-
       const PseudoPrefillMsgContentString = `Organize your response with xml tags. Start your response with:\n${prefill}`;
       const lastMessage = messages.at(-1);
       if (lastMessage && Array.isArray(lastMessage.content)) {
