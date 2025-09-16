@@ -43,7 +43,6 @@ describe('XmlOutputManager markdown fallback', () => {
     editedFile: null,
     toolConfig: {
       reflect: false,
-      usePrefillFromInput: false,
       autoExtractFigure: false,
       autoExtractTikzFigure: false,
       attachTeXCount: false,

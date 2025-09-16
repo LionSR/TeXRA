@@ -14,10 +14,7 @@ import { BaseAgent } from '@agent/implementations/BaseAgent';
 import type { IModelHandler } from '@agent/modelHandlers';
 import { OutputHandler, NamedOutputFile, IOutputHandler } from '@agent/output';
 import { PromptBuilder } from '@agent/utils/PromptBuilder';
-import {
-  getFirstKCharsFromDocument,
-  writePromptToXml,
-} from '@agent/utils/promptUtils';
+import { writePromptToXml } from '@agent/utils/promptUtils';
 import { bus } from '@eventBus/ProgressEventBus';
 // Standard library imports
 // (none needed)
@@ -34,9 +31,6 @@ import type { ToolDefinition } from '@model';
 
 // System imports - common utilities
 import { getConfig } from '@utils/config';
-
-// Shared constants
-import { K_SLICE } from '@utils/config';
 
 // Local imports - utilities
 import { calculateTotalRounds } from '@agent/utils/roundUtils';
@@ -243,14 +237,6 @@ export abstract class BaseReflectionAgent extends BaseAgent {
     this.logger.debug(`Processing round ${currRound}`);
 
     return this.withRoundGroup(`r${currRound}`, async (roundGroupId) => {
-      // Handle prefill from input if enabled
-      if (this.agentConfig.toolConfig.usePrefillFromInput) {
-        toolState.firstKCharsFromInput = await getFirstKCharsFromDocument(
-          this.agentConfig.inputFile,
-          K_SLICE,
-        );
-      }
-
       const extraMedia: string[] = [];
       if (this.modelHandler.capabilities.supportsVision) {
         if (
@@ -429,13 +415,6 @@ export abstract class BaseReflectionAgent extends BaseAgent {
         }
       }
 
-      if (this.agentConfig.toolConfig.usePrefillFromInput) {
-        toolState.firstKCharsFromInput = await getFirstKCharsFromDocument(
-          this.agentConfig.inputFile,
-          K_SLICE,
-        );
-      }
-
       // Initialize round
       const stateRound = new AgentStateRound(currRound);
 
@@ -533,27 +512,6 @@ export abstract class BaseReflectionAgent extends BaseAgent {
 
       return [stateRound, stateGlobal, updatedMessages, endTurn, toolState];
     });
-  }
-
-  private async withRoundGroup<T>(
-    roundLabel: string,
-    callback: (groupId: string) => Promise<T>,
-  ): Promise<T> {
-    const groupId = await this.logger.startGroup(
-      roundLabel,
-      undefined,
-      this.runGroupId,
-    );
-
-    let status: 'stopped' | 'error' = 'stopped';
-    try {
-      return await callback(groupId);
-    } catch (error) {
-      status = 'error';
-      throw error;
-    } finally {
-      this.logger.endGroup(groupId, status);
-    }
   }
 
   private async runRound(
