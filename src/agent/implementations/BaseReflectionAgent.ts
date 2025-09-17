@@ -226,6 +226,21 @@ export abstract class BaseReflectionAgent extends BaseAgent {
     return this.outputHandler.outputFiles[currRound] || [];
   }
 
+  /**
+   * Executes the shared round lifecycle pipeline used by both processing and reflection flows.
+   * Handles output initialization, response generation, and round finalization to keep
+   * lifecycle responsibilities centralized.
+   *
+   * @param currRound - Zero-based index of the round being executed.
+   * @param stateRound - Mutable state scoped to the current round of execution.
+   * @param stateGlobal - Shared agent state that spans all rounds.
+   * @param toolState - Current tool invocation state passed between rounds.
+   * @param preparedMessages - Messages prepared for the model before execution.
+   * @param prefill - Initial text inserted into the model response buffer.
+   * @param outputPath - Filesystem path where model output for this round is stored.
+   * @param roundGroupId - Identifier for grouping related log and output operations.
+   * @returns Updated round/global state, messages, completion flag, and tool state after execution.
+   */
   private async runRoundPipeline(
     currRound: number,
     stateRound: AgentStateRound,
