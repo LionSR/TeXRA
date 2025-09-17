@@ -127,6 +127,12 @@ export function generateXmlLatexConversions(environments: string[]): {
     patterns[`</${env}}`] = `\\end{${env}}`;
 
     patterns[`</${env}\n`] = `\\end{${env}}\n`;
+    patterns[`</${env}}\n`] = `\\end{${env}}\n`;
+
+    // XML begin tags incorrectly closed with leading slash
+    patterns[`</begin{${env}}`] = `\\begin{${env}}`;
+    patterns[`</begin{${env}}\n`] = `\\begin{${env}}\n`;
+    patterns[`</begin{${env}`] = `\\begin{${env}}`;
 
     // LaTeX with incorrect XML ending
     patterns[`\\end{${env}>}`] = `\\end{${env}}`;
