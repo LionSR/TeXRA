@@ -152,17 +152,14 @@ export async function activate(context: vscode.ExtensionContext) {
   refreshApiKeyStatus().catch(console.error);
 
   const runningStreams = new Set<string>();
+  const NON_RUNNING_STATUSES = ['stopped', 'error', 'cancelled', 'waiting'];
+  
   disposeStatusListener = bus.on(
     'updateStreamStatus',
     ({ stream, status }: { stream: string; status: string }) => {
       if (status === 'running') {
         runningStreams.add(stream);
-      } else if (
-        status === 'stopped' ||
-        status === 'error' ||
-        status === 'cancelled' ||
-        status === 'waiting'
-      ) {
+      } else if (NON_RUNNING_STATUSES.includes(status)) {
         runningStreams.delete(stream);
       }
       statusBarItem!.text =
