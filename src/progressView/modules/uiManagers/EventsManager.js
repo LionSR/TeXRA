@@ -168,6 +168,9 @@ export class EventsManager {
 
     // Handle clicks on file links inside file-list-details blocks
     document.addEventListener('click', (e) => {
+      if (!(e.target instanceof Element)) {
+        return;
+      }
       const link = e.target.closest('.file-link');
       if (link && link.dataset.file) {
         vscode.postMessage({
@@ -177,8 +180,97 @@ export class EventsManager {
       }
     });
 
+    // Handle copy actions for model responses
+    document.addEventListener('click', async (e) => {
+      if (!(e.target instanceof Element)) {
+        return;
+      }
+      const copyButton = e.target.closest('.model-response-copy');
+      if (!copyButton) {
+        return;
+      }
+
+      const contentElem = copyButton
+        .closest('.model-response-line')
+        ?.querySelector('.model-response-content');
+      if (!contentElem) {
+        return;
+      }
+
+      const rawContent = contentElem.dataset.rawContent;
+      const textToCopy = rawContent ?? contentElem.textContent ?? '';
+      if (!textToCopy.trim()) {
+        return;
+      }
+
+      const defaultTitle =
+        copyButton.dataset.defaultTitle ||
+        copyButton.getAttribute('title') ||
+        'Copy model output';
+      const successTitle = copyButton.dataset.successTitle || 'Copied!';
+      const existingTimeoutId = copyButton.dataset.copyResetTimeoutId;
+      if (existingTimeoutId) {
+        window.clearTimeout(Number(existingTimeoutId));
+        delete copyButton.dataset.copyResetTimeoutId;
+      }
+
+      copyButton.classList.remove('copy-success');
+      copyButton.setAttribute('title', defaultTitle);
+      copyButton.setAttribute('aria-label', defaultTitle);
+
+      const normalizedText = textToCopy.replace(/\r?\n/g, '\n');
+
+      const scheduleReset = () => {
+        const timeoutId = window.setTimeout(() => {
+          copyButton.classList.remove('copy-success');
+          copyButton.setAttribute('title', defaultTitle);
+          copyButton.setAttribute('aria-label', defaultTitle);
+          delete copyButton.dataset.copyResetTimeoutId;
+        }, 2000);
+
+        copyButton.dataset.copyResetTimeoutId = `${timeoutId}`;
+      };
+
+      const markSuccess = () => {
+        copyButton.classList.add('copy-success');
+        copyButton.setAttribute('title', successTitle);
+        copyButton.setAttribute('aria-label', successTitle);
+        scheduleReset();
+      };
+
+      if (navigator.clipboard?.writeText) {
+        try {
+          await navigator.clipboard.writeText(normalizedText);
+          markSuccess();
+          return;
+        } catch {
+          // Fallback to execCommand below
+        }
+      }
+
+      const textarea = document.createElement('textarea');
+      textarea.value = normalizedText;
+      textarea.setAttribute('readonly', '');
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      textarea.style.pointerEvents = 'none';
+      document.body.appendChild(textarea);
+      textarea.select();
+      try {
+        const copied = document.execCommand('copy');
+        if (copied) {
+          markSuccess();
+        }
+      } finally {
+        textarea.remove();
+      }
+    });
+
     // Handle clicks on LaTeX references within logs
     document.addEventListener('click', (e) => {
+      if (!(e.target instanceof Element)) {
+        return;
+      }
       const ref = e.target.closest('.latex-ref');
       if (ref && ref.dataset.label) {
         vscode.postMessage({
