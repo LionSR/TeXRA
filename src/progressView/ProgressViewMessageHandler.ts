@@ -7,6 +7,11 @@ import {
   BaseViewMessageHandler,
   MessageHandler,
 } from '@common/webview/BaseViewMessageHandler';
+// Local imports - agent types
+import {
+  AgentTypeFilter,
+  isAgentTypeFilter,
+} from '@agent/types/AgentStreamTypes';
 
 // @ts-ignore - Import JavaScript module
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
@@ -42,6 +47,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
       [PROGRESS_VIEW_COMMANDS.PACK_STREAM]: this.handlePackStream.bind(this),
       [PROGRESS_VIEW_COMMANDS.CLEAN_STREAM]: this.handleCleanStream.bind(this),
       [PROGRESS_VIEW_COMMANDS.SORT_STREAMS]: this.handleSortStreams.bind(this),
+      [PROGRESS_VIEW_COMMANDS.FILTER_STREAMS]:
+        this.handleFilterStreams.bind(this),
       [PROGRESS_VIEW_COMMANDS.RESTORE_STATE]:
         this.handleRestoreState.bind(this),
       [PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP]:
@@ -162,6 +169,18 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     webviewView: vscode.WebviewView,
   ): Promise<void> {
     this.provider.state.streamSortOrder = message.sortBy ?? 'time';
+    this.provider.updateWebview();
+  }
+
+  private async handleFilterStreams(
+    message: any,
+    _webviewView: vscode.WebviewView,
+  ): Promise<void> {
+    const requestedFilter = message.filter;
+    const filter: AgentTypeFilter = isAgentTypeFilter(requestedFilter)
+      ? requestedFilter
+      : 'all';
+    this.provider.state.agentTypeFilter = filter;
     this.provider.updateWebview();
   }
 

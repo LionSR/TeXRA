@@ -52,6 +52,7 @@ type AgentConstructor = {
     agentSetting: AgentSetting,
     agentPrompt: AgentPrompt,
     agentPath: string,
+    executionId?: ExecutionId,
   ): IAgent;
 };
 
@@ -148,7 +149,9 @@ function getAgentName(
 ): string {
   if (outputFiles && outputFiles.length > 1) {
     // logger.info(CHANNEL, `Switching to multiple output mode`);
-    return `${baseAgent}_multiple`;
+    return baseAgent.endsWith('_multiple')
+      ? baseAgent
+      : `${baseAgent}_multiple`;
   }
   return baseAgent;
 }
@@ -166,17 +169,18 @@ async function executeAgentWithLogging<T extends IAgent>(
     // Create agent instance and extract its declared type
     const { agent, agentType } = await createAgentFn();
 
-    if (executionId && 'setExecutionId' in agent) {
-      (agent as any).setExecutionId(executionId);
+    if (executionId) {
       await ensureRunDir(executionId);
     }
 
     // Get the full stream tab ID
     const config = agent.config;
     const streamTabId = getStreamTabId(
-      agentName,
+      config.agent,
       config.model,
       config.inputFile,
+      config.outputFiles ?? undefined,
+      { agentType, executionId },
     );
 
     // Check if this stream is already running
@@ -392,7 +396,8 @@ export async function executeAgent(
     throw new Error('Missing required fields: model and/or agent');
   }
 
-  const agentName = getAgentName(agentConfig.agent, agentConfig.outputFiles);
+  const requestedAgentName = agentConfig.agent;
+  const agentName = getAgentName(requestedAgentName, agentConfig.outputFiles);
 
   await executeAgentWithLogging(
     agentName,
@@ -432,7 +437,7 @@ export async function executeAgent(
       // Load settings and prompts
       const [agentSetting, agentPrompt] = await loadAgentSettingAndPrompts(
         agentPath,
-        agentName,
+        requestedAgentName,
       );
 
       // Get appropriate agent class and create instance
@@ -443,6 +448,7 @@ export async function executeAgent(
         agentSetting,
         agentPrompt,
         agentPath,
+        executionId,
       );
       return { agent, agentType: agentSetting.agentType };
     },

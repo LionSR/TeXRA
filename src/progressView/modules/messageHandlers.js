@@ -57,6 +57,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
   handleUpdateStreams(message) {
     state.activeStream = message.activeStream;
+    state.agentFilter = message.agentFilter || 'all';
     message.streams.forEach((s) => {
       if (s.status) {
         state.streamStatuses.set(s.name, s.status);
@@ -65,6 +66,17 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       }
     });
     dom.streamTabs.update(message.streams, message.activeStream);
+
+    const filterContainer = document.getElementById(
+      ELEMENT_IDS.AGENT_FILTER_CONTAINER,
+    );
+    if (filterContainer) {
+      filterContainer.querySelectorAll('button[data-filter]').forEach((btn) => {
+        const isActive = btn.dataset.filter === state.agentFilter;
+        btn.classList.toggle('toggled', isActive);
+        btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+      });
+    }
 
     this._updatePlaceholderVisibility();
 

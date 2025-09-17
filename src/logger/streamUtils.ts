@@ -1,8 +1,25 @@
 // Standard library imports
+import { randomUUID } from 'crypto';
 import * as path from 'path';
 
 // Local imports
-import type { StreamTabId } from '@agent/types/IdentifierTypes';
+import { AgentType } from '@agent/core/AgentDataclass';
+import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
+
+type StreamTabIdOptions = {
+  agentType?: AgentType;
+  executionId?: ExecutionId;
+};
+
+function formatToolUseStreamId(
+  agent: string,
+  model: string,
+  executionId?: ExecutionId,
+): StreamTabId {
+  const shortId = executionId?.slice(0, 8) ?? randomUUID().slice(0, 8);
+  const sanitizedAgent = agent || 'toolUse';
+  return `${sanitizedAgent}@${model}#${shortId}`;
+}
 
 /**
  * Build a consistent stream tab identifier based on agent, model and input file.
@@ -12,9 +29,19 @@ export function getStreamTabId(
   agent: string,
   model: string,
   inputFile: string,
-  outputFiles?: string[],
+  outputFiles?: string[] | null,
+  options: StreamTabIdOptions = {},
 ): StreamTabId {
-  const agentName =
-    outputFiles && outputFiles.length > 1 ? `${agent}_multiple` : agent;
-  return `${agentName}@${model}: ${path.basename(inputFile)}`;
+  if (options.agentType === AgentType.ToolUse) {
+    return formatToolUseStreamId(agent, model, options.executionId);
+  }
+
+  const hasMultipleOutputs = Boolean(outputFiles && outputFiles.length > 1);
+  const agentName = hasMultipleOutputs
+    ? agent.endsWith('_multiple')
+      ? agent
+      : `${agent}_multiple`
+    : agent;
+  const baseName = inputFile ? path.basename(inputFile) : '';
+  return `${agentName}@${model}: ${baseName}`;
 }
