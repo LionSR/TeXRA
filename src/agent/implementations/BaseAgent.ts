@@ -79,10 +79,10 @@ export abstract class BaseAgent implements IAgent {
       this.agentConfig.agent,
       this.agentConfig.model,
       this.agentConfig.inputFile,
-      this.agentConfig.outputFiles ?? undefined,
       {
         agentType: this.agentSetting.agentType,
         executionId: this.executionId,
+        useMultipleOutputs: this.agentConfig.useMultipleOutputs,
       },
     );
   }

@@ -145,9 +145,9 @@ function getAgentClass(settings: AgentSetting): AgentConstructor {
  */
 function getAgentName(
   baseAgent: string,
-  outputFiles: string[] | null | undefined,
+  useMultipleOutputs: boolean | undefined,
 ): string {
-  if (outputFiles && outputFiles.length > 1) {
+  if (useMultipleOutputs) {
     // logger.info(CHANNEL, `Switching to multiple output mode`);
     return baseAgent.endsWith('_multiple')
       ? baseAgent
@@ -179,8 +179,11 @@ async function executeAgentWithLogging<T extends IAgent>(
       config.agent,
       config.model,
       config.inputFile,
-      config.outputFiles ?? undefined,
-      { agentType, executionId },
+      {
+        agentType,
+        executionId,
+        useMultipleOutputs: config.useMultipleOutputs,
+      },
     );
 
     // Check if this stream is already running
@@ -220,7 +223,7 @@ async function executeAgentWithLogging<T extends IAgent>(
           taskDetailsGroupId,
         );
         logger.debug(
-          `Config has output files: ${!!config.outputFiles}, Number of output files: ${config.outputFiles?.length || 0}`,
+          `Config has output files: ${!!config.outputFiles}, Number of output files: ${config.outputFiles?.length || 0}, useMultipleOutputs: ${config.useMultipleOutputs}`,
           taskDetailsGroupId,
         );
 
@@ -238,13 +241,17 @@ async function executeAgentWithLogging<T extends IAgent>(
 
         if (!provider?.isViewVisible()) {
           const inputFileName = path.basename(config.inputFile);
-          const outputInfo = config.outputFiles?.length
-            ? `to ${
-                config.outputFiles.length > 1
-                  ? config.outputFiles.length + ' files'
-                  : path.basename(config.outputFiles[0])
-              }`
-            : '';
+          const outputInfo = config.useMultipleOutputs
+            ? config.outputFiles?.length
+              ? `to ${
+                  config.outputFiles.length > 1
+                    ? `${config.outputFiles.length} files`
+                    : path.basename(config.outputFiles[0])
+                }`
+              : 'for multiple outputs'
+            : config.outputFiles?.length
+              ? `to ${path.basename(config.outputFiles[0])}`
+              : '';
 
           vscode.window
             .showInformationMessage(
@@ -397,13 +404,26 @@ export async function executeAgent(
   }
 
   const requestedAgentName = agentConfig.agent;
-  const agentName = getAgentName(requestedAgentName, agentConfig.outputFiles);
+  const agentName = getAgentName(
+    requestedAgentName,
+    agentConfig.useMultipleOutputs,
+  );
 
   await executeAgentWithLogging(
     agentName,
     async () => {
       // Create full agent config
       const fullConfig = AgentConfigSchema.parse(agentConfig);
+
+      if (
+        Array.isArray(fullConfig.outputFiles) &&
+        fullConfig.outputFiles.length > 1 &&
+        !fullConfig.useMultipleOutputs
+      ) {
+        logger.warn(
+          `Multiple output files provided (${fullConfig.outputFiles.length}) but useMultipleOutputs flag is disabled. Update the agent configuration to ensure consistent stream handling.`,
+        );
+      }
 
       // Get model configuration
       const modelName = fullConfig.model;
