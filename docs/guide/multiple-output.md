@@ -54,9 +54,9 @@ This is the crucial part for generating multiple distinct files:
 
 **Key Point:** The agent doesn't magically know how to split output (it hasn't mastered telepathy... yet). It must be explicitly instructed via its prompts (like in `polish_multiple.yaml`) to generate the `<document name=\"...\">` structure matching the list you provide in the UI.
 
-## The `_multiple` Suffix
+## Tracking Multi-Output Runs
 
-You might notice `_multiple` appended to the agent name in logs or temporary filenames when using the "Multiple Outputs" feature. This internal suffix indicates that TeXRA is operating in a context where multiple output files are expected based on your UI selection; it doesn't necessarily mean a different agent `.yaml` file (like `polish_multiple.yaml`) was automatically chosen unless you selected it explicitly.
+TeXRA records whether a run expects multiple files through the `useMultipleOutputs` flag stored in each agent configuration. The UI toggles this flag whenever you expand the "Multiple Outputs" section, and the backend propagates it through task history, housekeeping commands, and progress logs. Stream identifiers still append `_multiple` for readability, but that suffix is now derived from the flag rather than being hard-coded into agent names.
 
 ## Example: `polish_multiple` Agent Prompts
 
