@@ -7,6 +7,11 @@ import {
   BaseViewMessageHandler,
   MessageHandler,
 } from '@common/webview/BaseViewMessageHandler';
+// Local imports - agent types
+import {
+  AgentTypeFilter,
+  isAgentTypeFilter,
+} from '@agent/types/AgentStreamTypes';
 
 // @ts-ignore - Import JavaScript module
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
@@ -171,7 +176,10 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     message: any,
     _webviewView: vscode.WebviewView,
   ): Promise<void> {
-    const filter = message.filter ?? 'all';
+    const requestedFilter = message.filter;
+    const filter: AgentTypeFilter = isAgentTypeFilter(requestedFilter)
+      ? requestedFilter
+      : 'all';
     this.provider.state.agentTypeFilter = filter;
     this.provider.updateWebview();
   }

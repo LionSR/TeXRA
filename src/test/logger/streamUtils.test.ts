@@ -1,8 +1,9 @@
 // Standard library imports
 import { strict as assert } from 'assert';
 
-// Local imports - logger utilities
+// Local imports
 import { getStreamTabId } from '@/logger/streamUtils';
+import { AgentType } from '@agent/core/AgentDataclass';
 
 describe('getStreamTabId', () => {
   it('builds workflow identifiers using input file name', () => {
@@ -21,7 +22,7 @@ describe('getStreamTabId', () => {
   it('uses execution id prefix for tool use streams', () => {
     const executionId = '12345678-9abc-def0-1234-56789abcdef0';
     const id = getStreamTabId('diagnostics', 'gpt4', '', undefined, {
-      agentType: 'toolUse',
+      agentType: AgentType.ToolUse,
       executionId,
     });
     assert.equal(id, 'diagnostics@gpt4#12345678');
