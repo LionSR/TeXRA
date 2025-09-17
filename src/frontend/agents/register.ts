@@ -126,7 +126,8 @@ export async function validateYamlAndPromptAdd(
     const settings = validationResult.settings as AgentSetting | undefined;
     const defaultOutputs: string[] = settings?.defaultOutputFiles ?? [];
     const hasMultipleDefaults = defaultOutputs.length > 1;
-    const useMultipleOutputs = settings?.useMultipleOutputs ?? hasMultipleDefaults;
+    const useMultipleOutputs =
+      settings?.useMultipleOutputs ?? hasMultipleDefaults;
     const isMultipleVariant = Boolean(useMultipleOutputs);
     const metadata: AgentVariantMetadata = {
       isMultipleVariant,
