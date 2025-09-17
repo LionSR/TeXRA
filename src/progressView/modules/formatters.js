@@ -838,7 +838,9 @@ export class LogEntryFormatter {
 
     const contentElem = element.querySelector('.user-message-content');
     if (contentElem) {
-      contentElem.textContent = content;
+      const decodedContent =
+        typeof content === 'string' ? decodeHtml(content) : '';
+      contentElem.textContent = decodedContent;
       if (logId) contentElem.dataset.logId = logId;
     }
 
