@@ -10,6 +10,9 @@ import { StatePersistenceManager } from '../persistence/StatePersistenceManager'
 import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
 import { WorkspaceStateKey } from '@common/state/stateManager';
 import { AgentLogger } from '@logger/AgentLogger';
+import type { AgentFilter } from '../types';
+// Local imports - agent types
+import { isAgentTypeFilter } from '@agent/types/AgentStreamTypes';
 
 // Types
 import { TaskState } from '@logger/TaskState';
@@ -27,6 +30,7 @@ export class ProgressViewState {
   private _usageStats: UsageStatsManager;
   private _activeStream: StreamTabId = '';
   private _streamSortOrder = 'time';
+  private _agentTypeFilter: AgentFilter = 'all';
   private _taskStates: Map<StreamTabId, TaskState> = new Map();
   private _executionIds: Map<StreamTabId, ExecutionId> = new Map();
   private readonly persistence: StatePersistenceManager;
@@ -77,6 +81,19 @@ export class ProgressViewState {
   set streamSortOrder(order: string) {
     this._streamSortOrder = order;
     this.saveStreamSortOrder();
+  }
+
+  get agentTypeFilter(): AgentFilter {
+    return this._agentTypeFilter;
+  }
+
+  set agentTypeFilter(filter: AgentFilter) {
+    if (!isAgentTypeFilter(filter)) {
+      this.logger.warn(`Invalid agent filter: ${filter}, defaulting to 'all'`);
+      filter = 'all';
+    }
+    this._agentTypeFilter = filter;
+    this.saveAgentTypeFilter();
   }
 
   // Task state management
@@ -178,6 +195,7 @@ export class ProgressViewState {
       this.loadTaskStates(),
       this.loadExecutionIds(),
       this.loadStreamSortOrder(),
+      this.loadAgentTypeFilter(),
     ]);
   }
 
@@ -284,6 +302,23 @@ export class ProgressViewState {
     this.persistence.save(
       WorkspaceStateKey.STREAM_SORT_ORDER,
       this._streamSortOrder,
+    );
+  }
+
+  private async loadAgentTypeFilter(): Promise<void> {
+    const savedFilter = await this.persistence.load<string>(
+      WorkspaceStateKey.STREAM_AGENT_FILTER,
+      'all',
+    );
+    this._agentTypeFilter = isAgentTypeFilter(savedFilter)
+      ? savedFilter
+      : 'all';
+  }
+
+  private saveAgentTypeFilter(): void {
+    this.persistence.save(
+      WorkspaceStateKey.STREAM_AGENT_FILTER,
+      this._agentTypeFilter,
     );
   }
 }

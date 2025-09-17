@@ -3,7 +3,9 @@ import * as path from 'path';
 
 // Local imports - progress view
 import type { ProgressViewState } from './state/ProgressViewState';
-import type { StreamTabInfo } from './types';
+import type { AgentFilter, StreamTabInfo } from './types';
+// Local imports - agent types
+import { AgentType } from '@agent/core/AgentDataclass';
 
 const sortComparators = {
   time: (a: StreamTabInfo, b: StreamTabInfo) =>
@@ -15,14 +17,44 @@ const sortComparators = {
     (a.agent || '').localeCompare(b.agent || ''),
 } as const;
 
+function matchesAgentFilter(
+  agentType: AgentType | undefined,
+  filter: AgentFilter,
+): boolean {
+  switch (filter) {
+    case 'all':
+      return true;
+    case 'toolUse':
+      return agentType === AgentType.ToolUse;
+    case 'workflow':
+      return agentType !== AgentType.ToolUse;
+    default:
+      return true;
+  }
+}
+
+function buildStreamLabel(
+  agentName: string,
+  inputFile: string,
+  agentType: AgentType | undefined,
+): string {
+  if (agentType === AgentType.ToolUse) {
+    return agentName;
+  }
+
+  const baseName = inputFile ? path.basename(inputFile) : '';
+  return baseName ? `${agentName}: ${baseName}` : agentName;
+}
+
 /**
  * Build metadata objects for all streams in the given state.
  */
 export function buildStreamInfos(
   state: ProgressViewState,
   statuses?: Map<string, string>,
+  filter: AgentFilter = 'all',
 ): StreamTabInfo[] {
-  const infos = state.streamTabs.keys().map((id) => {
+  const infos = state.streamTabs.keys().reduce<StreamTabInfo[]>((acc, id) => {
     const taskState = state.getTaskState(id);
     const logs = state.streamTabs.get(id);
     const lastTimestamp =
@@ -32,20 +64,27 @@ export function buildStreamInfos(
     const outputs = taskState?.agentConfig.outputFiles || [];
     const inputFile = taskState?.agentConfig.inputFile || '';
     const agentName = taskState?.agentConfig.agent || id.split('@')[0];
-    const label = `${agentName}: ${path.basename(inputFile)}`;
-    return {
+    const agentType = taskState?.agentType;
+    if (!matchesAgentFilter(agentType, filter)) {
+      return acc;
+    }
+    const executionId = state.getExecutionId(id);
+    const label = buildStreamLabel(agentName, inputFile, agentType);
+    acc.push({
       name: id,
       label,
       model: taskState?.agentConfig.model,
       agent: taskState?.agentConfig.agent,
-      agentType: taskState?.agentType,
+      agentType,
       hasMultipleOutputs: Array.isArray(outputs) && outputs.length > 1,
       lastTimestamp,
       inputFile,
       creationTimestamp,
       status: statuses?.get(id),
-    } as StreamTabInfo;
-  });
+      executionId,
+    });
+    return acc;
+  }, []);
 
   const comparator =
     sortComparators[state.streamSortOrder as keyof typeof sortComparators];

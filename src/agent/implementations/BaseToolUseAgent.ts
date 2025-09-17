@@ -17,6 +17,7 @@ import { BaseAgent } from './BaseAgent';
 import type { ToolDefinition } from '@model';
 import { BaseTool } from '@tools/core/base';
 import { DEFAULT_TOOL_REGISTRY } from '@tools/registry';
+import type { ExecutionId } from '@agent/types/IdentifierTypes';
 
 export class BaseToolUseAgent extends BaseAgent {
   private toolRegistry: Record<string, BaseTool<any>>;
@@ -31,8 +32,16 @@ export class BaseToolUseAgent extends BaseAgent {
     agentSetting: AgentSetting,
     agentPrompt: AgentPrompt,
     agentPath: string,
+    executionId?: ExecutionId,
   ) {
-    super(modelHandler, agentConfig, agentSetting, agentPrompt, agentPath);
+    super(
+      modelHandler,
+      agentConfig,
+      agentSetting,
+      agentPrompt,
+      agentPath,
+      executionId,
+    );
     this.toolRegistry = DEFAULT_TOOL_REGISTRY;
   }
 
