@@ -136,10 +136,18 @@ function getSnapshotPath(executionId: ExecutionId): string {
 }
 
 export class ToolUseSessionManager {
+  /**
+   * Checks if tool-use session persistence is enabled
+   * @returns True if persistence is enabled, false otherwise
+   */
   public static isPersistenceEnabled(): boolean {
     return getToolUsePersistenceEnabled();
   }
 
+  /**
+   * Saves a tool-use session snapshot to persistent storage
+   * @param payload - The snapshot data to save
+   */
   public static async saveSnapshot(payload: SavePayload): Promise<void> {
     if (!this.isPersistenceEnabled()) {
       return;
@@ -176,6 +184,11 @@ export class ToolUseSessionManager {
     }
   }
 
+  /**
+   * Loads a tool-use session snapshot from persistent storage
+   * @param executionId - The ID of the session to load
+   * @returns The snapshot if found and valid, null otherwise
+   */
   public static async loadSnapshot(
     executionId: ExecutionId,
   ): Promise<ToolUseSessionSnapshot | null> {
@@ -200,6 +213,10 @@ export class ToolUseSessionManager {
     }
   }
 
+  /**
+   * Deletes a tool-use session snapshot from persistent storage
+   * @param executionId - The ID of the session to delete
+   */
   public static async deleteSnapshot(executionId: ExecutionId | undefined): Promise<void> {
     if (!executionId || !isValidExecutionId(executionId)) {
       return;
@@ -218,6 +235,10 @@ export class ToolUseSessionManager {
     }
   }
 
+  /**
+   * Lists all persisted tool-use session snapshots
+   * @returns Array of valid snapshots, expired snapshots are automatically cleaned up
+   */
   public static async listSnapshots(): Promise<ToolUseSessionSnapshot[]> {
     if (!this.isPersistenceEnabled()) {
       return [];
@@ -252,12 +273,14 @@ export class ToolUseSessionManager {
     }
   }
 
+  /**
+   * Hydrates a ToolState object from a snapshot
+   * @param snapshot - The snapshot containing the tool state data
+   * @returns A new ToolState instance with the hydrated data
+   */
   public static hydrateToolStateFromSnapshot(
     snapshot: ToolUseSessionSnapshot,
   ): ToolState {
     return hydrateToolState(snapshot.toolState);
   }
 }
-
-export const TOOL_USE_PERSISTENCE_DEFAULT_TTL_HOURS =
-  DEFAULT_TOOL_USE_PERSISTENCE_TTL_HOURS;
