@@ -56,25 +56,32 @@ export class ExecutionManager {
       return f;
     };
 
+    const outputFiles = getFilesIfNotEmpty<string>(message.outputFiles);
+    const useMultipleOutputs = Boolean(
+      message.outputFilesActive ||
+        (Array.isArray(outputFiles) && outputFiles.length > 0),
+    );
+
     const agentConfig: AgentConfig = {
       agent: message.agent,
       model: message.model,
       instruction: message.instruction,
+      useMultipleOutputs,
       inputFile: message.inputFile,
-      inputFiles: getFilesIfNotEmpty(message.inputFiles),
+      inputFiles: getFilesIfNotEmpty<string>(message.inputFiles),
       referenceFile: message.referenceFile,
-      referenceFiles: getFilesIfNotEmpty(message.referenceFiles),
+      referenceFiles: getFilesIfNotEmpty<string>(message.referenceFiles),
       auxiliaryFile: message.auxiliaryFile,
-      auxiliaryFiles: getFilesIfNotEmpty(message.auxiliaryFiles),
+      auxiliaryFiles: getFilesIfNotEmpty<string>(message.auxiliaryFiles),
       mediaFile: mapMediaPath(message.mediaFile),
       mediaFiles: message.mediaFiles
-        ? getFilesIfNotEmpty(
+        ? getFilesIfNotEmpty<string>(
             message.mediaFiles
               .map(mapMediaPath)
               .filter((f: string | null): f is string => f !== null),
           )
         : null,
-      outputFiles: getFilesIfNotEmpty(message.outputFiles),
+      outputFiles,
       editedFile: null,
       toolConfig,
     };
