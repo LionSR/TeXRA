@@ -14,10 +14,8 @@ const TOOLBAR_ACTION_BUTTON_IDS = [
   ELEMENT_IDS.CLEAN_STREAM_BTN,
 ];
 
-const AGENT_MODES = Object.freeze({
-  TOOL: 'tool',
-  WORKFLOW: 'workflow',
-});
+// Session kind values match TypeScript AgentSessionKind enum
+// No need to duplicate - we use the actual values from messages
 
 // Create shorter aliases for internal use
 const state = progressViewState;
@@ -98,7 +96,11 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     const activeStreamInfo = message.streams.find(
       (s) => s.name === message.activeStream,
     );
-    const isToolAgent = activeStreamInfo?.uiTraits?.isToolAgent ?? false;
+    const sessionKind =
+      activeStreamInfo?.agentSessionKind ||
+      activeStreamInfo?.uiTraits?.sessionKind ||
+      'workflow'; // Default fallback
+    const isToolAgent = sessionKind === 'toolUse';
 
     const container = document.getElementById(ELEMENT_IDS.FOLLOW_UP_CONTAINER);
     if (container) {
@@ -111,9 +113,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     const toolbar = document.getElementById(ELEMENT_IDS.TOOLBAR_CONTAINER);
     if (toolbar) {
       toolbar.dataset.agentType = activeStreamInfo?.agentType || '';
-      toolbar.dataset.agentMode = isToolAgent
-        ? AGENT_MODES.TOOL
-        : AGENT_MODES.WORKFLOW;
+      toolbar.dataset.agentMode = sessionKind;
     }
 
     toolbarButtons.forEach((button) => {

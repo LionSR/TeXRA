@@ -5,7 +5,10 @@ import * as path from 'path';
 import type { ProgressViewState } from './state/ProgressViewState';
 import type { AgentFilter, StreamTabInfo } from './types';
 // Local imports - agent types
-import { AgentType } from '@agent/core/AgentDataclass';
+import {
+  AgentSessionKind,
+  deriveAgentSessionKind,
+} from '@agent/core/AgentDataclass';
 
 const sortComparators = {
   time: (a: StreamTabInfo, b: StreamTabInfo) =>
@@ -18,16 +21,16 @@ const sortComparators = {
 } as const;
 
 function matchesAgentFilter(
-  agentType: AgentType | undefined,
+  sessionKind: AgentSessionKind,
   filter: AgentFilter,
 ): boolean {
   switch (filter) {
     case 'all':
       return true;
     case 'toolUse':
-      return agentType === AgentType.ToolUse;
+      return sessionKind === AgentSessionKind.ToolUse;
     case 'workflow':
-      return agentType !== AgentType.ToolUse;
+      return sessionKind === AgentSessionKind.Workflow;
     default:
       return true;
   }
@@ -36,9 +39,9 @@ function matchesAgentFilter(
 function buildStreamLabel(
   agentName: string,
   inputFile: string,
-  agentType: AgentType | undefined,
+  sessionKind: AgentSessionKind,
 ): string {
-  if (agentType === AgentType.ToolUse) {
+  if (sessionKind === AgentSessionKind.ToolUse) {
     return agentName;
   }
 
@@ -65,19 +68,23 @@ export function buildStreamInfos(
     const inputFile = taskState?.agentConfig.inputFile || '';
     const agentName = taskState?.agentConfig.agent || id.split('@')[0];
     const agentType = taskState?.agentType;
-    if (!matchesAgentFilter(agentType, filter)) {
+    const agentSessionKind =
+      taskState?.agentSessionKind ?? deriveAgentSessionKind(agentType);
+    if (!matchesAgentFilter(agentSessionKind, filter)) {
       return acc;
     }
-    const isToolAgent = agentType === AgentType.ToolUse;
+    const isToolAgent = agentSessionKind === AgentSessionKind.ToolUse;
     const executionId = state.getExecutionId(id);
-    const label = buildStreamLabel(agentName, inputFile, agentType);
+    const label = buildStreamLabel(agentName, inputFile, agentSessionKind);
     acc.push({
       name: id,
       label,
       model: taskState?.agentConfig.model,
       agent: taskState?.agentConfig.agent,
       agentType,
+      agentSessionKind,
       uiTraits: {
+        sessionKind: agentSessionKind,
         isToolAgent,
       },
       hasMultipleOutputs: Array.isArray(outputs) && outputs.length > 1,

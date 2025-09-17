@@ -8,7 +8,11 @@
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import { AgentConfigSchema } from '@agent/core/AgentConfig';
 import { TaskState } from '@logger/TaskState';
-import type { AgentType } from '@agent/core/AgentDataclass';
+import {
+  AgentSessionKind,
+  type AgentType,
+  deriveAgentSessionKind,
+} from '@agent/core/AgentDataclass';
 
 import { FILE_TYPES, type FileType } from './constants';
 
@@ -41,10 +45,12 @@ export function agentConfigToTaskState(
   config: AgentConfig,
   agentType?: AgentType,
 ): TaskState {
+  const agentSessionKind = deriveAgentSessionKind(agentType);
   return {
     agentConfig: config,
     activeFiles: createActiveFilesFromArrays(config),
-    ...(agentType ? { agentType } : {}),
+    agentType,
+    agentSessionKind,
   };
 }
 
@@ -59,11 +65,15 @@ export function objectToTaskState(obj: Record<string, any>): TaskState {
   // Check if this is already in the new format with nested agentConfig
   if (obj.agentConfig && typeof obj.agentConfig === 'object') {
     // Already in new format, just ensure it's valid
+    const agentType = obj.agentType as AgentType | undefined;
+    const agentSessionKind =
+      obj.agentSessionKind ?? deriveAgentSessionKind(agentType);
     return {
       agentConfig: AgentConfigSchema.parse(obj.agentConfig),
       activeFiles:
         obj.activeFiles || createActiveFilesFromArrays(obj.agentConfig),
-      agentType: obj.agentType,
+      agentType,
+      agentSessionKind,
     };
   }
 
@@ -104,7 +114,11 @@ export function objectToTaskState(obj: Record<string, any>): TaskState {
   // Parse only AgentConfig-compatible fields
   try {
     const normalized = AgentConfigSchema.parse(agentConfigData);
-    const taskState = agentConfigToTaskState(normalized, obj.agentType);
+    const agentType = obj.agentType as AgentType | undefined;
+    const agentSessionKind =
+      obj.agentSessionKind ?? deriveAgentSessionKind(agentType);
+    const taskState = agentConfigToTaskState(normalized, agentType);
+    taskState.agentSessionKind = agentSessionKind;
 
     // Add back TaskState-specific fields
     if (activeFiles) {
@@ -116,7 +130,10 @@ export function objectToTaskState(obj: Record<string, any>): TaskState {
     // If parsing fails, create a minimal valid state
     console.error('Failed to parse task state, using defaults:', error);
     const defaultConfig = AgentConfigSchema.parse({});
-    const taskState = agentConfigToTaskState(defaultConfig, obj.agentType);
+    const agentType = obj.agentType as AgentType | undefined;
+    const agentSessionKind = deriveAgentSessionKind(agentType);
+    const taskState = agentConfigToTaskState(defaultConfig, agentType);
+    taskState.agentSessionKind = agentSessionKind;
 
     // Preserve activeFiles if available
     if (activeFiles) {
