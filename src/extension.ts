@@ -120,18 +120,18 @@ export async function activate(context: vscode.ExtensionContext) {
   registerCommands(context);
 
   if (persistedToolUseSessions.length > 0) {
-    const resumeOperations = persistedToolUseSessions.map((snapshot) =>
-      Promise.resolve(
-        vscode.commands.executeCommand('texra.resumeAgent', snapshot),
-      ).catch((error: unknown) => {
-        const message = error instanceof Error ? error.message : String(error);
-        logger.error(
-          'extension',
-          `Failed to resume tool-use session ${snapshot.executionId}: ${message}`,
-        );
-      }),
-    );
-    void Promise.allSettled(resumeOperations);
+    for (const snapshot of persistedToolUseSessions) {
+      void vscode.commands
+        .executeCommand('texra.resumeAgent', snapshot)
+        .catch((error: unknown) => {
+          const message =
+            error instanceof Error ? error.message : String(error);
+          logger.error(
+            'extension',
+            `Failed to resume tool-use session ${snapshot.executionId}: ${message}`,
+          );
+        });
+    }
   }
 
   // Create a status bar item to show TeXRA progress
