@@ -16,18 +16,24 @@ logger.initialize(CHANNEL);
  * Prompt to add a newly created agent to the `texra.agents` setting. When
  * `autoAdd` is true, the agent is added without prompting.
  */
+export interface AgentVariantMetadata {
+  isMultipleVariant?: boolean;
+  baseAgentName?: string;
+  multipleAgentName?: string;
+}
+
 export async function promptToAddAgentToConfig(
   agentName: string,
   autoAdd = false,
+  variant: AgentVariantMetadata = {},
 ): Promise<void> {
   const current = getConfig<string[]>('agents', []);
 
-  const baseName = agentName.endsWith('_multiple')
-    ? agentName.replace(/_multiple$/, '')
-    : agentName;
-  const multipleName = agentName.endsWith('_multiple')
-    ? agentName
-    : `${agentName}_multiple`;
+  const {
+    isMultipleVariant = false,
+    baseAgentName,
+    multipleAgentName,
+  } = variant;
 
   // Check if agent already exists (exact match)
   if (current.includes(agentName)) {
@@ -36,9 +42,9 @@ export async function promptToAddAgentToConfig(
   }
 
   // Check if the base/multiple counterpart already exists
-  if (agentName.endsWith('_multiple')) {
-    // Adding a _multiple variant, check if base agent exists
-    if (current.includes(baseName)) {
+  if (isMultipleVariant) {
+    const baseName = baseAgentName;
+    if (baseName && current.includes(baseName)) {
       logger.debug(
         CHANNEL,
         `Base agent "${baseName}" already in configuration, skipping "${agentName}"`,
@@ -46,11 +52,11 @@ export async function promptToAddAgentToConfig(
       return;
     }
   } else {
-    // Adding a base agent, check if _multiple variant exists
-    if (current.includes(multipleName)) {
+    const siblingMultiple = multipleAgentName;
+    if (siblingMultiple && current.includes(siblingMultiple)) {
       logger.debug(
         CHANNEL,
-        `Multiple variant "${multipleName}" already in configuration, skipping "${agentName}"`,
+        `Multiple variant "${siblingMultiple}" already in configuration, skipping "${agentName}"`,
       );
       return;
     }
@@ -116,6 +122,22 @@ export async function validateYamlAndPromptAdd(
 
   const configuredAgents = getConfig<string[]>('agents', []);
   if (!configuredAgents.includes(filenameBase)) {
-    await promptToAddAgentToConfig(filenameBase, !prompt);
+    const defaultOutputs = validationResult.settings?.defaultOutputFiles ?? [];
+    const isMultipleVariant = Array.isArray(defaultOutputs)
+      ? defaultOutputs.length > 0
+      : false;
+    const metadata: AgentVariantMetadata = {
+      isMultipleVariant,
+    };
+
+    if (isMultipleVariant) {
+      metadata.baseAgentName = internalName.includes('_multiple')
+        ? internalName.replace(/_multiple$/, '')
+        : undefined;
+    } else {
+      metadata.multipleAgentName = `${internalName}_multiple`;
+    }
+
+    await promptToAddAgentToConfig(filenameBase, !prompt, metadata);
   }
 }

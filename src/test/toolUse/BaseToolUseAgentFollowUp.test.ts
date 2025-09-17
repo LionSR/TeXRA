@@ -124,6 +124,7 @@ describe('BaseToolUseAgent follow-up loop', () => {
       model: 'dummy',
       agent: 'test',
       instruction: '',
+      useMultipleOutputs: false,
       inputFile: '',
       inputFiles: null,
       referenceFile: null,
