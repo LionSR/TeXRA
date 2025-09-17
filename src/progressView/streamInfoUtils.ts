@@ -68,6 +68,7 @@ export function buildStreamInfos(
     if (!matchesAgentFilter(agentType, filter)) {
       return acc;
     }
+    const isToolAgent = agentType === AgentType.ToolUse;
     const executionId = state.getExecutionId(id);
     const label = buildStreamLabel(agentName, inputFile, agentType);
     acc.push({
@@ -76,6 +77,9 @@ export function buildStreamInfos(
       model: taskState?.agentConfig.model,
       agent: taskState?.agentConfig.agent,
       agentType,
+      uiTraits: {
+        isToolAgent,
+      },
       hasMultipleOutputs: Array.isArray(outputs) && outputs.length > 1,
       lastTimestamp,
       inputFile,
