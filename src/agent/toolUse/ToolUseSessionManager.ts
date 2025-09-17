@@ -9,10 +9,7 @@ import * as vscode from 'vscode';
 import { AgentSessionKind } from '@agent/core/AgentDataclass';
 import { ToolState } from '@agent/core/ToolState';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
-import type {
-  ExecutionId,
-  StreamTabId,
-} from '@agent/types/IdentifierTypes';
+import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
 
 // Local imports - logging
 import { AgentLogger } from '@logger/AgentLogger';
@@ -96,7 +93,9 @@ function serializeToolState(state: ToolState) {
   };
 }
 
-function hydrateToolState(snapshot: ToolUseSessionSnapshot['toolState']): ToolState {
+function hydrateToolState(
+  snapshot: ToolUseSessionSnapshot['toolState'],
+): ToolState {
   const state = new ToolState();
   state.texcountStats = snapshot.texcountStats;
   state.lastResponse = snapshot.lastResponse;
@@ -217,7 +216,9 @@ export class ToolUseSessionManager {
    * Deletes a tool-use session snapshot from persistent storage
    * @param executionId - The ID of the session to delete
    */
-  public static async deleteSnapshot(executionId: ExecutionId | undefined): Promise<void> {
+  public static async deleteSnapshot(
+    executionId: ExecutionId | undefined,
+  ): Promise<void> {
     if (!executionId || !isValidExecutionId(executionId)) {
       return;
     }
