@@ -9,7 +9,12 @@ export interface IAgent {
   /** Agent configuration used during execution. */
   readonly config: AgentConfig;
 
-  /** Initialize the agent before running. */
+  /**
+   * Initialize the agent before running.
+   * @param parentGroupId - Optional parent group ID for nested logging
+   * @param options - Initialization options
+   * @param options.createGroup - Whether to create a new log group (default: true)
+   */
   init(
     parentGroupId?: string,
     options?: { createGroup?: boolean },
