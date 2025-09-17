@@ -234,8 +234,12 @@ export async function activate(context: vscode.ExtensionContext) {
   }
 }
 
-export function deactivate() {
+export async function deactivate() {
   disposeStatusListener?.();
+  
+  // Clean up persisted tool-use sessions when extension deactivates
+  await ToolUseSessionManager.deleteAllSnapshots();
+  
   // Get the ProgressViewProvider instance
   const progressViewProvider = ProgressViewProvider.getInstance();
   if (progressViewProvider) {
