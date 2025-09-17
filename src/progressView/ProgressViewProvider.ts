@@ -30,7 +30,8 @@ import { TaskState } from '@logger/TaskState';
 type StreamStatusType =
   | typeof STATUS.RUNNING
   | typeof STATUS.ERROR
-  | typeof STATUS.STOPPED;
+  | typeof STATUS.STOPPED
+  | typeof STATUS.WAITING;
 
 /**
  * Refactored ProgressViewProvider using the new modular architecture.
@@ -242,9 +243,11 @@ export class ProgressViewProvider
   /**
    * Cleanup tasks after restart (legacy compatibility)
    */
-  public cleanupTasksAfterRestart(): void {
+  public async cleanupTasksAfterRestart(
+    waitingStreams?: Set<string>,
+  ): Promise<void> {
     // Use the same logic as webview reload to mark all running tasks/groups as ERROR
-    this.resetRunningStreamStatuses();
+    await this.resetRunningStreamStatuses(waitingStreams);
     this.updateWebview();
   }
 
@@ -259,9 +262,12 @@ export class ProgressViewProvider
    * Reset running stream statuses when webview reloads
    * Sets all running streams and their groups to ERROR status
    */
-  private resetRunningStreamStatuses(): void {
+  private async resetRunningStreamStatuses(
+    waitingStreams?: Set<string>,
+  ): Promise<void> {
     // Get affected streams and set their status to ERROR
-    const affectedStreams = this.eventHandler.resetRunningTasksToError();
+    const affectedStreams =
+      this.eventHandler.resetRunningTasksToError(waitingStreams);
 
     // Also check ALL streams for running groups, not just affected streams
     // This ensures we catch any groups that might be running even if stream status is not

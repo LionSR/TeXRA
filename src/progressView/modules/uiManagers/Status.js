@@ -1,5 +1,5 @@
 // Local imports - progress view
-import { STATUS, TOOLBAR_BUTTONS, ELEMENT_IDS } from '../constants.js';
+import { STATUS, ALL_TOOLBAR_BUTTON_IDS, ELEMENT_IDS } from '../constants.js';
 // Local imports
 import { progressViewState } from '../progressViewState.js';
 import { setElementsDisabled } from '@common/domUtils.js';
@@ -44,9 +44,18 @@ export class Status {
         label: 'Ready',
         enable: [ELEMENT_IDS.RESTORE_STATE_BTN, ELEMENT_IDS.ERASE_STREAM_BTN],
       },
+      [STATUS.WAITING]: {
+        className: 'waiting',
+        label: 'Waiting for follow-up',
+        enable: [
+          ELEMENT_IDS.STOP_STREAM_BTN,
+          ELEMENT_IDS.RESTORE_STATE_BTN,
+          ELEMENT_IDS.ERASE_STREAM_BTN,
+        ],
+      },
     };
 
-    this.BUTTON_IDS = TOOLBAR_BUTTONS.map((b) => b.id);
+    this.BUTTON_IDS = ALL_TOOLBAR_BUTTON_IDS;
     this._buttonElements = null; // Cache for button elements
   }
 
@@ -63,13 +72,17 @@ export class Status {
       return;
     }
 
-    const buttons = (this._buttonElements ||= this.BUTTON_IDS.map((id) =>
+    // Query buttons fresh each time to handle toolbar re-rendering
+    const buttons = this.BUTTON_IDS.map((id) =>
       document.getElementById(id),
-    ).filter(Boolean));
+    ).filter(Boolean);
 
     setElementsDisabled(buttons, true);
     // Always enable the erase button regardless of status
-    setElementsDisabled(ELEMENT_IDS.ERASE_STREAM_BTN, false);
+    const eraseButton = document.getElementById(ELEMENT_IDS.ERASE_STREAM_BTN);
+    if (eraseButton) {
+      setElementsDisabled([eraseButton], false);
+    }
 
     statusIndicator.className = 'status-indicator';
     statusIndicator.dataset.status = 'Ready';
@@ -80,7 +93,13 @@ export class Status {
         return;
       }
 
-      statusIndicator.classList.remove('running', 'error', 'stopped', 'ready');
+      statusIndicator.classList.remove(
+        STATUS.RUNNING,
+        STATUS.ERROR,
+        STATUS.STOPPED,
+        STATUS.READY,
+        STATUS.WAITING,
+      );
 
       const cfg = this.STATUS_MAP[status] || {
         className: 'stopped',
