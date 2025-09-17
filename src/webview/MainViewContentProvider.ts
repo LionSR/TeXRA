@@ -4,6 +4,13 @@ import * as path from 'path';
 // Third-party imports
 import * as vscode from 'vscode';
 
+// Local imports - agent utilities
+import {
+  createAgentOptionTag,
+  getAgentOptionMetadataSync,
+  type AgentDirectoryMap,
+} from '@agent/utils/agentOptionMetadata';
+
 // Local imports - webview
 import {
   BaseViewContentProvider,
@@ -78,6 +85,20 @@ export class MainViewContentProvider extends BaseViewContentProvider {
     const agents = getConfig<string[]>('agents', []);
     const includeToolUse = getConfig<boolean>('includeToolUseAgents', false);
     const toolUseDir = GlobalStorageFS.fullPath('tool_use_agents');
+    const builtInDir = GlobalStorageFS.fullPath('agents');
+    const configuredCustomDir = getConfig<string>(
+      'explorer.agentsDirectory',
+      '',
+    ).trim();
+    const customDir = path.isAbsolute(configuredCustomDir)
+      ? configuredCustomDir
+      : '';
+
+    const agentDirectories: AgentDirectoryMap = {
+      custom: customDir,
+      builtIn: builtInDir,
+      builtInToolUse: includeToolUse ? toolUseDir : '',
+    };
     let extraAgents: string[] = [];
     if (includeToolUse) {
       try {
@@ -91,7 +112,10 @@ export class MainViewContentProvider extends BaseViewContentProvider {
     }
     const allAgents = Array.from(new Set([...agents, ...extraAgents]));
     const agentOptions = allAgents
-      .map((agent) => `<option value="${agent}">${agent}</option>`)
+      .map((agent) => {
+        const metadata = getAgentOptionMetadataSync(agent, agentDirectories);
+        return createAgentOptionTag(agent, metadata);
+      })
       .join('\n');
 
     const models = getConfig<string[]>('models', []);

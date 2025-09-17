@@ -105,3 +105,7 @@ option[data-requires-key='true'] {
 option[data-multiple='true'] {
   font-family: codicon, var(--vscode-font-family);
 }
+
+option[data-tool-use='true'] {
+  font-style: italic;
+}
