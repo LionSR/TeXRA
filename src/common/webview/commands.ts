@@ -178,6 +178,7 @@ export const PROGRESS_VIEW_COMMANDS = {
   PACK_STREAM: 'packStream',
   CLEAN_STREAM: 'cleanStream',
   SORT_STREAMS: 'sortStreams',
+  FILTER_STREAMS: 'filterStreams',
   RESTORE_STATE: 'restoreState',
   SEND_FOLLOW_UP: 'sendFollowUp',
 
