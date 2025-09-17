@@ -14,12 +14,8 @@ import { BaseAgent } from '@agent/implementations/BaseAgent';
 import type { IModelHandler } from '@agent/modelHandlers';
 import { OutputHandler, NamedOutputFile, IOutputHandler } from '@agent/output';
 import type { ExecutionId } from '@agent/types/IdentifierTypes';
-import {
-  getSystemPromptWithRules,
-  getPrefillForRound,
-  getReflectPromptForRound,
-} from '@agent/utils/promptHelpers';
-import { renderPrompt, writePromptToXml } from '@agent/utils/promptUtils';
+import { PromptBuilder } from '@agent/utils/PromptBuilder';
+import { writePromptToXml } from '@agent/utils/promptUtils';
 import { bus } from '@eventBus/ProgressEventBus';
 // Standard library imports
 // (none needed)
@@ -69,6 +65,7 @@ export abstract class BaseReflectionAgent extends BaseAgent {
   /** Handler for output file processing and validation. */
   protected outputHandler: IOutputHandler;
   protected latexMediaManager: LatexMediaManager;
+  protected promptBuilder?: PromptBuilder;
   public roundStates: AgentStateRound[] = [];
   public toolStates: ToolState[] = [];
 
@@ -122,6 +119,19 @@ export abstract class BaseReflectionAgent extends BaseAgent {
     );
 
     this.latexMediaManager = new LatexMediaManager(this.logger);
+  }
+
+  protected getPromptBuilder(): PromptBuilder {
+    if (!this.promptBuilder) {
+      this.promptBuilder = new PromptBuilder(
+        this.agentPrompt,
+        this.agentSetting,
+        this.userVars,
+        this.logger,
+      );
+    }
+
+    return this.promptBuilder;
   }
 
   /**
@@ -262,11 +272,9 @@ export abstract class BaseReflectionAgent extends BaseAgent {
       const messages: any[] = [];
 
       // Set up initial prompts
-      const [systemPrompt, userRequest, userPrefix] = await Promise.all([
-        getSystemPromptWithRules(this.agentPrompt.systemPrompt, this.userVars),
-        renderPrompt(this.agentPrompt.userRequest, this.userVars),
-        renderPrompt(this.agentPrompt.userPrefix, this.userVars),
-      ]);
+      const promptBuilder = this.getPromptBuilder();
+      const { systemPrompt, userRequest, userPrefix } =
+        await promptBuilder.buildInitialPrompts();
 
       let prefixWithStats = userPrefix;
       if (toolState.texcountStats) {
@@ -294,7 +302,7 @@ export abstract class BaseReflectionAgent extends BaseAgent {
       messages.push(...initialMessages);
 
       // Handle prefill
-      const prefill = getPrefillForRound(this.agentSetting.prefills, currRound);
+      const prefill = await promptBuilder.buildPrefill(currRound);
       toolState.updateAccumulatedOutput(prefill);
 
       // Initialize output and handle prefill
@@ -421,14 +429,9 @@ export abstract class BaseReflectionAgent extends BaseAgent {
       const stateRound = new AgentStateRound(currRound);
 
       // Prepare round message
-      const reflectTemplate = getReflectPromptForRound(
-        this.agentPrompt,
-        currRound,
-      );
-      const userRequestReflect = await renderPrompt(
-        reflectTemplate,
-        this.userVars,
-      );
+      const promptBuilder = this.getPromptBuilder();
+      const userRequestReflect =
+        await promptBuilder.buildReflectPrompt(currRound);
       let userMessage = userRequestReflect ? `${userRequestReflect}\n` : '';
       if (toolState.texcountStats) {
         userMessage = `${toolState.texcountStats}${userMessage}`;
@@ -446,7 +449,7 @@ export abstract class BaseReflectionAgent extends BaseAgent {
       );
 
       // Handle prefill for round
-      const prefill = getPrefillForRound(this.agentSetting.prefills, currRound);
+      const prefill = await promptBuilder.buildPrefill(currRound);
       toolState.updateAccumulatedOutput(prefill);
 
       const [endTurn, updatedMessages] =
@@ -541,6 +544,7 @@ export abstract class BaseReflectionAgent extends BaseAgent {
 
     try {
       await this.init(this.runGroupId);
+      this.promptBuilder = undefined;
       await this.initializeClient();
 
       let stateGlobal = new AgentStateGlobal();
