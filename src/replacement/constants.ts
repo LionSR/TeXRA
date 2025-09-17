@@ -73,6 +73,8 @@ export const LATEX_ENVIRONMENTS = [
   'solution',
   'acknowledgment',
   'minipage',
+  'column',
+  'columns',
   'verbatim',
   'lstlisting',
   'minted',
