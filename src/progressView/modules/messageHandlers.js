@@ -80,14 +80,45 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
     this._updatePlaceholderVisibility();
 
+    const activeStreamInfo = message.streams.find(
+      (s) => s.name === message.activeStream,
+    );
+    const isToolUseAgent = activeStreamInfo?.agentType === 'toolUse';
+
     const container = document.getElementById(ELEMENT_IDS.FOLLOW_UP_CONTAINER);
     if (container) {
-      const active = message.streams.find(
-        (s) => s.name === message.activeStream,
-      );
-      container.style.display =
-        active && active.agentType === 'toolUse' ? 'flex' : 'none';
+      container.classList.toggle('is-visible', Boolean(isToolUseAgent));
+      container.setAttribute('aria-hidden', isToolUseAgent ? 'false' : 'true');
     }
+
+    const buttonsToToggle = [
+      ELEMENT_IDS.RUN_AGAIN_BTN,
+      ELEMENT_IDS.DIFF_STREAM_BTN,
+      ELEMENT_IDS.PACK_STREAM_BTN,
+      ELEMENT_IDS.CLEAN_STREAM_BTN,
+    ];
+
+    const toolbar = document.getElementById(ELEMENT_IDS.TOOLBAR_CONTAINER);
+    if (toolbar) {
+      toolbar.dataset.agentType = activeStreamInfo?.agentType || '';
+    }
+
+    buttonsToToggle.forEach((buttonId) => {
+      const button = document.getElementById(buttonId);
+      if (!button) return;
+      const shouldHide = Boolean(isToolUseAgent);
+      button.classList.toggle('toolbar-button--hidden', shouldHide);
+      if (shouldHide) {
+        button.setAttribute('aria-hidden', 'true');
+        button.setAttribute('tabindex', '-1');
+        button.dataset.hiddenByAgent = 'true';
+        button.disabled = true;
+      } else {
+        button.removeAttribute('aria-hidden');
+        button.removeAttribute('tabindex');
+        delete button.dataset.hiddenByAgent;
+      }
+    });
 
     // Update status based on whether there's an active stream
     if (!message.activeStream) {

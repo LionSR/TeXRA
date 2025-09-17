@@ -12,6 +12,7 @@ import {
   AgentTypeFilter,
   isAgentTypeFilter,
 } from '@agent/types/AgentStreamTypes';
+import { AgentType } from '@agent/core/AgentDataclass';
 
 // @ts-ignore - Import JavaScript module
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
@@ -126,12 +127,14 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     webviewView: vscode.WebviewView,
   ): Promise<void> {
     const taskState = this.provider.state.getTaskState(message.stream);
-    if (taskState) {
-      await vscode.commands.executeCommand(
-        'texra.execute',
-        taskState.agentConfig,
-      );
+    if (!taskState || taskState.agentType === AgentType.ToolUse) {
+      return;
     }
+
+    await vscode.commands.executeCommand(
+      'texra.execute',
+      taskState.agentConfig,
+    );
   }
 
   private async handleDiffStream(
@@ -139,21 +142,28 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     webviewView: vscode.WebviewView,
   ): Promise<void> {
     const taskState = this.provider.state.getTaskState(message.stream);
-    if (taskState) {
-      await vscode.commands.executeCommand('texra.runLatexdiff', {
-        agent: taskState.agentConfig.agent,
-        model: taskState.agentConfig.model,
-        inputFile: taskState.agentConfig.inputFile,
-        outputFiles: taskState.agentConfig.outputFiles,
-        outputFilesActive: taskState.activeFiles.output,
-      });
+    if (!taskState || taskState.agentType === AgentType.ToolUse) {
+      return;
     }
+
+    await vscode.commands.executeCommand('texra.runLatexdiff', {
+      agent: taskState.agentConfig.agent,
+      model: taskState.agentConfig.model,
+      inputFile: taskState.agentConfig.inputFile,
+      outputFiles: taskState.agentConfig.outputFiles,
+      outputFilesActive: taskState.activeFiles.output,
+    });
   }
 
   private async handlePackStream(
     message: any,
     webviewView: vscode.WebviewView,
   ): Promise<void> {
+    const taskState = this.provider.state.getTaskState(message.stream);
+    if (!taskState || taskState.agentType === AgentType.ToolUse) {
+      return;
+    }
+
     await this.handleFileOperation(message.stream, 'texra.pack');
   }
 
@@ -161,6 +171,11 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     message: any,
     webviewView: vscode.WebviewView,
   ): Promise<void> {
+    const taskState = this.provider.state.getTaskState(message.stream);
+    if (!taskState || taskState.agentType === AgentType.ToolUse) {
+      return;
+    }
+
     await this.handleFileOperation(message.stream, 'texra.clean');
   }
 
@@ -290,7 +305,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     command: 'texra.pack' | 'texra.clean',
   ): Promise<void> {
     const taskState = this.provider.state.getTaskState(stream);
-    if (!taskState) return;
+    if (!taskState || taskState.agentType === AgentType.ToolUse) return;
 
     const generated = this.provider.state.outputFiles.getFiles(stream);
     const allFiles = new Set<string>(taskState.agentConfig.outputFiles || []);

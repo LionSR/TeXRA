@@ -91,7 +91,12 @@ export class Status {
       statusIndicator.classList.add(cfg.className);
       statusIndicator.dataset.status = cfg.label;
 
-      setElementsDisabled(cfg.enable, false);
+      const elementsToEnable = cfg.enable
+        .map((id) => document.getElementById(id))
+        .filter((el) => el && el.dataset.hiddenByAgent !== 'true');
+      if (elementsToEnable.length > 0) {
+        setElementsDisabled(elementsToEnable, false);
+      }
 
       const activeStream = progressViewState.activeStream;
       if (activeStream && status !== STATUS.READY) {
