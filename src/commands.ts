@@ -20,6 +20,7 @@ import { registerAgentCreatorCommands } from '@commands/agent/agentCreatorComman
 import { registerApiKeyCommands } from '@commands/api/apiKeyCommands';
 import { registerStateRestoreCommand } from '@commands/history/stateRestoreCommand';
 import { registerFollowUpCommand } from '@commands/agent/followUpCommand';
+import { registerResumeAgentCommand } from '@commands/agent/resumeCommand';
 import { registerTextEditorCommands } from '@commands/system/textEditorCommands';
 import { registerLinterCommands } from '@commands/latex/linterCommands';
 import { registerWolframScriptCommands } from '@commands/wolfram/wolframScriptCommands';
@@ -72,6 +73,7 @@ export function registerCommands(context: vscode.ExtensionContext) {
     compare: registerCompareCommands(context),
     progressView: registerProgressViewCommands(context),
     followUp: registerFollowUpCommand(context),
+    resumeAgent: registerResumeAgentCommand(context),
     openFile: registerOpenFileCommands(context),
     help: registerHelpCommands(context),
     mainView: registerMainViewCommands(context),

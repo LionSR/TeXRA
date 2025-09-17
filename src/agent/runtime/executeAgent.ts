@@ -159,12 +159,18 @@ function getAgentName(
 /**
  * Common function to execute any agent with proper logging and status handling
  */
-async function executeAgentWithLogging<T extends IAgent>(
+interface ExecuteAgentOptions {
+  resume?: boolean;
+}
+
+export async function executeAgentWithLogging<T extends IAgent>(
   agentName: string,
   createAgentFn: () => Promise<{ agent: T; agentType?: AgentType }>,
   context: vscode.ExtensionContext,
   executionId?: ExecutionId,
+  options?: ExecuteAgentOptions,
 ): Promise<void> {
+  const isResume = options?.resume ?? false;
   try {
     // Create agent instance and extract its declared type
     const { agent, agentType } = await createAgentFn();
@@ -189,29 +195,29 @@ async function executeAgentWithLogging<T extends IAgent>(
     // Check if this stream is already running
     const provider = ProgressViewProvider.getInstance();
     const currentStatus = provider?.eventHandler.getStreamStatus(streamTabId);
-    if (currentStatus === 'running') {
+    if (!isResume && currentStatus === 'running') {
       const errorMsg = `Task "${streamTabId}" is already running. Please wait for it to complete or stop it first.`;
       throw new Error(errorMsg);
     }
 
     // Create a main task group for the entire execution
-    const mainTaskGroupId = await logger.startGroup(
-      `Task: ${agentName}@${config.model}`,
-    );
+    const mainTaskGroupId = isResume
+      ? undefined
+      : await logger.startGroup(`Task: ${agentName}@${config.model}`);
 
     try {
       // Create a log group for execution details as a sub-group
-      const taskDetailsGroupId = await logger.startGroup(
-        `Task Details`,
-        undefined,
-        mainTaskGroupId,
-      );
+      const taskDetailsGroupId = isResume
+        ? undefined
+        : await logger.startGroup(`Task Details`, undefined, mainTaskGroupId);
 
-      logger.info(
-        `Starting task execution for ${streamTabId}`,
-        taskDetailsGroupId,
-      );
-      logger.info(`Input file: ${config.inputFile}`, taskDetailsGroupId);
+      if (!isResume && taskDetailsGroupId) {
+        logger.info(
+          `Starting task execution for ${streamTabId}`,
+          taskDetailsGroupId,
+        );
+        logger.info(`Input file: ${config.inputFile}`, taskDetailsGroupId);
+      }
 
       try {
         logger.debug(
@@ -234,65 +240,69 @@ async function executeAgentWithLogging<T extends IAgent>(
           status: 'running',
         });
 
-        const viewVisible = provider?.isViewVisible() ?? false;
-        if (!viewVisible) {
-          await vscode.commands.executeCommand('texra.showProgressView');
+        if (!isResume) {
+          const viewVisible = provider?.isViewVisible() ?? false;
+          if (!viewVisible) {
+            await vscode.commands.executeCommand('texra.showProgressView');
+          }
+
+          if (!provider?.isViewVisible()) {
+            const inputFileName = path.basename(config.inputFile);
+            const outputInfo = config.useMultipleOutputs
+              ? config.outputFiles?.length
+                ? `to ${
+                    config.outputFiles.length > 1
+                      ? `${config.outputFiles.length} files`
+                      : path.basename(config.outputFiles[0])
+                  }`
+                : 'for multiple outputs'
+              : config.outputFiles?.length
+                ? `to ${path.basename(config.outputFiles[0])}`
+                : '';
+
+            vscode.window
+              .showInformationMessage(
+                `TeXRA Agent Started: "${agentName}" is processing ${inputFileName} with ${config.model} ${outputInfo}. View in ProgressBoard for progress.`,
+                {
+                  modal: false,
+                  detail:
+                    'TeXRA agents run in the background and their progress can be tracked in the ProgressBoard.',
+                },
+                'Show ProgressBoard',
+              )
+              .then((selection) => {
+                if (selection === 'Show ProgressBoard') {
+                  vscode.commands.executeCommand('texra.showProgressView');
+                }
+              });
+          }
+
+          // Store taskState
+          logger.debug(
+            `Storing taskState for stream: ${streamTabId}`,
+            taskDetailsGroupId,
+          );
+          logger.debug(
+            `Config for taskState: ${JSON.stringify(config)}`,
+            taskDetailsGroupId,
+          );
+
+          // End the task details group
+          if (taskDetailsGroupId) {
+            logger.endGroup(taskDetailsGroupId, 'stopped');
+          }
+
+          // Convert AgentConfig to TaskState using utility function
+          bus.emit('setTaskState', {
+            streamTabId: streamTabId,
+            executionId,
+            taskState: agentConfigToTaskState(config, agentType),
+          });
+          logger.debug(
+            `Task state stored for stream: ${streamTabId}`,
+            mainTaskGroupId,
+          );
         }
-
-        if (!provider?.isViewVisible()) {
-          const inputFileName = path.basename(config.inputFile);
-          const outputInfo = config.useMultipleOutputs
-            ? config.outputFiles?.length
-              ? `to ${
-                  config.outputFiles.length > 1
-                    ? `${config.outputFiles.length} files`
-                    : path.basename(config.outputFiles[0])
-                }`
-              : 'for multiple outputs'
-            : config.outputFiles?.length
-              ? `to ${path.basename(config.outputFiles[0])}`
-              : '';
-
-          vscode.window
-            .showInformationMessage(
-              `TeXRA Agent Started: "${agentName}" is processing ${inputFileName} with ${config.model} ${outputInfo}. View in ProgressBoard for progress.`,
-              {
-                modal: false,
-                detail:
-                  'TeXRA agents run in the background and their progress can be tracked in the ProgressBoard.',
-              },
-              'Show ProgressBoard',
-            )
-            .then((selection) => {
-              if (selection === 'Show ProgressBoard') {
-                vscode.commands.executeCommand('texra.showProgressView');
-              }
-            });
-        }
-
-        // Store taskState
-        logger.debug(
-          `Storing taskState for stream: ${streamTabId}`,
-          taskDetailsGroupId,
-        );
-        logger.debug(
-          `Config for taskState: ${JSON.stringify(config)}`,
-          taskDetailsGroupId,
-        );
-
-        // End the task details group
-        logger.endGroup(taskDetailsGroupId, 'stopped');
-
-        // Convert AgentConfig to TaskState using utility function
-        bus.emit('setTaskState', {
-          streamTabId: streamTabId,
-          executionId,
-          taskState: agentConfigToTaskState(config, agentType),
-        });
-        logger.debug(
-          `Task state stored for stream: ${streamTabId}`,
-          mainTaskGroupId,
-        );
 
         try {
           // Run the agent
@@ -304,7 +314,9 @@ async function executeAgentWithLogging<T extends IAgent>(
           // await checkExpectedOutputs(config.outputFiles, agent);
           // Mark the task as completed successfully
           logger.debug(`Task completed successfully`, mainTaskGroupId);
-          logger.endGroup(mainTaskGroupId, 'stopped');
+          if (mainTaskGroupId) {
+            logger.endGroup(mainTaskGroupId, 'stopped');
+          }
           // Update status to stopped on successful completion
           bus.emit('updateStreamStatus', {
             stream: streamTabId,
@@ -325,7 +337,9 @@ async function executeAgentWithLogging<T extends IAgent>(
             `Task failed: ${err instanceof Error ? err.message : String(err)}`,
             mainTaskGroupId,
           );
-          logger.endGroup(mainTaskGroupId, 'error');
+          if (mainTaskGroupId) {
+            logger.endGroup(mainTaskGroupId, 'error');
+          }
           // Update status to error if agent run fails
           bus.emit('updateStreamStatus', {
             stream: streamTabId,
@@ -344,7 +358,9 @@ async function executeAgentWithLogging<T extends IAgent>(
           `Task initialization failed: ${err instanceof Error ? err.message : String(err)}`,
           mainTaskGroupId,
         );
-        logger.endGroup(mainTaskGroupId, 'error');
+        if (mainTaskGroupId) {
+          logger.endGroup(mainTaskGroupId, 'error');
+        }
         throw err;
       }
     } catch (err) {
@@ -474,6 +490,7 @@ export async function executeAgent(
     },
     context,
     executionId,
+    { resume: false },
   );
 }
 
