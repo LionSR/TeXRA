@@ -90,6 +90,14 @@ export class ActionButtonManager extends BaseUIManager {
       const agent = safeGetElementValue('agent');
       const model = safeGetElementValue('model');
       const instruction = safeGetElementValue(ELEMENT_IDS.INSTRUCTION);
+      const agentSelect = safeGetElementById('agent');
+      const selectedOption =
+        agentSelect &&
+        'options' in agentSelect &&
+        'selectedIndex' in agentSelect
+          ? agentSelect.options[agentSelect.selectedIndex]
+          : null;
+      const isToolUseAgent = selectedOption?.dataset?.toolUse === 'true';
       const singleFiles = this._getSingleFileData();
       const multipleFilesData = this._getMultipleFileData(singleFiles);
 
@@ -103,6 +111,7 @@ export class ActionButtonManager extends BaseUIManager {
         agent,
         model,
         instruction,
+        isToolUseAgent,
         ...singleFiles,
         ...multipleFilesData,
         ...checkboxValues,
