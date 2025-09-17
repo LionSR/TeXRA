@@ -543,7 +543,7 @@ export abstract class BaseReflectionAgent extends BaseAgent {
     await this.startRunGroup();
 
     try {
-      await this.init(this.runGroupId);
+      await this.init(this.runGroupId, { createGroup: true });
       this.promptBuilder = undefined;
       await this.initializeClient();
 
