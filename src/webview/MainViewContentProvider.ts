@@ -7,7 +7,7 @@ import * as vscode from 'vscode';
 // Local imports - agent utilities
 import {
   createAgentOptionTag,
-  getAgentOptionMetadataSync,
+  getAgentOptionMetadata,
   type AgentDirectoryMap,
 } from '@agent/utils/agentOptionMetadata';
 
@@ -113,7 +113,7 @@ export class MainViewContentProvider extends BaseViewContentProvider {
     const allAgents = Array.from(new Set([...agents, ...extraAgents]));
     const agentOptions = allAgents
       .map((agent) => {
-        const metadata = getAgentOptionMetadataSync(agent, agentDirectories);
+        const metadata = getAgentOptionMetadata(agent, agentDirectories);
         return createAgentOptionTag(agent, metadata);
       })
       .join('\n');
