@@ -360,7 +360,11 @@ export class LogEntryFormatter {
       if (result) {
         return result;
       }
-      if (messageType === 'thinking' || messageType === 'scratchpad') {
+      if (
+        messageType === 'thinking' ||
+        messageType === 'scratchpad' ||
+        messageType === 'modelResponse'
+      ) {
         return null;
       }
     }
@@ -488,6 +492,15 @@ export class LogEntryFormatter {
    * @returns {HTMLElement|null} DOM element for the model response
    */
   _formatModelResponse({ id, groupId, timestamp, verbose, content, level }) {
+    if (!content) {
+      return null;
+    }
+
+    const decodedContent = decodeHtml(content);
+    if (!decodedContent.trim()) {
+      return null;
+    }
+
     const element = createFromTemplate('modelResponseTemplate');
     if (!element) return null;
 
@@ -506,7 +519,6 @@ export class LogEntryFormatter {
 
     const contentElem = element.querySelector('.model-response-content');
     if (contentElem) {
-      const decodedContent = decodeHtml(content);
       contentElem.classList.add(`message-${level}`);
       contentElem.dataset.rawContent = decodedContent;
       contentElem.innerHTML = this._processMarkdownContent(
