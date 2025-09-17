@@ -7,6 +7,18 @@ import { appendFormatted } from './utils.js';
 import { progressViewState } from './progressViewState.js';
 import { BaseWebviewMessageHandler } from '@common/BaseWebviewMessageHandler.js';
 
+const TOOLBAR_ACTION_BUTTON_IDS = [
+  ELEMENT_IDS.RUN_AGAIN_BTN,
+  ELEMENT_IDS.DIFF_STREAM_BTN,
+  ELEMENT_IDS.PACK_STREAM_BTN,
+  ELEMENT_IDS.CLEAN_STREAM_BTN,
+];
+
+const AGENT_MODES = Object.freeze({
+  TOOL: 'tool',
+  WORKFLOW: 'workflow',
+});
+
 // Create shorter aliases for internal use
 const state = progressViewState;
 const dom = progressViewDomHandler;
@@ -17,6 +29,9 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   constructor() {
     super();
     this._entryFormatter = new LogEntryFormatter();
+    this._toolbarButtonCache = null;
+    this._toolbarMutationObserver = null;
+    this._toolbarObserverTarget = null;
     this._handlers = {
       ...createThemeHandlers(),
       ...this._createHandlers(),
@@ -80,14 +95,60 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
     this._updatePlaceholderVisibility();
 
+    const activeStreamInfo = message.streams.find(
+      (s) => s.name === message.activeStream,
+    );
+    const isToolAgent = activeStreamInfo?.uiTraits?.isToolAgent ?? false;
+
     const container = document.getElementById(ELEMENT_IDS.FOLLOW_UP_CONTAINER);
     if (container) {
-      const active = message.streams.find(
-        (s) => s.name === message.activeStream,
-      );
-      container.style.display =
-        active && active.agentType === 'toolUse' ? 'flex' : 'none';
+      container.classList.toggle('is-visible', isToolAgent);
+      container.setAttribute('aria-hidden', isToolAgent ? 'false' : 'true');
     }
+
+    const toolbarButtons = this._getToolbarButtons();
+
+    const toolbar = document.getElementById(ELEMENT_IDS.TOOLBAR_CONTAINER);
+    if (toolbar) {
+      toolbar.dataset.agentType = activeStreamInfo?.agentType || '';
+      toolbar.dataset.agentMode = isToolAgent
+        ? AGENT_MODES.TOOL
+        : AGENT_MODES.WORKFLOW;
+    }
+
+    toolbarButtons.forEach((button) => {
+      const shouldHide = isToolAgent;
+      const wasHidden = button.dataset.hiddenByAgent === 'true';
+      if (shouldHide === wasHidden) {
+        return;
+      }
+
+      button.classList.toggle('toolbar-button--hidden', shouldHide);
+
+      if (shouldHide) {
+        button.setAttribute('aria-hidden', 'true');
+        button.setAttribute('tabindex', '-1');
+        button.dataset.hiddenByAgent = 'true';
+        if (button.dataset.disabledBeforeAgentHide === undefined) {
+          button.dataset.disabledBeforeAgentHide = button.disabled
+            ? 'true'
+            : 'false';
+        }
+        if ('disabled' in button) {
+          button.disabled = true;
+        }
+        return;
+      }
+
+      button.removeAttribute('aria-hidden');
+      button.removeAttribute('tabindex');
+      const previousDisabledState = button.dataset.disabledBeforeAgentHide;
+      if ('disabled' in button && previousDisabledState !== undefined) {
+        button.disabled = previousDisabledState === 'true';
+      }
+      delete button.dataset.hiddenByAgent;
+      delete button.dataset.disabledBeforeAgentHide;
+    });
 
     // Update status based on whether there's an active stream
     if (!message.activeStream) {
@@ -258,6 +319,70 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
   handleDeleteAll() {
     state.toggleStates.clearAll();
+  }
+
+  _getToolbarButtons() {
+    const ensureCache = () => {
+      try {
+        return TOOLBAR_ACTION_BUTTON_IDS.map((buttonId) =>
+          document.getElementById(buttonId),
+        ).filter((button) => button instanceof HTMLElement);
+      } catch (error) {
+        console.warn('Failed to cache toolbar buttons:', error);
+        return [];
+      }
+    };
+
+    const toolbar = document.getElementById(ELEMENT_IDS.TOOLBAR_CONTAINER);
+    if (!toolbar) {
+      if (this._toolbarMutationObserver) {
+        this._toolbarMutationObserver.disconnect();
+        this._toolbarMutationObserver = null;
+      }
+      this._toolbarObserverTarget = null;
+      this._toolbarButtonCache = null;
+    } else if (this._toolbarObserverTarget !== toolbar) {
+      if (this._toolbarMutationObserver) {
+        this._toolbarMutationObserver.disconnect();
+        this._toolbarMutationObserver = null;
+      }
+
+      if (typeof MutationObserver === 'function') {
+        this._toolbarMutationObserver = new MutationObserver(() => {
+          this._toolbarButtonCache = null;
+        });
+        this._toolbarMutationObserver.observe(toolbar, {
+          childList: true,
+          subtree: false,
+          attributes: false,
+        });
+      }
+
+      this._toolbarObserverTarget = toolbar;
+      this._toolbarButtonCache = null;
+    }
+
+    if (!this._toolbarButtonCache || this._toolbarButtonCache.length === 0) {
+      this._toolbarButtonCache = ensureCache();
+      return this._toolbarButtonCache;
+    }
+
+    const cacheIsStale = TOOLBAR_ACTION_BUTTON_IDS.some((id) => {
+      const cached = this._toolbarButtonCache?.find(
+        (button) => button.id === id,
+      );
+      if (!cached) {
+        return true;
+      }
+      const current = document.getElementById(id);
+      return !current || current !== cached;
+    });
+
+    if (cacheIsStale) {
+      this._toolbarButtonCache = ensureCache();
+    }
+
+    return this._toolbarButtonCache;
   }
 }
 
