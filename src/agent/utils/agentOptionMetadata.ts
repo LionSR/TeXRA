@@ -1,9 +1,6 @@
 // Third-party imports
-import { glob, globSync } from 'glob';
+import { globSync } from 'glob';
 import * as yaml from 'yaml';
-
-// Local imports - agent runtime
-import { loadYaml } from '@agent/runtime/agentLoad';
 
 // Local imports - filesystem
 import { AbsoluteFS } from '@utils/files';
@@ -43,35 +40,7 @@ function normalizeDirectory(dir?: string): string | undefined {
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
-async function findAgentYaml(
-  agentName: string,
-  directories: AgentDirectoryMap,
-  suffix = '',
-): Promise<string | undefined> {
-  const fileName = `${agentName}${suffix}${YAML_EXTENSION}`;
-  for (const key of DIRECTORY_KEYS) {
-    const baseDir = normalizeDirectory(directories[key]);
-    if (!baseDir) {
-      continue;
-    }
-    try {
-      const matches = await glob(`**/${fileName}`, {
-        cwd: baseDir,
-        nodir: true,
-        dot: false,
-        absolute: true,
-      });
-      if (matches.length > 0) {
-        return matches[0];
-      }
-    } catch {
-      // Ignore filesystem errors so dropdown rendering continues.
-    }
-  }
-  return undefined;
-}
-
-function findAgentYamlSync(
+function findAgentYaml(
   agentName: string,
   directories: AgentDirectoryMap,
   suffix = '',
@@ -99,19 +68,7 @@ function findAgentYamlSync(
   return undefined;
 }
 
-async function hasToolUseAgentType(yamlPath?: string): Promise<boolean> {
-  if (!yamlPath) {
-    return false;
-  }
-  try {
-    const definition = (await loadYaml(yamlPath)) as AgentDefinition;
-    return definition?.settings?.agentType === TOOL_USE_AGENT_TYPE;
-  } catch {
-    return false;
-  }
-}
-
-function hasToolUseAgentTypeSync(yamlPath?: string): boolean {
+function hasToolUseAgentType(yamlPath?: string): boolean {
   if (!yamlPath) {
     return false;
   }
@@ -124,37 +81,16 @@ function hasToolUseAgentTypeSync(yamlPath?: string): boolean {
   }
 }
 
-export async function getAgentOptionMetadata(
-  agentName: string,
-  directories: AgentDirectoryMap,
-): Promise<AgentOptionMetadata> {
-  const definitionPath = await findAgentYaml(agentName, directories);
-  const multiplePath = await findAgentYaml(
-    agentName,
-    directories,
-    MULTIPLE_SUFFIX,
-  );
-  return {
-    hasDefinition: Boolean(definitionPath),
-    hasMultiple: Boolean(multiplePath),
-    isToolUse: await hasToolUseAgentType(definitionPath),
-  };
-}
-
-export function getAgentOptionMetadataSync(
+export function getAgentOptionMetadata(
   agentName: string,
   directories: AgentDirectoryMap,
 ): AgentOptionMetadata {
-  const definitionPath = findAgentYamlSync(agentName, directories);
-  const multiplePath = findAgentYamlSync(
-    agentName,
-    directories,
-    MULTIPLE_SUFFIX,
-  );
+  const definitionPath = findAgentYaml(agentName, directories);
+  const multiplePath = findAgentYaml(agentName, directories, MULTIPLE_SUFFIX);
   return {
     hasDefinition: Boolean(definitionPath),
     hasMultiple: Boolean(multiplePath),
-    isToolUse: hasToolUseAgentTypeSync(definitionPath),
+    isToolUse: hasToolUseAgentType(definitionPath),
   };
 }
 
