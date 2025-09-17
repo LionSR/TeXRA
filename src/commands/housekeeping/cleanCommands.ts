@@ -81,7 +81,9 @@ async function handleCleanSingle(
   const result = await runCleanSingle(model, inputFile, agent);
   showCleanResult(result, inputFile);
 
-  const streamId = getStreamTabId(agent, model, inputFile);
+  const streamId = getStreamTabId(agent, model, inputFile, {
+    useMultipleOutputs: false,
+  });
   bus.emit('clearOutputFiles', streamId);
   bus.emit('clearMissingOutputs', streamId);
   bus.emit('clearTaskOutput', streamId);
@@ -114,7 +116,9 @@ async function handleCleanMultiple(
   const result = await runCleanMultiple(model, inputFile, agent, outputFiles);
   showCleanResult(result, inputFile);
 
-  const streamId = getStreamTabId(agent, model, inputFile, outputFiles);
+  const streamId = getStreamTabId(agent, model, inputFile, {
+    useMultipleOutputs: true,
+  });
   bus.emit('clearOutputFiles', streamId);
   bus.emit('clearMissingOutputs', streamId);
   bus.emit('clearTaskOutput', streamId);
@@ -137,6 +141,9 @@ export async function handleClean(config: {
   const outputFiles = config.activeFiles?.output
     ? config.outputFiles || []
     : [];
+  const useMultipleOutputs = Boolean(
+    config.useMultipleOutputs ?? config.activeFiles?.output,
+  );
 
   if (outputFiles.length > 0) {
     logger.info(
@@ -162,7 +169,9 @@ export async function handleClean(config: {
 
   const streamId =
     config.streamId ||
-    getStreamTabId(config.agent, config.model, config.inputFile, outputFiles);
+    getStreamTabId(config.agent, config.model, config.inputFile, {
+      useMultipleOutputs,
+    });
   bus.emit('clearOutputFiles', streamId);
   bus.emit('clearMissingOutputs', streamId);
   bus.emit('clearTaskOutput', streamId);

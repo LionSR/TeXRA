@@ -60,6 +60,7 @@ describe('OutputHandler.finalizeRound', () => {
     model: 'test',
     agent: 'a',
     instruction: '',
+    useMultipleOutputs: false,
     inputFile: 'input.tex',
     inputFiles: null,
     referenceFile: null,

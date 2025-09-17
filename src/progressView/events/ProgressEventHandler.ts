@@ -298,6 +298,7 @@ export class ProgressEventHandler {
     if (taskState) {
       // Only clear output-related fields, preserve other task state data
       taskState.agentConfig.outputFiles = [];
+      taskState.agentConfig.useMultipleOutputs = false;
       if (taskState.activeFiles) {
         taskState.activeFiles.output = false;
       }

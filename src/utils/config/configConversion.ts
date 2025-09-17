@@ -19,9 +19,14 @@ function createActiveFilesFromArrays(
   FILE_TYPES.forEach((type) => {
     const filesField = `${type}Files`;
     const flagField = `${filesField}Active`;
+    const useMultipleOutputs = Boolean(
+      (src as { useMultipleOutputs?: boolean }).useMultipleOutputs,
+    );
+    const multipleFlag = type === 'output' && useMultipleOutputs;
     active[type] =
       (Array.isArray(src[filesField]) && src[filesField].length > 0) ||
-      !!src[flagField];
+      !!src[flagField] ||
+      multipleFlag;
   });
   return active;
 }

@@ -316,7 +316,16 @@ async function handleCreateAgentWithAI(context: vscode.ExtensionContext) {
 
     await AbsoluteFS.write(filePath.fsPath, yamlContent);
     vscode.window.showInformationMessage(`Created agent at ${filePath.fsPath}`);
-    await promptToAddAgentToConfig(agentName);
+    const isMultipleVariant = outputChoice === 'Multiple output files';
+    await promptToAddAgentToConfig(agentName, false, {
+      isMultipleVariant,
+      baseAgentName: isMultipleVariant
+        ? agentName.replace(/_multiple$/, '')
+        : undefined,
+      multipleAgentName: !isMultipleVariant
+        ? `${agentName}_multiple`
+        : agentName,
+    });
     const doc = await vscode.workspace.openTextDocument(filePath);
     await vscode.window.showTextDocument(doc);
   } catch (err) {
