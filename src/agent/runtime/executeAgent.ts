@@ -52,6 +52,7 @@ type AgentConstructor = {
     agentSetting: AgentSetting,
     agentPrompt: AgentPrompt,
     agentPath: string,
+    executionId?: ExecutionId,
   ): IAgent;
 };
 
@@ -177,6 +178,8 @@ async function executeAgentWithLogging<T extends IAgent>(
       agentName,
       config.model,
       config.inputFile,
+      config.outputFiles ?? undefined,
+      { agentType, executionId },
     );
 
     // Check if this stream is already running
@@ -443,6 +446,7 @@ export async function executeAgent(
         agentSetting,
         agentPrompt,
         agentPath,
+        executionId,
       );
       return { agent, agentType: agentSetting.agentType };
     },

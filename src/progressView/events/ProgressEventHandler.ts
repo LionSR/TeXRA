@@ -128,8 +128,16 @@ export class ProgressEventHandler {
     this.state.activeStream = stream;
 
     if (this.webviewUpdater.isAvailable()) {
-      const infos = buildStreamInfos(this.state, this._streamStatus);
-      this.webviewUpdater.updateStreams(infos, stream);
+      const infos = buildStreamInfos(
+        this.state,
+        this._streamStatus,
+        this.state.agentTypeFilter,
+      );
+      this.webviewUpdater.updateStreams(
+        infos,
+        stream,
+        this.state.agentTypeFilter,
+      );
 
       // Update log content (will be empty for new streams)
       this.updateLogContentForStream(stream);
@@ -152,8 +160,16 @@ export class ProgressEventHandler {
     }
 
     if (this.webviewUpdater.isAvailable()) {
-      const infos = buildStreamInfos(this.state, this._streamStatus);
-      this.webviewUpdater.updateStreams(infos, this.state.activeStream);
+      const infos = buildStreamInfos(
+        this.state,
+        this._streamStatus,
+        this.state.agentTypeFilter,
+      );
+      this.webviewUpdater.updateStreams(
+        infos,
+        this.state.activeStream,
+        this.state.agentTypeFilter,
+      );
 
       if (stream === this.state.activeStream) {
         this.webviewUpdater.updateStatus(status);
@@ -244,8 +260,16 @@ export class ProgressEventHandler {
     }
 
     if (this.webviewUpdater.isAvailable()) {
-      const infos = buildStreamInfos(this.state, this._streamStatus);
-      this.webviewUpdater.updateStreams(infos, this.state.activeStream);
+      const infos = buildStreamInfos(
+        this.state,
+        this._streamStatus,
+        this.state.agentTypeFilter,
+      );
+      this.webviewUpdater.updateStreams(
+        infos,
+        this.state.activeStream,
+        this.state.agentTypeFilter,
+      );
     }
   }
 
