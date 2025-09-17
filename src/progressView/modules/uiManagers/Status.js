@@ -72,9 +72,10 @@ export class Status {
       return;
     }
 
-    const buttons = (this._buttonElements ||= this.BUTTON_IDS.map((id) =>
+    // Query buttons fresh each time to handle toolbar re-rendering
+    const buttons = this.BUTTON_IDS.map((id) =>
       document.getElementById(id),
-    ).filter(Boolean));
+    ).filter(Boolean);
 
     setElementsDisabled(buttons, true);
     // Always enable the erase button regardless of status
@@ -89,7 +90,13 @@ export class Status {
         return;
       }
 
-      statusIndicator.classList.remove(STATUS.RUNNING, STATUS.ERROR, STATUS.STOPPED, STATUS.READY, STATUS.WAITING);
+      statusIndicator.classList.remove(
+        STATUS.RUNNING,
+        STATUS.ERROR,
+        STATUS.STOPPED,
+        STATUS.READY,
+        STATUS.WAITING,
+      );
 
       const cfg = this.STATUS_MAP[status] || {
         className: 'stopped',

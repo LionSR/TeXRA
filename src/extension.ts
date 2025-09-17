@@ -97,10 +97,9 @@ export async function activate(context: vscode.ExtensionContext) {
   const progressViewProvider = new ProgressViewProvider(context);
   await progressViewProvider.initialize();
 
-  const persistedToolUseSessions =
-    ToolUseSessionManager.isPersistenceEnabled()
-      ? await ToolUseSessionManager.listSnapshots()
-      : [];
+  const persistedToolUseSessions = ToolUseSessionManager.isPersistenceEnabled()
+    ? await ToolUseSessionManager.listSnapshots()
+    : [];
   const waitingStreams = new Set(
     persistedToolUseSessions.map((snapshot) => snapshot.streamId),
   );
@@ -122,16 +121,15 @@ export async function activate(context: vscode.ExtensionContext) {
 
   if (persistedToolUseSessions.length > 0) {
     const resumeOperations = persistedToolUseSessions.map((snapshot) =>
-      vscode.commands
-        .executeCommand('texra.resumeAgent', snapshot)
-        .catch((error) => {
-          const message =
-            error instanceof Error ? error.message : String(error);
-          logger.error(
-            'extension',
-            `Failed to resume tool-use session ${snapshot.executionId}: ${message}`,
-          );
-        }),
+      Promise.resolve(
+        vscode.commands.executeCommand('texra.resumeAgent', snapshot),
+      ).catch((error: unknown) => {
+        const message = error instanceof Error ? error.message : String(error);
+        logger.error(
+          'extension',
+          `Failed to resume tool-use session ${snapshot.executionId}: ${message}`,
+        );
+      }),
     );
     void Promise.allSettled(resumeOperations);
   }
@@ -153,7 +151,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
   const runningStreams = new Set<string>();
   const NON_RUNNING_STATUSES = ['stopped', 'error', 'cancelled', 'waiting'];
-  
+
   disposeStatusListener = bus.on(
     'updateStreamStatus',
     ({ stream, status }: { stream: string; status: string }) => {
