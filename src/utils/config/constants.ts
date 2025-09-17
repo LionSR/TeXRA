@@ -1,3 +1,6 @@
+// Local imports - config utils
+import { getConfig } from './configUtils';
+
 // Common file type constants
 export const FILE_TYPES = [
   'input',
@@ -44,3 +47,24 @@ export const DIFF_REGISTRATION_DELAY_MS = 300;
 export const LATEX_VIEWER_OPEN_DELAY_MS = 5000;
 export const LATEX_VIEWER_REFRESH_DELAY_MS = 5000;
 export const THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000;
+
+// Tool-use persistence defaults
+export const DEFAULT_TOOL_USE_PERSISTENCE_TTL_HOURS = 72;
+
+/** Determine whether tool-use session persistence is enabled. */
+export function getToolUsePersistenceEnabled(): boolean {
+  return getConfig<boolean>('toolUse.persistence.enabled', true);
+}
+
+/** Resolve the configured TTL (in hours) for persisted tool-use sessions. */
+export function getToolUsePersistenceTtlHours(): number {
+  const value = getConfig<number>(
+    'toolUse.persistence.ttlHours',
+    DEFAULT_TOOL_USE_PERSISTENCE_TTL_HOURS,
+  );
+  const hours = Number(value);
+  if (!Number.isFinite(hours) || hours < 1) {
+    return DEFAULT_TOOL_USE_PERSISTENCE_TTL_HOURS;
+  }
+  return hours;
+}
