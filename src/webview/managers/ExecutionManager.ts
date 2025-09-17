@@ -59,7 +59,7 @@ export class ExecutionManager {
     const outputFiles = getFilesIfNotEmpty<string>(message.outputFiles);
     const useMultipleOutputs = Boolean(
       message.outputFilesActive ||
-        (Array.isArray(outputFiles) && outputFiles.length > 0),
+        (Array.isArray(outputFiles) && outputFiles.length > 1),
     );
 
     const agentConfig: AgentConfig = {

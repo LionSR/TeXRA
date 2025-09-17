@@ -78,13 +78,28 @@ async function handlePack(config: { streamId?: string; [key: string]: any }) {
     return;
   }
 
-  // Get output files if multiple files mode is enabled
-  const outputFiles = config.activeFiles?.output
-    ? config.outputFiles || []
+  const declaredOutputFiles = Array.isArray(config.outputFiles)
+    ? config.outputFiles
     : [];
-  const useMultipleOutputs = Boolean(
-    config.useMultipleOutputs ?? config.activeFiles?.output,
-  );
+  const legacyActiveFlag =
+    typeof config.activeFiles?.output === 'boolean'
+      ? config.activeFiles.output
+      : undefined;
+  const useMultipleOutputs =
+    typeof config.useMultipleOutputs === 'boolean'
+      ? config.useMultipleOutputs
+      : typeof legacyActiveFlag === 'boolean'
+        ? legacyActiveFlag
+        : declaredOutputFiles.length > 1;
+
+  if (declaredOutputFiles.length > 1 && !useMultipleOutputs) {
+    logger.warn(
+      CHANNEL,
+      'Pack command received multiple output files but multi-output mode is disabled. Verify stored task state.',
+    );
+  }
+
+  const outputFiles = useMultipleOutputs ? declaredOutputFiles : [];
 
   const result = await runPack(
     config.model,
