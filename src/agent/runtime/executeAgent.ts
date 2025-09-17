@@ -149,7 +149,9 @@ function getAgentName(
 ): string {
   if (outputFiles && outputFiles.length > 1) {
     // logger.info(CHANNEL, `Switching to multiple output mode`);
-    return `${baseAgent}_multiple`;
+    return baseAgent.endsWith('_multiple')
+      ? baseAgent
+      : `${baseAgent}_multiple`;
   }
   return baseAgent;
 }
@@ -394,7 +396,8 @@ export async function executeAgent(
     throw new Error('Missing required fields: model and/or agent');
   }
 
-  const agentName = getAgentName(agentConfig.agent, agentConfig.outputFiles);
+  const requestedAgentName = agentConfig.agent;
+  const agentName = getAgentName(requestedAgentName, agentConfig.outputFiles);
 
   await executeAgentWithLogging(
     agentName,
@@ -434,7 +437,7 @@ export async function executeAgent(
       // Load settings and prompts
       const [agentSetting, agentPrompt] = await loadAgentSettingAndPrompts(
         agentPath,
-        agentName,
+        requestedAgentName,
       );
 
       // Get appropriate agent class and create instance
