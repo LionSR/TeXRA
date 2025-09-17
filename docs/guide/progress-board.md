@@ -35,7 +35,9 @@ This area shows the details for the stream selected in the Stream Tabs section.
 
 The header provides a summary and actions for the selected stream:
 
-- **Stream Name**: Displays the identifier of the current run (e.g., `agent@model: inputFile`).
+- **Stream Name**: Displays the identifier of the current run.
+  Workflow agents use the familiar `agent@model: inputFile` format.
+  Tool-use sessions show just the agent name so they stand alone even without an associated input file.
 - **Status Indicator**: A colored circle shows the current status:
   - **Green (Running)**: The agent is actively processing.
   - **Grey (Stopped)**: The agent finished successfully or was stopped manually before completion.
@@ -65,4 +67,5 @@ This scrollable area displays the detailed, timestamped logs for the selected ag
 Understanding the log content is key to diagnosing problems and seeing how TeXRA and the AI models process your requests. Refer to the [Troubleshooting](../reference/troubleshooting.md) guide for more tips on using logs.
 
 At the bottom of the tab list, there is a "Delete All" button (<i class="codicon codicon-close-all"></i>) that allows you to clear all streams and their associated logs from the ProgressBoard view.
-Next to it are sorting buttons (<i class="codicon codicon-clock"></i>, <i class="codicon codicon-file"></i>, <i class="codicon codicon-account"></i>) for ordering the tabs.
+Above the sorter, the **All / Workflow / Tool Use** buttons let you focus the tab list on specific agent types.
+Next to "Delete All" are sorting buttons (<i class="codicon codicon-clock"></i>, <i class="codicon codicon-file"></i>, <i class="codicon codicon-account"></i>) for ordering the tabs.
