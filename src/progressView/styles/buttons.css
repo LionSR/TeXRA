@@ -24,3 +24,7 @@
 .codicon-trash:before {
   content: '\eb9f';
 }
+
+#toolbarContainer .toolbar-button--hidden {
+  display: none;
+}

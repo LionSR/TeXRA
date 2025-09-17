@@ -12,6 +12,10 @@
   gap: var(--spacing-small);
 }
 
+.follow-up-container.is-visible {
+  display: flex;
+}
+
 /* Style the textarea for multi-line input */
 #followUpInput {
   min-height: 36px;
