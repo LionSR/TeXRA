@@ -1,6 +1,6 @@
 // Local imports - agent
 import type { AgentConfig } from '../core/AgentConfig';
-import { AgentPrompt, AgentSetting } from '../core/AgentDataclass';
+import { AgentPrompt, AgentSessionKind, AgentSetting } from '../core/AgentDataclass';
 import { ToolState } from '../core/ToolState';
 import { runToolUseCycle } from '../core/ToolUseCycle';
 import type { IModelHandler } from '../modelHandlers';
@@ -18,6 +18,11 @@ import type { ToolDefinition } from '@model';
 import { BaseTool } from '@tools/core/base';
 import { DEFAULT_TOOL_REGISTRY } from '@tools/registry';
 import type { ExecutionId } from '@agent/types/IdentifierTypes';
+import { bus } from '@eventBus/ProgressEventBus';
+import {
+  ToolUseSessionManager,
+  type ToolUseSessionSnapshot,
+} from '@agent/toolUse/ToolUseSessionManager';
 
 export class BaseToolUseAgent extends BaseAgent {
   private toolRegistry: Record<string, BaseTool<any>>;
@@ -25,6 +30,8 @@ export class BaseToolUseAgent extends BaseAgent {
   private followUpResolver: ((v: string | null) => void) | null = null;
   private messages: ProviderMessage[] = [];
   private toolState: ToolState | null = null;
+  private resumeSnapshot: ToolUseSessionSnapshot | null = null;
+  private hasPersistedSnapshot = false;
 
   constructor(
     modelHandler: IModelHandler,
@@ -76,6 +83,11 @@ export class BaseToolUseAgent extends BaseAgent {
     }
   }
 
+  public resumeFromSnapshot(snapshot: ToolUseSessionSnapshot): void {
+    this.resumeSnapshot = snapshot;
+    this.hasPersistedSnapshot = true;
+  }
+
   private async waitForFollowUp(): Promise<string | null> {
     if (this.followUpQueue.length > 0) {
       return this.followUpQueue.shift()!;
@@ -92,6 +104,7 @@ export class BaseToolUseAgent extends BaseAgent {
       this.followUpResolver(null);
       this.followUpResolver = null;
     }
+    void this.clearPersistedSnapshot();
   }
 
   public async run(): Promise<void> {
@@ -99,23 +112,35 @@ export class BaseToolUseAgent extends BaseAgent {
       await this.init(undefined, { createGroup: false });
       await this.initializeClient();
 
-      const [systemPrompt, userRequest, userPrefix] = await Promise.all([
-        getSystemPromptWithRules(
-          `${this.agentPrompt.systemPrompt}\n${TOOL_USE_INSTRUCTIONS}`,
-          this.userVars,
-        ),
-        renderPrompt(this.agentPrompt.userRequest, this.userVars),
-        renderPrompt(this.agentPrompt.userPrefix, this.userVars),
-      ]);
+      let shouldSkipCycle = false;
 
-      this.messages = await this.modelHandler.initializeMessages(
-        userPrefix,
-        userRequest,
-        undefined,
-        systemPrompt,
-      );
+      if (this.resumeSnapshot) {
+        this.logger.info('Resuming tool-use session from saved state.');
+        this.messages = (this.resumeSnapshot.messages ?? []) as ProviderMessage[];
+        this.toolState = ToolUseSessionManager.hydrateToolStateFromSnapshot(
+          this.resumeSnapshot,
+        );
+        shouldSkipCycle = true;
+        this.resumeSnapshot = null;
+      } else {
+        const [systemPrompt, userRequest, userPrefix] = await Promise.all([
+          getSystemPromptWithRules(
+            `${this.agentPrompt.systemPrompt}\n${TOOL_USE_INSTRUCTIONS}`,
+            this.userVars,
+          ),
+          renderPrompt(this.agentPrompt.userRequest, this.userVars),
+          renderPrompt(this.agentPrompt.userPrefix, this.userVars),
+        ]);
 
-      this.toolState = new ToolState();
+        this.messages = await this.modelHandler.initializeMessages(
+          userPrefix,
+          userRequest,
+          undefined,
+          systemPrompt,
+        );
+
+        this.toolState = new ToolState();
+      }
 
       const resolvedSetting = {
         ...this.agentSetting,
@@ -139,10 +164,27 @@ export class BaseToolUseAgent extends BaseAgent {
       } as const;
 
       while (true) {
-        await runToolUseCycle(cycleOptions, this.messages);
+        if (!shouldSkipCycle) {
+          await runToolUseCycle(cycleOptions, this.messages);
+        } else {
+          shouldSkipCycle = false;
+        }
+
         if (this.checkInterruption()) break;
+
+        const hasQueuedFollowUp = this.followUpQueue.length > 0;
+        if (!hasQueuedFollowUp) {
+          await this.enterWaitingState();
+        } else {
+          await this.clearPersistedSnapshot();
+        }
+
         const followUp = await this.waitForFollowUp();
         if (!followUp || this.checkInterruption()) break;
+
+        await this.markRunning();
+        await this.clearPersistedSnapshot();
+
         this.logger.userMessage(followUp);
         this.messages = await this.modelHandler.createUserFollowUpMessages(
           this.messages,
@@ -150,7 +192,70 @@ export class BaseToolUseAgent extends BaseAgent {
         );
       }
     } finally {
+      await this.clearPersistedSnapshot();
       this.cleanup();
+    }
+  }
+
+  private async enterWaitingState(): Promise<void> {
+    if (this.followUpQueue.length > 0) {
+      return;
+    }
+    const stream = this.getStreamTabId();
+    const executionId = this.getExecutionId();
+    const state = this.toolState;
+
+    if (
+      state &&
+      executionId &&
+      ToolUseSessionManager.isPersistenceEnabled() &&
+      this.followUpQueue.length === 0
+    ) {
+      await ToolUseSessionManager.saveSnapshot({
+        executionId,
+        streamId: stream,
+        agentName: this.agentConfig.agent,
+        model: this.agentConfig.model,
+        agentSessionKind: AgentSessionKind.ToolUse,
+        messages: this.messages,
+        toolState: state,
+      });
+
+      if (this.followUpQueue.length > 0) {
+        await ToolUseSessionManager.deleteSnapshot(executionId);
+        this.hasPersistedSnapshot = false;
+        return;
+      }
+
+      this.hasPersistedSnapshot = true;
+    }
+
+    bus.emit('updateStreamStatus', {
+      stream,
+      status: 'waiting',
+    });
+  }
+
+  private async markRunning(): Promise<void> {
+    bus.emit('updateStreamStatus', {
+      stream: this.getStreamTabId(),
+      status: 'running',
+    });
+  }
+
+  private async clearPersistedSnapshot(): Promise<void> {
+    if (!this.hasPersistedSnapshot) {
+      return;
+    }
+    const executionId = this.getExecutionId();
+    if (!executionId) {
+      this.hasPersistedSnapshot = false;
+      return;
+    }
+    try {
+      await ToolUseSessionManager.deleteSnapshot(executionId);
+    } finally {
+      this.hasPersistedSnapshot = false;
     }
   }
 }

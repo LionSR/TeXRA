@@ -17,6 +17,7 @@ import { TASK_RUNS_DIR } from '@utils/files/taskRunStorage';
 import { initializeStateManagers } from '@common/state/stateManager';
 import { FileLister } from '@frontend/files/fileLister';
 import { bus } from '@eventBus/ProgressEventBus';
+import { ToolUseSessionManager } from '@agent/toolUse/ToolUseSessionManager';
 
 // Local imports - components
 import { ProgressViewProvider } from './progressView/ProgressViewProvider';
@@ -99,11 +100,19 @@ export async function activate(context: vscode.ExtensionContext) {
   const progressViewProvider = new ProgressViewProvider(context);
   await progressViewProvider.initialize();
 
+  const persistedToolUseSessions =
+    ToolUseSessionManager.isPersistenceEnabled()
+      ? await ToolUseSessionManager.listSnapshots()
+      : [];
+  const waitingStreams = new Set(
+    persistedToolUseSessions.map((snapshot) => snapshot.streamId),
+  );
+
   // Log activation message to ensure the logger is working correctly
   logger.info('extension', 'TeXRA extension activated');
 
   // Clean up any tasks that were left in "running" state from previous session
-  progressViewProvider.cleanupTasksAfterRestart();
+  await progressViewProvider.cleanupTasksAfterRestart(waitingStreams);
 
   // Copy default agents
   await copyDefaultAgents(context);
@@ -113,6 +122,12 @@ export async function activate(context: vscode.ExtensionContext) {
 
   // Register commands first - this will create and store the MainViewProvider
   registerCommands(context);
+
+  if (persistedToolUseSessions.length > 0) {
+    for (const snapshot of persistedToolUseSessions) {
+      await vscode.commands.executeCommand('texra.resumeAgent', snapshot);
+    }
+  }
 
   // Create a status bar item to show TeXRA progress
   statusBarItem = vscode.window.createStatusBarItem(
@@ -138,7 +153,8 @@ export async function activate(context: vscode.ExtensionContext) {
       } else if (
         status === 'stopped' ||
         status === 'error' ||
-        status === 'cancelled'
+        status === 'cancelled' ||
+        status === 'waiting'
       ) {
         runningStreams.delete(stream);
       }
