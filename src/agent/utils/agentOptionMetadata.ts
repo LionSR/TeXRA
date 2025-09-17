@@ -1,4 +1,5 @@
 // Third-party imports
+import { encode as encodeHtml } from 'he';
 import { globSync } from 'glob';
 import * as yaml from 'yaml';
 
@@ -97,14 +98,6 @@ export function getAgentOptionMetadata(
   };
 }
 
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/"/g, '&quot;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
-}
-
 function decorateLabel(
   agentName: string,
   metadata: AgentOptionMetadata,
@@ -124,8 +117,8 @@ export function createAgentOptionTag(
   metadata: AgentOptionMetadata,
 ): string {
   const attributes = [
-    `value="${escapeHtml(agentName)}"`,
-    `data-label="${escapeHtml(agentName)}"`,
+    `value="${encodeHtml(agentName)}"`,
+    `data-label="${encodeHtml(agentName)}"`,
   ];
 
   if (!metadata.hasDefinition) {
@@ -139,5 +132,5 @@ export function createAgentOptionTag(
   }
 
   const label = decorateLabel(agentName, metadata);
-  return `<option ${attributes.join(' ')}>${escapeHtml(label)}</option>`;
+  return `<option ${attributes.join(' ')}>${encodeHtml(label)}</option>`;
 }
