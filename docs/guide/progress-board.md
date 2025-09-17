@@ -35,7 +35,9 @@ This area shows the details for the stream selected in the Stream Tabs section.
 
 The header provides a summary and actions for the selected stream:
 
-- **Stream Name**: Displays the identifier of the current run. Workflow agents use the familiar `agent@model: inputFile` format, while tool-use sessions display the agent name with a short execution id (for example `diagnostics #a1b2c3d4`).
+- **Stream Name**: Displays the identifier of the current run.
+  Workflow agents use the familiar `agent@model: inputFile` format.
+  Tool-use sessions show just the agent name so they stand alone even without an associated input file.
 - **Status Indicator**: A colored circle shows the current status:
   - **Green (Running)**: The agent is actively processing.
   - **Grey (Stopped)**: The agent finished successfully or was stopped manually before completion.
