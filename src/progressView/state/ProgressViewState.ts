@@ -11,6 +11,8 @@ import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
 import { WorkspaceStateKey } from '@common/state/stateManager';
 import { AgentLogger } from '@logger/AgentLogger';
 import type { AgentFilter } from '../types';
+// Local imports - agent types
+import { isAgentTypeFilter } from '@agent/types/AgentStreamTypes';
 
 // Types
 import { TaskState } from '@logger/TaskState';
@@ -300,10 +302,13 @@ export class ProgressViewState {
   }
 
   private async loadAgentTypeFilter(): Promise<void> {
-    this._agentTypeFilter = await this.persistence.load(
+    const savedFilter = await this.persistence.load<string>(
       WorkspaceStateKey.STREAM_AGENT_FILTER,
       'all',
     );
+    this._agentTypeFilter = isAgentTypeFilter(savedFilter)
+      ? savedFilter
+      : 'all';
   }
 
   private saveAgentTypeFilter(): void {

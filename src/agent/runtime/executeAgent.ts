@@ -167,15 +167,14 @@ async function executeAgentWithLogging<T extends IAgent>(
     // Create agent instance and extract its declared type
     const { agent, agentType } = await createAgentFn();
 
-    if (executionId && 'setExecutionId' in agent) {
-      (agent as any).setExecutionId(executionId);
+    if (executionId) {
       await ensureRunDir(executionId);
     }
 
     // Get the full stream tab ID
     const config = agent.config;
     const streamTabId = getStreamTabId(
-      agentName,
+      config.agent,
       config.model,
       config.inputFile,
       config.outputFiles ?? undefined,
