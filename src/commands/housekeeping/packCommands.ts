@@ -78,10 +78,28 @@ async function handlePack(config: { streamId?: string; [key: string]: any }) {
     return;
   }
 
-  // Get output files if multiple files mode is enabled
-  const outputFiles = config.activeFiles?.output
-    ? config.outputFiles || []
+  const declaredOutputFiles = Array.isArray(config.outputFiles)
+    ? config.outputFiles
     : [];
+  const legacyActiveFlag =
+    typeof config.activeFiles?.output === 'boolean'
+      ? config.activeFiles.output
+      : undefined;
+  const useMultipleOutputs =
+    typeof config.useMultipleOutputs === 'boolean'
+      ? config.useMultipleOutputs
+      : typeof legacyActiveFlag === 'boolean'
+        ? legacyActiveFlag
+        : declaredOutputFiles.length > 1;
+
+  if (declaredOutputFiles.length > 1 && !useMultipleOutputs) {
+    logger.warn(
+      CHANNEL,
+      'Pack command received multiple output files but multi-output mode is disabled. Verify stored task state.',
+    );
+  }
+
+  const outputFiles = useMultipleOutputs ? declaredOutputFiles : [];
 
   const result = await runPack(
     config.model,
@@ -93,7 +111,9 @@ async function handlePack(config: { streamId?: string; [key: string]: any }) {
 
   const streamId =
     config.streamId ||
-    getStreamTabId(config.agent, config.model, config.inputFile, outputFiles);
+    getStreamTabId(config.agent, config.model, config.inputFile, {
+      useMultipleOutputs,
+    });
   bus.emit('clearOutputFiles', streamId);
   bus.emit('clearMissingOutputs', streamId);
   bus.emit('clearTaskOutput', streamId);
@@ -124,7 +144,9 @@ async function handlePackSingle(
   const result = await runPackSingle(model, inputFile, agent);
   showPackResult(result, inputFile);
 
-  const streamId = getStreamTabId(agent, model, inputFile);
+  const streamId = getStreamTabId(agent, model, inputFile, {
+    useMultipleOutputs: false,
+  });
   bus.emit('clearOutputFiles', streamId);
   bus.emit('clearMissingOutputs', streamId);
   bus.emit('clearTaskOutput', streamId);
@@ -158,7 +180,9 @@ async function handlePackMultiple(
   const result = await runPackMultiple(model, inputFile, agent, outputFiles);
   showPackResult(result, inputFile);
 
-  const streamId = getStreamTabId(agent, model, inputFile, outputFiles);
+  const streamId = getStreamTabId(agent, model, inputFile, {
+    useMultipleOutputs: true,
+  });
   bus.emit('clearOutputFiles', streamId);
   bus.emit('clearMissingOutputs', streamId);
   bus.emit('clearTaskOutput', streamId);

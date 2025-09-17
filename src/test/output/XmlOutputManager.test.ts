@@ -23,6 +23,7 @@ describe('XmlOutputManager markdown fallback', () => {
     requiredFiles: {},
     requiredFilesInternal: {},
     defaultOutputFiles: [],
+    useMultipleOutputs: false,
     filePatternsContain: [],
     tools: [],
   };
@@ -31,6 +32,7 @@ describe('XmlOutputManager markdown fallback', () => {
     model: 'test',
     agent: 'a',
     instruction: '',
+    useMultipleOutputs: false,
     inputFile: 'input.tex',
     inputFiles: null,
     referenceFile: null,
