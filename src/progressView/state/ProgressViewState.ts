@@ -13,6 +13,7 @@ import { AgentLogger } from '@logger/AgentLogger';
 import type { AgentFilter } from '../types';
 // Local imports - agent types
 import { isAgentTypeFilter } from '@agent/types/AgentStreamTypes';
+import { deriveAgentSessionKind } from '@agent/core/AgentDataclass';
 
 // Types
 import { TaskState } from '@logger/TaskState';
@@ -98,7 +99,13 @@ export class ProgressViewState {
 
   // Task state management
   setTaskState(streamTabId: StreamTabId, taskState: TaskState): void {
-    this._taskStates.set(streamTabId, taskState);
+    const normalizedState: TaskState = {
+      ...taskState,
+      agentSessionKind:
+        taskState.agentSessionKind ??
+        deriveAgentSessionKind(taskState.agentType),
+    };
+    this._taskStates.set(streamTabId, normalizedState);
     this.saveTaskStates();
   }
 
