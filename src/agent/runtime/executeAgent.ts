@@ -416,11 +416,13 @@ export async function executeAgent(
       const fullConfig = AgentConfigSchema.parse(agentConfig);
 
       if (
-        !fullConfig.useMultipleOutputs &&
         Array.isArray(fullConfig.outputFiles) &&
-        fullConfig.outputFiles.length > 1
+        fullConfig.outputFiles.length > 1 &&
+        !fullConfig.useMultipleOutputs
       ) {
-        fullConfig.useMultipleOutputs = true;
+        logger.warn(
+          `Multiple output files provided (${fullConfig.outputFiles.length}) but useMultipleOutputs flag is disabled. Update the agent configuration to ensure consistent stream handling.`,
+        );
       }
 
       // Get model configuration

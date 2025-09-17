@@ -40,6 +40,7 @@ export const AgentSettingSchema = z
     requiredFiles: z.record(z.string()).default({}),
     requiredFilesInternal: z.record(z.string()).default({}),
     defaultOutputFiles: z.array(z.string()).default([]),
+    useMultipleOutputs: z.boolean().default(false),
     filePatternsContain: z
       .array(
         z.object({

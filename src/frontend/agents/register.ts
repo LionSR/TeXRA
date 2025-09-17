@@ -7,6 +7,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as logger from '@logger/logUtils';
 import { isValidAgentYaml } from '@agent/runtime/agentLoad';
+import type { AgentSetting } from '@agent/core/AgentDataclass';
 import { getConfig, updateConfig } from '@utils/config';
 
 const CHANNEL = 'AgentRegister';
@@ -122,10 +123,11 @@ export async function validateYamlAndPromptAdd(
 
   const configuredAgents = getConfig<string[]>('agents', []);
   if (!configuredAgents.includes(filenameBase)) {
-    const defaultOutputs = validationResult.settings?.defaultOutputFiles ?? [];
-    const isMultipleVariant = Array.isArray(defaultOutputs)
-      ? defaultOutputs.length > 0
-      : false;
+    const settings = validationResult.settings as AgentSetting | undefined;
+    const defaultOutputs: string[] = settings?.defaultOutputFiles ?? [];
+    const hasMultipleDefaults = defaultOutputs.length > 1;
+    const useMultipleOutputs = settings?.useMultipleOutputs ?? hasMultipleDefaults;
+    const isMultipleVariant = Boolean(useMultipleOutputs);
     const metadata: AgentVariantMetadata = {
       isMultipleVariant,
     };
