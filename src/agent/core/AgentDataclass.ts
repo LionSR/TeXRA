@@ -16,6 +16,28 @@ export enum AgentType {
   ToolUse = 'toolUse',
 }
 
+/**
+ * Canonical session groupings used throughout the extension UI.
+ * Workflow sessions represent traditional direct/CoT executions while
+ * toolUse isolates interactive tool panels.
+ */
+export enum AgentSessionKind {
+  Workflow = 'workflow',
+  ToolUse = 'toolUse',
+}
+
+/**
+ * Derive the canonical {@link AgentSessionKind} from a specific agent type.
+ * Defaults to {@link AgentSessionKind.Workflow} when the type is unknown.
+ */
+export function deriveAgentSessionKind(
+  agentType?: AgentType | null,
+): AgentSessionKind {
+  return agentType === AgentType.ToolUse
+    ? AgentSessionKind.ToolUse
+    : AgentSessionKind.Workflow;
+}
+
 /** Zod schema for AgentSetting validation */
 export const AgentSettingSchema = z
   .object({
