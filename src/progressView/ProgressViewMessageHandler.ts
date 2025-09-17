@@ -306,16 +306,18 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     }
 
     const outputFilesArray = Array.from(allFiles);
-    const outputActive = taskState.activeFiles.output;
+    const useMultipleOutputs =
+      taskState.agentConfig.useMultipleOutputs || taskState.activeFiles.output;
     await vscode.commands.executeCommand(command, {
       streamId: stream,
       agent: taskState.agentConfig.agent,
       model: taskState.agentConfig.model,
       inputFile: taskState.agentConfig.inputFile,
-      outputFiles: outputActive ? outputFilesArray : [],
+      outputFiles: useMultipleOutputs ? outputFilesArray : [],
       activeFiles: {
-        output: outputActive,
+        output: useMultipleOutputs,
       },
+      useMultipleOutputs,
     });
   }
 }

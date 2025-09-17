@@ -82,6 +82,9 @@ async function handlePack(config: { streamId?: string; [key: string]: any }) {
   const outputFiles = config.activeFiles?.output
     ? config.outputFiles || []
     : [];
+  const useMultipleOutputs = Boolean(
+    config.useMultipleOutputs ?? config.activeFiles?.output,
+  );
 
   const result = await runPack(
     config.model,
@@ -93,7 +96,9 @@ async function handlePack(config: { streamId?: string; [key: string]: any }) {
 
   const streamId =
     config.streamId ||
-    getStreamTabId(config.agent, config.model, config.inputFile, outputFiles);
+    getStreamTabId(config.agent, config.model, config.inputFile, {
+      useMultipleOutputs,
+    });
   bus.emit('clearOutputFiles', streamId);
   bus.emit('clearMissingOutputs', streamId);
   bus.emit('clearTaskOutput', streamId);
@@ -124,7 +129,9 @@ async function handlePackSingle(
   const result = await runPackSingle(model, inputFile, agent);
   showPackResult(result, inputFile);
 
-  const streamId = getStreamTabId(agent, model, inputFile);
+  const streamId = getStreamTabId(agent, model, inputFile, {
+    useMultipleOutputs: false,
+  });
   bus.emit('clearOutputFiles', streamId);
   bus.emit('clearMissingOutputs', streamId);
   bus.emit('clearTaskOutput', streamId);
@@ -158,7 +165,9 @@ async function handlePackMultiple(
   const result = await runPackMultiple(model, inputFile, agent, outputFiles);
   showPackResult(result, inputFile);
 
-  const streamId = getStreamTabId(agent, model, inputFile, outputFiles);
+  const streamId = getStreamTabId(agent, model, inputFile, {
+    useMultipleOutputs: true,
+  });
   bus.emit('clearOutputFiles', streamId);
   bus.emit('clearMissingOutputs', streamId);
   bus.emit('clearTaskOutput', streamId);
