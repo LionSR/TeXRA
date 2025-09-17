@@ -4,6 +4,8 @@ import * as path from 'path';
 // Local imports - progress view
 import type { ProgressViewState } from './state/ProgressViewState';
 import type { AgentFilter, StreamTabInfo } from './types';
+// Local imports - agent types
+import { AgentType } from '@agent/core/AgentDataclass';
 
 const sortComparators = {
   time: (a: StreamTabInfo, b: StreamTabInfo) =>
@@ -16,27 +18,28 @@ const sortComparators = {
 } as const;
 
 function matchesAgentFilter(
-  agentType: string | undefined,
+  agentType: AgentType | undefined,
   filter: AgentFilter,
 ): boolean {
-  if (filter === 'all') {
-    return true;
+  switch (filter) {
+    case 'all':
+      return true;
+    case 'toolUse':
+      return agentType === AgentType.ToolUse;
+    case 'workflow':
+      return agentType !== AgentType.ToolUse;
+    default:
+      return true;
   }
-  if (filter === 'toolUse') {
-    return agentType === 'toolUse';
-  }
-  return agentType !== 'toolUse';
 }
 
 function buildStreamLabel(
   agentName: string,
   inputFile: string,
-  agentType: string | undefined,
-  executionId?: string,
+  agentType: AgentType | undefined,
 ): string {
-  if (agentType === 'toolUse') {
-    const shortId = executionId ? executionId.slice(0, 8) : undefined;
-    return shortId ? `${agentName} #${shortId}` : agentName;
+  if (agentType === AgentType.ToolUse) {
+    return agentName;
   }
 
   const baseName = inputFile ? path.basename(inputFile) : '';
@@ -66,12 +69,7 @@ export function buildStreamInfos(
       return acc;
     }
     const executionId = state.getExecutionId(id);
-    const label = buildStreamLabel(
-      agentName,
-      inputFile,
-      agentType,
-      executionId,
-    );
+    const label = buildStreamLabel(agentName, inputFile, agentType);
     acc.push({
       name: id,
       label,
