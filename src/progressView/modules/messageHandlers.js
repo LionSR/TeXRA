@@ -13,6 +13,37 @@ const dom = progressViewDomHandler;
 
 // Create formatter instances
 
+const TOOLBAR_ACTION_BUTTON_IDS = [
+  ELEMENT_IDS.RUN_AGAIN_BTN,
+  ELEMENT_IDS.DIFF_STREAM_BTN,
+  ELEMENT_IDS.PACK_STREAM_BTN,
+  ELEMENT_IDS.CLEAN_STREAM_BTN,
+];
+
+const DEFAULT_STREAM_CAPABILITIES = Object.freeze({
+  canRunAgain: true,
+  canDiffStream: true,
+  canPackStream: true,
+  canCleanStream: true,
+  canSendFollowUp: false,
+});
+
+let toolbarActionButtonCache = null;
+
+function getToolbarActionButtons() {
+  if (
+    Array.isArray(toolbarActionButtonCache) &&
+    toolbarActionButtonCache.every((button) => button?.isConnected)
+  ) {
+    return toolbarActionButtonCache;
+  }
+
+  toolbarActionButtonCache = TOOLBAR_ACTION_BUTTON_IDS.map((id) =>
+    document.getElementById(id),
+  ).filter((el) => el instanceof HTMLButtonElement);
+  return toolbarActionButtonCache;
+}
+
 export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   constructor() {
     super();
@@ -83,30 +114,38 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     const activeStreamInfo = message.streams.find(
       (s) => s.name === message.activeStream,
     );
-    const isToolUseAgent = activeStreamInfo?.agentType === 'toolUse';
+    const capabilities = {
+      ...DEFAULT_STREAM_CAPABILITIES,
+      ...(activeStreamInfo?.capabilities || {}),
+    };
+    const isToolUseAgent = Boolean(activeStreamInfo?.isToolUseAgent);
 
     const container = document.getElementById(ELEMENT_IDS.FOLLOW_UP_CONTAINER);
     if (container) {
-      container.classList.toggle('is-visible', Boolean(isToolUseAgent));
-      container.setAttribute('aria-hidden', isToolUseAgent ? 'false' : 'true');
+      const followUpVisible = Boolean(capabilities.canSendFollowUp);
+      container.classList.toggle('is-visible', followUpVisible);
+      container.setAttribute('aria-hidden', followUpVisible ? 'false' : 'true');
     }
 
-    const buttonsToToggle = [
-      ELEMENT_IDS.RUN_AGAIN_BTN,
-      ELEMENT_IDS.DIFF_STREAM_BTN,
-      ELEMENT_IDS.PACK_STREAM_BTN,
-      ELEMENT_IDS.CLEAN_STREAM_BTN,
-    ];
+    const buttonVisibility = new Map([
+      [ELEMENT_IDS.RUN_AGAIN_BTN, capabilities.canRunAgain],
+      [ELEMENT_IDS.DIFF_STREAM_BTN, capabilities.canDiffStream],
+      [ELEMENT_IDS.PACK_STREAM_BTN, capabilities.canPackStream],
+      [ELEMENT_IDS.CLEAN_STREAM_BTN, capabilities.canCleanStream],
+    ]);
 
     const toolbar = document.getElementById(ELEMENT_IDS.TOOLBAR_CONTAINER);
     if (toolbar) {
       toolbar.dataset.agentType = activeStreamInfo?.agentType || '';
+      toolbar.dataset.agentMode = isToolUseAgent ? 'tool' : 'workflow';
     }
 
-    buttonsToToggle.forEach((buttonId) => {
-      const button = document.getElementById(buttonId);
-      if (!button) return;
-      const shouldHide = Boolean(isToolUseAgent);
+    const toolbarButtons = getToolbarActionButtons();
+    toolbarButtons.forEach((button) => {
+      const supportsAction = buttonVisibility.has(button.id)
+        ? buttonVisibility.get(button.id)
+        : true;
+      const shouldHide = buttonVisibility.has(button.id) && !supportsAction;
       button.classList.toggle('toolbar-button--hidden', shouldHide);
       if (shouldHide) {
         button.setAttribute('aria-hidden', 'true');

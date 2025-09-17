@@ -65,7 +65,7 @@ export class Status {
 
     const buttons = (this._buttonElements ||= this.BUTTON_IDS.map((id) =>
       document.getElementById(id),
-    ).filter(Boolean));
+    ).filter((el) => el instanceof HTMLButtonElement));
 
     setElementsDisabled(buttons, true);
     // Always enable the erase button regardless of status
@@ -93,7 +93,11 @@ export class Status {
 
       const elementsToEnable = cfg.enable
         .map((id) => document.getElementById(id))
-        .filter((el) => el && el.dataset.hiddenByAgent !== 'true');
+        .filter(
+          (el) =>
+            el instanceof HTMLButtonElement &&
+            el.dataset.hiddenByAgent !== 'true',
+        );
       if (elementsToEnable.length > 0) {
         setElementsDisabled(elementsToEnable, false);
       }

@@ -13,6 +13,7 @@ import {
   isAgentTypeFilter,
 } from '@agent/types/AgentStreamTypes';
 import { AgentType } from '@agent/core/AgentDataclass';
+import type { TaskState } from '@logger/TaskState';
 
 // @ts-ignore - Import JavaScript module
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
@@ -84,6 +85,12 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     this.provider.markWebviewReady();
   }
 
+  private shouldBlockToolbarCommand(
+    taskState: TaskState | undefined,
+  ): taskState is undefined | (TaskState & { agentType: AgentType.ToolUse }) {
+    return !taskState || taskState.agentType === AgentType.ToolUse;
+  }
+
   private async handleSwitchStream(
     message: any,
     webviewView: vscode.WebviewView,
@@ -127,7 +134,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     webviewView: vscode.WebviewView,
   ): Promise<void> {
     const taskState = this.provider.state.getTaskState(message.stream);
-    if (!taskState || taskState.agentType === AgentType.ToolUse) {
+    if (this.shouldBlockToolbarCommand(taskState)) {
       return;
     }
 
@@ -142,7 +149,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     webviewView: vscode.WebviewView,
   ): Promise<void> {
     const taskState = this.provider.state.getTaskState(message.stream);
-    if (!taskState || taskState.agentType === AgentType.ToolUse) {
+    if (this.shouldBlockToolbarCommand(taskState)) {
       return;
     }
 
@@ -160,7 +167,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     webviewView: vscode.WebviewView,
   ): Promise<void> {
     const taskState = this.provider.state.getTaskState(message.stream);
-    if (!taskState || taskState.agentType === AgentType.ToolUse) {
+    if (this.shouldBlockToolbarCommand(taskState)) {
       return;
     }
 
@@ -172,7 +179,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     webviewView: vscode.WebviewView,
   ): Promise<void> {
     const taskState = this.provider.state.getTaskState(message.stream);
-    if (!taskState || taskState.agentType === AgentType.ToolUse) {
+    if (this.shouldBlockToolbarCommand(taskState)) {
       return;
     }
 
@@ -305,7 +312,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     command: 'texra.pack' | 'texra.clean',
   ): Promise<void> {
     const taskState = this.provider.state.getTaskState(stream);
-    if (!taskState || taskState.agentType === AgentType.ToolUse) return;
+    if (this.shouldBlockToolbarCommand(taskState)) return;
 
     const generated = this.provider.state.outputFiles.getFiles(stream);
     const allFiles = new Set<string>(taskState.agentConfig.outputFiles || []);

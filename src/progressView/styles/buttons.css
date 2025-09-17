@@ -25,6 +25,6 @@
   content: '\eb9f';
 }
 
-.button-group .toolbar-button--hidden {
-  display: none !important;
+#toolbarContainer .toolbar-button--hidden {
+  display: none;
 }

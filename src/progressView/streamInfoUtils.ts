@@ -3,7 +3,7 @@ import * as path from 'path';
 
 // Local imports - progress view
 import type { ProgressViewState } from './state/ProgressViewState';
-import type { AgentFilter, StreamTabInfo } from './types';
+import type { AgentFilter, StreamCapabilities, StreamTabInfo } from './types';
 // Local imports - agent types
 import { AgentType } from '@agent/core/AgentDataclass';
 
@@ -46,6 +46,19 @@ function buildStreamLabel(
   return baseName ? `${agentName}: ${baseName}` : agentName;
 }
 
+function buildStreamCapabilities(
+  agentType: AgentType | undefined,
+): StreamCapabilities {
+  const isToolUseAgent = agentType === AgentType.ToolUse;
+  return {
+    canRunAgain: !isToolUseAgent,
+    canDiffStream: !isToolUseAgent,
+    canPackStream: !isToolUseAgent,
+    canCleanStream: !isToolUseAgent,
+    canSendFollowUp: isToolUseAgent,
+  };
+}
+
 /**
  * Build metadata objects for all streams in the given state.
  */
@@ -70,12 +83,16 @@ export function buildStreamInfos(
     }
     const executionId = state.getExecutionId(id);
     const label = buildStreamLabel(agentName, inputFile, agentType);
+    const capabilities = buildStreamCapabilities(agentType);
+    const isToolUseAgent = agentType === AgentType.ToolUse;
     acc.push({
       name: id,
       label,
       model: taskState?.agentConfig.model,
       agent: taskState?.agentConfig.agent,
       agentType,
+      capabilities,
+      isToolUseAgent,
       hasMultipleOutputs: Array.isArray(outputs) && outputs.length > 1,
       lastTimestamp,
       inputFile,
