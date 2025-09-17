@@ -101,6 +101,16 @@ export class EventsManager {
       }
     });
 
+    addEventListenerSafely(ELEMENT_IDS.FILTER_BUTTONS, 'click', (e) => {
+      const btn = e.target.closest('.filter-btn');
+      if (btn && btn.dataset.filter) {
+        vscode.postMessage({
+          command: COMMANDS.FILTER_STREAMS,
+          filter: btn.dataset.filter,
+        });
+      }
+    });
+
     // Follow-up input handler
     const sendFollowUp = () => {
       const followInput = document.getElementById(ELEMENT_IDS.FOLLOW_UP_INPUT);

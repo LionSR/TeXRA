@@ -1,11 +1,6 @@
-// Standard library imports
-import * as path from 'path';
-
-// Local imports - agent
-
 // Local imports - agent components
 import type { AgentConfig } from '../core/AgentConfig';
-import { AgentPrompt, AgentSetting } from '../core/AgentDataclass';
+import { AgentPrompt, AgentSetting, AgentType } from '../core/AgentDataclass';
 import { AgentStateGlobal } from '../core/AgentState';
 import { IAgent } from '../core/IAgent';
 import type { IModelHandler } from '../modelHandlers';
@@ -19,6 +14,7 @@ import { AgentLogger } from '@logger/AgentLogger';
 // Local imports - utilities
 import { SHORT_SLEEP_MS } from '@utils/config';
 import { sleep } from '@utils/helpers';
+import { getStreamTabId } from '@logger/streamUtils';
 
 /**
  * Minimal abstract base class providing shared setup and interruption logic.
@@ -37,8 +33,11 @@ export abstract class BaseAgent implements IAgent {
   protected isInterrupted = false;
   protected abortController: AbortController | null = null;
   protected executionId?: ExecutionId;
+  private readonly streamTabId: StreamTabId;
+  private readonly toolUseSequence?: number;
 
   private static runningAgents: Map<string, BaseAgent> = new Map();
+  private static toolUseCounters: Map<string, number> = new Map();
 
   public get config(): AgentConfig {
     return this.agentConfig;
@@ -57,8 +56,11 @@ export abstract class BaseAgent implements IAgent {
     this.agentPrompt = agentPrompt;
     this.agentPath = agentPath;
 
-    const streamTabId = this.getStreamTabId();
-    this.logger = new AgentLogger(streamTabId, true);
+    const { streamTabId, sequence } = this.computeStreamTabIdentity();
+    this.streamTabId = streamTabId;
+    this.toolUseSequence = sequence;
+
+    this.logger = new AgentLogger(this.streamTabId, true);
     this.modelHandler.setLogger(this.logger);
     this.usageMonitor = new UsageMonitor(
       this.modelHandler,
@@ -74,14 +76,50 @@ export abstract class BaseAgent implements IAgent {
   }
 
   /** Compute the stream tab identifier for this agent execution. */
-  protected getStreamTabId(): StreamTabId {
-    const baseName = path.basename(this.agentConfig.inputFile);
-    const agentName =
-      Array.isArray(this.agentConfig.outputFiles) &&
-      this.agentConfig.outputFiles.length > 1
-        ? `${this.agentConfig.agent}_multiple`
-        : this.agentConfig.agent;
-    return `${agentName}@${this.agentConfig.model}: ${baseName}`;
+  public getStreamTabId(): StreamTabId {
+    return this.streamTabId;
+  }
+
+  public getToolUseSequence(): number | undefined {
+    return this.toolUseSequence;
+  }
+
+  private computeStreamTabIdentity(): {
+    streamTabId: StreamTabId;
+    sequence?: number;
+  } {
+    const inputFile = this.agentConfig.inputFile;
+    const outputFiles = this.agentConfig.outputFiles ?? undefined;
+    const agentName = this.agentConfig.agent;
+    const model = this.agentConfig.model;
+
+    if (this.agentSetting.agentType === AgentType.ToolUse) {
+      const counterKey = `${agentName}@${model}`;
+      const nextSequence = (BaseAgent.toolUseCounters.get(counterKey) ?? 0) + 1;
+      BaseAgent.toolUseCounters.set(counterKey, nextSequence);
+
+      return {
+        streamTabId: getStreamTabId(
+          agentName,
+          model,
+          inputFile,
+          outputFiles,
+          AgentType.ToolUse,
+          nextSequence,
+        ),
+        sequence: nextSequence,
+      };
+    }
+
+    return {
+      streamTabId: getStreamTabId(
+        agentName,
+        model,
+        inputFile,
+        outputFiles,
+        this.agentSetting.agentType,
+      ),
+    };
   }
 
   /** Gather variables used for prompt rendering. */

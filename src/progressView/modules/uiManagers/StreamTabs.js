@@ -21,7 +21,7 @@ export class StreamTabs {
    * @param {Array} streams - Array of stream metadata objects
    * @param {string} activeStream - Currently active stream
    */
-  update(streams, activeStream) {
+  update(streams, activeStream, filter = 'all') {
     if (!Array.isArray(streams)) {
       console.error('StreamTabs.update: streams must be an array');
       return;
@@ -31,6 +31,7 @@ export class StreamTabs {
       console.error('StreamTabs.update: streamTabs container not found');
       return;
     }
+    tabsContainer.dataset.filter = filter;
     tabsContainer.innerHTML = '';
     streams.forEach((info) => {
       if (!info || typeof info !== 'object') {
@@ -39,12 +40,13 @@ export class StreamTabs {
       }
       const tabEl = createFromTemplate('streamTabTemplate', {
         text: {
-          '.tab-title': info.label || info.name,
+          '.tab-title': info.primaryLabel || info.label || info.name,
+          '.tab-subtitle': info.secondaryLabel || '',
           '.model': info.model || '',
           '.last-active': formatRelativeTime(info.lastTimestamp),
         },
         attributes: {
-          '.tab': { title: info.name },
+          '.tab': { title: info.name, 'data-category': info.category },
           '.tab-delete': { title: 'Delete stream' },
         },
         dataset: {
@@ -54,6 +56,14 @@ export class StreamTabs {
       });
       if (!tabEl) return;
       initializeIconButtons(tabEl);
+      const subtitleEl = tabEl.querySelector('.tab-subtitle');
+      if (subtitleEl) {
+        if (info.secondaryLabel) {
+          subtitleEl.classList.remove('hidden');
+        } else {
+          subtitleEl.classList.add('hidden');
+        }
+      }
       const statusEl = tabEl.querySelector('.tab-status');
       if (statusEl) {
         const status = info.status || 'stopped';

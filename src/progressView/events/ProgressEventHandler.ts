@@ -129,7 +129,7 @@ export class ProgressEventHandler {
 
     if (this.webviewUpdater.isAvailable()) {
       const infos = buildStreamInfos(this.state, this._streamStatus);
-      this.webviewUpdater.updateStreams(infos, stream);
+      this.webviewUpdater.updateStreams(infos, stream, this.state.streamFilter);
 
       // Update log content (will be empty for new streams)
       this.updateLogContentForStream(stream);
@@ -153,7 +153,11 @@ export class ProgressEventHandler {
 
     if (this.webviewUpdater.isAvailable()) {
       const infos = buildStreamInfos(this.state, this._streamStatus);
-      this.webviewUpdater.updateStreams(infos, this.state.activeStream);
+      this.webviewUpdater.updateStreams(
+        infos,
+        this.state.activeStream,
+        this.state.streamFilter,
+      );
 
       if (stream === this.state.activeStream) {
         this.webviewUpdater.updateStatus(status);
@@ -245,7 +249,11 @@ export class ProgressEventHandler {
 
     if (this.webviewUpdater.isAvailable()) {
       const infos = buildStreamInfos(this.state, this._streamStatus);
-      this.webviewUpdater.updateStreams(infos, this.state.activeStream);
+      this.webviewUpdater.updateStreams(
+        infos,
+        this.state.activeStream,
+        this.state.streamFilter,
+      );
     }
   }
 

@@ -35,6 +35,23 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     }
   }
 
+  _updateFilterButtons(activeFilter) {
+    const container = document.getElementById(ELEMENT_IDS.FILTER_BUTTONS);
+    if (!container) return;
+    const buttons = container.querySelectorAll('.filter-btn');
+    buttons.forEach((btn) => {
+      const { filter } = btn.dataset;
+      if (!filter) return;
+      if (filter === activeFilter) {
+        btn.classList.add('active');
+        btn.setAttribute('aria-pressed', 'true');
+      } else {
+        btn.classList.remove('active');
+        btn.setAttribute('aria-pressed', 'false');
+      }
+    });
+  }
+
   _createHandlers() {
     return {
       [COMMANDS.UPDATE_STREAMS]: (m) => this.handleUpdateStreams(m),
@@ -64,9 +81,15 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
         state.streamStatuses.delete(s.name);
       }
     });
-    dom.streamTabs.update(message.streams, message.activeStream);
+    state.streamFilter = message.filter || 'all';
+    dom.streamTabs.update(
+      message.streams,
+      message.activeStream,
+      state.streamFilter,
+    );
 
     this._updatePlaceholderVisibility();
+    this._updateFilterButtons(state.streamFilter);
 
     const container = document.getElementById(ELEMENT_IDS.FOLLOW_UP_CONTAINER);
     if (container) {

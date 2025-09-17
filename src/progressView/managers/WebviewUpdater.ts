@@ -36,7 +36,11 @@ export class WebviewUpdater {
   /**
    * Update stream tabs in the webview
    */
-  updateStreams(streams: StreamTabInfo[], activeStream: StreamTabId): void {
+  updateStreams(
+    streams: StreamTabInfo[],
+    activeStream: StreamTabId,
+    filter: string,
+  ): void {
     const webview = this.getWebview();
     if (!webview) return;
 
@@ -44,6 +48,7 @@ export class WebviewUpdater {
       command: COMMANDS.UPDATE_STREAMS,
       streams,
       activeStream,
+      filter,
     });
   }
 
@@ -211,7 +216,7 @@ export class WebviewUpdater {
     const streams = buildStreamInfos(state, statuses);
 
     // Update streams and active stream
-    this.updateStreams(streams, activeStream);
+    this.updateStreams(streams, activeStream, state.streamFilter);
 
     if (activeStream) {
       // Update log content for active stream

@@ -35,11 +35,15 @@ function createActiveFilesFromArrays(
 export function agentConfigToTaskState(
   config: AgentConfig,
   agentType?: AgentType,
+  options?: { toolUseSequence?: number },
 ): TaskState {
   return {
     agentConfig: config,
     activeFiles: createActiveFilesFromArrays(config),
     ...(agentType ? { agentType } : {}),
+    ...(options?.toolUseSequence
+      ? { toolUseSequence: options.toolUseSequence }
+      : {}),
   };
 }
 
@@ -59,6 +63,7 @@ export function objectToTaskState(obj: Record<string, any>): TaskState {
       activeFiles:
         obj.activeFiles || createActiveFilesFromArrays(obj.agentConfig),
       agentType: obj.agentType,
+      toolUseSequence: obj.toolUseSequence,
     };
   }
 
@@ -99,7 +104,9 @@ export function objectToTaskState(obj: Record<string, any>): TaskState {
   // Parse only AgentConfig-compatible fields
   try {
     const normalized = AgentConfigSchema.parse(agentConfigData);
-    const taskState = agentConfigToTaskState(normalized, obj.agentType);
+    const taskState = agentConfigToTaskState(normalized, obj.agentType, {
+      toolUseSequence: obj.toolUseSequence,
+    });
 
     // Add back TaskState-specific fields
     if (activeFiles) {
@@ -111,7 +118,9 @@ export function objectToTaskState(obj: Record<string, any>): TaskState {
     // If parsing fails, create a minimal valid state
     console.error('Failed to parse task state, using defaults:', error);
     const defaultConfig = AgentConfigSchema.parse({});
-    const taskState = agentConfigToTaskState(defaultConfig, obj.agentType);
+    const taskState = agentConfigToTaskState(defaultConfig, obj.agentType, {
+      toolUseSequence: obj.toolUseSequence,
+    });
 
     // Preserve activeFiles if available
     if (activeFiles) {

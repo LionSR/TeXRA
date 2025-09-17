@@ -25,6 +25,11 @@ export interface TaskState {
   agentType?: AgentType;
 
   /**
+   * Sequence number for tool-use sessions to create unique stream identifiers.
+   */
+  toolUseSequence?: number;
+
+  /**
    * UI-specific state for managing file type visibility in the interface.
    * Maps each file type (input, reference, auxiliary, media, output) to
    * whether it should be shown in the UI.

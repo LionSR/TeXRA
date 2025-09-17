@@ -155,7 +155,10 @@
             <button class="tab" data-stream="" title="">
               <div class="tab-header">
                 <span class="tab-status status-indicator"></span>
-                <div class="tab-title"></div>
+                <div class="tab-titles">
+                  <div class="tab-title"></div>
+                  <div class="tab-subtitle hidden"></div>
+                </div>
               </div>
               <div class="tab-meta">
                 <span class="model"></span>
@@ -276,6 +279,35 @@
           <!-- Stream tabs will be dynamically inserted here -->
         </div>
         <div class="clear-all-container">
+          <div class="button-group" id="filterButtons">
+            <button
+              class="vscode-button filter-btn active"
+              id="filterAllBtn"
+              data-filter="all"
+              data-icon="list-selection"
+              aria-pressed="true"
+            >
+              All
+            </button>
+            <button
+              class="vscode-button filter-btn"
+              id="filterWorkflowBtn"
+              data-filter="workflow"
+              data-icon="graph"
+              aria-pressed="false"
+            >
+              Workflow
+            </button>
+            <button
+              class="vscode-button filter-btn"
+              id="filterToolUseBtn"
+              data-filter="toolUse"
+              data-icon="wrench"
+              aria-pressed="false"
+            >
+              Tool Use
+            </button>
+          </div>
           <div class="button-group" id="sortButtons">
             <button
               class="vscode-button sort-btn"

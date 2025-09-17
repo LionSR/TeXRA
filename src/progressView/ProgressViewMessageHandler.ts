@@ -42,6 +42,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
       [PROGRESS_VIEW_COMMANDS.PACK_STREAM]: this.handlePackStream.bind(this),
       [PROGRESS_VIEW_COMMANDS.CLEAN_STREAM]: this.handleCleanStream.bind(this),
       [PROGRESS_VIEW_COMMANDS.SORT_STREAMS]: this.handleSortStreams.bind(this),
+      [PROGRESS_VIEW_COMMANDS.FILTER_STREAMS]:
+        this.handleFilterStreams.bind(this),
       [PROGRESS_VIEW_COMMANDS.RESTORE_STATE]:
         this.handleRestoreState.bind(this),
       [PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP]:
@@ -162,6 +164,14 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     webviewView: vscode.WebviewView,
   ): Promise<void> {
     this.provider.state.streamSortOrder = message.sortBy ?? 'time';
+    this.provider.updateWebview();
+  }
+
+  private async handleFilterStreams(
+    message: any,
+    _webviewView: vscode.WebviewView,
+  ): Promise<void> {
+    this.provider.state.streamFilter = message.filter ?? 'all';
     this.provider.updateWebview();
   }
 

@@ -4,6 +4,8 @@ import * as path from 'path';
 // Local imports - progress view
 import type { ProgressViewState } from './state/ProgressViewState';
 import type { StreamTabInfo } from './types';
+import { AgentType } from '@agent/core/AgentDataclass';
+import { getToolUseSessionLabel } from '@logger/streamUtils';
 
 const sortComparators = {
   time: (a: StreamTabInfo, b: StreamTabInfo) =>
@@ -32,13 +34,29 @@ export function buildStreamInfos(
     const outputs = taskState?.agentConfig.outputFiles || [];
     const inputFile = taskState?.agentConfig.inputFile || '';
     const agentName = taskState?.agentConfig.agent || id.split('@')[0];
-    const label = `${agentName}: ${path.basename(inputFile)}`;
+    const category =
+      taskState?.agentType === AgentType.ToolUse ? 'toolUse' : 'workflow';
+    const baseFile = path.basename(inputFile);
+    const primaryLabel = agentName;
+    const sequence = taskState?.toolUseSequence;
+    const secondaryLabel =
+      category === 'toolUse'
+        ? typeof sequence === 'number'
+          ? getToolUseSessionLabel(sequence)
+          : ''
+        : baseFile;
+    const label = secondaryLabel
+      ? `${primaryLabel} — ${secondaryLabel}`
+      : primaryLabel;
     return {
       name: id,
       label,
+      primaryLabel,
+      secondaryLabel,
       model: taskState?.agentConfig.model,
       agent: taskState?.agentConfig.agent,
       agentType: taskState?.agentType,
+      category,
       hasMultipleOutputs: Array.isArray(outputs) && outputs.length > 1,
       lastTimestamp,
       inputFile,
@@ -47,11 +65,16 @@ export function buildStreamInfos(
     } as StreamTabInfo;
   });
 
+  const filtered =
+    state.streamFilter === 'all'
+      ? infos
+      : infos.filter((info) => info.category === state.streamFilter);
+
   const comparator =
     sortComparators[state.streamSortOrder as keyof typeof sortComparators];
   if (comparator) {
-    infos.sort(comparator);
+    filtered.sort(comparator);
   }
 
-  return infos;
+  return filtered;
 }

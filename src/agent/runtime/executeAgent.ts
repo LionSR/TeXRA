@@ -6,7 +6,6 @@ import { glob } from 'glob';
 import * as vscode from 'vscode';
 
 // Local imports - agent
-import { getStreamTabId } from '@/logger/streamUtils';
 
 // Local imports - agent components
 import { AgentConfigSchema } from '@agent/core/AgentConfig';
@@ -22,6 +21,7 @@ import {
   CoTAgent,
   MergeAgent,
   BaseToolUseAgent,
+  BaseAgent,
 } from '@agent/implementations';
 import { loadAgentSettingAndPrompts } from '@agent/runtime/agentLoad';
 import { ModelFactory } from '@agent/runtime/ModelFactory';
@@ -173,11 +173,9 @@ async function executeAgentWithLogging<T extends IAgent>(
 
     // Get the full stream tab ID
     const config = agent.config;
-    const streamTabId = getStreamTabId(
-      agentName,
-      config.model,
-      config.inputFile,
-    );
+    const streamTabId = agent.getStreamTabId();
+    const toolUseSequence =
+      agent instanceof BaseAgent ? agent.getToolUseSequence() : undefined;
 
     // Check if this stream is already running
     const provider = ProgressViewProvider.getInstance();
@@ -276,7 +274,9 @@ async function executeAgentWithLogging<T extends IAgent>(
         bus.emit('setTaskState', {
           streamTabId: streamTabId,
           executionId,
-          taskState: agentConfigToTaskState(config, agentType),
+          taskState: agentConfigToTaskState(config, agentType, {
+            toolUseSequence,
+          }),
         });
         logger.debug(
           `Task state stored for stream: ${streamTabId}`,

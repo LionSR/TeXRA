@@ -14,6 +14,7 @@ import { AgentLogger } from '@logger/AgentLogger';
 // Types
 import { TaskState } from '@logger/TaskState';
 import { objectToTaskState, getConfig } from '@utils/config';
+import { AgentType } from '@agent/core/AgentDataclass';
 
 /**
  * Core state management for the progress view.
@@ -27,6 +28,7 @@ export class ProgressViewState {
   private _usageStats: UsageStatsManager;
   private _activeStream: StreamTabId = '';
   private _streamSortOrder = 'time';
+  private _streamFilter = 'all';
   private _taskStates: Map<StreamTabId, TaskState> = new Map();
   private _executionIds: Map<StreamTabId, ExecutionId> = new Map();
   private readonly persistence: StatePersistenceManager;
@@ -68,6 +70,7 @@ export class ProgressViewState {
   set activeStream(stream: StreamTabId) {
     this._activeStream = stream;
     this.saveActiveStream();
+    this.ensureActiveStreamMatchesFilter();
   }
 
   get streamSortOrder(): string {
@@ -77,6 +80,16 @@ export class ProgressViewState {
   set streamSortOrder(order: string) {
     this._streamSortOrder = order;
     this.saveStreamSortOrder();
+  }
+
+  get streamFilter(): string {
+    return this._streamFilter;
+  }
+
+  set streamFilter(filter: string) {
+    this._streamFilter = filter;
+    this.saveStreamFilter();
+    this.ensureActiveStreamMatchesFilter();
   }
 
   // Task state management
@@ -125,7 +138,9 @@ export class ProgressViewState {
     // Update active stream if necessary
     if (this._activeStream === stream) {
       const remainingStreams = this._streamTabs.keys();
-      this._activeStream = remainingStreams[0] || '';
+      const nextStream =
+        remainingStreams.find((id) => this.streamMatchesFilter(id)) || '';
+      this._activeStream = nextStream;
       this.saveActiveStream();
     }
 
@@ -160,6 +175,37 @@ export class ProgressViewState {
     this.saveExecutionIds();
   }
 
+  private streamMatchesFilter(stream: StreamTabId): boolean {
+    if (!stream) {
+      return false;
+    }
+    if (this._streamFilter === 'all') {
+      return true;
+    }
+    const taskState = this._taskStates.get(stream);
+    const category =
+      taskState?.agentType === AgentType.ToolUse ? 'toolUse' : 'workflow';
+    return category === this._streamFilter;
+  }
+
+  private ensureActiveStreamMatchesFilter(): void {
+    if (this._streamFilter === 'all') {
+      return;
+    }
+
+    if (this.streamMatchesFilter(this._activeStream)) {
+      return;
+    }
+
+    const nextStream =
+      this._streamTabs.keys().find((id) => this.streamMatchesFilter(id)) || '';
+
+    if (this._activeStream !== nextStream) {
+      this._activeStream = nextStream;
+      this.saveActiveStream();
+    }
+  }
+
   /**
    * Load all state from persistence
    */
@@ -178,6 +224,7 @@ export class ProgressViewState {
       this.loadTaskStates(),
       this.loadExecutionIds(),
       this.loadStreamSortOrder(),
+      this.loadStreamFilter(),
     ]);
   }
 
@@ -285,5 +332,17 @@ export class ProgressViewState {
       WorkspaceStateKey.STREAM_SORT_ORDER,
       this._streamSortOrder,
     );
+  }
+
+  private async loadStreamFilter(): Promise<void> {
+    this._streamFilter = await this.persistence.load(
+      WorkspaceStateKey.STREAM_FILTER,
+      'all',
+    );
+    this.ensureActiveStreamMatchesFilter();
+  }
+
+  private saveStreamFilter(): void {
+    this.persistence.save(WorkspaceStateKey.STREAM_FILTER, this._streamFilter);
   }
 }

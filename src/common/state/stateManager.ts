@@ -15,6 +15,7 @@ export enum WorkspaceStateKey {
   EXECUTION_IDS = 'texra.executionIds',
   USAGE_STATS = 'texra.usageStats',
   STREAM_SORT_ORDER = 'texra.streamSortOrder',
+  STREAM_FILTER = 'texra.streamFilter',
 }
 
 export enum GlobalStateKey {
