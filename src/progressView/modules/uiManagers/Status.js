@@ -79,7 +79,12 @@ export class Status {
 
     setElementsDisabled(buttons, true);
     // Always enable the erase button regardless of status
-    setElementsDisabled(ELEMENT_IDS.ERASE_STREAM_BTN, false);
+    const eraseButton = document.getElementById(
+      ELEMENT_IDS.ERASE_STREAM_BTN,
+    );
+    if (eraseButton) {
+      setElementsDisabled([eraseButton], false);
+    }
 
     statusIndicator.className = 'status-indicator';
     statusIndicator.dataset.status = 'Ready';
