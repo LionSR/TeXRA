@@ -12,10 +12,11 @@ import {
   AgentTypeFilter,
   isAgentTypeFilter,
 } from '@agent/types/AgentStreamTypes';
-import { AgentType } from '@agent/core/AgentDataclass';
+import {
+  AgentSessionKind,
+  deriveAgentSessionKind,
+} from '@agent/core/AgentDataclass';
 import type { TaskState } from '@logger/TaskState';
-
-type ToolUseTaskState = TaskState & { agentType: AgentType.ToolUse };
 
 // @ts-ignore - Import JavaScript module
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
@@ -330,10 +331,10 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
    * @param taskState - The currently resolved task state for the active stream.
    * @returns True when the caller should skip executing the toolbar action.
    */
-  private shouldSkipToolbarAction(
-    taskState: TaskState | undefined,
-  ): taskState is undefined | ToolUseTaskState {
-    return !taskState || taskState.agentType === AgentType.ToolUse;
+  private shouldSkipToolbarAction(taskState: TaskState): boolean {
+    const sessionKind =
+      taskState.agentSessionKind ?? deriveAgentSessionKind(taskState.agentType);
+    return sessionKind === AgentSessionKind.ToolUse;
   }
 
   /**
@@ -346,6 +347,10 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     action: (taskState: TaskState) => Promise<void>,
   ): Promise<void> {
     const taskState = this.provider.state.getTaskState(stream);
+    if (!taskState) {
+      return;
+    }
+
     if (this.shouldSkipToolbarAction(taskState)) {
       return;
     }
