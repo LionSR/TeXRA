@@ -28,11 +28,13 @@ type StatusType =
   | typeof STATUS.RUNNING
   | typeof STATUS.ERROR
   | typeof STATUS.STOPPED
-  | typeof STATUS.READY;
+  | typeof STATUS.READY
+  | typeof STATUS.WAITING;
 type StreamStatusType =
   | typeof STATUS.RUNNING
   | typeof STATUS.ERROR
-  | typeof STATUS.STOPPED;
+  | typeof STATUS.STOPPED
+  | typeof STATUS.WAITING;
 type StreamStatusOrReadyType = StreamStatusType | typeof STATUS.READY;
 
 /**
@@ -378,6 +380,8 @@ export class ProgressEventHandler {
       parseLegacyLogData(existing, this.logger, true);
     }
 
+    this.state.streamTabs.save();
+
     if (
       this.webviewUpdater.isAvailable() &&
       stream === this.state.activeStream
@@ -520,16 +524,24 @@ export class ProgressEventHandler {
    * Reset running tasks to ERROR status (used during webview reload)
    * Returns the list of affected streams for further processing
    */
-  resetRunningTasksToError(): string[] {
+  resetRunningTasksToError(waitingStreams?: Set<string>): string[] {
     const affectedStreams: string[] = [];
+    const waitingSet = waitingStreams ?? new Set<string>();
 
     for (const [stream, status] of this._streamStatus.entries()) {
       if (status === STATUS.RUNNING) {
-        this._streamStatus.set(stream, STATUS.ERROR);
-        affectedStreams.push(stream);
-        this.logger.debug(
-          `Stream ${stream} set to ERROR due to webview reload`,
-        );
+        if (waitingSet.has(stream)) {
+          this._streamStatus.set(stream, STATUS.WAITING);
+          this.logger.debug(
+            `Stream ${stream} restored to WAITING after reload`,
+          );
+        } else {
+          this._streamStatus.set(stream, STATUS.ERROR);
+          affectedStreams.push(stream);
+          this.logger.debug(
+            `Stream ${stream} set to ERROR due to webview reload`,
+          );
+        }
       }
     }
 

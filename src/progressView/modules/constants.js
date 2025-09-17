@@ -53,7 +53,7 @@ import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands.js';
 // Use standardized commands directly (OPEN_LABEL is already included)
 export const COMMANDS = PROGRESS_VIEW_COMMANDS;
 
-export const TOOLBAR_BUTTONS = [
+const WORKFLOW_TOOLBAR = [
   {
     id: ELEMENT_IDS.STOP_STREAM_BTN,
     icon: 'debug-stop',
@@ -112,6 +112,46 @@ export const TOOLBAR_BUTTONS = [
     disabled: false,
   },
 ];
+
+const TOOL_USE_TOOLBAR = [
+  {
+    id: ELEMENT_IDS.STOP_STREAM_BTN,
+    icon: 'debug-stop',
+    command: COMMANDS.STOP_STREAM,
+    title:
+      'Request task interruption (current API call will be aborted if supported)',
+    className: 'vscode-button stop-button',
+    disabled: true,
+  },
+  {
+    id: ELEMENT_IDS.RESTORE_STATE_BTN,
+    icon: 'reply',
+    command: COMMANDS.RESTORE_STATE,
+    title: 'Restore this configuration to the main view',
+    className: 'vscode-button restore-button',
+    disabled: true,
+  },
+  {
+    id: ELEMENT_IDS.ERASE_STREAM_BTN,
+    icon: 'clear-all',
+    command: COMMANDS.ERASE_STREAM,
+    title: 'Erase the stream output for this agent',
+    className: 'vscode-button clear-button',
+    disabled: false,
+  },
+];
+
+export const TOOLBAR_BUTTONS = {
+  workflow: WORKFLOW_TOOLBAR,
+  toolUse: TOOL_USE_TOOLBAR,
+};
+
+export const ALL_TOOLBAR_BUTTON_IDS = Array.from(
+  new Set([
+    ...WORKFLOW_TOOLBAR.map((btn) => btn.id),
+    ...TOOL_USE_TOOLBAR.map((btn) => btn.id),
+  ]),
+);
 
 export const SORT_BUTTONS = [
   {
