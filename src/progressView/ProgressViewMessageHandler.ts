@@ -12,6 +12,10 @@ import {
   AgentTypeFilter,
   isAgentTypeFilter,
 } from '@agent/types/AgentStreamTypes';
+import { AgentType } from '@agent/core/AgentDataclass';
+import type { TaskState } from '@logger/TaskState';
+
+type ToolUseTaskState = TaskState & { agentType: AgentType.ToolUse };
 
 // @ts-ignore - Import JavaScript module
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
@@ -125,21 +129,19 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     message: any,
     webviewView: vscode.WebviewView,
   ): Promise<void> {
-    const taskState = this.provider.state.getTaskState(message.stream);
-    if (taskState) {
+    await this.withToolbarTaskState(message.stream, async (taskState) => {
       await vscode.commands.executeCommand(
         'texra.execute',
         taskState.agentConfig,
       );
-    }
+    });
   }
 
   private async handleDiffStream(
     message: any,
     webviewView: vscode.WebviewView,
   ): Promise<void> {
-    const taskState = this.provider.state.getTaskState(message.stream);
-    if (taskState) {
+    await this.withToolbarTaskState(message.stream, async (taskState) => {
       await vscode.commands.executeCommand('texra.runLatexdiff', {
         agent: taskState.agentConfig.agent,
         model: taskState.agentConfig.model,
@@ -147,21 +149,25 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
         outputFiles: taskState.agentConfig.outputFiles,
         outputFilesActive: taskState.activeFiles.output,
       });
-    }
+    });
   }
 
   private async handlePackStream(
     message: any,
     webviewView: vscode.WebviewView,
   ): Promise<void> {
-    await this.handleFileOperation(message.stream, 'texra.pack');
+    await this.withToolbarTaskState(message.stream, async (taskState) => {
+      await this.handleFileOperation(message.stream, taskState, 'texra.pack');
+    });
   }
 
   private async handleCleanStream(
     message: any,
     webviewView: vscode.WebviewView,
   ): Promise<void> {
-    await this.handleFileOperation(message.stream, 'texra.clean');
+    await this.withToolbarTaskState(message.stream, async (taskState) => {
+      await this.handleFileOperation(message.stream, taskState, 'texra.clean');
+    });
   }
 
   private async handleSortStreams(
@@ -287,11 +293,9 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
 
   private async handleFileOperation(
     stream: string,
+    taskState: TaskState,
     command: 'texra.pack' | 'texra.clean',
   ): Promise<void> {
-    const taskState = this.provider.state.getTaskState(stream);
-    if (!taskState) return;
-
     const generated = this.provider.state.outputFiles.getFiles(stream);
     const allFiles = new Set<string>(taskState.agentConfig.outputFiles || []);
     if (generated) {
@@ -317,5 +321,23 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
         output: outputActive,
       },
     });
+  }
+
+  private shouldSkipToolbarAction(
+    taskState: TaskState | undefined,
+  ): taskState is undefined | ToolUseTaskState {
+    return !taskState || taskState.agentType === AgentType.ToolUse;
+  }
+
+  private async withToolbarTaskState(
+    stream: string,
+    action: (taskState: TaskState) => Promise<void>,
+  ): Promise<void> {
+    const taskState = this.provider.state.getTaskState(stream);
+    if (this.shouldSkipToolbarAction(taskState)) {
+      return;
+    }
+
+    await action(taskState);
   }
 }
