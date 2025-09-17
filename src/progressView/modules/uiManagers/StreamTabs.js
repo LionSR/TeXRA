@@ -32,11 +32,13 @@ export class StreamTabs {
       return;
     }
     tabsContainer.innerHTML = '';
+    let activeInfo = null;
     streams.forEach((info) => {
       if (!info || typeof info !== 'object') {
         console.warn('StreamTabs.update: invalid stream value:', info);
         return;
       }
+      const tooltip = this._buildTooltip(info);
       const tabEl = createFromTemplate('streamTabTemplate', {
         text: {
           '.tab-title': info.label || info.name,
@@ -44,7 +46,8 @@ export class StreamTabs {
           '.last-active': formatRelativeTime(info.lastTimestamp),
         },
         attributes: {
-          '.tab': { title: info.name },
+          '': { title: tooltip },
+          '.tab': { title: tooltip },
           '.tab-delete': { title: 'Delete stream' },
         },
         dataset: {
@@ -77,8 +80,10 @@ export class StreamTabs {
           multiIcon.remove();
         }
       }
-      if (info.name === activeStream) tabEl.classList.add('active');
-      tabEl.title = info.name;
+      if (info.name === activeStream) {
+        tabEl.classList.add('active');
+        activeInfo = info;
+      }
       tabsContainer.appendChild(tabEl);
     });
 
@@ -87,7 +92,41 @@ export class StreamTabs {
       ELEMENT_IDS.ACTIVE_STREAM_NAME,
     );
     if (streamNameElem) {
-      streamNameElem.textContent = activeStream || '';
+      const label = activeInfo?.label || '';
+      streamNameElem.textContent = label;
+      streamNameElem.title = activeInfo
+        ? this._buildActiveTitle(activeInfo)
+        : '';
+      if (activeInfo?.name) {
+        streamNameElem.dataset.stream = activeInfo.name;
+      } else {
+        delete streamNameElem.dataset.stream;
+      }
     }
+  }
+
+  _buildTooltip(info) {
+    const parts = [];
+    if (info?.label) {
+      parts.push(info.label);
+    }
+    if (info?.model) {
+      parts.push(`Model: ${info.model}`);
+    }
+    if (info?.inputFile) {
+      parts.push(`Input: ${info.inputFile}`);
+    }
+    return parts.filter(Boolean).join(' • ');
+  }
+
+  _buildActiveTitle(info) {
+    const parts = [this._buildTooltip(info)];
+    if (info?.lastTimestamp) {
+      const lastSeen = formatRelativeTime(info.lastTimestamp);
+      if (lastSeen) {
+        parts.push(`Last activity ${lastSeen}`);
+      }
+    }
+    return parts.filter(Boolean).join('\n');
   }
 }
