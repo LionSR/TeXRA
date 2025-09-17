@@ -121,16 +121,15 @@ export async function activate(context: vscode.ExtensionContext) {
 
   if (persistedToolUseSessions.length > 0) {
     for (const snapshot of persistedToolUseSessions) {
-      void vscode.commands
-        .executeCommand('texra.resumeAgent', snapshot)
-        .catch((error: unknown) => {
-          const message =
-            error instanceof Error ? error.message : String(error);
-          logger.error(
-            'extension',
-            `Failed to resume tool-use session ${snapshot.executionId}: ${message}`,
-          );
-        });
+      void Promise.resolve(
+        vscode.commands.executeCommand('texra.resumeAgent', snapshot),
+      ).catch((error: unknown) => {
+        const message = error instanceof Error ? error.message : String(error);
+        logger.error(
+          'extension',
+          `Failed to resume tool-use session ${snapshot.executionId}: ${message}`,
+        );
+      });
     }
   }
 
