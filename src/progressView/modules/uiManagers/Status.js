@@ -89,7 +89,7 @@ export class Status {
         return;
       }
 
-      statusIndicator.classList.remove('running', 'error', 'stopped', 'ready');
+      statusIndicator.classList.remove(STATUS.RUNNING, STATUS.ERROR, STATUS.STOPPED, STATUS.READY, STATUS.WAITING);
 
       const cfg = this.STATUS_MAP[status] || {
         className: 'stopped',
