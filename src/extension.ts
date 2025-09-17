@@ -17,6 +17,7 @@ import { TASK_RUNS_DIR } from '@utils/files/taskRunStorage';
 import { initializeStateManagers } from '@common/state/stateManager';
 import { FileLister } from '@frontend/files/fileLister';
 import { bus } from '@eventBus/ProgressEventBus';
+import { ToolUseSessionManager } from '@agent/toolUse/ToolUseSessionManager';
 
 // Local imports - components
 import { ProgressViewProvider } from './progressView/ProgressViewProvider';
@@ -29,6 +30,19 @@ import { registerCommands } from './commands';
 let statusBarItem: vscode.StatusBarItem | undefined;
 let apiKeyStatusBarItem: vscode.StatusBarItem | undefined;
 let disposeStatusListener: (() => void) | undefined;
+
+function promptToOpenFolder(message: string): void {
+  const openAction = 'Open Folder';
+  void vscode.window
+    .showInformationMessage(message, openAction)
+    .then((choice) => {
+      if (choice === openAction) {
+        void vscode.commands.executeCommand(
+          'workbench.action.files.openFolder',
+        );
+      }
+    });
+}
 
 async function refreshApiKeyStatus() {
   if (!apiKeyStatusBarItem) {
@@ -56,30 +70,14 @@ async function refreshApiKeyStatus() {
 export async function activate(context: vscode.ExtensionContext) {
   const workspaceFolders = vscode.workspace.workspaceFolders;
   if (!workspaceFolders || workspaceFolders.length === 0) {
-    const openAction = 'Open Folder';
-    vscode.window
-      .showInformationMessage(
-        'TeXRA requires an open workspace. Please open a folder to enable the extension.',
-        openAction,
-      )
-      .then((choice) => {
-        if (choice === openAction) {
-          vscode.commands.executeCommand('workbench.action.files.openFolder');
-        }
-      });
+    promptToOpenFolder(
+      'TeXRA requires an open workspace. Please open a folder to enable the extension.',
+    );
     return; // Exit before further initialization
   } else if (workspaceFolders.length > 1) {
-    const openAction = 'Open Folder';
-    vscode.window
-      .showInformationMessage(
-        'TeXRA supports only a single-folder workspace. Please open one folder to enable the extension.',
-        openAction,
-      )
-      .then((choice) => {
-        if (choice === openAction) {
-          vscode.commands.executeCommand('workbench.action.files.openFolder');
-        }
-      });
+    promptToOpenFolder(
+      'TeXRA supports only a single-folder workspace. Please open one folder to enable the extension.',
+    );
     return;
   }
   const workspaceRoot = workspaceFolders[0].uri.fsPath;
@@ -99,11 +97,18 @@ export async function activate(context: vscode.ExtensionContext) {
   const progressViewProvider = new ProgressViewProvider(context);
   await progressViewProvider.initialize();
 
+  const persistedToolUseSessions = ToolUseSessionManager.isPersistenceEnabled()
+    ? await ToolUseSessionManager.listSnapshots()
+    : [];
+  const waitingStreams = new Set(
+    persistedToolUseSessions.map((snapshot) => snapshot.streamId),
+  );
+
   // Log activation message to ensure the logger is working correctly
   logger.info('extension', 'TeXRA extension activated');
 
   // Clean up any tasks that were left in "running" state from previous session
-  progressViewProvider.cleanupTasksAfterRestart();
+  await progressViewProvider.cleanupTasksAfterRestart(waitingStreams);
 
   // Copy default agents
   await copyDefaultAgents(context);
@@ -113,6 +118,20 @@ export async function activate(context: vscode.ExtensionContext) {
 
   // Register commands first - this will create and store the MainViewProvider
   registerCommands(context);
+
+  if (persistedToolUseSessions.length > 0) {
+    for (const snapshot of persistedToolUseSessions) {
+      void Promise.resolve(
+        vscode.commands.executeCommand('texra.resumeAgent', snapshot),
+      ).catch((error: unknown) => {
+        const message = error instanceof Error ? error.message : String(error);
+        logger.error(
+          'extension',
+          `Failed to resume tool-use session ${snapshot.executionId}: ${message}`,
+        );
+      });
+    }
+  }
 
   // Create a status bar item to show TeXRA progress
   statusBarItem = vscode.window.createStatusBarItem(
@@ -130,16 +149,14 @@ export async function activate(context: vscode.ExtensionContext) {
   refreshApiKeyStatus().catch(console.error);
 
   const runningStreams = new Set<string>();
+  const NON_RUNNING_STATUSES = ['stopped', 'error', 'cancelled', 'waiting'];
+
   disposeStatusListener = bus.on(
     'updateStreamStatus',
     ({ stream, status }: { stream: string; status: string }) => {
       if (status === 'running') {
         runningStreams.add(stream);
-      } else if (
-        status === 'stopped' ||
-        status === 'error' ||
-        status === 'cancelled'
-      ) {
+      } else if (NON_RUNNING_STATUSES.includes(status)) {
         runningStreams.delete(stream);
       }
       statusBarItem!.text =
@@ -217,8 +234,12 @@ export async function activate(context: vscode.ExtensionContext) {
   }
 }
 
-export function deactivate() {
+export async function deactivate() {
   disposeStatusListener?.();
+
+  // Clean up persisted tool-use sessions when extension deactivates
+  await ToolUseSessionManager.deleteAllSnapshots();
+
   // Get the ProgressViewProvider instance
   const progressViewProvider = ProgressViewProvider.getInstance();
   if (progressViewProvider) {

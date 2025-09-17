@@ -17,6 +17,7 @@ import {
   deriveAgentSessionKind,
 } from '@agent/core/AgentDataclass';
 import type { TaskState } from '@logger/TaskState';
+import type { StreamTabId } from '@agent/types/IdentifierTypes';
 
 // @ts-ignore - Import JavaScript module
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
@@ -24,6 +25,16 @@ import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 export class ProgressViewMessageHandler extends BaseViewMessageHandler {
   constructor(private readonly provider: ProgressViewProvider) {
     super('ProgressView');
+  }
+
+  private async deleteSessionSnapshot(stream: StreamTabId): Promise<void> {
+    const executionId = this.provider.state.getExecutionId(stream);
+    if (executionId) {
+      const { ToolUseSessionManager } = await import(
+        '@agent/toolUse/ToolUseSessionManager'
+      );
+      await ToolUseSessionManager.deleteSnapshot(executionId);
+    }
   }
 
   protected createHandlers(): Record<
@@ -99,6 +110,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     message: any,
     webviewView: vscode.WebviewView,
   ): Promise<void> {
+    // Delete persisted session data if any
+    await this.deleteSessionSnapshot(message.stream);
     this.provider.state.clearStream(message.stream);
     this.provider.updateWebview();
   }
@@ -107,6 +120,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     message: any,
     webviewView: vscode.WebviewView,
   ): Promise<void> {
+    // Delete persisted session data when erasing stream
+    await this.deleteSessionSnapshot(message.stream);
     this.provider.state.eraseStreamContent(message.stream);
     this.provider.updateWebview();
   }
@@ -115,6 +130,12 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     message: any,
     webviewView: vscode.WebviewView,
   ): Promise<void> {
+    // Delete all persisted session data
+    const allStates = this.provider.state.getAllTaskStates();
+    for (const [stream] of allStates) {
+      await this.deleteSessionSnapshot(stream);
+    }
+
     this.provider.state.clearAll();
     this.provider.updateWebview();
   }

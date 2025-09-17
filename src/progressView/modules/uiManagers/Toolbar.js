@@ -7,14 +7,16 @@ import { createIconButton } from '@common/templateUtils.js';
  * Manages toolbar rendering.
  */
 export class Toolbar {
-  render() {
+  render(sessionKind = 'workflow') {
     const container = document.getElementById(ELEMENT_IDS.TOOLBAR_CONTAINER);
     if (!container) {
       console.error('Toolbar.render: toolbarContainer not found');
       return;
     }
     container.innerHTML = '';
-    TOOLBAR_BUTTONS.forEach((def) => {
+    const buttons = TOOLBAR_BUTTONS[sessionKind] ?? TOOLBAR_BUTTONS.workflow;
+    container.dataset.agentMode = sessionKind;
+    buttons.forEach((def) => {
       try {
         const btn = createIconButton({
           id: def.id,
