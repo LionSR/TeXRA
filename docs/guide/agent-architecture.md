@@ -62,6 +62,16 @@ sequenceDiagram
 
 TeXRA constructs the conversation by merging your agent's `systemPrompt`, the context-filled `userPrefix`, and the `userRequest`. Depending on settings, the extension may insert additional messages in between—for example the output of `texcount` when you enable **Attach TeX Count**, or encoded images and audio files selected in the file panel. The sequence is not a fixed "system–user–system" pattern: attachments or tool results can be inserted at any point before the LLM generates a single response containing `<scratchpad>` reasoning followed by the XML-wrapped output defined by `settings.documentTag`.
 
+### PromptBuilder utility
+
+Internally, TeXRA now assembles these prompt segments through the `PromptBuilder` helper. The builder collects the agent's templates and rendered variables once and exposes focused methods:
+
+- `buildInitialPrompts()` returns the trio of system, prefix, and request messages used for round 0.
+- `buildReflectPrompt(round)` renders the appropriate `userReflect` template for a given reflection round.
+- `getPrefill(round)` provides the prefill seed that is streamed to the assistant before each model turn.
+
+Agents that inherit from `BaseReflectionAgent` can override the protected `getPromptBuilder()` hook to supply a subclassed builder. This makes it easy to add new phases (e.g., a planning stage) or to customize how prefills are computed without rewriting the round-processing logic. When you introduce a specialised agent, create a derived `PromptBuilder` that extends the base implementation, override or add the necessary methods, and return it from your agent's `getPromptBuilder()` override so the lifecycle automatically uses your custom prompts.
+
 **Optional Reflection (Round 1):**
 
 If you enable the "Reflect" option in the Tool Config section of the UI, TeXRA performs an additional step after Round 0 finishes successfully:
