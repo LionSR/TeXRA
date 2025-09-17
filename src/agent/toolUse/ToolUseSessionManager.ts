@@ -284,4 +284,25 @@ export class ToolUseSessionManager {
   ): ToolState {
     return hydrateToolState(snapshot.toolState);
   }
+  
+  /**
+   * Deletes all persisted tool-use session snapshots
+   * @returns Promise that resolves when all snapshots are deleted
+   */
+  public static async deleteAllSnapshots(): Promise<void> {
+    if (!this.isPersistenceEnabled()) {
+      return;
+    }
+    
+    try {
+      const snapshots = await this.listSnapshots();
+      await Promise.all(
+        snapshots.map((snapshot) => this.deleteSnapshot(snapshot.executionId)),
+      );
+    } catch (error) {
+      logger.warn(
+        `Failed to delete all snapshots: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
 }
