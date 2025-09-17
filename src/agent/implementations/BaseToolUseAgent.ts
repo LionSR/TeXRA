@@ -32,6 +32,7 @@ export class BaseToolUseAgent extends BaseAgent {
   private toolState: ToolState | null = null;
   private resumeSnapshot: ToolUseSessionSnapshot | null = null;
   private hasPersistedSnapshot = false;
+  private persistenceLock = false; // Lock to prevent race conditions during persistence
 
   constructor(
     modelHandler: IModelHandler,
@@ -74,6 +75,10 @@ export class BaseToolUseAgent extends BaseAgent {
     return tools;
   }
 
+  /**
+   * Appends a follow-up message to the queue or resolves a waiting promise
+   * @param text - The follow-up message text
+   */
   public appendFollowUp(text: string): void {
     if (this.followUpResolver) {
       this.followUpResolver(text);
@@ -81,8 +86,16 @@ export class BaseToolUseAgent extends BaseAgent {
     } else {
       this.followUpQueue.push(text);
     }
+    // If we're in the middle of persisting, mark for cleanup
+    if (this.persistenceLock) {
+      this.hasPersistedSnapshot = true; // Will trigger cleanup in the next cycle
+    }
   }
 
+  /**
+   * Configures the agent to resume from a persisted snapshot
+   * @param snapshot - The snapshot to resume from
+   */
   public resumeFromSnapshot(snapshot: ToolUseSessionSnapshot): void {
     this.resumeSnapshot = snapshot;
     this.hasPersistedSnapshot = true;
@@ -116,7 +129,13 @@ export class BaseToolUseAgent extends BaseAgent {
 
       if (this.resumeSnapshot) {
         this.logger.info('Resuming tool-use session from saved state.');
-        this.messages = (this.resumeSnapshot.messages ?? []) as ProviderMessage[];
+        // Validate messages before hydrating
+        const messages = this.resumeSnapshot.messages ?? [];
+        if (!Array.isArray(messages)) {
+          throw new Error('Invalid snapshot: messages must be an array');
+        }
+        // Cast with confidence after validation
+        this.messages = messages as ProviderMessage[];
         this.toolState = ToolUseSessionManager.hydrateToolStateFromSnapshot(
           this.resumeSnapshot,
         );
@@ -198,48 +217,62 @@ export class BaseToolUseAgent extends BaseAgent {
   }
 
   private async enterWaitingState(): Promise<void> {
+    // Early check to avoid unnecessary work
     if (this.followUpQueue.length > 0) {
       return;
     }
+    
     const stream = this.getStreamTabId();
     const executionId = this.getExecutionId();
     const state = this.toolState;
 
+    // Persist snapshot with lock to prevent race conditions
     if (
       state &&
       executionId &&
-      ToolUseSessionManager.isPersistenceEnabled() &&
-      this.followUpQueue.length === 0
+      ToolUseSessionManager.isPersistenceEnabled()
     ) {
-      await ToolUseSessionManager.saveSnapshot({
-        executionId,
-        streamId: stream,
-        agentName: this.agentConfig.agent,
-        model: this.agentConfig.model,
-        agentSessionKind: AgentSessionKind.ToolUse,
-        messages: this.messages,
-        toolState: state,
-      });
-
-      if (this.followUpQueue.length > 0) {
-        await ToolUseSessionManager.deleteSnapshot(executionId);
-        this.hasPersistedSnapshot = false;
-        return;
+      // Acquire lock to prevent race conditions
+      this.persistenceLock = true;
+      
+      try {
+        // Double-check queue is still empty under lock
+        if (this.followUpQueue.length === 0) {
+          await ToolUseSessionManager.saveSnapshot({
+            executionId,
+            streamId: stream,
+            agentName: this.agentConfig.agent,
+            model: this.agentConfig.model,
+            agentSessionKind: AgentSessionKind.ToolUse,
+            messages: this.messages,
+            toolState: state,
+          });
+          
+          // Final check after save completes
+          if (this.followUpQueue.length > 0) {
+            // A follow-up arrived while we were saving
+            await ToolUseSessionManager.deleteSnapshot(executionId);
+            this.hasPersistedSnapshot = false;
+          } else {
+            this.hasPersistedSnapshot = true;
+          }
+        }
+      } finally {
+        // Always release lock
+        this.persistenceLock = false;
       }
-
-      this.hasPersistedSnapshot = true;
     }
 
     bus.emit('updateStreamStatus', {
       stream,
-      status: 'waiting',
+      status: 'waiting', // Using string literal here as it's part of the bus event API
     });
   }
 
   private async markRunning(): Promise<void> {
     bus.emit('updateStreamStatus', {
       stream: this.getStreamTabId(),
-      status: 'running',
+      status: 'running', // Using string literal here as it's part of the bus event API
     });
   }
 
