@@ -380,6 +380,8 @@ export class ProgressEventHandler {
       parseLegacyLogData(existing, this.logger, true);
     }
 
+    this.state.streamTabs.save();
+
     if (
       this.webviewUpdater.isAvailable() &&
       stream === this.state.activeStream
