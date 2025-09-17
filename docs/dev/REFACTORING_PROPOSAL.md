@@ -166,7 +166,11 @@ export class ProgressEventHandler {
 export class WebviewUpdater {
   constructor(private getWebview: () => vscode.Webview | undefined) {}
 
-  updateStreams(streams: string[], activeStream: string): void;
+  updateStreams(
+    streams: string[],
+    activeStream: string,
+    agentFilter: string,
+  ): void;
   updateLogContent(stream: string, messages: LogMessageData[]): void;
   updateFiles(stream: string, files: OutputFileInfo[]): void;
   updateUsage(usage: TokenUsageStats): void;

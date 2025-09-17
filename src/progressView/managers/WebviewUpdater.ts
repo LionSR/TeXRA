@@ -12,6 +12,7 @@ import { ProgressViewState } from '../state/ProgressViewState';
 import { buildStreamInfos } from '../streamInfoUtils';
 import type { StreamTabInfo } from '../types';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
+import type { AgentTypeFilter } from '@agent/types/AgentStreamTypes';
 
 // Types
 import type { TokenUsageStats } from '@agent/types/UsageTypes';
@@ -36,7 +37,11 @@ export class WebviewUpdater {
   /**
    * Update stream tabs in the webview
    */
-  updateStreams(streams: StreamTabInfo[], activeStream: StreamTabId): void {
+  updateStreams(
+    streams: StreamTabInfo[],
+    activeStream: StreamTabId,
+    agentFilter: AgentTypeFilter,
+  ): void {
     const webview = this.getWebview();
     if (!webview) return;
 
@@ -44,6 +49,7 @@ export class WebviewUpdater {
       command: COMMANDS.UPDATE_STREAMS,
       streams,
       activeStream,
+      agentFilter,
     });
   }
 
@@ -206,12 +212,16 @@ export class WebviewUpdater {
     const webview = this.getWebview();
     if (!webview) return;
 
-    const activeStream = state.activeStream;
+    const streams = buildStreamInfos(state, statuses, state.agentTypeFilter);
 
-    const streams = buildStreamInfos(state, statuses);
+    let activeStream = state.activeStream;
+    if (!streams.some((info) => info.name === activeStream)) {
+      activeStream = streams[0]?.name ?? '';
+      state.activeStream = activeStream;
+    }
 
     // Update streams and active stream
-    this.updateStreams(streams, activeStream);
+    this.updateStreams(streams, activeStream, state.agentTypeFilter);
 
     if (activeStream) {
       // Update log content for active stream

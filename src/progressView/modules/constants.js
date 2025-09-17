@@ -32,6 +32,10 @@ export const ELEMENT_IDS = {
   FOLLOW_UP_CONTAINER: 'followUpContainer',
   FOLLOW_UP_INPUT: 'followUpInput',
   SEND_FOLLOW_UP_BTN: 'sendFollowUpBtn',
+  AGENT_FILTER_CONTAINER: 'agentFilterButtons',
+  FILTER_ALL_BTN: 'filterAllBtn',
+  FILTER_WORKFLOW_BTN: 'filterWorkflowBtn',
+  FILTER_TOOL_BTN: 'filterToolBtn',
 };
 
 // Default sizes for split view
@@ -127,5 +131,23 @@ export const SORT_BUTTONS = [
     icon: 'account',
     sort: 'agent',
     title: 'Sort by agent',
+  },
+];
+
+export const FILTER_BUTTONS = [
+  {
+    id: ELEMENT_IDS.FILTER_ALL_BTN,
+    label: 'All',
+    filter: 'all',
+  },
+  {
+    id: ELEMENT_IDS.FILTER_WORKFLOW_BTN,
+    label: 'Workflow',
+    filter: 'workflow',
+  },
+  {
+    id: ELEMENT_IDS.FILTER_TOOL_BTN,
+    label: 'Tool Use',
+    filter: 'toolUse',
   },
 ];

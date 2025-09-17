@@ -13,6 +13,7 @@ import { ToolState } from '@agent/core/ToolState';
 import { BaseAgent } from '@agent/implementations/BaseAgent';
 import type { IModelHandler } from '@agent/modelHandlers';
 import { OutputHandler, NamedOutputFile, IOutputHandler } from '@agent/output';
+import type { ExecutionId } from '@agent/types/IdentifierTypes';
 import { PromptBuilder } from '@agent/utils/PromptBuilder';
 import { writePromptToXml } from '@agent/utils/promptUtils';
 import { bus } from '@eventBus/ProgressEventBus';
@@ -74,8 +75,16 @@ export abstract class BaseReflectionAgent extends BaseAgent {
     agentSetting: AgentSetting,
     agentPrompt: AgentPrompt,
     agentPath: string,
+    executionId?: ExecutionId,
   ) {
-    super(modelHandler, agentConfig, agentSetting, agentPrompt, agentPath);
+    super(
+      modelHandler,
+      agentConfig,
+      agentSetting,
+      agentPrompt,
+      agentPath,
+      executionId,
+    );
 
     // Initialize basic attributes
     const numRounds = this.getNumberOfRounds();
