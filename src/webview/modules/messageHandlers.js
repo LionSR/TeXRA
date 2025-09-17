@@ -155,47 +155,36 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
           select.value = previous;
         }
         Array.from(select.options).forEach((opt) => {
-          const originalLabel = opt.dataset.label
-            ? opt.dataset.label
-            : (() => {
-                let text = opt.textContent ?? '';
-                if (text.endsWith('ᵗ')) {
-                  text = text.slice(0, -1);
-                }
-                if (text.endsWith(' ∶∶')) {
-                  text = text.slice(0, -3);
-                }
-                return text;
-              })();
-          opt.dataset.label = originalLabel;
+          const baseLabel = opt.dataset.label || opt.textContent || '';
+          opt.dataset.label = baseLabel;
 
-          let displayLabel = originalLabel;
           const hints = [];
+          let displayLabel = baseLabel;
 
           if (opt.dataset.multiple === 'true') {
-            displayLabel = `${displayLabel} ∶∶`;
+            displayLabel += ' ∶∶';
             hints.push('Supports multi-file inputs.');
+            opt.style.opacity = '0.9';
+          } else {
+            opt.style.opacity = '';
           }
 
           if (opt.dataset.toolUse === 'true') {
-            displayLabel = `${displayLabel}ᵗ`;
+            displayLabel += 'ᵗ';
             hints.push('Uses tools for actions.');
           }
 
           opt.textContent = displayLabel;
-          opt.style.opacity = opt.dataset.multiple === 'true' ? '0.9' : '';
 
           if (hints.length > 0) {
-            const tooltip = hints.join('\n');
-            const ariaDescription = hints.join(', ');
-            opt.title = tooltip;
+            opt.title = hints.join('\n');
             opt.setAttribute(
               'aria-label',
-              `${originalLabel} (${ariaDescription})`,
+              `${baseLabel} (${hints.join(', ')})`,
             );
           } else {
             opt.removeAttribute('title');
-            opt.setAttribute('aria-label', originalLabel);
+            opt.setAttribute('aria-label', baseLabel);
           }
         });
       },
