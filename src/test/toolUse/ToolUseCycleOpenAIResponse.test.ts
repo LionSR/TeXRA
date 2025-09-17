@@ -116,6 +116,7 @@ describe('runToolUseCycle OpenAIResponse', () => {
       requiredFiles: {},
       requiredFilesInternal: {},
       defaultOutputFiles: [],
+      useMultipleOutputs: false,
       filePatternsContain: [],
       tools: [{ name: 'echo' }],
     };

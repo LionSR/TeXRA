@@ -52,6 +52,7 @@ describe('OutputHandler.finalizeRound', () => {
     requiredFiles: {},
     requiredFilesInternal: {},
     defaultOutputFiles: [],
+    useMultipleOutputs: false,
     filePatternsContain: [],
     tools: [],
   };
@@ -60,6 +61,7 @@ describe('OutputHandler.finalizeRound', () => {
     model: 'test',
     agent: 'a',
     instruction: '',
+    useMultipleOutputs: false,
     inputFile: 'input.tex',
     inputFiles: null,
     referenceFile: null,
