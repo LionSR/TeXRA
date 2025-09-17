@@ -266,9 +266,8 @@ export class ProgressViewProvider
     waitingStreams?: Set<string>,
   ): Promise<void> {
     // Get affected streams and set their status to ERROR
-    const affectedStreams = this.eventHandler.resetRunningTasksToError(
-      waitingStreams,
-    );
+    const affectedStreams =
+      this.eventHandler.resetRunningTasksToError(waitingStreams);
 
     // Also check ALL streams for running groups, not just affected streams
     // This ensures we catch any groups that might be running even if stream status is not

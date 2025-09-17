@@ -209,11 +209,7 @@ export async function executeAgentWithLogging<T extends IAgent>(
       // Create a log group for execution details as a sub-group
       const taskDetailsGroupId = isResume
         ? undefined
-        : await logger.startGroup(
-            `Task Details`,
-            undefined,
-            mainTaskGroupId,
-          );
+        : await logger.startGroup(`Task Details`, undefined, mainTaskGroupId);
 
       if (!isResume && taskDetailsGroupId) {
         logger.info(
