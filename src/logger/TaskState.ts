@@ -1,7 +1,7 @@
 // Local imports
 import type { FileType } from '@utils/config';
 import type { AgentConfig } from '@agent/core/AgentConfig';
-import type { AgentType } from '@agent/core/AgentDataclass';
+import type { AgentSessionKind, AgentType } from '@agent/core/AgentDataclass';
 
 /**
  * Interface for storing task execution state.
@@ -23,6 +23,12 @@ export interface TaskState {
    * compatibility with older saved states.
    */
   agentType?: AgentType;
+
+  /**
+   * Canonical grouping for the agent session (workflow vs toolUse).
+   * Persisted alongside {@link agentType} for consistent filtering logic.
+   */
+  agentSessionKind?: AgentSessionKind;
 
   /**
    * UI-specific state for managing file type visibility in the interface.
