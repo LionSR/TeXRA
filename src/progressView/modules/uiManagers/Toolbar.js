@@ -14,8 +14,7 @@ export class Toolbar {
       return;
     }
     container.innerHTML = '';
-    const buttons =
-      TOOLBAR_BUTTONS[sessionKind] ?? TOOLBAR_BUTTONS.workflow;
+    const buttons = TOOLBAR_BUTTONS[sessionKind] ?? TOOLBAR_BUTTONS.workflow;
     container.dataset.agentMode = sessionKind;
     buttons.forEach((def) => {
       try {

@@ -270,7 +270,6 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   handleDeleteAll() {
     state.toggleStates.clearAll();
   }
-
 }
 
 export const messageHandler = new ProgressViewMessageHandler();
