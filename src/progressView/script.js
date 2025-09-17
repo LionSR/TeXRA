@@ -37,7 +37,7 @@ document.addEventListener('DOMContentLoaded', () => {
     'groupHeaderTemplate',
   ]);
   initializeIconButtons();
-  progressViewDomHandler.toolbar.render();
+  progressViewDomHandler.toolbar.render('workflow');
   progressViewDomHandler.placeholder.show();
   // Setup UI event listeners
   progressViewDomHandler.events.setupEventListeners();
