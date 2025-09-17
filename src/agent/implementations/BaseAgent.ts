@@ -100,12 +100,15 @@ export abstract class BaseAgent implements IAgent {
   }
 
   /** Perform asynchronous initialization work. */
-  public async init(parentGroupId?: string): Promise<void> {
-    const initGroupId = await this.logger.startGroup(
-      `Init`,
-      undefined,
-      parentGroupId,
-    );
+  public async init(
+    parentGroupId?: string,
+    options?: { createGroup?: boolean },
+  ): Promise<void> {
+    const { createGroup = true } = options ?? {};
+    const initGroupId = createGroup
+      ? await this.logger.startGroup(`Init`, undefined, parentGroupId)
+      : parentGroupId;
+
     try {
       this.logger.debug(
         `AgentConfig: ${JSON.stringify(this.agentConfig)}`,
@@ -122,9 +125,14 @@ export abstract class BaseAgent implements IAgent {
 
       this.userVars = await this.getUserVars();
       BaseAgent.runningAgents.set(this.getStreamTabId(), this);
-      this.logger.endGroup(initGroupId, 'stopped');
+
+      if (createGroup && initGroupId) {
+        this.logger.endGroup(initGroupId, 'stopped');
+      }
     } catch (error) {
-      this.logger.endGroup(initGroupId, 'error');
+      if (createGroup && initGroupId) {
+        this.logger.endGroup(initGroupId, 'error');
+      }
       throw error;
     }
   }

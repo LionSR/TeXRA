@@ -53,10 +53,7 @@ export class BaseToolUseAgent extends BaseAgent {
     for (const t of cfg) {
       const def = typeof t === 'string' ? { name: t } : t;
       if (!this.toolRegistry[def.name]) {
-        this.logger.warn(
-          `Tool "${def.name}" not found in registry`,
-          this.runGroupId,
-        );
+        this.logger.warn(`Tool "${def.name}" not found in registry`);
         continue;
       }
       tools.push(def);
@@ -98,9 +95,8 @@ export class BaseToolUseAgent extends BaseAgent {
   }
 
   public async run(): Promise<void> {
-    await this.startRunGroup();
     try {
-      await this.init(this.runGroupId);
+      await this.init(undefined, { createGroup: false });
       await this.initializeClient();
 
       const [systemPrompt, userRequest, userPrefix] = await Promise.all([
@@ -143,21 +139,16 @@ export class BaseToolUseAgent extends BaseAgent {
       } as const;
 
       while (true) {
-        await runToolUseCycle(cycleOptions, this.messages, this.runGroupId);
+        await runToolUseCycle(cycleOptions, this.messages);
         if (this.checkInterruption()) break;
         const followUp = await this.waitForFollowUp();
         if (!followUp || this.checkInterruption()) break;
-        this.logger.userMessage(followUp, this.runGroupId);
+        this.logger.userMessage(followUp);
         this.messages = await this.modelHandler.createUserFollowUpMessages(
           this.messages,
           followUp,
         );
       }
-
-      this.endRunGroup('stopped');
-    } catch (err) {
-      this.endRunGroup('error');
-      throw err;
     } finally {
       this.cleanup();
     }
