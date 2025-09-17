@@ -33,6 +33,21 @@
   white-space: normal;
 }
 
+.model-response-header {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-small);
+}
+
+.model-response-copy {
+  margin-left: auto;
+  min-width: 0;
+}
+
+.model-response-content {
+  margin-top: var(--spacing-tiny);
+}
+
 /* Timestamp color */
 .timestamp {
   color: var(--vscode-descriptionForeground);
