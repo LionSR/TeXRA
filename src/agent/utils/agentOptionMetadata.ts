@@ -36,6 +36,9 @@ function normalizeDirectory(dir?: string): string | undefined {
   if (!dir) {
     return undefined;
   }
+  if (!/\S/.test(dir)) {
+    return undefined;
+  }
   const trimmed = dir.trim();
   return trimmed.length > 0 ? trimmed : undefined;
 }
