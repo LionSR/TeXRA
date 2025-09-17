@@ -66,10 +66,9 @@ export function objectToTaskState(obj: Record<string, any>): TaskState {
   if (obj.agentConfig && typeof obj.agentConfig === 'object') {
     // Already in new format, just ensure it's valid
     const agentType = obj.agentType as AgentType | undefined;
-    const agentSessionKind = ((): AgentSessionKind => {
-      const rawKind = obj.agentSessionKind as AgentSessionKind | undefined;
-      return rawKind ?? deriveAgentSessionKind(agentType);
-    })();
+    const agentSessionKind =
+      (obj.agentSessionKind as AgentSessionKind | undefined) ??
+      deriveAgentSessionKind(agentType);
     return {
       agentConfig: AgentConfigSchema.parse(obj.agentConfig),
       activeFiles:
@@ -117,10 +116,9 @@ export function objectToTaskState(obj: Record<string, any>): TaskState {
   try {
     const normalized = AgentConfigSchema.parse(agentConfigData);
     const agentType = obj.agentType as AgentType | undefined;
-    const agentSessionKind = ((): AgentSessionKind => {
-      const rawKind = obj.agentSessionKind as AgentSessionKind | undefined;
-      return rawKind ?? deriveAgentSessionKind(agentType);
-    })();
+    const agentSessionKind =
+      (obj.agentSessionKind as AgentSessionKind | undefined) ??
+      deriveAgentSessionKind(agentType);
     const taskState = agentConfigToTaskState(normalized, agentType);
     taskState.agentSessionKind = agentSessionKind;
 
