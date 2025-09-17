@@ -262,10 +262,21 @@ export class ModelHandlerAnthropic extends ModelHandler<
     mediaFiles?: string[],
     systemPrompt?: string,
   ): Promise<MessageParam[]> {
+    const prefixText = userPrefix ?? '';
+    const requestText = userRequest ?? '';
+    const trimmedPrefix = prefixText.trim();
+    const trimmedRequest = requestText.trim();
+
     // Create content list for the user message
-    const userMessageContent: ContentBlock[] = [
-      { type: 'text', text: userPrefix, citations: null },
-    ];
+    const userMessageContent: ContentBlock[] = [];
+
+    if (trimmedPrefix.length > 0) {
+      userMessageContent.push({
+        type: 'text',
+        text: prefixText,
+        citations: null,
+      });
+    }
 
     // Add media if provided (Anthropic currently only supports images)
     if (mediaFiles && this.config.capabilities.supportsVision) {
@@ -281,15 +292,24 @@ export class ModelHandlerAnthropic extends ModelHandler<
     }
 
     // Add user request with optional caching
-    const requestBlock: ContentBlock = {
-      type: 'text',
-      text: userRequest,
-      citations: null,
-      ...(this.capabilities.supportsPromptCaching
-        ? { cache_control: { type: 'ephemeral' } }
-        : {}),
-    };
-    userMessageContent.push(requestBlock);
+    if (trimmedRequest.length > 0) {
+      const requestBlock: ContentBlock = {
+        type: 'text',
+        text: requestText,
+        citations: null,
+        ...(this.capabilities.supportsPromptCaching
+          ? { cache_control: { type: 'ephemeral' } }
+          : {}),
+      };
+      userMessageContent.push(requestBlock);
+    }
+
+    if (userMessageContent.length === 0) {
+      const errMsg =
+        'Anthropic message initialization requires non-empty user prefix or request.';
+      this.logger.error(errMsg);
+      throw new Error(errMsg);
+    }
 
     // Note: Anthropic handles system prompts differently via createResponse()
     const messages: MessageParam[] = [
@@ -349,16 +369,27 @@ export class ModelHandlerAnthropic extends ModelHandler<
       }
     }
 
+    const trimmedMessage = userMessage.trim();
+
     // Add message text with optional caching
-    const messageBlock: ContentBlock = {
-      type: 'text',
-      text: userMessage,
-      citations: null,
-      ...(this.capabilities.supportsPromptCaching
-        ? { cache_control: { type: 'ephemeral' } }
-        : {}),
-    };
-    roundContent.push(messageBlock);
+    if (trimmedMessage.length > 0) {
+      const messageBlock: ContentBlock = {
+        type: 'text',
+        text: userMessage,
+        citations: null,
+        ...(this.capabilities.supportsPromptCaching
+          ? { cache_control: { type: 'ephemeral' } }
+          : {}),
+      };
+      roundContent.push(messageBlock);
+    }
+
+    if (roundContent.length === 0) {
+      const errMsg =
+        'Anthropic follow-up message requires non-empty text or media content.';
+      this.logger.error(errMsg);
+      throw new Error(errMsg);
+    }
 
     // We need to ensure we don't exceed Anthropic's limit of 4 cache_control blocks
     // Remove cache_control from ALL previous message contents
@@ -378,6 +409,14 @@ export class ModelHandlerAnthropic extends ModelHandler<
     messages: MessageParam[],
     userMessage: string,
   ): Promise<MessageParam[]> {
+    const trimmedMessage = userMessage.trim();
+    if (trimmedMessage.length === 0) {
+      const errMsg =
+        'Anthropic follow-up user message cannot be empty after trimming.';
+      this.logger.error(errMsg);
+      throw new Error(errMsg);
+    }
+
     messages.push({
       role: 'user',
       content: [{ type: 'text', text: userMessage, citations: null }],
