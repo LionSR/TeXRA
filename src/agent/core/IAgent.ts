@@ -10,7 +10,10 @@ export interface IAgent {
   readonly config: AgentConfig;
 
   /** Initialize the agent before running. */
-  init(parentGroupId?: string): Promise<void>;
+  init(
+    parentGroupId?: string,
+    options?: { createGroup?: boolean },
+  ): Promise<void>;
 
   /** Execute the agent. */
   run(): Promise<void>;
