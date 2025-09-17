@@ -37,7 +37,8 @@ export const AgentConfigSchema = z
 
     toolConfig: ToolConfigSchema.default({}),
   })
-  .strict()
+  // Strip unknown keys to tolerate stale settings from previous releases.
+  .strip()
   .refine(validateOutputFiles, {
     message:
       'Number of output files must not be greater than the number of input files.',

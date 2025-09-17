@@ -6,6 +6,9 @@ import { z } from 'zod';
  * Defaults are defined at the property level and the schema itself
  * defaults to an empty object, allowing omission of the entire
  * configuration section.
+ *
+ * We explicitly strip unknown properties to remain backward compatible
+ * with legacy settings that may still include removed flags.
  */
 export const ToolConfigSchema = z
   .object({
@@ -17,7 +20,7 @@ export const ToolConfigSchema = z
     printInputPrompt: z.boolean().default(false),
     autoCompileInputPdf: z.boolean().default(false),
   })
-  .strict()
+  .strip()
   .default({});
 
 export type ToolConfig = z.infer<typeof ToolConfigSchema>;
