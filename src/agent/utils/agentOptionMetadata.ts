@@ -8,68 +8,57 @@ import { loadYaml } from '@agent/runtime/agentLoad';
 // Local imports - filesystem
 import { AbsoluteFS } from '@utils/files';
 
-/** Map of agent directory locations used for lookup. */
 export interface AgentDirectoryMap {
   custom?: string;
   builtIn?: string;
   builtInToolUse?: string;
 }
 
-/** Metadata that controls how an agent option is rendered. */
 export interface AgentOptionMetadata {
   hasDefinition: boolean;
   hasMultiple: boolean;
   isToolUse: boolean;
 }
 
+const DIRECTORY_KEYS: (keyof AgentDirectoryMap)[] = [
+  'custom',
+  'builtIn',
+  'builtInToolUse',
+];
 const YAML_EXTENSION = '.yaml';
-const MULTIPLE_SUFFIX = '_multiple.yaml';
+const MULTIPLE_SUFFIX = '_multiple';
 const TOOL_USE_AGENT_TYPE = 'toolUse';
 
-interface AgentDefinitionLike {
+type AgentDefinition = {
   settings?: {
     agentType?: unknown;
   };
-}
+};
 
-type Globber = typeof glob;
-type GlobberSync = typeof globSync;
-
-type MatchResolver<T> = (
-  directories: AgentDirectoryMap,
-  globFn: T,
-  pattern: string,
-) => Promise<string | undefined> | string | undefined;
-
-const normalizeDirectory = (dir?: string): string | undefined => {
+function normalizeDirectory(dir?: string): string | undefined {
   if (!dir) {
     return undefined;
   }
   const trimmed = dir.trim();
   return trimmed.length > 0 ? trimmed : undefined;
-};
+}
 
-const directoryOrder: (keyof AgentDirectoryMap)[] = [
-  'custom',
-  'builtIn',
-  'builtInToolUse',
-];
-
-const resolveMatch = async (
+async function findAgentYaml(
+  agentName: string,
   directories: AgentDirectoryMap,
-  globFn: Globber,
-  pattern: string,
-): Promise<string | undefined> => {
-  for (const key of directoryOrder) {
+  suffix = '',
+): Promise<string | undefined> {
+  const fileName = `${agentName}${suffix}${YAML_EXTENSION}`;
+  for (const key of DIRECTORY_KEYS) {
     const baseDir = normalizeDirectory(directories[key]);
     if (!baseDir) {
       continue;
     }
     try {
-      const matches = await globFn(pattern, {
+      const matches = await glob(`**/${fileName}`, {
         cwd: baseDir,
-        dot: false,
         nodir: true,
+        dot: false,
         absolute: true,
       });
       if (matches.length > 0) {
@@ -80,23 +69,24 @@ const resolveMatch = async (
     }
   }
   return undefined;
-};
+}
 
-const resolveMatchSync = (
+function findAgentYamlSync(
+  agentName: string,
   directories: AgentDirectoryMap,
-  globFn: GlobberSync,
-  pattern: string,
-): string | undefined => {
-  for (const key of directoryOrder) {
+  suffix = '',
+): string | undefined {
+  const fileName = `${agentName}${suffix}${YAML_EXTENSION}`;
+  for (const key of DIRECTORY_KEYS) {
     const baseDir = normalizeDirectory(directories[key]);
     if (!baseDir) {
       continue;
     }
     try {
-      const matches = globFn(pattern, {
+      const matches = globSync(`**/${fileName}`, {
         cwd: baseDir,
-        dot: false,
         nodir: true,
+        dot: false,
         absolute: true,
       });
       if (matches.length > 0) {
@@ -107,176 +97,96 @@ const resolveMatchSync = (
     }
   }
   return undefined;
-};
+}
 
-const hasToolUseAgentType = (
-  definition: AgentDefinitionLike | null,
-): boolean => {
-  if (!definition?.settings) {
+async function hasToolUseAgentType(yamlPath?: string): Promise<boolean> {
+  if (!yamlPath) {
     return false;
   }
-  const { agentType } = definition.settings;
-  return typeof agentType === 'string' && agentType === TOOL_USE_AGENT_TYPE;
-};
-
-const getAgentDefinition = async (
-  yamlPath: string,
-): Promise<AgentDefinitionLike | null> => {
   try {
-    return (await loadYaml(yamlPath)) as AgentDefinitionLike;
+    const definition = (await loadYaml(yamlPath)) as AgentDefinition;
+    return definition?.settings?.agentType === TOOL_USE_AGENT_TYPE;
   } catch {
-    return null;
+    return false;
   }
-};
+}
 
-const getAgentDefinitionSync = (
-  yamlPath: string,
-): AgentDefinitionLike | null => {
+function hasToolUseAgentTypeSync(yamlPath?: string): boolean {
+  if (!yamlPath) {
+    return false;
+  }
   try {
     const fileContent = AbsoluteFS.readSync(yamlPath);
-    return yaml.parse(fileContent) as AgentDefinitionLike;
+    const definition = yaml.parse(fileContent) as AgentDefinition;
+    return definition?.settings?.agentType === TOOL_USE_AGENT_TYPE;
   } catch {
-    return null;
+    return false;
   }
-};
+}
 
-const computeMetadata = (params: {
-  agentName: string;
-  directories: AgentDirectoryMap;
-  resolver: MatchResolver<typeof glob>;
-  multipleResolver: MatchResolver<typeof glob>;
-  definitionLoader: (yamlPath: string) => Promise<AgentDefinitionLike | null>;
-}): Promise<AgentOptionMetadata> => {
-  const {
-    agentName,
-    directories,
-    resolver,
-    multipleResolver,
-    definitionLoader,
-  } = params;
-  return Promise.all([
-    resolver(directories, glob, `**/${agentName}${YAML_EXTENSION}`) as Promise<
-      string | undefined
-    >,
-    multipleResolver(
-      directories,
-      glob,
-      `**/${agentName}${MULTIPLE_SUFFIX}`,
-    ) as Promise<string | undefined>,
-  ]).then(async ([yamlPath, multiplePath]) => {
-    const definition = yamlPath ? await definitionLoader(yamlPath) : null;
-    return {
-      hasDefinition: Boolean(yamlPath),
-      hasMultiple: Boolean(multiplePath),
-      isToolUse: Boolean(yamlPath && hasToolUseAgentType(definition)),
-    };
-  });
-};
-
-const computeMetadataSync = (params: {
-  agentName: string;
-  directories: AgentDirectoryMap;
-  resolver: MatchResolver<typeof globSync>;
-  multipleResolver: MatchResolver<typeof globSync>;
-  definitionLoader: (yamlPath: string) => AgentDefinitionLike | null;
-}): AgentOptionMetadata => {
-  const {
-    agentName,
-    directories,
-    resolver,
-    multipleResolver,
-    definitionLoader,
-  } = params;
-  const yamlPath = resolver(
-    directories,
-    globSync,
-    `**/${agentName}${YAML_EXTENSION}`,
-  ) as string | undefined;
-  const multiplePath = multipleResolver(
-    directories,
-    globSync,
-    `**/${agentName}${MULTIPLE_SUFFIX}`,
-  ) as string | undefined;
-  const definition = yamlPath ? definitionLoader(yamlPath) : null;
-  return {
-    hasDefinition: Boolean(yamlPath),
-    hasMultiple: Boolean(multiplePath),
-    isToolUse: Boolean(yamlPath && hasToolUseAgentType(definition)),
-  };
-};
-
-/**
- * Determine metadata for rendering an agent option asynchronously.
- */
 export async function getAgentOptionMetadata(
   agentName: string,
   directories: AgentDirectoryMap,
 ): Promise<AgentOptionMetadata> {
-  return computeMetadata({
+  const definitionPath = await findAgentYaml(agentName, directories);
+  const multiplePath = await findAgentYaml(
     agentName,
     directories,
-    resolver: resolveMatch,
-    multipleResolver: resolveMatch,
-    definitionLoader: getAgentDefinition,
-  });
+    MULTIPLE_SUFFIX,
+  );
+  return {
+    hasDefinition: Boolean(definitionPath),
+    hasMultiple: Boolean(multiplePath),
+    isToolUse: await hasToolUseAgentType(definitionPath),
+  };
 }
 
-/**
- * Determine metadata for rendering an agent option synchronously.
- */
 export function getAgentOptionMetadataSync(
   agentName: string,
   directories: AgentDirectoryMap,
 ): AgentOptionMetadata {
-  return computeMetadataSync({
+  const definitionPath = findAgentYamlSync(agentName, directories);
+  const multiplePath = findAgentYamlSync(
     agentName,
     directories,
-    resolver: resolveMatchSync,
-    multipleResolver: resolveMatchSync,
-    definitionLoader: getAgentDefinitionSync,
-  });
+    MULTIPLE_SUFFIX,
+  );
+  return {
+    hasDefinition: Boolean(definitionPath),
+    hasMultiple: Boolean(multiplePath),
+    isToolUse: hasToolUseAgentTypeSync(definitionPath),
+  };
 }
 
-const MULTIPLE_DECORATOR = ' ∶∶';
-const TOOL_USE_DECORATOR = 'ᵗ';
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
 
-/**
- * Decorate an agent label with markers for special capabilities.
- */
-export function decorateAgentLabel(
+function decorateLabel(
   agentName: string,
   metadata: AgentOptionMetadata,
 ): string {
   let label = agentName;
   if (metadata.hasMultiple) {
-    label += MULTIPLE_DECORATOR;
+    label += ' ∶∶';
   }
   if (metadata.isToolUse) {
-    label += TOOL_USE_DECORATOR;
+    label += 'ᵗ';
   }
   return label;
 }
 
-const escapeAttribute = (value: string): string =>
-  value
-    .replace(/&/g, '&amp;')
-    .replace(/"/g, '&quot;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
-
-const escapeContent = (value: string): string =>
-  value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-
-/**
- * Create an HTML option tag string for the given agent and metadata.
- */
 export function createAgentOptionTag(
   agentName: string,
   metadata: AgentOptionMetadata,
 ): string {
   const attributes = [
-    `value="${escapeAttribute(agentName)}"`,
-    `data-label="${escapeAttribute(agentName)}"`,
+    `value="${escapeHtml(agentName)}"`,
+    `data-label="${escapeHtml(agentName)}"`,
   ];
 
   if (!metadata.hasDefinition) {
@@ -289,6 +199,6 @@ export function createAgentOptionTag(
     attributes.push('data-tool-use="true"');
   }
 
-  const label = decorateAgentLabel(agentName, metadata);
-  return `<option ${attributes.join(' ')}>${escapeContent(label)}</option>`;
+  const label = decorateLabel(agentName, metadata);
+  return `<option ${attributes.join(' ')}>${escapeHtml(label)}</option>`;
 }
