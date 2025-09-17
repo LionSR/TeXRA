@@ -23,6 +23,7 @@ export const AgentConfigSchema = z
     model: z.string().default('gemini25p'),
     agent: z.string().default('correct'),
     instruction: z.string().default(''),
+    useMultipleOutputs: z.boolean().default(false),
 
     inputFile: z.string().default(''),
     inputFiles: z.array(z.string()).nullable().default(null),

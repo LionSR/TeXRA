@@ -9,6 +9,7 @@ import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
 type StreamTabIdOptions = {
   agentType?: AgentType;
   executionId?: ExecutionId;
+  useMultipleOutputs?: boolean;
 };
 
 function formatToolUseStreamId(
@@ -29,15 +30,13 @@ export function getStreamTabId(
   agent: string,
   model: string,
   inputFile: string,
-  outputFiles?: string[] | null,
   options: StreamTabIdOptions = {},
 ): StreamTabId {
   if (options.agentType === AgentType.ToolUse) {
     return formatToolUseStreamId(agent, model, options.executionId);
   }
 
-  const hasMultipleOutputs = Boolean(outputFiles && outputFiles.length > 1);
-  const agentName = hasMultipleOutputs
+  const agentName = options.useMultipleOutputs
     ? agent.endsWith('_multiple')
       ? agent
       : `${agent}_multiple`
