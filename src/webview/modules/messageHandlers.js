@@ -48,8 +48,12 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     // Track file list event handlers for cleanup
     this._fileListHandlers = {};
     // Track pending model option updates until the select element is ready
-    this._pendingModelOptions = null;
-    this._modelOptionsApplyTimer = null;
+    this._latestModelOptions = null;
+    this._modelOptionsQueue = Promise.resolve();
+    this._modelSelectPromise = null;
+    this._modelSelectResolver = null;
+    this._modelSelectObserver = null;
+    this._isDisposed = false;
 
     const ctx = {
       postHandle: this._postHandle.bind(this),
@@ -87,17 +91,13 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
 
         const select = document.getElementById('model');
         if (select) {
-          if (this._modelOptionsApplyTimer) {
-            clearTimeout(this._modelOptionsApplyTimer);
-            this._modelOptionsApplyTimer = null;
-          }
-          this._pendingModelOptions = null;
+          this._latestModelOptions = null;
           this._applyModelOptions(select, m.options);
           return;
         }
 
-        this._pendingModelOptions = m.options;
-        this._scheduleModelOptionsApply();
+        this._latestModelOptions = m.options;
+        this._enqueueModelOptionsFlush();
       },
       [MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS]: (m) => {
         if (!m.options) {
@@ -186,32 +186,89 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     });
   }
 
-  _scheduleModelOptionsApply() {
-    if (this._modelOptionsApplyTimer) {
+  _enqueueModelOptionsFlush() {
+    this._modelOptionsQueue = this._modelOptionsQueue
+      .then(() => this._flushPendingModelOptions())
+      .catch((error) => {
+        console.error('SET_MODEL_OPTIONS: Failed to apply options', error);
+      });
+  }
+
+  async _flushPendingModelOptions() {
+    if (this._isDisposed) {
       return;
     }
 
-    this._modelOptionsApplyTimer = setTimeout(() => {
-      this._modelOptionsApplyTimer = null;
+    const select = await this._waitForModelSelect();
+    if (!select || this._isDisposed) {
+      return;
+    }
 
-      if (!this._pendingModelOptions) {
-        return;
-      }
+    if (!this._latestModelOptions) {
+      return;
+    }
 
-      const select = document.getElementById('model');
-      if (!select) {
-        this._scheduleModelOptionsApply();
-        return;
-      }
+    const html = this._latestModelOptions;
+    this._latestModelOptions = null;
+    this._applyModelOptions(select, html);
+  }
 
-      this._applyModelOptions(select, this._pendingModelOptions);
-      this._pendingModelOptions = null;
-    }, 100);
+  _waitForModelSelect() {
+    if (this._isDisposed) {
+      return Promise.resolve(null);
+    }
+
+    const existing = document.getElementById('model');
+    if (existing) {
+      return Promise.resolve(existing);
+    }
+
+    if (this._modelSelectPromise) {
+      return this._modelSelectPromise;
+    }
+
+    this._modelSelectPromise = new Promise((resolve) => {
+      this._modelSelectResolver = resolve;
+      const observer = new MutationObserver(() => {
+        const select = document.getElementById('model');
+        if (select) {
+          this._resolveModelSelectWaiter(select);
+        }
+      });
+      observer.observe(document.documentElement, {
+        childList: true,
+        subtree: true,
+      });
+      this._modelSelectObserver = observer;
+    });
+
+    return this._modelSelectPromise;
+  }
+
+  _resolveModelSelectWaiter(result) {
+    if (this._modelSelectObserver) {
+      this._modelSelectObserver.disconnect();
+      this._modelSelectObserver = null;
+    }
+
+    if (this._modelSelectResolver) {
+      const resolver = this._modelSelectResolver;
+      this._modelSelectResolver = null;
+      this._modelSelectPromise = null;
+      resolver(result);
+    } else {
+      this._modelSelectPromise = null;
+      this._modelSelectResolver = null;
+    }
   }
 
   /** Register handlers and optionally request initial data. */
   setup(options = {}) {
     const { requestData = true } = options;
+    this._isDisposed = false;
+    this._latestModelOptions = null;
+    this._modelOptionsQueue = Promise.resolve();
+    this._resolveModelSelectWaiter(null);
     super.setup();
     if (requestData) {
       this._initializeDataRequests();
@@ -219,6 +276,11 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
   }
 
   cleanup() {
+    this._isDisposed = true;
+    this._latestModelOptions = null;
+    this._modelOptionsQueue = Promise.resolve();
+    this._resolveModelSelectWaiter(null);
+
     super.cleanup();
     Object.values(this._fileListHandlers).forEach(({ container, handler }) => {
       container.removeEventListener('click', handler);
