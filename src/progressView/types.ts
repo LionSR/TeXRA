@@ -10,4 +10,7 @@ export interface StreamTabInfo {
   inputFile?: string;
   creationTimestamp?: number;
   status?: string;
+  executionId?: string;
 }
+
+export type AgentFilter = 'all' | 'workflow' | 'toolUse';
