@@ -9,6 +9,8 @@ export const CHARACTER_REPLACEMENTS: ReplacementCategory = {
     ansätze: 'ans{\\"a}tze',
     Rényi: "R{\\'e}nyi",
     Schrödinger: 'Schr{\\"o}dinger',
+    'Schr{\\\\`o}dinger': 'Schr{\\"o}dinger',
+    'Schr{\\\\`o}dingers': 'Schr{\\"o}dingers',
   },
 };
 
