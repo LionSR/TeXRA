@@ -171,6 +171,7 @@ export class ProgressViewState {
   constructor() {
     this.stateManager = new WebviewStateManager();
     this.activeStream = '';
+    this.agentFilter = 'all';
     this.currentGroupId = null;
 
     // Initialize managers

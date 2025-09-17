@@ -1,6 +1,3 @@
-// Standard library imports
-import * as path from 'path';
-
 // Local imports - agent
 
 // Local imports - agent components
@@ -15,6 +12,7 @@ import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
 
 // Local imports - log
 import { AgentLogger } from '@logger/AgentLogger';
+import { getStreamTabId as buildStreamTabId } from '@/logger/streamUtils';
 
 // Local imports - utilities
 import { SHORT_SLEEP_MS } from '@utils/config';
@@ -50,12 +48,14 @@ export abstract class BaseAgent implements IAgent {
     agentSetting: AgentSetting,
     agentPrompt: AgentPrompt,
     agentPath: string,
+    executionId?: ExecutionId,
   ) {
     this.modelHandler = modelHandler;
     this.agentConfig = agentConfig;
     this.agentSetting = agentSetting;
     this.agentPrompt = agentPrompt;
     this.agentPath = agentPath;
+    this.executionId = executionId;
 
     const streamTabId = this.getStreamTabId();
     this.logger = new AgentLogger(streamTabId, true);
@@ -75,13 +75,16 @@ export abstract class BaseAgent implements IAgent {
 
   /** Compute the stream tab identifier for this agent execution. */
   protected getStreamTabId(): StreamTabId {
-    const baseName = path.basename(this.agentConfig.inputFile);
-    const agentName =
-      Array.isArray(this.agentConfig.outputFiles) &&
-      this.agentConfig.outputFiles.length > 1
-        ? `${this.agentConfig.agent}_multiple`
-        : this.agentConfig.agent;
-    return `${agentName}@${this.agentConfig.model}: ${baseName}`;
+    return buildStreamTabId(
+      this.agentConfig.agent,
+      this.agentConfig.model,
+      this.agentConfig.inputFile,
+      this.agentConfig.outputFiles ?? undefined,
+      {
+        agentType: this.agentSetting.agentType,
+        executionId: this.executionId,
+      },
+    );
   }
 
   /** Gather variables used for prompt rendering. */
