@@ -767,6 +767,24 @@
             "scope": "resource"
           }
         }
+      },
+      {
+        "title": "Tool Use Agents",
+        "properties": {
+          "texra.toolUse.persistence.enabled": {
+            "type": "boolean",
+            "default": true,
+            "description": "Persist tool-use conversations across VS Code restarts",
+            "scope": "resource"
+          },
+          "texra.toolUse.persistence.ttlHours": {
+            "type": "number",
+            "default": 72,
+            "minimum": 1,
+            "description": "Maximum age (in hours) to keep saved tool-use sessions before automatic cleanup",
+            "scope": "resource"
+          }
+        }
       }
     ],
     "commands": [
@@ -809,6 +827,11 @@
         "category": "TeXRA",
         "icon": "$(indent)",
         "enablement": "!virtualWorkspace"
+      },
+      {
+        "command": "texra.resumeAgent",
+        "title": "Resume Tool-Use Agent",
+        "category": "TeXRA"
       },
       {
         "command": "texra.applyReplacements",

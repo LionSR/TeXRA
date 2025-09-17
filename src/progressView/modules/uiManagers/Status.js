@@ -1,5 +1,5 @@
 // Local imports - progress view
-import { STATUS, TOOLBAR_BUTTONS, ELEMENT_IDS } from '../constants.js';
+import { STATUS, ALL_TOOLBAR_BUTTON_IDS, ELEMENT_IDS } from '../constants.js';
 // Local imports
 import { progressViewState } from '../progressViewState.js';
 import { setElementsDisabled } from '@common/domUtils.js';
@@ -44,9 +44,18 @@ export class Status {
         label: 'Ready',
         enable: [ELEMENT_IDS.RESTORE_STATE_BTN, ELEMENT_IDS.ERASE_STREAM_BTN],
       },
+      [STATUS.WAITING]: {
+        className: 'waiting',
+        label: 'Waiting for follow-up',
+        enable: [
+          ELEMENT_IDS.STOP_STREAM_BTN,
+          ELEMENT_IDS.RESTORE_STATE_BTN,
+          ELEMENT_IDS.ERASE_STREAM_BTN,
+        ],
+      },
     };
 
-    this.BUTTON_IDS = TOOLBAR_BUTTONS.map((b) => b.id);
+    this.BUTTON_IDS = ALL_TOOLBAR_BUTTON_IDS;
     this._buttonElements = null; // Cache for button elements
   }
 

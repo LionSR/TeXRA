@@ -20,7 +20,7 @@ import { AgentLogger } from '@logger/AgentLogger';
 import { LogMessageData } from '@logger/LogTypes';
 
 // Type aliases for status values
-type StatusType = 'running' | 'error' | 'stopped' | 'ready';
+type StatusType = 'running' | 'error' | 'stopped' | 'ready' | 'waiting';
 
 /**
  * Manages webview updates for the progress view.
