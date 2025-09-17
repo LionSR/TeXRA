@@ -284,7 +284,7 @@ export class ToolUseSessionManager {
   ): ToolState {
     return hydrateToolState(snapshot.toolState);
   }
-  
+
   /**
    * Deletes all persisted tool-use session snapshots
    * @returns Promise that resolves when all snapshots are deleted
@@ -293,7 +293,7 @@ export class ToolUseSessionManager {
     if (!this.isPersistenceEnabled()) {
       return;
     }
-    
+
     try {
       const snapshots = await this.listSnapshots();
       await Promise.all(

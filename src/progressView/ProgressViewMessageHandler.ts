@@ -26,7 +26,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
   constructor(private readonly provider: ProgressViewProvider) {
     super('ProgressView');
   }
-  
+
   private async deleteSessionSnapshot(stream: StreamTabId): Promise<void> {
     const executionId = this.provider.state.getExecutionId(stream);
     if (executionId) {
@@ -135,7 +135,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     for (const [stream] of allStates) {
       await this.deleteSessionSnapshot(stream);
     }
-    
+
     this.provider.state.clearAll();
     this.provider.updateWebview();
   }
