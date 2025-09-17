@@ -88,6 +88,10 @@ export class ProgressViewState {
   }
 
   set agentTypeFilter(filter: AgentFilter) {
+    if (!isAgentTypeFilter(filter)) {
+      this.logger.warn(`Invalid agent filter: ${filter}, defaulting to 'all'`);
+      filter = 'all';
+    }
     this._agentTypeFilter = filter;
     this.saveAgentTypeFilter();
   }

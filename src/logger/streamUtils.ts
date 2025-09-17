@@ -36,8 +36,12 @@ export function getStreamTabId(
     return formatToolUseStreamId(agent, model, options.executionId);
   }
 
-  const agentName =
-    outputFiles && outputFiles.length > 1 ? `${agent}_multiple` : agent;
+  const hasMultipleOutputs = Boolean(outputFiles && outputFiles.length > 1);
+  const agentName = hasMultipleOutputs
+    ? agent.endsWith('_multiple')
+      ? agent
+      : `${agent}_multiple`
+    : agent;
   const baseName = inputFile ? path.basename(inputFile) : '';
   return `${agentName}@${model}: ${baseName}`;
 }
