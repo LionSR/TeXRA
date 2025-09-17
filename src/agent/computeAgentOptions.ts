@@ -68,12 +68,10 @@ export async function computeAgentOptions(
   const allAgents = await getAllAgents(context);
   const dirs = await getAgentDirectories(context);
 
-  const optionTags = await Promise.all(
-    allAgents.map(async (agent) => {
-      const metadata = await getAgentOptionMetadata(agent, dirs);
-      return createAgentOptionTag(agent, metadata);
-    }),
-  );
+  const optionTags = allAgents.map((agent) => {
+    const metadata = getAgentOptionMetadata(agent, dirs);
+    return createAgentOptionTag(agent, metadata);
+  });
 
   return optionTags.join('\n');
 }
