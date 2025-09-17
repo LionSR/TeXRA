@@ -27,6 +27,7 @@ export const LATEX_XML_REPLACEMENTS: ReplacementCategory = {
       'cover_letter',
       'reflection',
       'rebuttal_package',
+      'beamer_poster',
     ];
 
     // Initialize patterns object
