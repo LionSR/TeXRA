@@ -507,6 +507,7 @@ export class LogEntryFormatter {
     const contentElem = element.querySelector('.model-response-content');
     if (contentElem) {
       contentElem.classList.add(`message-${level}`);
+      contentElem.dataset.rawContent = encodeHtml(content);
       contentElem.innerHTML = this._processMarkdownContent(content);
     }
 

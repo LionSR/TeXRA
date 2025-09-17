@@ -205,7 +205,17 @@
         </template>
         <template id="modelResponseTemplate">
           <div class="model-response-line">
-            <span class="timestamp"></span>
+            <div class="model-response-header">
+              <span class="timestamp"></span>
+              <button
+                type="button"
+                class="vscode-button model-response-copy"
+                title="Copy model output"
+                aria-label="Copy model output"
+              >
+                <i class="codicon codicon-copy"></i>
+              </button>
+            </div>
             <div class="model-response-content markdown-content"></div>
           </div>
         </template>
