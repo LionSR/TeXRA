@@ -1,6 +1,10 @@
 // Local imports - agent
 import type { AgentConfig } from '../core/AgentConfig';
-import { AgentPrompt, AgentSessionKind, AgentSetting } from '../core/AgentDataclass';
+import {
+  AgentPrompt,
+  AgentSessionKind,
+  AgentSetting,
+} from '../core/AgentDataclass';
 import { ToolState } from '../core/ToolState';
 import { runToolUseCycle } from '../core/ToolUseCycle';
 import type { IModelHandler } from '../modelHandlers';
@@ -221,20 +225,16 @@ export class BaseToolUseAgent extends BaseAgent {
     if (this.followUpQueue.length > 0) {
       return;
     }
-    
+
     const stream = this.getStreamTabId();
     const executionId = this.getExecutionId();
     const state = this.toolState;
 
     // Persist snapshot with lock to prevent race conditions
-    if (
-      state &&
-      executionId &&
-      ToolUseSessionManager.isPersistenceEnabled()
-    ) {
+    if (state && executionId && ToolUseSessionManager.isPersistenceEnabled()) {
       // Acquire lock to prevent race conditions
       this.persistenceLock = true;
-      
+
       try {
         // Double-check queue is still empty under lock
         if (this.followUpQueue.length === 0) {
@@ -247,7 +247,7 @@ export class BaseToolUseAgent extends BaseAgent {
             messages: this.messages,
             toolState: state,
           });
-          
+
           // Final check after save completes
           if (this.followUpQueue.length > 0) {
             // A follow-up arrived while we were saving
