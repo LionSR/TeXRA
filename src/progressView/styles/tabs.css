@@ -32,6 +32,16 @@
   justify-content: space-between;
 }
 
+.agent-filter-group {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  margin-bottom: var(--spacing-small);
+}
+
+.agent-filter-group .vscode-button {
+  min-width: auto;
+}
+
 .tab-container {
   display: flex;
   align-items: center;
