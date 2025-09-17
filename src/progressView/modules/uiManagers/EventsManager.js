@@ -1,5 +1,6 @@
 // Third-party imports
 import Split from 'split.js';
+import { decode as decodeHtml } from 'he';
 
 // Local imports - progress view
 import { COMMANDS, SPLIT_SIZES, ELEMENT_IDS } from '../constants.js';
@@ -168,6 +169,9 @@ export class EventsManager {
 
     // Handle clicks on file links inside file-list-details blocks
     document.addEventListener('click', (e) => {
+      if (!(e.target instanceof Element)) {
+        return;
+      }
       const link = e.target.closest('.file-link');
       if (link && link.dataset.file) {
         vscode.postMessage({
@@ -177,8 +181,60 @@ export class EventsManager {
       }
     });
 
+    // Handle copy actions for model responses
+    document.addEventListener('click', async (e) => {
+      if (!(e.target instanceof Element)) {
+        return;
+      }
+      const copyButton = e.target.closest('.model-response-copy');
+      if (!copyButton) {
+        return;
+      }
+
+      const contentElem = copyButton
+        .closest('.model-response-line')
+        ?.querySelector('.model-response-content');
+      if (!contentElem) {
+        return;
+      }
+
+      const rawContent = contentElem.dataset.rawContent;
+      const textToCopy = rawContent
+        ? decodeHtml(rawContent)
+        : contentElem.textContent || '';
+      if (!textToCopy) {
+        return;
+      }
+
+      if (navigator.clipboard?.writeText) {
+        try {
+          await navigator.clipboard.writeText(textToCopy);
+          return;
+        } catch {
+          // Fallback to execCommand below
+        }
+      }
+
+      const textarea = document.createElement('textarea');
+      textarea.value = textToCopy;
+      textarea.setAttribute('readonly', '');
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      textarea.style.pointerEvents = 'none';
+      document.body.appendChild(textarea);
+      textarea.select();
+      try {
+        document.execCommand('copy');
+      } finally {
+        textarea.remove();
+      }
+    });
+
     // Handle clicks on LaTeX references within logs
     document.addEventListener('click', (e) => {
+      if (!(e.target instanceof Element)) {
+        return;
+      }
       const ref = e.target.closest('.latex-ref');
       if (ref && ref.dataset.label) {
         vscode.postMessage({
