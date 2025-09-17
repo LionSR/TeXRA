@@ -14,6 +14,11 @@ const TOOLBAR_ACTION_BUTTON_IDS = [
   ELEMENT_IDS.CLEAN_STREAM_BTN,
 ];
 
+const AGENT_MODES = Object.freeze({
+  TOOL: 'tool',
+  WORKFLOW: 'workflow',
+});
+
 // Create shorter aliases for internal use
 const state = progressViewState;
 const dom = progressViewDomHandler;
@@ -106,7 +111,9 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     const toolbar = document.getElementById(ELEMENT_IDS.TOOLBAR_CONTAINER);
     if (toolbar) {
       toolbar.dataset.agentType = activeStreamInfo?.agentType || '';
-      toolbar.dataset.agentMode = isToolAgent ? 'tool' : 'workflow';
+      toolbar.dataset.agentMode = isToolAgent
+        ? AGENT_MODES.TOOL
+        : AGENT_MODES.WORKFLOW;
     }
 
     toolbarButtons.forEach((button) => {
@@ -122,6 +129,11 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
         button.setAttribute('aria-hidden', 'true');
         button.setAttribute('tabindex', '-1');
         button.dataset.hiddenByAgent = 'true';
+        if (button.dataset.disabledBeforeAgentHide === undefined) {
+          button.dataset.disabledBeforeAgentHide = button.disabled
+            ? 'true'
+            : 'false';
+        }
         if ('disabled' in button) {
           button.disabled = true;
         }
@@ -130,7 +142,12 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
       button.removeAttribute('aria-hidden');
       button.removeAttribute('tabindex');
+      const previousDisabledState = button.dataset.disabledBeforeAgentHide;
+      if ('disabled' in button && previousDisabledState !== undefined) {
+        button.disabled = previousDisabledState === 'true';
+      }
       delete button.dataset.hiddenByAgent;
+      delete button.dataset.disabledBeforeAgentHide;
     });
 
     // Update status based on whether there's an active stream
@@ -305,10 +322,16 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   }
 
   _getToolbarButtons() {
-    const ensureCache = () =>
-      TOOLBAR_ACTION_BUTTON_IDS.map((buttonId) =>
-        document.getElementById(buttonId),
-      ).filter((button) => button instanceof HTMLElement);
+    const ensureCache = () => {
+      try {
+        return TOOLBAR_ACTION_BUTTON_IDS.map((buttonId) =>
+          document.getElementById(buttonId),
+        ).filter((button) => button instanceof HTMLElement);
+      } catch (error) {
+        console.warn('Failed to cache toolbar buttons:', error);
+        return [];
+      }
+    };
 
     const toolbar = document.getElementById(ELEMENT_IDS.TOOLBAR_CONTAINER);
     if (!toolbar) {
@@ -330,6 +353,8 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
         });
         this._toolbarMutationObserver.observe(toolbar, {
           childList: true,
+          subtree: false,
+          attributes: false,
         });
       }
 
@@ -350,7 +375,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
         return true;
       }
       const current = document.getElementById(id);
-      return current && current !== cached;
+      return !current || current !== cached;
     });
 
     if (cacheIsStale) {

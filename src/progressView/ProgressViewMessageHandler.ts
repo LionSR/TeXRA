@@ -323,12 +323,22 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     });
   }
 
+  /**
+   * Guards toolbar actions from running when the task state is missing or belongs to a tool-use agent.
+   * @param taskState - The currently resolved task state for the active stream.
+   * @returns True when the caller should skip executing the toolbar action.
+   */
   private shouldSkipToolbarAction(
     taskState: TaskState | undefined,
   ): taskState is undefined | ToolUseTaskState {
     return !taskState || taskState.agentType === AgentType.ToolUse;
   }
 
+  /**
+   * Fetches a task state for a toolbar action, short-circuiting execution for tool-use agents.
+   * @param stream - The stream identifier whose task state should be fetched.
+   * @param action - The callback to execute when a valid workflow task state is available.
+   */
   private async withToolbarTaskState(
     stream: string,
     action: (taskState: TaskState) => Promise<void>,
