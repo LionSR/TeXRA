@@ -226,6 +226,92 @@ export abstract class BaseReflectionAgent extends BaseAgent {
     return this.outputHandler.outputFiles[currRound] || [];
   }
 
+  private async runRoundPipeline(
+    currRound: number,
+    stateRound: AgentStateRound,
+    stateGlobal: AgentStateGlobal,
+    toolState: ToolState,
+    preparedMessages: any[],
+    prefill: string,
+    outputPath: string,
+    roundGroupId: string,
+  ): Promise<[AgentStateRound, AgentStateGlobal, any[], boolean, ToolState]> {
+    const [endTurn, updatedMessages] =
+      await this.modelHandler.initializeOutputAndPrefill(
+        this.agentConfig,
+        this.agentSetting,
+        preparedMessages,
+        toolState,
+        outputPath,
+        prefill,
+        roundGroupId,
+      );
+
+    if (!endTurn) {
+      const [
+        updatedStateRound,
+        updatedStateGlobal,
+        updatedToolState,
+        newEndTurn,
+      ] = await runResponseCycle(
+        {
+          modelHandler: this.modelHandler,
+          agentSetting: this.agentSetting,
+          agentConfig: this.agentConfig,
+          agentPrompt: this.agentPrompt,
+          userVars: this.userVars,
+          logger: this.logger,
+          client: this.client,
+          checkInterruption: () => this.checkInterruption(),
+          setAbortController: (ctrl) => {
+            this.abortController = ctrl;
+          },
+        },
+        updatedMessages,
+        stateRound,
+        stateGlobal,
+        toolState,
+        outputPath,
+        roundGroupId,
+        this.executionId,
+      );
+
+      await this.handleRoundCompletion(
+        currRound,
+        updatedStateRound,
+        updatedStateGlobal,
+        {
+          outputFile: outputPath,
+          endTurn: newEndTurn,
+          processGroupId: roundGroupId,
+        },
+      );
+
+      if (currRound === 0) {
+        this.logger.debug(
+          `stateGlobal: ${JSON.stringify(updatedStateGlobal)}`,
+          roundGroupId,
+        );
+      }
+
+      return [
+        updatedStateRound,
+        updatedStateGlobal,
+        updatedMessages,
+        newEndTurn,
+        updatedToolState,
+      ];
+    }
+
+    await this.handleRoundCompletion(currRound, stateRound, stateGlobal, {
+      outputFile: outputPath,
+      endTurn,
+      processGroupId: roundGroupId,
+    });
+
+    return [stateRound, stateGlobal, updatedMessages, endTurn, toolState];
+  }
+
   /**
    * Processes initial conversation round.
    * @returns Tuple of [round state, global state, messages, completion flag, tool state]
@@ -305,91 +391,17 @@ export abstract class BaseReflectionAgent extends BaseAgent {
       const prefill = await promptBuilder.buildPrefill(currRound);
       toolState.updateAccumulatedOutput(prefill);
 
-      // Initialize output and handle prefill
-      const [endTurn, updatedMessages] =
-        await this.modelHandler.initializeOutputAndPrefill(
-          this.agentConfig,
-          this.agentSetting,
-          messages,
-          toolState,
-          this.outputFile[currRound],
-          prefill,
-          roundGroupId,
-        );
-
       const stateRound = new AgentStateRound(currRound);
-      let finalEndTurn = endTurn;
-
-      if (!endTurn) {
-        const [
-          updatedStateRound,
-          updatedStateGlobal,
-          updatedToolState,
-          newEndTurn,
-        ] = await runResponseCycle(
-          {
-            modelHandler: this.modelHandler,
-            agentSetting: this.agentSetting,
-            agentConfig: this.agentConfig,
-            agentPrompt: this.agentPrompt,
-            userVars: this.userVars,
-            logger: this.logger,
-            client: this.client,
-            checkInterruption: () => this.checkInterruption(),
-            setAbortController: (ctrl) => {
-              this.abortController = ctrl;
-            },
-          },
-          updatedMessages,
-          stateRound,
-          stateGlobal,
-          toolState,
-          this.outputFile[currRound],
-          roundGroupId,
-          this.executionId,
-        );
-        finalEndTurn = newEndTurn;
-
-        // Handle output and logging
-        await this.handleRoundCompletion(
-          currRound,
-          updatedStateRound,
-          updatedStateGlobal,
-          {
-            outputFile: this.outputFile[currRound],
-            endTurn: finalEndTurn,
-            processGroupId: roundGroupId,
-          },
-        );
-
-        this.logger.debug(
-          `stateGlobal: ${JSON.stringify(updatedStateGlobal)}`,
-          roundGroupId,
-        );
-
-        return [
-          updatedStateRound,
-          updatedStateGlobal,
-          updatedMessages,
-          finalEndTurn,
-          updatedToolState,
-        ];
-      }
-
-      // Handle output and logging for early termination
-      await this.handleRoundCompletion(currRound, stateRound, stateGlobal, {
-        outputFile: this.outputFile[currRound],
-        endTurn: finalEndTurn,
-        processGroupId: roundGroupId,
-      });
-
-      return [
+      return this.runRoundPipeline(
+        currRound,
         stateRound,
         stateGlobal,
-        updatedMessages,
-        finalEndTurn,
         toolState,
-      ];
+        messages,
+        prefill,
+        this.outputFile[currRound],
+        roundGroupId,
+      );
     });
   }
 
@@ -452,75 +464,16 @@ export abstract class BaseReflectionAgent extends BaseAgent {
       const prefill = await promptBuilder.buildPrefill(currRound);
       toolState.updateAccumulatedOutput(prefill);
 
-      const [endTurn, updatedMessages] =
-        await this.modelHandler.initializeOutputAndPrefill(
-          this.agentConfig,
-          this.agentSetting,
-          roundMessages,
-          toolState,
-          this.outputFile[currRound],
-          prefill,
-          roundGroupId,
-        );
-
-      if (!endTurn) {
-        const [
-          updatedStateRound,
-          updatedStateGlobal,
-          updatedToolState,
-          newEndTurn,
-        ] = await runResponseCycle(
-          {
-            modelHandler: this.modelHandler,
-            agentSetting: this.agentSetting,
-            agentConfig: this.agentConfig,
-            agentPrompt: this.agentPrompt,
-            userVars: this.userVars,
-            logger: this.logger,
-            client: this.client,
-            checkInterruption: () => this.checkInterruption(),
-            setAbortController: (ctrl) => {
-              this.abortController = ctrl;
-            },
-          },
-          updatedMessages,
-          stateRound,
-          stateGlobal,
-          toolState,
-          this.outputFile[currRound],
-          roundGroupId,
-          this.executionId,
-        );
-
-        // Handle output and logging
-        await this.handleRoundCompletion(
-          currRound,
-          updatedStateRound,
-          updatedStateGlobal,
-          {
-            outputFile: this.outputFile[currRound],
-            endTurn: newEndTurn,
-            processGroupId: roundGroupId,
-          },
-        );
-
-        return [
-          updatedStateRound,
-          updatedStateGlobal,
-          updatedMessages,
-          newEndTurn,
-          updatedToolState,
-        ];
-      }
-
-      // Handle output and logging for early termination
-      await this.handleRoundCompletion(currRound, stateRound, stateGlobal, {
-        outputFile: this.outputFile[currRound],
-        endTurn,
-        processGroupId: roundGroupId,
-      });
-
-      return [stateRound, stateGlobal, updatedMessages, endTurn, toolState];
+      return this.runRoundPipeline(
+        currRound,
+        stateRound,
+        stateGlobal,
+        toolState,
+        roundMessages,
+        prefill,
+        this.outputFile[currRound],
+        roundGroupId,
+      );
     });
   }
 
