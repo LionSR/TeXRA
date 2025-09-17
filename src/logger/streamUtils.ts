@@ -1,22 +1,22 @@
 // Standard library imports
+import { randomUUID } from 'crypto';
 import * as path from 'path';
 
 // Local imports
-import type { StreamTabId } from '@agent/types/IdentifierTypes';
+import { AgentType } from '@agent/core/AgentDataclass';
+import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
 
 type StreamTabIdOptions = {
-  agentType?: string;
-  executionId?: string;
+  agentType?: AgentType;
+  executionId?: ExecutionId;
 };
 
 function formatToolUseStreamId(
   agent: string,
   model: string,
-  executionId?: string,
+  executionId?: ExecutionId,
 ): StreamTabId {
-  const shortId = executionId
-    ? executionId.slice(0, 8)
-    : Date.now().toString(36);
+  const shortId = executionId?.slice(0, 8) ?? randomUUID().slice(0, 8);
   const sanitizedAgent = agent || 'toolUse';
   return `${sanitizedAgent}@${model}#${shortId}`;
 }
@@ -32,7 +32,7 @@ export function getStreamTabId(
   outputFiles?: string[] | null,
   options: StreamTabIdOptions = {},
 ): StreamTabId {
-  if (options.agentType === 'toolUse') {
+  if (options.agentType === AgentType.ToolUse) {
     return formatToolUseStreamId(agent, model, options.executionId);
   }
 

@@ -12,6 +12,7 @@ import { ProgressViewState } from '../state/ProgressViewState';
 import { buildStreamInfos } from '../streamInfoUtils';
 import type { StreamTabInfo } from '../types';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
+import type { AgentTypeFilter } from '@agent/types/AgentStreamTypes';
 
 // Types
 import type { TokenUsageStats } from '@agent/types/UsageTypes';
@@ -39,7 +40,7 @@ export class WebviewUpdater {
   updateStreams(
     streams: StreamTabInfo[],
     activeStream: StreamTabId,
-    agentFilter: string,
+    agentFilter: AgentTypeFilter,
   ): void {
     const webview = this.getWebview();
     if (!webview) return;
