@@ -47,8 +47,13 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     this._elementCache = new Map();
     // Track file list event handlers for cleanup
     this._fileListHandlers = {};
-    // Flag to prevent concurrent retry attempts for model options
-    this._modelOptionsRetryInProgress = false;
+    // Track pending model option updates until the select element is ready
+    this._latestModelOptions = null;
+    this._modelOptionsQueue = Promise.resolve();
+    this._modelSelectPromise = null;
+    this._modelSelectResolver = null;
+    this._modelSelectObserver = null;
+    this._isDisposed = false;
 
     const ctx = {
       postHandle: this._postHandle.bind(this),
@@ -84,60 +89,15 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
           return;
         }
 
-        // Helper function to apply options to select element
-        const applyOptions = (selectElement) => {
-          const previous = selectElement.value;
-          selectElement.innerHTML = m.options;
-          if (previous) {
-            selectElement.value = previous;
-          }
-          Array.from(selectElement.options).forEach((opt) => {
-            // Note: disabled-model class is already set server-side in computeModelOptions
-            // We only need to add tooltips here
-            const { provider, context, cost } = opt.dataset;
-            if (provider || context || cost) {
-              opt.title = `Provider: ${provider ?? 'N/A'}, Context: ${context ?? 'N/A'}, Cost: ${cost ?? 'N/A'}`;
-            }
-          });
-        };
-
-        // Don't cache if element doesn't exist yet
         const select = document.getElementById('model');
-        if (!select) {
-          // Prevent concurrent retry attempts
-          if (this._modelOptionsRetryInProgress) {
-            console.warn('SET_MODEL_OPTIONS: Retry already in progress');
-            return;
-          }
-
-          // Use a more robust retry mechanism with exponential backoff
-          this._modelOptionsRetryInProgress = true;
-          let retryCount = 0;
-          const maxRetries = 5;
-          const retryDelay = [100, 200, 400, 800, 1600];
-
-          const tryApplyOptions = () => {
-            const retrySelect = document.getElementById('model');
-            if (retrySelect) {
-              applyOptions(retrySelect);
-              this._modelOptionsRetryInProgress = false;
-            } else if (retryCount < maxRetries) {
-              setTimeout(tryApplyOptions, retryDelay[retryCount]);
-              retryCount++;
-            } else {
-              console.warn(
-                'SET_MODEL_OPTIONS: Model select element not found after retries',
-              );
-              this._modelOptionsRetryInProgress = false;
-            }
-          };
-
-          setTimeout(tryApplyOptions, retryDelay[0]);
-          retryCount = 1;
+        if (select) {
+          this._latestModelOptions = null;
+          this._applyModelOptions(select, m.options);
           return;
         }
 
-        applyOptions(select);
+        this._latestModelOptions = m.options;
+        this._enqueueModelOptionsFlush();
       },
       [MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS]: (m) => {
         if (!m.options) {
@@ -155,9 +115,40 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
           select.value = previous;
         }
         Array.from(select.options).forEach((opt) => {
+          let baseLabel = opt.dataset.label;
+          if (!baseLabel) {
+            const valueAttr = opt.getAttribute('value');
+            baseLabel = valueAttr ?? '';
+            opt.dataset.label = baseLabel;
+          }
+
+          const hints = [];
+          let displayLabel = baseLabel;
+
           if (opt.dataset.multiple === 'true') {
-            opt.textContent = `${opt.textContent} ∶∶`;
+            displayLabel += ' ∶∶';
+            hints.push('Supports multi-file inputs.');
             opt.style.opacity = '0.9';
+          } else {
+            opt.style.opacity = '';
+          }
+
+          if (opt.dataset.toolUse === 'true') {
+            displayLabel += 'ᵗ';
+            hints.push('Uses tools for actions.');
+          }
+
+          opt.textContent = displayLabel;
+
+          if (hints.length > 0) {
+            opt.title = hints.join('\n');
+            opt.setAttribute(
+              'aria-label',
+              `${baseLabel} (${hints.join(', ')})`,
+            );
+          } else {
+            opt.removeAttribute('title');
+            opt.setAttribute('aria-label', baseLabel);
           }
         });
       },
@@ -181,9 +172,103 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     };
   }
 
+  _applyModelOptions(selectElement, optionsHtml) {
+    const previous = selectElement.value;
+    selectElement.innerHTML = optionsHtml;
+    if (previous) {
+      selectElement.value = previous;
+    }
+    Array.from(selectElement.options).forEach((opt) => {
+      const { provider, context, cost } = opt.dataset;
+      if (provider || context || cost) {
+        opt.title = `Provider: ${provider ?? 'N/A'}, Context: ${context ?? 'N/A'}, Cost: ${cost ?? 'N/A'}`;
+      }
+    });
+  }
+
+  _enqueueModelOptionsFlush() {
+    this._modelOptionsQueue = this._modelOptionsQueue
+      .then(() => this._flushPendingModelOptions())
+      .catch((error) => {
+        console.error('SET_MODEL_OPTIONS: Failed to apply options', error);
+      });
+  }
+
+  async _flushPendingModelOptions() {
+    if (this._isDisposed) {
+      return;
+    }
+
+    const select = await this._waitForModelSelect();
+    if (!select || this._isDisposed) {
+      return;
+    }
+
+    if (!this._latestModelOptions) {
+      return;
+    }
+
+    const html = this._latestModelOptions;
+    this._latestModelOptions = null;
+    this._applyModelOptions(select, html);
+  }
+
+  _waitForModelSelect() {
+    if (this._isDisposed) {
+      return Promise.resolve(null);
+    }
+
+    const existing = document.getElementById('model');
+    if (existing) {
+      return Promise.resolve(existing);
+    }
+
+    if (this._modelSelectPromise) {
+      return this._modelSelectPromise;
+    }
+
+    this._modelSelectPromise = new Promise((resolve) => {
+      this._modelSelectResolver = resolve;
+      const observer = new MutationObserver(() => {
+        const select = document.getElementById('model');
+        if (select) {
+          this._resolveModelSelectWaiter(select);
+        }
+      });
+      observer.observe(document.documentElement, {
+        childList: true,
+        subtree: true,
+      });
+      this._modelSelectObserver = observer;
+    });
+
+    return this._modelSelectPromise;
+  }
+
+  _resolveModelSelectWaiter(result) {
+    if (this._modelSelectObserver) {
+      this._modelSelectObserver.disconnect();
+      this._modelSelectObserver = null;
+    }
+
+    if (this._modelSelectResolver) {
+      const resolver = this._modelSelectResolver;
+      this._modelSelectResolver = null;
+      this._modelSelectPromise = null;
+      resolver(result);
+    } else {
+      this._modelSelectPromise = null;
+      this._modelSelectResolver = null;
+    }
+  }
+
   /** Register handlers and optionally request initial data. */
   setup(options = {}) {
     const { requestData = true } = options;
+    this._isDisposed = false;
+    this._latestModelOptions = null;
+    this._modelOptionsQueue = Promise.resolve();
+    this._resolveModelSelectWaiter(null);
     super.setup();
     if (requestData) {
       this._initializeDataRequests();
@@ -191,6 +276,11 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
   }
 
   cleanup() {
+    this._isDisposed = true;
+    this._latestModelOptions = null;
+    this._modelOptionsQueue = Promise.resolve();
+    this._resolveModelSelectWaiter(null);
+
     super.cleanup();
     Object.values(this._fileListHandlers).forEach(({ container, handler }) => {
       container.removeEventListener('click', handler);
