@@ -466,7 +466,6 @@ export class LogEntryFormatter {
 
         formattedContent = `
           <div class="tool-use-section">
-            <div class="tool-use-label">${toolName}</div>
             <div class="tool-use-subsection">
               <span class="tool-use-sublabel">Input:</span>
               <pre>${inputJson}</pre>
