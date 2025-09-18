@@ -37,6 +37,13 @@ When updating CHANGELOG.md:
 - Keep the directory structure aligned among different webviews (webview, historyView, progressView). Use the same folder names for modules of the same type and functionality but in different webviews.
 - Place view-specific manager classes under each view's `managers` folder. For example, `WebviewUpdater.ts` lives in `src/progressView/managers/`.
 
+### Pragmatic implementations
+
+- Favor solutions that are readable and straightforward over exhaustive edge-case handling.
+- Avoid over-engineering and unnecessary abstractions when a direct approach communicates intent better.
+- Keep generated code tight: trim redundant helpers, repeated type checks, or defensive guards that do not serve a demonstrated scenario.
+- Prefer improving existing structures incrementally instead of rewriting modules unless there is a clear, documented benefit.
+
 ### Patterns across the codebase
 
 - Use `getConfig` from `src/utils/configUtils` to read extension settings rather than calling `vscode.workspace.getConfiguration` directly.
