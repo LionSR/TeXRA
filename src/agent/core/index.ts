@@ -7,3 +7,4 @@ export * from './ResponseUsage';
 export * from './IAgent';
 export * from './ResponseCycle';
 export * from './ToolUseCycle';
+export * from './nodes/Node';
