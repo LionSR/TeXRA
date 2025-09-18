@@ -941,6 +941,9 @@ export class ModelHandlerAnthropic extends ModelHandler<
         if (Array.isArray(assistantMessage.content)) {
           assistantMessage.content.push(...toolState.thinkingBlocks);
         }
+        // Clear cached thinking so the next response can store fresh blocks
+        toolState.thinkingBlocks = [];
+        toolState.thinkingAdded = false;
       }
 
       // Add the text content
@@ -1104,6 +1107,9 @@ export class ModelHandlerAnthropic extends ModelHandler<
     ) {
       // Anthropic models expect thinking blocks before text
       content.push(...toolState.thinkingBlocks);
+      // Clear cached thinking so the next response can store fresh blocks
+      toolState.thinkingBlocks = [];
+      toolState.thinkingAdded = false;
     }
     if (text) {
       content.push({ type: 'text', text });
