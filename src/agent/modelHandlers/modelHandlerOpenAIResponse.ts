@@ -13,6 +13,9 @@ import type {
   ResponseFunctionToolCallItem,
   ResponseFunctionToolCall,
   ResponseInputItem,
+  ResponseCreateParams,
+  ResponseCreateParamsNonStreaming,
+  ResponseCreateParamsStreaming,
 } from 'openai/resources/responses/responses';
 
 // Local imports - agent
@@ -28,9 +31,6 @@ import { calculateTokenPrice } from '@agent/utils/priceUtils';
 import { logErrorMessage } from '@common/errors/errorHandlingUtils';
 import type { ToolDefinition } from '@model';
 import { K_SLICE, getConfig } from '@utils/config';
-
-// import { ResponseCreateParams } from 'openai/src/resources/responses/response';
-// this is incorrect now, but would be nice to use
 
 /**
  * Handler for OpenAI's new Responses API. Uses `previous_response_id` to
@@ -80,6 +80,92 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
     );
   }
 
+  private buildResponseCreateParams(
+    input: ResponseInputItem[],
+    temperature: number,
+    useStreaming: true,
+    systemPrompt?: string,
+    tools?: ToolDefinition[],
+  ): ResponseCreateParamsStreaming;
+  private buildResponseCreateParams(
+    input: ResponseInputItem[],
+    temperature: number,
+    useStreaming: false,
+    systemPrompt?: string,
+    tools?: ToolDefinition[],
+  ): ResponseCreateParamsNonStreaming;
+  private buildResponseCreateParams(
+    input: ResponseInputItem[],
+    temperature: number,
+    useStreaming: boolean,
+    systemPrompt?: string,
+    tools?: ToolDefinition[],
+  ): ResponseCreateParams;
+  private buildResponseCreateParams(
+    input: ResponseInputItem[],
+    temperature: number,
+    useStreaming: boolean,
+    systemPrompt?: string,
+    tools?: ToolDefinition[],
+  ): ResponseCreateParams {
+    const params: ResponseCreateParams = {
+      model: this.config.fullName,
+      input,
+      max_output_tokens: this.config.maxOutputTokens,
+      store: true,
+    };
+
+    if (!this.isOReasoningModel) {
+      params.temperature = temperature;
+    }
+
+    if (this.previousResponseId) {
+      params.previous_response_id = this.previousResponseId;
+    }
+
+    if (systemPrompt) {
+      params.instructions = systemPrompt;
+    }
+
+    if (tools && tools.length > 0) {
+      params.tools = toOpenAIResponseTools(tools);
+      params.tool_choice = 'auto';
+    }
+
+    if (this.capabilities.supportsReasoning) {
+      // Different models support different reasoning summarizers—for example, our computer
+      // use model supports the concise summarizer, while o4-mini supports detailed. To simply
+      // access the most detailed summarizer available, set the value of this parameter to auto
+      // and view the reasoning summary as part of the summary array in the reasoning output
+      // item. This feature is also supported with streaming, and across the following
+      // reasoning models: o4-mini, o3, o3-mini and o1.
+      const isGpt5 = this.config.name.startsWith('gpt5');
+      const includeSummary =
+        !isGpt5 || getConfig<boolean>('model.gpt5ReasoningSummary', false);
+
+      const reasoning: NonNullable<ResponseCreateParams['reasoning']> = {};
+      if (includeSummary) {
+        reasoning.summary = 'auto';
+      }
+      if (this.capabilities.supportsReasoningEffort) {
+        reasoning.effort = 'high';
+      }
+      params.reasoning = reasoning;
+    }
+
+    if (useStreaming) {
+      return {
+        ...params,
+        stream: true,
+      };
+    }
+
+    return {
+      ...params,
+      stream: false,
+    };
+  }
+
   /**
    * Create a response using the Responses API.
    *
@@ -107,7 +193,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
   ): Promise<Response> {
     const useStreaming = this.getStreamingConfig();
 
-    const newMessages = await Promise.all(
+    const newMessages = (await Promise.all(
       messages.slice(this.sentMessages).map(async (msg) => {
         if ('role' in msg) {
           const content =
@@ -175,60 +261,20 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
         }
         return msg;
       }),
-    );
-
-    const params: any = {
-      model: this.config.fullName,
-      input: newMessages,
-      max_output_tokens: this.config.maxOutputTokens,
-      store: true,
-    };
+    )) as ResponseInputItem[];
 
     // The Responses API does not currently support stop sequences. We keep the
     // end tag for post-processing only and do not send it to the API.
 
-    if (!this.isOReasoningModel) {
-      params.temperature = temperature;
-    }
-
-    if (this.previousResponseId) {
-      params.previous_response_id = this.previousResponseId;
-    }
-    if (systemPrompt) {
-      params.instructions = systemPrompt;
-    }
-
-    if (tools && tools.length > 0) {
-      params.tools = toOpenAIResponseTools(tools);
-      params.tool_choice = 'auto';
-    }
-
-    if (this.capabilities.supportsReasoning) {
-      // Different models support different reasoning summarizers—for example, our computer use model supports the concise summarizer, while o4-mini supports detailed. To simply access the most detailed summarizer available, set the value of this parameter to auto and view the reasoning summary as part of the summary array in the reasoning output item.
-      // This feature is also supported with streaming, and across the following reasoning models: o4-mini, o3, o3-mini and o1.
-      const isGpt5 = this.config.name.startsWith('gpt5');
-      const includeSummary =
-        !isGpt5 || getConfig<boolean>('model.gpt5ReasoningSummary', false);
-      params.reasoning = {};
-      if (includeSummary) {
-        params.reasoning.summary = 'auto'; // or "detailed"
-      }
-      if (this.capabilities.supportsReasoningEffort) {
-        params.reasoning.effort = 'high'; // or "medium" or "low"
-      }
-      if (
-        this.config.fullName.includes('o3') ||
-        this.config.fullName.includes('o4')
-      ) {
-        // Stop sequences are unsupported for o3 and o4 reasoning models.
-      }
-    }
-
-    // this.logger.debug(
-    //   `CreateResponse params: ${JSON.stringify(params, null, 2)}`,
-    // );
-
     if (useStreaming) {
+      const params = this.buildResponseCreateParams(
+        newMessages,
+        temperature,
+        true,
+        systemPrompt,
+        tools,
+      );
+
       // this.logger.debug(
       //   `OpenAI Responses streaming params: ${JSON.stringify(params)}`,
       // );
@@ -265,6 +311,14 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
       this.sentMessages = messages.length;
       return response;
     } else {
+      const params = this.buildResponseCreateParams(
+        newMessages,
+        temperature,
+        false,
+        systemPrompt,
+        tools,
+      );
+
       const response = await client.responses.create(params, {
         signal,
       });
