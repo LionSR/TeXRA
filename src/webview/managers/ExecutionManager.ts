@@ -26,7 +26,9 @@ export class ExecutionManager {
   constructor() {}
 
   async handleExecute(message: any): Promise<void> {
-    if (!message.inputFile) {
+    const isToolUseAgent = Boolean(message.isToolUseAgent);
+
+    if (!message.inputFile && !isToolUseAgent) {
       const openDocs = 'File Management Guide';
       const choice = await vscode.window.showErrorMessage(
         'Please select an input file.',
