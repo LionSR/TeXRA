@@ -52,7 +52,10 @@ function assertSingleTextBlock(content: ContentBlock[]): TextBlock {
 describe('ModelHandlerAnthropic message guards', () => {
   it('omits whitespace-only prefix content when initializing messages', async () => {
     const handler = createAnthropicHandler();
-    const messages = await handler.initializeMessages('   ', '  request text  ');
+    const messages = await handler.initializeMessages(
+      '   ',
+      '  request text  ',
+    );
 
     assert.equal(messages.length, 1, 'should return a single user message');
     const content = messages[0].content as ContentBlock[];
@@ -62,7 +65,10 @@ describe('ModelHandlerAnthropic message guards', () => {
 
   it('omits whitespace-only request content when initializing messages', async () => {
     const handler = createAnthropicHandler();
-    const messages = await handler.initializeMessages('  prefix value  ', '   ');
+    const messages = await handler.initializeMessages(
+      '  prefix value  ',
+      '   ',
+    );
 
     assert.equal(messages.length, 1, 'should return a single user message');
     const content = messages[0].content as ContentBlock[];
