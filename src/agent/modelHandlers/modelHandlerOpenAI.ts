@@ -175,19 +175,158 @@ export class ModelHandlerOpenAI extends ModelHandler<
 
         if (this.config.fullName.includes('deepseek')) {
           // Aggregate stream chunks manually for DeepSeek models
-          let fullContent = '';
-          let reasoning = '';
+          const collectText = (value: any): string => {
+            if (!value) {
+              return '';
+            }
+            if (typeof value === 'string') {
+              return value;
+            }
+            if (Array.isArray(value)) {
+              return value
+                .map((entry) => {
+                  if (!entry) {
+                    return '';
+                  }
+                  if (typeof entry === 'string') {
+                    return entry;
+                  }
+                  if (typeof entry === 'object' && 'text' in entry) {
+                    return (entry as { text?: string }).text ?? '';
+                  }
+                  return '';
+                })
+                .join('');
+            }
+            if (typeof value === 'object' && 'text' in value) {
+              return (value as { text?: string }).text ?? '';
+            }
+            return '';
+          };
+
+          const fullContentParts: string[] = [];
+          const reasoningParts: string[] = [];
+          const aggregatedToolCalls: Array<{
+            id: string;
+            type?: string;
+            function?: { name?: string; arguments?: string };
+          }> = [];
+          let aggregatedFunctionCall: {
+            name: string;
+            arguments: string;
+          } | null = null;
+          let role: string | undefined;
           let lastChunk: any;
+
           for await (const chunk of stream) {
             lastChunk = chunk;
-            const delta: any = chunk.choices[0]?.delta;
-            const reasoningDelta = delta?.reasoning_content ?? '';
-            const contentDelta = delta?.content ?? '';
-            if (reasoningDelta) thinking.append(reasoningDelta);
-            if (contentDelta) output?.append(contentDelta);
-            fullContent += contentDelta;
-            reasoning += reasoningDelta;
+            const delta: any = chunk.choices?.[0]?.delta ?? {};
+
+            if (delta.role && typeof delta.role === 'string') {
+              role = delta.role;
+            }
+
+            const reasoningDelta = collectText(delta?.reasoning_content);
+            if (reasoningDelta) {
+              reasoningParts.push(reasoningDelta);
+              thinking.append(reasoningDelta);
+            }
+
+            const contentDelta = collectText(delta?.content);
+            if (contentDelta) {
+              fullContentParts.push(contentDelta);
+              output?.append(contentDelta);
+            }
+
+            if (Array.isArray(delta?.tool_calls)) {
+              for (const toolCallChunk of delta.tool_calls) {
+                if (!toolCallChunk) {
+                  continue;
+                }
+                const index =
+                  typeof toolCallChunk.index === 'number'
+                    ? toolCallChunk.index
+                    : 0;
+                while (aggregatedToolCalls.length <= index) {
+                  aggregatedToolCalls.push({
+                    id: '',
+                    type: 'function',
+                    function: { name: '', arguments: '' },
+                  });
+                }
+                const target = aggregatedToolCalls[index];
+                if (toolCallChunk.id) {
+                  target.id += toolCallChunk.id;
+                }
+                if (toolCallChunk.type) {
+                  target.type = toolCallChunk.type;
+                }
+                if (toolCallChunk.function) {
+                  target.function = target.function ?? {
+                    name: '',
+                    arguments: '',
+                  };
+                  if (toolCallChunk.function.name) {
+                    target.function.name =
+                      (target.function.name ?? '') +
+                      toolCallChunk.function.name;
+                  }
+                  if (toolCallChunk.function.arguments) {
+                    target.function.arguments =
+                      (target.function.arguments ?? '') +
+                      toolCallChunk.function.arguments;
+                  }
+                }
+              }
+            }
+
+            if (delta?.function_call) {
+              aggregatedFunctionCall = aggregatedFunctionCall ?? {
+                name: '',
+                arguments: '',
+              };
+              if (delta.function_call.name) {
+                aggregatedFunctionCall.name += delta.function_call.name;
+              }
+              if (delta.function_call.arguments) {
+                aggregatedFunctionCall.arguments +=
+                  delta.function_call.arguments;
+              }
+            }
           }
+
+          const fullContent = fullContentParts.join('');
+          const reasoning = reasoningParts.join('');
+
+          const normalizedToolCalls = aggregatedToolCalls.filter((call) => {
+            const hasId = typeof call.id === 'string' && call.id.length > 0;
+            const hasName =
+              typeof call.function?.name === 'string' &&
+              call.function.name.length > 0;
+            const hasArgs =
+              typeof call.function?.arguments === 'string' &&
+              call.function.arguments.length > 0;
+            return hasId || hasName || hasArgs;
+          });
+
+          const finalMessage: Record<string, unknown> = {
+            role: role ?? 'assistant',
+            content: fullContent,
+          };
+
+          if (reasoning) {
+            finalMessage.reasoning_content = reasoning;
+          }
+          if (normalizedToolCalls.length > 0) {
+            finalMessage.tool_calls = normalizedToolCalls;
+          }
+          if (
+            aggregatedFunctionCall &&
+            (aggregatedFunctionCall.name || aggregatedFunctionCall.arguments)
+          ) {
+            finalMessage.function_call = aggregatedFunctionCall;
+          }
+
           const finalResponse = {
             id: lastChunk?.id,
             object: 'chat.completion',
@@ -198,20 +337,17 @@ export class ModelHandlerOpenAI extends ModelHandler<
             choices: [
               {
                 index: 0,
-                message: {
-                  content: fullContent,
-                  reasoning_content: reasoning,
-                },
+                message: finalMessage,
                 finish_reason: lastChunk?.choices?.[0]?.finish_reason,
-                // stop_reason: (lastChunk?.choices?.[0] as any)?.stop_reason,
-                // this might be related to the bug of deepseek that length is not recognized as the stop reason
-                // Be caraful with gemini via openai api though..
               },
             ],
           };
+
           const finalReasoning = this.processThinkingBlock(finalResponse);
           thinking.finalize(finalReasoning ?? undefined);
-          if (output) output.finalize(fullContent);
+          if (output) {
+            output.finalize(fullContent);
+          }
           return finalResponse;
         }
 
