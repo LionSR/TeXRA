@@ -439,8 +439,9 @@ export class LogEntryFormatter {
 
     let formattedContent;
     try {
-      // Try to parse as JSON first - don't decode HTML entities
-      const parsed = JSON.parse(content);
+      // Decode HTML entities before parsing - log messages are encoded in transport
+      const decodedContent = decodeHtml(content);
+      const parsed = JSON.parse(decodedContent);
 
       // Check if this is the new combined format
       if (parsed.tool && parsed.input && parsed.output) {
