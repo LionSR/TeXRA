@@ -204,6 +204,16 @@ export class ModelHandlerOpenAI extends ModelHandler<
             return '';
           };
 
+          const appendStringValue = (
+            existing: string | undefined,
+            addition: unknown,
+          ): string => {
+            if (typeof addition !== 'string' || addition.length === 0) {
+              return existing ?? '';
+            }
+            return `${existing ?? ''}${addition}`;
+          };
+
           const fullContentParts: string[] = [];
           const reasoningParts: string[] = [];
           const aggregatedToolCalls: Array<{
@@ -255,43 +265,44 @@ export class ModelHandlerOpenAI extends ModelHandler<
                   });
                 }
                 const target = aggregatedToolCalls[index];
-                if (toolCallChunk.id) {
-                  target.id += toolCallChunk.id;
-                }
+                target.id = appendStringValue(target.id, toolCallChunk.id);
                 if (toolCallChunk.type) {
                   target.type = toolCallChunk.type;
                 }
                 if (toolCallChunk.function) {
-                  target.function = target.function ?? {
-                    name: '',
-                    arguments: '',
-                  };
-                  if (toolCallChunk.function.name) {
-                    target.function.name =
-                      (target.function.name ?? '') +
-                      toolCallChunk.function.name;
-                  }
-                  if (toolCallChunk.function.arguments) {
-                    target.function.arguments =
-                      (target.function.arguments ?? '') +
-                      toolCallChunk.function.arguments;
-                  }
+                  const targetFunction =
+                    target.function ??
+                    (target.function = {
+                      name: '',
+                      arguments: '',
+                    });
+                  targetFunction.name = appendStringValue(
+                    targetFunction.name,
+                    toolCallChunk.function.name,
+                  );
+                  targetFunction.arguments = appendStringValue(
+                    targetFunction.arguments,
+                    toolCallChunk.function.arguments,
+                  );
                 }
               }
             }
 
             if (delta?.function_call) {
-              aggregatedFunctionCall = aggregatedFunctionCall ?? {
-                name: '',
-                arguments: '',
-              };
-              if (delta.function_call.name) {
-                aggregatedFunctionCall.name += delta.function_call.name;
-              }
-              if (delta.function_call.arguments) {
-                aggregatedFunctionCall.arguments +=
-                  delta.function_call.arguments;
-              }
+              const functionCall =
+                aggregatedFunctionCall ??
+                (aggregatedFunctionCall = {
+                  name: '',
+                  arguments: '',
+                });
+              functionCall.name = appendStringValue(
+                functionCall.name,
+                delta.function_call.name,
+              );
+              functionCall.arguments = appendStringValue(
+                functionCall.arguments,
+                delta.function_call.arguments,
+              );
             }
           }
 
