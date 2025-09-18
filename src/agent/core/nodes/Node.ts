@@ -19,15 +19,16 @@ export abstract class Node<TPrep = void, TExec = void, TShared = void> {
    * Prepare any data required before execution.
    */
   protected async prep(shared: TShared): Promise<TPrep> {
-    return undefined as unknown as TPrep;
+    return undefined as TPrep;
   }
 
   /**
    * Execute the core logic for the node.
    */
-  protected async exec(prepResult: TPrep, shared: TShared): Promise<TExec> {
-    return prepResult as unknown as TExec;
-  }
+  protected abstract exec(
+    prepResult: TPrep,
+    shared: TShared,
+  ): Promise<TExec>;
 
   /**
    * Perform cleanup or additional processing after execution.

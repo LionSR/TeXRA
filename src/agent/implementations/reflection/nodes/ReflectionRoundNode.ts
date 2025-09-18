@@ -63,16 +63,6 @@ interface ReflectionRoundPreparation {
   outputPath: string;
   skip: boolean;
   skipResult?: ReflectionRoundResult;
-  execution?: ReflectionRoundExecResult;
-}
-
-interface ReflectionRoundExecResult {
-  stateRound: AgentStateRound;
-  stateGlobal: AgentStateGlobal;
-  messages: ProviderMessage[];
-  endTurn: boolean;
-  toolState: ToolState;
-  skip: boolean;
 }
 
 export interface ReflectionRoundShared {
@@ -213,17 +203,7 @@ export class ReflectionRoundNode extends Node<
     shared: ReflectionRoundShared,
   ): Promise<ReflectionRoundResult> {
     if (prepResult.skip && prepResult.skipResult) {
-      const result = prepResult.skipResult;
-      const execution: ReflectionRoundExecResult = {
-        stateRound: result[0],
-        stateGlobal: result[1],
-        messages: result[2],
-        endTurn: result[3],
-        toolState: result[4],
-        skip: true,
-      };
-      prepResult.execution = execution;
-      return result;
+      return prepResult.skipResult;
     }
 
     const [endTurn, updatedMessages] =
@@ -266,39 +246,21 @@ export class ReflectionRoundNode extends Node<
         this.deps.executionId,
       );
 
-      const execution: ReflectionRoundExecResult = {
-        stateRound: updatedStateRound,
-        stateGlobal: updatedStateGlobal,
-        messages: updatedMessages,
-        endTurn: newEndTurn,
-        toolState: updatedToolState,
-        skip: false,
-      };
-      prepResult.execution = execution;
       return [
-        execution.stateRound,
-        execution.stateGlobal,
-        execution.messages,
-        execution.endTurn,
-        execution.toolState,
+        updatedStateRound,
+        updatedStateGlobal,
+        updatedMessages,
+        newEndTurn,
+        updatedToolState,
       ];
     }
 
-    const execution: ReflectionRoundExecResult = {
-      stateRound: prepResult.stateRound,
-      stateGlobal: shared.stateGlobal,
-      messages: updatedMessages,
-      endTurn,
-      toolState: shared.toolState,
-      skip: false,
-    };
-    prepResult.execution = execution;
     return [
-      execution.stateRound,
-      execution.stateGlobal,
-      execution.messages,
-      execution.endTurn,
-      execution.toolState,
+      prepResult.stateRound,
+      shared.stateGlobal,
+      updatedMessages,
+      endTurn,
+      shared.toolState,
     ];
   }
 
@@ -307,22 +269,22 @@ export class ReflectionRoundNode extends Node<
     prepResult: ReflectionRoundPreparation,
     shared: ReflectionRoundShared,
   ): Promise<ReflectionRoundResult> {
-    const execution = prepResult.execution;
-    if (execution && !execution.skip) {
+    if (!prepResult.skip) {
+      const [stateRound, stateGlobal, , endTurn] = execResult;
       await this.deps.handleRoundCompletion(
         shared.currRound,
-        execution.stateRound,
-        execution.stateGlobal,
+        stateRound,
+        stateGlobal,
         {
           outputFile: prepResult.outputPath,
-          endTurn: execution.endTurn,
+          endTurn,
           processGroupId: shared.roundGroupId,
         },
       );
 
       if (shared.currRound === 0) {
         this.deps.logger.debug(
-          `stateGlobal: ${JSON.stringify(execution.stateGlobal)}`,
+          `stateGlobal: ${JSON.stringify(stateGlobal)}`,
           shared.roundGroupId,
         );
       }
