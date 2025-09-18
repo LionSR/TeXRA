@@ -6,7 +6,28 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
-- Add install actions and re-check option to dependency banner
+### Bug Fixes
+
+### Improvements
+
+## [0.33.7] - 2025-09-18
+
+### Features
+
+- Add install and re-check actions to the dependency banner so required tools can be installed or revalidated in place
+- Separate tool-use streams in the Progress Board with All / Workflow / Tool Use filters and clearer tab titles
+- Show tool-use hints in the agent dropdown to highlight agents that launch tool workflows
+- Add a copy button to each model response entry for quickly reusing generated text
+- Persist tool-use sessions across restarts, including a resume command and settings to control retention
+
+### Bug Fixes
+
+- Decode HTML entities in follow-up messages so languages like Chinese render correctly in the Progress Board
+- Accept legacy tool configuration keys to keep existing tool-use agents working after the prefill cleanup
+- Fix LaTeX replacements for beamer column layouts and Schrödinger names to avoid corrupting generated files
+- Skip rendering empty model response logs so the Progress Board no longer shows blank entries
+- Disable workflow toolbar actions while viewing tool-use streams to prevent unsupported commands from running
+- Trim Anthropic requests and block empty user messages to avoid API errors
 
 ## [0.33.6] - 2025-09-14
 
