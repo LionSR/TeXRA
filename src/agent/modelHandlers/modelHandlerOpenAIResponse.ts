@@ -13,6 +13,7 @@ import type {
   ResponseFunctionToolCallItem,
   ResponseFunctionToolCall,
   ResponseInputItem,
+  ResponseStreamEvent,
 } from 'openai/resources/responses/responses';
 
 // Local imports - agent
@@ -240,15 +241,20 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
       const output = this.isOutputStreamingEnabled()
         ? this.createOutputStream(groupId)
         : undefined;
-      for await (const event of stream) {
-        if (
-          event.type === 'response.reasoning_text.delta' ||
-          event.type === 'response.reasoning_summary_text.delta'
-        ) {
-          thinking.append((event as any).delta);
-        }
-        if (event.type === 'response.output_text.delta') {
-          output?.append((event as any).delta);
+      const responseStream: AsyncIterable<ResponseStreamEvent> = stream;
+      for await (const event of responseStream) {
+        switch (event.type) {
+          case 'response.reasoning_text.delta':
+          case 'response.reasoning_summary_text.delta': {
+            thinking.append(event.delta);
+            break;
+          }
+          case 'response.output_text.delta': {
+            output?.append(event.delta);
+            break;
+          }
+          default:
+            break;
         }
       }
 
