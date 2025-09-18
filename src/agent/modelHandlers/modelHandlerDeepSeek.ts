@@ -2,7 +2,7 @@
 // (none needed)
 
 // Third-party imports
-import OpenAI from 'openai';
+import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 
 // Local imports - agent
 import { ToolState } from '../core/ToolState';
@@ -12,7 +12,6 @@ import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 
 // Local imports - utilities
 import { convertContentToString } from '@agent/utils/text/messageUtils';
-import type { ToolDefinition } from '@model';
 import { K_SLICE, MESSAGE_PREVIEW_LENGTH } from '@utils/config';
 
 // TODO: prompt_cache_hit_tokens can also be used here to correct the price and response usage computation in the base class (just overwrite the computePrice and computeResponseUsage methods with a revalues responseUsage.prompt_tokens_details?.cached_tokens and then call the super methods)
@@ -177,16 +176,27 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI {
    * @param messages Original messages array
    * @returns Processed messages array with merged consecutive messages and string content
    */
-  private preprocessMessages(messages: any[]): any[] {
+  protected preprocessMessagesForProvider(
+    messages: ChatCompletionMessageParam[],
+  ): ChatCompletionMessageParam[] {
     if (!messages || messages.length <= 1) {
       return messages;
     }
 
+    const originalLength = messages.length;
+    const cloneMessage = (message: ChatCompletionMessageParam): any => {
+      const clone: any = { ...message };
+      if (Array.isArray(clone.content)) {
+        clone.content = [...clone.content];
+      }
+      return clone;
+    };
+
     // First, handle merging consecutive messages with the same role
-    const mergedMessages: any[] = [messages[0]];
+    const mergedMessages: any[] = [cloneMessage(messages[0])];
 
     for (let i = 1; i < messages.length; i++) {
-      const currentMessage = messages[i];
+      const currentMessage = cloneMessage(messages[i]);
       const previousMessage = mergedMessages[mergedMessages.length - 1];
 
       // If current message has the same role as the previous one, merge them
@@ -235,7 +245,7 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI {
 
     // Now convert all content arrays to strings for DeepSeek compatibility
     const processedMessages = mergedMessages.map((message) => {
-      // Clone the message to avoid modifying the original
+      // Clone the message to avoid modifying the merged references
       const processedMessage = { ...message };
 
       // Convert content to string if it's an array
@@ -251,32 +261,13 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI {
       return processedMessage;
     });
 
-    return processedMessages;
-  }
-
-  /**
-   * Override createResponse to preprocess messages for Deepseek models
-   */
-  async createResponse(
-    client: OpenAI,
-    messages: any[],
-    temperature: number,
-    systemPrompt?: string,
-    endTag?: string,
-    signal?: AbortSignal,
-    tools?: ToolDefinition[],
-  ): Promise<any> {
-    // Preprocess messages to merge consecutive messages and convert content to strings
-    const processedMessages = this.preprocessMessages(messages);
-
-    if (processedMessages.length !== messages.length) {
+    if (processedMessages.length !== originalLength) {
       this.logger.info(
-        `Preprocessed message array from ${messages.length} to ${processedMessages.length} messages for Deepseek model compatibility`,
+        `Preprocessed message array from ${originalLength} to ${processedMessages.length} messages for Deepseek model compatibility`,
       );
     }
 
-    // Log the first few characters of each processed message for debugging
-    processedMessages.forEach((msg, index) => {
+    processedMessages.forEach((msg: any, index: number) => {
       const contentPreview =
         typeof msg.content === 'string'
           ? msg.content.substring(0, MESSAGE_PREVIEW_LENGTH)
@@ -284,15 +275,163 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI {
       this.logger.debug(`Message ${index} (${msg.role}): ${contentPreview}...`);
     });
 
-    // Call the parent implementation with the processed messages
-    return super.createResponse(
-      client,
-      processedMessages,
-      temperature,
-      systemPrompt,
-      endTag,
-      signal,
-      tools,
-    );
+    return processedMessages as ChatCompletionMessageParam[];
+  }
+
+  protected applyProviderRequestParams(payload: Record<string, any>): void {
+    super.applyProviderRequestParams(payload);
+
+    if (this.config.fullName.includes('deepseek-chat')) {
+      this.logger.debug(
+        'Setting max_tokens to 8192 for DeepSeek-chat models from the official api',
+      );
+      payload.max_tokens = 8192;
+    }
+  }
+
+  protected async handleStreamResponse(
+    stream: AsyncIterable<any> & { finalChatCompletion: () => Promise<any> },
+    thinking: ReturnType<ModelHandlerOpenAI['createThinkingStream']>,
+    output?: ReturnType<ModelHandlerOpenAI['createOutputStream']>,
+  ): Promise<any> {
+    let fullContent = '';
+    let reasoning = '';
+    let lastChunk: any;
+    const aggregatedToolCalls: any[] = [];
+    let aggregatedFunctionCall: {
+      name?: string;
+      arguments?: string;
+    } | null = null;
+
+    for await (const chunk of stream) {
+      lastChunk = chunk;
+      const delta: any = chunk.choices?.[0]?.delta ?? {};
+      const reasoningDelta = delta?.reasoning_content ?? '';
+      const rawContentDelta = delta?.content;
+      const contentDelta =
+        typeof rawContentDelta === 'string'
+          ? rawContentDelta
+          : Array.isArray(rawContentDelta)
+            ? rawContentDelta
+                .map((contentPart: any) => contentPart?.text ?? '')
+                .join('')
+            : '';
+
+      if (reasoningDelta) thinking.append(reasoningDelta);
+      if (contentDelta) output?.append(contentDelta);
+
+      fullContent += contentDelta;
+      reasoning += reasoningDelta;
+
+      if (Array.isArray(delta?.tool_calls)) {
+        for (const toolCallDelta of delta.tool_calls) {
+          const index = toolCallDelta?.index ?? 0;
+          if (!aggregatedToolCalls[index]) {
+            aggregatedToolCalls[index] = {
+              id: toolCallDelta?.id,
+              type: toolCallDelta?.type ?? 'function',
+              function: {
+                name: toolCallDelta?.function?.name,
+                arguments: '',
+              },
+            };
+          }
+
+          const target = aggregatedToolCalls[index];
+          if (toolCallDelta?.id) {
+            target.id = toolCallDelta.id;
+          }
+          if (toolCallDelta?.type) {
+            target.type = toolCallDelta.type;
+          }
+          if (toolCallDelta?.function?.name) {
+            target.function.name = toolCallDelta.function.name;
+          }
+          if (toolCallDelta?.function?.arguments) {
+            target.function.arguments = `${
+              target.function.arguments ?? ''
+            }${toolCallDelta.function.arguments}`;
+          }
+        }
+      }
+
+      if (delta?.function_call) {
+        aggregatedFunctionCall = aggregatedFunctionCall ?? {
+          name: undefined,
+          arguments: '',
+        };
+        if (delta.function_call.name) {
+          aggregatedFunctionCall.name = delta.function_call.name;
+        }
+        if (delta.function_call.arguments) {
+          aggregatedFunctionCall.arguments = `${
+            aggregatedFunctionCall.arguments ?? ''
+          }${delta.function_call.arguments}`;
+        }
+      }
+    }
+
+    if (!lastChunk) {
+      const response = await stream.finalChatCompletion();
+      const finalReasoning = this.processThinkingBlock(response);
+      thinking.finalize(finalReasoning ?? undefined);
+      const finalOutput = response.choices?.[0]?.message?.content ?? '';
+      if (output) output.finalize(finalOutput);
+      return response;
+    }
+
+    const message: any = {
+      role: 'assistant',
+      content: fullContent || null,
+    };
+    if (reasoning) {
+      message.reasoning_content = reasoning;
+    }
+
+    const normalizedToolCalls = aggregatedToolCalls
+      .filter(Boolean)
+      .map((toolCall) => ({
+        id: toolCall.id,
+        type: toolCall.type ?? 'function',
+        function: {
+          name: toolCall.function?.name,
+          arguments: toolCall.function?.arguments ?? '',
+        },
+      }));
+    if (normalizedToolCalls.length > 0) {
+      message.tool_calls = normalizedToolCalls;
+    }
+
+    if (
+      aggregatedFunctionCall &&
+      (aggregatedFunctionCall.name || aggregatedFunctionCall.arguments)
+    ) {
+      message.function_call = {
+        name: aggregatedFunctionCall.name,
+        arguments: aggregatedFunctionCall.arguments ?? '',
+      };
+    }
+
+    const finalResponse = {
+      id: lastChunk?.id,
+      object: 'chat.completion',
+      created: lastChunk?.created,
+      model: lastChunk?.model,
+      system_fingerprint: lastChunk?.system_fingerprint,
+      usage: lastChunk?.usage,
+      choices: [
+        {
+          index: 0,
+          message,
+          finish_reason: lastChunk?.choices?.[0]?.finish_reason,
+        },
+      ],
+    };
+
+    const finalReasoning = this.processThinkingBlock(finalResponse);
+    thinking.finalize(finalReasoning ?? undefined);
+    if (output) output.finalize(fullContent);
+
+    return finalResponse;
   }
 }

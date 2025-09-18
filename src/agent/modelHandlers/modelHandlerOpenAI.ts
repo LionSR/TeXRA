@@ -82,9 +82,11 @@ export class ModelHandlerOpenAI extends ModelHandler<
     // Get streaming config
     const useStreaming = this.getStreamingConfig();
 
+    const requestMessages = this.preprocessMessagesForProvider(messages);
+
     const kwargs: any = {
       model: this.config.fullName,
-      messages,
+      messages: requestMessages,
       [this.isOReasoningModel ? 'max_completion_tokens' : 'max_tokens']:
         this.config.maxOutputTokens,
     };
@@ -111,18 +113,13 @@ export class ModelHandlerOpenAI extends ModelHandler<
       kwargs.tools = toOpenAITools(tools);
       kwargs.tool_choice = 'auto';
     }
-    if (this.config.fullName.includes('deepseek-chat')) {
-      // for deepseek models,  this and context window are not the same for openrouter models and the official api. so we need to set max_tokens manually if the official api is used
-      this.logger.debug(
-        'Setting max_tokens to 8192 for DeepSeek-chat models from the official api',
-      );
-      kwargs.max_tokens = 8192;
-    }
+
+    this.applyProviderRequestParams(kwargs);
 
     // Calculate input tokens using the helper method
     try {
       const approximateInputTokens = this._calculateApproximateTokens(
-        messages,
+        requestMessages,
         systemPrompt,
       );
 
@@ -173,62 +170,7 @@ export class ModelHandlerOpenAI extends ModelHandler<
           ? this.createOutputStream(groupId)
           : undefined;
 
-        if (this.config.fullName.includes('deepseek')) {
-          // Aggregate stream chunks manually for DeepSeek models
-          let fullContent = '';
-          let reasoning = '';
-          let lastChunk: any;
-          for await (const chunk of stream) {
-            lastChunk = chunk;
-            const delta: any = chunk.choices[0]?.delta;
-            const reasoningDelta = delta?.reasoning_content ?? '';
-            const contentDelta = delta?.content ?? '';
-            if (reasoningDelta) thinking.append(reasoningDelta);
-            if (contentDelta) output?.append(contentDelta);
-            fullContent += contentDelta;
-            reasoning += reasoningDelta;
-          }
-          const finalResponse = {
-            id: lastChunk?.id,
-            object: 'chat.completion',
-            created: lastChunk?.created,
-            model: lastChunk?.model,
-            system_fingerprint: lastChunk?.system_fingerprint,
-            usage: lastChunk?.usage,
-            choices: [
-              {
-                index: 0,
-                message: {
-                  content: fullContent,
-                  reasoning_content: reasoning,
-                },
-                finish_reason: lastChunk?.choices?.[0]?.finish_reason,
-                // stop_reason: (lastChunk?.choices?.[0] as any)?.stop_reason,
-                // this might be related to the bug of deepseek that length is not recognized as the stop reason
-                // Be caraful with gemini via openai api though..
-              },
-            ],
-          };
-          const finalReasoning = this.processThinkingBlock(finalResponse);
-          thinking.finalize(finalReasoning ?? undefined);
-          if (output) output.finalize(fullContent);
-          return finalResponse;
-        }
-
-        for await (const chunk of stream) {
-          const reasoningDelta =
-            (chunk.choices[0]?.delta as any)?.reasoning_content ?? '';
-          const contentDelta = chunk.choices[0]?.delta?.content ?? '';
-          if (reasoningDelta) thinking.append(reasoningDelta);
-          if (contentDelta) output?.append(contentDelta);
-        }
-
-        // Note that there is no second consumption problem as per openai sdk examples
-        response = await stream.finalChatCompletion();
-        const finalReasoning = this.processThinkingBlock(response);
-        thinking.finalize(finalReasoning ?? undefined);
-        const finalOutput = response.choices?.[0]?.message?.content ?? '';
-        if (output) output.finalize(finalOutput);
+        response = await this.handleStreamResponse(stream, thinking, output);
 
         // in the future we can add: stream_options: {"include_usage": true} to get usage statistics
         // in the future if we pass stream to outside (signal: controller.signal)), calling stream.controller.abort() will abort the stream; which will be very useful for our stop button (controller.abort();)
@@ -259,6 +201,50 @@ export class ModelHandlerOpenAI extends ModelHandler<
         throw err;
       }
     }
+  }
+
+  protected preprocessMessagesForProvider(
+    messages: ChatCompletionMessageParam[],
+  ): ChatCompletionMessageParam[] {
+    return messages;
+  }
+
+  protected applyProviderRequestParams(_payload: Record<string, any>): void {
+    // No provider-specific defaults for base OpenAI handler
+  }
+
+  protected async handleStreamResponse(
+    stream: AsyncIterable<any> & { finalChatCompletion: () => Promise<any> },
+    thinking: ReturnType<
+      ModelHandler<
+        any,
+        ExtendedCompletionUsage | null,
+        OpenAIAPIResponseUsage
+      >['createThinkingStream']
+    >,
+    output?: ReturnType<
+      ModelHandler<
+        any,
+        ExtendedCompletionUsage | null,
+        OpenAIAPIResponseUsage
+      >['createOutputStream']
+    >,
+  ): Promise<any> {
+    for await (const chunk of stream) {
+      const reasoningDelta =
+        (chunk.choices[0]?.delta as any)?.reasoning_content ?? '';
+      const contentDelta = chunk.choices[0]?.delta?.content ?? '';
+      if (reasoningDelta) thinking.append(reasoningDelta);
+      if (contentDelta) output?.append(contentDelta);
+    }
+
+    const response = await stream.finalChatCompletion();
+    const finalReasoning = this.processThinkingBlock(response);
+    thinking.finalize(finalReasoning ?? undefined);
+    const finalOutput = response.choices?.[0]?.message?.content ?? '';
+    if (output) output.finalize(finalOutput);
+
+    return response;
   }
 
   /** Initializes message array with system prompt and user content. */
