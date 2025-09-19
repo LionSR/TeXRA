@@ -677,21 +677,15 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
 
     const candidate = responseObject.candidates[0];
 
-    let responseText = '';
-    if (candidate?.content?.parts) {
-      responseText = candidate.content.parts
-        // Exclude reasoning/thought blocks from the returned text
-        .filter((part) => !!part.text && !part.thought)
-        .map((part: Part) => part.text ?? '')
-        .join('')
-        .trim();
-    } else {
+    const rawResponseText = responseObject.text;
+    if (rawResponseText === undefined) {
       this.logger.warn(
         'Candidate content or parts missing in response object.',
       );
     }
-
-    responseText = replacementEngine.applyAll(responseText);
+    let responseText = replacementEngine.applyAll(
+      (rawResponseText ?? '').trim(),
+    );
 
     const usage = responseObject.usageMetadata;
     const stopReason: FinishReason =
