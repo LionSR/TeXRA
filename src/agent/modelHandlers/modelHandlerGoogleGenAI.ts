@@ -8,7 +8,6 @@ import {
   Content,
   GenerateContentResponse,
   FinishReason,
-  type Candidate,
   File,
   createPartFromUri,
   createPartFromFunctionCall,
@@ -327,61 +326,59 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         const output = this.isOutputStreamingEnabled()
           ? this.createOutputStream(groupId)
           : undefined;
-        const fullParts: Part[] = [];
-        let lastCandidate: Candidate | undefined;
+        let lastChunk: GenerateContentResponse | undefined;
         let finalUsage: GenerateContentResponseUsageMetadata | undefined;
-        const finalResponse = new GenerateContentResponse();
+        let promptFeedback: GenerateContentResponse['promptFeedback'];
+        let responseId: string | undefined;
+        let createTime: string | undefined;
+        let modelVersion: string | undefined;
         for await (const chunk of stream) {
-          if (chunk.candidates && chunk.candidates.length > 0) {
-            lastCandidate = chunk.candidates[0];
-            const parts = chunk.candidates[0]?.content?.parts;
-            if (parts) {
-              fullParts.push(...parts);
-              for (const part of parts) {
-                if ((part as any).thought && typeof part.text === 'string') {
-                  thinking.append(part.text);
-                } else if (typeof (part as any).text === 'string') {
-                  output?.append((part as any).text);
-                }
+          lastChunk = chunk;
+          const parts = chunk.candidates?.[0]?.content?.parts;
+          if (parts) {
+            for (const part of parts) {
+              if ((part as any).thought && typeof part.text === 'string') {
+                thinking.append(part.text);
+              } else if (typeof (part as any).text === 'string') {
+                output?.append((part as any).text);
               }
             }
           }
           if (chunk.usageMetadata) {
             finalUsage = chunk.usageMetadata;
           }
-          if (chunk.responseId) finalResponse.responseId = chunk.responseId;
-          if (chunk.createTime) finalResponse.createTime = chunk.createTime;
-          if (chunk.modelVersion)
-            finalResponse.modelVersion = chunk.modelVersion;
-          if (!finalResponse.promptFeedback && chunk.promptFeedback) {
-            finalResponse.promptFeedback = chunk.promptFeedback;
+          if (!promptFeedback && chunk.promptFeedback) {
+            promptFeedback = chunk.promptFeedback;
           }
+          if (chunk.responseId) responseId = chunk.responseId;
+          if (chunk.createTime) createTime = chunk.createTime;
+          if (chunk.modelVersion) modelVersion = chunk.modelVersion;
         }
 
-        if (fullParts.length === 0) {
+        if (!lastChunk) {
           throw new Error('Stream yielded no chunks');
         }
 
-        finalResponse.usageMetadata = finalUsage;
-        finalResponse.candidates = [
-          {
-            content: { role: 'model', parts: fullParts },
-            finishReason:
-              lastCandidate?.finishReason ??
-              FinishReason.FINISH_REASON_UNSPECIFIED,
-            finishMessage: lastCandidate?.finishMessage,
-            safetyRatings: lastCandidate?.safetyRatings,
-          },
-        ];
+        if (!lastChunk.promptFeedback && promptFeedback) {
+          lastChunk.promptFeedback = promptFeedback;
+        }
+        if (!lastChunk.usageMetadata && finalUsage) {
+          lastChunk.usageMetadata = finalUsage;
+        }
+        if (!lastChunk.responseId && responseId) {
+          lastChunk.responseId = responseId;
+        }
+        if (!lastChunk.createTime && createTime) {
+          lastChunk.createTime = createTime;
+        }
+        if (!lastChunk.modelVersion && modelVersion) {
+          lastChunk.modelVersion = modelVersion;
+        }
 
-        const finalReasoning = this.processThinkingBlock(finalResponse);
+        const finalReasoning = this.processThinkingBlock(lastChunk);
         thinking.finalize(finalReasoning ?? undefined);
-        const finalOutput = fullParts
-          .filter((p: any) => typeof p.text === 'string' && !(p as any).thought)
-          .map((p: any) => p.text)
-          .join('');
-        if (output) output.finalize(finalOutput);
-        return finalResponse;
+        if (output) output.finalize(lastChunk.text ?? '');
+        return lastChunk;
       }
 
       const sendParams: SendMessageParameters = {
