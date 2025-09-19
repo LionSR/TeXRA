@@ -162,7 +162,8 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
   Content,
   GenerateContentResponseUsageMetadata | null,
   OpenAIAPIResponseUsage,
-  FunctionCall
+  FunctionCall,
+  GoogleGenAI
 > {
   private googleClient: GoogleGenAI | null = null;
   async getClient(): Promise<GoogleGenAI> {
