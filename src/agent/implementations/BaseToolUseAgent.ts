@@ -7,6 +7,7 @@ import {
 } from '../core/AgentDataclass';
 import { ToolState } from '../core/ToolState';
 import { runToolUseCycle } from '../core/ToolUseCycle';
+import type { ToolUseCycleOptions } from '../core/ToolUseCycle';
 import type { IModelHandler } from '../modelHandlers';
 import type { ProviderMessage } from '../modelHandlers/types/ProviderMessage';
 import { getSystemPromptWithRules } from '../utils/promptHelpers';
@@ -28,7 +29,7 @@ import {
   type ToolUseSessionSnapshot,
 } from '@agent/toolUse/ToolUseSessionManager';
 
-export class BaseToolUseAgent extends BaseAgent {
+export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
   private toolRegistry: Record<string, BaseTool<any>>;
   private followUpQueue: string[] = [];
   private followUpResolver: ((v: string | null) => void) | null = null;
@@ -39,7 +40,7 @@ export class BaseToolUseAgent extends BaseAgent {
   private persistenceLock = false; // Lock to prevent race conditions during persistence
 
   constructor(
-    modelHandler: IModelHandler,
+    modelHandler: IModelHandler<any, any, any, any, C>,
     agentConfig: AgentConfig,
     agentSetting: AgentSetting,
     agentPrompt: AgentPrompt,
@@ -170,13 +171,14 @@ export class BaseToolUseAgent extends BaseAgent {
         tools: this.getTools(),
       };
 
-      const cycleOptions = {
+      const client = this.getClientInstance();
+      const cycleOptions: ToolUseCycleOptions<C> = {
         modelHandler: this.modelHandler,
         agentSetting: resolvedSetting,
         agentPrompt: this.agentPrompt,
         userVars: this.userVars,
         logger: this.logger,
-        client: this.client,
+        client,
         toolRegistry: this.toolRegistry,
         checkInterruption: () => this.checkInterruption(),
         setAbortController: (ctrl: AbortController | null) => {
