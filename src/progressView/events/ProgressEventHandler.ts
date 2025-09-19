@@ -13,6 +13,7 @@ import { ProgressViewState } from '../state/ProgressViewState';
 import { buildStreamInfos } from '../streamInfoUtils';
 import type { StreamTabInfo } from '../types';
 import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
+import { deriveAgentSessionKind } from '@agent/core/AgentDataclass';
 
 // Types
 import type { TokenUsageStats } from '@agent/types/UsageTypes';
@@ -256,6 +257,23 @@ export class ProgressEventHandler {
     const { streamTabId, executionId, taskState } = data;
 
     this.state.setTaskState(streamTabId, taskState);
+
+    const normalizedState = this.state.getTaskState(streamTabId);
+    const sessionKind =
+      normalizedState?.agentSessionKind ||
+      deriveAgentSessionKind(normalizedState?.agentType);
+    const currentFilter = this.state.agentTypeFilter;
+
+    if (
+      this.state.activeStream === streamTabId &&
+      currentFilter !== 'all' &&
+      currentFilter !== sessionKind
+    ) {
+      this.logger.debug(
+        `Adjusting agent filter from ${currentFilter} to ${sessionKind} for stream ${streamTabId}`,
+      );
+      this.state.agentTypeFilter = sessionKind;
+    }
 
     if (executionId) {
       this.state.setExecutionId(streamTabId, executionId);
