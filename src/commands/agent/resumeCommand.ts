@@ -24,6 +24,9 @@ import type { ExecutionId } from '@agent/types/IdentifierTypes';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import { MODEL_CONFIGS } from '@model/ModelRegistry';
 
+// Local imports - log
+import { getStreamTabId } from '@/logger/streamUtils';
+
 function isToolUseAgent(setting: AgentSetting): boolean {
   return setting.agentType === AgentType.ToolUse;
 }
@@ -74,6 +77,11 @@ async function buildToolUseAgent(
     agentPrompt as AgentPrompt,
     agentPath,
     snapshot.executionId as ExecutionId,
+    getStreamTabId(fullConfig.agent, fullConfig.model, fullConfig.inputFile, {
+      agentType: agentSetting.agentType,
+      executionId: snapshot.executionId as ExecutionId,
+      useMultipleOutputs: fullConfig.useMultipleOutputs,
+    }),
   );
 
   agent.resumeFromSnapshot(snapshot);

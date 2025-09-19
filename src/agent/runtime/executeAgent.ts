@@ -53,6 +53,7 @@ type AgentConstructor = {
     agentPrompt: AgentPrompt,
     agentPath: string,
     executionId?: ExecutionId,
+    streamTabId?: StreamTabId,
   ): IAgent;
 };
 
@@ -179,18 +180,9 @@ export async function executeAgentWithLogging<T extends IAgent>(
       await ensureRunDir(executionId);
     }
 
-    // Get the full stream tab ID
+    // Get the full stream tab ID from the agent instance
     const config = agent.config;
-    const streamTabId = getStreamTabId(
-      config.agent,
-      config.model,
-      config.inputFile,
-      {
-        agentType,
-        executionId,
-        useMultipleOutputs: config.useMultipleOutputs,
-      },
-    );
+    const streamTabId = agent.getStreamTabId();
 
     // Check if this stream is already running
     const provider = ProgressViewProvider.getInstance();
@@ -479,6 +471,16 @@ export async function executeAgent(
 
       // Get appropriate agent class and create instance
       const AgentClass = getAgentClass(agentSetting);
+      const streamTabId = getStreamTabId(
+        fullConfig.agent,
+        fullConfig.model,
+        fullConfig.inputFile,
+        {
+          agentType: agentSetting.agentType,
+          executionId,
+          useMultipleOutputs: fullConfig.useMultipleOutputs,
+        },
+      );
       const agent = new AgentClass(
         modelHandler,
         fullConfig,
@@ -486,6 +488,7 @@ export async function executeAgent(
         agentPrompt,
         agentPath,
         executionId,
+        streamTabId,
       );
       return { agent, agentType: agentSetting.agentType };
     },
@@ -540,12 +543,24 @@ export async function executeMergeAgent(
         'merge',
       );
 
+      const streamTabId = getStreamTabId(
+        agentConfig.agent,
+        agentConfig.model,
+        agentConfig.inputFile,
+        {
+          agentType: agentSetting.agentType,
+          executionId: undefined,
+          useMultipleOutputs: agentConfig.useMultipleOutputs,
+        },
+      );
       const agent = new MergeAgent(
         modelHandler,
         agentConfig,
         agentSetting,
         agentPrompt,
         agentPath,
+        undefined,
+        streamTabId,
       );
       return { agent, agentType: agentSetting.agentType };
     },

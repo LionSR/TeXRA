@@ -14,7 +14,7 @@ import { ToolState } from '@agent/core/ToolState';
 import { BaseAgent } from '@agent/implementations/BaseAgent';
 import type { IModelHandler } from '@agent/modelHandlers';
 import { OutputHandler, NamedOutputFile, IOutputHandler } from '@agent/output';
-import type { ExecutionId } from '@agent/types/IdentifierTypes';
+import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
 import { PromptBuilder } from '@agent/utils/PromptBuilder';
 import { writePromptToXml } from '@agent/utils/promptUtils';
 import { bus } from '@eventBus/ProgressEventBus';
@@ -77,6 +77,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     agentPrompt: AgentPrompt,
     agentPath: string,
     executionId?: ExecutionId,
+    streamTabId?: StreamTabId,
   ) {
     super(
       modelHandler,
@@ -85,6 +86,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       agentPrompt,
       agentPath,
       executionId,
+      streamTabId,
     );
 
     // Initialize basic attributes

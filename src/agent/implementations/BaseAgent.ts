@@ -35,6 +35,7 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
   protected isInterrupted = false;
   protected abortController: AbortController | null = null;
   protected executionId?: ExecutionId;
+  protected streamTabId: StreamTabId;
 
   private static runningAgents: Map<string, BaseAgent> = new Map();
 
@@ -49,6 +50,7 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
     agentPrompt: AgentPrompt,
     agentPath: string,
     executionId?: ExecutionId,
+    streamTabId?: StreamTabId,
   ) {
     this.modelHandler = modelHandler;
     this.agentConfig = agentConfig;
@@ -57,8 +59,20 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
     this.agentPath = agentPath;
     this.executionId = executionId;
 
-    const streamTabId = this.getStreamTabId();
-    this.logger = new AgentLogger(streamTabId, true);
+    this.streamTabId =
+      streamTabId ??
+      buildStreamTabId(
+        this.agentConfig.agent,
+        this.agentConfig.model,
+        this.agentConfig.inputFile,
+        {
+          agentType: this.agentSetting.agentType,
+          executionId: this.executionId,
+          useMultipleOutputs: this.agentConfig.useMultipleOutputs,
+        },
+      );
+
+    this.logger = new AgentLogger(this.streamTabId, true);
     this.modelHandler.setLogger(this.logger);
     this.usageMonitor = new UsageMonitor(
       this.modelHandler,
@@ -82,17 +96,8 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
   }
 
   /** Compute the stream tab identifier for this agent execution. */
-  protected getStreamTabId(): StreamTabId {
-    return buildStreamTabId(
-      this.agentConfig.agent,
-      this.agentConfig.model,
-      this.agentConfig.inputFile,
-      {
-        agentType: this.agentSetting.agentType,
-        executionId: this.executionId,
-        useMultipleOutputs: this.agentConfig.useMultipleOutputs,
-      },
-    );
+  public getStreamTabId(): StreamTabId {
+    return this.streamTabId;
   }
 
   /** Gather variables used for prompt rendering. */
@@ -132,7 +137,7 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
       );
 
       this.userVars = await this.getUserVars();
-      BaseAgent.runningAgents.set(this.getStreamTabId(), this);
+      BaseAgent.runningAgents.set(this.streamTabId, this);
 
       if (createGroup && initGroupId) {
         this.logger.endGroup(initGroupId, 'stopped');
@@ -238,8 +243,7 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
   }
 
   protected cleanup(): void {
-    const streamTabId = this.getStreamTabId();
-    BaseAgent.runningAgents.delete(streamTabId);
+    BaseAgent.runningAgents.delete(this.streamTabId);
   }
 
   abstract run(): Promise<void>;

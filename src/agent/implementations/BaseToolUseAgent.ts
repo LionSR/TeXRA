@@ -22,7 +22,7 @@ import { BaseAgent } from './BaseAgent';
 import type { ToolDefinition } from '@model';
 import { BaseTool } from '@tools/core/base';
 import { DEFAULT_TOOL_REGISTRY } from '@tools/registry';
-import type { ExecutionId } from '@agent/types/IdentifierTypes';
+import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
 import { bus } from '@eventBus/ProgressEventBus';
 import {
   ToolUseSessionManager,
@@ -46,6 +46,7 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
     agentPrompt: AgentPrompt,
     agentPath: string,
     executionId?: ExecutionId,
+    streamTabId?: StreamTabId,
   ) {
     super(
       modelHandler,
@@ -54,6 +55,7 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
       agentPrompt,
       agentPath,
       executionId,
+      streamTabId,
     );
     this.toolRegistry = DEFAULT_TOOL_REGISTRY;
   }
