@@ -3,7 +3,11 @@ import { Buffer } from 'node:buffer';
 
 // Third-party imports
 import OpenAI, { toFile } from 'openai';
-import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
+import type {
+  ChatCompletionMessageParam,
+  ChatCompletionAssistantMessageParam,
+  ChatCompletionToolMessageParam,
+} from 'openai/resources/chat/completions';
 import type {
   Response,
   ResponseUsage,
@@ -560,34 +564,40 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
     result: Record<string, unknown>,
     _toolState?: ToolState,
     text?: string,
-  ): (ResponseInputItem | ChatCompletionMessageParam)[] {
-    const messages: (ResponseInputItem | ChatCompletionMessageParam)[] = [];
-    if (text) {
-      messages.push({ role: 'assistant', content: [{ type: 'text', text }] });
-    }
+  ): [ChatCompletionAssistantMessageParam, ChatCompletionToolMessageParam] {
     const callId = call.call_id ?? id;
     const rawArguments = call.arguments as unknown;
     const args =
       typeof rawArguments === 'string'
         ? rawArguments
         : JSON.stringify(rawArguments ?? {});
-    const callMsg: ResponseFunctionToolCall = {
-      type: 'function_call',
-      call_id: callId,
-      name: call.name ?? name,
-      arguments: args,
-      id: call.id ?? callId,
+
+    // Create assistant message with tool call
+    const assistantMsg: ChatCompletionAssistantMessageParam = {
+      role: 'assistant',
+      tool_calls: [
+        {
+          id: callId,
+          type: 'function' as const,
+          function: {
+            name: call.name ?? name,
+            arguments: args,
+          },
+        },
+      ],
     };
-    if ('status' in call && call.status) {
-      callMsg.status = call.status;
+    if (text) {
+      assistantMsg.content = text;
     }
-    const resultMsg: ResponseInputItem.FunctionCallOutput = {
-      type: 'function_call_output',
-      call_id: callId,
-      output: JSON.stringify(result),
+
+    // Create tool result message
+    const toolMsg: ChatCompletionToolMessageParam = {
+      role: 'tool',
+      tool_call_id: callId,
+      content: JSON.stringify(result),
     };
-    messages.push(callMsg, resultMsg);
-    return messages;
+
+    return [assistantMsg, toolMsg];
   }
 
   async createUserFollowUpMessages(
