@@ -437,22 +437,35 @@ export class LogEntryFormatter {
     if (groupId) element.dataset.groupId = groupId;
     if (timestamp) element.dataset.fullTimestamp = timestamp;
 
+    const headerLabel = element.querySelector('.tool-use-title');
+    if (headerLabel) {
+      headerLabel.textContent = 'Tool Use';
+    }
+
     let formattedContent;
     try {
       // Decode HTML entities before parsing - log messages are encoded in transport
       const decodedContent = decodeHtml(content);
       const parsed = JSON.parse(decodedContent);
 
+      const toolName =
+        typeof parsed.tool === 'string'
+          ? parsed.tool.trim()
+          : typeof parsed.name === 'string'
+            ? parsed.name.trim()
+            : '';
+      if (headerLabel && toolName) {
+        headerLabel.textContent = `Tool Use: ${toolName}`;
+      }
+
       // Check if this is the new combined format
       if (parsed.tool && parsed.input && parsed.output) {
         // Format combined tool input/output
-        const toolName = parsed.tool;
         const inputJson = JSON.stringify(parsed.input, null, 2);
         const outputJson = JSON.stringify(parsed.output, null, 2);
 
         formattedContent = `
           <div class="tool-use-section">
-            <div class="tool-use-label">${toolName}</div>
             <div class="tool-use-subsection">
               <span class="tool-use-sublabel">Input:</span>
               <pre>${inputJson}</pre>

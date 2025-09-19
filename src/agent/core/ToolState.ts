@@ -21,6 +21,7 @@ export interface IToolState {
   updateLastResponse(response: string): void;
   updateAccumulatedOutput(output: string): void;
   addMediaFiles(files: string[]): void;
+  resetThinkingCache(): void;
 }
 
 /** Manages tool-specific runtime state and operations within a conversation round. */
@@ -71,5 +72,14 @@ export class ToolState implements IToolState {
    */
   addMediaFiles(files: string[]): void {
     this.mediaFiles.push(...files);
+  }
+
+  /**
+   * Resets the thinking cache by clearing thinking blocks and reset flag.
+   * Used to ensure fresh thinking blocks for subsequent responses.
+   */
+  resetThinkingCache(): void {
+    this.thinkingBlocks = [];
+    this.thinkingAdded = false;
   }
 }
