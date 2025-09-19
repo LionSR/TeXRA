@@ -2,11 +2,12 @@
 // (none needed)
 
 // Third-party imports
+import { FinishReason } from '@google/genai';
 import OpenAI from 'openai';
 import type { CompletionUsage } from 'openai/resources/completions';
 
 // Local imports - agent
-import { hasEndTag } from '../core/AgentDataclass';
+import { AgentSetting, hasEndTag } from '../core/AgentDataclass';
 import {
   OpenAIAPIResponseUsage,
   GenerateContentResponseUsageMetadata,
@@ -14,7 +15,15 @@ import {
 
 // Local imports - agent components
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
+import { OPENAI_CHAT_FINISH } from './types/StopReasonTypes';
 import type { ProviderStopReason } from './types/StopReasonTypes';
+
+// Token limit stop reasons reported by Google's OpenAI-compatible API.
+const TOKEN_LIMIT_REASONS = new Set<string>([
+  OPENAI_CHAT_FINISH.LENGTH.toLowerCase(),
+  'max_tokens',
+  'maxtokens',
+]);
 
 /**
  * Handler for Google models using OpenAI-compatible API.
@@ -89,12 +98,35 @@ export class ModelHandlerGoogle extends ModelHandlerOpenAI {
     return super.computeResponseUsage(normalized, responseTime);
   }
 
-  /** Determines if generation should continue based on response content. */
+  /**
+   * Determines if generation should continue based on response content and stop reason.
+   * Google surfaces FinishReason.MAX_TOKENS when output truncates; we only continue when
+   * that happens before the agent's closing tag has been emitted.
+   */
   shouldContinue(
     stopReason: ProviderStopReason,
     newResponse: string,
-    agentSetting: any,
+    agentSetting: AgentSetting,
   ): boolean {
-    return !hasEndTag(agentSetting, newResponse);
+    const containsEndTag = hasEndTag(agentSetting, newResponse);
+    const normalizedStopReason =
+      typeof stopReason === 'string' ? stopReason.toLowerCase() : undefined;
+
+    const hitTokenLimit =
+      stopReason === FinishReason.MAX_TOKENS ||
+      (normalizedStopReason !== undefined &&
+        TOKEN_LIMIT_REASONS.has(normalizedStopReason));
+
+    if (hitTokenLimit && !containsEndTag) {
+      this.logger.debug(
+        `Continuing generation: stopReason='${stopReason}' hit token limit before end tag '${agentSetting.endTag}'.`,
+      );
+      return true;
+    }
+
+    this.logger.debug(
+      `Stopping generation: stopReason='${stopReason}', hitTokenLimit=${hitTokenLimit}, hasEndTag=${containsEndTag}.`,
+    );
+    return false;
   }
 }
