@@ -72,6 +72,7 @@ When updating CHANGELOG.md:
 - Normalize UI payloads with `objectToTaskState` / `agentConfigToTaskState` from `@utils/config/configConversion`, which also derive `AgentSessionKind` metadata.
 - Build prompts with `PromptBuilder` and `getSystemPromptWithRules` (`src/agent/utils/PromptBuilder.ts`, `src/agent/utils/promptHelpers.ts`) instead of duplicating reflection logic.
 - Classify sessions using `AgentSessionKind` and compute stream identifiers with `getStreamTabId` (`src/agent/core/AgentDataclass.ts`, `src/logger/streamUtils.ts`) to keep workflow and tool-use tabs distinct.
+- `ModelHandlerOpenAIResponse` intentionally omits stop sequences; do not pass `stop` parameters into it. Downstream post-processing is responsible for appending any required end tags.
 - Persist interactive runs with `ToolUseSessionManager` (`src/agent/toolUse/ToolUseSessionManager.ts`) and launch/resume executions via `executeAgentWithLogging` (`src/agent/runtime/executeAgent.ts`) so session filters, run directories, and resume actions stay synchronized.
 - Add new model handlers under `src/agent/modelHandlers/`, export them through the index, and register capabilities/pricing in `src/model/ModelRegistry.ts`.
 
@@ -80,6 +81,7 @@ When updating CHANGELOG.md:
 - Generate HTML through `BaseViewContentProvider` (`src/common/webview/BaseViewContentProvider.ts`) and `buildWebviewHtml` (`src/frontend/webview/html.ts`). Extend `BaseViewMessageHandler` and `BaseDomHandler` for consistent lifecycle management across views.
 - Register webview message handlers with `registerMessageHandlers` (`src/common/modules/webviewContext.js`). When adding UI managers (e.g., under `src/webview/modules/uiManagers/` or `src/progressView/modules/uiManagers/`), expose their URIs in the relevant content provider and import map.
 - Use codicon-based controls and the shared helpers in `src/common/modules/` (`iconButtonInitializer`, `templateUtils`, `domUtils`, `stringUtils`, `pathUtils`, `webviewState`, `themeHandlers`) alongside `src/webview/modules/pasteHandler.js` for consistent interactions.
+- Escape any string that will be injected into HTML with `encodeHtml` before insertion. Only decode persisted log text with `decodeHtml` right before trusted parsing or rendering to avoid double-encoding.
 - Map every module dependency in the import map, including transitives, and generate URIs via helper methods (`getHistoryViewUri`, `getCommonUri`, etc.). Missing entries will prevent modules from loading in the sandboxed webview.
 - For webview dependencies, prefer CDN builds (jsdelivr for static assets, esm.sh for ES modules) for complex packages like markdown-it, KaTeX, or highlight.js, while keeping lightweight bundles (split.js, `@vscode/codicons`) local to reduce extension size.
 - Keep CSS modular (per-component styles in `src/progressView/styles`, shared tokens in `src/common/styles/common.css`) and use codicon chevrons (e.g., `<i class="codicon codicon-chevron-down"></i>`) for toggle affordances.
@@ -87,6 +89,7 @@ When updating CHANGELOG.md:
 **Progress view**
 
 - Extend the existing managers coordinated by `ProgressViewDomHandler` (`src/progressView/modules/domHandlers.js`). `StreamTabs`, `Toolbar`, `UsageSummary`, `UsageGroup`, `TaskGroupManager`, and `LogEntryManager` own their respective UI surfaces—augment them rather than manipulating the DOM directly.
+- The state containers (`TaskGroups`, `ToggleStates`, etc.) expose focused accessors (`get`, `set`, `update`). Interact with them through those methods instead of adding pass-through helpers that duplicate existing behavior.
 - Tool-use and workflow sessions surface in separate filters; continue emitting usage, status, and log events through the established progress event commands so filters, counts, and badges update automatically.
 
 **Error handling and types**
