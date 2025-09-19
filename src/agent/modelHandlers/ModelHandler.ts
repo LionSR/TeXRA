@@ -77,7 +77,8 @@ export abstract class ModelHandler<
   M extends ProviderMessage = ProviderMessage,
   U = any,
   R = any,
-> implements IModelHandler<M, U, R>
+  C = unknown,
+> implements IModelHandler<M, U, R, C>
 {
   public config: ModelConfig;
   public capabilities: ModelCapabilities;
@@ -927,7 +928,7 @@ export abstract class ModelHandler<
   abstract createToolUseFollowUpMessages(
     id: string,
     name: string,
-    call: any,
+    call: C,
     result: Record<string, unknown>,
     toolState?: ToolState,
     text?: string,
