@@ -687,11 +687,12 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     const candidate = responseObject.candidates[0];
 
     const rawResponseText = responseObject.text;
-    if (rawResponseText === undefined) {
-      this.logger.warn(
-        'Candidate content or parts missing in response object.',
-      );
-    }
+    // if (rawResponseText === undefined) {
+    //   this.logger.warn(
+    //     'Candidate content or parts missing in response object.',
+    //   );
+    // }
+    // For TOOL CALL ONLY RESPONSE this happens sometimes, we don't want to log it
     let responseText = replacementEngine.applyAll(
       (rawResponseText ?? '').trim(),
     );

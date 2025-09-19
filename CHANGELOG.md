@@ -6,6 +6,8 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
+- Add workspace-aware `glob`, `grep`, and `ls` tools to the default registry and chat agent so every workflow can inspect files safely
+
 ### Bug Fixes
 
 ### Improvements
