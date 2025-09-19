@@ -55,50 +55,33 @@ import { K_SLICE } from '@utils/config';
 import { WorkspaceFS, AbsoluteFS, getMimeType } from '@utils/files';
 import xmlUtils from '@utils/text/xmlUtils';
 
-// Internal type definition
-type InternalMessagePart = {
-  type: 'text' | 'file_uri' | string;
-  text?: string;
-  uri?: string;
-  mimeType?: string;
-};
-
-// For the Message interface, I kept a simple version because:
-// 1. Google's Content type has role?: string (optional), while our internal messages always have a role
-// 2. Google's Content uses parts?: Part[] while our internal structure uses content: string | InternalMessagePart[]
-
-// Define a message interface that matches our internal structure
-// but is compatible with Google's Content type
-interface Message {
-  role: string;
-  content?: string | InternalMessagePart[]; // Used for internal message representation
-  parts?: Part[]; // Used for Google-specific message format when sending to API
+// Helper function
+function normalizeRole(
+  role: string | undefined,
+  logger: AgentLogger,
+): 'user' | 'model' | null {
+  if (role === 'user') {
+    return 'user';
+  }
+  if (role === 'model' || role === 'assistant') {
+    return 'model';
+  }
+  if (role) {
+    logger.warn(`Skipping message with unsupported role '${role}'.`);
+  }
+  return null;
 }
 
-// Helper function
-function convertInternalPartsToGoogleParts(
-  internalParts: InternalMessagePart[],
-  logger: AgentLogger,
-): Part[] {
-  return internalParts
-    .map((part: InternalMessagePart): Part | null => {
-      if (part.type === 'text' && typeof part.text === 'string') {
-        return createPartFromText(part.text);
-      } else if (part.type === 'file_uri' && part.uri && part.mimeType) {
-        return createPartFromUri(part.uri, part.mimeType);
-      } else {
-        logger.warn(
-          `Skipping unsupported internal part type for sendMessage: ${JSON.stringify(part)}`,
-        );
-        return null;
-      }
-    })
-    .filter((part: Part | null): part is Part => part !== null);
+function sanitizeParts(parts: Part[] | undefined): Part[] {
+  if (!Array.isArray(parts)) {
+    return [];
+  }
+  return parts.filter((part): part is Part => Boolean(part));
 }
 
 // Helper function
 function convertMessagesToGoogleContentHistory(
-  messages: Message[],
+  messages: Content[],
   logger: AgentLogger,
 ): Content[] {
   const history: Content[] = [];
@@ -106,33 +89,18 @@ function convertMessagesToGoogleContentHistory(
   let currentParts: Part[] = [];
 
   messages.forEach((msg) => {
-    const role =
-      msg.role === 'assistant' ? 'model' : msg.role === 'user' ? 'user' : null;
-    if (!role) return;
-
-    let parts: Part[] = [];
-    if (Array.isArray(msg.parts)) {
-      parts = msg.parts;
-    } else if (Array.isArray(msg.content)) {
-      parts = msg.content
-        .map((part: InternalMessagePart): Part | null => {
-          if (part.type === 'text' && typeof part.text === 'string') {
-            return createPartFromText(part.text);
-          } else if (part.type === 'file_uri' && part.uri && part.mimeType) {
-            return createPartFromUri(part.uri, part.mimeType);
-          } else {
-            logger.warn(
-              `Skipping unsupported internal part type for history conversion: ${JSON.stringify(part)}`,
-            );
-            return null;
-          }
-        })
-        .filter((part: Part | null): part is Part => part !== null);
-    } else if (typeof msg.content === 'string') {
-      parts = [createPartFromText(msg.content)];
+    const role = normalizeRole(msg.role, logger);
+    if (!role) {
+      return;
     }
 
-    if (parts.length === 0) return;
+    const parts = sanitizeParts(msg.parts);
+    if (parts.length === 0) {
+      logger.debug(
+        `Skipping message with role '${msg.role ?? 'unknown'}' due to missing parts during history conversion.`,
+      );
+      return;
+    }
 
     if (role === currentRole) {
       currentParts.push(...parts);
@@ -141,7 +109,7 @@ function convertMessagesToGoogleContentHistory(
         history.push({ role: currentRole, parts: currentParts });
       }
       currentRole = role;
-      currentParts = parts;
+      currentParts = [...parts];
     }
   });
 
@@ -186,7 +154,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
   /** Creates a chat completion response using Google's GenAI API with specified parameters and optional system prompt. */
   async createResponse(
     client: GoogleGenAI,
-    messages: Message[],
+    messages: Content[],
     temperature: number,
     systemPrompt?: string,
     endTag?: string,
@@ -201,6 +169,15 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     const historyMessages = messages.slice(0, -1);
     const lastMessage = messages.at(-1);
 
+    if (
+      lastMessage?.role &&
+      normalizeRole(lastMessage.role, this.logger) !== 'user'
+    ) {
+      this.logger.warn(
+        `Expected last message role to be 'user' but received '${lastMessage.role}'. Continuing with sendMessage request.`,
+      );
+    }
+
     // chatHistory intentionally excludes the final user message because
     // we send it separately with `chat.sendMessage` below
 
@@ -209,19 +186,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       this.logger,
     );
 
-    let lastMessageParts: Part[] = [];
-    if (lastMessage) {
-      if (Array.isArray(lastMessage.parts)) {
-        lastMessageParts = lastMessage.parts;
-      } else if (Array.isArray(lastMessage.content)) {
-        lastMessageParts = convertInternalPartsToGoogleParts(
-          lastMessage.content,
-          this.logger,
-        );
-      } else if (typeof lastMessage.content === 'string') {
-        lastMessageParts = [createPartFromText(lastMessage.content)];
-      }
-    }
+    const lastMessageParts = sanitizeParts(lastMessage?.parts);
     if (lastMessageParts.length === 0) {
       this.logger.error('Could not extract valid parts from the last message.');
       throw new Error('Last message conversion resulted in empty parts.');
@@ -427,11 +392,9 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     userRequest: string,
     mediaFiles?: string[],
     systemPrompt?: string,
-  ): Promise<any[]> {
+  ): Promise<Content[]> {
     const client = await this.getClient();
-    const userContentParts: InternalMessagePart[] = [
-      { type: 'text', text: userPrefix },
-    ];
+    const userContentParts: Part[] = [createPartFromText(userPrefix)];
 
     if (
       mediaFiles &&
@@ -478,15 +441,23 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
             `Uploaded ${mediaFile}, URI: ${uploadResult.uri}, MimeType: ${uploadResult.mimeType}`,
           );
 
-          userContentParts.push({
-            type: 'text',
-            text: `\nFile attached: ${path.basename(mediaFile)}`,
-          });
-          userContentParts.push({
-            type: 'file_uri',
-            uri: uploadResult.uri,
-            mimeType: uploadResult.mimeType,
-          });
+          if (!uploadResult.uri) {
+            this.logger.error(
+              `Upload result for file ${mediaFile} is missing a URI. Skipping file.`,
+            );
+            mediaFileResults.push({ path: mediaFile, ok: false });
+            continue;
+          }
+
+          userContentParts.push(
+            createPartFromText(`\nFile attached: ${path.basename(mediaFile)}`),
+          );
+          userContentParts.push(
+            createPartFromUri(
+              uploadResult.uri,
+              uploadResult.mimeType ?? explicitMimeType,
+            ),
+          );
           mediaFileResults.push({ path: mediaFile, ok: true });
         } catch (error) {
           this.logger.error(
@@ -507,9 +478,9 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       }
     }
 
-    userContentParts.push({ type: 'text', text: `\n${userRequest}` });
+    userContentParts.push(createPartFromText(`\n${userRequest}`));
 
-    return [{ role: 'user', content: userContentParts }];
+    return [{ role: 'user', parts: userContentParts }];
   }
 
   private determineMimeType(filePath: string): string | null {
@@ -533,12 +504,12 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
 
   /** Creates message array for subsequent rounds, managing image content and message structure. */
   async createRoundMessages(
-    messages: Message[],
+    messages: Content[],
     userMessage: string,
     mediaFiles?: string[],
-  ): Promise<Message[]> {
+  ): Promise<Content[]> {
     const client = await this.getClient();
-    const roundParts: InternalMessagePart[] = [];
+    const roundParts: Part[] = [];
 
     if (
       mediaFiles &&
@@ -594,15 +565,17 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
             continue;
           }
 
-          roundParts.push({
-            type: 'text',
-            text: `\nProcessing file: ${path.basename(mediaFile)}`,
-          });
-          roundParts.push({
-            type: 'file_uri',
-            uri: uploadResult.uri,
-            mimeType: uploadResult.mimeType,
-          });
+          roundParts.push(
+            createPartFromText(
+              `\nProcessing file: ${path.basename(mediaFile)}`,
+            ),
+          );
+          roundParts.push(
+            createPartFromUri(
+              uploadResult.uri,
+              uploadResult.mimeType ?? explicitMimeType,
+            ),
+          );
           mediaFileResults.push({ path: mediaFile, ok: true });
         } catch (error) {
           this.logger.error(
@@ -623,16 +596,16 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       }
     }
 
-    roundParts.push({ type: 'text', text: userMessage });
+    roundParts.push(createPartFromText(userMessage));
 
-    messages.push({ role: 'user', content: roundParts });
+    messages.push({ role: 'user', parts: roundParts });
     return messages;
   }
 
   async createUserFollowUpMessages(
-    messages: Message[],
+    messages: Content[],
     userMessage: string,
-  ): Promise<Message[]> {
+  ): Promise<Content[]> {
     messages.push({
       role: 'user',
       parts: [createPartFromText(userMessage)],
@@ -640,7 +613,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     return messages;
   }
 
-  createAssistantMessage(text: string): Message {
+  createAssistantMessage(text: string): Content {
     return { role: 'model', parts: [createPartFromText(text)] };
   }
 
@@ -769,7 +742,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
   }
 
   addContinueMessageWithoutPrefill(
-    messages: Message[],
+    messages: Content[],
     _stateRound: AgentStateRound,
     toolState: ToolState,
     agentSetting: AgentSetting,
@@ -780,7 +753,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     this.logger.debug(`Adding continuation message.`);
     messages.push({
       role: 'user',
-      content: [{ type: 'text', text: userMessageContinuation }],
+      parts: [createPartFromText(userMessageContinuation)],
     });
   }
 
@@ -791,7 +764,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
   }
 
   updateMessageContentWithoutPrefill(
-    messages: Message[],
+    messages: Content[],
     bestConnector: string,
     newResponse: string,
     toolState: ToolState,
@@ -802,51 +775,46 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     const lastMessage = messages.at(-1);
     if (
       lastMessage?.role === 'user' &&
-      lastMessage.content &&
-      this.containCutOffMessage(lastMessage.content)
+      Array.isArray(lastMessage.parts) &&
+      this.containCutOffMessage(lastMessage.parts)
     ) {
       messages.pop();
       this.logger.debug('Removed user continuation prompt.');
     }
 
     const modelMessage = messages.at(-1);
-    if (modelMessage?.role === 'assistant') {
-      if (Array.isArray(modelMessage.content)) {
-        let lastTextPart = null;
-        for (let i = modelMessage.content.length - 1; i >= 0; i--) {
-          if (
-            modelMessage.content[i] &&
-            modelMessage.content[i].type === 'text'
-          ) {
-            lastTextPart = modelMessage.content[i];
+    if (modelMessage?.role === 'model') {
+      if (Array.isArray(modelMessage.parts)) {
+        let lastTextPart: Part | null = null;
+        for (let i = modelMessage.parts.length - 1; i >= 0; i--) {
+          const candidatePart = modelMessage.parts[i];
+          if (candidatePart && typeof candidatePart.text === 'string') {
+            lastTextPart = candidatePart;
             break;
           }
         }
         if (lastTextPart) {
           lastTextPart.text =
-            (lastTextPart.text || '') + bestConnector + newResponse;
+            (lastTextPart.text ?? '') + bestConnector + newResponse;
         } else {
-          modelMessage.content.push({
-            type: 'text',
-            text: bestConnector + newResponse,
-          });
+          modelMessage.parts.push(
+            createPartFromText(bestConnector + newResponse),
+          );
           this.logger.warn(
             'Added new text part to last model message as none existed.',
           );
         }
       } else {
-        modelMessage.content = [
-          { type: 'text', text: toolState.accumulatedOutput },
-        ];
+        modelMessage.parts = [createPartFromText(toolState.accumulatedOutput)];
         this.logger.error(
-          'Last model message content was not an array. Resetting content.',
+          'Last model message parts were not an array. Resetting parts.',
         );
       }
     } else {
       this.logger.debug('Adding new model message for the response.');
       messages.push({
-        role: 'assistant',
-        content: [{ type: 'text', text: toolState.accumulatedOutput }],
+        role: 'model',
+        parts: [createPartFromText(toolState.accumulatedOutput)],
       });
     }
   }
@@ -854,12 +822,12 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
   async initializeOutputAndPrefill(
     agentConfig: AgentConfig,
     agentSetting: AgentSetting,
-    messages: Message[],
+    messages: Content[],
     toolState: ToolState,
     outputFile: string,
     prefill: string,
     groupId?: string,
-  ): Promise<[boolean, Message[]]> {
+  ): Promise<[boolean, Content[]]> {
     let endTurn = false;
     this.logger.debug(
       `Initializing output and prefill for ${outputFile}. Prefill content: "${prefill.slice(0, 100)}..."`,
@@ -876,15 +844,15 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       const pseudoPrefillMsg = `Organize your response with XML tags. Start your response with:\n${prefill}`;
 
       if (lastMessage) {
-        if (Array.isArray(lastMessage.content)) {
-          lastMessage.content.push({ type: 'text', text: pseudoPrefillMsg });
+        if (Array.isArray(lastMessage.parts) && lastMessage.parts.length > 0) {
+          lastMessage.parts.push(createPartFromText(pseudoPrefillMsg));
         } else {
-          lastMessage.content = [{ type: 'text', text: pseudoPrefillMsg }];
+          lastMessage.parts = [createPartFromText(pseudoPrefillMsg)];
         }
       } else {
         messages.push({
-          role: 'assistant',
-          content: [{ type: 'text', text: pseudoPrefillMsg }],
+          role: 'model',
+          parts: [createPartFromText(pseudoPrefillMsg)],
         });
       }
 
@@ -910,11 +878,11 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     await WorkspaceFS.write(outputFile, fileContent);
     this.logger.debug(`Cleaned and saved existing content to ${outputFile}.`);
     messages.push({
-      role: 'assistant',
-      content: [{ type: 'text', text: fileContent }],
+      role: 'model',
+      parts: [createPartFromText(fileContent)],
     });
     this.logger.debug(
-      `Added existing file content to messages as 'assistant' role.`,
+      `Added existing file content to messages as 'model' role.`,
     );
 
     if (hasEndTag(agentSetting, fileContent)) {
@@ -1063,7 +1031,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       callParts.push(createPartFromText(text));
     }
     callParts.push(callPart);
-    const callMsg: Content = { role: 'assistant', parts: callParts };
+    const callMsg: Content = { role: 'model', parts: callParts };
     const resultMsg: Content = { role: 'user', parts: [resultPart] };
     return [callMsg, resultMsg];
   }
