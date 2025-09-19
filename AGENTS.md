@@ -16,6 +16,7 @@ When updating CHANGELOG.md:
 1. **Install dependencies**: run `npm install` if needed.
 2. **Run checks before committing**:
    - Format code using `npm run format`.
+   - Build the extension bundle with `npm run compile` to ensure the webpack build succeeds.
    - Lint TypeScript sources with `npm run lint`.
    - Execute `npm test` to run the VS Code test suite when possible.
 3. Commit only when `npm run lint` completes without errors. If tests fail due to environment issues, note this in the PR.
@@ -32,77 +33,82 @@ When updating CHANGELOG.md:
 - Use the provided ESLint configuration (`eslint.config.mjs`) and Prettier settings (`.prettierrc`). Run `npm run format` before committing.
 - Prefer `const` and `let` over `var`.
 - Group imports by source and prefix each block with a descriptive comment (e.g., `// Third-party imports`, `// Local imports - component`).
+- Use the path aliases defined in `tsconfig.json` (for example `@frontend/*`, `@common/*`, `@utils/*`) instead of long relative import chains.
 - Document functions with concise comments. Use JSDoc style for public APIs.
 - Keep functions small and focused; extract helpers or modules when logic becomes complex.
 - Keep the directory structure aligned among different webviews (webview, historyView, progressView). Use the same folder names for modules of the same type and functionality but in different webviews.
 - Place view-specific manager classes under each view's `managers` folder. For example, `WebviewUpdater.ts` lives in `src/progressView/managers/`.
 
+### Directory organization
+
+- `src/frontend/` contains extension-host utilities that power shared UI flows (agent directories, file listers, instruction banners, tool workflows). Prefer these helpers over duplicating logic in commands or webviews.
+- `src/common/` holds backend-only helpers (errors, state, files, base webview classes). Import them through the `@common/*` alias for clarity.
+- `src/utils/` is reserved for utilities used by both the extension host and webviews. If a helper is specific to one side, place it under `frontend/` or `common/` instead of `utils/`.
+
+### Pragmatic implementations
+
+- Favor solutions that are readable and straightforward over exhaustive edge-case handling.
+- Avoid over-engineering and unnecessary abstractions when a direct approach communicates intent better.
+- Keep generated code tight: trim redundant helpers, repeated type checks, or defensive guards that do not serve a demonstrated scenario.
+- Prefer improving existing structures incrementally instead of rewriting modules unless there is a clear, documented benefit.
+
 ### Patterns across the codebase
 
-- Use `getConfig` from `src/utils/configUtils` to read extension settings rather than calling `vscode.workspace.getConfiguration` directly.
-- For any filesystem access tied to the workspace, use helpers in `src/utils/workspaceFileUtils.ts`. These utilities automatically handle workspace-relative paths and use the VS Code `fs` APIs.
-- Use `src/utils/files/storageFS.ts` for workspace and global storage (temporary assets like pasted images).
-- These helpers also provide cleanup methods to remove old files (pasted images are deleted after three days).
-- Generate names and resolve paths for pasted images through `src/utils/files/pastedImageUtils.ts`.
-- Interact with the logging system via `src/logger/logUtils`. Create a channel-specific logger with `logger.initialize(CHANNEL)` and log messages with `logger.info`, `logger.debug`, etc. Use `startGroup` and `endGroup` for nested log blocks.
-- Always supply structured data via the `data` argument for specialized messages (file lists, missing outputs, latexdiff, statistics). Avoid JSON parsing fallbacks in the ProgressView.
-- When executing external commands, prefer `executeCommand` from `src/utils/execUtils.ts` so that output is captured and routed through the logger.
-- Convert serialized objects into `TaskState` using `objectToTaskState` from `src/utils/configConversion.ts`. This applies default values such as the `sonnet4T` model.
-- Model handlers for each provider live under `src/agent/modelHandlers`. Add new handlers there and export them via `src/agent/modelHandlers/index.ts`.
-- When targeting the OpenAI Responses API, use `ModelHandlerOpenAIResponse`. This API does not support stop sequences, so handle any end-tag logic in post-processing.
+**Configuration, storage, and workspace files**
+
+- Use `getConfig`, `updateConfig`, and `watchConfig` from `@utils/config` to read and react to settings changes.
+- Interact with the filesystem through `@utils/files` helpers (`WorkspaceFS`, `RelativeFS`, `StorageFS`, `GlobalStorageFS`, `AbsoluteFS`). They resolve workspace paths, manage global storage, and expose cleanup helpers like `StorageFS.cleanupOldFiles`.
+- Generate and resolve pasted-image paths with `@utils/files/pastedImageUtils` so temporary assets map correctly back to storage.
+- Surface files and agent directories through the shared frontend utilities (`fileLister` in `src/frontend/files/fileLister.ts`, `agentDirectories` in `src/frontend/agents/AgentDirectoryManager.ts`) instead of duplicating discovery logic.
+
+**Logging and telemetry**
+
+- Route logging through `@logger/logUtils`. Agent flows should wrap the logger with `AgentLogger` (`src/logger/AgentLogger.ts`) to get grouped output and tool-use aware channels.
+- Always pass structured payloads via the `data` argument (file lists, missing outputs, latexdiff results, usage statistics) so the progress view can render rich entries without custom parsing.
+- Publish progress updates with the event bus (`bus.emit`/`bus.on` from `src/eventBus/ProgressEventBus.ts`) and keep non-agent logs on the shared `TeXRA` output channel.
+
+**Agent execution and tool-use**
+
+- Implement new agents against `IAgent` (`src/agent/core/IAgent.ts`) and compose them via the factories in `src/agent/runtime`.
+- Normalize UI payloads with `objectToTaskState` / `agentConfigToTaskState` from `@utils/config/configConversion`, which also derive `AgentSessionKind` metadata.
+- Build prompts with `PromptBuilder` and `getSystemPromptWithRules` (`src/agent/utils/PromptBuilder.ts`, `src/agent/utils/promptHelpers.ts`) instead of duplicating reflection logic.
+- Classify sessions using `AgentSessionKind` and compute stream identifiers with `getStreamTabId` (`src/agent/core/AgentDataclass.ts`, `src/logger/streamUtils.ts`) to keep workflow and tool-use tabs distinct.
+- Persist interactive runs with `ToolUseSessionManager` (`src/agent/toolUse/ToolUseSessionManager.ts`) and launch/resume executions via `executeAgentWithLogging` (`src/agent/runtime/executeAgent.ts`) so session filters, run directories, and resume actions stay synchronized.
+- Add new model handlers under `src/agent/modelHandlers/`, export them through the index, and register capabilities/pricing in `src/model/ModelRegistry.ts`.
+
+**Webviews and UI**
+
+- Generate HTML through `BaseViewContentProvider` (`src/common/webview/BaseViewContentProvider.ts`) and `buildWebviewHtml` (`src/frontend/webview/html.ts`). Extend `BaseViewMessageHandler` and `BaseDomHandler` for consistent lifecycle management across views.
+- Register webview message handlers with `registerMessageHandlers` (`src/common/modules/webviewContext.js`). When adding UI managers (e.g., under `src/webview/modules/uiManagers/` or `src/progressView/modules/uiManagers/`), expose their URIs in the relevant content provider and import map.
+- Use codicon-based controls and the shared helpers in `src/common/modules/` (`iconButtonInitializer`, `templateUtils`, `domUtils`, `stringUtils`, `pathUtils`, `webviewState`, `themeHandlers`) alongside `src/webview/modules/pasteHandler.js` for consistent interactions.
+- Map every module dependency in the import map, including transitives, and generate URIs via helper methods (`getHistoryViewUri`, `getCommonUri`, etc.). Missing entries will prevent modules from loading in the sandboxed webview.
+- For webview dependencies, prefer CDN builds (jsdelivr for static assets, esm.sh for ES modules) for complex packages like markdown-it, KaTeX, or highlight.js, while keeping lightweight bundles (split.js, `@vscode/codicons`) local to reduce extension size.
+- Keep CSS modular (per-component styles in `src/progressView/styles`, shared tokens in `src/common/styles/common.css`) and use codicon chevrons (e.g., `<i class="codicon codicon-chevron-down"></i>`) for toggle affordances.
+
+**Progress view**
+
+- Extend the existing managers coordinated by `ProgressViewDomHandler` (`src/progressView/modules/domHandlers.js`). `StreamTabs`, `Toolbar`, `UsageSummary`, `UsageGroup`, `TaskGroupManager`, and `LogEntryManager` own their respective UI surfaces—augment them rather than manipulating the DOM directly.
+- Tool-use and workflow sessions surface in separate filters; continue emitting usage, status, and log events through the established progress event commands so filters, counts, and badges update automatically.
+
+**Error handling and types**
+
+- Format and surface errors through `logErrorMessage`, `showLoggedErrorMessage`, and `showLoggedMessageWithDocs` in `src/common/errors/errorHandlingUtils.ts` for consistent telemetry and documentation links.
+- Keep shared type definitions colocated with their domains (`src/agent/types`, `src/logger/types`) and derive runtime-safe interfaces with `zod` plus `z.infer`.
+
+**Miscellaneous**
+
 - Maintain text cleanup rules in the `src/replacement` modules.
-- UI components rely on VS Code codicons for icons (see `src/progressView/index.html`). Stick to these built-in icons to maintain a native look and feel.
-- When toggling sections in webviews, use codicons for the chevron instead of plain characters. For a collapsed state,
-  render `<i class="codicon codicon-chevron-down"></i>`.
-- CSS for views is organized per component under `src/progressView/styles` with shared variables in `src/common/styles/common.css`. Follow this structure when adding new styles.
-- Execute VS Code commands with `safeExecuteCommand` from `src/utils/commandUtils.ts` to handle errors gracefully.
-- Register webview handlers using a command map and `registerMessageHandlers` from `src/common/modules/webviewContext.js`.
-- Use `setupPasteListener` from `src/webview/modules/pasteHandler.js` to enable clipboard image pasting in text areas.
-- Implement agents using the `IAgent` interface (`src/agent/IAgent.ts`) for a consistent lifecycle.
-- Track log groups with numeric timestamps using `addLogMessage` in `src/logger/logUtils.ts`.
-- Use the event bus (`bus.emit`/`bus.on` from `src/eventBus/ProgressEventBus.ts`) to publish and subscribe to progress updates instead of calling `ProgressViewProvider` methods directly.
-- Only agent streams appear in the ProgressView and get their own output channels. Other logs share the
-  consolidated `TeXRA` channel and are not persisted across sessions.
-- Update cumulative usage stats with `updateUsageSummary` in `src/progressView/modules/domHandlers.js`.
-- Prefer enums or union types over plain booleans in configuration objects.
-- Build webview URIs through helpers in `src/webview/MainViewContentProvider.ts`.
-- When adding new webview modules (e.g., under `src/webview/modules/uiManagers`),
-  map them in `src/webview/index.html` and expose their URIs via
-  `MainViewContentProvider`.
-- Use `watchConfig` from `src/utils/configUtils.ts` to refresh features when configuration settings change.
-- Build DOM elements with `<template>` blocks and helpers in `src/common/modules/templateUtils.js`.
-- Manipulate webview DOM safely using `addEventListenerSafely` from `src/common/modules/domUtils.js`.
-- Format and log errors via `logErrorMessage` in `src/utils/errorHandlingUtils.ts`.
-- Categorize log entries with the `LogMessageType` enum (`src/types/LogTypes.ts`).
-- Share common webview helpers like `webviewContext` under `src/common/modules`.
-- Keep result and log group interfaces under `src/types` for reuse.
-- Retrieve included file extensions through `getIncludedExtensions` in `src/utils/fileTypeUtils.ts`.
-- Initialize new agent YAML files from the provided template for a consistent structure.
+- Execute VS Code commands with `safeExecuteCommand` from `src/utils/system/commandUtils.ts` and shell commands with `executeCommand` from `src/utils/system/execUtils.ts` so logging and error handling stay uniform.
+- Retrieve included file extensions via `getIncludedExtensions` in `src/common/files/fileTypeUtils.ts`.
+- Initialize new agent YAML files from the templates in `resources/agents/` and `resources/tool_use_agents/`.
 - Dispose event listeners and watchers when webviews close to prevent leaks.
-- Maintain provider capabilities and pricing info in `ModelRegistry`.
-- Define runtime schemas with `zod` and infer the corresponding TypeScript
-  types using `z.infer<typeof schema>` instead of writing separate interfaces.
-- Prefer debug logging for routine events; reserve info and error levels for important messages.
-- When refactoring classes for separation of concerns, avoid backward compatibility pass-through methods. Instead:
-  - Organize functionality into focused manager classes (e.g., `TaskGroups`, `StreamTabs`, `FileList`)
-  - Use direct access patterns: `state.taskGroups.get()` instead of `state.getTaskGroup()`
-  - Keep method names simple - context comes from the class name (`set()`, `get()`, `clear()`)
-  - Follow the pattern seen in `src/progressView/modules/progressViewState.js` and `domHandlers.js`
-- Prefer direct use of `encodeHtml` and `decodeHtml` from `he` instead of wrapper helpers like `_escapeHtml`. Apply this when confident to avoid repeated refactoring.
-- When modularizing webview code, ALL module dependencies must be explicitly mapped in the import map:
-  - Each module imported by ANY module in the dependency tree needs its own URI and import map entry
-  - This includes transitive dependencies (modules imported by imported modules)
-  - Generate URIs using appropriate helpers (`getHistoryViewUri`, `getCommonUri`, etc.)
-  - Pass all URIs to the HTML template and map them in the importmap script tag
-  - Without complete import mapping, ES modules will fail to resolve in the webview's sandboxed environment
-- For webview dependencies:
-  - Use CDN (jsdelivr for static assets, esm.sh for ES modules) for packages with complex transitive dependencies (e.g., markdown-it, KaTeX, highlight.js)
-  - Keep simple, standalone packages local (e.g., split.js, @vscode/codicons)
-  - CDN usage avoids dependency resolution issues and reduces extension size significantly
+- Prefer enums or discriminated unions over bare booleans in configuration objects.
+- Favor debug logs for routine events and reserve info/error levels for notable outcomes.
+- Use the helpers in `src/frontend/ui/messageUtils.ts` for consistent casing and notification primitives shared across the extension.
 
 ### Webview Consistency Patterns
 
-- **Base Classes**: All webviews extend `BaseViewContentProvider` and `BaseViewMessageHandler` for consistent error handling, logging, and URI generation
+- **Base Classes**: All webviews extend `BaseViewContentProvider`, `BaseViewMessageHandler`, and use DOM managers built on `BaseDomHandler` for consistent error handling, logging, URI generation, and cleanup
 - **Naming Convention**: Follow `[Domain]View[Component]` pattern (e.g., `MainViewContentProvider`, `HistoryViewMessageHandler`)
 - **Command Constants**: Define all commands in `src/common/webview/commands.js` and `.ts` - use constants, not string literals
 - **Message Handlers**: Delegate to domain-specific manager classes (FileManager, SettingsManager, etc.) for separation of concerns

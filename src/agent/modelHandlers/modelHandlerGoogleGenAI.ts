@@ -11,6 +11,7 @@ import {
   type Candidate,
   type FunctionCall,
   File,
+  createPartFromText,
   createPartFromUri,
   createPartFromFunctionCall,
   createPartFromFunctionResponse,
@@ -82,7 +83,7 @@ function convertInternalPartsToGoogleParts(
   return internalParts
     .map((part: InternalMessagePart): Part | null => {
       if (part.type === 'text' && typeof part.text === 'string') {
-        return { text: part.text };
+        return createPartFromText(part.text);
       } else if (part.type === 'file_uri' && part.uri && part.mimeType) {
         return createPartFromUri(part.uri, part.mimeType);
       } else {
@@ -116,9 +117,9 @@ function convertMessagesToGoogleContentHistory(
       parts = msg.content
         .map((part: InternalMessagePart): Part | null => {
           if (part.type === 'text' && typeof part.text === 'string') {
-            return { text: part.text };
+            return createPartFromText(part.text);
           } else if (part.type === 'file_uri' && part.uri && part.mimeType) {
-            return { fileData: { fileUri: part.uri, mimeType: part.mimeType } };
+            return createPartFromUri(part.uri, part.mimeType);
           } else {
             logger.warn(
               `Skipping unsupported internal part type for history conversion: ${JSON.stringify(part)}`,
@@ -128,7 +129,7 @@ function convertMessagesToGoogleContentHistory(
         })
         .filter((part: Part | null): part is Part => part !== null);
     } else if (typeof msg.content === 'string') {
-      parts = [{ text: msg.content }];
+      parts = [createPartFromText(msg.content)];
     }
 
     if (parts.length === 0) return;
@@ -218,7 +219,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
           this.logger,
         );
       } else if (typeof lastMessage.content === 'string') {
-        lastMessageParts = [{ text: lastMessage.content }];
+        lastMessageParts = [createPartFromText(lastMessage.content)];
       }
     }
     if (lastMessageParts.length === 0) {
@@ -248,7 +249,10 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       history: chatHistory,
       config: generationConfig,
       ...(systemPrompt && {
-        systemInstruction: { role: 'system', parts: [{ text: systemPrompt }] },
+        systemInstruction: {
+          role: 'system',
+          parts: [createPartFromText(systemPrompt)],
+        },
       }),
     };
 
@@ -258,7 +262,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         if (systemPrompt) {
           countContents.push({
             role: 'system',
-            parts: [{ text: systemPrompt }],
+            parts: [createPartFromText(systemPrompt)],
           });
         }
         countContents.push(...chatHistory);
@@ -629,12 +633,15 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     messages: Message[],
     userMessage: string,
   ): Promise<Message[]> {
-    messages.push({ role: 'user', parts: [{ text: userMessage }] });
+    messages.push({
+      role: 'user',
+      parts: [createPartFromText(userMessage)],
+    });
     return messages;
   }
 
   createAssistantMessage(text: string): Message {
-    return { role: 'model', parts: [{ text }] };
+    return { role: 'model', parts: [createPartFromText(text)] };
   }
 
   createMediaContent(mediaMessage: MediaEntry[]): MediaEntry[] {
@@ -679,21 +686,15 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
 
     const candidate = responseObject.candidates[0];
 
-    let responseText = '';
-    if (candidate?.content?.parts) {
-      responseText = candidate.content.parts
-        // Exclude reasoning/thought blocks from the returned text
-        .filter((part) => !!part.text && !part.thought)
-        .map((part: Part) => part.text ?? '')
-        .join('')
-        .trim();
-    } else {
+    const rawResponseText = responseObject.text;
+    if (rawResponseText === undefined) {
       this.logger.warn(
         'Candidate content or parts missing in response object.',
       );
     }
-
-    responseText = replacementEngine.applyAll(responseText);
+    let responseText = replacementEngine.applyAll(
+      (rawResponseText ?? '').trim(),
+    );
 
     const usage = responseObject.usageMetadata;
     const stopReason: FinishReason =
@@ -1045,7 +1046,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     const resultPart = createPartFromFunctionResponse(id, name, result);
     const callParts: Part[] = [];
     if (text) {
-      callParts.push({ text });
+      callParts.push(createPartFromText(text));
     }
     callParts.push(callPart);
     const callMsg: Content = { role: 'assistant', parts: callParts };
