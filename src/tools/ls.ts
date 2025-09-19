@@ -42,7 +42,7 @@ function formatEntry(name: string, type: vscode.FileType): string {
 export class LsTool extends defineTool({
   name: 'ls',
   description:
-    'Lists files and directories in a given path within the workspace',
+    'Lists files and directories in a given path within the workspace.',
   schema: LsInputSchema,
 }) {
   protected async execute(input: LsInput): Promise<ToolResult> {
