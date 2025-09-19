@@ -161,9 +161,16 @@ userPrefix: |
 ### Tool-Use Agents
 
 Tools live under `src/tools/` and each one defines its input schema with Zod.
-List the desired tools by name in your agent YAML. The registry includes tools
-like `str_replace_editor`, `bash`, `file_op`, `wolfram`, and `web_search` for
-searching the web.
+List the desired tools by name in your agent YAML. The registry includes
+workspace utilities like `bash`, `file_op`, `glob`, `grep`, and `ls` alongside
+domain-specific helpers such as `str_replace_editor`, `wolfram`, and
+`web_search`.
+
+Common workspace helpers:
+
+- `glob` — Quickly list files matching a pattern, sorted by modification time.
+- `grep` — Run ripgrep searches without leaving the workspace sandbox.
+- `ls` — Inspect directory contents with optional ignore globs.
 
 Example:
 
@@ -173,6 +180,9 @@ settings:
   tools:
     - str_replace_editor
     - wolfram
+    - glob
+    - grep
+    - ls
     - bash
     - file_op
     - web_search
