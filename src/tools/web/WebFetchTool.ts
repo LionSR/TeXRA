@@ -81,8 +81,8 @@ export class WebFetchTool extends defineTool({
 
     let response;
     try {
-      response = await axios.get<ArrayBuffer>(url, {
-        responseType: 'arraybuffer',
+      response = await axios.get(url, {
+        responseType: 'text',
         timeout: 30_000,
         maxRedirects: 5,
         maxContentLength: 10 * 1024 * 1024,
@@ -108,7 +108,7 @@ export class WebFetchTool extends defineTool({
       throw new ToolError(`Failed to fetch ${url}: ${message}`);
     }
 
-    const rawBody = Buffer.from(response.data).toString('utf8');
+    const rawBody = response.data;
 
     const contentType = String(
       response.headers?.['content-type'] ?? '',
