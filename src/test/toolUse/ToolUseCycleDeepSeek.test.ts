@@ -12,6 +12,7 @@ import {
 } from '@agent/core/AgentDataclass';
 import { ToolState } from '@agent/core/ToolState';
 import { runToolUseCycle } from '@agent/core/ToolUseCycle';
+import type { ToolUseCycleOptions } from '@agent/core/ToolUseCycle';
 import { ModelHandlerDeepSeek } from '@agent/modelHandlers/modelHandlerDeepSeek';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import { bus } from '@eventBus/ProgressEventBus';
@@ -24,6 +25,7 @@ import {
 } from '@model/ModelConfig';
 import { BaseTool } from '@tools/core/base';
 import { ToolResult } from '@tools/result';
+import type OpenAI from 'openai';
 
 class EchoTool extends BaseTool<{ value: string }> {
   constructor() {
@@ -36,8 +38,8 @@ class EchoTool extends BaseTool<{ value: string }> {
 
 class MockHandler extends ModelHandlerDeepSeek {
   private call = 0;
-  async getClient() {
-    return {} as any;
+  async getClient(): Promise<OpenAI> {
+    return {} as OpenAI;
   }
   override async createResponse(): Promise<any> {
     this.call++;
@@ -117,13 +119,13 @@ describe('runToolUseCycle DeepSeek', () => {
       userReflect: '',
     };
     const toolState = new ToolState();
-    const options = {
+    const options: ToolUseCycleOptions<OpenAI> = {
       modelHandler: handler,
       agentSetting: setting,
       agentPrompt: prompt,
       userVars: {},
       logger,
-      client: {},
+      client: {} as OpenAI,
       toolRegistry,
       checkInterruption: () => false,
       setAbortController: () => {},
