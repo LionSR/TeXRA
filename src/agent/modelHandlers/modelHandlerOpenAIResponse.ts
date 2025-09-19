@@ -3,7 +3,11 @@ import { Buffer } from 'node:buffer';
 
 // Third-party imports
 import OpenAI, { toFile } from 'openai';
-import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
+import type {
+  ChatCompletionMessageParam,
+  ChatCompletionAssistantMessageParam,
+  ChatCompletionToolMessageParam,
+} from 'openai/resources/chat/completions';
 import type {
   Response,
   ResponseUsage,
