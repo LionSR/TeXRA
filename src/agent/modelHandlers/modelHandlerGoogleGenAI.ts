@@ -9,6 +9,7 @@ import {
   GenerateContentResponse,
   FinishReason,
   type Candidate,
+  type FunctionCall,
   File,
   createPartFromText,
   createPartFromUri,
@@ -160,7 +161,8 @@ function convertMessagesToGoogleContentHistory(
 export class ModelHandlerGoogleGenAI extends ModelHandler<
   Content,
   GenerateContentResponseUsageMetadata | null,
-  OpenAIAPIResponseUsage
+  OpenAIAPIResponseUsage,
+  FunctionCall
 > {
   private googleClient: GoogleGenAI | null = null;
   async getClient(): Promise<GoogleGenAI> {
@@ -1027,19 +1029,35 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
   createToolUseFollowUpMessages(
     id: string,
     name: string,
-    call: any,
+    call: FunctionCall,
     result: Record<string, unknown>,
     _toolState?: ToolState,
     text?: string,
-  ): any[] {
-    const callPart = createPartFromFunctionCall(
-      name,
-      typeof call?.args === 'object' ? call.args : (call?.input ?? {}),
-    );
+  ): [Content, Content] {
+    // Handle both args and input fields for backward compatibility
+    const args =
+      call?.args && typeof call.args === 'object'
+        ? (call.args as Record<string, unknown>)
+        : ((call as any)?.input ?? {});
+
+    // Use call.name if available, fall back to provided name
+    const functionName = call?.name ?? name;
+
+    // Create the call part with the function name and arguments
+    const callPart = createPartFromFunctionCall(functionName, args);
+
+    // Use consistent ID for both call and result to ensure proper correlation
+    const callId = call?.id ?? id;
     if (callPart.functionCall) {
-      callPart.functionCall.id = id;
+      callPart.functionCall.id = callId;
     }
-    const resultPart = createPartFromFunctionResponse(id, name, result);
+
+    // Use the same ID for the result to maintain correlation
+    const resultPart = createPartFromFunctionResponse(
+      callId,
+      functionName,
+      result,
+    );
     const callParts: Part[] = [];
     if (text) {
       callParts.push(createPartFromText(text));

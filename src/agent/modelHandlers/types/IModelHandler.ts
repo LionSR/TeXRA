@@ -26,6 +26,7 @@ export interface IModelHandler<
   M extends ProviderMessage = ProviderMessage,
   U = any,
   R = any,
+  T = unknown,
 > {
   /** Model configuration used by the handler. */
   config: ModelConfig;
@@ -195,7 +196,7 @@ export interface IModelHandler<
   createToolUseFollowUpMessages(
     id: string,
     name: string,
-    call: any,
+    call: T,
     result: Record<string, unknown>,
     toolState?: ToolState,
     text?: string,
