@@ -12,8 +12,8 @@ import {
   resolveAndFormat,
   formatToolOutput,
   toPosixPath,
-  getGitignoreMatcher,
 } from '@tools/utils';
+import { getGitignoreMatcher } from '@tools/gitignore';
 
 // Local imports - utils
 import { WorkspaceFS } from '@utils/files';
@@ -56,8 +56,8 @@ export class GlobTool extends defineTool({
       throw new ToolError(`glob error: ${message}`);
     }
 
-    const decorated: GlobMatchInfo[] = [];
-    for (const match of matches) {
+    // Process matches in parallel for better performance
+    const statPromises = matches.map(async (match) => {
       let resolved;
       try {
         resolved = joinWorkspaceRelativePath(base.relative, match);
@@ -69,19 +69,24 @@ export class GlobTool extends defineTool({
 
       const relativePath = resolved.relative === '.' ? '.' : resolved.relative;
       if (relativePath === '.' || gitignore.ignores(relativePath)) {
-        continue;
+        return null;
       }
 
       try {
         const stat = await WorkspaceFS.stat(relativePath);
-        decorated.push({
+        return {
           relativePath,
           mtime: stat.mtime ?? 0,
-        });
+        };
       } catch {
-        decorated.push({ relativePath, mtime: 0 });
+        return { relativePath, mtime: 0 };
       }
-    }
+    });
+
+    const decoratedWithNulls = await Promise.all(statPromises);
+    const decorated = decoratedWithNulls.filter(
+      (item): item is GlobMatchInfo => item !== null,
+    );
 
     const sorted = decorated.sort((a, b) => {
       if (b.mtime !== a.mtime) {

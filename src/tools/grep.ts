@@ -115,8 +115,10 @@ export class GrepTool extends defineTool({
       truncate: false,
     });
 
-    if (!result.success && result.stderr) {
-      throw new ToolError(`ripgrep error: ${result.stderr}`);
+    if (!result.success) {
+      throw new ToolError(
+        `ripgrep error: ${result.stderr || 'No error output available'}`,
+      );
     }
 
     const limitedOutput = applyHeadLimit(result.stdout, input.head_limit);
