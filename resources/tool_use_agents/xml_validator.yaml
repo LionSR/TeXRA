@@ -3,6 +3,9 @@ settings:
   agentType: toolUse
   tools:
     - str_replace_editor
+    - glob
+    - grep
+    - ls
 prompts:
   systemPrompt: |
     You validate XML files. Review errors and apply fixes with the str_replace_editor tool.

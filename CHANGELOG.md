@@ -6,6 +6,8 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
+- Provide workspace-scoped Grep, Glob, and LS tools so every tool-use agent can search and inspect files without leaving the project
+
 ### Bug Fixes
 
 ### Improvements

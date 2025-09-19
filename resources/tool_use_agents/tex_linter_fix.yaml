@@ -4,6 +4,9 @@ settings:
   tools:
     - str_replace_editor
     - diagnostics
+    - glob
+    - grep
+    - ls
 prompts:
   systemPrompt: |
     You fix LaTeX linter issues. Use the diagnostics tool to list current problems and the str_replace_editor tool to apply minimal edits.

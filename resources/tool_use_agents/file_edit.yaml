@@ -3,6 +3,9 @@ settings:
   agentType: toolUse
   tools:
     - str_replace_editor
+    - glob
+    - grep
+    - ls
 prompts:
   systemPrompt: |
     You edit files using the provided str_replace_editor tool.
