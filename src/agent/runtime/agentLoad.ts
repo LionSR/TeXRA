@@ -65,12 +65,71 @@ export async function loadYaml(absolutePath: string): Promise<object> {
  * Loads agent settings and prompts with inheritance support.
  * Merges with parent configurations if specified in the inherits field.
  */
+interface LoadAgentOptions {
+  preferMultiple?: boolean;
+}
+
+async function resolveAgentDefinition(
+  agentPath: string,
+  agentNameFromFile: string,
+  options?: LoadAgentOptions,
+): Promise<{ filePath: string; resolvedName: string }> {
+  const preferMultiple = options?.preferMultiple ?? false;
+  const candidateNames: string[] = [];
+
+  if (preferMultiple) {
+    const preferredName = agentNameFromFile.endsWith('_multiple')
+      ? agentNameFromFile
+      : `${agentNameFromFile}_multiple`;
+    candidateNames.push(preferredName);
+  }
+
+  candidateNames.push(agentNameFromFile);
+
+  const seenCandidates = new Set<string>();
+  for (const candidate of candidateNames) {
+    if (seenCandidates.has(candidate)) {
+      continue;
+    }
+    seenCandidates.add(candidate);
+
+    const candidatePath = path.join(agentPath, `${candidate}.yaml`);
+    if (await AbsoluteFS.exists(candidatePath)) {
+      if (
+        preferMultiple &&
+        candidate === agentNameFromFile &&
+        !agentNameFromFile.endsWith('_multiple')
+      ) {
+        logger.warn(
+          CHANNEL,
+          `Requested multiple outputs for agent "${agentNameFromFile}" but no _multiple definition was found. Falling back to base definition.`,
+        );
+      }
+      return { filePath: candidatePath, resolvedName: candidate };
+    }
+  }
+
+  const fallbackPath = path.join(agentPath, `${agentNameFromFile}.yaml`);
+  if (preferMultiple && !agentNameFromFile.endsWith('_multiple')) {
+    logger.warn(
+      CHANNEL,
+      `Requested multiple outputs for agent "${agentNameFromFile}" but no _multiple definition was found. Falling back to base definition.`,
+    );
+  }
+  return { filePath: fallbackPath, resolvedName: agentNameFromFile };
+}
+
 export async function loadAgentSettingAndPrompts(
   agentPath: string,
   agentNameFromFile: string,
+  options?: LoadAgentOptions,
 ): Promise<[AgentSetting, AgentPrompt]> {
   try {
-    const agentFile = path.join(agentPath, `${agentNameFromFile}.yaml`);
+    const { filePath: agentFile, resolvedName } = await resolveAgentDefinition(
+      agentPath,
+      agentNameFromFile,
+      options,
+    );
     const rawConfig = await loadYaml(agentFile);
     const config = AgentDefinitionSchema.parse(rawConfig);
 
@@ -141,6 +200,17 @@ export async function loadAgentSettingAndPrompts(
 
     // The function returns the validated settings block and prompts.
     // The agent's name (declaredAgentName) is known in this scope but not part of AgentSetting.
+    if (
+      options?.preferMultiple &&
+      resolvedName.endsWith('_multiple') &&
+      !agentNameFromFile.endsWith('_multiple')
+    ) {
+      logger.debug(
+        CHANNEL,
+        `Using _multiple agent definition "${resolvedName}" for base agent "${agentNameFromFile}".`,
+      );
+    }
+
     return [settings as AgentSetting, prompts as AgentPrompt];
   } catch (err) {
     vscode.window.showErrorMessage(
