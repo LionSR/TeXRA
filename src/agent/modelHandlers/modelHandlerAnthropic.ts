@@ -3,12 +3,16 @@
 
 // Third-party imports
 import { Anthropic } from '@anthropic-ai/sdk';
-import type { BetaMessage } from '@anthropic-ai/sdk/resources/beta/messages';
+import type {
+  AnthropicBeta,
+  BetaMessage,
+  MessageCreateParamsBase,
+  MessageCreateParamsStreaming,
+} from '@anthropic-ai/sdk/resources/beta/messages';
 import {
   MessageParam,
   ContentBlock,
   ContentBlockParam,
-  MessageCreateParams,
   ToolUseBlock,
 } from '@anthropic-ai/sdk/resources/messages';
 
@@ -80,9 +84,11 @@ export class ModelHandlerAnthropic extends ModelHandler<
       'model.useAnthropic1MBeta',
       false,
     );
+    const output128kBeta: AnthropicBeta = 'output-128k-2025-02-19';
+    const context1mBeta: AnthropicBeta = 'context-1m-2025-08-07';
 
     // Prepare options for the API call
-    const options: MessageCreateParams & { betas?: string[] } = {
+    const requestOptions: MessageCreateParamsBase = {
       model: this.config.fullName,
       max_tokens: this.config.maxOutputTokens,
       messages,
@@ -92,8 +98,8 @@ export class ModelHandlerAnthropic extends ModelHandler<
     };
 
     if (tools && tools.length > 0) {
-      options.tools = toAnthropicTools(tools);
-      (options as MessageCreateParams).tool_choice = { type: 'auto' };
+      requestOptions.tools = toAnthropicTools(tools);
+      requestOptions.tool_choice = { type: 'auto' };
     }
 
     // Enable thinking for any models that support reasoning
@@ -107,7 +113,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       const defaultBudget = useStreaming ? 32768 : 4096; // this logics only applies to sonnet 3.7
       const thinkingBudget = Math.min(defaultBudget, maxBudget);
 
-      options.thinking = {
+      requestOptions.thinking = {
         type: 'enabled',
         budget_tokens: thinkingBudget,
       };
@@ -122,7 +128,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
         this.config.fullName.includes('claude-sonnet-4') ||
         this.config.fullName.includes('claude-3-7-sonnet')
       ) {
-        delete options.temperature;
+        delete requestOptions.temperature;
       }
     }
 
@@ -131,9 +137,11 @@ export class ModelHandlerAnthropic extends ModelHandler<
       // useStreaming = true; should consider to be true by default
       // temperature already deleted above for reasoning models
 
-      options.betas = ['output-128k-2025-02-19'];
+      requestOptions.betas = [output128kBeta];
       // Update max tokens to use the higher limit when streaming
-      options.max_tokens = useStreaming ? 64000 : this.config.maxOutputTokens;
+      requestOptions.max_tokens = useStreaming
+        ? 64000
+        : this.config.maxOutputTokens;
       // The thinking configuration is now handled above for all reasoning models
     }
 
@@ -142,7 +150,10 @@ export class ModelHandlerAnthropic extends ModelHandler<
       useAnthropic1MBeta &&
       this.config.fullName === 'claude-sonnet-4-20250514'
     ) {
-      options.betas = [...(options.betas ?? []), 'context-1m-2025-08-07'];
+      requestOptions.betas = [
+        ...(requestOptions.betas ?? []),
+        context1mBeta,
+      ];
     }
 
     if (this.capabilities.supportsTokenCounting) {
@@ -155,15 +166,15 @@ export class ModelHandlerAnthropic extends ModelHandler<
       // If thinking is enabled, we need to pass it to countTokens as well
       // to ensure consistency with the actual message creation.
       // Without this, the API returns an error when messages contain thinking blocks.
-      if (options.thinking) {
-        countTokensParams.thinking = options.thinking;
+      if (requestOptions.thinking) {
+        countTokensParams.thinking = requestOptions.thinking;
       }
 
       if (
         useAnthropic1MBeta &&
         this.config.fullName === 'claude-sonnet-4-20250514'
       ) {
-        countTokensParams.betas = ['context-1m-2025-08-07'];
+        countTokensParams.betas = [context1mBeta];
       }
 
       const responseTokenCount =
@@ -178,30 +189,30 @@ export class ModelHandlerAnthropic extends ModelHandler<
       }
       if (
         this.config.contextWindow - responseTokenCount.input_tokens <
-        options.max_tokens
+        requestOptions.max_tokens
       ) {
-        const warnMsg = `Token count of message plus max tokens exceeds context window: ${responseTokenCount.input_tokens} + ${options.max_tokens} > ${this.config.contextWindow}. Reducing max tokens to ${this.config.contextWindow - responseTokenCount.input_tokens}.`;
+        const warnMsg = `Token count of message plus max tokens exceeds context window: ${responseTokenCount.input_tokens} + ${requestOptions.max_tokens} > ${this.config.contextWindow}. Reducing max tokens to ${this.config.contextWindow - responseTokenCount.input_tokens}.`;
         this.logger.warn(warnMsg);
-        options.max_tokens =
+        requestOptions.max_tokens =
           this.config.contextWindow - responseTokenCount.input_tokens - 10;
 
         if (
           this.capabilities.supportsReasoning &&
-          options.thinking &&
-          options.thinking.type === 'enabled'
+          requestOptions.thinking &&
+          requestOptions.thinking.type === 'enabled'
         ) {
           const adjustedBudget = Math.max(
             1,
             Math.min(
-              options.thinking.budget_tokens,
-              Math.floor(options.max_tokens * 0.5),
+              requestOptions.thinking.budget_tokens,
+              Math.floor(requestOptions.max_tokens * 0.5),
             ),
           );
-          if (adjustedBudget !== options.thinking.budget_tokens) {
+          if (adjustedBudget !== requestOptions.thinking.budget_tokens) {
             this.logger.debug(
               `Adjusted thinking budget to ${adjustedBudget} due to reduced max_tokens`,
             );
-            options.thinking.budget_tokens = adjustedBudget;
+            requestOptions.thinking.budget_tokens = adjustedBudget;
           }
         }
       }
@@ -209,7 +220,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     }
 
     // this.logger.debug(
-    //   `CreateResponse options: ${JSON.stringify(options, null, 2)}`,
+    //   `CreateResponse options: ${JSON.stringify(requestOptions, null, 2)}`,
     // );
 
     let response: BetaMessage;
@@ -218,7 +229,11 @@ export class ModelHandlerAnthropic extends ModelHandler<
       if (useStreaming) {
         // in the future if we pass stream to outside, calling stream.controller.abort() will abort the stream; which will be very useful for our stop button
         // we should also make sure partial results can be returned in the presence of errors!
-        const stream = client.beta.messages.stream(options, { signal });
+        const streamOptions: MessageCreateParamsStreaming = {
+          ...requestOptions,
+          stream: true,
+        };
+        const stream = client.beta.messages.stream(streamOptions, { signal });
         const groupId = this.logger.getActiveGroupId();
         const thinking = this.createThinkingStream(groupId);
         const output = this.isOutputStreamingEnabled()
@@ -242,7 +257,13 @@ export class ModelHandlerAnthropic extends ModelHandler<
             .join('') ?? '';
         if (output) output.finalize(finalOutput);
       } else {
-        response = await client.beta.messages.create(options, { signal });
+        const nonStreamingOptions = {
+          ...requestOptions,
+          stream: false as const,
+        };
+        response = await client.beta.messages.create(nonStreamingOptions, {
+          signal,
+        });
       }
     } catch (err) {
       this.logger.error(
