@@ -259,20 +259,29 @@ export class ProgressEventHandler {
     this.state.setTaskState(streamTabId, taskState);
 
     const normalizedState = this.state.getTaskState(streamTabId);
-    const sessionKind =
-      normalizedState?.agentSessionKind ||
-      deriveAgentSessionKind(normalizedState?.agentType);
-    const currentFilter = this.state.agentTypeFilter;
 
-    if (
-      this.state.activeStream === streamTabId &&
-      currentFilter !== 'all' &&
-      currentFilter !== sessionKind
-    ) {
-      this.logger.debug(
-        `Adjusting agent filter from ${currentFilter} to ${sessionKind} for stream ${streamTabId}`,
+    if (!normalizedState) {
+      this.logger.warn(
+        `Received setTaskState for ${streamTabId} but no state was stored`,
       );
-      this.state.agentTypeFilter = sessionKind;
+    } else {
+      const sessionKind =
+        normalizedState.agentSessionKind ??
+        deriveAgentSessionKind(normalizedState.agentType);
+      const currentFilter = this.state.agentTypeFilter;
+      const activeStream = this.state.activeStream;
+
+      if (
+        activeStream &&
+        activeStream === streamTabId &&
+        currentFilter !== 'all' &&
+        currentFilter !== sessionKind
+      ) {
+        this.logger.debug(
+          `Adjusting agent filter from ${currentFilter} to ${sessionKind} for stream ${streamTabId}`,
+        );
+        this.state.agentTypeFilter = sessionKind;
+      }
     }
 
     if (executionId) {
