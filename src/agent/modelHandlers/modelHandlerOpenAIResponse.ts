@@ -563,7 +563,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
     return call ? JSON.stringify(call, null, 2) : null;
   }
 
-  override createToolUseFollowUpMessages(
+  createToolUseFollowUpMessages(
     id: string,
     name: string,
     call: any,
