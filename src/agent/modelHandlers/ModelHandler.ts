@@ -932,7 +932,7 @@ export abstract class ModelHandler<
     result: Record<string, unknown>,
     toolState?: ToolState,
     text?: string,
-  ): any[];
+  ): M[];
 
   /**
    * Append a simple text follow-up from the user.

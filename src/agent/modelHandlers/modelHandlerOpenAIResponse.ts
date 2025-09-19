@@ -563,47 +563,34 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
     return call ? JSON.stringify(call, null, 2) : null;
   }
 
-  createToolUseFollowUpMessages(
+  override createToolUseFollowUpMessages(
     id: string,
     name: string,
-    call: ResponseFunctionToolCall | ResponseFunctionToolCallItem,
+    call: any,
     result: Record<string, unknown>,
     _toolState?: ToolState,
     text?: string,
-  ): [ChatCompletionAssistantMessageParam, ChatCompletionToolMessageParam] {
-    const callId = call.call_id ?? id;
-    const rawArguments = call.arguments as unknown;
-    const args =
-      typeof rawArguments === 'string'
-        ? rawArguments
-        : JSON.stringify(rawArguments ?? {});
-
-    // Create assistant message with tool call
-    const assistantMsg: ChatCompletionAssistantMessageParam = {
-      role: 'assistant',
-      tool_calls: [
-        {
-          id: callId,
-          type: 'function' as const,
-          function: {
-            name: call.name ?? name,
-            arguments: args,
-          },
-        },
-      ],
-    };
+  ): any[] {
+    const messages: (ResponseInputItem | ChatCompletionMessageParam)[] = [];
     if (text) {
-      assistantMsg.content = text;
+      messages.push({ role: 'assistant', content: [{ type: 'text', text }] });
     }
-
-    // Create tool result message
-    const toolMsg: ChatCompletionToolMessageParam = {
-      role: 'tool',
-      tool_call_id: callId,
-      content: JSON.stringify(result),
+    const callMsg: ResponseFunctionToolCall = {
+      type: 'function_call',
+      call_id: id,
+      name,
+      arguments:
+        typeof call?.arguments === 'string'
+          ? call.arguments
+          : JSON.stringify(call?.input ?? call?.arguments ?? {}),
     };
-
-    return [assistantMsg, toolMsg];
+    const resultMsg: ResponseInputItem.FunctionCallOutput = {
+      type: 'function_call_output',
+      call_id: id,
+      output: JSON.stringify(result),
+    };
+    messages.push(callMsg, resultMsg);
+    return messages;
   }
 
   async createUserFollowUpMessages(
