@@ -4,13 +4,15 @@ import { strict as assert } from 'assert';
 // Local imports - test
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import {
-  AgentSetting,
   AgentPrompt,
+  AgentSessionKind,
+  AgentSetting,
   AgentType,
 } from '@agent/core/AgentDataclass';
 import { BaseToolUseAgent } from '@agent/implementations/BaseToolUseAgent';
 import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
+import type { ToolUseSessionSnapshot } from '@agent/toolUse/ToolUseSessionManager';
 import { bus } from '@eventBus/ProgressEventBus';
 import { ModelProvider, DEFAULT_MODEL_CAPABILITIES } from '@model/ModelConfig';
 
@@ -110,57 +112,65 @@ class DummyHandler extends ModelHandler<
 
 class TestAgent extends BaseToolUseAgent {}
 
+function createTestAgent(): { agent: TestAgent; handler: DummyHandler } {
+  const handler = new DummyHandler();
+  const setting: AgentSetting = {
+    agentType: AgentType.ToolUse,
+    documentTag: 'doc',
+    temperature: 0,
+    isRewrite: true,
+    rounds: 1,
+    prefills: [],
+    outputExt: 'txt',
+    endTag: '</doc>',
+    requiredFiles: {},
+    requiredFilesInternal: {},
+    defaultOutputFiles: [],
+    useMultipleOutputs: false,
+    filePatternsContain: [],
+    tools: [],
+  } as any;
+  const prompt: AgentPrompt = {
+    systemPrompt: '',
+    userPrefix: '',
+    userRequest: '',
+    userReflect: '',
+  };
+  const config: AgentConfig = {
+    model: 'dummy',
+    agent: 'test',
+    instruction: '',
+    useMultipleOutputs: false,
+    inputFile: '',
+    inputFiles: null,
+    referenceFile: null,
+    referenceFiles: null,
+    auxiliaryFile: null,
+    auxiliaryFiles: null,
+    mediaFile: null,
+    mediaFiles: null,
+    outputFiles: null,
+    editedFile: null,
+    toolConfig: {
+      reflect: false,
+      autoExtractFigure: false,
+      autoExtractTikzFigure: false,
+      attachTeXCount: false,
+      attachDiagnostics: false,
+      printInputPrompt: false,
+      autoCompileInputPdf: false,
+    },
+  };
+
+  return {
+    agent: new TestAgent(handler, config, setting, prompt, '.'),
+    handler,
+  };
+}
+
 describe('BaseToolUseAgent follow-up loop', () => {
   it('runs additional cycles for follow-ups', async () => {
-    const handler = new DummyHandler();
-    const setting: AgentSetting = {
-      agentType: AgentType.ToolUse,
-      documentTag: 'doc',
-      temperature: 0,
-      isRewrite: true,
-      rounds: 1,
-      prefills: [],
-      outputExt: 'txt',
-      endTag: '</doc>',
-      requiredFiles: {},
-      requiredFilesInternal: {},
-      defaultOutputFiles: [],
-      useMultipleOutputs: false,
-      filePatternsContain: [],
-      tools: [],
-    } as any;
-    const prompt: AgentPrompt = {
-      systemPrompt: '',
-      userPrefix: '',
-      userRequest: '',
-      userReflect: '',
-    };
-    const config: AgentConfig = {
-      model: 'dummy',
-      agent: 'test',
-      instruction: '',
-      useMultipleOutputs: false,
-      inputFile: '',
-      inputFiles: null,
-      referenceFile: null,
-      referenceFiles: null,
-      auxiliaryFile: null,
-      auxiliaryFiles: null,
-      mediaFile: null,
-      mediaFiles: null,
-      outputFiles: null,
-      editedFile: null,
-      toolConfig: {
-        reflect: false,
-        autoExtractFigure: false,
-        autoExtractTikzFigure: false,
-        attachTeXCount: false,
-        attachDiagnostics: false,
-        printInputPrompt: false,
-        autoCompileInputPdf: false,
-      },
-    };
-    const agent = new TestAgent(handler, config, setting, prompt, '.');
+    const { agent, handler } = createTestAgent();
     const logs: any[] = [];
     const dispose = bus.on('addLogMessage', (e) => logs.push(e));
     const runPromise = agent.run();
@@ -171,5 +181,36 @@ describe('BaseToolUseAgent follow-up loop', () => {
     dispose();
     assert.equal(handler.calls, 3);
     assert.ok(logs.length > 0);
+  });
+
+  it('skips the first cycle when resuming from a snapshot', async () => {
+    const { agent, handler } = createTestAgent();
+    const snapshot: ToolUseSessionSnapshot = {
+      version: 1,
+      executionId: 'exec',
+      streamId: 'stream',
+      agentName: 'test',
+      model: 'dummy',
+      agentSessionKind: AgentSessionKind.ToolUse,
+      messages: [],
+      toolState: {
+        texcountStats: null,
+        lastResponse: '',
+        accumulatedOutput: '',
+        mediaFiles: [],
+        thinkingBlocks: [],
+        thinkingAdded: false,
+      },
+      lastUpdated: Date.now(),
+    };
+
+    agent.resumeFromSnapshot(snapshot);
+    agent.appendFollowUp('follow-up after resume');
+
+    const runPromise = agent.run();
+    setTimeout(() => agent.interrupt(), 10);
+    await runPromise;
+
+    assert.equal(handler.calls, 1);
   });
 });
