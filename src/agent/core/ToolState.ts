@@ -13,7 +13,7 @@ export interface IToolState {
   mediaFiles: string[];
 
   /** Collection of all thinking blocks from the response (used for Anthropic models) */
-  thinkingBlocks: any[];
+  thinkingBlocks: unknown[];
 
   /** Whether the thinking block has been added to the accumulated output */
   thinkingAdded: boolean;
@@ -30,14 +30,14 @@ export class ToolState implements IToolState {
   lastResponse: string;
   accumulatedOutput: string;
   mediaFiles: string[];
-  thinkingBlocks: any[];
+  thinkingBlocks: unknown[];
   thinkingAdded: boolean;
 
   /**
    * Returns the first thinking block from thinkingBlocks array
    * @returns The first thinking block or null if none exists
    */
-  get thinkingBlock(): any {
+  get thinkingBlock(): unknown {
     return this.thinkingBlocks.length > 0 ? this.thinkingBlocks[0] : null;
   }
 

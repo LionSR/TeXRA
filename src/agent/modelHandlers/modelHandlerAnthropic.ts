@@ -9,6 +9,11 @@ import {
   ContentBlock,
   ContentBlockParam,
   MessageCreateParams,
+  ToolUseBlockParam,
+  ToolResultBlockParam,
+  ThinkingBlockParam,
+  RedactedThinkingBlockParam,
+  TextBlockParam,
 } from '@anthropic-ai/sdk/resources/messages';
 
 // Local imports - agent
@@ -934,15 +939,14 @@ export class ModelHandlerAnthropic extends ModelHandler<
       };
 
       // Include all thinking blocks from toolState if available
-      if (toolState.thinkingBlocks && toolState.thinkingBlocks.length > 0) {
+      const assistantThinkingBlocks = this.consumeThinkingBlocks(toolState);
+      if (assistantThinkingBlocks.length > 0) {
         this.logger.debug(
-          `Adding ${toolState.thinkingBlocks.length} thinking blocks to new assistant message`,
+          `Adding ${assistantThinkingBlocks.length} thinking blocks to new assistant message`,
         );
         if (Array.isArray(assistantMessage.content)) {
-          assistantMessage.content.push(...toolState.thinkingBlocks);
+          assistantMessage.content.push(...assistantThinkingBlocks);
         }
-        // Clear cached thinking so the next response can store fresh blocks
-        toolState.resetThinkingCache();
       }
 
       // Add the text content
@@ -997,6 +1001,83 @@ export class ModelHandlerAnthropic extends ModelHandler<
     return false;
   }
 
+  private sanitizeThinkingBlock(
+    block: unknown,
+  ): ThinkingBlockParam | RedactedThinkingBlockParam | null {
+    if (!block || typeof block !== 'object') {
+      return null;
+    }
+
+    const candidate = block as {
+      type?: unknown;
+      thinking?: unknown;
+      signature?: unknown;
+      thoughtSignature?: unknown;
+      data?: unknown;
+    };
+
+    if (candidate.type === 'thinking') {
+      const thinking = candidate.thinking;
+      const signature =
+        typeof candidate.signature === 'string'
+          ? candidate.signature
+          : typeof candidate.thoughtSignature === 'string'
+            ? candidate.thoughtSignature
+            : undefined;
+
+      if (typeof thinking === 'string' && typeof signature === 'string') {
+        const sanitized: ThinkingBlockParam = {
+          type: 'thinking',
+          thinking,
+          signature,
+        };
+        return sanitized;
+      }
+
+      return null;
+    }
+
+    if (candidate.type === 'redacted_thinking') {
+      const data = candidate.data;
+      if (typeof data === 'string') {
+        const sanitized: RedactedThinkingBlockParam = {
+          type: 'redacted_thinking',
+          data,
+        };
+        return sanitized;
+      }
+
+      return null;
+    }
+
+    return null;
+  }
+
+  private mapThinkingBlocksToParams(blocks: unknown[]): ContentBlockParam[] {
+    return blocks
+      .map((block) => this.sanitizeThinkingBlock(block))
+      .filter(
+        (block): block is ThinkingBlockParam | RedactedThinkingBlockParam =>
+          block !== null,
+      );
+  }
+
+  private consumeThinkingBlocks(toolState?: ToolState): ContentBlockParam[] {
+    if (!toolState || !Array.isArray(toolState.thinkingBlocks)) {
+      return [];
+    }
+
+    const thinkingContent = this.mapThinkingBlocksToParams(
+      toolState.thinkingBlocks,
+    );
+
+    if (thinkingContent.length > 0) {
+      toolState.resetThinkingCache();
+    }
+
+    return thinkingContent;
+  }
+
   /**
    * Process thinking blocks for Anthropic models
    * @param responseObject The response object from Anthropic API
@@ -1016,8 +1097,8 @@ export class ModelHandlerAnthropic extends ModelHandler<
     }
 
     // Extract all thinking blocks from the response
-    const thinkingBlocks = [];
-    let regularThinkingContent = null;
+    const thinkingBlocks: ContentBlock[] = [];
+    let regularThinkingContent: string | null = null;
 
     try {
       if (responseObject.content && Array.isArray(responseObject.content)) {
@@ -1048,6 +1129,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       return null;
     }
 
+    const thinkingBlockParams = this.mapThinkingBlocksToParams(thinkingBlocks);
     this.logger.debug(
       `Found ${thinkingBlocks.length} thinking blocks`,
       groupId,
@@ -1060,13 +1142,20 @@ export class ModelHandlerAnthropic extends ModelHandler<
         regularThinkingContent &&
         !this.containCutOffMessage(regularThinkingContent)
       ) {
-        toolState.thinkingBlocks = thinkingBlocks;
-        // thinkingBlock is now a getter that returns thinkingBlocks[0]
-        toolState.thinkingAdded = true;
-        this.logger.debug(
-          `Added ${thinkingBlocks.length} thinking blocks to toolState`,
-          groupId,
-        );
+        if (thinkingBlockParams.length > 0) {
+          toolState.thinkingBlocks = thinkingBlockParams;
+          // thinkingBlock is now a getter that returns thinkingBlocks[0]
+          toolState.thinkingAdded = true;
+          this.logger.debug(
+            `Added ${thinkingBlockParams.length} thinking blocks to toolState`,
+            groupId,
+          );
+        } else {
+          this.logger.debug(
+            'Skipping adding thinking blocks to toolState because sanitization produced no valid content blocks',
+            groupId,
+          );
+        }
       } else {
         this.logger.debug(
           `Skipping adding thinking blocks to toolState because of cut off message`,
@@ -1097,41 +1186,48 @@ export class ModelHandlerAnthropic extends ModelHandler<
     result: Record<string, unknown>,
     toolState?: ToolState,
     text?: string,
-  ): any[] {
-    const content: any[] = [];
-    if (
-      this.capabilities.supportsReasoning &&
-      toolState?.thinkingBlocks &&
-      toolState.thinkingBlocks.length > 0
-    ) {
-      // Anthropic models expect thinking blocks before text
-      content.push(...toolState.thinkingBlocks);
-      // Clear cached thinking so the next response can store fresh blocks
-      toolState.resetThinkingCache();
+  ): MessageParam[] {
+    const content: ContentBlockParam[] = [];
+
+    if (this.capabilities.supportsReasoning) {
+      const thinkingBlocks = this.consumeThinkingBlocks(toolState);
+      if (thinkingBlocks.length > 0) {
+        content.push(...thinkingBlocks);
+      }
     }
+
     if (text) {
-      content.push({ type: 'text', text });
+      const textBlock: TextBlockParam = {
+        type: 'text',
+        text,
+      };
+      content.push(textBlock);
     }
-    content.push({
+
+    const toolUseBlock: ToolUseBlockParam = {
       type: 'tool_use',
       id,
       name,
       input: call?.input ?? call?.arguments ?? {},
-    });
-    const callMsg = {
+    };
+    content.push(toolUseBlock);
+
+    const callMsg: MessageParam = {
       role: 'assistant',
       content,
     };
-    const resultMsg = {
-      role: 'user',
-      content: [
-        {
-          type: 'tool_result',
-          tool_use_id: id,
-          content: JSON.stringify(result),
-        },
-      ],
+
+    const toolResultBlock: ToolResultBlockParam = {
+      type: 'tool_result',
+      tool_use_id: id,
+      content: JSON.stringify(result),
     };
+
+    const resultMsg: MessageParam = {
+      role: 'user',
+      content: [toolResultBlock],
+    };
+
     return [callMsg, resultMsg];
   }
 }
