@@ -32,7 +32,11 @@ interface GlobMatchInfo {
 
 export class GlobTool extends defineTool({
   name: 'glob',
-  description: 'Fast file pattern matching within the workspace',
+  description:
+    'Fast file pattern matching within the workspace. \
+  Supports glob patterns like "**/*.tex" or "src/**/*.ts". \
+  Returns matching file paths sorted by modification time. \
+  Use this tool when you need to find files by name patterns.',
   schema: GlobInputSchema,
 }) {
   protected async execute(input: GlobInput): Promise<ToolResult> {

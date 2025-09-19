@@ -94,7 +94,12 @@ function applyHeadLimit(output: string | null, headLimit?: number): string {
 
 export class GrepTool extends defineTool({
   name: 'grep',
-  description: 'A powerful search tool built on ripgrep',
+  description:
+    'A powerful search tool built on ripgrep.\
+  Supports full regex syntax (e.g., "log.*Error", "function\s+\w+")". \
+  Returns matching file paths sorted by modification time. \
+  Filter files with glob parameter (e.g., "*.js", "**/*.tsx") or type parameter (e.g., "js", "py", "rust"). \
+  Use this tool when you need to find files by name patterns.',
   schema: GrepInputSchema,
 }) {
   protected async execute(input: GrepInput): Promise<ToolResult> {
