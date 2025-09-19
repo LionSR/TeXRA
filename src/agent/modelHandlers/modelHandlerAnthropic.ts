@@ -9,8 +9,10 @@ import {
   ContentBlock,
   ContentBlockParam,
   MessageCreateParams,
+  MessageCountTokensParams,
   ToolUseBlock,
 } from '@anthropic-ai/sdk/resources/messages';
+import type { AnthropicBeta } from '@anthropic-ai/sdk/resources/beta/beta';
 
 // Local imports - agent
 import { toAnthropicTools } from './toolConversion';
@@ -49,6 +51,16 @@ import xmlUtils from '@utils/text/xmlUtils';
  */
 
 // The new implicit prompt caching is worth checking out (can eliminate many controls of previous caching)
+type BetaMessageCreateParams = MessageCreateParams & {
+  betas?: AnthropicBeta[];
+};
+type BetaMessageCountTokensParams = MessageCountTokensParams & {
+  betas?: AnthropicBeta[];
+};
+
+const CONTEXT_1M_BETA: AnthropicBeta = 'context-1m-2025-08-07';
+const SONNET_37_OUTPUT_BETA: AnthropicBeta = 'output-128k-2025-02-19';
+
 export class ModelHandlerAnthropic extends ModelHandler<
   MessageParam,
   AnthropicUsage,
@@ -82,7 +94,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     );
 
     // Prepare options for the API call
-    const options: MessageCreateParams & { betas?: string[] } = {
+    const options: BetaMessageCreateParams = {
       model: this.config.fullName,
       max_tokens: this.config.maxOutputTokens,
       messages,
@@ -131,7 +143,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       // useStreaming = true; should consider to be true by default
       // temperature already deleted above for reasoning models
 
-      options.betas = ['output-128k-2025-02-19'];
+      options.betas = [SONNET_37_OUTPUT_BETA];
       // Update max tokens to use the higher limit when streaming
       options.max_tokens = useStreaming ? 64000 : this.config.maxOutputTokens;
       // The thinking configuration is now handled above for all reasoning models
@@ -142,14 +154,14 @@ export class ModelHandlerAnthropic extends ModelHandler<
       useAnthropic1MBeta &&
       this.config.fullName === 'claude-sonnet-4-20250514'
     ) {
-      options.betas = [...(options.betas ?? []), 'context-1m-2025-08-07'];
+      options.betas = [...(options.betas ?? []), CONTEXT_1M_BETA];
     }
 
     if (this.capabilities.supportsTokenCounting) {
-      const countTokensParams: any = {
+      const countTokensParams: BetaMessageCountTokensParams = {
         model: this.config.fullName,
         system: systemPrompt,
-        messages: messages,
+        messages,
       };
 
       // If thinking is enabled, we need to pass it to countTokens as well
@@ -159,31 +171,28 @@ export class ModelHandlerAnthropic extends ModelHandler<
         countTokensParams.thinking = options.thinking;
       }
 
-      if (
-        useAnthropic1MBeta &&
-        this.config.fullName === 'claude-sonnet-4-20250514'
-      ) {
-        countTokensParams.betas = ['context-1m-2025-08-07'];
+      // Strip betas that only apply to message creation (e.g., output length)
+      // while keeping context headers needed for accurate token counting.
+      const countTokenBetas = options.betas?.filter(
+        (beta) => beta === CONTEXT_1M_BETA,
+      );
+      if (countTokenBetas && countTokenBetas.length > 0) {
+        countTokensParams.betas = countTokenBetas;
       }
 
       const responseTokenCount =
         await client.beta.messages.countTokens(countTokensParams);
-      this.logger.debug(
-        `Token count of message: ${responseTokenCount.input_tokens}`,
-      );
-      if (responseTokenCount.input_tokens > this.config.contextWindow) {
-        const errMsg = `Token count of message exceeds context window: ${responseTokenCount.input_tokens} > ${this.config.contextWindow}`;
+      const { input_tokens: inputTokens } = responseTokenCount;
+      this.logger.debug(`Token count of message: ${inputTokens}`);
+      if (inputTokens > this.config.contextWindow) {
+        const errMsg = `Token count of message exceeds context window: ${inputTokens} > ${this.config.contextWindow}`;
         this.logger.error(errMsg);
         throw new Error(errMsg);
       }
-      if (
-        this.config.contextWindow - responseTokenCount.input_tokens <
-        options.max_tokens
-      ) {
-        const warnMsg = `Token count of message plus max tokens exceeds context window: ${responseTokenCount.input_tokens} + ${options.max_tokens} > ${this.config.contextWindow}. Reducing max tokens to ${this.config.contextWindow - responseTokenCount.input_tokens}.`;
+      if (this.config.contextWindow - inputTokens < options.max_tokens) {
+        const warnMsg = `Token count of message plus max tokens exceeds context window: ${inputTokens} + ${options.max_tokens} > ${this.config.contextWindow}. Reducing max tokens to ${this.config.contextWindow - inputTokens}.`;
         this.logger.warn(warnMsg);
-        options.max_tokens =
-          this.config.contextWindow - responseTokenCount.input_tokens - 10;
+        options.max_tokens = this.config.contextWindow - inputTokens - 10;
 
         if (
           this.capabilities.supportsReasoning &&
