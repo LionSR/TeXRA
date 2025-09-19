@@ -27,6 +27,7 @@ export interface IModelHandler<
   U = any,
   R = any,
   T = unknown,
+  C = unknown,
 > {
   /** Model configuration used by the handler. */
   config: ModelConfig;
@@ -59,7 +60,7 @@ export interface IModelHandler<
   setLogger(logger: AgentLogger): void;
 
   /** Retrieve an authenticated client instance. */
-  getClient(): Promise<any>;
+  getClient(): Promise<C>;
 
   /**
    * Generate a response from the model.
@@ -71,7 +72,7 @@ export interface IModelHandler<
    * @param signal Optional abort signal
    */
   createResponse(
-    client: any,
+    client: C,
     messages: M[],
     temperature: number,
     systemPrompt?: string,

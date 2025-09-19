@@ -52,7 +52,8 @@ export class ModelHandlerOpenAI extends ModelHandler<
   ChatCompletionMessageParam,
   ExtendedCompletionUsage | null,
   OpenAIAPIResponseUsage,
-  ChatCompletionMessageToolCall | ChatCompletionMessage.FunctionCall
+  ChatCompletionMessageToolCall | ChatCompletionMessage.FunctionCall,
+  OpenAI
 > {
   /**
    * Creates a new OpenAI client using the stored credentials.

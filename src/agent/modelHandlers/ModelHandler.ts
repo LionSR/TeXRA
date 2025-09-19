@@ -78,7 +78,8 @@ export abstract class ModelHandler<
   U = any,
   R = any,
   T = unknown,
-> implements IModelHandler<M, U, R, T>
+  C = unknown,
+> implements IModelHandler<M, U, R, T, C>
 {
   public config: ModelConfig;
   public capabilities: ModelCapabilities;
@@ -764,14 +765,14 @@ export abstract class ModelHandler<
   }
 
   /** Creates and configures a client instance for the specific model provider. */
-  abstract getClient(): Promise<any>;
+  abstract getClient(): Promise<C>;
 
   /**
    * Generates a model response using the provider's API.
    * @returns Promise resolving to provider-specific response object
    */
   abstract createResponse(
-    client: any,
+    client: C,
     messages: M[],
     temperature: number,
     systemPrompt?: string,
