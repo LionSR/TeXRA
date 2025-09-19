@@ -13,11 +13,12 @@ import type { ResponseCycleOptions } from '@agent/core/ResponseCycle';
 import { ToolState } from '@agent/core/ToolState';
 import { BaseAgent } from '@agent/implementations/BaseAgent';
 import type { IModelHandler } from '@agent/modelHandlers';
-import { OutputHandler, NamedOutputFile, IOutputHandler } from '@agent/output';
+import { OutputHandler, IOutputHandler } from '@agent/output';
 import type { ExecutionId } from '@agent/types/IdentifierTypes';
 import { PromptBuilder } from '@agent/utils/PromptBuilder';
 import { writePromptToXml } from '@agent/utils/promptUtils';
-import { bus } from '@eventBus/ProgressEventBus';
+import { Node } from '@agent/node';
+
 // Standard library imports
 // (none needed)
 
@@ -25,11 +26,10 @@ import { bus } from '@eventBus/ProgressEventBus';
 // (none needed)
 
 // Local imports - log
+import { AgentLogger } from '@logger/AgentLogger';
 
 // Local imports - latex utils
 import { LatexMediaManager } from '@latex';
-import { MESSAGE_TYPES } from '@logger/messageTypes';
-import type { ToolDefinition } from '@model';
 
 // System imports - common utilities
 import { getConfig } from '@utils/config';
@@ -49,6 +49,187 @@ export interface RoundOutputOptions {
   outputFile: string;
   endTurn: boolean;
   processGroupId?: string;
+}
+
+export interface RoundLifecycleResult {
+  stateRound: AgentStateRound;
+  stateGlobal: AgentStateGlobal;
+  messages: any[];
+  endTurn: boolean;
+  toolState: ToolState;
+}
+
+export interface RoundLifecycleSharedContext {
+  currRound: number;
+  stateRound: AgentStateRound;
+  stateGlobal: AgentStateGlobal;
+  toolState: ToolState;
+  messages: any[];
+  prefill: string;
+  outputPath: string;
+  roundGroupId: string;
+  result?: RoundLifecycleResult;
+}
+
+interface RoundLifecyclePrepResult {
+  endTurn: boolean;
+  messages: any[];
+}
+
+interface RoundLifecycleExecResult extends RoundLifecycleResult {
+  didExecuteCycle: boolean;
+}
+
+export interface ReflectionRoundNodeDeps<C> {
+  agentConfig: AgentConfig;
+  agentSetting: AgentSetting;
+  agentPrompt: AgentPrompt;
+  modelHandler: IModelHandler<any, any, any, any, C>;
+  logger: AgentLogger;
+  userVars: Record<string, any>;
+  getClient: () => C;
+  checkInterruption: () => Promise<boolean> | boolean;
+  setAbortController: (ctrl: AbortController | null) => void;
+  runResponseCycle: (
+    options: ResponseCycleOptions<C>,
+    messages: any[],
+    stateRound: AgentStateRound,
+    stateGlobal: AgentStateGlobal,
+    toolState: ToolState,
+    outputPath: string,
+    roundGroupId?: string,
+    executionId?: ExecutionId,
+  ) => Promise<[AgentStateRound, AgentStateGlobal, ToolState, boolean]>;
+  handleRoundCompletion: (
+    currRound: number,
+    stateRound: AgentStateRound,
+    stateGlobal: AgentStateGlobal,
+    options: RoundOutputOptions,
+  ) => Promise<void>;
+  executionId?: ExecutionId;
+}
+
+export class ReflectionRoundNode<C> extends Node<RoundLifecycleSharedContext> {
+  private currentShared?: RoundLifecycleSharedContext;
+
+  constructor(private readonly deps: ReflectionRoundNodeDeps<C>) {
+    super();
+  }
+
+  async prep(
+    shared: RoundLifecycleSharedContext,
+  ): Promise<RoundLifecyclePrepResult> {
+    this.currentShared = shared;
+    const [endTurn, updatedMessages] =
+      await this.deps.modelHandler.initializeOutputAndPrefill(
+        this.deps.agentConfig,
+        this.deps.agentSetting,
+        shared.messages,
+        shared.toolState,
+        shared.outputPath,
+        shared.prefill,
+        shared.roundGroupId,
+      );
+    shared.messages = updatedMessages;
+    return { endTurn, messages: updatedMessages };
+  }
+
+  async exec(
+    prepRes: RoundLifecyclePrepResult,
+  ): Promise<RoundLifecycleExecResult> {
+    const shared = this.currentShared;
+    if (!shared) {
+      throw new Error('Round lifecycle executed without a shared context.');
+    }
+
+    if (prepRes.endTurn) {
+      return {
+        stateRound: shared.stateRound,
+        stateGlobal: shared.stateGlobal,
+        messages: prepRes.messages,
+        endTurn: true,
+        toolState: shared.toolState,
+        didExecuteCycle: false,
+      };
+    }
+
+    const client = this.deps.getClient();
+    const options: ResponseCycleOptions<C> = {
+      modelHandler: this.deps.modelHandler,
+      agentSetting: this.deps.agentSetting,
+      agentConfig: this.deps.agentConfig,
+      agentPrompt: this.deps.agentPrompt,
+      userVars: this.deps.userVars,
+      logger: this.deps.logger,
+      client,
+      checkInterruption: this.deps.checkInterruption,
+      setAbortController: this.deps.setAbortController,
+    };
+
+    const [
+      updatedStateRound,
+      updatedStateGlobal,
+      updatedToolState,
+      newEndTurn,
+    ] = await this.deps.runResponseCycle(
+      options,
+      prepRes.messages,
+      shared.stateRound,
+      shared.stateGlobal,
+      shared.toolState,
+      shared.outputPath,
+      shared.roundGroupId,
+      this.deps.executionId,
+    );
+
+    return {
+      stateRound: updatedStateRound,
+      stateGlobal: updatedStateGlobal,
+      messages: prepRes.messages,
+      endTurn: newEndTurn,
+      toolState: updatedToolState,
+      didExecuteCycle: true,
+    };
+  }
+
+  async post(
+    shared: RoundLifecycleSharedContext,
+    _prepRes: RoundLifecyclePrepResult,
+    execRes: RoundLifecycleExecResult,
+  ): Promise<string | undefined> {
+    await this.deps.handleRoundCompletion(
+      shared.currRound,
+      execRes.stateRound,
+      execRes.stateGlobal,
+      {
+        outputFile: shared.outputPath,
+        endTurn: execRes.endTurn,
+        processGroupId: shared.roundGroupId,
+      },
+    );
+
+    if (shared.currRound === 0 && execRes.didExecuteCycle) {
+      this.deps.logger.debug(
+        `stateGlobal: ${JSON.stringify(execRes.stateGlobal)}`,
+        shared.roundGroupId,
+      );
+    }
+
+    shared.stateRound = execRes.stateRound;
+    shared.stateGlobal = execRes.stateGlobal;
+    shared.toolState = execRes.toolState;
+    shared.messages = execRes.messages;
+    shared.result = {
+      stateRound: execRes.stateRound,
+      stateGlobal: execRes.stateGlobal,
+      messages: execRes.messages,
+      endTurn: execRes.endTurn,
+      toolState: execRes.toolState,
+    };
+
+    this.currentShared = undefined;
+    return 'default';
+  }
 }
 
 /**
@@ -150,6 +331,39 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     );
   }
 
+  protected createRoundNode(): ReflectionRoundNode<C> {
+    return new ReflectionRoundNode<C>({
+      agentConfig: this.agentConfig,
+      agentSetting: this.agentSetting,
+      agentPrompt: this.agentPrompt,
+      modelHandler: this.modelHandler,
+      logger: this.logger,
+      userVars: this.userVars,
+      getClient: () => this.getClientInstance(),
+      checkInterruption: () => this.checkInterruption(),
+      setAbortController: (ctrl) => {
+        this.abortController = ctrl;
+      },
+      runResponseCycle,
+      handleRoundCompletion: (currRound, stateRound, stateGlobal, options) =>
+        this.handleRoundCompletion(currRound, stateRound, stateGlobal, options),
+      executionId: this.executionId,
+    });
+  }
+
+  private async runRoundWithNode(
+    shared: RoundLifecycleSharedContext,
+  ): Promise<RoundLifecycleResult> {
+    const node = this.createRoundNode();
+    await node.run(shared);
+
+    if (!shared.result) {
+      throw new Error('Round execution did not produce a result.');
+    }
+
+    return shared.result;
+  }
+
   /**
    * Processes completion of conversation round.
    */
@@ -225,110 +439,6 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     }
 
     return this.outputHandler.outputFiles[currRound] || [];
-  }
-
-  /**
-   * Executes the shared round lifecycle pipeline used by both processing and reflection flows.
-   * Handles output initialization, response generation, and round finalization to keep
-   * lifecycle responsibilities centralized.
-   *
-   * @param currRound - Zero-based index of the round being executed.
-   * @param stateRound - Mutable state scoped to the current round of execution.
-   * @param stateGlobal - Shared agent state that spans all rounds.
-   * @param toolState - Current tool invocation state passed between rounds.
-   * @param preparedMessages - Messages prepared for the model before execution.
-   * @param prefill - Initial text inserted into the model response buffer.
-   * @param outputPath - Filesystem path where model output for this round is stored.
-   * @param roundGroupId - Identifier for grouping related log and output operations.
-   * @returns Updated round/global state, messages, completion flag, and tool state after execution.
-   */
-  private async runRoundPipeline(
-    currRound: number,
-    stateRound: AgentStateRound,
-    stateGlobal: AgentStateGlobal,
-    toolState: ToolState,
-    preparedMessages: any[],
-    prefill: string,
-    outputPath: string,
-    roundGroupId: string,
-  ): Promise<[AgentStateRound, AgentStateGlobal, any[], boolean, ToolState]> {
-    const [endTurn, updatedMessages] =
-      await this.modelHandler.initializeOutputAndPrefill(
-        this.agentConfig,
-        this.agentSetting,
-        preparedMessages,
-        toolState,
-        outputPath,
-        prefill,
-        roundGroupId,
-      );
-
-    if (!endTurn) {
-      const client = this.getClientInstance();
-      const options: ResponseCycleOptions<C> = {
-        modelHandler: this.modelHandler,
-        agentSetting: this.agentSetting,
-        agentConfig: this.agentConfig,
-        agentPrompt: this.agentPrompt,
-        userVars: this.userVars,
-        logger: this.logger,
-        client,
-        checkInterruption: () => this.checkInterruption(),
-        setAbortController: (ctrl) => {
-          this.abortController = ctrl;
-        },
-      };
-
-      const [
-        updatedStateRound,
-        updatedStateGlobal,
-        updatedToolState,
-        newEndTurn,
-      ] = await runResponseCycle(
-        options,
-        updatedMessages,
-        stateRound,
-        stateGlobal,
-        toolState,
-        outputPath,
-        roundGroupId,
-        this.executionId,
-      );
-
-      await this.handleRoundCompletion(
-        currRound,
-        updatedStateRound,
-        updatedStateGlobal,
-        {
-          outputFile: outputPath,
-          endTurn: newEndTurn,
-          processGroupId: roundGroupId,
-        },
-      );
-
-      if (currRound === 0) {
-        this.logger.debug(
-          `stateGlobal: ${JSON.stringify(updatedStateGlobal)}`,
-          roundGroupId,
-        );
-      }
-
-      return [
-        updatedStateRound,
-        updatedStateGlobal,
-        updatedMessages,
-        newEndTurn,
-        updatedToolState,
-      ];
-    }
-
-    await this.handleRoundCompletion(currRound, stateRound, stateGlobal, {
-      outputFile: outputPath,
-      endTurn,
-      processGroupId: roundGroupId,
-    });
-
-    return [stateRound, stateGlobal, updatedMessages, endTurn, toolState];
   }
 
   /**
@@ -411,16 +521,25 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       toolState.updateAccumulatedOutput(prefill);
 
       const stateRound = new AgentStateRound(currRound);
-      return this.runRoundPipeline(
+      const shared: RoundLifecycleSharedContext = {
         currRound,
         stateRound,
         stateGlobal,
         toolState,
         messages,
         prefill,
-        this.outputFile[currRound],
+        outputPath: this.outputFile[currRound],
         roundGroupId,
-      );
+      };
+
+      const result = await this.runRoundWithNode(shared);
+      return [
+        result.stateRound,
+        result.stateGlobal,
+        result.messages,
+        result.endTurn,
+        result.toolState,
+      ];
     });
   }
 
@@ -483,16 +602,25 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       const prefill = await promptBuilder.buildPrefill(currRound);
       toolState.updateAccumulatedOutput(prefill);
 
-      return this.runRoundPipeline(
+      const shared: RoundLifecycleSharedContext = {
         currRound,
         stateRound,
         stateGlobal,
         toolState,
-        roundMessages,
+        messages: roundMessages,
         prefill,
-        this.outputFile[currRound],
+        outputPath: this.outputFile[currRound],
         roundGroupId,
-      );
+      };
+
+      const result = await this.runRoundWithNode(shared);
+      return [
+        result.stateRound,
+        result.stateGlobal,
+        result.messages,
+        result.endTurn,
+        result.toolState,
+      ];
     });
   }
 

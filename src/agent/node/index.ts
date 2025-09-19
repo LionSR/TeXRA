@@ -19,10 +19,15 @@ class BaseNode<S = unknown, P extends NonIterableObject = NonIterableObject> {
     this._successors.set(action, node); return this;
   }
   getNextNode(action: Action = "default"): BaseNode | undefined {
-    const nextAction = action || 'default', next = this._successors.get(nextAction)
+    const nextAction = action || 'default';
+    const next = this._successors.get(nextAction);
     if (!next && this._successors.size > 0)
-      console.warn(`Flow ends: '${nextAction}' not found in [${Array.from(this._successors.keys())}]`)
-    return next
+      console.warn(
+        `Flow ends: '${nextAction}' not found in [${Array.from(
+          this._successors.keys(),
+        )}]`,
+      );
+    return next;
   }
   clone(): this {
     const clonedNode = Object.create(Object.getPrototypeOf(this)); Object.assign(clonedNode, this);
@@ -55,8 +60,8 @@ class BatchNode<S = unknown, P extends NonIterableObject = NonIterableObject> ex
 }
 class ParallelBatchNode<S = unknown, P extends NonIterableObject = NonIterableObject> extends Node<S, P> {
   async _exec(items: unknown[]): Promise<unknown[]> {
-    if (!items || !Array.isArray(items)) return []
-    return Promise.all(items.map((item) => super._exec(item)))
+    if (!items || !Array.isArray(items)) return [];
+    return Promise.all(items.map((item) => super._exec(item)));
   }
 }
 class Flow<S = unknown, P extends NonIterableObject = NonIterableObject> extends BaseNode<S, P> {
