@@ -30,6 +30,10 @@ import {
 import { ToolState } from '../core/ToolState';
 import { ModelHandler } from './ModelHandler';
 import { toOpenAITools } from './toolConversion';
+import {
+  normalizeOpenAIMessageContent,
+  NormalizeOpenAIMessageContentOptions,
+} from './openAIMessageUtils';
 import type { ProviderStopReason } from './types/StopReasonTypes';
 import { OPENAI_CHAT_FINISH } from './types/StopReasonTypes';
 import { MediaEntry } from '@agent/utils/mediaTypes';
@@ -412,6 +416,20 @@ export class ModelHandlerOpenAI extends ModelHandler<
         throw err;
       }
     }
+  }
+
+  /**
+   * Normalizes OpenAI chat messages based on provided options.
+   * Subclasses can opt-in by passing normalization settings.
+   */
+  protected normalizeMessages<T extends ChatCompletionMessageParam>(
+    messages: T[],
+    options?: NormalizeOpenAIMessageContentOptions,
+  ): T[] {
+    if (!options) {
+      return messages;
+    }
+    return normalizeOpenAIMessageContent(messages, options);
   }
 
   /** Initializes message array with system prompt and user content. */
