@@ -556,27 +556,34 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
   createToolUseFollowUpMessages(
     id: string,
     name: string,
-    call: any,
+    call: ResponseFunctionToolCall | ResponseFunctionToolCallItem,
     result: Record<string, unknown>,
     _toolState?: ToolState,
     text?: string,
-  ): any[] {
+  ): (ResponseInputItem | ChatCompletionMessageParam)[] {
     const messages: (ResponseInputItem | ChatCompletionMessageParam)[] = [];
     if (text) {
       messages.push({ role: 'assistant', content: [{ type: 'text', text }] });
     }
+    const callId = call.call_id ?? id;
+    const rawArguments = call.arguments as unknown;
+    const args =
+      typeof rawArguments === 'string'
+        ? rawArguments
+        : JSON.stringify(rawArguments ?? {});
     const callMsg: ResponseFunctionToolCall = {
       type: 'function_call',
-      call_id: id,
-      name,
-      arguments:
-        typeof call?.arguments === 'string'
-          ? call.arguments
-          : JSON.stringify(call?.input ?? call?.arguments ?? {}),
+      call_id: callId,
+      name: call.name ?? name,
+      arguments: args,
+      id: call.id ?? callId,
     };
+    if ('status' in call && call.status) {
+      callMsg.status = call.status;
+    }
     const resultMsg: ResponseInputItem.FunctionCallOutput = {
       type: 'function_call_output',
-      call_id: id,
+      call_id: callId,
       output: JSON.stringify(result),
     };
     messages.push(callMsg, resultMsg);

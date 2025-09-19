@@ -10,6 +10,10 @@ import {
   ChatCompletionAssistantMessageParam,
   ChatCompletionToolMessageParam,
   ChatCompletionMessageParam,
+  ChatCompletionMessageToolCall,
+  ChatCompletionMessage,
+  ChatCompletionMessageFunctionToolCall,
+  ChatCompletionMessageCustomToolCall,
 } from 'openai/resources/chat/completions';
 
 // Local imports - agent
@@ -47,7 +51,8 @@ import xmlUtils from '@utils/text/xmlUtils';
 export class ModelHandlerOpenAI extends ModelHandler<
   ChatCompletionMessageParam,
   ExtendedCompletionUsage | null,
-  OpenAIAPIResponseUsage
+  OpenAIAPIResponseUsage,
+  ChatCompletionMessageToolCall | ChatCompletionMessage.FunctionCall
 > {
   /**
    * Creates a new OpenAI client using the stored credentials.
@@ -935,6 +940,78 @@ export class ModelHandlerOpenAI extends ModelHandler<
     return reasoning;
   }
 
+  private ensureStringifiedArguments(value: unknown): string {
+    if (typeof value === 'string') {
+      return value;
+    }
+    if (value === undefined) {
+      return '{}';
+    }
+    try {
+      return JSON.stringify(value);
+    } catch (err) {
+      this.logger.warn(
+        `Failed to serialize tool arguments: ${getSdkErrorMessage(err)}`,
+      );
+      return '{}';
+    }
+  }
+
+  private isFunctionToolCall(
+    call: ChatCompletionMessageToolCall | ChatCompletionMessage.FunctionCall,
+  ): call is ChatCompletionMessageFunctionToolCall {
+    return (
+      typeof (call as ChatCompletionMessageToolCall)?.type === 'string' &&
+      (call as ChatCompletionMessageToolCall).type === 'function'
+    );
+  }
+
+  private isCustomToolCall(
+    call: ChatCompletionMessageToolCall | ChatCompletionMessage.FunctionCall,
+  ): call is ChatCompletionMessageCustomToolCall {
+    return (
+      typeof (call as ChatCompletionMessageToolCall)?.type === 'string' &&
+      (call as ChatCompletionMessageToolCall).type === 'custom'
+    );
+  }
+
+  protected normalizeToolCall(
+    id: string,
+    fallbackName: string,
+    call: ChatCompletionMessageToolCall | ChatCompletionMessage.FunctionCall,
+  ): ChatCompletionMessageToolCall {
+    if (this.isFunctionToolCall(call)) {
+      return {
+        id: call.id ?? id,
+        type: 'function',
+        function: {
+          name: call.function?.name ?? fallbackName,
+          arguments: this.ensureStringifiedArguments(call.function?.arguments),
+        },
+      };
+    }
+
+    if (this.isCustomToolCall(call)) {
+      return {
+        id: call.id ?? id,
+        type: 'custom',
+        custom: {
+          name: call.custom?.name ?? fallbackName,
+          input: this.ensureStringifiedArguments(call.custom?.input),
+        },
+      };
+    }
+
+    return {
+      id,
+      type: 'function',
+      function: {
+        name: call.name ?? fallbackName,
+        arguments: this.ensureStringifiedArguments(call.arguments),
+      },
+    };
+  }
+
   extractToolUse(responseObject: any): string | null {
     const toolCalls = responseObject?.choices?.[0]?.message?.tool_calls;
     if (Array.isArray(toolCalls) && toolCalls.length > 0) {
@@ -950,33 +1027,22 @@ export class ModelHandlerOpenAI extends ModelHandler<
   createToolUseFollowUpMessages(
     id: string,
     name: string,
-    call: any,
+    call: ChatCompletionMessageToolCall | ChatCompletionMessage.FunctionCall,
     result: Record<string, unknown>,
     _toolState?: ToolState,
     text?: string,
-  ): any[] {
+  ): [ChatCompletionAssistantMessageParam, ChatCompletionToolMessageParam] {
+    const toolCall = this.normalizeToolCall(id, name, call);
     const callMsg: ChatCompletionAssistantMessageParam = {
       role: 'assistant',
-      tool_calls: [
-        {
-          id,
-          type: 'function',
-          function: {
-            name,
-            arguments:
-              typeof call?.arguments === 'string'
-                ? call.arguments
-                : JSON.stringify(call?.input ?? call?.arguments ?? {}),
-          },
-        },
-      ],
+      tool_calls: [toolCall],
     };
     if (text) {
       callMsg.content = [{ type: 'text', text }];
     }
     const resultMsg: ChatCompletionToolMessageParam = {
       role: 'tool',
-      tool_call_id: id,
+      tool_call_id: toolCall.id ?? id,
       content: JSON.stringify(result),
     };
     return [callMsg, resultMsg];
