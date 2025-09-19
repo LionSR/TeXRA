@@ -10,7 +10,8 @@ import { ToolError, ToolResult } from '@tools/result';
 import {
   createGlobMatcher,
   joinWorkspaceRelativePath,
-  resolveWorkspaceRelativePath,
+  resolveAndFormat,
+  formatToolOutput,
   toPosixPath,
 } from '@tools/utils';
 
@@ -41,56 +42,58 @@ function formatEntry(name: string, type: vscode.FileType): string {
 
 export class LsTool extends defineTool({
   name: 'ls',
-  description:
-    'Lists files and directories in a given path within the workspace.',
+  description: 'List files and directories. Supports glob patterns for filtering.',
   schema: LsInputSchema,
 }) {
   protected async execute(input: LsInput): Promise<ToolResult> {
-    const target = resolveWorkspaceRelativePath(input.path);
+    const { resolved: target, display } = resolveAndFormat(input.path);
     const relative = target.relative === '.' ? '.' : target.relative;
 
     let stats: vscode.FileStat | undefined;
     try {
       stats = await WorkspaceFS.stat(relative);
     } catch {
-      throw new ToolError(`Path not found: ${toPosixPath(target.relative)}`);
+      throw new ToolError(`Path not found: ${display}`);
     }
 
-    const ignoreMatchers = (input.ignore ?? []).map(createGlobMatcher);
-    const shouldIgnore = (entryPath: string) =>
-      ignoreMatchers.some((matcher) => matcher(entryPath));
+    const ignorePatterns = input.ignore ?? [];
+    const ignoreMatchers = ignorePatterns.map(createGlobMatcher);
+    const shouldIgnore = ignorePatterns.length === 0 
+      ? () => false
+      : (entryPath: string) => ignoreMatchers.some((matcher) => matcher(entryPath));
 
     if (stats.type === vscode.FileType.File) {
-      const entryPath = toPosixPath(target.relative);
-      if (shouldIgnore(entryPath)) {
+      if (shouldIgnore(display)) {
         return new ToolResult({
-          output: `Listing for ${entryPath}\n(no entries after applying ignore filters)`,
+          output: formatToolOutput(
+            `Listing for ${display}`, 
+            null, 
+            '(no entries after applying ignore filters)'
+          ),
         });
       }
       return new ToolResult({
-        output: `Listing for ${entryPath}\n${formatEntry(entryPath, vscode.FileType.File)}`,
+        output: formatToolOutput(
+          `Listing for ${display}`,
+          formatEntry(display, vscode.FileType.File)
+        ),
       });
     }
 
     const entries = await WorkspaceFS.readDir(relative);
-    const filtered = entries.filter(([name]) => {
-      if (ignoreMatchers.length === 0) {
-        return true;
-      }
-      const resolvedChild = joinWorkspaceRelativePath(target.relative, name);
-      const entryPath = toPosixPath(resolvedChild.relative);
-      return !shouldIgnore(entryPath) && !shouldIgnore(name);
-    });
+    const filtered = ignorePatterns.length === 0
+      ? entries
+      : entries.filter(([name]) => {
+          const resolvedChild = joinWorkspaceRelativePath(target.relative, name);
+          const entryPath = toPosixPath(resolvedChild.relative);
+          return !shouldIgnore(entryPath) && !shouldIgnore(name);
+        });
 
     const sorted = filtered.sort(([a], [b]) => a.localeCompare(b));
-    const formatted = sorted
-      .map(([name, type]) => formatEntry(name, type))
-      .join('\n');
-    const header = `Listing for ${toPosixPath(target.relative)}`;
-    const output = formatted
-      ? `${header}\n${formatted}`
-      : `${header}\n(no entries)`;
-
-    return new ToolResult({ output });
+    const formatted = sorted.map(([name, type]) => formatEntry(name, type));
+    
+    return new ToolResult({
+      output: formatToolOutput(`Listing for ${display}`, formatted),
+    });
   }
 }
