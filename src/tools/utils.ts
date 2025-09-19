@@ -109,3 +109,30 @@ export function createGlobMatcher(pattern: string): (value: string) => boolean {
 
   return (value: string) => matcher.match(value.replace(/\\/g, '/'));
 }
+
+/**
+ * Format tool output with a header and content.
+ */
+export function formatToolOutput(
+  header: string,
+  content: string | string[] | null,
+  noMatchesText: string = '(no entries)',
+): string {
+  if (!content || (Array.isArray(content) && content.length === 0)) {
+    return `${header}\n${noMatchesText}`;
+  }
+  const lines = Array.isArray(content) ? content.join('\n') : content;
+  return `${header}\n${lines}`;
+}
+
+/**
+ * Common pattern for resolving and formatting workspace paths.
+ */
+export function resolveAndFormat(path?: string): {
+  resolved: WorkspacePathResolution;
+  display: string;
+} {
+  const resolved = resolveWorkspaceRelativePath(path);
+  const display = toPosixPath(resolved.relative);
+  return { resolved, display };
+}

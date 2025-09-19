@@ -6,7 +6,7 @@ import { defineTool } from './core/define';
 
 // Local imports - tools
 import { ToolError, ToolResult } from '@tools/result';
-import { resolveWorkspaceRelativePath, toPosixPath } from '@tools/utils';
+import { resolveAndFormat } from '@tools/utils';
 
 // Local imports - utils
 import { executeCommand } from '@utils/system/execUtils';
@@ -95,16 +95,12 @@ function applyHeadLimit(output: string | null, headLimit?: number): string {
 export class GrepTool extends defineTool({
   name: 'grep',
   description:
-    'A powerful search tool built on ripgrep.\
-  Supports full regex syntax (e.g., "log.*Error", "function\s+\w+")". \
-  Returns matching file paths sorted by modification time. \
-  Filter files with glob parameter (e.g., "*.js", "**/*.tsx") or type parameter (e.g., "js", "py", "rust"). \
-  Use this tool when you need to find files by name patterns.',
+    'Search file contents using regex patterns. Supports context (-A/-B/-C), glob/type filters, and multiline matching.',
   schema: GrepInputSchema,
 }) {
   protected async execute(input: GrepInput): Promise<ToolResult> {
     const outputMode: OutputMode = input.output_mode ?? 'files_with_matches';
-    const searchPath = resolveWorkspaceRelativePath(input.path);
+    const { resolved: searchPath, display } = resolveAndFormat(input.path);
 
     const args = buildArguments(input, outputMode);
     const command = [
@@ -125,11 +121,9 @@ export class GrepTool extends defineTool({
 
     const limitedOutput = applyHeadLimit(result.stdout, input.head_limit);
 
-    const outputDetails =
-      searchPath.relative === '.' ? '.' : toPosixPath(searchPath.relative);
     const summary = limitedOutput
       ? limitedOutput
-      : `No matches found for pattern in ${outputDetails}`;
+      : `No matches found for pattern in ${display}`;
 
     return new ToolResult({ output: summary });
   }
