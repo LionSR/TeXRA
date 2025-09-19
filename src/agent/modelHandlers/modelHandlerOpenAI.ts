@@ -1192,7 +1192,7 @@ export class ModelHandlerOpenAI extends ModelHandler<
       tool_call_id: toolCall.id ?? id,
       content: JSON.stringify(result),
     };
-    let messages: ChatCompletionMessageParam[] = [];
+    const messages: ChatCompletionMessageParam[] = [];
     messages.push(callMsg, resultMsg);
     return messages;
   }
