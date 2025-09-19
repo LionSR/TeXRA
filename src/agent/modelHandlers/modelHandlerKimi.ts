@@ -9,6 +9,7 @@ import { ToolState } from '../core/ToolState';
 
 // Local imports - agent components
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
+import { OpenAIStreamDeltaAggregator } from './openAIStreamAggregators';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 
 // Local imports - utilities
@@ -21,6 +22,10 @@ import { K_SLICE, MESSAGE_PREVIEW_LENGTH } from '@utils/config';
  * Handler for Moonshot Kimi models using OpenAI-compatible API.
  */
 export class ModelHandlerKimi extends ModelHandlerOpenAI {
+  protected override getStreamAggregator() {
+    return new OpenAIStreamDeltaAggregator();
+  }
+
   /**
    * Get the base URL for the Moonshot API.
    * The Moonshot API has a different base URL than OpenAI.

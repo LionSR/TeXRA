@@ -8,6 +8,7 @@ import { ToolState } from '../core/ToolState';
 
 // Local imports - agent components
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
+import { OpenAIStreamDeltaAggregator } from './openAIStreamAggregators';
 import type { ProviderStopReason } from './types/StopReasonTypes';
 import { K_SLICE } from '@utils/config';
 
@@ -15,6 +16,10 @@ import { K_SLICE } from '@utils/config';
  * Handler for xAI models using OpenAI-compatible API.
  */
 export class ModelHandlerXAI extends ModelHandlerOpenAI {
+  protected override getStreamAggregator() {
+    return new OpenAIStreamDeltaAggregator();
+  }
+
   /**
    * Process thinking blocks for xAI models
    * @param responseObject The raw response object from the model

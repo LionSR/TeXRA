@@ -9,6 +9,7 @@ import { ToolState } from '../core/ToolState';
 
 // Local imports - agent components
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
+import { OpenAIStreamDeltaAggregator } from './openAIStreamAggregators';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 
 // Local imports - utilities
@@ -20,6 +21,10 @@ import { MESSAGE_PREVIEW_LENGTH } from '@utils/config';
  * Handler for DashScope Qwen models using OpenAI-compatible API.
  */
 export class ModelHandlerDashScope extends ModelHandlerOpenAI {
+  protected override getStreamAggregator() {
+    return new OpenAIStreamDeltaAggregator();
+  }
+
   /**
    * Process thinking blocks for DashScope models
    * @param responseObject The raw response object from the model

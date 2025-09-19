@@ -15,6 +15,7 @@ import { ToolState } from '../core/ToolState';
 
 // Local imports - agent components
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
+import { OpenAIStreamDeltaAggregator } from './openAIStreamAggregators';
 
 // Local imports - utilities
 import { convertContentToString } from '@agent/utils/text/messageUtils';
@@ -57,6 +58,10 @@ import { K_SLICE, MESSAGE_PREVIEW_LENGTH } from '@utils/config';
  * Handler for DeepSeek models using OpenAI-compatible API.
  */
 export class ModelHandlerDeepSeek extends ModelHandlerOpenAI {
+  protected override getStreamAggregator() {
+    return new OpenAIStreamDeltaAggregator();
+  }
+
   /**
    * Process thinking blocks for DeepSeek models
    * @param responseObject The raw response object from the model
