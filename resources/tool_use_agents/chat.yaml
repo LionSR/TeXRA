@@ -1,7 +1,7 @@
 name: chat
 settings:
   agentType: toolUse
-  tools: [bash, file_op]
+  tools: [bash, file_op, glob, grep, ls]
 prompts:
   systemPrompt: |
     You are a scientist. Reason deeply.
