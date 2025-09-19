@@ -19,9 +19,9 @@ import { BaseTool } from '@tools/core/base';
 import { ToolResult } from '@tools/result';
 import xmlUtils from '@utils/text/xmlUtils';
 
-export interface ToolUseCycleOptions {
+export interface ToolUseCycleOptions<C = unknown> {
   /** Model handler for API interactions */
-  modelHandler: IModelHandler;
+  modelHandler: IModelHandler<any, any, any, any, C>;
   /** Agent settings with tool configuration */
   agentSetting: AgentSetting;
   /** Prompt configuration for the agent */
@@ -31,7 +31,7 @@ export interface ToolUseCycleOptions {
   /** Logger instance for progress output */
   logger: AgentLogger;
   /** Provider client object */
-  client: any;
+  client: C;
   /** Registry mapping tool names to implementations */
   toolRegistry: Record<string, BaseTool<any>>;
   /** Check if the agent run has been interrupted */
@@ -48,8 +48,8 @@ export interface ToolUseCycleOptions {
  * Execute a tool-use interaction loop until the model returns no tool calls or
  * signals end of turn.
  */
-export async function runToolUseCycle(
-  options: ToolUseCycleOptions,
+export async function runToolUseCycle<C = unknown>(
+  options: ToolUseCycleOptions<C>,
   messages: ProviderMessage[],
   groupId?: string,
 ): Promise<void> {

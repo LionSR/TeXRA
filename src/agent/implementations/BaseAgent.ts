@@ -21,8 +21,8 @@ import { sleep } from '@utils/helpers';
 /**
  * Minimal abstract base class providing shared setup and interruption logic.
  */
-export abstract class BaseAgent implements IAgent {
-  protected modelHandler: IModelHandler;
+export abstract class BaseAgent<C = unknown> implements IAgent {
+  protected modelHandler: IModelHandler<any, any, any, any, C>;
   protected agentConfig: AgentConfig;
   protected agentSetting: AgentSetting;
   protected agentPrompt: AgentPrompt;
@@ -31,7 +31,7 @@ export abstract class BaseAgent implements IAgent {
   protected usageMonitor: UsageMonitor;
   protected runGroupId?: string;
   protected userVars: Record<string, any> = {};
-  protected client: any;
+  protected client: C | null = null;
   protected isInterrupted = false;
   protected abortController: AbortController | null = null;
   protected executionId?: ExecutionId;
@@ -43,7 +43,7 @@ export abstract class BaseAgent implements IAgent {
   }
 
   constructor(
-    modelHandler: IModelHandler,
+    modelHandler: IModelHandler<any, any, any, any, C>,
     agentConfig: AgentConfig,
     agentSetting: AgentSetting,
     agentPrompt: AgentPrompt,
@@ -71,6 +71,14 @@ export abstract class BaseAgent implements IAgent {
   protected async initializeClient(): Promise<void> {
     this.client = await this.modelHandler.getClient();
     await sleep(SHORT_SLEEP_MS);
+  }
+
+  /** Retrieve the initialized client instance. */
+  protected getClientInstance(): C {
+    if (this.client === null) {
+      throw new Error('Model client has not been initialized.');
+    }
+    return this.client;
   }
 
   /** Compute the stream tab identifier for this agent execution. */
