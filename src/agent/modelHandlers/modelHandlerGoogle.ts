@@ -62,7 +62,12 @@ export class ModelHandlerGoogle extends ModelHandlerOpenAI {
   }
 
   /** Computes cost based on Google's token usage format. */
-  computePrice(responseUsage: any): number {
+  computePrice(
+    responseUsage:
+      | GenerateContentResponseUsageMetadata
+      | CompletionUsage
+      | null,
+  ): number {
     if (!responseUsage) return 0;
 
     const normalized = this.normalizeToOpenAIFormat(responseUsage);
@@ -72,10 +77,11 @@ export class ModelHandlerGoogle extends ModelHandlerOpenAI {
   }
 
   /** Creates usage statistics from Google's response format. */
-
-  // In the future i want to type this to GenerateContentResponseUsageMetadata | CompletionUsage, but this needs to change the base class
   computeResponseUsage(
-    responseUsage: any,
+    responseUsage:
+      | GenerateContentResponseUsageMetadata
+      | CompletionUsage
+      | null,
     responseTime: number,
   ): OpenAIAPIResponseUsage {
     if (!responseUsage) {
