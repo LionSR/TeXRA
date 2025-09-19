@@ -461,18 +461,20 @@ export class ModelHandlerAnthropic extends ModelHandler<
       if (media.media_category === 'image') {
         // for backward compatibility
         // Always ensure media_type exists
-        if (!media.media_type) {
+        const originalMediaType = media.media_type;
+        let resolvedMediaType = originalMediaType;
+        if (!resolvedMediaType) {
           // Default to image/png since PDFs from TikZ are converted to PNG
-          media.media_type = 'image/png';
           this.logger.warn(
             `No media_type found for image ${media.file_name}, defaulting to image/png`,
           );
+          resolvedMediaType = 'image/png';
         }
 
         // Check for native PDF support
         const isPdf =
           this.capabilities.supportsNativePdf &&
-          media.media_type === 'application/pdf';
+          originalMediaType === 'application/pdf';
         const descriptionBlock = {
           type: 'text',
           text: `${isPdf ? 'Document' : 'Image'}: ${media.file_name}`,
@@ -492,16 +494,15 @@ export class ModelHandlerAnthropic extends ModelHandler<
         }
 
         let imageMediaType: BetaBase64ImageSource['media_type'];
-        if (isSupportedImageMediaType(media.media_type)) {
-          imageMediaType = media.media_type;
+        if (isSupportedImageMediaType(resolvedMediaType)) {
+          imageMediaType = resolvedMediaType;
         } else {
-          if (media.media_type !== 'image/png') {
+          if (resolvedMediaType && resolvedMediaType !== 'image/png') {
             this.logger.warn(
-              `Unsupported image media type ${media.media_type} for ${media.file_name}, defaulting to image/png`,
+              `Unsupported image media type ${resolvedMediaType} for ${media.file_name}, defaulting to image/png`,
             );
           }
           imageMediaType = 'image/png';
-          media.media_type = imageMediaType;
         }
 
         const imageBlock = {
