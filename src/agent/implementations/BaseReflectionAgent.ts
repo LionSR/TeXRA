@@ -9,6 +9,7 @@ import {
 } from '@agent/core/AgentDataclass';
 import { AgentStateRound, AgentStateGlobal } from '@agent/core/AgentState';
 import { runResponseCycle } from '@agent/core/ResponseCycle';
+import type { ResponseCycleOptions } from '@agent/core/ResponseCycle';
 import { ToolState } from '@agent/core/ToolState';
 import { BaseAgent } from '@agent/implementations/BaseAgent';
 import type { IModelHandler } from '@agent/modelHandlers';
@@ -55,7 +56,7 @@ export interface RoundOutputOptions {
  * Provides core functionality for processing inputs, managing state, and handling outputs
  * across multiple conversation rounds.
  */
-export abstract class BaseReflectionAgent extends BaseAgent {
+export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
   /** File paths for each round's raw model output. */
   protected outputFile: string[];
   protected outputFiles: { [key: number]: string[] };
@@ -70,7 +71,7 @@ export abstract class BaseReflectionAgent extends BaseAgent {
   public toolStates: ToolState[] = [];
 
   constructor(
-    modelHandler: IModelHandler,
+    modelHandler: IModelHandler<any, any, any, any, C>,
     agentConfig: AgentConfig,
     agentSetting: AgentSetting,
     agentPrompt: AgentPrompt,
@@ -263,25 +264,28 @@ export abstract class BaseReflectionAgent extends BaseAgent {
       );
 
     if (!endTurn) {
+      const client = this.getClientInstance();
+      const options: ResponseCycleOptions<C> = {
+        modelHandler: this.modelHandler,
+        agentSetting: this.agentSetting,
+        agentConfig: this.agentConfig,
+        agentPrompt: this.agentPrompt,
+        userVars: this.userVars,
+        logger: this.logger,
+        client,
+        checkInterruption: () => this.checkInterruption(),
+        setAbortController: (ctrl) => {
+          this.abortController = ctrl;
+        },
+      };
+
       const [
         updatedStateRound,
         updatedStateGlobal,
         updatedToolState,
         newEndTurn,
       ] = await runResponseCycle(
-        {
-          modelHandler: this.modelHandler,
-          agentSetting: this.agentSetting,
-          agentConfig: this.agentConfig,
-          agentPrompt: this.agentPrompt,
-          userVars: this.userVars,
-          logger: this.logger,
-          client: this.client,
-          checkInterruption: () => this.checkInterruption(),
-          setAbortController: (ctrl) => {
-            this.abortController = ctrl;
-          },
-        },
+        options,
         updatedMessages,
         stateRound,
         stateGlobal,
