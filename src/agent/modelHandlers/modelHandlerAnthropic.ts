@@ -228,28 +228,55 @@ export class ModelHandlerAnthropic extends ModelHandler<
         // in the future if we pass stream to outside, calling stream.controller.abort() will abort the stream; which will be very useful for our stop button
         // we should also make sure partial results can be returned in the presence of errors!
         const stream = client.beta.messages.stream(options, { signal });
-        const groupId = this.logger.getActiveGroupId();
-        const thinking = this.createThinkingStream(groupId);
-        const output = this.isOutputStreamingEnabled()
-          ? this.createOutputStream(groupId)
-          : undefined;
-        stream.on('thinking', (delta: string) => {
-          thinking.append(delta);
-        });
-        stream.on('text', (delta: string) => {
-          output?.append(delta);
-        });
 
-        // Note that there is no second consumption problem as per anthropic sdk examples
-        response = await stream.finalMessage();
-        const finalReasoning = this.processThinkingBlock(response);
-        thinking.finalize(finalReasoning ?? undefined);
-        const finalOutput =
-          response.content
-            ?.filter((c: any) => c.type === 'text')
-            ?.map((c: any) => c.text)
-            .join('') ?? '';
-        if (output) output.finalize(finalOutput);
+        if (signal?.aborted) {
+          stream.controller.abort();
+          const abortError =
+            signal.reason ??
+            Object.assign(new Error('The operation was aborted.'), {
+              name: 'AbortError',
+            });
+          throw abortError;
+        }
+
+        let cleanupAbortListener: (() => void) | undefined;
+        if (signal) {
+          const abortListener = () => {
+            stream.controller.abort();
+            signal.removeEventListener('abort', abortListener);
+          };
+          signal.addEventListener('abort', abortListener);
+          cleanupAbortListener = () => {
+            signal.removeEventListener('abort', abortListener);
+          };
+        }
+
+        try {
+          const groupId = this.logger.getActiveGroupId();
+          const thinking = this.createThinkingStream(groupId);
+          const output = this.isOutputStreamingEnabled()
+            ? this.createOutputStream(groupId)
+            : undefined;
+          stream.on('thinking', (delta: string) => {
+            thinking.append(delta);
+          });
+          stream.on('text', (delta: string) => {
+            output?.append(delta);
+          });
+
+          // Note that there is no second consumption problem as per anthropic sdk examples
+          response = await stream.finalMessage();
+          const finalReasoning = this.processThinkingBlock(response);
+          thinking.finalize(finalReasoning ?? undefined);
+          const finalOutput =
+            response.content
+              ?.filter((c: any) => c.type === 'text')
+              ?.map((c: any) => c.text)
+              .join('') ?? '';
+          if (output) output.finalize(finalOutput);
+        } finally {
+          cleanupAbortListener?.();
+        }
       } else {
         response = await client.beta.messages.create(options, { signal });
       }
