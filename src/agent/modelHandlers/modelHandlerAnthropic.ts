@@ -9,6 +9,7 @@ import {
   ContentBlock,
   ContentBlockParam,
   MessageCreateParams,
+  ToolUseBlock,
 } from '@anthropic-ai/sdk/resources/messages';
 
 // Local imports - agent
@@ -51,7 +52,8 @@ import xmlUtils from '@utils/text/xmlUtils';
 export class ModelHandlerAnthropic extends ModelHandler<
   MessageParam,
   AnthropicUsage,
-  AnthropicAPIResponseUsage
+  AnthropicAPIResponseUsage,
+  ToolUseBlock
 > {
   async getClient(): Promise<Anthropic> {
     const apiKey = await this.getApiKey();
@@ -1093,12 +1095,12 @@ export class ModelHandlerAnthropic extends ModelHandler<
   createToolUseFollowUpMessages(
     id: string,
     name: string,
-    call: any,
+    call: ToolUseBlock,
     result: Record<string, unknown>,
     toolState?: ToolState,
     text?: string,
-  ): any[] {
-    const content: any[] = [];
+  ): MessageParam[] {
+    const content: ContentBlockParam[] = [];
     if (
       this.capabilities.supportsReasoning &&
       toolState?.thinkingBlocks &&
@@ -1112,17 +1114,18 @@ export class ModelHandlerAnthropic extends ModelHandler<
     if (text) {
       content.push({ type: 'text', text });
     }
+    const toolInput = call?.input ?? {};
     content.push({
       type: 'tool_use',
       id,
       name,
-      input: call?.input ?? call?.arguments ?? {},
+      input: toolInput,
     });
-    const callMsg = {
+    const callMsg: MessageParam = {
       role: 'assistant',
       content,
     };
-    const resultMsg = {
+    const resultMsg: MessageParam = {
       role: 'user',
       content: [
         {
