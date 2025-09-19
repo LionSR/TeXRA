@@ -12,6 +12,7 @@ import {
   resolveAndFormat,
   formatToolOutput,
   toPosixPath,
+  getGitignoreMatcher,
 } from '@tools/utils';
 
 // Local imports - utils
@@ -39,6 +40,7 @@ export class GlobTool extends defineTool({
 }) {
   protected async execute(input: GlobInput): Promise<ToolResult> {
     const { resolved: base, display } = resolveAndFormat(input.path);
+    const gitignore = await getGitignoreMatcher();
 
     let matches: string[];
     try {
@@ -66,7 +68,7 @@ export class GlobTool extends defineTool({
       }
 
       const relativePath = resolved.relative === '.' ? '.' : resolved.relative;
-      if (relativePath === '.') {
+      if (relativePath === '.' || gitignore.ignores(relativePath)) {
         continue;
       }
 
