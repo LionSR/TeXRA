@@ -6,19 +6,18 @@ import {
   AgentSetting,
 } from '../core/AgentDataclass';
 import { ToolState } from '../core/ToolState';
-import { runToolUseCycle } from '../core/ToolUseCycle';
-import type { ToolUseCycleOptions } from '../core/ToolUseCycle';
 import type { IModelHandler } from '../modelHandlers';
 import type { ProviderMessage } from '../modelHandlers/types/ProviderMessage';
-import { getSystemPromptWithRules } from '../utils/promptHelpers';
-import { renderPrompt } from '../utils/promptUtils';
-import { TOOL_USE_INSTRUCTIONS } from '../utils/toolUsePrompt';
 // Base class for tool-use agents
 
 // Standard library imports
 
 // Local imports - core
 import { BaseAgent } from './BaseAgent';
+import {
+  createToolUseFlow,
+  type ToolUseRunShared,
+} from './toolUse/nodes/ToolUseFlow';
 import type { ToolDefinition } from '@model';
 import { BaseTool } from '@tools/core/base';
 import { DEFAULT_TOOL_REGISTRY } from '@tools/registry';
@@ -126,100 +125,64 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
   }
 
   public async run(): Promise<void> {
+    const flow = createToolUseFlow<C>();
+    const shared = this.createRunShared();
+
     try {
-      await this.init(undefined, { createGroup: false });
-      await this.initializeClient();
-
-      let shouldSkipCycle = false;
-
-      if (this.resumeSnapshot) {
-        this.logger.info('Resuming tool-use session from saved state.');
-        // Validate messages before hydrating
-        const messages = this.resumeSnapshot.messages ?? [];
-        if (!Array.isArray(messages)) {
-          throw new Error('Invalid snapshot: messages must be an array');
-        }
-        // Cast with confidence after validation
-        this.messages = messages as ProviderMessage[];
-        this.toolState = ToolUseSessionManager.hydrateToolStateFromSnapshot(
-          this.resumeSnapshot,
-        );
-        shouldSkipCycle = true;
-        this.resumeSnapshot = null;
-      } else {
-        const [systemPrompt, userRequest, userPrefix] = await Promise.all([
-          getSystemPromptWithRules(
-            `${this.agentPrompt.systemPrompt}\n${TOOL_USE_INSTRUCTIONS}`,
-            this.userVars,
-          ),
-          renderPrompt(this.agentPrompt.userRequest, this.userVars),
-          renderPrompt(this.agentPrompt.userPrefix, this.userVars),
-        ]);
-
-        this.messages = await this.modelHandler.initializeMessages(
-          userPrefix,
-          userRequest,
-          undefined,
-          systemPrompt,
-        );
-
-        this.toolState = new ToolState();
-      }
-
-      const resolvedSetting = {
-        ...this.agentSetting,
-        tools: this.getTools(),
-      };
-
-      const client = this.getClientInstance();
-      const cycleOptions: ToolUseCycleOptions<C> = {
-        modelHandler: this.modelHandler,
-        agentSetting: resolvedSetting,
-        agentPrompt: this.agentPrompt,
-        userVars: this.userVars,
-        logger: this.logger,
-        client,
-        toolRegistry: this.toolRegistry,
-        checkInterruption: () => this.checkInterruption(),
-        setAbortController: (ctrl: AbortController | null) => {
-          this.abortController = ctrl;
-        },
-        toolState: this.toolState,
-        modelName: this.agentConfig.model,
-      } as const;
-
-      while (true) {
-        if (!shouldSkipCycle) {
-          await runToolUseCycle(cycleOptions, this.messages);
-        } else {
-          shouldSkipCycle = false;
-        }
-
-        if (this.checkInterruption()) break;
-
-        const hasQueuedFollowUp = this.followUpQueue.length > 0;
-        if (!hasQueuedFollowUp) {
-          await this.enterWaitingState();
-        } else {
-          await this.clearPersistedSnapshot();
-        }
-
-        const followUp = await this.waitForFollowUp();
-        if (!followUp || this.checkInterruption()) break;
-
-        await this.markRunning();
-        await this.clearPersistedSnapshot();
-
-        this.logger.userMessage(followUp);
-        this.messages = await this.modelHandler.createUserFollowUpMessages(
-          this.messages,
-          followUp,
-        );
-      }
+      await flow.run(shared);
     } finally {
       await this.clearPersistedSnapshot();
       this.cleanup();
     }
+  }
+
+  private createRunShared(): ToolUseRunShared<C> {
+    const shared: ToolUseRunShared<C> = {
+      agent: this,
+      agentConfig: this.agentConfig,
+      agentSetting: this.agentSetting,
+      agentPrompt: this.agentPrompt,
+      modelHandler: this.modelHandler,
+      toolRegistry: this.toolRegistry,
+      logger: this.logger,
+      shouldSkipCycle: false,
+      cycleOptions: undefined,
+      getUserVars: () => this.userVars,
+      getMessages: () => this.messages,
+      setMessages: (messages: ProviderMessage[]) => {
+        this.messages = messages;
+      },
+      getToolState: () => this.toolState,
+      setToolState: (state: ToolState | null) => {
+        this.toolState = state;
+      },
+      getResumeSnapshot: () => this.resumeSnapshot,
+      setResumeSnapshot: (snapshot: ToolUseSessionSnapshot | null) => {
+        this.resumeSnapshot = snapshot;
+      },
+      waitForFollowUp: () => this.waitForFollowUp(),
+      hasQueuedFollowUp: () => this.followUpQueue.length > 0,
+      enterWaitingState: () => this.enterWaitingState(),
+      clearPersistedSnapshot: () => this.clearPersistedSnapshot(),
+      markRunning: () => this.markRunning(),
+      logUserMessage: (text: string) => {
+        this.logger.userMessage(text);
+      },
+      createUserFollowUpMessages: (
+        messages: ProviderMessage[],
+        followUp: string,
+      ) => this.modelHandler.createUserFollowUpMessages(messages, followUp),
+      checkInterruption: () => this.checkInterruption(),
+      initializeClient: () => this.initializeClient(),
+      getClientInstance: () => this.getClientInstance(),
+      initAgent: () => this.init(undefined, { createGroup: false }),
+      resolveTools: () => this.getTools(),
+      setAbortController: (ctrl: AbortController | null) => {
+        this.abortController = ctrl;
+      },
+    };
+
+    return shared;
   }
 
   private async enterWaitingState(): Promise<void> {
