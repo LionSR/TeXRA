@@ -1034,16 +1034,30 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     _toolState?: ToolState,
     text?: string,
   ): [Content, Content] {
+    // Handle both args and input fields for backward compatibility
     const args =
       call?.args && typeof call.args === 'object'
         ? (call.args as Record<string, unknown>)
-        : {};
+        : ((call as any)?.input ?? {});
+
+    // Use call.name if available, fall back to provided name
     const functionName = call?.name ?? name;
+
+    // Create the call part with the function name and arguments
     const callPart = createPartFromFunctionCall(functionName, args);
+
+    // Use consistent ID for both call and result to ensure proper correlation
+    const callId = call?.id ?? id;
     if (callPart.functionCall) {
-      callPart.functionCall.id = call?.id ?? id;
+      callPart.functionCall.id = callId;
     }
-    const resultPart = createPartFromFunctionResponse(id, name, result);
+
+    // Use the same ID for the result to maintain correlation
+    const resultPart = createPartFromFunctionResponse(
+      callId,
+      functionName,
+      result,
+    );
     const callParts: Part[] = [];
     if (text) {
       callParts.push(createPartFromText(text));
