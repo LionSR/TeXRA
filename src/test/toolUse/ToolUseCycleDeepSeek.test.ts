@@ -80,6 +80,37 @@ class MockHandler extends ModelHandlerDeepSeek {
   }
 }
 
+class ThinkingMockHandler extends ModelHandlerDeepSeek {
+  async getClient(): Promise<OpenAI> {
+    return {} as OpenAI;
+  }
+  override getStreamingConfig(): boolean {
+    return true;
+  }
+  override async createResponse(): Promise<any> {
+    return {
+      choices: [
+        {
+          message: {
+            role: 'assistant',
+            content: 'final answer',
+            reasoning_content: 'internal plan',
+          },
+          finish_reason: 'stop',
+        },
+      ],
+    };
+  }
+  override extractResponse(resp: any): [string, any, any] {
+    const message = resp?.choices?.[0]?.message ?? {};
+    return [
+      message.content ?? '',
+      undefined,
+      resp?.choices?.[0]?.finish_reason ?? 'stop',
+    ];
+  }
+}
+
 describe('runToolUseCycle DeepSeek', () => {
   it('logs tool calls and creates follow-up message', async () => {
     const config: ModelConfig = {
@@ -159,5 +190,75 @@ describe('runToolUseCycle DeepSeek', () => {
       tool_call_id: 'c1',
       content: JSON.stringify({ output: 'hello' }),
     });
+  });
+
+  it('logs thinking content when streaming is enabled', async () => {
+    const config: ModelConfig = {
+      name: 'ds',
+      fullName: 'ds',
+      provider: ModelProvider.DEEPSEEK,
+      maxOutputTokens: 10,
+      inputPrice: 0,
+      outputPrice: 0,
+      contextWindow: 1000,
+      capabilities: { ...DEFAULT_MODEL_CAPABILITIES },
+      openRouterOnly: false,
+    };
+    const handler = new ThinkingMockHandler(config);
+    const logger = new AgentLogger('TestHandler', true);
+    handler.setLogger(logger);
+    const setting: AgentSetting = {
+      agentType: AgentType.ToolUse,
+      documentTag: 'doc',
+      temperature: 0,
+      isRewrite: true,
+      rounds: 1,
+      prefills: [],
+      outputExt: 'txt',
+      endTag: '</doc>',
+      requiredFiles: {},
+      requiredFilesInternal: {},
+      defaultOutputFiles: [],
+      useMultipleOutputs: false,
+      filePatternsContain: [],
+      tools: [],
+    };
+    const prompt: AgentPrompt = {
+      systemPrompt: '',
+      userPrefix: '',
+      userRequest: '',
+      userReflect: '',
+    };
+    const toolState = new ToolState();
+    const options: ToolUseCycleOptions<OpenAI> = {
+      modelHandler: handler,
+      agentSetting: setting,
+      agentPrompt: prompt,
+      userVars: {},
+      logger,
+      client: {} as OpenAI,
+      toolRegistry: {},
+      checkInterruption: () => false,
+      setAbortController: () => {},
+      toolState,
+      modelName: 'ds',
+    };
+    const events: any[] = [];
+    const dispose = bus.on('addLogMessage', (e) => events.push(e));
+    const messages: ProviderMessage[] = [];
+
+    await runToolUseCycle(options, messages);
+    dispose();
+
+    const thinkingEvents = events.filter(
+      (e) => e.logMessage.messageType === MESSAGE_TYPES.THINKING,
+    );
+    assert.equal(thinkingEvents.length, 1);
+    assert.ok(
+      thinkingEvents[0].logMessage.text.includes('internal plan'),
+      'expected thinking log to include the reasoning content',
+    );
+    assert.equal(messages.length, 1);
+    assert.equal((messages[0] as any)?.role, 'assistant');
   });
 });

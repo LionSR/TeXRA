@@ -122,16 +122,19 @@ export async function runToolUseCycle<C = unknown>(
       break;
     }
 
+    const thinkingPreviouslyAdded = toolState?.thinkingAdded ?? false;
     const thinking = modelHandler.processThinkingBlock(
       response,
       groupId,
       toolState,
     );
     const useStreaming = modelHandler.getStreamingConfig();
-    if (thinking && !useStreaming) {
+    if (thinking) {
       const formatted = await xmlUtils.formatContent(thinking);
       if (formatted.trim().length > 0) {
-        logger.info(formatted, groupId, MESSAGE_TYPES.THINKING);
+        if (!useStreaming || !thinkingPreviouslyAdded) {
+          logger.info(formatted, groupId, MESSAGE_TYPES.THINKING);
+        }
       }
     }
 
