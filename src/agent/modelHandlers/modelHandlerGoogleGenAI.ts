@@ -10,12 +10,14 @@ import {
   FinishReason,
   type Candidate,
   type FunctionCall,
+  type Tool,
   File,
   createPartFromText,
   createPartFromUri,
   createPartFromFunctionCall,
   createPartFromFunctionResponse,
   GenerateContentConfig,
+  type CountTokensParameters,
   type CreateChatParameters,
   type SendMessageParameters,
   type UploadFileParameters,
@@ -244,37 +246,60 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       generationConfig.tools = toGoogleTools(tools);
     }
 
+    const systemInstruction = systemPrompt
+      ? {
+          role: 'system',
+          parts: [createPartFromText(systemPrompt)],
+        }
+      : undefined;
+
     const chatParams: CreateChatParameters = {
       model: this.config.fullName,
       history: chatHistory,
       config: generationConfig,
-      ...(systemPrompt && {
-        systemInstruction: {
-          role: 'system',
-          parts: [createPartFromText(systemPrompt)],
-        },
-      }),
+      ...(systemInstruction && { systemInstruction }),
     };
 
     if (this.capabilities.supportsTokenCounting) {
       try {
         const countContents: Content[] = [];
-        if (systemPrompt) {
-          countContents.push({
-            role: 'system',
-            parts: [createPartFromText(systemPrompt)],
-          });
+        if (systemInstruction) {
+          countContents.push(systemInstruction);
         }
         countContents.push(...chatHistory);
         // The token count API expects the upcoming message as part of the
         // history, so append the final user message that will be sent next.
         countContents.push({ role: 'user', parts: lastMessageParts });
 
-        const responseTokenCount = await client.models.countTokens({
+        const toolsForCounting = generationConfig.tools
+          ?.filter(
+            (tool): tool is Tool =>
+              typeof tool === 'object' &&
+              tool !== null &&
+              'functionDeclarations' in tool,
+          )
+          .map((tool) => ({ ...tool }));
+
+        const countTokenParams: CountTokensParameters = {
           model: this.config.fullName,
           contents: countContents,
-          config: { abortSignal: signal },
-        });
+          config: {
+            abortSignal: signal,
+            ...(systemInstruction && { systemInstruction }),
+            ...(toolsForCounting &&
+              toolsForCounting.length > 0 && {
+                tools: toolsForCounting,
+              }),
+            ...(generationConfig.thinkingConfig && {
+              generationConfig: {
+                thinkingConfig: generationConfig.thinkingConfig,
+              },
+            }),
+          },
+        };
+
+        const responseTokenCount =
+          await client.models.countTokens(countTokenParams);
         const totalTokens = responseTokenCount.totalTokens ?? 0;
         this.logger.debug(`Token count of message: ${totalTokens}`);
         if (totalTokens > this.config.contextWindow) {
@@ -294,6 +319,17 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
           );
           generationConfig.maxOutputTokens =
             this.config.contextWindow - totalTokens - 10;
+          this.logger.debug(
+            `Adjusted token budget => prompt: ${totalTokens}, maxOutputTokens: ${generationConfig.maxOutputTokens}, combined: ${
+              totalTokens + (generationConfig.maxOutputTokens ?? 0)
+            }, window: ${this.config.contextWindow}`,
+          );
+        } else {
+          this.logger.debug(
+            `Token budget within limit => prompt: ${totalTokens}, maxOutputTokens: ${generationConfig.maxOutputTokens}, combined: ${
+              totalTokens + (generationConfig.maxOutputTokens ?? 0)
+            }, window: ${this.config.contextWindow}`,
+          );
         }
       } catch (err) {
         this.logger.error(
