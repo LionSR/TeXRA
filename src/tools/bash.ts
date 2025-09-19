@@ -17,7 +17,8 @@ export type BashInput = z.infer<typeof BashInputSchema>;
 
 export class BashTool extends defineTool({
   name: 'bash',
-  description: 'Execute shell commands. Returns stdout on success, throws error with stderr on failure.',
+  description:
+    'Execute shell commands. Returns stdout on success, throws error with stderr on failure.',
   schema: BashInputSchema,
 }) {
   protected async execute(input: BashInput): Promise<ToolResult> {
