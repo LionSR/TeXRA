@@ -64,6 +64,7 @@ When updating CHANGELOG.md:
 
 - Route logging through `@logger/logUtils`. Agent flows should wrap the logger with `AgentLogger` (`src/logger/AgentLogger.ts`) to get grouped output and tool-use aware channels.
 - Always pass structured payloads via the `data` argument (file lists, missing outputs, latexdiff results, usage statistics) so the progress view can render rich entries without custom parsing.
+- Escape any string that will be injected into HTML with `encodeHtml` and only decode persisted data at a trusted consumption boundary. This applies to progress view presenters, tooltips, filenames, and any other dynamic markup mixed into DOM templates.
 - Publish progress updates with the event bus (`bus.emit`/`bus.on` from `src/eventBus/ProgressEventBus.ts`) and keep non-agent logs on the shared `TeXRA` output channel.
 
 **Agent execution and tool-use**
@@ -71,6 +72,7 @@ When updating CHANGELOG.md:
 - Implement new agents against `IAgent` (`src/agent/core/IAgent.ts`) and compose them via the factories in `src/agent/runtime`.
 - Normalize UI payloads with `objectToTaskState` / `agentConfigToTaskState` from `@utils/config/configConversion`, which also derive `AgentSessionKind` metadata.
 - Build prompts with `PromptBuilder` and `getSystemPromptWithRules` (`src/agent/utils/PromptBuilder.ts`, `src/agent/utils/promptHelpers.ts`) instead of duplicating reflection logic.
+- The OpenAI Responses API handler (`ModelHandlerOpenAIResponse`) intentionally omits stop sequences; let downstream post-processing append end tags and avoid reintroducing stop parameters when modifying this handler.
 - Classify sessions using `AgentSessionKind` and compute stream identifiers with `getStreamTabId` (`src/agent/core/AgentDataclass.ts`, `src/logger/streamUtils.ts`) to keep workflow and tool-use tabs distinct.
 - Persist interactive runs with `ToolUseSessionManager` (`src/agent/toolUse/ToolUseSessionManager.ts`) and launch/resume executions via `executeAgentWithLogging` (`src/agent/runtime/executeAgent.ts`) so session filters, run directories, and resume actions stay synchronized.
 - Add new model handlers under `src/agent/modelHandlers/`, export them through the index, and register capabilities/pricing in `src/model/ModelRegistry.ts`.
@@ -88,6 +90,7 @@ When updating CHANGELOG.md:
 
 - Extend the existing managers coordinated by `ProgressViewDomHandler` (`src/progressView/modules/domHandlers.js`). `StreamTabs`, `Toolbar`, `UsageSummary`, `UsageGroup`, `TaskGroupManager`, and `LogEntryManager` own their respective UI surfaces—augment them rather than manipulating the DOM directly.
 - Tool-use and workflow sessions surface in separate filters; continue emitting usage, status, and log events through the established progress event commands so filters, counts, and badges update automatically.
+- Progress view state modules (`TaskGroups`, `ToggleStates`, etc.) expose focused accessors—use their existing `get`, `set`, and `update` helpers rather than adding pass-through wrappers that duplicate state.
 
 **Error handling and types**
 
