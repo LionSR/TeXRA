@@ -3,14 +3,36 @@
 
 // Third-party imports
 import { Anthropic } from '@anthropic-ai/sdk';
-import type { BetaMessage } from '@anthropic-ai/sdk/resources/beta/messages';
+import type {
+  BetaBase64ImageSource,
+  BetaImageBlockParam,
+  BetaMessage,
+  BetaRequestDocumentBlock,
+  BetaTextBlockParam,
+} from '@anthropic-ai/sdk/resources/beta/messages';
 import {
   MessageParam,
   ContentBlock,
   ContentBlockParam,
   MessageCreateParams,
+  MessageCountTokensParams,
   ToolUseBlock,
 } from '@anthropic-ai/sdk/resources/messages';
+import type { AnthropicBeta } from '@anthropic-ai/sdk/resources/beta/beta';
+
+const isSupportedImageMediaType = (
+  mediaType: string,
+): mediaType is BetaBase64ImageSource['media_type'] => {
+  switch (mediaType) {
+    case 'image/jpeg':
+    case 'image/png':
+    case 'image/gif':
+    case 'image/webp':
+      return true;
+    default:
+      return false;
+  }
+};
 
 // Local imports - agent
 import { toAnthropicTools } from './toolConversion';
@@ -49,6 +71,16 @@ import xmlUtils from '@utils/text/xmlUtils';
  */
 
 // The new implicit prompt caching is worth checking out (can eliminate many controls of previous caching)
+type BetaMessageCreateParams = MessageCreateParams & {
+  betas?: AnthropicBeta[];
+};
+type BetaMessageCountTokensParams = MessageCountTokensParams & {
+  betas?: AnthropicBeta[];
+};
+
+const CONTEXT_1M_BETA: AnthropicBeta = 'context-1m-2025-08-07';
+const SONNET_37_OUTPUT_BETA: AnthropicBeta = 'output-128k-2025-02-19';
+
 export class ModelHandlerAnthropic extends ModelHandler<
   MessageParam,
   AnthropicUsage,
@@ -83,7 +115,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     );
 
     // Prepare options for the API call
-    const options: MessageCreateParams & { betas?: string[] } = {
+    const options: BetaMessageCreateParams = {
       model: this.config.fullName,
       max_tokens: this.config.maxOutputTokens,
       messages,
@@ -132,7 +164,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       // useStreaming = true; should consider to be true by default
       // temperature already deleted above for reasoning models
 
-      options.betas = ['output-128k-2025-02-19'];
+      options.betas = [SONNET_37_OUTPUT_BETA];
       // Update max tokens to use the higher limit when streaming
       options.max_tokens = useStreaming ? 64000 : this.config.maxOutputTokens;
       // The thinking configuration is now handled above for all reasoning models
@@ -143,14 +175,14 @@ export class ModelHandlerAnthropic extends ModelHandler<
       useAnthropic1MBeta &&
       this.config.fullName === 'claude-sonnet-4-20250514'
     ) {
-      options.betas = [...(options.betas ?? []), 'context-1m-2025-08-07'];
+      options.betas = [...(options.betas ?? []), CONTEXT_1M_BETA];
     }
 
     if (this.capabilities.supportsTokenCounting) {
-      const countTokensParams: any = {
+      const countTokensParams: BetaMessageCountTokensParams = {
         model: this.config.fullName,
         system: systemPrompt,
-        messages: messages,
+        messages,
       };
 
       // If thinking is enabled, we need to pass it to countTokens as well
@@ -160,31 +192,28 @@ export class ModelHandlerAnthropic extends ModelHandler<
         countTokensParams.thinking = options.thinking;
       }
 
-      if (
-        useAnthropic1MBeta &&
-        this.config.fullName === 'claude-sonnet-4-20250514'
-      ) {
-        countTokensParams.betas = ['context-1m-2025-08-07'];
+      // Strip betas that only apply to message creation (e.g., output length)
+      // while keeping context headers needed for accurate token counting.
+      const countTokenBetas = options.betas?.filter(
+        (beta) => beta === CONTEXT_1M_BETA,
+      );
+      if (countTokenBetas && countTokenBetas.length > 0) {
+        countTokensParams.betas = countTokenBetas;
       }
 
       const responseTokenCount =
         await client.beta.messages.countTokens(countTokensParams);
-      this.logger.debug(
-        `Token count of message: ${responseTokenCount.input_tokens}`,
-      );
-      if (responseTokenCount.input_tokens > this.config.contextWindow) {
-        const errMsg = `Token count of message exceeds context window: ${responseTokenCount.input_tokens} > ${this.config.contextWindow}`;
+      const { input_tokens: inputTokens } = responseTokenCount;
+      this.logger.debug(`Token count of message: ${inputTokens}`);
+      if (inputTokens > this.config.contextWindow) {
+        const errMsg = `Token count of message exceeds context window: ${inputTokens} > ${this.config.contextWindow}`;
         this.logger.error(errMsg);
         throw new Error(errMsg);
       }
-      if (
-        this.config.contextWindow - responseTokenCount.input_tokens <
-        options.max_tokens
-      ) {
-        const warnMsg = `Token count of message plus max tokens exceeds context window: ${responseTokenCount.input_tokens} + ${options.max_tokens} > ${this.config.contextWindow}. Reducing max tokens to ${this.config.contextWindow - responseTokenCount.input_tokens}.`;
+      if (this.config.contextWindow - inputTokens < options.max_tokens) {
+        const warnMsg = `Token count of message plus max tokens exceeds context window: ${inputTokens} + ${options.max_tokens} > ${this.config.contextWindow}. Reducing max tokens to ${this.config.contextWindow - inputTokens}.`;
         this.logger.warn(warnMsg);
-        options.max_tokens =
-          this.config.contextWindow - responseTokenCount.input_tokens - 10;
+        options.max_tokens = this.config.contextWindow - inputTokens - 10;
 
         if (
           this.capabilities.supportsReasoning &&
@@ -220,28 +249,55 @@ export class ModelHandlerAnthropic extends ModelHandler<
         // in the future if we pass stream to outside, calling stream.controller.abort() will abort the stream; which will be very useful for our stop button
         // we should also make sure partial results can be returned in the presence of errors!
         const stream = client.beta.messages.stream(options, { signal });
-        const groupId = this.logger.getActiveGroupId();
-        const thinking = this.createThinkingStream(groupId);
-        const output = this.isOutputStreamingEnabled()
-          ? this.createOutputStream(groupId)
-          : undefined;
-        stream.on('thinking', (delta: string) => {
-          thinking.append(delta);
-        });
-        stream.on('text', (delta: string) => {
-          output?.append(delta);
-        });
 
-        // Note that there is no second consumption problem as per anthropic sdk examples
-        response = await stream.finalMessage();
-        const finalReasoning = this.processThinkingBlock(response);
-        thinking.finalize(finalReasoning ?? undefined);
-        const finalOutput =
-          response.content
-            ?.filter((c: any) => c.type === 'text')
-            ?.map((c: any) => c.text)
-            .join('') ?? '';
-        if (output) output.finalize(finalOutput);
+        if (signal?.aborted) {
+          stream.controller.abort();
+          const abortError =
+            signal.reason ??
+            Object.assign(new Error('The operation was aborted.'), {
+              name: 'AbortError',
+            });
+          throw abortError;
+        }
+
+        let cleanupAbortListener: (() => void) | undefined;
+        if (signal) {
+          const abortListener = () => {
+            stream.controller.abort();
+            signal.removeEventListener('abort', abortListener);
+          };
+          signal.addEventListener('abort', abortListener);
+          cleanupAbortListener = () => {
+            signal.removeEventListener('abort', abortListener);
+          };
+        }
+
+        try {
+          const groupId = this.logger.getActiveGroupId();
+          const thinking = this.createThinkingStream(groupId);
+          const output = this.isOutputStreamingEnabled()
+            ? this.createOutputStream(groupId)
+            : undefined;
+          stream.on('thinking', (delta: string) => {
+            thinking.append(delta);
+          });
+          stream.on('text', (delta: string) => {
+            output?.append(delta);
+          });
+
+          // Note that there is no second consumption problem as per anthropic sdk examples
+          response = await stream.finalMessage();
+          const finalReasoning = this.processThinkingBlock(response);
+          thinking.finalize(finalReasoning ?? undefined);
+          const finalOutput =
+            response.content
+              ?.filter((c: any) => c.type === 'text')
+              ?.map((c: any) => c.text)
+              .join('') ?? '';
+          if (output) output.finalize(finalOutput);
+        } finally {
+          cleanupAbortListener?.();
+        }
       } else {
         response = await client.beta.messages.create(options, { signal });
       }
@@ -276,7 +332,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     }
 
     // Create content list for the user message
-    const userMessageContent: ContentBlock[] = [];
+    const userMessageContent: ContentBlockParam[] = [];
 
     if (trimmedPrefix) {
       userMessageContent.push({
@@ -301,7 +357,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
     // Add user request with optional caching
     if (trimmedRequest) {
-      const requestBlock: ContentBlock = {
+      const requestBlock: ContentBlockParam = {
         type: 'text',
         text: trimmedRequest,
         citations: null,
@@ -342,7 +398,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     mediaFiles?: string[],
   ): Promise<MessageParam[]> {
     // Create content list for the new round message
-    const roundContent: ContentBlock[] = [];
+    const roundContent: ContentBlockParam[] = [];
 
     // Add media if provided (Anthropic currently only supports images)
     if (
@@ -373,7 +429,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     // Add message text with optional caching
     const trimmedMessage = userMessage.trim();
     if (trimmedMessage) {
-      const messageBlock: ContentBlock = {
+      const messageBlock: ContentBlockParam = {
         type: 'text',
         text: trimmedMessage,
         citations: null,
@@ -431,44 +487,71 @@ export class ModelHandlerAnthropic extends ModelHandler<
   }
 
   /** Converts image/document content array into Anthropic-compatible message format with type and source metadata. */
-  createMediaContent(mediaMessage: MediaEntry[]): ContentBlock[] {
+  createMediaContent(mediaMessage: MediaEntry[]): ContentBlockParam[] {
     if (mediaMessage.length === 0) {
       return [];
     }
     this.logger.debug(
       `Creating media content for ${mediaMessage.length} items for Anthropic`,
     );
-    return mediaMessage.flatMap((media): ContentBlock[] => {
+    return mediaMessage.flatMap((media): ContentBlockParam[] => {
       if (media.media_category === 'image') {
         // for backward compatibility
         // Always ensure media_type exists
-        if (!media.media_type) {
+        const originalMediaType = media.media_type;
+        let resolvedMediaType = originalMediaType;
+        if (!resolvedMediaType) {
           // Default to image/png since PDFs from TikZ are converted to PNG
-          media.media_type = 'image/png';
           this.logger.warn(
             `No media_type found for image ${media.file_name}, defaulting to image/png`,
           );
+          resolvedMediaType = 'image/png';
         }
 
         // Check for native PDF support
         const isPdf =
           this.capabilities.supportsNativePdf &&
-          media.media_type === 'application/pdf';
-        return [
-          {
-            type: 'text',
-            text: `${isPdf ? 'Document' : 'Image'}: ${media.file_name}`,
-            citations: null,
-          },
-          {
-            type: isPdf ? 'document' : 'image',
+          originalMediaType === 'application/pdf';
+        const descriptionBlock = {
+          type: 'text',
+          text: `${isPdf ? 'Document' : 'Image'}: ${media.file_name}`,
+          citations: null,
+        } satisfies BetaTextBlockParam;
+
+        if (isPdf) {
+          const documentBlock = {
+            type: 'document',
             source: {
               type: 'base64',
-              media_type: media.media_type,
+              media_type: 'application/pdf',
               data: media.data,
             },
-          } as any,
-        ];
+          } satisfies BetaRequestDocumentBlock;
+          return [descriptionBlock, documentBlock];
+        }
+
+        let imageMediaType: BetaBase64ImageSource['media_type'];
+        if (isSupportedImageMediaType(resolvedMediaType)) {
+          imageMediaType = resolvedMediaType;
+        } else {
+          if (resolvedMediaType && resolvedMediaType !== 'image/png') {
+            this.logger.warn(
+              `Unsupported image media type ${resolvedMediaType} for ${media.file_name}, defaulting to image/png`,
+            );
+          }
+          imageMediaType = 'image/png';
+        }
+
+        const imageBlock = {
+          type: 'image',
+          source: {
+            type: 'base64',
+            media_type: imageMediaType,
+            data: media.data,
+          },
+        } satisfies BetaImageBlockParam;
+
+        return [descriptionBlock, imageBlock];
       } else if (media.media_category === 'audio') {
         // Anthropic doesn't explicitly support native audio input yet
         this.logger.warn(
