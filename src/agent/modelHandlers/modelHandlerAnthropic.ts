@@ -85,7 +85,8 @@ export class ModelHandlerAnthropic extends ModelHandler<
   MessageParam,
   AnthropicUsage,
   AnthropicAPIResponseUsage,
-  ToolUseBlock
+  ToolUseBlock,
+  Anthropic
 > {
   async getClient(): Promise<Anthropic> {
     const apiKey = await this.getApiKey();
