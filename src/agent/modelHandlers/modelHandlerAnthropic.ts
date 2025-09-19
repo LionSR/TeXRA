@@ -3,7 +3,13 @@
 
 // Third-party imports
 import { Anthropic } from '@anthropic-ai/sdk';
-import type { BetaMessage } from '@anthropic-ai/sdk/resources/beta/messages';
+import type {
+  BetaBase64ImageSource,
+  BetaImageBlockParam,
+  BetaMessage,
+  BetaRequestDocumentBlock,
+  BetaTextBlockParam,
+} from '@anthropic-ai/sdk/resources/beta/messages';
 import {
   MessageParam,
   ContentBlock,
@@ -11,6 +17,20 @@ import {
   MessageCreateParams,
   ToolUseBlock,
 } from '@anthropic-ai/sdk/resources/messages';
+
+const isSupportedImageMediaType = (
+  mediaType: string,
+): mediaType is BetaBase64ImageSource['media_type'] => {
+  switch (mediaType) {
+    case 'image/jpeg':
+    case 'image/png':
+    case 'image/gif':
+    case 'image/webp':
+      return true;
+    default:
+      return false;
+  }
+};
 
 // Local imports - agent
 import { toAnthropicTools } from './toolConversion';
@@ -275,7 +295,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     }
 
     // Create content list for the user message
-    const userMessageContent: ContentBlock[] = [];
+    const userMessageContent: ContentBlockParam[] = [];
 
     if (trimmedPrefix) {
       userMessageContent.push({
@@ -300,7 +320,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
     // Add user request with optional caching
     if (trimmedRequest) {
-      const requestBlock: ContentBlock = {
+      const requestBlock: ContentBlockParam = {
         type: 'text',
         text: trimmedRequest,
         citations: null,
@@ -341,7 +361,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     mediaFiles?: string[],
   ): Promise<MessageParam[]> {
     // Create content list for the new round message
-    const roundContent: ContentBlock[] = [];
+    const roundContent: ContentBlockParam[] = [];
 
     // Add media if provided (Anthropic currently only supports images)
     if (
@@ -372,7 +392,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     // Add message text with optional caching
     const trimmedMessage = userMessage.trim();
     if (trimmedMessage) {
-      const messageBlock: ContentBlock = {
+      const messageBlock: ContentBlockParam = {
         type: 'text',
         text: trimmedMessage,
         citations: null,
@@ -430,14 +450,14 @@ export class ModelHandlerAnthropic extends ModelHandler<
   }
 
   /** Converts image/document content array into Anthropic-compatible message format with type and source metadata. */
-  createMediaContent(mediaMessage: MediaEntry[]): ContentBlock[] {
+  createMediaContent(mediaMessage: MediaEntry[]): ContentBlockParam[] {
     if (mediaMessage.length === 0) {
       return [];
     }
     this.logger.debug(
       `Creating media content for ${mediaMessage.length} items for Anthropic`,
     );
-    return mediaMessage.flatMap((media): ContentBlock[] => {
+    return mediaMessage.flatMap((media): ContentBlockParam[] => {
       if (media.media_category === 'image') {
         // for backward compatibility
         // Always ensure media_type exists
@@ -453,21 +473,47 @@ export class ModelHandlerAnthropic extends ModelHandler<
         const isPdf =
           this.capabilities.supportsNativePdf &&
           media.media_type === 'application/pdf';
-        return [
-          {
-            type: 'text',
-            text: `${isPdf ? 'Document' : 'Image'}: ${media.file_name}`,
-            citations: null,
-          },
-          {
-            type: isPdf ? 'document' : 'image',
+        const descriptionBlock = {
+          type: 'text',
+          text: `${isPdf ? 'Document' : 'Image'}: ${media.file_name}`,
+          citations: null,
+        } satisfies BetaTextBlockParam;
+
+        if (isPdf) {
+          const documentBlock = {
+            type: 'document',
             source: {
               type: 'base64',
-              media_type: media.media_type,
+              media_type: 'application/pdf',
               data: media.data,
             },
-          } as any,
-        ];
+          } satisfies BetaRequestDocumentBlock;
+          return [descriptionBlock, documentBlock];
+        }
+
+        let imageMediaType: BetaBase64ImageSource['media_type'];
+        if (isSupportedImageMediaType(media.media_type)) {
+          imageMediaType = media.media_type;
+        } else {
+          if (media.media_type !== 'image/png') {
+            this.logger.warn(
+              `Unsupported image media type ${media.media_type} for ${media.file_name}, defaulting to image/png`,
+            );
+          }
+          imageMediaType = 'image/png';
+          media.media_type = imageMediaType;
+        }
+
+        const imageBlock = {
+          type: 'image',
+          source: {
+            type: 'base64',
+            media_type: imageMediaType,
+            data: media.data,
+          },
+        } satisfies BetaImageBlockParam;
+
+        return [descriptionBlock, imageBlock];
       } else if (media.media_category === 'audio') {
         // Anthropic doesn't explicitly support native audio input yet
         this.logger.warn(
