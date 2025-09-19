@@ -9,6 +9,7 @@ import {
   GenerateContentResponse,
   FinishReason,
   type Candidate,
+  type FunctionCall,
   File,
   createPartFromUri,
   createPartFromFunctionCall,
@@ -159,7 +160,8 @@ function convertMessagesToGoogleContentHistory(
 export class ModelHandlerGoogleGenAI extends ModelHandler<
   Content,
   GenerateContentResponseUsageMetadata | null,
-  OpenAIAPIResponseUsage
+  OpenAIAPIResponseUsage,
+  FunctionCall
 > {
   private googleClient: GoogleGenAI | null = null;
   async getClient(): Promise<GoogleGenAI> {
@@ -1026,17 +1028,19 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
   createToolUseFollowUpMessages(
     id: string,
     name: string,
-    call: any,
+    call: FunctionCall,
     result: Record<string, unknown>,
     _toolState?: ToolState,
     text?: string,
-  ): any[] {
-    const callPart = createPartFromFunctionCall(
-      name,
-      typeof call?.args === 'object' ? call.args : (call?.input ?? {}),
-    );
+  ): [Content, Content] {
+    const args =
+      call?.args && typeof call.args === 'object'
+        ? (call.args as Record<string, unknown>)
+        : {};
+    const functionName = call?.name ?? name;
+    const callPart = createPartFromFunctionCall(functionName, args);
     if (callPart.functionCall) {
-      callPart.functionCall.id = id;
+      callPart.functionCall.id = call?.id ?? id;
     }
     const resultPart = createPartFromFunctionResponse(id, name, result);
     const callParts: Part[] = [];
