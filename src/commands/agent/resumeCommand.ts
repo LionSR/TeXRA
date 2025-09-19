@@ -60,6 +60,7 @@ async function buildToolUseAgent(
   const [agentSetting, agentPrompt] = await loadAgentSettingAndPrompts(
     agentPath,
     fullConfig.agent,
+    { preferMultiple: fullConfig.useMultipleOutputs },
   );
 
   if (!isToolUseAgent(agentSetting)) {
