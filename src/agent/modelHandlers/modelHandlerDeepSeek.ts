@@ -3,6 +3,12 @@
 
 // Third-party imports
 import OpenAI from 'openai';
+import type {
+  ChatCompletionAssistantMessageParam,
+  ChatCompletionToolMessageParam,
+  ChatCompletionMessageToolCall,
+  ChatCompletionMessage,
+} from 'openai/resources/chat/completions';
 
 // Local imports - agent
 import { ToolState } from '../core/ToolState';
@@ -133,39 +139,22 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI {
   createToolUseFollowUpMessages(
     id: string,
     name: string,
-    call: any,
+    call: ChatCompletionMessageToolCall | ChatCompletionMessage.FunctionCall,
     result: Record<string, unknown>,
     _toolState?: ToolState,
     text?: string,
-  ): any[] {
-    const argString =
-      typeof call?.function?.arguments === 'string'
-        ? call.function.arguments
-        : typeof call?.arguments === 'string'
-          ? call.arguments
-          : JSON.stringify(
-              call?.input ?? call?.function?.arguments ?? call?.arguments ?? {},
-            );
-
-    const callMsg: any = {
+  ): [ChatCompletionAssistantMessageParam, ChatCompletionToolMessageParam] {
+    const toolCall = this.normalizeToolCall(id, name, call);
+    const callMsg: ChatCompletionAssistantMessageParam = {
       role: 'assistant',
-      tool_calls: [
-        {
-          id,
-          type: 'function',
-          function: {
-            name,
-            arguments: argString,
-          },
-        },
-      ],
+      tool_calls: [toolCall],
     };
     if (text) {
       callMsg.content = text;
     }
-    const resultMsg = {
+    const resultMsg: ChatCompletionToolMessageParam = {
       role: 'tool',
-      tool_call_id: id,
+      tool_call_id: toolCall.id ?? id,
       content: JSON.stringify(result),
     };
     return [callMsg, resultMsg];
