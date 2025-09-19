@@ -64,6 +64,10 @@ export async function loadYaml(absolutePath: string): Promise<object> {
 /**
  * Loads agent settings and prompts with inheritance support.
  * Merges with parent configurations if specified in the inherits field.
+ *
+ * The {@link LoadAgentOptions.preferMultiple} flag only affects the initial
+ * agent being resolved. Parent definitions always load their base variant so
+ * that inherited prompts remain consistent with the author's expectations.
  */
 interface LoadAgentOptions {
   preferMultiple?: boolean;
@@ -150,6 +154,8 @@ export async function loadAgentSettingAndPrompts(
       const [parentSettings, parentPrompts] = await loadAgentSettingAndPrompts(
         agentPath,
         parent, // Parent's name (from its filename or root 'name') is used for recursive loading
+        // Intentionally omit options so parents always load their base
+        // definition instead of inheriting multiple-output preferences.
       );
 
       // Get current agent's specific settings and prompts from its YAML
