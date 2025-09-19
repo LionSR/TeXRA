@@ -52,7 +52,8 @@ export class ModelHandlerOpenAI extends ModelHandler<
   ChatCompletionMessageParam,
   ExtendedCompletionUsage | null,
   OpenAIAPIResponseUsage,
-  ChatCompletionMessageToolCall | ChatCompletionMessage.FunctionCall
+  ChatCompletionMessageToolCall | ChatCompletionMessage.FunctionCall,
+  OpenAI
 > {
   /**
    * Creates a new OpenAI client using the stored credentials.
@@ -1192,7 +1193,7 @@ export class ModelHandlerOpenAI extends ModelHandler<
       tool_call_id: toolCall.id ?? id,
       content: JSON.stringify(result),
     };
-    let messages: ChatCompletionMessageParam[] = [];
+    const messages: ChatCompletionMessageParam[] = [];
     messages.push(callMsg, resultMsg);
     return messages;
   }
