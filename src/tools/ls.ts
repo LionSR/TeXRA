@@ -13,8 +13,8 @@ import {
   resolveAndFormat,
   formatToolOutput,
   toPosixPath,
-  getGitignoreMatcher,
 } from '@tools/utils';
+import { getGitignoreMatcher } from '@tools/gitignore';
 
 // Local imports - utils
 import { WorkspaceFS } from '@utils/files';
@@ -55,8 +55,9 @@ export class LsTool extends defineTool({
     let stats: vscode.FileStat | undefined;
     try {
       stats = await WorkspaceFS.stat(relative);
-    } catch {
-      throw new ToolError(`Path not found: ${display}`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      throw new ToolError(`Path not found: ${display} (${message})`);
     }
 
     const ignorePatterns = input.ignore ?? [];
