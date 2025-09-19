@@ -1321,6 +1321,7 @@
     "markdown-it": "^14.1.0",
     "markdown-it-highlightjs": "^4.2.0",
     "mime-types": "^3.0.1",
+    "minimatch": "^9.0.5",
     "nanoid": "^5.1.5",
     "node-pandoc": "^0.3.0",
     "openai": "^5.20.3",
