@@ -9,7 +9,8 @@ import { defineTool } from './core/define';
 import { ToolError, ToolResult } from '@tools/result';
 import {
   joinWorkspaceRelativePath,
-  resolveWorkspaceRelativePath,
+  resolveAndFormat,
+  formatToolOutput,
   toPosixPath,
 } from '@tools/utils';
 
@@ -33,14 +34,11 @@ interface GlobMatchInfo {
 export class GlobTool extends defineTool({
   name: 'glob',
   description:
-    'Fast file pattern matching within the workspace. \
-  Supports glob patterns like "**/*.tex" or "src/**/*.ts". \
-  Returns matching file paths sorted by modification time. \
-  Use this tool when you need to find files by name patterns.',
+    'Find files matching glob patterns (e.g., "**/*.tex", "src/**/*.ts"). Returns paths sorted by modification time.',
   schema: GlobInputSchema,
 }) {
   protected async execute(input: GlobInput): Promise<ToolResult> {
-    const base = resolveWorkspaceRelativePath(input.path);
+    const { resolved: base, display } = resolveAndFormat(input.path);
 
     let matches: string[];
     try {
@@ -90,13 +88,10 @@ export class GlobTool extends defineTool({
       return a.relativePath.localeCompare(b.relativePath);
     });
 
-    const displayBase = toPosixPath(base.relative);
-    const header = `Matches for pattern "${input.pattern}" under ${displayBase}`;
-    if (sorted.length === 0) {
-      return new ToolResult({ output: `${header}\n(no matches)` });
-    }
-
+    const header = `Matches for pattern "${input.pattern}" under ${display}`;
     const lines = sorted.map((item) => toPosixPath(item.relativePath));
-    return new ToolResult({ output: `${header}\n${lines.join('\n')}` });
+    return new ToolResult({
+      output: formatToolOutput(header, lines, '(no matches)'),
+    });
   }
 }
