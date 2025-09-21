@@ -12,7 +12,6 @@ import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 
 // Local imports - utilities
-import { convertContentToString } from '@agent/utils/text/messageUtils';
 import type { ToolDefinition } from '@model';
 import { MESSAGE_PREVIEW_LENGTH } from '@utils/config';
 
@@ -37,38 +36,6 @@ export class ModelHandlerDashScope extends ModelHandlerOpenAI {
   }
 
   /**
-   * Preprocess messages array for DashScope Qwen models
-   * Ensures compatibility with Qwen API format requirements
-   * @param messages Original messages array
-   * @returns Processed messages array
-   */
-  private preprocessMessages(messages: any[]): any[] {
-    if (!messages || messages.length <= 1) {
-      return messages;
-    }
-
-    // Process messages to ensure compatibility with DashScope API
-    const processedMessages = messages.map((message) => {
-      // Clone the message to avoid modifying the original
-      const processedMessage = { ...message };
-
-      // Convert content to string if it's an array
-      if (Array.isArray(processedMessage.content)) {
-        processedMessage.content = convertContentToString(
-          processedMessage.content,
-        );
-        this.logger.debug(
-          `Converted content array to string for ${processedMessage.role} message`,
-        );
-      }
-
-      return processedMessage;
-    });
-
-    return processedMessages;
-  }
-
-  /**
    * Override createResponse to preprocess messages for DashScope models
    */
   async createResponse(
@@ -81,7 +48,9 @@ export class ModelHandlerDashScope extends ModelHandlerOpenAI {
     tools?: ToolDefinition[],
   ): Promise<any> {
     // Preprocess messages for DashScope compatibility
-    const processedMessages = this.preprocessMessages(messages);
+    const processedMessages = this.normalizeMessages(messages, {
+      convertContentToString: true,
+    });
 
     if (processedMessages.length !== messages.length) {
       this.logger.info(
