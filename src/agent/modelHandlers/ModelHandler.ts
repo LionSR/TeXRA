@@ -598,6 +598,27 @@ export abstract class ModelHandler<
         continue;
       }
 
+      let fileSize: number | null = null;
+      try {
+        const stats = isAbsolutePath
+          ? await AbsoluteFS.stat(mediaFile)
+          : await WorkspaceFS.stat(mediaFile);
+        fileSize = stats.size;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        this.logger.error(
+          `Unable to read file info for ${mediaFile}: ${message}`,
+        );
+        mediaFileResults.push({ path: mediaFile, ok: false });
+        continue;
+      }
+
+      if (fileSize === 0) {
+        this.logger.warn(`Skipping empty media file: ${mediaFile}`);
+        mediaFileResults.push({ path: mediaFile, ok: false });
+        continue;
+      }
+
       const fileExtension = path.extname(mediaFile).toLowerCase();
 
       try {
