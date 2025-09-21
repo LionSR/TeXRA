@@ -186,6 +186,10 @@ export async function getBase64EncodedMedia(
       }
 
       const mediaBytes = AbsoluteFS.readBytesSync(pathToRead);
+      if (mediaBytes.length === 0) {
+        logger.warn(CHANNEL, `Skipping empty media file: ${mediaPath}`);
+        throw new Error(`File is empty: ${mediaPath}`);
+      }
       const base64String = mediaBytes.toString('base64');
       return base64String;
     } finally {
