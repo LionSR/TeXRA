@@ -14,6 +14,7 @@ For details on the underlying structure and execution flow common to all agents,
 
 The `chat` agent acts as a friendly scientist focused on careful reasoning during conversation.
 It can execute `bash` commands and manipulate files using the `file_op` tool.
+Use the `glob`, `grep`, and `ls` tools to explore the workspace without leaving the sandbox.
 When derivations are required, it presents steps inside `\begin{aligned} ... \end{aligned}` blocks
 to keep mathematical discussions accurate.
 
