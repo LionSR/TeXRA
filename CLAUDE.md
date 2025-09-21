@@ -57,6 +57,12 @@ The core of TeXRA is its agent architecture located in `src/agent/`:
 - **Model handlers** abstract different AI provider APIs (Anthropic, OpenAI, Google, etc.)
 - Agents are configured via YAML files in `resources/agents/`
 
+**Multiple-output agent variants**: `_multiple` YAML files may provide alternate
+prompts for agents that support multiple outputs. The preference for these
+variants is only applied to the initial agent requested by the runtime. Parent
+definitions loaded through the `inherits` field always use their base files so
+that shared prompts and defaults remain consistent across the inheritance chain.
+
 ### Command Organization
 
 Commands in `src/commands/` are organized by domain:
