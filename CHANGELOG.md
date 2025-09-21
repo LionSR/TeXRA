@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 ### Features
 
 - Add workspace-aware `glob`, `grep`, and `ls` tools to the default registry and chat agent so every workflow can inspect files safely
+- Introduce a `web_fetch` tool that downloads web pages and converts their HTML into Markdown for review inside agent workflows
 
 ### Bug Fixes
 
