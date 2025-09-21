@@ -800,7 +800,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         lastTextPart.text =
           (lastTextPart.text ?? '') + bestConnector + newResponse;
       } else {
-        parts.push(createPartFromText(toolState.accumulatedOutput));
+        parts.push(createPartFromText(bestConnector + newResponse));
         this.logger.warn(
           'Added new text part to last model message as none existed.',
         );
