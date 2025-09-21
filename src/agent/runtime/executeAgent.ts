@@ -474,6 +474,7 @@ export async function executeAgent(
       const [agentSetting, agentPrompt] = await loadAgentSettingAndPrompts(
         agentPath,
         requestedAgentName,
+        { preferMultiple: fullConfig.useMultipleOutputs },
       );
 
       // Get appropriate agent class and create instance
