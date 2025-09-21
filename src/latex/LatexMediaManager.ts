@@ -58,6 +58,24 @@ export class LatexMediaManager {
             path.basename(file).replace(/\.tex$/, '.pdf'),
           );
           if (await WorkspaceFS.exists(pdfFile)) {
+            try {
+              const stats = await WorkspaceFS.stat(pdfFile);
+              if (stats.size === 0) {
+                this.logger.warn(
+                  `Compiled PDF is empty for ${file}: ${pdfFile}`,
+                  groupId,
+                );
+                return undefined;
+              }
+            } catch (err) {
+              const message = err instanceof Error ? err.message : String(err);
+              this.logger.error(
+                `Failed to stat compiled PDF ${pdfFile}: ${message}`,
+                groupId,
+              );
+              return undefined;
+            }
+
             this.logger.info(`Compiled PDF for ${file}: ${pdfFile}`, groupId);
             return pdfFile;
           }
