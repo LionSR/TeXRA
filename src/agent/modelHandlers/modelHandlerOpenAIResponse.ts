@@ -1,8 +1,9 @@
 // Standard library imports
+import { Buffer } from 'node:buffer';
 import { randomUUID } from 'node:crypto';
 
 // Third-party imports
-import OpenAI from 'openai';
+import OpenAI, { toFile } from 'openai';
 import type {
   Response,
   ResponseUsage,
@@ -14,6 +15,7 @@ import type {
   ResponseInputItem,
   ResponseInputContent,
   ResponseInputMessageContentList,
+  ResponseInputFile,
   ResponseStreamEvent,
 } from 'openai/resources/responses/responses';
 
@@ -268,6 +270,85 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     });
   }
 
+  private isInputFileContent(
+    content: ResponseInputContent,
+  ): content is ResponseInputFile {
+    return content.type === 'input_file';
+  }
+
+  private async uploadInlineInputFiles(
+    client: OpenAI,
+    messageItems: ResponseInputItem[],
+  ): Promise<void> {
+    for (const item of messageItems) {
+      if (!this.isMessageItem(item)) {
+        continue;
+      }
+
+      const contentList = (item as ResponseInputItem & {
+        content?: ResponseInputMessageContentList;
+      }).content;
+
+      if (!Array.isArray(contentList)) {
+        continue;
+      }
+
+      for (const content of contentList) {
+        if (
+          this.isInputFileContent(content) &&
+          content.file_data &&
+          !content.file_id
+        ) {
+          await this.replaceFileDataWithUpload(client, content);
+        }
+      }
+    }
+  }
+
+  private async replaceFileDataWithUpload(
+    client: OpenAI,
+    content: ResponseInputFile,
+  ): Promise<void> {
+    const fileData = content.file_data;
+    if (!fileData) {
+      return;
+    }
+
+    const filename = content.filename ?? 'document.pdf';
+    let buffer: Buffer | undefined;
+
+    try {
+      const base64Separator = ';base64,';
+      const separatorIndex = fileData.indexOf(base64Separator);
+      const payload =
+        separatorIndex >= 0
+          ? fileData.slice(separatorIndex + base64Separator.length)
+          : fileData;
+
+      buffer = Buffer.from(payload, 'base64');
+      const uploadedFile = await client.files.create({
+        file: await toFile(buffer, filename),
+        purpose: 'assistants',
+      });
+
+      content.file_id = uploadedFile.id;
+      delete content.file_data;
+    } catch (err) {
+      this.logger.error(
+        `Failed to upload file ${filename}: ${getSdkErrorMessage(err)}`,
+        undefined,
+        undefined,
+        err,
+      );
+      throw err;
+    } finally {
+      if (buffer) {
+        buffer.fill(0);
+        buffer = undefined;
+      }
+    }
+  }
+
   /**
    * Create a response using the Responses API.
    * The handler submits only the messages that were not part of the previous
@@ -284,6 +365,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   ): Promise<Response> {
     const useStreaming = this.getStreamingConfig();
     const newMessages = messages.slice(this.sentMessages);
+
+    await this.uploadInlineInputFiles(client, newMessages);
 
     const params: Record<string, unknown> = {
       model: this.config.fullName,
