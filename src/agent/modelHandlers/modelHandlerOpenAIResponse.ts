@@ -67,6 +67,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 > {
   private previousResponseId: string | null = null;
   private sentMessages = 0;
+  private assistantMessageCounter = 0;
 
   /**
    * Manually set the previous response ID to resume a conversation.
@@ -75,6 +76,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   setPreviousResponseId(id: string | null): void {
     this.previousResponseId = id;
     this.sentMessages = 0;
+    this.assistantMessageCounter = 0;
   }
 
   /** Retrieve the stored previous response ID. */
@@ -106,6 +108,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   ): Promise<ResponseInputItem[]> {
     this.previousResponseId = null;
     this.sentMessages = 0;
+    this.assistantMessageCounter = 0;
 
     const messages: ResponseInputItem[] = [];
 
@@ -212,12 +215,18 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   /** Formats image/audio content for the Responses API. */
   createMediaContent(mediaMessage: MediaEntry[]): ResponseInputContent[] {
     return mediaMessage.flatMap((media): ResponseInputContent[] => {
-      if (media.media_category === 'image') {
+      const mediaType = media.media_type ?? '';
+
+      if (
+        media.media_category === 'image' &&
+        typeof mediaType === 'string' &&
+        mediaType.startsWith('image/')
+      ) {
         return [
           this.createInputText(`Image: ${media.file_name}`),
           {
             type: 'input_image',
-            image_url: `data:${media.media_type};base64,${media.data}`,
+            image_url: `data:${mediaType};base64,${media.data}`,
             detail: 'high',
           },
         ];
@@ -259,7 +268,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         ];
       }
 
-      if (media.media_type === 'application/pdf') {
+      if (mediaType === 'application/pdf') {
         return [
           this.createInputText(`Document: ${media.file_name}`),
           {
@@ -268,6 +277,13 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
             filename: media.file_name,
           },
         ];
+      }
+
+      if (media.media_category === 'image') {
+        this.logger.warn(
+          `Skipping media ${media.file_name} with unsupported image MIME type: ${mediaType}`,
+        );
+        return [];
       }
 
       this.logger.warn(`Unknown media category: ${media.media_category}`);
@@ -973,16 +989,22 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     return messages;
   }
 
-  createAssistantMessage(text: string): EasyInputMessage {
+  createAssistantMessage(text: string): ResponseOutputMessage {
     return {
       type: 'message',
       role: 'assistant',
-      content: [this.createInputText(text)],
-    } satisfies EasyInputMessage;
+      id: this.nextAssistantMessageId(),
+      status: 'completed',
+      content: [this.createOutputText(text)],
+    } satisfies ResponseOutputMessage;
   }
 
   private createInputText(text: string): ResponseInputContent {
     return { type: 'input_text', text };
+  }
+
+  private createOutputText(text: string): ResponseOutputText {
+    return { type: 'output_text', text, annotations: [] };
   }
 
   private isMessageItem(
@@ -1065,24 +1087,100 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     message: ResponseInputItem,
     text: string,
   ): boolean {
+    if (this.isAssistantOutputMessage(message)) {
+      message.content.push(this.createOutputText(text));
+      return true;
+    }
+
     if (!this.isMessageItem(message) || message.role !== 'assistant') {
       return false;
     }
 
-    const newContent = this.createInputText(text);
     const { content } = message;
 
     if (this.isInputContentList(content)) {
-      content.push(newContent);
+      const converted = content
+        .map((part) => {
+          const type = (part as { type?: unknown }).type;
+          const partText = (part as { text?: unknown }).text;
+          if (type === 'input_text' && typeof partText === 'string') {
+            return this.createOutputText(partText);
+          }
+          return null;
+        })
+        .filter((part): part is ResponseOutputText => part !== null);
+
+      const outputMessage: ResponseOutputMessage = {
+        type: 'message',
+        role: 'assistant',
+        id: this.nextAssistantMessageId(),
+        status: 'completed',
+        content: [...converted, this.createOutputText(text)],
+      };
+
+      Object.assign(message, outputMessage);
       return true;
     }
 
     if (typeof content === 'string') {
-      message.content = [this.createInputText(content), newContent];
+      const outputMessage: ResponseOutputMessage = {
+        type: 'message',
+        role: 'assistant',
+        id: this.nextAssistantMessageId(),
+        status: 'completed',
+        content: [this.createOutputText(content), this.createOutputText(text)],
+      };
+      Object.assign(message, outputMessage);
       return true;
     }
 
-    message.content = [newContent];
+    const fallback: ResponseOutputMessage = {
+      type: 'message',
+      role: 'assistant',
+      id: this.nextAssistantMessageId(),
+      status: 'completed',
+      content: [this.createOutputText(text)],
+    };
+    Object.assign(message, fallback);
     return true;
+  }
+
+  private isAssistantOutputMessage(
+    item?: ResponseInputItem,
+  ): item is ResponseOutputMessage {
+    if (!item || typeof item !== 'object') {
+      return false;
+    }
+
+    const role = (item as { role?: unknown }).role;
+    if (role !== 'assistant') {
+      return false;
+    }
+
+    const type = (item as { type?: unknown }).type;
+    if (typeof type === 'string' && type !== 'message') {
+      return false;
+    }
+
+    const content = (item as { content?: unknown }).content;
+    if (!Array.isArray(content)) {
+      return false;
+    }
+
+    return content.every((part) => this.isOutputText(part));
+  }
+
+  private isOutputText(part: unknown): part is ResponseOutputText {
+    return (
+      part !== null &&
+      typeof part === 'object' &&
+      (part as { type?: unknown }).type === 'output_text' &&
+      typeof (part as { text?: unknown }).text === 'string'
+    );
+  }
+
+  private nextAssistantMessageId(): string {
+    this.assistantMessageCounter += 1;
+    return `assistant-message-${this.assistantMessageCounter}`;
   }
 }
