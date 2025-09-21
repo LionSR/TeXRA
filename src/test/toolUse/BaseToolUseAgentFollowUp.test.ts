@@ -14,7 +14,15 @@ import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage
 import { bus } from '@eventBus/ProgressEventBus';
 import { ModelProvider, DEFAULT_MODEL_CAPABILITIES } from '@model/ModelConfig';
 
-class DummyHandler extends ModelHandler {
+type DummyClient = Record<string, never>;
+
+class DummyHandler extends ModelHandler<
+  ProviderMessage,
+  unknown,
+  unknown,
+  unknown,
+  DummyClient
+> {
   calls = 0;
   constructor() {
     super({
@@ -29,8 +37,8 @@ class DummyHandler extends ModelHandler {
       openRouterOnly: false,
     });
   }
-  async getClient() {
-    return {};
+  async getClient(): Promise<DummyClient> {
+    return {} as DummyClient;
   }
   async createResponse(): Promise<any> {
     this.calls++;
@@ -41,19 +49,25 @@ class DummyHandler extends ModelHandler {
     __: any,
     ___?: any,
     ____?: any,
-  ): Promise<any[]> {
+  ): Promise<ProviderMessage[]> {
     return [];
   }
-  async createRoundMessages(m: any[], u: any): Promise<any[]> {
+  async createRoundMessages(
+    m: ProviderMessage[],
+    u: string,
+  ): Promise<ProviderMessage[]> {
     m.push({ role: 'user', content: u });
     return m;
   }
-  async createUserFollowUpMessages(m: any[], u: any): Promise<any[]> {
+  async createUserFollowUpMessages(
+    m: ProviderMessage[],
+    u: string,
+  ): Promise<ProviderMessage[]> {
     m.push({ role: 'user', content: u });
     return m;
   }
-  createAssistantMessage(text: string) {
-    return { role: 'assistant', content: text } as any;
+  createAssistantMessage(text: string): ProviderMessage {
+    return { role: 'assistant', content: text } as ProviderMessage;
   }
   isEndTurnStop(_r: any): boolean {
     return false;
@@ -89,7 +103,7 @@ class DummyHandler extends ModelHandler {
   extractToolUse() {
     return null;
   }
-  createToolUseFollowUpMessages() {
+  createToolUseFollowUpMessages(): ProviderMessage[] {
     return [];
   }
 }
