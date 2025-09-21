@@ -4,9 +4,11 @@ import { Buffer } from 'node:buffer';
 // Third-party imports
 import OpenAI, { toFile } from 'openai';
 import type {
+  EasyInputMessage,
   Response,
   ResponseUsage,
   ResponseCreateParamsBase,
+  ResponseCreateParamsNonStreaming,
   ResponseOutputItem,
   ResponseOutputMessage,
   ResponseOutputText,
@@ -19,6 +21,8 @@ import type {
   ResponseInputFile,
   ResponseStreamEvent,
 } from 'openai/resources/responses/responses';
+import type { Reasoning } from 'openai/resources/shared';
+import type { ResponseStreamParams } from 'openai/lib/responses/ResponseStream';
 
 // Local imports - agent
 import type { AgentConfig } from '../core/AgentConfig';
@@ -399,17 +403,20 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       const isGpt5 = this.config.name.startsWith('gpt5');
       const includeSummary =
         !isGpt5 || getConfig<boolean>('model.gpt5ReasoningSummary', false);
-      params.reasoning = {};
+      const reasoning: Reasoning = {};
       if (includeSummary) {
-        (params.reasoning as Record<string, unknown>).summary = 'auto';
+        reasoning.summary = 'auto';
       }
       if (this.capabilities.supportsReasoningEffort) {
-        (params.reasoning as Record<string, unknown>).effort = 'high';
+        reasoning.effort = 'high';
       }
+      params.reasoning = reasoning;
     }
 
     if (useStreaming) {
-      const stream = client.responses.stream(params, { signal });
+      const { stream: _stream, ...rest } = params;
+      const streamParams: ResponseStreamParams = { ...rest, stream: true };
+      const stream = client.responses.stream(streamParams, { signal });
       const groupId = this.logger.getActiveGroupId();
       const thinking = this.createThinkingStream(groupId);
       const output = this.isOutputStreamingEnabled()
@@ -444,7 +451,14 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     }
 
     try {
-      const response = await client.responses.create(params, { signal });
+      const { stream: _nonStream, ...nonStreamRest } = params;
+      const nonStreamingParams: ResponseCreateParamsNonStreaming = {
+        ...nonStreamRest,
+        stream: false,
+      };
+      const response = await client.responses.create(nonStreamingParams, {
+        signal,
+      });
       this.previousResponseId = response.id;
       this.sentMessages = messages.length;
       return response;
@@ -474,34 +488,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       output_tokens_details: { reasoning_tokens: 0 },
     };
 
-    let newResponse = '';
-
-    if (responseObject.output_text) {
-      newResponse = responseObject.output_text.trim();
-    } else if (Array.isArray(responseObject.output)) {
-      const messageParts = responseObject.output.filter(
-        (part): part is ResponseOutputMessage =>
-          part.type === 'message' && 'content' in part,
-      );
-      if (messageParts.length > 0) {
-        const aggregated = messageParts
-          .map((part) => this.extractMessageText(part.content))
-          .filter((content) => content.length > 0)
-          .join('');
-        newResponse = aggregated.trim();
-      } else {
-        const fallbackText = responseObject.output
-          .filter(
-            (
-              part,
-            ): part is ResponseOutputItem & { text: string; type: string } =>
-              this.isTextBearingOutput(part) && part.type !== 'reasoning',
-          )
-          .map((part) => part.text)
-          .join('');
-        newResponse = fallbackText.trim();
-      }
-    }
+    const newResponse = this.collectResponseText(responseObject);
 
     const stopReason =
       responseObject.status === 'completed'
@@ -517,6 +504,56 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     }
 
     return [newResponse, usage, stopReason];
+  }
+
+  private collectResponseText(responseObject: Response): string {
+    const trimmedOutputText = responseObject.output_text?.trim();
+    if (trimmedOutputText) {
+      return trimmedOutputText;
+    }
+
+    const outputItems = responseObject.output;
+    if (!Array.isArray(outputItems) || outputItems.length === 0) {
+      return '';
+    }
+
+    const messageText = this.collectMessageOutput(outputItems);
+    if (messageText) {
+      return messageText;
+    }
+
+    return this.collectFallbackOutput(outputItems);
+  }
+
+  private collectMessageOutput(
+    outputItems: ResponseOutputItem[],
+  ): string | null {
+    const messageParts = outputItems.filter(
+      (part): part is ResponseOutputMessage =>
+        part.type === 'message' && 'content' in part,
+    );
+    if (messageParts.length === 0) {
+      return null;
+    }
+
+    const aggregated = messageParts
+      .map((part) => this.extractMessageText(part.content))
+      .filter((content) => content.length > 0)
+      .join('')
+      .trim();
+
+    return aggregated.length > 0 ? aggregated : null;
+  }
+
+  private collectFallbackOutput(outputItems: ResponseOutputItem[]): string {
+    return outputItems
+      .filter(
+        (part): part is ResponseOutputItem & { text: string; type: string } =>
+          this.isTextBearingOutput(part) && part.type !== 'reasoning',
+      )
+      .map((part) => part.text)
+      .join('')
+      .trim();
   }
 
   private extractMessageText(
@@ -782,14 +819,16 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     const lastMessage = messages.at(-1);
     const secondLastMessage = messages.at(-2);
 
-    if (!lastMessage || !this.isMessageItem(lastMessage)) {
+    if (!this.isMessageItem(lastMessage)) {
       this.logger.error(
         'Last message is not a message item - unexpected format',
       );
       return;
     }
 
-    if (this.containCutOffMessage((lastMessage as any).content)) {
+    const lastContent = this.getMessageContent(lastMessage);
+
+    if (lastContent && this.containCutOffMessage(lastContent)) {
       this.logger.debug(
         'Last message is a user message asking to continue after cut off',
       );
@@ -798,9 +837,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           secondLastMessage,
           `${bestConnector}${newResponse}`,
         );
+        const trailingMessage = messages.at(-1);
         if (
-          this.isMessageItem(messages.at(-1)) &&
-          (messages.at(-1) as any).role === 'user'
+          this.isMessageItem(trailingMessage) &&
+          trailingMessage.role === 'user'
         ) {
           messages.pop();
         } else if (!appended) {
@@ -953,16 +993,57 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     return { type: 'input_text', text };
   }
 
-  private isMessageItem(item?: ResponseInputItem): item is ResponseInputItem & {
-    type?: 'message';
-    role?: string;
-    content?: unknown;
-  } {
+  private isMessageItem(
+    item?: ResponseInputItem,
+  ): item is EasyInputMessage | ResponseInputItem.Message {
     if (!item || typeof item !== 'object') {
       return false;
     }
-    const candidate = item as any;
-    return typeof candidate.role === 'string';
+
+    const role = (item as { role?: unknown }).role;
+    if (typeof role !== 'string') {
+      return false;
+    }
+
+    const type = (item as { type?: unknown }).type;
+    if (typeof type === 'string' && type !== 'message') {
+      return false;
+    }
+
+    const content = (item as { content?: unknown }).content;
+    return typeof content === 'string' || this.isInputContentList(content);
+  }
+
+  private getMessageContent(
+    item?: ResponseInputItem,
+  ): ResponseInputMessageContentList | string | undefined {
+    if (!this.isMessageItem(item)) {
+      return undefined;
+    }
+    return item.content;
+  }
+
+  private isInputContentList(
+    content: unknown,
+  ): content is ResponseInputMessageContentList {
+    return (
+      Array.isArray(content) &&
+      content.every((item) => this.isInputContent(item))
+    );
+  }
+
+  private isInputContent(content: unknown): content is ResponseInputContent {
+    if (!content || typeof content !== 'object') {
+      return false;
+    }
+
+    const type = (content as { type?: unknown }).type;
+    return (
+      type === 'input_text' ||
+      type === 'input_image' ||
+      type === 'input_file' ||
+      type === 'input_audio'
+    );
   }
 
   private appendInputText(message: ResponseInputItem, text: string): void {
@@ -970,60 +1051,46 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       return;
     }
 
-    const messageWithContent = message as ResponseInputItem & {
-      content?: ResponseInputMessageContentList | string;
-    };
-    const { content } = messageWithContent;
+    const content = message.content;
 
-    if (Array.isArray(content)) {
+    if (this.isInputContentList(content)) {
       content.push(this.createInputText(text));
       return;
     }
 
     if (typeof content === 'string') {
-      messageWithContent.content = [
+      message.content = [
         this.createInputText(content),
         this.createInputText(text),
       ];
       return;
     }
 
-    messageWithContent.content = [this.createInputText(text)];
+    message.content = [this.createInputText(text)];
   }
 
   private appendAssistantText(
     message: ResponseInputItem,
     text: string,
   ): boolean {
-    if (!this.isMessageItem(message)) {
-      return false;
-    }
-
-    const assistantMessage = message as ResponseInputItem & {
-      role?: string;
-      content?: ResponseInputMessageContentList | string;
-    };
-
-    if (assistantMessage.role !== 'assistant') {
+    if (!this.isMessageItem(message) || message.role !== 'assistant') {
       return false;
     }
 
     const newContent = this.createInputText(text);
+    const { content } = message;
 
-    if (Array.isArray(assistantMessage.content)) {
-      assistantMessage.content.push(newContent);
+    if (this.isInputContentList(content)) {
+      content.push(newContent);
       return true;
     }
 
-    if (typeof assistantMessage.content === 'string') {
-      assistantMessage.content = [
-        this.createInputText(assistantMessage.content),
-        newContent,
-      ];
+    if (typeof content === 'string') {
+      message.content = [this.createInputText(content), newContent];
       return true;
     }
 
-    assistantMessage.content = [newContent];
+    message.content = [newContent];
     return true;
   }
 }
