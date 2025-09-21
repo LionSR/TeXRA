@@ -60,7 +60,12 @@ function normalizeRole(
   role: string | undefined,
   logger: AgentLogger,
 ): 'user' | 'model' | null {
-  if (role === 'user') {
+  if (role === 'user' || role === 'system') {
+    if (role === 'system') {
+      logger.debug(
+        "Coercing 'system' role to 'user' for Google chat history compatibility.",
+      );
+    }
     return 'user';
   }
   if (role === 'model' || role === 'assistant') {
@@ -471,10 +476,14 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       }
 
       if (mediaFileResults.length > 0) {
-        if (mediaFileResults.some((r) => !r.ok)) {
-          this.logger.warn('Some media files failed to load');
-        }
         this.logger.fileList(mediaFileResults);
+        const failedUploads = mediaFileResults.filter((r) => !r.ok);
+        if (failedUploads.length > 0) {
+          const failedPaths = failedUploads.map((r) => r.path).join(', ');
+          const failureMessage = `Failed to upload media file(s): ${failedPaths}`;
+          this.logger.error(failureMessage);
+          throw new Error(failureMessage);
+        }
       }
     }
 
@@ -589,10 +598,14 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       }
 
       if (mediaFileResults.length > 0) {
-        if (mediaFileResults.some((r) => !r.ok)) {
-          this.logger.warn('Some media files failed to load');
-        }
         this.logger.fileList(mediaFileResults);
+        const failedUploads = mediaFileResults.filter((r) => !r.ok);
+        if (failedUploads.length > 0) {
+          const failedPaths = failedUploads.map((r) => r.path).join(', ');
+          const failureMessage = `Failed to upload media file(s): ${failedPaths}`;
+          this.logger.error(failureMessage);
+          throw new Error(failureMessage);
+        }
       }
     }
 
@@ -805,9 +818,9 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
           );
         }
       } else {
-        modelMessage.parts = [createPartFromText(toolState.accumulatedOutput)];
+        modelMessage.parts = [createPartFromText(bestConnector + newResponse)];
         this.logger.error(
-          'Last model message parts were not an array. Resetting parts.',
+          'Last model message parts were not an array. Resetting parts with continuation text.',
         );
       }
     } else {
