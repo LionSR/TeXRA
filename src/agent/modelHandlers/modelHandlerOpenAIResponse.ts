@@ -882,24 +882,20 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     const reasoningObj = outputArr.find(
       (item) => item?.type === 'reasoning',
     ) as ResponseReasoningItem | undefined;
-    const summaryParts = reasoningObj?.summary;
-    if (!Array.isArray(summaryParts) || summaryParts.length === 0) {
+    const summaryParts = reasoningObj?.summary ?? [];
+    if (summaryParts.length === 0) {
       return null;
     }
 
     const thoughtContent = summaryParts
-      .map((part: any) =>
-        part.type === 'summary_text' && typeof part?.text === 'string'
-          ? part.text
-          : '',
-      )
+      .map((part) => part.text)
       .join('')
       .trim();
 
     if (toolState && !toolState.thinkingAdded) {
       toolState.thinkingBlocks = summaryParts.map((part) => ({
         type: 'thinking',
-        thinking: typeof part?.text === 'string' ? part.text : '',
+        thinking: part.text,
       }));
       toolState.thinkingAdded = true;
     }
@@ -977,16 +973,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     return messages;
   }
 
-  createAssistantMessage(text: string): ResponseInputItem {
-    const content: ResponseInputMessageContentList = [
-      this.createInputText(text),
-    ];
-
+  createAssistantMessage(text: string): EasyInputMessage {
     return {
       type: 'message',
       role: 'assistant',
-      content,
-    } satisfies ResponseInputItem;
+      content: [this.createInputText(text)],
+    } satisfies EasyInputMessage;
   }
 
   private createInputText(text: string): ResponseInputContent {
