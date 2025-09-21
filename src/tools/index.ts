@@ -10,4 +10,5 @@ export * from './core/base';
 export * from './core/define';
 export * from './registry';
 export * from './wolfram';
+export * from './web/WebFetchTool';
 export * from './web/WebSearchTool';
