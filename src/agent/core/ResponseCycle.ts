@@ -36,14 +36,14 @@ import xmlUtils from '@utils/text/xmlUtils';
 /**
  * Options required to run a single response cycle.
  */
-export interface ResponseCycleOptions {
-  modelHandler: IModelHandler;
+export interface ResponseCycleOptions<C = unknown> {
+  modelHandler: IModelHandler<any, any, any, any, C>;
   agentSetting: AgentSetting;
   agentConfig: AgentConfig;
   agentPrompt: AgentPrompt;
   userVars: Record<string, any>;
   logger: AgentLogger;
-  client: any;
+  client: C;
   checkInterruption: () => Promise<boolean> | boolean;
   setAbortController: (ctrl: AbortController | null) => void;
 }
@@ -52,8 +52,8 @@ export interface ResponseCycleOptions {
  * Executes a response cycle.
  * @returns Tuple of [round state, global state, tool state, completion flag]
  */
-export async function runResponseCycle(
-  options: ResponseCycleOptions,
+export async function runResponseCycle<C = unknown>(
+  options: ResponseCycleOptions<C>,
   messages: ProviderMessage[],
   stateRound: AgentStateRound,
   stateGlobal: AgentStateGlobal,
