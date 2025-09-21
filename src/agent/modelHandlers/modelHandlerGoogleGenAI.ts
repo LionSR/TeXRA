@@ -59,7 +59,7 @@ type GoogleRole = 'user' | 'model';
 
 function ensureParts(message: Content): Part[] {
   if (!Array.isArray(message.parts)) {
-    message.parts = [];
+    message.parts = []; // Initialize parts array if missing
   }
   return message.parts;
 }
@@ -90,7 +90,7 @@ function findLastTextPart(
   return undefined;
 }
 
-function toGoogleRole(role?: string): GoogleRole | null {
+function toGoogleRole(role?: string, logger?: AgentLogger): GoogleRole | null {
   if (role === 'assistant' || role === 'model') {
     return 'model';
   }
@@ -98,6 +98,9 @@ function toGoogleRole(role?: string): GoogleRole | null {
     return 'user';
   }
   if (role === 'system') {
+    logger?.debug(
+      `Converting system role to user role for Google API compatibility`,
+    );
     return 'user';
   }
   return null;
@@ -112,7 +115,7 @@ function convertMessagesToGoogleContentHistory(
   let currentParts: Part[] = [];
 
   messages.forEach((message) => {
-    const role = toGoogleRole(message.role);
+    const role = toGoogleRole(message.role, logger);
     if (!role) {
       logger.warn(
         `Skipping message with unsupported role during history conversion: ${message.role}`,
@@ -409,7 +412,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     userPrefix: string,
     userRequest: string,
     mediaFiles?: string[],
-    systemPrompt?: string,
+    _systemPrompt?: string,
   ): Promise<Content[]> {
     const client = await this.getClient();
     const userContentParts: Part[] = [createPartFromText(userPrefix)];
@@ -626,6 +629,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
   }
 
   createAssistantMessage(text: string): Content {
+    // Note: Method name retained for interface compatibility, but returns 'model' role per Google SDK
     return { role: 'model', parts: [createPartFromText(text)] };
   }
 
