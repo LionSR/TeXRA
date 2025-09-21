@@ -626,7 +626,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
   }
 
   createAssistantMessage(text: string): Content {
-    return { role: 'assistant', parts: [createPartFromText(text)] };
+    return { role: 'model', parts: [createPartFromText(text)] };
   }
 
   createMediaContent(mediaMessage: MediaEntry[]): MediaEntry[] {
@@ -795,7 +795,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     }
 
     const modelMessage = messages.at(-1);
-    if (modelMessage?.role === 'assistant') {
+    if (modelMessage?.role === 'model') {
       const parts = ensureParts(modelMessage);
       const lastTextPart = findLastTextPart(parts);
       if (lastTextPart) {
@@ -810,7 +810,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     } else {
       this.logger.debug('Adding new model message for the response.');
       messages.push({
-        role: 'assistant',
+        role: 'model',
         parts: [createPartFromText(toolState.accumulatedOutput)],
       });
     }
@@ -845,7 +845,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         parts.push(createPartFromText(pseudoPrefillMsg));
       } else {
         messages.push({
-          role: 'assistant',
+          role: 'model',
           parts: [createPartFromText(pseudoPrefillMsg)],
         });
       }
@@ -872,11 +872,11 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     await WorkspaceFS.write(outputFile, fileContent);
     this.logger.debug(`Cleaned and saved existing content to ${outputFile}.`);
     messages.push({
-      role: 'assistant',
+      role: 'model',
       parts: [createPartFromText(fileContent)],
     });
     this.logger.debug(
-      `Added existing file content to messages as 'assistant' role.`,
+      `Added existing file content to messages as 'model' role.`,
     );
 
     if (hasEndTag(agentSetting, fileContent)) {
@@ -1026,7 +1026,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       callParts.push(createPartFromText(text));
     }
     callParts.push(callPart);
-    const callMsg: Content = { role: 'assistant', parts: callParts };
+    const callMsg: Content = { role: 'model', parts: callParts };
     const resultMsg: Content = { role: 'user', parts: [resultPart] };
     return [callMsg, resultMsg];
   }
