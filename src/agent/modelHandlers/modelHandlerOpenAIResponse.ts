@@ -1,12 +1,13 @@
 // Standard library imports
 import { Buffer } from 'node:buffer';
-import { randomUUID } from 'node:crypto';
 
 // Third-party imports
 import OpenAI, { toFile } from 'openai';
 import type {
   Response,
   ResponseUsage,
+  ResponseCreateParamsBase,
+  ResponseOutputItem,
   ResponseOutputMessage,
   ResponseOutputText,
   ResponseReasoningItem,
@@ -285,9 +286,11 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         continue;
       }
 
-      const contentList = (item as ResponseInputItem & {
-        content?: ResponseInputMessageContentList;
-      }).content;
+      const contentList = (
+        item as ResponseInputItem & {
+          content?: ResponseInputMessageContentList;
+        }
+      ).content;
 
       if (!Array.isArray(contentList)) {
         continue;
@@ -368,7 +371,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
     await this.uploadInlineInputFiles(client, newMessages);
 
-    const params: Record<string, unknown> = {
+    const params: ResponseCreateParamsBase = {
       model: this.config.fullName,
       input: newMessages,
       max_output_tokens: this.config.maxOutputTokens,
@@ -481,21 +484,22 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           part.type === 'message' && 'content' in part,
       );
       if (messageParts.length > 0) {
-        newResponse = messageParts
-          .map((part) =>
-            part.content
-              .filter((c): c is ResponseOutputText => c.type === 'output_text')
-              .map((c) => c.text)
-              .join(''),
-          )
-          .join('')
-          .trim();
+        const aggregated = messageParts
+          .map((part) => this.extractMessageText(part.content))
+          .filter((content) => content.length > 0)
+          .join('');
+        newResponse = aggregated.trim();
       } else {
-        newResponse = responseObject.output
-          .filter((part) => 'text' in part && part.type !== 'reasoning')
-          .map((part: any) => part.text)
-          .join('')
-          .trim();
+        const fallbackText = responseObject.output
+          .filter(
+            (
+              part,
+            ): part is ResponseOutputItem & { text: string; type: string } =>
+              this.isTextBearingOutput(part) && part.type !== 'reasoning',
+          )
+          .map((part) => part.text)
+          .join('');
+        newResponse = fallbackText.trim();
       }
     }
 
@@ -513,6 +517,39 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     }
 
     return [newResponse, usage, stopReason];
+  }
+
+  private extractMessageText(
+    content: ResponseOutputMessage['content'] | string | undefined,
+  ): string {
+    if (!content) {
+      return '';
+    }
+
+    if (typeof content === 'string') {
+      return content;
+    }
+
+    if (!Array.isArray(content)) {
+      return '';
+    }
+
+    return content
+      .filter(
+        (item): item is ResponseOutputText =>
+          item?.type === 'output_text' && typeof item?.text === 'string',
+      )
+      .map((item) => item.text)
+      .join('');
+  }
+
+  private isTextBearingOutput(
+    part: ResponseOutputItem,
+  ): part is ResponseOutputItem & { text: string; type: string } {
+    return (
+      typeof (part as { text?: unknown }).text === 'string' &&
+      typeof (part as { type?: unknown }).type === 'string'
+    );
   }
 
   /** Price computation adapted for Responses API token fields. */
@@ -901,22 +938,19 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   }
 
   createAssistantMessage(text: string): ResponseInputItem {
-    const message: ResponseOutputMessage = {
-      id: randomUUID(),
+    const content: ResponseInputMessageContentList = [
+      this.createInputText(text),
+    ];
+
+    return {
       type: 'message',
       role: 'assistant',
-      status: 'completed',
-      content: [this.createOutputText(text)],
-    };
-    return message;
+      content,
+    } satisfies ResponseInputItem;
   }
 
   private createInputText(text: string): ResponseInputContent {
     return { type: 'input_text', text };
-  }
-
-  private createOutputText(text: string): ResponseOutputText {
-    return { type: 'output_text', text, annotations: [] };
   }
 
   private isMessageItem(item?: ResponseInputItem): item is ResponseInputItem & {
@@ -936,34 +970,60 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       return;
     }
 
-    const content = (message as any).content;
+    const messageWithContent = message as ResponseInputItem & {
+      content?: ResponseInputMessageContentList | string;
+    };
+    const { content } = messageWithContent;
+
     if (Array.isArray(content)) {
       content.push(this.createInputText(text));
-    } else if (typeof content === 'string') {
-      (message as any).content = [
+      return;
+    }
+
+    if (typeof content === 'string') {
+      messageWithContent.content = [
         this.createInputText(content),
         this.createInputText(text),
       ];
-    } else {
-      (message as any).content = [this.createInputText(text)];
+      return;
     }
+
+    messageWithContent.content = [this.createInputText(text)];
   }
 
   private appendAssistantText(
     message: ResponseInputItem,
     text: string,
   ): boolean {
-    if (this.isMessageItem(message) && (message as any).role === 'assistant') {
-      if (Array.isArray((message as any).content)) {
-        (message as any).content.push(this.createOutputText(text));
-      } else if (typeof (message as any).content === 'string') {
-        (message as any).content = `${(message as any).content}${text}`;
-      } else {
-        (message as any).content = [this.createOutputText(text)];
-      }
+    if (!this.isMessageItem(message)) {
+      return false;
+    }
+
+    const assistantMessage = message as ResponseInputItem & {
+      role?: string;
+      content?: ResponseInputMessageContentList | string;
+    };
+
+    if (assistantMessage.role !== 'assistant') {
+      return false;
+    }
+
+    const newContent = this.createInputText(text);
+
+    if (Array.isArray(assistantMessage.content)) {
+      assistantMessage.content.push(newContent);
       return true;
     }
 
-    return false;
+    if (typeof assistantMessage.content === 'string') {
+      assistantMessage.content = [
+        this.createInputText(assistantMessage.content),
+        newContent,
+      ];
+      return true;
+    }
+
+    assistantMessage.content = [newContent];
+    return true;
   }
 }
