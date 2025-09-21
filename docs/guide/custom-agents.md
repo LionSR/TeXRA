@@ -163,8 +163,8 @@ userPrefix: |
 Tools live under `src/tools/` and each one defines its input schema with Zod.
 List the desired tools by name in your agent YAML. The registry includes
 workspace utilities like `bash`, `file_op`, `glob`, `grep`, and `ls` alongside
-domain-specific helpers such as `str_replace_editor`, `wolfram`, and
-`web_search`.
+domain-specific helpers such as `str_replace_editor`, `wolfram`,
+`web_fetch`, and `web_search`.
 
 Common workspace helpers:
 
@@ -185,6 +185,7 @@ settings:
     - ls
     - bash
     - file_op
+    - web_fetch
     - web_search
 ```
 
