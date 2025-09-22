@@ -13,7 +13,6 @@ import { OpenAIStreamDeltaAggregator } from './openAIStreamAggregators';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 
 // Local imports - utilities
-import { convertContentToString } from '@agent/utils/text/messageUtils';
 import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
 import type { ToolDefinition } from '@model';
 import { K_SLICE, MESSAGE_PREVIEW_LENGTH } from '@utils/config';
@@ -97,39 +96,6 @@ export class ModelHandlerKimi extends ModelHandlerOpenAI {
   }
 
   /**
-   * Preprocess messages array for Moonshot Kimi models
-   * Ensures compatibility with Kimi API format requirements
-   * @param messages Original messages array
-   * @returns Processed messages array
-   */
-  private preprocessMessages(messages: any[]): any[] {
-    if (!messages || messages.length <= 1) {
-      return messages;
-    }
-
-    // Process messages to ensure compatibility with Kimi API
-    // This is similar to DeepSeek's handling but adapted for Kimi
-    const processedMessages = messages.map((message) => {
-      // Clone the message to avoid modifying the original
-      const processedMessage = { ...message };
-
-      // Convert content to string if it's an array
-      if (Array.isArray(processedMessage.content)) {
-        processedMessage.content = convertContentToString(
-          processedMessage.content,
-        );
-        this.logger.debug(
-          `Converted content array to string for ${processedMessage.role} message`,
-        );
-      }
-
-      return processedMessage;
-    });
-
-    return processedMessages;
-  }
-
-  /**
    * Override createResponse to preprocess messages for Kimi models
    */
   async createResponse(
@@ -142,7 +108,9 @@ export class ModelHandlerKimi extends ModelHandlerOpenAI {
     tools?: ToolDefinition[],
   ): Promise<any> {
     // Preprocess messages for Kimi compatibility
-    const processedMessages = this.preprocessMessages(messages);
+    const processedMessages = this.normalizeMessages(messages, {
+      convertContentToString: true,
+    });
 
     if (processedMessages.length !== messages.length) {
       this.logger.info(
