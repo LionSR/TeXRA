@@ -568,7 +568,7 @@ export class LogEntryFormatter {
                 <pre class="tool-output-preview">${preview}</pre>
                 <details class="tool-output-details">
                   <summary>Show full output</summary>
-                  <pre>${encodedOutput}</pre>
+                  <pre class="tool-output-full">${encodedOutput}</pre>
                 </details>
               </div>
             </div>
@@ -578,7 +578,7 @@ export class LogEntryFormatter {
             <div class="tool-use-section">
               <div class="tool-use-subsection">
                 <span class="tool-use-sublabel">Output:</span>
-                <pre>${encodedOutput}</pre>
+                <pre class="tool-output-full">${encodedOutput}</pre>
               </div>
             </div>
           `);
