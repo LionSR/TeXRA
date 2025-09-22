@@ -10,7 +10,7 @@ import { defineTool } from './core/define';
 // Local imports - tools
 
 // Local imports - core
-import { ToolResult, CLIResult, ToolError } from './result';
+import { ToolResult, ToolError, cliResult, toolResult } from './result';
 import { ToolCallInput, EditorCommand, FileHistoryEntry } from './types';
 
 // Local imports - Log
@@ -221,7 +221,8 @@ export class TextEditorTool extends defineTool({
           })
           .join('\n');
 
-        return new CLIResult({
+        return cliResult({
+          summary: `View directory ${filePath}`,
           output: `Here's the files and directories in ${filePath}:\n${formattedContents}`,
         });
       }
@@ -272,7 +273,16 @@ export class TextEditorTool extends defineTool({
         }
       }
 
-      return new CLIResult({
+      let rangeSummary: string | undefined;
+      if (viewRange) {
+        const [startLine, endLine] = viewRange;
+        rangeSummary = `${startLine}-${endLine === -1 ? 'end' : endLine}`;
+      }
+
+      return cliResult({
+        summary: rangeSummary
+          ? `View ${filePath} (${rangeSummary})`
+          : `View ${filePath}`,
         output: this.makeOutput(fileContent, filePath, initLine),
       });
     } catch (error) {
@@ -300,7 +310,8 @@ export class TextEditorTool extends defineTool({
       // Write file content
       await WorkspaceFS.write(filePath, content);
 
-      return new ToolResult({
+      return toolResult({
+        summary: `Created file ${filePath}`,
         output: `File created successfully at: ${filePath}`,
       });
     } catch (error) {
@@ -381,7 +392,8 @@ export class TextEditorTool extends defineTool({
         startLine,
       )}Review the changes and make sure they are as expected. Edit the file again if necessary.`;
 
-      return new CLIResult({
+      return cliResult({
+        summary: `Updated ${filePath}`,
         output: successMsg,
       });
     } catch (error) {
@@ -457,7 +469,8 @@ export class TextEditorTool extends defineTool({
         startLine,
       )}Review the changes and make sure they are as expected (correct indentation, no duplicate lines, etc). Edit the file again if necessary.`;
 
-      return new CLIResult({
+      return cliResult({
+        summary: `Inserted text into ${filePath}`,
         output: successMsg,
       });
     } catch (error) {
@@ -492,7 +505,8 @@ export class TextEditorTool extends defineTool({
         this.fileHistory.delete(filePath);
       }
 
-      return new CLIResult({
+      return cliResult({
+        summary: `Undid edit on ${filePath}`,
         output: `Last edit to ${filePath} undone successfully. ${this.makeOutput(oldContent, filePath)}`,
       });
     } catch (error) {
