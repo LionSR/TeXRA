@@ -13,7 +13,7 @@ import { ProgressViewState } from '../state/ProgressViewState';
 import { buildStreamInfos } from '../streamInfoUtils';
 import type { StreamTabInfo } from '../types';
 import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
-import { deriveAgentSessionKind } from '@agent/core/AgentDataclass';
+import { AgentType, deriveAgentSessionKind } from '@agent/core/AgentDataclass';
 
 // Types
 import type { TokenUsageStats } from '@agent/types/UsageTypes';
@@ -118,30 +118,37 @@ export class ProgressEventHandler {
   /**
    * Handle setting active stream
    */
-  private handleSetActiveStream(stream: string): void {
+  private handleSetActiveStream(
+    payload: { stream: StreamTabId; agentType?: AgentType | null } | string,
+  ): void {
+    const { stream, agentType } =
+      typeof payload === 'string'
+        ? { stream: payload, agentType: undefined }
+        : payload;
+
+    if (!stream) {
+      return;
+    }
+
     // Ensure the stream exists in streamTabs so it appears in the UI
     // This handles the case where setActiveStream is called before any logs
     this.state.streamTabs.ensureStream(stream);
 
-    // Set initial status to running for new streams
-    if (!this._streamStatus.has(stream)) {
-      this.handleUpdateStreamStatus({ stream, status: STATUS.RUNNING });
+    const sessionKindHint = deriveAgentSessionKind(agentType);
+    this.state.setSessionKindHint(stream, sessionKindHint);
+
+    const currentFilter = this.state.agentTypeFilter;
+    if (currentFilter !== 'all' && currentFilter !== sessionKindHint) {
+      this.state.agentTypeFilter = sessionKindHint;
     }
 
     this.state.activeStream = stream;
 
-    if (this.webviewUpdater.isAvailable()) {
-      const infos = buildStreamInfos(
-        this.state,
-        this._streamStatus,
-        this.state.agentTypeFilter,
-      );
-      this.webviewUpdater.updateStreams(
-        infos,
-        stream,
-        this.state.agentTypeFilter,
-      );
+    const status: StreamStatusOrReadyType =
+      this._streamStatus.get(stream) ?? STATUS.RUNNING;
+    this.handleUpdateStreamStatus({ stream, status });
 
+    if (this.webviewUpdater.isAvailable()) {
       // Update log content (will be empty for new streams)
       this.updateLogContentForStream(stream, { updateInstruction: false });
       this.sendInstructionUpdate(stream);
@@ -258,6 +265,7 @@ export class ProgressEventHandler {
     const { streamTabId, executionId, taskState } = data;
 
     this.state.setTaskState(streamTabId, taskState);
+    this.state.clearSessionKindHint(streamTabId);
 
     const normalizedState = this.state.getTaskState(streamTabId);
 
