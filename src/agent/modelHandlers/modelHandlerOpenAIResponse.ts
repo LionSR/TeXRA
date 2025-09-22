@@ -356,6 +356,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
       content.file_id = uploadedFile.id;
       delete content.file_data;
+      if ('filename' in content) {
+        delete content.filename;
+      }
     } catch (err) {
       this.logger.error(
         `Failed to upload file ${filename}: ${getSdkErrorMessage(err)}`,
