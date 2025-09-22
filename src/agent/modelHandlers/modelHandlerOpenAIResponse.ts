@@ -992,14 +992,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     return messages;
   }
 
-  createAssistantMessage(text: string): ResponseOutputMessage {
+  createAssistantMessage(text: string): EasyInputMessage {
     return {
       type: 'message',
       role: 'assistant',
-      id: this.nextAssistantMessageId(),
-      status: 'completed',
-      content: [this.createOutputText(text)],
-    } satisfies ResponseOutputMessage;
+      content: text,
+    } satisfies EasyInputMessage;
   }
 
   private createInputText(text: string): ResponseInputContent {
@@ -1184,6 +1182,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
   private nextAssistantMessageId(): string {
     this.assistantMessageCounter += 1;
-    return `assistant-message-${this.assistantMessageCounter}`;
+    const suffix = this.assistantMessageCounter.toString().padStart(6, '0');
+    return `msg_${suffix}`;
   }
 }
