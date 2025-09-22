@@ -185,7 +185,18 @@ export class ModelHandlerOpenAI extends ModelHandler<
 
         if (this.config.fullName.includes('deepseek')) {
           // Aggregate stream chunks manually for DeepSeek models
-          const collectText = (value: any): string => {
+          const REASONING_CONTENT_TYPES = new Set<string>([
+            'reasoning_content',
+            'reasoning',
+            'thinking',
+            'thought',
+            'chain_of_thought',
+          ]);
+
+          const collectText = (
+            value: any,
+            allowedTypes?: Set<string>,
+          ): string => {
             if (!value) {
               return '';
             }
@@ -194,24 +205,63 @@ export class ModelHandlerOpenAI extends ModelHandler<
             }
             if (Array.isArray(value)) {
               return value
-                .map((entry) => {
-                  if (!entry) {
-                    return '';
-                  }
-                  if (typeof entry === 'string') {
-                    return entry;
-                  }
-                  if (typeof entry === 'object' && 'text' in entry) {
-                    return (entry as { text?: string }).text ?? '';
-                  }
-                  return '';
-                })
+                .map((entry) => collectText(entry, allowedTypes))
                 .join('');
             }
-            if (typeof value === 'object' && 'text' in value) {
-              return (value as { text?: string }).text ?? '';
+            if (typeof value === 'object') {
+              const entry: Record<string, any> = value;
+              const entryType =
+                typeof entry.type === 'string' ? entry.type : undefined;
+              const typeAllowed =
+                !allowedTypes || !entryType || allowedTypes.has(entryType);
+              let result = '';
+
+              if (
+                typeAllowed &&
+                typeof entry.text === 'string' &&
+                entry.text.length > 0
+              ) {
+                result += entry.text;
+              }
+
+              if (typeAllowed) {
+                if (typeof entry.content === 'string') {
+                  result += entry.content;
+                }
+                if (typeof entry.reasoning_content === 'string') {
+                  result += entry.reasoning_content;
+                } else if (Array.isArray(entry.reasoning_content)) {
+                  result += collectText(entry.reasoning_content, allowedTypes);
+                }
+              } else if (entry.reasoning_content) {
+                result += collectText(entry.reasoning_content, allowedTypes);
+              }
+
+              if (Array.isArray(entry.content)) {
+                result += entry.content
+                  .map((part: any) => collectText(part, allowedTypes))
+                  .join('');
+              }
+
+              if (Array.isArray(entry.messages)) {
+                result += collectText(entry.messages, allowedTypes);
+              }
+
+              if (entry.delta) {
+                result += collectText(entry.delta, allowedTypes);
+              }
+
+              return result;
             }
             return '';
+          };
+
+          const appendReasoning = (segment: string) => {
+            if (!segment) {
+              return;
+            }
+            reasoningParts.push(segment);
+            thinking.append(segment);
           };
 
           const appendStringValue = (
@@ -246,11 +296,10 @@ export class ModelHandlerOpenAI extends ModelHandler<
               role = delta.role;
             }
 
-            const reasoningDelta = collectText(delta?.reasoning_content);
-            if (reasoningDelta) {
-              reasoningParts.push(reasoningDelta);
-              thinking.append(reasoningDelta);
-            }
+            appendReasoning(collectText(delta?.reasoning_content));
+            appendReasoning(
+              collectText(delta?.messages, REASONING_CONTENT_TYPES),
+            );
 
             const contentDelta = collectText(delta?.content);
             if (contentDelta) {

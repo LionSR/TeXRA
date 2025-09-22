@@ -84,7 +84,7 @@ describe('runToolUseCycle DeepSeek', () => {
   it('logs tool calls and creates follow-up message', async () => {
     const config: ModelConfig = {
       name: 'ds',
-      fullName: 'ds',
+      fullName: 'deepseek-chat',
       provider: ModelProvider.DEEPSEEK,
       maxOutputTokens: 10,
       inputPrice: 0,
@@ -159,5 +159,134 @@ describe('runToolUseCycle DeepSeek', () => {
       tool_call_id: 'c1',
       content: JSON.stringify({ output: 'hello' }),
     });
+  });
+  it('streams reasoning messages as thinking logs', async () => {
+    const config: ModelConfig = {
+      name: 'ds',
+      fullName: 'deepseek-chat',
+      provider: ModelProvider.DEEPSEEK,
+      maxOutputTokens: 10,
+      inputPrice: 0,
+      outputPrice: 0,
+      contextWindow: 1000,
+      capabilities: { ...DEFAULT_MODEL_CAPABILITIES },
+      openRouterOnly: false,
+    };
+    const handler = new ModelHandlerDeepSeek(config);
+    const logger = new AgentLogger('StreamingTest', true);
+    handler.setLogger(logger);
+    handler.setOutputStreaming(true);
+    (handler as any).getStreamingConfig = () => true;
+
+    const streamChunks = [
+      {
+        id: 'chunk-1',
+        choices: [
+          {
+            delta: {
+              role: 'assistant',
+              messages: [
+                {
+                  role: 'assistant',
+                  content: [
+                    { type: 'thinking', text: 'First thought. ' },
+                    { type: 'reasoning_content', text: 'Second thought.' },
+                  ],
+                },
+              ],
+            },
+          },
+        ],
+      },
+      {
+        id: 'chunk-2',
+        choices: [
+          {
+            delta: {
+              content: [{ type: 'output_text', text: 'Final answer.' }],
+            },
+          },
+        ],
+      },
+      {
+        id: 'chunk-3',
+        model: 'deepseek-chat',
+        usage: {
+          prompt_tokens: 1,
+          completion_tokens: 1,
+          total_tokens: 2,
+        },
+        choices: [
+          {
+            delta: {},
+            finish_reason: 'stop',
+          },
+        ],
+      },
+    ];
+
+    const mockStream = {
+      [Symbol.asyncIterator]() {
+        let index = 0;
+        return {
+          async next() {
+            if (index < streamChunks.length) {
+              return { value: streamChunks[index++], done: false };
+            }
+            return { value: undefined, done: true };
+          },
+        };
+      },
+    };
+
+    const client = {
+      chat: {
+        completions: {
+          stream: () => mockStream,
+        },
+      },
+    } as unknown as OpenAI;
+
+    const addEvents: any[] = [];
+    const updateEvents: any[] = [];
+    const disposeAdd = bus.on('addLogMessage', (event) =>
+      addEvents.push(event),
+    );
+    const disposeUpdate = bus.on('updateLogMessage', (event) =>
+      updateEvents.push(event),
+    );
+
+    const response = await handler.createResponse(
+      client,
+      [{ role: 'user', content: 'Hello' }],
+      0,
+      undefined,
+      undefined,
+      undefined,
+      [],
+    );
+
+    disposeAdd();
+    disposeUpdate();
+
+    const allEvents = [...addEvents, ...updateEvents];
+    const thinkingEvents = allEvents.filter(
+      (event) => event.logMessage?.messageType === MESSAGE_TYPES.THINKING,
+    );
+    assert.ok(
+      thinkingEvents.length > 0,
+      'Expected reasoning segments to emit thinking logs',
+    );
+    const combinedLogText = thinkingEvents
+      .map((event) => event.logMessage?.text ?? '')
+      .join('');
+    assert.ok(
+      combinedLogText.includes('First thought.'),
+      'Thinking log should contain reasoning text from messages',
+    );
+    assert.equal(
+      response.choices?.[0]?.message?.reasoning_content,
+      'First thought. Second thought.',
+    );
   });
 });
