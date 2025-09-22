@@ -237,7 +237,15 @@ export async function executeAgentWithLogging<T extends IAgent>(
         );
 
         // Switch to this stream and set its status to running
-        bus.emit('setActiveStream', streamTabId);
+        const resolvedAgentType =
+          agentType ??
+          (agent instanceof BaseToolUseAgent
+            ? AgentType.ToolUse
+            : AgentType.CoT);
+        bus.emit('setActiveStream', {
+          stream: streamTabId,
+          agentType: resolvedAgentType,
+        });
         bus.emit('updateStreamStatus', {
           stream: streamTabId,
           status: 'running',
