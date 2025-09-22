@@ -36,3 +36,22 @@
   border-top: 1px solid var(--vscode-panel-border);
   opacity: 0.3;
 }
+
+.tool-use-error > .details-summary .tool-use-title,
+.tool-use-error > .details-summary .codicon {
+  color: var(--vscode-errorForeground);
+}
+
+.tool-output-preview {
+  margin-bottom: var(--spacing-tiny);
+}
+
+.tool-output-details {
+  margin-top: var(--spacing-tiny);
+}
+
+.tool-output-details summary {
+  cursor: pointer;
+  color: var(--vscode-textLink-foreground);
+  font-size: var(--font-size-sm);
+}

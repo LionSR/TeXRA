@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { defineTool } from './core/define';
 
 // Local imports - tools
-import { ToolResult, ToolError } from '@tools/result';
+import { ToolResult, ToolError, toolResult } from '@tools/result';
 import { WorkspaceFS } from '@utils/files';
 
 const FileOpInputSchema = z.object({
@@ -27,27 +27,36 @@ export class FileOpTool extends defineTool({
     switch (command) {
       case 'read': {
         const data = await WorkspaceFS.read(path);
-        return new ToolResult({ output: data });
+        return toolResult({
+          summary: `Read ${path}`,
+          output: data,
+        });
       }
       case 'write': {
         if (content === undefined) {
-          return new ToolResult({
+          return toolResult({
             error: 'content parameter is required for write',
             isError: true,
           });
         }
         await WorkspaceFS.write(path, content);
-        return new ToolResult({ output: 'written' });
+        return toolResult({
+          summary: `Wrote ${path}`,
+          output: 'written',
+        });
       }
       case 'append': {
         if (content === undefined) {
-          return new ToolResult({
+          return toolResult({
             error: 'content parameter is required for append',
             isError: true,
           });
         }
         await WorkspaceFS.appendFile(path, content);
-        return new ToolResult({ output: 'appended' });
+        return toolResult({
+          summary: `Appended to ${path}`,
+          output: 'appended',
+        });
       }
       default:
         throw new ToolError(
