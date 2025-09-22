@@ -488,18 +488,23 @@ export class LogEntryFormatter {
         headerLabel.textContent = headerText;
       }
 
-      // Check if there's a summary
+      // Check if there's a non-trivial summary
       const summaryText =
         typeof parsed.summary === 'string' && parsed.summary.trim().length > 0
           ? parsed.summary.trim()
           : undefined;
 
-      // If there's a summary, only show the summary
+      const sections = [];
+
+      // If there's a summary, show it prominently
       if (summaryText) {
-        formattedContent = `<div class="tool-use-summary">${encodeHtml(summaryText)}</div>`;
+        sections.push(
+          `<div class="tool-use-summary">${encodeHtml(summaryText)}</div>`,
+        );
+        // When we have a summary, we DON'T show input/output details
+        // This keeps the UI clean and focused on the summary
       } else {
-        // No summary, show the full output with vertical limit
-        const sections = [];
+        // No summary, show the full details with vertical limit
 
         // Add input section if present
         if (Object.prototype.hasOwnProperty.call(parsed, 'input')) {
@@ -559,29 +564,29 @@ export class LogEntryFormatter {
             </div>
           `);
         }
-
-        // Add error section if present (and no summary)
-        if (parsed.error) {
-          const errorText =
-            typeof parsed.error === 'string'
-              ? parsed.error
-              : JSON.stringify(parsed.error, null, 2);
-          sections.push(`
-            <div class="tool-use-section">
-              <div class="tool-use-subsection">
-                <span class="tool-use-sublabel" style="color: #ff6b6b;">Error:</span>
-                <pre style="color: #ff6b6b;">${encodeHtml(errorText)}</pre>
-              </div>
-            </div>
-          `);
-        }
-
-        const detailMarkup = sections
-          .map((section) => section.trim())
-          .join('<hr class="tool-use-separator">');
-
-        formattedContent = detailMarkup || `<pre>${safeContent}</pre>`;
       }
+
+      // Always add error section if present (regardless of summary)
+      if (parsed.error) {
+        const errorText =
+          typeof parsed.error === 'string'
+            ? parsed.error
+            : JSON.stringify(parsed.error, null, 2);
+        sections.push(`
+          <div class="tool-use-section">
+            <div class="tool-use-subsection">
+              <span class="tool-use-sublabel" style="color: #ff6b6b;">Error:</span>
+              <pre style="color: #ff6b6b;">${encodeHtml(errorText)}</pre>
+            </div>
+          </div>
+        `);
+      }
+
+      const detailMarkup = sections
+        .map((section) => section.trim())
+        .join('<hr class="tool-use-separator">');
+
+      formattedContent = detailMarkup || `<pre>${safeContent}</pre>`;
     } else if (parsed !== undefined) {
       formattedContent = `<pre>${encodeHtml(JSON.stringify(parsed, null, 2))}</pre>`;
     } else {
