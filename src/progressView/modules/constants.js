@@ -19,7 +19,7 @@ export const ELEMENT_IDS = {
   INSTRUCTION_CONTAINER: 'instructionContainer',
   INSTRUCTION_TEXT: 'instructionText',
   INSTRUCTION_TOGGLE_BTN: 'instructionToggleBtn',
-  INSTRUCTION_CARD_TEMPLATE: 'instructionCardTemplate',
+  INSTRUCTION_COPY_BTN: 'instructionCopyBtn',
   TOOLBAR_CONTAINER: 'toolbarContainer',
   FILE_ITEM_TEMPLATE: 'fileItemTemplate',
   DELETE_ALL_BTN: 'deleteAllBtn',
