@@ -143,7 +143,8 @@ export class ProgressEventHandler {
       );
 
       // Update log content (will be empty for new streams)
-      this.updateLogContentForStream(stream);
+      this.updateLogContentForStream(stream, { updateInstruction: false });
+      this.sendInstructionUpdate(stream);
     }
   }
 
@@ -286,6 +287,10 @@ export class ProgressEventHandler {
 
     if (executionId) {
       this.state.setExecutionId(streamTabId, executionId);
+    }
+
+    if (this.state.activeStream === streamTabId) {
+      this.sendInstructionUpdate(streamTabId);
     }
 
     if (this.webviewUpdater.isAvailable()) {
@@ -494,10 +499,38 @@ export class ProgressEventHandler {
   }
 
   /**
+   * Send instruction updates for the provided stream
+   */
+  private sendInstructionUpdate(stream: StreamTabId | ''): void {
+    if (!this.webviewUpdater.isAvailable()) {
+      return;
+    }
+
+    if (!stream) {
+      this.webviewUpdater.clearInstruction('');
+      return;
+    }
+
+    const taskState = this.state.getTaskState(stream);
+    const instructionUpdate = WebviewUpdater.createInstructionUpdate(taskState);
+
+    if (instructionUpdate) {
+      this.webviewUpdater.updateInstruction(stream, instructionUpdate);
+    } else {
+      this.webviewUpdater.clearInstruction(stream);
+    }
+  }
+
+  /**
    * Update log content for a specific stream
    */
-  private updateLogContentForStream(stream: string): void {
+  private updateLogContentForStream(
+    stream: string,
+    options: { updateInstruction?: boolean } = {},
+  ): void {
     if (!this.webviewUpdater.isAvailable()) return;
+
+    const { updateInstruction = true } = options;
 
     const messages = this.state.streamTabs.get(stream) || [];
     const groups = Array.from(
@@ -520,6 +553,10 @@ export class ProgressEventHandler {
     // Update status for current stream - default to STOPPED when stream exists but no status is set
     const status = this._streamStatus.get(stream) || STATUS.STOPPED;
     this.webviewUpdater.updateStatus(status);
+
+    if (updateInstruction) {
+      this.sendInstructionUpdate(stream);
+    }
   }
 
   /**
