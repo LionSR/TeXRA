@@ -47,6 +47,7 @@ When updating CHANGELOG.md:
 
 ### Pragmatic implementations
 
+- **Lead with Occam's Razor**: prioritize the simplest implementation that fully solves the problem before considering additional abstractions or indirection. Each new helper, class, or configuration option must earn its place by clearly reducing complexity.
 - Favor solutions that are readable and straightforward over exhaustive edge-case handling.
 - Avoid over-engineering and unnecessary abstractions when a direct approach communicates intent better.
 - Keep generated code tight: trim redundant helpers, repeated type checks, or defensive guards that do not serve a demonstrated scenario.
