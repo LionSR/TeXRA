@@ -16,6 +16,7 @@ import {
   applyLatexQuotesFormatting,
   replaceMathUnicode,
   fixLatexQuoteIssues,
+  escapeTextttUnderscores,
   wrapCritiqueInAlign,
 } from './advanced';
 
@@ -278,6 +279,9 @@ export function applyReplacements(
 
   // Cleanup common quote issues
   text = fixLatexQuoteIssues(text);
+
+  // Escape underscores inside \texttt commands for LaTeX compatibility
+  text = escapeTextttUnderscores(text);
 
   return text;
 }
