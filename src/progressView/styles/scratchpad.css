@@ -62,3 +62,8 @@
   color: var(--vscode-textLink-foreground);
   font-size: var(--font-size-sm);
 }
+
+.tool-output-full {
+  max-height: 20rem;
+  overflow: auto;
+}
