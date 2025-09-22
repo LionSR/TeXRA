@@ -4,6 +4,7 @@ import Split from 'split.js';
 // Local imports - progress view
 import { COMMANDS, SPLIT_SIZES, ELEMENT_IDS } from '../constants.js';
 import { progressViewState } from '../progressViewState.js';
+import { copyWithFeedback } from '../utils.js';
 
 // Local imports
 import {
@@ -203,67 +204,13 @@ export class EventsManager {
         return;
       }
 
-      const defaultTitle =
-        copyButton.dataset.defaultTitle ||
-        copyButton.getAttribute('title') ||
-        'Copy model output';
-      const successTitle = copyButton.dataset.successTitle || 'Copied!';
-      const existingTimeoutId = copyButton.dataset.copyResetTimeoutId;
-      if (existingTimeoutId) {
-        window.clearTimeout(Number(existingTimeoutId));
-        delete copyButton.dataset.copyResetTimeoutId;
-      }
-
-      copyButton.classList.remove('copy-success');
-      copyButton.setAttribute('title', defaultTitle);
-      copyButton.setAttribute('aria-label', defaultTitle);
-
-      const normalizedText = textToCopy.replace(/\r?\n/g, '\n');
-
-      const scheduleReset = () => {
-        const timeoutId = window.setTimeout(() => {
-          copyButton.classList.remove('copy-success');
-          copyButton.setAttribute('title', defaultTitle);
-          copyButton.setAttribute('aria-label', defaultTitle);
-          delete copyButton.dataset.copyResetTimeoutId;
-        }, 2000);
-
-        copyButton.dataset.copyResetTimeoutId = `${timeoutId}`;
-      };
-
-      const markSuccess = () => {
-        copyButton.classList.add('copy-success');
-        copyButton.setAttribute('title', successTitle);
-        copyButton.setAttribute('aria-label', successTitle);
-        scheduleReset();
-      };
-
-      if (navigator.clipboard?.writeText) {
-        try {
-          await navigator.clipboard.writeText(normalizedText);
-          markSuccess();
-          return;
-        } catch {
-          // Fallback to execCommand below
-        }
-      }
-
-      const textarea = document.createElement('textarea');
-      textarea.value = normalizedText;
-      textarea.setAttribute('readonly', '');
-      textarea.style.position = 'fixed';
-      textarea.style.opacity = '0';
-      textarea.style.pointerEvents = 'none';
-      document.body.appendChild(textarea);
-      textarea.select();
-      try {
-        const copied = document.execCommand('copy');
-        if (copied) {
-          markSuccess();
-        }
-      } finally {
-        textarea.remove();
-      }
+      await copyWithFeedback(copyButton, textToCopy, {
+        defaultTitle:
+          copyButton.dataset.defaultTitle ||
+          copyButton.getAttribute('title') ||
+          'Copy model output',
+        successTitle: copyButton.dataset.successTitle || 'Copied!',
+      });
     });
 
     // Handle clicks on LaTeX references within logs

@@ -43,6 +43,7 @@
           "./modules/uiManagers/FileList.js": "${fileListUri}",
           "./modules/uiManagers/EventsManager.js": "${eventsUri}",
           "./modules/uiManagers/Placeholder.js": "${placeholderUri}",
+          "./modules/uiManagers/InstructionPanel.js": "${instructionPanelUri}",
           "./modules/handlers/themeHandlers.js": "${themeHandlersUri}",
           "./modules/katexMacros.js": "${katexMacrosUri}",
           "@common/webviewContext.js": "${webviewContextUri}",
@@ -83,6 +84,44 @@
             <span id="runSummary" class="run-summary"></span>
           </div>
           <div id="toolbarContainer" class="header-actions button-group"></div>
+        </div>
+        <div
+          id="instructionContainer"
+          class="instruction-panel"
+          aria-hidden="true"
+        >
+          <div class="instruction-panel__header">
+            <span class="instruction-panel__title">Instruction</span>
+            <div class="instruction-panel__actions button-group">
+              <button
+                id="instructionCopyBtn"
+                class="vscode-button instruction-panel__copy"
+                type="button"
+                data-icon="copy"
+                title="Copy instruction"
+                aria-label="Copy instruction"
+                data-default-title="Copy instruction"
+                data-success-title="Copied!"
+                disabled
+              ></button>
+              <button
+                id="instructionToggleBtn"
+                class="vscode-button instruction-panel__toggle is-hidden"
+                type="button"
+                data-icon="chevron-down"
+                aria-expanded="false"
+                aria-label="Expand instruction"
+                aria-hidden="true"
+              ></button>
+            </div>
+          </div>
+          <div class="instruction-panel__body" role="presentation">
+            <div
+              id="instructionText"
+              class="instruction-panel__text"
+              role="document"
+            ></div>
+          </div>
         </div>
         <div id="logContent" class="log-container"></div>
         <div id="generatedFiles" class="files-container"></div>
