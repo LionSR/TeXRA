@@ -186,6 +186,7 @@ export const MAX_AUTO_REPLACEMENTS: ReplacementCategory = {
       Leftarrow: 'La',
       Rightarrow: 'Ra',
       Leftrightarrow: 'LRa',
+      Longleftrightarrow: 'LRa',
     };
     Object.assign(patterns, generateArrowRelationShortcuts(arrowRelationMap));
 

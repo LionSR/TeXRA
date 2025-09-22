@@ -103,7 +103,6 @@ export const LATEX_SPACING_REPLACEMENTS: ReplacementCategory = {
 
     // ===== Display style commands =====
     '\\displaystyle': '',
-    '\\Longleftrightarrow': '\\LRa',
 
     // ===== O1/O3 model specific fixes =====
     '=    \\': '= \\',
