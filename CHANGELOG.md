@@ -8,10 +8,21 @@ All notable changes to this project will be documented in this file.
 
 - Add workspace-aware `glob`, `grep`, and `ls` tools to the default registry and chat agent so every workflow can inspect files safely
 - Introduce a `web_fetch` tool that downloads web pages and converts their HTML into Markdown for review inside agent workflows
+- Add dedicated `read_file`, `write_file`, and `edit_file` tools and wire them into the default chat agent for clearer, safer workspace editing
+- Ship a built-in read-only `ask` agent so you can inspect project files without risking accidental changes
+- Show the active instruction at the top of the Progress Board with expandable and copyable text, keeping prompts visible while a run executes
+- Allow DeepSeek chat models to call tools via function calling so they can participate fully in tool-use workflows
 
 ### Bug Fixes
 
+- Keep tool-use runs visible by automatically updating the Progress Board filter when a workflow starts in another stream
+- Log agent errors inside their stream groups so failures surface directly in the Progress Board timeline
+- Honor `.gitignore_global` rules in the `ls` tool so global exclusions stay hidden during workspace listings
+- Restore missing `output_text` segments in OpenAI Responses so assistants no longer drop parts of their replies
+
 ### Improvements
+
+- Summarize tool-use logs with clearer titles, error highlighting, and expandable sections that collapse very long outputs into a scrollable view
 
 ## [0.33.7] - 2025-09-18
 
