@@ -26,7 +26,7 @@ import {
   DEFAULT_MODEL_CAPABILITIES,
 } from '@model/ModelConfig';
 import { BaseTool } from '@tools/core/base';
-import { ToolResult } from '@tools/result';
+import { ToolResult, toolResult } from '@tools/result';
 import type OpenAI from 'openai';
 
 class EchoTool extends BaseTool<{ value: string }> {
@@ -34,7 +34,7 @@ class EchoTool extends BaseTool<{ value: string }> {
     super({ name: 'echo' }, z.object({ value: z.string() }));
   }
   protected async execute(input: { value: string }): Promise<ToolResult> {
-    return new ToolResult({ output: input.value });
+    return toolResult({ output: input.value });
   }
 }
 

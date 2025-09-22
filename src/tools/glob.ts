@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { defineTool } from './core/define';
 
 // Local imports - tools
-import { ToolError, ToolResult } from '@tools/result';
+import { ToolError, ToolResult, toolResult } from '@tools/result';
 import {
   joinWorkspaceRelativePath,
   resolveAndFormat,
@@ -97,7 +97,8 @@ export class GlobTool extends defineTool({
 
     const header = `Matches for pattern "${input.pattern}" under ${display}`;
     const lines = sorted.map((item) => toPosixPath(item.relativePath));
-    return new ToolResult({
+    return toolResult({
+      summary: `glob "${input.pattern}" under ${display}`,
       output: formatToolOutput(header, lines, '(no matches)'),
     });
   }

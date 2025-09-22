@@ -16,7 +16,7 @@ import { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import type { ToolDefinition } from '@model';
 import { BaseTool } from '@tools/core/base';
-import { ToolResult } from '@tools/result';
+import { ToolResult, toolResult } from '@tools/result';
 import xmlUtils from '@utils/text/xmlUtils';
 
 export interface ToolUseCycleOptions<C = unknown> {
@@ -181,7 +181,7 @@ export async function runToolUseCycle<C = unknown>(
       const toolUseLog = {
         tool: 'unknown',
         input: toolInfo,
-        output: new ToolResult({ error: errorMsg, isError: true }),
+        output: toolResult({ error: errorMsg, isError: true }),
       };
       logger.info(
         JSON.stringify(toolUseLog, null, 2),
@@ -201,7 +201,7 @@ export async function runToolUseCycle<C = unknown>(
       const toolUseLog = {
         tool: 'unknown',
         input: parsed,
-        output: new ToolResult({ error: errorMsg, isError: true }),
+        output: toolResult({ error: errorMsg, isError: true }),
       };
       logger.info(
         JSON.stringify(toolUseLog, null, 2),
@@ -229,7 +229,7 @@ export async function runToolUseCycle<C = unknown>(
     const tool = toolRegistry[name];
     let result: ToolResult;
     if (!tool) {
-      result = new ToolResult({ error: `Unknown tool ${name}`, isError: true });
+      result = toolResult({ error: `Unknown tool ${name}`, isError: true });
     } else {
       try {
         result = await tool.call(input);
@@ -262,7 +262,7 @@ export async function runToolUseCycle<C = unknown>(
               : `${name}: ${String(err)}`;
         }
 
-        result = new ToolResult({
+        result = toolResult({
           error: errorMessage,
           isError: true,
           diagnostics,
@@ -292,11 +292,15 @@ export async function runToolUseCycle<C = unknown>(
 
     // Build provider-specific message containing the tool result
     const resultObj: Record<string, unknown> = {};
+    if (result.summary !== undefined) resultObj.summary = result.summary;
     if (result.output !== undefined) resultObj.output = result.output;
     if (result.error !== undefined) resultObj.error = result.error;
     if (result.base64Image !== undefined)
       resultObj.base64Image = result.base64Image;
     if (result.system !== undefined) resultObj.system = result.system;
+    if (result.isError) resultObj.isError = true;
+    if (result.diagnostics !== undefined)
+      resultObj.diagnostics = result.diagnostics;
 
     const followUpMsgs = modelHandler.createToolUseFollowUpMessages(
       id,
