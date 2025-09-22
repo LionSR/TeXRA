@@ -458,7 +458,18 @@ export class LogEntryFormatter {
     }
 
     let formattedContent;
-    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+    // First, check if this looks like any kind of tool-related data
+    const looksLikeToolData =
+      parsed &&
+      typeof parsed === 'object' &&
+      !Array.isArray(parsed) &&
+      (parsed.tool !== undefined ||
+        parsed.input !== undefined ||
+        parsed.output !== undefined ||
+        parsed.error !== undefined ||
+        parsed.summary !== undefined);
+
+    if (looksLikeToolData) {
       // Check if this is a raw tool result (has output/summary but no tool field)
       // vs a proper tool use log (has tool field)
       const isRawResult =
@@ -597,8 +608,10 @@ export class LogEntryFormatter {
       formattedContent =
         detailMarkup || '<div class="tool-use-empty">Tool executed</div>';
     } else if (parsed !== undefined) {
-      // Fallback for other parsed formats (shouldn't normally reach here for tool use)
-      formattedContent = `<pre>${encodeHtml(JSON.stringify(parsed, null, 2))}</pre>`;
+      // This shouldn't happen for tool use logs, but if we get here with tool-like data,
+      // show a minimal view instead of the raw JSON
+      console.warn('Unexpected parsed data in tool use formatter:', parsed);
+      formattedContent = '<div class="tool-use-empty">Tool data received</div>';
     } else {
       // If not valid JSON, just display as-is in a pre block
       // This preserves any HTML entities in error messages
