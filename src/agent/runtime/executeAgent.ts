@@ -171,6 +171,8 @@ export async function executeAgentWithLogging<T extends IAgent>(
   options?: ExecuteAgentOptions,
 ): Promise<void> {
   const isResume = options?.resume ?? false;
+  let streamTabId: StreamTabId | undefined;
+  let agentStreamLogger: AgentLogger | undefined;
   try {
     // Create agent instance and extract its declared type
     const { agent, agentType } = await createAgentFn();
@@ -181,16 +183,17 @@ export async function executeAgentWithLogging<T extends IAgent>(
 
     // Get the full stream tab ID
     const config = agent.config;
-    const streamTabId = getStreamTabId(
-      config.agent,
-      config.model,
-      config.inputFile,
-      {
-        agentType,
-        executionId,
-        useMultipleOutputs: config.useMultipleOutputs,
-      },
-    );
+    streamTabId = getStreamTabId(config.agent, config.model, config.inputFile, {
+      agentType,
+      executionId,
+      useMultipleOutputs: config.useMultipleOutputs,
+    });
+
+    if (!streamTabId) {
+      throw new Error('Failed to resolve stream tab ID for agent execution');
+    }
+
+    agentStreamLogger = agentStreamLogger ?? new AgentLogger(streamTabId, true);
 
     // Check if this stream is already running
     const provider = ProgressViewProvider.getInstance();
@@ -399,6 +402,21 @@ export async function executeAgentWithLogging<T extends IAgent>(
     } else {
       // Show regular error message for other errors
       vscode.window.showErrorMessage(errorMsg);
+    }
+
+    if (agentStreamLogger || streamTabId) {
+      agentStreamLogger =
+        agentStreamLogger ?? new AgentLogger(streamTabId!, true);
+      const activeGroupId = agentStreamLogger.getActiveGroupId();
+      if (activeGroupId) {
+        agentStreamLogger.error(errorMsg, activeGroupId);
+      } else {
+        const agentErrorGroupId = await agentStreamLogger.startGroup(
+          `Error: ${agentName}`,
+        );
+        agentStreamLogger.error(errorMsg, agentErrorGroupId);
+        agentStreamLogger.endGroup(agentErrorGroupId, 'error');
+      }
     }
 
     // Create a temporary error group if no active group exists
