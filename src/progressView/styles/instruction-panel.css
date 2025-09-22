@@ -1,0 +1,69 @@
+/**
+ * Instruction panel styles for the ProgressView
+ */
+
+.instruction-panel {
+  display: none;
+  flex-direction: column;
+  gap: var(--spacing-small);
+  padding: var(--spacing-medium);
+  border-bottom: 1px solid var(--vscode-panel-border);
+  background-color: var(--vscode-editor-background);
+}
+
+.instruction-panel.is-visible {
+  display: flex;
+}
+
+.instruction-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-small);
+}
+
+.instruction-panel__title {
+  font-weight: 600;
+}
+
+.instruction-panel__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-small);
+}
+
+.instruction-panel__toggle {
+  font-size: var(--font-size-sm);
+}
+
+.instruction-panel__toggle .codicon {
+  margin-right: var(--spacing-tiny);
+}
+
+.instruction-panel__toggle.is-hidden {
+  display: none;
+}
+
+.instruction-panel__body {
+  max-height: 12rem;
+  overflow-y: auto;
+  padding-right: var(--spacing-small);
+}
+
+.instruction-panel.is-expanded .instruction-panel__body {
+  max-height: none;
+}
+
+.instruction-panel__text {
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text-color);
+  line-height: 1.5;
+}
+
+.instruction-panel__card {
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: var(--border-radius);
+  padding: var(--spacing-medium);
+  background-color: var(--vscode-editor-background);
+}

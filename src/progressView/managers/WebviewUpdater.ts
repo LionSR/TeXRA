@@ -10,7 +10,7 @@ import { COMMANDS } from '../modules/constants.js';
 // Local imports
 import { ProgressViewState } from '../state/ProgressViewState';
 import { buildStreamInfos } from '../streamInfoUtils';
-import type { StreamTabInfo } from '../types';
+import type { InstructionUpdate, StreamTabInfo } from '../types';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import type { AgentTypeFilter } from '@agent/types/AgentStreamTypes';
 
@@ -18,6 +18,7 @@ import type { AgentTypeFilter } from '@agent/types/AgentStreamTypes';
 import type { TokenUsageStats } from '@agent/types/UsageTypes';
 import { AgentLogger } from '@logger/AgentLogger';
 import { LogMessageData } from '@logger/LogTypes';
+import type { TaskState } from '@logger/TaskState';
 
 // Type aliases for status values
 type StatusType = 'running' | 'error' | 'stopped' | 'ready' | 'waiting';
@@ -32,6 +33,38 @@ export class WebviewUpdater {
 
   constructor(private getWebview: () => vscode.Webview | undefined) {
     this.logger = new AgentLogger('WebviewUpdater');
+  }
+
+  static createInstructionUpdate(
+    taskState?: TaskState,
+  ): InstructionUpdate | undefined {
+    if (!taskState) {
+      return undefined;
+    }
+
+    const text = taskState.agentConfig?.instruction ?? '';
+    const normalized = text.trim();
+    if (!normalized) {
+      return undefined;
+    }
+
+    const metadata = WebviewUpdater.computeInstructionMetadata(normalized);
+    const payload: InstructionUpdate = { text: normalized };
+    if (metadata) {
+      payload.metadata = metadata;
+    }
+    return payload;
+  }
+
+  private static computeInstructionMetadata(
+    text: string,
+  ): InstructionUpdate['metadata'] | undefined {
+    const lineCount = text.split(/\r?\n/).length;
+    const shouldShowToggle = lineCount > 6 || text.length > 600;
+    if (!shouldShowToggle) {
+      return undefined;
+    }
+    return { showToggle: true };
   }
 
   /**
@@ -145,6 +178,34 @@ export class WebviewUpdater {
   }
 
   /**
+   * Update instruction panel content
+   */
+  updateInstruction(stream: StreamTabId, instruction: InstructionUpdate): void {
+    const webview = this.getWebview();
+    if (!webview) return;
+
+    webview.postMessage({
+      command: COMMANDS.UPDATE_INSTRUCTION,
+      stream,
+      instruction,
+    });
+  }
+
+  /**
+   * Clear instruction panel content
+   */
+  clearInstruction(stream: StreamTabId | ''): void {
+    const webview = this.getWebview();
+    if (!webview) return;
+
+    webview.postMessage({
+      command: COMMANDS.UPDATE_INSTRUCTION,
+      stream,
+      instruction: null,
+    });
+  }
+
+  /**
    * Update the code highlight theme
    */
   updateTheme(theme: 'dark' | 'light'): void {
@@ -242,12 +303,22 @@ export class WebviewUpdater {
       // Update usage for active stream
       const usage = state.usageStats.getStreamUsage(activeStream);
       this.updateUsage(usage);
+
+      const taskState = state.getTaskState(activeStream);
+      const instructionUpdate =
+        WebviewUpdater.createInstructionUpdate(taskState);
+      if (instructionUpdate) {
+        this.updateInstruction(activeStream, instructionUpdate);
+      } else {
+        this.clearInstruction(activeStream);
+      }
     } else {
       // Clear content when no active stream
       this.updateLogContent('', [], []);
       this.updateFiles('', {});
       this.updateMissingOutputs('', {});
       this.updateUsage(undefined);
+      this.clearInstruction('');
     }
 
     this.logger.debug(
