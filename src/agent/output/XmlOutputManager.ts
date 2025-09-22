@@ -9,7 +9,7 @@ import { NamedOutputFile } from './types';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import { AgentSetting } from '@agent/core/AgentDataclass';
 import { getOutputFileName } from '@agent/utils/outputFileUtils';
-import { AgentLogger } from '@logger/AgentLogger';
+import type { ChannelLogger } from '@logger/logUtils';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import {
   applyReplacements,
@@ -23,7 +23,7 @@ export class XmlOutputManager {
   constructor(
     private readonly agentSetting: AgentSetting,
     private readonly agentConfig: AgentConfig,
-    private readonly logger: AgentLogger,
+    private readonly logger: ChannelLogger,
   ) {}
 
   async processXmlContent(content: string): Promise<string> {

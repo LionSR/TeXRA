@@ -16,7 +16,7 @@ import type { AgentTypeFilter } from '@agent/types/AgentStreamTypes';
 
 // Types
 import type { TokenUsageStats } from '@agent/types/UsageTypes';
-import { AgentLogger } from '@logger/AgentLogger';
+import { createChannelLogger, type ChannelLogger } from '@logger/logUtils';
 import { LogMessageData } from '@logger/LogTypes';
 import type { TaskState } from '@logger/TaskState';
 
@@ -29,10 +29,10 @@ type StatusType = 'running' | 'error' | 'stopped' | 'ready' | 'waiting';
  * without coupling business logic to DOM operations.
  */
 export class WebviewUpdater {
-  private readonly logger: AgentLogger;
+  private readonly logger: ChannelLogger;
 
   constructor(private getWebview: () => vscode.Webview | undefined) {
-    this.logger = new AgentLogger('WebviewUpdater');
+    this.logger = createChannelLogger('WebviewUpdater');
   }
 
   static createInstructionUpdate(

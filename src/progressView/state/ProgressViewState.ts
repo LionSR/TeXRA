@@ -9,7 +9,7 @@ import {
 import { StatePersistenceManager } from '../persistence/StatePersistenceManager';
 import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
 import { WorkspaceStateKey } from '@common/state/stateManager';
-import { AgentLogger } from '@logger/AgentLogger';
+import { createChannelLogger, type ChannelLogger } from '@logger/logUtils';
 import type { AgentFilter } from '../types';
 // Local imports - agent types
 import { isAgentTypeFilter } from '@agent/types/AgentStreamTypes';
@@ -35,11 +35,11 @@ export class ProgressViewState {
   private _taskStates: Map<StreamTabId, TaskState> = new Map();
   private _executionIds: Map<StreamTabId, ExecutionId> = new Map();
   private readonly persistence: StatePersistenceManager;
-  private readonly logger: AgentLogger;
+  private readonly logger: ChannelLogger;
 
   constructor(persistence: StatePersistenceManager) {
     this.persistence = persistence;
-    this.logger = new AgentLogger('ProgressViewState');
+    this.logger = createChannelLogger('ProgressViewState');
 
     // Initialize focused managers
     this._streamTabs = new StreamTabsManager(persistence);

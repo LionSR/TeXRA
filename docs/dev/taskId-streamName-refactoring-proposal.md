@@ -19,7 +19,7 @@ After analyzing the codebase, I've identified several confusing patterns in how 
    - Used for deduplication of execution jobs (prevents running same task twice)
 
 3. **`streamName`** (in logger contexts)
-   - Used in `AgentLogger` class for channel identification
+   - Used by channel loggers for output channel identification
    - Same value as `streamId` but different semantic context
 
 ### Problems Identified

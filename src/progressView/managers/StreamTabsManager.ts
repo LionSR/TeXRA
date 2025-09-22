@@ -9,11 +9,14 @@ import { PersistentMapManager } from '../persistence/PersistentMapManager';
 import { StatePersistenceManager } from '../persistence/StatePersistenceManager';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import { WorkspaceStateKey } from '@common/state/stateManager';
-import { AgentLogger } from '@logger/AgentLogger';
+import {
+  createChannelLogger,
+  parseLegacyLogData,
+  type ChannelLogger,
+} from '@logger/logUtils';
 
 // Types
 import { LogMessageData } from '@logger/LogTypes';
-import { parseLegacyLogData } from '@logger/logUtils';
 
 /**
  * Manages stream tabs collection with persistence.
@@ -24,11 +27,11 @@ export class StreamTabsManager extends PersistentMapManager<
   LogMessageData[]
 > {
   private static readonly MAX_MESSAGE_HISTORY = 1000;
-  private readonly logger: AgentLogger;
+  private readonly logger: ChannelLogger;
 
   constructor(persistence: StatePersistenceManager) {
     super(persistence, WorkspaceStateKey.STREAM_TABS, 'texra.logStreams');
-    this.logger = new AgentLogger('StreamTabsManager');
+    this.logger = createChannelLogger('StreamTabsManager');
   }
 
   /**

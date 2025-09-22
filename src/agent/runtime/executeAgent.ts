@@ -32,7 +32,7 @@ import { bus } from '@eventBus/ProgressEventBus';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
-import { AgentLogger } from '@logger/AgentLogger';
+import { createChannelLogger, type ChannelLogger } from '@logger/logUtils';
 import { MODEL_CONFIGS } from '@model/ModelRegistry';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import { agentConfigToTaskState } from '@utils/config';
@@ -40,7 +40,7 @@ import { ensureRunDir } from '@utils/files/taskRunStorage';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
 
 const CHANNEL = 'executeAgent';
-const logger = new AgentLogger(CHANNEL);
+const logger = createChannelLogger(CHANNEL);
 
 /**
  * Constructor signature for any agent implementation.
@@ -172,7 +172,7 @@ export async function executeAgentWithLogging<T extends IAgent>(
 ): Promise<void> {
   const isResume = options?.resume ?? false;
   let streamTabId: StreamTabId | undefined;
-  let agentStreamLogger: AgentLogger | undefined;
+  let agentStreamLogger: ChannelLogger | undefined;
   try {
     // Create agent instance and extract its declared type
     const { agent, agentType } = await createAgentFn();
@@ -193,7 +193,7 @@ export async function executeAgentWithLogging<T extends IAgent>(
       throw new Error('Failed to resolve stream tab ID for agent execution');
     }
 
-    agentStreamLogger = new AgentLogger(streamTabId, true);
+    agentStreamLogger = createChannelLogger(streamTabId, { isAgent: true });
 
     // Check if this stream is already running
     const provider = ProgressViewProvider.getInstance();
@@ -406,7 +406,7 @@ export async function executeAgentWithLogging<T extends IAgent>(
 
     if (agentStreamLogger || streamTabId) {
       if (!agentStreamLogger && streamTabId) {
-        agentStreamLogger = new AgentLogger(streamTabId, true);
+        agentStreamLogger = createChannelLogger(streamTabId, { isAgent: true });
       }
       if (agentStreamLogger) {
         const activeGroupId = agentStreamLogger.getActiveGroupId();

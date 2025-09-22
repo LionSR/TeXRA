@@ -16,7 +16,7 @@ import type { ToolUseCycleOptions } from '@agent/core/ToolUseCycle';
 import { ModelHandlerDeepSeek } from '@agent/modelHandlers/modelHandlerDeepSeek';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import { bus } from '@eventBus/ProgressEventBus';
-import { AgentLogger } from '@logger/AgentLogger';
+import { createChannelLogger } from '@logger/logUtils';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import {
   ModelConfig,
@@ -94,7 +94,7 @@ describe('runToolUseCycle DeepSeek', () => {
       openRouterOnly: false,
     };
     const handler = new MockHandler(config);
-    const logger = new AgentLogger('TestHandler', true);
+    const logger = createChannelLogger('TestHandler', { isAgent: true });
     const toolRegistry = { echo: new EchoTool() };
     const setting: AgentSetting = {
       agentType: AgentType.ToolUse,

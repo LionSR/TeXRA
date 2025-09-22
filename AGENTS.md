@@ -64,7 +64,7 @@ When updating CHANGELOG.md:
 
 **Logging and telemetry**
 
-- Route logging through `@logger/logUtils`. Agent flows should wrap the logger with `AgentLogger` (`src/logger/AgentLogger.ts`) to get grouped output and tool-use aware channels.
+- Route logging through `@logger/logUtils`. Agent flows should obtain channel-scoped loggers with `createChannelLogger` to get grouped output and tool-use aware channels.
 - Always pass structured payloads via the `data` argument (file lists, missing outputs, latexdiff results, usage statistics) so the progress view can render rich entries without custom parsing.
 - Publish progress updates with the event bus (`bus.emit`/`bus.on` from `src/eventBus/ProgressEventBus.ts`) and keep non-agent logs on the shared `TeXRA` output channel.
 

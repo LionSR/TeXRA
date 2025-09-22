@@ -1,11 +1,11 @@
 import * as vscode from 'vscode';
-import { AgentLogger } from '@logger/AgentLogger';
+import { createChannelLogger } from '@logger/logUtils';
 
 // Local imports - utils
 import { safeExecuteCommand } from '@utils/system';
 
 const CHANNEL = 'progressViewCommands';
-const logger = new AgentLogger(CHANNEL);
+const logger = createChannelLogger(CHANNEL);
 
 /**
  * Show the Progress View panel

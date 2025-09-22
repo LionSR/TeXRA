@@ -2,7 +2,7 @@
 import * as path from 'path';
 
 // Local imports - log
-import { AgentLogger } from '@logger/AgentLogger';
+import type { ChannelLogger } from '@logger/logUtils';
 
 // Local imports - latex utils
 import { extractFigurePathsFromLatex } from './extractFigure';
@@ -19,7 +19,7 @@ import { WorkspaceFS } from '@utils/files';
  * Handles LaTeX related media extraction and compilation for agents.
  */
 export class LatexMediaManager {
-  constructor(private readonly logger: AgentLogger) {}
+  constructor(private readonly logger: ChannelLogger) {}
 
   private async attachTeXCount(
     files: string[],

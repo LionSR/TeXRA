@@ -21,7 +21,7 @@ import { bestConnectionMethod } from '@latex';
 // (none needed)
 
 // Local imports - log
-import { AgentLogger } from '@logger/AgentLogger';
+import type { ChannelLogger } from '@logger/logUtils';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import replacementEngine from '@replacement/engine';
 
@@ -42,7 +42,7 @@ export interface ResponseCycleOptions<C = unknown> {
   agentConfig: AgentConfig;
   agentPrompt: AgentPrompt;
   userVars: Record<string, any>;
-  logger: AgentLogger;
+  logger: ChannelLogger;
   client: C;
   checkInterruption: () => Promise<boolean> | boolean;
   setAbortController: (ctrl: AbortController | null) => void;

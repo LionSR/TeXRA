@@ -8,14 +8,14 @@ import { OutputHandler } from '@agent/output';
 
 // Local imports
 import { bus } from '@eventBus/ProgressEventBus';
-import { AgentLogger } from '@logger/AgentLogger';
+import { createChannelLogger } from '@logger/logUtils';
 
 class MockOutputHandler extends OutputHandler {
   public gatherCalled = false;
   public validateCalled = false;
 
   constructor(setting: AgentSetting, config: AgentConfig) {
-    super(setting, config, 0, [], new AgentLogger('TestOutputHandler'));
+    super(setting, config, 0, [], createChannelLogger('TestOutputHandler'));
   }
 
   public override async gatherOutputFileInfo(round: number) {

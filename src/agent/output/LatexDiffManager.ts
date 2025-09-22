@@ -5,7 +5,7 @@ import * as path from 'path';
 import { AgentSetting } from '@agent/core/AgentDataclass';
 import { LaTeXdiffService, LaTeXdiffResult } from '@latex/latexdiff';
 import { compileLatex2Pdf } from '@latex/texTools';
-import { AgentLogger } from '@logger/AgentLogger';
+import type { ChannelLogger } from '@logger/logUtils';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import { createFileMapping } from '@utils/files';
 import { checkToolInstalled } from '@utils/system';
@@ -18,7 +18,7 @@ export class LatexDiffManager {
     private readonly agentSetting: AgentSetting,
     private readonly outputFiles: { [key: number]: string[] },
     private readonly baseFiles: string[],
-    private readonly logger: AgentLogger,
+    private readonly logger: ChannelLogger,
     private readonly channel: string,
   ) {
     this.latexdiffService = new LaTeXdiffService(channel);

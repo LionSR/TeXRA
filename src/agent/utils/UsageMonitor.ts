@@ -16,7 +16,7 @@ import type {
 } from '@agent/types/UsageTypes';
 import { bus } from '@eventBus/ProgressEventBus';
 // Local imports - log
-import { AgentLogger } from '@logger/AgentLogger';
+import type { ChannelLogger } from '@logger/logUtils';
 
 /**
  * Handles recording usage statistics to the log and progress view.
@@ -25,7 +25,7 @@ export class UsageMonitor {
   constructor(
     private readonly modelHandler: IModelHandler,
     private readonly channel: string,
-    private readonly logger: AgentLogger,
+    private readonly logger: ChannelLogger,
   ) {}
 
   async recordUsage(

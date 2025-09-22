@@ -12,7 +12,7 @@ import { maybeSaveDebugObject } from '@agent/utils/debugMessageSaver';
 // Third-party imports
 
 // Local imports - log
-import { AgentLogger } from '@logger/AgentLogger';
+import type { ChannelLogger } from '@logger/logUtils';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import type { ToolDefinition } from '@model';
 import { BaseTool } from '@tools/core/base';
@@ -29,7 +29,7 @@ export interface ToolUseCycleOptions<C = unknown> {
   /** User variables resolved from YAML */
   userVars: Record<string, any>;
   /** Logger instance for progress output */
-  logger: AgentLogger;
+  logger: ChannelLogger;
   /** Provider client object */
   client: C;
   /** Registry mapping tool names to implementations */

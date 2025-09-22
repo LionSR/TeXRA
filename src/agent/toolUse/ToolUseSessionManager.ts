@@ -12,7 +12,7 @@ import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage
 import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
 
 // Local imports - logging
-import { AgentLogger } from '@logger/AgentLogger';
+import { createChannelLogger } from '@logger/logUtils';
 
 // Local imports - utilities
 import { StorageFS } from '@utils/files';
@@ -23,7 +23,7 @@ import {
 } from '@utils/config';
 
 const CHANNEL = 'ToolUseSessionManager';
-const logger = new AgentLogger(CHANNEL);
+const logger = createChannelLogger(CHANNEL);
 
 const STORAGE_DIR = 'toolUseSessions';
 const SNAPSHOT_VERSION = 1;

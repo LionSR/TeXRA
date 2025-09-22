@@ -23,7 +23,7 @@ import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { runLatexFormatter } from '@latex/texFormatter';
 
 // Local imports - log
-import { AgentLogger } from '@logger/AgentLogger';
+import { createChannelLogger, type ChannelLogger } from '@logger/logUtils';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 
 // Local imports - utilities
@@ -42,7 +42,7 @@ export class OutputHandler implements IOutputHandler {
   public outputMappings: { [key: number]: NamedOutputFile[] };
   public baseFiles: string[];
   public processGroupId?: string;
-  protected logger: AgentLogger;
+  protected logger: ChannelLogger;
   protected channel: string;
   public readonly xmlManager: XmlOutputManager;
   private diffManager: LatexDiffManager;
@@ -53,7 +53,7 @@ export class OutputHandler implements IOutputHandler {
     agentConfig: AgentConfig,
     logId: number,
     baseFiles: string[] = [],
-    logger?: AgentLogger,
+    logger?: ChannelLogger,
   ) {
     this.agentSetting = agentSetting;
     this.agentConfig = agentConfig;
@@ -61,7 +61,7 @@ export class OutputHandler implements IOutputHandler {
     this.outputFiles = {};
     this.outputMappings = {};
     this.baseFiles = baseFiles;
-    this.logger = logger || new AgentLogger('OutputHandler');
+    this.logger = logger || createChannelLogger('OutputHandler');
     this.channel = this.logger.channelId;
 
     this.xmlManager = new XmlOutputManager(

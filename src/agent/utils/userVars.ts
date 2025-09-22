@@ -14,7 +14,7 @@ import { calculateTotalRounds } from '@agent/utils/roundUtils';
 import { setVarFromFile } from '@frontend/files/vars';
 
 // Local imports
-import { AgentLogger } from '@logger/AgentLogger';
+import type { ChannelLogger } from '@logger/logUtils';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import { WorkspaceFS } from '@utils/files';
 
@@ -27,7 +27,7 @@ export async function buildUserVars(
   agentPrompt: AgentPrompt,
   agentPath: string,
   modelHandler: IModelHandler,
-  logger: AgentLogger,
+  logger: ChannelLogger,
 ): Promise<Record<string, any>> {
   const userVars: Record<string, any> = {};
   const allLoadedFiles: {
@@ -143,7 +143,7 @@ async function getFileVars(
 async function getRequiredFileVars(
   agentSetting: AgentSetting,
   agentPath: string,
-  logger: AgentLogger,
+  logger: ChannelLogger,
 ): Promise<{
   vars: Record<string, any>;
   files: Array<{
@@ -209,7 +209,7 @@ async function getRequiredFileVars(
 async function getPatternBasedFileVars(
   agentConfig: AgentConfig,
   agentSetting: AgentSetting,
-  logger: AgentLogger,
+  logger: ChannelLogger,
 ): Promise<{
   vars: Record<string, any>;
   files: Array<{

@@ -8,7 +8,7 @@ import { strict as assert } from 'assert';
 import { ModelHandlerDashScope } from '@agent/modelHandlers/modelHandlerDashScope';
 import { ModelHandlerDeepSeek } from '@agent/modelHandlers/modelHandlerDeepSeek';
 import { ModelHandlerKimi } from '@agent/modelHandlers/modelHandlerKimi';
-import type { AgentLogger } from '@logger/AgentLogger';
+import type { ChannelLogger } from '@logger/logUtils';
 
 // Local imports - model config
 import {
@@ -17,7 +17,7 @@ import {
   ModelProvider,
 } from '@model/ModelConfig';
 
-type LoggerStub = Partial<AgentLogger> & {
+type LoggerStub = Partial<ChannelLogger> & {
   channelId: string;
   debugMessages: string[];
   infoMessages: string[];
@@ -127,7 +127,7 @@ describe('ModelHandlerOpenAI.normalizeMessages hook', () => {
     });
     const handler = new ModelHandlerDeepSeek(config);
     const loggerStub = createLoggerStub();
-    handler.setLogger(loggerStub as unknown as AgentLogger);
+    handler.setLogger(loggerStub as unknown as ChannelLogger);
     (handler as any).getStreamingConfig = () => false;
 
     const client = createClientStub();
@@ -161,7 +161,7 @@ describe('ModelHandlerOpenAI.normalizeMessages hook', () => {
     });
     const handler = new ModelHandlerKimi(config);
     const loggerStub = createLoggerStub();
-    handler.setLogger(loggerStub as unknown as AgentLogger);
+    handler.setLogger(loggerStub as unknown as ChannelLogger);
     (handler as any).getStreamingConfig = () => false;
 
     const client = createClientStub();
@@ -186,7 +186,7 @@ describe('ModelHandlerOpenAI.normalizeMessages hook', () => {
     });
     const handler = new ModelHandlerDashScope(config);
     const loggerStub = createLoggerStub();
-    handler.setLogger(loggerStub as unknown as AgentLogger);
+    handler.setLogger(loggerStub as unknown as ChannelLogger);
     (handler as any).getStreamingConfig = () => false;
 
     const client = createClientStub();

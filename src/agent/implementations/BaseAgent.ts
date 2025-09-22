@@ -11,7 +11,7 @@ import { buildUserVars } from '../utils/userVars';
 import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
 
 // Local imports - log
-import { AgentLogger } from '@logger/AgentLogger';
+import { createChannelLogger, type ChannelLogger } from '@logger/logUtils';
 import { getStreamTabId as buildStreamTabId } from '@/logger/streamUtils';
 
 // Local imports - utilities
@@ -27,7 +27,7 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
   protected agentSetting: AgentSetting;
   protected agentPrompt: AgentPrompt;
   protected agentPath: string;
-  protected logger: AgentLogger;
+  protected logger: ChannelLogger;
   protected usageMonitor: UsageMonitor;
   protected runGroupId?: string;
   protected userVars: Record<string, any> = {};
@@ -58,7 +58,7 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
     this.executionId = executionId;
 
     const streamTabId = this.getStreamTabId();
-    this.logger = new AgentLogger(streamTabId, true);
+    this.logger = createChannelLogger(streamTabId, { isAgent: true });
     this.modelHandler.setLogger(this.logger);
     this.usageMonitor = new UsageMonitor(
       this.modelHandler,

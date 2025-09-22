@@ -7,7 +7,7 @@ import type { AgentConfig } from '@agent/core/AgentConfig';
 // Local imports
 import { AgentSetting, AgentType } from '@agent/core/AgentDataclass';
 import { XmlOutputManager } from '@agent/output/XmlOutputManager';
-import { AgentLogger } from '@logger/AgentLogger';
+import { createChannelLogger } from '@logger/logUtils';
 import { WorkspaceFS } from '@utils/files';
 
 describe('XmlOutputManager markdown fallback', () => {
@@ -55,7 +55,7 @@ describe('XmlOutputManager markdown fallback', () => {
   };
 
   it('writes tex file from markdown fenced latex block', async () => {
-    const logger = new AgentLogger('TestXmlOutput');
+    const logger = createChannelLogger('TestXmlOutput');
     const manager = new XmlOutputManager(setting, config, logger);
     const outputXml = 'markdown_only.xml';
     const markdownContent =
@@ -76,7 +76,7 @@ describe('XmlOutputManager markdown fallback', () => {
   });
 
   it('writes tex file from named document tag', async () => {
-    const logger = new AgentLogger('TestXmlOutput');
+    const logger = createChannelLogger('TestXmlOutput');
     const manager = new XmlOutputManager(setting, config, logger);
     const outputXml = 'named_document.xml';
     const xmlContent =
@@ -98,7 +98,7 @@ describe('XmlOutputManager markdown fallback', () => {
   });
 
   it('prefers named document over latex_document when both present', async () => {
-    const logger = new AgentLogger('TestXmlOutput');
+    const logger = createChannelLogger('TestXmlOutput');
     const manager = new XmlOutputManager(setting, config, logger);
     const outputXml = 'both_tags.xml';
     const xmlContent =
@@ -121,7 +121,7 @@ describe('XmlOutputManager markdown fallback', () => {
   });
 
   it('writes tex file from plain LaTeX document block', async () => {
-    const logger = new AgentLogger('TestXmlOutput');
+    const logger = createChannelLogger('TestXmlOutput');
     const manager = new XmlOutputManager(setting, config, logger);
     const outputXml = 'plain_latex.xml';
     const content =

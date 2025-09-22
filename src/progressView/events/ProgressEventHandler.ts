@@ -18,9 +18,12 @@ import { deriveAgentSessionKind } from '@agent/core/AgentDataclass';
 // Types
 import type { TokenUsageStats } from '@agent/types/UsageTypes';
 import { bus } from '@eventBus/ProgressEventBus';
-import { AgentLogger } from '@logger/AgentLogger';
+import {
+  createChannelLogger,
+  parseLegacyLogData,
+  type ChannelLogger,
+} from '@logger/logUtils';
 import { LogMessageData, TaskGroup } from '@logger/LogTypes';
-import { parseLegacyLogData } from '@logger/logUtils';
 import { TaskState } from '@logger/TaskState';
 import { getConfig } from '@utils/config';
 
@@ -44,14 +47,14 @@ type StreamStatusOrReadyType = StreamStatusType | typeof STATUS.READY;
  * by delegating to the state manager and webview updater.
  */
 export class ProgressEventHandler {
-  private readonly logger: AgentLogger;
+  private readonly logger: ChannelLogger;
   private _streamStatus: Map<string, StreamStatusType> = new Map();
 
   constructor(
     private state: ProgressViewState,
     private webviewUpdater: WebviewUpdater,
   ) {
-    this.logger = new AgentLogger('ProgressEventHandler');
+    this.logger = createChannelLogger('ProgressEventHandler');
   }
 
   /**
