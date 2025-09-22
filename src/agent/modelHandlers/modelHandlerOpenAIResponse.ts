@@ -1101,6 +1101,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           if (type === 'input_text' && typeof partText === 'string') {
             return partText;
           }
+          if (type === 'output_text' && typeof partText === 'string') {
+            return partText;
+          }
           return '';
         })
         .join('');
