@@ -22,7 +22,7 @@ describe('escapeTextttUnderscores', () => {
     assert.strictEqual(escapeTextttUnderscores(input), input);
   });
 
-  it('handles nested braces safely', () => {
+  it('handles underscores adjacent to braces', () => {
     const input = '\\texttt{outer_{inner_value}}';
     const expected = '\\texttt{outer\\_{inner\\_value}}';
     assert.strictEqual(escapeTextttUnderscores(input), expected);
