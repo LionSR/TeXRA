@@ -459,79 +459,117 @@ export class LogEntryFormatter {
 
     let formattedContent;
     if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      // Extract tool name
       const toolName =
         typeof parsed.tool === 'string'
           ? parsed.tool.trim()
           : typeof parsed.name === 'string'
             ? parsed.name.trim()
             : '';
+      
+      // Update header to show tool name and error state
       if (headerLabel && toolName) {
-        headerLabel.textContent = `Tool Use: ${toolName}`;
+        let headerText = `Tool Use: ${toolName}`;
+        
+        // Add error information to the header if present
+        if (parsed.error) {
+          const errorText = typeof parsed.error === 'string' ? parsed.error : 'Error occurred';
+          // Truncate error message if too long
+          const truncatedError = errorText.length > 50 ? errorText.substring(0, 50) + '...' : errorText;
+          headerText = `Tool Use: ${toolName} - ❌ ${truncatedError}`;
+        } else if (parsed.isError === true) {
+          headerText = `Tool Use: ${toolName} - ❌ Error`;
+        }
+        
+        headerLabel.textContent = headerText;
       }
 
+      // Check if there's a summary
       const summaryText =
         typeof parsed.summary === 'string' && parsed.summary.trim().length > 0
           ? parsed.summary.trim()
           : undefined;
 
-      const hasOutput = Object.prototype.hasOwnProperty.call(parsed, 'output');
-      const outputValue = hasOutput ? parsed.output : undefined;
-      let fallbackSummary;
-      if (!summaryText && typeof outputValue === 'string') {
-        const trimmedOutput = outputValue.trim();
-        if (trimmedOutput.length > 0) {
-          fallbackSummary = trimmedOutput;
-        }
-      }
-
-      const summaryMarkup =
-        summaryText || fallbackSummary
-          ? `<div class="tool-use-summary">${encodeHtml(
-              summaryText || fallbackSummary,
-            )}</div>`
-          : '';
-
-      const sections = [];
-      if (Object.prototype.hasOwnProperty.call(parsed, 'input')) {
-        const inputJson = JSON.stringify(parsed.input, null, 2) ?? 'undefined';
-        sections.push(`
-          <div class="tool-use-section">
-            <div class="tool-use-subsection">
-              <span class="tool-use-sublabel">Input:</span>
-              <pre>${encodeHtml(inputJson)}</pre>
+      // If there's a summary, only show the summary
+      if (summaryText) {
+        formattedContent = `<div class="tool-use-summary">${encodeHtml(summaryText)}</div>`;
+      } else {
+        // No summary, show the full output with vertical limit
+        const sections = [];
+        
+        // Add input section if present
+        if (Object.prototype.hasOwnProperty.call(parsed, 'input')) {
+          const inputJson = JSON.stringify(parsed.input, null, 2) ?? 'undefined';
+          sections.push(`
+            <div class="tool-use-section">
+              <div class="tool-use-subsection">
+                <span class="tool-use-sublabel">Input:</span>
+                <pre>${encodeHtml(inputJson)}</pre>
+              </div>
             </div>
-          </div>
-        `);
-      }
-
-      if (hasOutput) {
-        let outputMarkup;
-        if (typeof outputValue === 'string') {
-          outputMarkup = `<pre>${encodeHtml(outputValue)}</pre>`;
-        } else {
-          const outputJson = JSON.stringify(outputValue, null, 2);
-          outputMarkup = `<pre>${encodeHtml(outputJson ?? 'undefined')}</pre>`;
+          `);
         }
-        sections.push(`
-          <div class="tool-use-section">
-            <div class="tool-use-subsection">
-              <span class="tool-use-sublabel">Output:</span>
-              ${outputMarkup}
+
+        // Add output section with vertical limit
+        const hasOutput = Object.prototype.hasOwnProperty.call(parsed, 'output');
+        if (hasOutput) {
+          const outputValue = parsed.output;
+          let outputDisplay;
+          
+          if (typeof outputValue === 'string') {
+            // Limit the number of lines for display
+            const MAX_LINES = 10;
+            const lines = outputValue.split('\n');
+            if (lines.length > MAX_LINES) {
+              const truncatedOutput = lines.slice(0, MAX_LINES).join('\n');
+              const remainingLines = lines.length - MAX_LINES;
+              outputDisplay = `${encodeHtml(truncatedOutput)}\n<span style="color: #888;">... (${remainingLines} more lines)</span>`;
+            } else {
+              outputDisplay = encodeHtml(outputValue);
+            }
+          } else {
+            const outputJson = JSON.stringify(outputValue, null, 2) ?? 'undefined';
+            // Also limit JSON output
+            const lines = outputJson.split('\n');
+            const MAX_LINES = 10;
+            if (lines.length > MAX_LINES) {
+              const truncatedOutput = lines.slice(0, MAX_LINES).join('\n');
+              const remainingLines = lines.length - MAX_LINES;
+              outputDisplay = `${encodeHtml(truncatedOutput)}\n<span style="color: #888;">... (${remainingLines} more lines)</span>`;
+            } else {
+              outputDisplay = encodeHtml(outputJson);
+            }
+          }
+          
+          sections.push(`
+            <div class="tool-use-section">
+              <div class="tool-use-subsection">
+                <span class="tool-use-sublabel">Output:</span>
+                <pre>${outputDisplay}</pre>
+              </div>
             </div>
-          </div>
-        `);
+          `);
+        }
+
+        // Add error section if present (and no summary)
+        if (parsed.error) {
+          const errorText = typeof parsed.error === 'string' ? parsed.error : JSON.stringify(parsed.error, null, 2);
+          sections.push(`
+            <div class="tool-use-section">
+              <div class="tool-use-subsection">
+                <span class="tool-use-sublabel" style="color: #ff6b6b;">Error:</span>
+                <pre style="color: #ff6b6b;">${encodeHtml(errorText)}</pre>
+              </div>
+            </div>
+          `);
+        }
+
+        const detailMarkup = sections
+          .map((section) => section.trim())
+          .join('<hr class="tool-use-separator">');
+
+        formattedContent = detailMarkup || `<pre>${safeContent}</pre>`;
       }
-
-      const detailMarkup = sections
-        .map((section) => section.trim())
-        .join('<hr class="tool-use-separator">');
-      const divider =
-        summaryMarkup && detailMarkup ? '<hr class="tool-use-separator">' : '';
-
-      formattedContent =
-        summaryMarkup || detailMarkup
-          ? `${summaryMarkup}${divider}${detailMarkup}`
-          : `<pre>${safeContent}</pre>`;
     } else if (parsed !== undefined) {
       formattedContent = `<pre>${encodeHtml(JSON.stringify(parsed, null, 2))}</pre>`;
     } else {

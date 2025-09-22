@@ -55,39 +55,13 @@ export class ToolResult {
     return new ToolResult(result ?? {});
   }
 
-  toModelPayload(): Record<string, unknown> {
-    const payload: Record<string, unknown> = {};
-    if (this.output !== undefined) payload.output = this.output;
-    if (this.error !== undefined) payload.error = this.error;
-    if (this.base64Image !== undefined) payload.base64Image = this.base64Image;
-    if (this.system !== undefined) payload.system = this.system;
-    return payload;
-  }
-
-  toLogPayload(): unknown {
-    const payload: Record<string, unknown> = {};
-    if (this.summary !== undefined) payload.summary = this.summary;
-    if (this.output !== undefined) payload.output = this.output;
-    if (this.error !== undefined) payload.error = this.error;
-    if (this.base64Image !== undefined) payload.base64Image = this.base64Image;
-    if (this.system !== undefined) payload.system = this.system;
-    if (this.diagnostics !== undefined) payload.diagnostics = this.diagnostics;
-    if (this.isError) payload.isError = true;
-
-    const hasOnlyStringOutput =
-      this.summary === undefined &&
-      this.error === undefined &&
-      this.base64Image === undefined &&
-      this.system === undefined &&
-      this.diagnostics === undefined &&
-      !this.isError &&
-      typeof this.output === 'string';
-
-    if (hasOnlyStringOutput) {
-      return this.output;
-    }
-
-    return Object.keys(payload).length > 0 ? payload : undefined;
+  // Simple method to get the content for model API
+  toContent(): string {
+    // For API responses, we need the actual content, not the summary
+    if (this.error) return this.error;
+    if (this.output) return this.output;
+    if (this.system) return this.system;
+    return '';
   }
 
   add(other: ToolResult): ToolResult {

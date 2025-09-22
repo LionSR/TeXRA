@@ -207,16 +207,11 @@ export async function runToolUseCycle<C = unknown>(
 
       // Log the failed tool use attempt with available info
       const errorResult = new ToolResult({ error: errorMsg, isError: true });
-      const errorPayload = errorResult.toLogPayload();
       const toolUseLog: Record<string, unknown> = {
         tool: 'unknown',
         input: parsed,
-      };
-      if (errorResult.summary !== undefined) {
-        toolUseLog.summary = errorResult.summary;
-      }
-      if (errorPayload !== undefined) {
-        toolUseLog.output = errorPayload;
+        error: errorMsg,
+        isError: true,
       }
       logger.info(
         JSON.stringify(toolUseLog, null, 2),
@@ -294,17 +289,20 @@ export async function runToolUseCycle<C = unknown>(
       toolInput = parsed;
     }
 
-    const logPayload = result.toLogPayload();
+    // Build the tool use log entry with all relevant fields
     const toolUseLog: Record<string, unknown> = {
       tool: name,
       input: toolInput,
     };
-    if (result.summary !== undefined) {
-      toolUseLog.summary = result.summary;
-    }
-    if (logPayload !== undefined) {
-      toolUseLog.output = logPayload;
-    }
+    
+    // Add all result fields to the log
+    if (result.summary !== undefined) toolUseLog.summary = result.summary;
+    if (result.output !== undefined) toolUseLog.output = result.output;
+    if (result.error !== undefined) toolUseLog.error = result.error;
+    if (result.base64Image !== undefined) toolUseLog.base64Image = result.base64Image;
+    if (result.system !== undefined) toolUseLog.system = result.system;
+    if (result.diagnostics !== undefined) toolUseLog.diagnostics = result.diagnostics;
+    if (result.isError) toolUseLog.isError = true;
 
     logger.info(
       JSON.stringify(toolUseLog, null, 2),
@@ -314,7 +312,12 @@ export async function runToolUseCycle<C = unknown>(
     );
 
     // Build provider-specific message containing the tool result
-    const resultObj = result.toModelPayload();
+    // Build result object for model API - only include defined fields
+    const resultObj: Record<string, unknown> = {};
+    if (result.output !== undefined) resultObj.output = result.output;
+    if (result.error !== undefined) resultObj.error = result.error;
+    if (result.base64Image !== undefined) resultObj.base64Image = result.base64Image;
+    if (result.system !== undefined) resultObj.system = result.system;
 
     const followUpMsgs = modelHandler.createToolUseFollowUpMessages(
       id,
