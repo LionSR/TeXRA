@@ -4,21 +4,20 @@
 
 .instruction-panel {
   display: none;
-  flex-direction: column;
-  gap: var(--spacing-small);
-  padding: var(--spacing-medium);
+  border-top: 1px solid var(--vscode-panel-border);
   border-bottom: 1px solid var(--vscode-panel-border);
   background-color: var(--vscode-editor-background);
 }
 
 .instruction-panel.is-visible {
-  display: flex;
+  display: block;
 }
 
 .instruction-panel__header {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  padding: var(--spacing-small) var(--spacing-medium);
   gap: var(--spacing-small);
 }
 
@@ -32,12 +31,21 @@
   gap: var(--spacing-small);
 }
 
-.instruction-panel__toggle {
-  font-size: var(--font-size-sm);
+.instruction-panel__copy {
+  opacity: 0.65;
+  transition:
+    opacity 0.2s ease,
+    color 0.2s ease;
 }
 
-.instruction-panel__toggle .codicon {
-  margin-right: var(--spacing-tiny);
+.instruction-panel:hover .instruction-panel__copy,
+.instruction-panel__copy:focus-visible,
+.instruction-panel__copy.copy-success {
+  opacity: 1;
+}
+
+.instruction-panel__copy.copy-success {
+  color: var(--vscode-testing-iconPassed, #2ea043);
 }
 
 .instruction-panel__toggle.is-hidden {
@@ -47,7 +55,7 @@
 .instruction-panel__body {
   max-height: 12rem;
   overflow-y: auto;
-  padding-right: var(--spacing-small);
+  padding: 0 var(--spacing-medium) var(--spacing-medium);
 }
 
 .instruction-panel.is-expanded .instruction-panel__body {
@@ -57,13 +65,6 @@
 .instruction-panel__text {
   white-space: pre-wrap;
   word-break: break-word;
+  line-height: 1.45;
   color: var(--text-color);
-  line-height: 1.5;
-}
-
-.instruction-panel__card {
-  border: 1px solid var(--vscode-panel-border);
-  border-radius: var(--border-radius);
-  padding: var(--spacing-medium);
-  background-color: var(--vscode-editor-background);
 }

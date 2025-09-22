@@ -35,7 +35,6 @@ document.addEventListener('DOMContentLoaded', () => {
     'latexdiffDetailsTemplate',
     'statisticsDetailsTemplate',
     'groupHeaderTemplate',
-    'instructionCardTemplate',
   ]);
   initializeIconButtons();
   progressViewDomHandler.toolbar.render('workflow');
