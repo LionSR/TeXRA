@@ -153,10 +153,13 @@ describe('runToolUseCycle OpenAIResponse', () => {
       (e) => e.logMessage.messageType === MESSAGE_TYPES.TOOL_USE,
     );
     assert.equal(toolEvents.length, 2);
-    assert.deepEqual(messages[0], {
-      role: 'assistant',
-      content: [{ type: 'text', text: 'intro' }],
-    });
+    const assistantMsg = messages[0] as any;
+    assert.equal(assistantMsg.role, 'assistant');
+    assert.equal(assistantMsg.type, 'message');
+    assert.equal(assistantMsg.status, 'completed');
+    assert.ok(Array.isArray(assistantMsg.content));
+    assert.equal(assistantMsg.content[0].type, 'output_text');
+    assert.equal(assistantMsg.content[0].text, 'intro');
     assert.deepEqual(messages[1], {
       type: 'function_call',
       call_id: 'c1',

@@ -4,55 +4,70 @@ import { Buffer } from 'node:buffer';
 // Third-party imports
 import OpenAI, { toFile } from 'openai';
 import type {
-  ChatCompletionMessageParam,
-  ChatCompletionAssistantMessageParam,
-  ChatCompletionToolMessageParam,
-} from 'openai/resources/chat/completions';
-import type {
+  EasyInputMessage,
   Response,
   ResponseUsage,
+  ResponseCreateParamsBase,
+  ResponseCreateParamsNonStreaming,
+  ResponseOutputItem,
   ResponseOutputMessage,
   ResponseOutputText,
   ResponseReasoningItem,
   ResponseFunctionToolCallItem,
   ResponseFunctionToolCall,
   ResponseInputItem,
+  ResponseInputContent,
+  ResponseInputMessageContentList,
+  ResponseInputFile,
   ResponseStreamEvent,
 } from 'openai/resources/responses/responses';
+import type { Reasoning } from 'openai/resources/shared';
+import type { ResponseStreamParams } from 'openai/lib/responses/ResponseStream';
 
 // Local imports - agent
-import { ResponseUsageFactory } from '../core/ResponseUsage';
+import type { AgentConfig } from '../core/AgentConfig';
+import type { AgentSetting } from '../core/AgentDataclass';
+import { hasEndTag } from '../core/AgentDataclass';
+import { AgentStateRound } from '../core/AgentState';
+import {
+  ResponseUsageFactory,
+  type OpenAIAPIResponseUsage,
+  type ExtendedCompletionUsage,
+} from '../core/ResponseUsage';
 import { ToolState } from '../core/ToolState';
 
 // Local imports - base handler
-import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
+import { ModelHandler } from './ModelHandler';
 import { toOpenAIResponseTools } from './toolConversion';
 import type { ProviderStopReason } from './types/StopReasonTypes';
 import { OPENAI_CHAT_FINISH } from './types/StopReasonTypes';
-import { calculateTokenPrice } from '@agent/utils/priceUtils';
-import { logErrorMessage } from '@common/errors/errorHandlingUtils';
-import type { ToolDefinition } from '@model';
-import { K_SLICE, getConfig } from '@utils/config';
 
-// import { ResponseCreateParams } from 'openai/src/resources/responses/response';
-// this is incorrect now, but would be nice to use
+// Local imports - utilities
+import { MediaEntry } from '@agent/utils/mediaTypes';
+import { calculateTokenPrice } from '@agent/utils/priceUtils';
+import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
+import { MESSAGE_TYPES } from '@logger/messageTypes';
+import type { ToolDefinition } from '@model';
+import { cleanFileContent } from '@replacement/engine';
+import { K_SLICE, getConfig } from '@utils/config';
+import { WorkspaceFS } from '@utils/files';
+import xmlUtils from '@utils/text/xmlUtils';
 
 /**
- * Handler for OpenAI's new Responses API. Uses `previous_response_id` to
- * manage conversation state between calls.
- *
- * This class extends ModelHandlerOpenAI to maintain compatibility with the
- * existing message handling infrastructure while adapting to the Responses API's
- * different message format. The base class works with ChatCompletionMessageParam[],
- * but the Responses API requires ResponseInputItem[]. All conversion happens
- * internally in the createResponse method.
- *
- * Note: PDFs are handled specially - they are converted from image_url format
- * to input_file format with mime_type 'application/pdf' for proper processing.
+ * Handler for OpenAI's Responses API. This implementation works directly with
+ * the native response message types instead of reusing the chat completion
+ * abstractions. Conversation state is maintained through `previous_response_id`
+ * so we only submit the new messages for each turn.
  */
-export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
+export class ModelHandlerOpenAIResponse extends ModelHandler<
+  ResponseInputItem,
+  ResponseUsage | undefined,
+  OpenAIAPIResponseUsage,
+  ResponseFunctionToolCallItem
+> {
   private previousResponseId: string | null = null;
   private sentMessages = 0;
+  private assistantMessageCounter = 0;
 
   /**
    * Manually set the previous response ID to resume a conversation.
@@ -61,6 +76,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
   setPreviousResponseId(id: string | null): void {
     this.previousResponseId = id;
     this.sentMessages = 0;
+    this.assistantMessageCounter = 0;
   }
 
   /** Retrieve the stored previous response ID. */
@@ -68,7 +84,22 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
     return this.previousResponseId;
   }
 
-  /** Reset conversation state when starting new messages. */
+  /** Creates a configured OpenAI client instance. */
+  protected async createOpenAIClient(
+    providerName: string = this.config.provider,
+  ): Promise<OpenAI> {
+    const apiKey = await this.getApiKey();
+    const baseURL = this.getBaseUrl();
+    this.logger.debug(`Using ${providerName} API key. Base URL: ${baseURL}`);
+    return new OpenAI({ apiKey, baseURL });
+  }
+
+  /** Returns OpenAI client with configured API key. */
+  async getClient(): Promise<OpenAI> {
+    return this.createOpenAIClient();
+  }
+
+  /** Reset conversation bookkeeping when starting a new session. */
   async initializeMessages(
     userPrefix: string,
     userRequest: string,
@@ -77,120 +108,298 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
   ): Promise<ResponseInputItem[]> {
     this.previousResponseId = null;
     this.sentMessages = 0;
-    return super.initializeMessages(
-      userPrefix,
-      userRequest,
-      mediaFiles,
-      systemPrompt,
-    );
+    this.assistantMessageCounter = 0;
+
+    const messages: ResponseInputItem[] = [];
+
+    if (systemPrompt) {
+      const role = this.capabilities.supportsSystemPrompt ? 'system' : 'user';
+      messages.push({
+        type: 'message',
+        role,
+        content: [
+          this.createInputText(systemPrompt),
+        ] as ResponseInputMessageContentList,
+      } as ResponseInputItem);
+    }
+
+    const supportsMedia =
+      this.capabilities.supportsVision || this.capabilities.supportsNativeAudio;
+    const userContent: ResponseInputMessageContentList = [
+      this.createInputText(userPrefix),
+    ];
+
+    if (mediaFiles && mediaFiles.length > 0 && supportsMedia) {
+      try {
+        const mediaContent = (await this.createMediaMessage(
+          mediaFiles,
+        )) as ResponseInputMessageContentList;
+        userContent.push(...mediaContent);
+      } catch (err) {
+        this.logger.error(
+          `Error processing media files: ${getSdkErrorMessage(err)}`,
+          undefined,
+          undefined,
+          err,
+        );
+      }
+    }
+
+    if (userContent.length > 0) {
+      messages.push({
+        type: 'message',
+        role: 'user',
+        content: userContent,
+      } as ResponseInputItem);
+    }
+
+    const requestRole = this.capabilities.supportsIntermDevMsgs
+      ? 'system'
+      : 'user';
+
+    if (requestRole === 'user' && messages.length > 0) {
+      this.appendInputText(messages.at(-1)!, userRequest);
+    } else {
+      messages.push({
+        type: 'message',
+        role: requestRole,
+        content: [
+          this.createInputText(userRequest),
+        ] as ResponseInputMessageContentList,
+      } as ResponseInputItem);
+    }
+
+    return messages;
+  }
+
+  /** Adds user message content for subsequent rounds. */
+  async createRoundMessages(
+    messages: ResponseInputItem[],
+    userMessage: string,
+    mediaFiles?: string[],
+  ): Promise<ResponseInputItem[]> {
+    const roundContent: ResponseInputMessageContentList = [];
+
+    if (
+      mediaFiles &&
+      mediaFiles.length > 0 &&
+      (this.capabilities.supportsVision ||
+        this.capabilities.supportsNativeAudio)
+    ) {
+      try {
+        const formattedMediaContent = (await this.createMediaMessage(
+          mediaFiles,
+        )) as ResponseInputMessageContentList;
+        roundContent.push(...formattedMediaContent);
+      } catch (err) {
+        this.logger.error(
+          `Error processing media files for follow-up round: ${getSdkErrorMessage(err)}`,
+          undefined,
+          undefined,
+          err,
+        );
+      }
+    }
+
+    roundContent.push(this.createInputText(userMessage));
+
+    messages.push({
+      type: 'message',
+      role: 'user',
+      content: roundContent,
+    } as ResponseInputItem);
+
+    return messages;
+  }
+
+  /** Formats image/audio content for the Responses API. */
+  createMediaContent(mediaMessage: MediaEntry[]): ResponseInputContent[] {
+    return mediaMessage.flatMap((media): ResponseInputContent[] => {
+      const mediaType = media.media_type ?? '';
+
+      if (
+        media.media_category === 'image' &&
+        typeof mediaType === 'string' &&
+        mediaType.startsWith('image/')
+      ) {
+        return [
+          this.createInputText(`Image: ${media.file_name}`),
+          {
+            type: 'input_image',
+            image_url: `data:${mediaType};base64,${media.data}`,
+            detail: 'high',
+          },
+        ];
+      }
+
+      if (media.media_category === 'audio') {
+        if (!this.capabilities.supportsNativeAudio) {
+          this.logger.warn(
+            `Audio input received (${media.file_name}) but native audio is not supported by this model/provider (${this.config.provider}). Skipping.`,
+          );
+          return [];
+        }
+
+        let audioFormat = media.media_type;
+        if (media.media_type.includes('/')) {
+          audioFormat = media.media_type.split('/')[1];
+        }
+
+        const normalizedFormat =
+          audioFormat === 'mp3' || audioFormat === 'wav'
+            ? audioFormat
+            : undefined;
+        if (!normalizedFormat) {
+          this.logger.warn(
+            `Audio input received (${media.file_name}) with unsupported format (${audioFormat}). Skipping.`,
+          );
+          return [];
+        }
+
+        return [
+          this.createInputText(`Audio: ${media.file_name}`),
+          {
+            type: 'input_audio',
+            input_audio: {
+              data: media.data,
+              format: normalizedFormat,
+            },
+          },
+        ];
+      }
+
+      if (mediaType === 'application/pdf') {
+        return [
+          this.createInputText(`Document: ${media.file_name}`),
+          {
+            type: 'input_file',
+            file_data: media.data,
+            filename: media.file_name,
+          },
+        ];
+      }
+
+      if (media.media_category === 'image') {
+        this.logger.warn(
+          `Skipping media ${media.file_name} with unsupported image MIME type: ${mediaType}`,
+        );
+        return [];
+      }
+
+      this.logger.warn(`Unknown media category: ${media.media_category}`);
+      return [];
+    });
+  }
+
+  private isInputFileContent(
+    content: ResponseInputContent,
+  ): content is ResponseInputFile {
+    return content.type === 'input_file';
+  }
+
+  private async uploadInlineInputFiles(
+    client: OpenAI,
+    messageItems: ResponseInputItem[],
+  ): Promise<void> {
+    for (const item of messageItems) {
+      if (!this.isMessageItem(item)) {
+        continue;
+      }
+
+      const contentList = (
+        item as ResponseInputItem & {
+          content?: ResponseInputMessageContentList;
+        }
+      ).content;
+
+      if (!Array.isArray(contentList)) {
+        continue;
+      }
+
+      for (const content of contentList) {
+        if (
+          this.isInputFileContent(content) &&
+          content.file_data &&
+          !content.file_id
+        ) {
+          await this.replaceFileDataWithUpload(client, content);
+        }
+      }
+    }
+  }
+
+  private async replaceFileDataWithUpload(
+    client: OpenAI,
+    content: ResponseInputFile,
+  ): Promise<void> {
+    const fileData = content.file_data;
+    if (!fileData) {
+      return;
+    }
+
+    const filename = content.filename ?? 'document.pdf';
+    let buffer: Buffer | undefined;
+
+    try {
+      const base64Separator = ';base64,';
+      const separatorIndex = fileData.indexOf(base64Separator);
+      const payload =
+        separatorIndex >= 0
+          ? fileData.slice(separatorIndex + base64Separator.length)
+          : fileData;
+
+      buffer = Buffer.from(payload, 'base64');
+      const uploadedFile = await client.files.create({
+        file: await toFile(buffer, filename),
+        purpose: 'assistants',
+      });
+
+      content.file_id = uploadedFile.id;
+      delete content.file_data;
+      if ('filename' in content) {
+        delete content.filename;
+      }
+    } catch (err) {
+      this.logger.error(
+        `Failed to upload file ${filename}: ${getSdkErrorMessage(err)}`,
+        undefined,
+        undefined,
+        err,
+      );
+      throw err;
+    } finally {
+      if (buffer) {
+        buffer.fill(0);
+        buffer = undefined;
+      }
+    }
   }
 
   /**
    * Create a response using the Responses API.
-   *
-   * IMPORTANT: This method maintains the base class signature for compatibility,
-   * accepting ChatCompletionMessageParam[] even though the Responses API requires
-   * ResponseInputItem[]. The conversion is handled internally to preserve the
-   * inheritance hierarchy and allow seamless integration with the existing infrastructure.
-   *
-   * The conversion handles:
-   * - Text content: 'text' -> 'input_text' or 'output_text' based on role
-   * - Images: 'image_url' -> 'input_image'
-   * - PDFs: Special handling to convert from image_url to input_file format
-   *
-   * @param messages ChatCompletionMessageParam[] from base class methods
-   * @returns Response object from the Responses API
+   * The handler submits only the messages that were not part of the previous
+   * request and relies on `previous_response_id` for conversation context.
    */
   async createResponse(
     client: OpenAI,
-    messages: ChatCompletionMessageParam[],
+    messages: ResponseInputItem[],
     temperature: number,
     systemPrompt?: string,
-    endTag?: string,
+    _endTag?: string,
     signal?: AbortSignal,
     tools?: ToolDefinition[],
   ): Promise<Response> {
     const useStreaming = this.getStreamingConfig();
+    const newMessages = messages.slice(this.sentMessages);
 
-    const newMessages = await Promise.all(
-      messages.slice(this.sentMessages).map(async (msg) => {
-        if ('role' in msg) {
-          const content =
-            typeof msg.content === 'string'
-              ? [{ type: 'input_text', text: msg.content }]
-              : Array.isArray(msg.content)
-                ? await Promise.all(
-                    msg.content.map(async (part: any) => {
-                      if (part.type === 'text') {
-                        if (msg.role === 'user') {
-                          return { type: 'input_text', text: part.text };
-                        } else if (msg.role === 'assistant') {
-                          return { type: 'output_text', text: part.text };
-                        } else {
-                          return { type: 'input_text', text: part.text };
-                        }
-                      }
-                      if (part.type === 'image_url') {
-                        const url =
-                          typeof part.image_url === 'string'
-                            ? part.image_url
-                            : part.image_url.url;
+    await this.uploadInlineInputFiles(client, newMessages);
 
-                        if (url.startsWith('data:application/pdf;base64,')) {
-                          const base64Data = url.replace(
-                            'data:application/pdf;base64,',
-                            '',
-                          );
-                          let buffer: Buffer | undefined = Buffer.from(
-                            base64Data,
-                            'base64',
-                          );
-                          try {
-                            const uploadedFile = await client.files.create({
-                              file: await toFile(buffer, 'upload.pdf'),
-                              purpose: 'assistants',
-                            });
-                            return {
-                              type: 'input_file',
-                              file_id: uploadedFile.id,
-                            };
-                          } catch (err) {
-                            logErrorMessage(
-                              'OpenAI',
-                              'Failed to upload PDF',
-                              err,
-                            );
-                            throw err;
-                          } finally {
-                            if (buffer) {
-                              buffer.fill(0);
-                              buffer = undefined;
-                            }
-                          }
-                        }
-
-                        const detail = part.image_url?.detail ?? 'auto';
-                        return { type: 'input_image', image_url: url, detail };
-                      }
-                      return part;
-                    }),
-                  )
-                : [];
-          return { role: msg.role, content };
-        }
-        return msg;
-      }),
-    );
-
-    const params: any = {
+    const params: ResponseCreateParamsBase = {
       model: this.config.fullName,
       input: newMessages,
       max_output_tokens: this.config.maxOutputTokens,
       store: true,
     };
-
-    // The Responses API does not currently support stop sequences. We keep the
-    // end tag for post-processing only and do not send it to the API.
 
     if (!this.isOReasoningModel) {
       params.temperature = temperature;
@@ -199,6 +408,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
     if (this.previousResponseId) {
       params.previous_response_id = this.previousResponseId;
     }
+
     if (systemPrompt) {
       params.instructions = systemPrompt;
     }
@@ -209,37 +419,23 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
     }
 
     if (this.capabilities.supportsReasoning) {
-      // Different models support different reasoning summarizers—for example, our computer use model supports the concise summarizer, while o4-mini supports detailed. To simply access the most detailed summarizer available, set the value of this parameter to auto and view the reasoning summary as part of the summary array in the reasoning output item.
-      // This feature is also supported with streaming, and across the following reasoning models: o4-mini, o3, o3-mini and o1.
       const isGpt5 = this.config.name.startsWith('gpt5');
       const includeSummary =
         !isGpt5 || getConfig<boolean>('model.gpt5ReasoningSummary', false);
-      params.reasoning = {};
+      const reasoning: Reasoning = {};
       if (includeSummary) {
-        params.reasoning.summary = 'auto'; // or "detailed"
+        reasoning.summary = 'auto';
       }
       if (this.capabilities.supportsReasoningEffort) {
-        params.reasoning.effort = 'high'; // or "medium" or "low"
+        reasoning.effort = 'high';
       }
-      if (
-        this.config.fullName.includes('o3') ||
-        this.config.fullName.includes('o4')
-      ) {
-        // Stop sequences are unsupported for o3 and o4 reasoning models.
-      }
+      params.reasoning = reasoning;
     }
 
-    // this.logger.debug(
-    //   `CreateResponse params: ${JSON.stringify(params, null, 2)}`,
-    // );
-
     if (useStreaming) {
-      // this.logger.debug(
-      //   `OpenAI Responses streaming params: ${JSON.stringify(params)}`,
-      // );
-      const stream = client.responses.stream(params, {
-        signal,
-      });
+      const { stream: _stream, ...rest } = params;
+      const streamParams: ResponseStreamParams = { ...rest, stream: true };
+      const stream = client.responses.stream(streamParams, { signal });
       const groupId = this.logger.getActiveGroupId();
       const thinking = this.createThinkingStream(groupId);
       const output = this.isOutputStreamingEnabled()
@@ -262,73 +458,48 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
         }
       }
 
-      // Note that there is no second consumption problem as per openai sdk examples
       const response = await stream.finalResponse();
       const finalReasoning = this.processThinkingBlock(response);
       thinking.finalize(finalReasoning ?? undefined);
       const [finalText] = this.extractResponse(response, '');
       if (output) output.finalize(finalText);
-      // this.logger.debug(
-      //   `OpenAI Responses final response: ${JSON.stringify(response)}`,
-      // );
+
       this.previousResponseId = response.id;
       this.sentMessages = messages.length;
       return response;
-    } else {
-      const response = await client.responses.create(params, {
+    }
+
+    try {
+      const { stream: _nonStream, ...nonStreamRest } = params;
+      const nonStreamingParams: ResponseCreateParamsNonStreaming = {
+        ...nonStreamRest,
+        stream: false,
+      };
+      const response = await client.responses.create(nonStreamingParams, {
         signal,
       });
       this.previousResponseId = response.id;
       this.sentMessages = messages.length;
       return response;
+    } catch (err) {
+      this.logger.error(
+        `Error in createResponse: ${getSdkErrorMessage(err)}`,
+        undefined,
+        undefined,
+        err,
+      );
+      throw err;
     }
   }
 
   /**
    * Extract plain text and usage information from the Responses API result.
-   *
-   * The OpenAI Responses API returns a JSON structure like:
-   * {
-   *   "id": "resp_...",
-   *   "object": "response",
-   *   "status": "completed",
-   *   "output": [
-   *     {
-   *       "id": "rs_...",
-   *       "type": "reasoning",
-   *       "summary": [
-   *         { "type": "summary_text", "text": "..." },
-   *         ...
-   *       ]
-   *     },
-   *     {
-   *       "id": "msg_...",
-   *       "type": "message",
-   *       "status": "completed",
-   *       "content": [
-   *         {
-   *           "type": "output_text",
-   *           "annotations": [],
-   *           "text": "The actual response text goes here..."
-   *         }
-   *       ],
-   *       "role": "assistant"
-   *     }
-   *   ],
-   *   "usage": {
-   *     "input_tokens": 123,
-   *     "output_tokens": 123,
-   *     "input_tokens_details": { "cached_tokens": 0 },
-   *     "output_tokens_details": { "reasoning_tokens": 9920 },
-   *     "total_tokens": 256
-   *   }
-   * }
    */
   extractResponse(
     responseObject: Response,
     endTag: string,
   ): [string, ResponseUsage | undefined, ProviderStopReason] {
-    const usage = responseObject.usage || {
+    const usage = responseObject.usage ?? {
       input_tokens: 0,
       output_tokens: 0,
       total_tokens: 0,
@@ -336,47 +507,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
       output_tokens_details: { reasoning_tokens: 0 },
     };
 
-    let newResponse = '';
-
-    // Try direct output_text first (some response formats)
-    if (responseObject.output_text) {
-      newResponse = responseObject.output_text.trim();
-    }
-    // Handle the nested array structure from Responses API
-    else if (Array.isArray(responseObject.output)) {
-      // First, try to extract all "message" type parts and join their "content"
-      const messageParts = responseObject.output.filter(
-        (part): part is ResponseOutputMessage =>
-          part.type === 'message' && 'content' in part,
-      );
-      if (messageParts.length > 0) {
-        newResponse = messageParts
-          .map((part) => {
-            // If content is an array, flatten and extract output_text
-            if (Array.isArray(part.content)) {
-              return part.content
-                .filter(
-                  (c): c is ResponseOutputText =>
-                    c.type === 'output_text' && 'text' in c,
-                )
-                .map((c) => c.text)
-                .join('');
-            } else if (typeof part.content === 'string') {
-              return part.content;
-            }
-            return '';
-          })
-          .join('')
-          .trim();
-      } else {
-        // Fallback: directly extract all output_text from output array (for older/alternate formats)
-        newResponse = responseObject.output
-          .filter((part) => 'text' in part && part.type !== 'reasoning')
-          .map((part: any) => part.text)
-          .join('')
-          .trim();
-      }
-    }
+    const newResponse = this.collectResponseText(responseObject);
 
     const stopReason =
       responseObject.status === 'completed'
@@ -390,16 +521,99 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
     ) {
       return [`${newResponse}\n${endTag}`, usage, stopReason];
     }
+
     return [newResponse, usage, stopReason];
   }
 
+  private collectResponseText(responseObject: Response): string {
+    const trimmedOutputText = responseObject.output_text?.trim();
+    if (trimmedOutputText) {
+      return trimmedOutputText;
+    }
+
+    const outputItems = responseObject.output;
+    if (!Array.isArray(outputItems) || outputItems.length === 0) {
+      return '';
+    }
+
+    const messageText = this.collectMessageOutput(outputItems);
+    if (messageText) {
+      return messageText;
+    }
+
+    return this.collectFallbackOutput(outputItems);
+  }
+
+  private collectMessageOutput(
+    outputItems: ResponseOutputItem[],
+  ): string | null {
+    const messageParts = outputItems.filter(
+      (part): part is ResponseOutputMessage =>
+        part.type === 'message' && 'content' in part,
+    );
+    if (messageParts.length === 0) {
+      return null;
+    }
+
+    const aggregated = messageParts
+      .map((part) => this.extractMessageText(part.content))
+      .filter((content) => content.length > 0)
+      .join('')
+      .trim();
+
+    return aggregated.length > 0 ? aggregated : null;
+  }
+
+  private collectFallbackOutput(outputItems: ResponseOutputItem[]): string {
+    return outputItems
+      .filter(
+        (part): part is ResponseOutputItem & { text: string; type: string } =>
+          this.isTextBearingOutput(part) && part.type !== 'reasoning',
+      )
+      .map((part) => part.text)
+      .join('')
+      .trim();
+  }
+
+  private extractMessageText(
+    content: ResponseOutputMessage['content'] | string | undefined,
+  ): string {
+    if (!content) {
+      return '';
+    }
+
+    if (typeof content === 'string') {
+      return content;
+    }
+
+    if (!Array.isArray(content)) {
+      return '';
+    }
+
+    return content
+      .filter(
+        (item): item is ResponseOutputText =>
+          item?.type === 'output_text' && typeof item?.text === 'string',
+      )
+      .map((item) => item.text)
+      .join('');
+  }
+
+  private isTextBearingOutput(
+    part: ResponseOutputItem,
+  ): part is ResponseOutputItem & { text: string; type: string } {
+    return (
+      typeof (part as { text?: unknown }).text === 'string' &&
+      typeof (part as { type?: unknown }).type === 'string'
+    );
+  }
+
   /** Price computation adapted for Responses API token fields. */
-  computePrice(responseUsage: any): number {
+  computePrice(responseUsage: ResponseUsage | undefined): number {
     if (!responseUsage) {
       return 0.0;
     }
 
-    // Response API uses input_tokens/output_tokens
     const promptTokens = responseUsage.input_tokens ?? 0;
     const completionTokens = responseUsage.output_tokens ?? 0;
 
@@ -410,7 +624,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
       this.config.outputPrice,
     );
 
-    // Response API uses output_tokens_details and input_tokens_details
     const reasoningTokens =
       responseUsage.output_tokens_details?.reasoning_tokens ?? 0;
     const cachedTokens = responseUsage.input_tokens_details?.cached_tokens ?? 0;
@@ -430,33 +643,33 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
   }
 
   /** Map usage fields and create usage statistics object. */
-  computeResponseUsage(responseUsage: any, responseTime: number): any {
+  computeResponseUsage(
+    responseUsage: ResponseUsage | undefined,
+    responseTime: number,
+  ): OpenAIAPIResponseUsage {
     if (!responseUsage) {
-      const emptyUsage = {
-        input_tokens: 0,
-        output_tokens: 0,
-        total_tokens: 0,
-        input_tokens_details: { cached_tokens: 0 },
-        output_tokens_details: { reasoning_tokens: 0 },
-      };
-      const mapped = {
+      const emptyUsage: ExtendedCompletionUsage = {
         prompt_tokens: 0,
         completion_tokens: 0,
         total_tokens: 0,
         prompt_tokens_details: { cached_tokens: 0 },
-        completion_tokens_details: { reasoning_tokens: 0 },
+        completion_tokens_details: {
+          reasoning_tokens: 0,
+          accepted_prediction_tokens: undefined,
+          rejected_prediction_tokens: undefined,
+        },
       };
       return ResponseUsageFactory.fromOpenAIResponse(
-        mapped,
-        this.computePrice(emptyUsage),
+        emptyUsage,
+        this.computePrice(responseUsage),
         responseTime,
       );
     }
 
-    const mapped = {
-      prompt_tokens: responseUsage.input_tokens,
-      completion_tokens: responseUsage.output_tokens,
-      total_tokens: responseUsage.total_tokens,
+    const mapped: ExtendedCompletionUsage = {
+      prompt_tokens: responseUsage.input_tokens ?? 0,
+      completion_tokens: responseUsage.output_tokens ?? 0,
+      total_tokens: responseUsage.total_tokens ?? 0,
       prompt_tokens_details: {
         cached_tokens: responseUsage.input_tokens_details?.cached_tokens ?? 0,
       },
@@ -475,42 +688,212 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
     );
   }
 
-  /**
-   * Process reasoning summaries from the Responses API.
-   * @param responseObject The API response object
-   * @param groupId Optional group ID for logging
-   * @param toolState Optional toolState to update with thinking blocks
-   * @returns The concatenated reasoning summary or null
-   */
-  /**
-   * Process reasoning summaries from the Responses API.
-   * Handles a structure like:
-   * {
-   *   output: {
-   *     [
-   *       {
-   *         id: "...",
-   *         type: "reasoning",
-   *         summary: [
-   *           { type: "summary_text", text: "..." },
-   *           ...
-   *         ]
-   *       },
-   *       ...
-   *     ]
-   *   }
-   * }
-   * @param responseObject The API response object
-   * @param groupId Optional group ID for logging
-   * @param toolState Optional toolState to update with thinking blocks
-   * @returns The concatenated reasoning summary or null
-   */
+  /** Models with prefill support do not require additional continuation messages. */
+  addContinueMessageWithPrefill(
+    _messages: ResponseInputItem[],
+    _stateRound: AgentStateRound,
+    _toolState: ToolState,
+    _agentSetting: AgentSetting,
+    _agentConfig: AgentConfig,
+  ): void {
+    this.logger.debug('Skipping continuation - assistant prefill is supported');
+  }
+
+  /** Adds continuation instructions for models without prefill support. */
+  addContinueMessageWithoutPrefill(
+    messages: ResponseInputItem[],
+    _stateRound: AgentStateRound,
+    toolState: ToolState,
+    agentSetting: AgentSetting,
+    _agentConfig: AgentConfig,
+  ): void {
+    const prefillTokens = toolState.lastResponse.slice(-K_SLICE);
+    const userMessageContinuation =
+      `Your response got cut off, because you only have limited response space. ` +
+      `Continue responding exactly from where you left off until the very end, ` +
+      `marked by ${agentSetting.endTag}. ` +
+      'Avoid repeat yourself and avoid starting over. ' +
+      `Start your response at the next token after: "${prefillTokens}"`;
+
+    const role = this.capabilities.supportsIntermDevMsgs ? 'system' : 'user';
+    messages.push({
+      type: 'message',
+      role,
+      content: [
+        this.createInputText(userMessageContinuation),
+      ] as ResponseInputMessageContentList,
+    } as ResponseInputItem);
+  }
+
+  /** Initializes output file and handles prefill content. */
+  async initializeOutputAndPrefill(
+    agentConfig: AgentConfig,
+    agentSetting: AgentSetting,
+    messages: ResponseInputItem[],
+    toolState: ToolState,
+    outputFile: string,
+    prefill: string,
+    groupId?: string,
+  ): Promise<[boolean, ResponseInputItem[]]> {
+    let endTurn = false;
+
+    if (!(await WorkspaceFS.existsAndNonTrivial(outputFile))) {
+      const pseudoPrefill = `Organize your response with xml tags. Start your response with:\n${prefill}`;
+      const lastMessage = messages.at(-1);
+      if (lastMessage) {
+        this.appendInputText(lastMessage, pseudoPrefill);
+      } else {
+        messages.push({
+          type: 'message',
+          role: 'user',
+          content: [
+            this.createInputText(pseudoPrefill),
+          ] as ResponseInputMessageContentList,
+        } as ResponseInputItem);
+      }
+      this.logger.debug(
+        `Added pseudo prefill message to messages:\n${pseudoPrefill}`,
+      );
+      return [endTurn, messages];
+    }
+
+    let fileContent = await WorkspaceFS.read(outputFile);
+    fileContent = cleanFileContent(fileContent);
+
+    const scratchpad = await xmlUtils.extractScratchpad(
+      fileContent,
+      'scratchpad',
+    );
+    if (scratchpad) {
+      this.logger.info(scratchpad, groupId, MESSAGE_TYPES.SCRATCHPAD);
+    }
+
+    await WorkspaceFS.write(outputFile, fileContent);
+
+    messages.push(this.createAssistantMessage(fileContent));
+
+    if (hasEndTag(agentSetting, fileContent)) {
+      this.logger.debug('End tag detected - skipping continuation');
+      endTurn = true;
+      return [endTurn, messages];
+    }
+
+    this.logger.warn(
+      'Output file exists but no end tag found - continuing from file',
+    );
+    if (fileContent.includes(prefill)) {
+      toolState.updateAccumulatedOutput(fileContent);
+    } else {
+      toolState.updateAccumulatedOutput(prefill + fileContent);
+      await WorkspaceFS.write(outputFile, toolState.accumulatedOutput);
+    }
+
+    const state = new AgentStateRound(0);
+    toolState.lastResponse = toolState.accumulatedOutput;
+    this.addContinueMessageWithoutPrefill(
+      messages,
+      state,
+      toolState,
+      agentSetting,
+      agentConfig,
+    );
+
+    endTurn = false;
+    return [endTurn, messages];
+  }
+
+  /** Updates message content for models with prefill support. */
+  updateMessageContentWithPrefill(
+    messages: ResponseInputItem[],
+    bestConnector: string,
+    newResponse: string,
+    toolState: ToolState,
+  ): void {
+    this.logger.debug(
+      'Updating message content for OpenAI Responses models with prefill support',
+    );
+
+    const lastMessage = messages.at(-1);
+    if (
+      lastMessage &&
+      this.appendAssistantText(lastMessage, `${bestConnector}${newResponse}`)
+    ) {
+      return;
+    }
+
+    messages.push(this.createAssistantMessage(toolState.accumulatedOutput));
+  }
+
+  /** Updates message content for models without prefill support. */
+  updateMessageContentWithoutPrefill(
+    messages: ResponseInputItem[],
+    bestConnector: string,
+    newResponse: string,
+    toolState: ToolState,
+  ): void {
+    this.logger.debug(
+      'Updating message content for OpenAI Responses models without prefill support',
+    );
+
+    const lastMessage = messages.at(-1);
+    const secondLastMessage = messages.at(-2);
+
+    if (!this.isMessageItem(lastMessage)) {
+      this.logger.error(
+        'Last message is not a message item - unexpected format',
+      );
+      return;
+    }
+
+    const lastContent = this.getMessageContent(lastMessage);
+
+    if (lastContent && this.containCutOffMessage(lastContent)) {
+      this.logger.debug(
+        'Last message is a user message asking to continue after cut off',
+      );
+      if (secondLastMessage) {
+        const appended = this.appendAssistantText(
+          secondLastMessage,
+          `${bestConnector}${newResponse}`,
+        );
+        const trailingMessage = messages.at(-1);
+        if (
+          this.isMessageItem(trailingMessage) &&
+          trailingMessage.role === 'user'
+        ) {
+          messages.pop();
+        } else if (!appended) {
+          messages.push(
+            this.createAssistantMessage(toolState.accumulatedOutput),
+          );
+        }
+      }
+    } else {
+      this.logger.debug(
+        'Last message is a request message rather than a continuation request',
+      );
+      messages.push(this.createAssistantMessage(toolState.accumulatedOutput));
+    }
+  }
+
+  /** Determines if generation should continue based on response content. */
+  shouldContinue(
+    stopReason: ProviderStopReason,
+    newResponse: string,
+    agentSetting: AgentSetting,
+  ): boolean {
+    return (
+      stopReason === OPENAI_CHAT_FINISH.LENGTH &&
+      !hasEndTag(agentSetting, newResponse)
+    );
+  }
+
+  /** Process reasoning summaries from the Responses API. */
   processThinkingBlock(
     responseObject: Response,
     groupId?: string,
     toolState?: ToolState,
   ): string | null {
-    // Find the first output item with type === "reasoning"
     const outputArr = responseObject?.output;
     if (!Array.isArray(outputArr)) {
       return null;
@@ -518,31 +901,24 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
     const reasoningObj = outputArr.find(
       (item) => item?.type === 'reasoning',
     ) as ResponseReasoningItem | undefined;
-    const summaryParts = reasoningObj?.summary;
-    if (!Array.isArray(summaryParts) || summaryParts.length === 0) {
+    const summaryParts = reasoningObj?.summary ?? [];
+    if (summaryParts.length === 0) {
       return null;
     }
 
-    // Concatenate all 'text' fields from the summary array
     const thoughtContent = summaryParts
-      .map((part: any) =>
-        part.type === 'summary_text' && typeof part?.text === 'string'
-          ? part.text
-          : '',
-      )
+      .map((part) => part.text)
       .join('')
       .trim();
 
-    // If toolState is provided and not already updated, add each summary part as a thinking block
     if (toolState && !toolState.thinkingAdded) {
       toolState.thinkingBlocks = summaryParts.map((part) => ({
         type: 'thinking',
-        thinking: typeof part?.text === 'string' ? part.text : '',
+        thinking: part.text,
       }));
       toolState.thinkingAdded = true;
     }
 
-    // Log a preview of the reasoning content if available
     if (thoughtContent) {
       this.logger.debug(
         `OpenAI Responses reasoning preview: ${thoughtContent.substring(0, K_SLICE)}...`,
@@ -566,15 +942,16 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
   createToolUseFollowUpMessages(
     id: string,
     name: string,
-    call: any,
+    call: ResponseFunctionToolCallItem,
     result: Record<string, unknown>,
     _toolState?: ToolState,
     text?: string,
-  ): any[] {
-    const messages: (ResponseInputItem | ChatCompletionMessageParam)[] = [];
+  ): ResponseInputItem[] {
+    const messages: ResponseInputItem[] = [];
     if (text) {
-      messages.push({ role: 'assistant', content: [{ type: 'text', text }] });
+      messages.push(this.createAssistantMessage(text));
     }
+
     const callMsg: ResponseFunctionToolCall = {
       type: 'function_call',
       call_id: id,
@@ -582,13 +959,21 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
       arguments:
         typeof call?.arguments === 'string'
           ? call.arguments
-          : JSON.stringify(call?.input ?? call?.arguments ?? {}),
+          : JSON.stringify(
+              (call as unknown as { input?: unknown; arguments?: unknown })
+                ?.input ??
+                (call as unknown as { input?: unknown; arguments?: unknown })
+                  ?.arguments ??
+                {},
+            ),
     };
+
     const resultMsg: ResponseInputItem.FunctionCallOutput = {
       type: 'function_call_output',
       call_id: id,
       output: JSON.stringify(result),
     };
+
     messages.push(callMsg, resultMsg);
     return messages;
   }
@@ -598,13 +983,206 @@ export class ModelHandlerOpenAIResponse extends ModelHandlerOpenAI {
     userMessage: string,
   ): Promise<ResponseInputItem[]> {
     messages.push({
+      type: 'message',
       role: 'user',
-      content: [{ type: 'input_text', text: userMessage }],
-    });
+      content: [
+        this.createInputText(userMessage),
+      ] as ResponseInputMessageContentList,
+    } as ResponseInputItem);
     return messages;
   }
 
-  createAssistantMessage(text: string): ChatCompletionMessageParam {
-    return { role: 'assistant', content: [{ type: 'text', text }] };
+  createAssistantMessage(text: string): EasyInputMessage {
+    return {
+      type: 'message',
+      role: 'assistant',
+      content: text,
+    } satisfies EasyInputMessage;
+  }
+
+  private createInputText(text: string): ResponseInputContent {
+    return { type: 'input_text', text };
+  }
+
+  private createOutputText(text: string): ResponseOutputText {
+    return { type: 'output_text', text, annotations: [] };
+  }
+
+  private isMessageItem(
+    item?: ResponseInputItem,
+  ): item is EasyInputMessage | ResponseInputItem.Message {
+    if (!item || typeof item !== 'object') {
+      return false;
+    }
+
+    const role = (item as { role?: unknown }).role;
+    if (typeof role !== 'string') {
+      return false;
+    }
+
+    const type = (item as { type?: unknown }).type;
+    if (typeof type === 'string' && type !== 'message') {
+      return false;
+    }
+
+    const content = (item as { content?: unknown }).content;
+    return typeof content === 'string' || this.isInputContentList(content);
+  }
+
+  private getMessageContent(
+    item?: ResponseInputItem,
+  ): ResponseInputMessageContentList | string | undefined {
+    if (!this.isMessageItem(item)) {
+      return undefined;
+    }
+    return item.content;
+  }
+
+  private isInputContentList(
+    content: unknown,
+  ): content is ResponseInputMessageContentList {
+    return (
+      Array.isArray(content) &&
+      content.every((item) => this.isInputContent(item))
+    );
+  }
+
+  private isInputContent(content: unknown): content is ResponseInputContent {
+    if (!content || typeof content !== 'object') {
+      return false;
+    }
+
+    const type = (content as { type?: unknown }).type;
+    return (
+      type === 'input_text' ||
+      type === 'input_image' ||
+      type === 'input_file' ||
+      type === 'input_audio'
+    );
+  }
+
+  private appendInputText(message: ResponseInputItem, text: string): void {
+    if (!this.isMessageItem(message)) {
+      return;
+    }
+
+    const content = message.content;
+
+    if (this.isInputContentList(content)) {
+      content.push(this.createInputText(text));
+      return;
+    }
+
+    if (typeof content === 'string') {
+      message.content = [
+        this.createInputText(content),
+        this.createInputText(text),
+      ];
+      return;
+    }
+
+    message.content = [this.createInputText(text)];
+  }
+
+  private appendAssistantText(
+    message: ResponseInputItem,
+    text: string,
+  ): boolean {
+    if (this.isAssistantOutputMessage(message)) {
+      message.content.push(this.createOutputText(text));
+      return true;
+    }
+
+    if (!this.isMessageItem(message) || message.role !== 'assistant') {
+      return false;
+    }
+
+    const { content } = message;
+
+    if (this.isInputContentList(content)) {
+      const converted = content
+        .map((part) => {
+          const type = (part as { type?: unknown }).type;
+          const partText = (part as { text?: unknown }).text;
+          if (type === 'input_text' && typeof partText === 'string') {
+            return this.createOutputText(partText);
+          }
+          return null;
+        })
+        .filter((part): part is ResponseOutputText => part !== null);
+
+      const outputMessage: ResponseOutputMessage = {
+        type: 'message',
+        role: 'assistant',
+        id: this.nextAssistantMessageId(),
+        status: 'completed',
+        content: [...converted, this.createOutputText(text)],
+      };
+
+      Object.assign(message, outputMessage);
+      return true;
+    }
+
+    if (typeof content === 'string') {
+      const outputMessage: ResponseOutputMessage = {
+        type: 'message',
+        role: 'assistant',
+        id: this.nextAssistantMessageId(),
+        status: 'completed',
+        content: [this.createOutputText(content), this.createOutputText(text)],
+      };
+      Object.assign(message, outputMessage);
+      return true;
+    }
+
+    const fallback: ResponseOutputMessage = {
+      type: 'message',
+      role: 'assistant',
+      id: this.nextAssistantMessageId(),
+      status: 'completed',
+      content: [this.createOutputText(text)],
+    };
+    Object.assign(message, fallback);
+    return true;
+  }
+
+  private isAssistantOutputMessage(
+    item?: ResponseInputItem,
+  ): item is ResponseOutputMessage {
+    if (!item || typeof item !== 'object') {
+      return false;
+    }
+
+    const role = (item as { role?: unknown }).role;
+    if (role !== 'assistant') {
+      return false;
+    }
+
+    const type = (item as { type?: unknown }).type;
+    if (typeof type === 'string' && type !== 'message') {
+      return false;
+    }
+
+    const content = (item as { content?: unknown }).content;
+    if (!Array.isArray(content)) {
+      return false;
+    }
+
+    return content.every((part) => this.isOutputText(part));
+  }
+
+  private isOutputText(part: unknown): part is ResponseOutputText {
+    return (
+      part !== null &&
+      typeof part === 'object' &&
+      (part as { type?: unknown }).type === 'output_text' &&
+      typeof (part as { text?: unknown }).text === 'string'
+    );
+  }
+
+  private nextAssistantMessageId(): string {
+    this.assistantMessageCounter += 1;
+    const suffix = this.assistantMessageCounter.toString().padStart(6, '0');
+    return `msg_${suffix}`;
   }
 }
