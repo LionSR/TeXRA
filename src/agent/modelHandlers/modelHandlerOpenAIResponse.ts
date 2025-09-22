@@ -67,7 +67,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 > {
   private previousResponseId: string | null = null;
   private sentMessages = 0;
-  private assistantMessageCounter = 0;
 
   /**
    * Manually set the previous response ID to resume a conversation.
@@ -76,7 +75,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   setPreviousResponseId(id: string | null): void {
     this.previousResponseId = id;
     this.sentMessages = 0;
-    this.assistantMessageCounter = 0;
   }
 
   /** Retrieve the stored previous response ID. */
@@ -108,7 +106,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   ): Promise<ResponseInputItem[]> {
     this.previousResponseId = null;
     this.sentMessages = 0;
-    this.assistantMessageCounter = 0;
 
     const messages: ResponseInputItem[] = [];
 
@@ -1004,10 +1001,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     return { type: 'input_text', text };
   }
 
-  private createOutputText(text: string): ResponseOutputText {
-    return { type: 'output_text', text, annotations: [] };
-  }
-
   private isMessageItem(
     item?: ResponseInputItem,
   ): item is EasyInputMessage | ResponseInputItem.Message {
@@ -1088,101 +1081,35 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     message: ResponseInputItem,
     text: string,
   ): boolean {
-    if (this.isAssistantOutputMessage(message)) {
-      message.content.push(this.createOutputText(text));
-      return true;
-    }
-
     if (!this.isMessageItem(message) || message.role !== 'assistant') {
       return false;
     }
 
     const { content } = message;
 
+    if (typeof content === 'string') {
+      message.content = `${content}${text}`;
+      return true;
+    }
+
+    let existingText = '';
     if (this.isInputContentList(content)) {
-      const converted = content
+      existingText = content
         .map((part) => {
           const type = (part as { type?: unknown }).type;
           const partText = (part as { text?: unknown }).text;
           if (type === 'input_text' && typeof partText === 'string') {
-            return this.createOutputText(partText);
+            return partText;
           }
-          return null;
+          return '';
         })
-        .filter((part): part is ResponseOutputText => part !== null);
-
-      const outputMessage: ResponseOutputMessage = {
-        type: 'message',
-        role: 'assistant',
-        id: this.nextAssistantMessageId(),
-        status: 'completed',
-        content: [...converted, this.createOutputText(text)],
-      };
-
-      Object.assign(message, outputMessage);
-      return true;
+        .join('');
     }
 
-    if (typeof content === 'string') {
-      const outputMessage: ResponseOutputMessage = {
-        type: 'message',
-        role: 'assistant',
-        id: this.nextAssistantMessageId(),
-        status: 'completed',
-        content: [this.createOutputText(content), this.createOutputText(text)],
-      };
-      Object.assign(message, outputMessage);
-      return true;
-    }
-
-    const fallback: ResponseOutputMessage = {
-      type: 'message',
-      role: 'assistant',
-      id: this.nextAssistantMessageId(),
-      status: 'completed',
-      content: [this.createOutputText(text)],
-    };
-    Object.assign(message, fallback);
-    return true;
-  }
-
-  private isAssistantOutputMessage(
-    item?: ResponseInputItem,
-  ): item is ResponseOutputMessage {
-    if (!item || typeof item !== 'object') {
-      return false;
-    }
-
-    const role = (item as { role?: unknown }).role;
-    if (role !== 'assistant') {
-      return false;
-    }
-
-    const type = (item as { type?: unknown }).type;
-    if (typeof type === 'string' && type !== 'message') {
-      return false;
-    }
-
-    const content = (item as { content?: unknown }).content;
-    if (!Array.isArray(content)) {
-      return false;
-    }
-
-    return content.every((part) => this.isOutputText(part));
-  }
-
-  private isOutputText(part: unknown): part is ResponseOutputText {
-    return (
-      part !== null &&
-      typeof part === 'object' &&
-      (part as { type?: unknown }).type === 'output_text' &&
-      typeof (part as { text?: unknown }).text === 'string'
+    Object.assign(
+      message,
+      this.createAssistantMessage(`${existingText}${text}`),
     );
-  }
-
-  private nextAssistantMessageId(): string {
-    this.assistantMessageCounter += 1;
-    const suffix = this.assistantMessageCounter.toString().padStart(6, '0');
-    return `msg_${suffix}`;
+    return true;
   }
 }
