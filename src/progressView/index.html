@@ -43,6 +43,7 @@
           "./modules/uiManagers/FileList.js": "${fileListUri}",
           "./modules/uiManagers/EventsManager.js": "${eventsUri}",
           "./modules/uiManagers/Placeholder.js": "${placeholderUri}",
+          "./modules/uiManagers/InstructionPanel.js": "${instructionPanelUri}",
           "./modules/handlers/themeHandlers.js": "${themeHandlersUri}",
           "./modules/katexMacros.js": "${katexMacrosUri}",
           "@common/webviewContext.js": "${webviewContextUri}",
@@ -84,6 +85,34 @@
           </div>
           <div id="toolbarContainer" class="header-actions button-group"></div>
         </div>
+        <div
+          id="instructionContainer"
+          class="instruction-panel"
+          aria-hidden="true"
+        >
+          <div class="instruction-panel__header">
+            <span class="instruction-panel__title">Instruction</span>
+            <div class="instruction-panel__actions">
+              <button
+                id="instructionToggleBtn"
+                class="vscode-button instruction-panel__toggle"
+                type="button"
+                aria-expanded="false"
+                aria-hidden="true"
+              >
+                <i class="codicon codicon-chevron-down" aria-hidden="true"></i>
+                <span class="instruction-panel__toggle-label">Show more</span>
+              </button>
+            </div>
+          </div>
+          <div class="instruction-panel__body">
+            <div
+              id="instructionText"
+              class="instruction-panel__text"
+              role="document"
+            ></div>
+          </div>
+        </div>
         <div id="logContent" class="log-container"></div>
         <div id="generatedFiles" class="files-container"></div>
         <div id="followUpContainer" class="follow-up-container">
@@ -99,6 +128,11 @@
             data-icon="send"
           ></button>
         </div>
+        <template id="instructionCardTemplate">
+          <div class="instruction-panel__card">
+            <div class="instruction-panel__text"></div>
+          </div>
+        </template>
         <template id="fileItemTemplate">
           <div class="file-item">
             <span class="file-name">
