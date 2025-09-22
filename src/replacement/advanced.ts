@@ -108,68 +108,40 @@ export function applyLatexQuotesFormatting(text: string): string {
 /**
  * Escapes bare underscores inside \texttt commands so they compile correctly.
  *
- * Replaces every `_` that is not already escaped inside a \texttt{...} block
- * with `\_`. Nested braces are handled so commands like \texttt{a_{b}} are
- * processed safely, and repeated runs are idempotent.
+ * Each \texttt{...} span is processed independently and underscores that are
+ * already escaped are preserved so the helper is idempotent.
  */
 export function escapeTextttUnderscores(text: string): string {
-  const textttRegex = /\\texttt\{/g;
-  let result = '';
-  let lastIndex = 0;
-  let match: RegExpExecArray | null;
+  const textttRegex = /\\texttt\{([^}]*)\}/g;
+  let totalReplacements = 0;
 
-  while ((match = textttRegex.exec(text)) !== null) {
-    const startIndex = match.index;
-    const contentStart = textttRegex.lastIndex;
-    let braceDepth = 1;
-    let i = contentStart;
+  const processedText = text.replace(
+    textttRegex,
+    (_match, rawContent: string) => {
+      let replacementCount = 0;
+      // (?<!\\)_ matches underscore not preceded by backslash
+      // This ensures we don't double-escape already escaped underscores
+      const processedContent = rawContent.replace(/(?<!\\)_/g, () => {
+        replacementCount += 1;
+        totalReplacements += 1;
+        return '\\_';
+      });
 
-    while (i < text.length && braceDepth > 0) {
-      const char = text[i];
+      logger.debug(
+        CHANNEL,
+        `Escaped ${replacementCount} underscores in texttt block`,
+      );
 
-      if (char === '\\') {
-        // Skip escaped characters so \{ and \} don't affect brace depth
-        i += 2;
-        continue;
-      }
+      return `\\texttt{${processedContent}}`;
+    },
+  );
 
-      if (char === '{') {
-        braceDepth += 1;
-      } else if (char === '}') {
-        braceDepth -= 1;
-        if (braceDepth === 0) {
-          break;
-        }
-      }
+  logger.debug(
+    CHANNEL,
+    `Finished escaping texttt underscores: ${totalReplacements} replacements total`,
+  );
 
-      i += 1;
-    }
-
-    if (braceDepth !== 0) {
-      // Unbalanced braces – append the rest of the string untouched
-      result += text.slice(lastIndex);
-      lastIndex = text.length;
-      break;
-    }
-
-    const contentEnd = i;
-    const rawContent = text.slice(contentStart, contentEnd);
-    const processedContent = rawContent.replace(/(?<!\\)_/g, '\\_');
-
-    result += text.slice(lastIndex, startIndex);
-    result += text.slice(startIndex, contentStart); // include the \texttt{
-    result += processedContent;
-    result += '}';
-
-    lastIndex = contentEnd + 1;
-    textttRegex.lastIndex = lastIndex;
-  }
-
-  if (lastIndex < text.length) {
-    result += text.slice(lastIndex);
-  }
-
-  return result;
+  return processedText;
 }
 
 /**
