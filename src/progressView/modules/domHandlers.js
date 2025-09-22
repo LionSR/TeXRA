@@ -8,6 +8,7 @@ import { FileList } from './uiManagers/FileList.js';
 import { Status } from './uiManagers/Status.js';
 import { StreamTabs } from './uiManagers/StreamTabs.js';
 import { Placeholder } from './uiManagers/Placeholder.js';
+import { InstructionPanel } from './uiManagers/InstructionPanel.js';
 import { Toolbar } from './uiManagers/Toolbar.js';
 import { UsageSummary, UsageGroup } from './usageManagers.js';
 import { BaseDomHandler } from '@common/BaseDomHandler.js';
@@ -29,6 +30,7 @@ class ProgressViewDomHandler extends BaseDomHandler {
       logEntries: new LogEntryManager(),
       events: new EventsManager(),
       placeholder: new Placeholder(),
+      instructionPanel: new InstructionPanel(),
     });
   }
 }
