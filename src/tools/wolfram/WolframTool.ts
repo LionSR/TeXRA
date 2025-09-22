@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { defineTool } from '../core/define';
 
 // Local imports - tools
-import { ToolResult, ToolError } from '../result';
+import { ToolResult, ToolError, toolResult } from '../result';
 import { executeWolframCode } from './wolframScriptUtils';
 
 const WolframInputSchema = z.object({
@@ -27,7 +27,10 @@ export class WolframTool extends defineTool({
       showErrorsToUser: false,
     });
     if (result.success) {
-      return new ToolResult({ output: result.output ?? '' });
+      return toolResult({
+        summary: 'Executed Wolfram code',
+        output: result.output ?? '',
+      });
     }
     throw new ToolError(
       `Wolfram execution failed: ${result.error ?? 'No error details available'}`,
