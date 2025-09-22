@@ -1,8 +1,12 @@
+// Standard library imports
+import * as os from 'os';
+import * as path from 'path';
+
 // Third-party imports
 import { Minimatch } from 'minimatch';
 
 // Local imports - utils
-import { WorkspaceFS } from '@utils/files';
+import { AbsoluteFS, WorkspaceFS } from '@utils/files';
 
 type GitignoreRule = {
   matcher: (value: string) => boolean;
@@ -111,6 +115,56 @@ function parseGitignore(content: string): GitignoreRule[] {
   return rules;
 }
 
+async function readWorkspaceGitignore(
+  relativePath: string,
+): Promise<GitignoreRule[]> {
+  try {
+    const exists = await WorkspaceFS.exists(relativePath);
+    if (!exists) {
+      return [];
+    }
+
+    const content = await WorkspaceFS.read(relativePath);
+    return parseGitignore(content);
+  } catch {
+    return [];
+  }
+}
+
+async function readAbsoluteGitignore(
+  absolutePath: string,
+): Promise<GitignoreRule[]> {
+  try {
+    const exists = await AbsoluteFS.exists(absolutePath);
+    if (!exists) {
+      return [];
+    }
+
+    const content = await AbsoluteFS.read(absolutePath);
+    return parseGitignore(content);
+  } catch {
+    return [];
+  }
+}
+
+async function readGlobalGitignore(): Promise<GitignoreRule[]> {
+  try {
+    const homeDirectory = os.homedir();
+    if (!homeDirectory) {
+      return [];
+    }
+
+    const candidates = [path.join(homeDirectory, '.gitignore_global')];
+
+    const ruleSets = await Promise.all(
+      candidates.map((candidate) => readAbsoluteGitignore(candidate)),
+    );
+    return ruleSets.flat();
+  } catch {
+    return [];
+  }
+}
+
 async function loadGitignoreMatcher(): Promise<GitignoreMatcher> {
   const workspacePath = WorkspaceFS.getPath();
   if (!workspacePath) {
@@ -118,13 +172,13 @@ async function loadGitignoreMatcher(): Promise<GitignoreMatcher> {
   }
 
   try {
-    const hasGitignore = await WorkspaceFS.exists('.gitignore');
-    if (!hasGitignore) {
-      return EMPTY_GITIGNORE_MATCHER;
-    }
-
-    const content = await WorkspaceFS.read('.gitignore');
-    const rules = parseGitignore(content);
+    const [globalRules, workspaceGlobalRules, workspaceRules] =
+      await Promise.all([
+        readGlobalGitignore(),
+        readWorkspaceGitignore('.gitignore_global'),
+        readWorkspaceGitignore('.gitignore'),
+      ]);
+    const rules = [...globalRules, ...workspaceGlobalRules, ...workspaceRules];
     if (rules.length === 0) {
       return EMPTY_GITIGNORE_MATCHER;
     }
