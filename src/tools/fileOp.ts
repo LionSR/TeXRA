@@ -7,7 +7,6 @@ import { defineTool } from './core/define';
 
 // Local imports - tools
 import { ToolResult, ToolError } from '@tools/result';
-import { markFileAsRead, clearTrackedFile } from './fileAccessTracker';
 import { WorkspaceFS } from '@utils/files';
 
 const FileOpInputSchema = z.object({
@@ -28,7 +27,6 @@ export class FileOpTool extends defineTool({
     switch (command) {
       case 'read': {
         const data = await WorkspaceFS.read(path);
-        markFileAsRead(path);
         return new ToolResult({ output: data });
       }
       case 'write': {
@@ -39,7 +37,6 @@ export class FileOpTool extends defineTool({
           });
         }
         await WorkspaceFS.write(path, content);
-        clearTrackedFile(path);
         return new ToolResult({ output: 'written' });
       }
       case 'append': {
@@ -50,7 +47,6 @@ export class FileOpTool extends defineTool({
           });
         }
         await WorkspaceFS.appendFile(path, content);
-        clearTrackedFile(path);
         return new ToolResult({ output: 'appended' });
       }
       default:

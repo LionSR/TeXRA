@@ -20,6 +20,16 @@ Use the `glob`, `grep`, and `ls` tools to explore the workspace without leaving 
 When derivations are required, it presents steps inside `\begin{aligned} ... \end{aligned}` blocks
 to keep mathematical discussions accurate.
 
+### `ask`
+
+The `ask` agent provides a read-only workspace companion for exploratory
+questions.
+It is limited to the `read_file`, `glob`, `grep`, and `ls` tools so it can
+inspect project files without modifying them or running arbitrary shell
+commands.
+Pick this agent when you want to look up details in the repository without the
+risk of accidental edits.
+
 ## Correction & Polishing Agents
 
 ### `correct`
