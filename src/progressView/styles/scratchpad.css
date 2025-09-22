@@ -46,6 +46,13 @@
   margin-bottom: var(--spacing-tiny);
 }
 
+.tool-output-full {
+  max-height: 240px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .tool-output-details {
   margin-top: var(--spacing-tiny);
 }
