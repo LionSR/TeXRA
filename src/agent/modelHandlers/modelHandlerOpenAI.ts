@@ -363,6 +363,10 @@ export class ModelHandlerOpenAI extends ModelHandler<
               },
             ],
           };
+          // this.logger.debug(
+          //   `Final response: ${objectToLogString(finalResponse)}`,
+          // );
+          // (1) If the request to the deepseek-reasoner model includes the tools parameter, the request will actually be processed using the deepseek-chat model.
 
           const finalReasoning = this.processThinkingBlock(finalResponse);
           thinking.finalize(finalReasoning ?? undefined);
