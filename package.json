@@ -37,6 +37,7 @@
             },
             "default": [
               "chat",
+              "ask",
               "correct",
               "polish",
               "draw",
@@ -1250,6 +1251,7 @@
     "@types/mocha": "^10.0.10",
     "@types/node": "^22.16.5",
     "@types/nunjucks": "^3.2.6",
+    "@types/turndown": "^5.0.5",
     "@types/shell-quote": "^1.7.5",
     "@types/vscode": "^1.99.1",
     "@typescript-eslint/eslint-plugin": "^8.38.0",
@@ -1330,6 +1332,7 @@
     "sortablejs": "^1.15.6",
     "split.js": "^1.6.5",
     "tar": "^7.4.3",
+    "turndown": "^7.2.1",
     "winston": "^3.17.0",
     "yaml": "^2.8.1",
     "zod": "^3.25.76",

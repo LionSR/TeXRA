@@ -106,6 +106,45 @@ export function applyLatexQuotesFormatting(text: string): string {
 }
 
 /**
+ * Escapes bare underscores inside \texttt commands so they compile correctly.
+ *
+ * Each \texttt{...} span is processed independently and underscores that are
+ * already escaped are preserved so the helper is idempotent.
+ */
+export function escapeTextttUnderscores(text: string): string {
+  const textttRegex = /\\texttt\{([^}]*)\}/g;
+  let totalReplacements = 0;
+
+  const processedText = text.replace(
+    textttRegex,
+    (_match, rawContent: string) => {
+      let replacementCount = 0;
+      // (?<!\\)_ matches underscore not preceded by backslash
+      // This ensures we don't double-escape already escaped underscores
+      const processedContent = rawContent.replace(/(?<!\\)_/g, () => {
+        replacementCount += 1;
+        totalReplacements += 1;
+        return '\\_';
+      });
+
+      logger.debug(
+        CHANNEL,
+        `Escaped ${replacementCount} underscores in texttt block`,
+      );
+
+      return `\\texttt{${processedContent}}`;
+    },
+  );
+
+  logger.debug(
+    CHANNEL,
+    `Finished escaping texttt underscores: ${totalReplacements} replacements total`,
+  );
+
+  return processedText;
+}
+
+/**
  * Helper function to convert Unicode characters to LaTeX commands
  * within math environments only
  */
