@@ -53,6 +53,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       [COMMANDS.UPDATE_FILES]: (m) => this.handleUpdateFiles(m),
       [COMMANDS.UPDATE_MISSING_OUTPUTS]: (m) =>
         this.handleUpdateMissingOutputs(m),
+      [COMMANDS.UPDATE_INSTRUCTION]: (m) => this.handleUpdateInstruction(m),
       [COMMANDS.DELETE_STREAM]: (m) => this.handleDeleteStream(m),
       [COMMANDS.DELETE_ALL]: () => this.handleDeleteAll(),
     };
@@ -103,6 +104,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     // Update status based on whether there's an active stream
     if (!message.activeStream) {
       dom.status.update(STATUS.READY);
+      dom.instructionPanel.hide();
     } else {
       const streamStatus = state.streamStatuses.get(message.activeStream);
       dom.status.update(streamStatus || STATUS.STOPPED);
@@ -251,6 +253,29 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     // State persisted server-side - no direct DOM updates needed
   }
 
+  handleUpdateInstruction(message) {
+    const activeStream = state.activeStream || '';
+
+    if (message.stream !== activeStream) {
+      if (!activeStream && !message.stream) {
+        dom.instructionPanel.hide();
+      }
+      return;
+    }
+
+    const payload = message.instruction;
+    const text = typeof payload === 'string' ? payload : (payload?.text ?? '');
+
+    if (!text || !text.trim()) {
+      dom.instructionPanel.hide();
+      return;
+    }
+
+    const metadata =
+      (payload && typeof payload === 'object' && payload.metadata) || {};
+    dom.instructionPanel.show(text, metadata);
+  }
+
   handleDeleteStream(message) {
     if (message.stream) {
       state.streamStatuses.delete(message.stream);
@@ -263,12 +288,14 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
           groupIds.push(el.id.replace('group-header-', ''));
         }
         state.toggleStates.clear(groupIds);
+        dom.instructionPanel.hide();
       }
     }
   }
 
   handleDeleteAll() {
     state.toggleStates.clearAll();
+    dom.instructionPanel.hide();
   }
 }
 
