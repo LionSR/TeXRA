@@ -28,3 +28,13 @@ export interface StreamTabInfo {
 }
 
 export type AgentFilter = AgentTypeFilter;
+
+export interface InstructionMetadata {
+  showToggle?: boolean;
+  expanded?: boolean;
+}
+
+export interface InstructionUpdate {
+  text: string;
+  metadata?: InstructionMetadata;
+}
