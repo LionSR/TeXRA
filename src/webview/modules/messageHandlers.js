@@ -134,8 +134,11 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
           }
 
           if (opt.dataset.toolUse === 'true') {
-            displayLabel += 'ᵗ';
+            displayLabel += 'ᵗ 🛠️';
             hints.push('Uses tools for actions.');
+            opt.classList.add('tool-use-option');
+          } else {
+            opt.classList.remove('tool-use-option');
           }
 
           opt.textContent = displayLabel;

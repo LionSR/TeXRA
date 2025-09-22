@@ -107,7 +107,7 @@ function decorateLabel(
     label += ' ∶∶';
   }
   if (metadata.isToolUse) {
-    label += 'ᵗ';
+    label += 'ᵗ 🛠️';
   }
   return label;
 }
@@ -121,16 +121,58 @@ export function createAgentOptionTag(
     `data-label="${encodeHtml(agentName)}"`,
   ];
 
+  const classes: string[] = [];
+
   if (!metadata.hasDefinition) {
-    attributes.push('class="disabled-option disabled-agent"');
+    classes.push('disabled-option', 'disabled-agent');
   }
   if (metadata.hasMultiple) {
     attributes.push('data-multiple="true"');
   }
   if (metadata.isToolUse) {
     attributes.push('data-tool-use="true"');
+    classes.push('tool-use-option');
+  }
+
+  if (classes.length > 0) {
+    attributes.push(`class="${classes.join(' ')}"`);
   }
 
   const label = decorateLabel(agentName, metadata);
   return `<option ${attributes.join(' ')}>${encodeHtml(label)}</option>`;
+}
+
+const WORKFLOW_GROUP_LABEL = 'Workflow Agents';
+const TOOL_USE_GROUP_LABEL = 'Tool-Use Agents';
+
+export function buildGroupedAgentOptions(
+  agentNames: string[],
+  directories: AgentDirectoryMap,
+): string {
+  const workflowOptions: string[] = [];
+  const toolUseOptions: string[] = [];
+
+  for (const agentName of agentNames) {
+    const metadata = getAgentOptionMetadata(agentName, directories);
+    const optionTag = createAgentOptionTag(agentName, metadata);
+    if (metadata.isToolUse) {
+      toolUseOptions.push(optionTag);
+      continue;
+    }
+    workflowOptions.push(optionTag);
+  }
+
+  const sections: string[] = [];
+  if (workflowOptions.length > 0) {
+    sections.push(
+      `<optgroup label="${encodeHtml(WORKFLOW_GROUP_LABEL)}" data-group="workflow">${workflowOptions.join('\n')}</optgroup>`,
+    );
+  }
+  if (toolUseOptions.length > 0) {
+    sections.push(
+      `<optgroup label="${encodeHtml(TOOL_USE_GROUP_LABEL)}" data-group="tool-use">${toolUseOptions.join('\n')}</optgroup>`,
+    );
+  }
+
+  return sections.join('\n');
 }

@@ -6,8 +6,7 @@ import * as vscode from 'vscode';
 
 // Local imports - agent utilities
 import {
-  createAgentOptionTag,
-  getAgentOptionMetadata,
+  buildGroupedAgentOptions,
   type AgentDirectoryMap,
 } from '@agent/utils/agentOptionMetadata';
 
@@ -111,12 +110,7 @@ export class MainViewContentProvider extends BaseViewContentProvider {
       }
     }
     const allAgents = Array.from(new Set([...agents, ...extraAgents]));
-    const agentOptions = allAgents
-      .map((agent) => {
-        const metadata = getAgentOptionMetadata(agent, agentDirectories);
-        return createAgentOptionTag(agent, metadata);
-      })
-      .join('\n');
+    const agentOptions = buildGroupedAgentOptions(allAgents, agentDirectories);
 
     const models = getConfig<string[]>('models', []);
     const modelOptions = models

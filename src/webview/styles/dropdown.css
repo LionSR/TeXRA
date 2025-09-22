@@ -109,3 +109,29 @@ option[data-multiple='true'] {
 option[data-tool-use='true'] {
   font-style: italic;
 }
+
+#agent optgroup {
+  font-weight: 600;
+  color: var(--vscode-descriptionForeground);
+  background-color: var(--vscode-menu-background);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: var(--spacing-tiny) var(--spacing-small);
+}
+
+#agent optgroup[data-group='tool-use'] {
+  border-top: 1px solid var(--vscode-menu-border);
+  margin-top: var(--spacing-tiny);
+  padding-top: calc(var(--spacing-tiny) * 1.5);
+}
+
+#agent optgroup option {
+  font-weight: normal;
+  text-transform: none;
+  letter-spacing: normal;
+  padding-left: var(--spacing-small);
+}
+
+option.tool-use-option {
+  color: var(--vscode-textLink-foreground);
+}

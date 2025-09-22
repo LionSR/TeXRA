@@ -7,6 +7,7 @@ import {
   createAgentOptionTag,
   getAgentOptionMetadata,
   type AgentDirectoryMap,
+  buildGroupedAgentOptions,
 } from '@agent/utils/agentOptionMetadata';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { getConfig } from '@utils/config';
@@ -67,6 +68,15 @@ export async function computeAgentOptions(
 ): Promise<string> {
   const allAgents = await getAllAgents(context);
   const dirs = await getAgentDirectories(context);
+
+  if (allAgents.length === 0) {
+    return '';
+  }
+
+  const grouped = buildGroupedAgentOptions(allAgents, dirs);
+  if (grouped) {
+    return grouped;
+  }
 
   const optionTags = allAgents.map((agent) => {
     const metadata = getAgentOptionMetadata(agent, dirs);
