@@ -1,12 +1,15 @@
 // Standard library imports
 import { Buffer } from 'node:buffer';
-import { randomUUID } from 'node:crypto';
 
 // Third-party imports
 import OpenAI, { toFile } from 'openai';
 import type {
+  EasyInputMessage,
   Response,
   ResponseUsage,
+  ResponseCreateParamsBase,
+  ResponseCreateParamsNonStreaming,
+  ResponseOutputItem,
   ResponseOutputMessage,
   ResponseOutputText,
   ResponseReasoningItem,
@@ -18,6 +21,8 @@ import type {
   ResponseInputFile,
   ResponseStreamEvent,
 } from 'openai/resources/responses/responses';
+import type { Reasoning } from 'openai/resources/shared';
+import type { ResponseStreamParams } from 'openai/lib/responses/ResponseStream';
 
 // Local imports - agent
 import type { AgentConfig } from '../core/AgentConfig';
@@ -47,6 +52,14 @@ import { cleanFileContent } from '@replacement/engine';
 import { K_SLICE, getConfig } from '@utils/config';
 import { WorkspaceFS } from '@utils/files';
 import xmlUtils from '@utils/text/xmlUtils';
+
+const SUPPORTED_IMAGE_MIME_TYPES = new Set([
+  'image/png',
+  'image/jpeg',
+  'image/jpg',
+  'image/webp',
+  'image/gif',
+]);
 
 /**
  * Handler for OpenAI's Responses API. This implementation works directly with
@@ -207,15 +220,40 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   /** Formats image/audio content for the Responses API. */
   createMediaContent(mediaMessage: MediaEntry[]): ResponseInputContent[] {
     return mediaMessage.flatMap((media): ResponseInputContent[] => {
-      if (media.media_category === 'image') {
+      const mediaType = media.media_type ?? '';
+      const normalizedType = mediaType.toLowerCase();
+
+      if (normalizedType === 'application/pdf') {
         return [
-          this.createInputText(`Image: ${media.file_name}`),
+          this.createInputText(`Document: ${media.file_name}`),
           {
-            type: 'input_image',
-            image_url: `data:${media.media_type};base64,${media.data}`,
-            detail: 'high',
+            type: 'input_file',
+            file_data: media.data,
+            filename: media.file_name,
           },
         ];
+      }
+
+      if (media.media_category === 'image') {
+        if (SUPPORTED_IMAGE_MIME_TYPES.has(normalizedType)) {
+          const mimeForDataUrl =
+            normalizedType === 'image/jpg' ? 'image/jpeg' : normalizedType;
+          return [
+            this.createInputText(`Image: ${media.file_name}`),
+            {
+              type: 'input_image',
+              image_url: `data:${mimeForDataUrl};base64,${media.data}`,
+              detail: 'high',
+            },
+          ];
+        }
+
+        if (normalizedType.startsWith('image/')) {
+          this.logger.warn(
+            `Skipping media ${media.file_name} with unsupported image MIME type: ${mediaType}`,
+          );
+          return [];
+        }
       }
 
       if (media.media_category === 'audio') {
@@ -254,17 +292,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         ];
       }
 
-      if (media.media_type === 'application/pdf') {
-        return [
-          this.createInputText(`Document: ${media.file_name}`),
-          {
-            type: 'input_file',
-            file_data: media.data,
-            filename: media.file_name,
-          },
-        ];
-      }
-
       this.logger.warn(`Unknown media category: ${media.media_category}`);
       return [];
     });
@@ -285,9 +312,11 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         continue;
       }
 
-      const contentList = (item as ResponseInputItem & {
-        content?: ResponseInputMessageContentList;
-      }).content;
+      const contentList = (
+        item as ResponseInputItem & {
+          content?: ResponseInputMessageContentList;
+        }
+      ).content;
 
       if (!Array.isArray(contentList)) {
         continue;
@@ -333,6 +362,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
       content.file_id = uploadedFile.id;
       delete content.file_data;
+      if ('filename' in content) {
+        delete content.filename;
+      }
     } catch (err) {
       this.logger.error(
         `Failed to upload file ${filename}: ${getSdkErrorMessage(err)}`,
@@ -368,7 +400,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
     await this.uploadInlineInputFiles(client, newMessages);
 
-    const params: Record<string, unknown> = {
+    const params: ResponseCreateParamsBase = {
       model: this.config.fullName,
       input: newMessages,
       max_output_tokens: this.config.maxOutputTokens,
@@ -396,17 +428,20 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       const isGpt5 = this.config.name.startsWith('gpt5');
       const includeSummary =
         !isGpt5 || getConfig<boolean>('model.gpt5ReasoningSummary', false);
-      params.reasoning = {};
+      const reasoning: Reasoning = {};
       if (includeSummary) {
-        (params.reasoning as Record<string, unknown>).summary = 'auto';
+        reasoning.summary = 'auto';
       }
       if (this.capabilities.supportsReasoningEffort) {
-        (params.reasoning as Record<string, unknown>).effort = 'high';
+        reasoning.effort = 'high';
       }
+      params.reasoning = reasoning;
     }
 
     if (useStreaming) {
-      const stream = client.responses.stream(params, { signal });
+      const { stream: _stream, ...rest } = params;
+      const streamParams: ResponseStreamParams = { ...rest, stream: true };
+      const stream = client.responses.stream(streamParams, { signal });
       const groupId = this.logger.getActiveGroupId();
       const thinking = this.createThinkingStream(groupId);
       const output = this.isOutputStreamingEnabled()
@@ -441,7 +476,14 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     }
 
     try {
-      const response = await client.responses.create(params, { signal });
+      const { stream: _nonStream, ...nonStreamRest } = params;
+      const nonStreamingParams: ResponseCreateParamsNonStreaming = {
+        ...nonStreamRest,
+        stream: false,
+      };
+      const response = await client.responses.create(nonStreamingParams, {
+        signal,
+      });
       this.previousResponseId = response.id;
       this.sentMessages = messages.length;
       return response;
@@ -471,33 +513,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       output_tokens_details: { reasoning_tokens: 0 },
     };
 
-    let newResponse = '';
-
-    if (responseObject.output_text) {
-      newResponse = responseObject.output_text.trim();
-    } else if (Array.isArray(responseObject.output)) {
-      const messageParts = responseObject.output.filter(
-        (part): part is ResponseOutputMessage =>
-          part.type === 'message' && 'content' in part,
-      );
-      if (messageParts.length > 0) {
-        newResponse = messageParts
-          .map((part) =>
-            part.content
-              .filter((c): c is ResponseOutputText => c.type === 'output_text')
-              .map((c) => c.text)
-              .join(''),
-          )
-          .join('')
-          .trim();
-      } else {
-        newResponse = responseObject.output
-          .filter((part) => 'text' in part && part.type !== 'reasoning')
-          .map((part: any) => part.text)
-          .join('')
-          .trim();
-      }
-    }
+    const newResponse = this.collectResponseText(responseObject);
 
     const stopReason =
       responseObject.status === 'completed'
@@ -513,6 +529,89 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     }
 
     return [newResponse, usage, stopReason];
+  }
+
+  private collectResponseText(responseObject: Response): string {
+    const trimmedOutputText = responseObject.output_text?.trim();
+    if (trimmedOutputText) {
+      return trimmedOutputText;
+    }
+
+    const outputItems = responseObject.output;
+    if (!Array.isArray(outputItems) || outputItems.length === 0) {
+      return '';
+    }
+
+    const messageText = this.collectMessageOutput(outputItems);
+    if (messageText) {
+      return messageText;
+    }
+
+    return this.collectFallbackOutput(outputItems);
+  }
+
+  private collectMessageOutput(
+    outputItems: ResponseOutputItem[],
+  ): string | null {
+    const messageParts = outputItems.filter(
+      (part): part is ResponseOutputMessage =>
+        part.type === 'message' && 'content' in part,
+    );
+    if (messageParts.length === 0) {
+      return null;
+    }
+
+    const aggregated = messageParts
+      .map((part) => this.extractMessageText(part.content))
+      .filter((content) => content.length > 0)
+      .join('')
+      .trim();
+
+    return aggregated.length > 0 ? aggregated : null;
+  }
+
+  private collectFallbackOutput(outputItems: ResponseOutputItem[]): string {
+    return outputItems
+      .filter(
+        (part): part is ResponseOutputItem & { text: string; type: string } =>
+          this.isTextBearingOutput(part) && part.type !== 'reasoning',
+      )
+      .map((part) => part.text)
+      .join('')
+      .trim();
+  }
+
+  private extractMessageText(
+    content: ResponseOutputMessage['content'] | string | undefined,
+  ): string {
+    if (!content) {
+      return '';
+    }
+
+    if (typeof content === 'string') {
+      return content;
+    }
+
+    if (!Array.isArray(content)) {
+      return '';
+    }
+
+    return content
+      .filter(
+        (item): item is ResponseOutputText =>
+          item?.type === 'output_text' && typeof item?.text === 'string',
+      )
+      .map((item) => item.text)
+      .join('');
+  }
+
+  private isTextBearingOutput(
+    part: ResponseOutputItem,
+  ): part is ResponseOutputItem & { text: string; type: string } {
+    return (
+      typeof (part as { text?: unknown }).text === 'string' &&
+      typeof (part as { type?: unknown }).type === 'string'
+    );
   }
 
   /** Price computation adapted for Responses API token fields. */
@@ -745,14 +844,16 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     const lastMessage = messages.at(-1);
     const secondLastMessage = messages.at(-2);
 
-    if (!lastMessage || !this.isMessageItem(lastMessage)) {
+    if (!this.isMessageItem(lastMessage)) {
       this.logger.error(
         'Last message is not a message item - unexpected format',
       );
       return;
     }
 
-    if (this.containCutOffMessage((lastMessage as any).content)) {
+    const lastContent = this.getMessageContent(lastMessage);
+
+    if (lastContent && this.containCutOffMessage(lastContent)) {
       this.logger.debug(
         'Last message is a user message asking to continue after cut off',
       );
@@ -761,9 +862,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           secondLastMessage,
           `${bestConnector}${newResponse}`,
         );
+        const trailingMessage = messages.at(-1);
         if (
-          this.isMessageItem(messages.at(-1)) &&
-          (messages.at(-1) as any).role === 'user'
+          this.isMessageItem(trailingMessage) &&
+          trailingMessage.role === 'user'
         ) {
           messages.pop();
         } else if (!appended) {
@@ -805,24 +907,20 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     const reasoningObj = outputArr.find(
       (item) => item?.type === 'reasoning',
     ) as ResponseReasoningItem | undefined;
-    const summaryParts = reasoningObj?.summary;
-    if (!Array.isArray(summaryParts) || summaryParts.length === 0) {
+    const summaryParts = reasoningObj?.summary ?? [];
+    if (summaryParts.length === 0) {
       return null;
     }
 
     const thoughtContent = summaryParts
-      .map((part: any) =>
-        part.type === 'summary_text' && typeof part?.text === 'string'
-          ? part.text
-          : '',
-      )
+      .map((part) => part.text)
       .join('')
       .trim();
 
     if (toolState && !toolState.thinkingAdded) {
       toolState.thinkingBlocks = summaryParts.map((part) => ({
         type: 'thinking',
-        thinking: typeof part?.text === 'string' ? part.text : '',
+        thinking: part.text,
       }));
       toolState.thinkingAdded = true;
     }
@@ -900,35 +998,85 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     return messages;
   }
 
-  createAssistantMessage(text: string): ResponseInputItem {
-    const message: ResponseOutputMessage = {
-      id: randomUUID(),
+  createAssistantMessage(text: string): EasyInputMessage {
+    return {
       type: 'message',
       role: 'assistant',
-      status: 'completed',
-      content: [this.createOutputText(text)],
-    };
-    return message;
+      content: text,
+    } satisfies EasyInputMessage;
   }
 
   private createInputText(text: string): ResponseInputContent {
     return { type: 'input_text', text };
   }
 
-  private createOutputText(text: string): ResponseOutputText {
-    return { type: 'output_text', text, annotations: [] };
-  }
-
-  private isMessageItem(item?: ResponseInputItem): item is ResponseInputItem & {
-    type?: 'message';
-    role?: string;
-    content?: unknown;
-  } {
+  private isMessageItem(
+    item?: ResponseInputItem,
+  ): item is EasyInputMessage | ResponseInputItem.Message {
     if (!item || typeof item !== 'object') {
       return false;
     }
-    const candidate = item as any;
-    return typeof candidate.role === 'string';
+
+    const role = (item as { role?: unknown }).role;
+    if (typeof role !== 'string') {
+      return false;
+    }
+
+    const type = (item as { type?: unknown }).type;
+    if (typeof type === 'string' && type !== 'message') {
+      return false;
+    }
+
+    const content = (item as { content?: unknown }).content;
+    return typeof content === 'string' || this.isInputContentList(content);
+  }
+
+  private getMessageContent(
+    item?: ResponseInputItem,
+  ): ResponseInputMessageContentList | string | undefined {
+    if (!this.isMessageItem(item)) {
+      return undefined;
+    }
+    return item.content;
+  }
+
+  private isInputContentList(
+    content: unknown,
+  ): content is ResponseInputMessageContentList {
+    return (
+      Array.isArray(content) &&
+      content.every((item) => this.isInputContent(item))
+    );
+  }
+
+  private isInputContent(content: unknown): content is ResponseInputContent {
+    if (!content || typeof content !== 'object') {
+      return false;
+    }
+
+    const type = (content as { type?: unknown }).type;
+    return (
+      type === 'input_text' ||
+      type === 'input_image' ||
+      type === 'input_file' ||
+      type === 'input_audio'
+    );
+  }
+
+  private isInputTextContent(
+    content: ResponseInputContent,
+  ): content is ResponseInputContent & { type: 'input_text'; text: string } {
+    return (
+      (content as { type?: unknown }).type === 'input_text' &&
+      typeof (content as { text?: unknown }).text === 'string'
+    );
+  }
+
+  private extractInputText(content: ResponseInputContent): string {
+    if (this.isInputTextContent(content)) {
+      return content.text;
+    }
+    return '';
   }
 
   private appendInputText(message: ResponseInputItem, text: string): void {
@@ -936,34 +1084,51 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       return;
     }
 
-    const content = (message as any).content;
-    if (Array.isArray(content)) {
+    const content = message.content;
+
+    if (this.isInputContentList(content)) {
       content.push(this.createInputText(text));
-    } else if (typeof content === 'string') {
-      (message as any).content = [
+      return;
+    }
+
+    if (typeof content === 'string') {
+      message.content = [
         this.createInputText(content),
         this.createInputText(text),
       ];
-    } else {
-      (message as any).content = [this.createInputText(text)];
+      return;
     }
+
+    message.content = [this.createInputText(text)];
   }
 
   private appendAssistantText(
     message: ResponseInputItem,
     text: string,
   ): boolean {
-    if (this.isMessageItem(message) && (message as any).role === 'assistant') {
-      if (Array.isArray((message as any).content)) {
-        (message as any).content.push(this.createOutputText(text));
-      } else if (typeof (message as any).content === 'string') {
-        (message as any).content = `${(message as any).content}${text}`;
-      } else {
-        (message as any).content = [this.createOutputText(text)];
-      }
+    if (!this.isMessageItem(message) || message.role !== 'assistant') {
+      return false;
+    }
+
+    const { content } = message;
+
+    if (typeof content === 'string') {
+      message.content = `${content}${text}`;
       return true;
     }
 
-    return false;
+    if (this.isInputContentList(content)) {
+      const existingText = content
+        .map((part) => this.extractInputText(part))
+        .join('');
+      Object.assign(
+        message,
+        this.createAssistantMessage(`${existingText}${text}`),
+      );
+      return true;
+    }
+
+    Object.assign(message, this.createAssistantMessage(text));
+    return true;
   }
 }

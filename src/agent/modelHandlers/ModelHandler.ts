@@ -44,7 +44,6 @@ import { getConfig } from '@utils/config';
 
 // Local imports - utilities
 import { WorkspaceFS, AbsoluteFS, getMimeType } from '@utils/files';
-import { checkMultipleToolsInstalled } from '@utils/system';
 import { normalizeUrl } from '@utils/urlUtils';
 
 // Default continuation limits
@@ -478,21 +477,8 @@ export abstract class ModelHandler<
     let mediaData: string | string[];
 
     if (ext === '.pdf') {
-      const isImageMagickInstalled = await checkMultipleToolsInstalled(
-        ['magick', 'gm'],
-        false,
-      );
-      const pageCount = await countPdfPages(mediaFile);
-
-      if (
-        (pageCount > 1 || !isImageMagickInstalled.some(Boolean)) &&
-        this.capabilities.supportsNativePdf
-      ) {
-        this.logger.debug(
-          `Using native PDF for ${mediaFile}. ImageMagick installed: ${isImageMagickInstalled.some(
-            Boolean,
-          )}, Page count: ${pageCount}`,
-        );
+      if (this.capabilities.supportsNativePdf) {
+        this.logger.debug(`Using native PDF for ${mediaFile}`);
         mediaType = 'application/pdf';
         mediaData = await getBase64EncodedMedia(mediaFile);
         return [mediaData, mediaType, 'image'];
@@ -502,18 +488,9 @@ export abstract class ModelHandler<
       this.logger.debug(`Converting PDF to PNG: ${mediaFile}`);
       const pdfResult = await processPdf2Png(mediaFile);
       if (pdfResult === null) {
-        if (this.capabilities.supportsNativePdf) {
-          this.logger.debug(
-            `PDF to PNG conversion failed. Falling back to native PDF for ${mediaFile}`,
-          );
-          mediaType = 'application/pdf';
-          mediaData = await getBase64EncodedMedia(mediaFile);
-        } else {
-          throw new Error(`Failed to process PDF file as image: ${mediaFile}`);
-        }
-      } else {
-        mediaData = pdfResult;
+        throw new Error(`Failed to process PDF file as image: ${mediaFile}`);
       }
+      mediaData = pdfResult;
     } else {
       const mimeType = getMimeType(mediaFile);
       if (mimeType && mimeType.startsWith('image/')) {
@@ -594,6 +571,27 @@ export abstract class ModelHandler<
 
       if (!fileExistsResult) {
         this.logger.error(`File not found: ${mediaFile}`);
+        mediaFileResults.push({ path: mediaFile, ok: false });
+        continue;
+      }
+
+      let fileSize: number | null = null;
+      try {
+        const stats = isAbsolutePath
+          ? await AbsoluteFS.stat(mediaFile)
+          : await WorkspaceFS.stat(mediaFile);
+        fileSize = stats.size;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        this.logger.error(
+          `Unable to read file info for ${mediaFile}: ${message}`,
+        );
+        mediaFileResults.push({ path: mediaFile, ok: false });
+        continue;
+      }
+
+      if (fileSize === 0) {
+        this.logger.warn(`Skipping empty media file: ${mediaFile}`);
         mediaFileResults.push({ path: mediaFile, ok: false });
         continue;
       }
