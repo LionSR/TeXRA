@@ -37,6 +37,7 @@
             },
             "default": [
               "chat",
+              "ask",
               "correct",
               "polish",
               "draw",
