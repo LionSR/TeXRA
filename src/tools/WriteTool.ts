@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { defineTool } from './core/define';
 
 // Local imports - tools
-import { ToolResult } from '@tools/result';
+import { ToolResult, toolResult } from '@tools/result';
 
 // Local imports - utils
 import { WorkspaceFS } from '@utils/files';
@@ -28,6 +28,9 @@ export class WriteFileTool extends defineTool({
 }) {
   protected async execute(input: WriteInput): Promise<ToolResult> {
     await WorkspaceFS.write(input.path, input.content);
-    return new ToolResult({ output: 'written' });
+    return toolResult({
+      summary: `Wrote ${input.path}`,
+      output: 'written',
+    });
   }
 }

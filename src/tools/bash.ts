@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { defineTool } from './core/define';
 
 // Local imports - tools
-import { ToolResult, ToolError } from '@tools/result';
+import { ToolResult, ToolError, toolResult } from '@tools/result';
 import { executeCommand } from '@utils/system/execUtils';
 
 const BashInputSchema = z.object({
@@ -24,7 +24,14 @@ export class BashTool extends defineTool({
   protected async execute(input: BashInput): Promise<ToolResult> {
     const result = await executeCommand(input.command, { truncate: true });
     if (result.success) {
-      return new ToolResult({ output: result.stdout || '' });
+      const commandPreview =
+        input.command.length > 60
+          ? `${input.command.slice(0, 57)}…`
+          : input.command;
+      return toolResult({
+        summary: `Ran bash: ${commandPreview}`,
+        output: result.stdout || '',
+      });
     }
     throw new ToolError(
       `Bash command failed: ${result.stderr || 'No error output available'}`,
