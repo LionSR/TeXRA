@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
-## [0.33.7] - 2025-09-18
+## [0.33.7] - 2025-09-22
 
 ### Features
 
