@@ -7,7 +7,6 @@ import { defineTool } from './core/define';
 
 // Local imports - tools
 import { ToolResult } from '@tools/result';
-import { clearTrackedFile } from './fileAccessTracker';
 
 // Local imports - utils
 import { WorkspaceFS } from '@utils/files';
@@ -29,7 +28,6 @@ export class WriteFileTool extends defineTool({
 }) {
   protected async execute(input: WriteInput): Promise<ToolResult> {
     await WorkspaceFS.write(input.path, input.content);
-    clearTrackedFile(input.path);
     return new ToolResult({ output: 'written' });
   }
 }
