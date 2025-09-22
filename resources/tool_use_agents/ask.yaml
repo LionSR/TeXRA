@@ -1,0 +1,15 @@
+name: ask
+settings:
+  agentType: toolUse
+  tools:
+    - read_file
+    - glob
+    - grep
+    - ls
+prompts:
+  systemPrompt: |
+    You answer questions by inspecting the workspace.
+    You may read files and run search or listing commands, but you must not
+    modify files or run shell commands that change the workspace state.
+  userRequest: |
+    {{ INSTRUCTION }}

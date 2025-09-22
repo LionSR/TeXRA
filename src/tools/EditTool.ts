@@ -7,7 +7,6 @@ import { defineTool } from './core/define';
 
 // Local imports - tools
 import { ToolError, ToolResult } from '@tools/result';
-import { clearTrackedFile, ensureFileWasRead } from './fileAccessTracker';
 
 // Local imports - utils
 import { WorkspaceFS } from '@utils/files';
@@ -49,11 +48,9 @@ export class EditFileTool extends defineTool({
   protected async execute(input: EditInput): Promise<ToolResult> {
     const { path: targetPath, old_string, new_string, replace_all } = input;
 
-    ensureFileWasRead(targetPath);
-
     if (old_string.length === 0) {
       throw new ToolError(
-        'old_string must not be empty. Provide the exact text to replace from read_file output.',
+        `old_string must not be empty for ${targetPath}. Provide the exact text to replace from read_file output.`,
       );
     }
 
@@ -62,22 +59,23 @@ export class EditFileTool extends defineTool({
 
     if (occurrences === 0) {
       throw new ToolError(
-        'The provided old_string was not found. Ensure it matches the read_file output exactly.',
+        `The provided old_string was not found in ${targetPath}. Ensure it matches the read_file output exactly.`,
       );
     }
 
     if (!replace_all && occurrences > 1) {
       throw new ToolError(
-        'old_string is not unique. Include more surrounding context or set replace_all to true.',
+        `old_string is not unique within ${targetPath}. Include more surrounding context or set replace_all to true.`,
       );
     }
 
+    // TODO: Reintroduce a read-before-edit guard when the tool runtime provides
+    // session-scoped state. The previous implementation persisted state across runs.
     const updatedContent = replace_all
-      ? currentContent.split(old_string).join(new_string)
+      ? currentContent.replaceAll(old_string, new_string)
       : currentContent.replace(old_string, new_string);
 
     await WorkspaceFS.write(targetPath, updatedContent);
-    clearTrackedFile(targetPath);
 
     const replacementSummary = replace_all
       ? `Replaced ${occurrences} occurrence${occurrences === 1 ? '' : 's'}.`
