@@ -13,7 +13,10 @@ import { AgentLogger } from '@logger/AgentLogger';
 import type { AgentFilter } from '../types';
 // Local imports - agent types
 import { isAgentTypeFilter } from '@agent/types/AgentStreamTypes';
-import { deriveAgentSessionKind } from '@agent/core/AgentDataclass';
+import {
+  AgentSessionKind,
+  deriveAgentSessionKind,
+} from '@agent/core/AgentDataclass';
 
 // Types
 import { TaskState } from '@logger/TaskState';
@@ -34,6 +37,7 @@ export class ProgressViewState {
   private _agentTypeFilter: AgentFilter = 'all';
   private _taskStates: Map<StreamTabId, TaskState> = new Map();
   private _executionIds: Map<StreamTabId, ExecutionId> = new Map();
+  private _sessionKindHints: Map<StreamTabId, AgentSessionKind> = new Map();
   private readonly persistence: StatePersistenceManager;
   private readonly logger: AgentLogger;
 
@@ -97,6 +101,22 @@ export class ProgressViewState {
     this.saveAgentTypeFilter();
   }
 
+  // Session kind hint management (non-persistent)
+  setSessionKindHint(
+    streamTabId: StreamTabId,
+    sessionKind: AgentSessionKind,
+  ): void {
+    this._sessionKindHints.set(streamTabId, sessionKind);
+  }
+
+  getSessionKindHint(streamTabId: StreamTabId): AgentSessionKind | undefined {
+    return this._sessionKindHints.get(streamTabId);
+  }
+
+  clearSessionKindHint(streamTabId: StreamTabId): void {
+    this._sessionKindHints.delete(streamTabId);
+  }
+
   // Task state management
   setTaskState(streamTabId: StreamTabId, taskState: TaskState): void {
     const normalizedState: TaskState = {
@@ -105,6 +125,7 @@ export class ProgressViewState {
         taskState.agentSessionKind ??
         deriveAgentSessionKind(taskState.agentType),
     };
+    this.clearSessionKindHint(streamTabId);
     this._taskStates.set(streamTabId, normalizedState);
     this.saveTaskStates();
   }
@@ -115,6 +136,7 @@ export class ProgressViewState {
 
   clearTaskState(streamTabId: StreamTabId): void {
     this._taskStates.delete(streamTabId);
+    this.clearSessionKindHint(streamTabId);
     this.saveTaskStates();
   }
 
@@ -145,6 +167,7 @@ export class ProgressViewState {
     this._usageStats.deleteStream(stream);
     this._taskStates.delete(stream);
     this._executionIds.delete(stream);
+    this.clearSessionKindHint(stream);
 
     // Update active stream if necessary
     if (this._activeStream === stream) {
@@ -165,6 +188,7 @@ export class ProgressViewState {
     // Clear display-related data (matching original eraseStream behavior)
     this._taskGroups.deleteStream(stream);
     this._outputFiles.deleteStream(stream);
+    this.clearSessionKindHint(stream);
 
     // NOTE: Preserve taskStates and executionIds - these are needed for re-run functionality
     // NOTE: Preserve usageStats - these were not cleared in original implementation
@@ -178,6 +202,7 @@ export class ProgressViewState {
     this._usageStats.clear();
     this._taskStates.clear();
     this._executionIds.clear();
+    this._sessionKindHints.clear();
     this._activeStream = '';
     this.saveActiveStream();
     this.saveTaskStates();
