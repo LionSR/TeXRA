@@ -10,7 +10,7 @@ import { z } from 'zod';
 import { defineTool } from '../core/define';
 
 // Local imports - tools
-import { ToolError, ToolResult } from '../result';
+import { ToolError, ToolResult, toolResult } from '../result';
 
 const WebFetchInputSchema = z
   .object({
@@ -144,6 +144,9 @@ export class WebFetchTool extends defineTool({
       sections.push('No readable content was extracted from the provided URL.');
     }
 
-    return new ToolResult({ output: sections.join('\n\n') });
+    return toolResult({
+      summary: `Fetched ${url}`,
+      output: sections.join('\n\n'),
+    });
   }
 }

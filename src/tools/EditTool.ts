@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { defineTool } from './core/define';
 
 // Local imports - tools
-import { ToolError, ToolResult } from '@tools/result';
+import { ToolError, ToolResult, toolResult } from '@tools/result';
 
 // Local imports - utils
 import { WorkspaceFS } from '@utils/files';
@@ -80,7 +80,15 @@ export class EditFileTool extends defineTool({
     const replacementSummary = replace_all
       ? `Replaced ${occurrences} occurrence${occurrences === 1 ? '' : 's'}.`
       : 'Replaced 1 occurrence.';
+    const summary = replace_all
+      ? `Edited ${targetPath}: replaced ${occurrences} occurrence${
+          occurrences === 1 ? '' : 's'
+        }`
+      : `Edited ${targetPath}: replaced 1 occurrence`;
 
-    return new ToolResult({ output: replacementSummary });
+    return toolResult({
+      summary,
+      output: replacementSummary,
+    });
   }
 }
