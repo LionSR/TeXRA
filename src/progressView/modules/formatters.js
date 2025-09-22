@@ -586,8 +586,11 @@ export class LogEntryFormatter {
         .map((section) => section.trim())
         .join('<hr class="tool-use-separator">');
 
-      formattedContent = detailMarkup || `<pre>${safeContent}</pre>`;
+      // Use formatted sections if we have any, otherwise show a minimal view
+      formattedContent =
+        detailMarkup || '<div class="tool-use-empty">Tool executed</div>';
     } else if (parsed !== undefined) {
+      // Fallback for other parsed formats (shouldn't normally reach here for tool use)
       formattedContent = `<pre>${encodeHtml(JSON.stringify(parsed, null, 2))}</pre>`;
     } else {
       // If not valid JSON, just display as-is in a pre block
