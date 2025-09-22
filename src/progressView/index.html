@@ -92,20 +92,30 @@
         >
           <div class="instruction-panel__header">
             <span class="instruction-panel__title">Instruction</span>
-            <div class="instruction-panel__actions">
+            <div class="instruction-panel__actions button-group">
+              <button
+                id="instructionCopyBtn"
+                class="vscode-button instruction-panel__copy"
+                type="button"
+                data-icon="copy"
+                title="Copy instruction"
+                aria-label="Copy instruction"
+                data-default-title="Copy instruction"
+                data-success-title="Copied!"
+                disabled
+              ></button>
               <button
                 id="instructionToggleBtn"
-                class="vscode-button instruction-panel__toggle"
+                class="vscode-button instruction-panel__toggle is-hidden"
                 type="button"
+                data-icon="chevron-down"
                 aria-expanded="false"
+                aria-label="Expand instruction"
                 aria-hidden="true"
-              >
-                <i class="codicon codicon-chevron-down" aria-hidden="true"></i>
-                <span class="instruction-panel__toggle-label">Show more</span>
-              </button>
+              ></button>
             </div>
           </div>
-          <div class="instruction-panel__body">
+          <div class="instruction-panel__body" role="presentation">
             <div
               id="instructionText"
               class="instruction-panel__text"
@@ -128,11 +138,6 @@
             data-icon="send"
           ></button>
         </div>
-        <template id="instructionCardTemplate">
-          <div class="instruction-panel__card">
-            <div class="instruction-panel__text"></div>
-          </div>
-        </template>
         <template id="fileItemTemplate">
           <div class="file-item">
             <span class="file-name">
