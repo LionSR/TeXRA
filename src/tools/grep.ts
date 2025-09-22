@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { defineTool } from './core/define';
 
 // Local imports - tools
-import { ToolError, ToolResult } from '@tools/result';
+import { ToolError, ToolResult, toolResult } from '@tools/result';
 import { resolveAndFormat } from '@tools/utils';
 
 // Local imports - utils
@@ -122,11 +122,15 @@ export class GrepTool extends defineTool({
     }
 
     const limitedOutput = applyHeadLimit(result.stdout, input.head_limit);
-
+    const outputText =
+      limitedOutput || `No matches found for pattern in ${display}`;
     const summary = limitedOutput
-      ? limitedOutput
-      : `No matches found for pattern in ${display}`;
+      ? `Matches for "${input.pattern}" in ${display}`
+      : `No matches for "${input.pattern}" in ${display}`;
 
-    return new ToolResult({ output: summary });
+    return toolResult({
+      summary,
+      output: outputText,
+    });
   }
 }
