@@ -1106,6 +1106,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         .join('');
     }
 
+    // It could be that: If an assistant message's content is not a string or a recognized input content list (e.g., ResponseOutputMessage with output_text parts), its existing content is not extracted. This results in existingText being empty, and the original message content is completely overwritten by the new appended text. But we will see if that is the case.
+
     Object.assign(
       message,
       this.createAssistantMessage(`${existingText}${text}`),
