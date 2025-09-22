@@ -466,21 +466,25 @@ export class LogEntryFormatter {
           : typeof parsed.name === 'string'
             ? parsed.name.trim()
             : '';
-      
+
       // Update header to show tool name and error state
       if (headerLabel && toolName) {
         let headerText = `Tool Use: ${toolName}`;
-        
+
         // Add error information to the header if present
         if (parsed.error) {
-          const errorText = typeof parsed.error === 'string' ? parsed.error : 'Error occurred';
+          const errorText =
+            typeof parsed.error === 'string' ? parsed.error : 'Error occurred';
           // Truncate error message if too long
-          const truncatedError = errorText.length > 50 ? errorText.substring(0, 50) + '...' : errorText;
+          const truncatedError =
+            errorText.length > 50
+              ? errorText.substring(0, 50) + '...'
+              : errorText;
           headerText = `Tool Use: ${toolName} - ❌ ${truncatedError}`;
         } else if (parsed.isError === true) {
           headerText = `Tool Use: ${toolName} - ❌ Error`;
         }
-        
+
         headerLabel.textContent = headerText;
       }
 
@@ -496,10 +500,11 @@ export class LogEntryFormatter {
       } else {
         // No summary, show the full output with vertical limit
         const sections = [];
-        
+
         // Add input section if present
         if (Object.prototype.hasOwnProperty.call(parsed, 'input')) {
-          const inputJson = JSON.stringify(parsed.input, null, 2) ?? 'undefined';
+          const inputJson =
+            JSON.stringify(parsed.input, null, 2) ?? 'undefined';
           sections.push(`
             <div class="tool-use-section">
               <div class="tool-use-subsection">
@@ -511,11 +516,14 @@ export class LogEntryFormatter {
         }
 
         // Add output section with vertical limit
-        const hasOutput = Object.prototype.hasOwnProperty.call(parsed, 'output');
+        const hasOutput = Object.prototype.hasOwnProperty.call(
+          parsed,
+          'output',
+        );
         if (hasOutput) {
           const outputValue = parsed.output;
           let outputDisplay;
-          
+
           if (typeof outputValue === 'string') {
             // Limit the number of lines for display
             const MAX_LINES = 10;
@@ -528,7 +536,8 @@ export class LogEntryFormatter {
               outputDisplay = encodeHtml(outputValue);
             }
           } else {
-            const outputJson = JSON.stringify(outputValue, null, 2) ?? 'undefined';
+            const outputJson =
+              JSON.stringify(outputValue, null, 2) ?? 'undefined';
             // Also limit JSON output
             const lines = outputJson.split('\n');
             const MAX_LINES = 10;
@@ -540,7 +549,7 @@ export class LogEntryFormatter {
               outputDisplay = encodeHtml(outputJson);
             }
           }
-          
+
           sections.push(`
             <div class="tool-use-section">
               <div class="tool-use-subsection">
@@ -553,7 +562,10 @@ export class LogEntryFormatter {
 
         // Add error section if present (and no summary)
         if (parsed.error) {
-          const errorText = typeof parsed.error === 'string' ? parsed.error : JSON.stringify(parsed.error, null, 2);
+          const errorText =
+            typeof parsed.error === 'string'
+              ? parsed.error
+              : JSON.stringify(parsed.error, null, 2);
           sections.push(`
             <div class="tool-use-section">
               <div class="tool-use-subsection">

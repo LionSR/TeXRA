@@ -9,6 +9,21 @@ import type { ExtendedTokenUsageStats } from '@agent/types/UsageTypes';
 import { maybeSaveDebugObject } from '@agent/utils/debugMessageSaver';
 // Utility to run iterative tool-use cycles
 
+// Helper to extract defined fields from objects
+const extractDefinedFields = (
+  obj: Record<string, any>,
+  allowedKeys?: string[],
+): Record<string, any> => {
+  const result: Record<string, any> = {};
+  for (const [key, value] of Object.entries(obj)) {
+    if (value === undefined) continue;
+    if (key === 'isError' && value !== true) continue;
+    if (allowedKeys && !allowedKeys.includes(key)) continue;
+    result[key] = value;
+  }
+  return result;
+};
+
 // Third-party imports
 
 // Local imports - log
@@ -178,18 +193,12 @@ export async function runToolUseCycle<C = unknown>(
       const errorMsg = `Malformed tool JSON: ${err instanceof Error ? err.message : String(err)}`;
 
       // Log the failed tool use attempt
-      const errorResult = new ToolResult({ error: errorMsg, isError: true });
-      const errorPayload = errorResult.toLogPayload();
-      const toolUseLog: Record<string, unknown> = {
+      const toolUseLog = {
         tool: 'unknown',
         input: toolInfo,
+        error: errorMsg,
+        isError: true,
       };
-      if (errorResult.summary !== undefined) {
-        toolUseLog.summary = errorResult.summary;
-      }
-      if (errorPayload !== undefined) {
-        toolUseLog.output = errorPayload;
-      }
       logger.info(
         JSON.stringify(toolUseLog, null, 2),
         groupId,
@@ -205,14 +214,13 @@ export async function runToolUseCycle<C = unknown>(
     if (!name) {
       const errorMsg = `Tool JSON missing name: ${JSON.stringify(parsed)}`;
 
-      // Log the failed tool use attempt with available info
-      const errorResult = new ToolResult({ error: errorMsg, isError: true });
-      const toolUseLog: Record<string, unknown> = {
+      // Log the failed tool use attempt
+      const toolUseLog = {
         tool: 'unknown',
         input: parsed,
         error: errorMsg,
         isError: true,
-      }
+      };
       logger.info(
         JSON.stringify(toolUseLog, null, 2),
         groupId,
@@ -289,20 +297,12 @@ export async function runToolUseCycle<C = unknown>(
       toolInput = parsed;
     }
 
-    // Build the tool use log entry with all relevant fields
-    const toolUseLog: Record<string, unknown> = {
+    // Build the tool use log entry
+    const toolUseLog = {
       tool: name,
       input: toolInput,
+      ...extractDefinedFields(result),
     };
-    
-    // Add all result fields to the log
-    if (result.summary !== undefined) toolUseLog.summary = result.summary;
-    if (result.output !== undefined) toolUseLog.output = result.output;
-    if (result.error !== undefined) toolUseLog.error = result.error;
-    if (result.base64Image !== undefined) toolUseLog.base64Image = result.base64Image;
-    if (result.system !== undefined) toolUseLog.system = result.system;
-    if (result.diagnostics !== undefined) toolUseLog.diagnostics = result.diagnostics;
-    if (result.isError) toolUseLog.isError = true;
 
     logger.info(
       JSON.stringify(toolUseLog, null, 2),
@@ -311,13 +311,13 @@ export async function runToolUseCycle<C = unknown>(
       toolUseLog,
     );
 
-    // Build provider-specific message containing the tool result
-    // Build result object for model API - only include defined fields
-    const resultObj: Record<string, unknown> = {};
-    if (result.output !== undefined) resultObj.output = result.output;
-    if (result.error !== undefined) resultObj.error = result.error;
-    if (result.base64Image !== undefined) resultObj.base64Image = result.base64Image;
-    if (result.system !== undefined) resultObj.system = result.system;
+    // Build result object for model API - only include content fields
+    const resultObj = extractDefinedFields(result, [
+      'output',
+      'error',
+      'base64Image',
+      'system',
+    ]);
 
     const followUpMsgs = modelHandler.createToolUseFollowUpMessages(
       id,
