@@ -381,6 +381,10 @@ export class ModelHandlerOpenAI extends ModelHandler<
             (chunk.choices[0]?.delta as any)?.reasoning_content ?? '';
           const contentDelta = chunk.choices[0]?.delta?.content ?? '';
           if (reasoningDelta) thinking.append(reasoningDelta);
+          // Here the support for streaming of thinking of grok model seem to be broken.
+          // if (reasoningDelta) {
+          //   this.logger.debug(`Reasoning delta: ${reasoningDelta}`);
+          // }
           if (contentDelta) output?.append(contentDelta);
         }
 
