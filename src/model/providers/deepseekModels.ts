@@ -28,6 +28,7 @@ export const DEEPSEEK_MODELS: Record<string, ModelConfig> = {
     capabilities: {
       ...DEEPSEEK_DEFAULT_CAPABILITIES,
       supportsAssistantPrefill: true,
+      supportsFunctionCalling: true,
     } satisfies ModelCapabilities,
     openRouterOnly: false,
   },
@@ -44,6 +45,7 @@ export const DEEPSEEK_MODELS: Record<string, ModelConfig> = {
       ...DEEPSEEK_DEFAULT_CAPABILITIES,
       supportsReasoning: true,
       supportsReasoningEffort: false,
+      supportsFunctionCalling: false,
     } satisfies ModelCapabilities,
     openRouterOnly: false,
   },
