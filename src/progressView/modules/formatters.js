@@ -251,9 +251,9 @@ export class LogEntryFormatter {
             ),
           'scratchpad',
         ),
-      toolUse: (text, id, groupId, timestamp) =>
+      toolUse: (text, id, groupId, timestamp, data) =>
         this._safeFormat(
-          () => this._formatToolUse(text, id, groupId, timestamp),
+          () => this._formatToolUse(text, id, groupId, timestamp, data),
           'tool use',
         ),
       modelResponse: (params) =>
@@ -348,7 +348,7 @@ export class LogEntryFormatter {
       ) {
         // Pass the full logMessage for access to groupId and timestamp
         // Note: timestamp here is numeric (from Date.now())
-        result = formatter(text, id, groupId, timestamp);
+        result = formatter(text, id, groupId, timestamp, data);
       } else if (messageType === 'userMessage') {
         // User message needs text, id, and timestamp
         result = formatter(text, id, timestamp);
@@ -428,7 +428,7 @@ export class LogEntryFormatter {
     return element;
   }
 
-  _formatToolUse(content, logId, groupId, timestamp) {
+  _formatToolUse(content, logId, groupId, timestamp, data) {
     const element = createFromTemplate('toolUseTemplate');
     if (!element) return null;
 
@@ -442,12 +442,23 @@ export class LogEntryFormatter {
       headerLabel.textContent = 'Tool Use';
     }
 
-    let formattedContent;
-    try {
-      // Decode HTML entities before parsing - log messages are encoded in transport
-      const decodedContent = decodeHtml(content);
-      const parsed = JSON.parse(decodedContent);
+    const safeContent = content ?? '';
+    const decodedContent = decodeHtml(safeContent);
 
+    const logData =
+      data && typeof data === 'object' && data !== null ? data : undefined;
+
+    let parsed = logData;
+    if (!parsed) {
+      try {
+        parsed = JSON.parse(decodedContent);
+      } catch {
+        parsed = undefined;
+      }
+    }
+
+    let formattedContent;
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
       const toolName =
         typeof parsed.tool === 'string'
           ? parsed.tool.trim()
@@ -458,34 +469,72 @@ export class LogEntryFormatter {
         headerLabel.textContent = `Tool Use: ${toolName}`;
       }
 
-      // Check if this is the new combined format
-      if (parsed.tool && parsed.input && parsed.output) {
-        // Format combined tool input/output
-        const inputJson = JSON.stringify(parsed.input, null, 2);
-        const outputJson = JSON.stringify(parsed.output, null, 2);
+      const summaryText =
+        typeof parsed.summary === 'string' && parsed.summary.trim().length > 0
+          ? parsed.summary.trim()
+          : undefined;
 
-        formattedContent = `
+      const hasOutput = Object.prototype.hasOwnProperty.call(parsed, 'output');
+      const outputValue = hasOutput ? parsed.output : undefined;
+      const fallbackSummary =
+        !summaryText && typeof outputValue === 'string' && outputValue.trim()
+          ? outputValue
+          : undefined;
+
+      const summaryMarkup =
+        summaryText || fallbackSummary
+          ? `<div class="tool-use-summary">${encodeHtml(
+              summaryText || fallbackSummary,
+            )}</div>`
+          : '';
+
+      const sections = [];
+      if (Object.prototype.hasOwnProperty.call(parsed, 'input')) {
+        const inputJson = JSON.stringify(parsed.input, null, 2) ?? 'undefined';
+        sections.push(`
           <div class="tool-use-section">
             <div class="tool-use-subsection">
               <span class="tool-use-sublabel">Input:</span>
-              <pre>${inputJson}</pre>
+              <pre>${encodeHtml(inputJson)}</pre>
             </div>
           </div>
-          <hr class="tool-use-separator">
+        `);
+      }
+
+      if (hasOutput) {
+        let outputMarkup;
+        if (typeof outputValue === 'string') {
+          outputMarkup = `<pre>${encodeHtml(outputValue)}</pre>`;
+        } else {
+          const outputJson = JSON.stringify(outputValue, null, 2);
+          outputMarkup = `<pre>${encodeHtml(outputJson ?? 'undefined')}</pre>`;
+        }
+        sections.push(`
           <div class="tool-use-section">
             <div class="tool-use-subsection">
               <span class="tool-use-sublabel">Output:</span>
-              <pre>${outputJson}</pre>
+              ${outputMarkup}
             </div>
-          </div>`;
-      } else {
-        // Legacy format - just display as before
-        formattedContent = `<pre>${JSON.stringify(parsed, null, 2)}</pre>`;
+          </div>
+        `);
       }
-    } catch {
+
+      const detailMarkup = sections
+        .map((section) => section.trim())
+        .join('<hr class="tool-use-separator">');
+      const divider =
+        summaryMarkup && detailMarkup ? '<hr class="tool-use-separator">' : '';
+
+      formattedContent =
+        summaryMarkup || detailMarkup
+          ? `${summaryMarkup}${divider}${detailMarkup}`
+          : `<pre>${safeContent}</pre>`;
+    } else if (parsed !== undefined) {
+      formattedContent = `<pre>${encodeHtml(JSON.stringify(parsed, null, 2))}</pre>`;
+    } else {
       // If not valid JSON, just display as-is in a pre block
       // This preserves any HTML entities in error messages
-      formattedContent = `<pre>${content}</pre>`;
+      formattedContent = `<pre>${safeContent}</pre>`;
     }
 
     const toggleIcon = element.querySelector('.toggle-icon');

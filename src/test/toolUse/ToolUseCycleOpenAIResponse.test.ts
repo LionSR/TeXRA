@@ -26,15 +26,15 @@ import {
   DEFAULT_MODEL_CAPABILITIES,
 } from '@model/ModelConfig';
 import { BaseTool } from '@tools/core/base';
-import { ToolResult } from '@tools/result';
+import type { ToolResultLike } from '@tools/result';
 import type OpenAI from 'openai';
 
 class EchoTool extends BaseTool<{ value: string }> {
   constructor() {
     super({ name: 'echo' }, z.object({ value: z.string() }));
   }
-  protected async execute(input: { value: string }): Promise<ToolResult> {
-    return new ToolResult({ output: input.value });
+  protected async execute(input: { value: string }): Promise<ToolResultLike> {
+    return { summary: `Echo: ${input.value}`, output: input.value };
   }
 }
 
@@ -153,6 +153,10 @@ describe('runToolUseCycle OpenAIResponse', () => {
       (e) => e.logMessage.messageType === MESSAGE_TYPES.TOOL_USE,
     );
     assert.equal(toolEvents.length, 2);
+    const toolLog = toolEvents.find((e) => e.logMessage.data?.tool === 'echo');
+    assert.ok(toolLog);
+    assert.equal(toolLog?.logMessage.data?.summary, 'Echo: hello');
+    assert.equal(toolLog?.logMessage.data?.output, 'hello');
     const assistantMsg = messages[0] as any;
     assert.equal(assistantMsg.role, 'assistant');
     assert.equal(assistantMsg.type, 'message');

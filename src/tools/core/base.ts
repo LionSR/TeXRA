@@ -3,7 +3,7 @@ import { z, ZodError } from 'zod';
 
 // Local imports - tools
 import type { ToolDefinition } from '@model';
-import { ToolResult } from '@tools/result';
+import { ToolResult, type ToolResultLike } from '@tools/result';
 
 export abstract class BaseTool<T> {
   readonly definition: ToolDefinition;
@@ -36,7 +36,8 @@ export abstract class BaseTool<T> {
   async call(rawInput: unknown): Promise<ToolResult> {
     try {
       const input = this.validate(rawInput);
-      return await this.execute(input);
+      const executionResult = await this.execute(input);
+      return ToolResult.from(executionResult);
     } catch (err) {
       if (err instanceof ZodError) {
         return new ToolResult({
@@ -56,5 +57,5 @@ export abstract class BaseTool<T> {
     }
   }
 
-  protected abstract execute(input: T): Promise<ToolResult>;
+  protected abstract execute(input: T): Promise<ToolResultLike>;
 }

@@ -178,15 +178,23 @@ export async function runToolUseCycle<C = unknown>(
       const errorMsg = `Malformed tool JSON: ${err instanceof Error ? err.message : String(err)}`;
 
       // Log the failed tool use attempt
-      const toolUseLog = {
+      const errorResult = new ToolResult({ error: errorMsg, isError: true });
+      const errorPayload = errorResult.toLogPayload();
+      const toolUseLog: Record<string, unknown> = {
         tool: 'unknown',
         input: toolInfo,
-        output: new ToolResult({ error: errorMsg, isError: true }),
       };
+      if (errorResult.summary !== undefined) {
+        toolUseLog.summary = errorResult.summary;
+      }
+      if (errorPayload !== undefined) {
+        toolUseLog.output = errorPayload;
+      }
       logger.info(
         JSON.stringify(toolUseLog, null, 2),
         groupId,
         MESSAGE_TYPES.TOOL_USE,
+        toolUseLog,
       );
       break;
     }
@@ -198,15 +206,23 @@ export async function runToolUseCycle<C = unknown>(
       const errorMsg = `Tool JSON missing name: ${JSON.stringify(parsed)}`;
 
       // Log the failed tool use attempt with available info
-      const toolUseLog = {
+      const errorResult = new ToolResult({ error: errorMsg, isError: true });
+      const errorPayload = errorResult.toLogPayload();
+      const toolUseLog: Record<string, unknown> = {
         tool: 'unknown',
         input: parsed,
-        output: new ToolResult({ error: errorMsg, isError: true }),
       };
+      if (errorResult.summary !== undefined) {
+        toolUseLog.summary = errorResult.summary;
+      }
+      if (errorPayload !== undefined) {
+        toolUseLog.output = errorPayload;
+      }
       logger.info(
         JSON.stringify(toolUseLog, null, 2),
         groupId,
         MESSAGE_TYPES.TOOL_USE,
+        toolUseLog,
       );
       break;
     }
@@ -278,25 +294,27 @@ export async function runToolUseCycle<C = unknown>(
       toolInput = parsed;
     }
 
-    const toolUseLog = {
+    const logPayload = result.toLogPayload();
+    const toolUseLog: Record<string, unknown> = {
       tool: name,
       input: toolInput,
-      output: result,
     };
+    if (result.summary !== undefined) {
+      toolUseLog.summary = result.summary;
+    }
+    if (logPayload !== undefined) {
+      toolUseLog.output = logPayload;
+    }
 
     logger.info(
       JSON.stringify(toolUseLog, null, 2),
       groupId,
       MESSAGE_TYPES.TOOL_USE,
+      toolUseLog,
     );
 
     // Build provider-specific message containing the tool result
-    const resultObj: Record<string, unknown> = {};
-    if (result.output !== undefined) resultObj.output = result.output;
-    if (result.error !== undefined) resultObj.error = result.error;
-    if (result.base64Image !== undefined)
-      resultObj.base64Image = result.base64Image;
-    if (result.system !== undefined) resultObj.system = result.system;
+    const resultObj = result.toModelPayload();
 
     const followUpMsgs = modelHandler.createToolUseFollowUpMessages(
       id,

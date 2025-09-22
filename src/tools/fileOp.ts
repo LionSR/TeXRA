@@ -7,6 +7,7 @@ import { defineTool } from './core/define';
 
 // Local imports - tools
 import { ToolResult, ToolError } from '@tools/result';
+import type { ToolResultLike } from '@tools/result';
 import { WorkspaceFS } from '@utils/files';
 
 const FileOpInputSchema = z.object({
@@ -22,12 +23,15 @@ export class FileOpTool extends defineTool({
   description: 'Perform basic file operations',
   schema: FileOpInputSchema,
 }) {
-  protected async execute(input: FileOpInput): Promise<ToolResult> {
+  protected async execute(input: FileOpInput): Promise<ToolResultLike> {
     const { command, path, content } = input;
     switch (command) {
       case 'read': {
         const data = await WorkspaceFS.read(path);
-        return new ToolResult({ output: data });
+        return {
+          summary: `Read ${path}`,
+          output: data,
+        };
       }
       case 'write': {
         if (content === undefined) {
@@ -37,7 +41,10 @@ export class FileOpTool extends defineTool({
           });
         }
         await WorkspaceFS.write(path, content);
-        return new ToolResult({ output: 'written' });
+        return {
+          summary: `Wrote ${path}`,
+          output: 'written',
+        };
       }
       case 'append': {
         if (content === undefined) {
@@ -47,7 +54,10 @@ export class FileOpTool extends defineTool({
           });
         }
         await WorkspaceFS.appendFile(path, content);
-        return new ToolResult({ output: 'appended' });
+        return {
+          summary: `Appended to ${path}`,
+          output: 'appended',
+        };
       }
       default:
         throw new ToolError(
