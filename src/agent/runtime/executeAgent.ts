@@ -6,7 +6,7 @@ import { glob } from 'glob';
 import * as vscode from 'vscode';
 
 // Local imports - agent
-import { getStreamTabId } from '@/logger/streamUtils';
+import { computeStreamTabId } from '@agent/utils/streamIdUtils';
 
 // Local imports - agent components
 import { AgentConfigSchema } from '@agent/core/AgentConfig';
@@ -471,15 +471,10 @@ export async function executeAgent(
 
       // Get appropriate agent class and create instance
       const AgentClass = getAgentClass(agentSetting);
-      const streamTabId = getStreamTabId(
-        fullConfig.agent,
-        fullConfig.model,
-        fullConfig.inputFile,
-        {
-          agentType: agentSetting.agentType,
-          executionId,
-          useMultipleOutputs: fullConfig.useMultipleOutputs,
-        },
+      const streamTabId = computeStreamTabId(
+        fullConfig,
+        agentSetting.agentType,
+        executionId,
       );
       const agent = new AgentClass(
         modelHandler,
@@ -543,15 +538,10 @@ export async function executeMergeAgent(
         'merge',
       );
 
-      const streamTabId = getStreamTabId(
-        agentConfig.agent,
-        agentConfig.model,
-        agentConfig.inputFile,
-        {
-          agentType: agentSetting.agentType,
-          executionId: undefined,
-          useMultipleOutputs: agentConfig.useMultipleOutputs,
-        },
+      const streamTabId = computeStreamTabId(
+        agentConfig,
+        agentSetting.agentType,
+        undefined,
       );
       const agent = new MergeAgent(
         modelHandler,

@@ -59,9 +59,12 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
     this.agentPath = agentPath;
     this.executionId = executionId;
 
-    this.streamTabId =
-      streamTabId ??
-      buildStreamTabId(
+    // Use provided stream ID or compute fallback
+    if (streamTabId) {
+      this.streamTabId = streamTabId;
+    } else {
+      // Fallback to computing stream ID if not provided
+      this.streamTabId = buildStreamTabId(
         this.agentConfig.agent,
         this.agentConfig.model,
         this.agentConfig.inputFile,
@@ -71,8 +74,16 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
           useMultipleOutputs: this.agentConfig.useMultipleOutputs,
         },
       );
+    }
 
     this.logger = new AgentLogger(this.streamTabId, true);
+    
+    // Log when falling back to computed stream ID for debugging
+    if (!streamTabId) {
+      this.logger.debug(
+        `Stream ID not provided in constructor, computed fallback: ${this.streamTabId}`,
+      );
+    }
     this.modelHandler.setLogger(this.logger);
     this.usageMonitor = new UsageMonitor(
       this.modelHandler,

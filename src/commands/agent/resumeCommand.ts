@@ -24,8 +24,8 @@ import type { ExecutionId } from '@agent/types/IdentifierTypes';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import { MODEL_CONFIGS } from '@model/ModelRegistry';
 
-// Local imports - log
-import { getStreamTabId } from '@/logger/streamUtils';
+// Local imports - agent utils
+import { computeStreamTabId } from '@agent/utils/streamIdUtils';
 
 function isToolUseAgent(setting: AgentSetting): boolean {
   return setting.agentType === AgentType.ToolUse;
@@ -70,18 +70,20 @@ async function buildToolUseAgent(
     throw new Error('Attempted to resume a non tool-use agent.');
   }
 
+  // Validate execution ID before casting
+  const executionId = snapshot.executionId;
+  if (!executionId) {
+    throw new Error('Missing execution ID in session snapshot.');
+  }
+
   const agent = new BaseToolUseAgent(
     modelHandler,
     fullConfig,
     agentSetting,
     agentPrompt as AgentPrompt,
     agentPath,
-    snapshot.executionId as ExecutionId,
-    getStreamTabId(fullConfig.agent, fullConfig.model, fullConfig.inputFile, {
-      agentType: agentSetting.agentType,
-      executionId: snapshot.executionId as ExecutionId,
-      useMultipleOutputs: fullConfig.useMultipleOutputs,
-    }),
+    executionId as ExecutionId,
+    computeStreamTabId(fullConfig, agentSetting.agentType, executionId as ExecutionId),
   );
 
   agent.resumeFromSnapshot(snapshot);
