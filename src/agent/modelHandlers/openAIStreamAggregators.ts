@@ -9,6 +9,21 @@ import type {
   ChatCompletionMessageToolCall,
 } from 'openai/resources/chat/completions';
 
+const MAX_TOOL_CALLS = 100;
+
+type ExtendedChoiceDelta = ChatCompletionChunk.Choice.Delta & {
+  reasoning_content?: unknown;
+  content?: unknown;
+};
+
+type ToolCallDelta = ChatCompletionChunk.Choice.Delta.ToolCall;
+
+type FunctionCallDelta = ChatCompletionChunk.Choice.Delta.FunctionCall;
+
+type ChatCompletionMessageWithReasoning = ChatCompletionMessage & {
+  reasoning_content?: string;
+};
+
 /**
  * Delta information returned when processing a streaming chunk.
  */
@@ -40,69 +55,45 @@ export interface OpenAIStreamAggregator {
   finalize(): ChatCompletion;
 }
 
-interface AggregatedToolCall
-  extends Partial<Omit<ChatCompletionMessageToolCall, 'function'>> {
-  index?: number;
-  function?: {
-    name?: string;
-    arguments?: string;
-  };
-}
-
-interface AggregatedFunctionCall {
-  name: string;
-  arguments: string;
-}
-
 /**
  * Shared aggregator for providers that do not emit a final completion payload.
  */
 export class OpenAIStreamDeltaAggregator implements OpenAIStreamAggregator {
   private readonly contentParts: string[] = [];
   private readonly reasoningParts: string[] = [];
-  private readonly aggregatedToolCalls: AggregatedToolCall[] = [];
-  private aggregatedFunctionCall: AggregatedFunctionCall | null = null;
-  private role: string | undefined;
+  private readonly aggregatedToolCalls = new Map<number, ToolCallDelta>();
+  private aggregatedFunctionCall: FunctionCallDelta | null = null;
+  private role: ChatCompletionMessage['role'] | undefined;
   private lastChunk: ChatCompletionChunk | null = null;
 
   ingest(chunk: ChatCompletionChunk): StreamAggregatorDelta {
     this.lastChunk = chunk;
 
-    const delta = chunk.choices?.[0]?.delta ?? {};
+    const delta = (chunk.choices?.[0]?.delta ?? {}) as ExtendedChoiceDelta;
     const updates: StreamAggregatorDelta = {};
 
-    if (delta && typeof delta === 'object' && 'role' in delta) {
-      const maybeRole = (delta as { role?: unknown }).role;
-      if (typeof maybeRole === 'string') {
-        this.role = maybeRole;
-      }
+    if (delta.role === 'assistant') {
+      this.role = delta.role;
     }
 
-    const reasoningDelta = this.collectText(
-      (delta as { reasoning_content?: unknown }).reasoning_content,
-    );
+    const reasoningDelta = this.collectText(delta.reasoning_content);
     if (reasoningDelta) {
       this.reasoningParts.push(reasoningDelta);
       updates.reasoningDelta = reasoningDelta;
     }
 
-    const contentDelta = this.collectText(
-      (delta as { content?: unknown }).content,
-    );
+    const contentDelta = this.collectText(delta.content);
     if (contentDelta) {
       this.contentParts.push(contentDelta);
       updates.contentDelta = contentDelta;
     }
 
-    const toolCalls = (delta as { tool_calls?: unknown }).tool_calls;
-    if (Array.isArray(toolCalls)) {
-      this.aggregateToolCalls(toolCalls as AggregatedToolCall[]);
+    if (Array.isArray(delta.tool_calls)) {
+      this.aggregateToolCalls(delta.tool_calls as ToolCallDelta[]);
     }
 
-    const functionCall = (delta as { function_call?: AggregatedFunctionCall })
-      .function_call;
-    if (functionCall) {
-      this.aggregateFunctionCall(functionCall);
+    if (delta.function_call) {
+      this.aggregateFunctionCall(delta.function_call as FunctionCallDelta);
     }
 
     return updates;
@@ -118,27 +109,25 @@ export class OpenAIStreamDeltaAggregator implements OpenAIStreamAggregator {
 
   finalize(): ChatCompletion {
     const lastChunk = this.lastChunk;
-    const message: ChatCompletionMessage = {
+    const message: ChatCompletionMessageWithReasoning = {
       role: this.role ?? 'assistant',
       content: this.getAggregatedContent(),
-    } as ChatCompletionMessage;
+      refusal: null,
+    };
 
     const reasoning = this.getAggregatedReasoning();
     if (reasoning) {
-      (
-        message as unknown as ChatCompletionMessage & {
-          reasoning_content?: string;
-        }
-      ).reasoning_content = reasoning;
+      message.reasoning_content = reasoning;
     }
 
     const toolCalls = this.normalizeToolCalls();
     if (toolCalls.length > 0) {
-      message.tool_calls = toolCalls as ChatCompletionMessageToolCall[];
+      message.tool_calls = toolCalls;
     }
 
     if (this.aggregatedFunctionCall) {
-      const { name, arguments: args } = this.aggregatedFunctionCall;
+      const name = this.aggregatedFunctionCall.name ?? '';
+      const args = this.aggregatedFunctionCall.arguments ?? '';
       if (name || args) {
         message.function_call = {
           name,
@@ -147,21 +136,25 @@ export class OpenAIStreamDeltaAggregator implements OpenAIStreamAggregator {
       }
     }
 
+    const finishReason =
+      lastChunk?.choices?.[0]?.finish_reason ?? 'stop';
+
     const response: ChatCompletion = {
-      id: lastChunk?.id ?? 'stream-aggregated',
+      id: lastChunk?.id ?? `stream-aggregated-${Date.now()}`,
       object: 'chat.completion',
       created: lastChunk?.created ?? Math.floor(Date.now() / 1000),
-      model: lastChunk?.model ?? '',
+      model: lastChunk?.model ?? 'stream-aggregated-model',
       system_fingerprint: lastChunk?.system_fingerprint,
-      usage: lastChunk?.usage,
+      usage: lastChunk?.usage ?? undefined,
       choices: [
         {
           index: 0,
           message,
-          finish_reason: lastChunk?.choices?.[0]?.finish_reason ?? undefined,
+          finish_reason: finishReason,
+          logprobs: null,
         },
       ],
-    } as ChatCompletion;
+    };
 
     return response;
   }
@@ -192,14 +185,17 @@ export class OpenAIStreamDeltaAggregator implements OpenAIStreamAggregator {
         .join('');
     }
 
-    if (typeof value === 'object' && 'text' in (value as Record<string, unknown>)) {
+    if (
+      typeof value === 'object' &&
+      'text' in (value as Record<string, unknown>)
+    ) {
       return (value as { text?: string }).text ?? '';
     }
 
     return '';
   }
 
-  private aggregateToolCalls(toolCalls: AggregatedToolCall[]): void {
+  private aggregateToolCalls(toolCalls: ToolCallDelta[]): void {
     for (const toolCall of toolCalls) {
       if (!toolCall) {
         continue;
@@ -210,36 +206,36 @@ export class OpenAIStreamDeltaAggregator implements OpenAIStreamAggregator {
           ? toolCall.index
           : 0;
 
-      while (this.aggregatedToolCalls.length <= index) {
-        this.aggregatedToolCalls.push({
-          id: '',
-          type: 'function',
-          function: { name: '', arguments: '' },
-        });
+      if (
+        !this.aggregatedToolCalls.has(index) &&
+        this.aggregatedToolCalls.size >= MAX_TOOL_CALLS
+      ) {
+        continue;
       }
 
-      const target = this.aggregatedToolCalls[index];
+      const target = this.ensureToolCallSlot(index);
+
       if (toolCall.id) {
-        target.id = this.appendString(target.id, toolCall.id as string);
+        target.id = this.appendString(target.id, toolCall.id);
       }
       if (toolCall.type) {
         target.type = toolCall.type;
       }
       if (toolCall.function) {
         const fn = target.function ?? { name: '', arguments: '' };
-        fn.name = this.appendString(fn.name, toolCall.function.name ?? '');
+        fn.name = this.appendString(fn.name, toolCall.function.name);
         fn.arguments = this.appendString(
           fn.arguments,
-          toolCall.function.arguments ?? '',
+          toolCall.function.arguments,
         );
         target.function = fn;
       }
     }
   }
 
-  private aggregateFunctionCall(functionCall: AggregatedFunctionCall): void {
+  private aggregateFunctionCall(functionCall: FunctionCallDelta): void {
     if (!this.aggregatedFunctionCall) {
-      this.aggregatedFunctionCall = { name: '', arguments: '' };
+      this.aggregatedFunctionCall = {};
     }
 
     this.aggregatedFunctionCall.name = this.appendString(
@@ -252,19 +248,81 @@ export class OpenAIStreamDeltaAggregator implements OpenAIStreamAggregator {
     );
   }
 
-  private normalizeToolCalls(): AggregatedToolCall[] {
-    return this.aggregatedToolCalls.filter((call) => {
-      const hasId = typeof call.id === 'string' && call.id.length > 0;
-      const hasName =
-        typeof call.function?.name === 'string' && call.function.name.length > 0;
-      const hasArgs =
-        typeof call.function?.arguments === 'string' &&
-        call.function.arguments.length > 0;
-      return hasId || hasName || hasArgs;
-    });
+  private normalizeToolCalls(): ChatCompletionMessageToolCall[] {
+    const sortedEntries = Array.from(this.aggregatedToolCalls.entries()).sort(
+      (a, b) => a[0] - b[0],
+    );
+
+    const normalized: ChatCompletionMessageToolCall[] = [];
+
+    for (const [, call] of sortedEntries) {
+      const maybeCall = this.toMessageToolCall(call);
+      if (maybeCall) {
+        normalized.push(maybeCall);
+      }
+    }
+
+    return normalized;
   }
 
-  private appendString(existing: string | undefined, addition: string): string {
+  private ensureToolCallSlot(index: number): ToolCallDelta {
+    let existing = this.aggregatedToolCalls.get(index);
+    if (!existing) {
+      existing = {
+        index,
+        id: '',
+        type: 'function',
+        function: { name: '', arguments: '' },
+      };
+      this.aggregatedToolCalls.set(index, existing);
+      return existing;
+    }
+
+    if (!existing.function) {
+      existing.function = { name: '', arguments: '' };
+    } else {
+      existing.function = {
+        name: existing.function.name ?? '',
+        arguments: existing.function.arguments ?? '',
+      };
+    }
+
+    if (typeof existing.id !== 'string') {
+      existing.id = '';
+    }
+
+    if (!existing.type) {
+      existing.type = 'function';
+    }
+
+    return existing;
+  }
+
+  private toMessageToolCall(
+    call: ToolCallDelta,
+  ): ChatCompletionMessageToolCall | null {
+    const id = typeof call.id === 'string' ? call.id : '';
+    const fnName = call.function?.name ?? '';
+    const fnArgs = call.function?.arguments ?? '';
+
+    if (!id && !fnName && !fnArgs) {
+      return null;
+    }
+
+    return {
+      id,
+      type: call.type ?? 'function',
+      function: {
+        name: fnName,
+        arguments: fnArgs,
+      },
+    };
+  }
+
+  private appendString(
+    existing: string | undefined,
+    addition?: string,
+  ): string {
     if (!addition) {
       return existing ?? '';
     }
