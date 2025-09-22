@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { defineTool } from './core/define';
 
 // Local imports - tools
-import { ToolResult } from '@tools/result';
+import type { ToolResultLike } from '@tools/result';
 
 // Local imports - utils
 import { WorkspaceFS } from '@utils/files';
@@ -26,8 +26,11 @@ export class WriteFileTool extends defineTool({
     'Overwrite a workspace file with the provided content. Creates the file if it does not exist.',
   schema: WriteInputSchema,
 }) {
-  protected async execute(input: WriteInput): Promise<ToolResult> {
+  protected async execute(input: WriteInput): Promise<ToolResultLike> {
     await WorkspaceFS.write(input.path, input.content);
-    return new ToolResult({ output: 'written' });
+    return {
+      summary: `Wrote ${input.path}`,
+      output: 'written',
+    };
   }
 }

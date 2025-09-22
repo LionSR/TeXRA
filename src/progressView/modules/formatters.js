@@ -476,10 +476,13 @@ export class LogEntryFormatter {
 
       const hasOutput = Object.prototype.hasOwnProperty.call(parsed, 'output');
       const outputValue = hasOutput ? parsed.output : undefined;
-      const fallbackSummary =
-        !summaryText && typeof outputValue === 'string' && outputValue.trim()
-          ? outputValue
-          : undefined;
+      let fallbackSummary;
+      if (!summaryText && typeof outputValue === 'string') {
+        const trimmedOutput = outputValue.trim();
+        if (trimmedOutput.length > 0) {
+          fallbackSummary = trimmedOutput;
+        }
+      }
 
       const summaryMarkup =
         summaryText || fallbackSummary

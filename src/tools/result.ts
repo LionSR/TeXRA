@@ -6,7 +6,7 @@ export type ErrorDiagnostics =
   | { name: string; stack?: string } // For regular errors
   | unknown; // For other types of diagnostics
 
-export interface ToolResultInit {
+type ToolResultInit = {
   output?: string;
   error?: string;
   base64Image?: string;
@@ -14,9 +14,9 @@ export interface ToolResultInit {
   isError?: boolean;
   diagnostics?: ErrorDiagnostics;
   summary?: string;
-}
+};
 
-export type ToolResultLike = ToolResult | ToolResultInit | string;
+export type ToolResultLike = ToolResult | string | ToolResultInit;
 
 export class ToolResult {
   output?: string;
@@ -35,7 +35,7 @@ export class ToolResult {
     isError = false,
     diagnostics,
     summary,
-  }: ToolResultInit) {
+  }: ToolResultInit = {}) {
     this.output = output;
     this.error = error;
     this.base64Image = base64Image;

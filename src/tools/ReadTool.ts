@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { defineTool } from './core/define';
 
 // Local imports - tools
-import { ToolResult } from '@tools/result';
+import type { ToolResultLike } from '@tools/result';
 
 // Local imports - utils
 import { WorkspaceFS } from '@utils/files';
@@ -24,8 +24,11 @@ export class ReadFileTool extends defineTool({
   description: 'Read and return the contents of a workspace file.',
   schema: ReadInputSchema,
 }) {
-  protected async execute(input: ReadInput): Promise<ToolResult> {
+  protected async execute(input: ReadInput): Promise<ToolResultLike> {
     const content = await WorkspaceFS.read(input.path);
-    return new ToolResult({ output: content });
+    return {
+      summary: `Read ${input.path}`,
+      output: content,
+    };
   }
 }
