@@ -7,7 +7,7 @@ import { z } from 'zod';
 import { defineTool } from '../core/define';
 
 // Local imports - tools
-import { ToolResult, ToolError } from '../result';
+import { ToolResult, ToolError, toolResult } from '../result';
 
 const WebSearchInputSchema = z.object({
   query: z.string(),
@@ -45,8 +45,14 @@ export class WebSearchTool extends defineTool({
       }
     }
     if (results.length === 0) {
-      return new ToolResult({ output: 'No results found.' });
+      return toolResult({
+        summary: `Search "${query}" (no results)`,
+        output: 'No results found.',
+      });
     }
-    return new ToolResult({ output: results.join('\n') });
+    return toolResult({
+      summary: `Search "${query}"`,
+      output: results.join('\n'),
+    });
   }
 }

@@ -3,7 +3,7 @@ import { z, ZodError } from 'zod';
 
 // Local imports - tools
 import type { ToolDefinition } from '@model';
-import { ToolResult } from '@tools/result';
+import { ToolResult, toolResult } from '@tools/result';
 
 export abstract class BaseTool<T> {
   readonly definition: ToolDefinition;
@@ -39,7 +39,7 @@ export abstract class BaseTool<T> {
       return await this.execute(input);
     } catch (err) {
       if (err instanceof ZodError) {
-        return new ToolResult({
+        return toolResult({
           error: 'Invalid input',
           isError: true,
           diagnostics: err.issues,
@@ -48,7 +48,7 @@ export abstract class BaseTool<T> {
       const message = err instanceof Error ? err.message : String(err);
       const diagnostics =
         err instanceof Error ? { name: err.name, stack: err.stack } : undefined;
-      return new ToolResult({
+      return toolResult({
         error: message,
         isError: true,
         diagnostics,
