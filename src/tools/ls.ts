@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { defineTool } from './core/define';
 
 // Local imports - tools
-import { ToolError, ToolResult } from '@tools/result';
+import { ToolError, ToolResult, toolResult } from '@tools/result';
 import {
   createGlobMatcher,
   joinWorkspaceRelativePath,
@@ -51,6 +51,7 @@ export class LsTool extends defineTool({
     const { resolved: target, display } = resolveAndFormat(input.path);
     const relative = target.relative === '.' ? '.' : target.relative;
     const gitignore = await getGitignoreMatcher();
+    const summary = `Listing for ${display}`;
 
     let stats: vscode.FileStat | undefined;
     try {
@@ -75,7 +76,8 @@ export class LsTool extends defineTool({
         matchesCustomIgnore(display) ||
         matchesCustomIgnore(relativePosix)
       ) {
-        return new ToolResult({
+        return toolResult({
+          summary,
           output: formatToolOutput(
             `Listing for ${display}`,
             null,
@@ -83,7 +85,8 @@ export class LsTool extends defineTool({
           ),
         });
       }
-      return new ToolResult({
+      return toolResult({
+        summary,
         output: formatToolOutput(
           `Listing for ${display}`,
           formatEntry(display, vscode.FileType.File),
@@ -92,7 +95,8 @@ export class LsTool extends defineTool({
     }
 
     if (relative !== '.' && gitignore.ignores(relative)) {
-      return new ToolResult({
+      return toolResult({
+        summary,
         output: formatToolOutput(
           `Listing for ${display}`,
           null,
@@ -124,7 +128,8 @@ export class LsTool extends defineTool({
     const sorted = filtered.sort(([a], [b]) => a.localeCompare(b));
     const formatted = sorted.map(([name, type]) => formatEntry(name, type));
 
-    return new ToolResult({
+    return toolResult({
+      summary,
       output: formatToolOutput(`Listing for ${display}`, formatted),
     });
   }

@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { defineTool } from './core/define';
 
 // Local imports - tools
-import { ToolResult, ToolError } from './result';
+import { ToolResult, ToolError, toolResult } from './result';
 import {
   getLinterMessages,
   countDiagnosticsBySeverity,
@@ -31,12 +31,18 @@ export class DiagnosticsTool extends defineTool({
     switch (command) {
       case 'list': {
         const messages = await getLinterMessages(path);
-        return new ToolResult({ output: JSON.stringify(messages) });
+        return toolResult({
+          summary: `Diagnostics list for ${path}`,
+          output: JSON.stringify(messages),
+        });
       }
       case 'count': {
         const messages = await getLinterMessages(path);
         const counts = countDiagnosticsBySeverity(messages);
-        return new ToolResult({ output: JSON.stringify(counts) });
+        return toolResult({
+          summary: `Diagnostics count for ${path}`,
+          output: JSON.stringify(counts),
+        });
       }
       default:
         throw new ToolError(
