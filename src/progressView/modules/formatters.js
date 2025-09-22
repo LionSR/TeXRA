@@ -459,9 +459,16 @@ export class LogEntryFormatter {
 
     let formattedContent;
     if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-      // Extract tool name
-      const toolName =
-        typeof parsed.tool === 'string'
+      // Check if this is a raw tool result (has output/summary but no tool field)
+      // vs a proper tool use log (has tool field)
+      const isRawResult =
+        !parsed.tool &&
+        (parsed.output !== undefined || parsed.summary !== undefined);
+
+      // Extract tool name - for raw results, we won't have a tool name
+      const toolName = isRawResult
+        ? 'Tool Result' // Generic name for raw results
+        : typeof parsed.tool === 'string'
           ? parsed.tool.trim()
           : typeof parsed.name === 'string'
             ? parsed.name.trim()
