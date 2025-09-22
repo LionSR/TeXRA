@@ -106,6 +106,73 @@ export function applyLatexQuotesFormatting(text: string): string {
 }
 
 /**
+ * Escapes bare underscores inside \texttt commands so they compile correctly.
+ *
+ * Replaces every `_` that is not already escaped inside a \texttt{...} block
+ * with `\_`. Nested braces are handled so commands like \texttt{a_{b}} are
+ * processed safely, and repeated runs are idempotent.
+ */
+export function escapeTextttUnderscores(text: string): string {
+  const textttRegex = /\\texttt\{/g;
+  let result = '';
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = textttRegex.exec(text)) !== null) {
+    const startIndex = match.index;
+    const contentStart = textttRegex.lastIndex;
+    let braceDepth = 1;
+    let i = contentStart;
+
+    while (i < text.length && braceDepth > 0) {
+      const char = text[i];
+
+      if (char === '\\') {
+        // Skip escaped characters so \{ and \} don't affect brace depth
+        i += 2;
+        continue;
+      }
+
+      if (char === '{') {
+        braceDepth += 1;
+      } else if (char === '}') {
+        braceDepth -= 1;
+        if (braceDepth === 0) {
+          break;
+        }
+      }
+
+      i += 1;
+    }
+
+    if (braceDepth !== 0) {
+      // Unbalanced braces – append the rest of the string untouched
+      result += text.slice(lastIndex);
+      lastIndex = text.length;
+      break;
+    }
+
+    const contentEnd = i;
+    const rawContent = text.slice(contentStart, contentEnd);
+    const processedContent = rawContent.replace(/(?<!\\)_/g, '\\_');
+
+    result += text.slice(lastIndex, startIndex);
+    result += text.slice(startIndex, contentStart); // include the \texttt{
+    result += processedContent;
+    result += '}';
+
+    lastIndex = contentEnd + 1;
+    textttRegex.lastIndex = lastIndex;
+  }
+
+  if (lastIndex < text.length) {
+    result += text.slice(lastIndex);
+  }
+
+  return result;
+}
+
+/**
  * Helper function to convert Unicode characters to LaTeX commands
  * within math environments only
  */
