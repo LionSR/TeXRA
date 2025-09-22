@@ -59,6 +59,7 @@ export function buildStreamInfos(
 ): StreamTabInfo[] {
   const infos = state.streamTabs.keys().reduce<StreamTabInfo[]>((acc, id) => {
     const taskState = state.getTaskState(id);
+    const sessionKindHint = state.getSessionKindHint(id);
     const logs = state.streamTabs.get(id);
     const lastTimestamp =
       logs && logs.length > 0 ? logs[logs.length - 1].timestamp : undefined;
@@ -69,7 +70,9 @@ export function buildStreamInfos(
     const agentName = taskState?.agentConfig.agent || id.split('@')[0];
     const agentType = taskState?.agentType;
     const agentSessionKind =
-      taskState?.agentSessionKind ?? deriveAgentSessionKind(agentType);
+      taskState?.agentSessionKind ??
+      sessionKindHint ??
+      deriveAgentSessionKind(agentType);
     if (!matchesAgentFilter(agentSessionKind, filter)) {
       return acc;
     }
