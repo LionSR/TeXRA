@@ -37,19 +37,17 @@ const ToolStateSnapshotSchema = z.object({
   thinkingAdded: z.boolean(),
 });
 
-const ToolUseSessionSnapshotSchema = z
-  .object({
+const ToolUseSessionSnapshotSchema = z.strictObject({
     version: z.literal(SNAPSHOT_VERSION),
     executionId: z.string(),
     streamId: z.string(),
     agentName: z.string(),
     model: z.string(),
-    agentSessionKind: z.nativeEnum(AgentSessionKind),
+    agentSessionKind: z.enum(AgentSessionKind),
     messages: z.array(z.unknown()),
     toolState: ToolStateSnapshotSchema,
     lastUpdated: z.number(),
-  })
-  .strict();
+  });
 
 export type ToolUseSessionSnapshot = z.infer<
   typeof ToolUseSessionSnapshotSchema

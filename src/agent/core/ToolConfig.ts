@@ -10,17 +10,15 @@ import { z } from 'zod';
  * We explicitly strip unknown properties to remain backward compatible
  * with legacy settings that may still include removed flags.
  */
-export const ToolConfigSchema = z
-  .object({
-    reflect: z.boolean().default(false),
-    autoExtractFigure: z.boolean().default(false),
-    autoExtractTikzFigure: z.boolean().default(false),
-    attachTeXCount: z.boolean().default(false),
-    attachDiagnostics: z.boolean().default(false),
-    printInputPrompt: z.boolean().default(false),
-    autoCompileInputPdf: z.boolean().default(false),
+export const ToolConfigSchema = z.object({
+    reflect: z.boolean().prefault(false),
+    autoExtractFigure: z.boolean().prefault(false),
+    autoExtractTikzFigure: z.boolean().prefault(false),
+    attachTeXCount: z.boolean().prefault(false),
+    attachDiagnostics: z.boolean().prefault(false),
+    printInputPrompt: z.boolean().prefault(false),
+    autoCompileInputPdf: z.boolean().prefault(false),
   })
-  .strip()
-  .default({});
+  .prefault({});
 
 export type ToolConfig = z.infer<typeof ToolConfigSchema>;

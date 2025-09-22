@@ -6,7 +6,7 @@ import { BaseTool } from './base';
 export function defineTool<T>(def: {
   name: string;
   description: string;
-  schema: z.ZodSchema<T>;
+  schema: z.ZodJSONSchema<T>;
 }) {
   const baseDefinition: ToolDefinition = {
     name: def.name,
