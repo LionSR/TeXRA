@@ -13,7 +13,11 @@ import { ProgressViewState } from '../state/ProgressViewState';
 import { buildStreamInfos } from '../streamInfoUtils';
 import type { StreamTabInfo } from '../types';
 import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
-import { AgentType, deriveAgentSessionKind } from '@agent/core/AgentDataclass';
+import {
+  AgentType,
+  AgentSessionKind,
+  resolveAgentSessionMetadata,
+} from '@agent/core/AgentDataclass';
 
 // Types
 import type { TokenUsageStats } from '@agent/types/UsageTypes';
@@ -21,7 +25,7 @@ import { bus } from '@eventBus/ProgressEventBus';
 import { AgentLogger } from '@logger/AgentLogger';
 import { LogMessageData, TaskGroup } from '@logger/LogTypes';
 import { parseLegacyLogData } from '@logger/logUtils';
-import { TaskState } from '@logger/TaskState';
+import { TaskState, isWorkflowTaskState } from '@logger/TaskState';
 import { getConfig } from '@utils/config';
 
 // Type aliases for status values
@@ -119,11 +123,17 @@ export class ProgressEventHandler {
    * Handle setting active stream
    */
   private handleSetActiveStream(
-    payload: { stream: StreamTabId; agentType?: AgentType | null } | string,
+    payload:
+      | {
+          stream: StreamTabId;
+          agentType?: AgentType | null;
+          agentSessionKind?: AgentSessionKind | null;
+        }
+      | string,
   ): void {
-    const { stream, agentType } =
+    const { stream, agentType, agentSessionKind } =
       typeof payload === 'string'
-        ? { stream: payload, agentType: undefined }
+        ? { stream: payload, agentType: undefined, agentSessionKind: undefined }
         : payload;
 
     if (!stream) {
@@ -134,12 +144,15 @@ export class ProgressEventHandler {
     // This handles the case where setActiveStream is called before any logs
     this.state.streamTabs.ensureStream(stream);
 
-    const sessionKindHint = deriveAgentSessionKind(agentType);
-    this.state.setSessionKindHint(stream, sessionKindHint);
+    const metadata = resolveAgentSessionMetadata(agentType, agentSessionKind);
+    this.state.setSessionKindHint(stream, metadata.agentSessionKind);
 
     const currentFilter = this.state.agentTypeFilter;
-    if (currentFilter !== 'all' && currentFilter !== sessionKindHint) {
-      this.state.agentTypeFilter = sessionKindHint;
+    if (
+      currentFilter !== 'all' &&
+      currentFilter !== metadata.agentSessionKind
+    ) {
+      this.state.agentTypeFilter = metadata.agentSessionKind;
     }
 
     this.state.activeStream = stream;
@@ -274,9 +287,10 @@ export class ProgressEventHandler {
         `Received setTaskState for ${streamTabId} but no state was stored`,
       );
     } else {
-      const sessionKind =
-        normalizedState.agentSessionKind ??
-        deriveAgentSessionKind(normalizedState.agentType);
+      const sessionKind = resolveAgentSessionMetadata(
+        normalizedState.agentType,
+        normalizedState.agentSessionKind,
+      ).agentSessionKind;
       const currentFilter = this.state.agentTypeFilter;
       const activeStream = this.state.activeStream;
 
@@ -341,7 +355,7 @@ export class ProgressEventHandler {
       // Only clear output-related fields, preserve other task state data
       taskState.agentConfig.outputFiles = [];
       taskState.agentConfig.useMultipleOutputs = false;
-      if (taskState.activeFiles) {
+      if (isWorkflowTaskState(taskState)) {
         taskState.activeFiles.output = false;
       }
       this.state.setTaskState(streamTabId, taskState);
