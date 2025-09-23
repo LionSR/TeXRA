@@ -1,14 +1,9 @@
-// Standard library imports
-import * as path from 'path';
-
 // Third-party imports
 import * as vscode from 'vscode';
 
 // Local imports - agent utilities
-import {
-  buildGroupedAgentOptions,
-  type AgentDirectoryMap,
-} from '@agent/utils/agentOptionMetadata';
+import { buildGroupedAgentOptions } from '@agent/utils/agentOptionMetadata';
+import { loadAgentOptionInputsSync } from '@agent/utils/agentOptionSources';
 
 // Local imports - webview
 import {
@@ -16,7 +11,6 @@ import {
   ModuleDescriptor,
 } from '@common/webview/BaseViewContentProvider';
 import { getConfig } from '@utils/config';
-import { GlobalStorageFS, AbsoluteFS } from '@utils/files';
 
 export class MainViewContentProvider extends BaseViewContentProvider {
   constructor(context: vscode.ExtensionContext) {
@@ -79,38 +73,8 @@ export class MainViewContentProvider extends BaseViewContentProvider {
   }
 
   protected getTemplateVariables(): Record<string, any> {
-    // Note: This uses synchronous approach for template generation
-    // Agent options with metadata are computed asynchronously via computeAgentOptions
-    const agents = getConfig<string[]>('agents', []);
-    const includeToolUse = getConfig<boolean>('includeToolUseAgents', false);
-    const toolUseDir = GlobalStorageFS.fullPath('tool_use_agents');
-    const builtInDir = GlobalStorageFS.fullPath('agents');
-    const configuredCustomDir = getConfig<string>(
-      'explorer.agentsDirectory',
-      '',
-    ).trim();
-    const customDir = path.isAbsolute(configuredCustomDir)
-      ? configuredCustomDir
-      : '';
-
-    const agentDirectories: AgentDirectoryMap = {
-      custom: customDir,
-      builtIn: builtInDir,
-      builtInToolUse: includeToolUse ? toolUseDir : '',
-    };
-    let extraAgents: string[] = [];
-    if (includeToolUse) {
-      try {
-        const files = AbsoluteFS.readDirSync(toolUseDir);
-        extraAgents = files
-          .filter((f) => f.endsWith('.yaml'))
-          .map((f) => path.basename(f, '.yaml'));
-      } catch {
-        extraAgents = [];
-      }
-    }
-    const allAgents = Array.from(new Set([...agents, ...extraAgents]));
-    const agentOptions = buildGroupedAgentOptions(allAgents, agentDirectories);
+    const { agentNames, directories } = loadAgentOptionInputsSync(this.context);
+    const agentOptions = buildGroupedAgentOptions(agentNames, directories);
 
     const models = getConfig<string[]>('models', []);
     const modelOptions = models
