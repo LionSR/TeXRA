@@ -12,11 +12,7 @@ import {
   AgentTypeFilter,
   isAgentTypeFilter,
 } from '@agent/types/AgentStreamTypes';
-import {
-  AgentSessionKind,
-  deriveAgentSessionKind,
-} from '@agent/core/AgentDataclass';
-import type { TaskState } from '@logger/TaskState';
+import { isWorkflowTaskState, type WorkflowTaskState } from '@logger/TaskState';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 
 // @ts-ignore - Import JavaScript module
@@ -315,7 +311,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
 
   private async handleFileOperation(
     stream: string,
-    taskState: TaskState,
+    taskState: WorkflowTaskState,
     command: 'texra.pack' | 'texra.clean',
   ): Promise<void> {
     const generated = this.provider.state.outputFiles.getFiles(stream);
@@ -348,31 +344,16 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
   }
 
   /**
-   * Guards toolbar actions from running when the task state is missing or belongs to a tool-use agent.
-   * @param taskState - The currently resolved task state for the active stream.
-   * @returns True when the caller should skip executing the toolbar action.
-   */
-  private shouldSkipToolbarAction(taskState: TaskState): boolean {
-    const sessionKind =
-      taskState.agentSessionKind ?? deriveAgentSessionKind(taskState.agentType);
-    return sessionKind === AgentSessionKind.ToolUse;
-  }
-
-  /**
    * Fetches a task state for a toolbar action, short-circuiting execution for tool-use agents.
    * @param stream - The stream identifier whose task state should be fetched.
    * @param action - The callback to execute when a valid workflow task state is available.
    */
   private async withToolbarTaskState(
     stream: string,
-    action: (taskState: TaskState) => Promise<void>,
+    action: (taskState: WorkflowTaskState) => Promise<void>,
   ): Promise<void> {
     const taskState = this.provider.state.getTaskState(stream);
-    if (!taskState) {
-      return;
-    }
-
-    if (this.shouldSkipToolbarAction(taskState)) {
+    if (!taskState || !isWorkflowTaskState(taskState)) {
       return;
     }
 
