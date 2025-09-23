@@ -45,6 +45,14 @@ export class ProgressViewState {
   private _agentTypeFilter: AgentFilter = 'all';
   private _taskStates: Map<StreamTabId, TaskState> = new Map();
   private _executionIds: Map<StreamTabId, ExecutionId> = new Map();
+  /**
+   * Ephemeral session-kind hints keyed by stream ID.
+   *
+   * When a stream becomes active before its {@link TaskState} is persisted,
+   * progress events populate this map so the UI can immediately classify the
+   * tab as workflow vs. tool-use. Once canonical metadata is stored the entry
+   * is cleared, so there is no need to persist these hints across sessions.
+   */
   private _sessionKindHints: Map<StreamTabId, AgentSessionKind> = new Map();
   private readonly persistence: StatePersistenceManager;
   private readonly logger: AgentLogger;

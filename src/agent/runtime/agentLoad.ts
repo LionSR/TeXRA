@@ -76,6 +76,19 @@ interface LoadAgentOptions {
   preferMultiple?: boolean;
 }
 
+export function ensureAgentTypeForSource<T extends { agentType?: AgentType }>(
+  settings: T,
+  source: AgentDirectorySource,
+): T {
+  if (
+    source === AgentDirectorySource.BuiltInToolUse &&
+    settings.agentType === undefined
+  ) {
+    settings.agentType = AgentType.ToolUse;
+  }
+  return settings;
+}
+
 async function resolveAgentDefinition(
   agentDirectory: string,
   agentNameFromFile: string,
@@ -182,12 +195,7 @@ export async function loadAgentSettingAndPrompts(
       });
     }
 
-    if (
-      agentPath.source === AgentDirectorySource.BuiltInToolUse &&
-      settings.agentType === undefined
-    ) {
-      settings.agentType = AgentType.ToolUse;
-    }
+    ensureAgentTypeForSource(settings, agentPath.source);
 
     // Resolve tool names to definitions
     if (Array.isArray(settings.tools)) {
