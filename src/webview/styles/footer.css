@@ -5,12 +5,12 @@
 
 /* Model Selection Footer styles */
 .model-selection-footer {
-  position: absolute;
-  bottom: var(--spacing-xlarge);
-  left: var(--spacing-xlarge);
   display: flex;
   gap: var(--spacing-small);
-  z-index: 10;
+  align-items: center;
+  flex-wrap: wrap;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .model-selection-footer .select-group {
