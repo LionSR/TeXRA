@@ -1,3 +1,6 @@
+// Third-party imports
+import { encode as encodeHtml } from 'he';
+
 // Local imports - history view
 import { COMMANDS, ELEMENT_IDS, CLASS_NAMES, LABELS } from '../constants.js';
 import { historyViewState } from '../historyViewState.js';
@@ -9,6 +12,10 @@ import { initializeIconButtons } from '@common/iconButtonInitializer.js';
 import { createFromTemplate, createCodicon } from '@common/templateUtils.js';
 // Local imports
 import { vscode } from '@common/webviewContext.js';
+
+const encodeValueForHtml = (value) => encodeHtml(String(value ?? ''));
+const encodeListForHtml = (values) =>
+  values.map((entry) => encodeValueForHtml(entry)).join(', ');
 
 /**
  * Renders history items and manages per-item events.
@@ -89,13 +96,19 @@ export class HistoryRenderer {
       return document.createElement('div');
     }
 
+    const encodedAgent = encodeValueForHtml(config.agent);
+    const encodedModel = encodeValueForHtml(config.model);
+    const encodedInstruction = config.instruction
+      ? encodeValueForHtml(config.instruction)
+      : 'None';
+
     let basicHTML = `
       <span class="history-label">Agent:</span>
-      <span class="history-value">${config.agent}</span>
+      <span class="history-value">${encodedAgent}</span>
       <span class="history-label">Model:</span>
-      <span class="history-value">${config.model}</span>
+      <span class="history-value">${encodedModel}</span>
       <span class="history-label">Instruction:</span>
-      <span class="history-value">${config.instruction || 'None'}</span>`;
+      <span class="history-value">${encodedInstruction}</span>`;
 
     const basicFileTypes = [
       { type: 'input', singular: 'InputFile', plural: 'InputFiles' },
@@ -105,18 +118,20 @@ export class HistoryRenderer {
       const single = config[`${type}File`];
       const multiple = config[`${type}Files`];
       if (single) {
+        const encodedSingle = encodeValueForHtml(single);
         basicHTML += `
           <span class="history-label">${singular}:</span>
-          <span class="history-value">${single}</span>`;
+          <span class="history-value">${encodedSingle}</span>`;
       } else if (type === 'input') {
         basicHTML += `
           <span class="history-label">${singular}:</span>
           <span class="history-value">None</span>`;
       }
       if (multiple && multiple.length > 0) {
+        const encodedMultiple = encodeListForHtml(multiple);
         basicHTML += `
           <span class="history-label">${plural}:</span>
-          <span class="history-value">${multiple.join(', ')}</span>`;
+          <span class="history-value">${encodedMultiple}</span>`;
       }
     });
     basicDetails.innerHTML = basicHTML;
@@ -138,21 +153,24 @@ export class HistoryRenderer {
       const single = config[`${type}File`];
       const multiple = config[`${type}Files`];
       if (single) {
+        const encodedSingle = encodeValueForHtml(single);
         detailsHTML += `
           <span class="history-label">${singular}:</span>
-          <span class="history-value">${single}</span>`;
+          <span class="history-value">${encodedSingle}</span>`;
       }
       if (multiple && multiple.length > 0) {
+        const encodedMultiple = encodeListForHtml(multiple);
         detailsHTML += `
           <span class="history-label">${plural}:</span>
-          <span class="history-value">${multiple.join(', ')}</span>`;
+          <span class="history-value">${encodedMultiple}</span>`;
       }
     });
 
     if (config.outputFiles && config.outputFiles.length > 0) {
+      const encodedOutputs = encodeListForHtml(config.outputFiles);
       detailsHTML += `
         <span class="history-label">Output Files:</span>
-        <span class="history-value">${config.outputFiles.join(', ')}</span>`;
+        <span class="history-value">${encodedOutputs}</span>`;
     }
 
     if (config.toolConfig) {
@@ -189,14 +207,24 @@ export class HistoryRenderer {
       <span class="history-label">${label}:</span>
       <div class="history-value config-section">`;
     entries.forEach(([key, value]) => {
-      const display = Array.isArray(value)
-        ? value.join(', ')
-        : typeof value === 'boolean'
-          ? value
-            ? 'Yes'
-            : 'No'
-          : value;
-      html += `<div class="config-item"><span class="config-key">${key}:</span> ${display}</div>`;
+      const encodedKey = encodeValueForHtml(key);
+      let display;
+      let alreadyEncoded = false;
+
+      if (Array.isArray(value)) {
+        display = encodeListForHtml(value);
+        alreadyEncoded = true;
+      } else if (typeof value === 'boolean') {
+        display = value ? 'Yes' : 'No';
+      } else {
+        display = encodeValueForHtml(value);
+        alreadyEncoded = true;
+      }
+
+      const safeDisplay = alreadyEncoded
+        ? display
+        : encodeValueForHtml(display);
+      html += `<div class="config-item"><span class="config-key">${encodedKey}:</span> ${safeDisplay}</div>`;
     });
     html += `</div>`;
     return html;
