@@ -9,7 +9,10 @@ import {
   AgentType,
 } from '@agent/core/AgentDataclass';
 import { BaseToolUseAgent } from '@agent/implementations/BaseToolUseAgent';
-import { loadAgentSettingAndPrompts } from '@agent/runtime/agentLoad';
+import {
+  loadAgentSettingAndPrompts,
+  ensureAgentTypeForSource,
+} from '@agent/runtime/agentLoad';
 import { ModelFactory } from '@agent/runtime/ModelFactory';
 import {
   executeAgentWithLogging,
@@ -54,10 +57,14 @@ async function buildToolUseAgent(
 
   const modelHandler = ModelFactory.createHandler(MODEL_CONFIGS[modelName]);
   const agentPath = await getAgentPath(fullConfig.agent, context);
-  const [agentSetting, agentPrompt] = await loadAgentSettingAndPrompts(
+  const [loadedAgentSetting, agentPrompt] = await loadAgentSettingAndPrompts(
     agentPath,
     fullConfig.agent,
     { preferMultiple: fullConfig.useMultipleOutputs },
+  );
+  const agentSetting = ensureAgentTypeForSource(
+    loadedAgentSetting,
+    agentPath.source,
   );
 
   if (!isToolUseAgent(agentSetting)) {
