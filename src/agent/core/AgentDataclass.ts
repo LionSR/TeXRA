@@ -27,6 +27,16 @@ export enum AgentSessionKind {
 }
 
 /**
+ * Shared metadata describing how an agent session should be classified.
+ */
+export interface AgentSessionMetadata {
+  /** Specific agent implementation type if known. */
+  agentType?: AgentType;
+  /** Canonical grouping used by the UI to filter sessions. */
+  agentSessionKind: AgentSessionKind;
+}
+
+/**
  * Derive the canonical {@link AgentSessionKind} from a specific agent type.
  * Defaults to {@link AgentSessionKind.Workflow} when the type is unknown.
  */
@@ -36,6 +46,20 @@ export function deriveAgentSessionKind(
   return agentType === AgentType.ToolUse
     ? AgentSessionKind.ToolUse
     : AgentSessionKind.Workflow;
+}
+
+/**
+ * Resolve canonical session metadata from optional hints.
+ */
+export function resolveAgentSessionMetadata(
+  agentType?: AgentType | null,
+  sessionKindHint?: AgentSessionKind | null,
+): AgentSessionMetadata {
+  const agentSessionKind = sessionKindHint ?? deriveAgentSessionKind(agentType);
+  return {
+    agentType: agentType ?? undefined,
+    agentSessionKind,
+  };
 }
 
 /** Zod schema for AgentSetting validation */

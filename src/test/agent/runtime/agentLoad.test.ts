@@ -4,6 +4,7 @@ import * as path from 'path';
 
 // Local imports - agent runtime
 import { loadAgentSettingAndPrompts } from '@agent/runtime/agentLoad';
+import { AgentDirectorySource } from '@agent/runtime/AgentPathTypes';
 import { AbsoluteFS } from '@utils/files';
 
 suite('loadAgentSettingAndPrompts', () => {
@@ -45,6 +46,10 @@ suite('loadAgentSettingAndPrompts', () => {
     const agentPath = path.join('/', 'tmp', 'agents');
     const baseDefinitionPath = path.join(agentPath, 'polish.yaml');
     const multipleDefinitionPath = path.join(agentPath, 'polish_multiple.yaml');
+    const agentPathInfo = {
+      directory: agentPath,
+      source: AgentDirectorySource.Custom,
+    } as const;
 
     fileContents.set(
       normalize(multipleDefinitionPath),
@@ -70,9 +75,13 @@ suite('loadAgentSettingAndPrompts', () => {
       ].join('\n'),
     );
 
-    const [, prompts] = await loadAgentSettingAndPrompts(agentPath, 'polish', {
-      preferMultiple: true,
-    });
+    const [, prompts] = await loadAgentSettingAndPrompts(
+      agentPathInfo,
+      'polish',
+      {
+        preferMultiple: true,
+      },
+    );
 
     assert.strictEqual(prompts.userRequest, 'multiple variant');
   });
@@ -80,6 +89,10 @@ suite('loadAgentSettingAndPrompts', () => {
   test('falls back to the base definition when _multiple is missing', async () => {
     const agentPath = path.join('/', 'tmp', 'agents');
     const baseDefinitionPath = path.join(agentPath, 'summarize.yaml');
+    const agentPathInfo = {
+      directory: agentPath,
+      source: AgentDirectorySource.Custom,
+    } as const;
 
     fileContents.set(
       normalize(baseDefinitionPath),
@@ -94,7 +107,7 @@ suite('loadAgentSettingAndPrompts', () => {
     );
 
     const [, prompts] = await loadAgentSettingAndPrompts(
-      agentPath,
+      agentPathInfo,
       'summarize',
       {
         preferMultiple: true,
