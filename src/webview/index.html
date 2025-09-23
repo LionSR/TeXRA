@@ -459,34 +459,36 @@
             class="vscode-textarea"
             placeholder="Enter your specific instruction such as: Gently correct mathematical mistakes and typos."
           ></textarea>
-          <div class="model-selection-footer">
-            <div class="select-group">
-              <i
-                id="agentSettingsButton"
-                class="codicon codicon-sparkle clickable"
-                title="Agent settings"
-              ></i>
-              <select id="agent">
-                ${agentOptions}
-              </select>
+          <div class="instruction-controls">
+            <div class="model-selection-footer">
+              <div class="select-group">
+                <i
+                  id="agentSettingsButton"
+                  class="codicon codicon-sparkle clickable"
+                  title="Agent settings"
+                ></i>
+                <select id="agent">
+                  ${agentOptions}
+                </select>
+              </div>
+              <div class="select-group">
+                <i
+                  id="modelSettingsButton"
+                  class="codicon codicon-robot clickable"
+                  title="Model settings"
+                ></i>
+                <select id="model">
+                  ${modelOptions}
+                </select>
+              </div>
             </div>
-            <div class="select-group">
-              <i
-                id="modelSettingsButton"
-                class="codicon codicon-robot clickable"
-                title="Model settings"
-              ></i>
-              <select id="model">
-                ${modelOptions}
-              </select>
-            </div>
+            <button
+              id="executeButton"
+              class="vscode-button"
+              title="Execute"
+              data-icon="play"
+            ></button>
           </div>
-          <button
-            id="executeButton"
-            class="vscode-button"
-            title="Execute"
-            data-icon="play"
-          ></button>
         </div>
 
         <!-- Agent Config Banner -->
