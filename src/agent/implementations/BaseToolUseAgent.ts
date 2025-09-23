@@ -61,16 +61,9 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
   }
 
   public override getSessionMetadata() {
-    const metadata = super.getSessionMetadata();
-    if (metadata.agentType !== AgentType.ToolUse) {
-      return resolveAgentSessionMetadata(
-        AgentType.ToolUse,
-        AgentSessionKind.ToolUse,
-      );
-    }
     return resolveAgentSessionMetadata(
-      metadata.agentType,
-      metadata.agentSessionKind,
+      AgentType.ToolUse,
+      AgentSessionKind.ToolUse,
     );
   }
 

@@ -24,7 +24,10 @@ import {
   MergeAgent,
   BaseToolUseAgent,
 } from '@agent/implementations';
-import { loadAgentSettingAndPrompts } from '@agent/runtime/agentLoad';
+import {
+  loadAgentSettingAndPrompts,
+  ensureAgentTypeForSource,
+} from '@agent/runtime/agentLoad';
 import { ModelFactory } from '@agent/runtime/ModelFactory';
 import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
 import { bus } from '@eventBus/ProgressEventBus';
@@ -515,10 +518,13 @@ export async function executeAgent(
       const agentPathInfo = await getAgentPath(fullConfig.agent, context);
 
       // Load settings and prompts
-      const [agentSetting, agentPrompt] = await loadAgentSettingAndPrompts(
-        agentPathInfo,
-        requestedAgentName,
-        { preferMultiple: fullConfig.useMultipleOutputs },
+      const [loadedAgentSetting, agentPrompt] =
+        await loadAgentSettingAndPrompts(agentPathInfo, requestedAgentName, {
+          preferMultiple: fullConfig.useMultipleOutputs,
+        });
+      const agentSetting = ensureAgentTypeForSource(
+        loadedAgentSetting,
+        agentPathInfo.source,
       );
 
       // Get appropriate agent class and create instance
@@ -579,9 +585,11 @@ export async function executeMergeAgent(
 
       // Get agent path and load settings/prompts
       const agentPathInfo = await getAgentPath('merge', context);
-      const [agentSetting, agentPrompt] = await loadAgentSettingAndPrompts(
-        agentPathInfo,
-        'merge',
+      const [loadedAgentSetting, agentPrompt] =
+        await loadAgentSettingAndPrompts(agentPathInfo, 'merge');
+      const agentSetting = ensureAgentTypeForSource(
+        loadedAgentSetting,
+        agentPathInfo.source,
       );
 
       const agent = new MergeAgent(
