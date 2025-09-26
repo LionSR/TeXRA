@@ -71,28 +71,6 @@ function isValidExecutionId(id: ExecutionId | undefined): id is ExecutionId {
   return !invalidPatterns.some((pattern) => id.includes(pattern));
 }
 
-function serializeMessages(messages: ProviderMessage[]): unknown[] {
-  try {
-    return JSON.parse(JSON.stringify(messages));
-  } catch (error) {
-    logger.warn(
-      `Failed to serialize provider messages: ${error instanceof Error ? error.message : String(error)}`,
-    );
-    return [];
-  }
-}
-
-function serializeToolState(state: ToolState) {
-  return {
-    texcountStats: state.texcountStats,
-    lastResponse: state.lastResponse,
-    accumulatedOutput: state.accumulatedOutput,
-    mediaFiles: [...state.mediaFiles],
-    thinkingBlocks: [...state.thinkingBlocks],
-    thinkingAdded: state.thinkingAdded,
-  };
-}
-
 function hydrateToolState(
   snapshot: ToolUseSessionSnapshot['toolState'],
 ): ToolState {
@@ -168,8 +146,8 @@ export class ToolUseSessionManager {
       agentName: payload.agentName,
       model: payload.model,
       agentSessionKind: payload.agentSessionKind,
-      messages: serializeMessages(payload.messages),
-      toolState: serializeToolState(payload.toolState),
+      messages: structuredClone(payload.messages),
+      toolState: structuredClone({ ...payload.toolState }),
       lastUpdated: Date.now(),
     };
 
