@@ -341,13 +341,12 @@ export class LogEntryFormatter {
           content: text,
           level,
         });
-      } else if (
-        messageType === 'thinking' ||
-        messageType === 'scratchpad' ||
-        messageType === 'toolUse'
-      ) {
-        // Pass the full logMessage for access to groupId and timestamp
+      } else if (messageType === 'thinking' || messageType === 'scratchpad') {
+        // Pass identifiers so the formatter can apply grouping metadata
         // Note: timestamp here is numeric (from Date.now())
+        result = formatter(text, id, groupId, timestamp);
+      } else if (messageType === 'toolUse') {
+        // Tool use needs both the rendered text and the structured payload
         result = formatter(text, data, id, groupId, timestamp);
       } else if (messageType === 'userMessage') {
         // User message needs text, id, and timestamp
