@@ -7,7 +7,6 @@ import type { AgentConfig } from '@agent/core/AgentConfig';
 
 // Local imports - agent
 import { ToolConfig } from '@agent/core/ToolConfig';
-import { getFilesIfNotEmpty } from '@frontend/files/listing';
 
 // Local imports - utils
 import { capitalize } from '@frontend/ui/messageUtils';
@@ -21,6 +20,13 @@ import {
 
 const CHANNEL = 'ExecutionManager';
 logger.initialize(CHANNEL);
+
+function getFilesIfNotEmpty<T>(files: T[] | undefined | null): T[] | null {
+  if (!Array.isArray(files) || files.length === 0) {
+    return null;
+  }
+  return files;
+}
 
 export class ExecutionManager {
   constructor() {}
