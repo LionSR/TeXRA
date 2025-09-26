@@ -1,6 +1,3 @@
-// Third-party imports
-import { encode as encodeHtml } from 'he';
-
 // Local imports - history view
 import { COMMANDS, ELEMENT_IDS, CLASS_NAMES, LABELS } from '../constants.js';
 import { historyViewState } from '../historyViewState.js';
@@ -10,12 +7,9 @@ import {
 } from '@common/domUtils.js';
 import { initializeIconButtons } from '@common/iconButtonInitializer.js';
 import { createFromTemplate, createCodicon } from '@common/templateUtils.js';
+import { encodeHtml, encodeListForHtml } from '@common/htmlEncoding.js';
 // Local imports
 import { vscode } from '@common/webviewContext.js';
-
-const encodeValueForHtml = (value) => encodeHtml(String(value ?? ''));
-const encodeListForHtml = (values) =>
-  values.map((entry) => encodeValueForHtml(entry)).join(', ');
 
 /**
  * Renders history items and manages per-item events.
@@ -96,10 +90,10 @@ export class HistoryRenderer {
       return document.createElement('div');
     }
 
-    const encodedAgent = encodeValueForHtml(config.agent);
-    const encodedModel = encodeValueForHtml(config.model);
+    const encodedAgent = encodeHtml(config.agent);
+    const encodedModel = encodeHtml(config.model);
     const encodedInstruction = config.instruction
-      ? encodeValueForHtml(config.instruction)
+      ? encodeHtml(config.instruction)
       : 'None';
 
     let basicHTML = `
@@ -118,7 +112,7 @@ export class HistoryRenderer {
       const single = config[`${type}File`];
       const multiple = config[`${type}Files`];
       if (single) {
-        const encodedSingle = encodeValueForHtml(single);
+        const encodedSingle = encodeHtml(single);
         basicHTML += `
           <span class="history-label">${singular}:</span>
           <span class="history-value">${encodedSingle}</span>`;
@@ -153,7 +147,7 @@ export class HistoryRenderer {
       const single = config[`${type}File`];
       const multiple = config[`${type}Files`];
       if (single) {
-        const encodedSingle = encodeValueForHtml(single);
+        const encodedSingle = encodeHtml(single);
         detailsHTML += `
           <span class="history-label">${singular}:</span>
           <span class="history-value">${encodedSingle}</span>`;
@@ -207,7 +201,7 @@ export class HistoryRenderer {
       <span class="history-label">${label}:</span>
       <div class="history-value config-section">`;
     entries.forEach(([key, value]) => {
-      const encodedKey = encodeValueForHtml(key);
+      const encodedKey = encodeHtml(key);
       let display;
       let alreadyEncoded = false;
 
@@ -217,13 +211,11 @@ export class HistoryRenderer {
       } else if (typeof value === 'boolean') {
         display = value ? 'Yes' : 'No';
       } else {
-        display = encodeValueForHtml(value);
+        display = encodeHtml(value);
         alreadyEncoded = true;
       }
 
-      const safeDisplay = alreadyEncoded
-        ? display
-        : encodeValueForHtml(display);
+      const safeDisplay = alreadyEncoded ? display : encodeHtml(display);
       html += `<div class="config-item"><span class="config-key">${encodedKey}:</span> ${safeDisplay}</div>`;
     });
     html += `</div>`;
