@@ -12,10 +12,7 @@ function createExcludePattern(
     .map((dir) => dir.trim())
     .filter((dir) => dir.length > 0)
     .map((dir) =>
-      dir
-        .replace(/\\/g, '/')
-        .replace(/^\//, '')
-        .replace(/\/$/, ''),
+      dir.replace(/\\/g, '/').replace(/^\//, '').replace(/\/$/, ''),
     );
 
   if (sanitized.length === 0) {
@@ -24,9 +21,7 @@ function createExcludePattern(
 
   const globSegments = sanitized.map((dir) => `**/${dir}/**`);
   const globPattern =
-    globSegments.length === 1
-      ? globSegments[0]
-      : `{${globSegments.join(',')}}`;
+    globSegments.length === 1 ? globSegments[0] : `{${globSegments.join(',')}}`;
 
   return new vscode.RelativePattern(root, globPattern);
 }
