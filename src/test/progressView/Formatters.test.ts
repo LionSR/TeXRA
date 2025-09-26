@@ -19,6 +19,7 @@ describe('LogEntryFormatter DOM', () => {
       </template>
     </body></html>`);
     global.document = dom.window.document as any;
+    global.window = dom.window as any;
 
     const formatter = new LogEntryFormatter();
     const el = formatter.format({
@@ -34,5 +35,57 @@ describe('LogEntryFormatter DOM', () => {
 
     assert.ok(el instanceof dom.window.HTMLElement);
     assert.equal(el.querySelector('.message')?.textContent, 'hello');
+  });
+
+  it('renders tool use entries from structured data', () => {
+    const dom = new JSDOM(`<!doctype html><html><body>
+      <template id="toolUseTemplate">
+        <details class="special-details">
+          <summary class="details-summary">
+            <i class="toggle-icon"></i>
+            <i class="codicon codicon-wrench"></i>
+            <span class="tool-use-title">Tool Use</span>
+          </summary>
+          <div class="special-content"></div>
+        </details>
+      </template>
+    </body></html>`);
+    global.document = dom.window.document as any;
+    global.window = dom.window as any;
+
+    const formatter = new LogEntryFormatter();
+    const toolLog = {
+      tool: 'read_file',
+      input: { path: '/tmp/example.tex', range: { start: 1, end: 15 } },
+      output: {
+        summary: 'Read 3 lines from example.tex',
+        output: 'Line 1: α & β\nLine 2: <section>\nLine 3: "quotes" and more',
+      },
+    };
+
+    const el = formatter.format({
+      id: 'tool-1',
+      text: 'not-json-content',
+      level: 'info',
+      timestamp: Date.now(),
+      groupId: 'g1',
+      messageType: 'toolUse',
+      verbose: false,
+      data: toolLog,
+    } as any);
+
+    assert.ok(el instanceof dom.window.HTMLElement);
+    const title = el.querySelector('.tool-use-title')?.textContent ?? '';
+    assert.ok(title.includes('Tool Use: read_file'));
+    assert.ok(title.includes('Read 3 lines from example.tex'));
+
+    const inputPre = el.querySelector('.tool-use-section pre');
+    assert.ok(inputPre);
+    assert.ok(inputPre.textContent?.includes('/tmp/example.tex'));
+
+    const outputFull = el.querySelector('.tool-output-full');
+    assert.ok(outputFull);
+    assert.ok(outputFull.textContent?.includes('Line 2: <section>'));
+    assert.ok(outputFull.textContent?.includes('"quotes" and more'));
   });
 });

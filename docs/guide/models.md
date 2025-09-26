@@ -114,11 +114,11 @@ miss), $2.50/million output tokens. [Tech blog](https://moonshotai.github.io/Kim
 
 Cost-effective models from Alibaba with strong multilingual capabilities.
 
-| Model ID    | Key Strength / Use Case                    | Relative Cost | Relative Speed | Notes                       |
-| :---------- | :----------------------------------------- | :------------ | :------------- | :-------------------------- |
-| `qwen3max`  | Best-in-class reasoning, 256k ctx          | $$$           | Medium         | Qwen3 Max, no deep thinking |
-| `qwenplus`  | Hybrid reasoning, 1M ctx                   | $$            | Medium         | Qwen3 Plus, enable_thinking |
-| `qwenturbo` | Fast responses with optional thinking mode | $             | Fast           | Qwen Turbo, enable_thinking |
+| Model ID    | Key Strength / Use Case                    | Relative Cost | Relative Speed | Notes                              |
+| :---------- | :----------------------------------------- | :------------ | :------------- | :--------------------------------- |
+| `qwen3max`  | Flagship coding agent, 262k ctx            | $$$           | Medium         | Qwen3-Max latest, no thinking mode |
+| `qwenplus`  | Hybrid thinking, 1M ctx + tool use         | $$            | Medium         | Qwen Plus latest, enable_thinking  |
+| `qwenturbo` | Fast responses with optional thinking mode | $             | Fast           | Qwen Turbo, enable_thinking        |
 
 Deep thinking models first stream their reasoning before the final answer.
 `qwenplus` and `qwenturbo` support this mode. Pass `enable_thinking: true`
@@ -135,7 +135,7 @@ client = OpenAI(
 )
 
 resp = client.chat.completions.create(
-    model="qwen-plus-2025-07-28",
+    model="qwen-plus-latest",
     messages=[{"role": "user", "content": "Who are you?"}],
     extra_body={"enable_thinking": True},
 )
