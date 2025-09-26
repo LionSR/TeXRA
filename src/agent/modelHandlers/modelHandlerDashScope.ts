@@ -13,7 +13,7 @@ import { MediaEntry } from '@agent/utils/mediaTypes';
 
 // Local imports - utilities
 import type { ToolDefinition } from '@model';
-import { MESSAGE_PREVIEW_LENGTH } from '@utils/config';
+import { K_SLICE, MESSAGE_PREVIEW_LENGTH } from '@utils/config';
 
 /**
  * Handler for DashScope Qwen models using OpenAI-compatible API.
@@ -31,8 +31,24 @@ export class ModelHandlerDashScope extends ModelHandlerOpenAI {
     groupId?: string,
     toolState?: ToolState,
   ): string | null {
-    // DashScope Qwen models don't currently support thinking blocks
-    return null;
+    const reasoning =
+      responseObject?.choices?.[0]?.message?.reasoning_content ?? null;
+
+    if (typeof reasoning !== 'string' || !reasoning.trim()) {
+      return null;
+    }
+
+    if (toolState && !toolState.thinkingAdded) {
+      toolState.thinkingBlocks = [{ type: 'thinking', thinking: reasoning }];
+      toolState.thinkingAdded = true;
+    }
+
+    this.logger.debug(
+      `DashScope reasoning preview: ${reasoning.substring(0, K_SLICE)}...`,
+      groupId,
+    );
+
+    return reasoning;
   }
 
   /**

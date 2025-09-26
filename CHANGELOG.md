@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Features
+
+- Refresh Qwen Max/Plus model entries with latest identifiers, pricing, and reasoning support
+
 ## [0.33.7] - 2025-09-22
 
 ### Features
