@@ -5,21 +5,21 @@
 
 /* Model Selection Footer styles */
 .model-selection-footer {
-  position: absolute;
-  bottom: var(--spacing-xlarge);
-  left: var(--spacing-xlarge);
   display: flex;
+  flex-wrap: wrap;
   gap: var(--spacing-small);
-  z-index: 10;
+  margin-top: var(--spacing-medium);
 }
 
 .model-selection-footer .select-group {
   display: flex;
   align-items: center;
-  max-width: 150px;
+  flex: 1 1 200px;
 }
 
 .model-selection-footer .select-group select {
+  flex: 1 1 auto;
+  width: 100%;
   height: var(--height-control);
   font-size: var(--font-size);
   padding: var(--spacing-tiny) var(--spacing-small);

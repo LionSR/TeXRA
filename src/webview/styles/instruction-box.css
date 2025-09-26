@@ -5,7 +5,9 @@
 
 .instruction-box {
   margin-bottom: var(--spacing-small);
-  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-medium);
   background-color: var(--background-color);
   border: var(--border-thin) solid
     var(--vscode-widget-border, var(--dropdown-border));
@@ -22,11 +24,9 @@
 #instruction {
   min-height: var(--height-medium);
   max-height: var(--height-xlarge);
-  padding-bottom: calc(var(--spacing-xlarge) + var(--spacing-large));
   resize: none;
   overflow-y: auto;
   transition: height 0.1s ease-out;
-  margin-top: var(--spacing-medium);
 }
 
 .instruction-header {
@@ -58,10 +58,8 @@
 
 #executeButton {
   font-size: var(--font-size);
-  position: absolute;
-  bottom: var(--spacing-xlarge);
-  right: var(--spacing-xlarge);
-  z-index: 10;
+  align-self: flex-end;
+  margin-top: var(--spacing-medium);
 }
 
 /* Recording button states */
