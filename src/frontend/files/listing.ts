@@ -4,11 +4,37 @@ import * as path from 'path';
 // Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - utilities
-import { AbsoluteFS } from '@utils/files';
+function createExcludePattern(
+  root: string,
+  directories: string[],
+): vscode.RelativePattern | undefined {
+  const sanitized = directories
+    .map((dir) => dir.trim())
+    .filter((dir) => dir.length > 0)
+    .map((dir) =>
+      dir
+        .replace(/\\/g, '/')
+        .replace(/^\//, '')
+        .replace(/\/$/, ''),
+    );
 
-export function getFilesIfNotEmpty<T>(files: T[] | undefined): T[] | null {
-  return files && files.length > 0 ? files : null;
+  if (sanitized.length === 0) {
+    return undefined;
+  }
+
+  const globSegments = sanitized.map((dir) => `**/${dir}/**`);
+  const globPattern =
+    globSegments.length === 1
+      ? globSegments[0]
+      : `{${globSegments.join(',')}}`;
+
+  return new vscode.RelativePattern(root, globPattern);
+}
+
+function containsHiddenSegment(relativePath: string): boolean {
+  return relativePath
+    .split(path.sep)
+    .some((segment) => segment.startsWith('.') && segment.length > 1);
 }
 
 export async function getFilesInDirectory(
@@ -18,40 +44,29 @@ export async function getFilesInDirectory(
   excludeDirectories: string[] = [],
   excludeKeywords: string[] = [],
 ): Promise<string[]> {
-  const dirEntries = await AbsoluteFS.readDir(dir);
-
   const normalizedIncludeExt = includeExtensions.map((e) => e.toLowerCase());
   const normalizedExcludeExt = excludeExtensions.map((e) => e.toLowerCase());
   const normalizedExcludeKeywords = excludeKeywords.map((k) => k.toLowerCase());
-  const normalizedExcludeDirs = new Set(
-    excludeDirectories.map((d) => d.toLowerCase()),
+  const excludePattern = createExcludePattern(dir, excludeDirectories);
+  const files = await vscode.workspace.findFiles(
+    new vscode.RelativePattern(dir, '*'),
+    excludePattern,
   );
 
-  const files = await Promise.all(
-    dirEntries.map(async ([name, type]) => {
+  return files
+    .map((uri) => path.basename(uri.fsPath))
+    .filter((name) => {
       const nameLower = name.toLowerCase();
-      const fullPath = path.join(dir, name);
-      const isSymbolicLink = await AbsoluteFS.isSymbolicLink(fullPath);
-
-      if (
-        (type === vscode.FileType.File || isSymbolicLink) &&
+      return (
         !name.startsWith('.') &&
         (normalizedIncludeExt.length === 0 ||
           normalizedIncludeExt.some((ext) => nameLower.endsWith(ext))) &&
         !normalizedExcludeExt.some((ext) => nameLower.endsWith(ext)) &&
         !normalizedExcludeKeywords.some((keyword) =>
           nameLower.includes(keyword),
-        ) &&
-        !normalizedExcludeDirs.has(path.dirname(name).toLowerCase())
-      ) {
-        return name;
-      }
-      return null;
-    }),
-  );
-  return files.filter(
-    (file): file is string => file !== null && file !== undefined,
-  );
+        )
+      );
+    });
 }
 
 export async function getFilesRecursively(
@@ -63,62 +78,38 @@ export async function getFilesRecursively(
   excludeKeywords: string[] = [],
   excludeFiles: string[] = [],
 ): Promise<string[]> {
-  const dirEntries = await AbsoluteFS.readDir(dir);
   const normalizedIncludeExt = includeExtensions.map((e) => e.toLowerCase());
   const normalizedExcludeExt = excludeExtensions.map((e) => e.toLowerCase());
-  const normalizedExcludeDirs = new Set(
-    excludeDirectories.map((d) => d.toLowerCase()),
-  );
   const normalizedExcludeKeywords = excludeKeywords.map((k) => k.toLowerCase());
   const normalizedExcludeFiles = excludeFiles.map((f) => f.toLowerCase());
-
-  const files = await Promise.all(
-    dirEntries.map(async ([name, type]) => {
-      const nameLower = name.toLowerCase();
-      const fullPath = path.join(dir, name);
-      const relativePath = path.relative(root, fullPath);
-
-      const pathParts = relativePath.split(path.sep);
-      if (
-        pathParts.some((part) => normalizedExcludeDirs.has(part.toLowerCase()))
-      ) {
-        return [];
-      }
-
-      const isSymbolicLink = await AbsoluteFS.isSymbolicLink(fullPath);
-      const isDirectory = await AbsoluteFS.isDir(fullPath);
-      const isFile = await AbsoluteFS.isFile(fullPath);
-
-      if (
-        (type === vscode.FileType.Directory ||
-          (isSymbolicLink && isDirectory)) &&
-        !name.startsWith('.') &&
-        !normalizedExcludeDirs.has(nameLower)
-      ) {
-        return getFilesRecursively(
-          fullPath,
-          root,
-          includeExtensions,
-          excludeExtensions,
-          excludeDirectories,
-          excludeKeywords,
-          excludeFiles,
-        );
-      } else if (
-        (type === vscode.FileType.File || (isSymbolicLink && isFile)) &&
-        !name.startsWith('.') &&
-        (normalizedIncludeExt.length === 0 ||
-          normalizedIncludeExt.some((ext) => nameLower.endsWith(ext))) &&
-        !normalizedExcludeExt.some((ext) => nameLower.endsWith(ext)) &&
-        !normalizedExcludeKeywords.some((keyword) =>
-          nameLower.includes(keyword),
-        ) &&
-        !normalizedExcludeFiles.includes(nameLower)
-      ) {
-        return [relativePath];
-      }
-      return [];
-    }),
+  const excludePattern = createExcludePattern(root, excludeDirectories);
+  const files = await vscode.workspace.findFiles(
+    new vscode.RelativePattern(dir, '**/*'),
+    excludePattern,
   );
-  return files.flat();
+
+  return files
+    .map((uri) => path.relative(root, uri.fsPath))
+    .filter((relativePath) => {
+      if (!relativePath) {
+        return false;
+      }
+
+      if (containsHiddenSegment(relativePath)) {
+        return false;
+      }
+
+      const fileName = path.basename(relativePath);
+      const fileNameLower = fileName.toLowerCase();
+
+      return (
+        (normalizedIncludeExt.length === 0 ||
+          normalizedIncludeExt.some((ext) => fileNameLower.endsWith(ext))) &&
+        !normalizedExcludeExt.some((ext) => fileNameLower.endsWith(ext)) &&
+        !normalizedExcludeKeywords.some((keyword) =>
+          fileNameLower.includes(keyword),
+        ) &&
+        !normalizedExcludeFiles.includes(fileNameLower)
+      );
+    });
 }
