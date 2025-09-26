@@ -49,6 +49,7 @@ class MockHandler extends ModelHandlerOpenAIResponse {
       return {
         id: 'r1',
         status: 'completed',
+        output_text: 'intro',
         output: [
           {
             type: 'message',
@@ -68,6 +69,7 @@ class MockHandler extends ModelHandlerOpenAIResponse {
     return {
       id: 'r2',
       status: 'completed',
+      output_text: 'done',
       output: [
         {
           type: 'message',
