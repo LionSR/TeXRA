@@ -9,9 +9,6 @@ import type {
   ResponseUsage,
   ResponseCreateParamsBase,
   ResponseCreateParamsNonStreaming,
-  ResponseOutputItem,
-  ResponseOutputMessage,
-  ResponseOutputText,
   ResponseReasoningItem,
   ResponseFunctionToolCallItem,
   ResponseFunctionToolCall,
@@ -523,86 +520,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   }
 
   private collectResponseText(responseObject: Response): string {
-    const trimmedOutputText = responseObject.output_text?.trim();
-    if (trimmedOutputText) {
-      return trimmedOutputText;
-    }
-
-    const outputItems = responseObject.output;
-    if (!Array.isArray(outputItems) || outputItems.length === 0) {
+    const { output_text: outputText } = responseObject;
+    if (typeof outputText !== 'string') {
       return '';
     }
 
-    const messageText = this.collectMessageOutput(outputItems);
-    if (messageText) {
-      return messageText;
-    }
-
-    return this.collectFallbackOutput(outputItems);
-  }
-
-  private collectMessageOutput(
-    outputItems: ResponseOutputItem[],
-  ): string | null {
-    const messageParts = outputItems.filter(
-      (part): part is ResponseOutputMessage =>
-        part.type === 'message' && 'content' in part,
-    );
-    if (messageParts.length === 0) {
-      return null;
-    }
-
-    const aggregated = messageParts
-      .map((part) => this.extractMessageText(part.content))
-      .filter((content) => content.length > 0)
-      .join('')
-      .trim();
-
-    return aggregated.length > 0 ? aggregated : null;
-  }
-
-  private collectFallbackOutput(outputItems: ResponseOutputItem[]): string {
-    return outputItems
-      .filter(
-        (part): part is ResponseOutputItem & { text: string; type: string } =>
-          this.isTextBearingOutput(part) && part.type !== 'reasoning',
-      )
-      .map((part) => part.text)
-      .join('')
-      .trim();
-  }
-
-  private extractMessageText(
-    content: ResponseOutputMessage['content'] | string | undefined,
-  ): string {
-    if (!content) {
-      return '';
-    }
-
-    if (typeof content === 'string') {
-      return content;
-    }
-
-    if (!Array.isArray(content)) {
-      return '';
-    }
-
-    return content
-      .filter(
-        (item): item is ResponseOutputText =>
-          item?.type === 'output_text' && typeof item?.text === 'string',
-      )
-      .map((item) => item.text)
-      .join('');
-  }
-
-  private isTextBearingOutput(
-    part: ResponseOutputItem,
-  ): part is ResponseOutputItem & { text: string; type: string } {
-    return (
-      typeof (part as { text?: unknown }).text === 'string' &&
-      typeof (part as { type?: unknown }).type === 'string'
-    );
+    return outputText.trim();
   }
 
   /** Price computation adapted for Responses API token fields. */
