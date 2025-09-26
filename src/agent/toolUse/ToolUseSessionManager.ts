@@ -15,7 +15,7 @@ import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
 import { AgentLogger } from '@logger/AgentLogger';
 
 // Local imports - utilities
-import { StorageFS } from '@utils/files';
+import { StorageFS, isValidExecutionId } from '@utils/files';
 import {
   DEFAULT_TOOL_USE_PERSISTENCE_TTL_HOURS,
   getToolUsePersistenceEnabled,

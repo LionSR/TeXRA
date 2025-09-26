@@ -187,6 +187,7 @@ export async function runToolUseCycle<C = unknown>(
         JSON.stringify(toolUseLog, null, 2),
         groupId,
         MESSAGE_TYPES.TOOL_USE,
+        toolUseLog,
       );
       break;
     }
@@ -207,6 +208,7 @@ export async function runToolUseCycle<C = unknown>(
         JSON.stringify(toolUseLog, null, 2),
         groupId,
         MESSAGE_TYPES.TOOL_USE,
+        toolUseLog,
       );
       break;
     }
@@ -288,6 +290,7 @@ export async function runToolUseCycle<C = unknown>(
       JSON.stringify(toolUseLog, null, 2),
       groupId,
       MESSAGE_TYPES.TOOL_USE,
+      toolUseLog,
     );
 
     // Build provider-specific message containing the tool result
