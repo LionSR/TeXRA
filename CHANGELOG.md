@@ -2,7 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.33.8] [Unreleased]
+
+### Improvements
+
+- Update Gemini 2.5 Flash preview entries to the September 2025 release.
 
 ## [0.33.7] - 2025-09-22
 
