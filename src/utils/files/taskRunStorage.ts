@@ -14,10 +14,14 @@ export const TASK_RUNS_DIR = 'taskRuns';
 
 /**
  * Validate an execution ID to ensure it's safe for use in file paths.
+ * Acts as a type guard to ensure the ID is defined and non-empty.
  * @param id - The execution ID to validate
  * @returns True if the ID is valid, false otherwise
  */
-function isValidExecutionId(id: ExecutionId): boolean {
+export function isValidExecutionId(
+  id: ExecutionId | undefined,
+): id is ExecutionId {
+  if (!id) return false;
   // Ensure ID doesn't contain path traversal characters or other unsafe patterns
   const invalidPatterns = ['..', '/', '\\', '\0'];
   return !invalidPatterns.some((pattern) => id.includes(pattern));
