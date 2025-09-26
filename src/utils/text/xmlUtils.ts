@@ -1,8 +1,12 @@
+// Third-party imports
+import TurndownService from 'turndown';
+import { gfm } from 'turndown-plugin-gfm';
+import nodePandoc from 'node-pandoc';
+
 // Local imports - log
 import * as logger from '@logger/logUtils';
 import { K_SLICE } from '@utils/config';
 import { checkToolInstalled } from '@utils/system/toolUtils';
-import nodePandoc from 'node-pandoc';
 
 const CHANNEL = 'xmlUtils';
 logger.initialize(CHANNEL);
@@ -35,6 +39,36 @@ export enum outputFormat {
   HTML = 'html',
   LaTeX = 'latex',
   MARKDOWN = 'markdown',
+}
+
+const LATEX_REPLACEMENTS: Array<[RegExp, string]> = [
+  [/\\section\{([^}]+)\}/g, '## $1'],
+  [/\\subsection\{([^}]+)\}/g, '### $1'],
+  [/\\textbf\{([^}]+)\}/g, '**$1**'],
+  [/\\textit\{([^}]+)\}/g, '*$1*'],
+  [/\\emph\{([^}]+)\}/g, '*$1*'],
+  [/\\item\s+/g, '- '],
+];
+
+const LATEX_ENVIRONMENT_MARKERS: RegExp[] = [
+  /\\begin\{itemize\}/g,
+  /\\end\{itemize\}/g,
+  /\\begin\{enumerate\}/g,
+  /\\end\{enumerate\}/g,
+];
+
+function convertLatexToMarkdown(latex: string): string {
+  const withoutEnvironments = LATEX_ENVIRONMENT_MARKERS.reduce(
+    (content, pattern) => content.replace(pattern, ''),
+    latex,
+  );
+
+  const converted = LATEX_REPLACEMENTS.reduce(
+    (content, [pattern, replacement]) => content.replace(pattern, replacement),
+    withoutEnvironments,
+  );
+
+  return converted.trim();
 }
 
 function detectInputFormat(text: string): outputFormat {
@@ -348,57 +382,25 @@ export async function formatContent(content: string): Promise<string> {
   const pandocResult = await convertWithPandoc(formattedContent);
 
   if (!pandocResult) {
-    // Replace LaTeX notation with markdown-friendly equivalents
-    formattedContent = formattedContent
-      .replace(/\\section\{([^}]+)\}/g, '## $1')
-      .replace(/\\subsection\{([^}]+)\}/g, '### $1')
-      .replace(/\\begin\{itemize\}/g, '')
-      .replace(/\\end\{itemize\}/g, '')
-      // Also handle enumerate environments like itemize
-      .replace(/\\begin\{enumerate\}/g, '')
-      .replace(/\\end\{enumerate\}/g, '')
-      .replace(/\\item\s+/g, '- ')
-      // Standardize bullet lists starting with asterisk while avoiding emphasis markers
-      .replace(/(^|\n)(\s*)\*\s+(?=\S)/g, '$1$2- ')
-      .replace(/\\textbf\{([^}]+)\}/g, '**$1**')
-      .replace(/\\textit\{([^}]+)\}/g, '*$1*')
-      .replace(/\\emph\{([^}]+)\}/g, '*$1*')
-      // Convert common HTML tags to markdown before generic XML handling
-      .replace(/<br\s*\/?>/gi, '\n')
-      // Handle p and div tags more carefully to avoid excessive newlines
-      .replace(/<(?:p|div)\b[^>]*>/gi, '')
-      .replace(/<\/(?:p|div)>/gi, '\n')
-      .replace(/<(strong|b)>(.*?)<\/\1>/gi, '**$2**')
-      .replace(/<(em|i)>(.*?)<\/\1>/gi, '*$2*')
-      .replace(/<code>(.*?)<\/code>/gi, '`$1`')
-      .replace(/<pre>([\s\S]*?)<\/pre>/gi, '```\n$1\n```')
-      .replace(/<h1>(.*?)<\/h1>/gi, '# $1\n')
-      .replace(/<h2>(.*?)<\/h2>/gi, '## $1\n')
-      .replace(/<h3>(.*?)<\/h3>/gi, '### $1\n')
-      .replace(/<h4>(.*?)<\/h4>/gi, '#### $1\n')
-      .replace(/<h5>(.*?)<\/h5>/gi, '##### $1\n')
-      .replace(/<h6>(.*?)<\/h6>/gi, '###### $1\n')
-      // Handle lists - simple approach
-      // For XML tags containing lists (ol/ul), just remove the wrapper tag
-      .replace(/<([\w-]{6,})>\s*(<[ou]l\b[\s\S]*?<\/[ou]l>)\s*<\/\1>/g, '$2')
-      // Convert XML tags to markdown headings - only for semantic tags with 6+ characters that don't contain lists
-      .replace(/<([\w-]{6,})>\s*([^<]*?)\s*<\/\1>/g, '## $1\n$2')
-      // Remove ul and ol tags
-      .replace(/<[ou]l>/gi, '')
-      .replace(/<\/[ou]l>/gi, '')
-      // Replace <li> with bullet point and remove </li> tags
-      .replace(/<li>/gi, '- ')
-      .replace(/<\/li>/gi, '')
-      // Escape LaTeX references but preserve the content
-      .replace(/~\\ref\{/g, ' \\ref{')
-      .replace(/\\ref\{([^}]+)\}/g, '\\\\ref{$1}')
-      // Remove multiple empty lines before list items, preserving indentation
-      .replace(/\n(\s*)\n(\s*)\n(\s*)- /g, '\n$3- ')
-      .replace(/\n(\s*)\n(\s*)- /g, '\n$2- ')
-      // Clean up excessive whitespace and normalize line breaks
-      .replace(/\n{4,}/g, '\n\n') // Replace 4+ newlines with 2
+    const fallbackFormat = detectInputFormat(formattedContent);
 
-      .replace(/ {4}/gm, '  '); // Replace 4 spaces with 2 spaces
+    if (fallbackFormat === outputFormat.HTML) {
+      const turndownService = new TurndownService({
+        bulletListMarker: '-',
+        codeBlockStyle: 'fenced',
+        emDelimiter: '*',
+        headingStyle: 'atx',
+        strongDelimiter: '**',
+      });
+      turndownService.use(gfm);
+
+      formattedContent = turndownService
+        .turndown(formattedContent)
+        .replace(/-\s{2,}/g, '- ')
+        .trim();
+    } else if (fallbackFormat === outputFormat.LaTeX) {
+      formattedContent = convertLatexToMarkdown(formattedContent);
+    }
   } else {
     formattedContent = pandocResult;
   }
