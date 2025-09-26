@@ -71,39 +71,16 @@ function isValidExecutionId(id: ExecutionId | undefined): id is ExecutionId {
   return !invalidPatterns.some((pattern) => id.includes(pattern));
 }
 
-function serializeMessages(messages: ProviderMessage[]): unknown[] {
-  try {
-    return JSON.parse(JSON.stringify(messages));
-  } catch (error) {
-    logger.warn(
-      `Failed to serialize provider messages: ${error instanceof Error ? error.message : String(error)}`,
-    );
-    return [];
-  }
-}
-
-function serializeToolState(state: ToolState) {
-  return {
-    texcountStats: state.texcountStats,
-    lastResponse: state.lastResponse,
-    accumulatedOutput: state.accumulatedOutput,
-    mediaFiles: [...state.mediaFiles],
-    thinkingBlocks: [...state.thinkingBlocks],
-    thinkingAdded: state.thinkingAdded,
-  };
+function toToolStateSnapshot(
+  state: ToolState,
+): ToolUseSessionSnapshot['toolState'] {
+  return ToolStateSnapshotSchema.parse(structuredClone(state));
 }
 
 function hydrateToolState(
   snapshot: ToolUseSessionSnapshot['toolState'],
 ): ToolState {
-  const state = new ToolState();
-  state.texcountStats = snapshot.texcountStats;
-  state.lastResponse = snapshot.lastResponse;
-  state.accumulatedOutput = snapshot.accumulatedOutput;
-  state.mediaFiles = [...snapshot.mediaFiles];
-  state.thinkingBlocks = [...snapshot.thinkingBlocks];
-  state.thinkingAdded = snapshot.thinkingAdded;
-  return state;
+  return Object.assign(new ToolState(), structuredClone(snapshot));
 }
 
 async function ensureStorageDir(): Promise<boolean> {
@@ -168,8 +145,8 @@ export class ToolUseSessionManager {
       agentName: payload.agentName,
       model: payload.model,
       agentSessionKind: payload.agentSessionKind,
-      messages: serializeMessages(payload.messages),
-      toolState: serializeToolState(payload.toolState),
+      messages: structuredClone(payload.messages),
+      toolState: toToolStateSnapshot(payload.toolState),
       lastUpdated: Date.now(),
     };
 
