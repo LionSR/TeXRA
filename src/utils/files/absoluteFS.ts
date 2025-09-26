@@ -70,6 +70,17 @@ export class AbsoluteFS {
   }
 
   /**
+   * Append content to a file, creating it if it does not exist
+   */
+  public static async appendFile(
+    filePath: string,
+    content: string | Uint8Array,
+  ): Promise<void> {
+    this.validatePath(filePath, 'appendFile');
+    await fs.promises.appendFile(filePath, content);
+  }
+
+  /**
    * Delete a file or directory
    */
   public static async delete(

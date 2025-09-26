@@ -77,10 +77,7 @@ export class WorkspaceFS extends RelativeFS {
     content: string,
   ): Promise<void> {
     try {
-      const existing = (await this.exists(filePath))
-        ? await this.read(filePath)
-        : '';
-      await this.write(filePath, existing + content);
+      await AbsoluteFS.appendFile(this.fullPath(filePath), content);
       logger.debug(CHANNEL, `Successfully appended to file: ${filePath}`);
     } catch (err) {
       logger.error(
