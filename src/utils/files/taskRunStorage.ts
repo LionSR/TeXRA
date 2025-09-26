@@ -18,7 +18,9 @@ export const TASK_RUNS_DIR = 'taskRuns';
  * @param id - The execution ID to validate
  * @returns True if the ID is valid, false otherwise
  */
-export function isValidExecutionId(id: ExecutionId | undefined): id is ExecutionId {
+export function isValidExecutionId(
+  id: ExecutionId | undefined,
+): id is ExecutionId {
   if (!id) return false;
   // Ensure ID doesn't contain path traversal characters or other unsafe patterns
   const invalidPatterns = ['..', '/', '\\', '\0'];
