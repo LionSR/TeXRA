@@ -3,7 +3,7 @@ import { z } from 'zod';
 
 // Local imports - agent
 // Local imports - agent components
-import { ToolConfigSchema } from './ToolConfig';
+import { ToolConfigSchema, TOOL_CONFIG_DEFAULTS } from './ToolConfig';
 
 /**
  * Checks that the number of output files does not exceed the number of input files.
@@ -18,28 +18,31 @@ export const validateOutputFiles = (cfg: Record<string, any>): boolean => {
 };
 
 /** Zod schema for validating AgentConfig objects */
-export const AgentConfigSchema = z.object({
-    model: z.string().prefault('gemini25p'),
-    agent: z.string().prefault('correct'),
-    instruction: z.string().prefault(''),
-    useMultipleOutputs: z.boolean().prefault(false),
+export const AgentConfigSchema = z
+  .object({
+    model: z.string().default('gemini25p'),
+    agent: z.string().default('correct'),
+    instruction: z.string().default(''),
+    useMultipleOutputs: z.boolean().default(false),
 
-    inputFile: z.string().prefault(''),
-    inputFiles: z.array(z.string()).nullable().prefault(null),
-    referenceFile: z.string().nullable().prefault(null),
-    referenceFiles: z.array(z.string()).nullable().prefault(null),
-    auxiliaryFile: z.string().nullable().prefault(null),
-    auxiliaryFiles: z.array(z.string()).nullable().prefault(null),
-    mediaFile: z.string().nullable().prefault(null),
-    mediaFiles: z.array(z.string()).nullable().prefault(null),
-    outputFiles: z.array(z.string()).nullable().prefault(null),
-    editedFile: z.string().nullable().prefault(null),
+    inputFile: z.string().default(''),
+    inputFiles: z.array(z.string()).nullable().default(null),
+    referenceFile: z.string().nullable().default(null),
+    referenceFiles: z.array(z.string()).nullable().default(null),
+    auxiliaryFile: z.string().nullable().default(null),
+    auxiliaryFiles: z.array(z.string()).nullable().default(null),
+    mediaFile: z.string().nullable().default(null),
+    mediaFiles: z.array(z.string()).nullable().default(null),
+    outputFiles: z.array(z.string()).nullable().default(null),
+    editedFile: z.string().nullable().default(null),
 
-    toolConfig: ToolConfigSchema.prefault({}),
+    toolConfig: ToolConfigSchema.default(TOOL_CONFIG_DEFAULTS),
   })
+  .strip()
   .refine(validateOutputFiles, {
     path: ['outputFiles'],
-      error: 'Number of output files must not be greater than the number of input files.'
-});
+    message:
+      'Number of output files must not be greater than the number of input files.',
+  });
 
 export type AgentConfig = z.infer<typeof AgentConfigSchema>;

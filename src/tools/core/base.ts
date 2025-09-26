@@ -7,9 +7,9 @@ import { ToolResult, toolResult } from '@tools/result';
 
 export abstract class BaseTool<T> {
   readonly definition: ToolDefinition;
-  readonly schema: z.ZodJSONSchema<T>;
+  readonly schema: z.ZodSchema<T>;
 
-  protected constructor(definition: ToolDefinition, schema: z.ZodJSONSchema<T>) {
+  protected constructor(definition: ToolDefinition, schema: z.ZodSchema<T>) {
     this.definition = definition;
     this.schema = schema;
   }

@@ -11,12 +11,14 @@ import { ToolError, ToolResult, toolResult } from '@tools/result';
 // Local imports - utils
 import { WorkspaceFS } from '@utils/files';
 
-const EditInputSchema = z.strictObject({
+const EditInputSchema = z
+  .object({
     path: z.string(),
     old_string: z.string(),
     new_string: z.string(),
     replace_all: z.boolean().optional(),
-  });
+  })
+  .strict();
 
 export type EditInput = z.infer<typeof EditInputSchema>;
 

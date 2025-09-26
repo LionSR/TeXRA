@@ -28,26 +28,30 @@ const logger = new AgentLogger(CHANNEL);
 const STORAGE_DIR = 'toolUseSessions';
 const SNAPSHOT_VERSION = 1;
 
-const ToolStateSnapshotSchema = z.object({
-  texcountStats: z.string().nullable(),
-  lastResponse: z.string(),
-  accumulatedOutput: z.string(),
-  mediaFiles: z.array(z.string()),
-  thinkingBlocks: z.array(z.unknown()),
-  thinkingAdded: z.boolean(),
-});
+const ToolStateSnapshotSchema = z
+  .object({
+    texcountStats: z.string().nullable(),
+    lastResponse: z.string(),
+    accumulatedOutput: z.string(),
+    mediaFiles: z.array(z.string()),
+    thinkingBlocks: z.array(z.unknown()),
+    thinkingAdded: z.boolean(),
+  })
+  .strict();
 
-const ToolUseSessionSnapshotSchema = z.strictObject({
+const ToolUseSessionSnapshotSchema = z
+  .object({
     version: z.literal(SNAPSHOT_VERSION),
     executionId: z.string(),
     streamId: z.string(),
     agentName: z.string(),
     model: z.string(),
-    agentSessionKind: z.enum(AgentSessionKind),
+    agentSessionKind: z.nativeEnum(AgentSessionKind),
     messages: z.array(z.unknown()),
     toolState: ToolStateSnapshotSchema,
     lastUpdated: z.number(),
-  });
+  })
+  .strict();
 
 export type ToolUseSessionSnapshot = z.infer<
   typeof ToolUseSessionSnapshotSchema

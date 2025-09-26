@@ -18,10 +18,12 @@ import { getGitignoreMatcher } from '@tools/gitignore';
 // Local imports - utils
 import { WorkspaceFS } from '@utils/files';
 
-const GlobInputSchema = z.strictObject({
+const GlobInputSchema = z
+  .object({
     pattern: z.string().min(1, 'pattern is required'),
     path: z.string().optional(),
-  });
+  })
+  .strict();
 
 export type GlobInput = z.infer<typeof GlobInputSchema>;
 

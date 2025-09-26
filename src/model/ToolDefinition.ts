@@ -6,14 +6,16 @@ import type { Tool as AnthropicTool } from '@anthropic-ai/sdk/resources/messages
 import type { Schema as GeminiSchema } from '@google/genai/dist/genai';
 
 /** Zod schema describing a tool/function that a provider can execute. */
-export const ToolDefinitionSchema = z.strictObject({
+export const ToolDefinitionSchema = z
+  .object({
     /** Name of the tool or function */
     name: z.string(),
     /** Optional description for the model */
     description: z.string().optional(),
     /** Parameter schema or provider specific metadata */
     parameters: z.record(z.string(), z.unknown()).optional(),
-  });
+  })
+  .strip();
 
 /**
  * Generic tool definition used across model providers. The parameters field

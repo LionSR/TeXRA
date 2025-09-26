@@ -11,9 +11,11 @@ import { ToolResult, toolResult } from '@tools/result';
 // Local imports - utils
 import { WorkspaceFS } from '@utils/files';
 
-const ReadInputSchema = z.strictObject({
+const ReadInputSchema = z
+  .object({
     path: z.string(),
-  });
+  })
+  .strict();
 
 export type ReadInput = z.infer<typeof ReadInputSchema>;
 

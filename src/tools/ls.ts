@@ -19,10 +19,12 @@ import { getGitignoreMatcher } from '@tools/gitignore';
 // Local imports - utils
 import { WorkspaceFS } from '@utils/files';
 
-const LsInputSchema = z.strictObject({
+const LsInputSchema = z
+  .object({
     path: z.string(),
     ignore: z.array(z.string()).optional(),
-  });
+  })
+  .strict();
 
 export type LsInput = z.infer<typeof LsInputSchema>;
 

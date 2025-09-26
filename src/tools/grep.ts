@@ -15,20 +15,22 @@ const OUTPUT_MODES = ['content', 'files_with_matches', 'count'] as const;
 
 type OutputMode = (typeof OUTPUT_MODES)[number];
 
-const GrepInputSchema = z.strictObject({
+const GrepInputSchema = z
+  .object({
     pattern: z.string().min(1, 'pattern is required'),
     path: z.string().optional(),
     glob: z.string().optional(),
     output_mode: z.enum(OUTPUT_MODES).optional(),
-    '-B': z.int().min(0).optional(),
-    '-A': z.int().min(0).optional(),
-    '-C': z.int().min(0).optional(),
+    '-B': z.number().int().min(0).optional(),
+    '-A': z.number().int().min(0).optional(),
+    '-C': z.number().int().min(0).optional(),
     '-n': z.boolean().optional(),
     '-i': z.boolean().optional(),
     type: z.string().optional(),
-    head_limit: z.int().min(1).optional(),
+    head_limit: z.number().int().min(1).optional(),
     multiline: z.boolean().optional(),
-  });
+  })
+  .strict();
 
 export type GrepInput = z.infer<typeof GrepInputSchema>;
 
