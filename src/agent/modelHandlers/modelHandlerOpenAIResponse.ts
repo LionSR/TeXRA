@@ -501,7 +501,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       output_tokens_details: { reasoning_tokens: 0 },
     };
 
-    const newResponse = this.collectResponseText(responseObject);
+    const rawOutputText = responseObject.output_text;
+    const newResponse =
+      typeof rawOutputText === 'string' ? rawOutputText.trim() : '';
 
     const stopReason =
       responseObject.status === 'completed'
@@ -517,15 +519,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     }
 
     return [newResponse, usage, stopReason];
-  }
-
-  private collectResponseText(responseObject: Response): string {
-    const { output_text: outputText } = responseObject;
-    if (typeof outputText !== 'string') {
-      return '';
-    }
-
-    return outputText.trim();
   }
 
   /** Price computation adapted for Responses API token fields. */
