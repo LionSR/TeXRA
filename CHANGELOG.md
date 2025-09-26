@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Improvements
+
+- Refresh Qwen-Max and Qwen Plus integrations with updated pricing, naming, and thinking support in the DashScope handler
+
 ## [0.33.7] - 2025-09-22
 
 ### Features
