@@ -15,7 +15,7 @@ import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
 import { AgentLogger } from '@logger/AgentLogger';
 
 // Local imports - utilities
-import { StorageFS } from '@utils/files';
+import { StorageFS, isValidExecutionId } from '@utils/files';
 import {
   DEFAULT_TOOL_USE_PERSISTENCE_TTL_HOURS,
   getToolUsePersistenceEnabled,
@@ -63,12 +63,6 @@ interface SavePayload {
   agentSessionKind: AgentSessionKind;
   messages: ProviderMessage[];
   toolState: ToolState;
-}
-
-function isValidExecutionId(id: ExecutionId | undefined): id is ExecutionId {
-  if (!id) return false;
-  const invalidPatterns = ['..', '/', '\\', '\0'];
-  return !invalidPatterns.some((pattern) => id.includes(pattern));
 }
 
 function serializeMessages(messages: ProviderMessage[]): unknown[] {
