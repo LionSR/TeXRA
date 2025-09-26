@@ -18,13 +18,13 @@ const DASHSCOPE_DEFAULT_CAPABILITIES: ModelCapabilities = {
 export const DASHSCOPE_MODELS: Record<string, ModelConfig> = {
   qwen3max: {
     name: 'qwen3max',
-    fullName: 'qwen3-max-latest',
-    openrouterFullName: 'qwen/qwen3-max',
+    fullName: 'qwen-max-latest',
+    openrouterFullName: 'qwen/qwen-max',
     provider: ModelProvider.DASHSCOPE,
     maxOutputTokens: 32800,
-    contextWindow: 256000,
-    inputPrice: 1.2,
-    outputPrice: 6,
+    contextWindow: 262144,
+    inputPrice: 1.6,
+    outputPrice: 6.4,
     capabilities: {
       ...DASHSCOPE_DEFAULT_CAPABILITIES,
       supportsVision: false,
@@ -33,8 +33,8 @@ export const DASHSCOPE_MODELS: Record<string, ModelConfig> = {
   },
   qwenplus: {
     name: 'qwenplus',
-    fullName: 'qwen-plus-2025-07-28',
-    openrouterFullName: 'qwen/qwen-plus-2025-07-28',
+    fullName: 'qwen-plus-latest',
+    openrouterFullName: 'qwen/qwen-plus',
     provider: ModelProvider.DASHSCOPE,
     maxOutputTokens: 32768,
     contextWindow: 1000000,
