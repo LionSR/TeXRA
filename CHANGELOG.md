@@ -8,6 +8,10 @@ All notable changes to this project will be documented in this file.
 
 - Update Gemini 2.5 Flash preview entries to the September 2025 release.
 
+### Improvements
+
+- Refresh Qwen-Max and Qwen Plus integrations with updated pricing, naming, and thinking support in the DashScope handler
+
 ## [0.33.7] - 2025-09-22
 
 ### Features
