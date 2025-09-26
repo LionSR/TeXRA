@@ -22,11 +22,20 @@
 #instruction {
   min-height: var(--height-medium);
   max-height: var(--height-xlarge);
-  padding-bottom: calc(var(--spacing-xlarge) + var(--spacing-large));
   resize: none;
   overflow-y: auto;
   transition: height 0.1s ease-out;
   margin-top: var(--spacing-medium);
+  margin-bottom: var(--spacing-medium);
+}
+
+.instruction-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-medium);
+  flex-wrap: wrap;
+  width: 100%;
 }
 
 .instruction-header {
@@ -58,10 +67,8 @@
 
 #executeButton {
   font-size: var(--font-size);
-  position: absolute;
-  bottom: var(--spacing-xlarge);
-  right: var(--spacing-xlarge);
-  z-index: 10;
+  margin-left: auto;
+  flex-shrink: 0;
 }
 
 /* Recording button states */
