@@ -2,7 +2,12 @@
 
 // Local imports - agent components
 import type { AgentConfig } from '../core/AgentConfig';
-import { AgentPrompt, AgentSetting } from '../core/AgentDataclass';
+import {
+  AgentPrompt,
+  AgentSetting,
+  AgentSessionMetadata,
+  resolveAgentSessionMetadata,
+} from '../core/AgentDataclass';
 import { AgentStateGlobal } from '../core/AgentState';
 import { IAgent } from '../core/IAgent';
 import type { IModelHandler } from '../modelHandlers';
@@ -40,6 +45,10 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
 
   public get config(): AgentConfig {
     return this.agentConfig;
+  }
+
+  public getSessionMetadata(): AgentSessionMetadata {
+    return resolveAgentSessionMetadata(this.agentSetting.agentType);
   }
 
   constructor(
