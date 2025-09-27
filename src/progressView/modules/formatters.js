@@ -251,9 +251,9 @@ export class LogEntryFormatter {
             ),
           'scratchpad',
         ),
-      toolUse: (text, id, groupId, timestamp) =>
+      toolUse: (text, data, id, groupId, timestamp) =>
         this._safeFormat(
-          () => this._formatToolUse(text, id, groupId, timestamp),
+          () => this._formatToolUse(text, data, id, groupId, timestamp),
           'tool use',
         ),
       modelResponse: (params) =>
@@ -341,14 +341,12 @@ export class LogEntryFormatter {
           content: text,
           level,
         });
-      } else if (
-        messageType === 'thinking' ||
-        messageType === 'scratchpad' ||
-        messageType === 'toolUse'
-      ) {
+      } else if (messageType === 'thinking' || messageType === 'scratchpad') {
         // Pass the full logMessage for access to groupId and timestamp
         // Note: timestamp here is numeric (from Date.now())
         result = formatter(text, id, groupId, timestamp);
+      } else if (messageType === 'toolUse') {
+        result = formatter(text, data, id, groupId, timestamp);
       } else if (messageType === 'userMessage') {
         // User message needs text, id, and timestamp
         result = formatter(text, id, timestamp);
@@ -428,7 +426,7 @@ export class LogEntryFormatter {
     return element;
   }
 
-  _formatToolUse(content, logId, groupId, timestamp) {
+  _formatToolUse(content, data, logId, groupId, timestamp) {
     const element = createFromTemplate('toolUseTemplate');
     if (!element) return null;
 
@@ -459,178 +457,55 @@ export class LogEntryFormatter {
       return `${normalized.slice(0, MAX_PREVIEW_CHARS - 1)}…`;
     };
 
-    const decodedContent = decodeHtml(content);
-    try {
-      const parsed = JSON.parse(decodedContent);
-
-      const toolName =
-        typeof parsed.tool === 'string'
-          ? parsed.tool.trim()
-          : typeof parsed.name === 'string'
-            ? parsed.name.trim()
-            : '';
-
-      const outputCandidate =
-        parsed.output &&
-        typeof parsed.output === 'object' &&
-        !Array.isArray(parsed.output)
-          ? parsed.output
-          : parsed.result &&
-              typeof parsed.result === 'object' &&
-              !Array.isArray(parsed.result)
-            ? parsed.result
-            : {};
-
-      const summaryText =
-        typeof outputCandidate.summary === 'string' &&
-        outputCandidate.summary.trim()
-          ? outputCandidate.summary.trim()
-          : typeof parsed.summary === 'string' && parsed.summary.trim()
-            ? parsed.summary.trim()
-            : '';
-
-      const errorText =
-        typeof outputCandidate.error === 'string'
-          ? outputCandidate.error
-          : typeof parsed.error === 'string'
-            ? parsed.error
-            : '';
-
-      let outputText = '';
-      if (typeof outputCandidate.output === 'string') {
-        outputText = outputCandidate.output;
-      } else if (typeof parsed.output === 'string') {
-        outputText = parsed.output;
+    const safeDecode = (value) => {
+      if (typeof value !== 'string') {
+        return '';
       }
-
-      const isError = Boolean(
-        (typeof outputCandidate.isError === 'boolean' &&
-          outputCandidate.isError) ||
-          (typeof parsed.isError === 'boolean' && parsed.isError) ||
-          (typeof errorText === 'string' && errorText.trim().length > 0),
-      );
-
-      const headerSummary =
-        summaryText || makePreview(errorText || outputText || '');
-
-      const titlePrefix = isError ? 'Tool Error' : 'Tool Use';
-      const titleBase = toolName ? `${titlePrefix}: ${toolName}` : titlePrefix;
-      const titleText = headerSummary
-        ? `${titleBase} — ${headerSummary}`
-        : titleBase;
-
-      if (headerLabel) headerLabel.textContent = titleText;
-      if (iconElem) {
-        iconElem.className = isError
-          ? 'codicon codicon-error'
-          : 'codicon codicon-wrench';
+      try {
+        return decodeHtml(value);
+      } catch (err) {
+        console.error('Failed to decode tool use log content:', err);
+        return value;
       }
-      element.classList.toggle('tool-use-error', isError);
+    };
 
-      const sections = [];
-
-      if (parsed.input !== undefined) {
-        const inputValue =
-          typeof parsed.input === 'string'
-            ? parsed.input
-            : JSON.stringify(parsed.input, null, 2);
-        sections.push(`
-          <div class="tool-use-section">
-            <div class="tool-use-subsection">
-              <span class="tool-use-sublabel">Input:</span>
-              <pre>${encodeHtml(inputValue)}</pre>
-            </div>
-          </div>
-        `);
+    const safeStringify = (value) => {
+      if (typeof value === 'string') {
+        return value;
       }
-
-      if (errorText) {
-        sections.push(`
-          <div class="tool-use-section">
-            <div class="tool-use-subsection">
-              <span class="tool-use-sublabel">Error:</span>
-              <pre>${encodeHtml(errorText)}</pre>
-            </div>
-          </div>
-        `);
+      if (value === undefined || value === null) {
+        return '';
       }
+      try {
+        return JSON.stringify(value, null, 2);
+      } catch (err) {
+        console.error('Failed to stringify tool use payload value:', err);
+        return String(value);
+      }
+    };
 
-      if (outputText) {
-        const encodedOutput = encodeHtml(outputText);
-        if (!summaryText && outputText.length > MAX_PREVIEW_CHARS) {
-          const preview = encodeHtml(
-            `${outputText.slice(0, MAX_PREVIEW_CHARS).trimEnd()}…`,
-          );
-          sections.push(`
-            <div class="tool-use-section">
-              <div class="tool-use-subsection">
-                <span class="tool-use-sublabel">Output:</span>
-                <pre class="tool-output-preview">${preview}</pre>
-                <details class="tool-output-details">
-                  <summary>Show full output</summary>
-                  <pre class="tool-output-full">${encodedOutput}</pre>
-                </details>
-              </div>
-            </div>
-          `);
-        } else {
-          sections.push(`
-            <div class="tool-use-section">
-              <div class="tool-use-subsection">
-                <span class="tool-use-sublabel">Output:</span>
-                <pre class="tool-output-full">${encodedOutput}</pre>
-              </div>
-            </div>
-          `);
+    const toDisplayString = (value) => {
+      if (value === undefined || value === null) {
+        return '';
+      }
+      return typeof value === 'string' ? value : safeStringify(value);
+    };
+
+    const decodedContent = safeDecode(content);
+    const showFallback = (raw, structured) => {
+      let fallbackSource = raw;
+      if (!fallbackSource) {
+        if (structured && typeof structured === 'object') {
+          fallbackSource = safeStringify(structured);
+        } else if (decodedContent) {
+          fallbackSource = decodedContent;
+        } else if (typeof content === 'string') {
+          fallbackSource = content;
         }
       }
-
-      if (outputCandidate && outputCandidate.diagnostics !== undefined) {
-        const diagnosticsJson = JSON.stringify(
-          outputCandidate.diagnostics,
-          null,
-          2,
-        );
-        sections.push(`
-          <div class="tool-use-section">
-            <div class="tool-use-subsection">
-              <span class="tool-use-sublabel">Diagnostics:</span>
-              <pre>${encodeHtml(diagnosticsJson)}</pre>
-            </div>
-          </div>
-        `);
+      if (!fallbackSource) {
+        fallbackSource = 'Unable to display tool log entry.';
       }
-
-      if (outputCandidate && typeof outputCandidate.system === 'string') {
-        sections.push(`
-          <div class="tool-use-section">
-            <div class="tool-use-subsection">
-              <span class="tool-use-sublabel">System:</span>
-              <pre>${encodeHtml(outputCandidate.system)}</pre>
-            </div>
-          </div>
-        `);
-      }
-
-      if (outputCandidate && typeof outputCandidate.base64Image === 'string') {
-        sections.push(`
-          <div class="tool-use-section">
-            <div class="tool-use-subsection">
-              <span class="tool-use-sublabel">Image:</span>
-              <pre>(base64 image omitted)</pre>
-            </div>
-          </div>
-        `);
-      }
-
-      if (sections.length === 0) {
-        contentElem.innerHTML = `<pre>${encodeHtml(decodedContent)}</pre>`;
-      } else {
-        contentElem.innerHTML = sections.join(
-          '<hr class="tool-use-separator">',
-        );
-      }
-    } catch {
       if (headerLabel) headerLabel.textContent = 'Tool Use (raw entry)';
       if (iconElem) iconElem.className = 'codicon codicon-wrench';
       element.classList.remove('tool-use-error');
@@ -638,10 +513,193 @@ export class LogEntryFormatter {
         <div class="tool-use-section">
           <div class="tool-use-subsection">
             <span class="tool-use-sublabel">Raw log:</span>
-            <pre>${encodeHtml(decodedContent)}</pre>
+            <pre>${encodeHtml(fallbackSource)}</pre>
           </div>
         </div>
       `;
+      return element;
+    };
+
+    const hasStructuredData =
+      data && typeof data === 'object' && data !== null && !Array.isArray(data);
+    let parsed = hasStructuredData ? data : undefined;
+
+    if (!parsed) {
+      if (!decodedContent) {
+        return showFallback('', data);
+      }
+      try {
+        parsed = JSON.parse(decodedContent);
+      } catch (err) {
+        console.error('Failed to parse tool use log entry:', err);
+        return showFallback(decodedContent, data);
+      }
+    }
+
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return showFallback(decodedContent, parsed ?? data);
+    }
+
+    const toolName =
+      typeof parsed.tool === 'string'
+        ? parsed.tool.trim()
+        : typeof parsed.name === 'string'
+          ? parsed.name.trim()
+          : '';
+
+    const outputCandidate =
+      parsed.output &&
+      typeof parsed.output === 'object' &&
+      !Array.isArray(parsed.output)
+        ? parsed.output
+        : parsed.result &&
+            typeof parsed.result === 'object' &&
+            !Array.isArray(parsed.result)
+          ? parsed.result
+          : {};
+
+    const summaryText =
+      typeof outputCandidate.summary === 'string' &&
+      outputCandidate.summary.trim()
+        ? outputCandidate.summary.trim()
+        : typeof parsed.summary === 'string' && parsed.summary.trim()
+          ? parsed.summary.trim()
+          : '';
+
+    const errorText = toDisplayString(
+      outputCandidate.error !== undefined
+        ? outputCandidate.error
+        : parsed.error,
+    );
+
+    let outputText = '';
+    if (outputCandidate.output !== undefined) {
+      outputText = toDisplayString(outputCandidate.output);
+    } else if (parsed.output !== undefined) {
+      outputText = toDisplayString(parsed.output);
+    }
+
+    const isError = Boolean(
+      (typeof outputCandidate.isError === 'boolean' &&
+        outputCandidate.isError) ||
+        (typeof parsed.isError === 'boolean' && parsed.isError) ||
+        (typeof errorText === 'string' && errorText.trim().length > 0),
+    );
+
+    const headerSummary =
+      summaryText || makePreview(errorText || outputText || '');
+
+    const titlePrefix = isError ? 'Tool Error' : 'Tool Use';
+    const titleBase = toolName ? `${titlePrefix}: ${toolName}` : titlePrefix;
+    const titleText = headerSummary
+      ? `${titleBase} — ${headerSummary}`
+      : titleBase;
+
+    if (headerLabel) headerLabel.textContent = titleText;
+    if (iconElem) {
+      iconElem.className = isError
+        ? 'codicon codicon-error'
+        : 'codicon codicon-wrench';
+    }
+    element.classList.toggle('tool-use-error', isError);
+
+    const sections = [];
+
+    if (parsed.input !== undefined) {
+      const inputValue = toDisplayString(parsed.input);
+      sections.push(`
+        <div class="tool-use-section">
+          <div class="tool-use-subsection">
+            <span class="tool-use-sublabel">Input:</span>
+            <pre>${encodeHtml(inputValue)}</pre>
+          </div>
+        </div>
+      `);
+    }
+
+    if (errorText && errorText.trim()) {
+      sections.push(`
+        <div class="tool-use-section">
+          <div class="tool-use-subsection">
+            <span class="tool-use-sublabel">Error:</span>
+            <pre>${encodeHtml(errorText)}</pre>
+          </div>
+        </div>
+      `);
+    }
+
+    if (outputText && outputText.trim()) {
+      const encodedOutput = encodeHtml(outputText);
+      if (!summaryText && outputText.length > MAX_PREVIEW_CHARS) {
+        const preview = encodeHtml(
+          `${outputText.slice(0, MAX_PREVIEW_CHARS).trimEnd()}…`,
+        );
+        sections.push(`
+          <div class="tool-use-section">
+            <div class="tool-use-subsection">
+              <span class="tool-use-sublabel">Output:</span>
+              <pre class="tool-output-preview">${preview}</pre>
+              <details class="tool-output-details">
+                <summary>Show full output</summary>
+                <pre class="tool-output-full">${encodedOutput}</pre>
+              </details>
+            </div>
+          </div>
+        `);
+      } else {
+        sections.push(`
+          <div class="tool-use-section">
+            <div class="tool-use-subsection">
+              <span class="tool-use-sublabel">Output:</span>
+              <pre class="tool-output-full">${encodedOutput}</pre>
+            </div>
+          </div>
+        `);
+      }
+    }
+
+    if (outputCandidate && outputCandidate.diagnostics !== undefined) {
+      const diagnosticsText = toDisplayString(outputCandidate.diagnostics);
+      if (diagnosticsText) {
+        sections.push(`
+          <div class="tool-use-section">
+            <div class="tool-use-subsection">
+              <span class="tool-use-sublabel">Diagnostics:</span>
+              <pre>${encodeHtml(diagnosticsText)}</pre>
+            </div>
+          </div>
+        `);
+      }
+    }
+
+    if (outputCandidate && typeof outputCandidate.system === 'string') {
+      sections.push(`
+        <div class="tool-use-section">
+          <div class="tool-use-subsection">
+            <span class="tool-use-sublabel">System:</span>
+            <pre>${encodeHtml(outputCandidate.system)}</pre>
+          </div>
+        </div>
+      `);
+    }
+
+    if (outputCandidate && typeof outputCandidate.base64Image === 'string') {
+      sections.push(`
+        <div class="tool-use-section">
+          <div class="tool-use-subsection">
+            <span class="tool-use-sublabel">Image:</span>
+            <pre>(base64 image omitted)</pre>
+          </div>
+        </div>
+      `);
+    }
+
+    if (sections.length === 0) {
+      const fallbackText =
+        decodedContent || safeStringify(parsed) || 'No structured tool output.';
+      contentElem.innerHTML = `<pre>${encodeHtml(fallbackText)}</pre>`;
+    } else {
+      contentElem.innerHTML = sections.join('<hr class="tool-use-separator">');
     }
 
     return element;

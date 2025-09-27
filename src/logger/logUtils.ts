@@ -436,6 +436,7 @@ export function parseLegacyLogData(
     MESSAGE_TYPES.MISSING_OUTPUTS,
     MESSAGE_TYPES.LATEXDIFF,
     MESSAGE_TYPES.STATISTICS,
+    MESSAGE_TYPES.TOOL_USE,
   ]);
 
   if (type && legacyTypes.has(type) && logMessage.text) {
