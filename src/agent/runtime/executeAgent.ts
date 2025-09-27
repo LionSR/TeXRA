@@ -15,6 +15,7 @@ import {
   AgentSetting,
   AgentPrompt,
   AgentType,
+  resolveAgentSessionMetadata,
 } from '@agent/core/AgentDataclass';
 import { IAgent } from '@agent/core/IAgent';
 import {
@@ -23,10 +24,17 @@ import {
   MergeAgent,
   BaseToolUseAgent,
 } from '@agent/implementations';
-import { loadAgentSettingAndPrompts } from '@agent/runtime/agentLoad';
+import {
+  loadAgentSettingAndPrompts,
+  ensureAgentTypeForSource,
+} from '@agent/runtime/agentLoad';
 import { ModelFactory } from '@agent/runtime/ModelFactory';
 import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
 import { bus } from '@eventBus/ProgressEventBus';
+import {
+  AgentDirectorySource,
+  type AgentPathResolution,
+} from './AgentPathTypes';
 
 // Local imports - utilities
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
@@ -62,7 +70,7 @@ type AgentConstructor = {
 export async function getAgentPath(
   agentName: string,
   context: vscode.ExtensionContext,
-): Promise<string> {
+): Promise<AgentPathResolution> {
   try {
     // First check custom agents directory
     const customDir = await agentDirectories.custom();
@@ -75,7 +83,10 @@ export async function getAgentPath(
       });
 
       if (customMatches.length > 0) {
-        return path.join(customDir, path.dirname(customMatches[0]));
+        return {
+          directory: path.join(customDir, path.dirname(customMatches[0])),
+          source: AgentDirectorySource.Custom,
+        };
       }
     }
 
@@ -115,9 +126,15 @@ export async function getAgentPath(
 
     // Return the directory containing the yaml file
     if (builtInMatches.length > 0) {
-      return path.join(builtInDir, path.dirname(builtInMatches[0]));
+      return {
+        directory: path.join(builtInDir, path.dirname(builtInMatches[0])),
+        source: AgentDirectorySource.BuiltIn,
+      };
     }
-    return path.join(builtInToolUseDir, path.dirname(toolUseMatches[0]));
+    return {
+      directory: path.join(builtInToolUseDir, path.dirname(toolUseMatches[0])),
+      source: AgentDirectorySource.BuiltInToolUse,
+    };
   } catch (err) {
     const errorMsg = `Error finding agent path: ${err instanceof Error ? err.message : String(err)}`;
     // Don't show error notification for missing YAML files - we handle it with banner
@@ -176,6 +193,11 @@ export async function executeAgentWithLogging<T extends IAgent>(
   try {
     // Create agent instance and extract its declared type
     const { agent, agentType } = await createAgentFn();
+    const sessionMetadata = agent.getSessionMetadata();
+    const metadata = resolveAgentSessionMetadata(
+      agentType ?? sessionMetadata.agentType,
+      sessionMetadata.agentSessionKind,
+    );
 
     if (executionId) {
       await ensureRunDir(executionId);
@@ -184,7 +206,7 @@ export async function executeAgentWithLogging<T extends IAgent>(
     // Get the full stream tab ID
     const config = agent.config;
     streamTabId = getStreamTabId(config.agent, config.model, config.inputFile, {
-      agentType,
+      agentType: metadata.agentType,
       executionId,
       useMultipleOutputs: config.useMultipleOutputs,
     });
@@ -237,14 +259,10 @@ export async function executeAgentWithLogging<T extends IAgent>(
         );
 
         // Switch to this stream and set its status to running
-        const resolvedAgentType =
-          agentType ??
-          (agent instanceof BaseToolUseAgent
-            ? AgentType.ToolUse
-            : AgentType.CoT);
         bus.emit('setActiveStream', {
           stream: streamTabId,
-          agentType: resolvedAgentType,
+          agentType: metadata.agentType,
+          agentSessionKind: metadata.agentSessionKind,
         });
         bus.emit('updateStreamStatus', {
           stream: streamTabId,
@@ -307,7 +325,7 @@ export async function executeAgentWithLogging<T extends IAgent>(
           bus.emit('setTaskState', {
             streamTabId: streamTabId,
             executionId,
-            taskState: agentConfigToTaskState(config, agentType),
+            taskState: agentConfigToTaskState(config, metadata),
           });
           logger.debug(
             `Task state stored for stream: ${streamTabId}`,
@@ -497,13 +515,16 @@ export async function executeAgent(
       const modelHandler = ModelFactory.createHandler(modelConfig);
 
       // Get agent path
-      const agentPath = await getAgentPath(fullConfig.agent, context);
+      const agentPathInfo = await getAgentPath(fullConfig.agent, context);
 
       // Load settings and prompts
-      const [agentSetting, agentPrompt] = await loadAgentSettingAndPrompts(
-        agentPath,
-        requestedAgentName,
-        { preferMultiple: fullConfig.useMultipleOutputs },
+      const [loadedAgentSetting, agentPrompt] =
+        await loadAgentSettingAndPrompts(agentPathInfo, requestedAgentName, {
+          preferMultiple: fullConfig.useMultipleOutputs,
+        });
+      const agentSetting = ensureAgentTypeForSource(
+        loadedAgentSetting,
+        agentPathInfo.source,
       );
 
       // Get appropriate agent class and create instance
@@ -513,7 +534,7 @@ export async function executeAgent(
         fullConfig,
         agentSetting,
         agentPrompt,
-        agentPath,
+        agentPathInfo.directory,
         executionId,
       );
       return { agent, agentType: agentSetting.agentType };
@@ -563,10 +584,12 @@ export async function executeMergeAgent(
       const modelHandler = ModelFactory.createHandler(modelConfig);
 
       // Get agent path and load settings/prompts
-      const agentPath = await getAgentPath('merge', context);
-      const [agentSetting, agentPrompt] = await loadAgentSettingAndPrompts(
-        agentPath,
-        'merge',
+      const agentPathInfo = await getAgentPath('merge', context);
+      const [loadedAgentSetting, agentPrompt] =
+        await loadAgentSettingAndPrompts(agentPathInfo, 'merge');
+      const agentSetting = ensureAgentTypeForSource(
+        loadedAgentSetting,
+        agentPathInfo.source,
       );
 
       const agent = new MergeAgent(
@@ -574,7 +597,7 @@ export async function executeMergeAgent(
         agentConfig,
         agentSetting,
         agentPrompt,
-        agentPath,
+        agentPathInfo.directory,
       );
       return { agent, agentType: agentSetting.agentType };
     },

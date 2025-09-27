@@ -4,6 +4,8 @@ import {
   AgentPrompt,
   AgentSessionKind,
   AgentSetting,
+  AgentType,
+  resolveAgentSessionMetadata,
 } from '../core/AgentDataclass';
 import { ToolState } from '../core/ToolState';
 import { runToolUseCycle } from '../core/ToolUseCycle';
@@ -56,6 +58,13 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
       executionId,
     );
     this.toolRegistry = DEFAULT_TOOL_REGISTRY;
+  }
+
+  public override getSessionMetadata() {
+    return resolveAgentSessionMetadata(
+      AgentType.ToolUse,
+      AgentSessionKind.ToolUse,
+    );
   }
 
   private getTools(): ToolDefinition[] {

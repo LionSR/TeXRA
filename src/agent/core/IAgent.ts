@@ -1,6 +1,7 @@
 // Local imports - agent
 // Local imports - agent components
 import type { AgentConfig } from './AgentConfig';
+import type { AgentSessionMetadata } from './AgentDataclass';
 
 /**
  * Minimal interface implemented by all agent types.
@@ -25,4 +26,9 @@ export interface IAgent {
 
   /** Interrupt the agent if it is running. */
   interrupt(): void;
+
+  /**
+   * Report how the agent identifies its session for logging and UI purposes.
+   */
+  getSessionMetadata(): AgentSessionMetadata;
 }
