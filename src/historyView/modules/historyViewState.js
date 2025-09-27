@@ -40,12 +40,25 @@ export class HistoryViewState {
   }
 
   initialize() {
-    const saved = this.stateManager.getState() ?? {};
+    const state = this.stateManager.getState();
+    const saved = typeof state === 'object' && state !== null ? state : {};
     this.searchIndex = saved.searchIndex || 0;
     this.totalMatches = saved.totalMatches || 0;
     const { toggleStates } = saved;
     if (Array.isArray(toggleStates)) {
       this.toggleStates.load(toggleStates);
+    } else if (typeof toggleStates === 'string') {
+      try {
+        const parsed = JSON.parse(toggleStates);
+        if (Array.isArray(parsed)) {
+          this.toggleStates.load(parsed);
+          this.save();
+        } else {
+          console.error('Failed to restore toggle states: expected an array.');
+        }
+      } catch (e) {
+        console.error('Failed to migrate toggle states from string.', e);
+      }
     } else if (toggleStates !== undefined) {
       console.error('Failed to restore toggle states: expected an array.');
     }
