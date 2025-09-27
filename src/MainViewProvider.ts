@@ -208,7 +208,7 @@ export class MainViewProvider
           }
         }
 
-        if (state && typeof state === 'object') {
+        if (state && typeof state === 'object' && !Array.isArray(state)) {
           // Send the state to the webview
           webviewView.webview.postMessage({
             command: MAIN_VIEW_COMMANDS.STATE_RESTORE,
@@ -217,7 +217,9 @@ export class MainViewProvider
 
           console.log('Restored state from context');
         }
-
+      } catch (error) {
+        console.error('Error restoring state from context:', error);
+      } finally {
         // Clear the stored state regardless of success to avoid loops
         await vscode.commands.executeCommand(
           'setContext',
@@ -229,8 +231,6 @@ export class MainViewProvider
           'texra.stateToRestore',
           undefined,
         );
-      } catch (error) {
-        console.error('Error restoring state from context:', error);
       }
     }
   }
