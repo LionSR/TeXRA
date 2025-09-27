@@ -184,20 +184,40 @@ export class ProgressViewState {
   initialize() {
     const previous = this.stateManager.getState();
     if (previous.groupToggleStates) {
-      try {
-        const data = JSON.parse(previous.groupToggleStates);
-        this.toggleStates.load(data);
-      } catch (e) {
-        console.error('Failed to restore group toggle states:', e);
+      const data = previous.groupToggleStates;
+      const isValidArray = Array.isArray(data);
+      if (!isValidArray) {
+        console.error(
+          'Failed to restore group toggle states: data is not an array',
+        );
+        return;
       }
+
+      const hasValidEntries = data.every((entry) => {
+        if (!Array.isArray(entry) || entry.length !== 2) {
+          return false;
+        }
+        const [id, collapsed] = entry;
+        return typeof id === 'string' && typeof collapsed === 'boolean';
+      });
+
+      if (!hasValidEntries) {
+        console.error(
+          'Failed to restore group toggle states: invalid entry format',
+        );
+        return;
+      }
+
+      this.toggleStates.load(data);
     }
   }
 
   /** Persist the current group toggle states. */
   save() {
     try {
-      const serialized = JSON.stringify(this.toggleStates.entries());
-      this.stateManager.update({ groupToggleStates: serialized });
+      this.stateManager.update({
+        groupToggleStates: this.toggleStates.entries(),
+      });
     } catch (e) {
       console.error('Failed to save state:', e);
     }
