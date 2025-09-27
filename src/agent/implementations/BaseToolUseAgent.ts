@@ -4,6 +4,8 @@ import {
   AgentPrompt,
   AgentSessionKind,
   AgentSetting,
+  AgentType,
+  resolveAgentSessionMetadata,
 } from '../core/AgentDataclass';
 import { ToolState } from '../core/ToolState';
 import { runToolUseCycle } from '../core/ToolUseCycle';
@@ -56,6 +58,13 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
       executionId,
     );
     this.toolRegistry = DEFAULT_TOOL_REGISTRY;
+  }
+
+  public override getSessionMetadata() {
+    return resolveAgentSessionMetadata(
+      AgentType.ToolUse,
+      AgentSessionKind.ToolUse,
+    );
   }
 
   private getTools(): ToolDefinition[] {
@@ -133,7 +142,7 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
       let shouldSkipCycle = false;
 
       if (this.resumeSnapshot) {
-        this.logger.info('Resuming tool-use session from saved state.');
+        this.logger.debug('Resuming tool-use session from saved state.');
         // Validate messages before hydrating
         const messages = this.resumeSnapshot.messages ?? [];
         if (!Array.isArray(messages)) {

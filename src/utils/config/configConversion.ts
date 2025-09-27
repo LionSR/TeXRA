@@ -7,14 +7,19 @@
 // Local imports - models
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import { AgentConfigSchema } from '@agent/core/AgentConfig';
-import { TaskState } from '@logger/TaskState';
+import { TaskState, isWorkflowTaskState } from '@logger/TaskState';
 import {
   AgentSessionKind,
   type AgentType,
-  deriveAgentSessionKind,
+  type AgentSessionMetadata,
+  resolveAgentSessionMetadata,
 } from '@agent/core/AgentDataclass';
 
 import { FILE_TYPES, type FileType } from './constants';
+
+function isObjectRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
 
 function createActiveFilesFromArrays(
   src: Record<string, any>,
@@ -43,14 +48,30 @@ function createActiveFilesFromArrays(
  */
 export function agentConfigToTaskState(
   config: AgentConfig,
-  agentType?: AgentType,
+  metadata?: AgentSessionMetadata | AgentType,
 ): TaskState {
-  const agentSessionKind = deriveAgentSessionKind(agentType);
+  const resolvedMetadata =
+    typeof metadata === 'object' && metadata !== null
+      ? resolveAgentSessionMetadata(
+          metadata.agentType,
+          metadata.agentSessionKind,
+        )
+      : resolveAgentSessionMetadata(metadata);
+
+  if (resolvedMetadata.agentSessionKind === AgentSessionKind.ToolUse) {
+    return {
+      agentConfig: config,
+      agentType: resolvedMetadata.agentType,
+      agentSessionKind: AgentSessionKind.ToolUse,
+      toolSessionState: {},
+    };
+  }
+
   return {
     agentConfig: config,
+    agentType: resolvedMetadata.agentType,
+    agentSessionKind: AgentSessionKind.Workflow,
     activeFiles: createActiveFilesFromArrays(config),
-    agentType,
-    agentSessionKind,
   };
 }
 
@@ -64,17 +85,22 @@ export function agentConfigToTaskState(
 export function objectToTaskState(obj: Record<string, any>): TaskState {
   // Check if this is already in the new format with nested agentConfig
   if (obj.agentConfig && typeof obj.agentConfig === 'object') {
-    // Already in new format, just ensure it's valid
     const agentType = obj.agentType as AgentType | undefined;
-    const agentSessionKind =
-      obj.agentSessionKind ?? deriveAgentSessionKind(agentType);
-    return {
-      agentConfig: AgentConfigSchema.parse(obj.agentConfig),
-      activeFiles:
-        obj.activeFiles || createActiveFilesFromArrays(obj.agentConfig),
-      agentType,
-      agentSessionKind,
-    };
+    const sessionKind = normalizeSessionKind(obj.agentSessionKind);
+    const metadata = resolveAgentSessionMetadata(agentType, sessionKind);
+    const state = agentConfigToTaskState(
+      AgentConfigSchema.parse(obj.agentConfig),
+      metadata,
+    );
+
+    if (isWorkflowTaskState(state)) {
+      state.activeFiles =
+        obj.activeFiles || createActiveFilesFromArrays(obj.agentConfig);
+    } else if (isObjectRecord(obj.toolSessionState)) {
+      state.toolSessionState = { ...obj.toolSessionState };
+    }
+
+    return state;
   }
 
   // Old format: extract UI-specific and tool config fields for backward compatibility
@@ -115,14 +141,16 @@ export function objectToTaskState(obj: Record<string, any>): TaskState {
   try {
     const normalized = AgentConfigSchema.parse(agentConfigData);
     const agentType = obj.agentType as AgentType | undefined;
-    const agentSessionKind =
-      obj.agentSessionKind ?? deriveAgentSessionKind(agentType);
-    const taskState = agentConfigToTaskState(normalized, agentType);
-    taskState.agentSessionKind = agentSessionKind;
+    const sessionKind = normalizeSessionKind(obj.agentSessionKind);
+    const metadata = resolveAgentSessionMetadata(agentType, sessionKind);
+    const taskState = agentConfigToTaskState(normalized, metadata);
 
-    // Add back TaskState-specific fields
-    if (activeFiles) {
-      taskState.activeFiles = activeFiles;
+    if (isWorkflowTaskState(taskState)) {
+      if (activeFiles) {
+        taskState.activeFiles = activeFiles;
+      }
+    } else if (isObjectRecord(obj.toolSessionState)) {
+      taskState.toolSessionState = { ...obj.toolSessionState };
     }
 
     return taskState;
@@ -131,15 +159,30 @@ export function objectToTaskState(obj: Record<string, any>): TaskState {
     console.error('Failed to parse task state, using defaults:', error);
     const defaultConfig = AgentConfigSchema.parse({});
     const agentType = obj.agentType as AgentType | undefined;
-    const agentSessionKind = deriveAgentSessionKind(agentType);
-    const taskState = agentConfigToTaskState(defaultConfig, agentType);
-    taskState.agentSessionKind = agentSessionKind;
+    const metadata = resolveAgentSessionMetadata(agentType);
+    const taskState = agentConfigToTaskState(defaultConfig, metadata);
 
-    // Preserve activeFiles if available
-    if (activeFiles) {
+    if (isWorkflowTaskState(taskState) && activeFiles) {
       taskState.activeFiles = activeFiles;
+    }
+
+    if (
+      !isWorkflowTaskState(taskState) &&
+      isObjectRecord(obj.toolSessionState)
+    ) {
+      taskState.toolSessionState = { ...obj.toolSessionState };
     }
 
     return taskState;
   }
+}
+
+function normalizeSessionKind(value: unknown): AgentSessionKind | undefined {
+  if (
+    value === AgentSessionKind.Workflow ||
+    value === AgentSessionKind.ToolUse
+  ) {
+    return value;
+  }
+  return undefined;
 }
