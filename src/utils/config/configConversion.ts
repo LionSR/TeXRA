@@ -17,6 +17,10 @@ import {
 
 import { FILE_TYPES, type FileType } from './constants';
 
+function isObjectRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
 function createActiveFilesFromArrays(
   src: Record<string, any>,
 ): Record<FileType, boolean> {
@@ -92,7 +96,7 @@ export function objectToTaskState(obj: Record<string, any>): TaskState {
     if (isWorkflowTaskState(state)) {
       state.activeFiles =
         obj.activeFiles || createActiveFilesFromArrays(obj.agentConfig);
-    } else if (obj.toolSessionState) {
+    } else if (isObjectRecord(obj.toolSessionState)) {
       state.toolSessionState = { ...obj.toolSessionState };
     }
 
@@ -145,7 +149,7 @@ export function objectToTaskState(obj: Record<string, any>): TaskState {
       if (activeFiles) {
         taskState.activeFiles = activeFiles;
       }
-    } else if (obj.toolSessionState) {
+    } else if (isObjectRecord(obj.toolSessionState)) {
       taskState.toolSessionState = { ...obj.toolSessionState };
     }
 
@@ -162,7 +166,7 @@ export function objectToTaskState(obj: Record<string, any>): TaskState {
       taskState.activeFiles = activeFiles;
     }
 
-    if (!isWorkflowTaskState(taskState) && obj.toolSessionState) {
+    if (!isWorkflowTaskState(taskState) && isObjectRecord(obj.toolSessionState)) {
       taskState.toolSessionState = { ...obj.toolSessionState };
     }
 
