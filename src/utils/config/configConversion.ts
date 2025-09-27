@@ -166,7 +166,10 @@ export function objectToTaskState(obj: Record<string, any>): TaskState {
       taskState.activeFiles = activeFiles;
     }
 
-    if (!isWorkflowTaskState(taskState) && isObjectRecord(obj.toolSessionState)) {
+    if (
+      !isWorkflowTaskState(taskState) &&
+      isObjectRecord(obj.toolSessionState)
+    ) {
       taskState.toolSessionState = { ...obj.toolSessionState };
     }
 
