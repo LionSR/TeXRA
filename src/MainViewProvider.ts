@@ -7,7 +7,6 @@ import { BaseWebviewProvider } from '@common/webview/BaseWebviewProvider';
 // Local imports - webview
 import { MainViewMessageHandler } from './webview/MainViewMessageHandler';
 import { MainViewContentProvider } from './webview/MainViewContentProvider';
-import { SecretManager } from '@frontend/secretManager';
 import { watchConfig, getConfig } from '@utils/config';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
 import { checkCoreDependencies } from '@utils/system/toolUtils';
@@ -159,19 +158,6 @@ export class MainViewProvider
     super.resolveWebviewViewInternal(webviewView);
 
     this.setupInitialState(webviewView);
-
-    // Check if any API keys are set and display banner if needed
-    const showReminders = getConfig<boolean>('ui.showApiKeyReminders', true);
-
-    if (showReminders) {
-      SecretManager.anyApiKeyExists().then((exists) => {
-        if (!exists) {
-          webviewView.webview.postMessage({
-            command: MAIN_VIEW_COMMANDS.SHOW_API_KEY_BANNER,
-          });
-        }
-      });
-    }
 
     // Check for missing core dependencies and display banner if needed
     const showDependencyReminders = getConfig<boolean>(

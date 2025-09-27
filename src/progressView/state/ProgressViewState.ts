@@ -15,12 +15,20 @@ import type { AgentFilter } from '../types';
 import { isAgentTypeFilter } from '@agent/types/AgentStreamTypes';
 import {
   AgentSessionKind,
-  deriveAgentSessionKind,
+  resolveAgentSessionMetadata,
 } from '@agent/core/AgentDataclass';
 
 // Types
-import { TaskState } from '@logger/TaskState';
-import { objectToTaskState, getConfig } from '@utils/config';
+import {
+  TaskState,
+  isToolUseTaskState,
+  isWorkflowTaskState,
+} from '@logger/TaskState';
+import {
+  objectToTaskState,
+  getConfig,
+  agentConfigToTaskState,
+} from '@utils/config';
 
 /**
  * Core state management for the progress view.
@@ -37,6 +45,14 @@ export class ProgressViewState {
   private _agentTypeFilter: AgentFilter = 'all';
   private _taskStates: Map<StreamTabId, TaskState> = new Map();
   private _executionIds: Map<StreamTabId, ExecutionId> = new Map();
+  /**
+   * Ephemeral session-kind hints keyed by stream ID.
+   *
+   * When a stream becomes active before its {@link TaskState} is persisted,
+   * progress events populate this map so the UI can immediately classify the
+   * tab as workflow vs. tool-use. Once canonical metadata is stored the entry
+   * is cleared, so there is no need to persist these hints across sessions.
+   */
   private _sessionKindHints: Map<StreamTabId, AgentSessionKind> = new Map();
   private readonly persistence: StatePersistenceManager;
   private readonly logger: AgentLogger;
@@ -119,12 +135,25 @@ export class ProgressViewState {
 
   // Task state management
   setTaskState(streamTabId: StreamTabId, taskState: TaskState): void {
-    const normalizedState: TaskState = {
-      ...taskState,
-      agentSessionKind:
-        taskState.agentSessionKind ??
-        deriveAgentSessionKind(taskState.agentType),
-    };
+    const metadata = resolveAgentSessionMetadata(
+      taskState.agentType,
+      taskState.agentSessionKind,
+    );
+    const normalizedState = agentConfigToTaskState(
+      taskState.agentConfig,
+      metadata,
+    );
+
+    if (isWorkflowTaskState(normalizedState) && 'activeFiles' in taskState) {
+      normalizedState.activeFiles = { ...taskState.activeFiles };
+    } else if (
+      isToolUseTaskState(normalizedState) &&
+      'toolSessionState' in taskState &&
+      taskState.toolSessionState
+    ) {
+      normalizedState.toolSessionState = { ...taskState.toolSessionState };
+    }
+
     this.clearSessionKindHint(streamTabId);
     this._taskStates.set(streamTabId, normalizedState);
     this.saveTaskStates();
