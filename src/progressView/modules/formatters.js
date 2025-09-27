@@ -1,6 +1,5 @@
 // Third-party imports
 import markdownItKatex from '@vscode/markdown-it-katex';
-import { encode as encodeHtml, decode as decodeHtml } from 'he';
 /**
  * Formatters for log entries in the progress view.
  *
@@ -29,6 +28,7 @@ import {
   CHEVRON_DOWN_CLASS,
 } from '@common/iconConstants.js';
 import { getBasename } from '@common/pathUtils.js';
+import { encodeHtml, decodeHtml } from '@common/htmlEncoding.js';
 
 // Constants
 export const BULLET_MARKUP =
