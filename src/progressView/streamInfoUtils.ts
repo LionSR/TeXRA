@@ -7,7 +7,7 @@ import type { AgentFilter, StreamTabInfo } from './types';
 // Local imports - agent types
 import {
   AgentSessionKind,
-  deriveAgentSessionKind,
+  resolveAgentSessionMetadata,
 } from '@agent/core/AgentDataclass';
 
 const sortComparators = {
@@ -68,11 +68,12 @@ export function buildStreamInfos(
     const outputs = taskState?.agentConfig.outputFiles || [];
     const inputFile = taskState?.agentConfig.inputFile || '';
     const agentName = taskState?.agentConfig.agent || id.split('@')[0];
-    const agentType = taskState?.agentType;
-    const agentSessionKind =
-      taskState?.agentSessionKind ??
-      sessionKindHint ??
-      deriveAgentSessionKind(agentType);
+    const metadata = resolveAgentSessionMetadata(
+      taskState?.agentType,
+      taskState?.agentSessionKind ?? sessionKindHint,
+    );
+    const agentType = metadata.agentType ?? taskState?.agentType;
+    const agentSessionKind = metadata.agentSessionKind;
     if (!matchesAgentFilter(agentSessionKind, filter)) {
       return acc;
     }

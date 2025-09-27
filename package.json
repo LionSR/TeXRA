@@ -361,6 +361,18 @@
             "editPresentation": "multilineText",
             "order": 10
           },
+          "texra.files.ignored.inputDirectories": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": [
+              "PapersEx"
+            ],
+            "description": "Additional directories to ignore when listing input and edited files",
+            "editPresentation": "multilineText",
+            "order": 11
+          },
           "texra.files.ignored.auxiliaryKeywords": {
             "type": "array",
             "items": {
@@ -385,7 +397,7 @@
             ],
             "description": "Additional keywords to ignore when listing auxiliary files, including model names",
             "editPresentation": "multilineText",
-            "order": 11
+            "order": 12
           },
           "texra.files.ignored.mediaDirectories": {
             "type": "array",
@@ -402,7 +414,7 @@
             ],
             "description": "Directories to ignore in the figure path",
             "editPresentation": "multilineText",
-            "order": 12
+            "order": 13
           },
           "texra.files.ignored.directories": {
             "type": "array",
@@ -421,11 +433,12 @@
               "stuff",
               "draft",
               "miscellaneous",
+              "diffs",
               "venv"
             ],
             "description": "Directories to ignore when listing files",
             "editPresentation": "multilineText",
-            "order": 13
+            "order": 14
           },
           "texra.files.ignored.keywords": {
             "type": "array",
@@ -447,7 +460,7 @@
             ],
             "description": "Keywords to ignore when selecting files",
             "editPresentation": "multilineText",
-            "order": 14
+            "order": 15
           },
           "texra.maxImageDimension": {
             "type": "number",
@@ -455,7 +468,7 @@
             "minimum": 100,
             "maximum": 10000,
             "description": "Maximum dimension (width or height) in pixels for images before resizing. Images larger than this will be resized to fit within this dimension while maintaining aspect ratio.",
-            "order": 15
+            "order": 16
           }
         }
       },
@@ -1300,7 +1313,7 @@
   },
   "homepage": "https://texra.ai",
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.63.1",
+    "@anthropic-ai/sdk": "^0.64.0",
     "@cantoo/pdf-lib": "^2.5.2",
     "@google/genai": "^1.21.0",
     "@modelcontextprotocol/sdk": "^1.18.2",
@@ -1325,7 +1338,7 @@
     "minimatch": "^10.0.3",
     "nanoid": "^5.1.6",
     "node-pandoc": "^0.3.0",
-    "openai": "^5.23.0",
+    "openai": "^5.23.1",
     "pdf2pic": "^3.2.0",
     "shell-quote": "^1.8.3",
     "sortablejs": "^1.15.6",

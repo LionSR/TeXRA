@@ -1,39 +1,46 @@
 // Local imports
-import type { FileType } from '@utils/config';
 import type { AgentConfig } from '@agent/core/AgentConfig';
-import type { AgentSessionKind, AgentType } from '@agent/core/AgentDataclass';
+import { AgentSessionKind } from '@agent/core/AgentDataclass';
+import type { AgentType } from '@agent/core/AgentDataclass';
+import type { FileType } from '@utils/config';
+
+/** Shared properties for all task state variants. */
+interface BaseTaskState {
+  agentConfig: AgentConfig;
+  agentType?: AgentType;
+  agentSessionKind: AgentSessionKind;
+}
 
 /**
- * Interface for storing task execution state.
- *
- * This interface represents the complete state of a task, including both
- * the agent configuration and UI-specific state. The separation between
- * agentConfig and UI state (activeFiles) provides a clean architecture
- * where agent-specific settings are clearly distinguished from UI concerns.
+ * Workflow task state stores file visibility information for toolbar actions.
  */
-export interface TaskState {
-  /**
-   * Agent configuration containing all settings needed for task execution.
-   * This includes model, agent type, file selections, and tool configurations.
-   */
-  agentConfig: AgentConfig;
-
-  /**
-   * Type of agent (e.g., CoT, direct, toolUse). Optional for backward
-   * compatibility with older saved states.
-   */
-  agentType?: AgentType;
-
-  /**
-   * Canonical grouping for the agent session (workflow vs toolUse).
-   * Persisted alongside {@link agentType} for consistent filtering logic.
-   */
-  agentSessionKind?: AgentSessionKind;
-
-  /**
-   * UI-specific state for managing file type visibility in the interface.
-   * Maps each file type (input, reference, auxiliary, media, output) to
-   * whether it should be shown in the UI.
-   */
+export interface WorkflowTaskState extends BaseTaskState {
+  agentSessionKind: AgentSessionKind.Workflow;
   activeFiles: Record<FileType, boolean>;
+}
+
+/**
+ * Tool-use task state reserves space for persisting interactive session data.
+ */
+export interface ToolSessionState {
+  lastFollowUpAt?: number;
+}
+
+export interface ToolUseTaskState extends BaseTaskState {
+  agentSessionKind: AgentSessionKind.ToolUse;
+  toolSessionState?: ToolSessionState;
+}
+
+export type TaskState = WorkflowTaskState | ToolUseTaskState;
+
+export function isWorkflowTaskState(
+  taskState: TaskState,
+): taskState is WorkflowTaskState {
+  return taskState.agentSessionKind === AgentSessionKind.Workflow;
+}
+
+export function isToolUseTaskState(
+  taskState: TaskState,
+): taskState is ToolUseTaskState {
+  return taskState.agentSessionKind === AgentSessionKind.ToolUse;
 }
