@@ -115,7 +115,9 @@ class ToggleStates {
 
   clearAll() {
     this.states.clear();
-    this.saveCallback();
+    if (this.saveCallback) {
+      this.saveCallback();
+    }
   }
 
   /** Get all entries for serialization */
@@ -184,9 +186,28 @@ export class ProgressViewState {
   initialize() {
     const previous = this.stateManager.getState();
     if (previous.groupToggleStates) {
-      const data = previous.groupToggleStates;
-      const isValidArray = Array.isArray(data);
-      if (!isValidArray) {
+      let data = previous.groupToggleStates;
+      if (!Array.isArray(data) && typeof data === 'string') {
+        try {
+          const parsed = JSON.parse(data);
+          if (Array.isArray(parsed)) {
+            data = parsed;
+          } else {
+            console.error(
+              'Failed to restore group toggle states: parsed data is not an array',
+            );
+            return;
+          }
+        } catch (error) {
+          console.error(
+            'Failed to restore group toggle states: could not parse legacy string data',
+            error,
+          );
+          return;
+        }
+      }
+
+      if (!Array.isArray(data)) {
         console.error(
           'Failed to restore group toggle states: data is not an array',
         );
