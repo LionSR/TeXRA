@@ -1168,9 +1168,19 @@ export class ModelHandlerAnthropic extends ModelHandler<
   extractToolUse(responseObject: BetaMessage): string | null {
     const content = responseObject?.content;
     if (Array.isArray(content)) {
-      const tu = content.find((c: any) => c.type === 'tool_use');
-      if (tu) {
-        return JSON.stringify(tu, null, 2);
+      for (const item of content) {
+        if (item?.type !== 'tool_use') {
+          continue;
+        }
+        if (
+          this.capabilities.supportsNativeWebSearch &&
+          typeof item?.name === 'string' &&
+          item.name.startsWith('web_search')
+        ) {
+          this.logNativeWebSearch(item as ToolUseBlock);
+          continue;
+        }
+        return JSON.stringify(item, null, 2);
       }
     }
     return null;
@@ -1220,5 +1230,24 @@ export class ModelHandlerAnthropic extends ModelHandler<
       ],
     };
     return [callMsg, resultMsg];
+  }
+
+  private logNativeWebSearch(call: ToolUseBlock): void {
+    const payload = {
+      tool: 'web_search',
+      input: {
+        id: call.id,
+        name: call.name,
+        input: call.input,
+      },
+      output: { handledBy: 'anthropic' as const },
+    };
+
+    this.logger.info(
+      JSON.stringify(payload, null, 2),
+      this.logger.getActiveGroupId(),
+      MESSAGE_TYPES.TOOL_USE,
+      payload,
+    );
   }
 }

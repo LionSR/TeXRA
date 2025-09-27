@@ -24,7 +24,7 @@ describe('toOpenAIResponseTools', () => {
     assert.equal(tools.length, 1);
     assert.equal(tools[0].type, 'function');
     assert.equal(tools[0].name, 'echo');
-    assert.deepEqual(tools[0].parameters, defs[0].parameters);
+    assert.deepEqual((tools[0] as any).parameters, defs[0].parameters);
   });
 
   it('sets parameters to null when omitted', () => {
@@ -36,6 +36,31 @@ describe('toOpenAIResponseTools', () => {
     ];
 
     const tools = toOpenAIResponseTools(defs);
-    assert.equal(tools[0].parameters, null);
+    assert.equal((tools[0] as any).parameters, null);
+  });
+
+  it('returns native web search tool when supported', () => {
+    const defs: ToolDefinition[] = [
+      {
+        name: 'web_search',
+        description: 'Search the web',
+        parameters: {
+          filters: {
+            time_range: { start_time: '2024-01-01', end_time: '2024-02-01' },
+            include_domains: ['example.com'],
+          },
+          search_context_size: 'high',
+        },
+      },
+    ];
+
+    const tools = toOpenAIResponseTools(defs, {
+      supportsNativeWebSearch: true,
+    });
+
+    assert.equal(tools.length, 1);
+    assert.equal(tools[0].type, 'web_search');
+    assert.deepEqual((tools[0] as any).filters, defs[0].parameters?.filters);
+    assert.equal((tools[0] as any).search_context_size, 'high');
   });
 });

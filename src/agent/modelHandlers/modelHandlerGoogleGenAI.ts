@@ -224,7 +224,12 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     }
 
     if (tools && tools.length > 0) {
-      generationConfig.tools = toGoogleTools(tools);
+      const convertedTools = toGoogleTools(tools, {
+        supportsNativeWebSearch: this.capabilities.supportsNativeWebSearch,
+      });
+      if (convertedTools.length > 0) {
+        generationConfig.tools = convertedTools;
+      }
     }
 
     const chatParams: CreateChatParameters = {
@@ -982,6 +987,8 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
   }
 
   extractToolUse(responseObject: GenerateContentResponse): string | null {
+    this.logGroundingMetadata(responseObject);
+
     const candidate = responseObject?.candidates?.[0];
     const parts = candidate?.content?.parts;
     if (Array.isArray(parts)) {
@@ -1036,4 +1043,33 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
   }
 
   // Assuming containCutOffMessage is available from base class ModelHandler
+  private logGroundingMetadata(
+    responseObject: GenerateContentResponse,
+  ): void {
+    if (!this.capabilities.supportsNativeWebSearch) {
+      return;
+    }
+
+    const candidate = responseObject?.candidates?.[0];
+    const metadata = candidate?.groundingMetadata;
+    if (!metadata) {
+      return;
+    }
+
+    const payload = {
+      tool: 'web_search',
+      input: { status: 'completed' as const },
+      output: {
+        handledBy: 'google',
+        groundingMetadata: metadata,
+      },
+    };
+
+    this.logger.info(
+      JSON.stringify(payload, null, 2),
+      this.logger.getActiveGroupId(),
+      MESSAGE_TYPES.TOOL_USE,
+      payload,
+    );
+  }
 }

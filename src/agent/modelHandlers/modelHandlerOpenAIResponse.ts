@@ -12,6 +12,7 @@ import type {
   ResponseReasoningItem,
   ResponseFunctionToolCallItem,
   ResponseFunctionToolCall,
+  ResponseFunctionWebSearch,
   ResponseInputItem,
   ResponseInputContent,
   ResponseInputMessageContentList,
@@ -408,8 +409,23 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     }
 
     if (tools && tools.length > 0) {
-      params.tools = toOpenAIResponseTools(tools);
+      const convertedTools = toOpenAIResponseTools(tools, {
+        supportsNativeWebSearch: this.capabilities.supportsNativeWebSearch,
+      });
+      params.tools = convertedTools;
       params.tool_choice = 'auto';
+
+      if (
+        this.capabilities.supportsNativeWebSearch &&
+        convertedTools.some(
+          (tool) =>
+            tool.type === 'web_search' || tool.type === 'web_search_2025_08_26',
+        )
+      ) {
+        params.include = [
+          ...new Set([...(params.include ?? []), 'web_search_call.action.sources']),
+        ];
+      }
     }
 
     if (this.capabilities.supportsReasoning) {
@@ -846,6 +862,15 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     const items = response?.output;
     if (!Array.isArray(items)) return null;
 
+    if (this.capabilities.supportsNativeWebSearch) {
+      items
+        .filter(
+          (item): item is ResponseFunctionWebSearch =>
+            item?.type === 'web_search_call',
+        )
+        .forEach((call) => this.logNativeWebSearch(call));
+    }
+
     const call = items.find(
       (it): it is ResponseFunctionToolCallItem => it?.type === 'function_call',
     );
@@ -915,6 +940,56 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
   private createInputText(text: string): ResponseInputContent {
     return { type: 'input_text', text };
+  }
+
+  private logNativeWebSearch(call: ResponseFunctionWebSearch): void {
+    const action = (call as ResponseFunctionWebSearch & {
+      action?:
+        | ResponseFunctionWebSearch.Search
+        | ResponseFunctionWebSearch.OpenPage
+        | ResponseFunctionWebSearch.Find;
+    }).action;
+
+    const actionInfo: Record<string, unknown> = {
+      id: call.id,
+      status: call.status,
+    };
+
+    if (action && typeof action === 'object') {
+      const actionType = (action as { type?: string }).type;
+      if (actionType) {
+        actionInfo.action = actionType;
+      }
+      if ('query' in action && typeof action.query === 'string') {
+        actionInfo.query = action.query;
+      }
+      if ('url' in action && typeof action.url === 'string') {
+        actionInfo.url = action.url;
+      }
+      const sources = Array.isArray(
+        (action as ResponseFunctionWebSearch.Search).sources,
+      )
+        ? (action as ResponseFunctionWebSearch.Search).sources?.
+            map((source) => source.url)
+            .filter((url): url is string => typeof url === 'string')
+        : undefined;
+      if (sources && sources.length > 0) {
+        actionInfo.sources = sources;
+      }
+    }
+
+    const payload = {
+      tool: 'web_search',
+      input: actionInfo,
+      output: { handledBy: 'openai' as const },
+    };
+
+    this.logger.info(
+      JSON.stringify(payload, null, 2),
+      this.logger.getActiveGroupId(),
+      MESSAGE_TYPES.TOOL_USE,
+      payload,
+    );
   }
 
   private isMessageItem(
