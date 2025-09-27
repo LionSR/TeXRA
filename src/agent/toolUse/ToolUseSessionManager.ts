@@ -65,12 +65,6 @@ interface SavePayload {
   toolState: ToolState;
 }
 
-function isValidExecutionId(id: ExecutionId | undefined): id is ExecutionId {
-  if (!id) return false;
-  const invalidPatterns = ['..', '/', '\\', '\0'];
-  return !invalidPatterns.some((pattern) => id.includes(pattern));
-}
-
 function toToolStateSnapshot(
   state: ToolState,
 ): ToolUseSessionSnapshot['toolState'] {
@@ -138,24 +132,24 @@ export class ToolUseSessionManager {
       return;
     }
 
-    const snapshot: ToolUseSessionSnapshot = {
-      version: SNAPSHOT_VERSION,
-      executionId: payload.executionId,
-      streamId: payload.streamId,
-      agentName: payload.agentName,
-      model: payload.model,
-      agentSessionKind: payload.agentSessionKind,
-      messages: structuredClone(payload.messages),
-      toolState: toToolStateSnapshot(payload.toolState),
-      lastUpdated: Date.now(),
-    };
-
-    const json = JSON.stringify(snapshot, null, 2);
     try {
+      const snapshot: ToolUseSessionSnapshot = {
+        version: SNAPSHOT_VERSION,
+        executionId: payload.executionId,
+        streamId: payload.streamId,
+        agentName: payload.agentName,
+        model: payload.model,
+        agentSessionKind: payload.agentSessionKind,
+        messages: structuredClone(payload.messages),
+        toolState: toToolStateSnapshot(payload.toolState),
+        lastUpdated: Date.now(),
+      };
+
+      const json = JSON.stringify(snapshot, null, 2);
       await StorageFS.write(getSnapshotPath(payload.executionId), json);
     } catch (error) {
       logger.warn(
-        `Failed to write tool-use session snapshot: ${error instanceof Error ? error.message : String(error)}`,
+        `Failed to save tool-use session snapshot: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
   }
