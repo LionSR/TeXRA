@@ -24,7 +24,7 @@ import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
 import type { TokenUsageStats } from '@agent/types/UsageTypes';
 import { AgentLogger } from '@logger/AgentLogger';
 import { LogMessageData } from '@logger/LogTypes';
-import { TaskState } from '@logger/TaskState';
+import { TaskState, isWorkflowTaskState } from '@logger/TaskState';
 
 // Type aliases for status values
 type StreamStatusType =
@@ -233,7 +233,7 @@ export class ProgressViewProvider
       // Only clear output-related fields, preserve other task state data
       taskState.agentConfig.outputFiles = [];
       taskState.agentConfig.useMultipleOutputs = false;
-      if (taskState.activeFiles) {
+      if (isWorkflowTaskState(taskState)) {
         taskState.activeFiles.output = false;
       }
       this.state.setTaskState(streamTabId, taskState);
