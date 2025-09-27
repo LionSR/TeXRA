@@ -4,13 +4,15 @@ import * as vscode from 'vscode';
 // Local imports - agent
 import { AgentConfigSchema } from '@agent/core/AgentConfig';
 import {
-  AgentSessionKind,
   AgentSetting,
   AgentPrompt,
   AgentType,
 } from '@agent/core/AgentDataclass';
 import { BaseToolUseAgent } from '@agent/implementations/BaseToolUseAgent';
-import { loadAgentSettingAndPrompts } from '@agent/runtime/agentLoad';
+import {
+  loadAgentSettingAndPrompts,
+  ensureAgentTypeForSource,
+} from '@agent/runtime/agentLoad';
 import { ModelFactory } from '@agent/runtime/ModelFactory';
 import {
   executeAgentWithLogging,
@@ -22,6 +24,7 @@ import {
 } from '@agent/toolUse/ToolUseSessionManager';
 import type { ExecutionId } from '@agent/types/IdentifierTypes';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
+import { isToolUseTaskState } from '@logger/TaskState';
 import { MODEL_CONFIGS } from '@model/ModelRegistry';
 
 function isToolUseAgent(setting: AgentSetting): boolean {
@@ -42,10 +45,7 @@ async function buildToolUseAgent(
     throw new Error('No saved task state found for stream.');
   }
 
-  if (
-    (taskState.agentSessionKind ?? AgentSessionKind.Workflow) !==
-    AgentSessionKind.ToolUse
-  ) {
+  if (!isToolUseTaskState(taskState)) {
     throw new Error('Saved task state is not a tool-use session.');
   }
 
@@ -57,10 +57,14 @@ async function buildToolUseAgent(
 
   const modelHandler = ModelFactory.createHandler(MODEL_CONFIGS[modelName]);
   const agentPath = await getAgentPath(fullConfig.agent, context);
-  const [agentSetting, agentPrompt] = await loadAgentSettingAndPrompts(
+  const [loadedAgentSetting, agentPrompt] = await loadAgentSettingAndPrompts(
     agentPath,
     fullConfig.agent,
     { preferMultiple: fullConfig.useMultipleOutputs },
+  );
+  const agentSetting = ensureAgentTypeForSource(
+    loadedAgentSetting,
+    agentPath.source,
   );
 
   if (!isToolUseAgent(agentSetting)) {
@@ -72,7 +76,7 @@ async function buildToolUseAgent(
     fullConfig,
     agentSetting,
     agentPrompt as AgentPrompt,
-    agentPath,
+    agentPath.directory,
     snapshot.executionId as ExecutionId,
   );
 
