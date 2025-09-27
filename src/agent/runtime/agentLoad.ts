@@ -14,12 +14,15 @@ import {
   AgentSettingSchema,
   AgentPromptSchema,
   AgentDefinitionSchema,
+  AgentType,
 } from '@agent/core/AgentDataclass';
 
 // Local imports - utils
 import * as logger from '@logger/logUtils';
 import type { ToolDefinition } from '@model';
 import { AbsoluteFS } from '@utils/files';
+import type { AgentPathResolution } from './AgentPathTypes';
+import { AgentDirectorySource } from './AgentPathTypes';
 
 const CHANNEL = 'agentLoad';
 logger.initialize(CHANNEL);
@@ -73,8 +76,21 @@ interface LoadAgentOptions {
   preferMultiple?: boolean;
 }
 
+export function ensureAgentTypeForSource<T extends { agentType?: AgentType }>(
+  settings: T,
+  source: AgentDirectorySource,
+): T {
+  if (
+    source === AgentDirectorySource.BuiltInToolUse &&
+    settings.agentType === undefined
+  ) {
+    settings.agentType = AgentType.ToolUse;
+  }
+  return settings;
+}
+
 async function resolveAgentDefinition(
-  agentPath: string,
+  agentDirectory: string,
   agentNameFromFile: string,
   options?: LoadAgentOptions,
 ): Promise<{ filePath: string; resolvedName: string }> {
@@ -97,7 +113,7 @@ async function resolveAgentDefinition(
     }
     seenCandidates.add(candidate);
 
-    const candidatePath = path.join(agentPath, `${candidate}.yaml`);
+    const candidatePath = path.join(agentDirectory, `${candidate}.yaml`);
     if (await AbsoluteFS.exists(candidatePath)) {
       if (
         preferMultiple &&
@@ -113,7 +129,7 @@ async function resolveAgentDefinition(
     }
   }
 
-  const fallbackPath = path.join(agentPath, `${agentNameFromFile}.yaml`);
+  const fallbackPath = path.join(agentDirectory, `${agentNameFromFile}.yaml`);
   if (preferMultiple && !agentNameFromFile.endsWith('_multiple')) {
     logger.warn(
       CHANNEL,
@@ -124,13 +140,13 @@ async function resolveAgentDefinition(
 }
 
 export async function loadAgentSettingAndPrompts(
-  agentPath: string,
+  agentPath: AgentPathResolution,
   agentNameFromFile: string,
   options?: LoadAgentOptions,
 ): Promise<[AgentSetting, AgentPrompt]> {
   try {
     const { filePath: agentFile, resolvedName } = await resolveAgentDefinition(
-      agentPath,
+      agentPath.directory,
       agentNameFromFile,
       options,
     );
@@ -178,6 +194,8 @@ export async function loadAgentSettingAndPrompts(
         arrayMerge: (_d, s) => s,
       });
     }
+
+    ensureAgentTypeForSource(settings, agentPath.source);
 
     // Resolve tool names to definitions
     if (Array.isArray(settings.tools)) {
