@@ -65,39 +65,16 @@ interface SavePayload {
   toolState: ToolState;
 }
 
-function serializeMessages(messages: ProviderMessage[]): unknown[] {
-  try {
-    return JSON.parse(JSON.stringify(messages));
-  } catch (error) {
-    logger.warn(
-      `Failed to serialize provider messages: ${error instanceof Error ? error.message : String(error)}`,
-    );
-    return [];
-  }
-}
-
-function serializeToolState(state: ToolState) {
-  return {
-    texcountStats: state.texcountStats,
-    lastResponse: state.lastResponse,
-    accumulatedOutput: state.accumulatedOutput,
-    mediaFiles: [...state.mediaFiles],
-    thinkingBlocks: [...state.thinkingBlocks],
-    thinkingAdded: state.thinkingAdded,
-  };
+function toToolStateSnapshot(
+  state: ToolState,
+): ToolUseSessionSnapshot['toolState'] {
+  return ToolStateSnapshotSchema.parse(structuredClone(state));
 }
 
 function hydrateToolState(
   snapshot: ToolUseSessionSnapshot['toolState'],
 ): ToolState {
-  const state = new ToolState();
-  state.texcountStats = snapshot.texcountStats;
-  state.lastResponse = snapshot.lastResponse;
-  state.accumulatedOutput = snapshot.accumulatedOutput;
-  state.mediaFiles = [...snapshot.mediaFiles];
-  state.thinkingBlocks = [...snapshot.thinkingBlocks];
-  state.thinkingAdded = snapshot.thinkingAdded;
-  return state;
+  return Object.assign(new ToolState(), structuredClone(snapshot));
 }
 
 async function ensureStorageDir(): Promise<boolean> {
@@ -155,24 +132,24 @@ export class ToolUseSessionManager {
       return;
     }
 
-    const snapshot: ToolUseSessionSnapshot = {
-      version: SNAPSHOT_VERSION,
-      executionId: payload.executionId,
-      streamId: payload.streamId,
-      agentName: payload.agentName,
-      model: payload.model,
-      agentSessionKind: payload.agentSessionKind,
-      messages: serializeMessages(payload.messages),
-      toolState: serializeToolState(payload.toolState),
-      lastUpdated: Date.now(),
-    };
-
-    const json = JSON.stringify(snapshot, null, 2);
     try {
+      const snapshot: ToolUseSessionSnapshot = {
+        version: SNAPSHOT_VERSION,
+        executionId: payload.executionId,
+        streamId: payload.streamId,
+        agentName: payload.agentName,
+        model: payload.model,
+        agentSessionKind: payload.agentSessionKind,
+        messages: structuredClone(payload.messages),
+        toolState: toToolStateSnapshot(payload.toolState),
+        lastUpdated: Date.now(),
+      };
+
+      const json = JSON.stringify(snapshot, null, 2);
       await StorageFS.write(getSnapshotPath(payload.executionId), json);
     } catch (error) {
       logger.warn(
-        `Failed to write tool-use session snapshot: ${error instanceof Error ? error.message : String(error)}`,
+        `Failed to save tool-use session snapshot: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
   }
