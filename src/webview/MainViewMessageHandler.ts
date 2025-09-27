@@ -25,6 +25,7 @@ import {
 } from '@utils/system';
 import { SETTINGS_QUERY } from '@utils/settingsQueries';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
+import { SecretManager } from '@frontend/secretManager';
 import { computeModelOptions } from '@model/computeModelOptions';
 import { computeAgentOptions } from '@agent/computeAgentOptions';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
@@ -365,6 +366,17 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         command: MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
         options: modelOptions,
       });
+
+      const showReminders = getConfig<boolean>('ui.showApiKeyReminders', true);
+      if (showReminders) {
+        const hasAnyApiKey = await SecretManager.anyApiKeyExists();
+        if (!hasAnyApiKey) {
+          webviewView.webview.postMessage({
+            command: MAIN_VIEW_COMMANDS.SHOW_API_KEY_BANNER,
+          });
+        }
+      }
+
       const agentOptions = await computeAgentOptions(this.context);
       webviewView.webview.postMessage({
         command: MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
