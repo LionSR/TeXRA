@@ -42,13 +42,17 @@ export enum outputFormat {
 }
 
 const LATEX_REPLACEMENTS: Array<[RegExp, string]> = [
-  [/\\section\{([^}]+)\}/g, '## $1'],
-  [/\\subsection\{([^}]+)\}/g, '### $1'],
+  [/\\section\{([^}]+)\}/g, '## $1\n\n'],
+  [/\\subsection\{([^}]+)\}/g, '### $1\n\n'],
   [/\\textbf\{([^}]+)\}/g, '**$1**'],
   [/\\textit\{([^}]+)\}/g, '*$1*'],
   [/\\emph\{([^}]+)\}/g, '*$1*'],
-  [/\\item\s+/g, '- '],
+  [/\\item\s+/g, '\n- '],
 ];
+
+const HTML_PATTERN = /<(?:br|p|div|strong|em|code|pre|h[1-6]|ul|ol|li)\b[^>]*>/;
+
+const LATEX_PATTERN = /\\(?:begin|end|section|subsection|textbf|textit|item)\{/;
 
 const LATEX_ENVIRONMENT_MARKERS: RegExp[] = [
   /\\begin\{itemize\}/g,
@@ -68,22 +72,51 @@ function convertLatexToMarkdown(latex: string): string {
     withoutEnvironments,
   );
 
-  return converted.trim();
+  return converted
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/^(\s*\n)+/g, '')
+    .trim();
 }
 
 function detectInputFormat(text: string): outputFormat {
   // const htmlRegex = /<[^>]+>/; // this is wrong, as we might have some xml tags to separte scratchpad
-  const htmlRegex = /<(?:br|p|div|strong|em|code|pre|h[1-6]|ul|ol|li)\b[^>]*>/;
-
-  const latexRegex = /\\(?:begin|end|section|subsection|textbf|textit|item)\{/;
-
-  if (latexRegex.test(text)) {
+  if (LATEX_PATTERN.test(text)) {
     return outputFormat.LaTeX;
-  } else if (htmlRegex.test(text)) {
+  } else if (HTML_PATTERN.test(text)) {
     return outputFormat.HTML;
   } else {
     return outputFormat.MARKDOWN;
   }
+}
+
+function containsHtml(text: string): boolean {
+  return HTML_PATTERN.test(text);
+}
+
+function containsLatex(text: string): boolean {
+  return LATEX_PATTERN.test(text);
+}
+
+function normalizeMarkdown(markdown: string): string {
+  return markdown
+    .replace(/\r\n/g, '\n')
+    .replace(/-\s{2,}/g, '- ')
+    .replace(/[ \t]+$/gm, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+function convertHtmlToMarkdown(html: string): string {
+  const turndownService = new TurndownService({
+    bulletListMarker: '-',
+    codeBlockStyle: 'fenced',
+    emDelimiter: '*',
+    headingStyle: 'atx',
+    strongDelimiter: '**',
+  });
+  turndownService.use(gfm);
+
+  return turndownService.turndown(html);
 }
 
 async function convertWithPandoc(text: string): Promise<string | null> {
@@ -381,32 +414,19 @@ export async function formatContent(content: string): Promise<string> {
 
   const pandocResult = await convertWithPandoc(formattedContent);
 
-  if (!pandocResult) {
-    const fallbackFormat = detectInputFormat(formattedContent);
+  if (pandocResult !== null) {
+    formattedContent = pandocResult;
+  } else {
+    if (containsHtml(formattedContent)) {
+      formattedContent = convertHtmlToMarkdown(formattedContent);
+    }
 
-    if (fallbackFormat === outputFormat.HTML) {
-      const turndownService = new TurndownService({
-        bulletListMarker: '-',
-        codeBlockStyle: 'fenced',
-        emDelimiter: '*',
-        headingStyle: 'atx',
-        strongDelimiter: '**',
-      });
-      turndownService.use(gfm);
-
-      formattedContent = turndownService
-        .turndown(formattedContent)
-        .replace(/-\s{2,}/g, '- ')
-        .trim();
-    } else if (fallbackFormat === outputFormat.LaTeX) {
+    if (containsLatex(formattedContent)) {
       formattedContent = convertLatexToMarkdown(formattedContent);
     }
-  } else {
-    formattedContent = pandocResult;
   }
-  // .replace(/ +$/gm, ''); // Remove trailing spaces only
 
-  return formattedContent;
+  return normalizeMarkdown(formattedContent);
 }
 
 /**
