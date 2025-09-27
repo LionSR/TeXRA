@@ -40,26 +40,23 @@ export class HistoryViewState {
   }
 
   initialize() {
-    const saved = this.stateManager.getState();
+    const saved = this.stateManager.getState() ?? {};
     this.searchIndex = saved.searchIndex || 0;
     this.totalMatches = saved.totalMatches || 0;
-    if (saved.toggleStates) {
-      try {
-        const data = JSON.parse(saved.toggleStates);
-        this.toggleStates.load(data);
-      } catch (e) {
-        console.error('Failed to restore toggle states', e);
-      }
+    const { toggleStates } = saved;
+    if (Array.isArray(toggleStates)) {
+      this.toggleStates.load(toggleStates);
+    } else if (toggleStates !== undefined) {
+      console.error('Failed to restore toggle states: expected an array.');
     }
   }
 
   save() {
     try {
-      const serialized = JSON.stringify(this.toggleStates.entries());
       this.stateManager.update({
         searchIndex: this.searchIndex,
         totalMatches: this.totalMatches,
-        toggleStates: serialized,
+        toggleStates: this.toggleStates.entries(),
       });
     } catch (e) {
       console.error('Failed to save state', e);
