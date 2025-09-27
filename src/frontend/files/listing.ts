@@ -32,6 +32,16 @@ function containsHiddenSegment(relativePath: string): boolean {
     .some((segment) => segment.startsWith('.') && segment.length > 1);
 }
 
+function containsExcludedDirectory(
+  relativePath: string,
+  normalizedExcludeDirs: string[],
+): boolean {
+  const pathSegments = relativePath.split(path.sep).map((s) => s.toLowerCase());
+  return pathSegments.some((segment) =>
+    normalizedExcludeDirs.includes(segment),
+  );
+}
+
 export async function getFilesInDirectory(
   dir: string,
   includeExtensions: string[] = [],
@@ -42,6 +52,7 @@ export async function getFilesInDirectory(
   const normalizedIncludeExt = includeExtensions.map((e) => e.toLowerCase());
   const normalizedExcludeExt = excludeExtensions.map((e) => e.toLowerCase());
   const normalizedExcludeKeywords = excludeKeywords.map((k) => k.toLowerCase());
+  const normalizedExcludeDirs = excludeDirectories.map((d) => d.toLowerCase());
   const excludePattern = createExcludePattern(dir, excludeDirectories);
   const files = await vscode.workspace.findFiles(
     new vscode.RelativePattern(dir, '*'),
@@ -49,6 +60,11 @@ export async function getFilesInDirectory(
   );
 
   return files
+    .filter((uri) => {
+      // Check if the file is inside an excluded directory (for symlinks, case-insensitive)
+      const relativePath = path.relative(dir, uri.fsPath);
+      return !containsExcludedDirectory(relativePath, normalizedExcludeDirs);
+    })
     .map((uri) => path.basename(uri.fsPath))
     .filter((name) => {
       const nameLower = name.toLowerCase();
@@ -77,6 +93,7 @@ export async function getFilesRecursively(
   const normalizedExcludeExt = excludeExtensions.map((e) => e.toLowerCase());
   const normalizedExcludeKeywords = excludeKeywords.map((k) => k.toLowerCase());
   const normalizedExcludeFiles = excludeFiles.map((f) => f.toLowerCase());
+  const normalizedExcludeDirs = excludeDirectories.map((d) => d.toLowerCase());
   const excludePattern = createExcludePattern(root, excludeDirectories);
   const files = await vscode.workspace.findFiles(
     new vscode.RelativePattern(dir, '**/*'),
@@ -91,6 +108,11 @@ export async function getFilesRecursively(
       }
 
       if (containsHiddenSegment(relativePath)) {
+        return false;
+      }
+
+      // Check if any segment of the path matches an excluded directory
+      if (containsExcludedDirectory(relativePath, normalizedExcludeDirs)) {
         return false;
       }
 
