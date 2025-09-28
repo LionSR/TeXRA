@@ -41,6 +41,7 @@ export class FileLister {
   private ignoredDirectories: string[] = [];
   private ignoredKeywords: string[] = [];
   private ignoredInputFiles: string[] = [];
+  private ignoredInputDirectories: string[] = [];
   private ignoredAuxKeywords: string[] = [];
   private ignoredMediaDirs: string[] = [];
 
@@ -55,6 +56,7 @@ export class FileLister {
       | 'ignoredDirectories'
       | 'ignoredKeywords'
       | 'ignoredInputFiles'
+      | 'ignoredInputDirectories'
       | 'ignoredAuxKeywords'
       | 'ignoredMediaDirs';
 
@@ -63,6 +65,10 @@ export class FileLister {
       { key: 'files.ignored.directories', target: 'ignoredDirectories' },
       { key: 'files.ignored.keywords', target: 'ignoredKeywords' },
       { key: 'files.ignored.inputFiles', target: 'ignoredInputFiles' },
+      {
+        key: 'files.ignored.inputDirectories',
+        target: 'ignoredInputDirectories',
+      },
       {
         key: 'files.ignored.auxiliaryKeywords',
         target: 'ignoredAuxKeywords',
@@ -90,6 +96,15 @@ export class FileLister {
 
     switch (fileType) {
       case 'input':
+        return getFilesRecursively(
+          workspace,
+          workspace,
+          getIncludedExtensions(fileType),
+          this.ignoredFileExtensions,
+          [...this.ignoredDirectories, ...this.ignoredInputDirectories],
+          this.ignoredKeywords,
+          this.ignoredInputFiles,
+        );
       case 'reference':
         return getFilesRecursively(
           workspace,
@@ -135,7 +150,7 @@ export class FileLister {
       workspace,
       getIncludedExtensions('edited'),
       this.ignoredFileExtensions,
-      [...this.ignoredDirectories, 'PapersEx'],
+      [...this.ignoredDirectories, ...this.ignoredInputDirectories],
       this.ignoredKeywords,
       this.ignoredInputFiles,
     );

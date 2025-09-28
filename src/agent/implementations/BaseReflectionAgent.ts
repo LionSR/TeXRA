@@ -5,7 +5,8 @@ import type { AgentConfig } from '@agent/core/AgentConfig';
 import {
   AgentSetting,
   AgentPrompt,
-  AgentType,
+  AgentWorkflowSetting,
+  requireWorkflowSetting,
 } from '@agent/core/AgentDataclass';
 import { AgentStateRound, AgentStateGlobal } from '@agent/core/AgentState';
 import { runResponseCycle } from '@agent/core/ResponseCycle';
@@ -61,6 +62,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
   protected outputFile: string[];
   protected outputFiles: { [key: number]: string[] };
   protected baseFiles: string[];
+  protected override agentSetting: AgentWorkflowSetting;
   protected useScratchpad: boolean = false;
   protected logId: number = 0;
   /** Handler for output file processing and validation. */
@@ -78,14 +80,16 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     agentPath: string,
     executionId?: ExecutionId,
   ) {
+    const workflowSetting = requireWorkflowSetting(agentSetting);
     super(
       modelHandler,
       agentConfig,
-      agentSetting,
+      workflowSetting,
       agentPrompt,
       agentPath,
       executionId,
     );
+    this.agentSetting = workflowSetting;
 
     // Initialize basic attributes
     const numRounds = this.getNumberOfRounds();

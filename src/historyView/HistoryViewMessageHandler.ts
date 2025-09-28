@@ -14,6 +14,7 @@ import {
 
 // @ts-ignore - Import JavaScript module
 import { HISTORY_VIEW_COMMANDS } from '@common/webview/commands';
+import { resolveAgentSessionMetadata } from '@agent/core/AgentDataclass';
 import { AgentHistoryManager } from '@historyView/managers';
 import { agentConfigToTaskState } from '@utils/config';
 
@@ -86,7 +87,11 @@ export class HistoryViewMessageHandler extends BaseViewMessageHandler<
       const historyItem =
         await AgentHistoryManager.getHistoryItemById(historyId);
       if (historyItem) {
-        const taskState = agentConfigToTaskState(historyItem.config);
+        const metadata = resolveAgentSessionMetadata(
+          historyItem.agentType,
+          historyItem.agentSessionKind,
+        );
+        const taskState = agentConfigToTaskState(historyItem.config, metadata);
         await vscode.commands.executeCommand('texra.restoreState', taskState);
       } else {
         await vscode.window.showErrorMessage('History item not found');
