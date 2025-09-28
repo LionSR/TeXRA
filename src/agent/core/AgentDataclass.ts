@@ -62,31 +62,27 @@ export function resolveAgentSessionMetadata(
   };
 }
 
-/** Zod schema for AgentSetting validation */
-export const AgentSettingSchema = z
+/**
+ * Base schema shared by workflow and tool-use agent settings. Individual
+ * variants extend this schema to add variant-specific constraints.
+ */
+export const AgentSettingBaseSchema = z
   .object({
     agentType: z.nativeEnum(AgentType).default(AgentType.CoT),
     documentTag: z
       .string()
       .min(1, 'documentTag cannot be empty')
       .default('document'),
+    endTag: z.string().default('</latex_document>'),
     temperature: z
       .number()
       .min(MIN_TEMPERATURE)
       .max(MAX_TEMPERATURE)
       .nullable()
       .default(0.0),
-    isRewrite: z.boolean().default(true),
-
-    rounds: z.number().default(2),
-    prefills: z.array(z.string()).default([]),
-    outputExt: z.string().default('txt'),
-    endTag: z.string().default('</latex_document>'),
-
     requiredFiles: z.record(z.string()).default({}),
     requiredFilesInternal: z.record(z.string()).default({}),
     defaultOutputFiles: z.array(z.string()).default([]),
-    useMultipleOutputs: z.boolean().default(false),
     filePatternsContain: z
       .array(
         z.object({
@@ -101,7 +97,53 @@ export const AgentSettingSchema = z
   })
   .strict();
 
+/**
+ * Workflow agent settings support multiple-output workflows and therefore
+ * expose the {@code isMultipleOutput} toggle.
+ */
+export const AgentWorkflowSettingSchema = AgentSettingBaseSchema.extend({
+  isRewrite: z.boolean().default(true),
+  rounds: z.number().default(2),
+  prefills: z.array(z.string()).default([]),
+  outputExt: z.string().default('txt'),
+  isMultipleOutput: z.boolean().default(false),
+}).superRefine((data, ctx) => {
+  if (data.agentType === AgentType.ToolUse) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['agentType'],
+      message:
+        'Workflow agent settings cannot use the toolUse agent type. Use the tool-use schema instead.',
+    });
+  }
+});
+
+/** Tool-use agents never expose workflow-specific flags. */
+export const AgentToolUseSettingSchema = AgentSettingBaseSchema.extend({
+  agentType: z.literal(AgentType.ToolUse).default(AgentType.ToolUse),
+});
+
+/**
+ * Canonical agent settings schema combining workflow and tool-use variants.
+ */
+export const AgentSettingSchema = z.union([
+  AgentWorkflowSettingSchema,
+  AgentToolUseSettingSchema,
+]);
+
+export type AgentWorkflowSetting = z.infer<typeof AgentWorkflowSettingSchema>;
+export type AgentToolUseSetting = z.infer<typeof AgentToolUseSettingSchema>;
 export type AgentSetting = z.infer<typeof AgentSettingSchema>;
+
+/** Narrow an {@link AgentSetting} to the workflow variant. */
+export function requireWorkflowSetting(
+  setting: AgentSetting,
+): AgentWorkflowSetting {
+  if (setting.agentType === AgentType.ToolUse) {
+    throw new Error('Expected workflow agent settings but received tool-use settings.');
+  }
+  return setting;
+}
 
 /** Default prompt templates for agent interactions. */
 
@@ -152,3 +194,8 @@ export const AgentDefinitionSchema = z
   .strict();
 
 export type AgentDefinition = z.infer<typeof AgentDefinitionSchema>;
+
+/** Parses a settings block into an {@link AgentSetting}. */
+export function parseAgentSetting(settings: unknown): AgentSetting {
+  return AgentSettingSchema.parse(settings ?? {});
+}
