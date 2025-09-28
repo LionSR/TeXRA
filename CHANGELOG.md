@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 - Harden progress view state handling with validation on task groups, toggles, and stream statuses to prevent invalid data from corrupting summaries.
 - Restore main view configurations using the shared task-state helper so history entries hydrate without manual JSON juggling.
 - Cap `read_file` tool responses at the first 400 lines to keep large files from overwhelming tool-use transcripts.
+- Enable interleaved thinking by default for supported Claude tool-use agents so follow-up reasoning stays in sync with tool results.
 
 ### Bug Fixes
 
