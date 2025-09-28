@@ -10,6 +10,7 @@ import {
   getAgentOptionMetadata,
   type AgentDirectoryMap,
 } from '@agent/utils/agentOptionMetadata';
+import { AgentOptionsPayload } from '@agent/computeAgentOptions';
 
 // Local imports - webview
 import {
@@ -111,12 +112,22 @@ export class MainViewContentProvider extends BaseViewContentProvider {
       }
     }
     const allAgents = Array.from(new Set([...agents, ...extraAgents]));
-    const agentOptions = allAgents
-      .map((agent) => {
-        const metadata = getAgentOptionMetadata(agent, agentDirectories);
-        return createAgentOptionTag(agent, metadata);
-      })
-      .join('\n');
+    const optionBuckets: AgentOptionsPayload = { workflow: '', toolUse: '' };
+    const workflowOptions: string[] = [];
+    const toolUseOptions: string[] = [];
+
+    allAgents.forEach((agent) => {
+      const metadata = getAgentOptionMetadata(agent, agentDirectories);
+      const optionTag = createAgentOptionTag(agent, metadata);
+      if (metadata.isToolUse) {
+        toolUseOptions.push(optionTag);
+      } else {
+        workflowOptions.push(optionTag);
+      }
+    });
+
+    optionBuckets.workflow = workflowOptions.join('\n');
+    optionBuckets.toolUse = toolUseOptions.join('\n');
 
     const models = getConfig<string[]>('models', []);
     const modelOptions = models
@@ -124,7 +135,8 @@ export class MainViewContentProvider extends BaseViewContentProvider {
       .join('\n');
 
     return {
-      agentOptions,
+      workflowAgentOptions: optionBuckets.workflow,
+      toolUseAgentOptions: optionBuckets.toolUse,
       modelOptions,
     };
   }

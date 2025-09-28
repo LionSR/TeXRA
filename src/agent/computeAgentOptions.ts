@@ -11,6 +11,11 @@ import {
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { getConfig } from '@utils/config';
 
+export interface AgentOptionsPayload {
+  workflow: string;
+  toolUse: string;
+}
+
 /**
  * Get all available agents including tool-use agents if enabled.
  */
@@ -64,14 +69,26 @@ async function getAgentDirectories(
  */
 export async function computeAgentOptions(
   context: vscode.ExtensionContext,
-): Promise<string> {
+): Promise<AgentOptionsPayload> {
   const allAgents = await getAllAgents(context);
   const dirs = await getAgentDirectories(context);
 
-  const optionTags = allAgents.map((agent) => {
+  const optionBuckets: AgentOptionsPayload = { workflow: '', toolUse: '' };
+  const workflowOptions: string[] = [];
+  const toolUseOptions: string[] = [];
+
+  allAgents.forEach((agent) => {
     const metadata = getAgentOptionMetadata(agent, dirs);
-    return createAgentOptionTag(agent, metadata);
+    const optionTag = createAgentOptionTag(agent, metadata);
+    if (metadata.isToolUse) {
+      toolUseOptions.push(optionTag);
+    } else {
+      workflowOptions.push(optionTag);
+    }
   });
 
-  return optionTags.join('\n');
+  optionBuckets.workflow = workflowOptions.join('\n');
+  optionBuckets.toolUse = toolUseOptions.join('\n');
+
+  return optionBuckets;
 }
