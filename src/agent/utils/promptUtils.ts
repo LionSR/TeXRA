@@ -10,8 +10,16 @@ import { getAgentFirstNameChunk } from '@housekeeping/utils';
 // Local imports - log
 import * as logger from '@logger/logUtils';
 
+// Local imports - types
+import type { ExecutionId } from '@agent/types/IdentifierTypes';
+
 // Local imports - utilities
-import { WorkspaceFS } from '@utils/files';
+import {
+  StorageFS,
+  TASK_RUNS_DIR,
+  WorkspaceFS,
+  isValidExecutionId,
+} from '@utils/files';
 
 const CHANNEL = 'promptUtils';
 logger.initialize(CHANNEL);
@@ -138,7 +146,8 @@ export async function renderPrompt(
  * @param userRequest The user request
  * @param inputFile Path to the input file
  * @param agent Name of the agent
- * @returns Path to the created XML file
+ * @param executionId Optional execution identifier used to isolate task run files
+ * @returns Absolute path to the created XML file
  */
 export async function writePromptToXml(
   systemPrompt: string,
@@ -146,15 +155,33 @@ export async function writePromptToXml(
   userRequest: string,
   inputFile: string,
   agent: string,
+  executionId?: ExecutionId,
 ): Promise<string> {
   try {
     const { dir, name } = path.parse(inputFile);
     const agentName = getAgentFirstNameChunk(agent);
-    const outputFile = path.join(dir, `${name}_${agentName}_input.xml`);
-
-    logger.debug(CHANNEL, `Writing input prompt to ${outputFile}`);
+    const baseFilename = `${name}_${agentName}_input.xml`;
 
     const fullPrompt = `\n<system>${systemPrompt}</system>\n\n${userPrefix}\n${userRequest}\n`;
+    if (isValidExecutionId(executionId)) {
+      await StorageFS.ensureDir(TASK_RUNS_DIR);
+      await StorageFS.ensureDir(path.join(TASK_RUNS_DIR, executionId));
+
+      const storageRelativePath = path.join(
+        TASK_RUNS_DIR,
+        executionId,
+        baseFilename,
+      );
+      const storageFullPath = StorageFS.fullPath(storageRelativePath);
+
+      logger.debug(CHANNEL, `Writing input prompt to ${storageFullPath}`);
+      await StorageFS.write(storageRelativePath, fullPrompt);
+
+      return storageFullPath;
+    }
+
+    const outputFile = path.join(dir, baseFilename);
+    logger.debug(CHANNEL, `Writing input prompt to ${outputFile}`);
     await WorkspaceFS.write(outputFile, fullPrompt);
 
     return outputFile;
