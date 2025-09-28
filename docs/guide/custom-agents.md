@@ -167,6 +167,8 @@ workspace utilities like `bash`, `read_file`, `write_file`, `edit_file`,
 `str_replace_editor`, `wolfram`,
 `web_fetch`, and `web_search`.
 
+> **Tip:** The `read_file` tool returns only the first 400 lines of a file to prevent massive responses from overwhelming the progress log.
+
 For a minimal read-only configuration, see the built-in `ask` agent
 (`resources/tool_use_agents/ask.yaml`), which only grants `read_file`, `glob`,
 `grep`, and `ls` access.
