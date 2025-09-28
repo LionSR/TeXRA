@@ -105,10 +105,18 @@ function getSnapshotPath(executionId: ExecutionId): string {
   return path.join(STORAGE_DIR, `${executionId}.json`);
 }
 
+interface ResumingSessionState {
+  queuedFollowUps: string[];
+}
+
 export class ToolUseSessionManager {
   private static readonly pendingSnapshots = new Map<
     StreamTabId,
     ToolUseSessionSnapshot
+  >();
+  private static readonly resumingSessions = new Map<
+    StreamTabId,
+    ResumingSessionState
   >();
 
   /**
@@ -150,11 +158,61 @@ export class ToolUseSessionManager {
     const snapshot = this.pendingSnapshots.get(streamId);
     if (snapshot) {
       this.pendingSnapshots.delete(streamId);
+      this.resumingSessions.set(streamId, { queuedFollowUps: [] });
       logger.debug(
         `Consuming pending snapshot for stream ${streamId} to resume lazily.`,
       );
     }
     return snapshot;
+  }
+
+  /**
+   * Adds a follow-up to the queue while a snapshot is being resumed.
+   * @param streamId - The stream identifier to enqueue under.
+   * @param followUp - The follow-up text to queue.
+   * @returns True if the follow-up was queued, false if no resuming session exists.
+   */
+  public static enqueueFollowUpWhileResuming(
+    streamId: StreamTabId,
+    followUp: string,
+  ): boolean {
+    const entry = this.resumingSessions.get(streamId);
+    if (!entry) {
+      return false;
+    }
+
+    entry.queuedFollowUps.push(followUp);
+    logger.debug(
+      `Queued follow-up while resuming stream ${streamId}; ${entry.queuedFollowUps.length} waiting.`,
+    );
+    return true;
+  }
+
+  /**
+   * Retrieves and clears queued follow-ups for a resuming session.
+   * @param streamId - The stream identifier to drain.
+   */
+  public static drainQueuedFollowUps(streamId: StreamTabId): string[] {
+    const entry = this.resumingSessions.get(streamId);
+    if (!entry) {
+      return [];
+    }
+
+    const queued = entry.queuedFollowUps.splice(0);
+    logger.debug(
+      `Drained ${queued.length} queued follow-ups for stream ${streamId} after resume.`,
+    );
+    return queued;
+  }
+
+  /**
+   * Clears a resuming session without draining queued follow-ups (used on failure).
+   * @param streamId - The stream identifier to clear.
+   */
+  public static clearResumingSession(streamId: StreamTabId): void {
+    if (this.resumingSessions.delete(streamId)) {
+      logger.debug(`Cleared resuming session tracking for stream ${streamId}.`);
+    }
   }
 
   /**
