@@ -141,7 +141,7 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
       );
 
       this.userVars = await this.getUserVars();
-      BaseAgent.runningAgents.set(this.getStreamTabId(), this);
+      this.registerRunningAgent(this.getStreamTabId());
 
       if (createGroup && initGroupId) {
         this.logger.endGroup(initGroupId, 'stopped');
@@ -248,6 +248,14 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
 
   protected cleanup(): void {
     const streamTabId = this.getStreamTabId();
+    this.unregisterRunningAgent(streamTabId);
+  }
+
+  protected registerRunningAgent(streamTabId: StreamTabId): void {
+    BaseAgent.runningAgents.set(streamTabId, this);
+  }
+
+  protected unregisterRunningAgent(streamTabId: StreamTabId): void {
     BaseAgent.runningAgents.delete(streamTabId);
   }
 

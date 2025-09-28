@@ -50,17 +50,37 @@ export function agentConfigToTaskState(
   config: AgentConfig,
   metadata?: AgentSessionMetadata | AgentType,
 ): TaskState {
-  const resolvedMetadata =
+  const configMetadata = resolveAgentSessionMetadata(
+    config.agentType,
+    config.agentSessionKind,
+  );
+
+  const providedMetadata =
     typeof metadata === 'object' && metadata !== null
       ? resolveAgentSessionMetadata(
           metadata.agentType,
           metadata.agentSessionKind,
         )
-      : resolveAgentSessionMetadata(metadata);
+      : metadata !== undefined
+        ? resolveAgentSessionMetadata(metadata)
+        : null;
+
+  const resolvedMetadata = providedMetadata
+    ? resolveAgentSessionMetadata(
+        providedMetadata.agentType ?? configMetadata.agentType,
+        providedMetadata.agentSessionKind ?? configMetadata.agentSessionKind,
+      )
+    : configMetadata;
+
+  const normalizedConfig: AgentConfig = {
+    ...config,
+    agentType: resolvedMetadata.agentType,
+    agentSessionKind: resolvedMetadata.agentSessionKind,
+  };
 
   if (resolvedMetadata.agentSessionKind === AgentSessionKind.ToolUse) {
     return {
-      agentConfig: config,
+      agentConfig: normalizedConfig,
       agentType: resolvedMetadata.agentType,
       agentSessionKind: AgentSessionKind.ToolUse,
       toolSessionState: {},
@@ -68,10 +88,10 @@ export function agentConfigToTaskState(
   }
 
   return {
-    agentConfig: config,
+    agentConfig: normalizedConfig,
     agentType: resolvedMetadata.agentType,
     agentSessionKind: AgentSessionKind.Workflow,
-    activeFiles: createActiveFilesFromArrays(config),
+    activeFiles: createActiveFilesFromArrays(normalizedConfig),
   };
 }
 
