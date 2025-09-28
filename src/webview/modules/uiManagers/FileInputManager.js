@@ -320,7 +320,12 @@ export class FileInputManager extends BaseUIManager {
 
   _setupSaveListeners() {
     ELEMENTS_TO_SAVE.forEach((id) => {
-      if (id === 'agent' || id === 'model') {
+      if (
+        id === 'model' ||
+        id === 'workflowAgent' ||
+        id === 'toolUseAgent' ||
+        id === 'sessionType'
+      ) {
         return; // handled by SettingsButtonManager
       }
       if (id !== 'instruction') {
