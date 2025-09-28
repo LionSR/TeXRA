@@ -54,10 +54,7 @@
             },
             "default": [
               "ask",
-              "chat",
-              "file_edit",
-              "tex_linter_fix",
-              "xml_validator"
+              "chat"
             ],
             "description": "List of tool-use agents shown in the dedicated dropdown",
             "scope": "resource"

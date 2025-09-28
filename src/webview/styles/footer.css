@@ -105,8 +105,8 @@
 .model-selection-footer .select-group select {
   flex: 0 0 auto;
   width: auto;
-  min-width: 10rem;
-  max-width: 14rem;
+  min-width: 8rem;
+  max-width: 11rem;
   height: var(--height-control);
   font-size: var(--font-size);
   padding: var(--spacing-tiny) var(--spacing-small);
