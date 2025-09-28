@@ -13,14 +13,21 @@ type GitignoreRule = {
   negated: boolean;
 };
 
+type GitignoreSource = {
+  absolutePath: string;
+  rules: GitignoreRule[];
+};
+
 export type GitignoreMatcher = {
   hasRules: boolean;
   ignores: (relativePath: string) => boolean;
+  ignoreFiles: string[];
 };
 
 const EMPTY_GITIGNORE_MATCHER: GitignoreMatcher = {
   hasRules: false,
   ignores: () => false,
+  ignoreFiles: [],
 };
 
 let gitignoreMatcherPromise: Promise<GitignoreMatcher> | undefined;
@@ -117,37 +124,49 @@ function parseGitignore(content: string): GitignoreRule[] {
 
 async function readWorkspaceGitignore(
   relativePath: string,
-): Promise<GitignoreRule[]> {
+): Promise<GitignoreSource | null> {
   try {
-    const exists = await WorkspaceFS.exists(relativePath);
-    if (!exists) {
-      return [];
+    const workspacePath = WorkspaceFS.getPath();
+    if (!workspacePath) {
+      return null;
     }
 
-    const content = await WorkspaceFS.read(relativePath);
-    return parseGitignore(content);
+    const normalized = relativePath.replace(/^\/+/, '');
+    const exists = await WorkspaceFS.exists(normalized);
+    if (!exists) {
+      return null;
+    }
+
+    const content = await WorkspaceFS.read(normalized);
+    return {
+      absolutePath: path.join(workspacePath, normalized),
+      rules: parseGitignore(content),
+    };
   } catch {
-    return [];
+    return null;
   }
 }
 
 async function readAbsoluteGitignore(
   absolutePath: string,
-): Promise<GitignoreRule[]> {
+): Promise<GitignoreSource | null> {
   try {
     const exists = await AbsoluteFS.exists(absolutePath);
     if (!exists) {
-      return [];
+      return null;
     }
 
     const content = await AbsoluteFS.read(absolutePath);
-    return parseGitignore(content);
+    return {
+      absolutePath,
+      rules: parseGitignore(content),
+    };
   } catch {
-    return [];
+    return null;
   }
 }
 
-async function readGlobalGitignore(): Promise<GitignoreRule[]> {
+async function readGlobalGitignore(): Promise<GitignoreSource[]> {
   try {
     const homeDirectory = os.homedir();
     if (!homeDirectory) {
@@ -156,10 +175,10 @@ async function readGlobalGitignore(): Promise<GitignoreRule[]> {
 
     const candidates = [path.join(homeDirectory, '.gitignore_global')];
 
-    const ruleSets = await Promise.all(
+    const sources = await Promise.all(
       candidates.map((candidate) => readAbsoluteGitignore(candidate)),
     );
-    return ruleSets.flat();
+    return sources.filter((source): source is GitignoreSource => source !== null);
   } catch {
     return [];
   }
@@ -172,16 +191,25 @@ async function loadGitignoreMatcher(): Promise<GitignoreMatcher> {
   }
 
   try {
-    const [globalRules, workspaceGlobalRules, workspaceRules] =
+    const [globalSources, workspaceGlobalSource, workspaceSource] =
       await Promise.all([
         readGlobalGitignore(),
         readWorkspaceGitignore('.gitignore_global'),
         readWorkspaceGitignore('.gitignore'),
       ]);
-    const rules = [...globalRules, ...workspaceGlobalRules, ...workspaceRules];
+
+    const sources: GitignoreSource[] = [
+      ...globalSources,
+      ...(workspaceGlobalSource ? [workspaceGlobalSource] : []),
+      ...(workspaceSource ? [workspaceSource] : []),
+    ];
+
+    const rules = sources.flatMap((source) => source.rules);
     if (rules.length === 0) {
       return EMPTY_GITIGNORE_MATCHER;
     }
+
+    const ignoreFiles = sources.map((source) => source.absolutePath);
 
     return {
       hasRules: true,
@@ -198,6 +226,7 @@ async function loadGitignoreMatcher(): Promise<GitignoreMatcher> {
         }
         return ignored;
       },
+      ignoreFiles,
     };
   } catch {
     return EMPTY_GITIGNORE_MATCHER;
