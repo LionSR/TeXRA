@@ -14,7 +14,7 @@ import { showLoggedMessageWithDocs } from '@common/errors/errorHandlingUtils';
 
 const CHANNEL = 'AgentLoad';
 logger.initialize(CHANNEL);
-const DEFAULT_CUSTOM_AGENTS_DIRNAME = 'custom_agents';
+const DEFAULT_CUSTOM_AGENTS_DIR_NAME = 'custom_agents';
 
 export class AgentDirectoryManager {
   private context: vscode.ExtensionContext | undefined;
@@ -65,8 +65,23 @@ export class AgentDirectoryManager {
 
   private async ensureDefaultCustomDir(): Promise<string> {
     this.ensureInitialized();
-    await GlobalStorageFS.ensureDir(DEFAULT_CUSTOM_AGENTS_DIRNAME);
-    const defaultPath = GlobalStorageFS.fullPath(DEFAULT_CUSTOM_AGENTS_DIRNAME);
+
+    try {
+      await GlobalStorageFS.ensureDir(DEFAULT_CUSTOM_AGENTS_DIR_NAME);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      logger.error(
+        CHANNEL,
+        `Failed to create default custom agents directory: ${message}`,
+      );
+      throw new Error(
+        'Unable to create custom agents directory. Please check permissions.',
+      );
+    }
+
+    const defaultPath = GlobalStorageFS.fullPath(
+      DEFAULT_CUSTOM_AGENTS_DIR_NAME,
+    );
     logger.debug(
       CHANNEL,
       `Using default custom agents directory: ${defaultPath}`,
@@ -94,6 +109,21 @@ export class AgentDirectoryManager {
       return undefined;
     }
 
+    const parentDir = path.dirname(configuredPath);
+    const parentExists = await AbsoluteFS.exists(parentDir);
+    if (!parentExists) {
+      logger.error(
+        CHANNEL,
+        `Parent directory does not exist for custom agents directory: ${parentDir}`,
+      );
+      await showLoggedMessageWithDocs(
+        CHANNEL,
+        'Parent directory for custom agents directory does not exist',
+        'custom-agents',
+      );
+      return undefined;
+    }
+
     await AbsoluteFS.ensureDir(configuredPath);
     logger.debug(
       CHANNEL,
@@ -104,7 +134,7 @@ export class AgentDirectoryManager {
 
   async custom(context?: vscode.ExtensionContext): Promise<string> {
     if (context) {
-      this.initialize(context);
+      this.context = context;
     }
 
     const configuredPath = getConfig<string>(
