@@ -1,5 +1,3 @@
-// Local imports - agent
-
 // Local imports - agent components
 import type { AgentConfig } from '../core/AgentConfig';
 import {
@@ -15,7 +13,7 @@ import { UsageMonitor } from '../utils/UsageMonitor';
 import { buildUserVars } from '../utils/userVars';
 import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
 
-// Local imports - log
+// Local imports - logging
 import { AgentLogger } from '@logger/AgentLogger';
 import { getStreamTabId as buildStreamTabId } from '@/logger/streamUtils';
 
