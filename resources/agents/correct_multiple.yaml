@@ -1,6 +1,7 @@
 name: correct_multiple
 inherits: correct
 settings:
+  isMultipleOutput: true
   documentTag: latex_documents
   endTag: </latex_documents>
   outputExt: tex
