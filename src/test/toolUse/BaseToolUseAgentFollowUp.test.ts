@@ -117,18 +117,13 @@ describe('BaseToolUseAgent follow-up loop', () => {
       agentType: AgentType.ToolUse,
       documentTag: 'doc',
       temperature: 0,
-      isRewrite: true,
-      rounds: 1,
-      prefills: [],
-      outputExt: 'txt',
       endTag: '</doc>',
       requiredFiles: {},
       requiredFilesInternal: {},
       defaultOutputFiles: [],
-      isMultipleOutput: false,
       filePatternsContain: [],
       tools: [],
-    } as any;
+    };
     const prompt: AgentPrompt = {
       systemPrompt: '',
       userPrefix: '',
