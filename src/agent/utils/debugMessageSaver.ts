@@ -91,11 +91,13 @@ export async function maybeSaveDebugObject({
     : WorkspaceFS.fullPath(debugFileName);
 
   try {
-    const content = JSON.stringify(object, null, 2);
     if (executionId) {
-      await StorageFS.write(debugFilePath, content);
+      await StorageFS.writeJson(debugFilePath, object);
     } else {
-      await WorkspaceFS.write(WorkspaceFS.relativePath(debugFilePath), content);
+      await WorkspaceFS.writeJson(
+        WorkspaceFS.relativePath(debugFilePath),
+        object,
+      );
     }
     logger.info(`Saved ${objectType} object to ${debugFilePath}`, groupId);
   } catch (error) {
