@@ -28,18 +28,21 @@ describe('followUpCommand', () => {
   let followUpHandler:
     | ((payload: { stream: string; text: string }) => Promise<void>)
     | undefined;
+  let getSnapshotCalls: StreamTabId[];
+  let getSnapshotImplementation:
+    | ((streamId: StreamTabId) => ToolUseSessionSnapshot | undefined)
+    | undefined;
   let consumeCalls: StreamTabId[];
   let consumeImplementation:
     | ((streamId: StreamTabId) => ToolUseSessionSnapshot | undefined)
     | undefined;
+  let setResumingCalls: StreamTabId[];
   let enqueueCalls: { streamId: StreamTabId; followUp: string }[];
   let enqueueImplementation:
     | ((streamId: StreamTabId, followUp: string) => boolean)
     | undefined;
   let drainCalls: StreamTabId[];
-  let drainImplementation:
-    | ((streamId: StreamTabId) => string[])
-    | undefined;
+  let drainImplementation: ((streamId: StreamTabId) => string[]) | undefined;
   let clearCalls: StreamTabId[];
   let executeImplementation:
     | ((command: string, ...args: any[]) => Promise<unknown>)
@@ -48,8 +51,10 @@ describe('followUpCommand', () => {
   const originalRegisterCommand = vscode.commands.registerCommand;
   const originalExecuteCommand = vscode.commands.executeCommand;
   const originalShowWarningMessage = vscode.window.showWarningMessage;
+  const originalGetSnapshot = ToolUseSessionManager.getSnapshotForStream;
   const originalConsumeSnapshot =
     ToolUseSessionManager.consumeSnapshotForStream;
+  const originalSetResumingSession = ToolUseSessionManager.setResumingSession;
   const originalEnqueueFollowUp =
     ToolUseSessionManager.enqueueFollowUpWhileResuming;
   const originalClearResumingSession =
@@ -65,8 +70,11 @@ describe('followUpCommand', () => {
     registeredCommands = new Map();
     warningMessages = [];
     executeCalls = [];
+    getSnapshotCalls = [];
+    getSnapshotImplementation = undefined;
     consumeCalls = [];
     consumeImplementation = undefined;
+    setResumingCalls = [];
     enqueueCalls = [];
     enqueueImplementation = undefined;
     drainCalls = [];
@@ -100,10 +108,28 @@ describe('followUpCommand', () => {
 
     (
       ToolUseSessionManager as typeof ToolUseSessionManager & {
+        getSnapshotForStream: typeof ToolUseSessionManager.getSnapshotForStream;
         consumeSnapshotForStream: typeof ToolUseSessionManager.consumeSnapshotForStream;
         enqueueFollowUpWhileResuming: typeof ToolUseSessionManager.enqueueFollowUpWhileResuming;
         clearResumingSession: typeof ToolUseSessionManager.clearResumingSession;
         drainQueuedFollowUps: typeof ToolUseSessionManager.drainQueuedFollowUps;
+        setResumingSession: typeof ToolUseSessionManager.setResumingSession;
+      }
+    ).getSnapshotForStream = (streamId: StreamTabId) => {
+      getSnapshotCalls.push(streamId);
+      if (getSnapshotImplementation) {
+        return getSnapshotImplementation(streamId);
+      }
+      return undefined;
+    };
+    (
+      ToolUseSessionManager as typeof ToolUseSessionManager & {
+        getSnapshotForStream: typeof ToolUseSessionManager.getSnapshotForStream;
+        consumeSnapshotForStream: typeof ToolUseSessionManager.consumeSnapshotForStream;
+        enqueueFollowUpWhileResuming: typeof ToolUseSessionManager.enqueueFollowUpWhileResuming;
+        clearResumingSession: typeof ToolUseSessionManager.clearResumingSession;
+        drainQueuedFollowUps: typeof ToolUseSessionManager.drainQueuedFollowUps;
+        setResumingSession: typeof ToolUseSessionManager.setResumingSession;
       }
     ).consumeSnapshotForStream = (streamId: StreamTabId) => {
       consumeCalls.push(streamId);
@@ -111,6 +137,18 @@ describe('followUpCommand', () => {
         return consumeImplementation(streamId);
       }
       return undefined;
+    };
+    (
+      ToolUseSessionManager as typeof ToolUseSessionManager & {
+        getSnapshotForStream: typeof ToolUseSessionManager.getSnapshotForStream;
+        consumeSnapshotForStream: typeof ToolUseSessionManager.consumeSnapshotForStream;
+        enqueueFollowUpWhileResuming: typeof ToolUseSessionManager.enqueueFollowUpWhileResuming;
+        clearResumingSession: typeof ToolUseSessionManager.clearResumingSession;
+        drainQueuedFollowUps: typeof ToolUseSessionManager.drainQueuedFollowUps;
+        setResumingSession: typeof ToolUseSessionManager.setResumingSession;
+      }
+    ).setResumingSession = (streamId: StreamTabId) => {
+      setResumingCalls.push(streamId);
     };
     (
       ToolUseSessionManager as typeof ToolUseSessionManager & {
@@ -168,9 +206,20 @@ describe('followUpCommand', () => {
     (vscode.window as any).showWarningMessage = originalShowWarningMessage;
     (
       ToolUseSessionManager as typeof ToolUseSessionManager & {
+        getSnapshotForStream: typeof ToolUseSessionManager.getSnapshotForStream;
         consumeSnapshotForStream: typeof ToolUseSessionManager.consumeSnapshotForStream;
         enqueueFollowUpWhileResuming: typeof ToolUseSessionManager.enqueueFollowUpWhileResuming;
         clearResumingSession: typeof ToolUseSessionManager.clearResumingSession;
+        setResumingSession: typeof ToolUseSessionManager.setResumingSession;
+      }
+    ).getSnapshotForStream = originalGetSnapshot;
+    (
+      ToolUseSessionManager as typeof ToolUseSessionManager & {
+        getSnapshotForStream: typeof ToolUseSessionManager.getSnapshotForStream;
+        consumeSnapshotForStream: typeof ToolUseSessionManager.consumeSnapshotForStream;
+        enqueueFollowUpWhileResuming: typeof ToolUseSessionManager.enqueueFollowUpWhileResuming;
+        clearResumingSession: typeof ToolUseSessionManager.clearResumingSession;
+        setResumingSession: typeof ToolUseSessionManager.setResumingSession;
       }
     ).consumeSnapshotForStream = originalConsumeSnapshot;
     (
@@ -188,6 +237,11 @@ describe('followUpCommand', () => {
         drainQueuedFollowUps: typeof ToolUseSessionManager.drainQueuedFollowUps;
       }
     ).drainQueuedFollowUps = originalDrainQueuedFollowUps;
+    (
+      ToolUseSessionManager as typeof ToolUseSessionManager & {
+        setResumingSession: typeof ToolUseSessionManager.setResumingSession;
+      }
+    ).setResumingSession = originalSetResumingSession;
   });
 
   function createSnapshot(streamId: StreamTabId): ToolUseSessionSnapshot {
@@ -235,6 +289,7 @@ describe('followUpCommand', () => {
     const snapshot = createSnapshot(streamId);
     let snapshotAvailable: ToolUseSessionSnapshot | undefined = snapshot;
 
+    getSnapshotImplementation = () => snapshotAvailable;
     consumeImplementation = () => {
       const current = snapshotAvailable;
       snapshotAvailable = undefined;
@@ -243,7 +298,9 @@ describe('followUpCommand', () => {
 
     await followUpHandler!({ stream: streamId, text: 'resume me' });
 
+    assert.deepStrictEqual(getSnapshotCalls, [streamId]);
     assert.strictEqual(consumeCalls.length, 1);
+    assert.deepStrictEqual(setResumingCalls, [streamId]);
     assert.strictEqual(executeCalls.length, 1);
     assert.strictEqual(executeCalls[0].command, 'texra.resumeAgent');
     assert.strictEqual(executeCalls[0].args.length, 1);
@@ -261,23 +318,28 @@ describe('followUpCommand', () => {
     const streamId = 'stream-4' as StreamTabId;
 
     enqueueImplementation = () => true;
+    getSnapshotImplementation = () => undefined;
 
     await followUpHandler!({ stream: streamId, text: 'queued follow-up' });
 
-    assert.strictEqual(consumeCalls.length, 1);
+    assert.deepStrictEqual(getSnapshotCalls, [streamId]);
+    assert.strictEqual(consumeCalls.length, 0);
     assert.deepStrictEqual(enqueueCalls, [
       { streamId, followUp: 'queued follow-up' },
     ]);
     assert.strictEqual(executeCalls.length, 0);
     assert.strictEqual(warningMessages.length, 0);
+    assert.strictEqual(setResumingCalls.length, 0);
   });
 
   it('warns when no session is available', async () => {
     const streamId = 'stream-3' as StreamTabId;
 
+    getSnapshotImplementation = () => undefined;
     await followUpHandler!({ stream: streamId, text: 'missing' });
 
-    assert.strictEqual(consumeCalls.length, 1);
+    assert.deepStrictEqual(getSnapshotCalls, [streamId]);
+    assert.strictEqual(consumeCalls.length, 0);
     assert.strictEqual(executeCalls.length, 0);
     assert.strictEqual(warningMessages.length, 1);
     assert.strictEqual(
@@ -285,12 +347,14 @@ describe('followUpCommand', () => {
       'No active tool-use session found for this follow-up.',
     );
     assert.strictEqual(enqueueCalls.length, 0);
+    assert.strictEqual(setResumingCalls.length, 0);
   });
 
   it('drains queued follow-ups and warns when resume fails', async () => {
     const streamId = 'stream-5' as StreamTabId;
     const snapshot = createSnapshot(streamId);
 
+    getSnapshotImplementation = () => snapshot;
     consumeImplementation = () => snapshot;
     drainImplementation = () => ['first follow-up', 'second follow-up'];
     executeImplementation = async () => {
@@ -299,10 +363,12 @@ describe('followUpCommand', () => {
 
     await followUpHandler!({ stream: streamId, text: 'trigger resume' });
 
+    assert.deepStrictEqual(getSnapshotCalls, [streamId]);
     assert.strictEqual(executeCalls.length, 1);
     assert.strictEqual(executeCalls[0].command, 'texra.resumeAgent');
     assert.deepStrictEqual(drainCalls, [streamId]);
     assert.deepStrictEqual(clearCalls, [streamId]);
+    assert.deepStrictEqual(setResumingCalls, [streamId]);
     assert.strictEqual(warningMessages.length, 1);
     assert.strictEqual(
       warningMessages[0],
