@@ -3,6 +3,13 @@ import { encode as encodeHtml } from 'he';
 import { globSync } from 'glob';
 import * as yaml from 'yaml';
 
+// Local imports - agent core
+import {
+  AgentType,
+  safeParseAgentSetting,
+  type AgentSetting,
+} from '@agent/core/AgentDataclass';
+
 // Local imports - filesystem
 import { AbsoluteFS } from '@utils/files';
 
@@ -26,14 +33,7 @@ const DIRECTORY_KEYS: (keyof AgentDirectoryMap)[] = [
 ];
 const YAML_EXTENSION = '.yaml';
 const MULTIPLE_SUFFIX = '_multiple';
-const TOOL_USE_AGENT_TYPE = 'toolUse';
-
-type AgentDefinition = {
-  settings?: {
-    agentType?: unknown;
-    isMultipleOutput?: unknown;
-  };
-};
+const TOOL_USE_AGENT_TYPE = AgentType.ToolUse;
 
 function normalizeDirectory(dir?: string): string | undefined {
   if (!dir) {
@@ -74,26 +74,17 @@ function findAgentYaml(
   return undefined;
 }
 
-function readAgentDefinition(yamlPath?: string): AgentDefinition | undefined {
+function readAgentDefinition(yamlPath?: string): AgentSetting | undefined {
   if (!yamlPath) {
     return undefined;
   }
   try {
     const fileContent = AbsoluteFS.readSync(yamlPath);
-    return yaml.parse(fileContent) as AgentDefinition;
+    const parsed = yaml.parse(fileContent) as { settings?: unknown };
+    return safeParseAgentSetting(parsed?.settings);
   } catch {
     return undefined;
   }
-}
-
-function hasToolUseAgentType(definition?: AgentDefinition): boolean {
-  return definition?.settings?.agentType === TOOL_USE_AGENT_TYPE;
-}
-
-function hasMultipleOutputFlag(definition?: AgentDefinition): boolean {
-  return typeof definition?.settings?.isMultipleOutput === 'boolean'
-    ? Boolean(definition?.settings?.isMultipleOutput)
-    : false;
 }
 
 export function getAgentOptionMetadata(
@@ -106,8 +97,8 @@ export function getAgentOptionMetadata(
   return {
     hasDefinition: Boolean(definitionPath),
     hasMultipleSibling: Boolean(multiplePath),
-    isMultipleOutput: hasMultipleOutputFlag(definition),
-    isToolUse: hasToolUseAgentType(definition),
+    isMultipleOutput: Boolean(definition?.isMultipleOutput),
+    isToolUse: definition?.agentType === TOOL_USE_AGENT_TYPE,
   };
 }
 

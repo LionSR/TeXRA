@@ -8,7 +8,7 @@ import * as yaml from 'yaml';
 import {
   AgentDefinitionSchema,
   AgentPromptSchema,
-  AgentSettingSchema,
+  parseAgentSetting,
 } from '@agent/core/AgentDataclass';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { promptToAddAgentToConfig } from '@frontend/agents/register';
@@ -173,7 +173,7 @@ function validateAgentYamlString(content: string): string | null {
     if (!data.settings || !data.prompts) {
       return 'missing settings or prompts block';
     }
-    AgentSettingSchema.parse(data.settings);
+    parseAgentSetting(data.settings);
     AgentPromptSchema.parse(data.prompts);
     if (!data.name || data.name.trim() === '') {
       return 'name is empty';
