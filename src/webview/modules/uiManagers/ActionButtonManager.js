@@ -26,6 +26,8 @@ export class ActionButtonManager extends BaseUIManager {
     this.fileList = fileList;
     this.state = state;
     this.instructionManager = instructionMgr;
+    this._sessionTypeInput = null;
+    this._agentSelectCache = new Map();
   }
 
   _getSingleFileData(fileTypes = ['input', 'reference', 'auxiliary', 'media']) {
@@ -299,6 +301,8 @@ export class ActionButtonManager extends BaseUIManager {
   }
 
   setup() {
+    this._sessionTypeInput = null;
+    this._agentSelectCache.clear();
     this._setupInstructionButtons();
     this._setupExecuteButtons();
     this._setupLatexdiffButtons();
@@ -311,17 +315,42 @@ export class ActionButtonManager extends BaseUIManager {
       : SESSION_TYPES.WORKFLOW;
   }
 
-  _getActiveAgentSelection() {
-    const rawSessionType = safeGetElementValue(SESSION_TYPE_INPUT);
-    const sessionType = this._normalizeSessionType(rawSessionType);
+  _getSessionTypeInput() {
+    if (!this._sessionTypeInput) {
+      const element = safeGetElementById(SESSION_TYPE_INPUT);
+      this._sessionTypeInput =
+        element instanceof HTMLInputElement ? element : null;
+    }
+    return this._sessionTypeInput;
+  }
+
+  _getAgentSelect(sessionType) {
     const selectId = AGENT_SELECT_IDS[sessionType];
-    const agent = selectId ? (safeGetElementValue(selectId) ?? '') : '';
-    const selectElement = selectId ? safeGetElementById(selectId) : null;
+    if (!selectId) {
+      return null;
+    }
+
+    if (!this._agentSelectCache.has(selectId)) {
+      const element = safeGetElementById(selectId);
+      this._agentSelectCache.set(
+        selectId,
+        element instanceof HTMLSelectElement ? element : null,
+      );
+    }
+
+    return this._agentSelectCache.get(selectId) || null;
+  }
+
+  _getActiveAgentSelection() {
+    const sessionTypeInput = this._getSessionTypeInput();
+    const rawSessionType = sessionTypeInput?.value;
+    const sessionType = this._normalizeSessionType(rawSessionType);
+    const selectElement = this._getAgentSelect(sessionType);
+    const agent = selectElement?.value ?? '';
     return {
       agent,
       sessionType,
-      selectElement:
-        selectElement instanceof HTMLSelectElement ? selectElement : null,
+      selectElement,
     };
   }
 }

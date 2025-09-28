@@ -494,26 +494,28 @@
                       Tool Use
                     </button>
                   </div>
-                  <select
-                    id="workflowAgent"
-                    class="agent-select agent-select--active"
-                    data-session-type="workflow"
-                    aria-label="Select a workflow agent"
-                    title="Select a workflow agent"
-                  >
-                    ${workflowAgentOptions}
-                  </select>
-                  <select
-                    id="toolUseAgent"
-                    class="agent-select agent-select--hidden"
-                    data-session-type="toolUse"
-                    aria-label="Select a tool-use agent"
-                    title="Select a tool-use agent"
-                    tabindex="-1"
-                    aria-hidden="true"
-                  >
-                    ${toolUseAgentOptions}
-                  </select>
+                  <div class="agent-select-dropdowns">
+                    <select
+                      id="workflowAgent"
+                      class="agent-select agent-select--active"
+                      data-session-type="workflow"
+                      aria-label="Select a workflow agent"
+                      title="Select a workflow agent"
+                    >
+                      ${workflowAgentOptions}
+                    </select>
+                    <select
+                      id="toolUseAgent"
+                      class="agent-select agent-select--hidden"
+                      data-session-type="toolUse"
+                      aria-label="Select a tool-use agent"
+                      title="Select a tool-use agent"
+                      tabindex="-1"
+                      aria-hidden="true"
+                    >
+                      ${toolUseAgentOptions}
+                    </select>
+                  </div>
                 </div>
               </div>
               <div class="select-group">

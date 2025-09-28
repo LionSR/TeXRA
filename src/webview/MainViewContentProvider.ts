@@ -6,11 +6,10 @@ import * as vscode from 'vscode';
 
 // Local imports - agent utilities
 import {
-  createAgentOptionTag,
-  getAgentOptionMetadata,
+  buildAgentOptionsPayload,
   type AgentDirectoryMap,
 } from '@agent/utils/agentOptionMetadata';
-import { AgentOptionsPayload } from '@agent/computeAgentOptions';
+import type { AgentOptionsPayload } from '@agent/computeAgentOptions';
 
 // Local imports - webview
 import {
@@ -85,6 +84,7 @@ export class MainViewContentProvider extends BaseViewContentProvider {
     // Agent options with metadata are computed asynchronously via computeAgentOptions
     const agents = getConfig<string[]>('agents', []);
     const includeToolUse = getConfig<boolean>('includeToolUseAgents', false);
+    const configuredToolUseAgents = getConfig<string[]>('toolUseAgents', []);
     const toolUseDir = GlobalStorageFS.fullPath('tool_use_agents');
     const builtInDir = GlobalStorageFS.fullPath('agents');
     const configuredCustomDir = getConfig<string>(
@@ -95,10 +95,12 @@ export class MainViewContentProvider extends BaseViewContentProvider {
       ? configuredCustomDir
       : '';
 
+    const shouldIncludeToolUseDir =
+      includeToolUse || configuredToolUseAgents.length > 0;
     const agentDirectories: AgentDirectoryMap = {
       custom: customDir,
       builtIn: builtInDir,
-      builtInToolUse: includeToolUse ? toolUseDir : '',
+      builtInToolUse: shouldIncludeToolUseDir ? toolUseDir : '',
     };
     let extraAgents: string[] = [];
     if (includeToolUse) {
@@ -111,23 +113,13 @@ export class MainViewContentProvider extends BaseViewContentProvider {
         extraAgents = [];
       }
     }
-    const allAgents = Array.from(new Set([...agents, ...extraAgents]));
-    const optionBuckets: AgentOptionsPayload = { workflow: '', toolUse: '' };
-    const workflowOptions: string[] = [];
-    const toolUseOptions: string[] = [];
-
-    allAgents.forEach((agent) => {
-      const metadata = getAgentOptionMetadata(agent, agentDirectories);
-      const optionTag = createAgentOptionTag(agent, metadata);
-      if (metadata.isToolUse) {
-        toolUseOptions.push(optionTag);
-      } else {
-        workflowOptions.push(optionTag);
-      }
-    });
-
-    optionBuckets.workflow = workflowOptions.join('\n');
-    optionBuckets.toolUse = toolUseOptions.join('\n');
+    const allAgents = Array.from(
+      new Set([...agents, ...configuredToolUseAgents, ...extraAgents]),
+    );
+    const optionBuckets: AgentOptionsPayload = buildAgentOptionsPayload(
+      allAgents,
+      agentDirectories,
+    );
 
     const models = getConfig<string[]>('models', []);
     const modelOptions = models
