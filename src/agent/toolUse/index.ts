@@ -7,6 +7,7 @@
 
 // Local imports - agents
 export { BaseToolUseAgent } from '@agent/implementations/BaseToolUseAgent';
+export * from './ToolUseAgentRegistry';
 
 // Export individual classes
 export * from '@tools/TextEditorTool';
