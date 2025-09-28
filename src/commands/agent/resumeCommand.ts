@@ -27,6 +27,7 @@ import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import { STATUS } from '@progressView/modules/constants.js';
 import { isToolUseTaskState } from '@logger/TaskState';
 import { MODEL_CONFIGS } from '@model/ModelRegistry';
+import { logErrorMessage } from '@common/errors/errorHandlingUtils';
 
 function isToolUseAgent(setting: AgentSetting): boolean {
   return setting.agentType === AgentType.ToolUse;
@@ -87,6 +88,13 @@ type ResumeAgentCommandPayload =
   | ToolUseSessionSnapshot
   | { snapshot: ToolUseSessionSnapshot; followUp?: string };
 
+const CHANNEL = 'resumeAgentCommand';
+
+export interface ResumeAgentResult {
+  success: boolean;
+  lostFollowUps?: number;
+}
+
 function normalizePayload(payload: ResumeAgentCommandPayload | undefined): {
   snapshot: ToolUseSessionSnapshot | undefined;
   followUp?: string;
@@ -107,16 +115,21 @@ export function registerResumeAgentCommand(
 ): vscode.Disposable {
   return vscode.commands.registerCommand(
     'texra.resumeAgent',
-    async (payload: ResumeAgentCommandPayload | undefined) => {
+    async (
+      payload: ResumeAgentCommandPayload | undefined,
+    ): Promise<ResumeAgentResult> => {
       const { snapshot, followUp } = normalizePayload(payload);
       if (!snapshot || !ToolUseSessionManager.isPersistenceEnabled()) {
-        return;
+        return { success: false };
       }
 
       const provider = ProgressViewProvider.getInstance();
       if (!provider) {
-        return;
+        return { success: false };
       }
+
+      const streamId = snapshot.streamId as StreamTabId;
+      let queuedFollowUps: string[] = [];
 
       try {
         const executionId = snapshot.executionId as ExecutionId;
@@ -127,7 +140,7 @@ export function registerResumeAgentCommand(
           existingStatus === STATUS.RUNNING ||
           existingStatus === STATUS.RESUMING
         ) {
-          return;
+          return { success: false };
         }
 
         provider.eventHandler.setStreamStatus(
@@ -145,9 +158,7 @@ export function registerResumeAgentCommand(
           agent.appendFollowUp(followUp);
         }
 
-        const queuedFollowUps = ToolUseSessionManager.drainQueuedFollowUps(
-          snapshot.streamId as StreamTabId,
-        );
+        queuedFollowUps = ToolUseSessionManager.drainQueuedFollowUps(streamId);
         for (const queuedFollowUp of queuedFollowUps) {
           agent.appendFollowUp(queuedFollowUp);
         }
@@ -163,24 +174,40 @@ export function registerResumeAgentCommand(
           { resume: true },
         );
 
-        ToolUseSessionManager.clearResumingSession(
-          snapshot.streamId as StreamTabId,
-        );
-      } catch (error) {
-        // Clear resuming session first to ensure cleanup
-        ToolUseSessionManager.clearResumingSession(
-          snapshot.streamId as StreamTabId,
-        );
-        // Then update UI status
+        ToolUseSessionManager.clearResumingSession(streamId);
         provider.eventHandler.setStreamStatus(
           snapshot.streamId,
           STATUS.WAITING,
         );
-        // Finally delete the snapshot
-        await ToolUseSessionManager.deleteSnapshot(snapshot.executionId);
-        throw error instanceof Error
-          ? error
-          : new Error(String(error ?? 'unknown'));
+
+        return { success: true };
+      } catch (error) {
+        const lostFollowUps =
+          queuedFollowUps.length > 0
+            ? queuedFollowUps
+            : ToolUseSessionManager.drainQueuedFollowUps(streamId);
+
+        ToolUseSessionManager.clearResumingSession(streamId);
+        provider.eventHandler.setStreamStatus(
+          snapshot.streamId,
+          STATUS.WAITING,
+        );
+
+        const baseMessage = logErrorMessage(
+          CHANNEL,
+          'Failed to resume tool-use session',
+          error,
+        );
+        const lostCount = lostFollowUps.length;
+        const followUpSuffix =
+          lostCount > 0
+            ? ` ${lostCount} queued ${
+                lostCount === 1 ? 'follow-up was' : 'follow-ups were'
+              } lost.`
+            : '';
+        await vscode.window.showWarningMessage(`${baseMessage}${followUpSuffix}`);
+
+        return { success: false, lostFollowUps: lostCount };
       }
     },
   );
