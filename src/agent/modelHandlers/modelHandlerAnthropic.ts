@@ -80,6 +80,8 @@ type BetaMessageCountTokensParams = MessageCountTokensParams & {
 
 const CONTEXT_1M_BETA: AnthropicBeta = 'context-1m-2025-08-07';
 const SONNET_37_OUTPUT_BETA: AnthropicBeta = 'output-128k-2025-02-19';
+const INTERLEAVED_THINKING_BETA: AnthropicBeta =
+  'interleaved-thinking-2025-05-14';
 
 export class ModelHandlerAnthropic extends ModelHandler<
   MessageParam,
@@ -127,6 +129,13 @@ export class ModelHandlerAnthropic extends ModelHandler<
     if (tools && tools.length > 0) {
       options.tools = toAnthropicTools(tools);
       (options as MessageCreateParams).tool_choice = { type: 'auto' };
+
+      if (this.config.capabilities.supportsInterleavedThinking) {
+        const existingBetas = options.betas ?? [];
+        if (!existingBetas.includes(INTERLEAVED_THINKING_BETA)) {
+          options.betas = [...existingBetas, INTERLEAVED_THINKING_BETA];
+        }
+      }
     }
 
     // Enable thinking for any models that support reasoning
