@@ -416,7 +416,6 @@ export class FileManager {
         options.emptyMessage ||
         `No ${fileType.toLowerCase()} files were found during refresh.`;
       logger.info(CHANNEL, message);
-      vscode.window.showInformationMessage(message);
     }
 
     webviewView.webview.postMessage({
