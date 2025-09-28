@@ -1,11 +1,10 @@
 // Third-party imports
-// Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - common
+// Local imports - common webview
 import { BaseWebviewProvider } from '@common/webview/BaseWebviewProvider';
 
-// Local imports - components
+// Local imports - history view components
 import { HistoryViewContentProvider } from './HistoryViewContentProvider';
 import { HistoryViewMessageHandler } from './HistoryViewMessageHandler';
 

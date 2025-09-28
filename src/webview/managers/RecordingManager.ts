@@ -1,19 +1,16 @@
 // Third-party imports
-// Third-party imports
 import * as vscode from 'vscode';
-
-// Local imports - webview
 
 // Local imports - commands
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
 
-// Local imports - utilities
+// Local imports - media utilities
 import {
   startRecording,
   stopRecordingAndTranscribe,
 } from '@frontend/media/audio';
 
-// Local imports - log
+// Local imports - logging
 import * as logger from '@logger/logUtils';
 
 const CHANNEL = 'RecordingManager';

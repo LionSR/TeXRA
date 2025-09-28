@@ -1,22 +1,19 @@
 // Standard library imports
-
 import * as path from 'path';
 
 // Third-party imports
 import * as vscode from 'vscode';
 import { z } from 'zod';
+
+// Local imports - tool definitions
 import { defineTool } from './core/define';
-
-// Local imports - tools
-
-// Local imports - core
 import { ToolResult, ToolError, cliResult, toolResult } from './result';
 import { ToolCallInput, EditorCommand, FileHistoryEntry } from './types';
 
-// Local imports - Log
+// Local imports - logging
 import * as logger from '@logger/logUtils';
 
-// Local imports - utilities
+// Local imports - filesystem utilities
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
 
 // Constants
