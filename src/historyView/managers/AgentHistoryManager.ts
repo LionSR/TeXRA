@@ -1,15 +1,10 @@
 // Standard library imports
-
-// Standard library imports
 import { randomUUID } from 'crypto';
 
 // Third-party imports
-// Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - history view
-
-// Local imports
+// Local imports - agent metadata
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import {
   AgentSessionKind,
@@ -17,6 +12,8 @@ import {
   resolveAgentSessionMetadata,
 } from '@agent/core/AgentDataclass';
 import type { ExecutionId } from '@agent/types/IdentifierTypes';
+
+// Local imports - workspace state
 import { workspaceSM } from '@common/state/stateManager';
 
 /**
