@@ -2,7 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.33.8] [Unreleased]
+
+### Improvements
+
+- Update Gemini 2.5 Flash preview entries to the September 2025 release.
+- Refresh Qwen-Max and Qwen Plus integrations with updated pricing, naming, and thinking support in the DashScope handler.
+- Harden progress view state handling with validation on task groups, toggles, and stream statuses to prevent invalid data from corrupting summaries.
+- Restore main view configurations using the shared task-state helper so history entries hydrate without manual JSON juggling.
+- Cap `read_file` tool responses at the first 400 lines to keep large files from overwhelming tool-use transcripts.
+- Enable interleaved thinking by default for supported Claude tool-use agents so follow-up reasoning stays in sync with tool results.
+
+### Bug Fixes
+
+- Migrate history view toggle state persistence from JSON strings to structured arrays so expansion settings reliably load across versions.
+- Clear queued restore context when the main view fails to initialize, preventing stale state from resurfacing on the next activation.
 
 ## [0.33.7] - 2025-09-22
 

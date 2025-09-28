@@ -3,6 +3,7 @@ import * as vscode from 'vscode';
 
 // Local imports - agent
 import { BaseAgent } from '@agent/implementations/BaseAgent';
+import { getToolUseAgent } from '@agent/toolUse/ToolUseAgentRegistry';
 import { bus } from '@eventBus/ProgressEventBus';
 
 // Local imports - log
@@ -19,7 +20,7 @@ export function registerAgentCommands(context: vscode.ExtensionContext) {
 
 async function handleStopAgent(stream: string) {
   // Get the running agent instance
-  const agent = BaseAgent.getRunningAgent(stream);
+  const agent = BaseAgent.getRunningAgent(stream) ?? getToolUseAgent(stream);
   if (agent) {
     // Interrupt the agent's execution
     agent.interrupt();

@@ -6,8 +6,8 @@ import * as vscode from 'vscode';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 
 // Local imports - agent
+import { AgentSessionKind, AgentType } from '@agent/core/AgentDataclass';
 import { ToolConfig } from '@agent/core/ToolConfig';
-import { getFilesIfNotEmpty } from '@frontend/files/listing';
 
 // Local imports - utils
 import { capitalize } from '@frontend/ui/messageUtils';
@@ -22,13 +22,33 @@ import {
 const CHANNEL = 'ExecutionManager';
 logger.initialize(CHANNEL);
 
+function getFilesIfNotEmpty<T>(files: T[] | undefined | null): T[] | null {
+  if (!Array.isArray(files) || files.length === 0) {
+    return null;
+  }
+  return files;
+}
+
 export class ExecutionManager {
   constructor() {}
 
   async handleExecute(message: any): Promise<void> {
     const isToolUseAgent = Boolean(message.isToolUseAgent);
+    const config = isToolUseAgent
+      ? this.buildToolUseCommandPayload(message)
+      : await this.buildWorkflowCommandPayload(message);
 
-    if (!message.inputFile && !isToolUseAgent) {
+    if (!config) {
+      return;
+    }
+
+    await vscode.commands.executeCommand('texra.execute', config);
+  }
+
+  private async buildWorkflowCommandPayload(
+    message: any,
+  ): Promise<AgentConfig | null> {
+    if (!message.inputFile) {
       const openDocs = 'File Management Guide';
       const choice = await vscode.window.showErrorMessage(
         'Please select an input file.',
@@ -37,9 +57,25 @@ export class ExecutionManager {
       if (choice === openDocs) {
         vscode.commands.executeCommand('texra.openDoc', 'file-management');
       }
-      return;
+      return null;
     }
 
+    return this.composeAgentConfig(message, {
+      agentSessionKind: AgentSessionKind.Workflow,
+    });
+  }
+
+  private buildToolUseCommandPayload(message: any): AgentConfig {
+    return this.composeAgentConfig(message, {
+      agentType: AgentType.ToolUse,
+      agentSessionKind: AgentSessionKind.ToolUse,
+    });
+  }
+
+  private composeAgentConfig(
+    message: any,
+    metadata: { agentType?: AgentType; agentSessionKind: AgentSessionKind },
+  ): AgentConfig {
     const toolConfig: ToolConfig = {
       autoExtractFigure: message.autoExtractFigure,
       autoExtractTikzFigure: message.autoExtractTikzFigure,
@@ -64,18 +100,18 @@ export class ExecutionManager {
         (Array.isArray(outputFiles) && outputFiles.length > 1),
     );
 
-    const agentConfig: AgentConfig = {
+    return {
       agent: message.agent,
       model: message.model,
       instruction: message.instruction,
       useMultipleOutputs,
-      inputFile: message.inputFile,
+      inputFile: message.inputFile ?? '',
       inputFiles: getFilesIfNotEmpty<string>(message.inputFiles),
-      referenceFile: message.referenceFile,
+      referenceFile: message.referenceFile ?? null,
       referenceFiles: getFilesIfNotEmpty<string>(message.referenceFiles),
-      auxiliaryFile: message.auxiliaryFile,
+      auxiliaryFile: message.auxiliaryFile ?? null,
       auxiliaryFiles: getFilesIfNotEmpty<string>(message.auxiliaryFiles),
-      mediaFile: mapMediaPath(message.mediaFile),
+      mediaFile: mapMediaPath(message.mediaFile ?? null),
       mediaFiles: message.mediaFiles
         ? getFilesIfNotEmpty<string>(
             message.mediaFiles
@@ -86,9 +122,9 @@ export class ExecutionManager {
       outputFiles,
       editedFile: null,
       toolConfig,
+      agentType: metadata.agentType,
+      agentSessionKind: metadata.agentSessionKind,
     };
-
-    await vscode.commands.executeCommand('texra.execute', agentConfig);
   }
 
   private handleFileOperation(message: any): void {

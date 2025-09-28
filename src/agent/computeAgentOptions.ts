@@ -50,7 +50,7 @@ async function getAgentDirectories(
   context: vscode.ExtensionContext,
 ): Promise<AgentDirectoryMap> {
   return {
-    custom: await agentDirectories.custom(),
+    custom: await agentDirectories.custom(context),
     builtIn: await agentDirectories.builtIn(context),
     builtInToolUse: await agentDirectories.builtInToolUse(context),
   };
@@ -59,8 +59,8 @@ async function getAgentDirectories(
 /**
  * Compute agent <option> tags for the agent dropdown.
  * Agents missing a YAML definition are marked as disabled and cannot be selected.
- * A codicon indicator is added via data-multiple when a corresponding
- * `_multiple.yaml` file exists.
+ * A codicon indicator is added via data-multiple when either the agent declares
+ * `isMultipleOutput: true` or a sibling `_multiple.yaml` definition exists.
  */
 export async function computeAgentOptions(
   context: vscode.ExtensionContext,

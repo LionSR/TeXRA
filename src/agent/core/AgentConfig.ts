@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 // Local imports - agent
 // Local imports - agent components
+import { AgentSessionKind, AgentType } from './AgentDataclass';
 import { ToolConfigSchema } from './ToolConfig';
 
 /**
@@ -24,6 +25,9 @@ export const AgentConfigSchema = z
     agent: z.string().default('correct'),
     instruction: z.string().default(''),
     useMultipleOutputs: z.boolean().default(false),
+
+    agentType: z.nativeEnum(AgentType).optional(),
+    agentSessionKind: z.nativeEnum(AgentSessionKind).optional(),
 
     inputFile: z.string().default(''),
     inputFiles: z.array(z.string()).nullable().default(null),

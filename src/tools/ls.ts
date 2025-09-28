@@ -28,6 +28,12 @@ const LsInputSchema = z
 
 export type LsInput = z.infer<typeof LsInputSchema>;
 
+const DEFAULT_HIDDEN_NAMES = new Set(['.git', '.gitignore']);
+
+function isDefaultHiddenName(name: string): boolean {
+  return DEFAULT_HIDDEN_NAMES.has(name);
+}
+
 function formatEntry(name: string, type: vscode.FileType): string {
   const suffix = type === vscode.FileType.Directory ? '/' : '';
   const label =
@@ -71,7 +77,9 @@ export class LsTool extends defineTool({
 
     if (stats.type === vscode.FileType.File) {
       const relativePosix = toPosixPath(relative);
+      const fileName = relativePosix.split('/').pop() ?? relativePosix;
       if (
+        isDefaultHiddenName(fileName) ||
         gitignore.ignores(relative) ||
         matchesCustomIgnore(display) ||
         matchesCustomIgnore(relativePosix)
@@ -106,24 +114,21 @@ export class LsTool extends defineTool({
     }
 
     const entries = await WorkspaceFS.readDir(relative);
-    const shouldFilter = ignorePatterns.length > 0 || gitignore.hasRules;
-    const filtered = shouldFilter
-      ? entries.filter(([name, _type]) => {
-          const resolvedChild = joinWorkspaceRelativePath(
-            target.relative,
-            name,
-          );
-          const entryRelative = resolvedChild.relative;
-          const entryPath = toPosixPath(entryRelative);
-          if (gitignore.ignores(entryRelative)) {
-            return false;
-          }
-          if (matchesCustomIgnore(entryPath) || matchesCustomIgnore(name)) {
-            return false;
-          }
-          return true;
-        })
-      : entries;
+    const filtered = entries.filter(([name, _type]) => {
+      const resolvedChild = joinWorkspaceRelativePath(target.relative, name);
+      const entryRelative = resolvedChild.relative;
+      const entryPath = toPosixPath(entryRelative);
+      if (isDefaultHiddenName(name)) {
+        return false;
+      }
+      if (gitignore.ignores(entryRelative)) {
+        return false;
+      }
+      if (matchesCustomIgnore(entryPath) || matchesCustomIgnore(name)) {
+        return false;
+      }
+      return true;
+    });
 
     const sorted = filtered.sort(([a], [b]) => a.localeCompare(b));
     const formatted = sorted.map(([name, type]) => formatEntry(name, type));

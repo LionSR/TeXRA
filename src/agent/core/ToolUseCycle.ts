@@ -183,11 +183,7 @@ export async function runToolUseCycle<C = unknown>(
         input: toolInfo,
         output: toolResult({ error: errorMsg, isError: true }),
       };
-      logger.info(
-        JSON.stringify(toolUseLog, null, 2),
-        groupId,
-        MESSAGE_TYPES.TOOL_USE,
-      );
+      logger.info('', groupId, MESSAGE_TYPES.TOOL_USE, toolUseLog);
       break;
     }
 
@@ -203,11 +199,7 @@ export async function runToolUseCycle<C = unknown>(
         input: parsed,
         output: toolResult({ error: errorMsg, isError: true }),
       };
-      logger.info(
-        JSON.stringify(toolUseLog, null, 2),
-        groupId,
-        MESSAGE_TYPES.TOOL_USE,
-      );
+      logger.info('', groupId, MESSAGE_TYPES.TOOL_USE, toolUseLog);
       break;
     }
     let input = parsed.input ?? parsed.args;
@@ -284,11 +276,7 @@ export async function runToolUseCycle<C = unknown>(
       output: result,
     };
 
-    logger.info(
-      JSON.stringify(toolUseLog, null, 2),
-      groupId,
-      MESSAGE_TYPES.TOOL_USE,
-    );
+    logger.info('', groupId, MESSAGE_TYPES.TOOL_USE, toolUseLog);
 
     // Build provider-specific message containing the tool result
     const resultObj: Record<string, unknown> = {};
