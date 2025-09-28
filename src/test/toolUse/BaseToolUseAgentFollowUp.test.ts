@@ -125,6 +125,7 @@ describe('BaseToolUseAgent follow-up loop', () => {
       requiredFiles: {},
       requiredFilesInternal: {},
       defaultOutputFiles: [],
+      isMultipleOutput: false,
       useMultipleOutputs: false,
       filePatternsContain: [],
       tools: [],

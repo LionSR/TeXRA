@@ -108,6 +108,7 @@ describe('runToolUseCycle DeepSeek', () => {
       requiredFiles: {},
       requiredFilesInternal: {},
       defaultOutputFiles: [],
+      isMultipleOutput: false,
       useMultipleOutputs: false,
       filePatternsContain: [],
       tools: [{ name: 'echo' }],

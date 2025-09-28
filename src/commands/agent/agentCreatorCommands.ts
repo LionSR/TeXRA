@@ -100,6 +100,7 @@ name: \${agentName}
 # --- Agent Settings ---
 settings:
   agentType: CoT
+  isMultipleOutput: true
   temperature: 0.1
   isRewrite: true
   documentTag: latex_documents
