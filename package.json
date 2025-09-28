@@ -408,7 +408,8 @@
               "__pycache__",
               "versions",
               "history",
-              "venv"
+              "venv",
+              "Diffs"
             ],
             "description": "Directories to ignore in the figure path",
             "editPresentation": "multilineText",
