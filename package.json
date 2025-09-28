@@ -1348,6 +1348,7 @@
     "split.js": "^1.6.5",
     "tar": "^7.4.4",
     "turndown": "^7.2.1",
+    "turndown-plugin-gfm": "^1.0.2",
     "winston": "^3.17.0",
     "yaml": "^2.8.1",
     "zod": "^3.25.76",
