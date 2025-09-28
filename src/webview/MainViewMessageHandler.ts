@@ -99,8 +99,8 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         this.fileManager.handleGenericFileSelected(m),
 
       // Request file commands
-      [MAIN_VIEW_COMMANDS.REQUEST_INPUT_FILE]: async (_m, w) =>
-        this.fileManager.handleRequestInputFile(w),
+      [MAIN_VIEW_COMMANDS.REQUEST_INPUT_FILE]: async (m, w) =>
+        this.fileManager.handleRequestInputFile(m, w),
       [MAIN_VIEW_COMMANDS.REQUEST_REFERENCE_FILE]: async (m, w) =>
         this.fileManager.handleRequestFile(m, w),
       [MAIN_VIEW_COMMANDS.REQUEST_AUXILIARY_FILE]: async (m, w) =>
@@ -109,8 +109,8 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         this.fileManager.handleRequestFile(m, w),
       [MAIN_VIEW_COMMANDS.REQUEST_EDITED_FILE]: async (m, w) =>
         this.fileManager.handleRequestEditedFile(m, w),
-      [MAIN_VIEW_COMMANDS.REQUEST_BASE_FILE]: async (_m, w) =>
-        this.fileManager.handleRequestBaseFile(w),
+      [MAIN_VIEW_COMMANDS.REQUEST_BASE_FILE]: async (m, w) =>
+        this.fileManager.handleRequestBaseFile(m, w),
       [MAIN_VIEW_COMMANDS.REQUEST_DEFAULT_OUTPUT_FILES]: async (m, w) =>
         this.fileManager.handleRequestDefaultOutputFiles(m, w),
 
@@ -267,8 +267,8 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         this.fileManager.handleUpdateFiles(m, w),
 
       // Git/diff operations
-      [MAIN_VIEW_COMMANDS.REQUEST_RECENT_COMMITS]: async (_m, w) =>
-        this.diffManager.handleRequestRecentCommits(w),
+      [MAIN_VIEW_COMMANDS.REQUEST_RECENT_COMMITS]: async (m, w) =>
+        this.diffManager.handleRequestRecentCommits(m, w),
       [MAIN_VIEW_COMMANDS.REFRESH_COMMITS]: async (_m, w) =>
         this.diffManager.handleRefreshCommits(w),
       [MAIN_VIEW_COMMANDS.LATEXDIFF]: async (m) =>
