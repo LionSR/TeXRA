@@ -172,7 +172,9 @@ async function readGlobalGitignore(): Promise<GitignoreSource[]> {
     const sources = await Promise.all(
       candidates.map((candidate) => readAbsoluteGitignore(candidate)),
     );
-    return sources.filter((source): source is GitignoreSource => source !== null);
+    return sources.filter(
+      (source): source is GitignoreSource => source !== null,
+    );
   } catch {
     return [];
   }
