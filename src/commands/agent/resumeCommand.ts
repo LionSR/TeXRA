@@ -167,13 +167,16 @@ export function registerResumeAgentCommand(
           snapshot.streamId as StreamTabId,
         );
       } catch (error) {
+        // Clear resuming session first to ensure cleanup
         ToolUseSessionManager.clearResumingSession(
           snapshot.streamId as StreamTabId,
         );
+        // Then update UI status
         provider.eventHandler.setStreamStatus(
           snapshot.streamId,
           STATUS.WAITING,
         );
+        // Finally delete the snapshot
         await ToolUseSessionManager.deleteSnapshot(snapshot.executionId);
         throw error instanceof Error
           ? error
