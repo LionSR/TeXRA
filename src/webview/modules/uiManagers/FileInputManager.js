@@ -220,8 +220,6 @@ export class FileInputManager extends BaseUIManager {
             command: MAIN_VIEW_COMMANDS.REQUEST_INPUT_FILE,
             payload: {
               notifyWhenEmpty: true,
-              emptyMessage:
-                'No input files found. Open a LaTeX file or use the Current button.',
             },
           },
         ],
@@ -233,8 +231,6 @@ export class FileInputManager extends BaseUIManager {
             command: MAIN_VIEW_COMMANDS.REQUEST_REFERENCE_FILE,
             payload: {
               notifyWhenEmpty: true,
-              emptyMessage:
-                'No reference files detected. Add context files or use the Add button.',
             },
           },
         ],
@@ -246,8 +242,6 @@ export class FileInputManager extends BaseUIManager {
             command: MAIN_VIEW_COMMANDS.REQUEST_AUXILIARY_FILE,
             payload: {
               notifyWhenEmpty: true,
-              emptyMessage:
-                'No auxiliary files found (e.g., .cls, .sty, .bib).',
             },
           },
         ],
@@ -259,8 +253,6 @@ export class FileInputManager extends BaseUIManager {
             command: MAIN_VIEW_COMMANDS.REQUEST_MEDIA_FILE,
             payload: {
               notifyWhenEmpty: true,
-              emptyMessage:
-                'No media assets detected. Add images or PDFs to refresh this list.',
             },
           },
         ],
@@ -282,9 +274,6 @@ export class FileInputManager extends BaseUIManager {
                 baseFile,
                 preserveSelection: safeGetElementValue(EDITED_FILE),
                 notifyWhenEmpty: true,
-                emptyMessage: baseFile
-                  ? 'No edited files match the selected base. Generate edits or select a different base file.'
-                  : 'Select a base file to load edited files.',
               },
             },
           ];
@@ -297,8 +286,6 @@ export class FileInputManager extends BaseUIManager {
             command: MAIN_VIEW_COMMANDS.REQUEST_RECENT_COMMITS,
             payload: {
               notifyWhenEmpty: true,
-              emptyMessage:
-                'No recent commits found. Ensure the workspace is a Git repository.',
             },
           },
         ],

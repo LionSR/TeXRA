@@ -29,7 +29,6 @@ logger.initialize(CHANNEL);
 
 type FileUpdateOptions = {
   notifyWhenEmpty?: boolean;
-  emptyMessage?: string;
   additionalPayload?: Record<string, unknown>;
 };
 
@@ -96,9 +95,6 @@ export class FileManager {
       )) || [];
     await this.postFileUpdate(webviewView, 'Input', refreshedInputFiles, {
       notifyWhenEmpty: Boolean(message?.notifyWhenEmpty),
-      emptyMessage:
-        message?.emptyMessage ||
-        'No input files found. Select a LaTeX file to continue.',
     });
   }
 
@@ -119,18 +115,8 @@ export class FileManager {
           return [];
       }
     })();
-    const defaultMessages: Record<string, string> = {
-      Reference:
-        'No reference files detected. Add context files or use the Add button.',
-      Auxiliary:
-        'No auxiliary files found. Include .cls, .sty, or .bib files as needed.',
-      Media:
-        'No media assets detected. Add images or PDFs to refresh this list.',
-    };
-
     await this.postFileUpdate(webviewView, fileType, files, {
       notifyWhenEmpty: Boolean(message?.notifyWhenEmpty),
-      emptyMessage: message?.emptyMessage || defaultMessages[fileType],
     });
   }
 
@@ -146,15 +132,8 @@ export class FileManager {
       );
       allEditedFiles = await fileLister.listEditedFiles(baseFileNameForEdited);
     }
-    const emptyMessage =
-      message?.emptyMessage ||
-      (message.baseFile
-        ? 'No edited files match the selected base. Generate edits or select a different base file.'
-        : 'Select a base file to load edited files.');
-
     await this.postFileUpdate(webviewView, 'Edited', allEditedFiles, {
       notifyWhenEmpty: Boolean(message?.notifyWhenEmpty),
-      emptyMessage,
     });
   }
 
@@ -165,9 +144,6 @@ export class FileManager {
     const files = await fileLister.list('input');
     await this.postFileUpdate(webviewView, 'Base', files, {
       notifyWhenEmpty: Boolean(message?.notifyWhenEmpty),
-      emptyMessage:
-        message?.emptyMessage ||
-        'No input files are available to serve as a base. Select an input file first.',
       additionalPayload: message?.preserveBaseFile
         ? { preserveBaseFile: true }
         : undefined,
@@ -412,8 +388,20 @@ export class FileManager {
     options: FileUpdateOptions = {},
   ): Promise<void> {
     if (options.notifyWhenEmpty && files.length === 0) {
+      const defaultMessages: Record<string, string> = {
+        Input: 'No input files found. Select a LaTeX file to continue.',
+        Reference:
+          'No reference files detected. Add context files or use the Add button.',
+        Auxiliary:
+          'No auxiliary files found. Include .cls, .sty, or .bib files as needed.',
+        Media:
+          'No media assets detected. Add images or PDFs to refresh this list.',
+        Edited:
+          'No edited files were found. Select a base file or generate edits to continue.',
+        Base: 'No input files are available to serve as a base. Select an input file first.',
+      };
       const message =
-        options.emptyMessage ||
+        defaultMessages[fileType] ||
         `No ${fileType.toLowerCase()} files were found during refresh.`;
       logger.info(CHANNEL, message);
     }
