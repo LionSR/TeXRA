@@ -87,6 +87,16 @@ function readAgentDefinition(yamlPath?: string): AgentSetting | undefined {
   }
 }
 
+function getMultipleOutputFlag(setting?: AgentSetting): boolean {
+  if (!setting) {
+    return false;
+  }
+  if (setting.agentType === AgentType.ToolUse) {
+    return false;
+  }
+  return setting.isMultipleOutput ?? false;
+}
+
 export function getAgentOptionMetadata(
   agentName: string,
   directories: AgentDirectoryMap,
@@ -94,11 +104,7 @@ export function getAgentOptionMetadata(
   const definitionPath = findAgentYaml(agentName, directories);
   const multiplePath = findAgentYaml(agentName, directories, MULTIPLE_SUFFIX);
   const definition = readAgentDefinition(definitionPath);
-  const isMultipleOutput = Boolean(
-    definition && 'isMultipleOutput' in definition
-      ? (definition as { isMultipleOutput?: boolean }).isMultipleOutput
-      : false,
-  );
+  const isMultipleOutput = getMultipleOutputFlag(definition);
   return {
     hasDefinition: Boolean(definitionPath),
     hasMultipleSibling: Boolean(multiplePath),

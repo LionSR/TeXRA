@@ -5,7 +5,6 @@ import * as path from 'path';
 import deepmerge from 'deepmerge';
 import * as vscode from 'vscode';
 import * as yaml from 'yaml';
-import { z } from 'zod';
 
 // Local imports - agent components
 import {
@@ -27,13 +26,10 @@ import { AgentDirectorySource } from './AgentPathTypes';
 const CHANNEL = 'agentLoad';
 logger.initialize(CHANNEL);
 
-/** Zod schema for the validated portion of an agent definition */
-export const ValidAgentDefinitionSchema = AgentDefinitionSchema.pick({
-  name: true,
-  settings: true,
-});
-
-export type ValidAgentDefinition = z.infer<typeof ValidAgentDefinitionSchema>;
+export interface ValidAgentDefinition {
+  name: string;
+  settings: AgentSetting;
+}
 
 /** Loads and parses a YAML file from an absolute path. */
 export async function loadYaml(absolutePath: string): Promise<object> {
@@ -275,11 +271,10 @@ export async function isValidAgentYaml(
       return null;
     }
 
-    // return structure validated by ValidAgentDefinitionSchema
-    return ValidAgentDefinitionSchema.parse({
+    return {
       name: rootName,
       settings: settingsBlock,
-    });
+    } satisfies ValidAgentDefinition;
   } catch (err) {
     logger.debug(
       CHANNEL,
