@@ -44,6 +44,15 @@ export function registerFollowUpCommand(context: vscode.ExtensionContext) {
               followUp: payload.text,
             });
           } catch (err) {
+            const lostFollowUps =
+              ToolUseSessionManager.drainQueuedFollowUps(streamId);
+            if (lostFollowUps.length > 0) {
+              const followUpLabel =
+                lostFollowUps.length === 1 ? 'follow-up was' : 'follow-ups were';
+              await vscode.window.showWarningMessage(
+                `Resume failed. ${lostFollowUps.length} queued ${followUpLabel} lost.`,
+              );
+            }
             ToolUseSessionManager.clearResumingSession(streamId);
             await showLoggedErrorMessage(
               CHANNEL,
