@@ -1,8 +1,12 @@
+// Third-party imports
+import TurndownService from 'turndown';
+import { gfm } from 'turndown-plugin-gfm';
+import nodePandoc from 'node-pandoc';
+
 // Local imports - log
 import * as logger from '@logger/logUtils';
 import { K_SLICE } from '@utils/config';
 import { checkToolInstalled } from '@utils/system/toolUtils';
-import nodePandoc from 'node-pandoc';
 
 const CHANNEL = 'xmlUtils';
 logger.initialize(CHANNEL);
@@ -37,19 +41,82 @@ export enum outputFormat {
   MARKDOWN = 'markdown',
 }
 
+const LATEX_REPLACEMENTS: Array<[RegExp, string]> = [
+  [/\\section\{([^}]+)\}/g, '## $1\n\n'],
+  [/\\subsection\{([^}]+)\}/g, '### $1\n\n'],
+  [/\\textbf\{([^}]+)\}/g, '**$1**'],
+  [/\\textit\{([^}]+)\}/g, '*$1*'],
+  [/\\emph\{([^}]+)\}/g, '*$1*'],
+  [/\\item\s+/g, '\n- '],
+];
+
+const HTML_PATTERN = /<(?:br|p|div|strong|em|code|pre|h[1-6]|ul|ol|li)\b[^>]*>/;
+
+const LATEX_PATTERN = /\\(?:begin|end|section|subsection|textbf|textit|item)\{/;
+
+const LATEX_ENVIRONMENT_MARKERS: RegExp[] = [
+  /\\begin\{itemize\}/g,
+  /\\end\{itemize\}/g,
+  /\\begin\{enumerate\}/g,
+  /\\end\{enumerate\}/g,
+];
+
+function convertLatexToMarkdown(latex: string): string {
+  const withoutEnvironments = LATEX_ENVIRONMENT_MARKERS.reduce(
+    (content, pattern) => content.replace(pattern, ''),
+    latex,
+  );
+
+  const converted = LATEX_REPLACEMENTS.reduce(
+    (content, [pattern, replacement]) => content.replace(pattern, replacement),
+    withoutEnvironments,
+  );
+
+  return converted
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/^(\s*\n)+/g, '')
+    .trim();
+}
+
 function detectInputFormat(text: string): outputFormat {
   // const htmlRegex = /<[^>]+>/; // this is wrong, as we might have some xml tags to separte scratchpad
-  const htmlRegex = /<(?:br|p|div|strong|em|code|pre|h[1-6]|ul|ol|li)\b[^>]*>/;
-
-  const latexRegex = /\\(?:begin|end|section|subsection|textbf|textit|item)\{/;
-
-  if (latexRegex.test(text)) {
+  if (LATEX_PATTERN.test(text)) {
     return outputFormat.LaTeX;
-  } else if (htmlRegex.test(text)) {
+  } else if (HTML_PATTERN.test(text)) {
     return outputFormat.HTML;
   } else {
     return outputFormat.MARKDOWN;
   }
+}
+
+function containsHtml(text: string): boolean {
+  return HTML_PATTERN.test(text);
+}
+
+function containsLatex(text: string): boolean {
+  return LATEX_PATTERN.test(text);
+}
+
+function normalizeMarkdown(markdown: string): string {
+  return markdown
+    .replace(/\r\n/g, '\n')
+    .replace(/-\s{2,}/g, '- ')
+    .replace(/[ \t]+$/gm, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+function convertHtmlToMarkdown(html: string): string {
+  const turndownService = new TurndownService({
+    bulletListMarker: '-',
+    codeBlockStyle: 'fenced',
+    emDelimiter: '*',
+    headingStyle: 'atx',
+    strongDelimiter: '**',
+  });
+  turndownService.use(gfm);
+
+  return turndownService.turndown(html);
 }
 
 async function convertWithPandoc(text: string): Promise<string | null> {
@@ -347,64 +414,19 @@ export async function formatContent(content: string): Promise<string> {
 
   const pandocResult = await convertWithPandoc(formattedContent);
 
-  if (!pandocResult) {
-    // Replace LaTeX notation with markdown-friendly equivalents
-    formattedContent = formattedContent
-      .replace(/\\section\{([^}]+)\}/g, '## $1')
-      .replace(/\\subsection\{([^}]+)\}/g, '### $1')
-      .replace(/\\begin\{itemize\}/g, '')
-      .replace(/\\end\{itemize\}/g, '')
-      // Also handle enumerate environments like itemize
-      .replace(/\\begin\{enumerate\}/g, '')
-      .replace(/\\end\{enumerate\}/g, '')
-      .replace(/\\item\s+/g, '- ')
-      // Standardize bullet lists starting with asterisk while avoiding emphasis markers
-      .replace(/(^|\n)(\s*)\*\s+(?=\S)/g, '$1$2- ')
-      .replace(/\\textbf\{([^}]+)\}/g, '**$1**')
-      .replace(/\\textit\{([^}]+)\}/g, '*$1*')
-      .replace(/\\emph\{([^}]+)\}/g, '*$1*')
-      // Convert common HTML tags to markdown before generic XML handling
-      .replace(/<br\s*\/?>/gi, '\n')
-      // Handle p and div tags more carefully to avoid excessive newlines
-      .replace(/<(?:p|div)\b[^>]*>/gi, '')
-      .replace(/<\/(?:p|div)>/gi, '\n')
-      .replace(/<(strong|b)>(.*?)<\/\1>/gi, '**$2**')
-      .replace(/<(em|i)>(.*?)<\/\1>/gi, '*$2*')
-      .replace(/<code>(.*?)<\/code>/gi, '`$1`')
-      .replace(/<pre>([\s\S]*?)<\/pre>/gi, '```\n$1\n```')
-      .replace(/<h1>(.*?)<\/h1>/gi, '# $1\n')
-      .replace(/<h2>(.*?)<\/h2>/gi, '## $1\n')
-      .replace(/<h3>(.*?)<\/h3>/gi, '### $1\n')
-      .replace(/<h4>(.*?)<\/h4>/gi, '#### $1\n')
-      .replace(/<h5>(.*?)<\/h5>/gi, '##### $1\n')
-      .replace(/<h6>(.*?)<\/h6>/gi, '###### $1\n')
-      // Handle lists - simple approach
-      // For XML tags containing lists (ol/ul), just remove the wrapper tag
-      .replace(/<([\w-]{6,})>\s*(<[ou]l\b[\s\S]*?<\/[ou]l>)\s*<\/\1>/g, '$2')
-      // Convert XML tags to markdown headings - only for semantic tags with 6+ characters that don't contain lists
-      .replace(/<([\w-]{6,})>\s*([^<]*?)\s*<\/\1>/g, '## $1\n$2')
-      // Remove ul and ol tags
-      .replace(/<[ou]l>/gi, '')
-      .replace(/<\/[ou]l>/gi, '')
-      // Replace <li> with bullet point and remove </li> tags
-      .replace(/<li>/gi, '- ')
-      .replace(/<\/li>/gi, '')
-      // Escape LaTeX references but preserve the content
-      .replace(/~\\ref\{/g, ' \\ref{')
-      .replace(/\\ref\{([^}]+)\}/g, '\\\\ref{$1}')
-      // Remove multiple empty lines before list items, preserving indentation
-      .replace(/\n(\s*)\n(\s*)\n(\s*)- /g, '\n$3- ')
-      .replace(/\n(\s*)\n(\s*)- /g, '\n$2- ')
-      // Clean up excessive whitespace and normalize line breaks
-      .replace(/\n{4,}/g, '\n\n') // Replace 4+ newlines with 2
-
-      .replace(/ {4}/gm, '  '); // Replace 4 spaces with 2 spaces
-  } else {
+  if (pandocResult !== null) {
     formattedContent = pandocResult;
-  }
-  // .replace(/ +$/gm, ''); // Remove trailing spaces only
+  } else {
+    if (containsHtml(formattedContent)) {
+      formattedContent = convertHtmlToMarkdown(formattedContent);
+    }
 
-  return formattedContent;
+    if (containsLatex(formattedContent)) {
+      formattedContent = convertLatexToMarkdown(formattedContent);
+    }
+  }
+
+  return normalizeMarkdown(formattedContent);
 }
 
 /**
