@@ -311,7 +311,10 @@ function getToolFlags(
   agentPrompt: AgentPrompt,
 ): Record<string, any> {
   return {
-    ROUNDS: calculateTotalRounds(agentSetting.rounds, agentPrompt.userReflect),
+    ROUNDS: calculateTotalRounds(
+      'rounds' in agentSetting ? agentSetting.rounds : undefined,
+      agentPrompt.userReflect,
+    ),
     AUTO_EXTRACT_FIGURE: agentConfig.toolConfig.autoExtractFigure,
     AUTO_EXTRACT_TIKZ_FIGURE: agentConfig.toolConfig.autoExtractTikzFigure,
     INCLUDE_TEX_COUNT: agentConfig.toolConfig.attachTeXCount,

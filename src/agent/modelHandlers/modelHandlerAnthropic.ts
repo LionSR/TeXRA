@@ -41,7 +41,11 @@ import { ANTHROPIC_STOP } from './types/StopReasonTypes';
 
 // Local imports - agent components
 import type { AgentConfig } from '@agent/core/AgentConfig';
-import { AgentSetting, hasEndTag } from '@agent/core/AgentDataclass';
+import {
+  AgentSetting,
+  hasEndTag,
+  requireWorkflowSetting,
+} from '@agent/core/AgentDataclass';
 import { AgentStateRound } from '@agent/core/AgentState';
 import {
   AnthropicAPIResponseUsage,
@@ -672,6 +676,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     prefill: string,
     groupId?: string,
   ): Promise<[boolean, MessageParam[]]> {
+    const workflowSetting = requireWorkflowSetting(agentSetting);
     let endTurn = false;
 
     if (!(await WorkspaceFS.existsAndNonTrivial(outputFile))) {
@@ -682,7 +687,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
           prefill === '<scratchpad>' // this is not so neat
         ) {
           await WorkspaceFS.write(outputFile, prefill);
-        } else if (agentSetting.outputExt === 'xml') {
+        } else if (workflowSetting.outputExt === 'xml') {
           await WorkspaceFS.write(outputFile, prefill + '\n');
         }
         messages.push({

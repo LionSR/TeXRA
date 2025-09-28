@@ -73,19 +73,13 @@ export const AgentSettingBaseSchema = z
       .string()
       .min(1, 'documentTag cannot be empty')
       .default('document'),
+    endTag: z.string().default('</latex_document>'),
     temperature: z
       .number()
       .min(MIN_TEMPERATURE)
       .max(MAX_TEMPERATURE)
       .nullable()
       .default(0.0),
-    isRewrite: z.boolean().default(true),
-
-    rounds: z.number().default(2),
-    prefills: z.array(z.string()).default([]),
-    outputExt: z.string().default('txt'),
-    endTag: z.string().default('</latex_document>'),
-
     requiredFiles: z.record(z.string()).default({}),
     requiredFilesInternal: z.record(z.string()).default({}),
     defaultOutputFiles: z.array(z.string()).default([]),
@@ -108,6 +102,10 @@ export const AgentSettingBaseSchema = z
  * expose the {@code isMultipleOutput} toggle.
  */
 export const AgentWorkflowSettingSchema = AgentSettingBaseSchema.extend({
+  isRewrite: z.boolean().default(true),
+  rounds: z.number().default(2),
+  prefills: z.array(z.string()).default([]),
+  outputExt: z.string().default('txt'),
   isMultipleOutput: z.boolean().default(false),
 }).superRefine((data, ctx) => {
   if (data.agentType === AgentType.ToolUse) {
@@ -123,7 +121,6 @@ export const AgentWorkflowSettingSchema = AgentSettingBaseSchema.extend({
 /** Tool-use agents never expose workflow-specific flags. */
 export const AgentToolUseSettingSchema = AgentSettingBaseSchema.extend({
   agentType: z.literal(AgentType.ToolUse).default(AgentType.ToolUse),
-  isMultipleOutput: z.literal(false).default(false),
 });
 
 /**
@@ -137,6 +134,16 @@ export const AgentSettingSchema = z.union([
 export type AgentWorkflowSetting = z.infer<typeof AgentWorkflowSettingSchema>;
 export type AgentToolUseSetting = z.infer<typeof AgentToolUseSettingSchema>;
 export type AgentSetting = z.infer<typeof AgentSettingSchema>;
+
+/** Narrow an {@link AgentSetting} to the workflow variant. */
+export function requireWorkflowSetting(
+  setting: AgentSetting,
+): AgentWorkflowSetting {
+  if (setting.agentType === AgentType.ToolUse) {
+    throw new Error('Expected workflow agent settings but received tool-use settings.');
+  }
+  return setting;
+}
 
 /** Default prompt templates for agent interactions. */
 
@@ -188,59 +195,7 @@ export const AgentDefinitionSchema = z
 
 export type AgentDefinition = z.infer<typeof AgentDefinitionSchema>;
 
-export type AgentSettingInput = Record<string, unknown>;
-
-/**
- * Normalizes a raw settings object loaded from YAML so legacy
- * `useMultipleOutputs` declarations map onto the canonical
- * {@link AgentWorkflowSetting.isMultipleOutput} flag.
- */
-export function normalizeAgentSettingInput(
-  settings: unknown,
-): AgentSettingInput | undefined {
-  if (!settings || typeof settings !== 'object') {
-    return undefined;
-  }
-
-  const record = settings as Record<string, unknown>;
-  const normalized: AgentSettingInput = { ...record };
-
-  if ('useMultipleOutputs' in normalized) {
-    const legacy = normalized.useMultipleOutputs;
-    if (
-      typeof legacy === 'boolean' &&
-      typeof normalized.isMultipleOutput !== 'boolean'
-    ) {
-      normalized.isMultipleOutput = legacy;
-    }
-    delete normalized.useMultipleOutputs;
-  }
-
-  return normalized;
-}
-
-/**
- * Parses a settings block into an {@link AgentSetting}, applying
- * compatibility aliases before running the schema validator.
- */
+/** Parses a settings block into an {@link AgentSetting}. */
 export function parseAgentSetting(settings: unknown): AgentSetting {
-  const normalized = normalizeAgentSettingInput(settings);
-  if (!normalized) {
-    throw new Error('Invalid agent settings block: expected an object.');
-  }
-
-  return AgentSettingSchema.parse(normalized);
-}
-
-/** Attempts to parse the given settings block, returning undefined on failure. */
-export function safeParseAgentSetting(
-  settings: unknown,
-): AgentSetting | undefined {
-  const normalized = normalizeAgentSettingInput(settings);
-  if (!normalized) {
-    return undefined;
-  }
-
-  const result = AgentSettingSchema.safeParse(normalized);
-  return result.success ? result.data : undefined;
+  return AgentSettingSchema.parse(settings ?? {});
 }
