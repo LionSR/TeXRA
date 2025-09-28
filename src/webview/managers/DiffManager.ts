@@ -86,11 +86,9 @@ export class DiffManager {
       return;
     }
 
-    const infoMessage =
-      message?.emptyMessage ||
-      (result.isGitRepo
-        ? 'No recent commits found for this repository.'
-        : 'This workspace is not a Git repository.');
+    const infoMessage = result.isGitRepo
+      ? 'No recent commits found for this repository.'
+      : 'This workspace is not a Git repository.';
 
     logger.info(CHANNEL, infoMessage);
   }
