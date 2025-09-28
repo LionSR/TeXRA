@@ -16,10 +16,97 @@
 .model-selection-footer .select-group {
   display: flex;
   align-items: center;
-  max-width: 150px;
+  gap: var(--spacing-small);
+}
+
+.model-selection-footer .agent-select-group {
+  align-items: center;
+  gap: var(--spacing-small);
+}
+
+.agent-select-controls {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--spacing-small);
+  flex: 0 0 auto;
+  min-width: 0;
+}
+
+.agent-select-dropdowns {
+  position: relative;
+  flex: 0 0 auto;
+  min-width: 10rem;
+  max-width: 14rem;
+}
+
+.agent-select-dropdowns select {
+  width: 100%;
+  min-width: 0;
+}
+
+.session-toggle {
+  display: inline-flex;
+  border: 1px solid var(--vscode-button-border);
+  border-radius: var(--border-radius);
+  overflow: hidden;
+  background: var(--vscode-input-background);
+}
+
+.session-toggle__option {
+  flex: 1 1 50%;
+  padding: var(--spacing-tiny) var(--spacing-small);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  background: transparent;
+  border: none;
+  color: var(--vscode-foreground);
+  transition:
+    background 0.12s ease,
+    color 0.12s ease;
+}
+
+.session-toggle__option:hover,
+.session-toggle__option:focus {
+  background: var(--vscode-list-hoverBackground);
+}
+
+.session-toggle__option.active {
+  background: var(--vscode-list-activeSelectionBackground);
+  color: var(--vscode-list-activeSelectionForeground);
+}
+
+.session-toggle__option:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: 1px;
+}
+
+.agent-select {
+  width: 100%;
+  min-width: 0;
+}
+
+.agent-select--hidden {
+  position: absolute;
+  inset: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.agent-select--active {
+  position: relative;
+  visibility: visible;
+}
+
+.model-selection-footer .select-group {
+  flex: 0 0 auto;
 }
 
 .model-selection-footer .select-group select {
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 8rem;
+  max-width: 11rem;
   height: var(--height-control);
   font-size: var(--font-size);
   padding: var(--spacing-tiny) var(--spacing-small);
