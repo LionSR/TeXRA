@@ -1,17 +1,10 @@
-// Local imports - agent
-
 // Local imports - agent components
 import {
   OpenAIAPIResponseUsage,
   AnthropicAPIResponseUsage,
 } from './ResponseUsage';
-// Standard library imports
-// (none needed)
 
-// Third-party imports
-// (none needed)
-
-// Local imports - log
+// Local imports - logging
 import * as logger from '@logger/logUtils';
 
 const CHANNEL = 'Agent';
