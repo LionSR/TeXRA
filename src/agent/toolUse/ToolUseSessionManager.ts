@@ -152,13 +152,36 @@ export class ToolUseSessionManager {
    * @param streamId - The stream identifier to lookup.
    * @returns The cached snapshot if found.
    */
+  public static getSnapshotForStream(
+    streamId: StreamTabId,
+  ): ToolUseSessionSnapshot | undefined {
+    return this.pendingSnapshots.get(streamId);
+  }
+
+  /**
+   * Marks a stream as resuming so follow-ups can be queued until the agent is ready.
+   * @param streamId - The stream identifier being resumed.
+   */
+  public static setResumingSession(streamId: StreamTabId): void {
+    if (this.resumingSessions.has(streamId)) {
+      return;
+    }
+
+    this.resumingSessions.set(streamId, { queuedFollowUps: [] });
+    logger.debug(`Marked stream ${streamId} as resuming.`);
+  }
+
+  /**
+   * Removes and returns a cached snapshot for the provided stream.
+   * @param streamId - The stream identifier to lookup.
+   * @returns The cached snapshot if found.
+   */
   public static consumeSnapshotForStream(
     streamId: StreamTabId,
   ): ToolUseSessionSnapshot | undefined {
     const snapshot = this.pendingSnapshots.get(streamId);
     if (snapshot) {
       this.pendingSnapshots.delete(streamId);
-      this.resumingSessions.set(streamId, { queuedFollowUps: [] });
       logger.debug(
         `Consuming pending snapshot for stream ${streamId} to resume lazily.`,
       );
