@@ -14,6 +14,7 @@ import { showLoggedMessageWithDocs } from '@common/errors/errorHandlingUtils';
 
 const CHANNEL = 'AgentLoad';
 logger.initialize(CHANNEL);
+const DEFAULT_CUSTOM_DIR = 'custom_agents';
 
 export class AgentDirectoryManager {
   /**
@@ -45,27 +46,42 @@ export class AgentDirectoryManager {
     return this.ensureBuiltInDir(context, 'tool_use_agents');
   }
 
-  async custom(): Promise<string> {
-    const customPath = getConfig<string>('explorer.agentsDirectory', '');
+  private async ensureDefaultCustomDir(): Promise<string> {
+    await GlobalStorageFS.ensureDir(DEFAULT_CUSTOM_DIR);
+    const defaultPath = GlobalStorageFS.fullPath(DEFAULT_CUSTOM_DIR);
+    logger.debug(
+      CHANNEL,
+      `Using default custom agents directory: ${defaultPath}`,
+    );
+    return defaultPath;
+  }
 
-    if (!customPath) {
-      return '';
+  async custom(): Promise<string> {
+    const configuredPath = getConfig<string>('explorer.agentsDirectory', '').trim();
+
+    if (!configuredPath) {
+      return this.ensureDefaultCustomDir();
     }
 
-    if (!path.isAbsolute(customPath)) {
+    if (!path.isAbsolute(configuredPath)) {
       logger.error(
         CHANNEL,
-        `Custom agents directory must be an absolute path: ${customPath}`,
+        `Custom agents directory must be an absolute path: ${configuredPath}`,
       );
       await showLoggedMessageWithDocs(
         CHANNEL,
         'Custom agents directory must be an absolute path',
         'custom-agents',
       );
-      return '';
+      return this.ensureDefaultCustomDir();
     }
 
-    return customPath;
+    await AbsoluteFS.ensureDir(configuredPath);
+    logger.debug(
+      CHANNEL,
+      `Using custom agents directory from setting: ${configuredPath}`,
+    );
+    return configuredPath;
   }
 
   async promptCustom(): Promise<string | undefined> {
@@ -88,12 +104,8 @@ export class AgentDirectoryManager {
     return selectedPath;
   }
 
-  async ensureCustom(): Promise<string | undefined> {
-    const current = await this.custom();
-    if (current) {
-      return current;
-    }
-    return this.promptCustom();
+  async ensureCustom(): Promise<string> {
+    return this.custom();
   }
 }
 
