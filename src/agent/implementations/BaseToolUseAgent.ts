@@ -24,12 +24,16 @@ import { BaseAgent } from './BaseAgent';
 import type { ToolDefinition } from '@model';
 import { BaseTool } from '@tools/core/base';
 import { DEFAULT_TOOL_REGISTRY } from '@tools/registry';
-import type { ExecutionId } from '@agent/types/IdentifierTypes';
+import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
 import { bus } from '@eventBus/ProgressEventBus';
 import {
   ToolUseSessionManager,
   type ToolUseSessionSnapshot,
 } from '@agent/toolUse/ToolUseSessionManager';
+import {
+  registerToolUseAgent,
+  unregisterToolUseAgent,
+} from '@agent/toolUse/ToolUseAgentRegistry';
 
 export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
   private toolRegistry: Record<string, BaseTool<any>>;
@@ -58,6 +62,14 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
       executionId,
     );
     this.toolRegistry = DEFAULT_TOOL_REGISTRY;
+  }
+
+  protected override registerRunningAgent(streamTabId: StreamTabId): void {
+    registerToolUseAgent(streamTabId, this);
+  }
+
+  protected override unregisterRunningAgent(streamTabId: StreamTabId): void {
+    unregisterToolUseAgent(streamTabId);
   }
 
   public override getSessionMetadata() {
