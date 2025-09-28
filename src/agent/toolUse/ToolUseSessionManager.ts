@@ -120,6 +120,14 @@ export class ToolUseSessionManager {
   >();
 
   /**
+   * Determines whether the provided stream is currently marked as resuming.
+   * @param streamId - The stream identifier to check.
+   */
+  public static isResumingSession(streamId: StreamTabId): boolean {
+    return this.resumingSessions.has(streamId);
+  }
+
+  /**
    * Checks if tool-use session persistence is enabled
    * @returns True if persistence is enabled, false otherwise
    */
