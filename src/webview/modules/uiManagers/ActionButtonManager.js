@@ -5,6 +5,9 @@ import {
   ELEMENT_IDS,
   BASE_FILE,
   EDITED_FILE,
+  SESSION_TYPES,
+  SESSION_TYPE_INPUT,
+  AGENT_SELECT_IDS,
 } from '../constants.js';
 import { BaseUIManager } from './BaseUIManager.js';
 import {
@@ -68,7 +71,7 @@ export class ActionButtonManager extends BaseUIManager {
     this.addListener(ELEMENT_IDS.MAGIC_POLISH_BUTTON, 'click', () => {
       const instruction = safeGetElementById(ELEMENT_IDS.INSTRUCTION);
       if (instruction && instruction.value.trim()) {
-        const agent = safeGetElementValue('agent');
+        const { agent } = this._getActiveAgentSelection();
         const model = safeGetElementValue('model');
         const singleFiles = this._getSingleFileData();
         const multipleFilesData = this._getMultipleFileData(singleFiles);
@@ -87,17 +90,10 @@ export class ActionButtonManager extends BaseUIManager {
 
   _setupExecuteButtons() {
     this.addListener(ELEMENT_IDS.EXECUTE_BUTTON, 'click', () => {
-      const agent = safeGetElementValue('agent');
+      const { agent, sessionType } = this._getActiveAgentSelection();
       const model = safeGetElementValue('model');
       const instruction = safeGetElementValue(ELEMENT_IDS.INSTRUCTION);
-      const agentSelect = safeGetElementById('agent');
-      const selectedOption =
-        agentSelect &&
-        'options' in agentSelect &&
-        'selectedIndex' in agentSelect
-          ? agentSelect.options[agentSelect.selectedIndex]
-          : null;
-      const isToolUseAgent = selectedOption?.dataset?.toolUse === 'true';
+      const isToolUseAgent = sessionType === SESSION_TYPES.TOOL_USE;
       const singleFiles = this._getSingleFileData();
       const multipleFilesData = this._getMultipleFileData(singleFiles);
 
@@ -140,7 +136,7 @@ export class ActionButtonManager extends BaseUIManager {
     ].forEach(({ id, action }) => {
       this.addListener(id, 'click', () => {
         const { inputFile } = this._getSingleFileData(['input']);
-        const agent = safeGetElementValue('agent');
+        const { agent } = this._getActiveAgentSelection();
         const model = safeGetElementValue('model');
 
         const outputFiles = this.fileList.getSelected(
@@ -307,5 +303,25 @@ export class ActionButtonManager extends BaseUIManager {
     this._setupExecuteButtons();
     this._setupLatexdiffButtons();
     this._setupCompareButtons();
+  }
+
+  _normalizeSessionType(rawType) {
+    return rawType === SESSION_TYPES.TOOL_USE
+      ? SESSION_TYPES.TOOL_USE
+      : SESSION_TYPES.WORKFLOW;
+  }
+
+  _getActiveAgentSelection() {
+    const rawSessionType = safeGetElementValue(SESSION_TYPE_INPUT);
+    const sessionType = this._normalizeSessionType(rawSessionType);
+    const selectId = AGENT_SELECT_IDS[sessionType];
+    const agent = selectId ? (safeGetElementValue(selectId) ?? '') : '';
+    const selectElement = selectId ? safeGetElementById(selectId) : null;
+    return {
+      agent,
+      sessionType,
+      selectElement:
+        selectElement instanceof HTMLSelectElement ? selectElement : null,
+    };
   }
 }
