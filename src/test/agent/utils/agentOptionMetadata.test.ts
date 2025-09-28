@@ -28,11 +28,9 @@ describe('agentOptionMetadata', () => {
     const agentPath = path.join(tempDir, 'custom_multi.yaml');
     fs.writeFileSync(
       agentPath,
-      [
-        'name: custom_multi',
-        'settings:',
-        '  isMultipleOutput: true',
-      ].join('\n'),
+      ['name: custom_multi', 'settings:', '  isMultipleOutput: true'].join(
+        '\n',
+      ),
       'utf8',
     );
 
@@ -46,14 +44,16 @@ describe('agentOptionMetadata', () => {
   it('keeps base agents decorated when a sibling _multiple file exists', () => {
     const basePath = path.join(tempDir, 'writer.yaml');
     const multiplePath = path.join(tempDir, 'writer_multiple.yaml');
-    fs.writeFileSync(basePath, ['name: writer', 'settings:', '  prefills: []'].join('\n'), 'utf8');
+    fs.writeFileSync(
+      basePath,
+      ['name: writer', 'settings:', '  prefills: []'].join('\n'),
+      'utf8',
+    );
     fs.writeFileSync(
       multiplePath,
-      [
-        'name: writer_multiple',
-        'settings:',
-        '  isMultipleOutput: true',
-      ].join('\n'),
+      ['name: writer_multiple', 'settings:', '  isMultipleOutput: true'].join(
+        '\n',
+      ),
       'utf8',
     );
 
