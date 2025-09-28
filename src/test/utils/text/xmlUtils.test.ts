@@ -6,7 +6,8 @@ import { extractScratchpad, formatContent } from '../../../utils/text/xmlUtils';
 
 describe('xmlUtils.formatContent', () => {
   it('converts HTML scratchpad content to markdown bullets', async () => {
-    const htmlInput = '<scratchpad><div><strong>Plan</strong><ul><li>Step 1</li><li>Step 2</li></ul></div></scratchpad>';
+    const htmlInput =
+      '<scratchpad><div><strong>Plan</strong><ul><li>Step 1</li><li>Step 2</li></ul></div></scratchpad>';
 
     const result = await formatContent(htmlInput);
 
