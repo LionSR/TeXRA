@@ -14,7 +14,8 @@ export interface AgentDirectoryMap {
 
 export interface AgentOptionMetadata {
   hasDefinition: boolean;
-  hasMultiple: boolean;
+  hasMultipleSibling: boolean;
+  isMultipleOutput: boolean;
   isToolUse: boolean;
 }
 
@@ -30,6 +31,7 @@ const TOOL_USE_AGENT_TYPE = 'toolUse';
 type AgentDefinition = {
   settings?: {
     agentType?: unknown;
+    isMultipleOutput?: unknown;
   };
 };
 
@@ -72,17 +74,26 @@ function findAgentYaml(
   return undefined;
 }
 
-function hasToolUseAgentType(yamlPath?: string): boolean {
+function readAgentDefinition(yamlPath?: string): AgentDefinition | undefined {
   if (!yamlPath) {
-    return false;
+    return undefined;
   }
   try {
     const fileContent = AbsoluteFS.readSync(yamlPath);
-    const definition = yaml.parse(fileContent) as AgentDefinition;
-    return definition?.settings?.agentType === TOOL_USE_AGENT_TYPE;
+    return yaml.parse(fileContent) as AgentDefinition;
   } catch {
-    return false;
+    return undefined;
   }
+}
+
+function hasToolUseAgentType(definition?: AgentDefinition): boolean {
+  return definition?.settings?.agentType === TOOL_USE_AGENT_TYPE;
+}
+
+function hasMultipleOutputFlag(definition?: AgentDefinition): boolean {
+  return typeof definition?.settings?.isMultipleOutput === 'boolean'
+    ? Boolean(definition?.settings?.isMultipleOutput)
+    : false;
 }
 
 export function getAgentOptionMetadata(
@@ -91,10 +102,12 @@ export function getAgentOptionMetadata(
 ): AgentOptionMetadata {
   const definitionPath = findAgentYaml(agentName, directories);
   const multiplePath = findAgentYaml(agentName, directories, MULTIPLE_SUFFIX);
+  const definition = readAgentDefinition(definitionPath);
   return {
     hasDefinition: Boolean(definitionPath),
-    hasMultiple: Boolean(multiplePath),
-    isToolUse: hasToolUseAgentType(definitionPath),
+    hasMultipleSibling: Boolean(multiplePath),
+    isMultipleOutput: hasMultipleOutputFlag(definition),
+    isToolUse: hasToolUseAgentType(definition),
   };
 }
 
@@ -103,7 +116,7 @@ function decorateLabel(
   metadata: AgentOptionMetadata,
 ): string {
   let label = agentName;
-  if (metadata.hasMultiple) {
+  if (metadata.hasMultipleSibling || metadata.isMultipleOutput) {
     label += ' ∶∶';
   }
   if (metadata.isToolUse) {
@@ -124,7 +137,7 @@ export function createAgentOptionTag(
   if (!metadata.hasDefinition) {
     attributes.push('class="disabled-option disabled-agent"');
   }
-  if (metadata.hasMultiple) {
+  if (metadata.hasMultipleSibling || metadata.isMultipleOutput) {
     attributes.push('data-multiple="true"');
   }
   if (metadata.isToolUse) {
