@@ -103,20 +103,20 @@ export class GrepTool extends defineTool({
     const outputMode: OutputMode = input.output_mode ?? 'files_with_matches';
     const { resolved: searchPath, display } = resolveAndFormat(input.path);
     const gitignore = await getGitignoreMatcher();
-
     const args = buildArguments(input, outputMode);
-    const command = [
-      'rg',
-      ...args,
-      input.pattern,
-      searchPath.relative === '.' ? '.' : searchPath.relative,
-    ];
+    const ignoreFilesCandidate = (
+      gitignore as { ignoreFiles?: unknown }
+    ).ignoreFiles;
+    const ignoreFiles = Array.isArray(ignoreFilesCandidate)
+      ? (ignoreFilesCandidate as string[])
+      : [];
+    const ignoreArgs = ignoreFiles.flatMap((ignoreFile) => [
+      '--ignore-file',
+      ignoreFile,
+    ]);
 
-    if (gitignore.ignoreFiles.length > 0) {
-      for (const ignoreFile of gitignore.ignoreFiles) {
-        command.push('--ignore-file', ignoreFile);
-      }
-    }
+    const targetPath = searchPath.relative === '.' ? '.' : searchPath.relative;
+    const command = ['rg', ...args, ...ignoreArgs, input.pattern, targetPath];
 
     const result = await executeCommand(command, {
       channel: CHANNEL,
