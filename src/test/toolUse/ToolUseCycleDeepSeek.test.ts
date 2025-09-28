@@ -100,15 +100,10 @@ describe('runToolUseCycle DeepSeek', () => {
       agentType: AgentType.ToolUse,
       documentTag: 'doc',
       temperature: 0,
-      isRewrite: true,
-      rounds: 1,
-      prefills: [],
-      outputExt: 'txt',
       endTag: '</doc>',
       requiredFiles: {},
       requiredFilesInternal: {},
       defaultOutputFiles: [],
-      useMultipleOutputs: false,
       filePatternsContain: [],
       tools: [{ name: 'echo' }],
     };
@@ -143,6 +138,14 @@ describe('runToolUseCycle DeepSeek', () => {
       (e) => e.logMessage.messageType === MESSAGE_TYPES.TOOL_USE,
     );
     assert.equal(toolEvents.length, 2);
+    const structuredLog = toolEvents.find(
+      (e) => e.logMessage.data && e.logMessage.data.tool === 'echo',
+    );
+    assert.ok(structuredLog, 'Tool use log entry missing structured payload');
+    assert.deepEqual(structuredLog?.logMessage.data?.input, { value: 'hello' });
+    assert.deepEqual(structuredLog?.logMessage.data?.output, {
+      output: 'hello',
+    });
     assert.deepEqual(messages[0], {
       role: 'assistant',
       tool_calls: [

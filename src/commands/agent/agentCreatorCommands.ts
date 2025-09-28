@@ -8,7 +8,7 @@ import * as yaml from 'yaml';
 import {
   AgentDefinitionSchema,
   AgentPromptSchema,
-  AgentSettingSchema,
+  parseAgentSetting,
 } from '@agent/core/AgentDataclass';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { promptToAddAgentToConfig } from '@frontend/agents/register';
@@ -100,6 +100,7 @@ name: \${agentName}
 # --- Agent Settings ---
 settings:
   agentType: CoT
+  isMultipleOutput: true
   temperature: 0.1
   isRewrite: true
   documentTag: latex_documents
@@ -172,7 +173,7 @@ function validateAgentYamlString(content: string): string | null {
     if (!data.settings || !data.prompts) {
       return 'missing settings or prompts block';
     }
-    AgentSettingSchema.parse(data.settings);
+    parseAgentSetting(data.settings);
     AgentPromptSchema.parse(data.prompts);
     if (!data.name || data.name.trim() === '') {
       return 'name is empty';
@@ -236,10 +237,7 @@ async function handleCreateAgentWithAI(context: vscode.ExtensionContext) {
       outputFilesYaml = files.map((f) => `    - ${f}`).join('\n');
     }
 
-    const targetDir = await agentDirectories.ensureCustom();
-    if (!targetDir) {
-      return;
-    }
+    const targetDir = await agentDirectories.custom(context);
 
     const filePath = vscode.Uri.file(`${targetDir}/${agentName}.yaml`);
 
@@ -316,13 +314,13 @@ async function handleCreateAgentWithAI(context: vscode.ExtensionContext) {
 
     await AbsoluteFS.write(filePath.fsPath, yamlContent);
     vscode.window.showInformationMessage(`Created agent at ${filePath.fsPath}`);
-    const isMultipleVariant = outputChoice === 'Multiple output files';
+    const isMultipleOutput = outputChoice === 'Multiple output files';
     await promptToAddAgentToConfig(agentName, false, {
-      isMultipleVariant,
-      baseAgentName: isMultipleVariant
+      isMultipleOutput,
+      baseAgentName: isMultipleOutput
         ? agentName.replace(/_multiple$/, '')
         : undefined,
-      multipleAgentName: !isMultipleVariant
+      multipleAgentName: !isMultipleOutput
         ? `${agentName}_multiple`
         : agentName,
     });
