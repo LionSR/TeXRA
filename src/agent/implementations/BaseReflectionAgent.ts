@@ -1,5 +1,3 @@
-// Local imports - agent
-
 // Local imports - agent components
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import {
@@ -18,25 +16,22 @@ import { OutputHandler, NamedOutputFile, IOutputHandler } from '@agent/output';
 import type { ExecutionId } from '@agent/types/IdentifierTypes';
 import { PromptBuilder } from '@agent/utils/PromptBuilder';
 import { writePromptToXml } from '@agent/utils/promptUtils';
+import { calculateTotalRounds } from '@agent/utils/roundUtils';
 import { bus } from '@eventBus/ProgressEventBus';
-// Standard library imports
-// (none needed)
 
-// Third-party imports
-// (none needed)
-
-// Local imports - log
-
-// Local imports - latex utils
+// Local imports - latex utilities
 import { LatexMediaManager } from '@latex';
+
+// Local imports - logging
 import { MESSAGE_TYPES } from '@logger/messageTypes';
+
+// Local imports - model definitions
 import type { ToolDefinition } from '@model';
 
-// System imports - common utilities
+// Local imports - configuration
 import { getConfig } from '@utils/config';
 
-// Local imports - utilities
-import { calculateTotalRounds } from '@agent/utils/roundUtils';
+// Local imports - filesystem utilities
 import { WorkspaceFS } from '@utils/files';
 
 /**

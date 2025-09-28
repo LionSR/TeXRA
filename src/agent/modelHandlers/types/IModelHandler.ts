@@ -1,14 +1,15 @@
-// Local imports - agent
-
 // Local imports - agent components
 import type { AgentConfig } from '../../core/AgentConfig';
 import { AgentSetting } from '../../core/AgentDataclass';
 import { AgentStateRound, AgentStateGlobal } from '../../core/AgentState';
 import { ToolState } from '../../core/ToolState';
 import type { MediaEntry } from '../../utils/mediaTypes';
+
+// Local imports - provider types
 import type { ProviderMessage } from './ProviderMessage';
 import type { ProviderStopReason } from './StopReasonTypes';
-// Local imports - log
+
+// Local imports - logging and model metadata
 import type { AgentLogger } from '@logger/AgentLogger';
 import type { ModelConfig, ModelCapabilities, ToolDefinition } from '@model';
 
