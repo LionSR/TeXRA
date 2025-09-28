@@ -38,18 +38,31 @@ export function registerFollowUpCommand(context: vscode.ExtensionContext) {
           console.log(
             `[${CHANNEL}] resuming agent lazily for stream ${payload.stream}`,
           );
-          void Promise.resolve(
-            vscode.commands.executeCommand('texra.resumeAgent', {
+          try {
+            await vscode.commands.executeCommand('texra.resumeAgent', {
               snapshot: pendingSnapshot,
               followUp: payload.text,
-            }),
-          ).catch((err: unknown) => {
-            void showLoggedErrorMessage(
+            });
+          } catch (err) {
+            ToolUseSessionManager.clearResumingSession(streamId);
+            await showLoggedErrorMessage(
               CHANNEL,
               'Failed to resume tool-use session for follow-up',
               err,
             );
-          });
+          }
+          return;
+        }
+
+        if (
+          ToolUseSessionManager.enqueueFollowUpWhileResuming(
+            streamId,
+            payload.text,
+          )
+        ) {
+          console.log(
+            `[${CHANNEL}] queued follow-up while stream ${payload.stream} is resuming`,
+          );
           return;
         }
 
