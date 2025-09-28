@@ -3,6 +3,13 @@ import { encode as encodeHtml } from 'he';
 import { globSync } from 'glob';
 import * as yaml from 'yaml';
 
+// Local imports - agent core
+import {
+  AgentType,
+  parseAgentSetting,
+  type AgentSetting,
+} from '@agent/core/AgentDataclass';
+
 // Local imports - filesystem
 import { AbsoluteFS } from '@utils/files';
 
@@ -14,7 +21,8 @@ export interface AgentDirectoryMap {
 
 export interface AgentOptionMetadata {
   hasDefinition: boolean;
-  hasMultiple: boolean;
+  hasMultipleSibling: boolean;
+  isMultipleOutput: boolean;
   isToolUse: boolean;
 }
 
@@ -25,13 +33,7 @@ const DIRECTORY_KEYS: (keyof AgentDirectoryMap)[] = [
 ];
 const YAML_EXTENSION = '.yaml';
 const MULTIPLE_SUFFIX = '_multiple';
-const TOOL_USE_AGENT_TYPE = 'toolUse';
-
-type AgentDefinition = {
-  settings?: {
-    agentType?: unknown;
-  };
-};
+const TOOL_USE_AGENT_TYPE = AgentType.ToolUse;
 
 function normalizeDirectory(dir?: string): string | undefined {
   if (!dir) {
@@ -72,17 +74,27 @@ function findAgentYaml(
   return undefined;
 }
 
-function hasToolUseAgentType(yamlPath?: string): boolean {
+function readAgentDefinition(yamlPath?: string): AgentSetting | undefined {
   if (!yamlPath) {
-    return false;
+    return undefined;
   }
   try {
     const fileContent = AbsoluteFS.readSync(yamlPath);
-    const definition = yaml.parse(fileContent) as AgentDefinition;
-    return definition?.settings?.agentType === TOOL_USE_AGENT_TYPE;
+    const parsed = yaml.parse(fileContent) as { settings?: unknown };
+    return parseAgentSetting(parsed?.settings ?? {});
   } catch {
+    return undefined;
+  }
+}
+
+function getMultipleOutputFlag(setting?: AgentSetting): boolean {
+  if (!setting) {
     return false;
   }
+  if (setting.agentType === AgentType.ToolUse) {
+    return false;
+  }
+  return setting.isMultipleOutput ?? false;
 }
 
 export function getAgentOptionMetadata(
@@ -91,10 +103,13 @@ export function getAgentOptionMetadata(
 ): AgentOptionMetadata {
   const definitionPath = findAgentYaml(agentName, directories);
   const multiplePath = findAgentYaml(agentName, directories, MULTIPLE_SUFFIX);
+  const definition = readAgentDefinition(definitionPath);
+  const isMultipleOutput = getMultipleOutputFlag(definition);
   return {
     hasDefinition: Boolean(definitionPath),
-    hasMultiple: Boolean(multiplePath),
-    isToolUse: hasToolUseAgentType(definitionPath),
+    hasMultipleSibling: Boolean(multiplePath),
+    isMultipleOutput,
+    isToolUse: definition?.agentType === TOOL_USE_AGENT_TYPE,
   };
 }
 
@@ -103,7 +118,7 @@ function decorateLabel(
   metadata: AgentOptionMetadata,
 ): string {
   let label = agentName;
-  if (metadata.hasMultiple) {
+  if (metadata.hasMultipleSibling || metadata.isMultipleOutput) {
     label += ' ∶∶';
   }
   if (metadata.isToolUse) {
@@ -124,7 +139,7 @@ export function createAgentOptionTag(
   if (!metadata.hasDefinition) {
     attributes.push('class="disabled-option disabled-agent"');
   }
-  if (metadata.hasMultiple) {
+  if (metadata.hasMultipleSibling || metadata.isMultipleOutput) {
     attributes.push('data-multiple="true"');
   }
   if (metadata.isToolUse) {
