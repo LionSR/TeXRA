@@ -6,6 +6,7 @@ import { defineTool } from './core/define';
 
 // Local imports - tools
 import { ToolError, ToolResult, toolResult } from '@tools/result';
+import { getGitignoreMatcher } from '@tools/gitignore';
 import { resolveAndFormat } from '@tools/utils';
 
 // Local imports - utils
@@ -101,6 +102,7 @@ export class GrepTool extends defineTool({
   protected async execute(input: GrepInput): Promise<ToolResult> {
     const outputMode: OutputMode = input.output_mode ?? 'files_with_matches';
     const { resolved: searchPath, display } = resolveAndFormat(input.path);
+    const gitignore = await getGitignoreMatcher();
 
     const args = buildArguments(input, outputMode);
     const command = [
@@ -109,6 +111,12 @@ export class GrepTool extends defineTool({
       input.pattern,
       searchPath.relative === '.' ? '.' : searchPath.relative,
     ];
+
+    if (gitignore.ignoreFiles.length > 0) {
+      for (const ignoreFile of gitignore.ignoreFiles) {
+        command.push('--ignore-file', ignoreFile);
+      }
+    }
 
     const result = await executeCommand(command, {
       channel: CHANNEL,
