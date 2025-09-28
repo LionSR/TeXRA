@@ -8,6 +8,10 @@ import {
   EDITED_FILE,
   BASE_FILE,
   ELEMENT_IDS,
+  SESSION_TYPES,
+  SESSION_TYPE_INPUT,
+  AGENT_SELECT_IDS,
+  AGENT_SELECT_LIST,
 } from './constants.js';
 import { webviewEventBus } from './eventBus.js';
 import { createFileHandlers } from './handlers/fileHandlers.js';
@@ -49,7 +53,8 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     this._fileListHandlers = {};
     // Track pending model option updates until the select element is ready
     this._latestModelOptions = null;
-    this._modelOptionsQueue = Promise.resolve();
+    this._modelFlushScheduled = false;
+    this._isModelFlushRunning = false;
     this._modelSelectPromise = null;
     this._modelSelectResolver = null;
     this._modelSelectObserver = null;
@@ -100,57 +105,33 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
         this._enqueueModelOptionsFlush();
       },
       [MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS]: (m) => {
-        if (!m.options) {
-          console.warn('SET_AGENT_OPTIONS: No options provided');
-          return;
-        }
-        const select = document.getElementById('agent');
-        if (!select) {
-          console.warn('SET_AGENT_OPTIONS: Agent select element not found');
-          return;
-        }
-        const previous = select.value;
-        select.innerHTML = m.options;
-        if (previous) {
-          select.value = previous;
-        }
-        Array.from(select.options).forEach((opt) => {
-          let baseLabel = opt.dataset.label;
-          if (!baseLabel) {
-            const valueAttr = opt.getAttribute('value');
-            baseLabel = valueAttr ?? '';
-            opt.dataset.label = baseLabel;
+        const optionsPayload = m.options ?? {};
+        let applied = false;
+
+        [
+          {
+            id: AGENT_SELECT_IDS[SESSION_TYPES.WORKFLOW],
+            html: optionsPayload.workflow ?? '',
+          },
+          {
+            id: AGENT_SELECT_IDS[SESSION_TYPES.TOOL_USE],
+            html: optionsPayload.toolUse ?? '',
+          },
+        ].forEach(({ id, html }) => {
+          if (!id) {
+            return;
           }
-
-          const hints = [];
-          let displayLabel = baseLabel;
-
-          if (opt.dataset.multiple === 'true') {
-            displayLabel += ' ∶∶';
-            hints.push('Supports multi-file inputs.');
-            opt.style.opacity = '0.9';
-          } else {
-            opt.style.opacity = '';
+          const select = document.getElementById(id);
+          if (!(select instanceof HTMLSelectElement)) {
+            return;
           }
-
-          if (opt.dataset.toolUse === 'true') {
-            displayLabel += 'ᵗ';
-            hints.push('Uses tools for actions.');
-          }
-
-          opt.textContent = displayLabel;
-
-          if (hints.length > 0) {
-            opt.title = hints.join('\n');
-            opt.setAttribute(
-              'aria-label',
-              `${baseLabel} (${hints.join(', ')})`,
-            );
-          } else {
-            opt.removeAttribute('title');
-            opt.setAttribute('aria-label', baseLabel);
-          }
+          this._applyAgentOptions(select, html);
+          applied = true;
         });
+
+        if (!applied) {
+          console.warn('SET_AGENT_OPTIONS: Agent select elements not found');
+        }
       },
     };
   }
@@ -186,31 +167,156 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     });
   }
 
-  _enqueueModelOptionsFlush() {
-    this._modelOptionsQueue = this._modelOptionsQueue
-      .then(() => this._flushPendingModelOptions())
-      .catch((error) => {
-        console.error('SET_MODEL_OPTIONS: Failed to apply options', error);
-      });
+  _applyAgentOptions(selectElement, optionsHtml) {
+    const previous = selectElement.value;
+    selectElement.innerHTML = optionsHtml ?? '';
+    if (previous) {
+      selectElement.value = previous;
+      if (
+        selectElement.value !== previous &&
+        selectElement.options.length > 0
+      ) {
+        const fallbackOption = Array.from(selectElement.options).find(
+          (option) => !option.disabled,
+        );
+        if (fallbackOption) {
+          selectElement.value = fallbackOption.value;
+        }
+      }
+    }
+
+    Array.from(selectElement.options).forEach((opt) => {
+      this._decorateAgentOption(opt);
+    });
   }
 
-  async _flushPendingModelOptions() {
+  _decorateAgentOption(opt) {
+    const { label, isMultiple, isToolUse } = this._readAgentOptionMetadata(opt);
+
+    const hints = [];
+    let displayLabel = label;
+
+    if (isMultiple) {
+      displayLabel += ' ∶∶';
+      hints.push('Supports multi-file inputs.');
+      opt.style.opacity = '0.9';
+    } else {
+      opt.style.opacity = '';
+    }
+
+    if (isToolUse) {
+      hints.push('Uses tools for actions.');
+    }
+
+    opt.textContent = displayLabel;
+
+    if (hints.length > 0) {
+      opt.title = hints.join('\n');
+      opt.setAttribute('aria-label', `${label} (${hints.join(', ')})`);
+      opt.setAttribute('aria-description', hints.join(' '));
+    } else {
+      opt.removeAttribute('title');
+      opt.setAttribute('aria-label', label);
+      opt.removeAttribute('aria-description');
+    }
+  }
+
+  _readAgentOptionMetadata(opt) {
+    let label = opt.dataset.label ?? '';
+    if (!label) {
+      const textLabel = opt.textContent?.trim();
+      if (textLabel) {
+        label = textLabel;
+      } else {
+        const valueAttr = opt.getAttribute('value');
+        label = valueAttr ?? '';
+      }
+      if (label) {
+        opt.dataset.label = label;
+      }
+    }
+
+    return {
+      label,
+      isMultiple: opt.dataset.multiple === 'true',
+      isToolUse: opt.dataset.toolUse === 'true',
+    };
+  }
+
+  _getSessionTypeValue() {
+    const input = this._getElement(SESSION_TYPE_INPUT);
+    const rawValue = input?.value ?? '';
+    return rawValue === SESSION_TYPES.TOOL_USE
+      ? SESSION_TYPES.TOOL_USE
+      : SESSION_TYPES.WORKFLOW;
+  }
+
+  _getAgentElementByType(sessionType) {
+    const selectId = AGENT_SELECT_IDS[sessionType];
+    if (!selectId) {
+      return null;
+    }
+    const element = this._getElement(selectId);
+    return element instanceof HTMLSelectElement ? element : null;
+  }
+
+  _getActiveAgentSelection() {
+    const sessionType = this._getSessionTypeValue();
+    const select = this._getAgentElementByType(sessionType);
+    const value = select?.value ?? '';
+    return { sessionType, select, value };
+  }
+
+  _enqueueModelOptionsFlush() {
     if (this._isDisposed) {
       return;
     }
 
-    const select = await this._waitForModelSelect();
-    if (!select || this._isDisposed) {
+    if (this._modelFlushScheduled) {
       return;
     }
 
-    if (!this._latestModelOptions) {
+    this._modelFlushScheduled = true;
+    Promise.resolve().then(() => this._drainModelOptions());
+  }
+
+  async _drainModelOptions() {
+    if (this._isDisposed) {
+      this._modelFlushScheduled = false;
       return;
     }
 
-    const html = this._latestModelOptions;
-    this._latestModelOptions = null;
-    this._applyModelOptions(select, html);
+    if (this._isModelFlushRunning) {
+      return;
+    }
+
+    this._isModelFlushRunning = true;
+
+    try {
+      while (!this._isDisposed && this._latestModelOptions) {
+        const select = await this._waitForModelSelect();
+        if (!select || this._isDisposed) {
+          break;
+        }
+
+        const html = this._latestModelOptions;
+        if (!html) {
+          break;
+        }
+
+        this._latestModelOptions = null;
+        this._applyModelOptions(select, html);
+      }
+    } catch (error) {
+      console.error('SET_MODEL_OPTIONS: Failed to apply options', error);
+    } finally {
+      this._isModelFlushRunning = false;
+      this._modelFlushScheduled = false;
+    }
+
+    if (!this._isDisposed && this._latestModelOptions) {
+      this._enqueueModelOptionsFlush();
+    }
   }
 
   _waitForModelSelect() {
@@ -246,10 +352,7 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
   }
 
   _resolveModelSelectWaiter(result) {
-    if (this._modelSelectObserver) {
-      this._modelSelectObserver.disconnect();
-      this._modelSelectObserver = null;
-    }
+    this._disposeModelSelectObserver();
 
     if (this._modelSelectResolver) {
       const resolver = this._modelSelectResolver;
@@ -262,12 +365,20 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     }
   }
 
+  _disposeModelSelectObserver() {
+    if (this._modelSelectObserver) {
+      this._modelSelectObserver.disconnect();
+      this._modelSelectObserver = null;
+    }
+  }
+
   /** Register handlers and optionally request initial data. */
   setup(options = {}) {
     const { requestData = true } = options;
     this._isDisposed = false;
     this._latestModelOptions = null;
-    this._modelOptionsQueue = Promise.resolve();
+    this._modelFlushScheduled = false;
+    this._isModelFlushRunning = false;
     this._resolveModelSelectWaiter(null);
     super.setup();
     if (requestData) {
@@ -278,7 +389,9 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
   cleanup() {
     this._isDisposed = true;
     this._latestModelOptions = null;
-    this._modelOptionsQueue = Promise.resolve();
+    this._modelFlushScheduled = false;
+    this._isModelFlushRunning = false;
+    this._disposeModelSelectObserver();
     this._resolveModelSelectWaiter(null);
 
     super.cleanup();
@@ -376,11 +489,11 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     });
 
     // Also request default output files for the current agent
-    const agentElement = this._getElement('agent');
-    if (agentElement && agentElement.value) {
+    const { value: agentValue } = this._getActiveAgentSelection();
+    if (agentValue) {
       vscode.postMessage({
         command: MAIN_VIEW_COMMANDS.REQUEST_DEFAULT_OUTPUT_FILES,
-        agent: agentElement.value,
+        agent: agentValue,
       });
     }
   }
@@ -400,7 +513,29 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
   }
 
   _restoreFormFields(state, savedState) {
-    if (state.agent) safeSetElementValue('agent', state.agent);
+    const sessionType = state.sessionType
+      ? state.sessionType
+      : state.isToolUseAgent
+        ? SESSION_TYPES.TOOL_USE
+        : SESSION_TYPES.WORKFLOW;
+    const workflowAgentValue =
+      state.workflowAgent ??
+      (!state.isToolUseAgent ? state.agent : undefined) ??
+      '';
+    const toolUseAgentValue =
+      state.toolUseAgent ??
+      (state.isToolUseAgent ? state.agent : undefined) ??
+      '';
+
+    safeSetElementValue(SESSION_TYPE_INPUT, sessionType);
+    safeSetElementValue(
+      AGENT_SELECT_IDS[SESSION_TYPES.WORKFLOW],
+      workflowAgentValue,
+    );
+    safeSetElementValue(
+      AGENT_SELECT_IDS[SESSION_TYPES.TOOL_USE],
+      toolUseAgentValue,
+    );
     if (state.model) safeSetElementValue('model', state.model);
 
     const instructionContent = state.instruction || '';
@@ -421,7 +556,14 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
 
     const toolConfig = state.toolConfig || {};
     Object.assign(savedState, {
-      agent: state.agent,
+      sessionType,
+      workflowAgent: workflowAgentValue,
+      toolUseAgent: toolUseAgentValue,
+      agent:
+        state.agent ??
+        (sessionType === SESSION_TYPES.TOOL_USE
+          ? toolUseAgentValue
+          : workflowAgentValue),
       model: state.model,
       instruction: instructionContent,
       inputFile: state.inputFile,

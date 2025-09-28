@@ -6,6 +6,10 @@ import {
   CHECK_BOXES_TOOL_USE,
   CHECK_BOXES_AUTO_EXTRACT,
   ELEMENT_IDS,
+  SESSION_TYPES,
+  SESSION_TYPE_INPUT,
+  AGENT_SELECT_IDS,
+  AGENT_SELECT_LIST,
 } from './constants.js';
 import { fileList } from './uiManagers/FileList.js';
 import {
@@ -42,6 +46,8 @@ export class MainViewState {
 
   /** Initialize UI with default state */
   setDefaults() {
+    this.applySessionType(SESSION_TYPES.WORKFLOW, { skipSave: true });
+
     const autoExtractToggle = safeGetElementById(
       ELEMENT_IDS.TOGGLE_AUTO_EXTRACT,
     );
@@ -79,9 +85,37 @@ export class MainViewState {
   restore() {
     const previousState = this.stateManager.getState();
     if (previousState) {
-      const defaults = { agent: 'correct', model: 'gemini25p', commit: 'HEAD' };
+      const defaults = {
+        sessionType: SESSION_TYPES.WORKFLOW,
+        workflowAgent: 'correct',
+        toolUseAgent: '',
+        model: 'gemini25p',
+        commit: 'HEAD',
+      };
+
+      const legacyAgent = previousState.agent;
+      const legacyToolUse = previousState.isToolUseAgent === true;
+      const normalizedValues = {
+        sessionType: previousState.sessionType
+          ? previousState.sessionType
+          : legacyToolUse
+            ? SESSION_TYPES.TOOL_USE
+            : defaults.sessionType,
+        workflowAgent:
+          previousState.workflowAgent ??
+          (!legacyToolUse ? legacyAgent : undefined) ??
+          defaults.workflowAgent,
+        toolUseAgent:
+          previousState.toolUseAgent ??
+          (legacyToolUse ? legacyAgent : undefined) ??
+          defaults.toolUseAgent,
+      };
 
       VALUE_ELEMENTS.forEach((id) => {
+        if (id in normalizedValues) {
+          safeSetElementValue(id, normalizedValues[id]);
+          return;
+        }
         safeSetElementValue(id, previousState[id] ?? defaults[id] ?? '');
       });
 
@@ -156,6 +190,11 @@ export class MainViewState {
         latexdiffsContent.style.display = visible ? 'block' : 'none';
         setChevronIcon(toggleLatexdiffs, visible);
       }
+
+      this.applySessionType(
+        normalizedValues.sessionType ?? defaults.sessionType,
+        { skipSave: true },
+      );
     } else {
       this.setDefaults();
     }
@@ -191,7 +230,61 @@ export class MainViewState {
       state[id] = fileList.getSelected(elementDiv);
     });
 
+    const sessionTypeValue =
+      state.sessionType ?? safeGetElementValue(SESSION_TYPE_INPUT);
+    const normalizedSessionType =
+      sessionTypeValue === SESSION_TYPES.TOOL_USE
+        ? SESSION_TYPES.TOOL_USE
+        : SESSION_TYPES.WORKFLOW;
+    const activeSelectId = AGENT_SELECT_IDS[normalizedSessionType];
+    if (activeSelectId) {
+      state.agent = safeGetElementValue(activeSelectId) ?? '';
+      state.isToolUseAgent = normalizedSessionType === SESSION_TYPES.TOOL_USE;
+    }
+
     this.stateManager.setState(state);
+  }
+
+  applySessionType(sessionType, options = {}) {
+    const { skipSave = false } = options;
+    const normalized =
+      sessionType === SESSION_TYPES.TOOL_USE
+        ? SESSION_TYPES.TOOL_USE
+        : SESSION_TYPES.WORKFLOW;
+
+    const sessionInput = safeGetElementById(SESSION_TYPE_INPUT);
+    if (sessionInput) {
+      sessionInput.value = normalized;
+    }
+
+    const toggleContainer = safeGetElementById(ELEMENT_IDS.SESSION_TYPE_TOGGLE);
+    if (toggleContainer) {
+      const buttons = toggleContainer.querySelectorAll('[data-session-type]');
+      buttons.forEach((button) => {
+        if (!(button instanceof HTMLElement)) {
+          return;
+        }
+        const isActive = button.dataset.sessionType === normalized;
+        button.classList.toggle('active', isActive);
+        button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+      });
+    }
+
+    AGENT_SELECT_LIST.forEach((selectId) => {
+      const selectEl = safeGetElementById(selectId);
+      if (!selectEl) {
+        return;
+      }
+      const isActive = selectId === AGENT_SELECT_IDS[normalized];
+      selectEl.classList.toggle('agent-select--active', isActive);
+      selectEl.classList.toggle('agent-select--hidden', !isActive);
+      selectEl.setAttribute('aria-hidden', isActive ? 'false' : 'true');
+      selectEl.tabIndex = isActive ? 0 : -1;
+    });
+
+    if (!skipSave) {
+      this.save();
+    }
   }
 }
 

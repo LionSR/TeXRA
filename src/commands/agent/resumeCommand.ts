@@ -205,7 +205,9 @@ export function registerResumeAgentCommand(
                 lostCount === 1 ? 'follow-up was' : 'follow-ups were'
               } lost.`
             : '';
-        await vscode.window.showWarningMessage(`${baseMessage}${followUpSuffix}`);
+        await vscode.window.showWarningMessage(
+          `${baseMessage}${followUpSuffix}`,
+        );
 
         return { success: false, lostFollowUps: lostCount };
       }
