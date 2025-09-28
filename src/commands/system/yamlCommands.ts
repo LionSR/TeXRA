@@ -61,10 +61,7 @@ export async function handleTestAgentLoading(
 
     // Create base agent
     const baseYamlPath = path.join(testDir, 'base.yaml');
-    await GlobalStorageFS.write(
-      'test_agents/base.yaml',
-      JSON.stringify(testYaml),
-    );
+    await GlobalStorageFS.writeJson('test_agents/base.yaml', testYaml);
 
     // Create child agent that inherits from base
     const childYaml = {
@@ -79,10 +76,7 @@ export async function handleTestAgentLoading(
     };
 
     const childYamlPath = path.join(testDir, 'child.yaml');
-    await GlobalStorageFS.write(
-      'test_agents/child.yaml',
-      JSON.stringify(childYaml),
-    );
+    await GlobalStorageFS.writeJson('test_agents/child.yaml', childYaml);
 
     // Test loading base agent
     logger.info(CHANNEL, '\nTesting base agent loading:');
