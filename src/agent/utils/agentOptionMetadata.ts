@@ -26,6 +26,11 @@ export interface AgentOptionMetadata {
   isToolUse: boolean;
 }
 
+export interface AgentOptionsPayload {
+  workflow: string;
+  toolUse: string;
+}
+
 const DIRECTORY_KEYS: (keyof AgentDirectoryMap)[] = [
   'custom',
   'builtIn',
@@ -148,4 +153,51 @@ export function createAgentOptionTag(
 
   const label = decorateLabel(agentName, metadata);
   return `<option ${attributes.join(' ')}>${encodeHtml(label)}</option>`;
+}
+
+export function buildAgentOptionsPayload(
+  agentNames: Iterable<string>,
+  directories: AgentDirectoryMap,
+): AgentOptionsPayload {
+  const workflowOptions: string[] = [];
+  const toolUseOptions: string[] = [];
+
+  const seen = new Set<string>();
+  for (const agentName of agentNames) {
+    if (!agentName || seen.has(agentName)) {
+      continue;
+    }
+    seen.add(agentName);
+    const metadata = getAgentOptionMetadata(agentName, directories);
+    const optionTag = createAgentOptionTag(agentName, metadata);
+    if (metadata.isToolUse) {
+      toolUseOptions.push(optionTag);
+    } else {
+      workflowOptions.push(optionTag);
+    }
+  }
+
+  const ensureOptions = (
+    options: string[],
+    placeholder: string,
+    emptyMessage: string,
+  ): string => {
+    if (options.length === 0) {
+      return `<option value="">${emptyMessage}</option>`;
+    }
+    return [`<option value="">${placeholder}</option>`, ...options].join('\n');
+  };
+
+  return {
+    workflow: ensureOptions(
+      workflowOptions,
+      'Select a workflow agent',
+      'No workflow agents available',
+    ),
+    toolUse: ensureOptions(
+      toolUseOptions,
+      'Select a tool-use agent',
+      'No tool-use agents available',
+    ),
+  };
 }
