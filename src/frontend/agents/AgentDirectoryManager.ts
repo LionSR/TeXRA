@@ -14,9 +14,11 @@ import { showLoggedMessageWithDocs } from '@common/errors/errorHandlingUtils';
 
 const CHANNEL = 'AgentLoad';
 logger.initialize(CHANNEL);
-const DEFAULT_CUSTOM_DIR = 'custom_agents';
+const DEFAULT_CUSTOM_AGENTS_DIRNAME = 'custom_agents';
 
 export class AgentDirectoryManager {
+  private context: vscode.ExtensionContext | undefined;
+
   /**
    * Ensure a built-in agents directory exists and return its path.
    */
@@ -38,6 +40,21 @@ export class AgentDirectoryManager {
     return basePath;
   }
 
+  initialize(context: vscode.ExtensionContext): void {
+    this.context = context;
+    StorageFS.initialize(context);
+  }
+
+  private ensureInitialized(): void {
+    if (!this.context) {
+      throw new Error(
+        'Agent directories not initialized. Call agentDirectories.initialize(context) first.',
+      );
+    }
+
+    StorageFS.initialize(this.context);
+  }
+
   async builtIn(context: vscode.ExtensionContext): Promise<string> {
     return this.ensureBuiltInDir(context, 'agents');
   }
@@ -47,8 +64,9 @@ export class AgentDirectoryManager {
   }
 
   private async ensureDefaultCustomDir(): Promise<string> {
-    await GlobalStorageFS.ensureDir(DEFAULT_CUSTOM_DIR);
-    const defaultPath = GlobalStorageFS.fullPath(DEFAULT_CUSTOM_DIR);
+    this.ensureInitialized();
+    await GlobalStorageFS.ensureDir(DEFAULT_CUSTOM_AGENTS_DIRNAME);
+    const defaultPath = GlobalStorageFS.fullPath(DEFAULT_CUSTOM_AGENTS_DIRNAME);
     logger.debug(
       CHANNEL,
       `Using default custom agents directory: ${defaultPath}`,
@@ -56,11 +74,11 @@ export class AgentDirectoryManager {
     return defaultPath;
   }
 
-  async custom(): Promise<string> {
-    const configuredPath = getConfig<string>('explorer.agentsDirectory', '').trim();
-
+  private async resolveConfiguredCustomDir(
+    configuredPath: string,
+  ): Promise<string | undefined> {
     if (!configuredPath) {
-      return this.ensureDefaultCustomDir();
+      return undefined;
     }
 
     if (!path.isAbsolute(configuredPath)) {
@@ -73,7 +91,7 @@ export class AgentDirectoryManager {
         'Custom agents directory must be an absolute path',
         'custom-agents',
       );
-      return this.ensureDefaultCustomDir();
+      return undefined;
     }
 
     await AbsoluteFS.ensureDir(configuredPath);
@@ -82,6 +100,24 @@ export class AgentDirectoryManager {
       `Using custom agents directory from setting: ${configuredPath}`,
     );
     return configuredPath;
+  }
+
+  async custom(context?: vscode.ExtensionContext): Promise<string> {
+    if (context) {
+      this.initialize(context);
+    }
+
+    const configuredPath = getConfig<string>(
+      'explorer.agentsDirectory',
+      '',
+    ).trim();
+
+    const resolvedPath = await this.resolveConfiguredCustomDir(configuredPath);
+    if (resolvedPath) {
+      return resolvedPath;
+    }
+
+    return this.ensureDefaultCustomDir();
   }
 
   async promptCustom(): Promise<string | undefined> {
@@ -102,10 +138,6 @@ export class AgentDirectoryManager {
     await updateConfig('explorer.agentsDirectory', selectedPath);
 
     return selectedPath;
-  }
-
-  async ensureCustom(): Promise<string> {
-    return this.custom();
   }
 }
 

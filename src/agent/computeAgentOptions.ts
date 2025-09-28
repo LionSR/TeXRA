@@ -50,7 +50,7 @@ async function getAgentDirectories(
   context: vscode.ExtensionContext,
 ): Promise<AgentDirectoryMap> {
   return {
-    custom: await agentDirectories.custom(),
+    custom: await agentDirectories.custom(context),
     builtIn: await agentDirectories.builtIn(context),
     builtInToolUse: await agentDirectories.builtInToolUse(context),
   };
