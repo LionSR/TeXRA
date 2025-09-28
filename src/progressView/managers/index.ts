@@ -4,3 +4,4 @@ export { TaskGroupManager } from './TaskGroupManager';
 export { ToolUseTaskStateManager } from './ToolUseTaskStateManager';
 export { UsageStatsManager } from './UsageStatsManager';
 export { WebviewUpdater } from './WebviewUpdater';
+export { WorkflowTaskStateManager } from './WorkflowTaskStateManager';
