@@ -12,11 +12,16 @@ All notable changes to this project will be documented in this file.
 - Restore main view configurations using the shared task-state helper so history entries hydrate without manual JSON juggling.
 - Cap `read_file` tool responses at the first 400 lines to keep large files from overwhelming tool-use transcripts.
 - Enable interleaved thinking by default for supported Claude tool-use agents so follow-up reasoning stays in sync with tool results.
+- Rebuild the agent selector footer with a compact session toggle and per-session dropdowns so the UI stays narrow and focused.
+- Populate the tool-use dropdown from the dedicated `texra.toolUseAgents` list and automatic discovery so the old include toggle is no longer needed.
+- Trim the default tool-use agent list to the conversational presets so specialized utilities stay opt-in per workspace.
+- Narrow the model selector width and streamline tool-use labelling so dropdowns stay tidy without superscript markers.
 
 ### Bug Fixes
 
 - Migrate history view toggle state persistence from JSON strings to structured arrays so expansion settings reliably load across versions.
 - Clear queued restore context when the main view fails to initialize, preventing stale state from resurfacing on the next activation.
+- Guard the model select observer lifecycle and update queue so successive model option messages render reliably without leaking observers.
 
 ## [0.33.7] - 2025-09-22
 
@@ -159,7 +164,7 @@ All notable changes to this project will be documented in this file.
 - Allow disabling LaTeX formatting and silencing missing `latexindent` warnings
 - Added configurable `texra.maxImageDimension` setting to control the maximum image size threshold
 - Add "New" button in main view to reset all fields
-- Add `texra.includeToolUseAgents` setting to optionally show built-in tool-use agents in the agent dropdown
+- Add `texra.includeToolUseAgents` setting to optionally show built-in tool-use agents in the agent dropdown (deprecated in 0.33.8)
 - Prompt users to install LaTeX Workshop extension with "Never remind again" option for enhanced LaTeX features
 
 ### Bug Fixes
