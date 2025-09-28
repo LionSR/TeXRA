@@ -24,7 +24,6 @@ describe('XmlOutputManager markdown fallback', () => {
     requiredFilesInternal: {},
     defaultOutputFiles: [],
     isMultipleOutput: false,
-    useMultipleOutputs: false,
     filePatternsContain: [],
     tools: [],
   };

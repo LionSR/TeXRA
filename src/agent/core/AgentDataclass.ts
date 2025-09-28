@@ -89,7 +89,6 @@ export const AgentSettingBaseSchema = z
     requiredFiles: z.record(z.string()).default({}),
     requiredFilesInternal: z.record(z.string()).default({}),
     defaultOutputFiles: z.array(z.string()).default([]),
-    useMultipleOutputs: z.boolean().default(false),
     filePatternsContain: z
       .array(
         z.object({
@@ -188,3 +187,60 @@ export const AgentDefinitionSchema = z
   .strict();
 
 export type AgentDefinition = z.infer<typeof AgentDefinitionSchema>;
+
+export type AgentSettingInput = Record<string, unknown>;
+
+/**
+ * Normalizes a raw settings object loaded from YAML so legacy
+ * `useMultipleOutputs` declarations map onto the canonical
+ * {@link AgentWorkflowSetting.isMultipleOutput} flag.
+ */
+export function normalizeAgentSettingInput(
+  settings: unknown,
+): AgentSettingInput | undefined {
+  if (!settings || typeof settings !== 'object') {
+    return undefined;
+  }
+
+  const record = settings as Record<string, unknown>;
+  const normalized: AgentSettingInput = { ...record };
+
+  if ('useMultipleOutputs' in normalized) {
+    const legacy = normalized.useMultipleOutputs;
+    if (
+      typeof legacy === 'boolean' &&
+      typeof normalized.isMultipleOutput !== 'boolean'
+    ) {
+      normalized.isMultipleOutput = legacy;
+    }
+    delete normalized.useMultipleOutputs;
+  }
+
+  return normalized;
+}
+
+/**
+ * Parses a settings block into an {@link AgentSetting}, applying
+ * compatibility aliases before running the schema validator.
+ */
+export function parseAgentSetting(settings: unknown): AgentSetting {
+  const normalized = normalizeAgentSettingInput(settings);
+  if (!normalized) {
+    throw new Error('Invalid agent settings block: expected an object.');
+  }
+
+  return AgentSettingSchema.parse(normalized);
+}
+
+/** Attempts to parse the given settings block, returning undefined on failure. */
+export function safeParseAgentSetting(
+  settings: unknown,
+): AgentSetting | undefined {
+  const normalized = normalizeAgentSettingInput(settings);
+  if (!normalized) {
+    return undefined;
+  }
+
+  const result = AgentSettingSchema.safeParse(normalized);
+  return result.success ? result.data : undefined;
+}
