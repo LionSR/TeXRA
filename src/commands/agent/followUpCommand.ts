@@ -33,11 +33,13 @@ export function registerFollowUpCommand(context: vscode.ExtensionContext) {
         }
 
         const pendingSnapshot =
-          ToolUseSessionManager.consumeSnapshotForStream(streamId);
+          ToolUseSessionManager.getSnapshotForStream(streamId);
         if (pendingSnapshot) {
           console.log(
             `[${CHANNEL}] resuming agent lazily for stream ${payload.stream}`,
           );
+          ToolUseSessionManager.setResumingSession(streamId);
+          ToolUseSessionManager.consumeSnapshotForStream(streamId);
           try {
             await vscode.commands.executeCommand('texra.resumeAgent', {
               snapshot: pendingSnapshot,
@@ -48,7 +50,9 @@ export function registerFollowUpCommand(context: vscode.ExtensionContext) {
               ToolUseSessionManager.drainQueuedFollowUps(streamId);
             if (lostFollowUps.length > 0) {
               const followUpLabel =
-                lostFollowUps.length === 1 ? 'follow-up was' : 'follow-ups were';
+                lostFollowUps.length === 1
+                  ? 'follow-up was'
+                  : 'follow-ups were';
               await vscode.window.showWarningMessage(
                 `Resume failed. ${lostFollowUps.length} queued ${followUpLabel} lost.`,
               );
