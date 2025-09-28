@@ -3,6 +3,8 @@ import * as vscode from 'vscode';
 
 // Local imports - agent
 import { getToolUseAgent } from '@agent/toolUse/ToolUseAgentRegistry';
+import { ToolUseSessionManager } from '@agent/toolUse/ToolUseSessionManager';
+import type { StreamTabId } from '@agent/types/IdentifierTypes';
 
 // Local imports - utilities
 import { showLoggedErrorMessage } from '@common/errors/errorHandlingUtils';
@@ -15,7 +17,8 @@ export function registerFollowUpCommand(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand(
       'texra.sendFollowUp',
       async (payload: { stream: string; text: string }) => {
-        const agent = getToolUseAgent(payload.stream);
+        const streamId = payload.stream as StreamTabId;
+        const agent = getToolUseAgent(streamId);
         if (agent) {
           try {
             agent.appendFollowUp(payload.text);
@@ -26,7 +29,36 @@ export function registerFollowUpCommand(context: vscode.ExtensionContext) {
               err,
             );
           }
+          return;
         }
+
+        const pendingSnapshot =
+          ToolUseSessionManager.consumeSnapshotForStream(streamId);
+        if (pendingSnapshot) {
+          console.log(
+            `[${CHANNEL}] resuming agent lazily for stream ${payload.stream}`,
+          );
+          void Promise.resolve(
+            vscode.commands.executeCommand('texra.resumeAgent', {
+              snapshot: pendingSnapshot,
+              followUp: payload.text,
+            }),
+          ).catch((err: unknown) => {
+            void showLoggedErrorMessage(
+              CHANNEL,
+              'Failed to resume tool-use session for follow-up',
+              err,
+            );
+          });
+          return;
+        }
+
+        console.log(
+          `[${CHANNEL}] no active session found for stream ${payload.stream}`,
+        );
+        void vscode.window.showWarningMessage(
+          'No active tool-use session found for this follow-up.',
+        );
       },
     ),
   );
