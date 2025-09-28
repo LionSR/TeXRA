@@ -10,6 +10,7 @@ All notable changes to this project will be documented in this file.
 - Refresh Qwen-Max and Qwen Plus integrations with updated pricing, naming, and thinking support in the DashScope handler.
 - Harden progress view state handling with validation on task groups, toggles, and stream statuses to prevent invalid data from corrupting summaries.
 - Restore main view configurations using the shared task-state helper so history entries hydrate without manual JSON juggling.
+- Cap `read_file` tool responses at the first 400 lines to keep large files from overwhelming tool-use transcripts.
 
 ### Bug Fixes
 
