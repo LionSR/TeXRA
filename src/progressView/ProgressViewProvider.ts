@@ -229,15 +229,15 @@ export class ProgressViewProvider
    */
   public clearTaskOutput(streamTabId: StreamTabId): void {
     const taskState = this.state.getTaskState(streamTabId);
-    if (taskState) {
-      // Only clear output-related fields, preserve other task state data
-      taskState.agentConfig.outputFiles = [];
-      taskState.agentConfig.useMultipleOutputs = false;
-      if (isWorkflowTaskState(taskState)) {
-        taskState.activeFiles.output = false;
-      }
-      this.state.setTaskState(streamTabId, taskState);
+    if (!taskState || !isWorkflowTaskState(taskState)) {
+      return;
     }
+
+    // Only clear output-related fields, preserve other task state data
+    taskState.agentConfig.outputFiles = [];
+    taskState.agentConfig.useMultipleOutputs = false;
+    taskState.activeFiles.output = false;
+    this.state.setTaskState(streamTabId, taskState);
   }
 
   /**
