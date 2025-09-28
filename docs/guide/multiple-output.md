@@ -77,10 +77,9 @@ settings:
 
 Agents that inherit from a single-output variant should also set this field so
 the registry watcher can skip duplicate prompts when the base agent is already
-configured. Existing YAML files that still use the older
-`useMultipleOutputs` field remain compatible—the extension translates that flag
-to `isMultipleOutput` automatically during validation so the dropdown and
-registration logic stay in sync.
+configured. The legacy `useMultipleOutputs` field is no longer supported—update
+existing YAML files to declare `isMultipleOutput` explicitly to opt into the
+multiple-output affordances.
 
 ## Example: `polish_multiple` Agent Prompts
 

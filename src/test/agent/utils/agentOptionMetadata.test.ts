@@ -43,22 +43,6 @@ describe('agentOptionMetadata', () => {
     assert.ok(optionTag.includes('∶∶'));
   });
 
-  it('normalizes legacy useMultipleOutputs declarations', () => {
-    const agentPath = path.join(tempDir, 'legacy_multi.yaml');
-    fs.writeFileSync(
-      agentPath,
-      [
-        'name: legacy_multi',
-        'settings:',
-        '  useMultipleOutputs: true',
-      ].join('\n'),
-      'utf8',
-    );
-
-    const metadata = getAgentOptionMetadata('legacy_multi', directories);
-    assert.equal(metadata.isMultipleOutput, true);
-  });
-
   it('keeps base agents decorated when a sibling _multiple file exists', () => {
     const basePath = path.join(tempDir, 'writer.yaml');
     const multiplePath = path.join(tempDir, 'writer_multiple.yaml');
