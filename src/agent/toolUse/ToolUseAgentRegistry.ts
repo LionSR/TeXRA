@@ -24,3 +24,14 @@ export function getToolUseAgent(
 export function clearToolUseAgents(): void {
   registry.clear();
 }
+
+/**
+ * Remove registry entries for streams that no longer have an active tool-use session.
+ */
+export function cleanupInactiveAgents(activeStreams: Set<StreamTabId>): void {
+  for (const streamId of registry.keys()) {
+    if (!activeStreams.has(streamId)) {
+      registry.delete(streamId);
+    }
+  }
+}
