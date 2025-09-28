@@ -105,7 +105,7 @@ export class ExplorerOperations {
 
   private async createCustomCopy(uri: vscode.Uri) {
     try {
-      const customPath = await agentDirectories.ensureCustom();
+      const customPath = await agentDirectories.custom(this.context);
 
       const base = uri.fsPath.startsWith(this.builtInToolUsePath)
         ? this.builtInToolUsePath
@@ -133,7 +133,7 @@ export class ExplorerOperations {
 
   async create(node: FileItem | undefined, isFolder: boolean) {
     try {
-      const customBase = await agentDirectories.ensureCustom();
+      const customBase = await agentDirectories.custom(this.context);
 
       let parentPath = node?.resourceUri.fsPath || customBase;
 

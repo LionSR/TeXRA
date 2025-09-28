@@ -18,6 +18,7 @@ import { initializeStateManagers } from '@common/state/stateManager';
 import { FileLister } from '@frontend/files/fileLister';
 import { bus } from '@eventBus/ProgressEventBus';
 import { ToolUseSessionManager } from '@agent/toolUse/ToolUseSessionManager';
+import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 
 // Local imports - components
 import { ProgressViewProvider } from './progressView/ProgressViewProvider';
@@ -89,6 +90,7 @@ export async function activate(context: vscode.ExtensionContext) {
   // Initialize storage systems
   SecretManager.initialize(context);
   StorageFS.initialize(context);
+  agentDirectories.initialize(context);
   await StorageFS.ensureDir(TASK_RUNS_DIR);
   initializeStateManagers(context);
   FileLister.initialize(context);
