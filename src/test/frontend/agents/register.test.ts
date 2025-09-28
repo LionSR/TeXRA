@@ -31,7 +31,11 @@ describe('getAgentRegistrationSkipReason', () => {
       isMultipleOutput: false,
       multipleAgentName: 'polish_multiple',
     };
-    const reason = getAgentRegistrationSkipReason('polish', ['polish_multiple'], metadata);
+    const reason = getAgentRegistrationSkipReason(
+      'polish',
+      ['polish_multiple'],
+      metadata,
+    );
     assert.equal(reason, 'multipleRegistered');
   });
 
