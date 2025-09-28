@@ -72,12 +72,15 @@ export function agentConfigToTaskState(
       )
     : configMetadata;
 
-  config.agentType = resolvedMetadata.agentType;
-  config.agentSessionKind = resolvedMetadata.agentSessionKind;
+  const normalizedConfig: AgentConfig = {
+    ...config,
+    agentType: resolvedMetadata.agentType,
+    agentSessionKind: resolvedMetadata.agentSessionKind,
+  };
 
   if (resolvedMetadata.agentSessionKind === AgentSessionKind.ToolUse) {
     return {
-      agentConfig: config,
+      agentConfig: normalizedConfig,
       agentType: resolvedMetadata.agentType,
       agentSessionKind: AgentSessionKind.ToolUse,
       toolSessionState: {},
@@ -85,10 +88,10 @@ export function agentConfigToTaskState(
   }
 
   return {
-    agentConfig: config,
+    agentConfig: normalizedConfig,
     agentType: resolvedMetadata.agentType,
     agentSessionKind: AgentSessionKind.Workflow,
-    activeFiles: createActiveFilesFromArrays(config),
+    activeFiles: createActiveFilesFromArrays(normalizedConfig),
   };
 }
 
