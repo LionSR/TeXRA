@@ -113,12 +113,12 @@ export function registerResumeAgentCommand(
         return;
       }
 
-      try {
-        const provider = ProgressViewProvider.getInstance();
-        if (!provider) {
-          return;
-        }
+      const provider = ProgressViewProvider.getInstance();
+      if (!provider) {
+        return;
+      }
 
+      try {
         const executionId = snapshot.executionId as ExecutionId;
         const existingStatus = provider.eventHandler.getStreamStatus(
           snapshot.streamId,
@@ -167,15 +167,14 @@ export function registerResumeAgentCommand(
           snapshot.streamId as StreamTabId,
         );
       } catch (error) {
-        ToolUseSessionManager.clearResumingSession(
-          snapshot.streamId as StreamTabId,
+        provider.eventHandler.setStreamStatus(
+          snapshot.streamId,
+          STATUS.WAITING,
         );
         await ToolUseSessionManager.deleteSnapshot(snapshot.executionId);
-        const message =
-          error instanceof Error ? error.message : String(error ?? 'unknown');
-        vscode.window.showWarningMessage(
-          `Failed to resume tool-use session: ${message}`,
-        );
+        throw error instanceof Error
+          ? error
+          : new Error(String(error ?? 'unknown'));
       }
     },
   );
