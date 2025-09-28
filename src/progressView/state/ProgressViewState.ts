@@ -4,6 +4,7 @@ import {
   TaskGroupManager,
   OutputFilesManager,
   UsageStatsManager,
+  ToolUseTaskStateManager,
 } from '../managers';
 // Local imports
 import { StatePersistenceManager } from '../persistence/StatePersistenceManager';
@@ -23,6 +24,8 @@ import {
   TaskState,
   isToolUseTaskState,
   isWorkflowTaskState,
+  type ToolUseTaskState,
+  type WorkflowTaskState,
 } from '@logger/TaskState';
 import {
   objectToTaskState,
@@ -43,7 +46,7 @@ export class ProgressViewState {
   private _activeStream: StreamTabId = '';
   private _streamSortOrder = 'time';
   private _agentTypeFilter: AgentFilter = 'all';
-  private _taskStates: Map<StreamTabId, TaskState> = new Map();
+  private _workflowTaskStates: Map<StreamTabId, WorkflowTaskState> = new Map();
   private _executionIds: Map<StreamTabId, ExecutionId> = new Map();
   /**
    * Ephemeral session-kind hints keyed by stream ID.
@@ -54,12 +57,14 @@ export class ProgressViewState {
    * is cleared, so there is no need to persist these hints across sessions.
    */
   private _sessionKindHints: Map<StreamTabId, AgentSessionKind> = new Map();
+  private readonly toolUseTaskStates: ToolUseTaskStateManager;
   private readonly persistence: StatePersistenceManager;
   private readonly logger: AgentLogger;
 
   constructor(persistence: StatePersistenceManager) {
     this.persistence = persistence;
     this.logger = new AgentLogger('ProgressViewState');
+    this.toolUseTaskStates = new ToolUseTaskStateManager();
 
     // Initialize focused managers
     this._streamTabs = new StreamTabsManager(persistence);
@@ -155,22 +160,39 @@ export class ProgressViewState {
     }
 
     this.clearSessionKindHint(streamTabId);
-    this._taskStates.set(streamTabId, normalizedState);
+    if (isWorkflowTaskState(normalizedState)) {
+      this._workflowTaskStates.set(streamTabId, normalizedState);
+      this.toolUseTaskStates.delete(streamTabId);
+    } else {
+      this.toolUseTaskStates.set(streamTabId, normalizedState);
+      this._workflowTaskStates.delete(streamTabId);
+    }
     this.saveTaskStates();
   }
 
   getTaskState(streamTabId: StreamTabId): TaskState | undefined {
-    return this._taskStates.get(streamTabId);
+    return (
+      this._workflowTaskStates.get(streamTabId) ||
+      this.toolUseTaskStates.get(streamTabId)
+    );
   }
 
   clearTaskState(streamTabId: StreamTabId): void {
-    this._taskStates.delete(streamTabId);
+    this._workflowTaskStates.delete(streamTabId);
+    this.toolUseTaskStates.delete(streamTabId);
     this.clearSessionKindHint(streamTabId);
     this.saveTaskStates();
   }
 
   getAllTaskStates(): Map<StreamTabId, TaskState> {
-    return new Map(this._taskStates);
+    const combined = new Map<StreamTabId, TaskState>();
+    for (const [stream, state] of this._workflowTaskStates.entries()) {
+      combined.set(stream, state);
+    }
+    for (const [stream, state] of this.toolUseTaskStates.entries()) {
+      combined.set(stream, state);
+    }
+    return combined;
   }
 
   // Execution ID management
@@ -194,7 +216,8 @@ export class ProgressViewState {
     this._taskGroups.deleteStream(stream);
     this._outputFiles.deleteStream(stream);
     this._usageStats.deleteStream(stream);
-    this._taskStates.delete(stream);
+    this._workflowTaskStates.delete(stream);
+    this.toolUseTaskStates.delete(stream);
     this._executionIds.delete(stream);
     this.clearSessionKindHint(stream);
 
@@ -229,7 +252,8 @@ export class ProgressViewState {
     this._taskGroups.clear();
     this._outputFiles.clear();
     this._usageStats.clear();
-    this._taskStates.clear();
+    this._workflowTaskStates.clear();
+    this.toolUseTaskStates.clear();
     this._executionIds.clear();
     this._sessionKindHints.clear();
     this._activeStream = '';
@@ -281,29 +305,58 @@ export class ProgressViewState {
    */
   private async loadTaskStates(): Promise<void> {
     const savedTaskStates = await this.persistence.load<
-      { [key: string]: Record<string, any> } | [string, Record<string, any>][]
+      | {
+          workflow?: Record<string, Record<string, any>>;
+          toolUse?: Record<string, Record<string, any>>;
+        }
+      | { [key: string]: Record<string, any> }
+      | [string, Record<string, any>][]
     >(WorkspaceStateKey.TASK_STATES, {});
 
-    if (savedTaskStates) {
-      const processedStates = new Map<StreamTabId, TaskState>();
+    this._workflowTaskStates.clear();
+    this.toolUseTaskStates.clear();
 
-      if (Array.isArray(savedTaskStates)) {
-        // Backwards compatibility: convert from array format if encountered
-        for (const [stream, state] of savedTaskStates) {
-          processedStates.set(stream, objectToTaskState(state));
-        }
-      } else {
-        for (const [stream, state] of Object.entries(savedTaskStates)) {
-          processedStates.set(stream, objectToTaskState(state));
-        }
+    const processState = (
+      stream: string,
+      rawState: Record<string, any>,
+    ): void => {
+      const taskState = objectToTaskState(rawState);
+      if (isWorkflowTaskState(taskState)) {
+        this._workflowTaskStates.set(stream, taskState);
+      } else if (isToolUseTaskState(taskState)) {
+        this.toolUseTaskStates.set(stream, taskState);
       }
+    };
 
-      this._taskStates = processedStates;
-      this.logger.debug(
-        `Loaded task states for ${this._taskStates.size} streams`,
-      );
+    if (!savedTaskStates) {
+      return;
+    }
+
+    if (Array.isArray(savedTaskStates)) {
+      for (const [stream, state] of savedTaskStates) {
+        processState(stream, state);
+      }
+    } else if ('workflow' in savedTaskStates || 'toolUse' in savedTaskStates) {
+      const { workflow = {}, toolUse = {} } = savedTaskStates as {
+        workflow?: Record<string, Record<string, any>>;
+        toolUse?: Record<string, Record<string, any>>;
+      };
+      for (const [stream, state] of Object.entries(workflow)) {
+        processState(stream, state);
+      }
+      for (const [stream, state] of Object.entries(toolUse)) {
+        processState(stream, state);
+      }
     } else {
-      this._taskStates.clear();
+      for (const [stream, state] of Object.entries(savedTaskStates)) {
+        processState(stream, state);
+      }
+    }
+
+    const totalStates =
+      this._workflowTaskStates.size + this.toolUseTaskStates.size();
+    if (totalStates > 0) {
+      this.logger.debug(`Loaded task states for ${totalStates} streams`);
     }
   }
 
@@ -339,8 +392,14 @@ export class ProgressViewState {
    * Save task states to persistence
    */
   private saveTaskStates(): void {
-    const taskStatesObj = Object.fromEntries(this._taskStates.entries());
-    this.persistence.save(WorkspaceStateKey.TASK_STATES, taskStatesObj);
+    const workflowStates = Object.fromEntries(
+      this._workflowTaskStates.entries(),
+    );
+    const toolUseStates = this.toolUseTaskStates.toObject();
+    this.persistence.save(WorkspaceStateKey.TASK_STATES, {
+      workflow: workflowStates,
+      toolUse: toolUseStates,
+    });
   }
 
   /**

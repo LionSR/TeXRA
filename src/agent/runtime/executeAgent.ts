@@ -194,7 +194,7 @@ export async function executeAgentWithLogging<T extends IAgent>(
     // Create agent instance and extract its declared type
     const { agent, agentType } = await createAgentFn();
     const sessionMetadata = agent.getSessionMetadata();
-    const metadata = resolveAgentSessionMetadata(
+    const baseMetadata = resolveAgentSessionMetadata(
       agentType ?? sessionMetadata.agentType,
       sessionMetadata.agentSessionKind,
     );
@@ -205,6 +205,13 @@ export async function executeAgentWithLogging<T extends IAgent>(
 
     // Get the full stream tab ID
     const config = agent.config;
+    const metadata = resolveAgentSessionMetadata(
+      config.agentType ?? baseMetadata.agentType,
+      config.agentSessionKind ?? baseMetadata.agentSessionKind,
+    );
+    config.agentType = metadata.agentType;
+    config.agentSessionKind = metadata.agentSessionKind;
+
     streamTabId = getStreamTabId(config.agent, config.model, config.inputFile, {
       agentType: metadata.agentType,
       executionId,
