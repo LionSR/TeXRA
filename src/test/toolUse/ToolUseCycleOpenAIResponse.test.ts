@@ -49,6 +49,7 @@ class MockHandler extends ModelHandlerOpenAIResponse {
       return {
         id: 'r1',
         status: 'completed',
+        output_text: 'intro',
         output: [
           {
             type: 'message',
@@ -68,6 +69,7 @@ class MockHandler extends ModelHandlerOpenAIResponse {
     return {
       id: 'r2',
       status: 'completed',
+      output_text: 'done',
       output: [
         {
           type: 'message',
@@ -110,15 +112,10 @@ describe('runToolUseCycle OpenAIResponse', () => {
       agentType: AgentType.ToolUse,
       documentTag: 'doc',
       temperature: 0,
-      isRewrite: true,
-      rounds: 1,
-      prefills: [],
-      outputExt: 'txt',
       endTag: '</doc>',
       requiredFiles: {},
       requiredFilesInternal: {},
       defaultOutputFiles: [],
-      useMultipleOutputs: false,
       filePatternsContain: [],
       tools: [{ name: 'echo' }],
     };
@@ -153,6 +150,14 @@ describe('runToolUseCycle OpenAIResponse', () => {
       (e) => e.logMessage.messageType === MESSAGE_TYPES.TOOL_USE,
     );
     assert.equal(toolEvents.length, 2);
+    const structuredLog = toolEvents.find(
+      (e) => e.logMessage.data && e.logMessage.data.tool === 'echo',
+    );
+    assert.ok(structuredLog, 'Tool use log entry missing structured payload');
+    assert.deepEqual(structuredLog?.logMessage.data?.input, { value: 'hello' });
+    assert.deepEqual(structuredLog?.logMessage.data?.output, {
+      output: 'hello',
+    });
     const assistantMsg = messages[0] as any;
     assert.equal(assistantMsg.role, 'assistant');
     assert.equal(assistantMsg.type, 'message');

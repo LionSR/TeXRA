@@ -4,9 +4,6 @@
 // Third-party imports
 import OpenAI from 'openai';
 
-// Local imports - agent
-import { ToolState } from '../core/ToolState';
-
 // Local imports - agent components
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 import { MediaEntry } from '@agent/utils/mediaTypes';
@@ -19,22 +16,7 @@ import { MESSAGE_PREVIEW_LENGTH } from '@utils/config';
  * Handler for DashScope Qwen models using OpenAI-compatible API.
  */
 export class ModelHandlerDashScope extends ModelHandlerOpenAI {
-  /**
-   * Process thinking blocks for DashScope models
-   * @param responseObject The raw response object from the model
-   * @param groupId Optional group ID for logging
-   * @param toolState Optional toolState to update with the thinking block
-   * @returns The extracted reasoning_content or null if none
-   */
-  processThinkingBlock(
-    responseObject: any,
-    groupId?: string,
-    toolState?: ToolState,
-  ): string | null {
-    // DashScope Qwen models don't currently support thinking blocks
-    return null;
-  }
-
+  /** Thinking blocks are handled by the base OpenAI handler. */
   /**
    * Override createResponse to preprocess messages for DashScope models
    */

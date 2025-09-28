@@ -25,6 +25,7 @@ import {
 } from '@utils/system';
 import { SETTINGS_QUERY } from '@utils/settingsQueries';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
+import { SecretManager } from '@frontend/secretManager';
 import { computeModelOptions } from '@model/computeModelOptions';
 import { computeAgentOptions } from '@agent/computeAgentOptions';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
@@ -98,8 +99,8 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         this.fileManager.handleGenericFileSelected(m),
 
       // Request file commands
-      [MAIN_VIEW_COMMANDS.REQUEST_INPUT_FILE]: async (_m, w) =>
-        this.fileManager.handleRequestInputFile(w),
+      [MAIN_VIEW_COMMANDS.REQUEST_INPUT_FILE]: async (m, w) =>
+        this.fileManager.handleRequestInputFile(m, w),
       [MAIN_VIEW_COMMANDS.REQUEST_REFERENCE_FILE]: async (m, w) =>
         this.fileManager.handleRequestFile(m, w),
       [MAIN_VIEW_COMMANDS.REQUEST_AUXILIARY_FILE]: async (m, w) =>
@@ -108,8 +109,8 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         this.fileManager.handleRequestFile(m, w),
       [MAIN_VIEW_COMMANDS.REQUEST_EDITED_FILE]: async (m, w) =>
         this.fileManager.handleRequestEditedFile(m, w),
-      [MAIN_VIEW_COMMANDS.REQUEST_BASE_FILE]: async (_m, w) =>
-        this.fileManager.handleRequestBaseFile(w),
+      [MAIN_VIEW_COMMANDS.REQUEST_BASE_FILE]: async (m, w) =>
+        this.fileManager.handleRequestBaseFile(m, w),
       [MAIN_VIEW_COMMANDS.REQUEST_DEFAULT_OUTPUT_FILES]: async (m, w) =>
         this.fileManager.handleRequestDefaultOutputFiles(m, w),
 
@@ -146,7 +147,7 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         this.settingsManager.openSettings(SETTINGS_QUERY.MODELS),
       [MAIN_VIEW_COMMANDS.OPEN_AGENT_DIRECTORY]: async (m) => {
         if (m?.customDirSet) {
-          const dir = await agentDirectories.custom();
+          const dir = await agentDirectories.custom(this.context);
           if (dir) {
             await vscode.commands.executeCommand(
               'revealFileInOS',
@@ -266,8 +267,8 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         this.fileManager.handleUpdateFiles(m, w),
 
       // Git/diff operations
-      [MAIN_VIEW_COMMANDS.REQUEST_RECENT_COMMITS]: async (_m, w) =>
-        this.diffManager.handleRequestRecentCommits(w),
+      [MAIN_VIEW_COMMANDS.REQUEST_RECENT_COMMITS]: async (m, w) =>
+        this.diffManager.handleRequestRecentCommits(m, w),
       [MAIN_VIEW_COMMANDS.REFRESH_COMMITS]: async (_m, w) =>
         this.diffManager.handleRefreshCommits(w),
       [MAIN_VIEW_COMMANDS.LATEXDIFF]: async (m) =>
@@ -365,6 +366,17 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         command: MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
         options: modelOptions,
       });
+
+      const showReminders = getConfig<boolean>('ui.showApiKeyReminders', true);
+      if (showReminders) {
+        const hasAnyApiKey = await SecretManager.anyApiKeyExists();
+        if (!hasAnyApiKey) {
+          webviewView.webview.postMessage({
+            command: MAIN_VIEW_COMMANDS.SHOW_API_KEY_BANNER,
+          });
+        }
+      }
+
       const agentOptions = await computeAgentOptions(this.context);
       webviewView.webview.postMessage({
         command: MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
