@@ -13,7 +13,7 @@ All notable changes to this project will be documented in this file.
 - Cap `read_file` tool responses at the first 400 lines to keep large files from overwhelming tool-use transcripts.
 - Enable interleaved thinking by default for supported Claude tool-use agents so follow-up reasoning stays in sync with tool results.
 - Rebuild the agent selector footer with a compact session toggle and per-session dropdowns so the UI stays narrow and focused.
-- Add a `texra.toolUseAgents` setting that controls which tool-use agents appear in the dedicated dropdown.
+- Populate the tool-use dropdown from the dedicated `texra.toolUseAgents` list and automatic discovery so the old include toggle is no longer needed.
 
 ### Bug Fixes
 
@@ -162,7 +162,7 @@ All notable changes to this project will be documented in this file.
 - Allow disabling LaTeX formatting and silencing missing `latexindent` warnings
 - Added configurable `texra.maxImageDimension` setting to control the maximum image size threshold
 - Add "New" button in main view to reset all fields
-- Add `texra.includeToolUseAgents` setting to optionally show built-in tool-use agents in the agent dropdown
+- Add `texra.includeToolUseAgents` setting to optionally show built-in tool-use agents in the agent dropdown (deprecated in 0.33.8)
 - Prompt users to install LaTeX Workshop extension with "Never remind again" option for enhanced LaTeX features
 
 ### Bug Fixes
