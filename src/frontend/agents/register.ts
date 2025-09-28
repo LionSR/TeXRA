@@ -7,7 +7,11 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as logger from '@logger/logUtils';
 import { isValidAgentYaml } from '@agent/runtime/agentLoad';
-import type { AgentSetting } from '@agent/core/AgentDataclass';
+import {
+  AgentType,
+  type AgentSetting,
+  type AgentWorkflowSetting,
+} from '@agent/core/AgentDataclass';
 import { getConfig, updateConfig } from '@utils/config';
 
 const CHANNEL = 'AgentRegister';
@@ -27,6 +31,15 @@ export type AgentRegistrationSkipReason =
   | 'alreadyRegistered'
   | 'baseRegistered'
   | 'multipleRegistered';
+
+function asWorkflowSetting(
+  setting?: AgentSetting,
+): AgentWorkflowSetting | undefined {
+  if (!setting || setting.agentType === AgentType.ToolUse) {
+    return undefined;
+  }
+  return setting;
+}
 
 export function getAgentRegistrationSkipReason(
   agentName: string,
@@ -59,7 +72,11 @@ export async function promptToAddAgentToConfig(
 ): Promise<void> {
   const current = getConfig<string[]>('agents', []);
 
-  const skipReason = getAgentRegistrationSkipReason(agentName, current, variant);
+  const skipReason = getAgentRegistrationSkipReason(
+    agentName,
+    current,
+    variant,
+  );
   if (skipReason === 'alreadyRegistered') {
     logger.debug(CHANNEL, `Agent "${agentName}" already in configuration`);
     return;
@@ -139,15 +156,13 @@ export async function validateYamlAndPromptAdd(
 
   const configuredAgents = getConfig<string[]>('agents', []);
   if (!configuredAgents.includes(filenameBase)) {
-    const settings = validationResult.settings as AgentSetting | undefined;
-    const defaultOutputs: string[] = settings?.defaultOutputFiles ?? [];
+    const settings = validationResult.settings;
+    const workflowSettings = asWorkflowSetting(settings);
+    const defaultOutputs = settings.defaultOutputFiles ?? [];
     const hasMultipleDefaults = defaultOutputs.length > 1;
-    const declaredMultiple =
-      settings && 'isMultipleOutput' in settings
-        ? (settings as { isMultipleOutput?: boolean }).isMultipleOutput
-        : undefined;
     const isMultipleOutput = Boolean(
-      declaredMultiple ?? (hasMultipleDefaults ? true : false),
+      workflowSettings?.isMultipleOutput ??
+        (workflowSettings ? hasMultipleDefaults : false),
     );
     const metadata: AgentVariantMetadata = {
       isMultipleOutput,
