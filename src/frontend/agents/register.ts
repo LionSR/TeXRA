@@ -18,7 +18,7 @@ logger.initialize(CHANNEL);
  * `autoAdd` is true, the agent is added without prompting.
  */
 export interface AgentVariantMetadata {
-  isMultipleVariant?: boolean;
+  isMultipleOutput?: boolean;
   baseAgentName?: string;
   multipleAgentName?: string;
 }
@@ -31,7 +31,7 @@ export async function promptToAddAgentToConfig(
   const current = getConfig<string[]>('agents', []);
 
   const {
-    isMultipleVariant = false,
+    isMultipleOutput = false,
     baseAgentName,
     multipleAgentName,
   } = variant;
@@ -43,7 +43,7 @@ export async function promptToAddAgentToConfig(
   }
 
   // Check if the base/multiple counterpart already exists
-  if (isMultipleVariant) {
+  if (isMultipleOutput) {
     const baseName = baseAgentName;
     if (baseName && current.includes(baseName)) {
       logger.debug(
@@ -128,12 +128,12 @@ export async function validateYamlAndPromptAdd(
     const hasMultipleDefaults = defaultOutputs.length > 1;
     const useMultipleOutputs =
       settings?.useMultipleOutputs ?? hasMultipleDefaults;
-    const isMultipleVariant = Boolean(useMultipleOutputs);
+    const isMultipleOutput = Boolean(useMultipleOutputs);
     const metadata: AgentVariantMetadata = {
-      isMultipleVariant,
+      isMultipleOutput,
     };
 
-    if (isMultipleVariant) {
+    if (isMultipleOutput) {
       metadata.baseAgentName = internalName.includes('_multiple')
         ? internalName.replace(/_multiple$/, '')
         : undefined;
