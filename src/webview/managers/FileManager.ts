@@ -388,22 +388,10 @@ export class FileManager {
     options: FileUpdateOptions = {},
   ): Promise<void> {
     if (options.notifyWhenEmpty && files.length === 0) {
-      const defaultMessages: Record<string, string> = {
-        Input: 'No input files found. Select a LaTeX file to continue.',
-        Reference:
-          'No reference files detected. Add context files or use the Add button.',
-        Auxiliary:
-          'No auxiliary files found. Include .cls, .sty, or .bib files as needed.',
-        Media:
-          'No media assets detected. Add images or PDFs to refresh this list.',
-        Edited:
-          'No edited files were found. Select a base file or generate edits to continue.',
-        Base: 'No input files are available to serve as a base. Select an input file first.',
-      };
-      const message =
-        defaultMessages[fileType] ||
-        `No ${fileType.toLowerCase()} files were found during refresh.`;
-      logger.info(CHANNEL, message);
+      logger.debug(
+        CHANNEL,
+        `No ${fileType.toLowerCase()} files were found during refresh.`,
+      );
     }
 
     webviewView.webview.postMessage({
