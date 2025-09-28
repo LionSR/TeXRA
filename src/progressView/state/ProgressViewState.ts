@@ -4,6 +4,7 @@ import {
   TaskGroupManager,
   OutputFilesManager,
   UsageStatsManager,
+  WorkflowTaskStateManager,
   ToolUseTaskStateManager,
 } from '../managers';
 // Local imports
@@ -24,14 +25,14 @@ import {
   TaskState,
   isToolUseTaskState,
   isWorkflowTaskState,
-  type ToolUseTaskState,
-  type WorkflowTaskState,
 } from '@logger/TaskState';
 import {
   objectToTaskState,
   getConfig,
   agentConfigToTaskState,
 } from '@utils/config';
+// Local imports - agents
+import { cleanupInactiveAgents } from '@agent/toolUse/ToolUseAgentRegistry';
 
 /**
  * Core state management for the progress view.
@@ -46,7 +47,7 @@ export class ProgressViewState {
   private _activeStream: StreamTabId = '';
   private _streamSortOrder = 'time';
   private _agentTypeFilter: AgentFilter = 'all';
-  private _workflowTaskStates: Map<StreamTabId, WorkflowTaskState> = new Map();
+  private readonly workflowTaskStates: WorkflowTaskStateManager;
   private _executionIds: Map<StreamTabId, ExecutionId> = new Map();
   /**
    * Ephemeral session-kind hints keyed by stream ID.
@@ -64,6 +65,7 @@ export class ProgressViewState {
   constructor(persistence: StatePersistenceManager) {
     this.persistence = persistence;
     this.logger = new AgentLogger('ProgressViewState');
+    this.workflowTaskStates = new WorkflowTaskStateManager();
     this.toolUseTaskStates = new ToolUseTaskStateManager();
 
     // Initialize focused managers
@@ -149,11 +151,14 @@ export class ProgressViewState {
       metadata,
     );
 
-    if (isWorkflowTaskState(normalizedState) && 'activeFiles' in taskState) {
+    if (
+      isWorkflowTaskState(normalizedState) &&
+      isWorkflowTaskState(taskState)
+    ) {
       normalizedState.activeFiles = { ...taskState.activeFiles };
     } else if (
       isToolUseTaskState(normalizedState) &&
-      'toolSessionState' in taskState &&
+      isToolUseTaskState(taskState) &&
       taskState.toolSessionState
     ) {
       normalizedState.toolSessionState = { ...taskState.toolSessionState };
@@ -161,32 +166,33 @@ export class ProgressViewState {
 
     this.clearSessionKindHint(streamTabId);
     if (isWorkflowTaskState(normalizedState)) {
-      this._workflowTaskStates.set(streamTabId, normalizedState);
+      this.workflowTaskStates.set(streamTabId, normalizedState);
       this.toolUseTaskStates.delete(streamTabId);
     } else {
       this.toolUseTaskStates.set(streamTabId, normalizedState);
-      this._workflowTaskStates.delete(streamTabId);
+      this.workflowTaskStates.delete(streamTabId);
     }
     this.saveTaskStates();
   }
 
   getTaskState(streamTabId: StreamTabId): TaskState | undefined {
     return (
-      this._workflowTaskStates.get(streamTabId) ||
+      this.workflowTaskStates.get(streamTabId) ||
       this.toolUseTaskStates.get(streamTabId)
     );
   }
 
   clearTaskState(streamTabId: StreamTabId): void {
-    this._workflowTaskStates.delete(streamTabId);
+    this.workflowTaskStates.delete(streamTabId);
     this.toolUseTaskStates.delete(streamTabId);
     this.clearSessionKindHint(streamTabId);
     this.saveTaskStates();
+    this.cleanupToolUseAgentRegistry();
   }
 
   getAllTaskStates(): Map<StreamTabId, TaskState> {
     const combined = new Map<StreamTabId, TaskState>();
-    for (const [stream, state] of this._workflowTaskStates.entries()) {
+    for (const [stream, state] of this.workflowTaskStates.entries()) {
       combined.set(stream, state);
     }
     for (const [stream, state] of this.toolUseTaskStates.entries()) {
@@ -216,10 +222,11 @@ export class ProgressViewState {
     this._taskGroups.deleteStream(stream);
     this._outputFiles.deleteStream(stream);
     this._usageStats.deleteStream(stream);
-    this._workflowTaskStates.delete(stream);
+    this.workflowTaskStates.delete(stream);
     this.toolUseTaskStates.delete(stream);
     this._executionIds.delete(stream);
     this.clearSessionKindHint(stream);
+    this.cleanupToolUseAgentRegistry();
 
     // Update active stream if necessary
     if (this._activeStream === stream) {
@@ -252,7 +259,7 @@ export class ProgressViewState {
     this._taskGroups.clear();
     this._outputFiles.clear();
     this._usageStats.clear();
-    this._workflowTaskStates.clear();
+    this.workflowTaskStates.clear();
     this.toolUseTaskStates.clear();
     this._executionIds.clear();
     this._sessionKindHints.clear();
@@ -260,6 +267,7 @@ export class ProgressViewState {
     this.saveActiveStream();
     this.saveTaskStates();
     this.saveExecutionIds();
+    this.cleanupToolUseAgentRegistry();
   }
 
   /**
@@ -313,7 +321,7 @@ export class ProgressViewState {
       | [string, Record<string, any>][]
     >(WorkspaceStateKey.TASK_STATES, {});
 
-    this._workflowTaskStates.clear();
+    this.workflowTaskStates.clear();
     this.toolUseTaskStates.clear();
 
     const processState = (
@@ -322,9 +330,9 @@ export class ProgressViewState {
     ): void => {
       const taskState = objectToTaskState(rawState);
       if (isWorkflowTaskState(taskState)) {
-        this._workflowTaskStates.set(stream, taskState);
+        this.workflowTaskStates.set(stream as StreamTabId, taskState);
       } else if (isToolUseTaskState(taskState)) {
-        this.toolUseTaskStates.set(stream, taskState);
+        this.toolUseTaskStates.set(stream as StreamTabId, taskState);
       }
     };
 
@@ -354,10 +362,12 @@ export class ProgressViewState {
     }
 
     const totalStates =
-      this._workflowTaskStates.size + this.toolUseTaskStates.size();
+      this.workflowTaskStates.size() + this.toolUseTaskStates.size();
     if (totalStates > 0) {
       this.logger.debug(`Loaded task states for ${totalStates} streams`);
     }
+
+    this.cleanupToolUseAgentRegistry();
   }
 
   /**
@@ -392,14 +402,20 @@ export class ProgressViewState {
    * Save task states to persistence
    */
   private saveTaskStates(): void {
-    const workflowStates = Object.fromEntries(
-      this._workflowTaskStates.entries(),
-    );
+    const workflowStates = this.workflowTaskStates.toObject();
     const toolUseStates = this.toolUseTaskStates.toObject();
     this.persistence.save(WorkspaceStateKey.TASK_STATES, {
       workflow: workflowStates,
       toolUse: toolUseStates,
     });
+  }
+
+  private cleanupToolUseAgentRegistry(): void {
+    const activeStreams = new Set<StreamTabId>();
+    for (const stream of this.toolUseTaskStates.keys()) {
+      activeStreams.add(stream);
+    }
+    cleanupInactiveAgents(activeStreams);
   }
 
   /**
