@@ -8,6 +8,7 @@ export * from './fileOp';
 export * from './ReadTool';
 export * from './WriteTool';
 export * from './EditTool';
+export * from './applyPath';
 export * from './ls';
 export * from './core/base';
 export * from './core/define';
