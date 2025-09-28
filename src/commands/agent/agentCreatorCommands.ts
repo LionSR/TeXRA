@@ -237,9 +237,6 @@ async function handleCreateAgentWithAI(context: vscode.ExtensionContext) {
     }
 
     const targetDir = await agentDirectories.ensureCustom();
-    if (!targetDir) {
-      return;
-    }
 
     const filePath = vscode.Uri.file(`${targetDir}/${agentName}.yaml`);
 
