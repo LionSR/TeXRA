@@ -6,6 +6,7 @@ import * as path from 'path';
 import { Minimatch } from 'minimatch';
 
 // Local imports - utils
+import { toPosixPath } from '@tools/pathUtils';
 import { AbsoluteFS, WorkspaceFS } from '@utils/files';
 
 type GitignoreRule = {
@@ -40,13 +41,6 @@ function createGlobMatcher(pattern: string): (value: string) => boolean {
   });
 
   return (value: string) => matcher.match(value.replace(/\\/g, '/'));
-}
-
-function toPosixPath(relativePath: string): string {
-  if (!relativePath || relativePath === '.') {
-    return '.';
-  }
-  return relativePath.split(/[\\/]/).join('/');
 }
 
 function expandGitignorePattern(
