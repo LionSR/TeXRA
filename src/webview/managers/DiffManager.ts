@@ -86,10 +86,13 @@ export class DiffManager {
       return;
     }
 
-    const infoMessage = result.isGitRepo
-      ? 'No recent commits found for this repository.'
-      : 'This workspace is not a Git repository.';
+    if (result.commits.length === 0 || !result.isGitRepo) {
+      const infoMessage = result.isGitRepo
+        ? 'No recent commits found for this repository.'
+        : 'This workspace is not a Git repository.';
 
-    logger.info(CHANNEL, infoMessage);
+      logger.info(CHANNEL, infoMessage);
+      vscode.window.showInformationMessage(infoMessage);
+    }
   }
 }
