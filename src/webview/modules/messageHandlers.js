@@ -191,25 +191,12 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
   }
 
   _decorateAgentOption(opt) {
-    let baseLabel = opt.dataset.label;
-    if (!baseLabel) {
-      const textLabel = opt.textContent?.trim();
-      if (textLabel) {
-        baseLabel = textLabel;
-        opt.dataset.label = baseLabel;
-      } else {
-        const valueAttr = opt.getAttribute('value');
-        baseLabel = valueAttr ?? '';
-        if (baseLabel) {
-          opt.dataset.label = baseLabel;
-        }
-      }
-    }
+    const { label, isMultiple, isToolUse } = this._readAgentOptionMetadata(opt);
 
     const hints = [];
-    let displayLabel = baseLabel;
+    let displayLabel = label;
 
-    if (opt.dataset.multiple === 'true') {
+    if (isMultiple) {
       displayLabel += ' ∶∶';
       hints.push('Supports multi-file inputs.');
       opt.style.opacity = '0.9';
@@ -217,8 +204,7 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       opt.style.opacity = '';
     }
 
-    if (opt.dataset.toolUse === 'true') {
-      displayLabel += 'ᵗ';
+    if (isToolUse) {
       hints.push('Uses tools for actions.');
     }
 
@@ -226,11 +212,35 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
 
     if (hints.length > 0) {
       opt.title = hints.join('\n');
-      opt.setAttribute('aria-label', `${baseLabel} (${hints.join(', ')})`);
+      opt.setAttribute('aria-label', `${label} (${hints.join(', ')})`);
+      opt.setAttribute('aria-description', hints.join(' '));
     } else {
       opt.removeAttribute('title');
-      opt.setAttribute('aria-label', baseLabel);
+      opt.setAttribute('aria-label', label);
+      opt.removeAttribute('aria-description');
     }
+  }
+
+  _readAgentOptionMetadata(opt) {
+    let label = opt.dataset.label ?? '';
+    if (!label) {
+      const textLabel = opt.textContent?.trim();
+      if (textLabel) {
+        label = textLabel;
+      } else {
+        const valueAttr = opt.getAttribute('value');
+        label = valueAttr ?? '';
+      }
+      if (label) {
+        opt.dataset.label = label;
+      }
+    }
+
+    return {
+      label,
+      isMultiple: opt.dataset.multiple === 'true',
+      isToolUse: opt.dataset.toolUse === 'true',
+    };
   }
 
   _getSessionTypeValue() {
