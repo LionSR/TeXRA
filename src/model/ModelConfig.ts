@@ -27,6 +27,7 @@ export const DEFAULT_MODEL_CAPABILITIES: ModelCapabilities = {
   supportsAutoPromptCaching: false,
   cacheDiscountFactor: 1.0,
   supportsReasoning: false,
+  supportsInterleavedThinking: false,
   reasoningEffort: ReasoningEffort.NONE,
   supportsVision: true,
   supportsNativePdf: false,
@@ -62,6 +63,7 @@ export interface ModelCapabilities {
   supportsAutoPromptCaching: boolean;
   cacheDiscountFactor: number;
   supportsReasoning: boolean;
+  supportsInterleavedThinking: boolean;
   reasoningEffort: ReasoningEffort;
   supportsVision: boolean;
   supportsNativePdf: boolean;
