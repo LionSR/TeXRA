@@ -147,7 +147,7 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         this.settingsManager.openSettings(SETTINGS_QUERY.MODELS),
       [MAIN_VIEW_COMMANDS.OPEN_AGENT_DIRECTORY]: async (m) => {
         if (m?.customDirSet) {
-          const dir = await agentDirectories.custom();
+          const dir = await agentDirectories.custom(this.context);
           if (dir) {
             await vscode.commands.executeCommand(
               'revealFileInOS',
