@@ -104,13 +104,7 @@ export class GrepTool extends defineTool({
     const { resolved: searchPath, display } = resolveAndFormat(input.path);
     const gitignore = await getGitignoreMatcher();
     const args = buildArguments(input, outputMode);
-    const ignoreFilesCandidate = (
-      gitignore as { ignoreFiles?: unknown }
-    ).ignoreFiles;
-    const ignoreFiles = Array.isArray(ignoreFilesCandidate)
-      ? (ignoreFilesCandidate as string[])
-      : [];
-    const ignoreArgs = ignoreFiles.flatMap((ignoreFile) => [
+    const ignoreArgs = gitignore.ignoreFiles.flatMap((ignoreFile) => [
       '--ignore-file',
       ignoreFile,
     ]);
