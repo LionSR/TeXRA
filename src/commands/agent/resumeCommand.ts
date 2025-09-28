@@ -167,6 +167,9 @@ export function registerResumeAgentCommand(
           snapshot.streamId as StreamTabId,
         );
       } catch (error) {
+        ToolUseSessionManager.clearResumingSession(
+          snapshot.streamId as StreamTabId,
+        );
         provider.eventHandler.setStreamStatus(
           snapshot.streamId,
           STATUS.WAITING,
