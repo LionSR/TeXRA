@@ -2,7 +2,12 @@
 
 // Local imports - agent components
 import type { AgentConfig } from '../core/AgentConfig';
-import { AgentPrompt, AgentSetting } from '../core/AgentDataclass';
+import {
+  AgentPrompt,
+  AgentSetting,
+  AgentSessionMetadata,
+  resolveAgentSessionMetadata,
+} from '../core/AgentDataclass';
 import { AgentStateGlobal } from '../core/AgentState';
 import { IAgent } from '../core/IAgent';
 import type { IModelHandler } from '../modelHandlers';
@@ -40,6 +45,10 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
 
   public get config(): AgentConfig {
     return this.agentConfig;
+  }
+
+  public getSessionMetadata(): AgentSessionMetadata {
+    return resolveAgentSessionMetadata(this.agentSetting.agentType);
   }
 
   constructor(
@@ -132,7 +141,7 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
       );
 
       this.userVars = await this.getUserVars();
-      BaseAgent.runningAgents.set(this.getStreamTabId(), this);
+      this.registerRunningAgent(this.getStreamTabId());
 
       if (createGroup && initGroupId) {
         this.logger.endGroup(initGroupId, 'stopped');
@@ -239,6 +248,14 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
 
   protected cleanup(): void {
     const streamTabId = this.getStreamTabId();
+    this.unregisterRunningAgent(streamTabId);
+  }
+
+  protected registerRunningAgent(streamTabId: StreamTabId): void {
+    BaseAgent.runningAgents.set(streamTabId, this);
+  }
+
+  protected unregisterRunningAgent(streamTabId: StreamTabId): void {
     BaseAgent.runningAgents.delete(streamTabId);
   }
 

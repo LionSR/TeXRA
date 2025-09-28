@@ -85,7 +85,7 @@ export class FolderExplorer implements vscode.TreeDataProvider<FileItem> {
         ),
       );
 
-      const customPath = await agentDirectories.custom();
+      const customPath = await agentDirectories.custom(this.context);
       if (customPath) {
         items.push(
           new FileItem(
