@@ -23,6 +23,35 @@ export interface AgentVariantMetadata {
   multipleAgentName?: string;
 }
 
+export type AgentRegistrationSkipReason =
+  | 'alreadyRegistered'
+  | 'baseRegistered'
+  | 'multipleRegistered';
+
+export function getAgentRegistrationSkipReason(
+  agentName: string,
+  configuredAgents: string[],
+  variant: AgentVariantMetadata = {},
+): AgentRegistrationSkipReason | undefined {
+  if (configuredAgents.includes(agentName)) {
+    return 'alreadyRegistered';
+  }
+
+  if (variant.isMultipleOutput) {
+    const baseName = variant.baseAgentName;
+    if (baseName && configuredAgents.includes(baseName)) {
+      return 'baseRegistered';
+    }
+  } else {
+    const siblingMultiple = variant.multipleAgentName;
+    if (siblingMultiple && configuredAgents.includes(siblingMultiple)) {
+      return 'multipleRegistered';
+    }
+  }
+
+  return undefined;
+}
+
 export async function promptToAddAgentToConfig(
   agentName: string,
   autoAdd = false,
@@ -30,37 +59,24 @@ export async function promptToAddAgentToConfig(
 ): Promise<void> {
   const current = getConfig<string[]>('agents', []);
 
-  const {
-    isMultipleOutput = false,
-    baseAgentName,
-    multipleAgentName,
-  } = variant;
-
-  // Check if agent already exists (exact match)
-  if (current.includes(agentName)) {
+  const skipReason = getAgentRegistrationSkipReason(agentName, current, variant);
+  if (skipReason === 'alreadyRegistered') {
     logger.debug(CHANNEL, `Agent "${agentName}" already in configuration`);
     return;
   }
-
-  // Check if the base/multiple counterpart already exists
-  if (isMultipleOutput) {
-    const baseName = baseAgentName;
-    if (baseName && current.includes(baseName)) {
-      logger.debug(
-        CHANNEL,
-        `Base agent "${baseName}" already in configuration, skipping "${agentName}"`,
-      );
-      return;
-    }
-  } else {
-    const siblingMultiple = multipleAgentName;
-    if (siblingMultiple && current.includes(siblingMultiple)) {
-      logger.debug(
-        CHANNEL,
-        `Multiple variant "${siblingMultiple}" already in configuration, skipping "${agentName}"`,
-      );
-      return;
-    }
+  if (skipReason === 'baseRegistered' && variant.baseAgentName) {
+    logger.debug(
+      CHANNEL,
+      `Base agent "${variant.baseAgentName}" already in configuration, skipping "${agentName}"`,
+    );
+    return;
+  }
+  if (skipReason === 'multipleRegistered' && variant.multipleAgentName) {
+    logger.debug(
+      CHANNEL,
+      `Multiple variant "${variant.multipleAgentName}" already in configuration, skipping "${agentName}"`,
+    );
+    return;
   }
 
   if (autoAdd) {
@@ -126,9 +142,13 @@ export async function validateYamlAndPromptAdd(
     const settings = validationResult.settings as AgentSetting | undefined;
     const defaultOutputs: string[] = settings?.defaultOutputFiles ?? [];
     const hasMultipleDefaults = defaultOutputs.length > 1;
-    const useMultipleOutputs =
-      settings?.useMultipleOutputs ?? hasMultipleDefaults;
-    const isMultipleOutput = Boolean(useMultipleOutputs);
+    const declaredMultiple = settings?.isMultipleOutput;
+    const legacyMultiple = settings?.useMultipleOutputs;
+    const fallbackMultiple =
+      legacyMultiple ?? (hasMultipleDefaults ? true : undefined);
+    const isMultipleOutput = Boolean(
+      (declaredMultiple ?? fallbackMultiple) ?? false,
+    );
     const metadata: AgentVariantMetadata = {
       isMultipleOutput,
     };
