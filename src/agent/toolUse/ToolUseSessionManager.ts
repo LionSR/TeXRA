@@ -145,8 +145,7 @@ export class ToolUseSessionManager {
         lastUpdated: Date.now(),
       };
 
-      const json = JSON.stringify(snapshot, null, 2);
-      await StorageFS.write(getSnapshotPath(payload.executionId), json);
+      await StorageFS.writeJson(getSnapshotPath(payload.executionId), snapshot);
     } catch (error) {
       logger.warn(
         `Failed to save tool-use session snapshot: ${error instanceof Error ? error.message : String(error)}`,
@@ -166,20 +165,51 @@ export class ToolUseSessionManager {
       return null;
     }
 
+    const snapshotPath = getSnapshotPath(executionId);
+
     try {
-      const raw = await StorageFS.read(getSnapshotPath(executionId));
-      const parsed = JSON.parse(raw);
-      return ToolUseSessionSnapshotSchema.parse(parsed);
+      const stored = await StorageFS.readJson<ToolUseSessionSnapshot | string>(
+        snapshotPath,
+      );
+      const normalized =
+        typeof stored === 'string' ? JSON.parse(stored) : stored;
+      return ToolUseSessionSnapshotSchema.parse(normalized);
     } catch (error) {
-      if (error instanceof vscode.FileSystemError) {
-        if (error.code === 'FileNotFound') {
+      if (
+        error instanceof vscode.FileSystemError &&
+        error.code === 'FileNotFound'
+      ) {
+        return null;
+      }
+
+      try {
+        const raw = await StorageFS.read(snapshotPath);
+        const fallbackParsed = JSON.parse(raw);
+        const normalized =
+          typeof fallbackParsed === 'string'
+            ? JSON.parse(fallbackParsed)
+            : fallbackParsed;
+        return ToolUseSessionSnapshotSchema.parse(normalized);
+      } catch (fallbackError) {
+        if (
+          fallbackError instanceof vscode.FileSystemError &&
+          fallbackError.code === 'FileNotFound'
+        ) {
           return null;
         }
+
+        const originalMessage =
+          error instanceof Error ? error.message : String(error);
+        const fallbackMessage =
+          fallbackError instanceof Error
+            ? fallbackError.message
+            : String(fallbackError);
+
+        logger.warn(
+          `Failed to load tool-use session snapshot: original=${originalMessage}; fallback=${fallbackMessage}`,
+        );
+        return null;
       }
-      logger.warn(
-        `Failed to load tool-use session snapshot: ${error instanceof Error ? error.message : String(error)}`,
-      );
-      return null;
     }
   }
 
