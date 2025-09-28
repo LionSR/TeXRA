@@ -65,7 +65,7 @@ async function restoreState(config: any) {
         await vscode.commands.executeCommand(
           'setContext',
           'texra.stateToRestore',
-          JSON.stringify(stateToRestore),
+          stateToRestore,
         );
 
         // Try to focus the main view to trigger its activation
@@ -88,7 +88,7 @@ async function restoreState(config: any) {
       await vscode.commands.executeCommand(
         'setContext',
         'texra.stateToRestore',
-        JSON.stringify(stateToRestore),
+        stateToRestore,
       );
 
       // Try to focus the main view to trigger its activation
