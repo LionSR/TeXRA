@@ -398,6 +398,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
           userRequest,
           this.agentConfig.inputFile,
           this.agentConfig.agent,
+          this.executionId,
         );
       }
 
