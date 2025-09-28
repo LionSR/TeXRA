@@ -14,8 +14,11 @@ import { showLoggedMessageWithDocs } from '@common/errors/errorHandlingUtils';
 
 const CHANNEL = 'AgentLoad';
 logger.initialize(CHANNEL);
+const DEFAULT_CUSTOM_AGENTS_DIR_NAME = 'custom_agents';
 
 export class AgentDirectoryManager {
+  private context: vscode.ExtensionContext | undefined;
+
   /**
    * Ensure a built-in agents directory exists and return its path.
    */
@@ -37,6 +40,21 @@ export class AgentDirectoryManager {
     return basePath;
   }
 
+  initialize(context: vscode.ExtensionContext): void {
+    this.context = context;
+    StorageFS.initialize(context);
+  }
+
+  private ensureInitialized(): void {
+    if (!this.context) {
+      throw new Error(
+        'Agent directories not initialized. Call agentDirectories.initialize(context) first.',
+      );
+    }
+
+    StorageFS.initialize(this.context);
+  }
+
   async builtIn(context: vscode.ExtensionContext): Promise<string> {
     return this.ensureBuiltInDir(context, 'agents');
   }
@@ -45,27 +63,91 @@ export class AgentDirectoryManager {
     return this.ensureBuiltInDir(context, 'tool_use_agents');
   }
 
-  async custom(): Promise<string> {
-    const customPath = getConfig<string>('explorer.agentsDirectory', '');
+  private async ensureDefaultCustomDir(): Promise<string> {
+    this.ensureInitialized();
 
-    if (!customPath) {
-      return '';
-    }
-
-    if (!path.isAbsolute(customPath)) {
+    try {
+      await GlobalStorageFS.ensureDir(DEFAULT_CUSTOM_AGENTS_DIR_NAME);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
       logger.error(
         CHANNEL,
-        `Custom agents directory must be an absolute path: ${customPath}`,
+        `Failed to create default custom agents directory: ${message}`,
+      );
+      throw new Error(
+        'Unable to create custom agents directory. Please check permissions.',
+      );
+    }
+
+    const defaultPath = GlobalStorageFS.fullPath(
+      DEFAULT_CUSTOM_AGENTS_DIR_NAME,
+    );
+    logger.debug(
+      CHANNEL,
+      `Using default custom agents directory: ${defaultPath}`,
+    );
+    return defaultPath;
+  }
+
+  private async resolveConfiguredCustomDir(
+    configuredPath: string,
+  ): Promise<string | undefined> {
+    if (!configuredPath) {
+      return undefined;
+    }
+
+    if (!path.isAbsolute(configuredPath)) {
+      logger.error(
+        CHANNEL,
+        `Custom agents directory must be an absolute path: ${configuredPath}`,
       );
       await showLoggedMessageWithDocs(
         CHANNEL,
         'Custom agents directory must be an absolute path',
         'custom-agents',
       );
-      return '';
+      return undefined;
     }
 
-    return customPath;
+    const parentDir = path.dirname(configuredPath);
+    const parentExists = await AbsoluteFS.exists(parentDir);
+    if (!parentExists) {
+      logger.error(
+        CHANNEL,
+        `Parent directory does not exist for custom agents directory: ${parentDir}`,
+      );
+      await showLoggedMessageWithDocs(
+        CHANNEL,
+        'Parent directory for custom agents directory does not exist',
+        'custom-agents',
+      );
+      return undefined;
+    }
+
+    await AbsoluteFS.ensureDir(configuredPath);
+    logger.debug(
+      CHANNEL,
+      `Using custom agents directory from setting: ${configuredPath}`,
+    );
+    return configuredPath;
+  }
+
+  async custom(context?: vscode.ExtensionContext): Promise<string> {
+    if (context) {
+      this.context = context;
+    }
+
+    const configuredPath = getConfig<string>(
+      'explorer.agentsDirectory',
+      '',
+    ).trim();
+
+    const resolvedPath = await this.resolveConfiguredCustomDir(configuredPath);
+    if (resolvedPath) {
+      return resolvedPath;
+    }
+
+    return this.ensureDefaultCustomDir();
   }
 
   async promptCustom(): Promise<string | undefined> {
@@ -86,14 +168,6 @@ export class AgentDirectoryManager {
     await updateConfig('explorer.agentsDirectory', selectedPath);
 
     return selectedPath;
-  }
-
-  async ensureCustom(): Promise<string | undefined> {
-    const current = await this.custom();
-    if (current) {
-      return current;
-    }
-    return this.promptCustom();
   }
 }
 
