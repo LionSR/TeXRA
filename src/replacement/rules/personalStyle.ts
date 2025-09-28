@@ -46,8 +46,6 @@ export const PERSONAL_STYLE_REPLACEMENTS: ReplacementCategory = {
 
     // ===== Math operator standardization =====
     // Preferred operator command forms
-    '\\mathrm{tr}': '\\tr',
-    '\\mathrm{Tr}': '\\Tr',
     '\\mathrm{KL}': '\\KL',
 
     // ===== Reference formatting =====

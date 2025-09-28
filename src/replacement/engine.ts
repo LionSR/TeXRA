@@ -41,6 +41,7 @@ import {
   LATEXDIFF_MARKUP_REPLACEMENTS,
   INLINE_MATH_REPLACEMENTS,
   EQUATION_STYLE_REPLACEMENTS,
+  PERSONAL_STYLE_CONTEXTUAL_REPLACEMENTS,
 } from './rulesRegex';
 
 export interface ReplacementEngine {
@@ -119,6 +120,7 @@ const REGEX_CATEGORIES: ReplacementCategory[] = [
   PARENTHESES_REPLACEMENTS,
   LATEXDIFF_MARKUP_REPLACEMENTS,
   EQUATION_STYLE_REPLACEMENTS,
+  PERSONAL_STYLE_CONTEXTUAL_REPLACEMENTS,
   MAX_REGEX_REPLACEMENTS,
 ];
 
@@ -176,6 +178,7 @@ export function getAllReplacementsRegex(): ReplacementCategory[] {
     'parentheses',
     'latexdiff_markup',
     'equation_style',
+    'personal_style_contextual',
   ]);
   const customReplacements = getConfig('latex.customReplacementsRegex', {});
 
