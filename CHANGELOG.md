@@ -14,6 +14,8 @@ All notable changes to this project will be documented in this file.
 - Enable interleaved thinking by default for supported Claude tool-use agents so follow-up reasoning stays in sync with tool results.
 - Rebuild the agent selector footer with a compact session toggle and per-session dropdowns so the UI stays narrow and focused.
 - Populate the tool-use dropdown from the dedicated `texra.toolUseAgents` list and automatic discovery so the old include toggle is no longer needed.
+- Trim the default tool-use agent list to the conversational presets so specialized utilities stay opt-in per workspace.
+- Narrow the model selector width and streamline tool-use labelling so dropdowns stay tidy without superscript markers.
 
 ### Bug Fixes
 

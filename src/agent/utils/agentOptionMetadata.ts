@@ -126,9 +126,6 @@ function decorateLabel(
   if (metadata.hasMultipleSibling || metadata.isMultipleOutput) {
     label += ' ∶∶';
   }
-  if (metadata.isToolUse) {
-    label += 'ᵗ';
-  }
   return label;
 }
 
