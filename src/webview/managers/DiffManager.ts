@@ -1,13 +1,10 @@
 // Third-party imports
-// Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - webview
-
-// Local imports - commands
+// Local imports - webview commands
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
 
-// Local imports - log
+// Local imports - logging
 import * as logger from '@logger/logUtils';
 
 const CHANNEL = 'DiffManager';
