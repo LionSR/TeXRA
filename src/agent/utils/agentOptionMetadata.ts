@@ -158,9 +158,11 @@ export function createAgentOptionTag(
 export function buildAgentOptionsPayload(
   agentNames: Iterable<string>,
   directories: AgentDirectoryMap,
+  configuredToolUseAgents: Iterable<string> = [],
 ): AgentOptionsPayload {
   const workflowOptions: string[] = [];
   const toolUseOptions: string[] = [];
+  const configuredToolUseSet = new Set(configuredToolUseAgents);
 
   const seen = new Set<string>();
   for (const agentName of agentNames) {
@@ -169,8 +171,11 @@ export function buildAgentOptionsPayload(
     }
     seen.add(agentName);
     const metadata = getAgentOptionMetadata(agentName, directories);
-    const optionTag = createAgentOptionTag(agentName, metadata);
-    if (metadata.isToolUse) {
+    const metadataWithConfig = configuredToolUseSet.has(agentName)
+      ? { ...metadata, isToolUse: true }
+      : metadata;
+    const optionTag = createAgentOptionTag(agentName, metadataWithConfig);
+    if (metadataWithConfig.isToolUse) {
       toolUseOptions.push(optionTag);
     } else {
       workflowOptions.push(optionTag);
