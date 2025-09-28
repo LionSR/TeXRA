@@ -6,7 +6,7 @@ import * as yaml from 'yaml';
 // Local imports - agent core
 import {
   AgentType,
-  safeParseAgentSetting,
+  parseAgentSetting,
   type AgentSetting,
 } from '@agent/core/AgentDataclass';
 
@@ -81,7 +81,7 @@ function readAgentDefinition(yamlPath?: string): AgentSetting | undefined {
   try {
     const fileContent = AbsoluteFS.readSync(yamlPath);
     const parsed = yaml.parse(fileContent) as { settings?: unknown };
-    return safeParseAgentSetting(parsed?.settings);
+    return parseAgentSetting(parsed?.settings ?? {});
   } catch {
     return undefined;
   }
@@ -94,10 +94,15 @@ export function getAgentOptionMetadata(
   const definitionPath = findAgentYaml(agentName, directories);
   const multiplePath = findAgentYaml(agentName, directories, MULTIPLE_SUFFIX);
   const definition = readAgentDefinition(definitionPath);
+  const isMultipleOutput = Boolean(
+    definition && 'isMultipleOutput' in definition
+      ? (definition as { isMultipleOutput?: boolean }).isMultipleOutput
+      : false,
+  );
   return {
     hasDefinition: Boolean(definitionPath),
     hasMultipleSibling: Boolean(multiplePath),
-    isMultipleOutput: Boolean(definition?.isMultipleOutput),
+    isMultipleOutput,
     isToolUse: definition?.agentType === TOOL_USE_AGENT_TYPE,
   };
 }
