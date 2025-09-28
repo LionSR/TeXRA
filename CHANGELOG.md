@@ -4,10 +4,16 @@ All notable changes to this project will be documented in this file.
 
 ## [0.33.8] [Unreleased]
 
-### Improvements
+### Features
 
+- Split the agent picker into workflow and tool-use sessions with a toggle so users can quickly see the agents that apply to their workflow. 
 - Update Gemini 2.5 Flash preview entries to the September 2025 release.
 - Refresh Qwen-Max and Qwen Plus integrations with updated pricing, naming, and thinking support in the DashScope handler.
+
+### Bug Fixes
+
+- Improve scratchpad markdown fallbacks by converting HTML with Turndown when Pandoc is unavailable, keeping formatting stable across environments.
+- Ensure prompt XML exports always resolve to absolute paths for both workspace files and execution-scoped runs to avoid downstream lookups failing.
 - Harden progress view state handling with validation on task groups, toggles, and stream statuses to prevent invalid data from corrupting summaries.
 - Restore main view configurations using the shared task-state helper so history entries hydrate without manual JSON juggling.
 - Cap `read_file` tool responses at the first 400 lines to keep large files from overwhelming tool-use transcripts.
