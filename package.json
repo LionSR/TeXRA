@@ -49,6 +49,21 @@
             "description": "List of available agents",
             "scope": "resource"
           },
+          "texra.toolUseAgents": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": [
+              "ask",
+              "chat",
+              "file_edit",
+              "tex_linter_fix",
+              "xml_validator"
+            ],
+            "description": "List of tool-use agents shown in the dedicated dropdown",
+            "scope": "resource"
+          },
           "texra.includeToolUseAgents": {
             "type": "boolean",
             "default": false,
