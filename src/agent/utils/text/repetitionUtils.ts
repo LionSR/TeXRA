@@ -1,14 +1,11 @@
-// Standard library imports
-// (none needed)
-
 // Third-party imports
 import { diff_match_patch } from 'diff-match-patch';
 import * as difflib from 'difflib';
 
-// Local imports - agent
-
-// Local imports - log
+// Local imports - logging
 import * as logger from '@logger/logUtils';
+
+// Local imports - configuration
 import {
   REPETITION_DETECTION_THRESHOLD,
   REPETITION_PREVIEW_LENGTH,
