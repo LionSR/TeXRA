@@ -6,6 +6,7 @@ import { Minimatch } from 'minimatch';
 
 // Local imports - tools
 import { ToolError } from '@tools/result';
+import { toPosixPath } from '@tools/pathUtils';
 
 // Local imports - utils
 import { WorkspaceFS } from '@utils/files';
@@ -99,7 +100,7 @@ export function createGlobMatcher(pattern: string): (value: string) => boolean {
   return (value: string) => matcher.match(value.replace(/\\/g, '/'));
 }
 
-export { toPosixPath } from './pathUtils';
+export { toPosixPath } from '@tools/pathUtils';
 
 // Re-export gitignore utilities from standalone module
 export { getGitignoreMatcher, clearGitignoreCache } from './gitignore';
