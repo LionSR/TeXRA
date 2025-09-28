@@ -4,17 +4,14 @@ import * as vscode from 'vscode';
 
 // Local imports - agent utilities
 import {
-  createAgentOptionTag,
-  getAgentOptionMetadata,
+  buildAgentOptionsPayload,
   type AgentDirectoryMap,
+  type AgentOptionsPayload,
 } from '@agent/utils/agentOptionMetadata';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { getConfig } from '@utils/config';
 
-export interface AgentOptionsPayload {
-  workflow: string;
-  toolUse: string;
-}
+export type { AgentOptionsPayload };
 
 /**
  * Get all available agents including tool-use agents if enabled.
@@ -22,14 +19,14 @@ export interface AgentOptionsPayload {
 export async function getAllAgents(
   context: vscode.ExtensionContext,
 ): Promise<string[]> {
-  const agents = getConfig<string[]>('agents', []);
+  const workflowAgents = getConfig<string[]>('agents', []);
+  const configuredToolUseAgents = getConfig<string[]>('toolUseAgents', []);
   const includeToolUse = getConfig<boolean>('includeToolUseAgents', false);
 
   if (!includeToolUse) {
-    return agents;
+    return Array.from(new Set([...workflowAgents, ...configuredToolUseAgents]));
   }
 
-  // Get tool-use agents
   const toolUseDir = await agentDirectories.builtInToolUse(context);
   try {
     const toolUseFiles = await glob('**/*.yaml', {
@@ -38,13 +35,18 @@ export async function getAllAgents(
       nodir: true,
       absolute: false,
     });
-    const toolUseAgents = toolUseFiles.map((f) =>
+    const discoveredToolUseAgents = toolUseFiles.map((f) =>
       f.replace(/\.yaml$/, '').replace(/.*\//, ''),
     );
-    return Array.from(new Set([...agents, ...toolUseAgents]));
+    return Array.from(
+      new Set([
+        ...workflowAgents,
+        ...configuredToolUseAgents,
+        ...discoveredToolUseAgents,
+      ]),
+    );
   } catch {
-    // If tool-use directory doesn't exist or can't be read, just use base agents
-    return agents;
+    return Array.from(new Set([...workflowAgents, ...configuredToolUseAgents]));
   }
 }
 
@@ -73,22 +75,5 @@ export async function computeAgentOptions(
   const allAgents = await getAllAgents(context);
   const dirs = await getAgentDirectories(context);
 
-  const optionBuckets: AgentOptionsPayload = { workflow: '', toolUse: '' };
-  const workflowOptions: string[] = [];
-  const toolUseOptions: string[] = [];
-
-  allAgents.forEach((agent) => {
-    const metadata = getAgentOptionMetadata(agent, dirs);
-    const optionTag = createAgentOptionTag(agent, metadata);
-    if (metadata.isToolUse) {
-      toolUseOptions.push(optionTag);
-    } else {
-      workflowOptions.push(optionTag);
-    }
-  });
-
-  optionBuckets.workflow = workflowOptions.join('\n');
-  optionBuckets.toolUse = toolUseOptions.join('\n');
-
-  return optionBuckets;
+  return buildAgentOptionsPayload(allAgents, dirs);
 }

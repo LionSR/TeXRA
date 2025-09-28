@@ -12,11 +12,14 @@ All notable changes to this project will be documented in this file.
 - Restore main view configurations using the shared task-state helper so history entries hydrate without manual JSON juggling.
 - Cap `read_file` tool responses at the first 400 lines to keep large files from overwhelming tool-use transcripts.
 - Enable interleaved thinking by default for supported Claude tool-use agents so follow-up reasoning stays in sync with tool results.
+- Rebuild the agent selector footer with a compact session toggle and per-session dropdowns so the UI stays narrow and focused.
+- Add a `texra.toolUseAgents` setting that controls which tool-use agents appear in the dedicated dropdown.
 
 ### Bug Fixes
 
 - Migrate history view toggle state persistence from JSON strings to structured arrays so expansion settings reliably load across versions.
 - Clear queued restore context when the main view fails to initialize, preventing stale state from resurfacing on the next activation.
+- Guard the model select observer lifecycle and update queue so successive model option messages render reliably without leaking observers.
 
 ## [0.33.7] - 2025-09-22
 

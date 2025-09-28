@@ -16,21 +16,30 @@
 .model-selection-footer .select-group {
   display: flex;
   align-items: center;
-  max-width: 150px;
+  gap: var(--spacing-small);
 }
 
 .model-selection-footer .agent-select-group {
-  align-items: flex-start;
+  align-items: center;
   gap: var(--spacing-small);
-  max-width: none;
 }
 
 .agent-select-controls {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  align-items: center;
   gap: var(--spacing-small);
   flex: 1 1 auto;
   min-width: 0;
+}
+
+.agent-select-dropdowns {
+  position: relative;
+  width: min(16rem, 100%);
+}
+
+.agent-select-dropdowns select {
+  width: 100%;
 }
 
 .session-toggle {
@@ -71,10 +80,19 @@
 
 .agent-select {
   width: 100%;
+  min-width: 0;
 }
 
 .agent-select--hidden {
-  display: none;
+  position: absolute;
+  inset: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.agent-select--active {
+  position: relative;
+  visibility: visible;
 }
 
 .model-selection-footer .select-group select {

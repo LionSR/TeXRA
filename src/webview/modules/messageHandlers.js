@@ -53,7 +53,8 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     this._fileListHandlers = {};
     // Track pending model option updates until the select element is ready
     this._latestModelOptions = null;
-    this._modelOptionsQueue = Promise.resolve();
+    this._modelFlushScheduled = false;
+    this._isModelFlushRunning = false;
     this._modelSelectPromise = null;
     this._modelSelectResolver = null;
     this._modelSelectObserver = null;
@@ -192,9 +193,17 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
   _decorateAgentOption(opt) {
     let baseLabel = opt.dataset.label;
     if (!baseLabel) {
-      const valueAttr = opt.getAttribute('value');
-      baseLabel = valueAttr ?? '';
-      opt.dataset.label = baseLabel;
+      const textLabel = opt.textContent?.trim();
+      if (textLabel) {
+        baseLabel = textLabel;
+        opt.dataset.label = baseLabel;
+      } else {
+        const valueAttr = opt.getAttribute('value');
+        baseLabel = valueAttr ?? '';
+        if (baseLabel) {
+          opt.dataset.label = baseLabel;
+        }
+      }
     }
 
     const hints = [];
@@ -249,30 +258,55 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
   }
 
   _enqueueModelOptionsFlush() {
-    this._modelOptionsQueue = this._modelOptionsQueue
-      .then(() => this._flushPendingModelOptions())
-      .catch((error) => {
-        console.error('SET_MODEL_OPTIONS: Failed to apply options', error);
-      });
-  }
-
-  async _flushPendingModelOptions() {
     if (this._isDisposed) {
       return;
     }
 
-    const select = await this._waitForModelSelect();
-    if (!select || this._isDisposed) {
+    if (this._modelFlushScheduled) {
       return;
     }
 
-    if (!this._latestModelOptions) {
+    this._modelFlushScheduled = true;
+    Promise.resolve().then(() => this._drainModelOptions());
+  }
+
+  async _drainModelOptions() {
+    if (this._isDisposed) {
+      this._modelFlushScheduled = false;
       return;
     }
 
-    const html = this._latestModelOptions;
-    this._latestModelOptions = null;
-    this._applyModelOptions(select, html);
+    if (this._isModelFlushRunning) {
+      return;
+    }
+
+    this._isModelFlushRunning = true;
+
+    try {
+      while (!this._isDisposed && this._latestModelOptions) {
+        const select = await this._waitForModelSelect();
+        if (!select || this._isDisposed) {
+          break;
+        }
+
+        const html = this._latestModelOptions;
+        if (!html) {
+          break;
+        }
+
+        this._latestModelOptions = null;
+        this._applyModelOptions(select, html);
+      }
+    } catch (error) {
+      console.error('SET_MODEL_OPTIONS: Failed to apply options', error);
+    } finally {
+      this._isModelFlushRunning = false;
+      this._modelFlushScheduled = false;
+    }
+
+    if (!this._isDisposed && this._latestModelOptions) {
+      this._enqueueModelOptionsFlush();
+    }
   }
 
   _waitForModelSelect() {
@@ -308,10 +342,7 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
   }
 
   _resolveModelSelectWaiter(result) {
-    if (this._modelSelectObserver) {
-      this._modelSelectObserver.disconnect();
-      this._modelSelectObserver = null;
-    }
+    this._disposeModelSelectObserver();
 
     if (this._modelSelectResolver) {
       const resolver = this._modelSelectResolver;
@@ -324,12 +355,20 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     }
   }
 
+  _disposeModelSelectObserver() {
+    if (this._modelSelectObserver) {
+      this._modelSelectObserver.disconnect();
+      this._modelSelectObserver = null;
+    }
+  }
+
   /** Register handlers and optionally request initial data. */
   setup(options = {}) {
     const { requestData = true } = options;
     this._isDisposed = false;
     this._latestModelOptions = null;
-    this._modelOptionsQueue = Promise.resolve();
+    this._modelFlushScheduled = false;
+    this._isModelFlushRunning = false;
     this._resolveModelSelectWaiter(null);
     super.setup();
     if (requestData) {
@@ -340,7 +379,9 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
   cleanup() {
     this._isDisposed = true;
     this._latestModelOptions = null;
-    this._modelOptionsQueue = Promise.resolve();
+    this._modelFlushScheduled = false;
+    this._isModelFlushRunning = false;
+    this._disposeModelSelectObserver();
     this._resolveModelSelectWaiter(null);
 
     super.cleanup();
