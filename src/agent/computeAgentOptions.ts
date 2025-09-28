@@ -14,20 +14,21 @@ import { getConfig } from '@utils/config';
 export type { AgentOptionsPayload };
 
 /**
- * Get all available agents including tool-use agents if enabled.
+ * Collect configured workflow agents alongside configured and discovered tool-use agents.
  */
+export interface AgentNameBuckets {
+  allAgents: string[];
+  toolUseAgents: string[];
+}
+
 export async function getAllAgents(
   context: vscode.ExtensionContext,
-): Promise<string[]> {
+): Promise<AgentNameBuckets> {
   const workflowAgents = getConfig<string[]>('agents', []);
   const configuredToolUseAgents = getConfig<string[]>('toolUseAgents', []);
-  const includeToolUse = getConfig<boolean>('includeToolUseAgents', false);
-
-  if (!includeToolUse) {
-    return Array.from(new Set([...workflowAgents, ...configuredToolUseAgents]));
-  }
 
   const toolUseDir = await agentDirectories.builtInToolUse(context);
+  let discoveredToolUseAgents: string[] = [];
   try {
     const toolUseFiles = await glob('**/*.yaml', {
       cwd: toolUseDir,
@@ -35,19 +36,19 @@ export async function getAllAgents(
       nodir: true,
       absolute: false,
     });
-    const discoveredToolUseAgents = toolUseFiles.map((f) =>
+    discoveredToolUseAgents = toolUseFiles.map((f) =>
       f.replace(/\.yaml$/, '').replace(/.*\//, ''),
     );
-    return Array.from(
-      new Set([
-        ...workflowAgents,
-        ...configuredToolUseAgents,
-        ...discoveredToolUseAgents,
-      ]),
-    );
   } catch {
-    return Array.from(new Set([...workflowAgents, ...configuredToolUseAgents]));
+    discoveredToolUseAgents = [];
   }
+
+  const toolUseAgents = Array.from(
+    new Set([...configuredToolUseAgents, ...discoveredToolUseAgents]),
+  );
+  const allAgents = Array.from(new Set([...workflowAgents, ...toolUseAgents]));
+
+  return { allAgents, toolUseAgents };
 }
 
 /**
@@ -72,8 +73,8 @@ async function getAgentDirectories(
 export async function computeAgentOptions(
   context: vscode.ExtensionContext,
 ): Promise<AgentOptionsPayload> {
-  const allAgents = await getAllAgents(context);
+  const { allAgents, toolUseAgents } = await getAllAgents(context);
   const dirs = await getAgentDirectories(context);
 
-  return buildAgentOptionsPayload(allAgents, dirs);
+  return buildAgentOptionsPayload(allAgents, dirs, toolUseAgents);
 }

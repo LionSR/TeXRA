@@ -36,8 +36,6 @@
               "type": "string"
             },
             "default": [
-              "chat",
-              "ask",
               "correct",
               "polish",
               "draw",
@@ -62,12 +60,6 @@
               "xml_validator"
             ],
             "description": "List of tool-use agents shown in the dedicated dropdown",
-            "scope": "resource"
-          },
-          "texra.includeToolUseAgents": {
-            "type": "boolean",
-            "default": false,
-            "description": "Include built-in tool-use agents (e.g., xml_validator, tex_linter_fix) in the agent list",
             "scope": "resource"
           },
           "texra.models": {

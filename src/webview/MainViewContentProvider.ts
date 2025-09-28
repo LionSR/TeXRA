@@ -83,7 +83,6 @@ export class MainViewContentProvider extends BaseViewContentProvider {
     // Note: This uses synchronous approach for template generation
     // Agent options with metadata are computed asynchronously via computeAgentOptions
     const agents = getConfig<string[]>('agents', []);
-    const includeToolUse = getConfig<boolean>('includeToolUseAgents', false);
     const configuredToolUseAgents = getConfig<string[]>('toolUseAgents', []);
     const toolUseDir = GlobalStorageFS.fullPath('tool_use_agents');
     const builtInDir = GlobalStorageFS.fullPath('agents');
@@ -95,30 +94,28 @@ export class MainViewContentProvider extends BaseViewContentProvider {
       ? configuredCustomDir
       : '';
 
-    const shouldIncludeToolUseDir =
-      includeToolUse || configuredToolUseAgents.length > 0;
     const agentDirectories: AgentDirectoryMap = {
       custom: customDir,
       builtIn: builtInDir,
-      builtInToolUse: shouldIncludeToolUseDir ? toolUseDir : '',
+      builtInToolUse: toolUseDir,
     };
-    let extraAgents: string[] = [];
-    if (includeToolUse) {
-      try {
-        const files = AbsoluteFS.readDirSync(toolUseDir);
-        extraAgents = files
-          .filter((f) => f.endsWith('.yaml'))
-          .map((f) => path.basename(f, '.yaml'));
-      } catch {
-        extraAgents = [];
-      }
+    let discoveredToolUseAgents: string[] = [];
+    try {
+      const files = AbsoluteFS.readDirSync(toolUseDir);
+      discoveredToolUseAgents = files
+        .filter((f) => f.endsWith('.yaml'))
+        .map((f) => path.basename(f, '.yaml'));
+    } catch {
+      discoveredToolUseAgents = [];
     }
-    const allAgents = Array.from(
-      new Set([...agents, ...configuredToolUseAgents, ...extraAgents]),
+    const toolUseAgents = Array.from(
+      new Set([...configuredToolUseAgents, ...discoveredToolUseAgents]),
     );
+    const allAgents = Array.from(new Set([...agents, ...toolUseAgents]));
     const optionBuckets: AgentOptionsPayload = buildAgentOptionsPayload(
       allAgents,
       agentDirectories,
+      toolUseAgents,
     );
 
     const models = getConfig<string[]>('models', []);
