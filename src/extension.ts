@@ -102,6 +102,7 @@ export async function activate(context: vscode.ExtensionContext) {
   const persistedToolUseSessions = ToolUseSessionManager.isPersistenceEnabled()
     ? await ToolUseSessionManager.listSnapshots()
     : [];
+  ToolUseSessionManager.registerPendingSnapshots(persistedToolUseSessions);
   const waitingStreams = new Set(
     persistedToolUseSessions.map((snapshot) => snapshot.streamId),
   );
@@ -120,20 +121,6 @@ export async function activate(context: vscode.ExtensionContext) {
 
   // Register commands first - this will create and store the MainViewProvider
   registerCommands(context);
-
-  if (persistedToolUseSessions.length > 0) {
-    for (const snapshot of persistedToolUseSessions) {
-      void Promise.resolve(
-        vscode.commands.executeCommand('texra.resumeAgent', snapshot),
-      ).catch((error: unknown) => {
-        const message = error instanceof Error ? error.message : String(error);
-        logger.error(
-          'extension',
-          `Failed to resume tool-use session ${snapshot.executionId}: ${message}`,
-        );
-      });
-    }
-  }
 
   // Create a status bar item to show TeXRA progress
   statusBarItem = vscode.window.createStatusBarItem(
