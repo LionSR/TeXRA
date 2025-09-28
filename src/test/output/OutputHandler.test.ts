@@ -53,7 +53,6 @@ describe('OutputHandler.finalizeRound', () => {
     requiredFilesInternal: {},
     defaultOutputFiles: [],
     isMultipleOutput: false,
-    useMultipleOutputs: false,
     filePatternsContain: [],
     tools: [],
   };

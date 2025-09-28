@@ -11,10 +11,10 @@ import { z } from 'zod';
 import {
   AgentSetting,
   AgentPrompt,
-  AgentSettingSchema,
   AgentPromptSchema,
   AgentDefinitionSchema,
   AgentType,
+  parseAgentSetting,
 } from '@agent/core/AgentDataclass';
 
 // Local imports - utils
@@ -217,7 +217,7 @@ export async function loadAgentSettingAndPrompts(
     }
 
     // Apply defaults and validate the final settings and prompts
-    const validatedSettings = AgentSettingSchema.parse(settings);
+    const validatedSettings = parseAgentSetting(settings);
     const validatedPrompts = AgentPromptSchema.parse(prompts);
     settings = validatedSettings;
     prompts = validatedPrompts;
@@ -263,7 +263,7 @@ export async function isValidAgentYaml(
       return null;
     }
 
-    const settingsBlock = AgentSettingSchema.parse(data.settings);
+    const settingsBlock = parseAgentSetting(data.settings);
     AgentPromptSchema.parse(data.prompts);
     const rootName = data.name;
 
