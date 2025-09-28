@@ -4,9 +4,10 @@ import * as vscode from 'vscode';
 
 // Local imports - agent utilities
 import {
-  createAgentOptionTag,
+  createGroupedAgentOptionMarkup,
   getAgentOptionMetadata,
   type AgentDirectoryMap,
+  type AgentOptionEntry,
 } from '@agent/utils/agentOptionMetadata';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { getConfig } from '@utils/config';
@@ -68,10 +69,10 @@ export async function computeAgentOptions(
   const allAgents = await getAllAgents(context);
   const dirs = await getAgentDirectories(context);
 
-  const optionTags = allAgents.map((agent) => {
-    const metadata = getAgentOptionMetadata(agent, dirs);
-    return createAgentOptionTag(agent, metadata);
-  });
+  const optionEntries: AgentOptionEntry[] = allAgents.map((agent) => ({
+    agentName: agent,
+    metadata: getAgentOptionMetadata(agent, dirs),
+  }));
 
-  return optionTags.join('\n');
+  return createGroupedAgentOptionMarkup(optionEntries);
 }

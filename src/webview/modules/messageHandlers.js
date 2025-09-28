@@ -114,43 +114,7 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
         if (previous) {
           select.value = previous;
         }
-        Array.from(select.options).forEach((opt) => {
-          let baseLabel = opt.dataset.label;
-          if (!baseLabel) {
-            const valueAttr = opt.getAttribute('value');
-            baseLabel = valueAttr ?? '';
-            opt.dataset.label = baseLabel;
-          }
-
-          const hints = [];
-          let displayLabel = baseLabel;
-
-          if (opt.dataset.multiple === 'true') {
-            displayLabel += ' ∶∶';
-            hints.push('Supports multi-file inputs.');
-            opt.style.opacity = '0.9';
-          } else {
-            opt.style.opacity = '';
-          }
-
-          if (opt.dataset.toolUse === 'true') {
-            displayLabel += 'ᵗ';
-            hints.push('Uses tools for actions.');
-          }
-
-          opt.textContent = displayLabel;
-
-          if (hints.length > 0) {
-            opt.title = hints.join('\n');
-            opt.setAttribute(
-              'aria-label',
-              `${baseLabel} (${hints.join(', ')})`,
-            );
-          } else {
-            opt.removeAttribute('title');
-            opt.setAttribute('aria-label', baseLabel);
-          }
-        });
+        this._decorateAgentOptions(select);
       },
     };
   }
@@ -547,6 +511,61 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       new CustomEvent('recordingUIUpdate', { detail: { recording: false } }),
     );
     this._postHandle();
+  }
+
+  _decorateAgentOptions(select) {
+    if (!select) {
+      return;
+    }
+
+    const optgroups = Array.from(
+      select.querySelectorAll('optgroup.agent-group'),
+    );
+    optgroups.forEach((group) => {
+      const label = group.getAttribute('label');
+      if (label && label.trim()) {
+        group.setAttribute('aria-label', label);
+        group.setAttribute('title', label);
+      } else {
+        group.removeAttribute('title');
+        group.removeAttribute('aria-label');
+      }
+    });
+
+    Array.from(select.querySelectorAll('option')).forEach((opt) => {
+      let baseLabel = opt.dataset.label;
+      if (!baseLabel) {
+        const valueAttr = opt.getAttribute('value');
+        baseLabel = valueAttr ?? '';
+        opt.dataset.label = baseLabel;
+      }
+
+      const hints = [];
+      let displayLabel = baseLabel;
+
+      if (opt.dataset.multiple === 'true') {
+        displayLabel += ' ∶∶';
+        hints.push('Supports multi-file inputs.');
+        opt.style.opacity = '0.9';
+      } else {
+        opt.style.opacity = '';
+      }
+
+      if (opt.dataset.toolUse === 'true') {
+        displayLabel += 'ᵗ';
+        hints.push('Uses tools for actions.');
+      }
+
+      opt.textContent = displayLabel;
+
+      if (hints.length > 0) {
+        opt.title = hints.join('\n');
+        opt.setAttribute('aria-label', `${baseLabel} (${hints.join(', ')})`);
+      } else {
+        opt.removeAttribute('title');
+        opt.setAttribute('aria-label', baseLabel);
+      }
+    });
   }
 }
 

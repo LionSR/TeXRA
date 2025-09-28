@@ -109,3 +109,34 @@ option[data-multiple='true'] {
 option[data-tool-use='true'] {
   font-style: italic;
 }
+
+select optgroup.agent-group {
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--vscode-descriptionForeground);
+  font-size: calc(var(--vscode-editor-font-size) * 0.8);
+  padding: var(--spacing-small) 0 var(--spacing-tiny);
+  background: var(--vscode-input-background);
+}
+
+select optgroup.agent-group:first-of-type {
+  padding-top: 0;
+}
+
+select optgroup.agent-group option {
+  font-weight: normal;
+  text-transform: none;
+  letter-spacing: normal;
+  color: var(--vscode-foreground);
+  padding-left: var(--spacing-medium);
+}
+
+select optgroup.agent-group--tool-use {
+  margin-top: var(--spacing-small);
+  border-top: 1px solid var(--vscode-menu-border);
+}
+
+select optgroup.agent-group--tool-use option {
+  padding-left: calc(var(--spacing-medium) * 1.2);
+}

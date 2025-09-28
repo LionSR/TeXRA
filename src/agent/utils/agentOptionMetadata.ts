@@ -26,6 +26,26 @@ export interface AgentOptionMetadata {
   isToolUse: boolean;
 }
 
+export interface AgentOptionEntry {
+  agentName: string;
+  metadata: AgentOptionMetadata;
+}
+
+export const AGENT_OPTION_GROUP_LABELS = {
+  workflow: 'Workflows',
+  toolUse: 'Tool-use agents',
+} as const;
+
+const AGENT_OPTION_GROUP_CLASSES = {
+  workflow: 'agent-group agent-group--workflow',
+  toolUse: 'agent-group agent-group--tool-use',
+} as const;
+
+const AGENT_OPTION_GROUP_DATA = {
+  workflow: 'workflow',
+  toolUse: 'tool-use',
+} as const;
+
 const DIRECTORY_KEYS: (keyof AgentDirectoryMap)[] = [
   'custom',
   'builtIn',
@@ -148,4 +168,68 @@ export function createAgentOptionTag(
 
   const label = decorateLabel(agentName, metadata);
   return `<option ${attributes.join(' ')}>${encodeHtml(label)}</option>`;
+}
+
+function createOptgroupMarkup(
+  label: string,
+  className: string,
+  dataGroup: string,
+  options: string[],
+): string {
+  if (options.length === 0) {
+    return '';
+  }
+
+  return [
+    `<optgroup class="${className}" data-group="${encodeHtml(
+      dataGroup,
+    )}" label="${encodeHtml(label)}">`,
+    options.join('\n'),
+    '</optgroup>',
+  ]
+    .filter(Boolean)
+    .join('\n');
+}
+
+export function createGroupedAgentOptionMarkup(
+  entries: AgentOptionEntry[],
+): string {
+  if (entries.length === 0) {
+    return '';
+  }
+
+  const workflowOptions: string[] = [];
+  const toolUseOptions: string[] = [];
+
+  for (const { agentName, metadata } of entries) {
+    const optionMarkup = createAgentOptionTag(agentName, metadata);
+    if (metadata.isToolUse) {
+      toolUseOptions.push(optionMarkup);
+    } else {
+      workflowOptions.push(optionMarkup);
+    }
+  }
+
+  const groups: string[] = [];
+  const workflowGroup = createOptgroupMarkup(
+    AGENT_OPTION_GROUP_LABELS.workflow,
+    AGENT_OPTION_GROUP_CLASSES.workflow,
+    AGENT_OPTION_GROUP_DATA.workflow,
+    workflowOptions,
+  );
+  if (workflowGroup) {
+    groups.push(workflowGroup);
+  }
+
+  const toolUseGroup = createOptgroupMarkup(
+    AGENT_OPTION_GROUP_LABELS.toolUse,
+    AGENT_OPTION_GROUP_CLASSES.toolUse,
+    AGENT_OPTION_GROUP_DATA.toolUse,
+    toolUseOptions,
+  );
+  if (toolUseGroup) {
+    groups.push(toolUseGroup);
+  }
+
+  return groups.join('\n');
 }

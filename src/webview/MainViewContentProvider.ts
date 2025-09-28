@@ -6,9 +6,10 @@ import * as vscode from 'vscode';
 
 // Local imports - agent utilities
 import {
-  createAgentOptionTag,
+  createGroupedAgentOptionMarkup,
   getAgentOptionMetadata,
   type AgentDirectoryMap,
+  type AgentOptionEntry,
 } from '@agent/utils/agentOptionMetadata';
 
 // Local imports - webview
@@ -111,12 +112,11 @@ export class MainViewContentProvider extends BaseViewContentProvider {
       }
     }
     const allAgents = Array.from(new Set([...agents, ...extraAgents]));
-    const agentOptions = allAgents
-      .map((agent) => {
-        const metadata = getAgentOptionMetadata(agent, agentDirectories);
-        return createAgentOptionTag(agent, metadata);
-      })
-      .join('\n');
+    const agentEntries: AgentOptionEntry[] = allAgents.map((agent) => ({
+      agentName: agent,
+      metadata: getAgentOptionMetadata(agent, agentDirectories),
+    }));
+    const agentOptions = createGroupedAgentOptionMarkup(agentEntries);
 
     const models = getConfig<string[]>('models', []);
     const modelOptions = models
