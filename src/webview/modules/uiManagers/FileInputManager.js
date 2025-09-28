@@ -212,18 +212,122 @@ export class FileInputManager extends BaseUIManager {
   }
 
   _setupRefreshIcons() {
+    const iconConfigs = [
+      {
+        className: 'codicon-file-code',
+        getRequests: () => [
+          {
+            command: MAIN_VIEW_COMMANDS.REQUEST_INPUT_FILE,
+            payload: {
+              notifyWhenEmpty: true,
+              emptyMessage:
+                'No input files found. Open a LaTeX file or use the Current button.',
+            },
+          },
+        ],
+      },
+      {
+        className: 'codicon-book',
+        getRequests: () => [
+          {
+            command: MAIN_VIEW_COMMANDS.REQUEST_REFERENCE_FILE,
+            payload: {
+              notifyWhenEmpty: true,
+              emptyMessage:
+                'No reference files detected. Add context files or use the Add button.',
+            },
+          },
+        ],
+      },
+      {
+        className: 'codicon-file-add',
+        getRequests: () => [
+          {
+            command: MAIN_VIEW_COMMANDS.REQUEST_AUXILIARY_FILE,
+            payload: {
+              notifyWhenEmpty: true,
+              emptyMessage:
+                'No auxiliary files found (e.g., .cls, .sty, .bib).',
+            },
+          },
+        ],
+      },
+      {
+        className: 'codicon-file-media',
+        getRequests: () => [
+          {
+            command: MAIN_VIEW_COMMANDS.REQUEST_MEDIA_FILE,
+            payload: {
+              notifyWhenEmpty: true,
+              emptyMessage:
+                'No media assets detected. Add images or PDFs to refresh this list.',
+            },
+          },
+        ],
+      },
+      {
+        className: 'codicon-edit',
+        getRequests: () => {
+          const baseFile = safeGetElementValue(BASE_FILE);
+          return [
+            {
+              command: MAIN_VIEW_COMMANDS.REQUEST_BASE_FILE,
+              payload: {
+                preserveBaseFile: true,
+              },
+            },
+            {
+              command: MAIN_VIEW_COMMANDS.REQUEST_EDITED_FILE,
+              payload: {
+                baseFile,
+                preserveSelection: safeGetElementValue(EDITED_FILE),
+                notifyWhenEmpty: true,
+                emptyMessage: baseFile
+                  ? 'No edited files match the selected base. Generate edits or select a different base file.'
+                  : 'Select a base file to load edited files.',
+              },
+            },
+          ];
+        },
+      },
+      {
+        className: 'codicon-git-commit',
+        getRequests: () => [
+          {
+            command: MAIN_VIEW_COMMANDS.REQUEST_RECENT_COMMITS,
+            payload: {
+              notifyWhenEmpty: true,
+              emptyMessage:
+                'No recent commits found. Ensure the workspace is a Git repository.',
+            },
+          },
+        ],
+      },
+    ];
+
     const icons = document.querySelectorAll(
       '.file-select-header label .codicon.clickable',
     );
+
     icons.forEach((icon) => {
-      if (icon.classList.contains('codicon-git-commit')) {
-        const handler = () => {
-          this.vscode.postMessage({
-            command: MAIN_VIEW_COMMANDS.REFRESH_COMMITS,
-          });
-        };
-        this.addListener(icon, 'click', handler);
+      const config = iconConfigs.find((item) =>
+        icon.classList.contains(item.className),
+      );
+      if (!config) {
+        return;
       }
+
+      const handler = () => {
+        const requests = config.getRequests ? config.getRequests() : [];
+        requests.forEach(({ command, payload = {} }) => {
+          this.vscode.postMessage({
+            command,
+            ...payload,
+          });
+        });
+      };
+
+      this.addListener(icon, 'click', handler);
     });
   }
 

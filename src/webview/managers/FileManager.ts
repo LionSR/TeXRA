@@ -27,6 +27,12 @@ import { WorkspaceFS } from '@utils/files';
 const CHANNEL = 'FileManager';
 logger.initialize(CHANNEL);
 
+type FileUpdateOptions = {
+  notifyWhenEmpty?: boolean;
+  emptyMessage?: string;
+  additionalPayload?: Record<string, unknown>;
+};
+
 export class FileManager {
   constructor(private readonly context: vscode.ExtensionContext) {}
 
@@ -80,12 +86,20 @@ export class FileManager {
     logger.debug(CHANNEL, `${message.command}: ${message.filePath}`);
   }
 
-  async handleRequestInputFile(webviewView: vscode.WebviewView): Promise<void> {
+  async handleRequestInputFile(
+    message: any,
+    webviewView: vscode.WebviewView,
+  ): Promise<void> {
     const refreshedInputFiles =
       (await vscode.commands.executeCommand<string[]>(
         'texra.refreshInputFiles',
       )) || [];
-    this.postFileUpdate(webviewView, 'Input', refreshedInputFiles);
+    await this.postFileUpdate(webviewView, 'Input', refreshedInputFiles, {
+      notifyWhenEmpty: Boolean(message?.notifyWhenEmpty),
+      emptyMessage:
+        message?.emptyMessage ||
+        'No input files found. Select a LaTeX file to continue.',
+    });
   }
 
   async handleRequestFile(
@@ -105,7 +119,19 @@ export class FileManager {
           return [];
       }
     })();
-    this.postFileUpdate(webviewView, fileType, files);
+    const defaultMessages: Record<string, string> = {
+      Reference:
+        'No reference files detected. Add context files or use the Add button.',
+      Auxiliary:
+        'No auxiliary files found. Include .cls, .sty, or .bib files as needed.',
+      Media:
+        'No media assets detected. Add images or PDFs to refresh this list.',
+    };
+
+    await this.postFileUpdate(webviewView, fileType, files, {
+      notifyWhenEmpty: Boolean(message?.notifyWhenEmpty),
+      emptyMessage: message?.emptyMessage || defaultMessages[fileType],
+    });
   }
 
   async handleRequestEditedFile(
@@ -120,11 +146,32 @@ export class FileManager {
       );
       allEditedFiles = await fileLister.listEditedFiles(baseFileNameForEdited);
     }
-    this.postFileUpdate(webviewView, 'Edited', allEditedFiles);
+    const emptyMessage =
+      message?.emptyMessage ||
+      (message.baseFile
+        ? 'No edited files match the selected base. Generate edits or select a different base file.'
+        : 'Select a base file to load edited files.');
+
+    await this.postFileUpdate(webviewView, 'Edited', allEditedFiles, {
+      notifyWhenEmpty: Boolean(message?.notifyWhenEmpty),
+      emptyMessage,
+    });
   }
 
-  async handleRequestBaseFile(webviewView: vscode.WebviewView): Promise<void> {
-    this.postFileUpdate(webviewView, 'Base', await fileLister.list('input'));
+  async handleRequestBaseFile(
+    message: any,
+    webviewView: vscode.WebviewView,
+  ): Promise<void> {
+    const files = await fileLister.list('input');
+    await this.postFileUpdate(webviewView, 'Base', files, {
+      notifyWhenEmpty: Boolean(message?.notifyWhenEmpty),
+      emptyMessage:
+        message?.emptyMessage ||
+        'No input files are available to serve as a base. Select an input file first.',
+      additionalPayload: message?.preserveBaseFile
+        ? { preserveBaseFile: true }
+        : undefined,
+    });
   }
 
   async handleRequestDefaultOutputFiles(
@@ -362,8 +409,21 @@ export class FileManager {
     webviewView: vscode.WebviewView,
     fileType: string,
     files: string[],
+    options: FileUpdateOptions = {},
   ): Promise<void> {
-    webviewView.webview.postMessage({ command: `set${fileType}File`, files });
+    if (options.notifyWhenEmpty && files.length === 0) {
+      const message =
+        options.emptyMessage ||
+        `No ${fileType.toLowerCase()} files were found during refresh.`;
+      logger.info(CHANNEL, message);
+      vscode.window.showInformationMessage(message);
+    }
+
+    webviewView.webview.postMessage({
+      command: `set${fileType}File`,
+      files,
+      ...(options.additionalPayload ?? {}),
+    });
   }
 
   private async updateBaseFileSelect(
