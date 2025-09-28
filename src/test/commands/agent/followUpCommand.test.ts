@@ -59,8 +59,7 @@ describe('followUpCommand', () => {
   const originalConsumeSnapshot =
     ToolUseSessionManager.consumeSnapshotForStream;
   const originalSetResumingSession = ToolUseSessionManager.setResumingSession;
-  const originalIsResumingSession =
-    ToolUseSessionManager.isResumingSession;
+  const originalIsResumingSession = ToolUseSessionManager.isResumingSession;
   const originalEnqueueFollowUp =
     ToolUseSessionManager.enqueueFollowUpWhileResuming;
   const originalClearResumingSession =
