@@ -2,7 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports - agent
-import { BaseAgent } from '@agent/implementations/BaseAgent';
+import { getToolUseAgent } from '@agent/toolUse/ToolUseAgentRegistry';
 
 // Local imports - utilities
 import { showLoggedErrorMessage } from '@common/errors/errorHandlingUtils';
@@ -15,10 +15,10 @@ export function registerFollowUpCommand(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand(
       'texra.sendFollowUp',
       async (payload: { stream: string; text: string }) => {
-        const agent = BaseAgent.getRunningAgent(payload.stream);
-        if (agent && typeof (agent as any).appendFollowUp === 'function') {
+        const agent = getToolUseAgent(payload.stream);
+        if (agent) {
           try {
-            (agent as any).appendFollowUp(payload.text);
+            agent.appendFollowUp(payload.text);
           } catch (err) {
             await showLoggedErrorMessage(
               CHANNEL,

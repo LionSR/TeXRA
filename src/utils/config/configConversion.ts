@@ -50,13 +50,30 @@ export function agentConfigToTaskState(
   config: AgentConfig,
   metadata?: AgentSessionMetadata | AgentType,
 ): TaskState {
-  const resolvedMetadata =
+  const configMetadata = resolveAgentSessionMetadata(
+    config.agentType,
+    config.agentSessionKind,
+  );
+
+  const providedMetadata =
     typeof metadata === 'object' && metadata !== null
       ? resolveAgentSessionMetadata(
           metadata.agentType,
           metadata.agentSessionKind,
         )
-      : resolveAgentSessionMetadata(metadata);
+      : metadata !== undefined
+        ? resolveAgentSessionMetadata(metadata)
+        : null;
+
+  const resolvedMetadata = providedMetadata
+    ? resolveAgentSessionMetadata(
+        providedMetadata.agentType ?? configMetadata.agentType,
+        providedMetadata.agentSessionKind ?? configMetadata.agentSessionKind,
+      )
+    : configMetadata;
+
+  config.agentType = resolvedMetadata.agentType;
+  config.agentSessionKind = resolvedMetadata.agentSessionKind;
 
   if (resolvedMetadata.agentSessionKind === AgentSessionKind.ToolUse) {
     return {
