@@ -106,12 +106,63 @@ function getSnapshotPath(executionId: ExecutionId): string {
 }
 
 export class ToolUseSessionManager {
+  private static readonly pendingSnapshots = new Map<
+    StreamTabId,
+    ToolUseSessionSnapshot
+  >();
+
   /**
    * Checks if tool-use session persistence is enabled
    * @returns True if persistence is enabled, false otherwise
    */
   public static isPersistenceEnabled(): boolean {
     return getToolUsePersistenceEnabled();
+  }
+
+  /**
+   * Registers persisted snapshots so they can be resumed lazily.
+   * @param snapshots - The snapshots to cache for later use.
+   */
+  public static registerPendingSnapshots(
+    snapshots: ToolUseSessionSnapshot[],
+  ): void {
+    if (snapshots.length === 0) {
+      return;
+    }
+
+    for (const snapshot of snapshots) {
+      this.pendingSnapshots.set(snapshot.streamId as StreamTabId, snapshot);
+    }
+
+    logger.debug(
+      `Registered ${snapshots.length} pending tool-use snapshots for lazy resume.`,
+    );
+  }
+
+  /**
+   * Retrieves and removes a cached snapshot for the provided stream.
+   * @param streamId - The stream identifier to lookup.
+   * @returns The cached snapshot if found.
+   */
+  public static consumeSnapshotForStream(
+    streamId: StreamTabId,
+  ): ToolUseSessionSnapshot | undefined {
+    const snapshot = this.pendingSnapshots.get(streamId);
+    if (snapshot) {
+      this.pendingSnapshots.delete(streamId);
+      logger.debug(
+        `Consuming pending snapshot for stream ${streamId} to resume lazily.`,
+      );
+    }
+    return snapshot;
+  }
+
+  /**
+   * Checks if a snapshot is cached for the provided stream identifier.
+   * @param streamId - The stream identifier to check.
+   */
+  public static hasPendingSnapshot(streamId: StreamTabId): boolean {
+    return this.pendingSnapshots.has(streamId);
   }
 
   /**
@@ -223,6 +274,14 @@ export class ToolUseSessionManager {
     if (!executionId || !isValidExecutionId(executionId)) {
       return;
     }
+
+    for (const [streamId, snapshot] of this.pendingSnapshots.entries()) {
+      if (snapshot.executionId === executionId) {
+        this.pendingSnapshots.delete(streamId);
+        break;
+      }
+    }
+
     try {
       await StorageFS.delete(getSnapshotPath(executionId));
     } catch (error) {
