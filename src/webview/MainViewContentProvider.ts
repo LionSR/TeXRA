@@ -6,10 +6,10 @@ import * as vscode from 'vscode';
 
 // Local imports - agent utilities
 import {
-  createAgentOptionTag,
-  getAgentOptionMetadata,
+  buildAgentOptionsPayload,
   type AgentDirectoryMap,
 } from '@agent/utils/agentOptionMetadata';
+import type { AgentOptionsPayload } from '@agent/computeAgentOptions';
 
 // Local imports - webview
 import {
@@ -83,7 +83,7 @@ export class MainViewContentProvider extends BaseViewContentProvider {
     // Note: This uses synchronous approach for template generation
     // Agent options with metadata are computed asynchronously via computeAgentOptions
     const agents = getConfig<string[]>('agents', []);
-    const includeToolUse = getConfig<boolean>('includeToolUseAgents', false);
+    const configuredToolUseAgents = getConfig<string[]>('toolUseAgents', []);
     const toolUseDir = GlobalStorageFS.fullPath('tool_use_agents');
     const builtInDir = GlobalStorageFS.fullPath('agents');
     const configuredCustomDir = getConfig<string>(
@@ -97,26 +97,26 @@ export class MainViewContentProvider extends BaseViewContentProvider {
     const agentDirectories: AgentDirectoryMap = {
       custom: customDir,
       builtIn: builtInDir,
-      builtInToolUse: includeToolUse ? toolUseDir : '',
+      builtInToolUse: toolUseDir,
     };
-    let extraAgents: string[] = [];
-    if (includeToolUse) {
-      try {
-        const files = AbsoluteFS.readDirSync(toolUseDir);
-        extraAgents = files
-          .filter((f) => f.endsWith('.yaml'))
-          .map((f) => path.basename(f, '.yaml'));
-      } catch {
-        extraAgents = [];
-      }
+    let discoveredToolUseAgents: string[] = [];
+    try {
+      const files = AbsoluteFS.readDirSync(toolUseDir);
+      discoveredToolUseAgents = files
+        .filter((f) => f.endsWith('.yaml'))
+        .map((f) => path.basename(f, '.yaml'));
+    } catch {
+      discoveredToolUseAgents = [];
     }
-    const allAgents = Array.from(new Set([...agents, ...extraAgents]));
-    const agentOptions = allAgents
-      .map((agent) => {
-        const metadata = getAgentOptionMetadata(agent, agentDirectories);
-        return createAgentOptionTag(agent, metadata);
-      })
-      .join('\n');
+    const toolUseAgents = Array.from(
+      new Set([...configuredToolUseAgents, ...discoveredToolUseAgents]),
+    );
+    const allAgents = Array.from(new Set([...agents, ...toolUseAgents]));
+    const optionBuckets: AgentOptionsPayload = buildAgentOptionsPayload(
+      allAgents,
+      agentDirectories,
+      toolUseAgents,
+    );
 
     const models = getConfig<string[]>('models', []);
     const modelOptions = models
@@ -124,7 +124,8 @@ export class MainViewContentProvider extends BaseViewContentProvider {
       .join('\n');
 
     return {
-      agentOptions,
+      workflowAgentOptions: optionBuckets.workflow,
+      toolUseAgentOptions: optionBuckets.toolUse,
       modelOptions,
     };
   }
