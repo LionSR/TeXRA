@@ -93,6 +93,5 @@ export class DiffManager {
         : 'This workspace is not a Git repository.');
 
     logger.info(CHANNEL, infoMessage);
-    vscode.window.showInformationMessage(infoMessage);
   }
 }
