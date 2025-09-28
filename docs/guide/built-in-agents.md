@@ -20,6 +20,8 @@ Use the `glob`, `grep`, and `ls` tools to explore the workspace without leaving 
 When derivations are required, it presents steps inside `\begin{aligned} ... \end{aligned}` blocks
 to keep mathematical discussions accurate.
 
+> **Heads up:** `read_file` returns at most the first 400 lines of a file so tool outputs stay readable.
+
 ### `ask`
 
 The `ask` agent provides a read-only workspace companion for exploratory
