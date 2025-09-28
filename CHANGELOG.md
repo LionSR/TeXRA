@@ -2,11 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.33.8] [Unreleased]
+## [0.33.8] - 2025-09-30
 
 ### Features
 
-- Split the agent picker into workflow and tool-use sessions with a toggle so users can quickly see the agents that apply to their workflow. 
+- Split the agent picker into workflow and tool-use sessions with a toggle so users can quickly see the agents that apply to their workflow.
 - Update Gemini 2.5 Flash preview entries to the September 2025 release.
 - Refresh Qwen-Max and Qwen Plus integrations with updated pricing, naming, and thinking support in the DashScope handler.
 
