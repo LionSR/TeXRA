@@ -190,35 +190,47 @@ export class MainViewProvider
     if (hasStateToRestore) {
       try {
         // Get the stored state
-        const stateJson = await vscode.commands.executeCommand(
+        const storedState = await vscode.commands.executeCommand(
           'getContext',
           'texra.stateToRestore',
         );
-        if (stateJson) {
-          const state = JSON.parse(stateJson as string);
 
+        let state: unknown = storedState;
+        if (typeof storedState === 'string') {
+          try {
+            state = JSON.parse(storedState);
+          } catch (parseError) {
+            console.warn(
+              'Failed to parse legacy state stored as JSON string:',
+              parseError,
+            );
+            state = undefined;
+          }
+        }
+
+        if (state && typeof state === 'object' && !Array.isArray(state)) {
           // Send the state to the webview
           webviewView.webview.postMessage({
             command: MAIN_VIEW_COMMANDS.STATE_RESTORE,
             state,
           });
 
-          // Clear the stored state
-          await vscode.commands.executeCommand(
-            'setContext',
-            'texra.hasStateToRestore',
-            false,
-          );
-          await vscode.commands.executeCommand(
-            'setContext',
-            'texra.stateToRestore',
-            '',
-          );
-
           console.log('Restored state from context');
         }
       } catch (error) {
         console.error('Error restoring state from context:', error);
+      } finally {
+        // Clear the stored state regardless of success to avoid loops
+        await vscode.commands.executeCommand(
+          'setContext',
+          'texra.hasStateToRestore',
+          false,
+        );
+        await vscode.commands.executeCommand(
+          'setContext',
+          'texra.stateToRestore',
+          undefined,
+        );
       }
     }
   }
