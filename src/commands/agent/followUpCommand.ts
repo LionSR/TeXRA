@@ -8,6 +8,7 @@ import type { StreamTabId } from '@agent/types/IdentifierTypes';
 
 // Local imports - utilities
 import { showLoggedErrorMessage } from '@common/errors/errorHandlingUtils';
+import type { ResumeAgentResult } from './resumeCommand';
 
 const CHANNEL = 'followUpCommand';
 console.log(`[${CHANNEL}] command registered`);
@@ -32,6 +33,19 @@ export function registerFollowUpCommand(context: vscode.ExtensionContext) {
           return;
         }
 
+        if (
+          ToolUseSessionManager.isResumingSession(streamId) &&
+          ToolUseSessionManager.enqueueFollowUpWhileResuming(
+            streamId,
+            payload.text,
+          )
+        ) {
+          console.log(
+            `[${CHANNEL}] queued follow-up while stream ${payload.stream} is resuming`,
+          );
+          return;
+        }
+
         const pendingSnapshot =
           ToolUseSessionManager.getSnapshotForStream(streamId);
         if (pendingSnapshot) {
@@ -40,12 +54,18 @@ export function registerFollowUpCommand(context: vscode.ExtensionContext) {
           );
           ToolUseSessionManager.setResumingSession(streamId);
           try {
-            await vscode.commands.executeCommand('texra.resumeAgent', {
-              snapshot: pendingSnapshot,
-              followUp: payload.text,
-            });
-            // Only consume the snapshot after successful resume
-            ToolUseSessionManager.consumeSnapshotForStream(streamId);
+            const result = (await vscode.commands.executeCommand(
+              'texra.resumeAgent',
+              {
+                snapshot: pendingSnapshot,
+                followUp: payload.text,
+              },
+            )) as ResumeAgentResult | undefined;
+
+            if (result?.success) {
+              // Only consume the snapshot after successful resume
+              ToolUseSessionManager.consumeSnapshotForStream(streamId);
+            }
           } catch (err) {
             const lostFollowUps =
               ToolUseSessionManager.drainQueuedFollowUps(streamId);
@@ -65,18 +85,6 @@ export function registerFollowUpCommand(context: vscode.ExtensionContext) {
               err,
             );
           }
-          return;
-        }
-
-        if (
-          ToolUseSessionManager.enqueueFollowUpWhileResuming(
-            streamId,
-            payload.text,
-          )
-        ) {
-          console.log(
-            `[${CHANNEL}] queued follow-up while stream ${payload.stream} is resuming`,
-          );
           return;
         }
 
