@@ -22,8 +22,9 @@ import {
   ToolUseSessionManager,
   type ToolUseSessionSnapshot,
 } from '@agent/toolUse/ToolUseSessionManager';
-import type { ExecutionId } from '@agent/types/IdentifierTypes';
+import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
+import { STATUS } from '@progressView/modules/constants.js';
 import { isToolUseTaskState } from '@logger/TaskState';
 import { MODEL_CONFIGS } from '@model/ModelRegistry';
 
@@ -122,9 +123,17 @@ export function registerResumeAgentCommand(
         const existingStatus = provider.eventHandler.getStreamStatus(
           snapshot.streamId,
         );
-        if (existingStatus === 'running') {
+        if (
+          existingStatus === STATUS.RUNNING ||
+          existingStatus === STATUS.RESUMING
+        ) {
           return;
         }
+
+        provider.eventHandler.setStreamStatus(
+          snapshot.streamId,
+          STATUS.RESUMING,
+        );
 
         const { agent, agentSetting } = await buildToolUseAgent(
           snapshot,
@@ -134,6 +143,13 @@ export function registerResumeAgentCommand(
         agent.resumeFromSnapshot(snapshot);
         if (followUp !== undefined) {
           agent.appendFollowUp(followUp);
+        }
+
+        const queuedFollowUps = ToolUseSessionManager.drainQueuedFollowUps(
+          snapshot.streamId as StreamTabId,
+        );
+        for (const queuedFollowUp of queuedFollowUps) {
+          agent.appendFollowUp(queuedFollowUp);
         }
 
         await executeAgentWithLogging(
@@ -146,7 +162,14 @@ export function registerResumeAgentCommand(
           executionId,
           { resume: true },
         );
+
+        ToolUseSessionManager.clearResumingSession(
+          snapshot.streamId as StreamTabId,
+        );
       } catch (error) {
+        ToolUseSessionManager.clearResumingSession(
+          snapshot.streamId as StreamTabId,
+        );
         await ToolUseSessionManager.deleteSnapshot(snapshot.executionId);
         const message =
           error instanceof Error ? error.message : String(error ?? 'unknown');
