@@ -18,7 +18,30 @@ describe('xmlUtils.formatContent', () => {
 
     const result = await formatContent(latexInput);
 
-    assert.equal(result, '## Plan\n- Step 1\n- Step 2');
+    assert.equal(result, '## Plan\n\n- Step 1\n- Step 2');
+  });
+
+  it('processes mixed HTML and LaTeX content sequentially', async () => {
+    const mixedInput =
+      '<div><strong>Plan</strong></div>\\begin{itemize}\\item Step 1\\item Step 2\\end{itemize>';
+
+    const result = await formatContent(mixedInput);
+
+    assert.equal(result, '**Plan**\n\n- Step 1\n- Step 2');
+  });
+
+  it('normalizes existing markdown formatting', async () => {
+    const markdownInput = 'Plan:\n-  Step 1\n-   Step 2\n\n';
+
+    const result = await formatContent(markdownInput);
+
+    assert.equal(result, 'Plan:\n- Step 1\n- Step 2');
+  });
+
+  it('returns empty string for empty content', async () => {
+    const result = await formatContent('');
+
+    assert.equal(result, '');
   });
 });
 
@@ -28,6 +51,6 @@ describe('xmlUtils.extractScratchpad', () => {
 
     const result = await extractScratchpad(response);
 
-    assert.equal(result, '## Plan\n- Step 1\n- Step 2');
+    assert.equal(result, '## Plan\n\n- Step 1\n- Step 2');
   });
 });
