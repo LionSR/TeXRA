@@ -34,12 +34,14 @@ type StatusType =
   | typeof STATUS.ERROR
   | typeof STATUS.STOPPED
   | typeof STATUS.READY
-  | typeof STATUS.WAITING;
+  | typeof STATUS.WAITING
+  | typeof STATUS.RESUMING;
 type StreamStatusType =
   | typeof STATUS.RUNNING
   | typeof STATUS.ERROR
   | typeof STATUS.STOPPED
-  | typeof STATUS.WAITING;
+  | typeof STATUS.WAITING
+  | typeof STATUS.RESUMING;
 type StreamStatusOrReadyType = StreamStatusType | typeof STATUS.READY;
 
 /**
@@ -586,6 +588,13 @@ export class ProgressEventHandler {
    */
   getStreamStatus(stream: string): StreamStatusType | undefined {
     return this._streamStatus.get(stream);
+  }
+
+  /**
+   * Set the status for a specific stream synchronously.
+   */
+  setStreamStatus(stream: string, status: StreamStatusOrReadyType): void {
+    this.handleUpdateStreamStatus({ stream, status });
   }
 
   /**
