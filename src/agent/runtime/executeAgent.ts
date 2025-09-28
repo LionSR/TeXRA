@@ -73,7 +73,7 @@ export async function getAgentPath(
 ): Promise<AgentPathResolution> {
   try {
     // First check custom agents directory
-    const customDir = await agentDirectories.custom();
+    const customDir = await agentDirectories.custom(context);
     if (customDir) {
       const customMatches = await glob(`**/${agentName}.yaml`, {
         cwd: customDir,
@@ -114,7 +114,7 @@ export async function getAgentPath(
       const view = await vscode.commands.executeCommand<vscode.WebviewView>(
         'texra.getWebviewView',
       );
-      const customDir = await agentDirectories.custom();
+      const customDir = await agentDirectories.custom(context);
       view?.webview.postMessage({
         command: MAIN_VIEW_COMMANDS.SHOW_AGENT_CONFIG_BANNER,
         agentName,
