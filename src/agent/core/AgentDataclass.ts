@@ -62,8 +62,11 @@ export function resolveAgentSessionMetadata(
   };
 }
 
-/** Zod schema for AgentSetting validation */
-export const AgentSettingSchema = z
+/**
+ * Base schema shared by workflow and tool-use agent settings. Individual
+ * variants extend this schema to add variant-specific constraints.
+ */
+export const AgentSettingBaseSchema = z
   .object({
     agentType: z.nativeEnum(AgentType).default(AgentType.CoT),
     documentTag: z
@@ -101,6 +104,39 @@ export const AgentSettingSchema = z
   })
   .strict();
 
+/**
+ * Workflow agent settings support multiple-output workflows and therefore
+ * expose the {@code isMultipleOutput} toggle.
+ */
+export const AgentWorkflowSettingSchema = AgentSettingBaseSchema.extend({
+  isMultipleOutput: z.boolean().default(false),
+}).superRefine((data, ctx) => {
+  if (data.agentType === AgentType.ToolUse) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['agentType'],
+      message:
+        'Workflow agent settings cannot use the toolUse agent type. Use the tool-use schema instead.',
+    });
+  }
+});
+
+/** Tool-use agents never expose workflow-specific flags. */
+export const AgentToolUseSettingSchema = AgentSettingBaseSchema.extend({
+  agentType: z.literal(AgentType.ToolUse).default(AgentType.ToolUse),
+  isMultipleOutput: z.literal(false).default(false),
+});
+
+/**
+ * Canonical agent settings schema combining workflow and tool-use variants.
+ */
+export const AgentSettingSchema = z.union([
+  AgentWorkflowSettingSchema,
+  AgentToolUseSettingSchema,
+]);
+
+export type AgentWorkflowSetting = z.infer<typeof AgentWorkflowSettingSchema>;
+export type AgentToolUseSetting = z.infer<typeof AgentToolUseSettingSchema>;
 export type AgentSetting = z.infer<typeof AgentSettingSchema>;
 
 /** Default prompt templates for agent interactions. */
