@@ -31,7 +31,8 @@ type StreamStatusType =
   | typeof STATUS.RUNNING
   | typeof STATUS.ERROR
   | typeof STATUS.STOPPED
-  | typeof STATUS.WAITING;
+  | typeof STATUS.WAITING
+  | typeof STATUS.RESUMING;
 
 /**
  * Refactored ProgressViewProvider using the new modular architecture.
