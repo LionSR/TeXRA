@@ -88,8 +88,8 @@ export const PERSONAL_STYLE_CONTEXTUAL_REPLACEMENTS: ReplacementCategory = {
     '\\\\mathrm{Tr}': '\\\\Tr',
     '\\\\mathrm{tr}': '\\\\tr',
     // Restore protected command definitions
-    '__TEXRA_PRESERVE_TR__': '\\\\mathrm{Tr}',
-    '__TEXRA_PRESERVE_tr__': '\\\\mathrm{tr}',
+    __TEXRA_PRESERVE_TR__: '\\\\mathrm{Tr}',
+    __TEXRA_PRESERVE_tr__: '\\\\mathrm{tr}',
   },
 };
 

@@ -140,7 +140,9 @@ export function requireWorkflowSetting(
   setting: AgentSetting,
 ): AgentWorkflowSetting {
   if (setting.agentType === AgentType.ToolUse) {
-    throw new Error('Expected workflow agent settings but received tool-use settings.');
+    throw new Error(
+      'Expected workflow agent settings but received tool-use settings.',
+    );
   }
   return setting;
 }
