@@ -79,9 +79,26 @@ async function buildToolUseAgent(
     agentPath.directory,
     snapshot.executionId as ExecutionId,
   );
-
-  agent.resumeFromSnapshot(snapshot);
   return { agent, agentSetting };
+}
+
+type ResumeAgentCommandPayload =
+  | ToolUseSessionSnapshot
+  | { snapshot: ToolUseSessionSnapshot; followUp?: string };
+
+function normalizePayload(payload: ResumeAgentCommandPayload | undefined): {
+  snapshot: ToolUseSessionSnapshot | undefined;
+  followUp?: string;
+} {
+  if (!payload) {
+    return { snapshot: undefined };
+  }
+
+  if ('snapshot' in payload) {
+    return { snapshot: payload.snapshot, followUp: payload.followUp };
+  }
+
+  return { snapshot: payload };
 }
 
 export function registerResumeAgentCommand(
@@ -89,7 +106,8 @@ export function registerResumeAgentCommand(
 ): vscode.Disposable {
   return vscode.commands.registerCommand(
     'texra.resumeAgent',
-    async (snapshot: ToolUseSessionSnapshot | undefined) => {
+    async (payload: ResumeAgentCommandPayload | undefined) => {
+      const { snapshot, followUp } = normalizePayload(payload);
       if (!snapshot || !ToolUseSessionManager.isPersistenceEnabled()) {
         return;
       }
@@ -112,6 +130,11 @@ export function registerResumeAgentCommand(
           snapshot,
           context,
         );
+
+        agent.resumeFromSnapshot(snapshot);
+        if (followUp !== undefined) {
+          agent.appendFollowUp(followUp);
+        }
 
         await executeAgentWithLogging(
           snapshot.agentName,
