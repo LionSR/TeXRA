@@ -15,7 +15,14 @@ export {
 export { compileLatex2Pdf } from './texTools';
 
 // Export texcount functionality
-export { getTeXCountStats } from './texcount';
+export {
+  getTeXCount,
+  getTeXCountStats,
+  formatTeXCountStats,
+  type TexcountOptions,
+  type TexcountMode,
+  type TexcountResult,
+} from './texcount';
 
 // Export latexdiff service
 export { LaTeXdiffService } from './latexdiff';
