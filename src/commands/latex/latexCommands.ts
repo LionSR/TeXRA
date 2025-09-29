@@ -169,20 +169,20 @@ async function handleGetTeXCount(): Promise<void> {
       async (progress) => {
         progress.report({ message: 'Running texcount...' });
 
-        const result = await getTeXCount(filePath, {
+        const { output, errors } = await getTeXCount(filePath, {
           mode: countingMode.value,
           channel: CHANNEL,
         });
 
-        if (result) {
+        if (output) {
           // Extract key statistics using regex
-          const wordMatch = result.match(/Words in text:\s*(\d+)/);
-          const headerMatch = result.match(/Words in headers:\s*(\d+)/);
-          const captionMatch = result.match(/Words in float captions:\s*(\d+)/);
-          const mathInlineMatch = result.match(
+          const wordMatch = output.match(/Words in text:\s*(\d+)/);
+          const headerMatch = output.match(/Words in headers:\s*(\d+)/);
+          const captionMatch = output.match(/Words in float captions:\s*(\d+)/);
+          const mathInlineMatch = output.match(
             /Number of inline math:\s*(\d+)/,
           );
-          const mathDisplayMatch = result.match(
+          const mathDisplayMatch = output.match(
             /Number of displayed math:\s*(\d+)/,
           );
 
@@ -204,7 +204,10 @@ async function handleGetTeXCount(): Promise<void> {
             canPickMany: false,
           });
         } else {
-          vscode.window.showErrorMessage('Failed to get tex count');
+          const message =
+            errors[0] ??
+            'Failed to get tex count. Please verify the file path.';
+          vscode.window.showErrorMessage(message);
         }
       },
     );
