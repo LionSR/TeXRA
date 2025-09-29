@@ -16,7 +16,13 @@ Ensuring clean, consistent, and valid LaTeX code.
 - **Comparison:** `latexdiff` is used to visualize changes between document versions, including automatic diff generation after agent runs. See the [LaTeX Diff guide](./latex-diff.md) for details on usage and configuration.
 
 **TeX Count Integration:**
-TeXRA can use `texcount` (often included with LaTeX) to provide document statistics (words, headers, math) to the AI agent. This is enabled via the "Attach TeX Count" (<i class="codicon codicon-symbol-numeric"></i>) checkbox in the Tool Configuration dropdown (see [Configuration Guide](./configuration.md#agent-execution-settings)). Ensure `texcount` is in your system's PATH.
+TeXRA can use `texcount` (often included with LaTeX) to provide document statistics (words, headers, math) to the AI agent. This is enabled via the "Attach TeX Count" (<i class="codicon codicon-symbol-numeric"></i>) checkbox in the Tool Configuration dropdown (see [Configuration Guide](./configuration.md#agent-execution-settings)). Tool-use sessions can also invoke the dedicated `texcount` tool to analyze arbitrary `.tex` files on demand. Choose a `mode` based on the task:
+
+- `separate` (default) counts each provided file individually.
+- `include` adds `-inc` so `texcount` follows `\input{}`/`\include{}` directives from the main file.
+- `sum` aggregates independent top-level files in a single total (uses `-sum`).
+
+Ensure `texcount` is in your system's PATH.
 
 ### 2. Figure & Media Handling
 
@@ -29,7 +35,7 @@ Processing visual elements for analysis and inclusion.
 
 Providing quantitative insights into your document structure.
 
-- **Statistics:** `texcount` analyzes your document to provide statistics like word counts, heading counts, and math element counts. This information can optionally be included in prompts to give the LLM better context about the document's scale and complexity. See the "Attach TeX Count" option in the UI ([File Management guide](./file-management.md#tool-config-dropdown)) and the `texra.getTeXCount` command.
+- **Statistics:** `texcount` analyzes your document to provide statistics like word counts, heading counts, and math element counts. This information can optionally be included in prompts to give the LLM better context about the document's scale and complexity. See the "Attach TeX Count" option in the UI ([File Management guide](./file-management.md#tool-config-dropdown)), the `texra.getTeXCount` command, or call the `texcount` tool directly from a tool-use workflow.
 - **Symbolic Math:** The `wolfram` tool runs Wolfram Language code through `wolframscript`, letting agents verify calculations or perform algebra before responding.
 
 _(Note: These tools often rely on external programs that need to be installed separately. See the [Installation guide](./installation.md) for requirements.)_
