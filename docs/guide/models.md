@@ -22,21 +22,23 @@ Here's a quick comparison of the models available by default in TeXRA:
 
 Known for strong instruction following and context handling.
 
-| Model ID    | Key Strength / Use Case                     | Relative Cost | Relative Speed | Notes                         |
-| :---------- | :------------------------------------------ | :------------ | :------------- | :---------------------------- |
-| `opus41T`   | Latest Opus with explicit reasoning steps   | $$$$          | Slow           | Claude 4.1 Opus with thinking |
-| `opus41`    | Latest high quality, complex tasks          | $$$$          | Slow           | Claude 4.1 Opus               |
-| `opus4T`    | Opus 4 with explicit reasoning steps        | $$$$          | Slow           | Claude 4 Opus with thinking   |
-| `opus4`     | Opus 4 high quality, complex tasks          | $$$$          | Slow           | Claude 4 Opus                 |
-| `sonnet4T`  | Latest Sonnet with explicit reasoning steps | $$$           | Medium         | Claude 4 Sonnet with thinking |
-| `sonnet4`   | Latest strong all-rounder                   | $$$           | Medium         | Claude 4 Sonnet               |
-| `sonnet37T` | `sonnet37` with explicit reasoning steps    | $$$           | Medium         | Good for math, complex logic  |
-| `sonnet37`  | Strong all-rounder, good context            | $$$           | Medium         |                               |
-| `sonnet35`  | Good balance of quality/cost (older Sonnet) | $$$           | Medium         |                               |
+| Model ID    | Key Strength / Use Case                     | Relative Cost | Relative Speed | Notes                           |
+| :---------- | :------------------------------------------ | :------------ | :------------- | :------------------------------ |
+| `opus41T`   | Latest Opus with explicit reasoning steps   | $$$$          | Slow           | Claude 4.1 Opus with thinking   |
+| `opus41`    | Latest high quality, complex tasks          | $$$$          | Slow           | Claude 4.1 Opus                 |
+| `opus4T`    | Opus 4 with explicit reasoning steps        | $$$$          | Slow           | Claude 4 Opus with thinking     |
+| `opus4`     | Opus 4 high quality, complex tasks          | $$$$          | Slow           | Claude 4 Opus                   |
+| `sonnet45T` | Latest Sonnet with explicit reasoning steps | $$$           | Medium         | Claude 4.5 Sonnet with thinking |
+| `sonnet45`  | Latest strong all-rounder                   | $$$           | Medium         | Claude 4.5 Sonnet               |
+| `sonnet4T`  | Sonnet 4 with explicit reasoning steps      | $$$           | Medium         | Claude 4 Sonnet with thinking   |
+| `sonnet4`   | Sonnet 4 strong all-rounder                 | $$$           | Medium         | Claude 4 Sonnet                 |
+| `sonnet37T` | `sonnet37` with explicit reasoning steps    | $$$           | Medium         | Good for math, complex logic    |
+| `sonnet37`  | Strong all-rounder, good context            | $$$           | Medium         |                                 |
+| `sonnet35`  | Good balance of quality/cost (older Sonnet) | $$$           | Medium         |                                 |
 
-#### Sonnet 4 1M Context (Beta)
+#### Sonnet 4 / 4.5 1M Context (Beta)
 
-To experiment with Anthropic's 1M-token context window for Sonnet 4, enable `"texra.model.useAnthropic1MBeta": true` in VS Code settings. The extension attaches the `context-1m-2025-08-07` beta header for these requests. Only Sonnet 4 supports this beta, and TeXRA still enforces the tier‑4 limit of 200 K tokens.
+To experiment with Anthropic's 1M-token context window for Sonnet 4 or 4.5, enable `"texra.model.useAnthropic1MBeta": true` in VS Code settings. The extension attaches the `context-1m-2025-08-07` beta header for these requests. Only Sonnet 4-family models support this beta, and TeXRA still enforces the tier‑4 limit of 200 K tokens.
 
 ### OpenAI Models
 
@@ -183,7 +185,7 @@ Consider these factors:
 - **Task Complexity**: Simple corrections might only need a `$`/Fast model (`gemini2f`), while complex paper transformations benefit from `$$$$`/Slow models (`opus`, `o1`).
 - **Budget**: Use cost indicators ($ - $$$$) to guide selection.
 - **Speed**: If quick turnaround is needed, prefer Fast/Very Fast models.
-- **Special Capabilities**: Do you need explicit reasoning (`sonnet37T`, `gemini2fT`, `o1`, `o3-`, `o1-`, `gptoss`, `gptoss-`, `dsr1`), vision (`gpt5`, `gpt4o`, `gemini*`), native PDF/audio (`gemini*`), or very large context (`gemini*`, `gpt41`, `gpt5`)?
+- **Special Capabilities**: Do you need explicit reasoning (`sonnet45T`, `sonnet37T`, `gemini2fT`, `o1`, `o3-`, `o1-`, `gptoss`, `gptoss-`, `dsr1`), vision (`gpt5`, `gpt4o`, `gemini*`), native PDF/audio (`gemini*`), or very large context (`gemini*`, `gpt41`, `gpt5`)?
 
 Experimentation is often key to finding the best model for your specific needs and writing style.
 
@@ -192,34 +194,23 @@ Experimentation is often key to finding the best model for your specific needs a
 You can customize which models appear in the TeXRA dropdown list via VS Code Settings (`Ctrl+,`). Search for `texra.models` and edit the JSON array. Here are the defaults:
 
 ::: tip Model Availability
-The specific models available by default and their identifiers (`sonnet37`, `gpt5`, etc.) are maintained by the TeXRA developers and may change in future updates based on new releases and performance evaluations.
+The specific models available by default and their identifiers (`sonnet45`, `gpt5`, etc.) are maintained by the TeXRA developers and may change in future updates based on new releases and performance evaluations.
 :::
 
 ```json
 "texra.models": [
-  "sonnet37T",
-  "sonnet37",
-  "o3",
-  "o4-",
-  "o3-",
-  "gptoss",
-  "gptoss-",
-  "o1",
-  "gpt41",
-  "gpt5",
-  "gpt4o",
   "gemini25p",
   "gemini25f",
-  "gemini2fT",
-  "dsv3",
-  "dsr1",
-  "grok4",
-  "grok3",
-  "qwenplus",
-  "kimit",
-  "kimiv",
+  "opus41T",
+  "sonnet45T",
+  "sonnet4T",
+  "gpt5",
+  "gpt41",
+  "deepseek",
+  "deepseekT",
   "kimi2",
-  "copilot4o"
+  "qwen3max",
+  "grok4"
 ]
 ```
 
