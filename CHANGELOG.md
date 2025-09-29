@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Features
+
+- Add Claude Sonnet 4.5 (thinking and regular) to the Anthropic catalog and default model list so the latest Claude release is immediately available in TeXRA.
+
 ## [0.33.8] - 2025-09-30
 
 ### Features
