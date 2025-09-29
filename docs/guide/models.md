@@ -28,8 +28,10 @@ Known for strong instruction following and context handling.
 | `opus41`    | Latest high quality, complex tasks          | $$$$          | Slow           | Claude 4.1 Opus               |
 | `opus4T`    | Opus 4 with explicit reasoning steps        | $$$$          | Slow           | Claude 4 Opus with thinking   |
 | `opus4`     | Opus 4 high quality, complex tasks          | $$$$          | Slow           | Claude 4 Opus                 |
-| `sonnet4T`  | Latest Sonnet with explicit reasoning steps | $$$           | Medium         | Claude 4 Sonnet with thinking |
-| `sonnet4`   | Latest strong all-rounder                   | $$$           | Medium         | Claude 4 Sonnet               |
+| `sonnet45T` | Flagship Sonnet with explicit reasoning     | $$$           | Medium         | Claude 4.5 Sonnet with thinking |
+| `sonnet45`  | Flagship strong all-rounder                 | $$$           | Medium         | Claude 4.5 Sonnet               |
+| `sonnet4T`  | Previous-gen Sonnet with explicit reasoning | $$$           | Medium         | Claude 4 Sonnet with thinking   |
+| `sonnet4`   | Previous-gen strong all-rounder             | $$$           | Medium         | Claude 4 Sonnet                 |
 | `sonnet37T` | `sonnet37` with explicit reasoning steps    | $$$           | Medium         | Good for math, complex logic  |
 | `sonnet37`  | Strong all-rounder, good context            | $$$           | Medium         |                               |
 | `sonnet35`  | Good balance of quality/cost (older Sonnet) | $$$           | Medium         |                               |
@@ -192,34 +194,22 @@ Experimentation is often key to finding the best model for your specific needs a
 You can customize which models appear in the TeXRA dropdown list via VS Code Settings (`Ctrl+,`). Search for `texra.models` and edit the JSON array. Here are the defaults:
 
 ::: tip Model Availability
-The specific models available by default and their identifiers (`sonnet37`, `gpt5`, etc.) are maintained by the TeXRA developers and may change in future updates based on new releases and performance evaluations.
+The specific models available by default and their identifiers (`sonnet45T`, `gpt5`, etc.) are maintained by the TeXRA developers and may change in future updates based on new releases and performance evaluations.
 :::
 
 ```json
 "texra.models": [
-  "sonnet37T",
-  "sonnet37",
-  "o3",
-  "o4-",
-  "o3-",
-  "gptoss",
-  "gptoss-",
-  "o1",
-  "gpt41",
-  "gpt5",
-  "gpt4o",
   "gemini25p",
   "gemini25f",
-  "gemini2fT",
-  "dsv3",
-  "dsr1",
-  "grok4",
-  "grok3",
-  "qwenplus",
-  "kimit",
-  "kimiv",
+  "opus41T",
+  "sonnet45T",
+  "gpt5",
+  "gpt41",
+  "deepseek",
+  "deepseekT",
   "kimi2",
-  "copilot4o"
+  "qwen3max",
+  "grok4"
 ]
 ```
 

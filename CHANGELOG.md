@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 - Split the agent picker into workflow and tool-use sessions with a toggle so users can quickly see the agents that apply to their workflow.
 - Update Gemini 2.5 Flash preview entries to the September 2025 release.
 - Refresh Qwen-Max and Qwen Plus integrations with updated pricing, naming, and thinking support in the DashScope handler.
+- Add Claude Sonnet 4.5 (thinking and standard) to the model catalog and promote the thinking variant to the default list.
 
 ### Bug Fixes
 
