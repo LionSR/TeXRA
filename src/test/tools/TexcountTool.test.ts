@@ -27,7 +27,7 @@ suite('TexcountTool', () => {
         files: Array.isArray(files) ? files : [files],
         options,
       });
-      return 'Words in text: 42';
+      return { output: 'Words in text: 42', errors: [] };
     };
 
     const tool = new TexcountTool();
@@ -43,7 +43,10 @@ suite('TexcountTool', () => {
   test('formats output when stats format requested', async () => {
     (
       texcountModule as { getTeXCount: typeof originalGetTeXCount }
-    ).getTeXCount = async () => 'Words in text: 100';
+    ).getTeXCount = async () => ({
+      output: 'Words in text: 100',
+      errors: [],
+    });
 
     const tool = new TexcountTool();
     const result = await tool.call({
@@ -59,13 +62,16 @@ suite('TexcountTool', () => {
   test('returns error result when texcount output is missing', async () => {
     (
       texcountModule as { getTeXCount: typeof originalGetTeXCount }
-    ).getTeXCount = async () => null;
+    ).getTeXCount = async () => ({
+      output: null,
+      errors: ['File missing.tex does not exist.'],
+    });
 
     const tool = new TexcountTool();
     const result = await tool.call({ files: ['missing.tex'], mode: 'sum' });
 
     assert.strictEqual(result.isError, true);
-    assert.ok(result.error?.includes('texcount did not return any output'));
+    assert.ok(result.error?.includes('missing.tex'));
   });
 
   test('passes selected mode to texcount implementation', async () => {
@@ -80,7 +86,7 @@ suite('TexcountTool', () => {
         files: Array.isArray(files) ? files : [files],
         options,
       });
-      return 'Words in text: 21';
+      return { output: 'Words in text: 21', errors: [] };
     };
 
     const tool = new TexcountTool();

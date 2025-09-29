@@ -46,11 +46,14 @@ export class TexcountTool extends defineTool({
     }
 
     const mode: TexcountMode = input.mode ?? 'separate';
-    const output = await getTeXCount(files, { mode });
+    const { output, errors } = await getTeXCount(files, { mode });
 
     if (!output) {
+      const errorMessage =
+        errors.join('\n') ||
+        'texcount did not return any output. Ensure the files exist.';
       return toolResult({
-        error: 'texcount did not return any output. Ensure the files exist.',
+        error: errorMessage,
         isError: true,
       });
     }

@@ -21,6 +21,7 @@ export {
   formatTeXCountStats,
   type TexcountOptions,
   type TexcountMode,
+  type TexcountResult,
 } from './texcount';
 
 // Export latexdiff service
