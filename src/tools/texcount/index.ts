@@ -1,0 +1,1 @@
+export { TexcountTool } from './TexcountTool';
