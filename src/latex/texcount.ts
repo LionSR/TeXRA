@@ -42,82 +42,195 @@ async function hasChinesePackages(filePath: string): Promise<boolean> {
 /**
  * Get full statistics for LaTeX documents using the texcount Perl script
  * @param filePaths Single file path or array of file paths
- * @param merge Whether to merge included files in the count
- * @param channel The channel to use for logging
+ * @param options Options to control merging behavior and logging channel
  * @returns Promise<string | null> String containing full texcount output for all files, or null if an error occurred
  */
+export type TexcountMode = 'separate' | 'include' | 'sum';
+
+export interface TexcountOptions {
+  mode?: TexcountMode;
+  channel?: string;
+}
+
+async function validateTexFile(
+  filePath: string,
+  channel: string,
+): Promise<boolean> {
+  if (!(await WorkspaceFS.exists(filePath))) {
+    logger.warn(channel, `File ${filePath} does not exist.`);
+    return false;
+  }
+
+  if (!filePath.endsWith('.tex')) {
+    logger.warn(
+      channel,
+      `Error: File ${filePath} is not a LaTeX file. Skipping.`,
+    );
+    return false;
+  }
+
+  return true;
+}
+
+async function detectChineseMode(
+  filePath: string,
+  channel: string,
+): Promise<boolean> {
+  if (await hasChinesePackages(filePath)) {
+    logger.debug(
+      channel,
+      `Chinese packages detected in ${filePath}, enabling Chinese character counting`,
+    );
+    return true;
+  }
+
+  return false;
+}
+
+async function runTexcount(
+  args: string[],
+  channel: string,
+  context: string,
+): Promise<string | null> {
+  const result = await runToolWithCheck('texcount', args, {
+    channel,
+    truncate: false,
+    showError: true,
+  });
+
+  if (!result) {
+    return null;
+  }
+
+  if (result.success && result.stdout) {
+    logger.debug(channel, `Successfully counted ${context}`);
+    return result.stdout;
+  }
+
+  logger.error(channel, `Error getting tex count for ${context}`);
+  if (result.stdout) {
+    logger.error(channel, `Stdout: ${result.stdout}`);
+  }
+  if (result.stderr) {
+    logger.error(channel, `Stderr: ${result.stderr}`);
+  }
+
+  return null;
+}
+
+async function getIndividualCounts(
+  paths: string[],
+  channel: string,
+  includeReferenced: boolean,
+): Promise<string[]> {
+  const outputs: string[] = [];
+
+  for (const filePath of paths) {
+    if (!(await validateTexFile(filePath, channel))) {
+      continue;
+    }
+
+    const args: string[] = [];
+    if (includeReferenced) {
+      args.push('-inc');
+    }
+    if (await detectChineseMode(filePath, channel)) {
+      args.push('-ch-only');
+    }
+    args.push(filePath);
+
+    const stdout = await runTexcount(args, channel, filePath);
+    if (stdout) {
+      outputs.push(`TeX Count Results for ${filePath}:\n${stdout}`);
+    }
+  }
+
+  return outputs;
+}
+
+async function getSummedCount(
+  paths: string[],
+  channel: string,
+): Promise<string | null> {
+  const validPaths: string[] = [];
+  let enableChineseMode = false;
+
+  for (const filePath of paths) {
+    if (!(await validateTexFile(filePath, channel))) {
+      continue;
+    }
+
+    validPaths.push(filePath);
+
+    if (!enableChineseMode && (await hasChinesePackages(filePath))) {
+      enableChineseMode = true;
+      logger.debug(
+        channel,
+        `Chinese packages detected in ${filePath}, enabling Chinese character counting`,
+      );
+    }
+  }
+
+  if (validPaths.length === 0) {
+    return null;
+  }
+
+  const args: string[] = ['-sum'];
+  if (enableChineseMode) {
+    args.push('-ch-only');
+  }
+  args.push(...validPaths);
+
+  const stdout = await runTexcount(
+    args,
+    channel,
+    `sum for ${validPaths.join(', ')}`,
+  );
+  if (!stdout) {
+    return null;
+  }
+
+  return `Combined TeX Count Results (sum):\n${stdout}`;
+}
+
 export async function getTeXCount(
   filePaths: string | string[],
-  merge: boolean = false,
-  channel: string = CHANNEL,
+  { mode = 'separate', channel = CHANNEL }: TexcountOptions = {},
 ): Promise<string | null> {
   try {
-    // Convert single path to array
     const paths = Array.isArray(filePaths) ? filePaths : [filePaths];
-    const allOutputs: string[] = [];
+    const resolvedChannel = channel ?? CHANNEL;
 
-    for (const filePath of paths) {
-      if (!(await WorkspaceFS.exists(filePath))) {
-        logger.warn(channel, `File ${filePath} does not exist.`);
-        continue;
-      }
-
-      if (!filePath.endsWith('.tex')) {
-        logger.warn(
-          channel,
-          `Error: File ${filePath} is not a LaTeX file. Skipping.`,
-        );
-        continue;
-      }
-
-      const args: string[] = [];
-      if (merge) {
-        args.push('-merge');
-      }
-
-      // Add Chinese counting support if Chinese packages are detected
-      if (await hasChinesePackages(filePath)) {
-        args.push('-ch-only'); // Use Chinese-only mode for accurate character counting
-        logger.debug(
-          channel,
-          `Chinese packages detected in ${filePath}, enabling Chinese character counting`,
+    if (mode === 'sum') {
+      const sumOutput = await getSummedCount(paths, resolvedChannel);
+      if (sumOutput) {
+        logger.info(
+          resolvedChannel,
+          `Combined TeX Count Results:\n${sumOutput}`,
         );
       }
-
-      args.push(filePath);
-
-      const result = await runToolWithCheck('texcount', args, {
-        channel,
-        truncate: false, // Don't truncate texcount output as we need the full statistics
-        showError: true, // Show error for missing texcount
-      });
-      if (!result) {
-        return null;
-      }
-      if (result.success && result.stdout) {
-        allOutputs.push(`TeX Count Results for ${filePath}:\n${result.stdout}`);
-        logger.debug(channel, `Successfully counted ${filePath}`);
-      } else {
-        logger.error(channel, `Error getting tex count for ${filePath}`);
-        if (result.stdout) {
-          logger.error(channel, `Stdout: ${result.stdout}`);
-        }
-        if (result.stderr) {
-          logger.error(channel, `Stderr: ${result.stderr}`);
-        }
-      }
+      return sumOutput;
     }
 
-    if (allOutputs.length > 0) {
-      const combinedOutput = allOutputs.join('\n\n');
-      logger.info(channel, `Combined TeX Count Results:\n${combinedOutput}`);
-      return combinedOutput;
+    const includeReferenced = mode === 'include';
+    const outputs = await getIndividualCounts(
+      paths,
+      resolvedChannel,
+      includeReferenced,
+    );
+    if (outputs.length === 0) {
+      return null;
     }
 
-    return null;
+    const combinedOutput = outputs.join('\n\n');
+    logger.info(
+      resolvedChannel,
+      `Combined TeX Count Results:\n${combinedOutput}`,
+    );
+    return combinedOutput;
   } catch (err) {
     logger.error(
-      channel,
+      channel ?? CHANNEL,
       `Error in getTeXCount: ${err instanceof Error ? err.message : String(err)}`,
     );
     return null;
@@ -130,12 +243,14 @@ export async function getTeXCount(
  * @param channel The channel to use for logging
  * @returns Promise<string | null> String containing formatted texcount statistics with XML tags, or null if an error occurred
  */
+export function formatTeXCountStats(texcountOutput: string): string {
+  return `TeX Count Statistics:<texcount>\n${texcountOutput}\n</texcount>\n\n`;
+}
+
 export async function getTeXCountStats(
   filePaths: string | string[],
   channel: string = CHANNEL,
 ): Promise<string | null> {
-  const texcountStats = await getTeXCount(filePaths, false, channel);
-  return texcountStats
-    ? `TeX Count Statistics:<texcount>\n${texcountStats}\n</texcount>\n\n`
-    : null;
+  const texcountStats = await getTeXCount(filePaths, { channel });
+  return texcountStats ? formatTeXCountStats(texcountStats) : null;
 }

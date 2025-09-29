@@ -85,7 +85,10 @@ describe('promptUtils.writePromptToXml', () => {
     );
 
     assert.equal(writes.length, 1);
-    assert.deepEqual(ensured, [TASK_RUNS_DIR, path.join(TASK_RUNS_DIR, executionId)]);
+    assert.deepEqual(ensured, [
+      TASK_RUNS_DIR,
+      path.join(TASK_RUNS_DIR, executionId),
+    ]);
 
     const expectedRelative = path.join(
       TASK_RUNS_DIR,
