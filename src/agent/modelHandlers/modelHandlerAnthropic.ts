@@ -165,6 +165,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       // Remove temperature for Claude 4 models when thinking is enabled as per Anthropic docs
       if (
         this.config.fullName.includes('claude-opus-4') ||
+        this.config.fullName.includes('claude-sonnet-4-5') ||
         this.config.fullName.includes('claude-sonnet-4') ||
         this.config.fullName.includes('claude-3-7-sonnet')
       ) {
@@ -183,10 +184,11 @@ export class ModelHandlerAnthropic extends ModelHandler<
       // The thinking configuration is now handled above for all reasoning models
     }
 
-    // Opt-in beta for 1M context window on Claude Sonnet 4
+    // Opt-in beta for 1M context window on Claude Sonnet 4 family
     if (
       useAnthropic1MBeta &&
-      this.config.fullName === 'claude-sonnet-4-20250514'
+      (this.config.fullName === 'claude-sonnet-4-20250514' ||
+        this.config.fullName === 'claude-sonnet-4-5')
     ) {
       options.betas = [...(options.betas ?? []), CONTEXT_1M_BETA];
     }
