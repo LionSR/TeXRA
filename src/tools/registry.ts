@@ -14,6 +14,7 @@ import { WriteFileTool } from './WriteTool';
 import { WebFetchTool } from './web/WebFetchTool';
 import { WebSearchTool } from './web/WebSearchTool';
 import { WolframTool } from './wolfram';
+import { TexcountTool } from './texcount';
 
 export const DEFAULT_TOOL_REGISTRY: Record<string, BaseTool<any>> = {
   str_replace_editor: new TextEditorTool(),
@@ -28,6 +29,7 @@ export const DEFAULT_TOOL_REGISTRY: Record<string, BaseTool<any>> = {
   grep: new GrepTool(),
   ls: new LsTool(),
   wolfram: new WolframTool(),
+  texcount: new TexcountTool(),
   web_fetch: new WebFetchTool(),
   web_search: new WebSearchTool(),
 };
