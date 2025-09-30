@@ -8,6 +8,7 @@ import { FileOpTool } from './fileOp';
 import { GlobTool } from './glob';
 import { GrepTool } from './grep';
 import { LsTool } from './ls';
+import { ArxivDownloadTool } from './latex/ArxivDownloadTool';
 import { ReadFileTool } from './ReadTool';
 import { TextEditorTool } from './TextEditorTool';
 import { WriteFileTool } from './WriteTool';
@@ -28,6 +29,7 @@ export const DEFAULT_TOOL_REGISTRY: Record<string, BaseTool<any>> = {
   glob: new GlobTool(),
   grep: new GrepTool(),
   ls: new LsTool(),
+  download_arxiv_source: new ArxivDownloadTool(),
   wolfram: new WolframTool(),
   texcount: new TexcountTool(),
   web_fetch: new WebFetchTool(),
