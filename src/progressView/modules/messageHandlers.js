@@ -101,6 +101,24 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
     dom.toolbar.render(sessionKind);
 
+    const openStorageButton = document.getElementById(
+      ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
+    );
+    if (openStorageButton) {
+      const hasExecution = Boolean(activeStreamInfo?.executionId);
+      openStorageButton.classList.toggle(
+        'toolbar-button--hidden',
+        !hasExecution,
+      );
+      openStorageButton.dataset.hiddenByAgent = hasExecution ? 'false' : 'true';
+      openStorageButton.disabled = !hasExecution;
+      if (hasExecution) {
+        openStorageButton.setAttribute('aria-hidden', 'false');
+      } else {
+        openStorageButton.setAttribute('aria-hidden', 'true');
+      }
+    }
+
     // Update status based on whether there's an active stream
     if (!message.activeStream) {
       dom.status.update(STATUS.READY);

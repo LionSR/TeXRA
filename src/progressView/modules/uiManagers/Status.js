@@ -13,7 +13,11 @@ export class Status {
       [STATUS.RUNNING]: {
         className: 'running',
         label: 'Running',
-        enable: [ELEMENT_IDS.STOP_STREAM_BTN, ELEMENT_IDS.RESTORE_STATE_BTN],
+        enable: [
+          ELEMENT_IDS.STOP_STREAM_BTN,
+          ELEMENT_IDS.RESTORE_STATE_BTN,
+          ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
+        ],
       },
       [STATUS.ERROR]: {
         className: 'error',
@@ -25,6 +29,7 @@ export class Status {
           ELEMENT_IDS.RESTORE_STATE_BTN,
           ELEMENT_IDS.DIFF_STREAM_BTN,
           ELEMENT_IDS.ERASE_STREAM_BTN,
+          ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
         ],
       },
       [STATUS.STOPPED]: {
@@ -37,12 +42,17 @@ export class Status {
           ELEMENT_IDS.RESTORE_STATE_BTN,
           ELEMENT_IDS.DIFF_STREAM_BTN,
           ELEMENT_IDS.ERASE_STREAM_BTN,
+          ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
         ],
       },
       [STATUS.READY]: {
         className: 'ready',
         label: 'Ready',
-        enable: [ELEMENT_IDS.RESTORE_STATE_BTN, ELEMENT_IDS.ERASE_STREAM_BTN],
+        enable: [
+          ELEMENT_IDS.RESTORE_STATE_BTN,
+          ELEMENT_IDS.ERASE_STREAM_BTN,
+          ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
+        ],
       },
       [STATUS.WAITING]: {
         className: 'waiting',
@@ -51,6 +61,7 @@ export class Status {
           ELEMENT_IDS.STOP_STREAM_BTN,
           ELEMENT_IDS.RESTORE_STATE_BTN,
           ELEMENT_IDS.ERASE_STREAM_BTN,
+          ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
         ],
       },
     };
