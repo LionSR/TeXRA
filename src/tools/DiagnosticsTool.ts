@@ -46,18 +46,15 @@ export class DiagnosticsTool extends defineTool({
           command,
           path,
           summary: `Diagnostics list for ${path}`,
-          output: messages,
           severity,
-          includeMessages: true,
+          messages,
         });
       case 'count':
         return this.createResult({
           command,
           path,
           summary: `Diagnostics count for ${path}`,
-          output: severity,
           severity,
-          includeMessages: false,
         });
       default:
         throw new ToolError(
@@ -66,6 +63,9 @@ export class DiagnosticsTool extends defineTool({
     }
   }
 
+  /**
+   * Resolve diagnostics for a given path and compute their severity totals.
+   */
   private async collectDiagnostics(path: string): Promise<{
     messages: Diagnostic[];
     severity: DiagnosticsSeverityCounts;
@@ -75,31 +75,35 @@ export class DiagnosticsTool extends defineTool({
     return { messages, severity };
   }
 
-  private createResult({
-    command,
-    path,
-    summary,
-    output,
-    severity,
-    includeMessages,
-  }: {
-    command: DiagnosticsInput['command'];
-    path: string;
-    summary: string;
-    output: DiagnosticsPayload['messages'] | DiagnosticsPayload['severity'];
-    severity: DiagnosticsSeverityCounts;
-    includeMessages: boolean;
-  }): ToolResult {
+  /**
+   * Wrap diagnostics data in the shared tool result format.
+   */
+  private createResult(
+    args:
+      | {
+          command: 'list';
+          path: string;
+          summary: string;
+          severity: DiagnosticsSeverityCounts;
+          messages: Diagnostic[];
+        }
+      | {
+          command: 'count';
+          path: string;
+          summary: string;
+          severity: DiagnosticsSeverityCounts;
+        },
+  ): ToolResult {
     const payload: DiagnosticsPayload = {
-      path,
-      command,
-      severity,
-      messages: includeMessages ? (output as Diagnostic[]) : undefined,
+      path: args.path,
+      command: args.command,
+      severity: args.severity,
+      messages: 'messages' in args ? args.messages : undefined,
     };
 
     return toolResult({
-      summary,
-      output: JSON.stringify(output, null, 2),
+      summary: args.summary,
+      output: JSON.stringify(payload, null, 2),
       diagnostics: payload,
     });
   }
