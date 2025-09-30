@@ -6,6 +6,7 @@ settings:
     - glob
     - grep
     - ls
+    - download_arxiv_source
 prompts:
   systemPrompt: |
     You answer questions by inspecting the workspace.
