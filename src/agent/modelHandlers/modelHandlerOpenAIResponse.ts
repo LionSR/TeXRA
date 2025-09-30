@@ -18,6 +18,7 @@ import type {
   ResponseInputMessageContentList,
   ResponseInputFile,
   ResponseStreamEvent,
+  ResponseOutputText,
 } from 'openai/resources/responses/responses';
 import type { Reasoning } from 'openai/resources/shared';
 import type { ResponseStreamParams } from 'openai/lib/responses/ResponseStream';
@@ -518,8 +519,27 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     };
 
     const rawOutputText = responseObject.output_text;
-    const newResponse =
+    let newResponse =
       typeof rawOutputText === 'string' ? rawOutputText.trim() : '';
+
+    if (!newResponse) {
+      const fallbackSegments =
+        responseObject.output?.flatMap((item) => {
+          if (item.type !== 'message') {
+            return [];
+          }
+
+          return item.content
+            .filter(
+              (part): part is ResponseOutputText => part.type === 'output_text',
+            )
+            .map((part) => part.text);
+        }) ?? [];
+      const fallbackText = fallbackSegments.join('').trim();
+      if (fallbackText) {
+        newResponse = fallbackText;
+      }
+    }
 
     const stopReason =
       responseObject.status === 'completed'

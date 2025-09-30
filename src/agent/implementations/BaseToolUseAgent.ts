@@ -4,6 +4,8 @@ import {
   AgentPrompt,
   AgentSessionKind,
   AgentSetting,
+  AgentType,
+  resolveAgentSessionMetadata,
 } from '../core/AgentDataclass';
 import { ToolState } from '../core/ToolState';
 import { runToolUseCycle } from '../core/ToolUseCycle';
@@ -22,12 +24,16 @@ import { BaseAgent } from './BaseAgent';
 import type { ToolDefinition } from '@model';
 import { BaseTool } from '@tools/core/base';
 import { DEFAULT_TOOL_REGISTRY } from '@tools/registry';
-import type { ExecutionId } from '@agent/types/IdentifierTypes';
+import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
 import { bus } from '@eventBus/ProgressEventBus';
 import {
   ToolUseSessionManager,
   type ToolUseSessionSnapshot,
 } from '@agent/toolUse/ToolUseSessionManager';
+import {
+  registerToolUseAgent,
+  unregisterToolUseAgent,
+} from '@agent/toolUse/ToolUseAgentRegistry';
 
 export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
   private toolRegistry: Record<string, BaseTool<any>>;
@@ -56,6 +62,21 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
       executionId,
     );
     this.toolRegistry = DEFAULT_TOOL_REGISTRY;
+  }
+
+  protected override registerRunningAgent(streamTabId: StreamTabId): void {
+    registerToolUseAgent(streamTabId, this);
+  }
+
+  protected override unregisterRunningAgent(streamTabId: StreamTabId): void {
+    unregisterToolUseAgent(streamTabId);
+  }
+
+  public override getSessionMetadata() {
+    return resolveAgentSessionMetadata(
+      AgentType.ToolUse,
+      AgentSessionKind.ToolUse,
+    );
   }
 
   private getTools(): ToolDefinition[] {
@@ -133,7 +154,7 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
       let shouldSkipCycle = false;
 
       if (this.resumeSnapshot) {
-        this.logger.info('Resuming tool-use session from saved state.');
+        this.logger.debug('Resuming tool-use session from saved state.');
         // Validate messages before hydrating
         const messages = this.resumeSnapshot.messages ?? [];
         if (!Array.isArray(messages)) {

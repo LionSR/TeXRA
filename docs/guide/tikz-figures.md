@@ -41,7 +41,7 @@ TeXRA's `draw` agent is specifically designed to work with TikZ figures (think o
 To create a new TikZ figure:
 
 1. Select the agent: `draw`
-2. Choose a model (Models like `o1`, `sonnet37T`, or `gemini25p` are often good choices for complex drawing tasks).
+2. Choose a model (Models like `o1`, `sonnet45T`, or `gemini25p` are often good choices for complex drawing tasks).
 3. Provide a detailed description of the desired figure
 4. Execute the agent
 

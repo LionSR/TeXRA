@@ -2,7 +2,7 @@
 import * as path from 'path';
 
 // Local imports - agent
-import { AgentSetting } from '@agent/core/AgentDataclass';
+import { AgentWorkflowSetting } from '@agent/core/AgentDataclass';
 import { LaTeXdiffService, LaTeXdiffResult } from '@latex/latexdiff';
 import { compileLatex2Pdf } from '@latex/texTools';
 import { AgentLogger } from '@logger/AgentLogger';
@@ -15,7 +15,7 @@ export class LatexDiffManager {
   private readonly latexdiffService: LaTeXdiffService;
 
   constructor(
-    private readonly agentSetting: AgentSetting,
+    private readonly agentSetting: AgentWorkflowSetting,
     private readonly outputFiles: { [key: number]: string[] },
     private readonly baseFiles: string[],
     private readonly logger: AgentLogger,

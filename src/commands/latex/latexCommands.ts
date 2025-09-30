@@ -11,7 +11,7 @@ import replacementEngine from '@replacement/engine';
 
 // Local imports - latex utils
 import { runLatexFormatter } from '@latex/texFormatter';
-import { getTeXCount } from '@latex/texcount';
+import { getTeXCount, type TexcountMode } from '@latex/texcount';
 import { showLoggedErrorMessage } from '@common/errors/errorHandlingUtils';
 
 // Local imports - commands
@@ -139,10 +139,15 @@ async function handleGetTeXCount(): Promise<void> {
     logger.debug(CHANNEL, `Getting tex count for: ${filePath}`);
 
     // Ask if user wants to merge included files
-    const mergeOption = await vscode.window.showQuickPick(
+    const countingMode = await vscode.window.showQuickPick<
+      vscode.QuickPickItem & { value: TexcountMode }
+    >(
       [
-        { label: 'Count main file only', value: false },
-        { label: 'Merge included files', value: true },
+        { label: 'Count main file only', value: 'separate' as const },
+        {
+          label: 'Follow \\input/\\include and combine',
+          value: 'include' as const,
+        },
       ],
       {
         placeHolder: 'Count options',
@@ -150,7 +155,7 @@ async function handleGetTeXCount(): Promise<void> {
       },
     );
 
-    if (!mergeOption) {
+    if (!countingMode) {
       return;
     }
 
@@ -164,17 +169,20 @@ async function handleGetTeXCount(): Promise<void> {
       async (progress) => {
         progress.report({ message: 'Running texcount...' });
 
-        const result = await getTeXCount(filePath, mergeOption.value, CHANNEL);
+        const { output, errors } = await getTeXCount(filePath, {
+          mode: countingMode.value,
+          channel: CHANNEL,
+        });
 
-        if (result) {
+        if (output) {
           // Extract key statistics using regex
-          const wordMatch = result.match(/Words in text:\s*(\d+)/);
-          const headerMatch = result.match(/Words in headers:\s*(\d+)/);
-          const captionMatch = result.match(/Words in float captions:\s*(\d+)/);
-          const mathInlineMatch = result.match(
+          const wordMatch = output.match(/Words in text:\s*(\d+)/);
+          const headerMatch = output.match(/Words in headers:\s*(\d+)/);
+          const captionMatch = output.match(/Words in float captions:\s*(\d+)/);
+          const mathInlineMatch = output.match(
             /Number of inline math:\s*(\d+)/,
           );
-          const mathDisplayMatch = result.match(
+          const mathDisplayMatch = output.match(
             /Number of displayed math:\s*(\d+)/,
           );
 
@@ -196,7 +204,10 @@ async function handleGetTeXCount(): Promise<void> {
             canPickMany: false,
           });
         } else {
-          vscode.window.showErrorMessage('Failed to get tex count');
+          const message =
+            errors[0] ??
+            'Failed to get tex count. Please verify the file path.';
+          vscode.window.showErrorMessage(message);
         }
       },
     );

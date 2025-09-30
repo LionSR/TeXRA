@@ -24,14 +24,15 @@ import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
 import type { TokenUsageStats } from '@agent/types/UsageTypes';
 import { AgentLogger } from '@logger/AgentLogger';
 import { LogMessageData } from '@logger/LogTypes';
-import { TaskState } from '@logger/TaskState';
+import { TaskState, isWorkflowTaskState } from '@logger/TaskState';
 
 // Type aliases for status values
 type StreamStatusType =
   | typeof STATUS.RUNNING
   | typeof STATUS.ERROR
   | typeof STATUS.STOPPED
-  | typeof STATUS.WAITING;
+  | typeof STATUS.WAITING
+  | typeof STATUS.RESUMING;
 
 /**
  * Refactored ProgressViewProvider using the new modular architecture.
@@ -229,15 +230,15 @@ export class ProgressViewProvider
    */
   public clearTaskOutput(streamTabId: StreamTabId): void {
     const taskState = this.state.getTaskState(streamTabId);
-    if (taskState) {
-      // Only clear output-related fields, preserve other task state data
-      taskState.agentConfig.outputFiles = [];
-      taskState.agentConfig.useMultipleOutputs = false;
-      if (taskState.activeFiles) {
-        taskState.activeFiles.output = false;
-      }
-      this.state.setTaskState(streamTabId, taskState);
+    if (!taskState || !isWorkflowTaskState(taskState)) {
+      return;
     }
+
+    // Only clear output-related fields, preserve other task state data
+    taskState.agentConfig.outputFiles = [];
+    taskState.agentConfig.useMultipleOutputs = false;
+    taskState.activeFiles.output = false;
+    this.state.setTaskState(streamTabId, taskState);
   }
 
   /**

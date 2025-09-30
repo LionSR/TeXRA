@@ -58,6 +58,29 @@ This is the crucial part for generating multiple distinct files:
 
 TeXRA records whether a run expects multiple files through the `useMultipleOutputs` flag stored in each agent configuration. The UI toggles this flag whenever you expand the "Multiple Outputs" section, and the backend propagates it through task history, housekeeping commands, and progress logs. Stream identifiers still append `_multiple` for readability, but that suffix is now derived from the flag rather than being hard-coded into agent names.
 
+### Declaring multi-output agents in YAML
+
+Custom agents can advertise that they always expect multiple outputs by setting
+`settings.isMultipleOutput: true` in their YAML definition. This flag is
+workflow-specific—it is ignored for tool-use agents—and it enables frontend
+affordances like the "∶∶" dropdown badge even when a sibling `_multiple.yaml`
+file is not present.
+
+```yaml
+name: my_agent_multiple
+settings:
+  isMultipleOutput: true
+  defaultOutputFiles:
+    - paper_section.tex
+    - appendix.tex
+```
+
+Agents that inherit from a single-output variant should also set this field so
+the registry watcher can skip duplicate prompts when the base agent is already
+configured. The legacy `useMultipleOutputs` field is no longer supported—update
+existing YAML files to declare `isMultipleOutput` explicitly to opt into the
+multiple-output affordances.
+
 ## Example: `polish_multiple` Agent Prompts
 
 The built-in `polish_multiple.yaml` agent (which inherits from `polish`) demonstrates how prompts need to be structured to request and format multiple outputs within the `<latex_documents>` tag. Its `userRequest` prompt explicitly asks the model to structure its response like this, referencing the `{{ OUTPUT_FILES_ORDER }}` variable which contains the comma-separated list of filenames from the UI:
