@@ -22,6 +22,9 @@ const ArxivDownloadInputSchema = z
 
 export type ArxivDownloadInput = z.infer<typeof ArxivDownloadInputSchema>;
 
+const validateArxivId = (id: string): string | null =>
+  arxivProcessor.validateId(id);
+
 export class ArxivDownloadTool extends defineTool({
   name: 'download_arxiv_source',
   description:
@@ -30,7 +33,7 @@ export class ArxivDownloadTool extends defineTool({
 }) {
   protected async execute(input: ArxivDownloadInput): Promise<ToolResult> {
     const arxivId = input.id.trim();
-    const validationError = arxivProcessor.validateId(arxivId);
+    const validationError = validateArxivId(arxivId);
     if (validationError) {
       throw new ToolError(validationError);
     }
@@ -48,17 +51,23 @@ export class ArxivDownloadTool extends defineTool({
     }
 
     const relativeRaw = WorkspaceFS.relativePath(downloadPath);
+    // WorkspaceFS.relativePath returns an empty string for the workspace root; normalise to '.' for tooling.
     const relativePath = relativeRaw === '' ? '.' : relativeRaw;
     const displayPath = toPosixPath(relativePath);
 
     const lsTool = new LsTool();
-    const listingResult = await lsTool.call({ path: relativePath });
-
-    const listingOutput = listingResult.output
-      ? listingResult.output
-      : listingResult.error
-        ? `Failed to list directory: ${listingResult.error}`
-        : '(directory listing unavailable)';
+    let listingOutput = '(directory listing unavailable)';
+    try {
+      const listingResult = await lsTool.call({ path: relativePath });
+      if (listingResult?.output) {
+        listingOutput = listingResult.output;
+      } else if (listingResult?.error) {
+        listingOutput = `Failed to list directory: ${listingResult.error}`;
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      listingOutput = `Failed to list directory: ${message}`;
+    }
 
     const summary = `Downloaded arXiv source to ${displayPath}`;
     const output = [
