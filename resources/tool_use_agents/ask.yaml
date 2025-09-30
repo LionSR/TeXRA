@@ -6,6 +6,9 @@ settings:
     - glob
     - grep
     - ls
+    # Optional LaTeX utilities:
+    # - extract_figures
+    # - extract_tikz_figures
 prompts:
   systemPrompt: |
     You answer questions by inspecting the workspace.

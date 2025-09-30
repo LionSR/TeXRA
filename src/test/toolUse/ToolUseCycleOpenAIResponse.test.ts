@@ -29,12 +29,25 @@ import { BaseTool } from '@tools/core/base';
 import { ToolResult, toolResult } from '@tools/result';
 import type OpenAI from 'openai';
 
+const SAMPLE_IMAGE_BASE64 =
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGNgYAAAAAMAAWgmWQ0AAAAASUVORK5CYII=';
+
 class EchoTool extends BaseTool<{ value: string }> {
   constructor() {
     super({ name: 'echo' }, z.object({ value: z.string() }));
   }
   protected async execute(input: { value: string }): Promise<ToolResult> {
-    return toolResult({ output: input.value });
+    return toolResult({
+      output: input.value,
+      files: [
+        {
+          path: 'figures/hello.png',
+          data: SAMPLE_IMAGE_BASE64,
+          mimeType: 'image/png',
+          name: 'hello.png',
+        },
+      ],
+    });
   }
 }
 
@@ -160,9 +173,11 @@ describe('runToolUseCycle OpenAIResponse', () => {
     );
     assert.ok(structuredLog, 'Tool use log entry missing structured payload');
     assert.deepEqual(structuredLog?.logMessage.data?.input, { value: 'hello' });
-    assert.deepEqual(structuredLog?.logMessage.data?.output, {
-      output: 'hello',
-    });
+    assert.equal(structuredLog?.logMessage.data?.output?.output, 'hello');
+    assert.equal(
+      structuredLog?.logMessage.data?.output?.files?.[0]?.path,
+      'figures/hello.png',
+    );
     const assistantMsg = messages[0] as any;
     assert.equal(assistantMsg.role, 'assistant');
     assert.equal(assistantMsg.type, 'message');
@@ -176,10 +191,19 @@ describe('runToolUseCycle OpenAIResponse', () => {
       name: 'echo',
       arguments: '{"value":"hello"}',
     });
-    assert.deepEqual(messages[2], {
-      type: 'function_call_output',
-      call_id: 'c1',
-      output: JSON.stringify({ output: 'hello' }),
-    });
+    const toolOutput = messages[2] as any;
+    assert.equal(toolOutput.type, 'function_call_output');
+    assert.equal(toolOutput.call_id, 'c1');
+    assert.ok(typeof toolOutput.output === 'string');
+    assert.ok(toolOutput.output.includes('"output":"hello"'));
+    assert.ok(Array.isArray(toolOutput.content));
+    assert.equal(toolOutput.content[0].type, 'output_text');
+    assert.ok(toolOutput.content[0].text.includes('"output":"hello"'));
+    const imagePart = toolOutput.content.find(
+      (part: any) => part.type === 'output_image',
+    );
+    assert.ok(imagePart, 'expected output_image part in tool response');
+    assert.equal(imagePart.mime_type, 'image/png');
+    assert.equal(imagePart.name, 'hello.png');
   });
 });

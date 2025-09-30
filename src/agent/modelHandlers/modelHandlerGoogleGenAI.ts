@@ -43,6 +43,7 @@ import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
 import { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import type { ToolDefinition } from '@model';
+import type { ToolResultAttachment } from '@tools/result';
 import { cleanFileContent } from '@replacement/engine';
 import replacementEngine from '@replacement/engine';
 
@@ -1000,6 +1001,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     result: Record<string, unknown>,
     _toolState?: ToolState,
     text?: string,
+    attachments?: ToolResultAttachment[],
   ): [Content, Content] {
     // Handle both args and input fields for backward compatibility
     const args =
@@ -1020,18 +1022,44 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     }
 
     // Use the same ID for the result to maintain correlation
-    const resultPart = createPartFromFunctionResponse(
-      callId,
-      functionName,
-      result,
-    );
+    const resultCopy = { ...result } as Record<string, unknown> & {
+      files?: unknown;
+    };
+    if ('files' in resultCopy) {
+      delete resultCopy.files;
+    }
+
+    const attachmentSummaries = attachments?.map((file) => ({
+      path: file.path,
+      name: file.name ?? path.basename(file.path),
+      mimeType: file.mimeType ?? 'application/octet-stream',
+      description: file.description,
+      size: file.size,
+    }));
+
+    const responsePayload = {
+      ...resultCopy,
+      files: attachmentSummaries ?? (result as { files?: unknown }).files ?? [],
+    };
+
+    const resultParts: Part[] = [
+      createPartFromFunctionResponse(callId, functionName, responsePayload),
+    ];
+
+    attachments?.forEach((file) => {
+      const mimeType = file.mimeType ?? 'application/octet-stream';
+      const label = file.name ?? path.basename(file.path);
+      const descriptor = file.description ? ` – ${file.description}` : '';
+      const attachmentText = `File: ${label} (${mimeType})${descriptor}\n${file.dataUri}`;
+      resultParts.push(createPartFromText(attachmentText));
+    });
     const callParts: Part[] = [];
     if (text) {
       callParts.push(createPartFromText(text));
     }
     callParts.push(callPart);
     const callMsg: Content = { role: 'model', parts: callParts };
-    const resultMsg: Content = { role: 'user', parts: [resultPart] };
+    const resultMsg: Content = { role: 'user', parts: resultParts };
     return [callMsg, resultMsg];
   }
 

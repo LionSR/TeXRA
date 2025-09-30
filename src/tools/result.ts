@@ -6,6 +6,20 @@ export type ErrorDiagnostics =
   | { name: string; stack?: string } // For regular errors
   | unknown; // For other types of diagnostics
 
+export interface ToolResultFile {
+  path: string;
+  name?: string;
+  mimeType?: string;
+  description?: string;
+  data?: string;
+}
+
+export interface ToolResultAttachment extends ToolResultFile {
+  data: string;
+  size?: number;
+  dataUri: string;
+}
+
 export interface ToolResult {
   output?: string;
   summary?: string;
@@ -14,6 +28,7 @@ export interface ToolResult {
   system?: string;
   isError?: boolean;
   diagnostics?: ErrorDiagnostics; // Additional error details like validation issues
+  files?: ToolResultFile[];
 }
 
 export function toolResult(result: ToolResult): ToolResult {

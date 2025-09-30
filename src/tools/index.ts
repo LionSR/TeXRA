@@ -15,3 +15,5 @@ export * from './registry';
 export * from './wolfram';
 export * from './web/WebFetchTool';
 export * from './web/WebSearchTool';
+export * from './latex/ExtractFiguresTool';
+export * from './latex/ExtractTikzFiguresTool';

@@ -11,6 +11,7 @@ import type { ProviderStopReason } from './StopReasonTypes';
 // Local imports - log
 import type { AgentLogger } from '@logger/AgentLogger';
 import type { ModelConfig, ModelCapabilities, ToolDefinition } from '@model';
+import type { ToolResultAttachment } from '@tools/result';
 
 /**
  * Common interface implemented by all model handlers.
@@ -201,6 +202,7 @@ export interface IModelHandler<
     result: Record<string, unknown>,
     toolState?: ToolState,
     text?: string,
+    attachments?: ToolResultAttachment[],
   ): M[];
 
   /**

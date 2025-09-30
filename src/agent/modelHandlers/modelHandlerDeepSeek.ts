@@ -1,5 +1,5 @@
 // Standard library imports
-// (none needed)
+import * as path from 'path';
 
 // Third-party imports
 import OpenAI from 'openai';
@@ -8,6 +8,7 @@ import type {
   ChatCompletionToolMessageParam,
   ChatCompletionMessageToolCall,
   ChatCompletionMessage,
+  ChatCompletionContentPart,
 } from 'openai/resources/chat/completions';
 
 // Local imports - agent
@@ -19,6 +20,7 @@ import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 // Local imports - utilities
 import type { ToolDefinition } from '@model';
 import { K_SLICE, MESSAGE_PREVIEW_LENGTH } from '@utils/config';
+import type { ToolResultAttachment } from '@tools/result';
 
 // TODO: prompt_cache_hit_tokens can also be used here to correct the price and response usage computation in the base class (just overwrite the computePrice and computeResponseUsage methods with a revalues responseUsage.prompt_tokens_details?.cached_tokens and then call the super methods)
 // DEEPSEEK RESPONSE USAGE FORMAT:
@@ -142,6 +144,7 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI {
     result: Record<string, unknown>,
     _toolState?: ToolState,
     text?: string,
+    attachments?: ToolResultAttachment[],
   ): [ChatCompletionAssistantMessageParam, ChatCompletionToolMessageParam] {
     const toolCall = this.normalizeToolCall(id, name, call);
     const callMsg: ChatCompletionAssistantMessageParam = {
@@ -151,10 +154,51 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI {
     if (text) {
       callMsg.content = text;
     }
+    const resultCopy = { ...result } as Record<string, unknown> & {
+      files?: unknown;
+    };
+    if ('files' in resultCopy) {
+      delete resultCopy.files;
+    }
+
+    const contentParts: ChatCompletionContentPart[] = [];
+    const payload = Object.keys(resultCopy).length
+      ? JSON.stringify(resultCopy, null, 2)
+      : undefined;
+    if (payload) {
+      contentParts.push({ type: 'text', text: payload });
+    }
+
+    attachments?.forEach((file) => {
+      const label = file.name ?? path.basename(file.path);
+      const descriptor = file.description ? ` – ${file.description}` : '';
+      if (file.mimeType && file.mimeType.startsWith('image/')) {
+        contentParts.push({
+          type: 'text',
+          text: `Image: ${label}${descriptor}`,
+        });
+        contentParts.push({
+          type: 'image_url',
+          image_url: { url: file.dataUri, detail: 'high' },
+        } as ChatCompletionContentPart);
+      } else {
+        const mime = file.mimeType ?? 'application/octet-stream';
+        contentParts.push({
+          type: 'text',
+          text: `File: ${label} (${mime})${descriptor}`,
+        });
+        contentParts.push({ type: 'text', text: file.dataUri });
+      }
+    });
+
+    const formattedContent = contentParts.length
+      ? (contentParts as unknown as ChatCompletionContentPart[])
+      : JSON.stringify(result);
+
     const resultMsg: ChatCompletionToolMessageParam = {
       role: 'tool',
       tool_call_id: toolCall.id ?? id,
-      content: JSON.stringify(result),
+      content: formattedContent as any,
     };
     return [callMsg, resultMsg];
   }

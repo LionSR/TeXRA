@@ -1,5 +1,6 @@
 // Standard library imports
 import { Buffer } from 'node:buffer';
+import * as path from 'path';
 
 // Third-party imports
 import OpenAI, { toFile } from 'openai';
@@ -38,6 +39,7 @@ import { ModelHandler } from './ModelHandler';
 import { toOpenAIResponseTools } from './toolConversion';
 import type { ProviderStopReason } from './types/StopReasonTypes';
 import { OPENAI_CHAT_FINISH } from './types/StopReasonTypes';
+import type { ToolResultAttachment } from '@tools/result';
 
 // Local imports - utilities
 import { MediaEntry } from '@agent/utils/mediaTypes';
@@ -859,6 +861,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     result: Record<string, unknown>,
     _toolState?: ToolState,
     text?: string,
+    attachments?: ToolResultAttachment[],
   ): ResponseInputItem[] {
     const messages: ResponseInputItem[] = [];
     if (text) {
@@ -881,11 +884,72 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
             ),
     };
 
+    const resultCopy = { ...result } as Record<string, unknown> & {
+      files?: unknown;
+    };
+    if ('files' in resultCopy) {
+      delete resultCopy.files;
+    }
+
+    const outputParts: any[] = [];
+    if (Object.keys(resultCopy).length > 0) {
+      outputParts.push({
+        type: 'output_text',
+        text: JSON.stringify(resultCopy, null, 2),
+        annotations: [],
+      });
+    }
+
+    const attachmentSummaries = attachments?.map((file) => ({
+      path: file.path,
+      name: file.name ?? path.basename(file.path),
+      mimeType: file.mimeType ?? 'application/octet-stream',
+      description: file.description,
+      size: file.size,
+    }));
+
+    attachments?.forEach((file) => {
+      const mimeType = file.mimeType ?? 'application/octet-stream';
+      const label = file.name ?? path.basename(file.path);
+      if (mimeType.startsWith('image/')) {
+        outputParts.push({
+          type: 'output_image',
+          image_base64: file.data,
+          mime_type: mimeType,
+          name: label,
+          description: file.description,
+        });
+      } else {
+        outputParts.push({
+          type: 'output_file',
+          file_base64: file.data,
+          mime_type: mimeType,
+          name: label,
+          description: file.description,
+        });
+      }
+    });
+
+    const resultFiles = (result as { files?: unknown }).files;
+
     const resultMsg: ResponseInputItem.FunctionCallOutput = {
       type: 'function_call_output',
       call_id: id,
-      output: JSON.stringify(result),
+      output: JSON.stringify({
+        ...resultCopy,
+        files: attachmentSummaries ?? resultFiles ?? [],
+      }),
     };
+
+    if (outputParts.length > 0) {
+      (resultMsg as any).content = outputParts;
+      (resultMsg as any).attachments = attachments?.map((file) => ({
+        path: file.path,
+        mimeType: file.mimeType ?? 'application/octet-stream',
+        name: file.name ?? path.basename(file.path),
+        dataUri: file.dataUri,
+      }));
+    }
 
     messages.push(callMsg, resultMsg);
     return messages;

@@ -1,5 +1,5 @@
 // Standard library imports
-// (none needed)
+import * as path from 'path';
 
 // Third-party imports
 import { Anthropic } from '@anthropic-ai/sdk';
@@ -38,6 +38,7 @@ const isSupportedImageMediaType = (
 import { toAnthropicTools } from './toolConversion';
 import type { ProviderStopReason } from './types/StopReasonTypes';
 import { ANTHROPIC_STOP } from './types/StopReasonTypes';
+import type { ToolResultAttachment } from '@tools/result';
 
 // Local imports - agent components
 import type { AgentConfig } from '@agent/core/AgentConfig';
@@ -1183,6 +1184,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     result: Record<string, unknown>,
     toolState?: ToolState,
     text?: string,
+    attachments?: ToolResultAttachment[],
   ): MessageParam[] {
     const content: ContentBlockParam[] = [];
     if (
@@ -1209,15 +1211,63 @@ export class ModelHandlerAnthropic extends ModelHandler<
       role: 'assistant',
       content,
     };
+    const resultCopy = { ...result } as Record<string, unknown> & {
+      files?: unknown;
+      isError?: boolean;
+    };
+    if ('files' in resultCopy) {
+      delete resultCopy.files;
+    }
+
+    const resultBlocks: (BetaTextBlockParam | BetaImageBlockParam | BetaRequestDocumentBlock)[] = [];
+    if (Object.keys(resultCopy).length > 0) {
+      resultBlocks.push({
+        type: 'text',
+        text: JSON.stringify(resultCopy, null, 2),
+      });
+    }
+
+    attachments?.forEach((file) => {
+      const label = file.name ?? path.basename(file.path);
+      const descriptor = file.description ? ` – ${file.description}` : '';
+      const mimeType = file.mimeType ?? 'application/octet-stream';
+      if (isSupportedImageMediaType(mimeType)) {
+        resultBlocks.push({
+          type: 'text',
+          text: `Image: ${label}${descriptor}`,
+        });
+        resultBlocks.push({
+          type: 'image',
+          source: {
+            type: 'base64',
+            media_type: mimeType,
+            data: file.data,
+          },
+        });
+      } else {
+        resultBlocks.push({
+          type: 'text',
+          text: `File: ${label} (${mimeType})${descriptor}\n${file.dataUri}`,
+        });
+      }
+    });
+
+    const toolResultBlock: any = {
+      type: 'tool_result',
+      tool_use_id: id,
+      content:
+        resultBlocks.length > 0
+          ? resultBlocks
+          : JSON.stringify(result),
+    };
+
+    if (resultCopy.isError) {
+      toolResultBlock.is_error = true;
+    }
+
     const resultMsg: MessageParam = {
       role: 'user',
-      content: [
-        {
-          type: 'tool_result',
-          tool_use_id: id,
-          content: JSON.stringify(result),
-        },
-      ],
+      content: [toolResultBlock],
     };
     return [callMsg, resultMsg];
   }

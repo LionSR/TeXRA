@@ -162,10 +162,12 @@ describe('runToolUseCycle DeepSeek', () => {
       ],
       content: 'intro',
     });
-    assert.deepEqual(messages[1], {
-      role: 'tool',
-      tool_call_id: 'c1',
-      content: JSON.stringify({ output: 'hello' }),
-    });
+    const toolMessage = messages[1] as any;
+    assert.equal(toolMessage.role, 'tool');
+    assert.equal(toolMessage.tool_call_id, 'c1');
+    const toolMessageContent = toolMessage.content;
+    assert.ok(Array.isArray(toolMessageContent));
+    assert.equal(toolMessageContent[0]?.type, 'text');
+    assert.ok(toolMessageContent[0]?.text.includes('"output":"hello"'));
   });
 });

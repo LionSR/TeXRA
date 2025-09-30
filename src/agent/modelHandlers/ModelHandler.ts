@@ -35,6 +35,7 @@ import { bus } from '@eventBus/ProgressEventBus';
 import { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES, MessageType } from '@logger/messageTypes';
 import type { ToolDefinition } from '@model';
+import type { ToolResultAttachment } from '@tools/result';
 import {
   ModelConfig,
   ModelProvider,
@@ -938,6 +939,7 @@ export abstract class ModelHandler<
     result: Record<string, unknown>,
     toolState?: ToolState,
     text?: string,
+    attachments?: ToolResultAttachment[],
   ): M[];
 
   /**

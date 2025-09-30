@@ -1,3 +1,6 @@
+// Standard library imports
+import * as path from 'path';
+
 // Local imports - agent
 import type { IModelHandler } from '../modelHandlers';
 import type { ProviderMessage } from '../modelHandlers/types/ProviderMessage';
@@ -16,8 +19,80 @@ import { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import type { ToolDefinition } from '@model';
 import { BaseTool } from '@tools/core/base';
-import { ToolResult, toolResult } from '@tools/result';
+import {
+  ToolResult,
+  ToolResultAttachment,
+  ToolResultFile,
+  toolResult,
+} from '@tools/result';
 import xmlUtils from '@utils/text/xmlUtils';
+import { AbsoluteFS, WorkspaceFS, getMimeType } from '@utils/files';
+
+function buildToolResultAttachments(
+  files: ToolResultFile[] | undefined,
+  logger: AgentLogger,
+): ToolResultAttachment[] {
+  if (!files || files.length === 0) {
+    return [];
+  }
+
+  const attachments: ToolResultAttachment[] = [];
+
+  for (const file of files) {
+    const targetPath = file.path;
+    if (!targetPath) {
+      continue;
+    }
+
+    try {
+      let data = file.data;
+      let size: number | undefined;
+      let absolutePath: string | undefined;
+
+      if (!data) {
+        const isAbsolute = path.isAbsolute(targetPath);
+        absolutePath = isAbsolute
+          ? targetPath
+          : WorkspaceFS.fullPath(targetPath);
+
+        const fileExists = AbsoluteFS.existsSync(absolutePath);
+        if (!fileExists) {
+          logger.warn(`Skipping attachment that does not exist: ${targetPath}`);
+          continue;
+        }
+
+        const buffer = AbsoluteFS.readBytesSync(absolutePath);
+        size = buffer.byteLength;
+        data = buffer.toString('base64');
+      } else {
+        size = Buffer.byteLength(data, 'base64');
+      }
+
+      const resolvedName = file.name ?? path.basename(targetPath);
+      const resolvedMime =
+        file.mimeType ??
+        (absolutePath
+          ? getMimeType(absolutePath)
+          : getMimeType(targetPath)) ??
+        'application/octet-stream';
+
+      attachments.push({
+        ...file,
+        path: targetPath,
+        name: resolvedName,
+        mimeType: resolvedMime,
+        data,
+        size,
+        dataUri: `data:${resolvedMime};base64,${data}`,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      logger.error(`Failed to prepare attachment ${targetPath}: ${message}`);
+    }
+  }
+
+  return attachments;
+}
 
 export interface ToolUseCycleOptions<C = unknown> {
   /** Model handler for API interactions */
@@ -280,10 +355,27 @@ export async function runToolUseCycle<C = unknown>(
       toolInput = parsed;
     }
 
+    const attachments = buildToolResultAttachments(result.files, logger);
+    if (attachments.length > 0) {
+      toolState?.addMediaFiles(attachments.map((file) => file.path));
+    }
+
+    const fileMetadata = attachments.map((file) => ({
+      path: file.path,
+      name: file.name,
+      mimeType: file.mimeType,
+      description: file.description,
+      size: file.size,
+    }));
+
+    const loggedOutput: ToolResult = fileMetadata.length
+      ? { ...result, files: fileMetadata }
+      : result;
+
     const toolUseLog = {
       tool: name,
       input: toolInput,
-      output: result,
+      output: loggedOutput,
     };
 
     logger.info(
@@ -304,6 +396,7 @@ export async function runToolUseCycle<C = unknown>(
     if (result.isError) resultObj.isError = true;
     if (result.diagnostics !== undefined)
       resultObj.diagnostics = result.diagnostics;
+    if (fileMetadata.length > 0) resultObj.files = fileMetadata;
 
     const followUpMsgs = modelHandler.createToolUseFollowUpMessages(
       id,
@@ -312,6 +405,7 @@ export async function runToolUseCycle<C = unknown>(
       resultObj,
       toolState,
       text,
+      attachments,
     );
     messages.push(...followUpMsgs);
 

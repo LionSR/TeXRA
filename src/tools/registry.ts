@@ -13,6 +13,8 @@ import { WriteFileTool } from './WriteTool';
 import { WebFetchTool } from './web/WebFetchTool';
 import { WebSearchTool } from './web/WebSearchTool';
 import { WolframTool } from './wolfram';
+import { ExtractFiguresTool } from './latex/ExtractFiguresTool';
+import { ExtractTikzFiguresTool } from './latex/ExtractTikzFiguresTool';
 
 export const DEFAULT_TOOL_REGISTRY: Record<string, BaseTool<any>> = {
   str_replace_editor: new TextEditorTool(),
@@ -28,4 +30,6 @@ export const DEFAULT_TOOL_REGISTRY: Record<string, BaseTool<any>> = {
   wolfram: new WolframTool(),
   web_fetch: new WebFetchTool(),
   web_search: new WebSearchTool(),
+  extract_figures: new ExtractFiguresTool(),
+  extract_tikz_figures: new ExtractTikzFiguresTool(),
 };
