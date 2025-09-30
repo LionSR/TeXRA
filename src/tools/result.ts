@@ -1,9 +1,18 @@
+import type { Diagnostic } from 'vscode';
 import type { ZodIssue } from 'zod';
+
+export interface DiagnosticsPayload {
+  path: string;
+  command: 'list' | 'count';
+  severity: Record<string, number>;
+  messages?: Diagnostic[];
+}
 
 // Define proper type for diagnostic information
 export type ErrorDiagnostics =
   | ZodIssue[] // For validation errors
   | { name: string; stack?: string } // For regular errors
+  | DiagnosticsPayload // For diagnostics payloads returned by tools
   | unknown; // For other types of diagnostics
 
 export interface ToolResult {
