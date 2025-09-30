@@ -4,7 +4,12 @@ import { z } from 'zod';
 import { defineTool } from './core/define';
 
 // Local imports - tools
-import { ToolResult, ToolError, toolResult } from './result';
+import {
+  type DiagnosticsPayload,
+  ToolResult,
+  ToolError,
+  toolResult,
+} from './result';
 import {
   getLinterMessages,
   countDiagnosticsBySeverity,
@@ -22,13 +27,6 @@ export const DiagnosticsInputSchema = z.object({
 export type DiagnosticsInput = z.infer<typeof DiagnosticsInputSchema>;
 
 type DiagnosticsSeverityCounts = ReturnType<typeof countDiagnosticsBySeverity>;
-
-interface DiagnosticsPayload {
-  path: string;
-  command: DiagnosticsInput['command'];
-  severity: DiagnosticsSeverityCounts;
-  messages?: Diagnostic[];
-}
 
 export class DiagnosticsTool extends defineTool({
   name: 'diagnostics',
@@ -70,9 +68,15 @@ export class DiagnosticsTool extends defineTool({
     messages: Diagnostic[];
     severity: DiagnosticsSeverityCounts;
   }> {
-    const messages = await getLinterMessages(path);
-    const severity = countDiagnosticsBySeverity(messages);
-    return { messages, severity };
+    try {
+      const messages = await getLinterMessages(path);
+      const severity = countDiagnosticsBySeverity(messages);
+      return { messages, severity };
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      logger.error(CHANNEL, `Failed to collect diagnostics for ${path}: ${detail}`);
+      throw new ToolError(`Failed to collect diagnostics: ${detail}`);
+    }
   }
 
   /**
@@ -98,7 +102,7 @@ export class DiagnosticsTool extends defineTool({
       path: args.path,
       command: args.command,
       severity: args.severity,
-      messages: 'messages' in args ? args.messages : undefined,
+      ...('messages' in args ? { messages: args.messages } : {}),
     };
 
     return toolResult({
