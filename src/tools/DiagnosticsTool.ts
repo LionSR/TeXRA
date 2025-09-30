@@ -74,7 +74,10 @@ export class DiagnosticsTool extends defineTool({
       return { messages, severity };
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
-      logger.error(CHANNEL, `Failed to collect diagnostics for ${path}: ${detail}`);
+      logger.error(
+        CHANNEL,
+        `Failed to collect diagnostics for ${path}: ${detail}`,
+      );
       throw new ToolError(`Failed to collect diagnostics: ${detail}`);
     }
   }
