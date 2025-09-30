@@ -14,6 +14,10 @@ import {
 } from '@agent/types/AgentStreamTypes';
 import { isWorkflowTaskState, type WorkflowTaskState } from '@logger/TaskState';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
+// Local imports - storage
+import { ensureRunDir, getRunDir } from '@utils/files/taskRunStorage';
+// Local imports - commands
+import { safeExecuteCommand } from '@utils/system/commandUtils';
 
 // @ts-ignore - Import JavaScript module
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
@@ -65,6 +69,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
         this.handleRestoreState.bind(this),
       [PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP]:
         this.handleSendFollowUp.bind(this),
+      [PROGRESS_VIEW_COMMANDS.OPEN_TASK_STORAGE]:
+        this.handleOpenTaskStorage.bind(this),
 
       // File operations
       [PROGRESS_VIEW_COMMANDS.OPEN_FILE]: this.handleOpenFile.bind(this),
@@ -226,6 +232,43 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
       stream: message.stream,
       text: message.text,
     });
+  }
+
+  private async handleOpenTaskStorage(
+    message: any,
+    _webviewView: vscode.WebviewView,
+  ): Promise<void> {
+    const stream = message.stream as StreamTabId | undefined;
+    if (!stream) {
+      await vscode.window.showInformationMessage(
+        'No workspace storage folder is available for this run yet.',
+      );
+      return;
+    }
+
+    const executionId = this.provider.state.getExecutionId(stream);
+    if (!executionId) {
+      await vscode.window.showInformationMessage(
+        'No workspace storage folder is available for this run yet.',
+      );
+      return;
+    }
+
+    try {
+      await ensureRunDir(executionId);
+      const runDir = getRunDir(executionId);
+      await safeExecuteCommand('revealFileInOS', [vscode.Uri.file(runDir)]);
+    } catch (error) {
+      this.logger.error(
+        this.channel,
+        `Failed to open task storage for ${executionId}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+      await vscode.window.showErrorMessage(
+        'Unable to open the workspace storage folder for this run.',
+      );
+    }
   }
 
   private async handleOpenFile(
