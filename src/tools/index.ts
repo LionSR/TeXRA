@@ -15,5 +15,6 @@ export * from './core/define';
 export * from './registry';
 export * from './wolfram';
 export * from './texcount';
+export * from './latex/ArxivDownloadTool';
 export * from './web/WebFetchTool';
 export * from './web/WebSearchTool';
