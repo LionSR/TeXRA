@@ -34,6 +34,8 @@ const isSupportedImageMediaType = (
   }
 };
 
+const MAX_LOGGED_RESULTS = 3;
+
 // Local imports - agent
 import { toAnthropicTools } from './toolConversion';
 import type { ProviderStopReason } from './types/StopReasonTypes';
@@ -1183,23 +1185,30 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
   extractToolUse(responseObject: BetaMessage): string | null {
     const content = responseObject?.content;
-    if (Array.isArray(content)) {
-      for (const item of content) {
-        if (item?.type !== 'tool_use') {
-          continue;
-        }
-        if (
-          this.capabilities.supportsNativeWebSearch &&
-          typeof item?.name === 'string' &&
-          item.name.startsWith('web_search')
-        ) {
-          this.logNativeWebSearch(item as ToolUseBlock);
-          continue;
-        }
-        return JSON.stringify(item, null, 2);
-      }
+    if (!Array.isArray(content)) {
+      return null;
     }
-    return null;
+
+    let nativeCall: ToolUseBlock | null = null;
+
+    for (const item of content) {
+      if (item?.type !== 'tool_use') {
+        continue;
+      }
+      if (
+        this.capabilities.supportsNativeWebSearch &&
+        typeof item?.name === 'string' &&
+        item.name.startsWith('web_search')
+      ) {
+        const call = item as ToolUseBlock;
+        this.logNativeWebSearch(call);
+        nativeCall ??= call;
+        continue;
+      }
+      return JSON.stringify(item, null, 2);
+    }
+
+    return nativeCall ? JSON.stringify(nativeCall, null, 2) : null;
   }
 
   createToolUseFollowUpMessages(
@@ -1288,7 +1297,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
           continue;
         }
         results.push(normalized);
-        if (results.length >= 3) {
+        if (results.length >= MAX_LOGGED_RESULTS) {
           break;
         }
       }
@@ -1303,7 +1312,12 @@ export class ModelHandlerAnthropic extends ModelHandler<
   private extractAnthropicResult(
     result: unknown,
   ): { title?: string; url?: string } | null {
+    const groupId = this.logger.getActiveGroupId();
     if (!result || typeof result !== 'object') {
+      this.logger.debug(
+        'Anthropic web search result missing object payload',
+        groupId,
+      );
       return null;
     }
 
@@ -1315,6 +1329,10 @@ export class ModelHandlerAnthropic extends ModelHandler<
     const cleanedUrl = typeof url === 'string' && url.length > 0 ? url : undefined;
 
     if (cleanedTitle === undefined && cleanedUrl === undefined) {
+      this.logger.debug(
+        'Anthropic web search result missing title and url',
+        groupId,
+      );
       return null;
     }
 

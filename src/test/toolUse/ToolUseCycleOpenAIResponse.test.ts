@@ -92,6 +92,68 @@ class MockHandler extends ModelHandlerOpenAIResponse {
   }
 }
 
+class NativeSearchHandler extends ModelHandlerOpenAIResponse {
+  private call = 0;
+
+  async getClient(): Promise<OpenAI> {
+    return {} as OpenAI;
+  }
+
+  override async createResponse(): Promise<any> {
+    this.call++;
+    if (this.call === 1) {
+      return {
+        id: 'r1',
+        status: 'searching',
+        output_text: '',
+        output: [
+          {
+            type: 'web_search_call',
+            id: 'ws1',
+            status: 'completed',
+            action: {
+              type: 'search',
+              query: 'latest research',
+              sources: [{ type: 'url', url: 'https://example.com' }],
+            },
+          },
+        ],
+        usage: { input_tokens: 1, output_tokens: 0, total_tokens: 1 },
+      };
+    }
+    return {
+      id: 'r2',
+      status: 'completed',
+      output_text: 'final answer',
+      output: [
+        {
+          type: 'message',
+          role: 'assistant',
+          status: 'completed',
+          content: [
+            {
+              type: 'output_text',
+              text: 'final answer',
+              annotations: [],
+            },
+          ],
+        },
+      ],
+      usage: { input_tokens: 1, output_tokens: 2, total_tokens: 3 },
+    };
+  }
+
+  override extractResponse(resp: any): [string, any, any] {
+    if (resp.id === 'r1') {
+      return ['', resp.usage, 'stop'];
+    }
+    if (resp.id === 'r2') {
+      return ['final answer', resp.usage, 'stop'];
+    }
+    return ['', resp.usage, 'stop'];
+  }
+}
+
 describe('runToolUseCycle OpenAIResponse', () => {
   it('logs tool calls and creates follow-up message', async () => {
     const config: ModelConfig = {
@@ -176,5 +238,96 @@ describe('runToolUseCycle OpenAIResponse', () => {
       call_id: 'c1',
       output: JSON.stringify({ output: 'hello' }),
     });
+  });
+});
+
+describe('native web search handling', () => {
+  it('continues after provider-handled search without local tool execution', async () => {
+    const config: ModelConfig = {
+      name: 'test-native-search',
+      fullName: 'test-native-search',
+      provider: ModelProvider.OPENAI,
+      maxOutputTokens: 10,
+      inputPrice: 0,
+      outputPrice: 0,
+      contextWindow: 1000,
+      capabilities: {
+        ...DEFAULT_MODEL_CAPABILITIES,
+        supportsNativeWebSearch: true,
+      },
+      openRouterOnly: false,
+    };
+    const handler = new NativeSearchHandler(config);
+    const logger = new AgentLogger('NativeSearchHandler', true);
+    handler.setLogger(logger);
+    const serialized = handler.extractToolUse({
+      output: [
+        {
+          type: 'web_search_call',
+          id: 'ws-test',
+          status: 'completed',
+          action: {
+            type: 'search',
+            query: 'sample query',
+            sources: [{ type: 'url', url: 'https://example.com' }],
+          },
+        },
+      ],
+    } as any);
+    assert.ok(serialized, 'Expected serialized native search call');
+    const parsedSearch = JSON.parse(serialized!);
+    assert.equal(parsedSearch.name, 'web_search');
+    const toolRegistry: Record<string, BaseTool<any>> = {};
+    const setting: AgentSetting = {
+      agentType: AgentType.ToolUse,
+      documentTag: 'doc',
+      temperature: 0,
+      endTag: '</doc>',
+      requiredFiles: {},
+      requiredFilesInternal: {},
+      defaultOutputFiles: [],
+      filePatternsContain: [],
+      tools: [],
+    };
+    const prompt: AgentPrompt = {
+      systemPrompt: '',
+      userPrefix: '',
+      userRequest: '',
+      userReflect: '',
+    };
+    const toolState = new ToolState();
+    const options: ToolUseCycleOptions<OpenAI> = {
+      modelHandler: handler,
+      agentSetting: setting,
+      agentPrompt: prompt,
+      userVars: {},
+      logger,
+      client: {} as OpenAI,
+      toolRegistry,
+      checkInterruption: () => false,
+      setAbortController: () => {},
+      toolState,
+      modelName: 'test-native-search',
+    };
+
+    const events: any[] = [];
+    const dispose = bus.on('addLogMessage', (e) => events.push(e));
+    const messages: ProviderMessage[] = [];
+
+    await runToolUseCycle(options, messages);
+    dispose();
+
+    const toolEvents = events.filter(
+      (e) => e.logMessage.messageType === MESSAGE_TYPES.TOOL_USE,
+    );
+    const webSearchLog = toolEvents.find(
+      (event) => event.logMessage.data?.tool === 'web_search',
+    );
+
+    assert.ok(webSearchLog, 'Expected native web search log entry');
+    assert.equal(messages.length, 1, 'Expected final assistant message');
+    const assistantMsg = messages[0] as any;
+    assert.equal(assistantMsg.role, 'assistant');
+    assert.equal(assistantMsg.content[0].text, 'final answer');
   });
 });

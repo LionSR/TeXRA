@@ -59,6 +59,8 @@ import xmlUtils from '@utils/text/xmlUtils';
 
 type GoogleRole = 'user' | 'model';
 
+const MAX_LOGGED_RESULTS = 3;
+
 function ensureParts(message: Content): Part[] {
   if (!Array.isArray(message.parts)) {
     message.parts = []; // Initialize parts array if missing
@@ -1096,7 +1098,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       }
     }
 
-    return queries.slice(0, 3);
+    return queries.slice(0, MAX_LOGGED_RESULTS);
   }
 
   private extractGoogleResults(metadata: GroundingMetadata): Array<{
@@ -1126,7 +1128,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         results.push(retrievedContextResult);
       }
 
-      if (results.length >= 3) {
+      if (results.length >= MAX_LOGGED_RESULTS) {
         break;
       }
     }
@@ -1137,6 +1139,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
   private extractWebChunk(
     chunk: GroundingChunk,
   ): { title?: string; url?: string } | null {
+    const groupId = this.logger.getActiveGroupId();
     const web = chunk.web;
     if (!web || typeof web !== 'object') {
       return null;
@@ -1149,6 +1152,10 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     const cleanedUrl = typeof url === 'string' && url.length > 0 ? url : undefined;
 
     if (cleanedTitle === undefined && cleanedUrl === undefined) {
+      this.logger.debug(
+        'Google grounding web chunk missing title and url',
+        groupId,
+      );
       return null;
     }
 
@@ -1158,6 +1165,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
   private extractRetrievedContextChunk(
     chunk: GroundingChunk,
   ): { title?: string; url?: string } | null {
+    const groupId = this.logger.getActiveGroupId();
     const retrievedContext = (chunk as { retrievedContext?: unknown }).retrievedContext;
     if (!retrievedContext || typeof retrievedContext !== 'object') {
       return null;
@@ -1170,6 +1178,10 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     const cleanedUrl = typeof url === 'string' && url.length > 0 ? url : undefined;
 
     if (cleanedTitle === undefined && cleanedUrl === undefined) {
+      this.logger.debug(
+        'Google retrieved context chunk missing title and url',
+        groupId,
+      );
       return null;
     }
 

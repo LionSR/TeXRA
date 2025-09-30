@@ -91,6 +91,9 @@ export function toOpenAIResponseTools(
       }
     }
 
+    // Tool definitions come from trusted configuration where parameters are
+    // already validated as JSON-compatible objects, so casting to a record is
+    // safe for serialization.
     const params = (d.parameters ?? null) as Record<string, unknown> | null;
     return {
       type: 'function',

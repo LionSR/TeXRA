@@ -6,6 +6,7 @@ import type { ContentBlock } from '@anthropic-ai/sdk/resources/messages';
 
 // Local imports - agent
 import { ModelHandlerAnthropic } from '@agent/modelHandlers/modelHandlerAnthropic';
+import { AgentLogger } from '@logger/AgentLogger';
 
 // Local imports - model config
 import {
@@ -137,5 +138,45 @@ describe('ModelHandlerAnthropic message guards', () => {
         return true;
       },
     );
+  });
+});
+
+describe('ModelHandlerAnthropic native tool extraction', () => {
+  it('returns serialized native web search call when present', () => {
+    const capabilities = {
+      ...DEFAULT_MODEL_CAPABILITIES,
+      supportsPromptCaching: true,
+      supportsNativeWebSearch: true,
+    };
+    const config: ModelConfig = {
+      name: 'test-anthropic-search',
+      fullName: 'claude-test',
+      provider: ModelProvider.ANTHROPIC,
+      maxOutputTokens: 1024,
+      inputPrice: 0,
+      outputPrice: 0,
+      contextWindow: 200000,
+      capabilities,
+      openRouterOnly: false,
+    };
+    const handler = new ModelHandlerAnthropic(config);
+    handler.setLogger(new AgentLogger('AnthropicSearch', true));
+
+    const response = {
+      content: [
+        {
+          type: 'tool_use',
+          id: 'search-1',
+          name: 'web_search',
+          input: { query: 'anthropic sdk' },
+        },
+      ],
+    } as any;
+
+    const serialized = handler.extractToolUse(response);
+    assert.ok(serialized, 'Expected serialized native tool call');
+    const parsed = JSON.parse(serialized!);
+    assert.equal(parsed.name, 'web_search');
+    assert.equal(parsed.id, 'search-1');
   });
 });

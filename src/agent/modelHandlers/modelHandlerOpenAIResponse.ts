@@ -53,6 +53,8 @@ import { K_SLICE, getConfig } from '@utils/config';
 import { WorkspaceFS } from '@utils/files';
 import xmlUtils from '@utils/text/xmlUtils';
 
+const MAX_LOGGED_RESULTS = 3;
+
 /**
  * Handler for OpenAI's Responses API. This implementation works directly with
  * the native response message types instead of reusing the chat completion
@@ -883,21 +885,42 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
   extractToolUse(response: Response): string | null {
     const items = response?.output;
-    if (!Array.isArray(items)) return null;
-
-    if (this.capabilities.supportsNativeWebSearch) {
-      items
-        .filter(
-          (item): item is ResponseFunctionWebSearch =>
-            item?.type === 'web_search_call',
-        )
-        .forEach((call) => this.logNativeWebSearch(call));
+    if (!Array.isArray(items)) {
+      return null;
     }
 
-    const call = items.find(
-      (it): it is ResponseFunctionToolCallItem => it?.type === 'function_call',
-    );
-    return call ? JSON.stringify(call, null, 2) : null;
+    let nativeCall: ResponseFunctionWebSearch | null = null;
+    let functionCall: ResponseFunctionToolCallItem | null = null;
+
+    for (const item of items) {
+      if (!item) {
+        continue;
+      }
+
+      if (
+        this.capabilities.supportsNativeWebSearch &&
+        item.type === 'web_search_call'
+      ) {
+        const call = item as ResponseFunctionWebSearch;
+        this.logNativeWebSearch(call);
+        nativeCall ??= call;
+        continue;
+      }
+
+      if (!functionCall && item.type === 'function_call') {
+        functionCall = item as ResponseFunctionToolCallItem;
+      }
+    }
+
+    if (functionCall) {
+      return JSON.stringify(functionCall, null, 2);
+    }
+
+    if (nativeCall) {
+      return JSON.stringify(this.normalizeNativeWebSearchCall(nativeCall), null, 2);
+    }
+
+    return null;
   }
 
   createToolUseFollowUpMessages(
@@ -994,7 +1017,16 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     | ResponseFunctionWebSearch.Find
     | null {
     const candidate = (call as { action?: unknown }).action;
-    if (!candidate || typeof candidate !== 'object') {
+    const groupId = this.logger.getActiveGroupId();
+    if (!candidate) {
+      return null;
+    }
+
+    if (typeof candidate !== 'object') {
+      this.logger.debug(
+        'OpenAI web search action missing structured payload',
+        groupId,
+      );
       return null;
     }
 
@@ -1014,6 +1046,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     ) {
       return candidate as ResponseFunctionWebSearch.Find;
     }
+    this.logger.debug(
+      `OpenAI web search action had unexpected type: ${String(type)}`,
+      groupId,
+    );
     return null;
   }
 
@@ -1029,7 +1065,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           ? action.sources
               .map((source) => source?.url)
               .filter((url): url is string => typeof url === 'string' && url.length > 0)
-              .slice(0, 3)
+              .slice(0, MAX_LOGGED_RESULTS)
           : undefined;
         return {
           action: action.type,
@@ -1051,6 +1087,19 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       default:
         return {};
     }
+  }
+
+  private normalizeNativeWebSearchCall(
+    call: ResponseFunctionWebSearch,
+  ): Record<string, unknown> {
+    const action = this.getWebSearchAction(call);
+    return {
+      id: call.id,
+      name: 'web_search',
+      type: call.type,
+      status: call.status,
+      ...(action ? { action } : {}),
+    };
   }
 
   private isMessageItem(

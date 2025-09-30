@@ -44,6 +44,27 @@ export interface ToolUseCycleOptions<C = unknown> {
   modelName?: string;
 }
 
+function isNativeWebSearchInvocation(candidate: unknown): boolean {
+  if (!candidate || typeof candidate !== 'object') {
+    return false;
+  }
+
+  const type = (candidate as { type?: unknown }).type;
+  if (typeof type === 'string' && type === 'web_search_call') {
+    return true;
+  }
+
+  const name = (candidate as { name?: unknown }).name;
+  if (typeof name === 'string') {
+    const normalized = name.toLowerCase();
+    if (normalized.includes('web_search')) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 /**
  * Execute a tool-use interaction loop until the model returns no tool calls or
  * signals end of turn.
@@ -185,6 +206,18 @@ export async function runToolUseCycle<C = unknown>(
       };
       logger.info('', groupId, MESSAGE_TYPES.TOOL_USE, toolUseLog);
       break;
+    }
+
+    if (
+      modelHandler.capabilities.supportsNativeWebSearch &&
+      isNativeWebSearchInvocation(parsed)
+    ) {
+      logger.debug(
+        'Native web search handled by provider; awaiting follow-up response',
+        groupId,
+      );
+      iteration++;
+      continue;
     }
 
     const id =
