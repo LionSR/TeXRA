@@ -1,7 +1,17 @@
 name: chat
 settings:
   agentType: toolUse
-  tools: [bash, read_file, write_file, edit_file, glob, grep, ls]
+  tools:
+    [
+      bash,
+      read_file,
+      write_file,
+      edit_file,
+      glob,
+      grep,
+      ls,
+      download_arxiv_source,
+    ]
 prompts:
   systemPrompt: |
     You are a scientist. Reason deeply.
