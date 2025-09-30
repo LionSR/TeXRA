@@ -1253,8 +1253,8 @@ export class ModelHandlerAnthropic extends ModelHandler<
       tool: 'web_search',
       input: {
         id: call.id,
-        name: call.name,
-        input: call.input,
+        action: call.name,
+        ...this.describeAnthropicWebSearch(call.input),
       },
       output: { handledBy: 'anthropic' as const },
     };
@@ -1265,5 +1265,59 @@ export class ModelHandlerAnthropic extends ModelHandler<
       MESSAGE_TYPES.TOOL_USE,
       payload,
     );
+  }
+
+  private describeAnthropicWebSearch(input: unknown): Record<string, unknown> {
+    if (!input || typeof input !== 'object') {
+      return {};
+    }
+
+    const candidate = input as Record<string, unknown>;
+    const summary: Record<string, unknown> = {};
+
+    const query = candidate.query;
+    if (typeof query === 'string' && query.length > 0) {
+      summary.query = query;
+    }
+
+    if (Array.isArray(candidate.results)) {
+      const results: Array<{ title?: string; url?: string }> = [];
+      for (const raw of candidate.results) {
+        const normalized = this.extractAnthropicResult(raw);
+        if (!normalized) {
+          continue;
+        }
+        results.push(normalized);
+        if (results.length >= 3) {
+          break;
+        }
+      }
+      if (results.length > 0) {
+        summary.results = results;
+      }
+    }
+
+    return summary;
+  }
+
+  private extractAnthropicResult(
+    result: unknown,
+  ): { title?: string; url?: string } | null {
+    if (!result || typeof result !== 'object') {
+      return null;
+    }
+
+    const record = result as Record<string, unknown>;
+    const title = record.title;
+    const url = record.url;
+
+    const cleanedTitle = typeof title === 'string' && title.length > 0 ? title : undefined;
+    const cleanedUrl = typeof url === 'string' && url.length > 0 ? url : undefined;
+
+    if (cleanedTitle === undefined && cleanedUrl === undefined) {
+      return null;
+    }
+
+    return { title: cleanedTitle, url: cleanedUrl };
   }
 }

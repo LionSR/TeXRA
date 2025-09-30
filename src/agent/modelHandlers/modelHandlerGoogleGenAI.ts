@@ -10,6 +10,8 @@ import {
   FinishReason,
   type Candidate,
   type FunctionCall,
+  type GroundingChunk,
+  type GroundingMetadata,
   File,
   createPartFromText,
   createPartFromUri,
@@ -1056,12 +1058,18 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       return;
     }
 
+    const queries = this.extractGoogleQueries(metadata);
+    const results = this.extractGoogleResults(metadata);
+
     const payload = {
       tool: 'web_search',
-      input: { status: 'completed' as const },
+      input: {
+        status: 'completed' as const,
+        ...(queries.length > 0 ? { queries } : {}),
+      },
       output: {
-        handledBy: 'google',
-        groundingMetadata: metadata,
+        handledBy: 'google' as const,
+        ...(results.length > 0 ? { results } : {}),
       },
     };
 
@@ -1071,5 +1079,100 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       MESSAGE_TYPES.TOOL_USE,
       payload,
     );
+  }
+
+  private extractGoogleQueries(metadata: GroundingMetadata): string[] {
+    const queries: string[] = [];
+    const sources = [metadata.webSearchQueries, metadata.retrievalQueries];
+
+    for (const source of sources) {
+      if (!Array.isArray(source)) {
+        continue;
+      }
+      for (const query of source) {
+        if (typeof query === 'string' && query.length > 0) {
+          queries.push(query);
+        }
+      }
+    }
+
+    return queries.slice(0, 3);
+  }
+
+  private extractGoogleResults(metadata: GroundingMetadata): Array<{
+    title?: string;
+    url?: string;
+  }> {
+    if (!Array.isArray(metadata.groundingChunks)) {
+      return [];
+    }
+
+    const results: Array<{ title?: string; url?: string }> = [];
+
+    for (const chunk of metadata.groundingChunks) {
+      if (!chunk || typeof chunk !== 'object') {
+        continue;
+      }
+
+      const webResult = this.extractWebChunk(chunk as GroundingChunk);
+      if (webResult) {
+        results.push(webResult);
+      }
+
+      const retrievedContextResult = this.extractRetrievedContextChunk(
+        chunk as GroundingChunk,
+      );
+      if (retrievedContextResult) {
+        results.push(retrievedContextResult);
+      }
+
+      if (results.length >= 3) {
+        break;
+      }
+    }
+
+    return results;
+  }
+
+  private extractWebChunk(
+    chunk: GroundingChunk,
+  ): { title?: string; url?: string } | null {
+    const web = chunk.web;
+    if (!web || typeof web !== 'object') {
+      return null;
+    }
+
+    const title = (web as { title?: unknown }).title;
+    const url = (web as { uri?: unknown }).uri;
+
+    const cleanedTitle = typeof title === 'string' && title.length > 0 ? title : undefined;
+    const cleanedUrl = typeof url === 'string' && url.length > 0 ? url : undefined;
+
+    if (cleanedTitle === undefined && cleanedUrl === undefined) {
+      return null;
+    }
+
+    return { title: cleanedTitle, url: cleanedUrl };
+  }
+
+  private extractRetrievedContextChunk(
+    chunk: GroundingChunk,
+  ): { title?: string; url?: string } | null {
+    const retrievedContext = (chunk as { retrievedContext?: unknown }).retrievedContext;
+    if (!retrievedContext || typeof retrievedContext !== 'object') {
+      return null;
+    }
+
+    const title = (retrievedContext as { title?: unknown }).title;
+    const url = (retrievedContext as { uri?: unknown }).uri;
+
+    const cleanedTitle = typeof title === 'string' && title.length > 0 ? title : undefined;
+    const cleanedUrl = typeof url === 'string' && url.length > 0 ? url : undefined;
+
+    if (cleanedTitle === undefined && cleanedUrl === undefined) {
+      return null;
+    }
+
+    return { title: cleanedTitle, url: cleanedUrl };
   }
 }

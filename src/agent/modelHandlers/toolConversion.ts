@@ -71,22 +71,9 @@ function toWebSearchTool(
     return null;
   }
 
-  const config = (parameters ?? {}) as Partial<WebSearchTool>;
-  const tool: WebSearchTool = {
+  return {
     type: mappedType,
-  };
-
-  if (config.filters) {
-    tool.filters = config.filters;
-  }
-  if (config.search_context_size) {
-    tool.search_context_size = config.search_context_size;
-  }
-  if (config.user_location) {
-    tool.user_location = config.user_location;
-  }
-
-  return tool;
+  } satisfies WebSearchTool;
 }
 
 /** Convert generic ToolDefinition objects to OpenAI Responses tool format. */
@@ -142,43 +129,6 @@ export interface GoogleToolOptions {
   supportsNativeWebSearch?: boolean;
 }
 
-function parseGoogleSearchConfig(
-  params: ToolDefinition['parameters'],
-): GeminiTool['googleSearch'] {
-  if (!params || typeof params !== 'object') {
-    return {};
-  }
-
-  const config = params as Record<string, unknown>;
-  const googleSearch: NonNullable<GeminiTool['googleSearch']> = {};
-
-  const exclude = config.excludeDomains ?? config.exclude_domains;
-  if (Array.isArray(exclude)) {
-    googleSearch.excludeDomains = exclude.filter(
-      (domain): domain is string => typeof domain === 'string' && domain.length > 0,
-    );
-  }
-
-  const timeRange = config.timeRange ?? config.time_range;
-  if (timeRange && typeof timeRange === 'object') {
-    const rangeRecord = timeRange as Record<string, unknown>;
-    const startTime = rangeRecord.startTime ?? rangeRecord.start_time;
-    const endTime = rangeRecord.endTime ?? rangeRecord.end_time;
-    googleSearch.timeRangeFilter = {
-      ...(typeof startTime === 'string' ? { startTime } : {}),
-      ...(typeof endTime === 'string' ? { endTime } : {}),
-    };
-    if (
-      googleSearch.timeRangeFilter.startTime === undefined &&
-      googleSearch.timeRangeFilter.endTime === undefined
-    ) {
-      delete googleSearch.timeRangeFilter;
-    }
-  }
-
-  return googleSearch;
-}
-
 const GOOGLE_NATIVE_WEB_SEARCH_NAMES = new Set([
   'web_search',
   'google_web_search',
@@ -194,14 +144,11 @@ export function toGoogleTools(
   }
 
   const declarations: FunctionDeclaration[] = [];
-  let googleSearchConfig: GeminiTool['googleSearch'] | null = null;
+  let hasNativeWebSearch = false;
 
   for (const def of defs) {
     if (options?.supportsNativeWebSearch && GOOGLE_NATIVE_WEB_SEARCH_NAMES.has(def.name)) {
-      googleSearchConfig = {
-        ...(googleSearchConfig ?? {}),
-        ...parseGoogleSearchConfig(def.parameters),
-      };
+      hasNativeWebSearch = true;
       continue;
     }
 
@@ -216,8 +163,8 @@ export function toGoogleTools(
   if (declarations.length > 0) {
     tool.functionDeclarations = declarations;
   }
-  if (googleSearchConfig) {
-    tool.googleSearch = googleSearchConfig;
+  if (hasNativeWebSearch) {
+    tool.googleSearch = {};
   }
 
   return tool.functionDeclarations || tool.googleSearch ? [tool] : [];

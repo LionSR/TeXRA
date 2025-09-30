@@ -2,7 +2,10 @@
 import { strict as assert } from 'assert';
 
 // Local imports - test
-import { toOpenAIResponseTools } from '@agent/modelHandlers/toolConversion';
+import {
+  toGoogleTools,
+  toOpenAIResponseTools,
+} from '@agent/modelHandlers/toolConversion';
 import type { ToolDefinition } from '@model';
 
 describe('toOpenAIResponseTools', () => {
@@ -39,7 +42,7 @@ describe('toOpenAIResponseTools', () => {
     assert.equal((tools[0] as any).parameters, null);
   });
 
-  it('returns native web search tool when supported', () => {
+  it('returns native web search tool without exposing config', () => {
     const defs: ToolDefinition[] = [
       {
         name: 'web_search',
@@ -60,7 +63,26 @@ describe('toOpenAIResponseTools', () => {
 
     assert.equal(tools.length, 1);
     assert.equal(tools[0].type, 'web_search');
-    assert.deepEqual((tools[0] as any).filters, defs[0].parameters?.filters);
-    assert.equal((tools[0] as any).search_context_size, 'high');
+    assert.deepEqual(tools[0], { type: 'web_search' });
+  });
+
+  it('omits Google search overrides when emitting native tool', () => {
+    const defs: ToolDefinition[] = [
+      {
+        name: 'web_search',
+        description: 'Search the web',
+        parameters: {
+          excludeDomains: ['example.com'],
+          timeRange: { startTime: '2024-01-01', endTime: '2024-02-01' },
+        },
+      },
+    ];
+
+    const tools = toGoogleTools(defs, {
+      supportsNativeWebSearch: true,
+    });
+
+    assert.equal(tools.length, 1);
+    assert.deepEqual(tools[0].googleSearch, {});
   });
 });

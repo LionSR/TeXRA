@@ -17,6 +17,7 @@ import type {
   ResponseInputContent,
   ResponseInputMessageContentList,
   ResponseInputFile,
+  ResponseIncludable,
   ResponseStreamEvent,
   ResponseOutputText,
 } from 'openai/resources/responses/responses';
@@ -423,9 +424,11 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
             tool.type === 'web_search' || tool.type === 'web_search_2025_08_26',
         )
       ) {
-        params.include = [
-          ...new Set([...(params.include ?? []), 'web_search_call.action.sources']),
-        ];
+        const include = new Set<ResponseIncludable>(params.include ?? []);
+        include.add(
+          'web_search_call.action.sources' as ResponseIncludable,
+        );
+        params.include = Array.from(include);
       }
     }
 
@@ -963,44 +966,15 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   }
 
   private logNativeWebSearch(call: ResponseFunctionWebSearch): void {
-    const action = (call as ResponseFunctionWebSearch & {
-      action?:
-        | ResponseFunctionWebSearch.Search
-        | ResponseFunctionWebSearch.OpenPage
-        | ResponseFunctionWebSearch.Find;
-    }).action;
-
-    const actionInfo: Record<string, unknown> = {
-      id: call.id,
-      status: call.status,
-    };
-
-    if (action && typeof action === 'object') {
-      const actionType = (action as { type?: string }).type;
-      if (actionType) {
-        actionInfo.action = actionType;
-      }
-      if ('query' in action && typeof action.query === 'string') {
-        actionInfo.query = action.query;
-      }
-      if ('url' in action && typeof action.url === 'string') {
-        actionInfo.url = action.url;
-      }
-      const sources = Array.isArray(
-        (action as ResponseFunctionWebSearch.Search).sources,
-      )
-        ? (action as ResponseFunctionWebSearch.Search).sources?.
-            map((source) => source.url)
-            .filter((url): url is string => typeof url === 'string')
-        : undefined;
-      if (sources && sources.length > 0) {
-        actionInfo.sources = sources;
-      }
-    }
+    const action = this.getWebSearchAction(call);
 
     const payload = {
       tool: 'web_search',
-      input: actionInfo,
+      input: {
+        id: call.id,
+        status: call.status,
+        ...(action ? this.describeWebSearchAction(action) : {}),
+      },
       output: { handledBy: 'openai' as const },
     };
 
@@ -1010,6 +984,73 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       MESSAGE_TYPES.TOOL_USE,
       payload,
     );
+  }
+
+  private getWebSearchAction(
+    call: ResponseFunctionWebSearch,
+  ):
+    | ResponseFunctionWebSearch.Search
+    | ResponseFunctionWebSearch.OpenPage
+    | ResponseFunctionWebSearch.Find
+    | null {
+    const candidate = (call as { action?: unknown }).action;
+    if (!candidate || typeof candidate !== 'object') {
+      return null;
+    }
+
+    const type = (candidate as { type?: unknown }).type;
+    if (type === 'search' && 'query' in candidate && typeof candidate.query === 'string') {
+      return candidate as ResponseFunctionWebSearch.Search;
+    }
+    if (type === 'open_page' && 'url' in candidate && typeof candidate.url === 'string') {
+      return candidate as ResponseFunctionWebSearch.OpenPage;
+    }
+    if (
+      type === 'find' &&
+      'url' in candidate &&
+      typeof (candidate as { url?: unknown }).url === 'string' &&
+      'pattern' in candidate &&
+      typeof (candidate as { pattern?: unknown }).pattern === 'string'
+    ) {
+      return candidate as ResponseFunctionWebSearch.Find;
+    }
+    return null;
+  }
+
+  private describeWebSearchAction(
+    action:
+      | ResponseFunctionWebSearch.Search
+      | ResponseFunctionWebSearch.OpenPage
+      | ResponseFunctionWebSearch.Find,
+  ): Record<string, unknown> {
+    switch (action.type) {
+      case 'search': {
+        const sources = Array.isArray(action.sources)
+          ? action.sources
+              .map((source) => source?.url)
+              .filter((url): url is string => typeof url === 'string' && url.length > 0)
+              .slice(0, 3)
+          : undefined;
+        return {
+          action: action.type,
+          query: action.query,
+          ...(sources && sources.length > 0 ? { sources } : {}),
+        };
+      }
+      case 'open_page':
+        return {
+          action: action.type,
+          url: action.url,
+        };
+      case 'find':
+        return {
+          action: action.type,
+          url: action.url,
+          pattern: action.pattern,
+        };
+      default:
+        return {};
+    }
   }
 
   private isMessageItem(
