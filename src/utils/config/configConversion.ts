@@ -131,10 +131,27 @@ export function objectToTaskState(obj: Record<string, any>): TaskState {
     autoExtractTikzFigure,
     autoCompileInputPdf,
     attachTeXCount,
-    printInputPrompt,
     reflect,
     ...agentConfigData
   } = obj;
+
+  const legacyPrintInputPrompt = Object.prototype.hasOwnProperty.call(
+    obj,
+    'printInputPrompt',
+  )
+    ? obj.printInputPrompt
+    : undefined;
+
+  const nestedLegacyPrintInputPrompt =
+    isObjectRecord(agentConfigData.toolConfig) &&
+    Object.prototype.hasOwnProperty.call(
+      agentConfigData.toolConfig,
+      'printInputPrompt',
+    )
+      ? (agentConfigData.toolConfig as Record<string, unknown>)[
+          'printInputPrompt'
+        ]
+      : undefined;
 
   // Build toolConfig from extracted fields (backward compatibility)
   // Ensure toolConfig is an object, handling cases where it might be malformed
@@ -153,9 +170,20 @@ export function objectToTaskState(obj: Record<string, any>): TaskState {
     ...(autoExtractTikzFigure !== undefined && { autoExtractTikzFigure }),
     ...(autoCompileInputPdf !== undefined && { autoCompileInputPdf }),
     ...(attachTeXCount !== undefined && { attachTeXCount }),
-    ...(printInputPrompt !== undefined && { printInputPrompt }),
     ...(reflect !== undefined && { reflect }),
   };
+
+  if (
+    legacyPrintInputPrompt !== undefined ||
+    nestedLegacyPrintInputPrompt !== undefined
+  ) {
+    console.warn(
+      'Ignoring legacy printInputPrompt setting. Enable texra.debug.saveInputPrompt instead.',
+    );
+    delete (agentConfigData.toolConfig as Record<string, unknown>)[
+      'printInputPrompt'
+    ];
+  }
 
   // Parse only AgentConfig-compatible fields
   try {
