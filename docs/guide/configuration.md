@@ -245,11 +245,13 @@ Control logging behavior:
 
 ```json
 "texra.logger.debugMode": false,
-"texra.debug.saveDebugObjects": false
+"texra.debug.saveDebugObjects": false,
+"texra.debug.saveInputPrompt": false
 ```
 
 - `debugMode`: Show detailed debug messages in the logger view
 - `saveDebugObjects`: Save message and response objects to JSON files for debugging purposes (includes both API messages and raw responses)
+- `saveInputPrompt`: Persist the final model input prompt as an XML file (stored alongside other debug artifacts when an execution ID is available)
 
 ## Environment-Specific Configuration
 
@@ -398,7 +400,9 @@ These settings, accessible directly in the main TeXRA webview, control how agent
 
 - **Reflect** (<i class="codicon codicon-refresh"></i>): Enables CoT agents to critique/improve their output (adds round 1). Increases cost/time, potentially quality.
 - **Attach TeX Count** (<i class="codicon codicon-symbol-numeric"></i>): Includes `texcount` output (word/header/math stats) in the agent's context. Requires `texcount` installed.
-- **Print Input Prompt** (<i class="codicon codicon-file-code"></i>): Adds the full final prompt sent to the LLM to the ProgressBoard log (useful for debugging, increases log size).
+- **Attach Diagnostics** (<i class="codicon codicon-tools"></i>): Appends LaTeX compilation logs and other diagnostics to the agent prompt.
+
+To capture the full prompt sent to the model, enable the `Save Input Prompt` debug setting in VS Code Settings (`texra.debug.saveInputPrompt`).
 
 **Model/Agent Selection:**
 

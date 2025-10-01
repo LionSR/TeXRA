@@ -82,7 +82,6 @@ export class ExecutionManager {
       reflect: message.reflect,
       attachTeXCount: message.attachTeXCount,
       attachDiagnostics: message.attachDiagnostics,
-      printInputPrompt: message.printInputPrompt,
       autoCompileInputPdf: message.autoCompileInputPdf,
     };
 
