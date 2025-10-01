@@ -70,6 +70,16 @@ import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands.js';
 // Use standardized commands directly (OPEN_LABEL is already included)
 export const COMMANDS = PROGRESS_VIEW_COMMANDS;
 
+// Shared definition for the storage toolbar button across layouts
+const OPEN_TASK_STORAGE_BUTTON = Object.freeze({
+  id: ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
+  icon: 'folder-opened',
+  command: COMMANDS.OPEN_TASK_STORAGE,
+  title: 'Open the workspace storage folder for this run',
+  className: 'vscode-button storage-button toolbar-button--hidden',
+  disabled: true,
+});
+
 /** @type {ToolbarButtonDefinition[]} */
 const WORKFLOW_TOOLBAR = [
   {
@@ -121,14 +131,7 @@ const WORKFLOW_TOOLBAR = [
     className: 'vscode-button clean-button',
     disabled: true,
   },
-  {
-    id: ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
-    icon: 'folder-opened',
-    command: COMMANDS.OPEN_TASK_STORAGE,
-    title: 'Open the workspace storage folder for this run',
-    className: 'vscode-button storage-button toolbar-button--hidden',
-    disabled: true,
-  },
+  { ...OPEN_TASK_STORAGE_BUTTON },
   {
     id: ELEMENT_IDS.ERASE_STREAM_BTN,
     icon: 'clear-all',
@@ -158,14 +161,7 @@ const TOOL_USE_TOOLBAR = [
     className: 'vscode-button restore-button',
     disabled: true,
   },
-  {
-    id: ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
-    icon: 'folder-opened',
-    command: COMMANDS.OPEN_TASK_STORAGE,
-    title: 'Open the workspace storage folder for this run',
-    className: 'vscode-button storage-button toolbar-button--hidden',
-    disabled: true,
-  },
+  { ...OPEN_TASK_STORAGE_BUTTON },
   {
     id: ELEMENT_IDS.ERASE_STREAM_BTN,
     icon: 'clear-all',
