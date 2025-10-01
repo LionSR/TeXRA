@@ -425,4 +425,150 @@ describe('ModelHandlerAnthropic message guards', () => {
 
     assert.equal(response.stop_reason, 'end_turn');
   });
+
+  it('skips token counting when messages include file-based document sources', async () => {
+    const handler = createAnthropicHandler({
+      supportsNativePdf: true,
+      supportsTokenCounting: true,
+    });
+    const loggerStub = {
+      channelId: 'test',
+      debug: () => {},
+      info: () => {},
+      warn: () => {},
+      error: () => {},
+      fileList: () => {},
+      getActiveGroupId: () => undefined,
+    };
+    handler.setLogger(loggerStub as unknown as AgentLogger);
+    (handler as any).getStreamingConfig = () => false;
+
+    const messages: MessageParam[] = [
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: 'Document: sample.pdf', citations: null },
+          {
+            type: 'document',
+            source: {
+              type: 'file',
+              file_id: 'file_existing',
+            },
+            title: 'sample.pdf',
+          },
+        ] as unknown as ContentBlockParam[],
+      },
+    ];
+
+    const countTokenCalls: string[] = [];
+
+    const client = {
+      beta: {
+        files: {
+          upload: async () => {
+            throw new Error('should not upload existing file sources');
+          },
+        },
+        messages: {
+          countTokens: async () => {
+            countTokenCalls.push('countTokens');
+            throw new Error(
+              'countTokens should not be invoked for file sources',
+            );
+          },
+          create: async () =>
+            ({
+              id: 'msg',
+              type: 'message',
+              role: 'assistant',
+              model: 'claude-test',
+              content: [{ type: 'text', text: 'ok' }],
+              stop_reason: 'end_turn',
+              usage: { input_tokens: 1, output_tokens: 1 },
+            }) as any,
+        },
+      },
+    } as any;
+
+    const response = await handler.createResponse(client, messages, 0);
+
+    assert.equal(
+      countTokenCalls.length,
+      0,
+      'should skip token counting for file sources',
+    );
+    assert.equal(response.stop_reason, 'end_turn');
+  });
+
+  it('counts tokens before uploading PDF documents', async () => {
+    const handler = createAnthropicHandler({
+      supportsNativePdf: true,
+      supportsTokenCounting: true,
+    });
+    const loggerStub = {
+      channelId: 'test',
+      debug: () => {},
+      info: () => {},
+      warn: () => {},
+      error: () => {},
+      fileList: () => {},
+      getActiveGroupId: () => undefined,
+    };
+    handler.setLogger(loggerStub as unknown as AgentLogger);
+    (handler as any).getStreamingConfig = () => false;
+
+    const messages: MessageParam[] = [
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: 'Document: sample.pdf', citations: null },
+          {
+            type: 'document',
+            source: {
+              type: 'base64',
+              media_type: 'application/pdf',
+              data: 'ZHVtbXk=',
+            },
+            title: 'sample.pdf',
+          },
+        ],
+      },
+    ];
+
+    const callOrder: string[] = [];
+
+    const client = {
+      beta: {
+        files: {
+          upload: async () => {
+            callOrder.push('upload');
+            return { id: 'file_uploaded' };
+          },
+        },
+        messages: {
+          countTokens: async () => {
+            callOrder.push('countTokens');
+            return { input_tokens: 5 } as any;
+          },
+          create: async () => {
+            callOrder.push('create');
+            return {
+              id: 'msg',
+              type: 'message',
+              role: 'assistant',
+              model: 'claude-test',
+              content: [{ type: 'text', text: 'ok' }],
+              stop_reason: 'end_turn',
+              usage: { input_tokens: 1, output_tokens: 1 },
+            } as any;
+          },
+        },
+      },
+    } as any;
+
+    const response = await handler.createResponse(client, messages, 0);
+
+    assert.deepEqual(callOrder, ['countTokens', 'upload', 'create']);
+    assert.equal(response.stop_reason, 'end_turn');
+  });
 });

@@ -13,6 +13,7 @@ All notable changes to this project will be documented in this file.
 - Upload Anthropic PDF attachments to the Files API so requests reuse `file_id`s instead of resending large base64 payloads.
 - Ensure follow-up Anthropic requests keep the Files API beta header when referencing previously uploaded PDFs.
 - Sanitize Anthropic PDF filenames before uploading so nested paths with forbidden characters no longer trigger Files API errors.
+- Skip Anthropic token counting when requests already reference Files API assets and defer PDF uploads until after token usage is calculated to avoid countTokens errors.
 
 ## [0.33.8] - 2025-09-30
 
