@@ -1,4 +1,3 @@
-// Third-party imports
 /**
  * Utility functions for consistent error logging and formatting across the TeXRA extension.
  *
@@ -15,9 +14,7 @@
 // Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - common
-
-// Local imports - log
+// Local imports - logging
 import * as logger from '@logger/logUtils';
 
 /**

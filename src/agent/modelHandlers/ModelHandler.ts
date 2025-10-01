@@ -98,7 +98,6 @@ export abstract class ModelHandler<
         reflect: false,
         attachTeXCount: false,
         attachDiagnostics: false,
-        printInputPrompt: false,
         autoCompileInputPdf: false,
       },
     };

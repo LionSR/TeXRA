@@ -52,7 +52,7 @@ describe('OutputHandler.finalizeRound', () => {
     requiredFiles: {},
     requiredFilesInternal: {},
     defaultOutputFiles: [],
-    useMultipleOutputs: false,
+    isMultipleOutput: false,
     filePatternsContain: [],
     tools: [],
   };
@@ -78,7 +78,6 @@ describe('OutputHandler.finalizeRound', () => {
       autoExtractTikzFigure: false,
       attachTeXCount: false,
       attachDiagnostics: false,
-      printInputPrompt: false,
       autoCompileInputPdf: false,
     },
   };

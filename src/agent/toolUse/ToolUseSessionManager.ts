@@ -65,39 +65,16 @@ interface SavePayload {
   toolState: ToolState;
 }
 
-function serializeMessages(messages: ProviderMessage[]): unknown[] {
-  try {
-    return JSON.parse(JSON.stringify(messages));
-  } catch (error) {
-    logger.warn(
-      `Failed to serialize provider messages: ${error instanceof Error ? error.message : String(error)}`,
-    );
-    return [];
-  }
-}
-
-function serializeToolState(state: ToolState) {
-  return {
-    texcountStats: state.texcountStats,
-    lastResponse: state.lastResponse,
-    accumulatedOutput: state.accumulatedOutput,
-    mediaFiles: [...state.mediaFiles],
-    thinkingBlocks: [...state.thinkingBlocks],
-    thinkingAdded: state.thinkingAdded,
-  };
+function toToolStateSnapshot(
+  state: ToolState,
+): ToolUseSessionSnapshot['toolState'] {
+  return ToolStateSnapshotSchema.parse(structuredClone(state));
 }
 
 function hydrateToolState(
   snapshot: ToolUseSessionSnapshot['toolState'],
 ): ToolState {
-  const state = new ToolState();
-  state.texcountStats = snapshot.texcountStats;
-  state.lastResponse = snapshot.lastResponse;
-  state.accumulatedOutput = snapshot.accumulatedOutput;
-  state.mediaFiles = [...snapshot.mediaFiles];
-  state.thinkingBlocks = [...snapshot.thinkingBlocks];
-  state.thinkingAdded = snapshot.thinkingAdded;
-  return state;
+  return Object.assign(new ToolState(), structuredClone(snapshot));
 }
 
 async function ensureStorageDir(): Promise<boolean> {
@@ -128,13 +105,153 @@ function getSnapshotPath(executionId: ExecutionId): string {
   return path.join(STORAGE_DIR, `${executionId}.json`);
 }
 
+interface ResumingSessionState {
+  queuedFollowUps: string[];
+}
+
 export class ToolUseSessionManager {
+  private static readonly pendingSnapshots = new Map<
+    StreamTabId,
+    ToolUseSessionSnapshot
+  >();
+  private static readonly resumingSessions = new Map<
+    StreamTabId,
+    ResumingSessionState
+  >();
+
+  /**
+   * Determines whether the provided stream is currently marked as resuming.
+   * @param streamId - The stream identifier to check.
+   */
+  public static isResumingSession(streamId: StreamTabId): boolean {
+    return this.resumingSessions.has(streamId);
+  }
+
   /**
    * Checks if tool-use session persistence is enabled
    * @returns True if persistence is enabled, false otherwise
    */
   public static isPersistenceEnabled(): boolean {
     return getToolUsePersistenceEnabled();
+  }
+
+  /**
+   * Registers persisted snapshots so they can be resumed lazily.
+   * @param snapshots - The snapshots to cache for later use.
+   */
+  public static registerPendingSnapshots(
+    snapshots: ToolUseSessionSnapshot[],
+  ): void {
+    if (snapshots.length === 0) {
+      return;
+    }
+
+    for (const snapshot of snapshots) {
+      this.pendingSnapshots.set(snapshot.streamId as StreamTabId, snapshot);
+    }
+
+    logger.debug(
+      `Registered ${snapshots.length} pending tool-use snapshots for lazy resume.`,
+    );
+  }
+
+  /**
+   * Retrieves and removes a cached snapshot for the provided stream.
+   * @param streamId - The stream identifier to lookup.
+   * @returns The cached snapshot if found.
+   */
+  public static getSnapshotForStream(
+    streamId: StreamTabId,
+  ): ToolUseSessionSnapshot | undefined {
+    return this.pendingSnapshots.get(streamId);
+  }
+
+  /**
+   * Marks a stream as resuming so follow-ups can be queued until the agent is ready.
+   * @param streamId - The stream identifier being resumed.
+   */
+  public static setResumingSession(streamId: StreamTabId): void {
+    if (this.resumingSessions.has(streamId)) {
+      return;
+    }
+
+    this.resumingSessions.set(streamId, { queuedFollowUps: [] });
+    logger.debug(`Marked stream ${streamId} as resuming.`);
+  }
+
+  /**
+   * Removes and returns a cached snapshot for the provided stream.
+   * @param streamId - The stream identifier to lookup.
+   * @returns The cached snapshot if found.
+   */
+  public static consumeSnapshotForStream(
+    streamId: StreamTabId,
+  ): ToolUseSessionSnapshot | undefined {
+    const snapshot = this.pendingSnapshots.get(streamId);
+    if (snapshot) {
+      this.pendingSnapshots.delete(streamId);
+      logger.debug(
+        `Consuming pending snapshot for stream ${streamId} to resume lazily.`,
+      );
+    }
+    return snapshot;
+  }
+
+  /**
+   * Adds a follow-up to the queue while a snapshot is being resumed.
+   * @param streamId - The stream identifier to enqueue under.
+   * @param followUp - The follow-up text to queue.
+   * @returns True if the follow-up was queued, false if no resuming session exists.
+   */
+  public static enqueueFollowUpWhileResuming(
+    streamId: StreamTabId,
+    followUp: string,
+  ): boolean {
+    const entry = this.resumingSessions.get(streamId);
+    if (!entry) {
+      return false;
+    }
+
+    entry.queuedFollowUps.push(followUp);
+    logger.debug(
+      `Queued follow-up while resuming stream ${streamId}; ${entry.queuedFollowUps.length} waiting.`,
+    );
+    return true;
+  }
+
+  /**
+   * Retrieves and clears queued follow-ups for a resuming session.
+   * @param streamId - The stream identifier to drain.
+   */
+  public static drainQueuedFollowUps(streamId: StreamTabId): string[] {
+    const entry = this.resumingSessions.get(streamId);
+    if (!entry) {
+      return [];
+    }
+
+    const queued = entry.queuedFollowUps.splice(0);
+    logger.debug(
+      `Drained ${queued.length} queued follow-ups for stream ${streamId} after resume.`,
+    );
+    return queued;
+  }
+
+  /**
+   * Clears a resuming session without draining queued follow-ups (used on failure).
+   * @param streamId - The stream identifier to clear.
+   */
+  public static clearResumingSession(streamId: StreamTabId): void {
+    if (this.resumingSessions.delete(streamId)) {
+      logger.debug(`Cleared resuming session tracking for stream ${streamId}.`);
+    }
+  }
+
+  /**
+   * Checks if a snapshot is cached for the provided stream identifier.
+   * @param streamId - The stream identifier to check.
+   */
+  public static hasPendingSnapshot(streamId: StreamTabId): boolean {
+    return this.pendingSnapshots.has(streamId);
   }
 
   /**
@@ -155,24 +272,23 @@ export class ToolUseSessionManager {
       return;
     }
 
-    const snapshot: ToolUseSessionSnapshot = {
-      version: SNAPSHOT_VERSION,
-      executionId: payload.executionId,
-      streamId: payload.streamId,
-      agentName: payload.agentName,
-      model: payload.model,
-      agentSessionKind: payload.agentSessionKind,
-      messages: serializeMessages(payload.messages),
-      toolState: serializeToolState(payload.toolState),
-      lastUpdated: Date.now(),
-    };
-
-    const json = JSON.stringify(snapshot, null, 2);
     try {
-      await StorageFS.write(getSnapshotPath(payload.executionId), json);
+      const snapshot: ToolUseSessionSnapshot = {
+        version: SNAPSHOT_VERSION,
+        executionId: payload.executionId,
+        streamId: payload.streamId,
+        agentName: payload.agentName,
+        model: payload.model,
+        agentSessionKind: payload.agentSessionKind,
+        messages: structuredClone(payload.messages),
+        toolState: toToolStateSnapshot(payload.toolState),
+        lastUpdated: Date.now(),
+      };
+
+      await StorageFS.writeJson(getSnapshotPath(payload.executionId), snapshot);
     } catch (error) {
       logger.warn(
-        `Failed to write tool-use session snapshot: ${error instanceof Error ? error.message : String(error)}`,
+        `Failed to save tool-use session snapshot: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
   }
@@ -189,20 +305,51 @@ export class ToolUseSessionManager {
       return null;
     }
 
+    const snapshotPath = getSnapshotPath(executionId);
+
     try {
-      const raw = await StorageFS.read(getSnapshotPath(executionId));
-      const parsed = JSON.parse(raw);
-      return ToolUseSessionSnapshotSchema.parse(parsed);
+      const stored = await StorageFS.readJson<ToolUseSessionSnapshot | string>(
+        snapshotPath,
+      );
+      const normalized =
+        typeof stored === 'string' ? JSON.parse(stored) : stored;
+      return ToolUseSessionSnapshotSchema.parse(normalized);
     } catch (error) {
-      if (error instanceof vscode.FileSystemError) {
-        if (error.code === 'FileNotFound') {
+      if (
+        error instanceof vscode.FileSystemError &&
+        error.code === 'FileNotFound'
+      ) {
+        return null;
+      }
+
+      try {
+        const raw = await StorageFS.read(snapshotPath);
+        const fallbackParsed = JSON.parse(raw);
+        const normalized =
+          typeof fallbackParsed === 'string'
+            ? JSON.parse(fallbackParsed)
+            : fallbackParsed;
+        return ToolUseSessionSnapshotSchema.parse(normalized);
+      } catch (fallbackError) {
+        if (
+          fallbackError instanceof vscode.FileSystemError &&
+          fallbackError.code === 'FileNotFound'
+        ) {
           return null;
         }
+
+        const originalMessage =
+          error instanceof Error ? error.message : String(error);
+        const fallbackMessage =
+          fallbackError instanceof Error
+            ? fallbackError.message
+            : String(fallbackError);
+
+        logger.warn(
+          `Failed to load tool-use session snapshot: original=${originalMessage}; fallback=${fallbackMessage}`,
+        );
+        return null;
       }
-      logger.warn(
-        `Failed to load tool-use session snapshot: ${error instanceof Error ? error.message : String(error)}`,
-      );
-      return null;
     }
   }
 
@@ -216,6 +363,14 @@ export class ToolUseSessionManager {
     if (!executionId || !isValidExecutionId(executionId)) {
       return;
     }
+
+    for (const [streamId, snapshot] of this.pendingSnapshots.entries()) {
+      if (snapshot.executionId === executionId) {
+        this.pendingSnapshots.delete(streamId);
+        break;
+      }
+    }
+
     try {
       await StorageFS.delete(getSnapshotPath(executionId));
     } catch (error) {

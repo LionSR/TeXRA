@@ -1,11 +1,10 @@
-// Local imports - agent
-
 // Local imports - agent components
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import {
   AgentSetting,
   AgentPrompt,
-  AgentType,
+  AgentWorkflowSetting,
+  requireWorkflowSetting,
 } from '@agent/core/AgentDataclass';
 import { AgentStateRound, AgentStateGlobal } from '@agent/core/AgentState';
 import { runResponseCycle } from '@agent/core/ResponseCycle';
@@ -17,25 +16,22 @@ import { OutputHandler, NamedOutputFile, IOutputHandler } from '@agent/output';
 import type { ExecutionId } from '@agent/types/IdentifierTypes';
 import { PromptBuilder } from '@agent/utils/PromptBuilder';
 import { writePromptToXml } from '@agent/utils/promptUtils';
+import { calculateTotalRounds } from '@agent/utils/roundUtils';
 import { bus } from '@eventBus/ProgressEventBus';
-// Standard library imports
-// (none needed)
 
-// Third-party imports
-// (none needed)
-
-// Local imports - log
-
-// Local imports - latex utils
+// Local imports - latex utilities
 import { LatexMediaManager } from '@latex';
+
+// Local imports - logging
 import { MESSAGE_TYPES } from '@logger/messageTypes';
+
+// Local imports - model definitions
 import type { ToolDefinition } from '@model';
 
-// System imports - common utilities
+// Local imports - configuration
 import { getConfig } from '@utils/config';
 
-// Local imports - utilities
-import { calculateTotalRounds } from '@agent/utils/roundUtils';
+// Local imports - filesystem utilities
 import { WorkspaceFS } from '@utils/files';
 
 /**
@@ -61,6 +57,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
   protected outputFile: string[];
   protected outputFiles: { [key: number]: string[] };
   protected baseFiles: string[];
+  protected override agentSetting: AgentWorkflowSetting;
   protected useScratchpad: boolean = false;
   protected logId: number = 0;
   /** Handler for output file processing and validation. */
@@ -78,14 +75,16 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     agentPath: string,
     executionId?: ExecutionId,
   ) {
+    const workflowSetting = requireWorkflowSetting(agentSetting);
     super(
       modelHandler,
       agentConfig,
-      agentSetting,
+      workflowSetting,
       agentPrompt,
       agentPath,
       executionId,
     );
+    this.agentSetting = workflowSetting;
 
     // Initialize basic attributes
     const numRounds = this.getNumberOfRounds();
@@ -386,14 +385,24 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
         prefixWithStats = `${toolState.texcountStats}${userPrefix}`;
       }
 
-      // Write prompt to file if requested
-      if (this.agentConfig.toolConfig.printInputPrompt) {
-        await writePromptToXml(
+      // Write prompt to file if debug setting is enabled
+      const shouldSaveInputPrompt = getConfig<boolean>(
+        'debug.saveInputPrompt',
+        false,
+      );
+      if (shouldSaveInputPrompt) {
+        const promptPath = await writePromptToXml(
           systemPrompt,
           prefixWithStats,
           userRequest,
           this.agentConfig.inputFile,
           this.agentConfig.agent,
+          this.executionId,
+        );
+        this.logger.info(
+          `Saved input prompt to ${promptPath}`,
+          roundGroupId,
+          MESSAGE_TYPES.DEFAULT,
         );
       }
 

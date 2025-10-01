@@ -2,7 +2,7 @@
   "name": "texra",
   "displayName": "TeXRA",
   "description": "TeXRA: Your LLM-powered 24/7 LaTeX Research Assistant.",
-  "version": "0.33.8",
+  "version": "0.33.9",
   "publisher": "texra-ai",
   "engines": {
     "vscode": "^1.99.3"
@@ -18,11 +18,7 @@
     "Data Science"
   ],
   "activationEvents": [
-    "onView:texra.mainView",
-    "onView:texra.folderExplorer",
-    "onView:texra.progressView",
-    "onColorTheme",
-    "onCommand:texra.createSampleProject"
+    "onColorTheme"
   ],
   "main": "./dist/extension.js",
   "contributes": {
@@ -36,8 +32,6 @@
               "type": "string"
             },
             "default": [
-              "chat",
-              "ask",
               "correct",
               "polish",
               "draw",
@@ -49,10 +43,16 @@
             "description": "List of available agents",
             "scope": "resource"
           },
-          "texra.includeToolUseAgents": {
-            "type": "boolean",
-            "default": false,
-            "description": "Include built-in tool-use agents (e.g., xml_validator, tex_linter_fix) in the agent list",
+          "texra.toolUseAgents": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": [
+              "ask",
+              "chat"
+            ],
+            "description": "List of tool-use agents shown in the dedicated dropdown",
             "scope": "resource"
           },
           "texra.models": {
@@ -64,6 +64,8 @@
                 "opus41",
                 "opus4T",
                 "opus4",
+                "sonnet45T",
+                "sonnet45",
                 "sonnet4T",
                 "sonnet4",
                 "sonnet37T",
@@ -103,18 +105,17 @@
               "gemini25p",
               "gemini25f",
               "opus41T",
+              "sonnet45T",
               "sonnet4T",
-              "deepseek",
-              "deepseekT",
               "gpt5",
               "gpt41",
-              "gptoss",
-              "o3",
-              "o4-",
-              "grok4",
-              "kimi2"
+              "deepseek",
+              "deepseekT",
+              "kimi2",
+              "qwen3max",
+              "grok4"
             ],
-            "description": "List of available models. Model codes: opus41T/opus41 (Claude Opus 4.1 Thinking/Regular), opus4T/opus4 (Claude Opus 4 Thinking/Regular), sonnet4T/sonnet4 (Claude Sonnet 4 Thinking/Regular), sonnet37T/sonnet37 (Claude Sonnet 3.7 Thinking/Regular), o4-/o3/o3pro/o3-/o1pro/o1/gptoss/gptoss- (OpenAI reasoning models), gpt5/gpt5-/gpt5--/gpt41/gpt4o (GPT-5/5 Mini/5 Nano/4.1/4O), gemini25p/gemini25f/gemini2fT (Gemini 2.5 Pro/Flash, 2.0 Flash Thinking), deepseek/deepseekT(DeepSeek V3.1 Regular/Thinking), dsv3/dsr1 (DeepSeek V3/R1), grok4 (Grok 4), grok3 (Grok 3), qwen3max (Qwen-Max latest), qwenplus (Qwen Plus latest), qwenturbo (Qwen Turbo), kimit/kimiv/kimi2/kimi2turbo (Kimi Thinking/Vision/K2/K2 Turbo)",
+            "description": "List of available models. Model codes: opus41T/opus41 (Claude Opus 4.1 Thinking/Regular), opus4T/opus4 (Claude Opus 4 Thinking/Regular), sonnet45T/sonnet45 (Claude Sonnet 4.5 Thinking/Regular), sonnet4T/sonnet4 (Claude Sonnet 4 Thinking/Regular), sonnet37T/sonnet37 (Claude Sonnet 3.7 Thinking/Regular), o4-/o3/o3pro/o3-/o1pro/o1/gptoss/gptoss- (OpenAI reasoning models), gpt5/gpt5-/gpt5--/gpt41/gpt4o (GPT-5/5 Mini/5 Nano/4.1/4O), gemini25p/gemini25f/gemini2fT (Gemini 2.5 Pro/Flash, 2.0 Flash Thinking), deepseek/deepseekT(DeepSeek V3.1 Regular/Thinking), dsv3/dsr1 (DeepSeek V3/R1), grok4 (Grok 4), grok3 (Grok 3), qwen3max (Qwen-Max latest), qwenplus (Qwen Plus latest), qwenturbo (Qwen Turbo), kimit/kimiv/kimi2/kimi2turbo (Kimi Thinking/Vision/K2/K2 Turbo)",
             "scope": "resource"
           }
         }
@@ -361,6 +362,18 @@
             "editPresentation": "multilineText",
             "order": 10
           },
+          "texra.files.ignored.inputDirectories": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": [
+              "PapersEx"
+            ],
+            "description": "Additional directories to ignore when listing input and edited files",
+            "editPresentation": "multilineText",
+            "order": 11
+          },
           "texra.files.ignored.auxiliaryKeywords": {
             "type": "array",
             "items": {
@@ -385,7 +398,7 @@
             ],
             "description": "Additional keywords to ignore when listing auxiliary files, including model names",
             "editPresentation": "multilineText",
-            "order": 11
+            "order": 12
           },
           "texra.files.ignored.mediaDirectories": {
             "type": "array",
@@ -398,11 +411,12 @@
               "__pycache__",
               "versions",
               "history",
-              "venv"
+              "venv",
+              "Diffs"
             ],
             "description": "Directories to ignore in the figure path",
             "editPresentation": "multilineText",
-            "order": 12
+            "order": 13
           },
           "texra.files.ignored.directories": {
             "type": "array",
@@ -421,11 +435,12 @@
               "stuff",
               "draft",
               "miscellaneous",
+              "diffs",
               "venv"
             ],
             "description": "Directories to ignore when listing files",
             "editPresentation": "multilineText",
-            "order": 13
+            "order": 14
           },
           "texra.files.ignored.keywords": {
             "type": "array",
@@ -447,7 +462,7 @@
             ],
             "description": "Keywords to ignore when selecting files",
             "editPresentation": "multilineText",
-            "order": 14
+            "order": 15
           },
           "texra.maxImageDimension": {
             "type": "number",
@@ -455,7 +470,7 @@
             "minimum": 100,
             "maximum": 10000,
             "description": "Maximum dimension (width or height) in pixels for images before resizing. Images larger than this will be resized to fit within this dimension while maintaining aspect ratio.",
-            "order": 15
+            "order": 16
           }
         }
       },
@@ -741,6 +756,12 @@
             "type": "boolean",
             "default": false,
             "description": "Save message and response objects to JSON files for debugging purposes",
+            "scope": "resource"
+          },
+          "texra.debug.saveInputPrompt": {
+            "type": "boolean",
+            "default": false,
+            "description": "Save the final input prompt sent to the model as an XML file for debugging purposes",
             "scope": "resource"
           }
         }
@@ -1300,7 +1321,7 @@
   },
   "homepage": "https://texra.ai",
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.63.1",
+    "@anthropic-ai/sdk": "^0.64.0",
     "@cantoo/pdf-lib": "^2.5.2",
     "@google/genai": "^1.21.0",
     "@modelcontextprotocol/sdk": "^1.18.2",
@@ -1325,13 +1346,14 @@
     "minimatch": "^10.0.3",
     "nanoid": "^5.1.6",
     "node-pandoc": "^0.3.0",
-    "openai": "^5.23.0",
+    "openai": "^5.23.1",
     "pdf2pic": "^3.2.0",
     "shell-quote": "^1.8.3",
     "sortablejs": "^1.15.6",
     "split.js": "^1.6.5",
     "tar": "^7.4.4",
     "turndown": "^7.2.1",
+    "turndown-plugin-gfm": "^1.0.2",
     "winston": "^3.17.0",
     "yaml": "^2.8.1",
     "zod": "^3.25.76",

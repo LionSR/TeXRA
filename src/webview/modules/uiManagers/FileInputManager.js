@@ -212,24 +212,120 @@ export class FileInputManager extends BaseUIManager {
   }
 
   _setupRefreshIcons() {
+    const iconConfigs = [
+      {
+        className: 'codicon-file-code',
+        getRequests: () => [
+          {
+            command: MAIN_VIEW_COMMANDS.REQUEST_INPUT_FILE,
+            payload: {
+              notifyWhenEmpty: true,
+            },
+          },
+        ],
+      },
+      {
+        className: 'codicon-book',
+        getRequests: () => [
+          {
+            command: MAIN_VIEW_COMMANDS.REQUEST_REFERENCE_FILE,
+            payload: {
+              notifyWhenEmpty: true,
+            },
+          },
+        ],
+      },
+      {
+        className: 'codicon-file-add',
+        getRequests: () => [
+          {
+            command: MAIN_VIEW_COMMANDS.REQUEST_AUXILIARY_FILE,
+            payload: {
+              notifyWhenEmpty: true,
+            },
+          },
+        ],
+      },
+      {
+        className: 'codicon-file-media',
+        getRequests: () => [
+          {
+            command: MAIN_VIEW_COMMANDS.REQUEST_MEDIA_FILE,
+            payload: {
+              notifyWhenEmpty: true,
+            },
+          },
+        ],
+      },
+      {
+        className: 'codicon-edit',
+        getRequests: () => {
+          const baseFile = safeGetElementValue(BASE_FILE);
+          return [
+            {
+              command: MAIN_VIEW_COMMANDS.REQUEST_BASE_FILE,
+              payload: {
+                preserveBaseFile: true,
+              },
+            },
+            {
+              command: MAIN_VIEW_COMMANDS.REQUEST_EDITED_FILE,
+              payload: {
+                baseFile,
+                preserveSelection: safeGetElementValue(EDITED_FILE),
+                notifyWhenEmpty: true,
+              },
+            },
+          ];
+        },
+      },
+      {
+        className: 'codicon-git-commit',
+        getRequests: () => [
+          {
+            command: MAIN_VIEW_COMMANDS.REQUEST_RECENT_COMMITS,
+            payload: {
+              notifyWhenEmpty: true,
+            },
+          },
+        ],
+      },
+    ];
+
     const icons = document.querySelectorAll(
       '.file-select-header label .codicon.clickable',
     );
+
     icons.forEach((icon) => {
-      if (icon.classList.contains('codicon-git-commit')) {
-        const handler = () => {
-          this.vscode.postMessage({
-            command: MAIN_VIEW_COMMANDS.REFRESH_COMMITS,
-          });
-        };
-        this.addListener(icon, 'click', handler);
+      const config = iconConfigs.find((item) =>
+        icon.classList.contains(item.className),
+      );
+      if (!config) {
+        return;
       }
+
+      const handler = () => {
+        const requests = config.getRequests ? config.getRequests() : [];
+        requests.forEach(({ command, payload = {} }) => {
+          this.vscode.postMessage({
+            command,
+            ...payload,
+          });
+        });
+      };
+
+      this.addListener(icon, 'click', handler);
     });
   }
 
   _setupSaveListeners() {
     ELEMENTS_TO_SAVE.forEach((id) => {
-      if (id === 'agent' || id === 'model') {
+      if (
+        id === 'model' ||
+        id === 'workflowAgent' ||
+        id === 'toolUseAgent' ||
+        id === 'sessionType'
+      ) {
         return; // handled by SettingsButtonManager
       }
       if (id !== 'instruction') {

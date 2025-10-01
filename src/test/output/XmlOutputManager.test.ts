@@ -23,7 +23,7 @@ describe('XmlOutputManager markdown fallback', () => {
     requiredFiles: {},
     requiredFilesInternal: {},
     defaultOutputFiles: [],
-    useMultipleOutputs: false,
+    isMultipleOutput: false,
     filePatternsContain: [],
     tools: [],
   };
@@ -49,7 +49,6 @@ describe('XmlOutputManager markdown fallback', () => {
       autoExtractTikzFigure: false,
       attachTeXCount: false,
       attachDiagnostics: false,
-      printInputPrompt: false,
       autoCompileInputPdf: false,
     },
   };

@@ -4,28 +4,31 @@ import * as vscode from 'vscode';
 
 // Local imports - agent utilities
 import {
-  createAgentOptionTag,
-  getAgentOptionMetadata,
+  buildAgentOptionsPayload,
   type AgentDirectoryMap,
+  type AgentOptionsPayload,
 } from '@agent/utils/agentOptionMetadata';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { getConfig } from '@utils/config';
 
+export type { AgentOptionsPayload };
+
 /**
- * Get all available agents including tool-use agents if enabled.
+ * Collect configured workflow agents alongside configured and discovered tool-use agents.
  */
+export interface AgentNameBuckets {
+  allAgents: string[];
+  toolUseAgents: string[];
+}
+
 export async function getAllAgents(
   context: vscode.ExtensionContext,
-): Promise<string[]> {
-  const agents = getConfig<string[]>('agents', []);
-  const includeToolUse = getConfig<boolean>('includeToolUseAgents', false);
+): Promise<AgentNameBuckets> {
+  const workflowAgents = getConfig<string[]>('agents', []);
+  const configuredToolUseAgents = getConfig<string[]>('toolUseAgents', []);
 
-  if (!includeToolUse) {
-    return agents;
-  }
-
-  // Get tool-use agents
   const toolUseDir = await agentDirectories.builtInToolUse(context);
+  let discoveredToolUseAgents: string[] = [];
   try {
     const toolUseFiles = await glob('**/*.yaml', {
       cwd: toolUseDir,
@@ -33,14 +36,19 @@ export async function getAllAgents(
       nodir: true,
       absolute: false,
     });
-    const toolUseAgents = toolUseFiles.map((f) =>
+    discoveredToolUseAgents = toolUseFiles.map((f) =>
       f.replace(/\.yaml$/, '').replace(/.*\//, ''),
     );
-    return Array.from(new Set([...agents, ...toolUseAgents]));
   } catch {
-    // If tool-use directory doesn't exist or can't be read, just use base agents
-    return agents;
+    discoveredToolUseAgents = [];
   }
+
+  const toolUseAgents = Array.from(
+    new Set([...configuredToolUseAgents, ...discoveredToolUseAgents]),
+  );
+  const allAgents = Array.from(new Set([...workflowAgents, ...toolUseAgents]));
+
+  return { allAgents, toolUseAgents };
 }
 
 /**
@@ -50,7 +58,7 @@ async function getAgentDirectories(
   context: vscode.ExtensionContext,
 ): Promise<AgentDirectoryMap> {
   return {
-    custom: await agentDirectories.custom(),
+    custom: await agentDirectories.custom(context),
     builtIn: await agentDirectories.builtIn(context),
     builtInToolUse: await agentDirectories.builtInToolUse(context),
   };
@@ -59,19 +67,14 @@ async function getAgentDirectories(
 /**
  * Compute agent <option> tags for the agent dropdown.
  * Agents missing a YAML definition are marked as disabled and cannot be selected.
- * A codicon indicator is added via data-multiple when a corresponding
- * `_multiple.yaml` file exists.
+ * A codicon indicator is added via data-multiple when either the agent declares
+ * `isMultipleOutput: true` or a sibling `_multiple.yaml` definition exists.
  */
 export async function computeAgentOptions(
   context: vscode.ExtensionContext,
-): Promise<string> {
-  const allAgents = await getAllAgents(context);
+): Promise<AgentOptionsPayload> {
+  const { allAgents, toolUseAgents } = await getAllAgents(context);
   const dirs = await getAgentDirectories(context);
 
-  const optionTags = allAgents.map((agent) => {
-    const metadata = getAgentOptionMetadata(agent, dirs);
-    return createAgentOptionTag(agent, metadata);
-  });
-
-  return optionTags.join('\n');
+  return buildAgentOptionsPayload(allAgents, dirs, toolUseAgents);
 }

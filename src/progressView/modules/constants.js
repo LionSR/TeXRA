@@ -5,7 +5,19 @@ export const STATUS = {
   STOPPED: 'stopped',
   READY: 'ready',
   WAITING: 'waiting',
+  RESUMING: 'resuming',
 };
+
+/**
+ * @typedef {Object} ToolbarButtonDefinition
+ * @property {string} id - DOM element identifier for the button.
+ * @property {string} icon - Codicon identifier rendered inside the button.
+ * @property {string} command - Webview command dispatched when clicked.
+ * @property {string} title - Accessible label describing the action.
+ * @property {string} className - Space-delimited class names applied to the button.
+ * @property {boolean} disabled - Whether the button is initially disabled.
+ * @property {Record<string, string>} [dataset] - Additional data attributes for the button element.
+ */
 
 // DOM element IDs used across the progress view
 export const ELEMENT_IDS = {
@@ -32,6 +44,7 @@ export const ELEMENT_IDS = {
   DIFF_STREAM_BTN: 'diffStreamBtn',
   PACK_STREAM_BTN: 'packStreamBtn',
   CLEAN_STREAM_BTN: 'cleanStreamBtn',
+  OPEN_TASK_STORAGE_BTN: 'openTaskStorageBtn',
   ERASE_STREAM_BTN: 'eraseStreamBtn',
   FOLLOW_UP_CONTAINER: 'followUpContainer',
   FOLLOW_UP_INPUT: 'followUpInput',
@@ -57,6 +70,17 @@ import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands.js';
 // Use standardized commands directly (OPEN_LABEL is already included)
 export const COMMANDS = PROGRESS_VIEW_COMMANDS;
 
+// Shared definition for the storage toolbar button across layouts
+const OPEN_TASK_STORAGE_BUTTON = Object.freeze({
+  id: ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
+  icon: 'folder-opened',
+  command: COMMANDS.OPEN_TASK_STORAGE,
+  title: 'Open the workspace storage folder for this run',
+  className: 'vscode-button storage-button toolbar-button--hidden',
+  disabled: true,
+});
+
+/** @type {ToolbarButtonDefinition[]} */
 const WORKFLOW_TOOLBAR = [
   {
     id: ELEMENT_IDS.STOP_STREAM_BTN,
@@ -107,6 +131,7 @@ const WORKFLOW_TOOLBAR = [
     className: 'vscode-button clean-button',
     disabled: true,
   },
+  { ...OPEN_TASK_STORAGE_BUTTON },
   {
     id: ELEMENT_IDS.ERASE_STREAM_BTN,
     icon: 'clear-all',
@@ -117,6 +142,7 @@ const WORKFLOW_TOOLBAR = [
   },
 ];
 
+/** @type {ToolbarButtonDefinition[]} */
 const TOOL_USE_TOOLBAR = [
   {
     id: ELEMENT_IDS.STOP_STREAM_BTN,
@@ -135,6 +161,7 @@ const TOOL_USE_TOOLBAR = [
     className: 'vscode-button restore-button',
     disabled: true,
   },
+  { ...OPEN_TASK_STORAGE_BUTTON },
   {
     id: ELEMENT_IDS.ERASE_STREAM_BTN,
     icon: 'clear-all',
@@ -145,6 +172,7 @@ const TOOL_USE_TOOLBAR = [
   },
 ];
 
+/** @type {Record<'workflow' | 'toolUse', ToolbarButtonDefinition[]>} */
 export const TOOLBAR_BUTTONS = {
   workflow: WORKFLOW_TOOLBAR,
   toolUse: TOOL_USE_TOOLBAR,

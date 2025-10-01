@@ -1,5 +1,6 @@
 // Third-party imports
 import { countTokens } from 'gpt-tokenizer';
+
 // Standard library imports
 import * as path from 'path';
 
@@ -15,8 +16,6 @@ import {
   ChatCompletionMessageFunctionToolCall,
   ChatCompletionMessageCustomToolCall,
 } from 'openai/resources/chat/completions';
-
-// Local imports - agent
 
 // Local imports - agent components
 import type { AgentConfig } from '../core/AgentConfig';
@@ -45,7 +44,7 @@ import type { ToolDefinition } from '@model';
 import { cleanFileContent } from '@replacement/engine';
 import { K_SLICE } from '@utils/config';
 
-// Local imports - utilities
+// Local imports - filesystem utilities
 import { WorkspaceFS } from '@utils/files';
 import { objectToLogString } from '@utils/text/stringUtils';
 import xmlUtils from '@utils/text/xmlUtils';

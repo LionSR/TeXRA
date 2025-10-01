@@ -2,15 +2,45 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.33.8] [Unreleased]
+## [Unreleased]
 
-### Improvements
+### Features
 
+- Add Claude Sonnet 4.5 (thinking and regular) to the Anthropic catalog and default model list so the latest Claude release is immediately available in TeXRA.
+
+### Bug Fixes
+
+- Upload Anthropic PDF attachments to the Files API so requests reuse `file_id`s instead of resending large base64 payloads.
+- Ensure follow-up Anthropic requests keep the Files API beta header when referencing previously uploaded PDFs.
+- Sanitize Anthropic PDF filenames before uploading so nested paths with forbidden characters no longer trigger Files API errors.
+- Skip Anthropic token counting when requests already reference Files API assets and defer PDF uploads until after token usage is calculated to avoid countTokens errors.
+
+## [0.33.8] - 2025-09-30
+
+### Features
+
+- Split the agent picker into workflow and tool-use sessions with a toggle so users can quickly see the agents that apply to their workflow.
 - Update Gemini 2.5 Flash preview entries to the September 2025 release.
+- Refresh Qwen-Max and Qwen Plus integrations with updated pricing, naming, and thinking support in the DashScope handler.
 
-### Improvements
+### Bug Fixes
 
-- Refresh Qwen-Max and Qwen Plus integrations with updated pricing, naming, and thinking support in the DashScope handler
+- Improve scratchpad markdown fallbacks by converting HTML with Turndown when Pandoc is unavailable, keeping formatting stable across environments.
+- Ensure prompt XML exports always resolve to absolute paths for both workspace files and execution-scoped runs to avoid downstream lookups failing.
+- Harden progress view state handling with validation on task groups, toggles, and stream statuses to prevent invalid data from corrupting summaries.
+- Restore main view configurations using the shared task-state helper so history entries hydrate without manual JSON juggling.
+- Cap `read_file` tool responses at the first 400 lines to keep large files from overwhelming tool-use transcripts.
+- Enable interleaved thinking by default for supported Claude tool-use agents so follow-up reasoning stays in sync with tool results.
+- Rebuild the agent selector footer with a compact session toggle and per-session dropdowns so the UI stays narrow and focused.
+- Populate the tool-use dropdown from the dedicated `texra.toolUseAgents` list and automatic discovery so the old include toggle is no longer needed.
+- Trim the default tool-use agent list to the conversational presets so specialized utilities stay opt-in per workspace.
+- Narrow the model selector width and streamline tool-use labelling so dropdowns stay tidy without superscript markers.
+
+### Bug Fixes
+
+- Migrate history view toggle state persistence from JSON strings to structured arrays so expansion settings reliably load across versions.
+- Clear queued restore context when the main view fails to initialize, preventing stale state from resurfacing on the next activation.
+- Guard the model select observer lifecycle and update queue so successive model option messages render reliably without leaking observers.
 
 ## [0.33.7] - 2025-09-22
 
@@ -153,7 +183,7 @@ All notable changes to this project will be documented in this file.
 - Allow disabling LaTeX formatting and silencing missing `latexindent` warnings
 - Added configurable `texra.maxImageDimension` setting to control the maximum image size threshold
 - Add "New" button in main view to reset all fields
-- Add `texra.includeToolUseAgents` setting to optionally show built-in tool-use agents in the agent dropdown
+- Add `texra.includeToolUseAgents` setting to optionally show built-in tool-use agents in the agent dropdown (deprecated in 0.33.8)
 - Prompt users to install LaTeX Workshop extension with "Never remind again" option for enhanced LaTeX features
 
 ### Bug Fixes
