@@ -264,13 +264,12 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
       this.logger.error(
         this.channel,
         `Failed to open task storage for stream ${stream}, executionId ${executionId}: ${errorMessage}`,
-        undefined,
+        error instanceof Error ? error : undefined,
         undefined,
         undefined,
         {
           stream,
           executionId,
-          error: error instanceof Error ? error : errorMessage,
         },
       );
       await vscode.window.showErrorMessage(
