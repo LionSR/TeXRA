@@ -18,11 +18,7 @@
     "Data Science"
   ],
   "activationEvents": [
-    "onView:texra.mainView",
-    "onView:texra.folderExplorer",
-    "onView:texra.progressView",
-    "onColorTheme",
-    "onCommand:texra.createSampleProject"
+    "onColorTheme"
   ],
   "main": "./dist/extension.js",
   "contributes": {
@@ -760,6 +756,12 @@
             "type": "boolean",
             "default": false,
             "description": "Save message and response objects to JSON files for debugging purposes",
+            "scope": "resource"
+          },
+          "texra.debug.saveInputPrompt": {
+            "type": "boolean",
+            "default": false,
+            "description": "Save the final input prompt sent to the model as an XML file for debugging purposes",
             "scope": "resource"
           }
         }
