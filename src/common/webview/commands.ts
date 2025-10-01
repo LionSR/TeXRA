@@ -181,6 +181,7 @@ export const PROGRESS_VIEW_COMMANDS = {
   FILTER_STREAMS: 'filterStreams',
   RESTORE_STATE: 'restoreState',
   SEND_FOLLOW_UP: 'sendFollowUp',
+  OPEN_TASK_STORAGE: 'openTaskStorage',
 
   // File operations
   OPEN_FILE: 'openFile',

@@ -18,13 +18,14 @@ export class Toolbar {
     container.dataset.agentMode = sessionKind;
     buttons.forEach((def) => {
       try {
+        const dataset = { command: def.command, ...(def.dataset ?? {}) };
         const btn = createIconButton({
           id: def.id,
           icon: def.icon,
           title: def.title,
           className: def.className,
           disabled: def.disabled,
-          dataset: { command: def.command },
+          dataset,
         });
         container.appendChild(btn);
       } catch (error) {
