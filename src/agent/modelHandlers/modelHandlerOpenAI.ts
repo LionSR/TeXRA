@@ -1216,51 +1216,21 @@ export class ModelHandlerOpenAI extends ModelHandler<
     if (text) {
       callMsg.content = [{ type: 'text', text }];
     }
-    const resultCopy = { ...result } as Record<string, unknown> & {
-      files?: unknown;
-    };
-    if ('files' in resultCopy) {
-      delete resultCopy.files;
+    const payload: Record<string, unknown> = { ...result };
+    if (!('files' in payload) && attachments?.length) {
+      payload.files = attachments.map((file) => ({
+        path: file.path,
+        name: file.name ?? path.basename(file.path),
+        mimeType: file.mimeType ?? 'application/octet-stream',
+        description: file.description,
+        size: file.size,
+      }));
     }
-
-    const contentParts: ChatCompletionContentPart[] = [];
-    const textPayload = Object.keys(resultCopy).length
-      ? JSON.stringify(resultCopy, null, 2)
-      : undefined;
-    if (textPayload) {
-      contentParts.push({ type: 'text', text: textPayload });
-    }
-
-    attachments?.forEach((file) => {
-      const label = file.name ?? path.basename(file.path);
-      const descriptor = file.description ? ` – ${file.description}` : '';
-      if (file.mimeType && file.mimeType.startsWith('image/')) {
-        contentParts.push({
-          type: 'text',
-          text: `Image: ${label}${descriptor}`,
-        });
-        contentParts.push({
-          type: 'image_url',
-          image_url: { url: file.dataUri, detail: 'high' },
-        } as ChatCompletionContentPart);
-      } else {
-        const mime = file.mimeType ?? 'application/octet-stream';
-        contentParts.push({
-          type: 'text',
-          text: `File: ${label} (${mime})${descriptor}`,
-        });
-        contentParts.push({ type: 'text', text: file.dataUri });
-      }
-    });
-
-    const formattedContent = contentParts.length
-      ? (contentParts as unknown as ChatCompletionContentPart[])
-      : JSON.stringify(result);
 
     const resultMsg: ChatCompletionToolMessageParam = {
       role: 'tool',
       tool_call_id: toolCall.id ?? id,
-      content: formattedContent as any,
+      content: JSON.stringify(payload),
     };
     const messages: ChatCompletionMessageParam[] = [callMsg, resultMsg];
     return messages;

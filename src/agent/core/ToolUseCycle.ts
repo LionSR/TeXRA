@@ -28,6 +28,34 @@ import {
 import xmlUtils from '@utils/text/xmlUtils';
 import { AbsoluteFS, WorkspaceFS, getMimeType } from '@utils/files';
 
+function decodeInlineBase64(
+  rawData: string,
+): { buffer: Buffer; normalized: string } | null {
+  const sanitized = rawData.replace(/\s+/g, '');
+  if (sanitized.length === 0) {
+    return { buffer: Buffer.alloc(0), normalized: sanitized };
+  }
+
+  const base64Pattern = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
+  if (!base64Pattern.test(sanitized)) {
+    return null;
+  }
+
+  const buffer = Buffer.from(sanitized, 'base64');
+  const trimmedOriginal = sanitized.replace(/=+$/, '');
+  const trimmedEncoded = buffer.toString('base64').replace(/=+$/, '');
+
+  if (buffer.length === 0 && trimmedOriginal.length > 0) {
+    return null;
+  }
+
+  if (trimmedEncoded !== trimmedOriginal) {
+    return null;
+  }
+
+  return { buffer, normalized: sanitized };
+}
+
 function buildToolResultAttachments(
   files: ToolResultFile[] | undefined,
   logger: AgentLogger,
@@ -65,7 +93,15 @@ function buildToolResultAttachments(
         size = buffer.byteLength;
         data = buffer.toString('base64');
       } else {
-        size = Buffer.byteLength(data, 'base64');
+        const decoded = decodeInlineBase64(data);
+        if (!decoded) {
+          logger.warn(
+            `Skipping attachment with non-base64 inline data: ${targetPath}`,
+          );
+          continue;
+        }
+        size = decoded.buffer.byteLength;
+        data = decoded.normalized;
       }
 
       const resolvedName = file.name ?? path.basename(targetPath);

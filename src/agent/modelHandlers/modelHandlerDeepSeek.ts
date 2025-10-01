@@ -1,6 +1,4 @@
 // Standard library imports
-import * as path from 'path';
-
 // Third-party imports
 import OpenAI from 'openai';
 import type {
@@ -8,7 +6,6 @@ import type {
   ChatCompletionToolMessageParam,
   ChatCompletionMessageToolCall,
   ChatCompletionMessage,
-  ChatCompletionContentPart,
 } from 'openai/resources/chat/completions';
 
 // Local imports - agent
@@ -154,51 +151,21 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI {
     if (text) {
       callMsg.content = text;
     }
-    const resultCopy = { ...result } as Record<string, unknown> & {
-      files?: unknown;
-    };
-    if ('files' in resultCopy) {
-      delete resultCopy.files;
+    const payload: Record<string, unknown> = { ...result };
+    if (!('files' in payload) && attachments?.length) {
+      payload.files = attachments.map((file) => ({
+        path: file.path,
+        name: file.name ?? file.path,
+        mimeType: file.mimeType ?? 'application/octet-stream',
+        description: file.description,
+        size: file.size,
+      }));
     }
-
-    const contentParts: ChatCompletionContentPart[] = [];
-    const payload = Object.keys(resultCopy).length
-      ? JSON.stringify(resultCopy, null, 2)
-      : undefined;
-    if (payload) {
-      contentParts.push({ type: 'text', text: payload });
-    }
-
-    attachments?.forEach((file) => {
-      const label = file.name ?? path.basename(file.path);
-      const descriptor = file.description ? ` – ${file.description}` : '';
-      if (file.mimeType && file.mimeType.startsWith('image/')) {
-        contentParts.push({
-          type: 'text',
-          text: `Image: ${label}${descriptor}`,
-        });
-        contentParts.push({
-          type: 'image_url',
-          image_url: { url: file.dataUri, detail: 'high' },
-        } as ChatCompletionContentPart);
-      } else {
-        const mime = file.mimeType ?? 'application/octet-stream';
-        contentParts.push({
-          type: 'text',
-          text: `File: ${label} (${mime})${descriptor}`,
-        });
-        contentParts.push({ type: 'text', text: file.dataUri });
-      }
-    });
-
-    const formattedContent = contentParts.length
-      ? (contentParts as unknown as ChatCompletionContentPart[])
-      : JSON.stringify(result);
 
     const resultMsg: ChatCompletionToolMessageParam = {
       role: 'tool',
       tool_call_id: toolCall.id ?? id,
-      content: formattedContent as any,
+      content: JSON.stringify(payload),
     };
     return [callMsg, resultMsg];
   }
