@@ -126,9 +126,8 @@ const WORKFLOW_TOOLBAR = [
     icon: 'folder-opened',
     command: COMMANDS.OPEN_TASK_STORAGE,
     title: 'Open the workspace storage folder for this run',
-    className: 'vscode-button storage-button',
+    className: 'vscode-button storage-button toolbar-button--hidden',
     disabled: true,
-    dataset: { requiresExecution: 'true' },
   },
   {
     id: ELEMENT_IDS.ERASE_STREAM_BTN,
@@ -164,9 +163,8 @@ const TOOL_USE_TOOLBAR = [
     icon: 'folder-opened',
     command: COMMANDS.OPEN_TASK_STORAGE,
     title: 'Open the workspace storage folder for this run',
-    className: 'vscode-button storage-button',
+    className: 'vscode-button storage-button toolbar-button--hidden',
     disabled: true,
-    dataset: { requiresExecution: 'true' },
   },
   {
     id: ELEMENT_IDS.ERASE_STREAM_BTN,
