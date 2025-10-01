@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 ### Bug Fixes
 
 - Upload Anthropic PDF attachments to the Files API so requests reuse `file_id`s instead of resending large base64 payloads.
+- Ensure follow-up Anthropic requests keep the Files API beta header when referencing previously uploaded PDFs.
 
 ## [0.33.8] - 2025-09-30
 

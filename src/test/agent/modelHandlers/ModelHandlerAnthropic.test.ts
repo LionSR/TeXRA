@@ -276,4 +276,79 @@ describe('ModelHandlerAnthropic message guards', () => {
 
     assert.equal(response.stop_reason, 'end_turn');
   });
+
+  it('opts into the Files API when messages already reference uploaded PDFs', async () => {
+    const handler = createAnthropicHandler({ supportsNativePdf: true });
+    const loggerStub = {
+      channelId: 'test',
+      debug: () => {},
+      info: () => {},
+      warn: () => {},
+      error: () => {},
+      fileList: () => {},
+      getActiveGroupId: () => undefined,
+    };
+    handler.setLogger(loggerStub as unknown as AgentLogger);
+    (handler as any).getStreamingConfig = () => false;
+
+    const messages: MessageParam[] = [
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: 'Document: sample.pdf', citations: null },
+          {
+            type: 'document',
+            source: {
+              type: 'file',
+              file_id: 'file_existing',
+            },
+            title: 'sample.pdf',
+          },
+        ] as unknown as ContentBlockParam[],
+      },
+    ];
+
+    const messageOptions: any[] = [];
+
+    const client = {
+      beta: {
+        files: {
+          upload: async () => {
+            throw new Error('should not upload when file_id already provided');
+          },
+        },
+        messages: {
+          create: async (opts: any) => {
+            messageOptions.push(opts);
+            return {
+              id: 'msg',
+              type: 'message',
+              role: 'assistant',
+              model: 'claude-test',
+              content: [{ type: 'text', text: 'ok' }],
+              stop_reason: 'end_turn',
+              usage: { input_tokens: 1, output_tokens: 1 },
+            } as any;
+          },
+        },
+      },
+    } as any;
+
+    const response = await handler.createResponse(client, messages, 0);
+
+    const documentBlock = (messages[0].content as any[]).find(
+      (block) => block.type === 'document',
+    );
+    assert.ok(documentBlock, 'document block should remain in messages');
+    assert.equal(documentBlock.source.type, 'file');
+    assert.equal(documentBlock.source.file_id, 'file_existing');
+
+    const betas: string[] = messageOptions[0].betas ?? [];
+    assert.ok(
+      betas.includes('files-api-2025-04-14'),
+      'request should opt into the Files API beta when referencing file IDs',
+    );
+
+    assert.equal(response.stop_reason, 'end_turn');
+  });
 });

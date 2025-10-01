@@ -123,7 +123,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
     // Upload inline PDF documents before creating the request so we can
     // reference them by file ID.
-    const uploadedFiles = await this.replaceDocumentDataWithUploads(
+    const { hasFileReference } = await this.replaceDocumentDataWithUploads(
       client,
       messages,
     );
@@ -138,7 +138,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       system: systemPrompt,
     };
 
-    if (uploadedFiles) {
+    if (hasFileReference) {
       const existingBetas = options.betas ?? [];
       if (!existingBetas.includes(FILES_API_BETA)) {
         options.betas = [...existingBetas, FILES_API_BETA];
@@ -347,12 +347,13 @@ export class ModelHandlerAnthropic extends ModelHandler<
   private async replaceDocumentDataWithUploads(
     client: Anthropic,
     messages: MessageParam[],
-  ): Promise<boolean> {
+  ): Promise<{ uploaded: boolean; hasFileReference: boolean }> {
     if (!this.capabilities.supportsNativePdf) {
-      return false;
+      return { uploaded: false, hasFileReference: false };
     }
 
     let uploaded = false;
+    let hasFileReference = false;
 
     for (const message of messages) {
       const contentBlocks = message.content;
@@ -366,7 +367,16 @@ export class ModelHandlerAnthropic extends ModelHandler<
         }
 
         const source = block.source;
-        if (!source || source.type !== 'base64') {
+        if (!source) {
+          continue;
+        }
+
+        if ('file_id' in (source as { file_id?: string })) {
+          hasFileReference = true;
+          continue;
+        }
+
+        if (source.type !== 'base64') {
           continue;
         }
 
@@ -383,6 +393,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
         const filename =
           (block.title ?? 'document.pdf').trim() || 'document.pdf';
         let buffer: Buffer | undefined;
+        let uploadedSource: BetaRequestDocumentBlock['source'] | undefined;
 
         try {
           buffer = Buffer.from(base64Data, 'base64');
@@ -391,12 +402,10 @@ export class ModelHandlerAnthropic extends ModelHandler<
             betas: [FILES_API_BETA],
           });
 
-          (source as { data?: string }).data = '';
-          (block as BetaRequestDocumentBlock).source = {
+          uploadedSource = {
             type: 'file',
             file_id: uploadedFile.id,
           } as BetaRequestDocumentBlock['source'];
-          uploaded = true;
         } catch (err) {
           this.logger.error(
             `Failed to upload document ${filename}: ${getSdkErrorMessage(err)}`,
@@ -411,10 +420,17 @@ export class ModelHandlerAnthropic extends ModelHandler<
             buffer = undefined;
           }
         }
+
+        if (uploadedSource) {
+          delete (source as { data?: string }).data;
+          (block as BetaRequestDocumentBlock).source = uploadedSource;
+          uploaded = true;
+          hasFileReference = true;
+        }
       }
     }
 
-    return uploaded;
+    return { uploaded, hasFileReference };
   }
 
   /** Initializes the message array for Anthropic chat models with user prefix, request, and optional media. */
