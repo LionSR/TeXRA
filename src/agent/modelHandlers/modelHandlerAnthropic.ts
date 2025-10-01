@@ -1,8 +1,8 @@
 // Standard library imports
-// (none needed)
+import { Buffer } from 'node:buffer';
 
 // Third-party imports
-import { Anthropic } from '@anthropic-ai/sdk';
+import { Anthropic, toFile } from '@anthropic-ai/sdk';
 import type {
   BetaBase64ImageSource,
   BetaImageBlockParam,
@@ -83,6 +83,7 @@ type BetaMessageCountTokensParams = MessageCountTokensParams & {
 };
 
 const CONTEXT_1M_BETA: AnthropicBeta = 'context-1m-2025-08-07';
+const FILES_API_BETA: AnthropicBeta = 'files-api-2025-04-14';
 const SONNET_37_OUTPUT_BETA: AnthropicBeta = 'output-128k-2025-02-19';
 const INTERLEAVED_THINKING_BETA: AnthropicBeta =
   'interleaved-thinking-2025-05-14';
@@ -120,6 +121,13 @@ export class ModelHandlerAnthropic extends ModelHandler<
       false,
     );
 
+    // Upload inline PDF documents before creating the request so we can
+    // reference them by file ID.
+    const uploadedFiles = await this.replaceDocumentDataWithUploads(
+      client,
+      messages,
+    );
+
     // Prepare options for the API call
     const options: BetaMessageCreateParams = {
       model: this.config.fullName,
@@ -129,6 +137,13 @@ export class ModelHandlerAnthropic extends ModelHandler<
       stop_sequences: endTag ? [endTag] : undefined,
       system: systemPrompt,
     };
+
+    if (uploadedFiles) {
+      const existingBetas = options.betas ?? [];
+      if (!existingBetas.includes(FILES_API_BETA)) {
+        options.betas = [...existingBetas, FILES_API_BETA];
+      }
+    }
 
     if (tools && tools.length > 0) {
       options.tools = toAnthropicTools(tools);
@@ -210,7 +225,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       // Strip betas that only apply to message creation (e.g., output length)
       // while keeping context headers needed for accurate token counting.
       const countTokenBetas = options.betas?.filter(
-        (beta) => beta === CONTEXT_1M_BETA,
+        (beta) => beta === CONTEXT_1M_BETA || beta === FILES_API_BETA,
       );
       if (countTokenBetas && countTokenBetas.length > 0) {
         countTokensParams.betas = countTokenBetas;
@@ -329,6 +344,79 @@ export class ModelHandlerAnthropic extends ModelHandler<
     return response;
   }
 
+  private async replaceDocumentDataWithUploads(
+    client: Anthropic,
+    messages: MessageParam[],
+  ): Promise<boolean> {
+    if (!this.capabilities.supportsNativePdf) {
+      return false;
+    }
+
+    let uploaded = false;
+
+    for (const message of messages) {
+      const contentBlocks = message.content;
+      if (!Array.isArray(contentBlocks)) {
+        continue;
+      }
+
+      for (const block of contentBlocks) {
+        if (block.type !== 'document') {
+          continue;
+        }
+
+        const source = block.source;
+        if (!source || source.type !== 'base64') {
+          continue;
+        }
+
+        const mediaType = source.media_type;
+        if (mediaType !== 'application/pdf') {
+          continue;
+        }
+
+        const base64Data = source.data;
+        if (!base64Data) {
+          continue;
+        }
+
+        const filename =
+          (block.title ?? 'document.pdf').trim() || 'document.pdf';
+        let buffer: Buffer | undefined;
+
+        try {
+          buffer = Buffer.from(base64Data, 'base64');
+          const uploadedFile = await client.beta.files.upload({
+            file: await toFile(buffer, filename, { type: mediaType }),
+            betas: [FILES_API_BETA],
+          });
+
+          (source as { data?: string }).data = '';
+          (block as BetaRequestDocumentBlock).source = {
+            type: 'file',
+            file_id: uploadedFile.id,
+          } as BetaRequestDocumentBlock['source'];
+          uploaded = true;
+        } catch (err) {
+          this.logger.error(
+            `Failed to upload document ${filename}: ${getSdkErrorMessage(err)}`,
+            undefined,
+            undefined,
+            err,
+          );
+          throw err;
+        } finally {
+          if (buffer) {
+            buffer.fill(0);
+            buffer = undefined;
+          }
+        }
+      }
+    }
+
+    return uploaded;
+  }
+
   /** Initializes the message array for Anthropic chat models with user prefix, request, and optional media. */
   async initializeMessages(
     userPrefix: string,
@@ -357,17 +445,10 @@ export class ModelHandlerAnthropic extends ModelHandler<
       });
     }
 
-    // Add media if provided (Anthropic currently only supports images)
+    // Add media if provided (images and native PDFs)
     if (mediaFiles && this.config.capabilities.supportsVision) {
       const formattedMediaContent = await this.createMediaMessage(mediaFiles);
-      // Filter out any non-image content just in case, although createMediaContent should handle this
-      userMessageContent.push(
-        ...formattedMediaContent.filter(
-          (c) =>
-            c.type === 'image' ||
-            (c.type === 'text' && c.text?.startsWith('Image:')),
-        ),
-      );
+      userMessageContent.push(...formattedMediaContent);
     }
 
     // Add user request with optional caching
@@ -415,7 +496,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     // Create content list for the new round message
     const roundContent: ContentBlockParam[] = [];
 
-    // Add media if provided (Anthropic currently only supports images)
+    // Add media if provided (images and native PDFs)
     if (
       mediaFiles &&
       mediaFiles.length > 0 &&
@@ -423,14 +504,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     ) {
       try {
         const formattedMediaContent = await this.createMediaMessage(mediaFiles);
-        // Filter out any non-image content
-        roundContent.push(
-          ...formattedMediaContent.filter(
-            (c) =>
-              c.type === 'image' ||
-              (c.type === 'text' && c.text?.startsWith('Image:')),
-          ),
-        );
+        roundContent.push(...formattedMediaContent);
       } catch (err) {
         this.logger.error(
           `Error processing media files for follow-up round: ${getSdkErrorMessage(err)}`,
@@ -541,6 +615,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
               media_type: 'application/pdf',
               data: media.data,
             },
+            title: media.file_name,
           } satisfies BetaRequestDocumentBlock;
           return [descriptionBlock, documentBlock];
         }

@@ -2,25 +2,34 @@
 import { strict as assert } from 'assert';
 
 // Third-party imports
-import type { ContentBlock } from '@anthropic-ai/sdk/resources/messages';
+import type {
+  ContentBlock,
+  ContentBlockParam,
+  MessageParam,
+} from '@anthropic-ai/sdk/resources/messages';
 
 // Local imports - agent
 import { ModelHandlerAnthropic } from '@agent/modelHandlers/modelHandlerAnthropic';
+import type { AgentLogger } from '@logger/AgentLogger';
 
 // Local imports - model config
 import {
   DEFAULT_MODEL_CAPABILITIES,
+  ModelCapabilities,
   ModelConfig,
   ModelProvider,
 } from '@model/ModelConfig';
 
-function createAnthropicHandler(): ModelHandlerAnthropic {
+function buildAnthropicConfig(
+  capabilityOverrides: Partial<ModelCapabilities> = {},
+): ModelConfig {
   const capabilities = {
     ...DEFAULT_MODEL_CAPABILITIES,
     supportsPromptCaching: true,
+    ...capabilityOverrides,
   };
 
-  const config: ModelConfig = {
+  return {
     name: 'test-anthropic',
     fullName: 'claude-test',
     provider: ModelProvider.ANTHROPIC,
@@ -31,8 +40,12 @@ function createAnthropicHandler(): ModelHandlerAnthropic {
     capabilities,
     openRouterOnly: false,
   };
+}
 
-  return new ModelHandlerAnthropic(config);
+function createAnthropicHandler(
+  capabilityOverrides: Partial<ModelCapabilities> = {},
+): ModelHandlerAnthropic {
+  return new ModelHandlerAnthropic(buildAnthropicConfig(capabilityOverrides));
 }
 
 type TextBlock = Extract<ContentBlock, { type: 'text' }>;
@@ -49,7 +62,51 @@ function assertSingleTextBlock(content: ContentBlock[]): TextBlock {
   return textBlocks[0];
 }
 
+class PdfStubAnthropicHandler extends ModelHandlerAnthropic {
+  private mediaContent: ContentBlockParam[] = [];
+
+  setMediaContent(content: ContentBlockParam[]): void {
+    this.mediaContent = content;
+  }
+
+  override async createMediaMessage(): Promise<any[]> {
+    return this.mediaContent;
+  }
+}
+
 describe('ModelHandlerAnthropic message guards', () => {
+  it('includes native PDF document blocks when initializing messages', async () => {
+    const handler = new PdfStubAnthropicHandler(
+      buildAnthropicConfig({ supportsNativePdf: true }),
+    );
+
+    handler.setMediaContent([
+      { type: 'text', text: 'Document: sample.pdf', citations: null },
+      {
+        type: 'document',
+        source: {
+          type: 'base64',
+          media_type: 'application/pdf',
+          data: 'ZHVtbXk=',
+        },
+        title: 'sample.pdf',
+      },
+    ] as ContentBlockParam[]);
+
+    const messages = await handler.initializeMessages('', 'request text', [
+      'sample.pdf',
+    ]);
+
+    const content = messages[0].content as ContentBlock[];
+    const documentBlocks = (content as any[]).filter(
+      (block) => block.type === 'document',
+    );
+
+    assert.equal(documentBlocks.length, 1, 'should keep document blocks');
+    assert.equal(documentBlocks[0].source.type, 'base64');
+    assert.equal(documentBlocks[0].title, 'sample.pdf');
+  });
+
   it('omits whitespace-only prefix content when initializing messages', async () => {
     const handler = createAnthropicHandler();
     const messages = await handler.initializeMessages(
@@ -137,5 +194,86 @@ describe('ModelHandlerAnthropic message guards', () => {
         return true;
       },
     );
+  });
+
+  it('uploads base64 PDF documents before creating responses', async () => {
+    const handler = createAnthropicHandler({ supportsNativePdf: true });
+    const loggerStub = {
+      channelId: 'test',
+      debug: () => {},
+      info: () => {},
+      warn: () => {},
+      error: () => {},
+      fileList: () => {},
+      getActiveGroupId: () => undefined,
+    };
+    handler.setLogger(loggerStub as unknown as AgentLogger);
+    (handler as any).getStreamingConfig = () => false;
+
+    const messages: MessageParam[] = [
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: 'Document: sample.pdf', citations: null },
+          {
+            type: 'document',
+            source: {
+              type: 'base64',
+              media_type: 'application/pdf',
+              data: 'ZHVtbXk=',
+            },
+            title: 'sample.pdf',
+          },
+        ],
+      },
+    ];
+
+    const uploadArgs: any[] = [];
+    const messageOptions: any[] = [];
+
+    const client = {
+      beta: {
+        files: {
+          upload: async (params: any) => {
+            uploadArgs.push(params);
+            return { id: 'file_uploaded' };
+          },
+        },
+        messages: {
+          create: async (opts: any) => {
+            messageOptions.push(opts);
+            return {
+              id: 'msg',
+              type: 'message',
+              role: 'assistant',
+              model: 'claude-test',
+              content: [{ type: 'text', text: 'ok' }],
+              stop_reason: 'end_turn',
+              usage: { input_tokens: 1, output_tokens: 1 },
+            } as any;
+          },
+        },
+      },
+    } as any;
+
+    const response = await handler.createResponse(client, messages, 0);
+
+    assert.equal(uploadArgs.length, 1, 'should upload the PDF document');
+    assert.deepEqual(uploadArgs[0].betas, ['files-api-2025-04-14']);
+
+    const documentBlock = (messages[0].content as any[]).find(
+      (block) => block.type === 'document',
+    );
+    assert.ok(documentBlock, 'document block should remain in messages');
+    assert.equal(documentBlock.source.type, 'file');
+    assert.equal(documentBlock.source.file_id, 'file_uploaded');
+
+    const betas: string[] = messageOptions[0].betas ?? [];
+    assert.ok(
+      betas.includes('files-api-2025-04-14'),
+      'request should opt into the Files API beta',
+    );
+
+    assert.equal(response.stop_reason, 'end_turn');
   });
 });
