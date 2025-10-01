@@ -17,7 +17,6 @@ export const ToolConfigSchema = z
     autoExtractTikzFigure: z.boolean().default(false),
     attachTeXCount: z.boolean().default(false),
     attachDiagnostics: z.boolean().default(false),
-    printInputPrompt: z.boolean().default(false),
     autoCompileInputPdf: z.boolean().default(false),
   })
   .strip()

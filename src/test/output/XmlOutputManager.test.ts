@@ -49,7 +49,6 @@ describe('XmlOutputManager markdown fallback', () => {
       autoExtractTikzFigure: false,
       attachTeXCount: false,
       attachDiagnostics: false,
-      printInputPrompt: false,
       autoCompileInputPdf: false,
     },
   };

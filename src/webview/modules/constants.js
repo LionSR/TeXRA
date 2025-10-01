@@ -41,7 +41,6 @@ export const CHECK_BOXES_AUTO_EXTRACT = [
 export const CHECK_BOXES_TOOL_USE = [
   'attachTeXCount',
   'attachDiagnostics',
-  'printInputPrompt',
   'reflect',
 ];
 
