@@ -259,11 +259,19 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
       const runDir = getRunDir(executionId);
       await safeExecuteCommand('revealFileInOS', [vscode.Uri.file(runDir)]);
     } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
       this.logger.error(
         this.channel,
-        `Failed to open task storage for ${executionId}: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
+        `Failed to open task storage for stream ${stream}, executionId ${executionId}: ${errorMessage}`,
+        undefined,
+        undefined,
+        undefined,
+        {
+          stream,
+          executionId,
+          error: error instanceof Error ? error : errorMessage,
+        },
       );
       await vscode.window.showErrorMessage(
         'Unable to open the workspace storage folder for this run.',
