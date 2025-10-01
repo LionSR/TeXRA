@@ -16,6 +16,7 @@ import { setVarFromFile } from '@frontend/files/vars';
 // Local imports
 import { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
+import { getConfig } from '@utils/config';
 import { WorkspaceFS } from '@utils/files';
 
 /**
@@ -305,16 +306,20 @@ function getOutputFilesOrder(
   return userVars;
 }
 
-function getToolFlags(
+export function getToolFlags(
   agentConfig: AgentConfig,
   agentSetting: AgentSetting,
   agentPrompt: AgentPrompt,
 ): Record<string, any> {
+  const shouldSaveInputPrompt = getConfig<boolean>(
+    'debug.saveInputPrompt',
+    false,
+  );
   const flags: Record<string, any> = {
     AUTO_EXTRACT_FIGURE: agentConfig.toolConfig.autoExtractFigure,
     AUTO_EXTRACT_TIKZ_FIGURE: agentConfig.toolConfig.autoExtractTikzFigure,
     INCLUDE_TEX_COUNT: agentConfig.toolConfig.attachTeXCount,
-    PRINT_INPUT_PROMPT: agentConfig.toolConfig.printInputPrompt,
+    PRINT_INPUT_PROMPT: shouldSaveInputPrompt,
     AUTO_COMPILE_INPUT_PDF: agentConfig.toolConfig.autoCompileInputPdf,
   };
 

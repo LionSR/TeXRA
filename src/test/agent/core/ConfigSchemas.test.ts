@@ -10,12 +10,17 @@ describe('ToolConfigSchema', () => {
     const parsed = ToolConfigSchema.parse({
       reflect: true,
       usePrefillFromInput: true,
+      printInputPrompt: true,
     } as Record<string, unknown>);
 
     assert.strictEqual(parsed.reflect, true);
     assert.strictEqual(parsed.autoExtractFigure, false);
     assert.strictEqual(
       (parsed as Record<string, unknown>).usePrefillFromInput,
+      undefined,
+    );
+    assert.strictEqual(
+      (parsed as Record<string, unknown>).printInputPrompt,
       undefined,
     );
   });
