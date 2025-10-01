@@ -1,3 +1,6 @@
+// Standard library imports
+import * as path from 'path';
+
 // Third-party imports
 import * as vscode from 'vscode';
 
@@ -28,6 +31,9 @@ function showPackResult(result: FileOpResult, inputFile: string): void {
       if (result.outputFolder) {
         const openFolder = 'Open Folder';
         const outputFolder = result.outputFolder;
+        const folderPath = path.isAbsolute(outputFolder)
+          ? outputFolder
+          : WorkspaceFS.fullPath(outputFolder);
         vscode.window
           .showInformationMessage(
             `Files packed into ${outputFolder}`,
@@ -37,7 +43,7 @@ function showPackResult(result: FileOpResult, inputFile: string): void {
             if (selection === openFolder) {
               void vscode.commands.executeCommand(
                 'revealFileInOS',
-                vscode.Uri.file(WorkspaceFS.fullPath(outputFolder)),
+                vscode.Uri.file(folderPath),
               );
             }
           });
@@ -106,6 +112,7 @@ async function handlePack(config: { streamId?: string; [key: string]: any }) {
     config.inputFile,
     config.agent,
     outputFiles,
+    config.executionId ? { executionId: config.executionId } : undefined,
   );
   showPackResult(result, config.inputFile);
 

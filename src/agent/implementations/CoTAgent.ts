@@ -1,8 +1,12 @@
+// Standard library imports
+import * as path from 'path';
+
 // Local imports - agent
 // Local imports - agent components
 import { AgentStateRound, AgentStateGlobal } from '../core/AgentState';
 import { BaseReflectionAgent, RoundOutputOptions } from './BaseReflectionAgent';
 import { getOutputFileName } from '@agent/output';
+import { StorageFS, TASK_RUNS_DIR, isValidExecutionId } from '@utils/files';
 
 /**
  * Chain of Thought (CoT) agent implementation that extends BaseReflectionAgent.
@@ -19,7 +23,7 @@ export class CoTAgent extends BaseReflectionAgent {
     const fileExtension = this.useScratchpad
       ? 'xml'
       : this.agentSetting.outputExt;
-    return getOutputFileName(
+    const computedPath = getOutputFileName(
       baseOutputFile,
       this.agentConfig.agent,
       this.modelHandler.config.name,
@@ -27,6 +31,15 @@ export class CoTAgent extends BaseReflectionAgent {
       currRound,
       this.agentConfig.editedFile || undefined,
     );
+
+    if (this.useScratchpad && isValidExecutionId(this.executionId)) {
+      const xmlFileName = path.basename(computedPath);
+      return StorageFS.fullPath(
+        path.join(TASK_RUNS_DIR, this.executionId, xmlFileName),
+      );
+    }
+
+    return computedPath;
   }
 
   /**

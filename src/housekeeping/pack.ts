@@ -11,7 +11,9 @@ import type { FileOpResult } from '@agent/types/ResultTypes';
 import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
-import { WorkspaceFS } from '@utils/files';
+import { AbsoluteFS, StorageFS, WorkspaceFS } from '@utils/files';
+import { isValidExecutionId, TASK_RUNS_DIR } from '@utils/files/taskRunStorage';
+import type { ExecutionId } from '@agent/types/IdentifierTypes';
 
 // Local imports - housekeeping
 import {
@@ -30,15 +32,93 @@ import { getConfig } from '@utils/config';
 const CHANNEL = 'Housekeeping';
 logger.initialize(CHANNEL);
 
+interface PackOptions {
+  outputFolder?: string;
+  executionId?: ExecutionId;
+}
+
+async function resolveOutputFolder(
+  inputDir: string,
+  baseName: string,
+  agent: string,
+  model: string,
+  options?: PackOptions,
+): Promise<string> {
+  const timestamp = new Date().toISOString().replace(/[-:]/g, '').split('.')[0];
+
+  if (options?.outputFolder) {
+    return options.outputFolder;
+  }
+
+  if (options?.executionId && isValidExecutionId(options.executionId)) {
+    const relativeBase = path.join(
+      TASK_RUNS_DIR,
+      options.executionId,
+      'packed',
+    );
+    await StorageFS.ensureDir(relativeBase);
+    const relativeFolder = path.join(
+      relativeBase,
+      `${timestamp}_${baseName}_${agent}_${model}`,
+    );
+    return StorageFS.fullPath(relativeFolder);
+  }
+
+  const workspaceFolder = path.join(
+    inputDir,
+    HISTORY_DIR,
+    `${timestamp}_${baseName}_${agent}_${model}`,
+  );
+  return workspaceFolder;
+}
+
+async function ensureDirectory(folder: string): Promise<void> {
+  if (path.isAbsolute(folder)) {
+    await AbsoluteFS.ensureDir(folder);
+  } else {
+    await WorkspaceFS.ensureDir(folder);
+  }
+}
+
+function getDestinationPath(folder: string, file: string): string {
+  return path.join(folder, path.basename(file));
+}
+
+async function moveFile(
+  sourceRelative: string,
+  destinationFolder: string,
+): Promise<void> {
+  const destination = getDestinationPath(destinationFolder, sourceRelative);
+  if (path.isAbsolute(destinationFolder)) {
+    const sourceAbsolute = WorkspaceFS.fullPath(sourceRelative);
+    await AbsoluteFS.rename(sourceAbsolute, destination, { overwrite: true });
+  } else {
+    await WorkspaceFS.rename(sourceRelative, destination);
+  }
+}
+
+async function copyFile(
+  sourceRelative: string,
+  destinationFolder: string,
+): Promise<void> {
+  const destination = getDestinationPath(destinationFolder, sourceRelative);
+  if (path.isAbsolute(destinationFolder)) {
+    const sourceAbsolute = WorkspaceFS.fullPath(sourceRelative);
+    await AbsoluteFS.copy(sourceAbsolute, destination, { overwrite: true });
+  } else {
+    await WorkspaceFS.copy(sourceRelative, destination);
+  }
+}
+
 export async function runPackSingle(
   model: string,
   inputFile: string,
   agent: string,
-  outputFolder?: string,
+  options?: PackOptions,
 ): Promise<FileOpResult> {
   logger.info(
     CHANNEL,
-    `Starting packing with model=${model}, inputFile=${inputFile}, agent=${agent}, outputFolder=${outputFolder}`,
+    `Starting packing with model=${model}, inputFile=${inputFile}, agent=${agent}, outputFolder=${options?.outputFolder ?? 'auto'}`,
   );
 
   if (!inputFile || !model || !agent) {
@@ -103,33 +183,37 @@ export async function runPackSingle(
           : ''),
     );
 
-    const now = new Date().toISOString().replace(/[-:]/g, '').split('.')[0];
-    outputFolder =
-      outputFolder ||
-      path.join(inputDir, HISTORY_DIR, `${now}_${baseName}_${agent}_${model}`);
-    logger.debug(CHANNEL, `Output folder: ${outputFolder}`);
-
     try {
-      await WorkspaceFS.createDir(outputFolder);
-      logger.debug(CHANNEL, `Created output directory: ${outputFolder}`);
+      const destinationFolder = await resolveOutputFolder(
+        inputDir,
+        baseName,
+        agent,
+        model,
+        options,
+      );
+      logger.debug(CHANNEL, `Output folder: ${destinationFolder}`);
+      await ensureDirectory(destinationFolder);
+      logger.debug(
+        CHANNEL,
+        `Created output directory: ${destinationFolder}`,
+      );
 
-      // Move and copy files
       const operations: string[] = [];
       for (const file of movedFiles) {
-        const destination = path.join(outputFolder, path.basename(file));
+        const destination = getDestinationPath(destinationFolder, file);
         operations.push(`Moving: ${file} -> ${destination}`);
-        await WorkspaceFS.rename(file, destination);
+        await moveFile(file, destinationFolder);
       }
       for (const file of copiedFiles) {
-        const destination = path.join(outputFolder, path.basename(file));
+        const destination = getDestinationPath(destinationFolder, file);
         operations.push(`Copying: ${file} -> ${destination}`);
-        await WorkspaceFS.copy(file, destination);
+        await copyFile(file, destinationFolder);
       }
       if (operations.length > 0 && !onlyInputFilePacked) {
-        logger.info(CHANNEL, `Files packed into ${outputFolder}`);
+        logger.info(CHANNEL, `Files packed into ${destinationFolder}`);
         logger.debug(CHANNEL, `File operations:\n${operations.join('\n')}`);
       }
-      result = { status: 'success', outputFolder };
+      result = { status: 'success', outputFolder: destinationFolder };
     } catch (err) {
       logger.error(
         CHANNEL,
@@ -165,6 +249,7 @@ export async function runPackMultiple(
   inputFile: string,
   agent: string,
   inputFiles: string[],
+  options?: PackOptions,
 ): Promise<FileOpResult> {
   logger.debug(
     CHANNEL,
@@ -176,11 +261,12 @@ export async function runPackMultiple(
   const baseName = path.parse(fileToPack).name;
   const outputDir = path.dirname(fileToPack);
 
-  const now = new Date().toISOString().replace(/[-:]/g, '').split('.')[0];
-  const commonOutputFolder = path.join(
+  const commonOutputFolder = await resolveOutputFolder(
     outputDir,
-    HISTORY_DIR,
-    `${now}_${baseName}_multiple_${agent}_${model}`,
+    baseName,
+    `${agent}_multiple`,
+    model,
+    options,
   );
   logger.debug(CHANNEL, `Common output folder: ${commonOutputFolder}`);
 
@@ -192,7 +278,7 @@ export async function runPackMultiple(
       model,
       fileToPack,
       agent,
-      commonOutputFolder,
+      { ...options, outputFolder: commonOutputFolder },
     );
     if (singleResult.status === 'success') {
       anyFilesPacked = true;
@@ -205,7 +291,7 @@ export async function runPackMultiple(
           model,
           file,
           agent,
-          commonOutputFolder,
+          { ...options, outputFolder: commonOutputFolder },
         );
         if (additionalResult.status === 'success') {
           anyFilesPacked = true;
@@ -227,13 +313,10 @@ export async function runPackMultiple(
       const filePath = path.join(outputDir, pattern);
       if (await WorkspaceFS.exists(filePath)) {
         if (!anyFilesPacked) {
-          await WorkspaceFS.createDir(commonOutputFolder);
+          await ensureDirectory(commonOutputFolder);
         }
         logger.debug(CHANNEL, `Found additional XML file: ${filePath}`);
-        await WorkspaceFS.rename(
-          filePath,
-          path.join(commonOutputFolder, pattern),
-        );
+        await moveFile(filePath, commonOutputFolder);
         anyFilesPacked = true;
       }
     }
@@ -262,6 +345,7 @@ export async function runPack(
   inputFile: string,
   agent: string,
   outputFiles: string[] = [],
+  options?: PackOptions,
 ): Promise<FileOpResult> {
   logger.debug(
     CHANNEL,
@@ -279,8 +363,14 @@ export async function runPack(
 
   // Use multiple mode if there are output files
   if (outputFiles.length > 0) {
-    return await runPackMultiple(model, inputFile, agent, outputFiles);
+    return await runPackMultiple(
+      model,
+      inputFile,
+      agent,
+      outputFiles,
+      options,
+    );
   } else {
-    return await runPackSingle(model, inputFile, agent);
+    return await runPackSingle(model, inputFile, agent, options);
   }
 }

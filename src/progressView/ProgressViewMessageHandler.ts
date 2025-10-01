@@ -15,12 +15,15 @@ import {
 import { isWorkflowTaskState, type WorkflowTaskState } from '@logger/TaskState';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 // Local imports - storage
+import { AbsoluteFS } from '@utils/files';
 import { ensureRunDir, getRunDir } from '@utils/files/taskRunStorage';
 // Local imports - commands
 import { safeExecuteCommand } from '@utils/system/commandUtils';
 
 // @ts-ignore - Import JavaScript module
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
+// @ts-ignore - Import JavaScript module
+import { STATUS } from './modules/constants.js';
 
 export class ProgressViewMessageHandler extends BaseViewMessageHandler {
   constructor(private readonly provider: ProgressViewProvider) {
@@ -153,7 +156,61 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     message: any,
     webviewView: vscode.WebviewView,
   ): Promise<void> {
-    await this.withToolbarTaskState(message.stream, async (taskState) => {
+    const stream = message.stream as StreamTabId | undefined;
+    if (!stream) {
+      return;
+    }
+
+    const status = this.provider.eventHandler.getStreamStatus(stream);
+    if (status === STATUS.RUNNING || status === STATUS.RESUMING) {
+      this.logger.warn(
+        this.channel,
+        `Run again requested while stream ${stream} is ${status}`,
+      );
+      await vscode.window.showInformationMessage(
+        'This task is still running. Please wait for it to finish before running again.',
+      );
+      return;
+    }
+
+    const executionId = this.provider.state.getExecutionId(stream);
+    if (executionId) {
+      try {
+        const runDir = getRunDir(executionId);
+        if (await AbsoluteFS.exists(runDir)) {
+          const entries = await AbsoluteFS.readDir(runDir);
+          const xmlFiles = entries.filter(
+            ([name, type]) =>
+              type === vscode.FileType.File && name.toLowerCase().endsWith('.xml'),
+          );
+          if (xmlFiles.length > 0) {
+            const runOption = 'Run Anyway';
+            const openOption = 'Open Run Folder';
+            const selection = await vscode.window.showWarningMessage(
+              'Previous runs saved XML diagnostics for this task. Review them before starting a new run?',
+              runOption,
+              openOption,
+            );
+            if (selection === openOption) {
+              await safeExecuteCommand('revealFileInOS', [vscode.Uri.file(runDir)]);
+              return;
+            }
+            if (selection !== runOption) {
+              return;
+            }
+          }
+        }
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
+        this.logger.warn(
+          this.channel,
+          `Failed to inspect run storage for rerun prompt: ${errorMessage}`,
+        );
+      }
+    }
+
+    await this.withToolbarTaskState(stream, async (taskState) => {
       await vscode.commands.executeCommand(
         'texra.execute',
         taskState.agentConfig,
@@ -364,6 +421,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     taskState: WorkflowTaskState,
     command: 'texra.pack' | 'texra.clean',
   ): Promise<void> {
+    const executionId = this.provider.state.getExecutionId(stream as StreamTabId);
     const generated = this.provider.state.outputFiles.getFiles(stream);
     const allFiles = new Set<string>(taskState.agentConfig.outputFiles || []);
     if (generated) {
@@ -390,6 +448,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
         output: useMultipleOutputs,
       },
       useMultipleOutputs,
+      executionId,
     });
   }
 

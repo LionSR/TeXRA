@@ -44,7 +44,8 @@ import { AgentLogger } from '@logger/AgentLogger';
 import { MODEL_CONFIGS } from '@model/ModelRegistry';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import { agentConfigToTaskState } from '@utils/config';
-import { ensureRunDir } from '@utils/files/taskRunStorage';
+import { ensureRunDir, getRunDir, TASK_RUNS_DIR } from '@utils/files/taskRunStorage';
+import { AbsoluteFS, StorageFS, WorkspaceFS } from '@utils/files';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
 
 const CHANNEL = 'executeAgent';
@@ -201,6 +202,33 @@ export async function executeAgentWithLogging<T extends IAgent>(
 
     if (executionId) {
       await ensureRunDir(executionId);
+      try {
+        const runDir = getRunDir(executionId);
+        const inputPath = agent.config.inputFile;
+        if (inputPath) {
+          const sourcePath = path.isAbsolute(inputPath)
+            ? inputPath
+            : WorkspaceFS.fullPath(inputPath);
+          const destinationPath = path.join(runDir, path.basename(inputPath));
+          await AbsoluteFS.copy(sourcePath, destinationPath, { overwrite: true });
+        }
+        const additionalInputs = agent.config.inputFiles || [];
+        for (const extra of additionalInputs) {
+          if (!extra) continue;
+          const sourcePath = path.isAbsolute(extra)
+            ? extra
+            : WorkspaceFS.fullPath(extra);
+          const destinationPath = path.join(runDir, path.basename(extra));
+          await AbsoluteFS.copy(sourcePath, destinationPath, { overwrite: true });
+        }
+        await StorageFS.ensureDir(path.join(TASK_RUNS_DIR, executionId, 'packed'));
+      } catch (error) {
+        logger.warn(
+          `Failed to snapshot inputs for execution ${executionId}: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+      }
     }
 
     // Get the full stream tab ID

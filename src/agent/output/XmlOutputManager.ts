@@ -16,7 +16,7 @@ import {
   getReplacementsByCategory,
 } from '@replacement/engine';
 import replacementEngine from '@replacement/engine';
-import { WorkspaceFS } from '@utils/files';
+import { AbsoluteFS, WorkspaceFS } from '@utils/files';
 import xmlUtils from '@utils/text/xmlUtils';
 
 export class XmlOutputManager {
@@ -25,6 +25,32 @@ export class XmlOutputManager {
     private readonly agentConfig: AgentConfig,
     private readonly logger: AgentLogger,
   ) {}
+
+  private async readOutputFile(filePath: string): Promise<string> {
+    return path.isAbsolute(filePath)
+      ? await AbsoluteFS.read(filePath)
+      : await WorkspaceFS.read(filePath);
+  }
+
+  private async writeOutputFile(
+    filePath: string,
+    content: string,
+  ): Promise<void> {
+    if (path.isAbsolute(filePath)) {
+      await AbsoluteFS.write(filePath, content);
+    } else {
+      await WorkspaceFS.write(filePath, content);
+    }
+  }
+
+  private getWorkspaceTexPath(xmlFile: string): string {
+    const { name } = path.parse(xmlFile);
+    const inputDir = path.dirname(this.agentConfig.inputFile);
+    const texPath = path.join(inputDir, `${name}.tex`);
+    return path.isAbsolute(texPath)
+      ? WorkspaceFS.relativePath(texPath)
+      : texPath;
+  }
 
   async processXmlContent(content: string): Promise<string> {
     content = replacementEngine.applyNonRegex(content);
@@ -146,10 +172,9 @@ export class XmlOutputManager {
     documentTag: string,
     thinkingTag: string = 'scratchpad',
   ): Promise<string> {
-    const { dir, name } = path.parse(outputFile);
-    const texFile = path.join(dir, `${name}.tex`);
+    const texFile = this.getWorkspaceTexPath(outputFile);
 
-    let outputContent = await WorkspaceFS.read(outputFile);
+    let outputContent = await this.readOutputFile(outputFile);
     const tagsToWrap = [documentTag, thinkingTag];
     outputContent = xmlUtils.addCdataToTags(outputContent, tagsToWrap);
 
@@ -211,7 +236,7 @@ export class XmlOutputManager {
     documentTag: string,
     thinkingTag: string = 'scratchpad',
   ): Promise<NamedOutputFile[]> {
-    let outputContent = await WorkspaceFS.read(outputFile);
+    let outputContent = await this.readOutputFile(outputFile);
 
     const tagsToWrap = [thinkingTag, 'document'];
     outputContent = xmlUtils.addCdataToTagsMultiple(outputContent, tagsToWrap);
@@ -323,7 +348,7 @@ export class XmlOutputManager {
       this.agentSetting.documentTag,
     );
 
-    const xmlContent = await WorkspaceFS.read(outputFile);
+    const xmlContent = await this.readOutputFile(outputFile);
     let original = '';
     const nameMatch = xmlContent.match(/<document[^>]*name="(.*?)"[^>]*>/);
     if (nameMatch && nameMatch[1]) {
@@ -354,7 +379,7 @@ export class XmlOutputManager {
     documentTag: string,
   ): Promise<void> {
     this.logger.debug(`Ensuring correct XML structure: ${filePath}`);
-    let content = await WorkspaceFS.read(filePath);
+    let content = await this.readOutputFile(filePath);
 
     content = await this.processXmlContent(content);
 
@@ -371,6 +396,6 @@ export class XmlOutputManager {
         }
       }
     }
-    await WorkspaceFS.write(filePath, content);
+    await this.writeOutputFile(filePath, content);
   }
 }
