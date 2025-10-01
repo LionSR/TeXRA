@@ -167,6 +167,38 @@ class StreamStatuses {
 }
 
 /**
+ * Tracks whether a stream has an execution directory available.
+ */
+class ExecutionAvailability {
+  constructor() {
+    this.availability = new Map();
+  }
+
+  set(stream, available) {
+    if (!stream) {
+      console.error('ExecutionAvailability.set: stream is required');
+      return;
+    }
+    this.availability.set(stream, Boolean(available));
+  }
+
+  get(stream) {
+    return this.availability.get(stream) ?? false;
+  }
+
+  delete(stream) {
+    if (!stream) {
+      return;
+    }
+    this.availability.delete(stream);
+  }
+
+  clear() {
+    this.availability.clear();
+  }
+}
+
+/**
  * Manages progress view state and handles persistence.
  */
 export class ProgressViewState {
@@ -180,6 +212,23 @@ export class ProgressViewState {
     this.taskGroups = new TaskGroups();
     this.toggleStates = new ToggleStates(() => this.save());
     this.streamStatuses = new StreamStatuses();
+    this.executionAvailability = new ExecutionAvailability();
+  }
+
+  setExecutionAvailability(stream, available) {
+    this.executionAvailability.set(stream, available);
+  }
+
+  getExecutionAvailability(stream) {
+    return this.executionAvailability.get(stream);
+  }
+
+  clearExecutionAvailability(stream) {
+    this.executionAvailability.delete(stream);
+  }
+
+  resetExecutionAvailability() {
+    this.executionAvailability.clear();
   }
 
   /** Load saved state from VS Code storage. */

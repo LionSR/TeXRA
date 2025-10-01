@@ -68,6 +68,25 @@ export class Status {
 
     this.BUTTON_IDS = ALL_TOOLBAR_BUTTON_IDS;
     this._buttonElements = null; // Cache for button elements
+    this._executionAvailable = false;
+  }
+
+  setExecutionAvailability(hasExecution) {
+    this._executionAvailable = Boolean(hasExecution);
+    this._applyExecutionAvailability();
+  }
+
+  _applyExecutionAvailability() {
+    const button = document.getElementById(ELEMENT_IDS.OPEN_TASK_STORAGE_BTN);
+    if (!button) {
+      return;
+    }
+    const isAvailable = this._executionAvailable;
+    button.classList.toggle('toolbar-button--hidden', !isAvailable);
+    button.setAttribute('aria-hidden', isAvailable ? 'false' : 'true');
+    if (!isAvailable) {
+      setElementsDisabled([button], true);
+    }
   }
 
   /**
@@ -75,6 +94,7 @@ export class Status {
    * @param {string} status - The status to set
    */
   update(status) {
+    this._applyExecutionAvailability();
     const statusIndicator = document.getElementById(
       ELEMENT_IDS.STATUS_INDICATOR,
     );
@@ -127,7 +147,13 @@ export class Status {
           if (!el) {
             return false;
           }
-          return el.dataset.hiddenByAgent !== 'true';
+          if (
+            el.dataset.requiresExecution === 'true' &&
+            !this._executionAvailable
+          ) {
+            return false;
+          }
+          return true;
         });
       if (elementsToEnable.length > 0) {
         setElementsDisabled(elementsToEnable, false);
