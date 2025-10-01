@@ -18,11 +18,7 @@
     "Data Science"
   ],
   "activationEvents": [
-    "onView:texra.mainView",
-    "onView:texra.folderExplorer",
-    "onView:texra.progressView",
-    "onColorTheme",
-    "onCommand:texra.createSampleProject"
+    "onColorTheme"
   ],
   "main": "./dist/extension.js",
   "contributes": {
