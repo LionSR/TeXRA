@@ -466,11 +466,7 @@ export class ModelHandlerOpenAI extends ModelHandler<
     ];
 
     // Add media if provided
-    if (
-      mediaFiles &&
-      (this.config.capabilities.supportsVision ||
-        this.config.capabilities.supportsNativeAudio)
-    ) {
+    if (this.canAttachFiles(mediaFiles)) {
       // createMediaMessage returns an array of objects formatted by createMediaContent
       const formattedMediaContent = await this.createMediaMessage(mediaFiles);
       userMessageContent.push(...formattedMediaContent);
@@ -541,12 +537,7 @@ export class ModelHandlerOpenAI extends ModelHandler<
     // system role does not support images/audio
     const role = 'user';
 
-    if (
-      mediaFiles &&
-      mediaFiles.length > 0 &&
-      (this.config.capabilities.supportsVision ||
-        this.config.capabilities.supportsNativeAudio)
-    ) {
+    if (this.canAttachFiles(mediaFiles)) {
       try {
         const formattedMediaContent = await this.createMediaMessage(mediaFiles);
         roundContent.push(...formattedMediaContent);
@@ -578,6 +569,16 @@ export class ModelHandlerOpenAI extends ModelHandler<
 
   createAssistantMessage(text: string): ChatCompletionMessageParam {
     return { role: 'assistant', content: [{ type: 'text', text }] };
+  }
+
+  private canAttachFiles(
+    mediaFiles?: string[],
+  ): mediaFiles is string[] {
+    return (
+      Array.isArray(mediaFiles) &&
+      mediaFiles.length > 0 &&
+      (this.capabilities.supportsVision || this.capabilities.supportsNativeAudio)
+    );
   }
 
   /** Formats image/audio content for OpenAI/Google's vision/audio API. */

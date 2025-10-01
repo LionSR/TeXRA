@@ -112,9 +112,11 @@ describe('ModelHandlerGoogleGenAI media uploads', () => {
     );
     handler.setLogger(createLoggerStub());
 
+    const binaryPayload = Buffer.from('%PDF-1.7');
     const entry: MediaEntry = {
       file_name: 'sample.pdf',
-      data: Buffer.from('%PDF-1.7').toString('base64'),
+      data: binaryPayload.toString('base64'),
+      binaryData: new Uint8Array(binaryPayload),
       media_type: 'application/pdf',
       media_category: 'image',
     };
@@ -129,6 +131,15 @@ describe('ModelHandlerGoogleGenAI media uploads', () => {
     );
     assert.equal(uploadParams.config?.mimeType, 'application/pdf');
     assert.equal(uploadParams.config?.displayName, 'sample.pdf');
+
+    const blobBuffer = Buffer.from(
+      await (uploadParams.file as Blob).arrayBuffer(),
+    );
+    assert.equal(
+      blobBuffer.equals(binaryPayload),
+      true,
+      'blob payload should match provided binary data',
+    );
 
     assert.deepEqual(parts, [
       createPartFromUri('files/test-file', 'application/pdf'),

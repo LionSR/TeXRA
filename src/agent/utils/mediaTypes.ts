@@ -7,6 +7,8 @@ export interface MediaEntry {
   file_name: string;
   /** Base64 encoded media content */
   data: string;
+  /** Binary representation of the media payload when available */
+  binaryData?: Uint8Array;
   /** MIME type of the media */
   media_type: string;
   /** Category of the media, e.g. 'image' or 'audio' */

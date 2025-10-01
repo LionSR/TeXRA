@@ -118,13 +118,11 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       } as ResponseInputItem);
     }
 
-    const supportsMedia =
-      this.capabilities.supportsVision || this.capabilities.supportsNativeAudio;
     const userContent: ResponseInputMessageContentList = [
       this.createInputText(userPrefix),
     ];
 
-    if (mediaFiles && mediaFiles.length > 0 && supportsMedia) {
+    if (this.canAttachFiles(mediaFiles)) {
       try {
         const mediaContent = (await this.createMediaMessage(
           mediaFiles,
@@ -175,12 +173,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   ): Promise<ResponseInputItem[]> {
     const roundContent: ResponseInputMessageContentList = [];
 
-    if (
-      mediaFiles &&
-      mediaFiles.length > 0 &&
-      (this.capabilities.supportsVision ||
-        this.capabilities.supportsNativeAudio)
-    ) {
+    if (this.canAttachFiles(mediaFiles)) {
       try {
         const formattedMediaContent = (await this.createMediaMessage(
           mediaFiles,
@@ -284,6 +277,16 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       this.logger.warn(`Unknown media category: ${media.media_category}`);
       return [];
     });
+  }
+
+  private canAttachFiles(
+    mediaFiles?: string[],
+  ): mediaFiles is string[] {
+    return (
+      Array.isArray(mediaFiles) &&
+      mediaFiles.length > 0 &&
+      (this.capabilities.supportsVision || this.capabilities.supportsNativeAudio)
+    );
   }
 
   private isInputFileContent(

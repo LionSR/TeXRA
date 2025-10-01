@@ -161,10 +161,20 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
 > {
   private googleClient: GoogleGenAI | null = null;
 
-  private supportsMediaUploads(): boolean {
+  private supportsFileUploads(): boolean {
     return (
-      this.config.capabilities.supportsVision ||
-      this.config.capabilities.supportsNativeAudio
+      this.capabilities.supportsVision ||
+      this.capabilities.supportsNativeAudio
+    );
+  }
+
+  private canAttachFiles(
+    mediaFiles?: string[],
+  ): mediaFiles is string[] {
+    return (
+      Array.isArray(mediaFiles) &&
+      mediaFiles.length > 0 &&
+      this.supportsFileUploads()
     );
   }
 
@@ -180,17 +190,20 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     for (const entry of entries) {
       const fileName = entry.file_name || 'unnamed-file';
       const mimeType = entry.media_type;
-      if (!entry.data || !mimeType) {
+      const binaryData =
+        entry.binaryData ??
+        (entry.data ? Buffer.from(entry.data, 'base64') : null);
+
+      if (!binaryData || !mimeType) {
         this.logger.error(
-          `Skipping media entry ${fileName} due to missing data or mime type`,
+          `Skipping media entry ${fileName} due to missing binary payload or mime type`,
         );
         uploadSummaries.push({ path: fileName, ok: false });
         continue;
       }
 
       try {
-        const buffer = Buffer.from(entry.data, 'base64');
-        const blob = new globalThis.Blob([buffer], { type: mimeType });
+        const blob = new globalThis.Blob([binaryData], { type: mimeType });
         const uploadParams: UploadFileParameters = {
           file: blob,
           config: {
@@ -205,7 +218,10 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
 
         const uploadResult: File = await client.files.upload(uploadParams);
         const fileUri = uploadResult.uri;
-        const resolvedMimeType = uploadResult.mimeType ?? mimeType;
+        const resolvedMimeType = this.resolveUploadedMimeType(
+          uploadResult,
+          mimeType,
+        );
 
         if (!fileUri) {
           this.logger.error(
@@ -238,6 +254,10 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     }
 
     return uploadedParts;
+  }
+
+  private resolveUploadedMimeType(result: File, fallback: string): string {
+    return result.mimeType ?? fallback;
   }
   async getClient(): Promise<GoogleGenAI> {
     if (!this.googleClient) {
@@ -495,7 +515,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
   ): Promise<Content[]> {
     const userContentParts: Part[] = [createPartFromText(userPrefix)];
 
-    if (mediaFiles && mediaFiles.length > 0 && this.supportsMediaUploads()) {
+    if (this.canAttachFiles(mediaFiles)) {
       const formattedMedia = await this.createMediaMessage(mediaFiles);
       if (formattedMedia.length > 0) {
         const pluralSuffix = mediaFiles.length > 1 ? 's' : '';
@@ -524,7 +544,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
   ): Promise<Content[]> {
     const roundParts: Part[] = [];
 
-    if (mediaFiles && mediaFiles.length > 0 && this.supportsMediaUploads()) {
+    if (this.canAttachFiles(mediaFiles)) {
       const formattedMedia = await this.createMediaMessage(mediaFiles);
       if (formattedMedia.length > 0) {
         const pluralSuffix = mediaFiles.length > 1 ? 's' : '';

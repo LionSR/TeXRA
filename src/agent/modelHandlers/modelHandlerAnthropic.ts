@@ -531,7 +531,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     }
 
     // Add media if provided (images and native PDFs)
-    if (mediaFiles && this.config.capabilities.supportsVision) {
+    if (this.canAttachFiles(mediaFiles)) {
       const formattedMediaContent = await this.createMediaMessage(mediaFiles);
       userMessageContent.push(...formattedMediaContent);
     }
@@ -582,11 +582,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     const roundContent: ContentBlockParam[] = [];
 
     // Add media if provided (images and native PDFs)
-    if (
-      mediaFiles &&
-      mediaFiles.length > 0 &&
-      this.config.capabilities.supportsVision
-    ) {
+    if (this.canAttachFiles(mediaFiles)) {
       try {
         const formattedMediaContent = await this.createMediaMessage(mediaFiles);
         roundContent.push(...formattedMediaContent);
@@ -658,6 +654,16 @@ export class ModelHandlerAnthropic extends ModelHandler<
       role: 'assistant',
       content: [{ type: 'text', text, citations: null }],
     };
+  }
+
+  private canAttachFiles(
+    mediaFiles?: string[],
+  ): mediaFiles is string[] {
+    return (
+      Array.isArray(mediaFiles) &&
+      mediaFiles.length > 0 &&
+      this.capabilities.supportsVision
+    );
   }
 
   /** Converts image/document content array into Anthropic-compatible message format with type and source metadata. */

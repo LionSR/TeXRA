@@ -620,9 +620,13 @@ export abstract class ModelHandler<
           this.capabilities.supportsNativePdf &&
           mediaType === 'application/pdf'
         ) {
+          const base64Payload = Array.isArray(mediaData)
+            ? mediaData[0]
+            : mediaData;
           const imageEntry: MediaEntry = {
             file_name: path.basename(mediaFile),
-            data: Array.isArray(mediaData) ? mediaData[0] : mediaData,
+            data: base64Payload,
+            binaryData: Buffer.from(base64Payload, 'base64'),
             media_type: mediaType,
             media_category: mediaCategory,
           };
@@ -637,9 +641,11 @@ export abstract class ModelHandler<
             `Adding ${mediaData.length} pages/parts to the media contents`,
           );
           for (let i = 0; i < mediaData.length; i++) {
+            const base64Payload = mediaData[i];
             const mediaEntry: MediaEntry = {
               file_name: `${path.basename(mediaFile)}_page_${i + 1}`,
-              data: mediaData[i],
+              data: base64Payload,
+              binaryData: Buffer.from(base64Payload, 'base64'),
               media_type: mediaType,
               media_category: mediaCategory,
             };
@@ -650,9 +656,11 @@ export abstract class ModelHandler<
           this.logger.debug(
             `Adding single part to the media contents: ${mediaFile}`,
           );
+          const base64Payload = mediaData;
           const mediaEntry: MediaEntry = {
             file_name: path.basename(mediaFile),
-            data: mediaData,
+            data: base64Payload,
+            binaryData: Buffer.from(base64Payload, 'base64'),
             media_type: mediaType,
             media_category: mediaCategory,
           };
