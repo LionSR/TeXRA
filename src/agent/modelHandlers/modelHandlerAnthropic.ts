@@ -122,12 +122,8 @@ export class ModelHandlerAnthropic extends ModelHandler<
       false,
     );
 
-    // Upload inline PDF documents before creating the request so we can
-    // reference them by file ID.
-    const { hasFileReference } = await this.replaceDocumentDataWithUploads(
-      client,
-      messages,
-    );
+    const documentAnalysis = this.analyzeDocumentSources(messages);
+    let hasFileReference = documentAnalysis.hasFileSource;
 
     // Prepare options for the API call
     const options: BetaMessageCreateParams = {
@@ -138,13 +134,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
       stop_sequences: endTag ? [endTag] : undefined,
       system: systemPrompt,
     };
-
-    if (hasFileReference) {
-      const existingBetas = options.betas ?? [];
-      if (!existingBetas.includes(FILES_API_BETA)) {
-        options.betas = [...existingBetas, FILES_API_BETA];
-      }
-    }
 
     if (tools && tools.length > 0) {
       options.tools = toAnthropicTools(tools);
@@ -210,63 +199,86 @@ export class ModelHandlerAnthropic extends ModelHandler<
     }
 
     if (this.capabilities.supportsTokenCounting) {
-      const countTokensParams: BetaMessageCountTokensParams = {
-        model: this.config.fullName,
-        system: systemPrompt,
-        messages,
-      };
+      if (documentAnalysis.hasFileSource) {
+        this.logger.debug(
+          'Skipping token counting because Anthropic countTokens does not support file-based document sources.',
+        );
+      } else {
+        const countTokensParams: BetaMessageCountTokensParams = {
+          model: this.config.fullName,
+          system: systemPrompt,
+          messages,
+        };
 
-      // If thinking is enabled, we need to pass it to countTokens as well
-      // to ensure consistency with the actual message creation.
-      // Without this, the API returns an error when messages contain thinking blocks.
-      if (options.thinking) {
-        countTokensParams.thinking = options.thinking;
-      }
+        // If thinking is enabled, we need to pass it to countTokens as well
+        // to ensure consistency with the actual message creation.
+        // Without this, the API returns an error when messages contain thinking blocks.
+        if (options.thinking) {
+          countTokensParams.thinking = options.thinking;
+        }
 
-      // Strip betas that only apply to message creation (e.g., output length)
-      // while keeping context headers needed for accurate token counting.
-      const countTokenBetas = options.betas?.filter(
-        (beta) => beta === CONTEXT_1M_BETA || beta === FILES_API_BETA,
-      );
-      if (countTokenBetas && countTokenBetas.length > 0) {
-        countTokensParams.betas = countTokenBetas;
-      }
+        // Strip betas that only apply to message creation (e.g., output length)
+        // while keeping context headers needed for accurate token counting.
+        const countTokenBetas = options.betas?.filter(
+          (beta) => beta === CONTEXT_1M_BETA,
+        );
+        if (countTokenBetas && countTokenBetas.length > 0) {
+          countTokensParams.betas = countTokenBetas;
+        }
 
-      const responseTokenCount =
-        await client.beta.messages.countTokens(countTokensParams);
-      const { input_tokens: inputTokens } = responseTokenCount;
-      this.logger.debug(`Token count of message: ${inputTokens}`);
-      if (inputTokens > this.config.contextWindow) {
-        const errMsg = `Token count of message exceeds context window: ${inputTokens} > ${this.config.contextWindow}`;
-        this.logger.error(errMsg);
-        throw new Error(errMsg);
-      }
-      if (this.config.contextWindow - inputTokens < options.max_tokens) {
-        const warnMsg = `Token count of message plus max tokens exceeds context window: ${inputTokens} + ${options.max_tokens} > ${this.config.contextWindow}. Reducing max tokens to ${this.config.contextWindow - inputTokens}.`;
-        this.logger.warn(warnMsg);
-        options.max_tokens = this.config.contextWindow - inputTokens - 10;
+        const responseTokenCount =
+          await client.beta.messages.countTokens(countTokensParams);
+        const { input_tokens: inputTokens } = responseTokenCount;
+        this.logger.debug(`Token count of message: ${inputTokens}`);
+        if (inputTokens > this.config.contextWindow) {
+          const errMsg = `Token count of message exceeds context window: ${inputTokens} > ${this.config.contextWindow}`;
+          this.logger.error(errMsg);
+          throw new Error(errMsg);
+        }
+        if (this.config.contextWindow - inputTokens < options.max_tokens) {
+          const warnMsg = `Token count of message plus max tokens exceeds context window: ${inputTokens} + ${options.max_tokens} > ${this.config.contextWindow}. Reducing max tokens to ${this.config.contextWindow - inputTokens}.`;
+          this.logger.warn(warnMsg);
+          options.max_tokens = this.config.contextWindow - inputTokens - 10;
 
-        if (
-          this.capabilities.supportsReasoning &&
-          options.thinking &&
-          options.thinking.type === 'enabled'
-        ) {
-          const adjustedBudget = Math.max(
-            1,
-            Math.min(
-              options.thinking.budget_tokens,
-              Math.floor(options.max_tokens * 0.5),
-            ),
-          );
-          if (adjustedBudget !== options.thinking.budget_tokens) {
-            this.logger.debug(
-              `Adjusted thinking budget to ${adjustedBudget} due to reduced max_tokens`,
+          if (
+            this.capabilities.supportsReasoning &&
+            options.thinking &&
+            options.thinking.type === 'enabled'
+          ) {
+            const adjustedBudget = Math.max(
+              1,
+              Math.min(
+                options.thinking.budget_tokens,
+                Math.floor(options.max_tokens * 0.5),
+              ),
             );
-            options.thinking.budget_tokens = adjustedBudget;
+            if (adjustedBudget !== options.thinking.budget_tokens) {
+              this.logger.debug(
+                `Adjusted thinking budget to ${adjustedBudget} due to reduced max_tokens`,
+              );
+              options.thinking.budget_tokens = adjustedBudget;
+            }
           }
         }
+        // in the future we log this in firstInputTokens of the AgentStateGlobal
       }
-      // in the future we log this in firstInputTokens of the AgentStateGlobal
+    }
+
+    if (documentAnalysis.hasBase64Pdf) {
+      const uploadResult = await this.replaceDocumentDataWithUploads(
+        client,
+        messages,
+      );
+      if (uploadResult.hasFileReference) {
+        hasFileReference = true;
+      }
+    }
+
+    if (hasFileReference) {
+      const existingBetas = options.betas ?? [];
+      if (!existingBetas.includes(FILES_API_BETA)) {
+        options.betas = [...existingBetas, FILES_API_BETA];
+      }
     }
 
     // this.logger.debug(
@@ -433,6 +445,46 @@ export class ModelHandlerAnthropic extends ModelHandler<
     }
 
     return { uploaded, hasFileReference };
+  }
+
+  private analyzeDocumentSources(messages: MessageParam[]): {
+    hasFileSource: boolean;
+    hasBase64Pdf: boolean;
+  } {
+    let hasFileSource = false;
+    let hasBase64Pdf = false;
+
+    for (const message of messages) {
+      const contentBlocks = message.content;
+      if (!Array.isArray(contentBlocks)) {
+        continue;
+      }
+
+      for (const block of contentBlocks) {
+        if (block.type !== 'document') {
+          continue;
+        }
+
+        const source = block.source;
+        if (!source) {
+          continue;
+        }
+
+        if ('file_id' in (source as { file_id?: string })) {
+          hasFileSource = true;
+        } else if (source.type === 'base64') {
+          if (source.media_type === 'application/pdf' && source.data) {
+            hasBase64Pdf = true;
+          }
+        }
+
+        if (hasFileSource && hasBase64Pdf) {
+          return { hasFileSource: true, hasBase64Pdf: true };
+        }
+      }
+    }
+
+    return { hasFileSource, hasBase64Pdf };
   }
 
   private sanitizeFilename(filename: string): string {
