@@ -148,7 +148,7 @@ export class Status {
             return false;
           }
           if (
-            el.dataset.requiresExecution === 'true' &&
+            el.id === ELEMENT_IDS.OPEN_TASK_STORAGE_BTN &&
             !this._executionAvailable
           ) {
             return false;
