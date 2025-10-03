@@ -12,18 +12,15 @@ import { defineTool } from '../core/define';
 // Local imports - tools
 import { ToolError, ToolResult, toolResult } from '../result';
 
-const WebFetchInputSchema = z
-  .object({
-    url: z
-      .string()
-      .url('Provide a valid absolute URL to fetch.')
-      .refine(
-        (value) => value.startsWith('http://') || value.startsWith('https://'),
-        'URL must use HTTP or HTTPS protocol',
-      ),
-    prompt: z.string().min(1).optional(),
-  })
-  .strict();
+const WebFetchInputSchema = z.strictObject({
+  url: z
+    .url('Provide a valid absolute URL to fetch.')
+    .refine(
+      (value) => value.startsWith('http://') || value.startsWith('https://'),
+      'URL must use HTTP or HTTPS protocol',
+    ),
+  prompt: z.string().min(1).optional(),
+});
 
 export type WebFetchInput = z.infer<typeof WebFetchInputSchema>;
 
