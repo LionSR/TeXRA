@@ -13,12 +13,10 @@ import { formatToolOutput, toPosixPath } from '@tools/utils';
 // Local imports - utils
 import { WorkspaceFS } from '@utils/files';
 
-const ArxivDownloadInputSchema = z
-  .object({
-    id: z.string(),
-    autoIndent: z.boolean().optional(),
-  })
-  .strict();
+const ArxivDownloadInputSchema = z.strictObject({
+  id: z.string(),
+  autoIndent: z.boolean().optional(),
+});
 
 export type ArxivDownloadInput = z.infer<typeof ArxivDownloadInputSchema>;
 
