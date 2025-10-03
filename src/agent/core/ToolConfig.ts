@@ -1,7 +1,7 @@
 // Third-party imports
 import { z } from 'zod';
 
-const TOOL_CONFIG_DEFAULTS = {
+export const DEFAULT_TOOL_CONFIG = {
   reflect: false,
   autoExtractFigure: false,
   autoExtractTikzFigure: false,
@@ -21,24 +21,21 @@ const TOOL_CONFIG_DEFAULTS = {
  */
 export const ToolConfigSchema = z
   .object({
-    reflect: z.boolean().default(TOOL_CONFIG_DEFAULTS.reflect),
+    reflect: z.boolean().prefault(DEFAULT_TOOL_CONFIG.reflect),
     autoExtractFigure: z
       .boolean()
-      .default(TOOL_CONFIG_DEFAULTS.autoExtractFigure),
+      .prefault(DEFAULT_TOOL_CONFIG.autoExtractFigure),
     autoExtractTikzFigure: z
       .boolean()
-      .default(TOOL_CONFIG_DEFAULTS.autoExtractTikzFigure),
-    attachTeXCount: z.boolean().default(TOOL_CONFIG_DEFAULTS.attachTeXCount),
+      .prefault(DEFAULT_TOOL_CONFIG.autoExtractTikzFigure),
+    attachTeXCount: z.boolean().prefault(DEFAULT_TOOL_CONFIG.attachTeXCount),
     attachDiagnostics: z
       .boolean()
-      .default(TOOL_CONFIG_DEFAULTS.attachDiagnostics),
+      .prefault(DEFAULT_TOOL_CONFIG.attachDiagnostics),
     autoCompileInputPdf: z
       .boolean()
-      .default(TOOL_CONFIG_DEFAULTS.autoCompileInputPdf),
+      .prefault(DEFAULT_TOOL_CONFIG.autoCompileInputPdf),
   })
-  .strip()
-  .default(TOOL_CONFIG_DEFAULTS);
-
-export const DEFAULT_TOOL_CONFIG = TOOL_CONFIG_DEFAULTS;
+  .prefault(DEFAULT_TOOL_CONFIG);
 
 export type ToolConfig = z.infer<typeof ToolConfigSchema>;

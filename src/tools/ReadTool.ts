@@ -13,11 +13,9 @@ import { WorkspaceFS } from '@utils/files';
 
 export const READ_FILE_MAX_LINES = 400;
 
-const ReadInputSchema = z
-  .object({
-    path: z.string(),
-  })
-  .strict();
+const ReadInputSchema = z.strictObject({
+  path: z.string(),
+});
 
 export type ReadInput = z.infer<typeof ReadInputSchema>;
 
