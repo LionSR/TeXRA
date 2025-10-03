@@ -7,6 +7,8 @@ import * as vscode from 'vscode';
 // Local imports - agent utilities
 import {
   buildAgentOptionsPayload,
+  DEFAULT_TOOL_USE_AGENT,
+  DEFAULT_WORKFLOW_AGENT,
   type AgentDirectoryMap,
 } from '@agent/utils/agentOptionMetadata';
 import type { AgentOptionsPayload } from '@agent/computeAgentOptions';
@@ -17,7 +19,7 @@ import {
   ModuleDescriptor,
 } from '@common/webview/BaseViewContentProvider';
 import { getConfig } from '@utils/config';
-import { GlobalStorageFS, AbsoluteFS } from '@utils/files';
+import { GlobalStorageFS } from '@utils/files';
 
 export class MainViewContentProvider extends BaseViewContentProvider {
   constructor(context: vscode.ExtensionContext) {
@@ -99,23 +101,23 @@ export class MainViewContentProvider extends BaseViewContentProvider {
       builtIn: builtInDir,
       builtInToolUse: toolUseDir,
     };
-    let discoveredToolUseAgents: string[] = [];
-    try {
-      const files = AbsoluteFS.readDirSync(toolUseDir);
-      discoveredToolUseAgents = files
-        .filter((f) => f.endsWith('.yaml'))
-        .map((f) => path.basename(f, '.yaml'));
-    } catch {
-      discoveredToolUseAgents = [];
-    }
-    const toolUseAgents = Array.from(
-      new Set([...configuredToolUseAgents, ...discoveredToolUseAgents]),
+    const workflowAgents = Array.from(
+      new Set([DEFAULT_WORKFLOW_AGENT, ...agents]),
     );
-    const allAgents = Array.from(new Set([...agents, ...toolUseAgents]));
+    const toolUseAgents = Array.from(
+      new Set([DEFAULT_TOOL_USE_AGENT, ...configuredToolUseAgents]),
+    );
+    const allAgents = Array.from(
+      new Set([...workflowAgents, ...toolUseAgents]),
+    );
     const optionBuckets: AgentOptionsPayload = buildAgentOptionsPayload(
       allAgents,
       agentDirectories,
       toolUseAgents,
+      {
+        workflowAgent: DEFAULT_WORKFLOW_AGENT,
+        toolUseAgent: DEFAULT_TOOL_USE_AGENT,
+      },
     );
 
     const models = getConfig<string[]>('models', []);
