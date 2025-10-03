@@ -37,7 +37,10 @@ import {
 import { ToolState } from '@agent/core/ToolState';
 
 // Local imports - agent components
-import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
+import {
+  ModelHandler,
+  type MediaFileResult,
+} from '@agent/modelHandlers/ModelHandler';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import { calculateTokenPrice } from '@agent/utils/priceUtils';
 import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
@@ -176,7 +179,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
 
     const client = await this.getClient();
     const uploadedParts: Part[] = [];
-    const uploadSummaries: Array<{ path: string; ok: boolean }> = [];
+    const uploadSummaries: MediaFileResult[] = [];
 
     for (const entry of entries) {
       const fileName = entry.file_name || 'unnamed-file';
@@ -244,7 +247,11 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     entry: MediaEntry,
     mimeType: string,
   ): string | globalThis.Blob | null {
-    if (entry.source_path && entry.source_path.length > 0) {
+    if (
+      entry.source_path &&
+      entry.source_path.length > 0 &&
+      entry.bytes_match_source !== false
+    ) {
       return entry.source_path;
     }
     if (entry.binary_data && entry.binary_data.length > 0) {
@@ -733,7 +740,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
   }
 
   addContinueMessageWithPrefill(/* ... */): void {
-    this.logger.warn(
+    this.logger.debug(
       "Native Google SDK handler does not support assistant prefill continuation. Using 'WithoutPrefill'.",
     );
   }
@@ -755,7 +762,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
   }
 
   updateMessageContentWithPrefill(/* ... */): void {
-    this.logger.warn(
+    this.logger.debug(
       "Native Google SDK handler does not support assistant prefill update. Using 'WithoutPrefill'.",
     );
   }
