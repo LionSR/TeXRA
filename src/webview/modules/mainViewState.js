@@ -88,7 +88,7 @@ export class MainViewState {
       const defaults = {
         sessionType: SESSION_TYPES.WORKFLOW,
         workflowAgent: 'correct',
-        toolUseAgent: '',
+        toolUseAgent: 'chat',
         model: 'gemini25p',
         commit: 'HEAD',
       };
