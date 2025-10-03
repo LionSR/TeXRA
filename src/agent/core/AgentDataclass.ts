@@ -66,51 +66,49 @@ export function resolveAgentSessionMetadata(
  * Base schema shared by workflow and tool-use agent settings. Individual
  * variants extend this schema to add variant-specific constraints.
  */
-export const AgentSettingBaseSchema = z
-  .object({
-    agentType: z.nativeEnum(AgentType).default(AgentType.CoT),
-    documentTag: z
-      .string()
-      .min(1, 'documentTag cannot be empty')
-      .default('document'),
-    endTag: z.string().default('</latex_document>'),
-    temperature: z
-      .number()
-      .min(MIN_TEMPERATURE)
-      .max(MAX_TEMPERATURE)
-      .nullable()
-      .default(0.0),
-    requiredFiles: z.record(z.string(), z.string()).default({}),
-    requiredFilesInternal: z.record(z.string(), z.string()).default({}),
-    defaultOutputFiles: z.array(z.string()).default([]),
-    filePatternsContain: z
-      .array(
-        z.object({
-          pattern: z.string(),
-          varName: z.string(),
-          categories: z.array(z.string()).default([]),
-        }),
-      )
-      .default([]),
+export const AgentSettingBaseSchema = z.strictObject({
+  agentType: z.enum(AgentType).prefault(AgentType.CoT),
+  documentTag: z
+    .string()
+    .min(1, 'documentTag cannot be empty')
+    .prefault('document'),
+  endTag: z.string().prefault('</latex_document>'),
+  temperature: z
+    .number()
+    .min(MIN_TEMPERATURE)
+    .max(MAX_TEMPERATURE)
+    .nullable()
+    .prefault(0.0),
+  requiredFiles: z.record(z.string(), z.string()).prefault({}),
+  requiredFilesInternal: z.record(z.string(), z.string()).prefault({}),
+  defaultOutputFiles: z.array(z.string()).prefault([]),
+  filePatternsContain: z
+    .array(
+      z.strictObject({
+        pattern: z.string(),
+        varName: z.string(),
+        categories: z.array(z.string()).prefault([]),
+      }),
+    )
+    .prefault([]),
 
-    tools: z.array(ToolDefinitionSchema).default([]),
-  })
-  .strict();
+  tools: z.array(ToolDefinitionSchema).prefault([]),
+});
 
 /**
  * Workflow agent settings support multiple-output workflows and therefore
  * expose the {@code isMultipleOutput} toggle.
  */
 export const AgentWorkflowSettingSchema = AgentSettingBaseSchema.extend({
-  isRewrite: z.boolean().default(true),
-  rounds: z.number().default(2),
-  prefills: z.array(z.string()).default([]),
-  outputExt: z.string().default('txt'),
-  isMultipleOutput: z.boolean().default(false),
+  isRewrite: z.boolean().prefault(true),
+  rounds: z.number().prefault(2),
+  prefills: z.array(z.string()).prefault([]),
+  outputExt: z.string().prefault('txt'),
+  isMultipleOutput: z.boolean().prefault(false),
 }).superRefine((data, ctx) => {
   if (data.agentType === AgentType.ToolUse) {
     ctx.addIssue({
-      code: z.ZodIssueCode.custom,
+      code: 'custom',
       path: ['agentType'],
       message:
         'Workflow agent settings cannot use the toolUse agent type. Use the tool-use schema instead.',
@@ -120,7 +118,7 @@ export const AgentWorkflowSettingSchema = AgentSettingBaseSchema.extend({
 
 /** Tool-use agents never expose workflow-specific flags. */
 export const AgentToolUseSettingSchema = AgentSettingBaseSchema.extend({
-  agentType: z.literal(AgentType.ToolUse).default(AgentType.ToolUse),
+  agentType: z.literal(AgentType.ToolUse).prefault(AgentType.ToolUse),
 });
 
 /**
@@ -170,14 +168,12 @@ export function hasEndTag(
 }
 
 /** Zod schema for AgentPrompt validation */
-export const AgentPromptSchema = z
-  .object({
-    systemPrompt: z.string().default(''),
-    userPrefix: z.string().default(''),
-    userRequest: z.string().default(''),
-    userReflect: z.union([z.string(), z.array(z.string())]).default(''),
-  })
-  .strict();
+export const AgentPromptSchema = z.strictObject({
+  systemPrompt: z.string().prefault(''),
+  userPrefix: z.string().prefault(''),
+  userRequest: z.string().prefault(''),
+  userReflect: z.union([z.string(), z.array(z.string())]).prefault(''),
+});
 
 export type AgentPrompt = z.infer<typeof AgentPromptSchema>;
 
@@ -186,14 +182,12 @@ export type AgentPrompt = z.infer<typeof AgentPromptSchema>;
  * Includes the root name, optional inheritance target,
  * settings block and prompt configuration.
  */
-export const AgentDefinitionSchema = z
-  .object({
-    name: z.string().trim().min(1),
-    inherits: z.string().optional(),
-    settings: z.record(z.string(), z.unknown()).optional(),
-    prompts: z.record(z.string(), z.unknown()).optional(),
-  })
-  .strict();
+export const AgentDefinitionSchema = z.strictObject({
+  name: z.string().trim().min(1),
+  inherits: z.string().optional(),
+  settings: z.record(z.string(), z.unknown()).optional(),
+  prompts: z.record(z.string(), z.unknown()).optional(),
+});
 
 export type AgentDefinition = z.infer<typeof AgentDefinitionSchema>;
 
