@@ -4,7 +4,7 @@ import { z } from 'zod';
 // Local imports - agent
 // Local imports - agent components
 import { AgentSessionKind, AgentType } from './AgentDataclass';
-import { ToolConfigSchema } from './ToolConfig';
+import { DEFAULT_TOOL_CONFIG, ToolConfigSchema } from './ToolConfig';
 
 /**
  * Checks that the number of output files does not exceed the number of input files.
@@ -40,7 +40,7 @@ export const AgentConfigSchema = z
     outputFiles: z.array(z.string()).nullable().default(null),
     editedFile: z.string().nullable().default(null),
 
-    toolConfig: ToolConfigSchema.default({}),
+    toolConfig: ToolConfigSchema.default(DEFAULT_TOOL_CONFIG),
   })
   // Strip unknown keys to tolerate stale settings from previous releases.
   .strip()
