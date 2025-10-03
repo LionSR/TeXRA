@@ -6,6 +6,16 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
+- _No unreleased changes yet._
+
+## [0.33.9] - 2025-10-03
+
+### Features
+
+- Introduce new `apply_path` and `download_arxiv_source` tools so agents can apply patches and fetch arXiv sources without leaving TeXRA.
+- Default workflow and tool-use pickers to curated Correct and Chat presets, remember multi-output toggles, and automatically seed custom agent directories for new workspaces.
+- Add an **Open storage** button in the progress view with richer file refresh feedback so you can inspect run outputs and diffs immediately.
+- Add between-round `latexdiff` controls and Texcount mode selection to customize LaTeX comparison and word-count workflows.
 - Add Claude Sonnet 4.5 (thinking and regular) to the Anthropic catalog and default model list so the latest Claude release is immediately available in TeXRA.
 
 ### Bug Fixes
@@ -14,6 +24,10 @@ All notable changes to this project will be documented in this file.
 - Ensure follow-up Anthropic requests keep the Files API beta header when referencing previously uploaded PDFs.
 - Sanitize Anthropic PDF filenames before uploading so nested paths with forbidden characters no longer trigger Files API errors.
 - Skip Anthropic token counting when requests already reference Files API assets and defer PDF uploads until after token usage is calculated to avoid countTokens errors.
+- Harden tool-use session resume so queued follow-ups, execution state, and multi-output agents restore reliably after reloads.
+- Respect `.gitignore` rules across `glob`, `grep`, and file listings to keep excluded paths out of workspace inspections.
+- Stabilize custom agent directory initialization and tool-use registry cleanup so default agents appear consistently.
+- Guard Google upload pipelines and diagnostics tooling to avoid sending derived media and to surface clearer errors when runs fail.
 
 ## [0.33.8] - 2025-09-30
 
