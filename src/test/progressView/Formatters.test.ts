@@ -46,7 +46,7 @@ describe('LogEntryFormatter DOM', () => {
             <i class="codicon codicon-wrench"></i>
             <span class="tool-use-title">Tool Use</span>
           </summary>
-          <div class="special-content"></div>
+          <div class="special-content log-entry-content"></div>
         </details>
       </template>
     </body></html>`);
