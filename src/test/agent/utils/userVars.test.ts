@@ -48,7 +48,6 @@ const baseConfig: AgentConfig = {
   outputFiles: null,
   editedFile: null,
   toolConfig: {
-    reflect: false,
     autoExtractFigure: false,
     autoExtractTikzFigure: false,
     attachTeXCount: false,

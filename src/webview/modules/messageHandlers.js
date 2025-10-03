@@ -570,7 +570,6 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       referenceFile: state.referenceFile,
       auxiliaryFile: state.auxiliaryFile,
       mediaFile: state.mediaFile,
-      reflect: state.reflect ?? toolConfig.reflect ?? false,
       autoExtractFigure:
         state.autoExtractFigure ?? toolConfig.autoExtractFigure ?? false,
       autoExtractTikzFigure:

@@ -131,9 +131,11 @@ export function objectToTaskState(obj: Record<string, any>): TaskState {
     autoExtractTikzFigure,
     autoCompileInputPdf,
     attachTeXCount,
-    reflect,
+    reflect: _legacyReflect,
     ...agentConfigData
   } = obj;
+
+  void _legacyReflect;
 
   const legacyPrintInputPrompt = Object.prototype.hasOwnProperty.call(
     obj,
@@ -162,6 +164,13 @@ export function objectToTaskState(obj: Record<string, any>): TaskState {
     agentConfigData.toolConfig = {};
   }
 
+  if (
+    isObjectRecord(agentConfigData.toolConfig) &&
+    Object.prototype.hasOwnProperty.call(agentConfigData.toolConfig, 'reflect')
+  ) {
+    delete (agentConfigData.toolConfig as Record<string, unknown>).reflect;
+  }
+
   // Merge top-level tool config fields into toolConfig
   // Top-level fields take precedence for backward compatibility
   agentConfigData.toolConfig = {
@@ -170,7 +179,6 @@ export function objectToTaskState(obj: Record<string, any>): TaskState {
     ...(autoExtractTikzFigure !== undefined && { autoExtractTikzFigure }),
     ...(autoCompileInputPdf !== undefined && { autoCompileInputPdf }),
     ...(attachTeXCount !== undefined && { attachTeXCount }),
-    ...(reflect !== undefined && { reflect }),
   };
 
   if (

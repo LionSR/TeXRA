@@ -30,7 +30,7 @@ TeXRA's logging interface that shows detailed information about the processing s
 
 ### Tool Config
 
-Settings that control how TeXRA interacts with external tools and processes, including reflection, TeX counting, and prompt logging options.
+Settings that control how TeXRA interacts with external tools and processes, including TeX counting, diagnostics attachments, and prompt logging options.
 
 ### Auto Extract
 
@@ -38,7 +38,7 @@ A feature that automatically identifies and extracts figures or TikZ diagrams fr
 
 ### Reflection
 
-A process where the AI reviews and improves its own work, leading to higher quality outputs. Enabled through the "Reflect" option in tool config.
+A process where the AI reviews and improves its own work, leading to higher quality outputs. TeXRA automatically schedules reflection rounds based on the agent definition—no manual toggle is required.
 
 ## AI and Language Model Terms
 

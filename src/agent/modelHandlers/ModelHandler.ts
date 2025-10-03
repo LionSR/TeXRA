@@ -97,7 +97,6 @@ export abstract class ModelHandler<
       toolConfig: config.toolConfig || {
         autoExtractFigure: false,
         autoExtractTikzFigure: false,
-        reflect: false,
         attachTeXCount: false,
         attachDiagnostics: false,
         autoCompileInputPdf: false,
