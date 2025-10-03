@@ -254,9 +254,6 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     ) {
       return entry.source_path;
     }
-    if (entry.binary_data && entry.binary_data.length > 0) {
-      return new globalThis.Blob([entry.binary_data], { type: mimeType });
-    }
     if (entry.data) {
       try {
         const buffer = Buffer.from(entry.data, 'base64');
