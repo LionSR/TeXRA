@@ -2,7 +2,6 @@
 
 /* Base layout for markdown containers */
 .markdown-content {
-  padding: var(--spacing-small) 0 var(--spacing-medium) var(--spacing-large);
   overflow: visible;
 }
 
