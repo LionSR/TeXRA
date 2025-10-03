@@ -8,6 +8,7 @@ import { compileLatex2Pdf } from '@latex/texTools';
 import { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import { createFileMapping } from '@utils/files';
+import { getConfig } from '@utils/config';
 import { checkToolInstalled } from '@utils/system';
 import { objectToLogString } from '@utils/text/stringUtils';
 
@@ -56,6 +57,10 @@ export class LatexDiffManager {
     groupId?: string,
   ): Promise<void> {
     const diffProcessGroupId = groupId ?? this.logger.getActiveGroupId();
+    const generateBetweenRoundDiffs = getConfig<boolean>(
+      'latexdiff.generateBetweenRoundDiffs',
+      false,
+    );
     const aggregated: Array<{
       base: string;
       revised: string;
@@ -143,7 +148,7 @@ export class LatexDiffManager {
         }
       }
 
-      if (currRound > 0) {
+      if (generateBetweenRoundDiffs && currRound > 0) {
         this.logger.debug(
           'Running between-rounds latexdiff operations',
           diffProcessGroupId,
@@ -204,6 +209,11 @@ export class LatexDiffManager {
             );
           }
         }
+      } else if (!generateBetweenRoundDiffs) {
+        this.logger.debug(
+          'Skipping between-round latexdiff operations: disabled in settings',
+          diffProcessGroupId,
+        );
       }
 
       if (aggregated.length > 0) {
