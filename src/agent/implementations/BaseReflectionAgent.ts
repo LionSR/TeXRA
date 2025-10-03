@@ -534,12 +534,11 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
 
       const totalRounds = this.getNumberOfRounds();
       for (let currRound = 0; currRound < totalRounds; currRound++) {
-        if (
-          currRound > 0 &&
-          (!this.agentConfig.toolConfig.reflect ||
-            !continueRounds ||
-            this.isInterrupted)
-        ) {
+        if (currRound > 0 && (!continueRounds || this.isInterrupted)) {
+          break;
+        }
+
+        if (this.isInterrupted) {
           break;
         }
 

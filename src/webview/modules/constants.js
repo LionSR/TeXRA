@@ -38,11 +38,7 @@ export const CHECK_BOXES_AUTO_EXTRACT = [
 ];
 
 // Tool configuration checkboxes
-export const CHECK_BOXES_TOOL_USE = [
-  'attachTeXCount',
-  'attachDiagnostics',
-  'reflect',
-];
+export const CHECK_BOXES_TOOL_USE = ['attachTeXCount', 'attachDiagnostics'];
 
 // All checkboxes (combined)
 export const CHECK_BOXES = [
