@@ -79,7 +79,6 @@ export class ExecutionManager {
     const toolConfig: ToolConfig = {
       autoExtractFigure: message.autoExtractFigure,
       autoExtractTikzFigure: message.autoExtractTikzFigure,
-      reflect: message.reflect,
       attachTeXCount: message.attachTeXCount,
       attachDiagnostics: message.attachDiagnostics,
       autoCompileInputPdf: message.autoCompileInputPdf,

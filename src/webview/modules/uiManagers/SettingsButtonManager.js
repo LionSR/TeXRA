@@ -283,11 +283,6 @@ export class SettingsButtonManager extends BaseUIManager {
       });
     }
 
-    const reflectCheckbox = safeGetElementById('reflect');
-    if (reflectCheckbox) {
-      reflectCheckbox.checked = !selectedAgent.startsWith('correct');
-    }
-
     this.vscode.postMessage({
       command: MAIN_VIEW_COMMANDS.REQUEST_MEDIA_FILE,
     });
