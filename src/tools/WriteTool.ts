@@ -11,12 +11,10 @@ import { ToolResult, toolResult } from '@tools/result';
 // Local imports - utils
 import { WorkspaceFS } from '@utils/files';
 
-const WriteInputSchema = z
-  .object({
-    path: z.string(),
-    content: z.string(),
-  })
-  .strict();
+const WriteInputSchema = z.strictObject({
+  path: z.string(),
+  content: z.string(),
+});
 
 export type WriteInput = z.infer<typeof WriteInputSchema>;
 
