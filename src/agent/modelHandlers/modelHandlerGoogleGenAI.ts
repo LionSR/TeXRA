@@ -1,5 +1,6 @@
 // Standard library imports
 import * as path from 'path';
+import { Buffer } from 'buffer';
 
 // Third-party imports
 import {
@@ -36,7 +37,10 @@ import {
 import { ToolState } from '@agent/core/ToolState';
 
 // Local imports - agent components
-import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
+import {
+  ModelHandler,
+  type MediaFileResult,
+} from '@agent/modelHandlers/ModelHandler';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import { calculateTokenPrice } from '@agent/utils/priceUtils';
 import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
@@ -52,7 +56,7 @@ import replacementEngine from '@replacement/engine';
 import { K_SLICE } from '@utils/config';
 
 // Local imports - utilities
-import { WorkspaceFS, AbsoluteFS, getMimeType } from '@utils/files';
+import { WorkspaceFS } from '@utils/files';
 import xmlUtils from '@utils/text/xmlUtils';
 
 type GoogleRole = 'user' | 'model';
@@ -160,6 +164,124 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
   GoogleGenAI
 > {
   private googleClient: GoogleGenAI | null = null;
+
+  private supportsFileUploads(): boolean {
+    return (
+      this.config.capabilities.supportsVision ||
+      this.config.capabilities.supportsNativeAudio
+    );
+  }
+
+  protected async uploadMediaEntries(entries: MediaEntry[]): Promise<Part[]> {
+    if (entries.length === 0) {
+      return [];
+    }
+
+    const client = await this.getClient();
+    const uploadedParts: Part[] = [];
+    const uploadSummaries: MediaFileResult[] = [];
+
+    for (const entry of entries) {
+      const fileName = entry.file_name || 'unnamed-file';
+      const mimeType = entry.media_type || 'application/octet-stream';
+      const uploadSource = this.getUploadSource(entry, mimeType);
+
+      if (!uploadSource) {
+        this.logger.error(
+          `Skipping media entry ${fileName} due to missing data or mime type`,
+        );
+        uploadSummaries.push({ path: fileName, ok: false });
+        continue;
+      }
+
+      try {
+        const uploadParams: UploadFileParameters = {
+          file: uploadSource,
+          config: {
+            mimeType,
+            displayName: fileName,
+          },
+        };
+
+        const uploadDescription =
+          typeof uploadSource === 'string'
+            ? `path ${uploadSource}`
+            : `in-memory payload (${mimeType})`;
+        this.logger.debug(
+          `Uploading media entry ${fileName} via Google GenAI SDK using ${uploadDescription}`,
+        );
+
+        const uploadResult: File = await client.files.upload(uploadParams);
+        const fileUri = uploadResult.uri;
+
+        if (!fileUri) {
+          this.logger.error(
+            `Upload result for ${fileName} is missing a URI. Skipping entry.`,
+          );
+          uploadSummaries.push({ path: fileName, ok: false });
+          continue;
+        }
+
+        const resolvedMimeType = this.resolveUploadMimeType(
+          entry,
+          uploadResult,
+        );
+        uploadedParts.push(createPartFromUri(fileUri, resolvedMimeType));
+        uploadSummaries.push({ path: fileName, ok: true });
+      } catch (error) {
+        this.logger.error(
+          `Failed to upload media entry ${fileName}: ${getSdkErrorMessage(error)}`,
+          undefined,
+          undefined,
+          error,
+        );
+        uploadSummaries.push({ path: fileName, ok: false });
+      }
+    }
+
+    this.logMediaResults(uploadSummaries);
+    return uploadedParts;
+  }
+
+  private getUploadSource(
+    entry: MediaEntry,
+    mimeType: string,
+  ): string | globalThis.Blob | null {
+    if (
+      entry.source_path &&
+      entry.source_path.length > 0 &&
+      entry.bytes_match_source !== false
+    ) {
+      return entry.source_path;
+    }
+    if (entry.binary_data && entry.binary_data.length > 0) {
+      return new globalThis.Blob([entry.binary_data], { type: mimeType });
+    }
+    if (entry.data) {
+      try {
+        const buffer = Buffer.from(entry.data, 'base64');
+        return new globalThis.Blob([buffer], { type: mimeType });
+      } catch (error) {
+        this.logger.error(
+          `Failed to decode base64 media for ${entry.file_name}: ${getSdkErrorMessage(error)}`,
+          undefined,
+          undefined,
+          error,
+        );
+      }
+    }
+    return null;
+  }
+
+  private resolveUploadMimeType(entry: MediaEntry, uploaded: File): string {
+    if (uploaded.mimeType && uploaded.mimeType.length > 0) {
+      return uploaded.mimeType;
+    }
+    if (entry.media_type && entry.media_type.length > 0) {
+      return entry.media_type;
+    }
+    return 'application/octet-stream';
+  }
   async getClient(): Promise<GoogleGenAI> {
     if (!this.googleClient) {
       const apiKey = await this.getApiKey();
@@ -414,85 +536,21 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     mediaFiles?: string[],
     _systemPrompt?: string,
   ): Promise<Content[]> {
-    const client = await this.getClient();
     const userContentParts: Part[] = [createPartFromText(userPrefix)];
 
-    if (
-      mediaFiles &&
-      mediaFiles.length > 0 &&
-      (this.config.capabilities.supportsVision ||
-        this.config.capabilities.supportsNativeAudio)
-    ) {
-      this.logger.debug(
-        `Uploading ${mediaFiles.length} media files via native SDK...`,
-      );
-      const mediaFileResults: Array<{ path: string; ok: boolean }> = [];
-
-      for (const mediaFile of mediaFiles) {
-        try {
-          const absolutePath = WorkspaceFS.fullPath(mediaFile);
-          if (!(await AbsoluteFS.exists(absolutePath))) {
-            this.logger.error(`File does not exist: ${absolutePath}`);
-            mediaFileResults.push({ path: mediaFile, ok: false });
-            continue;
-          }
-
-          const explicitMimeType = this.determineMimeType(absolutePath);
-
-          if (!explicitMimeType) {
-            this.logger.error(
-              `Cannot determine mime type for ${mediaFile}. Skipping file.`,
-            );
-            mediaFileResults.push({ path: mediaFile, ok: false });
-            continue;
-          }
-
-          const uploadParams: UploadFileParameters = {
-            file: absolutePath,
-            config: { mimeType: explicitMimeType },
-          };
-
-          this.logger.debug(
-            `Attempting upload for ${mediaFile} with params: ${JSON.stringify(uploadParams)}`,
-          );
-
-          const uploadResult: File = await client.files.upload(uploadParams);
-
-          this.logger.debug(
-            `Uploaded ${mediaFile}, URI: ${uploadResult.uri}, MimeType: ${uploadResult.mimeType}`,
-          );
-
-          const fileUri = uploadResult.uri;
-          const fileMimeType = uploadResult.mimeType;
-          if (!fileUri || !fileMimeType) {
-            this.logger.error(
-              `Upload result for file ${mediaFile} missing URI or MimeType. API might have failed inference. Skipping file.`,
-            );
-            mediaFileResults.push({ path: mediaFile, ok: false });
-            continue;
-          }
-
-          userContentParts.push(
-            createPartFromText(`\nFile attached: ${path.basename(mediaFile)}`),
-          );
-          userContentParts.push(createPartFromUri(fileUri, fileMimeType));
-          mediaFileResults.push({ path: mediaFile, ok: true });
-        } catch (error) {
-          this.logger.error(
-            `Failed to upload media file ${mediaFile} via native SDK: ${getSdkErrorMessage(error)}`,
-            undefined,
-            undefined,
-            error,
-          );
-          mediaFileResults.push({ path: mediaFile, ok: false });
-        }
-      }
-
-      if (mediaFileResults.length > 0) {
-        if (mediaFileResults.some((r) => !r.ok)) {
-          this.logger.warn('Some media files failed to load');
-        }
-        this.logger.fileList(mediaFileResults);
+    if (mediaFiles && mediaFiles.length > 0 && this.supportsFileUploads()) {
+      const formattedMedia = await this.createMediaMessage(mediaFiles);
+      if (formattedMedia.length > 0) {
+        const pluralSuffix = mediaFiles.length > 1 ? 's' : '';
+        const attachmentLabel = mediaFiles
+          .map((filePath) => path.basename(filePath))
+          .join(', ');
+        userContentParts.push(
+          createPartFromText(
+            `\nAttached file${pluralSuffix}: ${attachmentLabel}`,
+          ),
+        );
+        userContentParts.push(...formattedMedia);
       }
     }
 
@@ -501,113 +559,27 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     return [{ role: 'user', parts: userContentParts }];
   }
 
-  private determineMimeType(filePath: string): string | null {
-    const ext = path.extname(filePath).toLowerCase();
-    this.logger.debug(
-      `Determining MIME type for extension: '${ext}' from file: ${filePath}`,
-    );
-
-    const mimeType = getMimeType(filePath);
-    if (!mimeType) {
-      this.logger.warn(
-        `Cannot determine mime type for ${filePath} from extension '${ext}'.`,
-      );
-    } else {
-      this.logger.debug(
-        `Determined MIME type: ${mimeType} for file: ${filePath}`,
-      );
-    }
-    return mimeType;
-  }
-
   /** Creates message array for subsequent rounds, managing image content and message structure. */
   async createRoundMessages(
     messages: Content[],
     userMessage: string,
     mediaFiles?: string[],
   ): Promise<Content[]> {
-    const client = await this.getClient();
     const roundParts: Part[] = [];
 
-    if (
-      mediaFiles &&
-      mediaFiles.length > 0 &&
-      (this.config.capabilities.supportsVision ||
-        this.config.capabilities.supportsNativeAudio)
-    ) {
-      this.logger.debug(
-        `Uploading ${mediaFiles.length} media files for reflection via native SDK...`,
-      );
-      const mediaFileResults: Array<{ path: string; ok: boolean }> = [];
-
-      for (const mediaFile of mediaFiles) {
-        try {
-          const absolutePath = WorkspaceFS.fullPath(mediaFile);
-          if (!(await AbsoluteFS.exists(absolutePath))) {
-            this.logger.error(`File does not exist: ${absolutePath}`);
-            mediaFileResults.push({ path: mediaFile, ok: false });
-            continue;
-          }
-
-          const explicitMimeType = this.determineMimeType(absolutePath);
-
-          if (!explicitMimeType) {
-            this.logger.error(
-              `Cannot determine mime type for file ${mediaFile}. Skipping file.`,
-            );
-            mediaFileResults.push({ path: mediaFile, ok: false });
-            continue;
-          }
-
-          const uploadParams: UploadFileParameters = {
-            file: absolutePath,
-            config: { mimeType: explicitMimeType },
-          };
-
-          this.logger.debug(
-            `Attempting upload for ${mediaFile} with params: ${JSON.stringify(uploadParams)}`,
-          );
-          this.logger.debug(`MIME type being used: ${explicitMimeType}`);
-
-          const uploadResult: File = await client.files.upload(uploadParams);
-
-          this.logger.debug(
-            `Uploaded reflection file ${mediaFile}, URI: ${uploadResult.uri}, MimeType: ${uploadResult.mimeType}`,
-          );
-
-          const fileUri = uploadResult.uri;
-          const fileMimeType = uploadResult.mimeType;
-          if (!fileUri || !fileMimeType) {
-            this.logger.error(
-              `Upload result for file ${mediaFile} missing URI or MimeType. API might have failed inference. Skipping file.`,
-            );
-            mediaFileResults.push({ path: mediaFile, ok: false });
-            continue;
-          }
-
-          roundParts.push(
-            createPartFromText(
-              `\nProcessing file: ${path.basename(mediaFile)}`,
-            ),
-          );
-          roundParts.push(createPartFromUri(fileUri, fileMimeType));
-          mediaFileResults.push({ path: mediaFile, ok: true });
-        } catch (error) {
-          this.logger.error(
-            `Failed to upload media file ${mediaFile} for follow-up round: ${getSdkErrorMessage(error)}`,
-            undefined,
-            undefined,
-            error,
-          );
-          mediaFileResults.push({ path: mediaFile, ok: false });
-        }
-      }
-
-      if (mediaFileResults.length > 0) {
-        if (mediaFileResults.some((r) => !r.ok)) {
-          this.logger.warn('Some media files failed to load');
-        }
-        this.logger.fileList(mediaFileResults);
+    if (mediaFiles && mediaFiles.length > 0 && this.supportsFileUploads()) {
+      const formattedMedia = await this.createMediaMessage(mediaFiles);
+      if (formattedMedia.length > 0) {
+        const pluralSuffix = mediaFiles.length > 1 ? 's' : '';
+        const attachmentLabel = mediaFiles
+          .map((filePath) => path.basename(filePath))
+          .join(', ');
+        roundParts.push(
+          createPartFromText(
+            `\nProcessing file${pluralSuffix}: ${attachmentLabel}`,
+          ),
+        );
+        roundParts.push(...formattedMedia);
       }
     }
 
@@ -631,6 +603,21 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
   createAssistantMessage(text: string): Content {
     // Note: Method name retained for interface compatibility, but returns 'model' role per Google SDK
     return { role: 'model', parts: [createPartFromText(text)] };
+  }
+
+  override async createMediaMessage(mediaFiles: string[]): Promise<Part[]> {
+    if (!mediaFiles || mediaFiles.length === 0 || !this.supportsFileUploads()) {
+      return [];
+    }
+
+    const { entries, results } = await this.buildMediaEntries(mediaFiles);
+    this.logMediaResults(results);
+
+    if (entries.length === 0) {
+      return [];
+    }
+
+    return this.uploadMediaEntries(entries);
   }
 
   createMediaContent(mediaMessage: MediaEntry[]): MediaEntry[] {
@@ -753,7 +740,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
   }
 
   addContinueMessageWithPrefill(/* ... */): void {
-    this.logger.warn(
+    this.logger.debug(
       "Native Google SDK handler does not support assistant prefill continuation. Using 'WithoutPrefill'.",
     );
   }
@@ -775,7 +762,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
   }
 
   updateMessageContentWithPrefill(/* ... */): void {
-    this.logger.warn(
+    this.logger.debug(
       "Native Google SDK handler does not support assistant prefill update. Using 'WithoutPrefill'.",
     );
   }

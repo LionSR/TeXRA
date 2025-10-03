@@ -1,6 +1,7 @@
 // Standard library imports
 import * as path from 'path';
 import { randomUUID } from 'crypto';
+import { Buffer } from 'buffer';
 
 // Third-party imports
 import { FinishReason } from '@google/genai';
@@ -68,6 +69,8 @@ interface MarkerFlags {
   endTurn: boolean;
   encounterDocumentTag: boolean;
 }
+
+export type MediaFileResult = { path: string; ok: boolean };
 
 /**
  * Abstract base class for model-specific handlers that manage API interactions, message processing, and response handling.
@@ -565,15 +568,33 @@ export abstract class ModelHandler<
    * Individual providers can override if needed.
    */
   public async createMediaMessage(mediaFiles: string[]): Promise<any[]> {
+    const { entries, results } = await this.buildMediaEntries(mediaFiles);
+    this.logMediaResults(results);
+    return this.createMediaContent(entries);
+  }
+
+  protected logMediaResults(results: MediaFileResult[]): void {
+    if (results.length === 0) {
+      return;
+    }
+    if (results.some((result) => !result.ok)) {
+      this.logger.warn('Some media files failed to load');
+    }
+    this.logger.fileList(results);
+  }
+
+  protected async buildMediaEntries(
+    mediaFiles: string[],
+  ): Promise<{ entries: MediaEntry[]; results: MediaFileResult[] }> {
     const mediaMessage: MediaEntry[] = [];
-    const mediaFileResults: Array<{ path: string; ok: boolean }> = [];
+    const mediaFileResults: MediaFileResult[] = [];
 
     for (const mediaFile of mediaFiles) {
-      // Check if this is an absolute path (for pasted images in storage)
       const isAbsolutePath = path.isAbsolute(mediaFile);
-      const fileExistsResult = isAbsolutePath
-        ? await AbsoluteFS.exists(mediaFile)
-        : await WorkspaceFS.exists(mediaFile);
+      const absolutePath = isAbsolutePath
+        ? mediaFile
+        : WorkspaceFS.fullPath(mediaFile);
+      const fileExistsResult = await AbsoluteFS.exists(absolutePath);
 
       if (!fileExistsResult) {
         this.logger.error(`File not found: ${mediaFile}`);
@@ -583,9 +604,7 @@ export abstract class ModelHandler<
 
       let fileSize: number | null = null;
       try {
-        const stats = isAbsolutePath
-          ? await AbsoluteFS.stat(mediaFile)
-          : await WorkspaceFS.stat(mediaFile);
+        const stats = await AbsoluteFS.stat(absolutePath);
         fileSize = stats.size;
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
@@ -613,20 +632,41 @@ export abstract class ModelHandler<
           `Processed ${mediaCategory}: ${mediaFile}, type: ${mediaType}`,
         );
 
-        // Special handling for OpenAI native PDF support
+        const isDerivedFromConversion =
+          fileExtension === '.pdf' && mediaType !== 'application/pdf';
+
+        const createEntry = (
+          fileName: string,
+          data: string,
+          matchesSource: boolean = !isDerivedFromConversion,
+        ): MediaEntry => {
+          const entry: MediaEntry = {
+            file_name: fileName,
+            data,
+            media_type: mediaType,
+            media_category: mediaCategory,
+            binary_data: Buffer.from(data, 'base64'),
+            bytes_match_source: matchesSource,
+          };
+
+          if (matchesSource) {
+            entry.source_path = absolutePath;
+          }
+
+          return entry;
+        };
+
         if (
           this.isOpenai &&
           this.capabilities.supportsVision &&
           this.capabilities.supportsNativePdf &&
           mediaType === 'application/pdf'
         ) {
-          const imageEntry: MediaEntry = {
-            file_name: path.basename(mediaFile),
-            data: Array.isArray(mediaData) ? mediaData[0] : mediaData,
-            media_type: mediaType,
-            media_category: mediaCategory,
-          };
-          mediaMessage.push(imageEntry);
+          const pdfEntry = createEntry(
+            path.basename(mediaFile),
+            Array.isArray(mediaData) ? mediaData[0] : mediaData,
+          );
+          mediaMessage.push(pdfEntry);
           mediaFileResults.push({ path: mediaFile, ok: true });
           this.logger.debug(`Added native PDF: ${mediaFile}`);
           continue;
@@ -637,26 +677,15 @@ export abstract class ModelHandler<
             `Adding ${mediaData.length} pages/parts to the media contents`,
           );
           for (let i = 0; i < mediaData.length; i++) {
-            const mediaEntry: MediaEntry = {
-              file_name: `${path.basename(mediaFile)}_page_${i + 1}`,
-              data: mediaData[i],
-              media_type: mediaType,
-              media_category: mediaCategory,
-            };
-            mediaMessage.push(mediaEntry);
+            const fileName = `${path.basename(mediaFile)}_page_${i + 1}`;
+            mediaMessage.push(createEntry(fileName, mediaData[i], false));
           }
           mediaFileResults.push({ path: mediaFile, ok: true });
         } else {
           this.logger.debug(
             `Adding single part to the media contents: ${mediaFile}`,
           );
-          const mediaEntry: MediaEntry = {
-            file_name: path.basename(mediaFile),
-            data: mediaData,
-            media_type: mediaType,
-            media_category: mediaCategory,
-          };
-          mediaMessage.push(mediaEntry);
+          mediaMessage.push(createEntry(path.basename(mediaFile), mediaData));
           mediaFileResults.push({ path: mediaFile, ok: true });
         }
       } catch (err) {
@@ -667,18 +696,10 @@ export abstract class ModelHandler<
           err,
         );
         mediaFileResults.push({ path: mediaFile, ok: false });
-        continue;
       }
     }
 
-    if (mediaFileResults.length > 0) {
-      if (mediaFileResults.some((r) => !r.ok)) {
-        this.logger.warn('Some media files failed to load');
-      }
-      this.logger.fileList(mediaFileResults);
-    }
-
-    return this.createMediaContent(mediaMessage);
+    return { entries: mediaMessage, results: mediaFileResults };
   }
 
   /** Calculates token-based stop flags. */
