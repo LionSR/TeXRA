@@ -176,6 +176,54 @@ describe('ModelHandlerGoogleGenAI media uploads', () => {
     assert.deepEqual(parts, [createPartFromUri('files/audio', 'audio/wav')]);
   });
 
+  it('ignores source paths when bytes no longer match the encoded payload', async () => {
+    const uploadCalls: UploadFileParameters[] = [];
+
+    const clientStub = {
+      files: {
+        upload: async (params: UploadFileParameters) => {
+          uploadCalls.push(params);
+          return {
+            name: 'files/converted',
+            uri: 'files/converted',
+            mimeType: params.config?.mimeType ?? 'image/png',
+            displayName: params.config?.displayName ?? 'converted.png',
+          } satisfies Partial<File> as File;
+        },
+      },
+    };
+
+    const handler = new GoogleHandlerTestDouble(
+      buildGoogleConfig({ supportsNativePdf: false }),
+      clientStub,
+    );
+    const { logger } = createLoggerStub();
+    handler.setLogger(logger);
+
+    const pngPayload = Buffer.from([0, 1, 2, 3]).toString('base64');
+    const entry: MediaEntry = {
+      file_name: 'converted_page_1',
+      data: pngPayload,
+      media_type: 'image/png',
+      media_category: 'image',
+      source_path: '/tmp/original.pdf',
+      bytes_match_source: false,
+    };
+
+    const parts = await handler.invokeUpload([entry]);
+
+    assert.equal(uploadCalls.length, 1, 'should invoke files.upload once');
+    const [uploadParams] = uploadCalls;
+    assert.ok(
+      uploadParams.file instanceof globalThis.Blob,
+      'file payload should be uploaded from memory instead of the stale path',
+    );
+
+    assert.deepEqual(parts, [
+      createPartFromUri('files/converted', 'image/png'),
+    ]);
+  });
+
   it('falls back to Blob payloads when media entries only contain encoded data', async () => {
     const uploadCalls: UploadFileParameters[] = [];
 
