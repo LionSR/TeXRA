@@ -221,24 +221,46 @@ export function buildAgentOptionsPayload(
       return `<option value="">${emptyMessage}</option>`;
     }
 
-    if (defaultName) {
-      const defaultIndex = entries.findIndex(
-        (entry) => entry.name === defaultName,
-      );
-      if (defaultIndex > 0) {
-        const [defaultEntry] = entries.splice(defaultIndex, 1);
-        entries.unshift(defaultEntry);
+    let orderedEntries = [...entries];
+    let selectedName =
+      orderedEntries.find((entry) => entry.isSelected)?.name ?? defaultName;
+
+    let selectedIndex = selectedName
+      ? orderedEntries.findIndex((entry) => entry.name === selectedName)
+      : -1;
+
+    if (
+      selectedIndex === -1 ||
+      !orderedEntries[selectedIndex]?.metadata.hasDefinition
+    ) {
+      const fallbackEntry =
+        orderedEntries.find((entry) => entry.metadata.hasDefinition) ??
+        orderedEntries[0];
+
+      if (defaultName) {
+        console.warn(
+          `Default agent "${defaultName}" is missing or disabled. Falling back to "${fallbackEntry.name}".`,
+        );
       }
+
+      selectedName = fallbackEntry.name;
+      selectedIndex = orderedEntries.findIndex(
+        (entry) => entry.name === selectedName,
+      );
     }
 
-    if (!entries.some((entry) => entry.isSelected)) {
-      entries[0].isSelected = true;
+    if (selectedIndex > 0) {
+      orderedEntries = [
+        orderedEntries[selectedIndex],
+        ...orderedEntries.slice(0, selectedIndex),
+        ...orderedEntries.slice(selectedIndex + 1),
+      ];
     }
 
-    return entries
+    return orderedEntries
       .map((entry) =>
         createAgentOptionTag(entry.name, entry.metadata, {
-          isSelected: entry.isSelected,
+          isSelected: entry.name === selectedName,
         }),
       )
       .join('\n');
