@@ -2,7 +2,6 @@
 import { z } from 'zod';
 
 export const DEFAULT_TOOL_CONFIG = {
-  reflect: false,
   autoExtractFigure: false,
   autoExtractTikzFigure: false,
   attachTeXCount: false,
@@ -21,7 +20,6 @@ export const DEFAULT_TOOL_CONFIG = {
  */
 export const ToolConfigSchema = z
   .object({
-    reflect: z.boolean().prefault(DEFAULT_TOOL_CONFIG.reflect),
     autoExtractFigure: z
       .boolean()
       .prefault(DEFAULT_TOOL_CONFIG.autoExtractFigure),
