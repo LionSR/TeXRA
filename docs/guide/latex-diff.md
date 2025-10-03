@@ -8,7 +8,7 @@ This guide explains how to use TeXRA's dedicated LaTeXdiff features for comparin
 
 ### Controlling Between-Round Diffs
 
-TeXRA compares each round of agent output to your original input and, by default, also creates diffs between consecutive rounds (`_diff_rN-rM.tex`). If you prefer to skip the between-round comparisons, set **TeXRA › LaTeXdiff › Generate Between Round Diffs** (`texra.latexdiff.generateBetweenRoundDiffs`) to `false` in VS Code's settings. When disabled, the run command and progress notifications only account for the original-vs-round comparisons, reducing the number of diff files created.
+TeXRA compares each round of agent output to your original input and can also create diffs between consecutive rounds (`_diff_rN-rM.tex`). Between-round diffs are disabled by default—enable them by setting **TeXRA › LaTeXdiff › Generate Between Round Diffs** (`texra.latexdiff.generateBetweenRoundDiffs`) to `true` in VS Code's settings. When left off, the run command and progress notifications only account for the original-vs-round comparisons, reducing the number of diff files created.
 
 ## Understanding LaTeX Diff
 
