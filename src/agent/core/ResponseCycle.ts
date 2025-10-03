@@ -1,3 +1,6 @@
+// Standard library imports
+import * as path from 'path';
+
 // Local imports - agent components
 import type { AgentConfig } from './AgentConfig';
 import type { AgentSetting, AgentPrompt } from './AgentDataclass';
@@ -25,7 +28,7 @@ import replacementEngine from '@replacement/engine';
 import { K_SLICE, REPETITION_DETECTION_THRESHOLD } from '@utils/config';
 
 // Local imports - filesystem utilities
-import { WorkspaceFS } from '@utils/files';
+import { AbsoluteFS, WorkspaceFS } from '@utils/files';
 import { getRunDir, TASK_RUNS_DIR } from '@utils/files/taskRunStorage';
 import xmlUtils from '@utils/text/xmlUtils';
 
@@ -78,7 +81,10 @@ export async function runResponseCycle<C = unknown>(
       break;
     }
 
-    const exists = await WorkspaceFS.exists(outputFile);
+    const isAbsoluteOutput = path.isAbsolute(outputFile);
+    const exists = isAbsoluteOutput
+      ? await AbsoluteFS.exists(outputFile)
+      : await WorkspaceFS.exists(outputFile);
     const startTime = Date.now();
     const systemPrompt = await getSystemPromptWithRules(
       agentPrompt.systemPrompt,
@@ -230,13 +236,20 @@ export async function runResponseCycle<C = unknown>(
 
     if (!exists) {
       logger.debug(`Creating new file: ${outputFile}`, taskGroupId);
-      await WorkspaceFS.write(outputFile, processedResponse);
+      if (isAbsoluteOutput) {
+        await AbsoluteFS.write(outputFile, processedResponse);
+      } else {
+        await WorkspaceFS.write(outputFile, processedResponse);
+      }
     } else {
       logger.debug(`Appending to existing file: ${outputFile}`, taskGroupId);
-      await WorkspaceFS.appendFile(
-        outputFile,
-        bestConnector + processedResponse,
-      );
+      const appendContent = bestConnector + processedResponse;
+      if (isAbsoluteOutput) {
+        const existingContent = await AbsoluteFS.read(outputFile);
+        await AbsoluteFS.write(outputFile, existingContent + appendContent);
+      } else {
+        await WorkspaceFS.appendFile(outputFile, appendContent);
+      }
     }
 
     logger.debug('Response preview:', taskGroupId);
