@@ -31,6 +31,14 @@ export interface AgentOptionsPayload {
   toolUse: string;
 }
 
+export interface AgentOptionDefaults {
+  workflowAgent?: string;
+  toolUseAgent?: string;
+}
+
+export const DEFAULT_WORKFLOW_AGENT = 'correct';
+export const DEFAULT_TOOL_USE_AGENT = 'chat';
+
 const DIRECTORY_KEYS: (keyof AgentDirectoryMap)[] = [
   'custom',
   'builtIn',
@@ -129,9 +137,14 @@ function decorateLabel(
   return label;
 }
 
+interface AgentOptionTagOptions {
+  isSelected?: boolean;
+}
+
 export function createAgentOptionTag(
   agentName: string,
   metadata: AgentOptionMetadata,
+  options: AgentOptionTagOptions = {},
 ): string {
   const attributes = [
     `value="${encodeHtml(agentName)}"`,
@@ -147,6 +160,9 @@ export function createAgentOptionTag(
   if (metadata.isToolUse) {
     attributes.push('data-tool-use="true"');
   }
+  if (options.isSelected) {
+    attributes.push('selected');
+  }
 
   const label = decorateLabel(agentName, metadata);
   return `<option ${attributes.join(' ')}>${encodeHtml(label)}</option>`;
@@ -156,9 +172,16 @@ export function buildAgentOptionsPayload(
   agentNames: Iterable<string>,
   directories: AgentDirectoryMap,
   configuredToolUseAgents: Iterable<string> = [],
+  defaults: AgentOptionDefaults = {},
 ): AgentOptionsPayload {
-  const workflowOptions: string[] = [];
-  const toolUseOptions: string[] = [];
+  interface OptionEntry {
+    name: string;
+    metadata: AgentOptionMetadata;
+    isSelected: boolean;
+  }
+
+  const workflowEntries: OptionEntry[] = [];
+  const toolUseEntries: OptionEntry[] = [];
   const configuredToolUseSet = new Set(configuredToolUseAgents);
 
   const seen = new Set<string>();
@@ -171,34 +194,87 @@ export function buildAgentOptionsPayload(
     const metadataWithConfig = configuredToolUseSet.has(agentName)
       ? { ...metadata, isToolUse: true }
       : metadata;
-    const optionTag = createAgentOptionTag(agentName, metadataWithConfig);
+    const isDefaultWorkflow =
+      defaults.workflowAgent && agentName === defaults.workflowAgent;
+    const isDefaultToolUse =
+      defaults.toolUseAgent && agentName === defaults.toolUseAgent;
+    const entry: OptionEntry = {
+      name: agentName,
+      metadata: metadataWithConfig,
+      isSelected: metadataWithConfig.isToolUse
+        ? Boolean(isDefaultToolUse)
+        : Boolean(isDefaultWorkflow),
+    };
     if (metadataWithConfig.isToolUse) {
-      toolUseOptions.push(optionTag);
+      toolUseEntries.push(entry);
     } else {
-      workflowOptions.push(optionTag);
+      workflowEntries.push(entry);
     }
   }
 
   const ensureOptions = (
-    options: string[],
-    placeholder: string,
+    entries: OptionEntry[],
+    defaultName: string | undefined,
     emptyMessage: string,
   ): string => {
-    if (options.length === 0) {
+    if (entries.length === 0) {
       return `<option value="">${emptyMessage}</option>`;
     }
-    return [`<option value="">${placeholder}</option>`, ...options].join('\n');
+
+    let orderedEntries = [...entries];
+    let selectedName =
+      orderedEntries.find((entry) => entry.isSelected)?.name ?? defaultName;
+
+    let selectedIndex = selectedName
+      ? orderedEntries.findIndex((entry) => entry.name === selectedName)
+      : -1;
+
+    if (
+      selectedIndex === -1 ||
+      !orderedEntries[selectedIndex]?.metadata.hasDefinition
+    ) {
+      const fallbackEntry =
+        orderedEntries.find((entry) => entry.metadata.hasDefinition) ??
+        orderedEntries[0];
+
+      if (defaultName) {
+        console.warn(
+          `Default agent "${defaultName}" is missing or disabled. Falling back to "${fallbackEntry.name}".`,
+        );
+      }
+
+      selectedName = fallbackEntry.name;
+      selectedIndex = orderedEntries.findIndex(
+        (entry) => entry.name === selectedName,
+      );
+    }
+
+    if (selectedIndex > 0) {
+      orderedEntries = [
+        orderedEntries[selectedIndex],
+        ...orderedEntries.slice(0, selectedIndex),
+        ...orderedEntries.slice(selectedIndex + 1),
+      ];
+    }
+
+    return orderedEntries
+      .map((entry) =>
+        createAgentOptionTag(entry.name, entry.metadata, {
+          isSelected: entry.name === selectedName,
+        }),
+      )
+      .join('\n');
   };
 
   return {
     workflow: ensureOptions(
-      workflowOptions,
-      'Select a workflow agent',
+      workflowEntries,
+      defaults.workflowAgent,
       'No workflow agents available',
     ),
     toolUse: ensureOptions(
-      toolUseOptions,
-      'Select a tool-use agent',
+      toolUseEntries,
+      defaults.toolUseAgent,
       'No tool-use agents available',
     ),
   };

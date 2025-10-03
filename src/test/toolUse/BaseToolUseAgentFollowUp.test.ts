@@ -146,12 +146,10 @@ describe('BaseToolUseAgent follow-up loop', () => {
       outputFiles: null,
       editedFile: null,
       toolConfig: {
-        reflect: false,
         autoExtractFigure: false,
         autoExtractTikzFigure: false,
         attachTeXCount: false,
         attachDiagnostics: false,
-        printInputPrompt: false,
         autoCompileInputPdf: false,
       },
     };

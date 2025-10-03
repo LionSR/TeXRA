@@ -94,10 +94,14 @@ Be specific about what you want! Vague instructions are like asking a genie for 
 ### Step 5: Configure Tools
 
 1. Click on the "Tool Config" dropdown
-2. Enable "Reflect" to allow the AI to review and improve its own work
-3. (Optional) Enable other tools as needed:
+2. (Optional) Enable helpers for this run:
    - "Attach TeX Count" to include document statistics
-   - "Print Input Prompt" to save the generated prompt for reference (which you can also feed to ChatGPT or Claude to process with your subscription)
+   - "Attach Diagnostics" to include LaTeX compilation logs and other troubleshooting details
+   - Reflection rounds are controlled by the selected agent—most writing agents already include a follow-up critique pass
+
+::: tip Save Prompts for Later
+Enable the `texra.debug.saveInputPrompt` setting if you want TeXRA to store the generated prompt alongside other debug artifacts.
+:::
 
 ![Tool Configuration](/images/tool-config.png)
 

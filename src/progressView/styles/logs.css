@@ -23,6 +23,11 @@
   display: block;
 }
 
+.log-entry-content {
+  padding: var(--spacing-small) 0 var(--spacing-medium) var(--spacing-large);
+  overflow: visible;
+}
+
 .log-line {
   white-space: pre-wrap;
   word-wrap: break-word;

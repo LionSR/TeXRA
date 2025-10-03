@@ -116,7 +116,7 @@ Refine your documents through multiple passes:
 1. Start with broader instructions
 2. Review the results and identify specific areas for improvement
 3. Use more targeted instructions in subsequent passes
-4. Enable the "Reflect" option for critical tasks
+4. Choose agents that include reflection prompts (or add them via custom agents) for critical tasks so TeXRA runs an automatic follow-up pass
 
 ### Collaborative Writing
 

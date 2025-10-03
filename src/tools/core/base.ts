@@ -1,5 +1,5 @@
 // Third-party imports
-import { z, ZodError } from 'zod';
+import { ZodError, type ZodType } from 'zod';
 
 // Local imports - tools
 import type { ToolDefinition } from '@model';
@@ -7,9 +7,9 @@ import { ToolResult, toolResult } from '@tools/result';
 
 export abstract class BaseTool<T> {
   readonly definition: ToolDefinition;
-  readonly schema: z.ZodSchema<T>;
+  readonly schema: ZodType<T>;
 
-  protected constructor(definition: ToolDefinition, schema: z.ZodSchema<T>) {
+  protected constructor(definition: ToolDefinition, schema: ZodType<T>) {
     this.definition = definition;
     this.schema = schema;
   }

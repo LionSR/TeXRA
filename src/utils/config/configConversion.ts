@@ -131,10 +131,29 @@ export function objectToTaskState(obj: Record<string, any>): TaskState {
     autoExtractTikzFigure,
     autoCompileInputPdf,
     attachTeXCount,
-    printInputPrompt,
-    reflect,
+    reflect: _legacyReflect,
     ...agentConfigData
   } = obj;
+
+  void _legacyReflect;
+
+  const legacyPrintInputPrompt = Object.prototype.hasOwnProperty.call(
+    obj,
+    'printInputPrompt',
+  )
+    ? obj.printInputPrompt
+    : undefined;
+
+  const nestedLegacyPrintInputPrompt =
+    isObjectRecord(agentConfigData.toolConfig) &&
+    Object.prototype.hasOwnProperty.call(
+      agentConfigData.toolConfig,
+      'printInputPrompt',
+    )
+      ? (agentConfigData.toolConfig as Record<string, unknown>)[
+          'printInputPrompt'
+        ]
+      : undefined;
 
   // Build toolConfig from extracted fields (backward compatibility)
   // Ensure toolConfig is an object, handling cases where it might be malformed
@@ -145,6 +164,13 @@ export function objectToTaskState(obj: Record<string, any>): TaskState {
     agentConfigData.toolConfig = {};
   }
 
+  if (
+    isObjectRecord(agentConfigData.toolConfig) &&
+    Object.prototype.hasOwnProperty.call(agentConfigData.toolConfig, 'reflect')
+  ) {
+    delete (agentConfigData.toolConfig as Record<string, unknown>).reflect;
+  }
+
   // Merge top-level tool config fields into toolConfig
   // Top-level fields take precedence for backward compatibility
   agentConfigData.toolConfig = {
@@ -153,9 +179,19 @@ export function objectToTaskState(obj: Record<string, any>): TaskState {
     ...(autoExtractTikzFigure !== undefined && { autoExtractTikzFigure }),
     ...(autoCompileInputPdf !== undefined && { autoCompileInputPdf }),
     ...(attachTeXCount !== undefined && { attachTeXCount }),
-    ...(printInputPrompt !== undefined && { printInputPrompt }),
-    ...(reflect !== undefined && { reflect }),
   };
+
+  if (
+    legacyPrintInputPrompt !== undefined ||
+    nestedLegacyPrintInputPrompt !== undefined
+  ) {
+    console.warn(
+      'Ignoring legacy printInputPrompt setting. Enable texra.debug.saveInputPrompt instead.',
+    );
+    delete (agentConfigData.toolConfig as Record<string, unknown>)[
+      'printInputPrompt'
+    ];
+  }
 
   // Parse only AgentConfig-compatible fields
   try {

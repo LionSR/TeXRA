@@ -385,15 +385,24 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
         prefixWithStats = `${toolState.texcountStats}${userPrefix}`;
       }
 
-      // Write prompt to file if requested
-      if (this.agentConfig.toolConfig.printInputPrompt) {
-        await writePromptToXml(
+      // Write prompt to file if debug setting is enabled
+      const shouldSaveInputPrompt = getConfig<boolean>(
+        'debug.saveInputPrompt',
+        false,
+      );
+      if (shouldSaveInputPrompt) {
+        const promptPath = await writePromptToXml(
           systemPrompt,
           prefixWithStats,
           userRequest,
           this.agentConfig.inputFile,
           this.agentConfig.agent,
           this.executionId,
+        );
+        this.logger.info(
+          `Saved input prompt to ${promptPath}`,
+          roundGroupId,
+          MESSAGE_TYPES.DEFAULT,
         );
       }
 
@@ -525,12 +534,11 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
 
       const totalRounds = this.getNumberOfRounds();
       for (let currRound = 0; currRound < totalRounds; currRound++) {
-        if (
-          currRound > 0 &&
-          (!this.agentConfig.toolConfig.reflect ||
-            !continueRounds ||
-            this.isInterrupted)
-        ) {
+        if (this.isInterrupted) {
+          break;
+        }
+
+        if (currRound > 0 && !continueRounds) {
           break;
         }
 
