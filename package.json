@@ -1362,7 +1362,6 @@
     "turndown-plugin-gfm": "^1.0.2",
     "winston": "^3.18.3",
     "yaml": "^2.8.1",
-    "zod": "^3.25.76",
-    "zod-to-json-schema": "^3.24.6"
+    "zod": "^4.1.11"
   }
 }
