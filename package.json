@@ -651,6 +651,12 @@
             "default": "(?:picture|tikzpicture|scope|DIFnomarkup)[\\w\\d*@]*",
             "description": "Regular expression pattern for environments to be treated as pictures. These environments will be processed as a unit without internal differencing.",
             "order": 3
+          },
+          "texra.latexdiff.generateBetweenRoundDiffs": {
+            "type": "boolean",
+            "default": false,
+            "description": "Generate diffs between consecutive agent rounds in addition to comparing each round to the original input.",
+            "order": 4
           }
         }
       },
