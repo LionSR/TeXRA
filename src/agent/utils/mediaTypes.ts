@@ -17,4 +17,6 @@ export interface MediaEntry {
   binary_data?: Buffer;
   /** Absolute path to the original file when available */
   source_path?: string;
+  /** Indicates whether the binary payload matches the on-disk source */
+  bytes_match_source?: boolean;
 }

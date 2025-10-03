@@ -70,7 +70,7 @@ interface MarkerFlags {
   encounterDocumentTag: boolean;
 }
 
-type MediaFileResult = { path: string; ok: boolean };
+export type MediaFileResult = { path: string; ok: boolean };
 
 /**
  * Abstract base class for model-specific handlers that manage API interactions, message processing, and response handling.
@@ -632,14 +632,29 @@ export abstract class ModelHandler<
           `Processed ${mediaCategory}: ${mediaFile}, type: ${mediaType}`,
         );
 
-        const createEntry = (fileName: string, data: string): MediaEntry => ({
-          file_name: fileName,
-          data,
-          media_type: mediaType,
-          media_category: mediaCategory,
-          binary_data: Buffer.from(data, 'base64'),
-          source_path: absolutePath,
-        });
+        const isDerivedFromConversion =
+          fileExtension === '.pdf' && mediaType !== 'application/pdf';
+
+        const createEntry = (
+          fileName: string,
+          data: string,
+          matchesSource: boolean = !isDerivedFromConversion,
+        ): MediaEntry => {
+          const entry: MediaEntry = {
+            file_name: fileName,
+            data,
+            media_type: mediaType,
+            media_category: mediaCategory,
+            binary_data: Buffer.from(data, 'base64'),
+            bytes_match_source: matchesSource,
+          };
+
+          if (matchesSource) {
+            entry.source_path = absolutePath;
+          }
+
+          return entry;
+        };
 
         if (
           this.isOpenai &&
@@ -663,7 +678,7 @@ export abstract class ModelHandler<
           );
           for (let i = 0; i < mediaData.length; i++) {
             const fileName = `${path.basename(mediaFile)}_page_${i + 1}`;
-            mediaMessage.push(createEntry(fileName, mediaData[i]));
+            mediaMessage.push(createEntry(fileName, mediaData[i], false));
           }
           mediaFileResults.push({ path: mediaFile, ok: true });
         } else {
