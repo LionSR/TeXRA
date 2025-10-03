@@ -1,10 +1,11 @@
 // Third-party imports
-import { glob } from 'glob';
 import * as vscode from 'vscode';
 
 // Local imports - agent utilities
 import {
   buildAgentOptionsPayload,
+  DEFAULT_TOOL_USE_AGENT,
+  DEFAULT_WORKFLOW_AGENT,
   type AgentDirectoryMap,
   type AgentOptionsPayload,
 } from '@agent/utils/agentOptionMetadata';
@@ -14,7 +15,7 @@ import { getConfig } from '@utils/config';
 export type { AgentOptionsPayload };
 
 /**
- * Collect configured workflow agents alongside configured and discovered tool-use agents.
+ * Collect configured workflow agents alongside configured tool-use agents and defaults.
  */
 export interface AgentNameBuckets {
   allAgents: string[];
@@ -24,27 +25,14 @@ export interface AgentNameBuckets {
 export async function getAllAgents(
   context: vscode.ExtensionContext,
 ): Promise<AgentNameBuckets> {
-  const workflowAgents = getConfig<string[]>('agents', []);
+  const configuredWorkflowAgents = getConfig<string[]>('agents', []);
   const configuredToolUseAgents = getConfig<string[]>('toolUseAgents', []);
 
-  const toolUseDir = await agentDirectories.builtInToolUse(context);
-  let discoveredToolUseAgents: string[] = [];
-  try {
-    const toolUseFiles = await glob('**/*.yaml', {
-      cwd: toolUseDir,
-      dot: false,
-      nodir: true,
-      absolute: false,
-    });
-    discoveredToolUseAgents = toolUseFiles.map((f) =>
-      f.replace(/\.yaml$/, '').replace(/.*\//, ''),
-    );
-  } catch {
-    discoveredToolUseAgents = [];
-  }
-
+  const workflowAgents = Array.from(
+    new Set([DEFAULT_WORKFLOW_AGENT, ...configuredWorkflowAgents]),
+  );
   const toolUseAgents = Array.from(
-    new Set([...configuredToolUseAgents, ...discoveredToolUseAgents]),
+    new Set([DEFAULT_TOOL_USE_AGENT, ...configuredToolUseAgents]),
   );
   const allAgents = Array.from(new Set([...workflowAgents, ...toolUseAgents]));
 
@@ -76,5 +64,8 @@ export async function computeAgentOptions(
   const { allAgents, toolUseAgents } = await getAllAgents(context);
   const dirs = await getAgentDirectories(context);
 
-  return buildAgentOptionsPayload(allAgents, dirs, toolUseAgents);
+  return buildAgentOptionsPayload(allAgents, dirs, toolUseAgents, {
+    workflowAgent: DEFAULT_WORKFLOW_AGENT,
+    toolUseAgent: DEFAULT_TOOL_USE_AGENT,
+  });
 }
