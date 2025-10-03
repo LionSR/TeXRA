@@ -250,9 +250,9 @@ Even the best research assistants (human or AI) have off days. This guide helps 
    - Provide clear examples of desired outputs
    - Specify what should and shouldn't be changed
 
-2. **Enable reflection**:
-   - Turn on the "Reflect" option to allow the model to review its work
-   - This often improves output quality significantly
+2. **Leverage reflection rounds**:
+   - Use agents that define follow-up `userReflect` prompts or add them via a custom agent
+   - TeXRA automatically runs these additional rounds when they exist, often improving output quality
 
 3. **Use better models**:
    - Upgrade to more capable models for complex tasks

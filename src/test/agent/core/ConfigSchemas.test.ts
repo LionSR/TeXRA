@@ -13,7 +13,7 @@ describe('ToolConfigSchema', () => {
       printInputPrompt: true,
     } as Record<string, unknown>);
 
-    assert.strictEqual(parsed.reflect, true);
+    assert.strictEqual('reflect' in parsed, false);
     assert.strictEqual(parsed.autoExtractFigure, false);
     assert.strictEqual(
       (parsed as Record<string, unknown>).usePrefillFromInput,
@@ -36,7 +36,7 @@ describe('AgentConfigSchema', () => {
       },
     } as Record<string, unknown>);
 
-    assert.strictEqual(parsed.toolConfig.reflect, true);
+    assert.strictEqual('reflect' in parsed.toolConfig, false);
     assert.strictEqual(parsed.toolConfig.autoExtractFigure, false);
     assert.strictEqual('legacyFlag' in parsed, false);
     assert.strictEqual(parsed.inputFile, '');
