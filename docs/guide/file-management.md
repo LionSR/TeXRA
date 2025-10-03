@@ -136,7 +136,7 @@ For example:
 - Model: `sonnet45`
 - Output: `paper_polish_r0_sonnet45.tex`
 
-When reflection is enabled, you may also see:
+When the selected agent includes a reflection round, you may also see:
 
 - Round 1: `paper_polish_r1_sonnet45.tex`
 

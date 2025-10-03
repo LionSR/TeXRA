@@ -46,7 +46,7 @@ export interface ResponseCycleOptions<C = unknown> {
 
 /**
  * Executes a response cycle.
- * @returns Tuple of [round state, global state, tool state, completion flag]
+ * @returns Tuple of [round state, global state, tool state, endTurn, shouldStop]
  */
 export async function runResponseCycle<C = unknown>(
   options: ResponseCycleOptions<C>,
@@ -57,7 +57,7 @@ export async function runResponseCycle<C = unknown>(
   outputFile: string,
   roundGroupId?: string,
   executionId?: ExecutionId,
-): Promise<[AgentStateRound, AgentStateGlobal, ToolState, boolean]> {
+): Promise<[AgentStateRound, AgentStateGlobal, ToolState, boolean, boolean]> {
   const {
     modelHandler,
     agentSetting,
@@ -73,6 +73,7 @@ export async function runResponseCycle<C = unknown>(
   const taskGroupId = roundGroupId;
 
   let endTurn = false;
+  let conversationStopped = false;
   while (!endTurn) {
     if (await checkInterruption()) {
       break;
@@ -274,6 +275,7 @@ export async function runResponseCycle<C = unknown>(
     );
     endTurn = shouldEndTurn;
     if (shouldStop) {
+      conversationStopped = true;
       break;
     }
 
@@ -312,5 +314,5 @@ export async function runResponseCycle<C = unknown>(
     }
   }
 
-  return [stateRound, stateGlobal, toolState, endTurn];
+  return [stateRound, stateGlobal, toolState, endTurn, conversationStopped];
 }

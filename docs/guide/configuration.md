@@ -398,7 +398,8 @@ These settings, accessible directly in the main TeXRA webview, control how agent
 
 **Tool Configuration Dropdown** (<i class="codicon codicon-tools"></i> ○<i class="codicon codicon-chevron-down"></i> next to Instruction label):
 
-- **Reflect** (<i class="codicon codicon-refresh"></i>): Enables CoT agents to critique/improve their output (adds round 1). Increases cost/time, potentially quality.
+Reflection rounds are controlled by the agent definition (via `settings.rounds` and `prompts.userReflect`) and run automatically when present. The dropdown exposes additional per-run toggles:
+
 - **Attach TeX Count** (<i class="codicon codicon-symbol-numeric"></i>): Includes `texcount` output (word/header/math stats) in the agent's context. Requires `texcount` installed.
 - **Attach Diagnostics** (<i class="codicon codicon-tools"></i>): Appends LaTeX compilation logs and other diagnostics to the agent prompt.
 

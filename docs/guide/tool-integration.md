@@ -55,7 +55,7 @@ The outputs of these tools are often incorporated directly or indirectly into th
 
 You have several ways to control how TeXRA uses these tools:
 
-- **Tool Config Dropdown (UI):** Quickly enable/disable features like "Attach TeX Count" or "Reflect" for the current run. See [File Management](./file-management.md#tool-config-dropdown).
+- **Tool Config Dropdown (UI):** Quickly enable/disable features like "Attach TeX Count" for the current run. Agents with reflection prompts automatically run extra rounds without a toggle. See [File Management](./file-management.md#tool-config-dropdown).
 - **Auto Extract Dropdown (UI):** Enable/disable automatic extraction of Figures or TikZ Figures for the current run. See [File Management](./file-management.md#auto-extraction-features).
 
 For detailed configuration of specific tools (like `latexindent` or `tex-fmt`, TikZ processing paths, etc.), refer to the main [Configuration guide](./configuration.md).

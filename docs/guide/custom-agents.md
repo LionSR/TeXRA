@@ -91,7 +91,7 @@ prompts:
     # Often includes guidance for thinking (<scratchpad>) and output structure (<documentTag>).
     [Define the initial task prompt, potentially including scratchpad guidance]
 
-  # userReflect: | # Optional: Only needed if you plan to use reflect=true
+  # userReflect: | # Optional: Add when you want the agent to run an automatic reflection round
   #   The prompt for the AI's second round (Round 1) asking it to critique and improve its Round 0 output.
   #   [Define the reflection prompt]
 ```

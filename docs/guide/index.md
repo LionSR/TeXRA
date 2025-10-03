@@ -60,7 +60,7 @@ graph LR
     B --> C[Plan Changes];
     C --> D["Execute Plan (LLM Call - Round 0)"];
     D --> E["Process Output (Save *_r0_* File)"];
-    E --> F{"Reflect on Output? (Optional)"};
+    E --> F{"Agent Defines Reflection Round?"};
     F -- Yes --> G[Refine Plan];
     G --> H["Execute Refined Plan (LLM Call - Round 1)"];
     H --> I["Process Output (Save *_r1_* File)"];
@@ -68,7 +68,7 @@ graph LR
     F -- No --> J[End];
 ```
 
-This process leverages the strengths of language models while addressing their limitations through structured workflows, optional self-reflection, and specialized tools.
+This process leverages the strengths of language models while addressing their limitations through structured workflows, agent-configured self-reflection, and specialized tools.
 
 ## Who Should Use TeXRA?
 

@@ -72,9 +72,9 @@ Internally, TeXRA now assembles these prompt segments through the `PromptBuilder
 
 Agents that inherit from `BaseReflectionAgent` can override the protected `getPromptBuilder()` hook to supply a subclassed builder. This makes it easy to add new phases (e.g., a planning stage) or to customize how prefills are computed without rewriting the round-processing logic. When you introduce a specialised agent, create a derived `PromptBuilder` that extends the base implementation, override or add the necessary methods, and return it from your agent's `getPromptBuilder()` override so the lifecycle automatically uses your custom prompts.
 
-**Optional Reflection (Round 1):**
+**Automatic Reflection (Round 1):**
 
-If you enable the "Reflect" option in the Tool Config section of the UI, TeXRA performs an additional step after Round 0 finishes successfully:
+When an agent defines `userReflect` templates or configures multiple rounds, TeXRA automatically performs an additional step after Round 0 finishes successfully:
 
 1.  **Reflection Prompt:** It uses the agent's `userReflect` prompt template to ask the LLM to critique and improve its own Round 0 output (which is included in the conversation history).
 2.  **LLM Interaction (Round 1):** The LLM generates a revised response.
@@ -88,7 +88,7 @@ Occasionally, LLMs might generate slightly malformed XML (e.g., missing closing 
 
 ### Reflection
 
-After generating an initial output (Round 0), TeXRA agents with reflection enabled evaluate and refine their work (Round 1):
+After generating an initial output (Round 0), TeXRA agents that define reflection prompts evaluate and refine their work (Round 1):
 
 <div class="reflection-pdf-viewer">
   <div class="pdf-tabs">

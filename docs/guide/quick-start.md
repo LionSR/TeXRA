@@ -94,10 +94,10 @@ Be specific about what you want! Vague instructions are like asking a genie for 
 ### Step 5: Configure Tools
 
 1. Click on the "Tool Config" dropdown
-2. Enable "Reflect" to allow the AI to review and improve its own work
-3. (Optional) Enable other tools as needed:
-   - "Attach TeX Count" to include document statistics
-   - "Attach Diagnostics" to include LaTeX compilation logs and other troubleshooting details
+2. Review the available options:
+   - Reflection runs automatically when the selected agent defines follow-up prompts, so no toggle is required
+   - "Attach TeX Count" includes document statistics in the prompt
+   - "Attach Diagnostics" bundles LaTeX compilation logs and other troubleshooting details when available
 
 ::: tip Save Prompts for Later
 Enable the `texra.debug.saveInputPrompt` setting if you want TeXRA to store the generated prompt alongside other debug artifacts.

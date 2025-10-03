@@ -47,6 +47,11 @@ export interface RoundOutputOptions {
   processGroupId?: string;
 }
 
+interface RoundProgress {
+  endTurn: boolean;
+  shouldStop: boolean;
+}
+
 /**
  * Abstract base class for agents that support multi-turn reflection and refinement.
  * Provides core functionality for processing inputs, managing state, and handling outputs
@@ -250,7 +255,9 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     prefill: string,
     outputPath: string,
     roundGroupId: string,
-  ): Promise<[AgentStateRound, AgentStateGlobal, any[], boolean, ToolState]> {
+  ): Promise<
+    [AgentStateRound, AgentStateGlobal, any[], RoundProgress, ToolState]
+  > {
     const [endTurn, updatedMessages] =
       await this.modelHandler.initializeOutputAndPrefill(
         this.agentConfig,
@@ -283,6 +290,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
         updatedStateGlobal,
         updatedToolState,
         newEndTurn,
+        shouldStop,
       ] = await runResponseCycle(
         options,
         updatedMessages,
@@ -316,7 +324,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
         updatedStateRound,
         updatedStateGlobal,
         updatedMessages,
-        newEndTurn,
+        { endTurn: newEndTurn, shouldStop },
         updatedToolState,
       ];
     }
@@ -327,7 +335,13 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       processGroupId: roundGroupId,
     });
 
-    return [stateRound, stateGlobal, updatedMessages, endTurn, toolState];
+    return [
+      stateRound,
+      stateGlobal,
+      updatedMessages,
+      { endTurn: true, shouldStop: false },
+      toolState,
+    ];
   }
 
   /**
@@ -335,7 +349,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
    * @returns Tuple of [round state, global state, messages, completion flag, tool state]
    */
   protected async process(): Promise<
-    [AgentStateRound, AgentStateGlobal, any[], boolean, ToolState]
+    [AgentStateRound, AgentStateGlobal, any[], RoundProgress, ToolState]
   > {
     // Initialize input files list
     const inputFiles = [
@@ -442,7 +456,9 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     messages: any[],
     toolState: ToolState,
     currRound: number = 1,
-  ): Promise<[AgentStateRound, AgentStateGlobal, any[], boolean, ToolState]> {
+  ): Promise<
+    [AgentStateRound, AgentStateGlobal, any[], RoundProgress, ToolState]
+  > {
     this.logger.debug(`Processing round ${currRound}`);
 
     return this.withRoundGroup(`r${currRound}`, async (roundGroupId) => {
@@ -479,7 +495,13 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
 
       // Only proceed if there's actual content
       if (!userMessage.trim()) {
-        return [stateRound, stateGlobal, messages, true, toolState];
+        return [
+          stateRound,
+          stateGlobal,
+          messages,
+          { endTurn: true, shouldStop: true },
+          toolState,
+        ];
       }
 
       const roundMessages = await this.modelHandler.createRoundMessages(
@@ -510,7 +532,9 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     stateGlobal: AgentStateGlobal,
     messages: any[],
     toolState: ToolState,
-  ): Promise<[AgentStateRound, AgentStateGlobal, any[], boolean, ToolState]> {
+  ): Promise<
+    [AgentStateRound, AgentStateGlobal, any[], RoundProgress, ToolState]
+  > {
     if (currRound === 0) {
       return await this.process();
     }
@@ -530,28 +554,36 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
 
       let stateGlobal = new AgentStateGlobal();
       let messages: any[] = [];
-      let continueRounds = true;
+      let roundProgress: RoundProgress = {
+        endTurn: true,
+        shouldStop: false,
+      };
 
       const totalRounds = this.getNumberOfRounds();
       for (let currRound = 0; currRound < totalRounds; currRound++) {
         if (
           currRound > 0 &&
-          (!this.agentConfig.toolConfig.reflect ||
-            !continueRounds ||
-            this.isInterrupted)
+          (this.isInterrupted ||
+            roundProgress.shouldStop ||
+            !roundProgress.endTurn)
         ) {
           break;
         }
 
         this.userVars.CURRENT_ROUND = currRound;
         const toolState = new ToolState();
-        const [stateRound, updatedGlobal, newMessages, endTurn, usedToolState] =
-          await this.runRound(currRound, stateGlobal, messages, toolState);
+        const [
+          stateRound,
+          updatedGlobal,
+          newMessages,
+          nextProgress,
+          usedToolState,
+        ] = await this.runRound(currRound, stateGlobal, messages, toolState);
         this.roundStates.push(stateRound);
         this.toolStates.push(usedToolState);
         stateGlobal = updatedGlobal;
         messages = newMessages;
-        continueRounds = endTurn;
+        roundProgress = nextProgress;
         stateGlobal.incrementRounds();
       }
 

@@ -116,7 +116,7 @@ Refine your documents through multiple passes:
 1. Start with broader instructions
 2. Review the results and identify specific areas for improvement
 3. Use more targeted instructions in subsequent passes
-4. Enable the "Reflect" option for critical tasks
+4. Choose agents with built-in reflection prompts for critical tasks
 
 ### Collaborative Writing
 
