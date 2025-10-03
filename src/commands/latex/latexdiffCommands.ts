@@ -8,6 +8,7 @@ import * as vscode from 'vscode';
 import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
+import { getConfig } from '@utils/config';
 import { WorkspaceFS } from '@utils/files';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 
@@ -271,6 +272,15 @@ async function handleRunLatexdiff(config: any) {
       return;
     }
 
+    const generateBetweenRoundDiffs = getConfig<boolean>(
+      'latexdiff.generateBetweenRoundDiffs',
+      true,
+    );
+    logger.debug(
+      CHANNEL,
+      `Between-round diffs enabled: ${generateBetweenRoundDiffs}`,
+    );
+
     // Get the agent name chunk for filename matching
     const agentNameChunk = getAgentFirstNameChunk(agent);
     logger.debug(CHANNEL, `Using agent name chunk: ${agentNameChunk}`);
@@ -375,13 +385,13 @@ async function handleRunLatexdiff(config: any) {
         let completedOperations = 0;
 
         // Count operations for better progress reporting
-        for (const [input, roundOutputs] of inputToOutputsMap.entries()) {
+        for (const [, roundOutputs] of inputToOutputsMap.entries()) {
           // 1. Count round-based diffs (original vs output)
           totalOperations += roundOutputs.size;
 
           // 2. Count between-rounds diffs
           const rounds = Array.from(roundOutputs.keys()).sort((a, b) => a - b);
-          if (rounds.length > 1) {
+          if (generateBetweenRoundDiffs && rounds.length > 1) {
             totalOperations += rounds.length - 1;
           }
         }
@@ -445,7 +455,7 @@ async function handleRunLatexdiff(config: any) {
           }
 
           // 2. Perform between-rounds diffs if there are multiple rounds
-          if (rounds.length > 1) {
+          if (generateBetweenRoundDiffs && rounds.length > 1) {
             for (let i = 0; i < rounds.length - 1; i++) {
               const currentRound = rounds[i];
               const nextRound = rounds[i + 1];
