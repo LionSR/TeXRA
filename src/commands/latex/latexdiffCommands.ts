@@ -274,7 +274,7 @@ async function handleRunLatexdiff(config: any) {
 
     const generateBetweenRoundDiffs = getConfig<boolean>(
       'latexdiff.generateBetweenRoundDiffs',
-      true,
+      false,
     );
     logger.debug(
       CHANNEL,
