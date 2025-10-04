@@ -84,20 +84,33 @@ export class FileSelect {
 
       const manualSelection = this._manualCommitSelection;
       if (manualSelection) {
-        const hasManualCommit = message.commits.some((commit) =>
-          commit.startsWith(`${manualSelection.commitHash}:`),
+        const options = Array.from(commitDiv.options);
+        const existingOption = options.find((option) =>
+          this._areEquivalentCommitHashes(
+            option.value,
+            manualSelection.commitHash,
+          ),
         );
-        if (!hasManualCommit) {
+
+        if (!existingOption) {
           this.addOption(
             commitDiv,
             manualSelection.commitHash,
             manualSelection.commitLabel,
           );
+          safeSetElementValue(
+            ELEMENT_IDS.COMMIT_SELECT,
+            manualSelection.commitHash,
+          );
+        } else {
+          if (
+            manualSelection.commitLabel &&
+            existingOption.text !== manualSelection.commitLabel
+          ) {
+            existingOption.text = manualSelection.commitLabel;
+          }
+          this._manualCommitSelection = null;
         }
-        safeSetElementValue(
-          ELEMENT_IDS.COMMIT_SELECT,
-          manualSelection.commitHash,
-        );
       }
       setElementsDisabled([commitDiv, ...commitButtons], false);
     }
@@ -147,6 +160,23 @@ export class FileSelect {
     };
 
     commitDiv.dispatchEvent(new Event('change'));
+  }
+
+  _areEquivalentCommitHashes(hashA, hashB) {
+    if (!hashA || !hashB) {
+      return false;
+    }
+
+    const normalizedA = hashA.trim();
+    const normalizedB = hashB.trim();
+
+    if (normalizedA === normalizedB) {
+      return true;
+    }
+
+    return (
+      normalizedA.startsWith(normalizedB) || normalizedB.startsWith(normalizedA)
+    );
   }
 }
 
