@@ -295,9 +295,22 @@ export class FileManager {
           );
         }
       } else {
+        let filePathToSelect = currentOpenFile;
+        if (fileType === 'base') {
+          const derivedBaseFile =
+            this._deriveBaseFileFromLatexDiff(currentOpenFile);
+          if (derivedBaseFile) {
+            await this.handleRequestBaseFile(
+              { preserveBaseFile: true },
+              webviewView,
+            );
+            filePathToSelect = derivedBaseFile;
+          }
+        }
+
         webviewView.webview.postMessage({
           command: MAIN_VIEW_COMMANDS.SET_CURRENT_FILE,
-          filePath: currentOpenFile,
+          filePath: filePathToSelect,
           fileType,
         });
         commitCheckFile = currentOpenFile;
@@ -368,6 +381,17 @@ export class FileManager {
 
     logger.debug(CHANNEL, `Updating ${fileType} with ${files.length} files`);
     webviewView.webview.postMessage({ command: `set${fileType}`, files });
+  }
+
+  private _deriveBaseFileFromLatexDiff(filePath: string): string | null {
+    const { dir, name, ext } = path.parse(filePath);
+    const baseNameMatch = name.match(/^(.*)-diff[0-9a-fA-F]{4,40}$/);
+    if (!baseNameMatch || !baseNameMatch[1]) {
+      return null;
+    }
+
+    const baseName = baseNameMatch[1];
+    return path.join(dir, `${baseName}${ext}`);
   }
 
   async selectOutputFiles(currentInputFile: string): Promise<string[] | null> {
