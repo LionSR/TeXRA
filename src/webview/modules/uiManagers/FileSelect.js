@@ -17,6 +17,7 @@ import { vscode } from '@common/webviewContext.js';
 export class FileSelect {
   constructor() {
     this._agentDefaults = [];
+    this._manualCommitSelection = null;
   }
 
   setAgentDefaultOutputFiles(files) {
@@ -73,12 +74,47 @@ export class FileSelect {
     if (message.isGitRepo === false) {
       this.addOption(commitDiv, '', 'Not a Git repository');
       setElementsDisabled([commitDiv, ...commitButtons], true);
+      this._manualCommitSelection = null;
     } else {
       this.addOption(commitDiv, 'HEAD', 'HEAD');
       message.commits.forEach((commit) => {
         const [commitHash] = commit.split(': ');
         this.addOption(commitDiv, commitHash, commit);
       });
+
+      const manualSelection = this._manualCommitSelection;
+      if (manualSelection) {
+        const options = Array.from(commitDiv.options);
+        const existingOption = options.find((option) =>
+          this._areEquivalentCommitHashes(
+            option.value,
+            manualSelection.commitHash,
+          ),
+        );
+
+        if (!existingOption) {
+          this.addOption(
+            commitDiv,
+            manualSelection.commitHash,
+            manualSelection.commitLabel,
+          );
+          safeSetElementValue(
+            ELEMENT_IDS.COMMIT_SELECT,
+            manualSelection.commitHash,
+          );
+        } else {
+          if (
+            manualSelection.commitLabel &&
+            existingOption.text !== manualSelection.commitLabel
+          ) {
+            existingOption.text = manualSelection.commitLabel;
+          }
+          safeSetElementValue(
+            ELEMENT_IDS.COMMIT_SELECT,
+            manualSelection.commitHash,
+          );
+        }
+      }
       setElementsDisabled([commitDiv, ...commitButtons], false);
     }
   }
@@ -101,6 +137,49 @@ export class FileSelect {
         text: `The current file is not in the ${fileType} file list: ${filePath}`,
       });
     }
+  }
+
+  handleSetSelectedCommit({ commitHash, commitLabel }) {
+    const commitDiv = document.getElementById(ELEMENT_IDS.COMMIT_SELECT);
+    if (!commitDiv || !commitHash) {
+      return;
+    }
+
+    const options = Array.from(commitDiv.options);
+    const existingOption = options.find((option) =>
+      this._areEquivalentCommitHashes(option.value, commitHash),
+    );
+
+    if (!existingOption) {
+      this.addOption(commitDiv, commitHash, commitLabel || commitHash);
+    } else if (commitLabel) {
+      existingOption.text = commitLabel;
+    }
+
+    safeSetElementValue(ELEMENT_IDS.COMMIT_SELECT, commitHash);
+    this._manualCommitSelection = {
+      commitHash,
+      commitLabel: commitLabel || commitHash,
+    };
+
+    commitDiv.dispatchEvent(new Event('change'));
+  }
+
+  _areEquivalentCommitHashes(hashA, hashB) {
+    if (!hashA || !hashB) {
+      return false;
+    }
+
+    const normalizedA = hashA.trim();
+    const normalizedB = hashB.trim();
+
+    if (normalizedA === normalizedB) {
+      return true;
+    }
+
+    return (
+      normalizedA.startsWith(normalizedB) || normalizedB.startsWith(normalizedA)
+    );
   }
 }
 
