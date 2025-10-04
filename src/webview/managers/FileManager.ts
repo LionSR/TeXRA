@@ -27,6 +27,8 @@ import { WorkspaceFS } from '@utils/files';
 const CHANNEL = 'FileManager';
 logger.initialize(CHANNEL);
 
+const LATEX_DIFF_BASENAME_PATTERN = /^(.+?)-diff([0-9a-fA-F]{4,40})$/;
+
 type FileUpdateOptions = {
   notifyWhenEmpty?: boolean;
   additionalPayload?: Record<string, unknown>;
@@ -265,6 +267,7 @@ export class FileManager {
       'texra.getCurrentFile',
     );
     if (currentOpenFile) {
+      let commitCheckFile: string | null = null;
       if (fileType === 'edited') {
         const baseFile = message.baseFile;
         if (baseFile) {
@@ -282,6 +285,7 @@ export class FileManager {
               filePath: currentOpenFile,
               fileType,
             });
+            commitCheckFile = currentOpenFile;
           } else {
             vscode.window.showInformationMessage(
               'The current file is not a valid edited version of the base file.',
@@ -293,15 +297,76 @@ export class FileManager {
           );
         }
       } else {
+        let filePathToSelect = currentOpenFile;
+        if (fileType === 'base') {
+          const derivedBaseFile =
+            this._deriveBaseFileFromLatexDiff(currentOpenFile);
+          if (derivedBaseFile) {
+            const baseExists = await WorkspaceFS.exists(derivedBaseFile);
+            if (baseExists) {
+              await this.handleRequestBaseFile(
+                { preserveBaseFile: true },
+                webviewView,
+              );
+              filePathToSelect = derivedBaseFile;
+            } else {
+              logger.info(
+                CHANNEL,
+                `Derived base file ${derivedBaseFile} from ${currentOpenFile} does not exist on disk`,
+              );
+              vscode.window.showInformationMessage(
+                `The base file ${derivedBaseFile} could not be found. Keeping ${currentOpenFile} selected.`,
+              );
+            }
+          }
+        }
+
         webviewView.webview.postMessage({
           command: MAIN_VIEW_COMMANDS.SET_CURRENT_FILE,
-          filePath: currentOpenFile,
+          filePath: filePathToSelect,
           fileType,
         });
+        commitCheckFile = currentOpenFile;
+      }
+      if (commitCheckFile) {
+        await this._maybeSelectCommitFromDiffFile(commitCheckFile, webviewView);
       }
     } else {
       vscode.window.showInformationMessage(
         'No file is currently open or the file is not part of the workspace.',
+      );
+    }
+  }
+
+  private async _maybeSelectCommitFromDiffFile(
+    filePath: string,
+    webviewView: vscode.WebviewView,
+  ): Promise<void> {
+    const fileName = path.basename(filePath);
+    const latexDiffMetadata = this._parseLatexDiffMetadata(filePath);
+    if (!latexDiffMetadata) {
+      return;
+    }
+
+    const { commitHash } = latexDiffMetadata;
+    const commitLabel = await vscode.commands.executeCommand<string | null>(
+      'texra.findCommitInHistory',
+      commitHash,
+    );
+
+    if (commitLabel) {
+      webviewView.webview.postMessage({
+        command: MAIN_VIEW_COMMANDS.SET_SELECTED_COMMIT,
+        commitHash,
+        commitLabel,
+      });
+    } else {
+      logger.info(
+        CHANNEL,
+        `Commit ${commitHash} from ${fileName} was not found in repository history`,
+      );
+      vscode.window.showInformationMessage(
+        `The commit ${commitHash} referenced by ${fileName} was not found in the repository history.`,
       );
     }
   }
@@ -329,6 +394,33 @@ export class FileManager {
 
     logger.debug(CHANNEL, `Updating ${fileType} with ${files.length} files`);
     webviewView.webview.postMessage({ command: `set${fileType}`, files });
+  }
+
+  private _deriveBaseFileFromLatexDiff(filePath: string): string | null {
+    const metadata = this._parseLatexDiffMetadata(filePath);
+    if (!metadata) {
+      return null;
+    }
+
+    const { dir, baseName, ext } = metadata;
+    return path.join(dir, `${baseName}${ext}`);
+  }
+
+  private _parseLatexDiffMetadata(
+    filePath: string,
+  ): { dir: string; baseName: string; ext: string; commitHash: string } | null {
+    const { dir, name, ext } = path.parse(filePath);
+    const match = name.match(LATEX_DIFF_BASENAME_PATTERN);
+    if (!match) {
+      return null;
+    }
+
+    const [, baseName, commitHash] = match;
+    if (!baseName || !commitHash) {
+      return null;
+    }
+
+    return { dir, baseName, ext, commitHash };
   }
 
   async selectOutputFiles(currentInputFile: string): Promise<string[] | null> {
