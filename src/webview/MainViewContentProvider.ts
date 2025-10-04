@@ -101,21 +101,25 @@ export class MainViewContentProvider extends BaseViewContentProvider {
       builtIn: builtInDir,
       builtInToolUse: toolUseDir,
     };
-    const workflowAgents = Array.from(
-      new Set([DEFAULT_WORKFLOW_AGENT, ...agents]),
-    );
+    const hasConfiguredWorkflowAgents = agents.length > 0;
+    const workflowAgents = hasConfiguredWorkflowAgents
+      ? Array.from(new Set(agents))
+      : [DEFAULT_WORKFLOW_AGENT];
     const toolUseAgents = Array.from(
       new Set([DEFAULT_TOOL_USE_AGENT, ...configuredToolUseAgents]),
     );
     const allAgents = Array.from(
       new Set([...workflowAgents, ...toolUseAgents]),
     );
+    const defaultWorkflowAgent = agents.includes(DEFAULT_WORKFLOW_AGENT)
+      ? DEFAULT_WORKFLOW_AGENT
+      : workflowAgents[0] ?? DEFAULT_WORKFLOW_AGENT;
     const optionBuckets: AgentOptionsPayload = buildAgentOptionsPayload(
       allAgents,
       agentDirectories,
       toolUseAgents,
       {
-        workflowAgent: DEFAULT_WORKFLOW_AGENT,
+        workflowAgent: defaultWorkflowAgent,
         toolUseAgent: DEFAULT_TOOL_USE_AGENT,
       },
     );

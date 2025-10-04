@@ -20,6 +20,7 @@ export type { AgentOptionsPayload };
 export interface AgentNameBuckets {
   allAgents: string[];
   toolUseAgents: string[];
+  defaultWorkflowAgent: string;
 }
 
 export async function getAllAgents(
@@ -28,15 +29,22 @@ export async function getAllAgents(
   const configuredWorkflowAgents = getConfig<string[]>('agents', []);
   const configuredToolUseAgents = getConfig<string[]>('toolUseAgents', []);
 
-  const workflowAgents = Array.from(
-    new Set([DEFAULT_WORKFLOW_AGENT, ...configuredWorkflowAgents]),
-  );
+  const hasConfiguredWorkflowAgents = configuredWorkflowAgents.length > 0;
+  const workflowAgents = hasConfiguredWorkflowAgents
+    ? Array.from(new Set(configuredWorkflowAgents))
+    : [DEFAULT_WORKFLOW_AGENT];
   const toolUseAgents = Array.from(
     new Set([DEFAULT_TOOL_USE_AGENT, ...configuredToolUseAgents]),
   );
   const allAgents = Array.from(new Set([...workflowAgents, ...toolUseAgents]));
 
-  return { allAgents, toolUseAgents };
+  const defaultWorkflowAgent = configuredWorkflowAgents.includes(
+    DEFAULT_WORKFLOW_AGENT,
+  )
+    ? DEFAULT_WORKFLOW_AGENT
+    : workflowAgents[0] ?? DEFAULT_WORKFLOW_AGENT;
+
+  return { allAgents, toolUseAgents, defaultWorkflowAgent };
 }
 
 /**
@@ -61,11 +69,12 @@ async function getAgentDirectories(
 export async function computeAgentOptions(
   context: vscode.ExtensionContext,
 ): Promise<AgentOptionsPayload> {
-  const { allAgents, toolUseAgents } = await getAllAgents(context);
+  const { allAgents, toolUseAgents, defaultWorkflowAgent } =
+    await getAllAgents(context);
   const dirs = await getAgentDirectories(context);
 
   return buildAgentOptionsPayload(allAgents, dirs, toolUseAgents, {
-    workflowAgent: DEFAULT_WORKFLOW_AGENT,
+    workflowAgent: defaultWorkflowAgent,
     toolUseAgent: DEFAULT_TOOL_USE_AGENT,
   });
 }
