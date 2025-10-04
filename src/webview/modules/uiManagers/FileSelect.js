@@ -109,7 +109,10 @@ export class FileSelect {
           ) {
             existingOption.text = manualSelection.commitLabel;
           }
-          this._manualCommitSelection = null;
+          safeSetElementValue(
+            ELEMENT_IDS.COMMIT_SELECT,
+            manualSelection.commitHash,
+          );
         }
       }
       setElementsDisabled([commitDiv, ...commitButtons], false);
@@ -143,8 +146,8 @@ export class FileSelect {
     }
 
     const options = Array.from(commitDiv.options);
-    const existingOption = options.find(
-      (option) => option.value === commitHash,
+    const existingOption = options.find((option) =>
+      this._areEquivalentCommitHashes(option.value, commitHash),
     );
 
     if (!existingOption) {
