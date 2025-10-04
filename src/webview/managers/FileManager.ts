@@ -265,6 +265,7 @@ export class FileManager {
       'texra.getCurrentFile',
     );
     if (currentOpenFile) {
+      let commitCheckFile: string | null = null;
       if (fileType === 'edited') {
         const baseFile = message.baseFile;
         if (baseFile) {
@@ -282,6 +283,7 @@ export class FileManager {
               filePath: currentOpenFile,
               fileType,
             });
+            commitCheckFile = currentOpenFile;
           } else {
             vscode.window.showInformationMessage(
               'The current file is not a valid edited version of the base file.',
@@ -298,10 +300,47 @@ export class FileManager {
           filePath: currentOpenFile,
           fileType,
         });
+        commitCheckFile = currentOpenFile;
+      }
+      if (commitCheckFile) {
+        await this._maybeSelectCommitFromDiffFile(commitCheckFile, webviewView);
       }
     } else {
       vscode.window.showInformationMessage(
         'No file is currently open or the file is not part of the workspace.',
+      );
+    }
+  }
+
+  private async _maybeSelectCommitFromDiffFile(
+    filePath: string,
+    webviewView: vscode.WebviewView,
+  ): Promise<void> {
+    const fileName = path.basename(filePath);
+    const commitMatch = fileName.match(/-diff([0-9a-fA-F]{4,40})/);
+    if (!commitMatch) {
+      return;
+    }
+
+    const commitHash = commitMatch[1];
+    const commitLabel = await vscode.commands.executeCommand<string | null>(
+      'texra.findCommitInHistory',
+      commitHash,
+    );
+
+    if (commitLabel) {
+      webviewView.webview.postMessage({
+        command: MAIN_VIEW_COMMANDS.SET_SELECTED_COMMIT,
+        commitHash,
+        commitLabel,
+      });
+    } else {
+      logger.info(
+        CHANNEL,
+        `Commit ${commitHash} from ${fileName} was not found in repository history`,
+      );
+      vscode.window.showInformationMessage(
+        `The commit ${commitHash} referenced by ${fileName} was not found in the repository history.`,
       );
     }
   }
