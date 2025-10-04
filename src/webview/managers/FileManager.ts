@@ -27,6 +27,8 @@ import { WorkspaceFS } from '@utils/files';
 const CHANNEL = 'FileManager';
 logger.initialize(CHANNEL);
 
+const LATEX_DIFF_BASENAME_PATTERN = /^(.+?)-diff([0-9a-fA-F]{4,40})$/;
+
 type FileUpdateOptions = {
   notifyWhenEmpty?: boolean;
   additionalPayload?: Record<string, unknown>;
@@ -341,12 +343,12 @@ export class FileManager {
     webviewView: vscode.WebviewView,
   ): Promise<void> {
     const fileName = path.basename(filePath);
-    const commitMatch = fileName.match(/-diff([0-9a-fA-F]{4,40})/);
-    if (!commitMatch) {
+    const latexDiffMetadata = this._parseLatexDiffMetadata(filePath);
+    if (!latexDiffMetadata) {
       return;
     }
 
-    const commitHash = commitMatch[1];
+    const { commitHash } = latexDiffMetadata;
     const commitLabel = await vscode.commands.executeCommand<string | null>(
       'texra.findCommitInHistory',
       commitHash,
@@ -395,14 +397,30 @@ export class FileManager {
   }
 
   private _deriveBaseFileFromLatexDiff(filePath: string): string | null {
-    const { dir, name, ext } = path.parse(filePath);
-    const baseNameMatch = name.match(/^(.*)-diff[0-9a-fA-F]{4,40}$/);
-    if (!baseNameMatch || !baseNameMatch[1]) {
+    const metadata = this._parseLatexDiffMetadata(filePath);
+    if (!metadata) {
       return null;
     }
 
-    const baseName = baseNameMatch[1];
+    const { dir, baseName, ext } = metadata;
     return path.join(dir, `${baseName}${ext}`);
+  }
+
+  private _parseLatexDiffMetadata(
+    filePath: string,
+  ): { dir: string; baseName: string; ext: string; commitHash: string } | null {
+    const { dir, name, ext } = path.parse(filePath);
+    const match = name.match(LATEX_DIFF_BASENAME_PATTERN);
+    if (!match) {
+      return null;
+    }
+
+    const [, baseName, commitHash] = match;
+    if (!baseName || !commitHash) {
+      return null;
+    }
+
+    return { dir, baseName, ext, commitHash };
   }
 
   async selectOutputFiles(currentInputFile: string): Promise<string[] | null> {

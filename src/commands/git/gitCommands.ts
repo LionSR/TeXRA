@@ -8,6 +8,8 @@ import * as vscode from 'vscode';
 import { getConfig } from '@utils/config';
 import { WorkspaceFS } from '@utils/files';
 
+const COMMIT_LABEL_FORMAT = '%h: %s (%cr)';
+
 export function registerGitCommands(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand('texra.isGitRepository', isGitRepository),
@@ -54,7 +56,12 @@ async function getRecentCommits(): Promise<string[] | null> {
 
     const result = execaSync(
       'git',
-      ['log', '-n', numberOfCommits.toString(), '--pretty=format:%h: %s (%cr)'],
+      [
+        'log',
+        '-n',
+        numberOfCommits.toString(),
+        `--pretty=format:${COMMIT_LABEL_FORMAT}`,
+      ],
       { cwd: workspacePath, reject: false },
     );
     if (result.exitCode !== 0) {
@@ -95,7 +102,7 @@ async function findCommitInHistory(commitHash: string): Promise<string | null> {
 
   const labelResult = execaSync(
     'git',
-    ['show', '-s', '--format=%h: %s (%cr)', sanitizedCommit],
+    ['show', '-s', `--format=${COMMIT_LABEL_FORMAT}`, sanitizedCommit],
     { cwd: workspacePath, reject: false },
   );
 
