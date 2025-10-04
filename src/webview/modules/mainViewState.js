@@ -24,6 +24,22 @@ import { capitalize } from '@common/stringUtils.js';
 import { CHEVRON_DOWN_CLASS } from '@common/iconConstants.js';
 import { WebviewStateManager } from '@common/webviewState.js';
 
+const DEFAULT_WORKFLOW_AGENT = 'correct';
+const DEFAULT_TOOL_USE_AGENT = 'chat';
+
+function getSelectDefaultValue(selectId, fallback) {
+  const element = safeGetElementById(selectId);
+  if (element instanceof HTMLSelectElement) {
+    if (element.value) {
+      return element.value;
+    }
+    if (element.options.length > 0) {
+      return element.options[0].value;
+    }
+  }
+  return fallback;
+}
+
 /**
  * Manages persistent state for the main webview.
  */
@@ -87,8 +103,14 @@ export class MainViewState {
     if (previousState) {
       const defaults = {
         sessionType: SESSION_TYPES.WORKFLOW,
-        workflowAgent: 'correct',
-        toolUseAgent: 'chat',
+        workflowAgent: getSelectDefaultValue(
+          AGENT_SELECT_IDS[SESSION_TYPES.WORKFLOW],
+          DEFAULT_WORKFLOW_AGENT,
+        ),
+        toolUseAgent: getSelectDefaultValue(
+          AGENT_SELECT_IDS[SESSION_TYPES.TOOL_USE],
+          DEFAULT_TOOL_USE_AGENT,
+        ),
         model: 'gemini25p',
         commit: 'HEAD',
       };
