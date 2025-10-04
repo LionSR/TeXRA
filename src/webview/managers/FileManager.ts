@@ -300,11 +300,22 @@ export class FileManager {
           const derivedBaseFile =
             this._deriveBaseFileFromLatexDiff(currentOpenFile);
           if (derivedBaseFile) {
-            await this.handleRequestBaseFile(
-              { preserveBaseFile: true },
-              webviewView,
-            );
-            filePathToSelect = derivedBaseFile;
+            const baseExists = await WorkspaceFS.exists(derivedBaseFile);
+            if (baseExists) {
+              await this.handleRequestBaseFile(
+                { preserveBaseFile: true },
+                webviewView,
+              );
+              filePathToSelect = derivedBaseFile;
+            } else {
+              logger.info(
+                CHANNEL,
+                `Derived base file ${derivedBaseFile} from ${currentOpenFile} does not exist on disk`,
+              );
+              vscode.window.showInformationMessage(
+                `The base file ${derivedBaseFile} could not be found. Keeping ${currentOpenFile} selected.`,
+              );
+            }
           }
         }
 
