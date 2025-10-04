@@ -42,7 +42,7 @@ export async function getAllAgents(
     DEFAULT_WORKFLOW_AGENT,
   )
     ? DEFAULT_WORKFLOW_AGENT
-    : workflowAgents[0] ?? DEFAULT_WORKFLOW_AGENT;
+    : (workflowAgents[0] ?? DEFAULT_WORKFLOW_AGENT);
 
   return { allAgents, toolUseAgents, defaultWorkflowAgent };
 }
