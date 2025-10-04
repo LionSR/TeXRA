@@ -84,7 +84,7 @@ export class MainViewContentProvider extends BaseViewContentProvider {
   protected getTemplateVariables(): Record<string, any> {
     // Note: This uses synchronous approach for template generation
     // Agent options with metadata are computed asynchronously via computeAgentOptions
-    const agents = getConfig<string[]>('agents', []);
+    const configuredWorkflowAgents = getConfig<string[]>('agents', []);
     const configuredToolUseAgents = getConfig<string[]>('toolUseAgents', []);
     const toolUseDir = GlobalStorageFS.fullPath('tool_use_agents');
     const builtInDir = GlobalStorageFS.fullPath('agents');
@@ -101,9 +101,9 @@ export class MainViewContentProvider extends BaseViewContentProvider {
       builtIn: builtInDir,
       builtInToolUse: toolUseDir,
     };
-    const hasConfiguredWorkflowAgents = agents.length > 0;
+    const hasConfiguredWorkflowAgents = configuredWorkflowAgents.length > 0;
     const workflowAgents = hasConfiguredWorkflowAgents
-      ? Array.from(new Set(agents))
+      ? Array.from(new Set(configuredWorkflowAgents))
       : [DEFAULT_WORKFLOW_AGENT];
     const toolUseAgents = Array.from(
       new Set([DEFAULT_TOOL_USE_AGENT, ...configuredToolUseAgents]),
@@ -111,9 +111,11 @@ export class MainViewContentProvider extends BaseViewContentProvider {
     const allAgents = Array.from(
       new Set([...workflowAgents, ...toolUseAgents]),
     );
-    const defaultWorkflowAgent = agents.includes(DEFAULT_WORKFLOW_AGENT)
+    const defaultWorkflowAgent = configuredWorkflowAgents.includes(
+      DEFAULT_WORKFLOW_AGENT,
+    )
       ? DEFAULT_WORKFLOW_AGENT
-      : workflowAgents[0] ?? DEFAULT_WORKFLOW_AGENT;
+      : (workflowAgents[0] ?? DEFAULT_WORKFLOW_AGENT);
     const optionBuckets: AgentOptionsPayload = buildAgentOptionsPayload(
       allAgents,
       agentDirectories,
