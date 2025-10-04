@@ -12,6 +12,10 @@ export function registerGitCommands(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand('texra.isGitRepository', isGitRepository),
     vscode.commands.registerCommand('texra.getRecentCommits', getRecentCommits),
+    vscode.commands.registerCommand(
+      'texra.findCommitInHistory',
+      findCommitInHistory,
+    ),
   );
 }
 
@@ -64,7 +68,47 @@ async function getRecentCommits(): Promise<string[] | null> {
   return [];
 }
 
+async function findCommitInHistory(commitHash: string): Promise<string | null> {
+  if (typeof commitHash !== 'string') {
+    return null;
+  }
+
+  const sanitizedCommit = commitHash.trim();
+  if (!/^[0-9a-fA-F]{4,40}$/.test(sanitizedCommit)) {
+    return null;
+  }
+
+  const workspacePath = WorkspaceFS.getPath();
+  if (!workspacePath) {
+    return null;
+  }
+
+  const verifyResult = execaSync(
+    'git',
+    ['rev-parse', '--verify', `${sanitizedCommit}^{commit}`],
+    { cwd: workspacePath, reject: false },
+  );
+
+  if (verifyResult.exitCode !== 0) {
+    return null;
+  }
+
+  const labelResult = execaSync(
+    'git',
+    ['show', '-s', '--format=%h: %s (%cr)', sanitizedCommit],
+    { cwd: workspacePath, reject: false },
+  );
+
+  if (labelResult.exitCode !== 0) {
+    return sanitizedCommit;
+  }
+
+  const label = labelResult.stdout.toString().trim();
+  return label || sanitizedCommit;
+}
+
 export const gitCommands = {
   isGitRepository,
   getRecentCommits,
+  findCommitInHistory,
 };
