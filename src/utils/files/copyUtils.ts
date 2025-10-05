@@ -1,13 +1,13 @@
 // Standard library imports
 import * as path from 'path';
 
-// Local imports - fs
-import { AbsoluteFS } from './absoluteFS';
+// Third-party imports
+import fsExtra, { type CopyOptions } from 'fs-extra';
 
-type FileSystem = {
-  createDir(relativePath: string): Promise<void>;
-  write(relativePath: string, content: Uint8Array): Promise<void>;
-};
+// Local imports - fs
+import { RelativeFS } from './relativeFS';
+
+type FileSystem = Pick<typeof RelativeFS, 'ensureDir' | 'fullPath'>;
 
 /**
  * Recursively copy a directory from an absolute source path to a relative
@@ -16,25 +16,27 @@ type FileSystem = {
  * @param sourcePath Absolute path to the directory to copy
  * @param destRelativePath Destination path relative to the filesystem base
  * @param destFS Filesystem class (e.g., WorkspaceFS, GlobalStorageFS)
+ * @param options Optional fs-extra copy options to pass through
  */
 export async function copyDirToFS(
   sourcePath: string,
   destRelativePath: string,
   destFS: FileSystem,
+  options: CopyOptions = {},
 ): Promise<void> {
-  await destFS.createDir(destRelativePath);
-  const entries = AbsoluteFS.readDirSync(sourcePath);
-  for (const entry of entries) {
-    const srcEntry = path.join(sourcePath, entry);
-    const destEntryRel = path.join(destRelativePath, entry);
-    const stats = AbsoluteFS.statSync(srcEntry);
-    if (stats.isDirectory()) {
-      await copyDirToFS(srcEntry, destEntryRel, destFS);
-    } else {
-      const data = AbsoluteFS.readBytesSync(srcEntry);
-      await destFS.write(destEntryRel, data);
-    }
+  if (!path.isAbsolute(sourcePath)) {
+    throw new Error(
+      `copyDirToFS: sourcePath must be absolute. Received ${sourcePath}`,
+    );
   }
+
+  await destFS.ensureDir(destRelativePath);
+
+  const destAbsolutePath = destFS.fullPath(destRelativePath);
+  await fsExtra.copy(sourcePath, destAbsolutePath, {
+    overwrite: true,
+    ...options,
+  });
 }
 
 export default copyDirToFS;
