@@ -35,7 +35,7 @@ interface UpdateTaskGroupPayload {
 }
 
 interface SetActiveStreamPayload {
-  stream: StreamTabId | '';
+  stream: StreamTabId | null;
   agentType?: AgentType | null;
   agentSessionKind?: AgentSessionKind | null;
 }
