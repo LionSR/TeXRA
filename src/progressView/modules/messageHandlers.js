@@ -260,6 +260,12 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     // State persisted server-side - no direct DOM updates needed
   }
 
+  /**
+   * @param {{
+   *   stream: string | null,
+   *   instruction: import('../types').InstructionUpdate | null
+   * }} message
+   */
   handleUpdateInstruction(message) {
     const activeStream = state.activeStream || '';
 
