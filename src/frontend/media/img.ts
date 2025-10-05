@@ -40,9 +40,7 @@ function ensureTempDir(): void {
 }
 
 /** Resolve a file path and ensure it exists. */
-async function resolveExistingFile(
-  filePath: string,
-): Promise<{ absolutePath: string; exists: boolean }> {
+async function resolveExistingFile(filePath: string): Promise<string> {
   const absolutePath = resolveFilePath(filePath);
   const exists = await AbsoluteFS.exists(absolutePath);
 
@@ -50,7 +48,7 @@ async function resolveExistingFile(
     throw new Error(`File not found: ${filePath}`);
   }
 
-  return { absolutePath, exists };
+  return absolutePath;
 }
 
 /**
@@ -103,13 +101,7 @@ async function getImageDimensions(
   imagePath: string,
 ): Promise<{ width: number; height: number }> {
   const { prefix } = await selectImageTool();
-  const identifyArgs = [
-    ...prefix,
-    'identify',
-    '-format',
-    '%w %h',
-    imagePath,
-  ];
+  const identifyArgs = [...prefix, 'identify', '-format', '%w %h', imagePath];
   const result = await executeCommand(identifyArgs, { channel: CHANNEL });
   if (!result.success || !result.stdout) {
     throw new Error(result.stderr || 'Failed to get image dimensions');
@@ -172,7 +164,7 @@ export async function getBase64EncodedMedia(
   mediaPath: string,
 ): Promise<string> {
   try {
-    const { absolutePath } = await resolveExistingFile(mediaPath);
+    const absolutePath = await resolveExistingFile(mediaPath);
     const mimeType = getMimeType(absolutePath);
     let tempPath: string | null = null;
     let pathToRead = absolutePath;
@@ -223,7 +215,7 @@ export async function getBase64EncodedMedia(
  */
 export async function countPdfPages(pdfPath: string): Promise<number> {
   try {
-    const { absolutePath } = await resolveExistingFile(pdfPath);
+    const absolutePath = await resolveExistingFile(pdfPath);
     const pdfBytes = AbsoluteFS.readBytesSync(absolutePath);
     const pdfDoc = await PDFDocument.load(pdfBytes, {
       updateMetadata: false,
@@ -274,7 +266,7 @@ export async function singlePagePdf2Png(
       throw new Error('GraphicsMagick/ImageMagick is not installed.');
     }
 
-    const { absolutePath } = await resolveExistingFile(pdfPath);
+    const absolutePath = await resolveExistingFile(pdfPath);
     logger.debug(CHANNEL, `Full path to PDF: ${absolutePath}`);
 
     ensureTempDir();
@@ -388,8 +380,7 @@ export async function processPdf2Png(
   maxSize?: [number, number],
 ): Promise<string | string[] | null> {
   try {
-    const { absolutePath } = await resolveExistingFile(pdfPath);
-    const pageCount = await countPdfPages(absolutePath);
+    const pageCount = await countPdfPages(pdfPath);
     if (pageCount === 0) {
       return null;
     }
@@ -399,15 +390,10 @@ export async function processPdf2Png(
     const finalMaxSize: [number, number] = maxSize || [1024, 1024];
 
     if (pageCount === 1) {
-      return await singlePagePdf2Png(
-        absolutePath,
-        1,
-        finalQuality,
-        finalMaxSize,
-      );
+      return await singlePagePdf2Png(pdfPath, 1, finalQuality, finalMaxSize);
     } else {
       return await multiPagePdf2Png(
-        absolutePath,
+        pdfPath,
         finalQuality,
         finalMaxSize,
         maxPages,
