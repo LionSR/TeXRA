@@ -271,15 +271,14 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     }
 
     const payload = message.instruction;
-    const text = typeof payload === 'string' ? payload : (payload?.text ?? '');
+    const text = payload?.text ?? '';
 
-    if (!text || !text.trim()) {
+    if (!text.trim()) {
       dom.instructionPanel.hide();
       return;
     }
 
-    const metadata =
-      (payload && typeof payload === 'object' && payload.metadata) || {};
+    const metadata = payload?.metadata ?? {};
     dom.instructionPanel.show(text, metadata);
   }
 
