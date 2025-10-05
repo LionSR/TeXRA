@@ -28,6 +28,7 @@ describe('ModelHandlerGoogle.shouldContinue', () => {
   const agentSetting = {
     endTag: '</doc>',
     documentTag: 'doc',
+    agentCategory: 'workflow',
   } as AgentSetting;
 
   it('continues when FinishReason.MAX_TOKENS is returned without the end tag', () => {

@@ -14,6 +14,7 @@ import {
   AgentDefinitionSchema,
   AgentType,
   parseAgentSetting,
+  type AgentCategory,
 } from '@agent/core/AgentDataclass';
 
 // Local imports - utils
@@ -72,15 +73,20 @@ interface LoadAgentOptions {
   preferMultiple?: boolean;
 }
 
-export function ensureAgentTypeForSource<T extends { agentType?: AgentType }>(
-  settings: T,
-  source: AgentDirectorySource,
-): T {
+export function ensureAgentTypeForSource<
+  T extends {
+    agentType?: AgentType;
+    agentCategory?: AgentCategory;
+  },
+>(settings: T, source: AgentDirectorySource): T {
   if (
     source === AgentDirectorySource.BuiltInToolUse &&
     settings.agentType === undefined
   ) {
     settings.agentType = AgentType.ToolUse;
+    if (settings.agentCategory === undefined) {
+      settings.agentCategory = 'toolUse';
+    }
   }
   return settings;
 }

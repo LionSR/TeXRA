@@ -4,7 +4,7 @@ import {
   AgentPrompt,
   AgentSetting,
   AgentSessionMetadata,
-  resolveAgentSessionMetadata,
+  deriveAgentCategory,
 } from '../core/AgentDataclass';
 import { AgentStateGlobal } from '../core/AgentState';
 import { IAgent } from '../core/IAgent';
@@ -46,7 +46,14 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
   }
 
   public getSessionMetadata(): AgentSessionMetadata {
-    return resolveAgentSessionMetadata(this.agentSetting.agentType);
+    const agentType = this.agentSetting.agentType;
+    const agentCategory =
+      this.agentSetting.agentCategory ?? deriveAgentCategory(agentType);
+
+    return {
+      agentType,
+      agentCategory,
+    };
   }
 
   constructor(

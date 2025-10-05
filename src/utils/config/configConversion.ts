@@ -9,10 +9,10 @@ import type { AgentConfig } from '@agent/core/AgentConfig';
 import { AgentConfigSchema } from '@agent/core/AgentConfig';
 import { TaskState, isWorkflowTaskState } from '@logger/TaskState';
 import {
-  AgentSessionKind,
+  deriveAgentCategory,
+  type AgentCategory,
   type AgentType,
   type AgentSessionMetadata,
-  resolveAgentSessionMetadata,
 } from '@agent/core/AgentDataclass';
 
 import { FILE_TYPES, type FileType } from './constants';
@@ -50,47 +50,52 @@ export function agentConfigToTaskState(
   config: AgentConfig,
   metadata?: AgentSessionMetadata | AgentType,
 ): TaskState {
-  const configMetadata = resolveAgentSessionMetadata(
-    config.agentType,
-    config.agentSessionKind,
-  );
+  const configAgentType = config.agentType;
+  const configAgentCategory =
+    config.agentCategory ?? deriveAgentCategory(configAgentType);
 
-  const providedMetadata =
-    typeof metadata === 'object' && metadata !== null
-      ? resolveAgentSessionMetadata(
-          metadata.agentType,
-          metadata.agentSessionKind,
-        )
-      : metadata !== undefined
-        ? resolveAgentSessionMetadata(metadata)
-        : null;
+  let resolvedAgentType = configAgentType;
+  let resolvedAgentCategory = configAgentCategory;
 
-  const resolvedMetadata = providedMetadata
-    ? resolveAgentSessionMetadata(
-        providedMetadata.agentType ?? configMetadata.agentType,
-        providedMetadata.agentSessionKind ?? configMetadata.agentSessionKind,
-      )
-    : configMetadata;
+  if (metadata !== undefined && metadata !== null) {
+    if (typeof metadata === 'string') {
+      resolvedAgentType = metadata;
+      resolvedAgentCategory = deriveAgentCategory(metadata);
+    } else {
+      if (metadata.agentType) {
+        resolvedAgentType = metadata.agentType;
+      }
+      if (metadata.agentCategory) {
+        resolvedAgentCategory = metadata.agentCategory;
+      } else if (metadata.agentType) {
+        resolvedAgentCategory = deriveAgentCategory(metadata.agentType);
+      }
+    }
+  }
+
+  if (!resolvedAgentCategory) {
+    resolvedAgentCategory = deriveAgentCategory(resolvedAgentType);
+  }
 
   const normalizedConfig: AgentConfig = {
     ...config,
-    agentType: resolvedMetadata.agentType,
-    agentSessionKind: resolvedMetadata.agentSessionKind,
+    agentType: resolvedAgentType,
+    agentCategory: resolvedAgentCategory,
   };
 
-  if (resolvedMetadata.agentSessionKind === AgentSessionKind.ToolUse) {
+  if (resolvedAgentCategory === 'toolUse') {
     return {
       agentConfig: normalizedConfig,
-      agentType: resolvedMetadata.agentType,
-      agentSessionKind: AgentSessionKind.ToolUse,
+      agentType: resolvedAgentType,
+      agentCategory: 'toolUse',
       toolSessionState: {},
     };
   }
 
   return {
     agentConfig: normalizedConfig,
-    agentType: resolvedMetadata.agentType,
-    agentSessionKind: AgentSessionKind.Workflow,
+    agentType: resolvedAgentType,
+    agentCategory: 'workflow',
     activeFiles: createActiveFilesFromArrays(normalizedConfig),
   };
 }
@@ -106,8 +111,19 @@ export function objectToTaskState(obj: Record<string, any>): TaskState {
   // Check if this is already in the new format with nested agentConfig
   if (obj.agentConfig && typeof obj.agentConfig === 'object') {
     const agentType = obj.agentType as AgentType | undefined;
-    const sessionKind = normalizeSessionKind(obj.agentSessionKind);
-    const metadata = resolveAgentSessionMetadata(agentType, sessionKind);
+    const candidateCategory =
+      obj.agentCategory ??
+      (obj as { agentSessionKind?: AgentCategory }).agentSessionKind;
+    const agentCategory =
+      candidateCategory === 'toolUse'
+        ? 'toolUse'
+        : candidateCategory === 'workflow'
+          ? 'workflow'
+          : undefined;
+    const metadata: AgentSessionMetadata = {
+      agentType,
+      agentCategory: agentCategory ?? deriveAgentCategory(agentType),
+    };
     const state = agentConfigToTaskState(
       AgentConfigSchema.parse(obj.agentConfig),
       metadata,
@@ -197,8 +213,19 @@ export function objectToTaskState(obj: Record<string, any>): TaskState {
   try {
     const normalized = AgentConfigSchema.parse(agentConfigData);
     const agentType = obj.agentType as AgentType | undefined;
-    const sessionKind = normalizeSessionKind(obj.agentSessionKind);
-    const metadata = resolveAgentSessionMetadata(agentType, sessionKind);
+    const candidateCategory =
+      obj.agentCategory ??
+      (obj as { agentSessionKind?: AgentCategory }).agentSessionKind;
+    const agentCategory =
+      candidateCategory === 'toolUse'
+        ? 'toolUse'
+        : candidateCategory === 'workflow'
+          ? 'workflow'
+          : undefined;
+    const metadata: AgentSessionMetadata = {
+      agentType,
+      agentCategory: agentCategory ?? deriveAgentCategory(agentType),
+    };
     const taskState = agentConfigToTaskState(normalized, metadata);
 
     if (isWorkflowTaskState(taskState)) {
@@ -215,7 +242,10 @@ export function objectToTaskState(obj: Record<string, any>): TaskState {
     console.error('Failed to parse task state, using defaults:', error);
     const defaultConfig = AgentConfigSchema.parse({});
     const agentType = obj.agentType as AgentType | undefined;
-    const metadata = resolveAgentSessionMetadata(agentType);
+    const metadata: AgentSessionMetadata = {
+      agentType,
+      agentCategory: deriveAgentCategory(agentType),
+    };
     const taskState = agentConfigToTaskState(defaultConfig, metadata);
 
     if (isWorkflowTaskState(taskState) && activeFiles) {
@@ -231,14 +261,4 @@ export function objectToTaskState(obj: Record<string, any>): TaskState {
 
     return taskState;
   }
-}
-
-function normalizeSessionKind(value: unknown): AgentSessionKind | undefined {
-  if (
-    value === AgentSessionKind.Workflow ||
-    value === AgentSessionKind.ToolUse
-  ) {
-    return value;
-  }
-  return undefined;
 }

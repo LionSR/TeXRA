@@ -42,6 +42,7 @@ class MockOutputHandler extends OutputHandler {
 describe('OutputHandler.finalizeRound', () => {
   const setting: AgentSetting = {
     agentType: AgentType.CoT,
+    agentCategory: 'workflow',
     documentTag: 'document',
     temperature: 0,
     isRewrite: true,

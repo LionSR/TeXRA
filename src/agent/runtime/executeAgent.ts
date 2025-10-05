@@ -15,7 +15,8 @@ import {
   AgentSetting,
   AgentPrompt,
   AgentType,
-  resolveAgentSessionMetadata,
+  deriveAgentCategory,
+  type AgentSessionMetadata,
 } from '@agent/core/AgentDataclass';
 import { IAgent } from '@agent/core/IAgent';
 import {
@@ -194,10 +195,12 @@ export async function executeAgentWithLogging<T extends IAgent>(
     // Create agent instance and extract its declared type
     const { agent, agentType } = await createAgentFn();
     const sessionMetadata = agent.getSessionMetadata();
-    const baseMetadata = resolveAgentSessionMetadata(
-      agentType ?? sessionMetadata.agentType,
-      sessionMetadata.agentSessionKind,
-    );
+    const baseAgentType = agentType ?? sessionMetadata.agentType;
+    const baseMetadata: AgentSessionMetadata = {
+      agentType: baseAgentType,
+      agentCategory:
+        sessionMetadata.agentCategory ?? deriveAgentCategory(baseAgentType),
+    };
 
     if (executionId) {
       await ensureRunDir(executionId);
@@ -205,12 +208,15 @@ export async function executeAgentWithLogging<T extends IAgent>(
 
     // Get the full stream tab ID
     const config = agent.config;
-    const metadata = resolveAgentSessionMetadata(
-      config.agentType ?? baseMetadata.agentType,
-      config.agentSessionKind ?? baseMetadata.agentSessionKind,
-    );
+    const metadataAgentType = config.agentType ?? baseMetadata.agentType;
+    const metadataAgentCategory =
+      config.agentCategory ?? deriveAgentCategory(metadataAgentType);
+    const metadata: AgentSessionMetadata = {
+      agentType: metadataAgentType,
+      agentCategory: metadataAgentCategory,
+    };
     config.agentType = metadata.agentType;
-    config.agentSessionKind = metadata.agentSessionKind;
+    config.agentCategory = metadata.agentCategory;
 
     streamTabId = getStreamTabId(config.agent, config.model, config.inputFile, {
       agentType: metadata.agentType,
@@ -269,7 +275,7 @@ export async function executeAgentWithLogging<T extends IAgent>(
         bus.emit('setActiveStream', {
           stream: streamTabId,
           agentType: metadata.agentType,
-          agentSessionKind: metadata.agentSessionKind,
+          agentCategory: metadata.agentCategory,
         });
         bus.emit('updateStreamStatus', {
           stream: streamTabId,

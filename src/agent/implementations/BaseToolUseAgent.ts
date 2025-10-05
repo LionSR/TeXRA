@@ -1,12 +1,6 @@
 // Local imports - agent
 import type { AgentConfig } from '../core/AgentConfig';
-import {
-  AgentPrompt,
-  AgentSessionKind,
-  AgentSetting,
-  AgentType,
-  resolveAgentSessionMetadata,
-} from '../core/AgentDataclass';
+import { AgentPrompt, AgentSetting, AgentType } from '../core/AgentDataclass';
 import { ToolState } from '../core/ToolState';
 import { runToolUseCycle } from '../core/ToolUseCycle';
 import type { ToolUseCycleOptions } from '../core/ToolUseCycle';
@@ -70,13 +64,6 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
 
   protected override unregisterRunningAgent(streamTabId: StreamTabId): void {
     unregisterToolUseAgent(streamTabId);
-  }
-
-  public override getSessionMetadata() {
-    return resolveAgentSessionMetadata(
-      AgentType.ToolUse,
-      AgentSessionKind.ToolUse,
-    );
   }
 
   private getTools(): ToolDefinition[] {
@@ -266,7 +253,7 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
             streamId: stream,
             agentName: this.agentConfig.agent,
             model: this.agentConfig.model,
-            agentSessionKind: AgentSessionKind.ToolUse,
+            agentCategory: 'toolUse',
             messages: this.messages,
             toolState: state,
           });

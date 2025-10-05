@@ -15,8 +15,8 @@ import type { StreamTabInfo } from '../types';
 import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
 import {
   AgentType,
-  AgentSessionKind,
-  resolveAgentSessionMetadata,
+  deriveAgentCategory,
+  type AgentCategory,
 } from '@agent/core/AgentDataclass';
 
 // Types
@@ -129,13 +129,13 @@ export class ProgressEventHandler {
       | {
           stream: StreamTabId;
           agentType?: AgentType | null;
-          agentSessionKind?: AgentSessionKind | null;
+          agentCategory?: AgentCategory | null;
         }
       | string,
   ): void {
-    const { stream, agentType, agentSessionKind } =
+    const { stream, agentType, agentCategory } =
       typeof payload === 'string'
-        ? { stream: payload, agentType: undefined, agentSessionKind: undefined }
+        ? { stream: payload, agentType: undefined, agentCategory: undefined }
         : payload;
 
     if (!stream) {
@@ -146,15 +146,12 @@ export class ProgressEventHandler {
     // This handles the case where setActiveStream is called before any logs
     this.state.streamTabs.ensureStream(stream);
 
-    const metadata = resolveAgentSessionMetadata(agentType, agentSessionKind);
-    this.state.setSessionKindHint(stream, metadata.agentSessionKind);
+    const resolvedCategory = agentCategory ?? deriveAgentCategory(agentType);
+    this.state.setCategoryHint(stream, resolvedCategory);
 
     const currentFilter = this.state.agentTypeFilter;
-    if (
-      currentFilter !== 'all' &&
-      currentFilter !== metadata.agentSessionKind
-    ) {
-      this.state.agentTypeFilter = metadata.agentSessionKind;
+    if (currentFilter !== 'all' && currentFilter !== resolvedCategory) {
+      this.state.agentTypeFilter = resolvedCategory;
     }
 
     this.state.activeStream = stream;
@@ -280,7 +277,7 @@ export class ProgressEventHandler {
     const { streamTabId, executionId, taskState } = data;
 
     this.state.setTaskState(streamTabId, taskState);
-    this.state.clearSessionKindHint(streamTabId);
+    this.state.clearCategoryHint(streamTabId);
 
     const normalizedState = this.state.getTaskState(streamTabId);
 
@@ -289,10 +286,7 @@ export class ProgressEventHandler {
         `Received setTaskState for ${streamTabId} but no state was stored`,
       );
     } else {
-      const sessionKind = resolveAgentSessionMetadata(
-        normalizedState.agentType,
-        normalizedState.agentSessionKind,
-      ).agentSessionKind;
+      const sessionCategory = normalizedState.agentCategory;
       const currentFilter = this.state.agentTypeFilter;
       const activeStream = this.state.activeStream;
 
@@ -300,12 +294,12 @@ export class ProgressEventHandler {
         activeStream &&
         activeStream === streamTabId &&
         currentFilter !== 'all' &&
-        currentFilter !== sessionKind
+        currentFilter !== sessionCategory
       ) {
         this.logger.debug(
-          `Adjusting agent filter from ${currentFilter} to ${sessionKind} for stream ${streamTabId}`,
+          `Adjusting agent filter from ${currentFilter} to ${sessionCategory} for stream ${streamTabId}`,
         );
-        this.state.agentTypeFilter = sessionKind;
+        this.state.agentTypeFilter = sessionCategory;
       }
     }
 

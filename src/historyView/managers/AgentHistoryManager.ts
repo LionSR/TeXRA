@@ -7,9 +7,9 @@ import * as vscode from 'vscode';
 // Local imports - agent metadata
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import {
-  AgentSessionKind,
   AgentType,
-  resolveAgentSessionMetadata,
+  deriveAgentCategory,
+  type AgentCategory,
 } from '@agent/core/AgentDataclass';
 import type { ExecutionId } from '@agent/types/IdentifierTypes';
 
@@ -24,7 +24,16 @@ export interface AgentHistoryItem {
   timestamp: string;
   config: AgentConfig;
   agentType?: AgentType;
-  agentSessionKind?: AgentSessionKind;
+  agentCategory?: AgentCategory;
+}
+
+function resolveCategory(
+  candidate: unknown,
+  agentType?: AgentType | null,
+): AgentCategory {
+  return candidate === 'toolUse' || candidate === 'workflow'
+    ? candidate
+    : deriveAgentCategory(agentType);
 }
 
 /**
@@ -38,22 +47,26 @@ export class AgentHistoryManager {
    * Add a new agent execution to history
    */
   public static async addToHistory(config: AgentConfig): Promise<string> {
-    const metadata = resolveAgentSessionMetadata(
+    const sessionKind = resolveCategory(
+      config.agentCategory ??
+        (config as { agentSessionKind?: AgentCategory }).agentSessionKind,
       config.agentType,
-      config.agentSessionKind,
     );
+    const agentType =
+      config.agentType ??
+      (sessionKind === 'toolUse' ? AgentType.ToolUse : undefined);
     const normalizedConfig: AgentConfig = {
       ...config,
-      agentType: metadata.agentType,
-      agentSessionKind: metadata.agentSessionKind,
+      agentType,
+      agentCategory: sessionKind,
     };
 
     const historyItem: AgentHistoryItem = {
       id: randomUUID(),
       timestamp: new Date().toISOString(),
       config: normalizedConfig,
-      agentType: metadata.agentType,
-      agentSessionKind: metadata.agentSessionKind,
+      agentType,
+      agentCategory: sessionKind,
     };
 
     // Get current workspace-specific history
@@ -93,22 +106,28 @@ export class AgentHistoryManager {
   private static normalizeHistoryItem(
     item: AgentHistoryItem,
   ): AgentHistoryItem {
-    const metadata = resolveAgentSessionMetadata(
-      item.agentType ?? item.config.agentType,
-      item.agentSessionKind ?? item.config.agentSessionKind,
-    );
+    const rawAgentType = item.agentType ?? item.config.agentType;
+    const rawSessionKind =
+      item.agentCategory ??
+      (item as { agentSessionKind?: AgentCategory }).agentSessionKind ??
+      item.config.agentCategory ??
+      (item.config as { agentSessionKind?: AgentCategory }).agentSessionKind;
+    const sessionKind = resolveCategory(rawSessionKind, rawAgentType);
+    const agentType =
+      rawAgentType ??
+      (sessionKind === 'toolUse' ? AgentType.ToolUse : undefined);
 
     const normalizedConfig: AgentConfig = {
       ...item.config,
-      agentType: metadata.agentType,
-      agentSessionKind: metadata.agentSessionKind,
+      agentType,
+      agentCategory: sessionKind,
     };
 
     return {
       ...item,
       config: normalizedConfig,
-      agentType: metadata.agentType,
-      agentSessionKind: metadata.agentSessionKind,
+      agentType,
+      agentCategory: sessionKind,
     };
   }
 

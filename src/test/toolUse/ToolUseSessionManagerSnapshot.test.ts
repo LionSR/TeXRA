@@ -5,14 +5,10 @@ import { promises as fs } from 'fs';
 
 import * as vscode from 'vscode';
 
-import { AgentSessionKind } from '@agent/core/AgentDataclass';
 import { ToolState } from '@agent/core/ToolState';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { ExecutionId } from '@agent/types/IdentifierTypes';
-import {
-  ToolUseSessionManager,
-  type ToolUseSessionSnapshot,
-} from '@agent/toolUse/ToolUseSessionManager';
+import { ToolUseSessionManager } from '@agent/toolUse/ToolUseSessionManager';
 import StorageFS from '@utils/files/storageFS';
 
 const STORAGE_DIR = path.join(os.tmpdir(), 'texra-tooluse-snapshot-tests');
@@ -61,20 +57,23 @@ suite('ToolUseSessionManager snapshot compatibility', () => {
       streamId: 'stream-id',
       agentName: 'demo-agent',
       model: 'demo-model',
-      agentSessionKind: AgentSessionKind.ToolUse,
+      agentCategory: 'toolUse' as const,
       messages: [] as ProviderMessage[],
       toolState,
     };
   }
 
-  function buildSnapshot(executionId: ExecutionId): ToolUseSessionSnapshot {
-    return {
+  function buildSnapshot(
+    executionId: ExecutionId,
+    options?: { legacy?: boolean },
+  ): Record<string, unknown> {
+    const snapshot: Record<string, unknown> = {
       version: 1,
       executionId,
       streamId: 'stream-id',
       agentName: 'demo-agent',
       model: 'demo-model',
-      agentSessionKind: AgentSessionKind.ToolUse,
+      agentCategory: 'toolUse',
       messages: [],
       toolState: {
         texcountStats: null,
@@ -86,6 +85,13 @@ suite('ToolUseSessionManager snapshot compatibility', () => {
       },
       lastUpdated: Date.now(),
     };
+
+    if (options?.legacy) {
+      snapshot.agentSessionKind = 'toolUse';
+      delete snapshot.agentCategory;
+    }
+
+    return snapshot;
   }
 
   test('saveSnapshot and loadSnapshot round trip', async () => {
@@ -102,7 +108,7 @@ suite('ToolUseSessionManager snapshot compatibility', () => {
 
   test('loadSnapshot reads snapshots saved before helper migration', async () => {
     const executionId = 'legacy-snapshot' as ExecutionId;
-    const snapshot = buildSnapshot(executionId);
+    const snapshot = buildSnapshot(executionId, { legacy: true });
 
     await StorageFS.ensureDir('toolUseSessions');
     await StorageFS.write(
