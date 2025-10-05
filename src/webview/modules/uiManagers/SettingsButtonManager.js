@@ -255,21 +255,14 @@ export class SettingsButtonManager extends BaseUIManager {
     this._setupDependencyBanner();
   }
 
-  _normalizeSessionType(rawType) {
-    return rawType === SESSION_TYPES.TOOL_USE
-      ? SESSION_TYPES.TOOL_USE
-      : SESSION_TYPES.WORKFLOW;
-  }
-
   _handleAgentSelection(selectElement) {
     if (!(selectElement instanceof HTMLSelectElement)) {
       return;
     }
 
-    const normalizedType = this._normalizeSessionType(
-      selectElement.dataset.sessionType,
-    );
-    this.state.applySessionType(normalizedType, { skipSave: true });
+    const sessionType =
+      selectElement.dataset.sessionType || SESSION_TYPES.WORKFLOW;
+    this.state.applySessionType(sessionType, { skipSave: true });
 
     const selectedAgent = selectElement.value;
     const selectedOption = selectElement.options[selectElement.selectedIndex];
@@ -296,7 +289,7 @@ export class SettingsButtonManager extends BaseUIManager {
 
     const sessionInput = safeGetElementById(SESSION_TYPE_INPUT);
     if (sessionInput) {
-      sessionInput.value = normalizedType;
+      sessionInput.value = sessionType;
     }
 
     this.state.save();

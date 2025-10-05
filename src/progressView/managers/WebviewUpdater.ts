@@ -11,6 +11,7 @@ import { COMMANDS } from '../modules/constants.js';
 import { ProgressViewState } from '../state/ProgressViewState';
 import { buildStreamInfos } from '../streamInfoUtils';
 import type { InstructionUpdate, StreamTabInfo } from '../types';
+import type { OutputFileInfo } from '@agent/output/types';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import type { AgentTypeFilter } from '@agent/types/AgentStreamTypes';
 
@@ -136,7 +137,10 @@ export class WebviewUpdater {
   /**
    * Update output files for a stream
    */
-  updateFiles(stream: StreamTabId, files: { [key: number]: any[] }): void {
+  updateFiles(
+    stream: StreamTabId,
+    files: { [key: number]: OutputFileInfo[] },
+  ): void {
     const webview = this.getWebview();
     if (!webview) return;
 
