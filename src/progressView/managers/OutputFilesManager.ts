@@ -8,15 +8,8 @@ import { AgentLogger } from '@logger/AgentLogger';
 import { WorkspaceFS } from '@utils/files';
 
 // Types
-import type { DiffStats } from '@agent/types/DiffTypes';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
-
-interface OutputFileInfo extends DiffStats {
-  path: string;
-  base?: string | null;
-  prev?: string | null;
-  original?: string;
-}
+import type { OutputFileInfo } from '@agent/output/types';
 
 /**
  * Manages output files collection with persistence and file existence validation.

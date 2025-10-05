@@ -84,30 +84,16 @@ async function buildToolUseAgent(
   return { agent, agentSetting };
 }
 
-type ResumeAgentCommandPayload =
-  | ToolUseSessionSnapshot
-  | { snapshot: ToolUseSessionSnapshot; followUp?: string };
+interface ResumeAgentCommandPayload {
+  snapshot: ToolUseSessionSnapshot;
+  followUp?: string;
+}
 
 const CHANNEL = 'resumeAgentCommand';
 
 export interface ResumeAgentResult {
   success: boolean;
   lostFollowUps?: number;
-}
-
-function normalizePayload(payload: ResumeAgentCommandPayload | undefined): {
-  snapshot: ToolUseSessionSnapshot | undefined;
-  followUp?: string;
-} {
-  if (!payload) {
-    return { snapshot: undefined };
-  }
-
-  if ('snapshot' in payload) {
-    return { snapshot: payload.snapshot, followUp: payload.followUp };
-  }
-
-  return { snapshot: payload };
 }
 
 export function registerResumeAgentCommand(
@@ -118,7 +104,8 @@ export function registerResumeAgentCommand(
     async (
       payload: ResumeAgentCommandPayload | undefined,
     ): Promise<ResumeAgentResult> => {
-      const { snapshot, followUp } = normalizePayload(payload);
+      const snapshot = payload?.snapshot;
+      const followUp = payload?.followUp;
       if (!snapshot || !ToolUseSessionManager.isPersistenceEnabled()) {
         return { success: false };
       }
