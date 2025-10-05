@@ -6,8 +6,8 @@ import type { ProgressViewState } from './state/ProgressViewState';
 import type { AgentFilter, StreamTabInfo } from './types';
 // Local imports - agent types
 import {
-  AgentSessionKind,
-  resolveAgentSessionMetadata,
+  deriveAgentCategory,
+  type AgentCategory,
 } from '@agent/core/AgentDataclass';
 
 const sortComparators = {
@@ -21,16 +21,16 @@ const sortComparators = {
 } as const;
 
 function matchesAgentFilter(
-  sessionKind: AgentSessionKind,
+  category: AgentCategory,
   filter: AgentFilter,
 ): boolean {
   switch (filter) {
     case 'all':
       return true;
     case 'toolUse':
-      return sessionKind === AgentSessionKind.ToolUse;
+      return category === 'toolUse';
     case 'workflow':
-      return sessionKind === AgentSessionKind.Workflow;
+      return category === 'workflow';
     default:
       return true;
   }
@@ -39,9 +39,9 @@ function matchesAgentFilter(
 function buildStreamLabel(
   agentName: string,
   inputFile: string,
-  sessionKind: AgentSessionKind,
+  category: AgentCategory,
 ): string {
-  if (sessionKind === AgentSessionKind.ToolUse) {
+  if (category === 'toolUse') {
     return agentName;
   }
 
@@ -59,7 +59,7 @@ export function buildStreamInfos(
 ): StreamTabInfo[] {
   const infos = state.streamTabs.keys().reduce<StreamTabInfo[]>((acc, id) => {
     const taskState = state.getTaskState(id);
-    const sessionKindHint = state.getSessionKindHint(id);
+    const sessionKindHint = state.getCategoryHint(id);
     const logs = state.streamTabs.get(id);
     const lastTimestamp =
       logs && logs.length > 0 ? logs[logs.length - 1].timestamp : undefined;
@@ -68,27 +68,26 @@ export function buildStreamInfos(
     const outputs = taskState?.agentConfig.outputFiles || [];
     const inputFile = taskState?.agentConfig.inputFile || '';
     const agentName = taskState?.agentConfig.agent || id.split('@')[0];
-    const metadata = resolveAgentSessionMetadata(
-      taskState?.agentType,
-      taskState?.agentSessionKind ?? sessionKindHint,
-    );
-    const agentType = metadata.agentType ?? taskState?.agentType;
-    const agentSessionKind = metadata.agentSessionKind;
-    if (!matchesAgentFilter(agentSessionKind, filter)) {
+    const agentType = taskState?.agentType;
+    const agentCategory =
+      taskState?.agentCategory ??
+      sessionKindHint ??
+      deriveAgentCategory(agentType);
+    if (!matchesAgentFilter(agentCategory, filter)) {
       return acc;
     }
-    const isToolAgent = agentSessionKind === AgentSessionKind.ToolUse;
+    const isToolAgent = agentCategory === 'toolUse';
     const executionId = state.getExecutionId(id);
-    const label = buildStreamLabel(agentName, inputFile, agentSessionKind);
+    const label = buildStreamLabel(agentName, inputFile, agentCategory);
     acc.push({
       name: id,
       label,
       model: taskState?.agentConfig.model,
       agent: taskState?.agentConfig.agent,
       agentType,
-      agentSessionKind,
+      agentCategory,
       uiTraits: {
-        sessionKind: agentSessionKind,
+        category: agentCategory,
         isToolAgent,
       },
       hasMultipleOutputs: Array.isArray(outputs) && outputs.length > 1,

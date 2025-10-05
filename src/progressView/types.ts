@@ -1,11 +1,11 @@
 // Local imports - agent types
-import type { AgentSessionKind, AgentType } from '@agent/core/AgentDataclass';
+import type { AgentCategory, AgentType } from '@agent/core/AgentDataclass';
 import type { ExecutionId } from '@agent/types/IdentifierTypes';
 import type { AgentTypeFilter } from '@agent/types/AgentStreamTypes';
 
 export interface StreamUITraits {
   /** Canonical session grouping for the stream. */
-  sessionKind: AgentSessionKind;
+  category: AgentCategory;
   /** Indicates whether the associated agent is a tool-use session. */
   isToolAgent: boolean;
 }
@@ -17,7 +17,7 @@ export interface StreamTabInfo {
   model?: string;
   agent?: string;
   agentType?: AgentType;
-  agentSessionKind: AgentSessionKind;
+  agentCategory: AgentCategory;
   uiTraits: StreamUITraits;
   hasMultipleOutputs?: boolean;
   lastTimestamp?: number;

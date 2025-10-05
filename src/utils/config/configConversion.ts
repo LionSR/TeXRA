@@ -9,10 +9,11 @@ import type { AgentConfig } from '@agent/core/AgentConfig';
 import { AgentConfigSchema } from '@agent/core/AgentConfig';
 import { TaskState, isWorkflowTaskState } from '@logger/TaskState';
 import {
-  AgentSessionKind,
+  AgentCategorySchema,
+  deriveAgentCategory,
+  type AgentCategory,
   type AgentType,
   type AgentSessionMetadata,
-  resolveAgentSessionMetadata,
 } from '@agent/core/AgentDataclass';
 
 import { FILE_TYPES, type FileType } from './constants';
@@ -48,49 +49,43 @@ function createActiveFilesFromArrays(
  */
 export function agentConfigToTaskState(
   config: AgentConfig,
-  metadata?: AgentSessionMetadata | AgentType,
+  metadata?: Partial<AgentSessionMetadata> | AgentType,
 ): TaskState {
-  const configMetadata = resolveAgentSessionMetadata(
-    config.agentType,
-    config.agentSessionKind,
-  );
+  let providedType: AgentType | undefined;
+  let providedCategory: AgentCategory | undefined;
 
-  const providedMetadata =
-    typeof metadata === 'object' && metadata !== null
-      ? resolveAgentSessionMetadata(
-          metadata.agentType,
-          metadata.agentSessionKind,
-        )
-      : metadata !== undefined
-        ? resolveAgentSessionMetadata(metadata)
-        : null;
+  if (typeof metadata === 'object' && metadata !== null) {
+    providedType = metadata.agentType;
+    providedCategory = metadata.agentCategory;
+  } else if (metadata !== undefined) {
+    providedType = metadata;
+  }
 
-  const resolvedMetadata = providedMetadata
-    ? resolveAgentSessionMetadata(
-        providedMetadata.agentType ?? configMetadata.agentType,
-        providedMetadata.agentSessionKind ?? configMetadata.agentSessionKind,
-      )
-    : configMetadata;
+  const agentType = config.agentType ?? providedType;
+  const agentCategory =
+    config.agentCategory ??
+    providedCategory ??
+    deriveAgentCategory(agentType);
 
   const normalizedConfig: AgentConfig = {
     ...config,
-    agentType: resolvedMetadata.agentType,
-    agentSessionKind: resolvedMetadata.agentSessionKind,
+    agentType,
+    agentCategory,
   };
 
-  if (resolvedMetadata.agentSessionKind === AgentSessionKind.ToolUse) {
+  if (agentCategory === 'toolUse') {
     return {
       agentConfig: normalizedConfig,
-      agentType: resolvedMetadata.agentType,
-      agentSessionKind: AgentSessionKind.ToolUse,
+      agentType,
+      agentCategory: 'toolUse',
       toolSessionState: {},
     };
   }
 
   return {
     agentConfig: normalizedConfig,
-    agentType: resolvedMetadata.agentType,
-    agentSessionKind: AgentSessionKind.Workflow,
+    agentType,
+    agentCategory: 'workflow',
     activeFiles: createActiveFilesFromArrays(normalizedConfig),
   };
 }
@@ -106,8 +101,15 @@ export function objectToTaskState(obj: Record<string, any>): TaskState {
   // Check if this is already in the new format with nested agentConfig
   if (obj.agentConfig && typeof obj.agentConfig === 'object') {
     const agentType = obj.agentType as AgentType | undefined;
-    const sessionKind = normalizeSessionKind(obj.agentSessionKind);
-    const metadata = resolveAgentSessionMetadata(agentType, sessionKind);
+    const rawCategory =
+      obj.agentCategory ??
+      (obj as { agentSessionKind?: unknown }).agentSessionKind;
+    const categoryResult = AgentCategorySchema.safeParse(rawCategory);
+    const agentCategory = categoryResult.success ? categoryResult.data : undefined;
+    const metadata =
+      agentType !== undefined || agentCategory !== undefined
+        ? { agentType, agentCategory }
+        : undefined;
     const state = agentConfigToTaskState(
       AgentConfigSchema.parse(obj.agentConfig),
       metadata,
@@ -197,8 +199,15 @@ export function objectToTaskState(obj: Record<string, any>): TaskState {
   try {
     const normalized = AgentConfigSchema.parse(agentConfigData);
     const agentType = obj.agentType as AgentType | undefined;
-    const sessionKind = normalizeSessionKind(obj.agentSessionKind);
-    const metadata = resolveAgentSessionMetadata(agentType, sessionKind);
+    const rawCategory =
+      obj.agentCategory ??
+      (obj as { agentSessionKind?: unknown }).agentSessionKind;
+    const categoryResult = AgentCategorySchema.safeParse(rawCategory);
+    const agentCategory = categoryResult.success ? categoryResult.data : undefined;
+    const metadata =
+      agentType !== undefined || agentCategory !== undefined
+        ? { agentType, agentCategory }
+        : undefined;
     const taskState = agentConfigToTaskState(normalized, metadata);
 
     if (isWorkflowTaskState(taskState)) {
@@ -215,7 +224,7 @@ export function objectToTaskState(obj: Record<string, any>): TaskState {
     console.error('Failed to parse task state, using defaults:', error);
     const defaultConfig = AgentConfigSchema.parse({});
     const agentType = obj.agentType as AgentType | undefined;
-    const metadata = resolveAgentSessionMetadata(agentType);
+    const metadata = agentType !== undefined ? { agentType } : undefined;
     const taskState = agentConfigToTaskState(defaultConfig, metadata);
 
     if (isWorkflowTaskState(taskState) && activeFiles) {
@@ -231,14 +240,4 @@ export function objectToTaskState(obj: Record<string, any>): TaskState {
 
     return taskState;
   }
-}
-
-function normalizeSessionKind(value: unknown): AgentSessionKind | undefined {
-  if (
-    value === AgentSessionKind.Workflow ||
-    value === AgentSessionKind.ToolUse
-  ) {
-    return value;
-  }
-  return undefined;
 }

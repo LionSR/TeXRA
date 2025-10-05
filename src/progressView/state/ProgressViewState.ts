@@ -16,8 +16,8 @@ import type { AgentFilter } from '../types';
 // Local imports - agent types
 import { isAgentTypeFilter } from '@agent/types/AgentStreamTypes';
 import {
-  AgentSessionKind,
-  resolveAgentSessionMetadata,
+  type AgentCategory,
+  type AgentSessionMetadata,
 } from '@agent/core/AgentDataclass';
 
 // Types
@@ -50,14 +50,14 @@ export class ProgressViewState {
   private readonly workflowTaskStates: WorkflowTaskStateManager;
   private _executionIds: Map<StreamTabId, ExecutionId> = new Map();
   /**
-   * Ephemeral session-kind hints keyed by stream ID.
+   * Ephemeral agent category hints keyed by stream ID.
    *
    * When a stream becomes active before its {@link TaskState} is persisted,
    * progress events populate this map so the UI can immediately classify the
    * tab as workflow vs. tool-use. Once canonical metadata is stored the entry
    * is cleared, so there is no need to persist these hints across sessions.
    */
-  private _sessionKindHints: Map<StreamTabId, AgentSessionKind> = new Map();
+  private _categoryHints: Map<StreamTabId, AgentCategory> = new Map();
   private readonly toolUseTaskStates: ToolUseTaskStateManager;
   private readonly persistence: StatePersistenceManager;
   private readonly logger: AgentLogger;
@@ -125,27 +125,24 @@ export class ProgressViewState {
   }
 
   // Session kind hint management (non-persistent)
-  setSessionKindHint(
-    streamTabId: StreamTabId,
-    sessionKind: AgentSessionKind,
-  ): void {
-    this._sessionKindHints.set(streamTabId, sessionKind);
+  setCategoryHint(streamTabId: StreamTabId, category: AgentCategory): void {
+    this._categoryHints.set(streamTabId, category);
   }
 
-  getSessionKindHint(streamTabId: StreamTabId): AgentSessionKind | undefined {
-    return this._sessionKindHints.get(streamTabId);
+  getCategoryHint(streamTabId: StreamTabId): AgentCategory | undefined {
+    return this._categoryHints.get(streamTabId);
   }
 
-  clearSessionKindHint(streamTabId: StreamTabId): void {
-    this._sessionKindHints.delete(streamTabId);
+  clearCategoryHint(streamTabId: StreamTabId): void {
+    this._categoryHints.delete(streamTabId);
   }
 
   // Task state management
   setTaskState(streamTabId: StreamTabId, taskState: TaskState): void {
-    const metadata = resolveAgentSessionMetadata(
-      taskState.agentType,
-      taskState.agentSessionKind,
-    );
+    const metadata: AgentSessionMetadata = {
+      agentType: taskState.agentType,
+      agentCategory: taskState.agentCategory,
+    };
     const normalizedState = agentConfigToTaskState(
       taskState.agentConfig,
       metadata,
@@ -164,7 +161,7 @@ export class ProgressViewState {
       normalizedState.toolSessionState = { ...taskState.toolSessionState };
     }
 
-    this.clearSessionKindHint(streamTabId);
+    this.clearCategoryHint(streamTabId);
     if (isWorkflowTaskState(normalizedState)) {
       this.workflowTaskStates.set(streamTabId, normalizedState);
       this.toolUseTaskStates.delete(streamTabId);
@@ -185,7 +182,7 @@ export class ProgressViewState {
   clearTaskState(streamTabId: StreamTabId): void {
     this.workflowTaskStates.delete(streamTabId);
     this.toolUseTaskStates.delete(streamTabId);
-    this.clearSessionKindHint(streamTabId);
+    this.clearCategoryHint(streamTabId);
     this.saveTaskStates();
     this.cleanupToolUseAgentRegistry();
   }
@@ -225,7 +222,7 @@ export class ProgressViewState {
     this.workflowTaskStates.delete(stream);
     this.toolUseTaskStates.delete(stream);
     this._executionIds.delete(stream);
-    this.clearSessionKindHint(stream);
+    this.clearCategoryHint(stream);
     this.cleanupToolUseAgentRegistry();
 
     // Update active stream if necessary
@@ -247,7 +244,7 @@ export class ProgressViewState {
     // Clear display-related data (matching original eraseStream behavior)
     this._taskGroups.deleteStream(stream);
     this._outputFiles.deleteStream(stream);
-    this.clearSessionKindHint(stream);
+    this.clearCategoryHint(stream);
 
     // NOTE: Preserve taskStates and executionIds - these are needed for re-run functionality
     // NOTE: Preserve usageStats - these were not cleared in original implementation
@@ -262,7 +259,7 @@ export class ProgressViewState {
     this.workflowTaskStates.clear();
     this.toolUseTaskStates.clear();
     this._executionIds.clear();
-    this._sessionKindHints.clear();
+    this._categoryHints.clear();
     this._activeStream = '';
     this.saveActiveStream();
     this.saveTaskStates();

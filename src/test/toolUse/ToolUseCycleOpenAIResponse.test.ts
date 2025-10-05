@@ -110,6 +110,7 @@ describe('runToolUseCycle OpenAIResponse', () => {
     const toolRegistry = { echo: new EchoTool() };
     const setting: AgentSetting = {
       agentType: AgentType.ToolUse,
+      agentCategory: 'toolUse',
       documentTag: 'doc',
       temperature: 0,
       endTag: '</doc>',

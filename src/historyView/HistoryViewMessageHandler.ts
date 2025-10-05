@@ -3,7 +3,10 @@ import * as vscode from 'vscode';
 
 // Local imports - agent commands
 import { executeCommand } from '@commands/agent/executeCommand';
-import { resolveAgentSessionMetadata } from '@agent/core/AgentDataclass';
+import {
+  deriveAgentCategory,
+  type AgentSessionMetadata,
+} from '@agent/core/AgentDataclass';
 import { showLoggedErrorMessage } from '@common/errors/errorHandlingUtils';
 
 // Local imports - history view
@@ -89,10 +92,21 @@ export class HistoryViewMessageHandler extends BaseViewMessageHandler<
       const historyItem =
         await AgentHistoryManager.getHistoryItemById(historyId);
       if (historyItem) {
-        const metadata = resolveAgentSessionMetadata(
-          historyItem.agentType,
-          historyItem.agentSessionKind,
-        );
+        const agentType = historyItem.agentType ?? historyItem.config.agentType;
+        const rawCategory =
+          historyItem.agentCategory ??
+          (historyItem as { agentSessionKind?: string }).agentSessionKind ??
+          historyItem.config.agentCategory ??
+          (historyItem.config as { agentSessionKind?: string })
+            .agentSessionKind;
+        const agentCategory =
+          rawCategory === 'toolUse' || rawCategory === 'workflow'
+            ? rawCategory
+            : deriveAgentCategory(agentType);
+        const metadata: AgentSessionMetadata = {
+          agentType: agentType ?? undefined,
+          agentCategory,
+        };
         const taskState = agentConfigToTaskState(historyItem.config, metadata);
         await vscode.commands.executeCommand('texra.restoreState', taskState);
       } else {

@@ -7,7 +7,7 @@ import { appendFormatted } from './utils.js';
 import { progressViewState } from './progressViewState.js';
 import { BaseWebviewMessageHandler } from '@common/BaseWebviewMessageHandler.js';
 
-// Session kind values match TypeScript AgentSessionKind enum
+// Agent category values match the TypeScript AgentCategory union
 // No need to duplicate - we use the actual values from messages
 
 // Create shorter aliases for internal use
@@ -89,11 +89,11 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     const activeStreamInfo = message.streams.find(
       (s) => s.name === message.activeStream,
     );
-    const sessionKind =
-      activeStreamInfo?.agentSessionKind ||
-      activeStreamInfo?.uiTraits?.sessionKind ||
+    const agentCategory =
+      activeStreamInfo?.agentCategory ||
+      activeStreamInfo?.uiTraits?.category ||
       'workflow'; // Default fallback
-    const isToolAgent = sessionKind === 'toolUse';
+    const isToolAgent = agentCategory === 'toolUse';
 
     const container = document.getElementById(ELEMENT_IDS.FOLLOW_UP_CONTAINER);
     if (container) {
@@ -101,7 +101,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       container.setAttribute('aria-hidden', isToolAgent ? 'false' : 'true');
     }
 
-    dom.toolbar.render(sessionKind);
+    dom.toolbar.render(agentCategory);
 
     const hasExecution = state.getExecutionAvailability(message.activeStream);
     dom.status.setExecutionAvailability(Boolean(hasExecution));

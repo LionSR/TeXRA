@@ -6,7 +6,7 @@ import { z } from 'zod';
 import * as vscode from 'vscode';
 
 // Local imports - agent
-import { AgentSessionKind } from '@agent/core/AgentDataclass';
+import type { AgentCategory } from '@agent/core/AgentDataclass';
 import { ToolState } from '@agent/core/ToolState';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
@@ -37,19 +37,38 @@ const ToolStateSnapshotSchema = z.object({
   thinkingAdded: z.boolean(),
 });
 
-const ToolUseSessionSnapshotSchema = z.strictObject({
-  version: z.literal(SNAPSHOT_VERSION),
-  executionId: z.string(),
-  streamId: z.string(),
-  agentName: z.string(),
-  model: z.string(),
-  agentSessionKind: z.enum(AgentSessionKind),
-  messages: z.array(z.unknown()),
-  toolState: ToolStateSnapshotSchema,
-  lastUpdated: z.number(),
-});
+const ToolUseSessionSnapshotSchema = z
+  .strictObject({
+    version: z.literal(SNAPSHOT_VERSION),
+    executionId: z.string(),
+    streamId: z.string(),
+    agentName: z.string(),
+    model: z.string(),
+    agentCategory: z.literal('toolUse').optional(),
+    agentSessionKind: z.literal('toolUse').optional(),
+    messages: z.array(z.unknown()),
+    toolState: ToolStateSnapshotSchema,
+    lastUpdated: z.number(),
+  })
+  .transform((snapshot) => {
+    const { agentCategory, agentSessionKind, ...rest } = snapshot;
+    return {
+      ...rest,
+      agentCategory: agentCategory ?? agentSessionKind ?? 'toolUse',
+    } satisfies {
+      version: number;
+      executionId: string;
+      streamId: string;
+      agentName: string;
+      model: string;
+      agentCategory: AgentCategory;
+      messages: unknown[];
+      toolState: z.infer<typeof ToolStateSnapshotSchema>;
+      lastUpdated: number;
+    };
+  });
 
-export type ToolUseSessionSnapshot = z.infer<
+export type ToolUseSessionSnapshot = z.output<
   typeof ToolUseSessionSnapshotSchema
 >;
 
@@ -58,7 +77,7 @@ interface SavePayload {
   streamId: StreamTabId;
   agentName: string;
   model: string;
-  agentSessionKind: AgentSessionKind;
+  agentCategory: 'toolUse';
   messages: ProviderMessage[];
   toolState: ToolState;
 }
@@ -277,7 +296,7 @@ export class ToolUseSessionManager {
         streamId: payload.streamId,
         agentName: payload.agentName,
         model: payload.model,
-        agentSessionKind: payload.agentSessionKind,
+        agentCategory: payload.agentCategory,
         messages: structuredClone(payload.messages),
         toolState: toToolStateSnapshot(payload.toolState),
         lastUpdated: Date.now(),

@@ -21,10 +21,9 @@ export enum AgentType {
  * Workflow sessions represent traditional direct/CoT executions while
  * toolUse isolates interactive tool panels.
  */
-export enum AgentSessionKind {
-  Workflow = 'workflow',
-  ToolUse = 'toolUse',
-}
+export const AgentCategorySchema = z.enum(['workflow', 'toolUse'] as const);
+
+export type AgentCategory = z.infer<typeof AgentCategorySchema>;
 
 /**
  * Shared metadata describing how an agent session should be classified.
@@ -33,33 +32,17 @@ export interface AgentSessionMetadata {
   /** Specific agent implementation type if known. */
   agentType?: AgentType;
   /** Canonical grouping used by the UI to filter sessions. */
-  agentSessionKind: AgentSessionKind;
+  agentCategory: AgentCategory;
 }
 
 /**
- * Derive the canonical {@link AgentSessionKind} from a specific agent type.
- * Defaults to {@link AgentSessionKind.Workflow} when the type is unknown.
+ * Derive the canonical {@link AgentCategory} from a specific agent type.
+ * Defaults to {@code workflow} when the type is unknown.
  */
-export function deriveAgentSessionKind(
+export function deriveAgentCategory(
   agentType?: AgentType | null,
-): AgentSessionKind {
-  return agentType === AgentType.ToolUse
-    ? AgentSessionKind.ToolUse
-    : AgentSessionKind.Workflow;
-}
-
-/**
- * Resolve canonical session metadata from optional hints.
- */
-export function resolveAgentSessionMetadata(
-  agentType?: AgentType | null,
-  sessionKindHint?: AgentSessionKind | null,
-): AgentSessionMetadata {
-  const agentSessionKind = sessionKindHint ?? deriveAgentSessionKind(agentType);
-  return {
-    agentType: agentType ?? undefined,
-    agentSessionKind,
-  };
+): AgentCategory {
+  return agentType === AgentType.ToolUse ? 'toolUse' : 'workflow';
 }
 
 /**
@@ -68,6 +51,7 @@ export function resolveAgentSessionMetadata(
  */
 export const AgentSettingBaseSchema = z.strictObject({
   agentType: z.enum(AgentType).prefault(AgentType.CoT),
+  agentCategory: AgentCategorySchema.optional(),
   documentTag: z
     .string()
     .min(1, 'documentTag cannot be empty')
@@ -105,6 +89,7 @@ export const AgentWorkflowSettingSchema = AgentSettingBaseSchema.extend({
   prefills: z.array(z.string()).prefault([]),
   outputExt: z.string().prefault('txt'),
   isMultipleOutput: z.boolean().prefault(false),
+  agentCategory: z.literal('workflow').prefault('workflow'),
 }).superRefine((data, ctx) => {
   if (data.agentType === AgentType.ToolUse) {
     ctx.addIssue({
@@ -119,6 +104,7 @@ export const AgentWorkflowSettingSchema = AgentSettingBaseSchema.extend({
 /** Tool-use agents never expose workflow-specific flags. */
 export const AgentToolUseSettingSchema = AgentSettingBaseSchema.extend({
   agentType: z.literal(AgentType.ToolUse).prefault(AgentType.ToolUse),
+  agentCategory: z.literal('toolUse').prefault('toolUse'),
 });
 
 /**
@@ -132,6 +118,12 @@ export const AgentSettingSchema = z.union([
 export type AgentWorkflowSetting = z.infer<typeof AgentWorkflowSettingSchema>;
 export type AgentToolUseSetting = z.infer<typeof AgentToolUseSettingSchema>;
 export type AgentSetting = z.infer<typeof AgentSettingSchema>;
+
+/** Resolve the canonical agent category from validated settings. */
+export function getAgentCategory(setting: AgentSetting): AgentCategory {
+  const agentType = (setting as { agentType?: AgentType }).agentType;
+  return setting.agentCategory ?? deriveAgentCategory(agentType);
+}
 
 /** Narrow an {@link AgentSetting} to the workflow variant. */
 export function requireWorkflowSetting(

@@ -115,6 +115,7 @@ describe('BaseToolUseAgent follow-up loop', () => {
     const handler = new DummyHandler();
     const setting: AgentSetting = {
       agentType: AgentType.ToolUse,
+      agentCategory: 'toolUse',
       documentTag: 'doc',
       temperature: 0,
       endTag: '</doc>',

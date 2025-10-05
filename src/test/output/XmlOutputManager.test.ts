@@ -13,6 +13,7 @@ import { WorkspaceFS } from '@utils/files';
 describe('XmlOutputManager markdown fallback', () => {
   const setting: AgentSetting = {
     agentType: AgentType.CoT,
+    agentCategory: 'workflow',
     documentTag: 'latex_document',
     temperature: 0,
     isRewrite: true,

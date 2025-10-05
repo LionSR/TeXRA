@@ -10,6 +10,7 @@ import * as configModule from '@utils/config';
 
 const baseSetting: AgentSetting = {
   agentType: AgentType.CoT,
+  agentCategory: 'workflow',
   documentTag: 'document',
   temperature: 0,
   isRewrite: true,
