@@ -309,12 +309,6 @@ export class ActionButtonManager extends BaseUIManager {
     this._setupCompareButtons();
   }
 
-  _normalizeSessionType(rawType) {
-    return rawType === SESSION_TYPES.TOOL_USE
-      ? SESSION_TYPES.TOOL_USE
-      : SESSION_TYPES.WORKFLOW;
-  }
-
   _getSessionTypeInput() {
     if (!this._sessionTypeInput) {
       const element = safeGetElementById(SESSION_TYPE_INPUT);
@@ -344,7 +338,7 @@ export class ActionButtonManager extends BaseUIManager {
   _getActiveAgentSelection() {
     const sessionTypeInput = this._getSessionTypeInput();
     const rawSessionType = sessionTypeInput?.value;
-    const sessionType = this._normalizeSessionType(rawSessionType);
+    const sessionType = rawSessionType || SESSION_TYPES.WORKFLOW;
     const selectElement = this._getAgentSelect(sessionType);
     const agent = selectElement?.value ?? '';
     return {
