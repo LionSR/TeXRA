@@ -50,6 +50,25 @@ import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
 const CHANNEL = 'executeAgent';
 const logger = new AgentLogger(CHANNEL);
 
+type AgentDirectoryCandidate = {
+  dir: string;
+  source: AgentDirectorySource;
+};
+
+async function findAgentYaml(
+  agentName: string,
+  searchDir: string,
+): Promise<string | undefined> {
+  const matches = await glob(`**/${agentName}.yaml`, {
+    cwd: searchDir,
+    dot: false,
+    nodir: true,
+    absolute: false,
+  });
+
+  return matches[0];
+}
+
 /**
  * Constructor signature for any agent implementation.
  */
@@ -72,69 +91,47 @@ export async function getAgentPath(
   context: vscode.ExtensionContext,
 ): Promise<AgentPathResolution> {
   try {
-    // First check custom agents directory
-    const customDir = await agentDirectories.custom(context);
-    if (customDir) {
-      const customMatches = await glob(`**/${agentName}.yaml`, {
-        cwd: customDir,
-        dot: false,
-        nodir: true,
-        absolute: false,
-      });
+    const [customDir, builtInDir, builtInToolUseDir] = await Promise.all([
+      agentDirectories.custom(context),
+      agentDirectories.builtIn(context),
+      agentDirectories.builtInToolUse(context),
+    ]);
 
-      if (customMatches.length > 0) {
+    const candidateDirectories = [
+      customDir && { dir: customDir, source: AgentDirectorySource.Custom },
+      builtInDir && { dir: builtInDir, source: AgentDirectorySource.BuiltIn },
+      builtInToolUseDir && {
+        dir: builtInToolUseDir,
+        source: AgentDirectorySource.BuiltInToolUse,
+      },
+    ].filter((candidate): candidate is AgentDirectoryCandidate => Boolean(candidate));
+
+    for (const candidate of candidateDirectories) {
+      const match = await findAgentYaml(agentName, candidate.dir);
+      if (match) {
         return {
-          directory: path.join(customDir, path.dirname(customMatches[0])),
-          source: AgentDirectorySource.Custom,
+          directory: path.join(candidate.dir, path.dirname(match)),
+          source: candidate.source,
         };
       }
     }
 
-    // If not found in custom directory, check built-in directory
-    const builtInDir = await agentDirectories.builtIn(context);
-    const builtInMatches = await glob(`**/${agentName}.yaml`, {
-      cwd: builtInDir,
-      dot: false,
-      nodir: true,
-      absolute: false,
-    });
-
-    // Also check the built-in tool-use directory for agents
-    const builtInToolUseDir = await agentDirectories.builtInToolUse(context);
-    const toolUseMatches = await glob(`**/${agentName}.yaml`, {
-      cwd: builtInToolUseDir,
-      dot: false,
-      nodir: true,
-      absolute: false,
-    });
-
-    const allMatches = [...builtInMatches, ...toolUseMatches];
-
-    if (allMatches.length === 0) {
-      const view = await vscode.commands.executeCommand<vscode.WebviewView>(
-        'texra.getWebviewView',
-      );
-      const customDir = await agentDirectories.custom(context);
-      view?.webview.postMessage({
-        command: MAIN_VIEW_COMMANDS.SHOW_AGENT_CONFIG_BANNER,
-        agentName,
-        customDirSet: !!customDir,
-      });
-      const errorMsg = `Could not find yaml file for agent: ${agentName}`;
-      throw new Error(errorMsg);
+    if (candidateDirectories.length === 0) {
+      throw new Error('No agent directories available for lookup');
     }
 
-    // Return the directory containing the yaml file
-    if (builtInMatches.length > 0) {
-      return {
-        directory: path.join(builtInDir, path.dirname(builtInMatches[0])),
-        source: AgentDirectorySource.BuiltIn,
-      };
-    }
-    return {
-      directory: path.join(builtInToolUseDir, path.dirname(toolUseMatches[0])),
-      source: AgentDirectorySource.BuiltInToolUse,
-    };
+    const customDirSet = candidateDirectories.some((candidate) => candidate.source === AgentDirectorySource.Custom);
+
+    const view = await vscode.commands.executeCommand<vscode.WebviewView>(
+      'texra.getWebviewView',
+    );
+    view?.webview.postMessage({
+      command: MAIN_VIEW_COMMANDS.SHOW_AGENT_CONFIG_BANNER,
+      agentName,
+      customDirSet,
+    });
+    const errorMsg = `Could not find yaml file for agent: ${agentName}`;
+    throw new Error(errorMsg);
   } catch (err) {
     const errorMsg = `Error finding agent path: ${err instanceof Error ? err.message : String(err)}`;
     // Don't show error notification for missing YAML files - we handle it with banner
