@@ -13,6 +13,7 @@ import { ProgressViewState } from '../state/ProgressViewState';
 import { buildStreamInfos } from '../streamInfoUtils';
 import type { StreamTabInfo } from '../types';
 import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
+import type { OutputFileInfo } from '@agent/output/types';
 import {
   AgentType,
   AgentSessionKind,
@@ -23,7 +24,7 @@ import {
 import type { TokenUsageStats } from '@agent/types/UsageTypes';
 import { bus } from '@eventBus/ProgressEventBus';
 import { AgentLogger } from '@logger/AgentLogger';
-import { LogMessageData, TaskGroup } from '@logger/LogTypes';
+import { LogMessageData, LogMessageUpdate, TaskGroup } from '@logger/LogTypes';
 import { parseLegacyLogData } from '@logger/logUtils';
 import { TaskState, isWorkflowTaskState } from '@logger/TaskState';
 import { getConfig } from '@utils/config';
@@ -123,20 +124,13 @@ export class ProgressEventHandler {
 
   /**
    * Handle setting active stream
-   */
-  private handleSetActiveStream(
-    payload:
-      | {
-          stream: StreamTabId;
-          agentType?: AgentType | null;
-          agentSessionKind?: AgentSessionKind | null;
-        }
-      | string,
-  ): void {
-    const { stream, agentType, agentSessionKind } =
-      typeof payload === 'string'
-        ? { stream: payload, agentType: undefined, agentSessionKind: undefined }
-        : payload;
+  */
+  private handleSetActiveStream(payload: {
+    stream: StreamTabId | null;
+    agentType?: AgentType | null;
+    agentSessionKind?: AgentSessionKind | null;
+  }): void {
+    const { stream, agentType, agentSessionKind } = payload;
 
     if (!stream) {
       return;
@@ -208,7 +202,7 @@ export class ProgressEventHandler {
    */
   private handleAddOutputFiles(data: {
     stream: string;
-    filesByRound: { [key: number]: any[] };
+    filesByRound: { [key: number]: OutputFileInfo[] };
   }): void {
     const { stream, filesByRound } = data;
     this.state.outputFiles.addFiles(stream, filesByRound);
@@ -413,7 +407,7 @@ export class ProgressEventHandler {
    */
   private handleUpdateLogMessage(data: {
     stream: string;
-    logMessage: LogMessageData;
+    logMessage: LogMessageUpdate;
   }): void {
     const { stream, logMessage } = data;
 
@@ -426,8 +420,17 @@ export class ProgressEventHandler {
     if (logMessage.text !== undefined) {
       existing.text = logMessage.text;
     }
-    if (logMessage.messageType) {
+    if (logMessage.messageType !== undefined) {
       existing.messageType = logMessage.messageType;
+    }
+    if (logMessage.level) {
+      existing.level = logMessage.level;
+    }
+    if (logMessage.timestamp !== undefined) {
+      existing.timestamp = logMessage.timestamp;
+    }
+    if (logMessage.verbose !== undefined) {
+      existing.verbose = logMessage.verbose;
     }
     if (logMessage.data !== undefined) {
       existing.data = logMessage.data;
@@ -474,7 +477,7 @@ export class ProgressEventHandler {
       if (!this._streamStatus.has(stream)) {
         this.handleUpdateStreamStatus({ stream, status: STATUS.RUNNING });
       }
-      this.handleSetActiveStream(stream);
+      this.handleSetActiveStream({ stream });
     }
 
     const group: TaskGroup = {
