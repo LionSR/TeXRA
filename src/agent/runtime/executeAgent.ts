@@ -220,13 +220,16 @@ export async function executeAgentWithLogging<T extends IAgent>(
       throw new Error('Failed to resolve stream tab ID for agent execution');
     }
 
-    agentStreamLogger = new AgentLogger(streamTabId, true);
+    const activeStreamId: StreamTabId = streamTabId;
+
+    agentStreamLogger = new AgentLogger(activeStreamId, true);
 
     // Check if this stream is already running
     const provider = ProgressViewProvider.getInstance();
-    const currentStatus = provider?.eventHandler.getStreamStatus(streamTabId);
+    const currentStatus =
+      provider?.eventHandler.getStreamStatus(activeStreamId);
     if (!isResume && currentStatus === 'running') {
-      const errorMsg = `Task "${streamTabId}" is already running. Please wait for it to complete or stop it first.`;
+      const errorMsg = `Task "${activeStreamId}" is already running. Please wait for it to complete or stop it first.`;
       throw new Error(errorMsg);
     }
 
@@ -241,7 +244,7 @@ export async function executeAgentWithLogging<T extends IAgent>(
             async (taskDetailsGroupId) => {
               if (!isResume && taskDetailsGroupId) {
                 logger.info(
-                  `Starting task execution for ${streamTabId}`,
+                  `Starting task execution for ${activeStreamId}`,
                   taskDetailsGroupId,
                 );
                 logger.info(
@@ -251,7 +254,7 @@ export async function executeAgentWithLogging<T extends IAgent>(
               }
 
               logger.debug(
-                `Creating stream with ID: ${streamTabId}`,
+                `Creating stream with ID: ${activeStreamId}`,
                 taskDetailsGroupId,
               );
               logger.debug(
@@ -265,12 +268,12 @@ export async function executeAgentWithLogging<T extends IAgent>(
 
               // Switch to this stream and set its status to running
               bus.emit('setActiveStream', {
-                stream: streamTabId,
-                agentType: metadata.agentType,
-                agentSessionKind: metadata.agentSessionKind,
+                stream: activeStreamId,
+                agentType: metadata.agentType ?? null,
+                agentSessionKind: metadata.agentSessionKind ?? null,
               });
               bus.emit('updateStreamStatus', {
-                stream: streamTabId,
+                stream: activeStreamId,
                 status: 'running',
               });
 
@@ -283,18 +286,26 @@ export async function executeAgentWithLogging<T extends IAgent>(
                 }
 
                 if (!provider?.isViewVisible()) {
-                  const inputFileName = path.basename(config.inputFile);
-                  const outputInfo = config.useMultipleOutputs
-                    ? config.outputFiles?.length
-                      ? `to ${
-                          config.outputFiles.length > 1
-                            ? `${config.outputFiles.length} files`
-                            : path.basename(config.outputFiles[0])
-                        }`
-                      : 'for multiple outputs'
-                    : config.outputFiles?.length
-                      ? `to ${path.basename(config.outputFiles[0])}`
+                  const inputFileName = config.inputFile
+                    ? path.basename(config.inputFile)
+                    : 'selected input';
+                  const outputInfo = (() => {
+                    if (config.useMultipleOutputs) {
+                      const outputs = config.outputFiles ?? [];
+                      if (outputs.length > 1) {
+                        return `to ${outputs.length} files`;
+                      }
+                      const [firstOutput] = outputs;
+                      return firstOutput
+                        ? `to ${path.basename(firstOutput)}`
+                        : 'for multiple outputs';
+                    }
+
+                    const [singleOutput] = config.outputFiles ?? [];
+                    return singleOutput
+                      ? `to ${path.basename(singleOutput)}`
                       : '';
+                  })();
 
                   vscode.window
                     .showInformationMessage(
@@ -317,7 +328,7 @@ export async function executeAgentWithLogging<T extends IAgent>(
 
                 // Store taskState
                 logger.debug(
-                  `Storing taskState for stream: ${streamTabId}`,
+                  `Storing taskState for stream: ${activeStreamId}`,
                   taskDetailsGroupId,
                 );
                 logger.debug(
@@ -327,12 +338,12 @@ export async function executeAgentWithLogging<T extends IAgent>(
 
                 // Convert AgentConfig to TaskState using utility function
                 bus.emit('setTaskState', {
-                  streamTabId: streamTabId,
+                  streamTabId: activeStreamId,
                   executionId,
                   taskState: agentConfigToTaskState(config, metadata),
                 });
                 logger.debug(
-                  `Task state stored for stream: ${streamTabId}`,
+                  `Task state stored for stream: ${activeStreamId}`,
                   mainTaskGroupId,
                 );
               }
@@ -359,15 +370,18 @@ export async function executeAgentWithLogging<T extends IAgent>(
           logger.debug(`Task completed successfully`, mainTaskGroupId);
           // Update status to stopped on successful completion
           bus.emit('updateStreamStatus', {
-            stream: streamTabId,
+            stream: activeStreamId,
             status: 'stopped',
           });
 
-          const generated: string[] = Object.values(
+          const generated = Object.values(
             (agent as any).outputHandler?.outputFiles || {},
           )
             .flat()
-            .filter(Boolean) as string[];
+            .filter(
+              (file): file is string =>
+                typeof file === 'string' && file.trim().length > 0,
+            );
           for (const out of generated) {
             await openBuildDisplayIfTex(out, { preserveFocus: true });
           }
@@ -379,7 +393,7 @@ export async function executeAgentWithLogging<T extends IAgent>(
           );
           // Update status to error if agent run fails
           bus.emit('updateStreamStatus', {
-            stream: streamTabId,
+            stream: activeStreamId,
             status: 'error',
           });
           throw err;
