@@ -124,7 +124,7 @@ export class ProgressEventHandler {
 
   /**
    * Handle setting active stream
-  */
+   */
   private handleSetActiveStream(payload: {
     stream: StreamTabId | null;
     agentType?: AgentType | null;
