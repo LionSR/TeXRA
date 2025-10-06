@@ -104,8 +104,7 @@ function defaultChildTimestamp(child) {
 const COPY_RESET_DELAY_MS = 2000;
 
 /**
- * Attempt to copy text to the clipboard using the modern API, falling back to
- * document.execCommand when necessary.
+ * Attempt to copy text to the clipboard using the asynchronous clipboard API.
  * @param {string} text
  * @returns {Promise<boolean>} true when the copy succeeds.
  */
@@ -116,30 +115,11 @@ export async function copyTextToClipboard(text) {
 
   const normalized = text.replace(/\r?\n/g, '\n');
 
-  if (navigator.clipboard?.writeText) {
-    try {
-      await navigator.clipboard.writeText(normalized);
-      return true;
-    } catch {
-      // Fall back to execCommand below
-    }
-  }
-
-  const textarea = document.createElement('textarea');
-  textarea.value = normalized;
-  textarea.setAttribute('readonly', '');
-  textarea.style.position = 'fixed';
-  textarea.style.opacity = '0';
-  textarea.style.pointerEvents = 'none';
-  document.body.appendChild(textarea);
-  textarea.select();
-
   try {
-    return document.execCommand('copy');
+    await navigator.clipboard.writeText(normalized);
+    return true;
   } catch {
     return false;
-  } finally {
-    textarea.remove();
   }
 }
 
