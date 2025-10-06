@@ -39,16 +39,43 @@ function ensureTempDir(): void {
   }
 }
 
-/** Resolve a file path and ensure it exists. */
-async function resolveExistingFile(filePath: string): Promise<string> {
+/** Try to resolve a file path and return the absolute path when it exists. */
+async function resolveFileIfExists(filePath: string): Promise<string | null> {
   const absolutePath = resolveFilePath(filePath);
   const exists = await AbsoluteFS.exists(absolutePath);
 
-  if (!exists) {
-    throw new Error(`File not found: ${filePath}`);
+  return exists ? absolutePath : null;
+}
+
+/** Resolve a file path and ensure it exists. */
+async function resolveExistingFile(
+  filePath: string,
+  resourceLabel: string = 'File',
+): Promise<string> {
+  const absolutePath = await resolveFileIfExists(filePath);
+
+  if (!absolutePath) {
+    throw new Error(`${resourceLabel} not found: ${filePath}`);
   }
 
   return absolutePath;
+}
+
+/** Load a PDF and return its page count. Expects an absolute path. */
+async function loadPdfPageCount(
+  absolutePath: string,
+  displayPath: string,
+): Promise<number> {
+  const pdfBytes = AbsoluteFS.readBytesSync(absolutePath);
+  const pdfDoc = await PDFDocument.load(pdfBytes, {
+    updateMetadata: false,
+    ignoreEncryption: true,
+  });
+
+  const pageCount = pdfDoc.getPageCount();
+
+  logger.debug(CHANNEL, `PDF page count for ${displayPath}: ${pageCount}`);
+  return pageCount;
 }
 
 /**
@@ -215,16 +242,14 @@ export async function getBase64EncodedMedia(
  */
 export async function countPdfPages(pdfPath: string): Promise<number> {
   try {
-    const absolutePath = await resolveExistingFile(pdfPath);
-    const pdfBytes = AbsoluteFS.readBytesSync(absolutePath);
-    const pdfDoc = await PDFDocument.load(pdfBytes, {
-      updateMetadata: false,
-      ignoreEncryption: true,
-    });
-    const pageCount = pdfDoc.getPageCount();
+    const absolutePath = await resolveFileIfExists(pdfPath);
 
-    logger.debug(CHANNEL, `PDF page count for ${pdfPath}: ${pageCount}`);
-    return pageCount;
+    if (!absolutePath) {
+      logger.debug(CHANNEL, `PDF file not found: ${pdfPath}`);
+      return 0;
+    }
+
+    return await loadPdfPageCount(absolutePath, pdfPath);
   } catch (err) {
     logger.error(
       CHANNEL,
@@ -266,7 +291,7 @@ export async function singlePagePdf2Png(
       throw new Error('GraphicsMagick/ImageMagick is not installed.');
     }
 
-    const absolutePath = await resolveExistingFile(pdfPath);
+    const absolutePath = await resolveExistingFile(pdfPath, 'PDF file');
     logger.debug(CHANNEL, `Full path to PDF: ${absolutePath}`);
 
     ensureTempDir();
@@ -380,7 +405,14 @@ export async function processPdf2Png(
   maxSize?: [number, number],
 ): Promise<string | string[] | null> {
   try {
-    const pageCount = await countPdfPages(pdfPath);
+    const absolutePath = await resolveFileIfExists(pdfPath);
+
+    if (!absolutePath) {
+      logger.debug(CHANNEL, `PDF file not found: ${pdfPath}`);
+      return null;
+    }
+
+    const pageCount = await loadPdfPageCount(absolutePath, pdfPath);
     if (pageCount === 0) {
       return null;
     }
