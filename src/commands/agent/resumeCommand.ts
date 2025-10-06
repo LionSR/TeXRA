@@ -3,20 +3,11 @@ import * as vscode from 'vscode';
 
 // Local imports - agent
 import { AgentConfigSchema } from '@agent/core/AgentConfig';
-import {
-  AgentSetting,
-  AgentPrompt,
-  AgentType,
-} from '@agent/core/AgentDataclass';
+import { AgentType } from '@agent/core/AgentDataclass';
 import { BaseToolUseAgent } from '@agent/implementations/BaseToolUseAgent';
 import {
-  loadAgentSettingAndPrompts,
-  ensureAgentTypeForSource,
-} from '@agent/runtime/agentLoad';
-import { ModelFactory } from '@agent/runtime/ModelFactory';
-import {
   executeAgentWithLogging,
-  getAgentPath,
+  prepareAgentInstance,
 } from '@agent/runtime/executeAgent';
 import {
   ToolUseSessionManager,
@@ -26,17 +17,12 @@ import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import { STATUS } from '@progressView/modules/constants.js';
 import { isToolUseTaskState } from '@logger/TaskState';
-import { MODEL_CONFIGS } from '@model/ModelRegistry';
 import { logErrorMessage } from '@common/errors/errorHandlingUtils';
-
-function isToolUseAgent(setting: AgentSetting): boolean {
-  return setting.agentType === AgentType.ToolUse;
-}
 
 async function buildToolUseAgent(
   snapshot: ToolUseSessionSnapshot,
   context: vscode.ExtensionContext,
-): Promise<{ agent: BaseToolUseAgent; agentSetting: AgentSetting }> {
+): Promise<{ agent: BaseToolUseAgent; agentType: AgentType }> {
   const provider = ProgressViewProvider.getInstance();
   if (!provider) {
     throw new Error('Progress view provider is not initialized.');
@@ -52,36 +38,18 @@ async function buildToolUseAgent(
   }
 
   const fullConfig = AgentConfigSchema.parse(taskState.agentConfig);
-  const modelName = fullConfig.model;
-  if (!(modelName in MODEL_CONFIGS)) {
-    throw new Error(`Model ${modelName} not found in MODEL_CONFIGS`);
-  }
+  const { agent, agentType } = await prepareAgentInstance<BaseToolUseAgent>({
+    agentName: fullConfig.agent,
+    configPayload: fullConfig,
+    context,
+    executionId: snapshot.executionId as ExecutionId,
+  });
 
-  const modelHandler = ModelFactory.createHandler(MODEL_CONFIGS[modelName]);
-  const agentPath = await getAgentPath(fullConfig.agent, context);
-  const [loadedAgentSetting, agentPrompt] = await loadAgentSettingAndPrompts(
-    agentPath,
-    fullConfig.agent,
-    { preferMultiple: fullConfig.useMultipleOutputs },
-  );
-  const agentSetting = ensureAgentTypeForSource(
-    loadedAgentSetting,
-    agentPath.source,
-  );
-
-  if (!isToolUseAgent(agentSetting)) {
+  if (!(agent instanceof BaseToolUseAgent) || agentType !== AgentType.ToolUse) {
     throw new Error('Attempted to resume a non tool-use agent.');
   }
 
-  const agent = new BaseToolUseAgent(
-    modelHandler,
-    fullConfig,
-    agentSetting,
-    agentPrompt as AgentPrompt,
-    agentPath.directory,
-    snapshot.executionId as ExecutionId,
-  );
-  return { agent, agentSetting };
+  return { agent, agentType };
 }
 
 interface ResumeAgentCommandPayload {
@@ -135,10 +103,7 @@ export function registerResumeAgentCommand(
           STATUS.RESUMING,
         );
 
-        const { agent, agentSetting } = await buildToolUseAgent(
-          snapshot,
-          context,
-        );
+        const { agent, agentType } = await buildToolUseAgent(snapshot, context);
 
         agent.resumeFromSnapshot(snapshot);
         if (followUp !== undefined) {
@@ -154,7 +119,7 @@ export function registerResumeAgentCommand(
           snapshot.agentName,
           async () => ({
             agent,
-            agentType: agentSetting.agentType,
+            agentType,
           }),
           context,
           executionId,
