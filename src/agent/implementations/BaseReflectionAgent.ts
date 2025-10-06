@@ -180,26 +180,27 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
   }
 
   /**
-   * Processes output files for current round.
-   * This method orchestrates the overall output processing flow with clear separation of concerns:
-   * 1. Usage tracking via trackRoundUsage
-   * 2. LaTeX diff operations via handleLatexdiffofOutput (only when endTurn is true)
-   *
-   * The actual file processing is handled separately in processOutputFiles.
-   *
-   * @returns Array of processed output file paths
+   * Hook for agents that need to preprocess model output before the shared
+   * pipeline parses files. Subclasses override this to normalize XML or apply
+   * other transformations while reusing the base orchestration.
    */
-  protected async handleOutput(
+  protected async preprocessOutputForRound(
+    _currRound: number,
+    _outputFile: string,
+    _processGroupId: string,
+  ): Promise<void> {
+    // Default implementation intentionally left blank.
+  }
+
+  private async finalizeRoundOutputProcessing(
     currRound: number,
-    stateRound: AgentStateRound,
     stateGlobal: AgentStateGlobal,
     options: RoundOutputOptions,
   ): Promise<string[]> {
-    const { outputFile, endTurn, processGroupId } = options;
-    // Record usage statistics at the end of each round
+    const { endTurn, processGroupId } = options;
+
     await this.trackRoundUsage(stateGlobal, processGroupId);
 
-    // If this is the end of a turn, handle latexdiff operations as a separate step
     if (
       endTurn &&
       this.outputHandler.outputFiles[currRound] &&
@@ -209,8 +210,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
         this.baseFiles.map(async (f) => await WorkspaceFS.exists(f)),
       );
 
-      if (existingBase.some((e) => e)) {
-        // Pass the process group ID to maintain proper nesting in the log hierarchy
+      if (existingBase.some((exists) => exists)) {
         await this.outputHandler.handleLatexdiffofOutput(
           currRound,
           processGroupId,
@@ -224,6 +224,86 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     }
 
     return this.outputHandler.outputFiles[currRound] || [];
+  }
+
+  protected async runOutputPipeline(
+    currRound: number,
+    _stateRound: AgentStateRound,
+    stateGlobal: AgentStateGlobal,
+    options: RoundOutputOptions,
+  ): Promise<string[]> {
+    const { outputFile, endTurn, processGroupId } = options;
+
+    let outputProcessGroupId = processGroupId;
+    let createdGroup = false;
+    let encounteredError = false;
+
+    if (!outputProcessGroupId) {
+      outputProcessGroupId = await this.logger.startGroup(
+        `OutputProcessing-Round${currRound}`,
+        undefined,
+        this.logger.getActiveGroupId(),
+      );
+      createdGroup = true;
+    }
+
+    this.outputHandler.outputFiles[currRound] =
+      this.outputHandler.outputFiles[currRound] || [];
+
+    try {
+      if (endTurn) {
+        this.logger.debug(
+          `Processing output for round ${currRound}`,
+          outputProcessGroupId,
+        );
+
+        await this.preprocessOutputForRound(
+          currRound,
+          outputFile,
+          outputProcessGroupId,
+        );
+
+        await this.outputHandler.processOutputFiles(
+          outputFile,
+          currRound,
+          outputProcessGroupId,
+        );
+
+        this.logger.debug(
+          `Output files processed for round ${currRound}`,
+          outputProcessGroupId,
+        );
+      }
+
+      return await this.finalizeRoundOutputProcessing(currRound, stateGlobal, {
+        outputFile,
+        endTurn,
+        processGroupId: outputProcessGroupId,
+      });
+    } catch (error) {
+      encounteredError = true;
+      this.logger.error(
+        `Error processing output for round ${currRound}: ${error}`,
+        outputProcessGroupId,
+      );
+      throw error;
+    } finally {
+      if (createdGroup && outputProcessGroupId) {
+        this.logger.endGroup(
+          outputProcessGroupId,
+          encounteredError ? 'error' : 'stopped',
+        );
+      }
+    }
+  }
+
+  protected async handleOutput(
+    currRound: number,
+    stateRound: AgentStateRound,
+    stateGlobal: AgentStateGlobal,
+    options: RoundOutputOptions,
+  ): Promise<string[]> {
+    return this.runOutputPipeline(currRound, stateRound, stateGlobal, options);
   }
 
   /**
