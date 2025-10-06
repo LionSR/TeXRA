@@ -198,7 +198,35 @@ export async function prepareAgentInstance<T extends IAgent = IAgent>(
   };
 
   const fullConfig = AgentConfigSchema.parse(configInput);
-  const modelName = fullConfig.model;
+  let resolvedAgentName = getAgentName(
+    fullConfig.agent,
+    fullConfig.useMultipleOutputs,
+  );
+
+  let agentPathInfo: AgentPathResolution;
+  try {
+    agentPathInfo = await getAgentPath(resolvedAgentName, context);
+  } catch (err) {
+    if (resolvedAgentName !== fullConfig.agent) {
+      resolvedAgentName = fullConfig.agent;
+      agentPathInfo = await getAgentPath(fullConfig.agent, context);
+    } else {
+      throw err;
+    }
+  }
+
+  const [loadedAgentSetting, agentPrompt] = await loadAgentSettingAndPrompts(
+    agentPathInfo,
+    fullConfig.agent,
+    { preferMultiple: fullConfig.useMultipleOutputs },
+  );
+
+  const configWithResolvedAgent: AgentConfig = {
+    ...fullConfig,
+    agent: resolvedAgentName,
+  };
+
+  const modelName = configWithResolvedAgent.model;
 
   if (!(modelName in MODEL_CONFIGS)) {
     const openDocs = 'Model Documentation';
@@ -218,15 +246,9 @@ export async function prepareAgentInstance<T extends IAgent = IAgent>(
   }
 
   const modelConfig = MODEL_CONFIGS[modelName];
-  modelConfig.toolConfig = fullConfig.toolConfig;
+  modelConfig.toolConfig = configWithResolvedAgent.toolConfig;
 
   const modelHandler = ModelFactory.createHandler(modelConfig);
-  const agentPathInfo = await getAgentPath(agentName, context);
-  const [loadedAgentSetting, agentPrompt] = await loadAgentSettingAndPrompts(
-    agentPathInfo,
-    agentName,
-    { preferMultiple: fullConfig.useMultipleOutputs },
-  );
 
   const agentSetting = ensureAgentTypeForSource(
     loadedAgentSetting,
@@ -238,7 +260,7 @@ export async function prepareAgentInstance<T extends IAgent = IAgent>(
 
   const agent = new AgentClass(
     modelHandler,
-    fullConfig,
+    configWithResolvedAgent,
     agentSetting,
     agentPrompt,
     agentPathInfo.directory,
@@ -561,14 +583,14 @@ export async function executeAgent(
         executionId,
       });
 
-      const fullConfig = agent.config;
+      const { outputFiles, useMultipleOutputs } = agent.config;
       if (
-        Array.isArray(fullConfig.outputFiles) &&
-        fullConfig.outputFiles.length > 1 &&
-        !fullConfig.useMultipleOutputs
+        Array.isArray(outputFiles) &&
+        outputFiles.length > 1 &&
+        !useMultipleOutputs
       ) {
         logger.warn(
-          `Multiple output files provided (${fullConfig.outputFiles.length}) but useMultipleOutputs flag is disabled. Update the agent configuration to ensure consistent stream handling.`,
+          `Multiple output files provided (${outputFiles.length}) but useMultipleOutputs flag is disabled. Update the agent configuration to ensure consistent stream handling.`,
         );
       }
 
