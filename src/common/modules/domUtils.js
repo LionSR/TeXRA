@@ -5,7 +5,11 @@ import {
   CHEVRON_RIGHT_CLASS,
 } from './iconConstants.js';
 
-function setChevronIconImpl(element, expanded, { expandedClass, collapsedClass }) {
+function setChevronIconImpl(
+  element,
+  expanded,
+  { expandedClass, collapsedClass },
+) {
   if (!element) return;
   let icon = element;
   if (icon.tagName.toLowerCase() !== 'i') {
@@ -17,10 +21,14 @@ function setChevronIconImpl(element, expanded, { expandedClass, collapsedClass }
   }
   const existingClasses = icon.className
     .split(' ')
-    .filter((cls) => cls && !cls.startsWith('codicon-chevron-') && cls !== 'codicon')
+    .filter(
+      (cls) => cls && !cls.startsWith('codicon-chevron-') && cls !== 'codicon',
+    )
     .join(' ');
   const chevronClass = expanded ? expandedClass : collapsedClass;
-  icon.className = existingClasses ? `${chevronClass} ${existingClasses}` : chevronClass;
+  icon.className = existingClasses
+    ? `${chevronClass} ${existingClasses}`
+    : chevronClass;
 }
 
 export function addEventListenerSafely(elementOrId, event, handler, options) {
