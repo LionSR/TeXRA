@@ -80,6 +80,7 @@
                 "gptoss-",
                 "gpt45",
                 "gpt5",
+                "gpt5pro",
                 "gpt5-",
                 "gpt5--",
                 "gpt41",
@@ -115,7 +116,7 @@
               "qwen3max",
               "grok4"
             ],
-            "description": "List of available models. Model codes: opus41T/opus41 (Claude Opus 4.1 Thinking/Regular), opus4T/opus4 (Claude Opus 4 Thinking/Regular), sonnet45T/sonnet45 (Claude Sonnet 4.5 Thinking/Regular), sonnet4T/sonnet4 (Claude Sonnet 4 Thinking/Regular), sonnet37T/sonnet37 (Claude Sonnet 3.7 Thinking/Regular), o4-/o3/o3pro/o3-/o1pro/o1/gptoss/gptoss- (OpenAI reasoning models), gpt5/gpt5-/gpt5--/gpt41/gpt4o (GPT-5/5 Mini/5 Nano/4.1/4O), gemini25p/gemini25f/gemini2fT (Gemini 2.5 Pro/Flash, 2.0 Flash Thinking), deepseek/deepseekT(DeepSeek V3.1 Regular/Thinking), dsv3/dsr1 (DeepSeek V3/R1), grok4 (Grok 4), grok3 (Grok 3), qwen3max (Qwen-Max latest), qwenplus (Qwen Plus latest), qwenturbo (Qwen Turbo), kimit/kimiv/kimi2/kimi2turbo (Kimi Thinking/Vision/K2/K2 Turbo)",
+            "description": "List of available models. Model codes: opus41T/opus41 (Claude Opus 4.1 Thinking/Regular), opus4T/opus4 (Claude Opus 4 Thinking/Regular), sonnet45T/sonnet45 (Claude Sonnet 4.5 Thinking/Regular), sonnet4T/sonnet4 (Claude Sonnet 4 Thinking/Regular), sonnet37T/sonnet37 (Claude Sonnet 3.7 Thinking/Regular), o4-/o3/o3pro/o3-/o1pro/o1/gptoss/gptoss- (OpenAI reasoning models), gpt5/gpt5pro/gpt5-/gpt5--/gpt41/gpt4o (GPT-5/5 Pro/5 Mini/5 Nano/4.1/4O), gemini25p/gemini25f/gemini2fT (Gemini 2.5 Pro/Flash, 2.0 Flash Thinking), deepseek/deepseekT(DeepSeek V3.1 Regular/Thinking), dsv3/dsr1 (DeepSeek V3/R1), grok4 (Grok 4), grok3 (Grok 3), qwen3max (Qwen-Max latest), qwenplus (Qwen Plus latest), qwenturbo (Qwen Turbo), kimit/kimiv/kimi2/kimi2turbo (Kimi Thinking/Vision/K2/K2 Turbo)",
             "scope": "resource"
           }
         }
@@ -684,6 +685,7 @@
               "gemini25p",
               "gemini25f",
               "gpt5",
+              "gpt5pro",
               "gpt5-",
               "o3-mini",
               "gpt41",
@@ -697,6 +699,7 @@
               "Gemini 2.5 Pro",
               "Gemini 2.5 Flash",
               "OpenAI GPT-5",
+              "OpenAI GPT-5 Pro",
               "OpenAI GPT-5-",
               "OpenAI O3 Mini",
               "OpenAI GPT-4.1",

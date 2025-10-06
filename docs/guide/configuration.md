@@ -49,7 +49,7 @@ default list is maintained in the [Models Guide](./models.md). Override it by
 specifying your own model identifiers:
 
 ```json
-"texra.models": ["sonnet45T", "gpt5"]
+"texra.models": ["sonnet45T", "gpt5", "gpt5pro"]
 ```
 
 ### API Provider Settings
@@ -77,7 +77,7 @@ Configure how TeXRA connects to AI model providers:
 - `useStreamingAnthropicReasoning`: Enable streaming specifically for Anthropic reasoning models
 - `useStreamingOpenAIReasoning`: Enable streaming specifically for OpenAI reasoning models
 - `useOpenAIResponsesAPI`: Use OpenAI's Responses API instead of Chat Completions when available
-- `gpt5ReasoningSummary`: Request reasoning summaries from GPT-5 models (requires verified account and user tier)
+- `gpt5ReasoningSummary`: Request reasoning summaries from GPT-5 family models, including GPT-5 Pro (requires verified account and user tier)
 - `useCopilot`: Use the Copilot language model through VS Code's Language Model API for instruction polishing and text connection
 
 | Provider         | Proxy path                  | Supported |
