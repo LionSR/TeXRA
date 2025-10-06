@@ -176,6 +176,79 @@ function getAgentName(
 }
 
 /**
+ * Create and configure an agent instance from the provided payload.
+ */
+interface PrepareAgentInstanceParams {
+  agentName: string;
+  configPayload: Partial<AgentConfig>;
+  context: vscode.ExtensionContext;
+  executionId?: ExecutionId;
+  agentClassOverride?: AgentConstructor;
+}
+
+export async function prepareAgentInstance<T extends IAgent = IAgent>(
+  params: PrepareAgentInstanceParams,
+): Promise<{ agent: T; agentType: AgentType }> {
+  const { agentName, configPayload, context, executionId, agentClassOverride } =
+    params;
+
+  const configInput: Partial<AgentConfig> = {
+    agent: agentName,
+    ...configPayload,
+  };
+
+  const fullConfig = AgentConfigSchema.parse(configInput);
+  const modelName = fullConfig.model;
+
+  if (!(modelName in MODEL_CONFIGS)) {
+    const openDocs = 'Model Documentation';
+    await showInstructionWithSuppress(
+      'modelNotRecognized',
+      `Model "${modelName}" is not recognized. Review the documentation for supported models.`,
+      [
+        {
+          title: openDocs,
+          callback: () =>
+            vscode.commands.executeCommand('texra.openDoc', 'models'),
+        },
+      ],
+      false,
+    );
+    throw new Error(`Model ${modelName} not found in MODEL_CONFIGS`);
+  }
+
+  const modelConfig = MODEL_CONFIGS[modelName];
+  modelConfig.toolConfig = fullConfig.toolConfig;
+
+  const modelHandler = ModelFactory.createHandler(modelConfig);
+  const agentPathInfo = await getAgentPath(agentName, context);
+  const [loadedAgentSetting, agentPrompt] = await loadAgentSettingAndPrompts(
+    agentPathInfo,
+    agentName,
+    { preferMultiple: fullConfig.useMultipleOutputs },
+  );
+
+  const agentSetting = ensureAgentTypeForSource(
+    loadedAgentSetting,
+    agentPathInfo.source,
+  );
+
+  const AgentClass = (agentClassOverride ??
+    getAgentClass(agentSetting)) as AgentConstructor;
+
+  const agent = new AgentClass(
+    modelHandler,
+    fullConfig,
+    agentSetting,
+    agentPrompt,
+    agentPathInfo.directory,
+    executionId,
+  );
+
+  return { agent: agent as T, agentType: agentSetting.agentType };
+}
+
+/**
  * Common function to execute any agent with proper logging and status handling
  */
 interface ExecuteAgentOptions {
@@ -481,9 +554,14 @@ export async function executeAgent(
   await executeAgentWithLogging(
     agentName,
     async () => {
-      // Create full agent config
-      const fullConfig = AgentConfigSchema.parse(agentConfig);
+      const { agent, agentType } = await prepareAgentInstance({
+        agentName: requestedAgentName,
+        configPayload: agentConfig,
+        context,
+        executionId,
+      });
 
+      const fullConfig = agent.config;
       if (
         Array.isArray(fullConfig.outputFiles) &&
         fullConfig.outputFiles.length > 1 &&
@@ -494,56 +572,7 @@ export async function executeAgent(
         );
       }
 
-      // Get model configuration
-      const modelName = fullConfig.model;
-      if (!(modelName in MODEL_CONFIGS)) {
-        const openDocs = 'Model Documentation';
-        await showInstructionWithSuppress(
-          'modelNotRecognized',
-          `Model "${modelName}" is not recognized. Review the documentation for supported models.`,
-          [
-            {
-              title: openDocs,
-              callback: () =>
-                vscode.commands.executeCommand('texra.openDoc', 'models'),
-            },
-          ],
-          false,
-        );
-        throw new Error(`Model ${modelName} not found in MODEL_CONFIGS`);
-      }
-
-      const modelConfig = MODEL_CONFIGS[modelName];
-      // Only set toolConfig reference - no need to override openRouterOnly
-      modelConfig.toolConfig = fullConfig.toolConfig;
-
-      // Create model handler
-      const modelHandler = ModelFactory.createHandler(modelConfig);
-
-      // Get agent path
-      const agentPathInfo = await getAgentPath(fullConfig.agent, context);
-
-      // Load settings and prompts
-      const [loadedAgentSetting, agentPrompt] =
-        await loadAgentSettingAndPrompts(agentPathInfo, requestedAgentName, {
-          preferMultiple: fullConfig.useMultipleOutputs,
-        });
-      const agentSetting = ensureAgentTypeForSource(
-        loadedAgentSetting,
-        agentPathInfo.source,
-      );
-
-      // Get appropriate agent class and create instance
-      const AgentClass = getAgentClass(agentSetting);
-      const agent = new AgentClass(
-        modelHandler,
-        fullConfig,
-        agentSetting,
-        agentPrompt,
-        agentPathInfo.directory,
-        executionId,
-      );
-      return { agent, agentType: agentSetting.agentType };
+      return { agent, agentType };
     },
     context,
     executionId,
@@ -565,47 +594,14 @@ export async function executeMergeAgent(
   await executeAgentWithLogging(
     agentName,
     async () => {
-      // Create agent config for merge operation
-      const agentConfig = AgentConfigSchema.parse({
-        agent: 'merge',
-        model,
-        inputFile,
-        editedFile,
+      const { agent, agentType } = await prepareAgentInstance<MergeAgent>({
+        agentName,
+        configPayload: { agent: agentName, model, inputFile, editedFile },
+        context,
+        agentClassOverride: MergeAgent,
       });
 
-      // Get model configuration
-      if (!(model in MODEL_CONFIGS)) {
-        const openDocs = 'Model Documentation';
-        const choice = await vscode.window.showErrorMessage(
-          `Model ${model} is not recognized.`,
-          openDocs,
-        );
-        if (choice === openDocs) {
-          vscode.commands.executeCommand('texra.openDoc', 'models');
-        }
-        throw new Error(`Model ${model} not found in MODEL_CONFIGS`);
-      }
-
-      const modelConfig = MODEL_CONFIGS[model];
-      const modelHandler = ModelFactory.createHandler(modelConfig);
-
-      // Get agent path and load settings/prompts
-      const agentPathInfo = await getAgentPath('merge', context);
-      const [loadedAgentSetting, agentPrompt] =
-        await loadAgentSettingAndPrompts(agentPathInfo, 'merge');
-      const agentSetting = ensureAgentTypeForSource(
-        loadedAgentSetting,
-        agentPathInfo.source,
-      );
-
-      const agent = new MergeAgent(
-        modelHandler,
-        agentConfig,
-        agentSetting,
-        agentPrompt,
-        agentPathInfo.directory,
-      );
-      return { agent, agentType: agentSetting.agentType };
+      return { agent, agentType };
     },
     context,
     undefined,
