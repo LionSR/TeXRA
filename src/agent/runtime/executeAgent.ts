@@ -105,7 +105,9 @@ export async function getAgentPath(
         dir: builtInToolUseDir,
         source: AgentDirectorySource.BuiltInToolUse,
       },
-    ].filter((candidate): candidate is AgentDirectoryCandidate => Boolean(candidate));
+    ].filter((candidate): candidate is AgentDirectoryCandidate =>
+      Boolean(candidate),
+    );
 
     for (const candidate of candidateDirectories) {
       const match = await findAgentYaml(agentName, candidate.dir);
@@ -121,7 +123,9 @@ export async function getAgentPath(
       throw new Error('No agent directories available for lookup');
     }
 
-    const customDirSet = candidateDirectories.some((candidate) => candidate.source === AgentDirectorySource.Custom);
+    const customDirSet = candidateDirectories.some(
+      (candidate) => candidate.source === AgentDirectorySource.Custom,
+    );
 
     const view = await vscode.commands.executeCommand<vscode.WebviewView>(
       'texra.getWebviewView',
