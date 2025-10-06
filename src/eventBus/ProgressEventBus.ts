@@ -64,7 +64,11 @@ export interface ProgressEventPayloads {
   clearMissingOutputs: StreamTabId;
   clearOutputFiles: StreamTabId;
   setTaskState: SetTaskStatePayload;
-  updateGroupUsage: { stream: StreamTabId; groupId: string; usage: TokenUsageStats };
+  updateGroupUsage: {
+    stream: StreamTabId;
+    groupId: string;
+    usage: TokenUsageStats;
+  };
   clearTaskOutput: StreamTabId;
   updateStreamUsage: { stream: StreamTabId; usage: TokenUsageStats };
 }
@@ -78,7 +82,10 @@ class ProgressEventBus {
     payload: ProgressEventPayloads[ProgressEvent];
   }[] = [];
 
-  emit<K extends ProgressEvent>(event: K, payload: ProgressEventPayloads[K]): void {
+  emit<K extends ProgressEvent>(
+    event: K,
+    payload: ProgressEventPayloads[K],
+  ): void {
     if (this.emitter.listenerCount(event) === 0) {
       this.buffer.push({ event, payload });
       if (this.buffer.length > MAX_BUFFER_SIZE) {
