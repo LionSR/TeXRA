@@ -213,6 +213,12 @@
             "description": "Use the OpenAI Responses API instead of the Chat Completions API when available.",
             "scope": "resource"
           },
+          "texra.model.useBackgroundResponses": {
+            "type": "boolean",
+            "default": false,
+            "description": "Run OpenAI Responses API requests in background mode to improve reliability for long-running generations.",
+            "scope": "resource"
+          },
           "texra.model.gpt5ReasoningSummary": {
             "type": "boolean",
             "default": false,
