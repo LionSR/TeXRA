@@ -152,6 +152,9 @@ describe('ModelHandlerOpenAI.normalizeMessages hook', () => {
       'Message 1 (assistant): Assistant reply...',
       'assistant preview should remain intact',
     );
+    assert.deepEqual(loggerStub.infoMessages, [
+      'Preprocessed message array from 3 to 2 messages for Deepseek model compatibility',
+    ]);
   });
 
   it('Kimi handler logs each message preview', async () => {
@@ -177,6 +180,7 @@ describe('ModelHandlerOpenAI.normalizeMessages hook', () => {
       'Message 1 (user): Second part...',
       'Message 2 (assistant): Assistant reply...',
     ]);
+    assert.deepEqual(loggerStub.infoMessages, []);
   });
 
   it('DashScope handler logs each message preview', async () => {
@@ -202,5 +206,6 @@ describe('ModelHandlerOpenAI.normalizeMessages hook', () => {
       'Message 1 (user): Second part...',
       'Message 2 (assistant): Assistant reply...',
     ]);
+    assert.deepEqual(loggerStub.infoMessages, []);
   });
 });
