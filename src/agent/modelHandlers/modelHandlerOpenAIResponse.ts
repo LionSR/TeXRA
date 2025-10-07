@@ -45,9 +45,10 @@ import { MediaEntry } from '@agent/utils/mediaTypes';
 import { calculateTokenPrice } from '@agent/utils/priceUtils';
 import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
-import type { ToolDefinition } from '@model';
+import { ModelProvider, type ToolDefinition } from '@model';
 import { cleanFileContent } from '@replacement/engine';
 import { K_SLICE, getConfig } from '@utils/config';
+import { sleep } from '@utils/helpers';
 import { WorkspaceFS } from '@utils/files';
 import xmlUtils from '@utils/text/xmlUtils';
 
@@ -63,6 +64,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   OpenAIAPIResponseUsage,
   ResponseFunctionToolCallItem
 > {
+  private static readonly BACKGROUND_POLL_INTERVAL_MS = 2000;
   private previousResponseId: string | null = null;
   private sentMessages = 0;
 
@@ -385,6 +387,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     tools?: ToolDefinition[],
   ): Promise<Response> {
     const useStreaming = this.getStreamingConfig();
+    const useBackgroundResponses =
+      this.config.provider === ModelProvider.OPENAI &&
+      getConfig<boolean>('model.useBackgroundResponses', false);
     const newMessages = messages.slice(this.sentMessages);
 
     await this.uploadInlineInputFiles(client, newMessages);
@@ -395,6 +400,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       max_output_tokens: this.config.maxOutputTokens,
       store: true,
     };
+
+    if (useBackgroundResponses) {
+      params.background = true;
+    }
 
     if (!this.isOReasoningModel) {
       params.temperature = temperature;
@@ -470,9 +479,16 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         ...nonStreamRest,
         stream: false,
       };
-      const response = await client.responses.create(nonStreamingParams, {
+      let response = await client.responses.create(nonStreamingParams, {
         signal,
       });
+      if (useBackgroundResponses) {
+        response = await this.waitForBackgroundCompletion(
+          client,
+          response,
+          signal,
+        );
+      }
       this.previousResponseId = response.id;
       this.sentMessages = messages.length;
       return response;
@@ -630,6 +646,67 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     _agentConfig: AgentConfig,
   ): void {
     this.logger.debug('Skipping continuation - assistant prefill is supported');
+  }
+
+  private isBackgroundPending(response: Response): boolean {
+    return response.status === 'queued' || response.status === 'in_progress';
+  }
+
+  private async waitForBackgroundCompletion(
+    client: OpenAI,
+    initialResponse: Response,
+    signal?: AbortSignal,
+  ): Promise<Response> {
+    if (!initialResponse.id || !this.isBackgroundPending(initialResponse)) {
+      return initialResponse;
+    }
+
+    let current = initialResponse;
+    while (this.isBackgroundPending(current)) {
+      await this.waitWithAbort(
+        ModelHandlerOpenAIResponse.BACKGROUND_POLL_INTERVAL_MS,
+        signal,
+      );
+
+      const requestOptions = signal ? { signal } : undefined;
+      current = await client.responses.retrieve(
+        current.id,
+        undefined,
+        requestOptions,
+      );
+    }
+
+    return current;
+  }
+
+  private async waitWithAbort(ms: number, signal?: AbortSignal): Promise<void> {
+    if (!signal) {
+      await sleep(ms);
+      return;
+    }
+
+    if (signal.aborted) {
+      throw new DOMException('The operation was aborted.', 'AbortError');
+    }
+
+    await new Promise<void>((resolve, reject) => {
+      const cleanup = () => {
+        clearTimeout(timeout);
+        signal.removeEventListener('abort', onAbort);
+      };
+
+      const onAbort = () => {
+        cleanup();
+        reject(new DOMException('The operation was aborted.', 'AbortError'));
+      };
+
+      const timeout = setTimeout(() => {
+        cleanup();
+        resolve();
+      }, ms);
+
+      signal.addEventListener('abort', onAbort, { once: true });
+    });
   }
 
   /** Adds continuation instructions for models without prefill support. */
