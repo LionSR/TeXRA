@@ -36,7 +36,7 @@ import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import type { ToolDefinition } from '@model';
 import { cleanFileContent } from '@replacement/engine';
-import { K_SLICE } from '@utils/config';
+import { K_SLICE, MESSAGE_PREVIEW_LENGTH } from '@utils/config';
 
 // Local imports - filesystem utilities
 import { WorkspaceFS } from '@utils/files';
@@ -432,6 +432,36 @@ export class ModelHandlerOpenAI extends ModelHandler<
       return messages;
     }
     return normalizeOpenAIMessageContent(messages, options);
+  }
+
+  /**
+   * Normalizes messages and logs diagnostics about any changes.
+   * @param messages Original message array passed to the handler.
+   * @param options Normalization options passed to the OpenAI utilities.
+   * @param providerLabel Label used to identify the provider in logs.
+   */
+  protected prepareNormalizedMessages<T extends ChatCompletionMessageParam>(
+    messages: T[],
+    options?: NormalizeOpenAIMessageContentOptions,
+    providerLabel: string = this.config.provider,
+  ): T[] {
+    const normalizedMessages = this.normalizeMessages(messages, options);
+
+    if (normalizedMessages.length !== messages.length) {
+      this.logger.info(
+        `Preprocessed message array from ${messages.length} to ${normalizedMessages.length} messages for ${providerLabel} model compatibility`,
+      );
+    }
+
+    normalizedMessages.forEach((msg, index) => {
+      const contentPreview =
+        typeof msg.content === 'string'
+          ? msg.content.substring(0, MESSAGE_PREVIEW_LENGTH)
+          : 'non-string content';
+      this.logger.debug(`Message ${index} (${msg.role}): ${contentPreview}...`);
+    });
+
+    return normalizedMessages;
   }
 
   /** Initializes message array with system prompt and user content. */
