@@ -62,6 +62,13 @@ export class DirectAgent extends BaseReflectionAgent {
           outputProcessGroupId,
         );
 
+        if (this.useScratchpad) {
+          await this.outputHandler.xmlManager.ensureCorrectXmlStructure(
+            outputFile,
+            this.agentSetting.documentTag,
+          );
+        }
+
         // Process output files using the output handler
         await this.outputHandler.processOutputFiles(
           outputFile,
