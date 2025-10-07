@@ -10,7 +10,6 @@ import { MediaEntry } from '@agent/utils/mediaTypes';
 
 // Local imports - utilities
 import type { ToolDefinition } from '@model';
-import { MESSAGE_PREVIEW_LENGTH } from '@utils/config';
 
 /**
  * Handler for DashScope Qwen models using OpenAI-compatible API.
@@ -30,24 +29,13 @@ export class ModelHandlerDashScope extends ModelHandlerOpenAI {
     tools?: ToolDefinition[],
   ): Promise<any> {
     // Preprocess messages for DashScope compatibility
-    const processedMessages = this.normalizeMessages(messages, {
-      convertContentToString: true,
-    });
-
-    if (processedMessages.length !== messages.length) {
-      this.logger.info(
-        `Preprocessed message array from ${messages.length} to ${processedMessages.length} messages for DashScope model compatibility`,
-      );
-    }
-
-    // Log the first few characters of each processed message for debugging
-    processedMessages.forEach((msg, index) => {
-      const contentPreview =
-        typeof msg.content === 'string'
-          ? msg.content.substring(0, MESSAGE_PREVIEW_LENGTH)
-          : 'non-string content';
-      this.logger.debug(`Message ${index} (${msg.role}): ${contentPreview}...`);
-    });
+    const processedMessages = this.prepareNormalizedMessages(
+      messages,
+      {
+        convertContentToString: true,
+      },
+      'DashScope',
+    );
 
     // Call the parent implementation with the processed messages
     return super.createResponse(
