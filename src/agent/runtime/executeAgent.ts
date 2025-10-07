@@ -5,9 +5,6 @@ import * as path from 'path';
 import { glob } from 'glob';
 import * as vscode from 'vscode';
 
-// Local imports - agent
-import { getStreamTabId } from '@/logger/streamUtils';
-
 // Local imports - agent components
 import { AgentConfigSchema } from '@agent/core/AgentConfig';
 import type { AgentConfig } from '@agent/core/AgentConfig';
@@ -196,10 +193,6 @@ export async function executeAgentWithLogging<T extends IAgent>(
     // Create agent instance and extract its declared type
     const { agent, agentType } = await createAgentFn();
     const sessionMetadata = agent.getSessionMetadata();
-    const baseMetadata = resolveAgentSessionMetadata(
-      agentType ?? sessionMetadata.agentType,
-      sessionMetadata.agentSessionKind,
-    );
 
     if (executionId) {
       await ensureRunDir(executionId);
@@ -208,17 +201,11 @@ export async function executeAgentWithLogging<T extends IAgent>(
     // Get the full stream tab ID
     const config = agent.config;
     const metadata = resolveAgentSessionMetadata(
-      config.agentType ?? baseMetadata.agentType,
-      config.agentSessionKind ?? baseMetadata.agentSessionKind,
+      config.agentType ?? agentType ?? sessionMetadata.agentType,
+      config.agentSessionKind ?? sessionMetadata.agentSessionKind,
     );
-    config.agentType = metadata.agentType;
-    config.agentSessionKind = metadata.agentSessionKind;
 
-    streamTabId = getStreamTabId(config.agent, config.model, config.inputFile, {
-      agentType: metadata.agentType,
-      executionId,
-      useMultipleOutputs: config.useMultipleOutputs,
-    });
+    streamTabId = agent.getStreamTabId();
 
     if (!streamTabId) {
       throw new Error('Failed to resolve stream tab ID for agent execution');

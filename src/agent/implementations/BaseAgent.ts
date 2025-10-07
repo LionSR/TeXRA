@@ -89,7 +89,7 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
   }
 
   /** Compute the stream tab identifier for this agent execution. */
-  protected getStreamTabId(): StreamTabId {
+  public getStreamTabId(): StreamTabId {
     return buildStreamTabId(
       this.agentConfig.agent,
       this.agentConfig.model,
