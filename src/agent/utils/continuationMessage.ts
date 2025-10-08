@@ -13,4 +13,3 @@ export const createContinuationMessage = (
   `marked by ${endTag}. ` +
   'Avoid repeating yourself and avoid starting over. ' +
   `Start your response at the next token after: "${prefillTokens}"`;
-
