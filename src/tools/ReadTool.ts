@@ -55,11 +55,10 @@ export class ReadFileTool extends defineTool({
     }
 
     const totalLines = lines.length;
-    const clamp = (value: number, min: number, max: number) =>
-      Math.min(Math.max(value, min), max);
 
     const requestedStartLine = input.range?.start ?? 1;
-    const requestedEndLine = input.range?.end ?? totalLines;
+    const requestedEndLine =
+      input.range?.end ?? Math.max(requestedStartLine, totalLines);
 
     // Convert the requested 1-based range into zero-based indices and clamp them to the
     // available file length so callers can safely request windows beyond the file bounds.
