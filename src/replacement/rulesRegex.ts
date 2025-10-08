@@ -1,7 +1,19 @@
 // Local imports
 import { ReplacementCategory } from './types';
+import { FENCED_LATEX_BLOCK_PATTERN } from './constants';
 
 // ===== Regex replacements =====
+
+export const FENCED_LATEX_BLOCK_REPLACEMENTS: ReplacementCategory = {
+  name: 'fenced_latex_blocks',
+  description:
+    'Convert Markdown-style fenced math blocks into proper LaTeX environments',
+  isRegex: true,
+  flags: 'g',
+  patterns: {
+    [FENCED_LATEX_BLOCK_PATTERN]: String.raw`$1$2\begin{$3}\n$4\n$2\end{$3}`,
+  },
+};
 
 // Parentheses sizing standardization
 export const PARENTHESES_REPLACEMENTS: ReplacementCategory = {
