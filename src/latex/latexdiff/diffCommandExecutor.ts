@@ -5,10 +5,14 @@ import * as logger from '@logger/logUtils';
 import { executeCommand } from '@utils/system';
 import { getConfig } from '@utils/config';
 import type { ExecResult } from '@agent/types/ResultTypes';
+import {
+  DEFAULT_MATH_MARKUP,
+  normalizeMathMarkup,
+  type MathMarkupOption,
+} from './mathMarkup';
 
 const DEFAULT_PICTURE_ENVS =
   '(?:picture|tikzpicture|scope|DIFnomarkup)[\\w\\d*@]*';
-const DEFAULT_MATH_MARKUP = 'coarse';
 
 const BIBLIOGRAPHY_ERROR_PATTERNS = [
   'bibtex',
@@ -27,6 +31,15 @@ const ERROR_MESSAGES = {
   FAILED_GENERAL: (commandType: string) => `Failed to run ${commandType}`,
 } as const;
 
+/**
+ * Options for diff execution.
+ * @property mathMarkup - Math markup mode ('off' | 'whole' | 'coarse' | 'fine').
+ * Overrides the configured default for this execution.
+ */
+interface DiffExecutionOptions {
+  mathMarkup?: MathMarkupOption;
+}
+
 export class DiffCommandExecutor {
   constructor(
     private readonly channel: string,
@@ -36,10 +49,16 @@ export class DiffCommandExecutor {
   async executeDiff(
     inputFile: string,
     editedFile: string,
+    options?: DiffExecutionOptions,
   ): Promise<ExecResult> {
     return this.executeWithFallback(
       (useFlatten) =>
-        this.buildLatexdiffCommand(inputFile, editedFile, useFlatten),
+        this.buildLatexdiffCommand(
+          inputFile,
+          editedFile,
+          useFlatten,
+          options?.mathMarkup,
+        ),
       'latexdiff',
     );
   }
@@ -47,10 +66,16 @@ export class DiffCommandExecutor {
   async executeDiffVc(
     inputFile: string,
     commitHash: string,
+    options?: DiffExecutionOptions,
   ): Promise<ExecResult> {
     return this.executeWithFallback(
       (useFlatten) =>
-        this.buildLatexdiffVcCommand(inputFile, commitHash, useFlatten),
+        this.buildLatexdiffVcCommand(
+          inputFile,
+          commitHash,
+          useFlatten,
+          options?.mathMarkup,
+        ),
       'latexdiff-vc',
     );
   }
@@ -59,8 +84,10 @@ export class DiffCommandExecutor {
     inputFile: string,
     editedFile: string,
     useFlatten = true,
+    mathMarkupOverride?: MathMarkupOption,
   ): string[] {
-    const { mathMarkup, pictureEnvs } = this.getLatexdiffConfig();
+    const { mathMarkup, pictureEnvs } =
+      this.getLatexdiffConfig(mathMarkupOverride);
     const baseCommand = [
       'latexdiff',
       '--encoding=utf8',
@@ -82,8 +109,10 @@ export class DiffCommandExecutor {
     inputFile: string,
     commitHash: string,
     useFlatten = true,
+    mathMarkupOverride?: MathMarkupOption,
   ): string[] {
-    const { mathMarkup, pictureEnvs } = this.getLatexdiffConfig();
+    const { mathMarkup, pictureEnvs } =
+      this.getLatexdiffConfig(mathMarkupOverride);
     const baseCommand = [
       'latexdiff-vc',
       '--encoding=utf8',
@@ -167,12 +196,16 @@ export class DiffCommandExecutor {
     );
   }
 
-  private getLatexdiffConfig(): { mathMarkup: string; pictureEnvs: string } {
+  private getLatexdiffConfig(mathMarkupOverride?: MathMarkupOption): {
+    mathMarkup: MathMarkupOption;
+    pictureEnvs: string;
+  } {
     return {
-      mathMarkup: getConfig<string>(
-        'latexdiff.mathMarkup',
-        DEFAULT_MATH_MARKUP,
-      ),
+      mathMarkup:
+        mathMarkupOverride ??
+        normalizeMathMarkup(
+          getConfig<string>('latexdiff.mathMarkup', DEFAULT_MATH_MARKUP),
+        ),
       pictureEnvs: getConfig<string>(
         'latexdiff.pictureEnvironments',
         DEFAULT_PICTURE_ENVS,
