@@ -20,10 +20,7 @@ suite('ReadFileTool', () => {
     try {
       const result = await tool.call({ path: 'long.txt' });
 
-      assert.strictEqual(
-        result.summary,
-        `Read long.txt (first ${READ_FILE_MAX_LINES} of ${totalLines} lines)`,
-      );
+      assert.strictEqual(result.summary, 'Read lines 1-400 of long.txt');
 
       assert.ok(result.output, 'Expected tool output when truncating file');
 
@@ -66,6 +63,36 @@ suite('ReadFileTool', () => {
 
       assert.strictEqual(result.summary, 'Read short.txt');
       assert.strictEqual(result.output, content);
+    } finally {
+      (WorkspaceFS as unknown as { read: typeof WorkspaceFS.read }).read =
+        originalRead;
+    }
+  });
+
+  test('reads requested range beyond 400th line', async () => {
+    const tool = new ReadFileTool();
+    const originalRead = WorkspaceFS.read;
+
+    const totalLines = READ_FILE_MAX_LINES + 50;
+    const content = Array.from(
+      { length: totalLines },
+      (_, index) => `row ${index + 1}`,
+    ).join('\n');
+
+    (WorkspaceFS as unknown as { read: typeof WorkspaceFS.read }).read =
+      async () => content;
+
+    try {
+      const result = await tool.call({
+        path: 'paged.txt',
+        range: { start: 401, end: 450 },
+      });
+
+      assert.strictEqual(result.summary, 'Read lines 401-450 of paged.txt');
+      const outputLines = result.output?.split('\n') ?? [];
+      assert.strictEqual(outputLines.length, 50);
+      assert.strictEqual(outputLines[0], 'row 401');
+      assert.strictEqual(outputLines[outputLines.length - 1], 'row 450');
     } finally {
       (WorkspaceFS as unknown as { read: typeof WorkspaceFS.read }).read =
         originalRead;
