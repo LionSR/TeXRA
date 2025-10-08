@@ -7,7 +7,7 @@ import { getConfig } from '@utils/config';
 import type { ExecResult } from '@agent/types/ResultTypes';
 import {
   DEFAULT_MATH_MARKUP,
-  MATH_MARKUP_OPTIONS,
+  normalizeMathMarkup,
   type MathMarkupOption,
 } from './mathMarkup';
 
@@ -200,18 +200,12 @@ export class DiffCommandExecutor {
     mathMarkup: MathMarkupOption;
     pictureEnvs: string;
   } {
-    const configuredMathMarkup = getConfig<string>(
-      'latexdiff.mathMarkup',
-      DEFAULT_MATH_MARKUP,
-    );
-    const normalizedConfig = MATH_MARKUP_OPTIONS.includes(
-      configuredMathMarkup as MathMarkupOption,
-    )
-      ? (configuredMathMarkup as MathMarkupOption)
-      : DEFAULT_MATH_MARKUP;
-
     return {
-      mathMarkup: mathMarkupOverride ?? normalizedConfig,
+      mathMarkup:
+        mathMarkupOverride ??
+        normalizeMathMarkup(
+          getConfig<string>('latexdiff.mathMarkup', DEFAULT_MATH_MARKUP),
+        ),
       pictureEnvs: getConfig<string>(
         'latexdiff.pictureEnvironments',
         DEFAULT_PICTURE_ENVS,

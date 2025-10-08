@@ -18,6 +18,7 @@ import {
   DEFAULT_MATH_MARKUP,
   MATH_MARKUP_OPTIONS,
   describeMathMarkupOption,
+  normalizeMathMarkup,
   type MathMarkupOption,
 } from '@latex/latexdiff/mathMarkup';
 import { checkToolInstalled } from '@utils/system';
@@ -50,11 +51,7 @@ async function promptForMathMarkup(): Promise<MathMarkupOption | undefined> {
     'latexdiff.mathMarkup',
     DEFAULT_MATH_MARKUP,
   );
-  const currentMode = MATH_MARKUP_OPTIONS.includes(
-    configuredMode as MathMarkupOption,
-  )
-    ? (configuredMode as MathMarkupOption)
-    : DEFAULT_MATH_MARKUP;
+  const currentMode = normalizeMathMarkup(configuredMode);
   const items: (vscode.QuickPickItem & { value: MathMarkupOption })[] =
     MATH_MARKUP_OPTIONS.map((mode) => ({
       label: mode,
@@ -137,9 +134,6 @@ async function handleLatexdiff(
       CHANNEL,
       `Running latexdiff with math markup mode: ${mathMarkup}`,
     );
-    vscode.window.showInformationMessage(
-      `Running LaTeX diff with math markup mode "${mathMarkup}"`,
-    );
 
     // Get the result from LaTeXdiffService
     const result = await service.runDiff(
@@ -192,9 +186,6 @@ async function handleLatexdiffvc(
     logger.info(
       CHANNEL,
       `Running latexdiff-vc with math markup mode: ${mathMarkup}`,
-    );
-    vscode.window.showInformationMessage(
-      `Running latexdiff-vc with math markup mode "${mathMarkup}"`,
     );
 
     // Get the result from LaTeXdiffService
@@ -342,9 +333,6 @@ async function handleRunLatexdiff(config: any) {
     logger.info(
       CHANNEL,
       `Running latexdiff with math markup mode: ${mathMarkup}`,
-    );
-    vscode.window.showInformationMessage(
-      `Running LaTeX diffs with math markup mode "${mathMarkup}"`,
     );
 
     const generateBetweenRoundDiffs = getConfig<boolean>(
@@ -572,14 +560,17 @@ async function handleRunLatexdiff(config: any) {
         const successCount = results.filter((r) => r.success).length;
 
         if (successCount === 0) {
-          await showLoggedMessage(CHANNEL, 'All LaTeX diff operations failed');
+          await showLoggedMessage(
+            CHANNEL,
+            `All LaTeX diff operations failed (math markup: "${mathMarkup}")`,
+          );
         } else if (successCount < totalOperations) {
           vscode.window.showWarningMessage(
-            `${successCount} of ${totalOperations} LaTeX diff operations completed successfully`,
+            `${successCount} of ${totalOperations} LaTeX diff operations completed successfully (math markup: "${mathMarkup}")`,
           );
         } else {
           vscode.window.showInformationMessage(
-            'All LaTeX diffs completed successfully',
+            `All LaTeX diffs completed successfully (math markup: "${mathMarkup}")`,
           );
         }
 
