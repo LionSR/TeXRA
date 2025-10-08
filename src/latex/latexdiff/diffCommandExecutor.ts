@@ -27,6 +27,10 @@ const ERROR_MESSAGES = {
   FAILED_GENERAL: (commandType: string) => `Failed to run ${commandType}`,
 } as const;
 
+interface DiffExecutionOptions {
+  mathMarkup?: string;
+}
+
 export class DiffCommandExecutor {
   constructor(
     private readonly channel: string,
@@ -36,10 +40,16 @@ export class DiffCommandExecutor {
   async executeDiff(
     inputFile: string,
     editedFile: string,
+    options?: DiffExecutionOptions,
   ): Promise<ExecResult> {
     return this.executeWithFallback(
       (useFlatten) =>
-        this.buildLatexdiffCommand(inputFile, editedFile, useFlatten),
+        this.buildLatexdiffCommand(
+          inputFile,
+          editedFile,
+          useFlatten,
+          options?.mathMarkup,
+        ),
       'latexdiff',
     );
   }
@@ -47,10 +57,16 @@ export class DiffCommandExecutor {
   async executeDiffVc(
     inputFile: string,
     commitHash: string,
+    options?: DiffExecutionOptions,
   ): Promise<ExecResult> {
     return this.executeWithFallback(
       (useFlatten) =>
-        this.buildLatexdiffVcCommand(inputFile, commitHash, useFlatten),
+        this.buildLatexdiffVcCommand(
+          inputFile,
+          commitHash,
+          useFlatten,
+          options?.mathMarkup,
+        ),
       'latexdiff-vc',
     );
   }
@@ -59,8 +75,10 @@ export class DiffCommandExecutor {
     inputFile: string,
     editedFile: string,
     useFlatten = true,
+    mathMarkupOverride?: string,
   ): string[] {
-    const { mathMarkup, pictureEnvs } = this.getLatexdiffConfig();
+    const { mathMarkup, pictureEnvs } =
+      this.getLatexdiffConfig(mathMarkupOverride);
     const baseCommand = [
       'latexdiff',
       '--encoding=utf8',
@@ -82,8 +100,10 @@ export class DiffCommandExecutor {
     inputFile: string,
     commitHash: string,
     useFlatten = true,
+    mathMarkupOverride?: string,
   ): string[] {
-    const { mathMarkup, pictureEnvs } = this.getLatexdiffConfig();
+    const { mathMarkup, pictureEnvs } =
+      this.getLatexdiffConfig(mathMarkupOverride);
     const baseCommand = [
       'latexdiff-vc',
       '--encoding=utf8',
@@ -167,12 +187,14 @@ export class DiffCommandExecutor {
     );
   }
 
-  private getLatexdiffConfig(): { mathMarkup: string; pictureEnvs: string } {
+  private getLatexdiffConfig(mathMarkupOverride?: string): {
+    mathMarkup: string;
+    pictureEnvs: string;
+  } {
     return {
-      mathMarkup: getConfig<string>(
-        'latexdiff.mathMarkup',
-        DEFAULT_MATH_MARKUP,
-      ),
+      mathMarkup:
+        mathMarkupOverride ??
+        getConfig<string>('latexdiff.mathMarkup', DEFAULT_MATH_MARKUP),
       pictureEnvs: getConfig<string>(
         'latexdiff.pictureEnvironments',
         DEFAULT_PICTURE_ENVS,
