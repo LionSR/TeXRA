@@ -98,4 +98,33 @@ suite('ReadFileTool', () => {
         originalRead;
     }
   });
+
+  test('notes when requested range exceeds file length', async () => {
+    const tool = new ReadFileTool();
+    const originalRead = WorkspaceFS.read;
+
+    const totalLines = READ_FILE_MAX_LINES + 50;
+    const content = Array.from(
+      { length: totalLines },
+      (_, index) => `row ${index + 1}`,
+    ).join('\n');
+
+    (WorkspaceFS as unknown as { read: typeof WorkspaceFS.read }).read =
+      async () => content;
+
+    try {
+      const result = await tool.call({
+        path: 'clipped.txt',
+        range: { start: 401, end: totalLines + 50 },
+      });
+
+      assert.strictEqual(
+        result.summary,
+        `Read lines 401-450 of clipped.txt (requested end ${totalLines + 50} exceeds file length ${totalLines})`,
+      );
+    } finally {
+      (WorkspaceFS as unknown as { read: typeof WorkspaceFS.read }).read =
+        originalRead;
+    }
+  });
 });
