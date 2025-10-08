@@ -42,16 +42,16 @@ export class ReadFileTool extends defineTool({
     }
 
     const totalLines = lines.length;
+    const clamp = (value: number, min: number, max: number) =>
+      Math.min(Math.max(value, min), max);
+
     const requestedStartLine = Math.max(input.range?.start ?? 1, 1);
-    const requestedEndLine = Math.max(
-      input.range?.end ?? totalLines,
-      input.range?.start ?? 1,
-    );
-    const startIndex = Math.min(Math.max(requestedStartLine - 1, 0), totalLines);
-    const endIndexExclusive = Math.min(
-      Math.max(requestedEndLine, requestedStartLine - 1),
-      totalLines,
-    );
+    const requestedEndLine = input.range?.end ?? totalLines;
+
+    // Convert the requested 1-based range into zero-based indices and clamp them to the
+    // available file length so callers can safely request windows beyond the file bounds.
+    const startIndex = clamp(requestedStartLine - 1, 0, totalLines);
+    const endIndexExclusive = clamp(requestedEndLine, startIndex, totalLines);
 
     const selectedLines = lines.slice(startIndex, endIndexExclusive);
     const truncated = selectedLines.length > READ_FILE_MAX_LINES;
@@ -59,9 +59,6 @@ export class ReadFileTool extends defineTool({
       ? selectedLines.slice(0, READ_FILE_MAX_LINES)
       : selectedLines;
     const visibleCount = visibleLines.length;
-    const actualStartLine = visibleCount > 0 ? requestedStartLine : undefined;
-    const actualEndLine =
-      visibleCount > 0 ? requestedStartLine + visibleCount - 1 : undefined;
 
     const segments: string[] = [];
     if (visibleLines.length > 0) {
@@ -73,30 +70,69 @@ export class ReadFileTool extends defineTool({
       );
     }
 
-    const summary = (() => {
-      if (visibleCount === 0) {
-        return `Read ${input.path} (no lines in requested range)`;
-      }
-
-      if (
-        input.range ||
-        truncated ||
-        actualStartLine !== 1 ||
-        actualEndLine !== totalLines
-      ) {
-        const rangeLabel =
-          actualStartLine === actualEndLine
-            ? `line ${actualStartLine}`
-            : `lines ${actualStartLine}-${actualEndLine}`;
-        return `Read ${rangeLabel} of ${input.path}`;
-      }
-
-      return `Read ${input.path}`;
-    })();
+    const summary = this.buildSummary({
+      path: input.path,
+      totalLines,
+      visibleCount,
+      requestedStartLine,
+      requestedEndLine,
+      truncated,
+      rangeProvided: Boolean(input.range),
+      rangeEndExceeded:
+        input.range?.end !== undefined && input.range.end > totalLines,
+    });
 
     return toolResult({
       summary,
       output: segments.join('\n'),
     });
+  }
+
+  private buildSummary({
+    path,
+    totalLines,
+    visibleCount,
+    requestedStartLine,
+    requestedEndLine,
+    truncated,
+    rangeProvided,
+    rangeEndExceeded,
+  }: {
+    path: string;
+    totalLines: number;
+    visibleCount: number;
+    requestedStartLine: number;
+    requestedEndLine: number;
+    truncated: boolean;
+    rangeProvided: boolean;
+    rangeEndExceeded: boolean;
+  }): string {
+    if (visibleCount === 0) {
+      return rangeProvided
+        ? `Read ${path} (no lines in requested range)`
+        : `Read ${path} (file is empty)`;
+    }
+
+    const actualStartLine = requestedStartLine;
+    const actualEndLine = requestedStartLine + visibleCount - 1;
+    const describeRange =
+      rangeProvided ||
+      truncated ||
+      actualStartLine !== 1 ||
+      actualEndLine !== totalLines;
+    const rangeLabel =
+      actualStartLine === actualEndLine
+        ? `line ${actualStartLine}`
+        : `lines ${actualStartLine}-${actualEndLine}`;
+
+    let summary = describeRange
+      ? `Read ${rangeLabel} of ${path}`
+      : `Read ${path}`;
+
+    if (rangeEndExceeded) {
+      summary += ` (requested end ${requestedEndLine} exceeds file length ${totalLines})`;
+    }
+
+    return summary;
   }
 }
