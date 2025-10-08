@@ -127,4 +127,34 @@ suite('ReadFileTool', () => {
         originalRead;
     }
   });
+
+  test('indicates when the requested window lies beyond the file bounds', async () => {
+    const tool = new ReadFileTool();
+    const originalRead = WorkspaceFS.read;
+
+    const totalLines = READ_FILE_MAX_LINES;
+    const content = Array.from(
+      { length: totalLines },
+      (_, index) => `row ${index + 1}`,
+    ).join('\n');
+
+    (WorkspaceFS as unknown as { read: typeof WorkspaceFS.read }).read =
+      async () => content;
+
+    try {
+      const result = await tool.call({
+        path: 'out-of-range.txt',
+        range: { start: totalLines + 10, end: totalLines + 20 },
+      });
+
+      assert.strictEqual(
+        result.summary,
+        'Read out-of-range.txt (no lines in requested range)',
+      );
+      assert.strictEqual(result.output, '');
+    } finally {
+      (WorkspaceFS as unknown as { read: typeof WorkspaceFS.read }).read =
+        originalRead;
+    }
+  });
 });
