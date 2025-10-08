@@ -39,6 +39,26 @@ logger.initialize(CHANNEL);
 
 const service = new LaTeXdiffService(CHANNEL);
 
+const MATH_MARKUP_OPTIONS = ['off', 'whole', 'coarse', 'fine'] as const;
+type MathMarkupOption = (typeof MATH_MARKUP_OPTIONS)[number];
+
+async function promptForMathMarkup(): Promise<MathMarkupOption | undefined> {
+  const currentMode = getConfig<string>('latexdiff.mathMarkup', 'coarse');
+  const items: vscode.QuickPickItem[] = MATH_MARKUP_OPTIONS.map((mode) => ({
+    label: mode,
+    description: mode === 'coarse' ? 'Default mode' : undefined,
+    picked: mode === currentMode,
+  }));
+
+  const selection = await vscode.window.showQuickPick(items, {
+    title: 'Latexdiff math markup',
+    placeHolder: 'Select math markup granularity for this diff run',
+    ignoreFocusOut: true,
+  });
+
+  return selection?.label as MathMarkupOption | undefined;
+}
+
 // Removed showLatexdiffError wrapper - using showLoggedMessageWithDocs directly
 
 export function registerLatexdiffCommands(context: vscode.ExtensionContext) {
@@ -96,8 +116,19 @@ async function handleLatexdiff(
       return;
     }
 
+    const mathMarkup = await promptForMathMarkup();
+    if (!mathMarkup) {
+      return;
+    }
+
     // Get the result from LaTeXdiffService
-    const result = await service.runDiff(fileToUse, editedFile, '_diff', false);
+    const result = await service.runDiff(
+      fileToUse,
+      editedFile,
+      '_diff',
+      false,
+      mathMarkup,
+    );
 
     if (!result.success || !result.diffFileName) {
       throw new Error(result.message || 'Failed to generate diff file');
@@ -272,6 +303,18 @@ async function handleRunLatexdiff(config: any) {
       return;
     }
 
+    const mathMarkup = await promptForMathMarkup();
+    if (!mathMarkup) {
+      return;
+    }
+    logger.info(
+      CHANNEL,
+      `Running latexdiff with math markup mode: ${mathMarkup}`,
+    );
+    vscode.window.showInformationMessage(
+      `Running LaTeX diffs with math markup mode "${mathMarkup}"`,
+    );
+
     const generateBetweenRoundDiffs = getConfig<boolean>(
       'latexdiff.generateBetweenRoundDiffs',
       false,
@@ -437,6 +480,7 @@ async function handleRunLatexdiff(config: any) {
               inputFile,
               outputFile,
               round,
+              mathMarkup,
             );
 
             results.push({
@@ -472,6 +516,7 @@ async function handleRunLatexdiff(config: any) {
               const result = await service.runDiffBetweenRounds(
                 currentFile,
                 nextFile,
+                mathMarkup,
               );
 
               results.push({
