@@ -89,6 +89,8 @@ const SONNET_37_OUTPUT_BETA: AnthropicBeta = 'output-128k-2025-02-19';
 const INTERLEAVED_THINKING_BETA: AnthropicBeta =
   'interleaved-thinking-2025-05-14';
 
+const ANTHROPIC_1M_CONTEXT_WINDOW = 1_000_000;
+
 export class ModelHandlerAnthropic extends ModelHandler<
   MessageParam,
   AnthropicUsage,
@@ -127,7 +129,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     const isAnthropic1MBetaActive =
       useAnthropic1MBeta && isAnthropic1MBetaEligibleModel;
     const effectiveContextWindow = isAnthropic1MBetaActive
-      ? 1_000_000
+      ? ANTHROPIC_1M_CONTEXT_WINDOW
       : this.config.contextWindow;
 
     const documentAnalysis = this.analyzeDocumentSources(messages);
