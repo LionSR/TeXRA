@@ -64,7 +64,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   OpenAIAPIResponseUsage,
   ResponseFunctionToolCallItem
 > {
-  private static readonly BACKGROUND_POLL_INTERVAL_MS = 5000;
+  protected override backgroundModeSupported = true;
+  private static readonly BACKGROUND_POLL_INITIAL_INTERVAL_MS = 5000;
+  private static readonly BACKGROUND_POLL_BACKOFF_STEP_MS = 2000;
+  private static readonly BACKGROUND_POLL_MAX_INTERVAL_MS = 15000;
   private static readonly BACKGROUND_RETRIEVE_MAX_RETRIES = 3;
   private previousResponseId: string | null = null;
   private sentMessages = 0;
@@ -388,9 +391,17 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     tools?: ToolDefinition[],
   ): Promise<Response> {
     const useStreaming = this.getStreamingConfig();
+    const backgroundToggleEnabled = getConfig<boolean>(
+      'model.useBackgroundResponses',
+      false,
+    );
+    if (backgroundToggleEnabled && !this.backgroundModeSupported) {
+      this.logger.debug(
+        'Background mode toggle is enabled but this handler does not support background execution. Falling back to synchronous requests.',
+      );
+    }
     const useBackgroundResponses =
-      this.capabilities.supportsBackgroundMode &&
-      getConfig<boolean>('model.useBackgroundResponses', false);
+      this.backgroundModeSupported && backgroundToggleEnabled;
     const newMessages = messages.slice(this.sentMessages);
 
     await this.uploadInlineInputFiles(client, newMessages);
@@ -403,6 +414,15 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     };
 
     if (useBackgroundResponses) {
+      this.logger.debug(
+        'Submitting OpenAI Responses request in background mode.',
+        undefined,
+        undefined,
+        {
+          model: this.config.fullName,
+          previousResponseId: this.previousResponseId ?? undefined,
+        },
+      );
       params.background = true;
     }
 
@@ -484,6 +504,20 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         signal,
       });
       this.previousResponseId = response.id;
+      if (useBackgroundResponses) {
+        this.logger.debug(
+          `Background response ${response.id} created with status ${
+            response.status ?? 'unknown'
+          }`,
+          undefined,
+          undefined,
+          {
+            responseId: response.id,
+            status: response.status,
+            usage: response.usage ?? undefined,
+          },
+        );
+      }
       if (useBackgroundResponses) {
         response = await this.waitForBackgroundCompletion(
           client,
@@ -665,7 +699,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
     let current = initialResponse;
     const responseId = initialResponse.id;
-    const pollInterval = ModelHandlerOpenAIResponse.BACKGROUND_POLL_INTERVAL_MS;
+    const initialInterval =
+      ModelHandlerOpenAIResponse.BACKGROUND_POLL_INITIAL_INTERVAL_MS;
+    const backoffStep =
+      ModelHandlerOpenAIResponse.BACKGROUND_POLL_BACKOFF_STEP_MS;
+    const maxInterval =
+      ModelHandlerOpenAIResponse.BACKGROUND_POLL_MAX_INTERVAL_MS;
     const maxRetries =
       ModelHandlerOpenAIResponse.BACKGROUND_RETRIEVE_MAX_RETRIES;
     const startTime = Date.now();
@@ -685,7 +724,37 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
     while (this.isBackgroundPending(current)) {
       pollCount += 1;
-      await this.waitWithAbort(pollInterval, signal);
+      const waitMs = Math.min(
+        initialInterval + (pollCount - 1) * backoffStep,
+        maxInterval,
+      );
+      this.logger.debug(
+        `Waiting ${waitMs}ms before poll ${pollCount} for response ${responseId}`,
+        undefined,
+        undefined,
+        {
+          responseId,
+          pollCount,
+          waitMs,
+        },
+      );
+      try {
+        await this.waitWithAbort(waitMs, signal);
+      } catch (err) {
+        if (err instanceof DOMException && err.name === 'AbortError') {
+          this.logger.warn(
+            `Background polling aborted for response ${responseId} while waiting to poll.`,
+            undefined,
+            undefined,
+            {
+              responseId,
+              pollCount,
+              elapsedMs: Date.now() - startTime,
+            },
+          );
+        }
+        throw err;
+      }
 
       try {
         const requestOptions = signal ? { signal } : undefined;
@@ -751,6 +820,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         status: current.status,
         pollCount,
         elapsedMs,
+        usage: current.usage ?? undefined,
       },
     );
 
@@ -772,7 +842,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         },
       );
       throw new Error(
-        `Background response ${responseId} ended with status ${fallbackStatus}: ${errorDetail}`,
+        `Background response ${responseId} ended with status ${fallbackStatus}: ${errorDetail}. Retrieve the latest status with client.responses.retrieve("${responseId}").`,
       );
     }
 
