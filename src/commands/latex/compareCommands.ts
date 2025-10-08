@@ -66,21 +66,26 @@ async function handleCompare(
     // If the ProgressBoard lives in the secondary sidebar, close the bottom
     // panel to give the diff view more space. If the view is in the panel
     // already, leave it open.
+    const contextKeyCommandId = 'vscode.getContextKeyValue';
     try {
       const location: string | undefined = await vscode.commands.executeCommand(
-        'getContextKeyValue',
+        contextKeyCommandId,
         'viewContainerLocation:texra-panel',
       );
-      // 🟡 [2025-06-08 20:48:23.181] [CompareCommands] Could not check ProgressBoard location: command 'getContextKeyValue' not found
 
       if (location === 'secondarySideBar') {
         await vscode.commands.executeCommand('workbench.action.closePanel');
       }
     } catch (err) {
-      logger.warn(
-        CHANNEL,
-        `Could not check ProgressBoard location: ${err instanceof Error ? err.message : String(err)}`,
-      );
+      const message = err instanceof Error ? err.message : String(err);
+      if (message.includes(`command '${contextKeyCommandId}' not found`)) {
+        logger.warn(
+          CHANNEL,
+          `Could not check ProgressBoard location: command '${contextKeyCommandId}' not found`,
+        );
+      } else {
+        throw err;
+      }
     }
 
     // Open files in diff editor
