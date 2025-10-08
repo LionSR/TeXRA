@@ -286,6 +286,11 @@ export class LogEntryFormatter {
           () => this._formatUserMessage(text, id, timestamp),
           'user message',
         ),
+      progressStatus: (text, id, timestamp) =>
+        this._safeFormat(
+          () => this._formatProgressStatus(text, id, timestamp),
+          'progress status',
+        ),
     };
   }
 
@@ -350,6 +355,8 @@ export class LogEntryFormatter {
         result = formatter(text, data, id, groupId, timestamp);
       } else if (messageType === 'userMessage') {
         // User message needs text, id, and timestamp
+        result = formatter(text, id, timestamp);
+      } else if (messageType === 'progressStatus') {
         result = formatter(text, id, timestamp);
       } else {
         // File list, missing outputs, latexdiff, statistics need data
@@ -1055,6 +1062,34 @@ export class LogEntryFormatter {
     if (contentElem) {
       contentElem.innerHTML = items.join('');
       if (logId) contentElem.dataset.logId = logId;
+    }
+
+    return element;
+  }
+
+  _formatProgressStatus(content, logId, timestamp) {
+    const element = createFromTemplate('nativeStatusTemplate');
+    if (!element) return null;
+
+    const date = new Date(timestamp ?? Date.now());
+    const { fullTimestamp, timeDisplay } = this._formatTimestamp(date);
+
+    element.dataset.fullTimestamp = fullTimestamp;
+    if (logId) {
+      element.dataset.logId = logId;
+    }
+
+    const timeElem = element.querySelector('.native-status-time');
+    if (timeElem) {
+      timeElem.textContent = timeDisplay;
+      timeElem.title = fullTimestamp;
+    }
+
+    const textElem = element.querySelector('.native-status-text');
+    if (textElem) {
+      const decodedContent =
+        typeof content === 'string' ? decodeHtml(content) : '';
+      textElem.textContent = decodedContent;
     }
 
     return element;
