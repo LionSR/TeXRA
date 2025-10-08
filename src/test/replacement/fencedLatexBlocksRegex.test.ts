@@ -47,6 +47,26 @@ describe('FENCED_LATEX_BLOCK_REPLACEMENTS', () => {
     assert.strictEqual(convert(input), expected);
   });
 
+  it('preserves CRLF line endings', () => {
+    const input = '::: align*\r\n&= a + b\\\\\r\n:::\r\n';
+    const expected = '\\begin{align*}\r\n&= a + b\\\\\r\n\\end{align*}\r\n';
+    assert.strictEqual(convert(input), expected);
+  });
+
+  it('appends a trailing newline when the body lacks one', () => {
+    const input = String.raw`::: gather
+1\\
+2
+:::
+`;
+    const expected = String.raw`\begin{gather}
+1\\
+2
+\end{gather}
+`;
+    assert.strictEqual(convert(input), expected);
+  });
+
   it('handles multiple fenced blocks in the same string', () => {
     const input = String.raw`::: aligned
 0\\
