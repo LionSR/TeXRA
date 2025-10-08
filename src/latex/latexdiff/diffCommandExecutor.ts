@@ -5,10 +5,14 @@ import * as logger from '@logger/logUtils';
 import { executeCommand } from '@utils/system';
 import { getConfig } from '@utils/config';
 import type { ExecResult } from '@agent/types/ResultTypes';
+import {
+  DEFAULT_MATH_MARKUP,
+  MATH_MARKUP_OPTIONS,
+  type MathMarkupOption,
+} from './mathMarkup';
 
 const DEFAULT_PICTURE_ENVS =
   '(?:picture|tikzpicture|scope|DIFnomarkup)[\\w\\d*@]*';
-const DEFAULT_MATH_MARKUP = 'coarse';
 
 const BIBLIOGRAPHY_ERROR_PATTERNS = [
   'bibtex',
@@ -27,8 +31,13 @@ const ERROR_MESSAGES = {
   FAILED_GENERAL: (commandType: string) => `Failed to run ${commandType}`,
 } as const;
 
+/**
+ * Options for diff execution.
+ * @property mathMarkup - Math markup mode ('off' | 'whole' | 'coarse' | 'fine').
+ * Overrides the configured default for this execution.
+ */
 interface DiffExecutionOptions {
-  mathMarkup?: string;
+  mathMarkup?: MathMarkupOption;
 }
 
 export class DiffCommandExecutor {
@@ -75,7 +84,7 @@ export class DiffCommandExecutor {
     inputFile: string,
     editedFile: string,
     useFlatten = true,
-    mathMarkupOverride?: string,
+    mathMarkupOverride?: MathMarkupOption,
   ): string[] {
     const { mathMarkup, pictureEnvs } =
       this.getLatexdiffConfig(mathMarkupOverride);
@@ -100,7 +109,7 @@ export class DiffCommandExecutor {
     inputFile: string,
     commitHash: string,
     useFlatten = true,
-    mathMarkupOverride?: string,
+    mathMarkupOverride?: MathMarkupOption,
   ): string[] {
     const { mathMarkup, pictureEnvs } =
       this.getLatexdiffConfig(mathMarkupOverride);
@@ -187,14 +196,22 @@ export class DiffCommandExecutor {
     );
   }
 
-  private getLatexdiffConfig(mathMarkupOverride?: string): {
-    mathMarkup: string;
+  private getLatexdiffConfig(mathMarkupOverride?: MathMarkupOption): {
+    mathMarkup: MathMarkupOption;
     pictureEnvs: string;
   } {
+    const configuredMathMarkup = getConfig<string>(
+      'latexdiff.mathMarkup',
+      DEFAULT_MATH_MARKUP,
+    );
+    const normalizedConfig = MATH_MARKUP_OPTIONS.includes(
+      configuredMathMarkup as MathMarkupOption,
+    )
+      ? (configuredMathMarkup as MathMarkupOption)
+      : DEFAULT_MATH_MARKUP;
+
     return {
-      mathMarkup:
-        mathMarkupOverride ??
-        getConfig<string>('latexdiff.mathMarkup', DEFAULT_MATH_MARKUP),
+      mathMarkup: mathMarkupOverride ?? normalizedConfig,
       pictureEnvs: getConfig<string>(
         'latexdiff.pictureEnvironments',
         DEFAULT_PICTURE_ENVS,

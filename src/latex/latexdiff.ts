@@ -23,6 +23,7 @@ import { runLatexFormatter } from './texFormatter';
 import { DiffFileNameManager } from './latexdiff/diffFileNameManager';
 import { DiffFileProcessor } from './latexdiff/diffFileProcessor';
 import { DiffCommandExecutor } from './latexdiff/diffCommandExecutor';
+import type { MathMarkupOption } from './latexdiff/mathMarkup';
 
 export interface LaTeXdiffResult {
   success: boolean;
@@ -70,7 +71,7 @@ export class LaTeXdiffService {
     editedFile: string,
     suffix = '_diff',
     runIndent = true,
-    mathMarkup?: string,
+    mathMarkup?: MathMarkupOption,
   ): Promise<LaTeXdiffResult> {
     let diffFileName = '';
     let outputPath = '';
@@ -155,6 +156,7 @@ export class LaTeXdiffService {
   async runDiffVc(
     inputFile: string,
     commitHash: string,
+    mathMarkup?: MathMarkupOption,
   ): Promise<LaTeXdiffResult> {
     try {
       if (!(await this.validateDocumentStructure(inputFile))) {
@@ -172,7 +174,9 @@ export class LaTeXdiffService {
         path.basename(diffFileName),
       );
 
-      await this.commandExecutor.executeDiffVc(inputFile, commitHash);
+      await this.commandExecutor.executeDiffVc(inputFile, commitHash, {
+        mathMarkup,
+      });
       await this.fileProcessor.processDiffFile(outputPath);
 
       return {
@@ -253,7 +257,7 @@ export class LaTeXdiffService {
     baseFile: string,
     outputFile: string,
     _round: number,
-    mathMarkup?: string,
+    mathMarkup?: MathMarkupOption,
   ): Promise<LaTeXdiffResult> {
     try {
       if (
@@ -282,7 +286,7 @@ export class LaTeXdiffService {
   async runDiffBetweenRounds(
     outputFile1: string,
     outputFile2: string,
-    mathMarkup?: string,
+    mathMarkup?: MathMarkupOption,
   ): Promise<LaTeXdiffResult> {
     try {
       if (
