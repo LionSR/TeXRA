@@ -1,7 +1,9 @@
 // Local imports - agent
-// Local imports - agent components
 import type { AgentConfig } from './AgentConfig';
+// Local imports - agent components
 import type { AgentSessionMetadata } from './AgentDataclass';
+// Local imports - agent types
+import type { StreamTabId } from '@agent/types/IdentifierTypes';
 
 /**
  * Minimal interface implemented by all agent types.
@@ -26,6 +28,11 @@ export interface IAgent {
 
   /** Interrupt the agent if it is running. */
   interrupt(): void;
+
+  /**
+   * Unique identifier used to route logs and progress updates for this agent run.
+   */
+  getStreamTabId(): StreamTabId;
 
   /**
    * Report how the agent identifies its session for logging and UI purposes.
