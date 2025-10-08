@@ -51,7 +51,14 @@ export class ReadFileTool extends defineTool({
     // Convert the requested 1-based range into zero-based indices and clamp them to the
     // available file length so callers can safely request windows beyond the file bounds.
     const startIndex = clamp(requestedStartLine - 1, 0, totalLines);
-    const endIndexExclusive = clamp(requestedEndLine, startIndex, totalLines);
+    const endIndexExclusive = (() => {
+      const requestedExclusiveOneBased = clamp(
+        requestedEndLine,
+        requestedStartLine,
+        totalLines,
+      );
+      return Math.max(startIndex, requestedExclusiveOneBased);
+    })();
 
     const selectedLines = lines.slice(startIndex, endIndexExclusive);
     const truncated = selectedLines.length > READ_FILE_MAX_LINES;
@@ -70,10 +77,15 @@ export class ReadFileTool extends defineTool({
       );
     }
 
+    const actualStartLine = visibleCount > 0 ? startIndex + 1 : null;
+    const actualEndLine = visibleCount > 0 ? startIndex + visibleCount : null;
+
     const summary = this.buildSummary({
       path: input.path,
       totalLines,
       visibleCount,
+      actualStartLine,
+      actualEndLine,
       requestedStartLine,
       requestedEndLine,
       truncated,
@@ -92,6 +104,8 @@ export class ReadFileTool extends defineTool({
     path,
     totalLines,
     visibleCount,
+    actualStartLine,
+    actualEndLine,
     requestedStartLine,
     requestedEndLine,
     truncated,
@@ -101,6 +115,8 @@ export class ReadFileTool extends defineTool({
     path: string;
     totalLines: number;
     visibleCount: number;
+    actualStartLine: number | null;
+    actualEndLine: number | null;
     requestedStartLine: number;
     requestedEndLine: number;
     truncated: boolean;
@@ -113,17 +129,18 @@ export class ReadFileTool extends defineTool({
         : `Read ${path} (file is empty)`;
     }
 
-    const actualStartLine = requestedStartLine;
-    const actualEndLine = requestedStartLine + visibleCount - 1;
+    const safeActualStartLine = actualStartLine ?? 1;
+    const safeActualEndLine =
+      actualEndLine ?? safeActualStartLine + visibleCount - 1;
     const describeRange =
       rangeProvided ||
       truncated ||
-      actualStartLine !== 1 ||
-      actualEndLine !== totalLines;
+      safeActualStartLine !== 1 ||
+      safeActualEndLine !== totalLines;
     const rangeLabel =
-      actualStartLine === actualEndLine
-        ? `line ${actualStartLine}`
-        : `lines ${actualStartLine}-${actualEndLine}`;
+      safeActualStartLine === safeActualEndLine
+        ? `line ${safeActualStartLine}`
+        : `lines ${safeActualStartLine}-${safeActualEndLine}`;
 
     let summary = describeRange
       ? `Read ${rangeLabel} of ${path}`
