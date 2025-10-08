@@ -14,7 +14,7 @@ import { MediaEntry } from '@agent/utils/mediaTypes';
 // Local imports - utilities
 import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
 import type { ToolDefinition } from '@model';
-import { K_SLICE, MESSAGE_PREVIEW_LENGTH } from '@utils/config';
+import { K_SLICE } from '@utils/config';
 
 /**
  * Handler for Moonshot Kimi models using OpenAI-compatible API.
@@ -103,24 +103,13 @@ export class ModelHandlerKimi extends ModelHandlerOpenAI {
     tools?: ToolDefinition[],
   ): Promise<any> {
     // Preprocess messages for Kimi compatibility
-    const processedMessages = this.normalizeMessages(messages, {
-      convertContentToString: true,
-    });
-
-    if (processedMessages.length !== messages.length) {
-      this.logger.info(
-        `Preprocessed message array from ${messages.length} to ${processedMessages.length} messages for Kimi model compatibility`,
-      );
-    }
-
-    // Log the first few characters of each processed message for debugging
-    processedMessages.forEach((msg, index) => {
-      const contentPreview =
-        typeof msg.content === 'string'
-          ? msg.content.substring(0, MESSAGE_PREVIEW_LENGTH)
-          : 'non-string content';
-      this.logger.debug(`Message ${index} (${msg.role}): ${contentPreview}...`);
-    });
+    const processedMessages = this.prepareNormalizedMessages(
+      messages,
+      {
+        convertContentToString: true,
+      },
+      'Kimi',
+    );
 
     // For Kimi thinking model, add the thinking parameter
     const isThinkingModel =
