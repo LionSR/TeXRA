@@ -193,6 +193,7 @@ export class FileList {
         condition: file.prev,
         configure: (btn) => {
           btn.dataset.prev = file.prev;
+          btn.dataset.base = file.prev;
         },
       },
     ];
