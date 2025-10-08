@@ -6,7 +6,8 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
-- _No unreleased changes yet._
+- Add OpenAI GPT-5 Pro (`gpt5pro`) to the model catalog with updated pricing and documentation.
+- Add interactive prompt to select latexdiff math markup granularity before each run.
 
 ## [0.33.9] - 2025-10-03
 
