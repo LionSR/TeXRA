@@ -198,7 +198,7 @@
 }
 
 /* Special handling for reflection patterns */
-.markdown-content p:has(strong:first-child) {
+.special-content--scratchpad p:has(strong:first-child) {
   border-left: calc(var(--spacing-small) - 1px) solid
     var(--vscode-notificationsInfoIcon-foreground, #75beff);
   padding-left: var(--spacing-medium);
