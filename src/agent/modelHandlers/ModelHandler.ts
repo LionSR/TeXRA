@@ -90,6 +90,7 @@ export abstract class ModelHandler<
   public maxOutputTokensFactor: number;
   protected logger: AgentLogger;
   protected outputStreaming = false;
+  protected backgroundModeSupported = false;
 
   constructor(config: ModelConfig) {
     this.config = {
