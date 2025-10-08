@@ -16,6 +16,7 @@ import {
   getReplacementsByCategory,
 } from '@replacement/engine';
 import replacementEngine from '@replacement/engine';
+import { FENCED_LATEX_BLOCK_REPLACEMENTS } from '@replacement/rulesRegex';
 import { WorkspaceFS } from '@utils/files';
 import xmlUtils from '@utils/text/xmlUtils';
 
@@ -28,6 +29,7 @@ export class XmlOutputManager {
 
   async processXmlContent(content: string): Promise<string> {
     content = replacementEngine.applyNonRegex(content);
+    content = applyReplacements(content, FENCED_LATEX_BLOCK_REPLACEMENTS);
 
     const latexXmlReplacements = getReplacementsByCategory('latex_xml');
     if (latexXmlReplacements) {
