@@ -1290,8 +1290,8 @@
     "@types/shell-quote": "^1.7.5",
     "@types/turndown": "^5.0.5",
     "@types/vscode": "^1.99.1",
-    "@typescript-eslint/eslint-plugin": "^8.38.0",
-    "@typescript-eslint/parser": "^8.38.0",
+    "@typescript-eslint/eslint-plugin": "^8.46.0",
+    "@typescript-eslint/parser": "^8.46.0",
     "@vscode/test-cli": "^0.0.11",
     "@vscode/test-electron": "^2.5.2",
     "eslint": "^9.37.0",
@@ -1304,8 +1304,8 @@
     "terser-webpack-plugin": "^5.3.14",
     "ts-loader": "^9.5.4",
     "typescript": "^5.9.3",
-    "typescript-eslint": "^8.45.0",
-    "webpack": "^5.102.0",
+    "typescript-eslint": "^8.46.0",
+    "webpack": "^5.102.1",
     "webpack-cli": "^6.0.1"
   },
   "repository": {
@@ -1363,7 +1363,7 @@
     "minimatch": "^10.0.3",
     "nanoid": "^5.1.6",
     "node-pandoc": "^0.3.0",
-    "openai": "^6.1.0",
+    "openai": "^6.2.0",
     "pdf2pic": "^3.2.0",
     "shell-quote": "^1.8.3",
     "sortablejs": "^1.15.6",
@@ -1373,6 +1373,6 @@
     "turndown-plugin-gfm": "^1.0.2",
     "winston": "^3.18.3",
     "yaml": "^2.8.1",
-    "zod": "^4.1.11"
+    "zod": "^4.1.12"
   }
 }
