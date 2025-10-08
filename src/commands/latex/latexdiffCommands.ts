@@ -14,6 +14,11 @@ import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 
 // Local imports - latex utils
 import { LaTeXdiffService } from '@latex/latexdiff';
+import {
+  MATH_MARKUP_OPTIONS,
+  describeMathMarkupOption,
+  type MathMarkupOption,
+} from '@latex/latexdiff/mathMarkup';
 import { checkToolInstalled } from '@utils/system';
 
 // Local imports - housekeeping
@@ -39,14 +44,11 @@ logger.initialize(CHANNEL);
 
 const service = new LaTeXdiffService(CHANNEL);
 
-const MATH_MARKUP_OPTIONS = ['off', 'whole', 'coarse', 'fine'] as const;
-type MathMarkupOption = (typeof MATH_MARKUP_OPTIONS)[number];
-
 async function promptForMathMarkup(): Promise<MathMarkupOption | undefined> {
   const currentMode = getConfig<string>('latexdiff.mathMarkup', 'coarse');
   const items: vscode.QuickPickItem[] = MATH_MARKUP_OPTIONS.map((mode) => ({
     label: mode,
-    description: mode === 'coarse' ? 'Default mode' : undefined,
+    description: describeMathMarkupOption(mode),
     picked: mode === currentMode,
   }));
 
@@ -165,8 +167,17 @@ async function handleLatexdiffvc(
       return;
     }
 
+    const mathMarkup = await promptForMathMarkup();
+    if (!mathMarkup) {
+      return;
+    }
+    logger.info(
+      CHANNEL,
+      `Running latexdiff-vc with math markup mode: ${mathMarkup}`,
+    );
+
     // Get the result from LaTeXdiffService
-    const result = await service.runDiffVc(fileToUse, commitHash);
+    const result = await service.runDiffVc(fileToUse, commitHash, mathMarkup);
 
     if (!result.success || !result.diffFileName) {
       throw new Error(result.message || 'Failed to generate diff file');
