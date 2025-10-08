@@ -46,7 +46,10 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
   }
 
   public getSessionMetadata(): AgentSessionMetadata {
-    return resolveAgentSessionMetadata(this.agentSetting.agentType);
+    return resolveAgentSessionMetadata(
+      this.agentConfig.agentType ?? this.agentSetting.agentType,
+      this.agentConfig.agentSessionKind,
+    );
   }
 
   constructor(
@@ -90,12 +93,13 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
 
   /** Compute the stream tab identifier for this agent execution. */
   public getStreamTabId(): StreamTabId {
+    const metadata = this.getSessionMetadata();
     return buildStreamTabId(
       this.agentConfig.agent,
       this.agentConfig.model,
       this.agentConfig.inputFile,
       {
-        agentType: this.agentSetting.agentType,
+        agentType: metadata.agentType,
         executionId: this.executionId,
         useMultipleOutputs: this.agentConfig.useMultipleOutputs,
       },
