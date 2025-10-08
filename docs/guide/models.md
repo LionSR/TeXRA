@@ -48,6 +48,7 @@ Known for strong reasoning and creative capabilities.
 | :-------- | :------------------------------------ | :------------ | :------------- | :------------------------------- |
 | `o1`      | Advanced reasoning, math, figures     | $$$$          | Slow           | Explicit reasoning               |
 | `gpt45`   | High quality, vision (Preview)        | $$$$          | Medium         |                                  |
+| `gpt5pro` | Premium reasoning & coding            | $$$$          | Slow           | 400k ctx, 272k max output        |
 | `gpt5`    | Flagship reasoning & coding           | $$$           | Medium         | 400k context                     |
 | `gpt5-`   | Flagship mini, fast                   | $$            | Fast           | 400k context, mini               |
 | `gpt5--`  | Flagship nano, fastest                | $             | Very Fast      | 400k context, nano               |
@@ -63,7 +64,7 @@ Known for strong reasoning and creative capabilities.
 | `gptoss`  | Open-weight reasoning, large context  | $$            | Medium         | `gpt-oss-120b` (OpenRouter only) |
 | `gptoss-` | Open-weight reasoning, cost-effective | $             | Fast           | `gpt-oss-20b` (OpenRouter only)  |
 
-> **Note:** GPT-5 reasoning summaries require additional account verification. TeXRA disables them by default—enable `"texra.model.gpt5ReasoningSummary": true` if your account supports this feature.
+> **Note:** GPT-5 and GPT-5 Pro reasoning summaries require additional account verification. TeXRA disables them by default—enable `"texra.model.gpt5ReasoningSummary": true` if your account supports this feature.
 
 ### Google Models
 
@@ -185,7 +186,7 @@ Consider these factors:
 - **Task Complexity**: Simple corrections might only need a `$`/Fast model (`gemini2f`), while complex paper transformations benefit from `$$$$`/Slow models (`opus`, `o1`).
 - **Budget**: Use cost indicators ($ - $$$$) to guide selection.
 - **Speed**: If quick turnaround is needed, prefer Fast/Very Fast models.
-- **Special Capabilities**: Do you need explicit reasoning (`sonnet45T`, `sonnet37T`, `gemini2fT`, `o1`, `o3-`, `o1-`, `gptoss`, `gptoss-`, `dsr1`), vision (`gpt5`, `gpt4o`, `gemini*`), native PDF/audio (`gemini*`), or very large context (`gemini*`, `gpt41`, `gpt5`)?
+- **Special Capabilities**: Do you need explicit reasoning (`sonnet45T`, `sonnet37T`, `gemini2fT`, `o1`, `o3-`, `o1-`, `gptoss`, `gptoss-`, `dsr1`), vision (`gpt5`, `gpt5pro`, `gpt4o`, `gemini*`), native PDF/audio (`gemini*`), or very large context (`gemini*`, `gpt41`, `gpt5`, `gpt5pro`)?
 
 Experimentation is often key to finding the best model for your specific needs and writing style.
 
@@ -194,7 +195,7 @@ Experimentation is often key to finding the best model for your specific needs a
 You can customize which models appear in the TeXRA dropdown list via VS Code Settings (`Ctrl+,`). Search for `texra.models` and edit the JSON array. Here are the defaults:
 
 ::: tip Model Availability
-The specific models available by default and their identifiers (`sonnet45`, `gpt5`, etc.) are maintained by the TeXRA developers and may change in future updates based on new releases and performance evaluations.
+The specific models available by default and their identifiers (`sonnet45`, `gpt5`, `gpt5pro`, etc.) are maintained by the TeXRA developers and may change in future updates based on new releases and performance evaluations.
 :::
 
 ```json
