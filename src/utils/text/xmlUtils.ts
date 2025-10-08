@@ -72,10 +72,7 @@ function convertLatexToMarkdown(latex: string): string {
     withoutEnvironments,
   );
 
-  return converted
-    .replace(/\n{3,}/g, '\n\n')
-    .replace(/^(\s*\n)+/g, '')
-    .trim();
+  return converted;
 }
 
 function detectInputFormat(text: string): outputFormat {
@@ -97,6 +94,9 @@ function containsLatex(text: string): boolean {
   return LATEX_PATTERN.test(text);
 }
 
+/**
+ * @deprecated This function is deprecated. Let us try to find native solutions instead
+ */
 function normalizeMarkdown(markdown: string): string {
   return markdown
     .replace(/\r\n/g, '\n')
@@ -425,8 +425,8 @@ export async function formatContent(content: string): Promise<string> {
       formattedContent = convertLatexToMarkdown(formattedContent);
     }
   }
-
-  return normalizeMarkdown(formattedContent);
+  return formattedContent;
+  // return normalizeMarkdown(formattedContent);
 }
 
 /**
