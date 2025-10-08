@@ -15,6 +15,7 @@ import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
 
 // Local imports - logging
 import { AgentLogger } from '@logger/AgentLogger';
+import { MESSAGE_TYPES } from '@logger/messageTypes';
 import { getStreamTabId as buildStreamTabId } from '@/logger/streamUtils';
 
 // Local imports - utilities
@@ -170,7 +171,11 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
   /** Check if the agent should stop due to user interruption. */
   protected checkInterruption(): boolean {
     if (this.isInterrupted) {
-      this.logger.info('Stopping due to user interruption');
+      this.logger.info(
+        'Stopping due to user interruption',
+        undefined,
+        MESSAGE_TYPES.PROGRESS_STATUS,
+      );
       return true;
     }
     return false;

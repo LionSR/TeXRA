@@ -283,6 +283,7 @@ export async function runResponseCycle<C = unknown>(
     logger.info(
       `Starting continuation #${stateRound.continuationCount}`,
       taskGroupId,
+      MESSAGE_TYPES.PROGRESS_STATUS,
     );
 
     if (
