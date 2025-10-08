@@ -1163,7 +1163,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       return null;
     }
 
-    const thoughtContent = summaryParts.map((part) => part.text).join('');
+    const thoughtContent = summaryParts.map((part) => part.text).join('\n');
 
     if (toolState && !toolState.thinkingAdded) {
       toolState.thinkingBlocks = summaryParts.map((part) => ({
