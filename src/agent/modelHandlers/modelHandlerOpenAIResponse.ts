@@ -65,9 +65,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   ResponseFunctionToolCallItem
 > {
   protected override backgroundModeSupported = true;
-  private static readonly BACKGROUND_POLL_INITIAL_INTERVAL_MS = 5000;
-  private static readonly BACKGROUND_POLL_BACKOFF_STEP_MS = 2000;
-  private static readonly BACKGROUND_POLL_MAX_INTERVAL_MS = 15000;
+  private static readonly BACKGROUND_POLL_INTERVAL_MS = 15000;
   private static readonly BACKGROUND_RETRIEVE_MAX_RETRIES = 3;
   private previousResponseId: string | null = null;
   private sentMessages = 0;
@@ -503,7 +501,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       let response = await client.responses.create(nonStreamingParams, {
         signal,
       });
-      this.previousResponseId = response.id;
       if (useBackgroundResponses) {
         this.logger.debug(
           `Background response ${response.id} created with status ${
@@ -515,6 +512,16 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
             responseId: response.id,
             status: response.status,
             usage: response.usage ?? undefined,
+          },
+        );
+        this.logger.info(
+          'Running OpenAI Responses in background mode; polling every 15s. Completion may take longer than usual.',
+          undefined,
+          MESSAGE_TYPES.DEFAULT,
+          {
+            responseId: response.id,
+            pollIntervalMs:
+              ModelHandlerOpenAIResponse.BACKGROUND_POLL_INTERVAL_MS,
           },
         );
       }
@@ -699,12 +706,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
     let current = initialResponse;
     const responseId = initialResponse.id;
-    const initialInterval =
-      ModelHandlerOpenAIResponse.BACKGROUND_POLL_INITIAL_INTERVAL_MS;
-    const backoffStep =
-      ModelHandlerOpenAIResponse.BACKGROUND_POLL_BACKOFF_STEP_MS;
-    const maxInterval =
-      ModelHandlerOpenAIResponse.BACKGROUND_POLL_MAX_INTERVAL_MS;
+    const pollInterval = ModelHandlerOpenAIResponse.BACKGROUND_POLL_INTERVAL_MS;
     const maxRetries =
       ModelHandlerOpenAIResponse.BACKGROUND_RETRIEVE_MAX_RETRIES;
     const startTime = Date.now();
@@ -724,22 +726,18 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
     while (this.isBackgroundPending(current)) {
       pollCount += 1;
-      const waitMs = Math.min(
-        initialInterval + (pollCount - 1) * backoffStep,
-        maxInterval,
-      );
       this.logger.debug(
-        `Waiting ${waitMs}ms before poll ${pollCount} for response ${responseId}`,
+        `Waiting ${pollInterval}ms before poll ${pollCount} for response ${responseId}`,
         undefined,
         undefined,
         {
           responseId,
           pollCount,
-          waitMs,
+          waitMs: pollInterval,
         },
       );
       try {
-        await this.waitWithAbort(waitMs, signal);
+        await this.waitWithAbort(pollInterval, signal);
       } catch (err) {
         if (err instanceof DOMException && err.name === 'AbortError') {
           this.logger.warn(
