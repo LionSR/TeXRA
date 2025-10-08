@@ -15,6 +15,7 @@ import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 // Local imports - latex utils
 import { LaTeXdiffService } from '@latex/latexdiff';
 import {
+  DEFAULT_MATH_MARKUP,
   MATH_MARKUP_OPTIONS,
   describeMathMarkupOption,
   type MathMarkupOption,
@@ -45,12 +46,22 @@ logger.initialize(CHANNEL);
 const service = new LaTeXdiffService(CHANNEL);
 
 async function promptForMathMarkup(): Promise<MathMarkupOption | undefined> {
-  const currentMode = getConfig<string>('latexdiff.mathMarkup', 'coarse');
-  const items: vscode.QuickPickItem[] = MATH_MARKUP_OPTIONS.map((mode) => ({
-    label: mode,
-    description: describeMathMarkupOption(mode),
-    picked: mode === currentMode,
-  }));
+  const configuredMode = getConfig<string>(
+    'latexdiff.mathMarkup',
+    DEFAULT_MATH_MARKUP,
+  );
+  const currentMode = MATH_MARKUP_OPTIONS.includes(
+    configuredMode as MathMarkupOption,
+  )
+    ? (configuredMode as MathMarkupOption)
+    : DEFAULT_MATH_MARKUP;
+  const items: (vscode.QuickPickItem & { value: MathMarkupOption })[] =
+    MATH_MARKUP_OPTIONS.map((mode) => ({
+      label: mode,
+      description: describeMathMarkupOption(mode),
+      picked: mode === currentMode,
+      value: mode,
+    }));
 
   const selection = await vscode.window.showQuickPick(items, {
     title: 'Latexdiff math markup',
@@ -58,7 +69,7 @@ async function promptForMathMarkup(): Promise<MathMarkupOption | undefined> {
     ignoreFocusOut: true,
   });
 
-  return selection?.label as MathMarkupOption | undefined;
+  return selection?.value;
 }
 
 // Removed showLatexdiffError wrapper - using showLoggedMessageWithDocs directly
@@ -122,6 +133,13 @@ async function handleLatexdiff(
     if (!mathMarkup) {
       return;
     }
+    logger.info(
+      CHANNEL,
+      `Running latexdiff with math markup mode: ${mathMarkup}`,
+    );
+    vscode.window.showInformationMessage(
+      `Running LaTeX diff with math markup mode "${mathMarkup}"`,
+    );
 
     // Get the result from LaTeXdiffService
     const result = await service.runDiff(
@@ -174,6 +192,9 @@ async function handleLatexdiffvc(
     logger.info(
       CHANNEL,
       `Running latexdiff-vc with math markup mode: ${mathMarkup}`,
+    );
+    vscode.window.showInformationMessage(
+      `Running latexdiff-vc with math markup mode "${mathMarkup}"`,
     );
 
     // Get the result from LaTeXdiffService
