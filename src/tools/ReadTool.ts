@@ -66,6 +66,7 @@ export class ReadFileTool extends defineTool({
 
     // Convert the requested 1-based range into zero-based indices and clamp them to the
     // available file length so callers can safely request windows beyond the file bounds.
+    // If startIndex >= totalLines, slice will return empty array (which is correct behavior).
     const startIndex = Math.min(requestedStartLine - 1, totalLines);
     const endIndexExclusive = Math.min(
       Math.max(requestedEndLine, requestedStartLine),
@@ -125,9 +126,10 @@ export class ReadFileTool extends defineTool({
     rangeEndExceeded,
   }: BuildSummaryParams): string {
     if (visibleCount === 0) {
-      return rangeProvided
-        ? `Read ${path} (no lines in requested range)`
-        : `Read ${path} (file is empty)`;
+      if (totalLines === 0) {
+        return `Read ${path} (file is empty)`;
+      }
+      return `Read ${path} (no lines in requested range)`;
     }
 
     const safeActualStartLine = actualStartLine ?? 1;
