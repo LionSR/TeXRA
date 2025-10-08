@@ -308,10 +308,21 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     message: any,
     webviewView: vscode.WebviewView,
   ): Promise<void> {
+    const previousFile = message.prev || message.base;
+
+    if (previousFile) {
+      await vscode.commands.executeCommand(
+        'texra.latexdiff',
+        undefined,
+        previousFile,
+        message.file,
+      );
+    }
+
     await vscode.commands.executeCommand(
       'texra.compare',
       undefined,
-      message.prev,
+      previousFile,
       message.file,
     );
   }
