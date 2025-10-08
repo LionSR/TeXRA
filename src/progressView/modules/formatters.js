@@ -393,7 +393,12 @@ export class LogEntryFormatter {
 
   _formatSpecialContent(content, contentType, logId, groupId, timestamp) {
     if (!content || !content.trim()) return null;
-    const parsedMarkdown = this._processMarkdownContent(content);
+    const decodedContent = decodeHtml(content);
+    if (!decodedContent.trim()) {
+      return null;
+    }
+
+    const parsedMarkdown = this._processMarkdownContent(decodedContent, false);
     const element = createFromTemplate('specialDetailsTemplate');
     if (!element) return null;
 
@@ -422,6 +427,15 @@ export class LogEntryFormatter {
     const labelElem = element.querySelector('.label');
     if (labelElem) labelElem.textContent = labelText;
 
+    const copyButton = element.querySelector('.special-content-copy');
+    if (copyButton) {
+      const defaultTitle = `Copy ${labelText.toLowerCase()}`;
+      copyButton.dataset.defaultTitle = defaultTitle;
+      copyButton.dataset.successTitle = 'Copied!';
+      copyButton.setAttribute('title', defaultTitle);
+      copyButton.setAttribute('aria-label', defaultTitle);
+    }
+
     const contentElem = element.querySelector('.special-content');
     if (contentElem) {
       contentElem.classList.remove(
@@ -429,6 +443,7 @@ export class LogEntryFormatter {
         'special-content--scratchpad',
       );
       contentElem.classList.add(contentClass);
+      contentElem.dataset.rawContent = decodedContent;
       contentElem.innerHTML = parsedMarkdown;
     }
 

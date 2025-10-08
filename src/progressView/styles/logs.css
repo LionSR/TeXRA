@@ -45,7 +45,8 @@
   column-gap: var(--spacing-small);
 }
 
-.model-response-copy {
+.model-response-copy,
+.special-content-copy {
   min-width: 0;
   padding: 0 var(--spacing-tiny);
   opacity: 0;
@@ -57,11 +58,16 @@
 .model-response-header:hover .model-response-copy,
 .model-response-line:focus-within .model-response-copy,
 .model-response-copy:focus-visible,
-.model-response-copy.copy-success {
+.model-response-copy.copy-success,
+.details-summary:hover .special-content-copy,
+.special-details:focus-within .special-content-copy,
+.special-content-copy:focus-visible,
+.special-content-copy.copy-success {
   opacity: 1;
 }
 
-.model-response-copy.copy-success {
+.model-response-copy.copy-success,
+.special-content-copy.copy-success {
   color: var(--vscode-testing-iconPassed, #2ea043);
 }
 
