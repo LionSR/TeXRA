@@ -11,7 +11,11 @@ import { getConfig } from '@utils/config';
 const CHANNEL = 'ReplacementEngine';
 logger.initialize(CHANNEL);
 
-import { ReplacementCategory } from './types';
+import {
+  ReplacementCategory,
+  ReplacementFunction,
+  ReplacementValue,
+} from './types';
 import {
   applyLatexQuotesFormatting,
   replaceMathUnicode,
@@ -152,7 +156,7 @@ export function getAllReplacements(): ReplacementCategory {
   );
 
   // Combine patterns from all enabled categories
-  let allPatterns: { [key: string]: string } = {};
+  let allPatterns: { [key: string]: ReplacementValue } = {};
   enabledCategories.forEach((category) => {
     allPatterns = { ...allPatterns, ...category.patterns };
   });
@@ -262,10 +266,13 @@ export function applyReplacements(
     if (category.isRegex) {
       for (const [pattern, repl] of Object.entries(category.patterns)) {
         try {
-          text = text.replace(
-            new RegExp(pattern, category.flags),
-            repl as string,
-          );
+          const regex = new RegExp(pattern, category.flags);
+          if (typeof repl === 'function') {
+            const replacer = repl as ReplacementFunction;
+            text = text.replace(regex, (...args) => replacer(...args));
+          } else {
+            text = text.replace(regex, repl);
+          }
         } catch (regexErr) {
           logger.error(
             CHANNEL,
