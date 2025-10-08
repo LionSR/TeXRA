@@ -17,8 +17,8 @@ const ReadInputSchema = z.strictObject({
   path: z.string(),
   range: z
     .strictObject({
-      start: z.number().int().positive(),
-      end: z.number().int().positive().optional(),
+      start: z.number().int().min(1),
+      end: z.number().int().min(1).optional(),
     })
     .refine((value) => value.end === undefined || value.end >= value.start, {
       message: 'range.end must be greater than or equal to range.start',
@@ -28,6 +28,19 @@ const ReadInputSchema = z.strictObject({
 });
 
 export type ReadInput = z.infer<typeof ReadInputSchema>;
+
+interface BuildSummaryParams {
+  path: string;
+  totalLines: number;
+  visibleCount: number;
+  actualStartLine: number | null;
+  actualEndLine: number | null;
+  requestedStartLine: number;
+  requestedEndLine: number;
+  truncated: boolean;
+  rangeProvided: boolean;
+  rangeEndExceeded: boolean;
+}
 
 export class ReadFileTool extends defineTool({
   name: 'read_file',
@@ -45,20 +58,16 @@ export class ReadFileTool extends defineTool({
     const clamp = (value: number, min: number, max: number) =>
       Math.min(Math.max(value, min), max);
 
-    const requestedStartLine = Math.max(input.range?.start ?? 1, 1);
+    const requestedStartLine = input.range?.start ?? 1;
     const requestedEndLine = input.range?.end ?? totalLines;
 
     // Convert the requested 1-based range into zero-based indices and clamp them to the
     // available file length so callers can safely request windows beyond the file bounds.
-    const startIndex = clamp(requestedStartLine - 1, 0, totalLines);
-    const endIndexExclusive = (() => {
-      const requestedExclusiveOneBased = clamp(
-        requestedEndLine,
-        requestedStartLine,
-        totalLines,
-      );
-      return Math.max(startIndex, requestedExclusiveOneBased);
-    })();
+    const startIndex = Math.min(requestedStartLine - 1, totalLines);
+    const endIndexExclusive = Math.min(
+      Math.max(requestedEndLine, requestedStartLine),
+      totalLines,
+    );
 
     const selectedLines = lines.slice(startIndex, endIndexExclusive);
     const truncated = selectedLines.length > READ_FILE_MAX_LINES;
@@ -111,18 +120,7 @@ export class ReadFileTool extends defineTool({
     truncated,
     rangeProvided,
     rangeEndExceeded,
-  }: {
-    path: string;
-    totalLines: number;
-    visibleCount: number;
-    actualStartLine: number | null;
-    actualEndLine: number | null;
-    requestedStartLine: number;
-    requestedEndLine: number;
-    truncated: boolean;
-    rangeProvided: boolean;
-    rangeEndExceeded: boolean;
-  }): string {
+  }: BuildSummaryParams): string {
     if (visibleCount === 0) {
       return rangeProvided
         ? `Read ${path} (no lines in requested range)`
