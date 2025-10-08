@@ -7,13 +7,19 @@ const convertFencedLatexBlock: ReplacementFunction = (
   leadingBreak,
   indent,
   environment,
-  body,
+  multilineBody,
+  inlineBody,
 ) => {
   const newline = match.includes('\r\n') ? '\r\n' : '\n';
   const safeLeadingBreak = typeof leadingBreak === 'string' ? leadingBreak : '';
   const safeIndent = typeof indent === 'string' ? indent : '';
   const safeEnvironment = typeof environment === 'string' ? environment : '';
-  const safeBody = typeof body === 'string' ? body : '';
+  const safeBody =
+    typeof multilineBody === 'string' && multilineBody !== undefined
+      ? multilineBody
+      : typeof inlineBody === 'string' && inlineBody !== undefined
+        ? inlineBody
+        : '';
 
   const bodyWithTrailingBreak =
     safeBody === ''
