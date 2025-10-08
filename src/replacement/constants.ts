@@ -48,14 +48,45 @@ export const MATH_OPERATORS = [
   'liminf',
 ];
 
+const escapeRegExp = (value: string): string =>
+  value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+export const FENCED_LATEX_ENVIRONMENTS = [
+  'align',
+  'align*',
+  'aligned',
+  'aligned*',
+  'alignat',
+  'alignat*',
+  'gather',
+  'gather*',
+  'multline',
+  'multline*',
+  'equation',
+  'equation*',
+  'cases',
+  'cases*',
+  'split',
+  'pmatrix',
+  'bmatrix',
+  'vmatrix',
+  'matrix',
+  'smallmatrix',
+];
+
+export const FENCED_LATEX_ENVIRONMENT_PATTERN =
+  FENCED_LATEX_ENVIRONMENTS.map(escapeRegExp).join('|');
+
+const LINE_BREAK_PATTERN = String.raw`\r?\n`;
+
+export const FENCED_LATEX_BLOCK_PATTERN = String.raw`(^|${LINE_BREAK_PATTERN})([ \t]*):::\s*(${FENCED_LATEX_ENVIRONMENT_PATTERN})[^\S\r\n]*(?:${LINE_BREAK_PATTERN}([\s\S]*?))?${LINE_BREAK_PATTERN}[ \t]*:::(?=${LINE_BREAK_PATTERN}|$)`;
+
 // Union of common LaTeX environments used across rules
 // prettier-ignore
-export const LATEX_ENVIRONMENTS = [
+const BASE_LATEX_ENVIRONMENTS = [
   'figure',
   'figure*',
   'tikzpicture',
-  'align',
-  'equation',
   'itemize',
   'enumerate',
   'tabular',
@@ -86,19 +117,16 @@ export const LATEX_ENVIRONMENTS = [
   'axis',
   'scope',
   'response',
-  'align*',
-  'aligned',
   'overpic',
   'overpic*',
-  'aligned*',
-  'alignat',
-  'alignat*',
-  'gather',
-  'gather*',
   'section',
   'subsection',
   'referee',
   'letter',
   'array',
-  'equation*',
+];
+
+export const LATEX_ENVIRONMENTS = [
+  ...BASE_LATEX_ENVIRONMENTS,
+  ...FENCED_LATEX_ENVIRONMENTS,
 ];
