@@ -67,6 +67,17 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   protected override backgroundModeSupported = true;
   private static readonly BACKGROUND_POLL_INTERVAL_MS = 15000;
   private static readonly BACKGROUND_RETRIEVE_MAX_RETRIES = 3;
+  private static readonly BACKGROUND_MAX_DURATION_MS = 3 * 60 * 60 * 1000; // 3 hours
+  private static readonly BACKGROUND_PENDING_STATUSES = [
+    'queued',
+    'in_progress',
+  ] as const;
+  private static readonly BACKGROUND_TERMINAL_STATUSES = [
+    'completed',
+    'failed',
+    'cancelled',
+    'expired',
+  ] as const;
   private previousResponseId: string | null = null;
   private sentMessages = 0;
 
@@ -692,7 +703,14 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   }
 
   private isBackgroundPending(response: Response): boolean {
-    return response.status === 'queued' || response.status === 'in_progress';
+    const status = response.status;
+    if (!status) {
+      return false;
+    }
+
+    return ModelHandlerOpenAIResponse.BACKGROUND_PENDING_STATUSES.includes(
+      status as (typeof ModelHandlerOpenAIResponse.BACKGROUND_PENDING_STATUSES)[number],
+    );
   }
 
   private async waitForBackgroundCompletion(
@@ -756,6 +774,24 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         throw err;
       }
 
+      const elapsedMs = Date.now() - startTime;
+      if (elapsedMs > ModelHandlerOpenAIResponse.BACKGROUND_MAX_DURATION_MS) {
+        this.logger.error(
+          `Background response ${responseId} exceeded maximum polling duration while pending`,
+          undefined,
+          undefined,
+          {
+            responseId,
+            status: current.status,
+            pollCount,
+            elapsedMs,
+          },
+        );
+        throw new Error(
+          `Background response ${responseId} exceeded maximum polling duration of ${ModelHandlerOpenAIResponse.BACKGROUND_MAX_DURATION_MS} ms. Retry later or cancel the job with client.responses.cancel("${responseId}").`,
+        );
+      }
+
       try {
         const requestOptions = signal ? { signal } : undefined;
         current = await client.responses.retrieve(
@@ -780,7 +816,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         consecutiveErrors += 1;
         const message = getSdkErrorMessage(err);
         this.logger.warn(
-          `Background poll ${pollCount} for response ${responseId} failed (${consecutiveErrors}/${maxRetries}): ${message}`,
+          `Background poll ${pollCount} for response ${responseId} failed (${consecutiveErrors}/${maxRetries}): ${message}. Will retry...`,
           undefined,
           undefined,
           {
@@ -823,6 +859,28 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         usage: current.usage ?? undefined,
       },
     );
+
+    const finalStatus = current.status;
+
+    const isTerminal =
+      !!finalStatus &&
+      ModelHandlerOpenAIResponse.BACKGROUND_TERMINAL_STATUSES.includes(
+        finalStatus as (typeof ModelHandlerOpenAIResponse.BACKGROUND_TERMINAL_STATUSES)[number],
+      );
+
+    if (!isTerminal) {
+      this.logger.warn(
+        `Background response ${responseId} returned non-terminal status ${finalStatus ?? 'unknown'} after polling loop`,
+        undefined,
+        undefined,
+        {
+          responseId,
+          status: finalStatus,
+          pollCount,
+          elapsedMs,
+        },
+      );
+    }
 
     if (current.status !== 'completed') {
       const fallbackStatus = current.status ?? 'unknown';
@@ -870,10 +928,15 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         timeoutSignal?.removeEventListener('abort', onTimeout);
         if (timeoutId) {
           clearTimeout(timeoutId);
+          timeoutId = undefined;
         }
       };
 
       const onAbort = () => {
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+          timeoutId = undefined;
+        }
         cleanup();
         reject(new DOMException('The operation was aborted.', 'AbortError'));
       };
