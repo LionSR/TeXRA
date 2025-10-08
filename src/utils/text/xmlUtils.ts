@@ -94,18 +94,6 @@ function containsLatex(text: string): boolean {
   return LATEX_PATTERN.test(text);
 }
 
-/**
- * @deprecated This function is deprecated. Let us try to find native solutions instead
- */
-function normalizeMarkdown(markdown: string): string {
-  return markdown
-    .replace(/\r\n/g, '\n')
-    .replace(/-\s{2,}/g, '- ')
-    .replace(/[ \t]+$/gm, '')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
-}
-
 function convertHtmlToMarkdown(html: string): string {
   const turndownService = new TurndownService({
     bulletListMarker: '-',
@@ -427,7 +415,6 @@ export async function formatContent(content: string): Promise<string> {
     }
   }
   return formattedContent;
-  // return normalizeMarkdown(formattedContent);
 }
 
 /**
