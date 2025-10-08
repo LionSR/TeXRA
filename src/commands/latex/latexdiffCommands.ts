@@ -63,8 +63,12 @@ async function promptForMathMarkup(): Promise<MathMarkupOption | undefined> {
       picked: mode === currentMode,
       value: mode,
     }));
+  const prioritizedItems = [
+    ...items.filter((item) => item.value === currentMode),
+    ...items.filter((item) => item.value !== currentMode),
+  ];
 
-  const selection = await vscode.window.showQuickPick(items, {
+  const selection = await vscode.window.showQuickPick(prioritizedItems, {
     title: 'Latexdiff math markup',
     placeHolder: 'Select math markup granularity for this diff run',
     ignoreFocusOut: true,
