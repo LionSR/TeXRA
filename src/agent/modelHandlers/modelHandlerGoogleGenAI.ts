@@ -41,6 +41,7 @@ import {
   ModelHandler,
   type MediaFileResult,
 } from '@agent/modelHandlers/ModelHandler';
+import { createContinuationMessage } from '@agent/utils/continuationMessage';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import { calculateTokenPrice } from '@agent/utils/priceUtils';
 import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
@@ -750,7 +751,10 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     _agentConfig: AgentConfig,
   ): void {
     const prefillTokens = toolState.lastResponse.slice(-K_SLICE);
-    const userMessageContinuation = `Your response got cut off. Continue responding exactly where you left off, starting after: "${prefillTokens}". Do not repeat yourself or start over. Ensure you end with ${agentSetting.endTag}.`;
+    const userMessageContinuation = createContinuationMessage(
+      agentSetting.endTag,
+      prefillTokens,
+    );
     this.logger.debug(`Adding continuation message.`);
     messages.push({
       role: 'user',
