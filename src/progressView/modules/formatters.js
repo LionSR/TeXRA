@@ -159,10 +159,6 @@ export class LogEntryFormatter {
       content = decodeHtml(content);
     }
 
-    // Normalize line breaks and spacing similar to xmlUtils.formatContent
-    // to avoid excessive whitespace in rendered output
-    content = this._normalizeLineBreaks(content);
-
     // Pre-process LaTeX references to protect them from markdown parsing
     content = content.replace(/\\ref\{([^}]+)\}/g, '@@LATEX-REF:$1@@');
     content = content.replace(/\\cref\{([^}]+)\}/g, '@@LATEX-CREF:$1@@');
@@ -203,21 +199,6 @@ export class LogEntryFormatter {
       .replace(/@@LATEX-EQREF:([^@]+)@@/g, (_, label) =>
         this._createLatexReferenceHtml('eqref', label),
       );
-  }
-
-  /**
-   * Collapse excessive blank lines and normalize spacing. This mirrors
-   * cleanup applied by xmlUtils.formatContent for special contents so that
-   * model responses render consistently.
-   * @param {string} text - Raw markdown text
-   * @returns {string} Normalized text
-   */
-  _normalizeLineBreaks(text) {
-    return text
-      .replace(/\n(\s*)\n(\s*)\n(\s*)- /g, '\n$3- ')
-      .replace(/\n(\s*)\n(\s*)- /g, '\n$2- ')
-      .replace(/\n{4,}/g, '\n\n');
-    // .replace(/ {4}/gm, '  ');
   }
 
   /**
