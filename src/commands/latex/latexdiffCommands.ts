@@ -46,6 +46,10 @@ logger.initialize(CHANNEL);
 
 const service = new LaTeXdiffService(CHANNEL);
 
+/**
+ * Prompts the user to select a math markup granularity for latexdiff operations.
+ * @returns The selected math markup option, or undefined if the user cancels.
+ */
 async function promptForMathMarkup(): Promise<MathMarkupOption | undefined> {
   const configuredMode = getConfig<string>(
     'latexdiff.mathMarkup',
@@ -128,6 +132,7 @@ async function handleLatexdiff(
 
     const mathMarkup = await promptForMathMarkup();
     if (!mathMarkup) {
+      logger.debug(CHANNEL, 'Math markup selection cancelled by user');
       return;
     }
     logger.info(
@@ -181,6 +186,7 @@ async function handleLatexdiffvc(
 
     const mathMarkup = await promptForMathMarkup();
     if (!mathMarkup) {
+      logger.debug(CHANNEL, 'Math markup selection cancelled by user');
       return;
     }
     logger.info(
@@ -328,6 +334,7 @@ async function handleRunLatexdiff(config: any) {
 
     const mathMarkup = await promptForMathMarkup();
     if (!mathMarkup) {
+      logger.debug(CHANNEL, 'Math markup selection cancelled by user');
       return;
     }
     logger.info(

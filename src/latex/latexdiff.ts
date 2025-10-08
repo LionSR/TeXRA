@@ -194,6 +194,7 @@ export class LaTeXdiffService {
   async runDiffVcMultiple(
     inputFiles: string[],
     commitHash: string,
+    mathMarkup?: MathMarkupOption,
   ): Promise<LaTeXdiffMultipleResult> {
     try {
       if (!inputFiles || inputFiles.length === 0) {
@@ -210,7 +211,7 @@ export class LaTeXdiffService {
 
       for (const inputFile of inputFiles) {
         try {
-          const result = await this.runDiffVc(inputFile, commitHash);
+          const result = await this.runDiffVc(inputFile, commitHash, mathMarkup);
           if (result.success) {
             results.success.push(inputFile);
           } else {
