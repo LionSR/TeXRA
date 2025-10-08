@@ -195,8 +195,9 @@ export async function prepareAgentInstance<T extends IAgent = IAgent>(
   };
 
   const fullConfig = AgentConfigSchema.parse(configInput);
+  const originalAgentName = fullConfig.agent;
   let resolvedAgentName = getAgentName(
-    fullConfig.agent,
+    originalAgentName,
     fullConfig.useMultipleOutputs,
   );
 
@@ -204,9 +205,9 @@ export async function prepareAgentInstance<T extends IAgent = IAgent>(
   try {
     agentPathInfo = await getAgentPath(resolvedAgentName, context);
   } catch (err) {
-    if (resolvedAgentName !== fullConfig.agent) {
-      resolvedAgentName = fullConfig.agent;
-      agentPathInfo = await getAgentPath(fullConfig.agent, context);
+    if (resolvedAgentName !== originalAgentName) {
+      resolvedAgentName = originalAgentName;
+      agentPathInfo = await getAgentPath(originalAgentName, context);
     } else {
       throw err;
     }
@@ -214,16 +215,16 @@ export async function prepareAgentInstance<T extends IAgent = IAgent>(
 
   const [loadedAgentSetting, agentPrompt] = await loadAgentSettingAndPrompts(
     agentPathInfo,
-    fullConfig.agent,
+    resolvedAgentName,
     { preferMultiple: fullConfig.useMultipleOutputs },
   );
 
-  const configWithResolvedAgent: AgentConfig = {
+  const agentConfig: AgentConfig = {
     ...fullConfig,
-    agent: resolvedAgentName,
+    agent: originalAgentName,
   };
 
-  const modelName = configWithResolvedAgent.model;
+  const modelName = agentConfig.model;
 
   if (!(modelName in MODEL_CONFIGS)) {
     const openDocs = 'Model Documentation';
@@ -242,8 +243,11 @@ export async function prepareAgentInstance<T extends IAgent = IAgent>(
     throw new Error(`Model ${modelName} not found in MODEL_CONFIGS`);
   }
 
-  const modelConfig = MODEL_CONFIGS[modelName];
-  modelConfig.toolConfig = configWithResolvedAgent.toolConfig;
+  const baseModelConfig = MODEL_CONFIGS[modelName];
+  const modelConfig = {
+    ...baseModelConfig,
+    toolConfig: agentConfig.toolConfig,
+  };
 
   const modelHandler = ModelFactory.createHandler(modelConfig);
 
@@ -257,7 +261,7 @@ export async function prepareAgentInstance<T extends IAgent = IAgent>(
 
   const agent = new AgentClass(
     modelHandler,
-    configWithResolvedAgent,
+    agentConfig,
     agentSetting,
     agentPrompt,
     agentPathInfo.directory,
