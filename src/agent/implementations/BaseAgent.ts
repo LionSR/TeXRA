@@ -33,6 +33,7 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
   protected logger: AgentLogger;
   protected usageMonitor: UsageMonitor;
   protected runGroupId?: string;
+  private lastRunGroupId?: string;
   protected userVars: Record<string, any> = {};
   protected client: C | null = null;
   protected isInterrupted = false;
@@ -228,6 +229,7 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
       undefined,
       parentGroupId,
     );
+    this.lastRunGroupId = this.runGroupId;
     return this.runGroupId;
   }
 
@@ -237,9 +239,17 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
    */
   protected endRunGroup(status: 'stopped' | 'error' = 'stopped'): void {
     if (this.runGroupId) {
+      this.lastRunGroupId = this.runGroupId;
       this.logger.endGroup(this.runGroupId, status);
       this.runGroupId = undefined;
     }
+  }
+
+  /**
+   * Retrieve the most recently used run group identifier.
+   */
+  public getLastRunGroupId(): string | undefined {
+    return this.lastRunGroupId;
   }
 
   public static getRunningAgent(
