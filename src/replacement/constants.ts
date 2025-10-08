@@ -79,6 +79,9 @@ export const FENCED_LATEX_ENVIRONMENT_PATTERN =
 
 const LINE_BREAK_PATTERN = String.raw`\r?\n`;
 
+// This pattern supports two body forms:
+// 1. Multiline bodies captured in group 4 when the fence is followed by a line break.
+// 2. Inline bodies captured in group 5 when content trails the opening fence on the same line.
 export const FENCED_LATEX_BLOCK_PATTERN = String.raw`(^|${LINE_BREAK_PATTERN})([ \t]*):::\s*(${FENCED_LATEX_ENVIRONMENT_PATTERN})(?:[^\S\r\n]*(?:${LINE_BREAK_PATTERN}([\s\S]*?))?${LINE_BREAK_PATTERN}[ \t]*|[^\S\r\n]*([^\r\n]*?))[ \t]*:::(?=${LINE_BREAK_PATTERN}|$)`;
 
 // Union of common LaTeX environments used across rules

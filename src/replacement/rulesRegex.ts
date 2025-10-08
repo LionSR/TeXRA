@@ -15,9 +15,9 @@ const convertFencedLatexBlock: ReplacementFunction = (
   const safeIndent = typeof indent === 'string' ? indent : '';
   const safeEnvironment = typeof environment === 'string' ? environment : '';
   const safeBody =
-    typeof multilineBody === 'string' && multilineBody !== undefined
+    typeof multilineBody === 'string'
       ? multilineBody
-      : typeof inlineBody === 'string' && inlineBody !== undefined
+      : typeof inlineBody === 'string'
         ? inlineBody
         : '';
 
