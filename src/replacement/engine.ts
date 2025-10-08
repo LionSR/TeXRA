@@ -42,6 +42,7 @@ import {
   INLINE_MATH_REPLACEMENTS,
   EQUATION_STYLE_REPLACEMENTS,
   PERSONAL_STYLE_CONTEXTUAL_REPLACEMENTS,
+  FENCED_LATEX_BLOCK_REPLACEMENTS,
 } from './rulesRegex';
 
 export interface ReplacementEngine {
@@ -116,6 +117,7 @@ const NON_REGEX_CATEGORIES: ReplacementCategory[] = [
 
 // Define all available regex categories
 const REGEX_CATEGORIES: ReplacementCategory[] = [
+  FENCED_LATEX_BLOCK_REPLACEMENTS,
   INLINE_MATH_REPLACEMENTS,
   PARENTHESES_REPLACEMENTS,
   LATEXDIFF_MARKUP_REPLACEMENTS,
@@ -173,6 +175,7 @@ export function getAllReplacements(): ReplacementCategory {
  */
 export function getAllReplacementsRegex(): ReplacementCategory[] {
   const enabledCategoryNames = getConfig('latex.enabledReplacementsRegex', [
+    'fenced_latex_blocks',
     'inline_math',
     'tikz',
     'parentheses',
