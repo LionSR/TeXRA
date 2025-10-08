@@ -400,6 +400,9 @@ export class LogEntryFormatter {
     const isThinking = contentType.includes('Thinking');
     const labelText = isThinking ? 'Thinking' : 'Scratchpad';
     const icon = isThinking ? 'codicon-lightbulb' : 'codicon-pencil';
+    const contentClass = isThinking
+      ? 'special-content--thinking'
+      : 'special-content--scratchpad';
 
     // Add necessary attributes for proper group placement (but not log-line class which affects whitespace)
     if (logId) element.dataset.logId = logId;
@@ -421,6 +424,11 @@ export class LogEntryFormatter {
 
     const contentElem = element.querySelector('.special-content');
     if (contentElem) {
+      contentElem.classList.remove(
+        'special-content--thinking',
+        'special-content--scratchpad',
+      );
+      contentElem.classList.add(contentClass);
       contentElem.innerHTML = parsedMarkdown;
     }
 
