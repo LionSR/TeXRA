@@ -44,7 +44,8 @@ interface BuildSummaryParams {
 
 export class ReadFileTool extends defineTool({
   name: 'read_file',
-  description: 'Read and return the contents of a workspace file.',
+  description:
+    'Read and return the contents of a workspace file. Optionally specify a line range to read specific sections.',
   schema: ReadInputSchema,
 }) {
   protected async execute(input: ReadInput): Promise<ToolResult> {
@@ -58,7 +59,10 @@ export class ReadFileTool extends defineTool({
 
     const requestedStartLine = input.range?.start ?? 1;
     const requestedEndLine =
-      input.range?.end ?? Math.max(requestedStartLine, totalLines);
+      input.range?.end ??
+      (input.range?.start
+        ? Math.min(requestedStartLine + READ_FILE_MAX_LINES - 1, totalLines)
+        : totalLines);
 
     // Convert the requested 1-based range into zero-based indices and clamp them to the
     // available file length so callers can safely request windows beyond the file bounds.
