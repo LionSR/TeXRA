@@ -1341,7 +1341,7 @@
     "@cantoo/pdf-lib": "^2.5.3",
     "@google/genai": "^1.21.0",
     "@modelcontextprotocol/sdk": "^1.18.2",
-    "@vscode/codicons": "^0.0.40",
+    "@vscode/codicons": "^0.0.41",
     "@vscode/markdown-it-katex": "^1.1.2",
     "axios": "^1.12.2",
     "deepmerge": "^4.3.1",
