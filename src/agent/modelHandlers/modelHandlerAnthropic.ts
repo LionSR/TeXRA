@@ -55,6 +55,7 @@ import {
 } from '@agent/core/ResponseUsage';
 import { ToolState } from '@agent/core/ToolState';
 import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
+import { createContinuationMessage } from '@agent/utils/continuationMessage';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import { calculateTokenPrice } from '@agent/utils/priceUtils';
 
@@ -818,12 +819,10 @@ export class ModelHandlerAnthropic extends ModelHandler<
   ): void {
     // Create continuation message with last K tokens
     const prefillTokens = toolState.lastResponse.slice(-K_SLICE);
-    const userMessageContinuation =
-      `Your response got cut off, because you only have limited response space. ` +
-      `Continue responding exactly from where you left off until the very end, ` +
-      `marked by ${agentSetting.endTag}. ` +
-      'Avoid repeat yourself and avoid starting over. ' +
-      `Start your response at the next token after: "${prefillTokens}"`;
+    const userMessageContinuation = createContinuationMessage(
+      agentSetting.endTag,
+      prefillTokens,
+    );
 
     // Add continuation message
     this.logger.debug(
