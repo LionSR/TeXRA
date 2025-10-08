@@ -47,6 +47,14 @@ describe('FENCED_LATEX_BLOCK_REPLACEMENTS', () => {
     assert.strictEqual(convert(input), expected);
   });
 
+  it('converts inline fenced aligned blocks', () => {
+    const input = '::: aligned {_i=1^n X_i t} &(-) :::';
+    const expected = String.raw`\begin{aligned}
+{_i=1^n X_i t} &(-)
+\end{aligned}`;
+    assert.strictEqual(convert(input), expected);
+  });
+
   it('preserves CRLF line endings', () => {
     const input = '::: align*\r\n&= a + b\\\\\r\n:::\r\n';
     const expected = '\\begin{align*}\r\n&= a + b\\\\\r\n\\end{align*}\r\n';
