@@ -77,7 +77,7 @@ export const FENCED_LATEX_ENVIRONMENTS = [
 export const FENCED_LATEX_ENVIRONMENT_PATTERN =
   FENCED_LATEX_ENVIRONMENTS.map(escapeRegExp).join('|');
 
-export const FENCED_LATEX_BLOCK_PATTERN = String.raw`(^|\n)([ \t]*):::\s*(${FENCED_LATEX_ENVIRONMENT_PATTERN})[^\S\r\n]*\n([\s\S]*?\S)?\s*\n[ \t]*:::(?=\n|$)`;
+export const FENCED_LATEX_BLOCK_PATTERN = String.raw`(^|\n)([ \t]*):::\s*(${FENCED_LATEX_ENVIRONMENT_PATTERN})[^\S\r\n]*(?:\n([\s\S]*?))?\n[ \t]*:::(?=\n|$)`;
 
 // Union of common LaTeX environments used across rules
 // prettier-ignore
