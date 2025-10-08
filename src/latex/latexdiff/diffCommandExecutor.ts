@@ -5,10 +5,7 @@ import * as logger from '@logger/logUtils';
 import { executeCommand } from '@utils/system';
 import { getConfig } from '@utils/config';
 import type { ExecResult } from '@agent/types/ResultTypes';
-import {
-  DEFAULT_MATH_MARKUP,
-  type MathMarkupOption,
-} from './mathMarkup';
+import { DEFAULT_MATH_MARKUP, type MathMarkupOption } from './mathMarkup';
 
 const DEFAULT_PICTURE_ENVS =
   '(?:picture|tikzpicture|scope|DIFnomarkup)[\\w\\d*@]*';
