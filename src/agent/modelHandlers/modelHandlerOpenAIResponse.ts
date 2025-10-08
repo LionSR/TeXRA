@@ -45,7 +45,7 @@ import { MediaEntry } from '@agent/utils/mediaTypes';
 import { calculateTokenPrice } from '@agent/utils/priceUtils';
 import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
-import { ModelProvider, type ToolDefinition } from '@model';
+import type { ToolDefinition } from '@model';
 import { cleanFileContent } from '@replacement/engine';
 import { K_SLICE, getConfig } from '@utils/config';
 import { sleep } from '@utils/helpers';
@@ -64,7 +64,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   OpenAIAPIResponseUsage,
   ResponseFunctionToolCallItem
 > {
-  private static readonly BACKGROUND_POLL_INTERVAL_MS = 2000;
+  private static readonly BACKGROUND_POLL_INTERVAL_MS = 5000;
+  private static readonly BACKGROUND_RETRIEVE_MAX_RETRIES = 3;
   private previousResponseId: string | null = null;
   private sentMessages = 0;
 
@@ -388,7 +389,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   ): Promise<Response> {
     const useStreaming = this.getStreamingConfig();
     const useBackgroundResponses =
-      this.config.provider === ModelProvider.OPENAI &&
+      this.capabilities.supportsBackgroundMode &&
       getConfig<boolean>('model.useBackgroundResponses', false);
     const newMessages = messages.slice(this.sentMessages);
 
@@ -482,6 +483,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       let response = await client.responses.create(nonStreamingParams, {
         signal,
       });
+      this.previousResponseId = response.id;
       if (useBackgroundResponses) {
         response = await this.waitForBackgroundCompletion(
           client,
@@ -657,22 +659,120 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     initialResponse: Response,
     signal?: AbortSignal,
   ): Promise<Response> {
-    if (!initialResponse.id || !this.isBackgroundPending(initialResponse)) {
+    if (!initialResponse.id) {
       return initialResponse;
     }
 
     let current = initialResponse;
-    while (this.isBackgroundPending(current)) {
-      await this.waitWithAbort(
-        ModelHandlerOpenAIResponse.BACKGROUND_POLL_INTERVAL_MS,
-        signal,
-      );
+    const responseId = initialResponse.id;
+    const pollInterval = ModelHandlerOpenAIResponse.BACKGROUND_POLL_INTERVAL_MS;
+    const maxRetries =
+      ModelHandlerOpenAIResponse.BACKGROUND_RETRIEVE_MAX_RETRIES;
+    const startTime = Date.now();
+    let pollCount = 0;
+    let consecutiveErrors = 0;
+    const initialStatus = current.status ?? 'unknown';
 
-      const requestOptions = signal ? { signal } : undefined;
-      current = await client.responses.retrieve(
-        current.id,
+    this.logger.debug(
+      `Background polling started for response ${responseId} (status: ${initialStatus})`,
+      undefined,
+      undefined,
+      {
+        responseId,
+        status: current.status,
+      },
+    );
+
+    while (this.isBackgroundPending(current)) {
+      pollCount += 1;
+      await this.waitWithAbort(pollInterval, signal);
+
+      try {
+        const requestOptions = signal ? { signal } : undefined;
+        current = await client.responses.retrieve(
+          responseId,
+          undefined,
+          requestOptions,
+        );
+        consecutiveErrors = 0;
+        this.logger.debug(
+          `Background poll ${pollCount} for response ${responseId}: status=${
+            current.status ?? 'unknown'
+          }`,
+          undefined,
+          undefined,
+          {
+            responseId,
+            status: current.status,
+            pollCount,
+          },
+        );
+      } catch (err) {
+        consecutiveErrors += 1;
+        const message = getSdkErrorMessage(err);
+        this.logger.warn(
+          `Background poll ${pollCount} for response ${responseId} failed (${consecutiveErrors}/${maxRetries}): ${message}`,
+          undefined,
+          undefined,
+          {
+            responseId,
+            pollCount,
+            error: message,
+          },
+        );
+
+        if (consecutiveErrors >= maxRetries) {
+          this.logger.error(
+            `Giving up after ${consecutiveErrors} errors retrieving background response ${responseId}`,
+            undefined,
+            undefined,
+            {
+              responseId,
+              pollCount,
+              error: message,
+            },
+          );
+          throw err;
+        }
+
+        continue;
+      }
+    }
+
+    const elapsedMs = Date.now() - startTime;
+    this.logger.debug(
+      `Background polling finished for response ${responseId} with status=${
+        current.status ?? 'unknown'
+      } after ${pollCount} polls (${elapsedMs} ms)`,
+      undefined,
+      undefined,
+      {
+        responseId,
+        status: current.status,
+        pollCount,
+        elapsedMs,
+      },
+    );
+
+    if (current.status !== 'completed') {
+      const fallbackStatus = current.status ?? 'unknown';
+      const errorDetail =
+        current.error?.message ??
+        current.incomplete_details?.reason ??
+        'Background response did not complete successfully.';
+      this.logger.error(
+        `Background response ${responseId} ended with status ${fallbackStatus}`,
         undefined,
-        requestOptions,
+        undefined,
+        {
+          responseId,
+          status: current.status,
+          error: current.error ?? undefined,
+          incomplete: current.incomplete_details ?? undefined,
+        },
+      );
+      throw new Error(
+        `Background response ${responseId} ended with status ${fallbackStatus}: ${errorDetail}`,
       );
     }
 
