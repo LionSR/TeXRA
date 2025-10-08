@@ -27,6 +27,7 @@ document.addEventListener('DOMContentLoaded', () => {
     'streamTabTemplate',
     'roundHeaderTemplate',
     'logLineTemplate',
+    'nativeStatusTemplate',
     'specialDetailsTemplate',
     'toolUseTemplate',
     'modelResponseTemplate',
