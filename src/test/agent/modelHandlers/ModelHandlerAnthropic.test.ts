@@ -20,6 +20,9 @@ import {
   ModelProvider,
 } from '@model/ModelConfig';
 
+// Local imports - utilities
+import * as configModule from '@utils/config';
+
 function buildAnthropicConfig(
   capabilityOverrides: Partial<ModelCapabilities> = {},
 ): ModelConfig {
@@ -570,5 +573,93 @@ describe('ModelHandlerAnthropic message guards', () => {
 
     assert.deepEqual(callOrder, ['countTokens', 'upload', 'create']);
     assert.equal(response.stop_reason, 'end_turn');
+  });
+
+  it('does not warn about context overflow when 1M beta header is active', async () => {
+    const handler = createAnthropicHandler({ supportsTokenCounting: true });
+    handler.config.fullName = 'claude-sonnet-4-20250514';
+
+    const warnMessages: string[] = [];
+    const loggerStub = {
+      channelId: 'test',
+      debug: () => {},
+      info: () => {},
+      warn: (message: string) => {
+        warnMessages.push(message);
+      },
+      error: () => {},
+      fileList: () => {},
+      getActiveGroupId: () => undefined,
+    };
+    handler.setLogger(loggerStub as unknown as AgentLogger);
+    (handler as any).getStreamingConfig = () => false;
+
+    const messages: MessageParam[] = [
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: 'hello', citations: null },
+        ] as ContentBlockParam[],
+      },
+    ];
+
+    const messageOptions: any[] = [];
+    const client = {
+      beta: {
+        messages: {
+          countTokens: async () => ({ input_tokens: 900000 }),
+          create: async (opts: any) => {
+            messageOptions.push(opts);
+            return {
+              id: 'msg',
+              type: 'message',
+              role: 'assistant',
+              model: 'claude-sonnet-4-20250514',
+              content: [{ type: 'text', text: 'ok' }],
+              stop_reason: 'end_turn',
+              usage: { input_tokens: 1, output_tokens: 1 },
+            } as any;
+          },
+        },
+      },
+    } as any;
+
+    const originalGetConfig = configModule.getConfig;
+
+    try {
+      (configModule as any).getConfig = (
+        path: string,
+        defaultValue?: unknown,
+      ) => {
+        if (path === 'model.useAnthropic1MBeta') {
+          return true;
+        }
+        return defaultValue as unknown;
+      };
+
+      const response = await handler.createResponse(client, messages, 0);
+      assert.equal(response.stop_reason, 'end_turn');
+    } finally {
+      (configModule as any).getConfig = originalGetConfig;
+    }
+
+    assert.equal(
+      warnMessages.length,
+      0,
+      'should not warn when 1M beta context window is active',
+    );
+
+    const options = messageOptions[0] ?? {};
+    assert.equal(
+      options.max_tokens,
+      handler.config.maxOutputTokens,
+      'should not reduce max_tokens below the configured value',
+    );
+
+    const betas: string[] = options.betas ?? [];
+    assert.ok(
+      betas.includes('context-1m-2025-08-07'),
+      'should include the 1M context beta header when enabled',
+    );
   });
 });
