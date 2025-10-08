@@ -23,6 +23,7 @@ import { runLatexFormatter } from './texFormatter';
 import { DiffFileNameManager } from './latexdiff/diffFileNameManager';
 import { DiffFileProcessor } from './latexdiff/diffFileProcessor';
 import { DiffCommandExecutor } from './latexdiff/diffCommandExecutor';
+import type { MathMarkupOption } from './latexdiff/mathMarkup';
 
 export interface LaTeXdiffResult {
   success: boolean;
@@ -70,6 +71,7 @@ export class LaTeXdiffService {
     editedFile: string,
     suffix = '_diff',
     runIndent = true,
+    mathMarkup?: MathMarkupOption,
   ): Promise<LaTeXdiffResult> {
     let diffFileName = '';
     let outputPath = '';
@@ -118,6 +120,7 @@ export class LaTeXdiffService {
       const result = await this.commandExecutor.executeDiff(
         inputFile,
         editedFile,
+        { mathMarkup },
       );
       if (!result.stdout) {
         throw new Error('Latexdiff produced no output');
@@ -153,6 +156,7 @@ export class LaTeXdiffService {
   async runDiffVc(
     inputFile: string,
     commitHash: string,
+    mathMarkup?: MathMarkupOption,
   ): Promise<LaTeXdiffResult> {
     try {
       if (!(await this.validateDocumentStructure(inputFile))) {
@@ -170,7 +174,9 @@ export class LaTeXdiffService {
         path.basename(diffFileName),
       );
 
-      await this.commandExecutor.executeDiffVc(inputFile, commitHash);
+      await this.commandExecutor.executeDiffVc(inputFile, commitHash, {
+        mathMarkup,
+      });
       await this.fileProcessor.processDiffFile(outputPath);
 
       return {
@@ -188,6 +194,7 @@ export class LaTeXdiffService {
   async runDiffVcMultiple(
     inputFiles: string[],
     commitHash: string,
+    mathMarkup?: MathMarkupOption,
   ): Promise<LaTeXdiffMultipleResult> {
     try {
       if (!inputFiles || inputFiles.length === 0) {
@@ -204,7 +211,7 @@ export class LaTeXdiffService {
 
       for (const inputFile of inputFiles) {
         try {
-          const result = await this.runDiffVc(inputFile, commitHash);
+          const result = await this.runDiffVc(inputFile, commitHash, mathMarkup);
           if (result.success) {
             results.success.push(inputFile);
           } else {
@@ -251,13 +258,20 @@ export class LaTeXdiffService {
     baseFile: string,
     outputFile: string,
     _round: number,
+    mathMarkup?: MathMarkupOption,
   ): Promise<LaTeXdiffResult> {
     try {
       if (
         (await WorkspaceFS.exists(baseFile)) &&
         (await WorkspaceFS.exists(outputFile))
       ) {
-        return await this.runDiff(baseFile, outputFile, '_diff', false);
+        return await this.runDiff(
+          baseFile,
+          outputFile,
+          '_diff',
+          false,
+          mathMarkup,
+        );
       }
 
       const message = `Could not generate latexdiff for round ${_round}. Files not found: ${baseFile} or ${outputFile}`;
@@ -273,6 +287,7 @@ export class LaTeXdiffService {
   async runDiffBetweenRounds(
     outputFile1: string,
     outputFile2: string,
+    mathMarkup?: MathMarkupOption,
   ): Promise<LaTeXdiffResult> {
     try {
       if (
@@ -291,7 +306,13 @@ export class LaTeXdiffService {
         const firstRound = firstRoundMatch[1];
         const secondRound = secondRoundMatch[1];
         const diffSuffix = `_diffr${secondRound}r${firstRound}`;
-        return await this.runDiff(outputFile1, outputFile2, diffSuffix, false);
+        return await this.runDiff(
+          outputFile1,
+          outputFile2,
+          diffSuffix,
+          false,
+          mathMarkup,
+        );
       }
 
       const message = `Could not generate latexdiff between rounds. Files not found: ${outputFile1} or ${outputFile2}`;
