@@ -18,6 +18,7 @@ const OPENAI_DEFAULT_CAPABILITIES: ModelCapabilities = {
   supportsNativeMCPServer: false, // OpenAI uses function calling for MCP
   supportsNativeWebSearch: false, // OpenAI uses function calling for web search
   supportsNativeCodeExecution: false, // OpenAI uses function calling for code execution
+  supportsBackgroundMode: true,
 };
 
 export const OPENAI_MODELS: Record<string, ModelConfig> = {
