@@ -18,7 +18,6 @@ import {
   DEFAULT_MATH_MARKUP,
   MATH_MARKUP_OPTIONS,
   describeMathMarkupOption,
-  normalizeMathMarkup,
   type MathMarkupOption,
 } from '@latex/latexdiff/mathMarkup';
 import { checkToolInstalled } from '@utils/system';
@@ -55,17 +54,16 @@ async function promptForMathMarkup(): Promise<MathMarkupOption | undefined> {
     'latexdiff.mathMarkup',
     DEFAULT_MATH_MARKUP,
   );
-  const currentMode = normalizeMathMarkup(configuredMode);
   const items: (vscode.QuickPickItem & { value: MathMarkupOption })[] =
     MATH_MARKUP_OPTIONS.map((mode) => ({
       label: mode,
       description: describeMathMarkupOption(mode),
-      picked: mode === currentMode,
+      picked: mode === configuredMode,
       value: mode,
     }));
   const prioritizedItems = [
-    ...items.filter((item) => item.value === currentMode),
-    ...items.filter((item) => item.value !== currentMode),
+    ...items.filter((item) => item.value === configuredMode),
+    ...items.filter((item) => item.value !== configuredMode),
   ];
 
   const selection = await vscode.window.showQuickPick(prioritizedItems, {
