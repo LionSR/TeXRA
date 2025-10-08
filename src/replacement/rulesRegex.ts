@@ -1,7 +1,43 @@
 // Local imports
-import { ReplacementCategory } from './types';
+import { ReplacementCategory, ReplacementFunction } from './types';
+import { FENCED_LATEX_BLOCK_PATTERN } from './constants';
+
+const convertFencedLatexBlock: ReplacementFunction = (
+  match,
+  leadingBreak,
+  indent,
+  environment,
+  body,
+) => {
+  const newline = match.includes('\r\n') ? '\r\n' : '\n';
+  const safeLeadingBreak = typeof leadingBreak === 'string' ? leadingBreak : '';
+  const safeIndent = typeof indent === 'string' ? indent : '';
+  const safeEnvironment = typeof environment === 'string' ? environment : '';
+  const safeBody = typeof body === 'string' ? body : '';
+
+  const bodyWithTrailingBreak =
+    safeBody === ''
+      ? ''
+      : safeBody.endsWith(newline)
+        ? safeBody
+        : `${safeBody}${newline}`;
+  const emptyBodyPadding = safeBody === '' ? newline : '';
+
+  return `${safeLeadingBreak}${safeIndent}\\begin{${safeEnvironment}}${newline}${emptyBodyPadding}${bodyWithTrailingBreak}${safeIndent}\\end{${safeEnvironment}}`;
+};
 
 // ===== Regex replacements =====
+
+export const FENCED_LATEX_BLOCK_REPLACEMENTS: ReplacementCategory = {
+  name: 'fenced_latex_blocks',
+  description:
+    'Convert Markdown-style fenced math blocks into proper LaTeX environments',
+  isRegex: true,
+  flags: 'g',
+  patterns: {
+    [FENCED_LATEX_BLOCK_PATTERN]: convertFencedLatexBlock,
+  },
+};
 
 // Parentheses sizing standardization
 export const PARENTHESES_REPLACEMENTS: ReplacementCategory = {
