@@ -121,6 +121,14 @@ export class ModelHandlerAnthropic extends ModelHandler<
       'model.useAnthropic1MBeta',
       false,
     );
+    const isAnthropic1MBetaEligibleModel =
+      this.config.fullName === 'claude-sonnet-4-20250514' ||
+      this.config.fullName === 'claude-sonnet-4-5';
+    const isAnthropic1MBetaActive =
+      useAnthropic1MBeta && isAnthropic1MBetaEligibleModel;
+    const effectiveContextWindow = isAnthropic1MBetaActive
+      ? 1_000_000
+      : this.config.contextWindow;
 
     const documentAnalysis = this.analyzeDocumentSources(messages);
     let hasFileReference = documentAnalysis.hasFileSource;
@@ -190,11 +198,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     }
 
     // Opt-in beta for 1M context window on Claude Sonnet 4 family
-    if (
-      useAnthropic1MBeta &&
-      (this.config.fullName === 'claude-sonnet-4-20250514' ||
-        this.config.fullName === 'claude-sonnet-4-5')
-    ) {
+    if (isAnthropic1MBetaActive) {
       options.betas = [...(options.betas ?? []), CONTEXT_1M_BETA];
     }
 
@@ -230,15 +234,19 @@ export class ModelHandlerAnthropic extends ModelHandler<
           await client.beta.messages.countTokens(countTokensParams);
         const { input_tokens: inputTokens } = responseTokenCount;
         this.logger.debug(`Token count of message: ${inputTokens}`);
-        if (inputTokens > this.config.contextWindow) {
-          const errMsg = `Token count of message exceeds context window: ${inputTokens} > ${this.config.contextWindow}`;
+        if (inputTokens > effectiveContextWindow) {
+          const errMsg = `Token count of message exceeds context window: ${inputTokens} > ${effectiveContextWindow}`;
           this.logger.error(errMsg);
           throw new Error(errMsg);
         }
-        if (this.config.contextWindow - inputTokens < options.max_tokens) {
-          const warnMsg = `Token count of message plus max tokens exceeds context window: ${inputTokens} + ${options.max_tokens} > ${this.config.contextWindow}. Reducing max tokens to ${this.config.contextWindow - inputTokens}.`;
+        if (effectiveContextWindow - inputTokens < options.max_tokens) {
+          const reducedMaxTokens = Math.max(
+            0,
+            effectiveContextWindow - inputTokens - 10,
+          );
+          const warnMsg = `Token count of message plus max tokens exceeds context window: ${inputTokens} + ${options.max_tokens} > ${effectiveContextWindow}. Reducing max tokens to ${reducedMaxTokens}.`;
           this.logger.warn(warnMsg);
-          options.max_tokens = this.config.contextWindow - inputTokens - 10;
+          options.max_tokens = reducedMaxTokens;
 
           if (
             this.capabilities.supportsReasoning &&
