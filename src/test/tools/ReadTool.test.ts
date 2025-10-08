@@ -186,4 +186,30 @@ suite('ReadFileTool', () => {
     assert.strictEqual(outputLines[0], 'line 100');
     assert.strictEqual(outputLines[399], 'line 499');
   });
+
+  test('handles range starting at line 1 with end exceeding file length', async () => {
+    const tool = new ReadFileTool();
+
+    const totalLines = 50;
+    const content = Array.from(
+      { length: totalLines },
+      (_, index) => `line ${index + 1}`,
+    ).join('\n');
+
+    WorkspaceFS.read = async () => content;
+
+    const result = await tool.call({
+      path: 'clipped-start.txt',
+      range: { start: 1, end: totalLines + 50 },
+    });
+
+    assert.strictEqual(
+      result.summary,
+      `Read lines 1-50 of clipped-start.txt (requested end ${totalLines + 50} exceeds file length ${totalLines})`,
+    );
+    const outputLines = result.output?.split('\n') ?? [];
+    assert.strictEqual(outputLines.length, 50);
+    assert.strictEqual(outputLines[0], 'line 1');
+    assert.strictEqual(outputLines[49], 'line 50');
+  });
 });
