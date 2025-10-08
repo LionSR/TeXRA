@@ -515,7 +515,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           },
         );
         this.logger.info(
-          'Running OpenAI Responses in background mode; polling every 15s. Completion may take longer than usual.',
+          `Running OpenAI Responses in background mode for response ${response.id}; polling every 15s. Completion may take longer than usual.`,
           undefined,
           MESSAGE_TYPES.DEFAULT,
           {
@@ -750,6 +750,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
               elapsedMs: Date.now() - startTime,
             },
           );
+          // Background jobs keep running on the OpenAI side when polling stops.
+          // Callers can later resume polling or explicitly cancel via client.responses.cancel(responseId).
         }
         throw err;
       }
@@ -857,10 +859,18 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       throw new DOMException('The operation was aborted.', 'AbortError');
     }
 
+    const supportsAbortTimeout = typeof AbortSignal.timeout === 'function';
+
     await new Promise<void>((resolve, reject) => {
+      let timeoutId: NodeJS.Timeout | undefined;
+      let timeoutSignal: AbortSignal | undefined;
+
       const cleanup = () => {
-        clearTimeout(timeout);
         signal.removeEventListener('abort', onAbort);
+        timeoutSignal?.removeEventListener('abort', onTimeout);
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+        }
       };
 
       const onAbort = () => {
@@ -868,12 +878,19 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         reject(new DOMException('The operation was aborted.', 'AbortError'));
       };
 
-      const timeout = setTimeout(() => {
+      const onTimeout = () => {
         cleanup();
         resolve();
-      }, ms);
+      };
 
       signal.addEventListener('abort', onAbort, { once: true });
+
+      if (supportsAbortTimeout) {
+        timeoutSignal = AbortSignal.timeout(ms);
+        timeoutSignal.addEventListener('abort', onTimeout, { once: true });
+      } else {
+        timeoutId = setTimeout(onTimeout, ms);
+      }
     });
   }
 
