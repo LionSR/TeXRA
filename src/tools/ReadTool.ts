@@ -15,6 +15,16 @@ export const READ_FILE_MAX_LINES = 400;
 
 const ReadInputSchema = z.strictObject({
   path: z.string(),
+  range: z
+    .strictObject({
+      start: z.number().int().positive(),
+      end: z.number().int().positive().optional(),
+    })
+    .refine((value) => value.end === undefined || value.end >= value.start, {
+      message: 'range.end must be greater than or equal to range.start',
+      path: ['end'],
+    })
+    .optional(),
 });
 
 export type ReadInput = z.infer<typeof ReadInputSchema>;
@@ -32,19 +42,61 @@ export class ReadFileTool extends defineTool({
     }
 
     const totalLines = lines.length;
-    if (totalLines > READ_FILE_MAX_LINES) {
-      const visibleLines = lines.slice(0, READ_FILE_MAX_LINES);
-      const truncatedOutput = `${visibleLines.join('\n')}\n...(truncated, ${totalLines - READ_FILE_MAX_LINES} more lines)`;
+    const requestedStartLine = Math.max(input.range?.start ?? 1, 1);
+    const requestedEndLine = Math.max(
+      input.range?.end ?? totalLines,
+      input.range?.start ?? 1,
+    );
+    const startIndex = Math.min(Math.max(requestedStartLine - 1, 0), totalLines);
+    const endIndexExclusive = Math.min(
+      Math.max(requestedEndLine, requestedStartLine - 1),
+      totalLines,
+    );
 
-      return toolResult({
-        summary: `Read ${input.path} (first ${READ_FILE_MAX_LINES} of ${totalLines} lines)`,
-        output: truncatedOutput,
-      });
+    const selectedLines = lines.slice(startIndex, endIndexExclusive);
+    const truncated = selectedLines.length > READ_FILE_MAX_LINES;
+    const visibleLines = truncated
+      ? selectedLines.slice(0, READ_FILE_MAX_LINES)
+      : selectedLines;
+    const visibleCount = visibleLines.length;
+    const actualStartLine = visibleCount > 0 ? requestedStartLine : undefined;
+    const actualEndLine =
+      visibleCount > 0 ? requestedStartLine + visibleCount - 1 : undefined;
+
+    const segments: string[] = [];
+    if (visibleLines.length > 0) {
+      segments.push(visibleLines.join('\n'));
+    }
+    if (truncated) {
+      segments.push(
+        `...(truncated, ${selectedLines.length - READ_FILE_MAX_LINES} more lines)`,
+      );
     }
 
+    const summary = (() => {
+      if (visibleCount === 0) {
+        return `Read ${input.path} (no lines in requested range)`;
+      }
+
+      if (
+        input.range ||
+        truncated ||
+        actualStartLine !== 1 ||
+        actualEndLine !== totalLines
+      ) {
+        const rangeLabel =
+          actualStartLine === actualEndLine
+            ? `line ${actualStartLine}`
+            : `lines ${actualStartLine}-${actualEndLine}`;
+        return `Read ${rangeLabel} of ${input.path}`;
+      }
+
+      return `Read ${input.path}`;
+    })();
+
     return toolResult({
-      summary: `Read ${input.path}`,
-      output: content,
+      summary,
+      output: segments.join('\n'),
     });
   }
 }

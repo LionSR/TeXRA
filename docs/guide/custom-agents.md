@@ -167,7 +167,7 @@ workspace utilities like `bash`, `read_file`, `write_file`, `edit_file`,
 `str_replace_editor`, `wolfram`,
 `web_fetch`, and `web_search`.
 
-> **Tip:** The `read_file` tool returns only the first 400 lines of a file to prevent massive responses from overwhelming the progress log.
+> **Tip:** The `read_file` tool returns only the first 400 lines of a file to prevent massive responses from overwhelming the progress log. Provide an optional `range` object (for example, `{"start": 401, "end": 450}`) to page through a file beyond the first 400 lines. The tool enforces the same 400-line limit on each requested window and reports the specific line range that was returned.
 
 For a minimal read-only configuration, see the built-in `ask` agent
 (`resources/tool_use_agents/ask.yaml`), which only grants `read_file`, `glob`,
