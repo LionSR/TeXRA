@@ -5,6 +5,9 @@
 // Local imports - log
 import * as logger from '@logger/logUtils';
 
+// Local imports - replacement
+import { FENCED_LATEX_BLOCK_PATTERN } from './constants';
+
 const CHANNEL = 'ReplacementEngine';
 logger.initialize(CHANNEL);
 
@@ -433,4 +436,26 @@ export function wrapCritiqueInAlign(text: string): string {
     return block;
   }
   return text.replace(alignRegex, wrapCommands);
+}
+
+const FENCED_LATEX_FENCE_REGEX = new RegExp(FENCED_LATEX_BLOCK_PATTERN, 'g');
+
+/**
+ * Convert Markdown-style fenced math blocks like
+ * ::: aligned ... ::: to proper LaTeX environments.
+ */
+export function convertFencedLatexBlocks(text: string): string {
+  return text.replace(
+    FENCED_LATEX_FENCE_REGEX,
+    (
+      _match,
+      prefix: string,
+      indent: string,
+      env: string,
+      body: string | undefined,
+    ) => {
+      const content = body ?? '';
+      return `${prefix}${indent}\\begin{${env}}\n${content}\n${indent}\\end{${env}}`;
+    },
+  );
 }
