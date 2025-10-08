@@ -216,7 +216,7 @@
           "texra.model.useBackgroundResponses": {
             "type": "boolean",
             "default": false,
-            "description": "Enable background mode for OpenAI Responses API to handle long-running generations (>10 minutes) more reliably by preventing request timeouts. Adds polling overhead.",
+            "description": "Enable background mode for OpenAI Responses API to handle long-running generations (>10mins) more reliably by preventing request timeouts. Adds polling overhead.",
             "scope": "resource"
           },
           "texra.model.gpt5ReasoningSummary": {
