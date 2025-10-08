@@ -127,7 +127,8 @@ async function convertWithPandoc(text: string): Promise<string | null> {
 
   // If already markdown, return as-is
   if (format === outputFormat.MARKDOWN) {
-    return text.trim();
+    // return text.trim();
+    return text;
   }
 
   try {
@@ -144,7 +145,7 @@ async function convertWithPandoc(text: string): Promise<string | null> {
         },
       );
     });
-    return result.trim();
+    return result;
   } catch (err) {
     logger.error(
       CHANNEL,
