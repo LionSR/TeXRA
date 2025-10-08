@@ -41,6 +41,7 @@ import type { ProviderStopReason } from './types/StopReasonTypes';
 import { OPENAI_CHAT_FINISH } from './types/StopReasonTypes';
 
 // Local imports - utilities
+import { createContinuationMessage } from '@agent/utils/continuationMessage';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import { calculateTokenPrice } from '@agent/utils/priceUtils';
 import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
@@ -641,12 +642,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     _agentConfig: AgentConfig,
   ): void {
     const prefillTokens = toolState.lastResponse.slice(-K_SLICE);
-    const userMessageContinuation =
-      `Your response got cut off, because you only have limited response space. ` +
-      `Continue responding exactly from where you left off until the very end, ` +
-      `marked by ${agentSetting.endTag}. ` +
-      'Avoid repeat yourself and avoid starting over. ' +
-      `Start your response at the next token after: "${prefillTokens}"`;
+    const userMessageContinuation = createContinuationMessage(
+      agentSetting.endTag,
+      prefillTokens,
+    );
 
     const role = this.capabilities.supportsIntermDevMsgs ? 'system' : 'user';
     messages.push({
