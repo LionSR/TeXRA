@@ -11,6 +11,9 @@ import { ProgressViewState } from '../state/ProgressViewState';
 import { buildStreamInfos } from '../streamInfoUtils';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 
+// Local imports - agent
+import { AgentSessionKind } from '@agent/core/AgentDataclass';
+
 // Types
 import { bus } from '@eventBus/ProgressEventBus';
 import { AgentLogger } from '@logger/AgentLogger';
@@ -71,6 +74,8 @@ export class ProgressEventHandler {
     });
     this.taskGroupEvents = createTaskGroupEvents({
       logger: this.logger,
+      initializeStreamForTaskGroup: (stream) =>
+        this.initializeStreamForTaskGroup(stream),
     });
   }
 
@@ -199,6 +204,37 @@ export class ProgressEventHandler {
    */
   getAllStreamStatuses(): Map<string, StreamStatusType> {
     return new Map(this._streamStatus);
+  }
+
+  /**
+   * Initialize a stream when task group events arrive before dedicated
+   * status or activation events, preserving any existing status metadata.
+   */
+  private initializeStreamForTaskGroup(stream: string): void {
+    const existingStatus = this._streamStatus.get(stream);
+
+    this.state.streamTabs.ensureStream(stream);
+
+    if (!existingStatus) {
+      this.setStreamStatus(stream, STATUS.RUNNING);
+    }
+
+    this.state.setSessionKindHint(stream, AgentSessionKind.Workflow);
+
+    const currentFilter = this.state.agentTypeFilter;
+    if (currentFilter !== 'all' && currentFilter !== AgentSessionKind.Workflow) {
+      this.state.agentTypeFilter = AgentSessionKind.Workflow;
+    }
+
+    this.state.activeStream = stream;
+
+    const status = this._streamStatus.get(stream) ?? STATUS.RUNNING;
+    this.setStreamStatus(stream, status);
+
+    if (this.webviewUpdater.isAvailable()) {
+      this.updateLogContentForStream(stream, { updateInstruction: false });
+      this.sendInstructionUpdate(stream);
+    }
   }
 
   /**

@@ -5,11 +5,6 @@ import * as vscode from 'vscode';
 import type { WebviewUpdater } from '../managers';
 import type { ProgressViewState } from '../state/ProgressViewState';
 
-import { STATUS } from '../modules/constants.js';
-
-// Local imports - agent
-import { AgentSessionKind } from '@agent/core/AgentDataclass';
-
 // Local imports - events
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import { createErrorBoundary } from './errorHandling';
@@ -20,6 +15,7 @@ import type { TaskGroup } from '@logger/LogTypes';
 
 interface TaskGroupEventsShared {
   logger: AgentLogger;
+  initializeStreamForTaskGroup(stream: string): void;
 }
 
 export interface TaskGroupEventsModule {
@@ -42,7 +38,6 @@ export function createTaskGroupEvents(
     data: ProgressEventPayloads['addTaskGroup'],
     state: ProgressViewState,
     updater: WebviewUpdater,
-    bus: ProgressEventBusLike,
   ): void => {
     withErrorBoundary('failed to handle addTaskGroup', () => {
       const {
@@ -58,16 +53,7 @@ export function createTaskGroupEvents(
       const hasStream = state.streamTabs.has(stream);
       if (!hasStream) {
         shared.logger.debug(`Creating stream from addTaskGroup: ${stream}`);
-        state.streamTabs.ensureStream(stream);
-        bus.emit('updateStreamStatus', {
-          stream,
-          status: STATUS.RUNNING,
-        });
-        bus.emit('setActiveStream', {
-          stream,
-          agentType: null,
-          agentSessionKind: AgentSessionKind.Workflow,
-        });
+        shared.initializeStreamForTaskGroup(stream);
       }
 
       const group: TaskGroup = {
@@ -115,7 +101,7 @@ export function createTaskGroupEvents(
       return [
         new vscode.Disposable(
           bus.on('addTaskGroup', (payload) =>
-            handleAddTaskGroup(payload, state, updater, bus),
+            handleAddTaskGroup(payload, state, updater),
           ),
         ),
         new vscode.Disposable(
