@@ -35,7 +35,8 @@ import { MediaEntry } from '@agent/utils/mediaTypes';
 import { calculateTokenPrice } from '@agent/utils/priceUtils';
 import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
-import type { ToolDefinition } from '@model';
+import type { ModelConfig, ToolDefinition } from '@model';
+import type { ToolFileAttachment } from '@tools/result';
 import { cleanFileContent } from '@replacement/engine';
 import { K_SLICE, MESSAGE_PREVIEW_LENGTH } from '@utils/config';
 
@@ -54,6 +55,12 @@ export class ModelHandlerOpenAI extends ModelHandler<
   ChatCompletionMessageToolCall | ChatCompletionMessage.FunctionCall,
   OpenAI
 > {
+  constructor(config: ModelConfig) {
+    super(config);
+    this.capabilities.supportsToolFileOutputs = false;
+    this.capabilities.supportsInlineToolImages = false;
+  }
+
   /**
    * Creates a new OpenAI client using the stored credentials.
    * Handles API key retrieval, base URL resolution, and logging.
@@ -1237,10 +1244,43 @@ export class ModelHandlerOpenAI extends ModelHandler<
     if (text) {
       callMsg.content = [{ type: 'text', text }];
     }
+    const attachments: ToolFileAttachment[] = Array.isArray(
+      (result as { files?: unknown }).files,
+    )
+      ? ((result as { files: ToolFileAttachment[] })
+          .files as ToolFileAttachment[])
+      : [];
+
+    const sanitizedResult: Record<string, unknown> = { ...result };
+    if (attachments.length > 0) {
+      const sanitizedAttachments = attachments.map(
+        ({ base64Data, bytes, ...rest }) => rest,
+      );
+      (sanitizedResult as { files?: unknown }).files = sanitizedAttachments;
+      const attachmentSummary = attachments
+        .map((file) => {
+          const path =
+            typeof file.path === 'string' && file.path.length > 0
+              ? file.path
+              : 'attachment';
+          const type =
+            typeof file.mimeType === 'string' && file.mimeType.length > 0
+              ? file.mimeType
+              : 'application/octet-stream';
+          return `- ${path} (${type})`;
+        })
+        .join('\n');
+      (sanitizedResult as Record<string, unknown>).attachmentSummary =
+        `Attachments available:\n${attachmentSummary}\nUse the read_file tool to download them.`;
+    }
+    if ('base64Image' in sanitizedResult) {
+      delete (sanitizedResult as { base64Image?: unknown }).base64Image;
+    }
+
     const resultMsg: ChatCompletionToolMessageParam = {
       role: 'tool',
       tool_call_id: toolCall.id ?? id,
-      content: JSON.stringify(result),
+      content: JSON.stringify(sanitizedResult),
     };
     const messages: ChatCompletionMessageParam[] = [callMsg, resultMsg];
     return messages;

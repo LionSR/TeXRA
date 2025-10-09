@@ -18,6 +18,7 @@ import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 
 // Local imports - utilities
 import type { ToolDefinition } from '@model';
+import type { ToolFileAttachment } from '@tools/result';
 import { K_SLICE } from '@utils/config';
 
 // TODO: prompt_cache_hit_tokens can also be used here to correct the price and response usage computation in the base class (just overwrite the computePrice and computeResponseUsage methods with a revalues responseUsage.prompt_tokens_details?.cached_tokens and then call the super methods)
@@ -151,10 +152,41 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI {
     if (text) {
       callMsg.content = text;
     }
+    const attachments: ToolFileAttachment[] = Array.isArray(
+      (result as { files?: unknown }).files,
+    )
+      ? ((result as { files: ToolFileAttachment[] })
+          .files as ToolFileAttachment[])
+      : [];
+    const sanitizedResult: Record<string, unknown> = { ...result };
+    if (attachments.length > 0) {
+      const sanitizedAttachments = attachments.map(
+        ({ base64Data, bytes, ...rest }) => rest,
+      );
+      (sanitizedResult as { files?: unknown }).files = sanitizedAttachments;
+      const attachmentSummary = attachments
+        .map((file) => {
+          const path =
+            typeof file.path === 'string' && file.path.length > 0
+              ? file.path
+              : 'attachment';
+          const type =
+            typeof file.mimeType === 'string' && file.mimeType.length > 0
+              ? file.mimeType
+              : 'application/octet-stream';
+          return `- ${path} (${type})`;
+        })
+        .join('\n');
+      (sanitizedResult as Record<string, unknown>).attachmentSummary =
+        `Attachments available:\n${attachmentSummary}\nUse the read_file tool to download them.`;
+    }
+    if ('base64Image' in sanitizedResult) {
+      delete (sanitizedResult as { base64Image?: unknown }).base64Image;
+    }
     const resultMsg: ChatCompletionToolMessageParam = {
       role: 'tool',
       tool_call_id: toolCall.id ?? id,
-      content: JSON.stringify(result),
+      content: JSON.stringify(sanitizedResult),
     };
     return [callMsg, resultMsg];
   }
