@@ -68,6 +68,9 @@ export const GPTNESS_REPLACEMENTS: ReplacementCategory = {
     burgeon: 'grow',
     expound: 'explain',
 
+    // LaTeX packages:
+    ',amsth,': ',amsthm,',
+
     // Sophisticated/Formal GPT Expressions (user curated)
     'it is imperative to': 'we must',
     'it is paramount that': 'it is crucial that',
