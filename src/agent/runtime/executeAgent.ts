@@ -173,6 +173,147 @@ function getAgentName(
 }
 
 /**
+ * Parameters for creating and configuring an agent instance.
+ */
+interface PrepareAgentInstanceParams {
+  /** Name of the agent to instantiate (without _multiple suffix) */
+  agentName: string;
+  /** Partial agent configuration to merge with defaults */
+  configPayload: Partial<AgentConfig>;
+  /** VS Code extension context for resource access */
+  context: vscode.ExtensionContext;
+  /** Optional execution ID for tracking and logging */
+  executionId?: ExecutionId;
+  /** Optional agent class to use instead of automatic selection based on agent type */
+  agentClassOverride?: AgentConstructor;
+}
+
+/**
+ * Create and configure an agent instance from the provided configuration.
+ *
+ * This helper centralizes agent instantiation logic including:
+ * - Model validation and configuration
+ * - Agent path resolution with _multiple variant fallback
+ * - Settings and prompt loading
+ * - Agent class selection and construction
+ *
+ * The function handles the _multiple variant resolution automatically:
+ * - When useMultipleOutputs is true, it first tries to load the _multiple variant
+ * - If the _multiple variant doesn't exist, it falls back to the base agent
+ * - The returned agent config always contains the original agent name
+ *
+ * @template T - The expected agent type (defaults to IAgent)
+ * @param params - Configuration parameters for agent creation
+ * @returns Promise resolving to the constructed agent instance and its type
+ * @throws Error if model is not found in MODEL_CONFIGS
+ * @throws Error if agent YAML file cannot be located (after fallback attempts)
+ *
+ * @example
+ * // Create a standard agent
+ * const { agent, agentType } = await prepareAgentInstance({
+ *   agentName: 'my-agent',
+ *   configPayload: { model: 'gpt-4', inputFile: 'input.tex' },
+ *   context,
+ * });
+ *
+ * @example
+ * // Create a merge agent with class override
+ * const { agent, agentType } = await prepareAgentInstance<MergeAgent>({
+ *   agentName: 'merge-agent',
+ *   configPayload: { model: 'claude-3-5-sonnet-20241022', inputFile: 'input.tex' },
+ *   context,
+ *   agentClassOverride: MergeAgent,
+ * });
+ */
+export async function prepareAgentInstance<T extends IAgent = IAgent>(
+  params: PrepareAgentInstanceParams,
+): Promise<{ agent: T; agentType: AgentType }> {
+  const { agentName, configPayload, context, executionId, agentClassOverride } =
+    params;
+
+  const configInput: Partial<AgentConfig> = {
+    agent: agentName,
+    ...configPayload,
+  };
+
+  const fullConfig = AgentConfigSchema.parse(configInput);
+  const originalAgentName = fullConfig.agent;
+  let resolvedAgentName = getAgentName(
+    originalAgentName,
+    fullConfig.useMultipleOutputs,
+  );
+
+  let agentPathInfo: AgentPathResolution;
+  try {
+    agentPathInfo = await getAgentPath(resolvedAgentName, context);
+  } catch (err) {
+    if (resolvedAgentName !== originalAgentName) {
+      resolvedAgentName = originalAgentName;
+      agentPathInfo = await getAgentPath(originalAgentName, context);
+    } else {
+      throw err;
+    }
+  }
+
+  const [loadedAgentSetting, agentPrompt] = await loadAgentSettingAndPrompts(
+    agentPathInfo,
+    resolvedAgentName,
+    { preferMultiple: fullConfig.useMultipleOutputs },
+  );
+
+  const agentConfig: AgentConfig = {
+    ...fullConfig,
+    agent: originalAgentName,
+  };
+
+  const modelName = agentConfig.model;
+
+  if (!(modelName in MODEL_CONFIGS)) {
+    const openDocs = 'Model Documentation';
+    await showInstructionWithSuppress(
+      'modelNotRecognized',
+      `Model "${modelName}" is not recognized. Review the documentation for supported models.`,
+      [
+        {
+          title: openDocs,
+          callback: () =>
+            vscode.commands.executeCommand('texra.openDoc', 'models'),
+        },
+      ],
+      false,
+    );
+    throw new Error(`Model ${modelName} not found in MODEL_CONFIGS`);
+  }
+
+  const baseModelConfig = MODEL_CONFIGS[modelName];
+  const modelConfig = {
+    ...baseModelConfig,
+    toolConfig: agentConfig.toolConfig,
+  };
+
+  const modelHandler = ModelFactory.createHandler(modelConfig);
+
+  const agentSetting = ensureAgentTypeForSource(
+    loadedAgentSetting,
+    agentPathInfo.source,
+  );
+
+  const AgentClass = (agentClassOverride ??
+    getAgentClass(agentSetting)) as AgentConstructor;
+
+  const agent = new AgentClass(
+    modelHandler,
+    agentConfig,
+    agentSetting,
+    agentPrompt,
+    agentPathInfo.directory,
+    executionId,
+  );
+
+  return { agent: agent as T, agentType: agentSetting.agentType };
+}
+
+/**
  * Common function to execute any agent with proper logging and status handling
  */
 interface ExecuteAgentOptions {
@@ -468,69 +609,25 @@ export async function executeAgent(
   await executeAgentWithLogging(
     agentName,
     async () => {
-      // Create full agent config
-      const fullConfig = AgentConfigSchema.parse(agentConfig);
+      const { agent, agentType } = await prepareAgentInstance({
+        agentName: requestedAgentName,
+        configPayload: agentConfig,
+        context,
+        executionId,
+      });
 
+      const { outputFiles, useMultipleOutputs } = agent.config;
       if (
-        Array.isArray(fullConfig.outputFiles) &&
-        fullConfig.outputFiles.length > 1 &&
-        !fullConfig.useMultipleOutputs
+        Array.isArray(outputFiles) &&
+        outputFiles.length > 1 &&
+        !useMultipleOutputs
       ) {
         logger.warn(
-          `Multiple output files provided (${fullConfig.outputFiles.length}) but useMultipleOutputs flag is disabled. Update the agent configuration to ensure consistent stream handling.`,
+          `Multiple output files provided (${outputFiles.length}) but useMultipleOutputs flag is disabled. Update the agent configuration to ensure consistent stream handling.`,
         );
       }
 
-      // Get model configuration
-      const modelName = fullConfig.model;
-      if (!(modelName in MODEL_CONFIGS)) {
-        const openDocs = 'Model Documentation';
-        await showInstructionWithSuppress(
-          'modelNotRecognized',
-          `Model "${modelName}" is not recognized. Review the documentation for supported models.`,
-          [
-            {
-              title: openDocs,
-              callback: () =>
-                vscode.commands.executeCommand('texra.openDoc', 'models'),
-            },
-          ],
-          false,
-        );
-        throw new Error(`Model ${modelName} not found in MODEL_CONFIGS`);
-      }
-
-      const modelConfig = MODEL_CONFIGS[modelName];
-      // Only set toolConfig reference - no need to override openRouterOnly
-      modelConfig.toolConfig = fullConfig.toolConfig;
-
-      // Create model handler
-      const modelHandler = ModelFactory.createHandler(modelConfig);
-
-      // Get agent path
-      const agentPathInfo = await getAgentPath(fullConfig.agent, context);
-
-      // Load settings and prompts
-      const [loadedAgentSetting, agentPrompt] =
-        await loadAgentSettingAndPrompts(agentPathInfo, requestedAgentName, {
-          preferMultiple: fullConfig.useMultipleOutputs,
-        });
-      const agentSetting = ensureAgentTypeForSource(
-        loadedAgentSetting,
-        agentPathInfo.source,
-      );
-
-      // Get appropriate agent class and create instance
-      const AgentClass = getAgentClass(agentSetting);
-      const agent = new AgentClass(
-        modelHandler,
-        fullConfig,
-        agentSetting,
-        agentPrompt,
-        agentPathInfo.directory,
-        executionId,
-      );
-      return { agent, agentType: agentSetting.agentType };
+      return { agent, agentType };
     },
     context,
     executionId,
@@ -552,47 +649,14 @@ export async function executeMergeAgent(
   await executeAgentWithLogging(
     agentName,
     async () => {
-      // Create agent config for merge operation
-      const agentConfig = AgentConfigSchema.parse({
-        agent: 'merge',
-        model,
-        inputFile,
-        editedFile,
+      const { agent, agentType } = await prepareAgentInstance<MergeAgent>({
+        agentName,
+        configPayload: { agent: agentName, model, inputFile, editedFile },
+        context,
+        agentClassOverride: MergeAgent,
       });
 
-      // Get model configuration
-      if (!(model in MODEL_CONFIGS)) {
-        const openDocs = 'Model Documentation';
-        const choice = await vscode.window.showErrorMessage(
-          `Model ${model} is not recognized.`,
-          openDocs,
-        );
-        if (choice === openDocs) {
-          vscode.commands.executeCommand('texra.openDoc', 'models');
-        }
-        throw new Error(`Model ${model} not found in MODEL_CONFIGS`);
-      }
-
-      const modelConfig = MODEL_CONFIGS[model];
-      const modelHandler = ModelFactory.createHandler(modelConfig);
-
-      // Get agent path and load settings/prompts
-      const agentPathInfo = await getAgentPath('merge', context);
-      const [loadedAgentSetting, agentPrompt] =
-        await loadAgentSettingAndPrompts(agentPathInfo, 'merge');
-      const agentSetting = ensureAgentTypeForSource(
-        loadedAgentSetting,
-        agentPathInfo.source,
-      );
-
-      const agent = new MergeAgent(
-        modelHandler,
-        agentConfig,
-        agentSetting,
-        agentPrompt,
-        agentPathInfo.directory,
-      );
-      return { agent, agentType: agentSetting.agentType };
+      return { agent, agentType };
     },
     context,
     undefined,
