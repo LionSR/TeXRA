@@ -46,11 +46,11 @@ const updateActiveStreamOutputs = (
     return;
   }
 
-  if (Object.prototype.hasOwnProperty.call(updates, 'files')) {
+  if ('files' in updates) {
     updater.updateFiles(stream, updates.files ?? {});
   }
 
-  if (Object.prototype.hasOwnProperty.call(updates, 'missing')) {
+  if ('missing' in updates) {
     updater.updateMissingOutputs(stream, updates.missing ?? {});
   }
 };

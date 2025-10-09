@@ -21,22 +21,17 @@ import {
 import { createOutputEvents, type OutputEventsModule } from './OutputEvents';
 import { createUsageEvents, type UsageEventsModule } from './UsageEvents';
 import { createLogEvents, type LogEventsModule } from './LogEvents';
+import {
+  createTaskGroupEvents,
+  type TaskGroupEventsModule,
+} from './TaskGroupEvents';
 
-// Type aliases for status values
-export type StatusType =
-  | typeof STATUS.RUNNING
-  | typeof STATUS.ERROR
-  | typeof STATUS.STOPPED
-  | typeof STATUS.READY
-  | typeof STATUS.WAITING
-  | typeof STATUS.RESUMING;
-export type StreamStatusType =
-  | typeof STATUS.RUNNING
-  | typeof STATUS.ERROR
-  | typeof STATUS.STOPPED
-  | typeof STATUS.WAITING
-  | typeof STATUS.RESUMING;
-export type StreamStatusOrReadyType = StreamStatusType | typeof STATUS.READY;
+// Local imports - events
+import type {
+  StatusType,
+  StreamStatusOrReadyType,
+  StreamStatusType,
+} from './types';
 
 /**
  * Handles progress event bus subscriptions for the progress view.
@@ -50,6 +45,7 @@ export class ProgressEventHandler {
   private readonly outputEvents: OutputEventsModule;
   private readonly logEvents: LogEventsModule;
   private readonly usageEvents: UsageEventsModule;
+  private readonly taskGroupEvents: TaskGroupEventsModule;
 
   constructor(
     private state: ProgressViewState,
@@ -67,6 +63,9 @@ export class ProgressEventHandler {
     this.outputEvents = createOutputEvents();
     this.usageEvents = createUsageEvents();
     this.logEvents = createLogEvents({
+      logger: this.logger,
+    });
+    this.taskGroupEvents = createTaskGroupEvents({
       logger: this.logger,
     });
   }
@@ -87,6 +86,9 @@ export class ProgressEventHandler {
     );
     disposables.push(
       ...this.logEvents.register(bus, this.state, this.webviewUpdater),
+    );
+    disposables.push(
+      ...this.taskGroupEvents.register(bus, this.state, this.webviewUpdater),
     );
     return disposables;
   }
@@ -166,7 +168,8 @@ export class ProgressEventHandler {
     if (status === STATUS.READY) {
       this._streamStatus.delete(stream);
     } else {
-      this._streamStatus.set(stream, status);
+      const nextStatus: StreamStatusType = status;
+      this._streamStatus.set(stream, nextStatus);
     }
 
     if (this.webviewUpdater.isAvailable()) {

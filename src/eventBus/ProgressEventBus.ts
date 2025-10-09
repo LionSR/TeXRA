@@ -18,9 +18,14 @@ import type { TaskState } from '@logger/TaskState';
 // Maximum number of events to buffer when no listeners are registered
 const MAX_BUFFER_SIZE = 1000;
 
-type StreamStatus = 'running' | 'error' | 'stopped' | 'waiting' | 'resuming';
-type StreamStatusOrReady = StreamStatus | 'ready';
-type TaskGroupStatus = TaskGroup['status'];
+export type StreamStatus =
+  | 'running'
+  | 'error'
+  | 'stopped'
+  | 'waiting'
+  | 'resuming';
+export type StreamStatusOrReady = StreamStatus | 'ready';
+export type TaskGroupStatus = TaskGroup['status'];
 
 interface AddTaskGroupPayload {
   stream: StreamTabId;

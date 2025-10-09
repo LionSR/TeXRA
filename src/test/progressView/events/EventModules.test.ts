@@ -6,6 +6,7 @@ import { createStreamStatusEvents } from '@progressView/events/StreamStatusEvent
 import { createOutputEvents } from '@progressView/events/OutputEvents';
 import { createUsageEvents } from '@progressView/events/UsageEvents';
 import { createLogEvents } from '@progressView/events/LogEvents';
+import { createTaskGroupEvents } from '@progressView/events/TaskGroupEvents';
 
 import { AgentSessionKind } from '@agent/core/AgentDataclass';
 import type { ProgressViewState } from '@progressView/state/ProgressViewState';
@@ -123,12 +124,20 @@ describe('Progress event modules', () => {
     });
 
     const disposables = module.register(bus as any, stateStub, updaterStub);
-    assert.deepStrictEqual(bus.events, [
-      'addLogMessage',
-      'updateLogMessage',
-      'addTaskGroup',
-      'updateTaskGroup',
-    ]);
+    assert.deepStrictEqual(bus.events, ['addLogMessage', 'updateLogMessage']);
+
+    disposables.forEach((disposable) => disposable.dispose());
+    assert.deepStrictEqual(bus.disposed, bus.events);
+  });
+
+  it('registers task group handlers and disposes them', () => {
+    const bus = new FakeBus();
+    const module = createTaskGroupEvents({
+      logger: loggerStub,
+    });
+
+    const disposables = module.register(bus as any, stateStub, updaterStub);
+    assert.deepStrictEqual(bus.events, ['addTaskGroup', 'updateTaskGroup']);
 
     disposables.forEach((disposable) => disposable.dispose());
     assert.deepStrictEqual(bus.disposed, bus.events);
@@ -136,7 +145,7 @@ describe('Progress event modules', () => {
 
   it('emits setActiveStream when a new task group initializes a stream', () => {
     const bus = new FakeBus();
-    const module = createLogEvents({
+    const module = createTaskGroupEvents({
       logger: loggerStub,
     });
 

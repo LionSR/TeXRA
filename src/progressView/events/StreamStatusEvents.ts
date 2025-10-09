@@ -10,11 +10,7 @@ import type { StreamTabInfo } from '../types';
 import { STATUS } from '../modules/constants.js';
 
 // Local imports - agent
-import {
-  AgentSessionKind,
-  AgentType,
-  resolveAgentSessionMetadata,
-} from '@agent/core/AgentDataclass';
+import { AgentType, resolveAgentSessionMetadata } from '@agent/core/AgentDataclass';
 import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
 
 // Local imports - events
@@ -22,10 +18,7 @@ import type {
   ProgressEventPayloads,
   ProgressEvent,
 } from '@eventBus/ProgressEventBus';
-import type {
-  StreamStatusType,
-  StreamStatusOrReadyType,
-} from './ProgressEventHandler';
+import type { StreamStatusType, StreamStatusOrReadyType } from './types';
 import type { AgentLogger } from '@logger/AgentLogger';
 
 interface ProgressEventBusLike {
@@ -70,10 +63,7 @@ export function createStreamStatusEvents(
 
     state.streamTabs.ensureStream(stream);
 
-    const metadata = resolveAgentSessionMetadata(
-      agentType ?? undefined,
-      agentSessionKind ?? undefined,
-    );
+    const metadata = resolveAgentSessionMetadata(agentType, agentSessionKind);
     state.setSessionKindHint(stream, metadata.agentSessionKind);
 
     const currentFilter = state.agentTypeFilter;
