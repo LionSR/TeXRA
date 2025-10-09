@@ -8,7 +8,6 @@ import { createUsageEvents } from '@progressView/events/UsageEvents';
 import { createLogEvents } from '@progressView/events/LogEvents';
 import { createTaskGroupEvents } from '@progressView/events/TaskGroupEvents';
 
-import { AgentSessionKind } from '@agent/core/AgentDataclass';
 import type { ProgressViewState } from '@progressView/state/ProgressViewState';
 import type { WebviewUpdater } from '@progressView/managers';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
@@ -138,6 +137,7 @@ describe('Progress event modules', () => {
     const bus = new FakeBus();
     const module = createTaskGroupEvents({
       logger: loggerStub,
+      initializeStreamForTaskGroup: () => {},
     });
 
     const disposables = module.register(bus as any, stateStub, updaterStub);
@@ -147,10 +147,14 @@ describe('Progress event modules', () => {
     assert.deepStrictEqual(bus.disposed, bus.events);
   });
 
-  it('emits setActiveStream when a new task group initializes a stream', () => {
+  it('initializes new streams via the provided initializer', () => {
     const bus = new FakeBus();
+    const initialized: string[] = [];
     const module = createTaskGroupEvents({
       logger: loggerStub,
+      initializeStreamForTaskGroup: (stream) => {
+        initialized.push(stream);
+      },
     });
 
     const state = {
@@ -184,22 +188,7 @@ describe('Progress event modules', () => {
       status: 'running',
     });
 
-    assert.deepStrictEqual(bus.emissions, [
-      {
-        event: 'updateStreamStatus',
-        payload: {
-          stream: 'stream-1',
-          status: 'running',
-        },
-      },
-      {
-        event: 'setActiveStream',
-        payload: {
-          stream: 'stream-1',
-          agentType: null,
-          agentSessionKind: AgentSessionKind.Workflow,
-        },
-      },
-    ]);
+    assert.deepStrictEqual(initialized, ['stream-1']);
+    assert.deepStrictEqual(bus.emissions, []);
   });
 });
