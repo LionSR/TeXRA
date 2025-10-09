@@ -395,7 +395,16 @@ export class OutputHandler implements IOutputHandler {
           source: outputFile,
           path: outputFile,
         };
-        if (this.agentSetting.agentType === AgentType.CoT) {
+        const hasScratchpadPrefill =
+          this.agentSetting.prefills?.some((prefill) =>
+            /<scratchpad\s*>/i.test(prefill),
+          ) ?? false;
+        const shouldProcessXml =
+          this.agentSetting.agentType === AgentType.CoT ||
+          (this.agentSetting.agentType === AgentType.Direct &&
+            hasScratchpadPrefill);
+
+        if (shouldProcessXml) {
           processed = await this.xmlManager.processSingleXmlOutput(outputFile);
         }
 

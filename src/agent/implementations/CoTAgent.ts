@@ -1,4 +1,3 @@
-// Local imports - agent
 // Local imports - agent components
 import { AgentStateRound, AgentStateGlobal } from '../core/AgentState';
 import { BaseReflectionAgent, RoundOutputOptions } from './BaseReflectionAgent';
@@ -94,6 +93,7 @@ export class CoTAgent extends BaseReflectionAgent {
       );
 
       // Only end the processing group if we created it
+      // Maybe this kind of setup is more graceful to do a withGroup kind of function?
       if (!processGroupId) {
         this.logger.endGroup(outputProcessGroupId, 'stopped');
       }

@@ -294,6 +294,8 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
         this.executionId,
       );
 
+      // The round state is forwarded to handleRoundCompletion so subclasses can
+      // maintain a consistent signature even when this helper doesn't mutate it directly.
       await this.handleRoundCompletion(
         currRound,
         updatedStateRound,
@@ -579,15 +581,4 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       this.logger.getActiveGroupId(),
     );
   }
-
-  /**
-   * Processes output files from XML or direct input.
-   * This method focuses solely on extracting and processing output files.
-   * It does NOT perform any latexdiff operations - those are handled separately
-   * in the handleOutput method via handleLatexdiffofOutput.
-   *
-   * @param outputFile Path to the output file to process
-   * @param currRound Current round number
-   * @param processGroupId Optional process group ID for logging
-   */
 }
