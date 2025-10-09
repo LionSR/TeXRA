@@ -72,10 +72,7 @@ function convertLatexToMarkdown(latex: string): string {
     withoutEnvironments,
   );
 
-  return converted
-    .replace(/\n{3,}/g, '\n\n')
-    .replace(/^(\s*\n)+/g, '')
-    .trim();
+  return converted;
 }
 
 function detectInputFormat(text: string): outputFormat {
@@ -95,15 +92,6 @@ function containsHtml(text: string): boolean {
 
 function containsLatex(text: string): boolean {
   return LATEX_PATTERN.test(text);
-}
-
-function normalizeMarkdown(markdown: string): string {
-  return markdown
-    .replace(/\r\n/g, '\n')
-    .replace(/-\s{2,}/g, '- ')
-    .replace(/[ \t]+$/gm, '')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
 }
 
 function convertHtmlToMarkdown(html: string): string {
@@ -127,7 +115,8 @@ async function convertWithPandoc(text: string): Promise<string | null> {
 
   // If already markdown, return as-is
   if (format === outputFormat.MARKDOWN) {
-    return text.trim();
+    // return text.trim();
+    return text;
   }
 
   try {
@@ -144,7 +133,7 @@ async function convertWithPandoc(text: string): Promise<string | null> {
         },
       );
     });
-    return result.trim();
+    return result;
   } catch (err) {
     logger.error(
       CHANNEL,
@@ -425,8 +414,7 @@ export async function formatContent(content: string): Promise<string> {
       formattedContent = convertLatexToMarkdown(formattedContent);
     }
   }
-
-  return normalizeMarkdown(formattedContent);
+  return formattedContent;
 }
 
 /**

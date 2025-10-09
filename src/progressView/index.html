@@ -223,12 +223,28 @@
             ><span class="message"></span>
           </div>
         </template>
+        <template id="nativeStatusTemplate">
+          <div class="native-status-line" role="status">
+            <span class="native-status-time"></span>
+            <span class="native-status-text"></span>
+          </div>
+        </template>
         <template id="specialDetailsTemplate">
           <details class="special-details">
             <summary class="details-summary">
               <i class="toggle-icon"></i>
               <i class="codicon icon"></i>
               <span class="label"></span>
+              <button
+                type="button"
+                class="vscode-button special-content-copy"
+                aria-label="Copy content"
+                title="Copy content"
+                data-default-title="Copy content"
+                data-success-title="Copied!"
+              >
+                <i class="codicon codicon-copy"></i>
+              </button>
             </summary>
             <div
               class="special-content log-entry-content markdown-content"

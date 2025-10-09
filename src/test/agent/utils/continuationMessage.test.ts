@@ -11,10 +11,18 @@ describe('continuationMessage.createContinuationMessage', () => {
     const result = createContinuationMessage(endTag, prefillTokens);
 
     assert.ok(result.includes('Your response got cut off'));
-    assert.ok(result.includes('Continue responding exactly from where you left off'));
+    assert.ok(
+      result.includes('Continue responding exactly from where you left off'),
+    );
     assert.ok(result.includes(`marked by ${endTag}`));
-    assert.ok(result.includes('Avoid repeating yourself and avoid starting over'));
-    assert.ok(result.includes(`Start your response at the next token after: "${prefillTokens}"`));
+    assert.ok(
+      result.includes('Avoid repeating yourself and avoid starting over'),
+    );
+    assert.ok(
+      result.includes(
+        `Start your response at the next token after: "${prefillTokens}"`,
+      ),
+    );
   });
 
   it('should handle special characters in endTag', () => {
@@ -30,7 +38,11 @@ describe('continuationMessage.createContinuationMessage', () => {
     const prefillTokens = 'tokens with "quotes" and \\backslash';
     const result = createContinuationMessage(endTag, prefillTokens);
 
-    assert.ok(result.includes(`Start your response at the next token after: "${prefillTokens}"`));
+    assert.ok(
+      result.includes(
+        `Start your response at the next token after: "${prefillTokens}"`,
+      ),
+    );
   });
 
   it('should return a non-empty string', () => {

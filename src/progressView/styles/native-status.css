@@ -1,0 +1,38 @@
+/**
+ * Styling for native-style status log entries.
+ * Presents lightweight inline updates with a subtle vertical accent.
+ */
+
+.native-status-line {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-small);
+  padding: var(--spacing-small) var(--spacing-medium);
+  margin: var(--spacing-small) 0;
+  border-left: var(--border-thin) solid var(--vscode-panel-border);
+  border-radius: var(--border-radius-large);
+  background-color: var(--vscode-sideBarSectionHeader-background, transparent);
+  font-size: var(--font-size-sm);
+  color: var(--vscode-foreground);
+  min-height: calc(var(--spacing-large) + var(--spacing-small));
+  word-break: break-word;
+}
+
+.native-status-line:hover {
+  background-color: var(
+    --vscode-list-hoverBackground,
+    var(--vscode-sideBarSectionHeader-background)
+  );
+}
+
+.native-status-time {
+  color: var(--vscode-descriptionForeground);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.native-status-text {
+  flex: 1;
+  white-space: pre-wrap;
+}

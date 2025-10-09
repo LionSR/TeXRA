@@ -159,10 +159,6 @@ export class LogEntryFormatter {
       content = decodeHtml(content);
     }
 
-    // Normalize line breaks and spacing similar to xmlUtils.formatContent
-    // to avoid excessive whitespace in rendered output
-    content = this._normalizeLineBreaks(content);
-
     // Pre-process LaTeX references to protect them from markdown parsing
     content = content.replace(/\\ref\{([^}]+)\}/g, '@@LATEX-REF:$1@@');
     content = content.replace(/\\cref\{([^}]+)\}/g, '@@LATEX-CREF:$1@@');
@@ -203,21 +199,6 @@ export class LogEntryFormatter {
       .replace(/@@LATEX-EQREF:([^@]+)@@/g, (_, label) =>
         this._createLatexReferenceHtml('eqref', label),
       );
-  }
-
-  /**
-   * Collapse excessive blank lines and normalize spacing. This mirrors
-   * cleanup applied by xmlUtils.formatContent for special contents so that
-   * model responses render consistently.
-   * @param {string} text - Raw markdown text
-   * @returns {string} Normalized text
-   */
-  _normalizeLineBreaks(text) {
-    return text
-      .replace(/\n(\s*)\n(\s*)\n(\s*)- /g, '\n$3- ')
-      .replace(/\n(\s*)\n(\s*)- /g, '\n$2- ')
-      .replace(/\n{4,}/g, '\n\n');
-    // .replace(/ {4}/gm, '  ');
   }
 
   /**
@@ -286,6 +267,11 @@ export class LogEntryFormatter {
           () => this._formatUserMessage(text, id, timestamp),
           'user message',
         ),
+      progressStatus: (text, id, timestamp) =>
+        this._safeFormat(
+          () => this._formatProgressStatus(text, id, timestamp),
+          'progress status',
+        ),
     };
   }
 
@@ -351,6 +337,8 @@ export class LogEntryFormatter {
       } else if (messageType === 'userMessage') {
         // User message needs text, id, and timestamp
         result = formatter(text, id, timestamp);
+      } else if (messageType === 'progressStatus') {
+        result = formatter(text, id, timestamp);
       } else {
         // File list, missing outputs, latexdiff, statistics need data
         result = formatter(text, data, id);
@@ -393,7 +381,12 @@ export class LogEntryFormatter {
 
   _formatSpecialContent(content, contentType, logId, groupId, timestamp) {
     if (!content || !content.trim()) return null;
-    const parsedMarkdown = this._processMarkdownContent(content);
+    const decodedContent = decodeHtml(content);
+    if (!decodedContent.trim()) {
+      return null;
+    }
+
+    const parsedMarkdown = this._processMarkdownContent(decodedContent, false);
     const element = createFromTemplate('specialDetailsTemplate');
     if (!element) return null;
 
@@ -422,6 +415,15 @@ export class LogEntryFormatter {
     const labelElem = element.querySelector('.label');
     if (labelElem) labelElem.textContent = labelText;
 
+    const copyButton = element.querySelector('.special-content-copy');
+    if (copyButton) {
+      const defaultTitle = `Copy ${labelText.toLowerCase()}`;
+      copyButton.dataset.defaultTitle = defaultTitle;
+      copyButton.dataset.successTitle = 'Copied!';
+      copyButton.setAttribute('title', defaultTitle);
+      copyButton.setAttribute('aria-label', defaultTitle);
+    }
+
     const contentElem = element.querySelector('.special-content');
     if (contentElem) {
       contentElem.classList.remove(
@@ -429,6 +431,7 @@ export class LogEntryFormatter {
         'special-content--scratchpad',
       );
       contentElem.classList.add(contentClass);
+      contentElem.dataset.rawContent = decodedContent;
       contentElem.innerHTML = parsedMarkdown;
     }
 
@@ -1040,6 +1043,34 @@ export class LogEntryFormatter {
     if (contentElem) {
       contentElem.innerHTML = items.join('');
       if (logId) contentElem.dataset.logId = logId;
+    }
+
+    return element;
+  }
+
+  _formatProgressStatus(content, logId, timestamp) {
+    const element = createFromTemplate('nativeStatusTemplate');
+    if (!element) return null;
+
+    const date = new Date(timestamp ?? Date.now());
+    const { fullTimestamp, timeDisplay } = this._formatTimestamp(date);
+
+    element.dataset.fullTimestamp = fullTimestamp;
+    if (logId) {
+      element.dataset.logId = logId;
+    }
+
+    const timeElem = element.querySelector('.native-status-time');
+    if (timeElem) {
+      timeElem.textContent = timeDisplay;
+      timeElem.title = fullTimestamp;
+    }
+
+    const textElem = element.querySelector('.native-status-text');
+    if (textElem) {
+      const decodedContent =
+        typeof content === 'string' ? decodeHtml(content) : '';
+      textElem.textContent = decodedContent;
     }
 
     return element;
