@@ -170,7 +170,7 @@ export async function buildFileAttachment({
 
   let buffer: Buffer;
   try {
-    buffer = WorkspaceFS.readFileBytesSync(resolved.relative);
+    buffer = await WorkspaceFS.readFileBytes(resolved.relative);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     throw new ToolError(`Failed to read attachment ${display}: ${message}`);

@@ -17,6 +17,7 @@ import { MESSAGE_TYPES } from '@logger/messageTypes';
 import type { ToolDefinition } from '@model';
 import { BaseTool } from '@tools/core/base';
 import { ToolResult, toolResult } from '@tools/result';
+import { sanitizeToolResultForLog } from '@agent/modelHandlers/utils/toolAttachmentUtils';
 import { WorkspaceFS } from '@utils/files';
 import xmlUtils from '@utils/text/xmlUtils';
 
@@ -179,10 +180,11 @@ export async function runToolUseCycle<C = unknown>(
       const errorMsg = `Malformed tool JSON: ${err instanceof Error ? err.message : String(err)}`;
 
       // Log the failed tool use attempt
+      const errorResult = toolResult({ error: errorMsg, isError: true });
       const toolUseLog = {
         tool: 'unknown',
         input: toolInfo,
-        output: toolResult({ error: errorMsg, isError: true }),
+        output: sanitizeToolResultForLog(errorResult),
       };
       logger.info('', groupId, MESSAGE_TYPES.TOOL_USE, toolUseLog);
       break;
@@ -195,10 +197,11 @@ export async function runToolUseCycle<C = unknown>(
       const errorMsg = `Tool JSON missing name: ${JSON.stringify(parsed)}`;
 
       // Log the failed tool use attempt with available info
+      const errorResult = toolResult({ error: errorMsg, isError: true });
       const toolUseLog = {
         tool: 'unknown',
         input: parsed,
-        output: toolResult({ error: errorMsg, isError: true }),
+        output: sanitizeToolResultForLog(errorResult),
       };
       logger.info('', groupId, MESSAGE_TYPES.TOOL_USE, toolUseLog);
       break;
@@ -274,7 +277,7 @@ export async function runToolUseCycle<C = unknown>(
     const toolUseLog = {
       tool: name,
       input: toolInput,
-      output: result,
+      output: sanitizeToolResultForLog(result),
     };
 
     logger.info('', groupId, MESSAGE_TYPES.TOOL_USE, toolUseLog);
@@ -317,13 +320,14 @@ export async function runToolUseCycle<C = unknown>(
       }
     }
 
-    const followUpMsgs = modelHandler.createToolUseFollowUpMessages(
+    const followUpMsgs = await modelHandler.createToolUseFollowUpMessages(
       id,
       name,
       parsed,
       resultObj,
       toolState,
       text,
+      client,
     );
     messages.push(...followUpMsgs);
 
