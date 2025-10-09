@@ -5,12 +5,8 @@ import * as vscode from 'vscode';
 import type { WebviewUpdater } from '../managers';
 import type { ProgressViewState } from '../state/ProgressViewState';
 
-// @ts-ignore - Import JavaScript module
-import { STATUS } from '../modules/constants.js';
-
 // Local imports - agent
 import { AgentSessionKind } from '@agent/core/AgentDataclass';
-import type { StreamTabId } from '@agent/types/IdentifierTypes';
 
 // Local imports - events
 import type {
@@ -27,10 +23,6 @@ import type {
 } from '@logger/LogTypes';
 import { getConfig } from '@utils/config';
 
-import type {
-  StreamStatusOrReadyType,
-  StreamStatusType,
-} from './ProgressEventHandler';
 import type { AgentLogger } from '@logger/AgentLogger';
 
 interface ProgressEventBusLike {
@@ -38,17 +30,14 @@ interface ProgressEventBusLike {
     event: K,
     listener: (payload: ProgressEventPayloads[K]) => void,
   ): () => void;
+  emit<K extends ProgressEvent>(
+    event: K,
+    payload: ProgressEventPayloads[K],
+  ): void;
 }
 
 interface LogEventsShared {
   logger: AgentLogger;
-  streamStatus: Map<string, StreamStatusType>;
-  setStreamStatus(stream: string, status: StreamStatusOrReadyType): void;
-  sendInstructionUpdate(stream: StreamTabId | ''): void;
-  updateLogContentForStream(
-    stream: string,
-    options?: { updateInstruction?: boolean },
-  ): void;
 }
 
 export interface LogEventsModule {
@@ -165,6 +154,7 @@ export function createLogEvents(shared: LogEventsShared): LogEventsModule {
     data: ProgressEventPayloads['addTaskGroup'],
     state: ProgressViewState,
     updater: WebviewUpdater,
+    bus: ProgressEventBusLike,
   ): void => {
     withErrorBoundary('failed to handle addTaskGroup', () => {
       const {
@@ -179,29 +169,10 @@ export function createLogEvents(shared: LogEventsShared): LogEventsModule {
 
       if (!state.streamTabs.has(stream)) {
         shared.logger.debug(`Creating stream from addTaskGroup: ${stream}`);
-        state.streamTabs.ensureStream(stream);
-        state.setSessionKindHint(stream, AgentSessionKind.Workflow);
-
-        const currentFilter = state.agentTypeFilter;
-        if (
-          currentFilter !== 'all' &&
-          currentFilter !== AgentSessionKind.Workflow
-        ) {
-          state.agentTypeFilter = AgentSessionKind.Workflow;
-        }
-
-        state.activeStream = stream;
-
-        if (!shared.streamStatus.has(stream)) {
-          shared.setStreamStatus(stream, STATUS.RUNNING);
-        }
-
-        if (updater.isAvailable()) {
-          shared.updateLogContentForStream(stream, {
-            updateInstruction: false,
-          });
-          shared.sendInstructionUpdate(stream);
-        }
+        bus.emit('setActiveStream', {
+          stream,
+          agentSessionKind: AgentSessionKind.Workflow,
+        });
       }
 
       const group: TaskGroup = {
@@ -259,7 +230,7 @@ export function createLogEvents(shared: LogEventsShared): LogEventsModule {
         ),
         new vscode.Disposable(
           bus.on('addTaskGroup', (payload) =>
-            handleAddTaskGroup(payload, state, updater),
+            handleAddTaskGroup(payload, state, updater, bus),
           ),
         ),
         new vscode.Disposable(

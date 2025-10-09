@@ -7,7 +7,6 @@ import { buildStreamInfos } from '../streamInfoUtils';
 import type { ProgressViewState } from '../state/ProgressViewState';
 import type { StreamTabInfo } from '../types';
 
-// @ts-ignore - Import JavaScript module
 import { STATUS } from '../modules/constants.js';
 
 // Local imports - agent

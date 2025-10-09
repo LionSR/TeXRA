@@ -4,7 +4,6 @@ import * as vscode from 'vscode';
 // Local imports - progress view
 import { WebviewUpdater } from '../managers';
 
-// @ts-ignore - Import JavaScript module
 import { STATUS } from '../modules/constants.js';
 
 // Local imports
@@ -69,11 +68,6 @@ export class ProgressEventHandler {
     this.usageEvents = createUsageEvents();
     this.logEvents = createLogEvents({
       logger: this.logger,
-      streamStatus: this._streamStatus,
-      setStreamStatus: (stream, status) => this.setStreamStatus(stream, status),
-      sendInstructionUpdate: (stream) => this.sendInstructionUpdate(stream),
-      updateLogContentForStream: (stream, options) =>
-        this.updateLogContentForStream(stream, options),
     });
   }
 
@@ -169,10 +163,10 @@ export class ProgressEventHandler {
    * Set the status for a specific stream synchronously.
    */
   setStreamStatus(stream: string, status: StreamStatusOrReadyType): void {
-    if (status !== STATUS.READY) {
-      this._streamStatus.set(stream, status as StreamStatusType);
-    } else {
+    if (status === STATUS.READY) {
       this._streamStatus.delete(stream);
+    } else {
+      this._streamStatus.set(stream, status);
     }
 
     if (this.webviewUpdater.isAvailable()) {

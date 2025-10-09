@@ -7,6 +7,7 @@ import { createOutputEvents } from '@progressView/events/OutputEvents';
 import { createUsageEvents } from '@progressView/events/UsageEvents';
 import { createLogEvents } from '@progressView/events/LogEvents';
 
+import { AgentSessionKind } from '@agent/core/AgentDataclass';
 import type { ProgressViewState } from '@progressView/state/ProgressViewState';
 import type { WebviewUpdater } from '@progressView/managers';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
@@ -15,15 +16,42 @@ import type { AgentLogger } from '@logger/AgentLogger';
 class FakeBus {
   public readonly events: (keyof ProgressEventPayloads)[] = [];
   public readonly disposed: (keyof ProgressEventPayloads)[] = [];
+  public readonly listeners = new Map<
+    keyof ProgressEventPayloads,
+    (payload: ProgressEventPayloads[keyof ProgressEventPayloads]) => void
+  >();
+  public readonly emissions: {
+    event: keyof ProgressEventPayloads;
+    payload: ProgressEventPayloads[keyof ProgressEventPayloads];
+  }[] = [];
 
   on<K extends keyof ProgressEventPayloads>(
     event: K,
     _listener: (payload: ProgressEventPayloads[K]) => void,
   ): () => void {
     this.events.push(event);
+    this.listeners.set(event, _listener as any);
     return () => {
       this.disposed.push(event);
+      this.listeners.delete(event);
     };
+  }
+
+  emit<K extends keyof ProgressEventPayloads>(
+    event: K,
+    payload: ProgressEventPayloads[K],
+  ): void {
+    this.emissions.push({ event, payload });
+  }
+
+  trigger<K extends keyof ProgressEventPayloads>(
+    event: K,
+    payload: ProgressEventPayloads[K],
+  ): void {
+    const listener = this.listeners.get(event) as
+      | ((value: ProgressEventPayloads[K]) => void)
+      | undefined;
+    listener?.(payload);
   }
 }
 
@@ -92,10 +120,6 @@ describe('Progress event modules', () => {
     const bus = new FakeBus();
     const module = createLogEvents({
       logger: loggerStub,
-      streamStatus: new Map(),
-      setStreamStatus: () => {},
-      sendInstructionUpdate: () => {},
-      updateLogContentForStream: () => {},
     });
 
     const disposables = module.register(bus as any, stateStub, updaterStub);
@@ -108,5 +132,53 @@ describe('Progress event modules', () => {
 
     disposables.forEach((disposable) => disposable.dispose());
     assert.deepStrictEqual(bus.disposed, bus.events);
+  });
+
+  it('emits setActiveStream when a new task group initializes a stream', () => {
+    const bus = new FakeBus();
+    const module = createLogEvents({
+      logger: loggerStub,
+    });
+
+    const state = {
+      streamTabs: {
+        has: () => false,
+        ensureStream: () => {},
+        addMessage: () => {},
+        get: () => undefined,
+        save: () => {},
+      },
+      taskGroups: {
+        addGroup: () => {},
+        updateGroup: () => {},
+      },
+      setSessionKindHint: () => {},
+      agentTypeFilter: 'all',
+      activeStream: '',
+    } as unknown as ProgressViewState;
+    const updater = {
+      isAvailable: () => false,
+      addTaskGroup: () => {},
+    } as unknown as WebviewUpdater;
+
+    module.register(bus as any, state, updater);
+
+    bus.trigger('addTaskGroup', {
+      stream: 'stream-1',
+      groupId: 'group-1',
+      groupName: 'Group',
+      startTime: 0,
+      status: 'running',
+    });
+
+    assert.deepStrictEqual(bus.emissions, [
+      {
+        event: 'setActiveStream',
+        payload: {
+          stream: 'stream-1',
+          agentSessionKind: AgentSessionKind.Workflow,
+        },
+      },
+    ]);
   });
 });
