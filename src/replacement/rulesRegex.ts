@@ -1,6 +1,9 @@
 // Local imports
 import { ReplacementCategory, ReplacementFunction } from './types';
-import { FENCED_LATEX_BLOCK_PATTERN } from './constants';
+import {
+  FENCED_LATEX_BLOCK_PATTERN_INLINE,
+  FENCED_LATEX_BLOCK_PATTERN_MULTILINE,
+} from './constants';
 
 const convertFencedLatexBlock: ReplacementFunction = (
   match,
@@ -41,7 +44,8 @@ export const FENCED_LATEX_BLOCK_REPLACEMENTS: ReplacementCategory = {
   isRegex: true,
   flags: 'g',
   patterns: {
-    [FENCED_LATEX_BLOCK_PATTERN]: convertFencedLatexBlock,
+    [FENCED_LATEX_BLOCK_PATTERN_MULTILINE]: convertFencedLatexBlock,
+    [FENCED_LATEX_BLOCK_PATTERN_INLINE]: convertFencedLatexBlock,
   },
 };
 
