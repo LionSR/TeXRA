@@ -397,7 +397,7 @@ export class OutputHandler implements IOutputHandler {
         };
         const hasScratchpadPrefill =
           this.agentSetting.prefills?.some((prefill) =>
-            prefill.includes('<scratchpad>'),
+            /<scratchpad\s*>/i.test(prefill),
           ) ?? false;
         const shouldProcessXml =
           this.agentSetting.agentType === AgentType.CoT ||
