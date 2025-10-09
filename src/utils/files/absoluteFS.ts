@@ -56,6 +56,16 @@ export class AbsoluteFS {
   }
 
   /**
+   * Read a file as raw bytes
+   */
+  public static async readBytes(filePath: string): Promise<Buffer> {
+    this.validatePath(filePath, 'readBytes');
+    const uri = vscode.Uri.file(filePath);
+    const content = await vscode.workspace.fs.readFile(uri);
+    return Buffer.from(content);
+  }
+
+  /**
    * Write content to a file (text or binary)
    */
   public static async write(
