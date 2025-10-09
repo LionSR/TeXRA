@@ -330,9 +330,12 @@ export async function executeAgentWithLogging<T extends IAgent>(
   const isResume = options?.resume ?? false;
   let streamTabId: StreamTabId | undefined;
   let agentStreamLogger: AgentLogger | undefined;
+  let agent: T | undefined;
   try {
     // Create agent instance and extract its declared type
-    const { agent, agentType } = await createAgentFn();
+    const created = await createAgentFn();
+    agent = created.agent;
+    const { agentType } = created;
     const sessionMetadata = agent.getSessionMetadata();
 
     if (executionId) {
@@ -569,9 +572,10 @@ export async function executeAgentWithLogging<T extends IAgent>(
         agentStreamLogger = new AgentLogger(streamTabId, true);
       }
       if (agentStreamLogger) {
-        const activeGroupId = agentStreamLogger.getActiveGroupId();
-        if (activeGroupId) {
-          agentStreamLogger.error(errorMsg, activeGroupId);
+        const fallbackGroupId =
+          agentStreamLogger.getActiveGroupId() ?? agent?.getLastRunGroupId();
+        if (fallbackGroupId) {
+          agentStreamLogger.error(errorMsg, fallbackGroupId);
         } else {
           const agentErrorGroupId = await agentStreamLogger.startGroup(
             `Error: ${agentName}`,
