@@ -38,6 +38,12 @@ const isSupportedImageMediaType = (
   }
 };
 
+interface UploadedAnthropicAttachment {
+  attachment: ToolFileAttachment;
+  fileId: string;
+  blockType: 'image' | 'document';
+}
+
 // Local imports - agent
 import { toAnthropicTools } from './toolConversion';
 import type { ProviderStopReason } from './types/StopReasonTypes';
@@ -62,6 +68,10 @@ import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
 import { createContinuationMessage } from '@agent/utils/continuationMessage';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import { calculateTokenPrice } from '@agent/utils/priceUtils';
+import {
+  describeAttachments,
+  extractToolAttachments,
+} from './utils/toolAttachmentUtils';
 
 // Local imports - error utils
 import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
@@ -103,6 +113,14 @@ export class ModelHandlerAnthropic extends ModelHandler<
   ToolUseBlock,
   Anthropic
 > {
+  protected override get supportsToolFileOutputs(): boolean {
+    return true;
+  }
+
+  protected override get supportsInlineToolImages(): boolean {
+    return true;
+  }
+
   async getClient(): Promise<Anthropic> {
     const apiKey = await this.getApiKey();
     const baseUrl = this.getBaseUrl();
@@ -500,6 +518,79 @@ export class ModelHandlerAnthropic extends ModelHandler<
     }
 
     return { hasFileSource, hasBase64Pdf };
+  }
+
+  private async uploadToolAttachments(
+    client: Anthropic,
+    attachments: ToolFileAttachment[],
+  ): Promise<{
+    uploaded: UploadedAnthropicAttachment[];
+    unsupported: ToolFileAttachment[];
+  }> {
+    const uploaded: UploadedAnthropicAttachment[] = [];
+    const unsupported: ToolFileAttachment[] = [];
+
+    for (const attachment of attachments) {
+      const mimeType = attachment.mimeType ?? 'application/octet-stream';
+      const normalized = mimeType.toLowerCase();
+      const isImage = isSupportedImageMediaType(normalized);
+      const isPdf = normalized === 'application/pdf';
+
+      if (!isImage && !isPdf) {
+        unsupported.push(attachment);
+        continue;
+      }
+
+      let buffer: Buffer | undefined;
+      try {
+        if (attachment.bytes) {
+          buffer = Buffer.from(attachment.bytes);
+        } else if (attachment.base64Data) {
+          buffer = Buffer.from(attachment.base64Data, 'base64');
+        } else if (attachment.path) {
+          const fileBuffer = await WorkspaceFS.readFileBytes(attachment.path);
+          buffer = Buffer.from(fileBuffer);
+        }
+
+        if (!buffer) {
+          unsupported.push(attachment);
+          continue;
+        }
+
+        const filename = this.sanitizeFilename(
+          attachment.path ??
+            (isPdf
+              ? 'document.pdf'
+              : `image.${normalized.split('/').pop() ?? 'png'}`),
+        );
+
+        const uploadedFile = await client.beta.files.upload({
+          file: await toFile(buffer, filename, { type: mimeType }),
+          betas: [FILES_API_BETA],
+        });
+
+        uploaded.push({
+          attachment,
+          fileId: uploadedFile.id,
+          blockType: isPdf ? 'document' : 'image',
+        });
+      } catch (err) {
+        this.logger.error(
+          `Failed to upload attachment ${attachment.path ?? 'attachment'}: ${getSdkErrorMessage(err)}`,
+          undefined,
+          undefined,
+          err,
+        );
+        unsupported.push(attachment);
+      } finally {
+        if (buffer) {
+          buffer.fill(0);
+          buffer = undefined;
+        }
+      }
+    }
+
+    return { uploaded, unsupported };
   }
 
   private sanitizeFilename(filename: string): string {
@@ -1365,14 +1456,15 @@ export class ModelHandlerAnthropic extends ModelHandler<
     return null;
   }
 
-  createToolUseFollowUpMessages(
+  async createToolUseFollowUpMessages(
     id: string,
     name: string,
     call: ToolUseBlock,
     result: Record<string, unknown>,
     toolState?: ToolState,
     text?: string,
-  ): MessageParam[] {
+    client?: Anthropic,
+  ): Promise<MessageParam[]> {
     const content: ContentBlockParam[] = [];
     if (
       this.capabilities.supportsReasoning &&
@@ -1399,21 +1491,32 @@ export class ModelHandlerAnthropic extends ModelHandler<
       content,
     };
 
-    const attachments: ToolFileAttachment[] = Array.isArray(
-      (result as { files?: unknown }).files,
-    )
-      ? ((result as { files: ToolFileAttachment[] })
-          .files as ToolFileAttachment[])
-      : [];
+    const { attachments, sanitizedResult } = extractToolAttachments(result);
+    const supportsAttachments = this.supportsToolFileOutputs;
+    const supportsInlineImages = this.supportsInlineToolImages;
 
-    const sanitizedResult: Record<string, unknown> = { ...result };
-    if (attachments.length > 0) {
-      (sanitizedResult as { files?: unknown }).files = attachments.map(
-        ({ base64Data, bytes, ...rest }) => rest,
+    let uploadedAttachments: UploadedAnthropicAttachment[] = [];
+    const unsupportedAttachments: ToolFileAttachment[] = [];
+
+    if (supportsAttachments && attachments.length > 0 && client) {
+      const uploadResult = await this.uploadToolAttachments(
+        client,
+        attachments,
       );
-    }
-    if ('base64Image' in sanitizedResult) {
-      delete (sanitizedResult as { base64Image?: unknown }).base64Image;
+      uploadedAttachments = uploadResult.uploaded;
+      unsupportedAttachments.push(...uploadResult.unsupported);
+
+      if (uploadedAttachments.length > 0) {
+        (sanitizedResult as { files?: unknown }).files =
+          uploadedAttachments.map(({ attachment, fileId }) => ({
+            path: attachment.path,
+            mimeType: attachment.mimeType,
+            description: attachment.description,
+            fileId,
+          }));
+      }
+    } else if (attachments.length > 0) {
+      unsupportedAttachments.push(...attachments);
     }
 
     const textPieces: string[] = [];
@@ -1427,56 +1530,32 @@ export class ModelHandlerAnthropic extends ModelHandler<
     > = [{ type: 'text', text: textPieces.join('\n\n') }];
 
     const unsupportedNotes: string[] = [];
-    if (attachments.length > 0 && this.capabilities.supportsToolFileOutputs) {
-      for (const attachment of attachments) {
-        const base64Payload =
-          attachment.base64Data ??
-          (attachment.bytes
-            ? Buffer.from(attachment.bytes).toString('base64')
-            : undefined);
-        if (!base64Payload) {
-          unsupportedNotes.push(
-            `${attachment.path ?? 'attachment'} (missing payload)`,
-          );
-          continue;
-        }
 
-        const mimeType = attachment.mimeType ?? 'application/octet-stream';
-        if (isSupportedImageMediaType(mimeType)) {
-          toolResultContent.push({
-            type: 'image',
-            source: {
-              type: 'base64',
-              data: base64Payload,
-              media_type: mimeType,
-            },
-          });
-          continue;
-        }
-
-        if (mimeType === 'application/pdf') {
-          toolResultContent.push({
-            type: 'document',
-            source: {
-              type: 'base64',
-              data: base64Payload,
-              media_type: 'application/pdf',
-            },
-            title: basename(attachment.path ?? 'figure.pdf'),
-          });
-          continue;
-        }
-
-        unsupportedNotes.push(
-          `${attachment.path ?? 'attachment'} (${mimeType})`,
-        );
+    for (const uploaded of uploadedAttachments) {
+      if (uploaded.blockType === 'image' && supportsInlineImages) {
+        toolResultContent.push({
+          type: 'image',
+          source: { type: 'file', file_id: uploaded.fileId },
+        } as unknown as ImageBlockParam);
+        continue;
       }
-    } else if (attachments.length > 0) {
+
+      if (uploaded.blockType === 'document') {
+        toolResultContent.push({
+          type: 'document',
+          source: { type: 'file', file_id: uploaded.fileId },
+          title: basename(uploaded.attachment.path ?? 'attachment.pdf'),
+        } as unknown as DocumentBlockParam);
+        continue;
+      }
+
       unsupportedNotes.push(
-        ...attachments.map(
-          (file) => `${file.path ?? 'attachment'} (${file.mimeType})`,
-        ),
+        `${uploaded.attachment.path ?? 'attachment'} (${uploaded.attachment.mimeType})`,
       );
+    }
+
+    if (unsupportedAttachments.length > 0) {
+      unsupportedNotes.push(...describeAttachments(unsupportedAttachments));
     }
 
     if (unsupportedNotes.length > 0) {
@@ -1486,6 +1565,16 @@ export class ModelHandlerAnthropic extends ModelHandler<
           '\n',
         )}\nUse the read_file tool if you need the raw bytes.`,
       });
+      if (!(sanitizedResult as Record<string, unknown>).attachmentSummary) {
+        (sanitizedResult as Record<string, unknown>).attachmentSummary =
+          `Attachments available but returned as metadata only:\n${unsupportedNotes.join(
+            '\n',
+          )}`;
+      }
+    }
+
+    if (unsupportedNotes.length > 0) {
+      // Summary already added above
     }
 
     const isError = Boolean((result as { isError?: boolean }).isError);
