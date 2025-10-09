@@ -92,6 +92,14 @@ export abstract class ModelHandler<
   protected outputStreaming = false;
   protected backgroundModeSupported = false;
 
+  protected get supportsToolFileOutputs(): boolean {
+    return false;
+  }
+
+  protected get supportsInlineToolImages(): boolean {
+    return false;
+  }
+
   constructor(config: ModelConfig) {
     this.config = {
       ...config,
@@ -958,7 +966,8 @@ export abstract class ModelHandler<
     result: Record<string, unknown>,
     toolState?: ToolState,
     text?: string,
-  ): M[];
+    client?: C,
+  ): Promise<M[]>;
 
   /**
    * Append a simple text follow-up from the user.

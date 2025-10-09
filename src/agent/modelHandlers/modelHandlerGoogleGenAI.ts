@@ -48,7 +48,10 @@ import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
 import { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import type { ToolDefinition } from '@model';
-import type { ToolFileAttachment } from '@tools/result';
+import {
+  describeAttachments,
+  extractToolAttachments,
+} from './utils/toolAttachmentUtils';
 import { cleanFileContent } from '@replacement/engine';
 import replacementEngine from '@replacement/engine';
 
@@ -982,14 +985,15 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     return null;
   }
 
-  createToolUseFollowUpMessages(
+  async createToolUseFollowUpMessages(
     id: string,
     name: string,
     call: FunctionCall,
     result: Record<string, unknown>,
     _toolState?: ToolState,
     text?: string,
-  ): [Content, Content] {
+    _client?: GoogleGenAI,
+  ): Promise<Content[]> {
     // Handle both args and input fields for backward compatibility
     const args =
       call?.args && typeof call.args === 'object'
@@ -1009,36 +1013,12 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     }
 
     // Use the same ID for the result to maintain correlation
-    const attachments: ToolFileAttachment[] = Array.isArray(
-      (result as { files?: unknown }).files,
-    )
-      ? ((result as { files: ToolFileAttachment[] })
-          .files as ToolFileAttachment[])
-      : [];
-    const sanitizedResult: Record<string, unknown> = { ...result };
+    const { attachments, sanitizedResult } = extractToolAttachments(result);
     if (attachments.length > 0) {
-      const sanitizedAttachments = attachments.map(
-        ({ base64Data, bytes, ...rest }) => rest,
-      );
-      (sanitizedResult as { files?: unknown }).files = sanitizedAttachments;
-      const attachmentSummary = attachments
-        .map((file) => {
-          const path =
-            typeof file.path === 'string' && file.path.length > 0
-              ? file.path
-              : 'attachment';
-          const type =
-            typeof file.mimeType === 'string' && file.mimeType.length > 0
-              ? file.mimeType
-              : 'application/octet-stream';
-          return `- ${path} (${type})`;
-        })
-        .join('\n');
       (sanitizedResult as Record<string, unknown>).attachmentSummary =
-        `Attachments available:\n${attachmentSummary}\nUse the read_file tool to download them.`;
-    }
-    if ('base64Image' in sanitizedResult) {
-      delete (sanitizedResult as { base64Image?: unknown }).base64Image;
+        `Attachments available:\n${describeAttachments(attachments).join(
+          '\n',
+        )}\nUse the read_file tool to download them.`;
     }
     const resultPart = createPartFromFunctionResponse(
       callId,

@@ -202,7 +202,8 @@ export interface IModelHandler<
     result: Record<string, unknown>,
     toolState?: ToolState,
     text?: string,
-  ): M[];
+    client?: C,
+  ): Promise<M[]>;
 
   /**
    * Create provider-specific messages for a simple text follow-up.

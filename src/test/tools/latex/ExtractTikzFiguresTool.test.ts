@@ -13,7 +13,7 @@ suite('ExtractTikzFiguresTool', () => {
   const originalExtract = tikzPictureManager.extract;
   const originalCompile = tikzPictureManager.compile;
   const originalExists = WorkspaceFS.exists;
-  const originalReadBytes = WorkspaceFS.readFileBytesSync;
+  const originalReadBytes = WorkspaceFS.readFileBytes;
 
   teardown(() => {
     (
@@ -25,8 +25,8 @@ suite('ExtractTikzFiguresTool', () => {
     (WorkspaceFS as unknown as { exists: typeof originalExists }).exists =
       originalExists;
     (
-      WorkspaceFS as unknown as { readFileBytesSync: typeof originalReadBytes }
-    ).readFileBytesSync = originalReadBytes;
+      WorkspaceFS as unknown as { readFileBytes: typeof originalReadBytes }
+    ).readFileBytes = originalReadBytes;
   });
 
   test('compiles TikZ figures and returns attachments', async () => {
@@ -34,8 +34,8 @@ suite('ExtractTikzFiguresTool', () => {
       async (path: string) =>
         path === 'slides.tex' || path === 'build/slides/fig_a.pdf';
     (
-      WorkspaceFS as unknown as { readFileBytesSync: typeof originalReadBytes }
-    ).readFileBytesSync = () => Buffer.from('%PDF');
+      WorkspaceFS as unknown as { readFileBytes: typeof originalReadBytes }
+    ).readFileBytes = async () => Buffer.from('%PDF');
     (
       tikzPictureManager as unknown as { extract: typeof originalExtract }
     ).extract = async () => [
