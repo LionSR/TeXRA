@@ -211,7 +211,11 @@ export class LaTeXdiffService {
 
       for (const inputFile of inputFiles) {
         try {
-          const result = await this.runDiffVc(inputFile, commitHash, mathMarkup);
+          const result = await this.runDiffVc(
+            inputFile,
+            commitHash,
+            mathMarkup,
+          );
           if (result.success) {
             results.success.push(inputFile);
           } else {

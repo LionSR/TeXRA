@@ -22,6 +22,18 @@ import { safeExecuteCommand } from '@utils/system/commandUtils';
 // @ts-ignore - Import JavaScript module
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 
+interface FileCommandMessage {
+  file: string;
+}
+
+interface BaseFileCommandMessage extends FileCommandMessage {
+  base?: string;
+}
+
+interface CompareMessage extends BaseFileCommandMessage {
+  prev?: string;
+}
+
 export class ProgressViewMessageHandler extends BaseViewMessageHandler {
   constructor(private readonly provider: ProgressViewProvider) {
     super('ProgressView');
@@ -279,23 +291,35 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
   }
 
   private async handleOpenFile(
-    message: any,
+    message: FileCommandMessage,
     webviewView: vscode.WebviewView,
   ): Promise<void> {
     await vscode.commands.executeCommand('texra.openFile', message.file);
   }
 
   private async handleOpenFileCompile(
-    message: any,
+    message: FileCommandMessage,
     webviewView: vscode.WebviewView,
   ): Promise<void> {
     await vscode.commands.executeCommand('texra.openFileCompile', message.file);
   }
 
   private async handleCompareOriginal(
-    message: any,
+    message: BaseFileCommandMessage,
     webviewView: vscode.WebviewView,
   ): Promise<void> {
+    if (!message.base) {
+      this.logger.warn(
+        this.channel,
+        'Compare original requested without a base path.',
+        undefined,
+        undefined,
+        undefined,
+        { file: message.file },
+      );
+      return;
+    }
+
     await vscode.commands.executeCommand(
       'texra.compare',
       undefined,
@@ -305,21 +329,44 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
   }
 
   private async handleComparePrevious(
-    message: any,
+    message: CompareMessage,
     webviewView: vscode.WebviewView,
   ): Promise<void> {
+    const previousFile = message.prev || message.base;
+
+    if (previousFile) {
+      await vscode.commands.executeCommand(
+        'texra.latexdiff',
+        undefined,
+        previousFile,
+        message.file,
+      );
+    }
+
     await vscode.commands.executeCommand(
       'texra.compare',
       undefined,
-      message.prev,
+      previousFile,
       message.file,
     );
   }
 
   private async handleAcceptFile(
-    message: any,
+    message: BaseFileCommandMessage,
     webviewView: vscode.WebviewView,
   ): Promise<void> {
+    if (!message.base) {
+      this.logger.warn(
+        this.channel,
+        'Accept requested without a base path.',
+        undefined,
+        undefined,
+        undefined,
+        { file: message.file },
+      );
+      return;
+    }
+
     await vscode.commands.executeCommand(
       'texra.acceptEdited',
       undefined,
@@ -329,9 +376,21 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
   }
 
   private async handleMergeFile(
-    message: any,
+    message: BaseFileCommandMessage,
     webviewView: vscode.WebviewView,
   ): Promise<void> {
+    if (!message.base) {
+      this.logger.warn(
+        this.channel,
+        'Merge requested without a base path.',
+        undefined,
+        undefined,
+        undefined,
+        { file: message.file },
+      );
+      return;
+    }
+
     await vscode.commands.executeCommand(
       'texra.merge',
       undefined,
@@ -341,9 +400,21 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
   }
 
   private async handleLatexdiffFile(
-    message: any,
+    message: BaseFileCommandMessage,
     webviewView: vscode.WebviewView,
   ): Promise<void> {
+    if (!message.base) {
+      this.logger.warn(
+        this.channel,
+        'Latexdiff requested without a base path.',
+        undefined,
+        undefined,
+        undefined,
+        { file: message.file },
+      );
+      return;
+    }
+
     await vscode.commands.executeCommand(
       'texra.latexdiff',
       undefined,

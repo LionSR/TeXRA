@@ -5,11 +5,7 @@ import * as logger from '@logger/logUtils';
 import { executeCommand } from '@utils/system';
 import { getConfig } from '@utils/config';
 import type { ExecResult } from '@agent/types/ResultTypes';
-import {
-  DEFAULT_MATH_MARKUP,
-  normalizeMathMarkup,
-  type MathMarkupOption,
-} from './mathMarkup';
+import { DEFAULT_MATH_MARKUP, type MathMarkupOption } from './mathMarkup';
 
 const DEFAULT_PICTURE_ENVS =
   '(?:picture|tikzpicture|scope|DIFnomarkup)[\\w\\d*@]*';
@@ -203,8 +199,9 @@ export class DiffCommandExecutor {
     return {
       mathMarkup:
         mathMarkupOverride ??
-        normalizeMathMarkup(
-          getConfig<string>('latexdiff.mathMarkup', DEFAULT_MATH_MARKUP),
+        getConfig<MathMarkupOption>(
+          'latexdiff.mathMarkup',
+          DEFAULT_MATH_MARKUP,
         ),
       pictureEnvs: getConfig<string>(
         'latexdiff.pictureEnvironments',
