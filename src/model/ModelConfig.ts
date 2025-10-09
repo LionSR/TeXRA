@@ -38,6 +38,8 @@ export const DEFAULT_MODEL_CAPABILITIES: ModelCapabilities = {
   supportsIntermDevMsgs: false,
   supportsReasoningEffort: false,
   supportsNativeAudio: false,
+  supportsToolFileOutputs: false,
+  supportsInlineToolImages: false,
 };
 
 /** Supported language model providers with their API identifiers. */
@@ -74,6 +76,8 @@ export interface ModelCapabilities {
   supportsIntermDevMsgs: boolean;
   supportsReasoningEffort: boolean;
   supportsNativeAudio: boolean;
+  supportsToolFileOutputs: boolean;
+  supportsInlineToolImages: boolean;
 }
 
 /** Complete configuration for a language model instance. */

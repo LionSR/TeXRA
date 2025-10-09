@@ -18,6 +18,9 @@ import {
   MessageCreateParams,
   MessageCountTokensParams,
   ToolUseBlock,
+  TextBlockParam,
+  ImageBlockParam,
+  DocumentBlockParam,
 } from '@anthropic-ai/sdk/resources/messages';
 import type { AnthropicBeta } from '@anthropic-ai/sdk/resources/beta/beta';
 
@@ -38,6 +41,7 @@ const isSupportedImageMediaType = (
 // Local imports - agent
 import { toAnthropicTools } from './toolConversion';
 import type { ProviderStopReason } from './types/StopReasonTypes';
+import type { ToolFileAttachment } from '@tools/result';
 import { ANTHROPIC_STOP } from './types/StopReasonTypes';
 
 // Local imports - agent components
@@ -1394,13 +1398,105 @@ export class ModelHandlerAnthropic extends ModelHandler<
       role: 'assistant',
       content,
     };
+
+    const attachments: ToolFileAttachment[] = Array.isArray(
+      (result as { files?: unknown }).files,
+    )
+      ? ((result as { files: ToolFileAttachment[] })
+          .files as ToolFileAttachment[])
+      : [];
+
+    const sanitizedResult: Record<string, unknown> = { ...result };
+    if (attachments.length > 0) {
+      (sanitizedResult as { files?: unknown }).files = attachments.map(
+        ({ base64Data, bytes, ...rest }) => rest,
+      );
+    }
+    if ('base64Image' in sanitizedResult) {
+      delete (sanitizedResult as { base64Image?: unknown }).base64Image;
+    }
+
+    const textPieces: string[] = [];
+    if (typeof result.output === 'string' && result.output.trim().length > 0) {
+      textPieces.push(result.output);
+    }
+    textPieces.push(JSON.stringify(sanitizedResult, null, 2));
+
+    const toolResultContent: Array<
+      TextBlockParam | ImageBlockParam | DocumentBlockParam
+    > = [{ type: 'text', text: textPieces.join('\n\n') }];
+
+    const unsupportedNotes: string[] = [];
+    if (attachments.length > 0 && this.capabilities.supportsToolFileOutputs) {
+      for (const attachment of attachments) {
+        const base64Payload =
+          attachment.base64Data ??
+          (attachment.bytes
+            ? Buffer.from(attachment.bytes).toString('base64')
+            : undefined);
+        if (!base64Payload) {
+          unsupportedNotes.push(
+            `${attachment.path ?? 'attachment'} (missing payload)`,
+          );
+          continue;
+        }
+
+        const mimeType = attachment.mimeType ?? 'application/octet-stream';
+        if (isSupportedImageMediaType(mimeType)) {
+          toolResultContent.push({
+            type: 'image',
+            source: {
+              type: 'base64',
+              data: base64Payload,
+              media_type: mimeType,
+            },
+          });
+          continue;
+        }
+
+        if (mimeType === 'application/pdf') {
+          toolResultContent.push({
+            type: 'document',
+            source: {
+              type: 'base64',
+              data: base64Payload,
+              media_type: 'application/pdf',
+            },
+            title: basename(attachment.path ?? 'figure.pdf'),
+          });
+          continue;
+        }
+
+        unsupportedNotes.push(
+          `${attachment.path ?? 'attachment'} (${mimeType})`,
+        );
+      }
+    } else if (attachments.length > 0) {
+      unsupportedNotes.push(
+        ...attachments.map(
+          (file) => `${file.path ?? 'attachment'} (${file.mimeType})`,
+        ),
+      );
+    }
+
+    if (unsupportedNotes.length > 0) {
+      toolResultContent.unshift({
+        type: 'text',
+        text: `Attachments available but returned as metadata only:\n${unsupportedNotes.join(
+          '\n',
+        )}\nUse the read_file tool if you need the raw bytes.`,
+      });
+    }
+
+    const isError = Boolean((result as { isError?: boolean }).isError);
     const resultMsg: MessageParam = {
       role: 'user',
       content: [
         {
           type: 'tool_result',
           tool_use_id: id,
-          content: JSON.stringify(result),
+          content: toolResultContent,
+          is_error: isError || undefined,
         },
       ],
     };

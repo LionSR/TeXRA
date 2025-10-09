@@ -103,7 +103,7 @@ export abstract class ModelHandler<
         autoCompileInputPdf: false,
       },
     };
-    this.capabilities = config.capabilities;
+    this.capabilities = { ...config.capabilities };
     this.continueLimit = DEFAULT_CONTINUE_LIMIT;
     this.inputTokenLimit = DEFAULT_INPUT_TOKEN_LIMIT;
     this.maxOutputTokensFactor = DEFAULT_OUTPUT_TOKEN_LIMIT_FACTOR;
