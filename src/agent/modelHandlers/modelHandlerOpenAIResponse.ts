@@ -529,7 +529,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         this.logger.info(
           `Running OpenAI Responses in background mode for response ${response.id}; polling every 15s. Completion may take longer than usual.`,
           undefined,
-          MESSAGE_TYPES.DEFAULT,
+          MESSAGE_TYPES.PROGRESS_STATUS,
           {
             responseId: response.id,
             pollIntervalMs:
