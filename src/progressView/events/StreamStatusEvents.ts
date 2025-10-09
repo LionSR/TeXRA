@@ -53,11 +53,6 @@ export interface StreamStatusEventModule {
     state: ProgressViewState,
     updater: WebviewUpdater,
   ): vscode.Disposable[];
-  activateStream(
-    payload: ProgressEventPayloads['setActiveStream'],
-    state: ProgressViewState,
-    updater: WebviewUpdater,
-  ): void;
 }
 
 export function createStreamStatusEvents(
@@ -77,8 +72,8 @@ export function createStreamStatusEvents(
     state.streamTabs.ensureStream(stream);
 
     const metadata = resolveAgentSessionMetadata(
-      agentType as AgentType | undefined,
-      agentSessionKind as AgentSessionKind | undefined,
+      agentType ?? undefined,
+      agentSessionKind ?? undefined,
     );
     state.setSessionKindHint(stream, metadata.agentSessionKind);
 
@@ -140,7 +135,7 @@ export function createStreamStatusEvents(
     }
 
     if (executionId) {
-      state.setExecutionId(streamTabId, executionId as ExecutionId);
+      state.setExecutionId(streamTabId, executionId);
     }
 
     if (state.activeStream === streamTabId) {
@@ -153,11 +148,7 @@ export function createStreamStatusEvents(
         shared.streamStatus,
         state.agentTypeFilter,
       );
-      updater.updateStreams(
-        infos,
-        state.activeStream,
-        state.agentTypeFilter,
-      );
+      updater.updateStreams(infos, state.activeStream, state.agentTypeFilter);
     }
   };
 
@@ -168,29 +159,22 @@ export function createStreamStatusEvents(
       updater: WebviewUpdater,
     ): vscode.Disposable[] {
       return [
-        new vscode.Disposable((
+        new vscode.Disposable(
           bus.on('setActiveStream', (payload) =>
             handleSetActiveStream(payload, state, updater),
-          )
-        )),
-        new vscode.Disposable((
+          ),
+        ),
+        new vscode.Disposable(
           bus.on('updateStreamStatus', (payload) =>
             shared.setStreamStatus(payload.stream, payload.status),
-          )
-        )),
-        new vscode.Disposable((
+          ),
+        ),
+        new vscode.Disposable(
           bus.on('setTaskState', (payload) =>
             handleSetTaskState(payload, state, updater),
-          )
-        )),
+          ),
+        ),
       ];
-    },
-    activateStream(
-      payload: ProgressEventPayloads['setActiveStream'],
-      state: ProgressViewState,
-      updater: WebviewUpdater,
-    ): void {
-      handleSetActiveStream(payload, state, updater);
     },
   };
 }

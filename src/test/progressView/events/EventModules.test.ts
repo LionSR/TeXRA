@@ -31,6 +31,7 @@ describe('Progress event modules', () => {
   const loggerStub = {
     warn: () => {},
     debug: () => {},
+    error: () => {},
   } as unknown as AgentLogger;
   const stateStub = {} as ProgressViewState;
   const updaterStub = {} as WebviewUpdater;
@@ -92,8 +93,9 @@ describe('Progress event modules', () => {
     const module = createLogEvents({
       logger: loggerStub,
       streamStatus: new Map(),
-      activateStream: () => {},
       setStreamStatus: () => {},
+      sendInstructionUpdate: () => {},
+      updateLogContentForStream: () => {},
     });
 
     const disposables = module.register(bus as any, stateStub, updaterStub);

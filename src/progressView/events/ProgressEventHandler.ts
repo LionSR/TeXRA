@@ -70,9 +70,10 @@ export class ProgressEventHandler {
     this.logEvents = createLogEvents({
       logger: this.logger,
       streamStatus: this._streamStatus,
-      activateStream: (payload, state, updater) =>
-        this.streamStatusEvents.activateStream(payload, state, updater),
       setStreamStatus: (stream, status) => this.setStreamStatus(stream, status),
+      sendInstructionUpdate: (stream) => this.sendInstructionUpdate(stream),
+      updateLogContentForStream: (stream, options) =>
+        this.updateLogContentForStream(stream, options),
     });
   }
 

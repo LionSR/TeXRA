@@ -8,7 +8,11 @@ import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
 import type { TokenUsageStats } from '@agent/types/UsageTypes';
 
 // Local imports - logger
-import type { LogMessageData, LogMessageUpdate } from '@logger/LogTypes';
+import type {
+  LogMessageData,
+  LogMessageUpdate,
+  TaskGroup,
+} from '@logger/LogTypes';
 import type { TaskState } from '@logger/TaskState';
 
 // Maximum number of events to buffer when no listeners are registered
@@ -16,13 +20,14 @@ const MAX_BUFFER_SIZE = 1000;
 
 type StreamStatus = 'running' | 'error' | 'stopped' | 'waiting' | 'resuming';
 type StreamStatusOrReady = StreamStatus | 'ready';
+type TaskGroupStatus = TaskGroup['status'];
 
 interface AddTaskGroupPayload {
   stream: StreamTabId;
   groupId: string;
   groupName: string;
   startTime: number;
-  status: StreamStatus | 'ready';
+  status: TaskGroupStatus;
   endTime?: number;
   parentGroupId?: string;
 }
@@ -30,7 +35,7 @@ interface AddTaskGroupPayload {
 interface UpdateTaskGroupPayload {
   stream: StreamTabId;
   groupId: string;
-  status: StreamStatus | 'ready';
+  status: TaskGroupStatus;
   endTime?: number;
 }
 

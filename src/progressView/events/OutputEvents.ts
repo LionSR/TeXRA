@@ -37,15 +37,22 @@ const updateActiveStreamOutputs = (
   state: ProgressViewState,
   updater: WebviewUpdater,
   stream: string,
-  files: FilesByRound<OutputFileInfo> | undefined,
-  missing: FilesByRound<string> | undefined,
+  updates: {
+    files?: FilesByRound<OutputFileInfo> | undefined;
+    missing?: FilesByRound<string> | undefined;
+  },
 ): void => {
   if (state.activeStream !== stream || !updater.isAvailable()) {
     return;
   }
 
-  updater.updateFiles(stream, files ?? {});
-  updater.updateMissingOutputs(stream, missing ?? {});
+  if (Object.prototype.hasOwnProperty.call(updates, 'files')) {
+    updater.updateFiles(stream, updates.files ?? {});
+  }
+
+  if (Object.prototype.hasOwnProperty.call(updates, 'missing')) {
+    updater.updateMissingOutputs(stream, updates.missing ?? {});
+  }
 };
 
 const registerOutputFileListeners = (
@@ -56,7 +63,7 @@ const registerOutputFileListeners = (
   const addFiles = bus.on('addOutputFiles', ({ stream, filesByRound }) => {
     state.outputFiles.addFiles(stream, filesByRound);
     const files = state.outputFiles.getFiles(stream);
-    updateActiveStreamOutputs(state, updater, stream, files, undefined);
+    updateActiveStreamOutputs(state, updater, stream, { files });
   });
 
   const updateMissing = bus.on(
@@ -64,18 +71,18 @@ const registerOutputFileListeners = (
     ({ stream, filesByRound }) => {
       state.outputFiles.updateMissingOutputs(stream, filesByRound);
       const missing = state.outputFiles.getMissingOutputs(stream);
-      updateActiveStreamOutputs(state, updater, stream, undefined, missing);
+      updateActiveStreamOutputs(state, updater, stream, { missing });
     },
   );
 
   const clearMissing = bus.on('clearMissingOutputs', (stream) => {
     state.outputFiles.clearMissingOutputs(stream);
-    updateActiveStreamOutputs(state, updater, stream, undefined, {});
+    updateActiveStreamOutputs(state, updater, stream, { missing: {} });
   });
 
   const clearFiles = bus.on('clearOutputFiles', (stream) => {
     state.outputFiles.clearFiles(stream);
-    updateActiveStreamOutputs(state, updater, stream, {}, undefined);
+    updateActiveStreamOutputs(state, updater, stream, { files: {} });
   });
 
   return [addFiles, updateMissing, clearMissing, clearFiles].map(
