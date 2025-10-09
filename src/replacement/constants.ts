@@ -79,7 +79,21 @@ export const FENCED_LATEX_ENVIRONMENT_PATTERN =
 
 const LINE_BREAK_PATTERN = String.raw`\r?\n`;
 
-export const FENCED_LATEX_BLOCK_PATTERN = String.raw`(^|${LINE_BREAK_PATTERN})([ \t]*):::\s*(${FENCED_LATEX_ENVIRONMENT_PATTERN})[^\S\r\n]*(?:${LINE_BREAK_PATTERN}([\s\S]*?))?${LINE_BREAK_PATTERN}[ \t]*:::(?=${LINE_BREAK_PATTERN}|$)`;
+// Multiline and inline bodies are parsed with distinct patterns so the intent of
+// each branch stays readable. Both patterns capture the same groups:
+// 1. Leading break (if present)
+// 2. Block indentation
+// 3. LaTeX environment name
+// 4. Multiline body content (empty for inline matches)
+// 5. Inline body content (empty for multiline matches)
+export const FENCED_LATEX_BLOCK_PATTERN_MULTILINE = String.raw`(^|${LINE_BREAK_PATTERN})([ \t]*):::\s*(${FENCED_LATEX_ENVIRONMENT_PATTERN})[^\S\r\n]*(?:${LINE_BREAK_PATTERN}([\s\S]*?))?${LINE_BREAK_PATTERN}[ \t]*():::(?=${LINE_BREAK_PATTERN}|$)`;
+
+export const FENCED_LATEX_BLOCK_PATTERN_INLINE = String.raw`(^|${LINE_BREAK_PATTERN})([ \t]*):::\s*(${FENCED_LATEX_ENVIRONMENT_PATTERN})[^\S\r\n]*()([^\r\n]*)[ \t]*:::(?=${LINE_BREAK_PATTERN}|$)`;
+
+export const FENCED_LATEX_BLOCK_PATTERNS = [
+  FENCED_LATEX_BLOCK_PATTERN_MULTILINE,
+  FENCED_LATEX_BLOCK_PATTERN_INLINE,
+];
 
 // Union of common LaTeX environments used across rules
 // prettier-ignore

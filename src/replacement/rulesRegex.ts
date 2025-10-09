@@ -1,19 +1,28 @@
 // Local imports
 import { ReplacementCategory, ReplacementFunction } from './types';
-import { FENCED_LATEX_BLOCK_PATTERN } from './constants';
+import {
+  FENCED_LATEX_BLOCK_PATTERN_INLINE,
+  FENCED_LATEX_BLOCK_PATTERN_MULTILINE,
+} from './constants';
 
 const convertFencedLatexBlock: ReplacementFunction = (
   match,
   leadingBreak,
   indent,
   environment,
-  body,
+  multilineBody,
+  inlineBody,
 ) => {
   const newline = match.includes('\r\n') ? '\r\n' : '\n';
   const safeLeadingBreak = typeof leadingBreak === 'string' ? leadingBreak : '';
   const safeIndent = typeof indent === 'string' ? indent : '';
   const safeEnvironment = typeof environment === 'string' ? environment : '';
-  const safeBody = typeof body === 'string' ? body : '';
+  const safeBody =
+    typeof multilineBody === 'string'
+      ? multilineBody
+      : typeof inlineBody === 'string'
+        ? inlineBody
+        : '';
 
   const bodyWithTrailingBreak =
     safeBody === ''
@@ -35,7 +44,8 @@ export const FENCED_LATEX_BLOCK_REPLACEMENTS: ReplacementCategory = {
   isRegex: true,
   flags: 'g',
   patterns: {
-    [FENCED_LATEX_BLOCK_PATTERN]: convertFencedLatexBlock,
+    [FENCED_LATEX_BLOCK_PATTERN_MULTILINE]: convertFencedLatexBlock,
+    [FENCED_LATEX_BLOCK_PATTERN_INLINE]: convertFencedLatexBlock,
   },
 };
 
