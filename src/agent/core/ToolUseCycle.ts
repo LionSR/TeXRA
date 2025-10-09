@@ -17,6 +17,7 @@ import { MESSAGE_TYPES } from '@logger/messageTypes';
 import type { ToolDefinition } from '@model';
 import { BaseTool } from '@tools/core/base';
 import { ToolResult, toolResult } from '@tools/result';
+import { WorkspaceFS } from '@utils/files';
 import xmlUtils from '@utils/text/xmlUtils';
 
 export interface ToolUseCycleOptions<C = unknown> {
@@ -289,6 +290,32 @@ export async function runToolUseCycle<C = unknown>(
     if (result.isError) resultObj.isError = true;
     if (result.diagnostics !== undefined)
       resultObj.diagnostics = result.diagnostics;
+    if (result.files !== undefined) resultObj.files = result.files;
+
+    if (result.files && result.files.length > 0 && toolState) {
+      const existing = toolState.mediaFiles;
+      const toAdd: string[] = [];
+      for (const attachment of result.files) {
+        const candidate = attachment.path;
+        if (typeof candidate !== 'string' || candidate.trim() === '') {
+          continue;
+        }
+        if (existing.includes(candidate) || toAdd.includes(candidate)) {
+          continue;
+        }
+        try {
+          const exists = await WorkspaceFS.exists(candidate);
+          if (exists) {
+            toAdd.push(candidate);
+          }
+        } catch {
+          // Ignore errors when checking existence; attachment metadata may still be useful
+        }
+      }
+      if (toAdd.length > 0) {
+        toolState.addMediaFiles(toAdd);
+      }
+    }
 
     const followUpMsgs = modelHandler.createToolUseFollowUpMessages(
       id,

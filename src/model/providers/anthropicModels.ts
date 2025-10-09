@@ -23,6 +23,8 @@ const ANTHROPIC_DEFAULT_CAPABILITIES: ModelCapabilities = {
   supportsNativeMCPServer: false, // Set explicitly, overridden per model
   supportsNativeWebSearch: false, // Set explicitly, overridden per model
   supportsNativeCodeExecution: false, // Set explicitly, overridden per model
+  supportsToolFileOutputs: true,
+  supportsInlineToolImages: true,
 };
 
 export const ANTHROPIC_MODELS: Record<string, ModelConfig> = {
