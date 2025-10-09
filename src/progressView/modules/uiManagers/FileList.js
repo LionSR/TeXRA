@@ -191,8 +191,11 @@ export class FileList {
         selector: '.prev-btn',
         command: COMMANDS.COMPARE_PREVIOUS,
         condition: file.prev,
-        configure: (btn) => {
+        configure: (btn, basePath) => {
           btn.dataset.prev = file.prev;
+          if (basePath) {
+            btn.dataset.base = basePath;
+          }
         },
       },
     ];
@@ -206,7 +209,7 @@ export class FileList {
         button.dataset.command = command;
         button.dataset.file = file.path;
         if (configure) {
-          configure(button);
+          configure(button, effectiveBase);
         } else {
           button.dataset.base = effectiveBase;
         }
