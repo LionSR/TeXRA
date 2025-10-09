@@ -5,11 +5,11 @@ import * as path from 'path';
 import { Minimatch } from 'minimatch';
 
 // Local imports - tools
-import { ToolError } from '@tools/result';
+import { ToolError, type ToolFileAttachment } from '@tools/result';
 import { toPosixPath } from '@tools/pathUtils';
 
 // Local imports - utils
-import { WorkspaceFS } from '@utils/files';
+import { WorkspaceFS, getMimeType } from '@utils/files';
 
 /**
  * Helper function to truncate long output for logging
@@ -131,4 +131,72 @@ export function resolveAndFormat(path?: string): {
   const resolved = resolveWorkspaceRelativePath(path);
   const display = toPosixPath(resolved.relative);
   return { resolved, display };
+}
+
+export interface BuildFileAttachmentOptions {
+  /** Path to a workspace file (relative or absolute) */
+  filePath: string;
+  /** Optional description surfaced to the model */
+  description?: string;
+  /** Override detected MIME type */
+  mimeType?: string;
+  /** Include base64 data in the attachment */
+  includeBase64?: boolean;
+  /** Maximum allowed file size in bytes */
+  maxBytes?: number;
+}
+
+const DEFAULT_ATTACHMENT_MAX_BYTES = 15 * 1024 * 1024; // 15 MiB
+
+/**
+ * Build a tool attachment by reading a workspace file and packaging metadata.
+ */
+export async function buildFileAttachment({
+  filePath,
+  description,
+  mimeType,
+  includeBase64 = false,
+  maxBytes = DEFAULT_ATTACHMENT_MAX_BYTES,
+}: BuildFileAttachmentOptions): Promise<ToolFileAttachment> {
+  if (!filePath || filePath.trim().length === 0) {
+    throw new ToolError('Attachment path must be provided.');
+  }
+
+  const { resolved, display } = resolveAndFormat(filePath);
+  const exists = await WorkspaceFS.exists(resolved.relative);
+  if (!exists) {
+    throw new ToolError(`Attachment not found: ${display}`);
+  }
+
+  let buffer: Buffer;
+  try {
+    buffer = WorkspaceFS.readFileBytesSync(resolved.relative);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    throw new ToolError(`Failed to read attachment ${display}: ${message}`);
+  }
+
+  if (buffer.length > maxBytes) {
+    const limitMb = (maxBytes / (1024 * 1024)).toFixed(1);
+    throw new ToolError(
+      `Attachment ${display} exceeds maximum size of ${limitMb} MiB.`,
+    );
+  }
+
+  const inferredMime =
+    mimeType ?? getMimeType(resolved.relative) ?? 'application/octet-stream';
+  const attachment: ToolFileAttachment = {
+    path: display,
+    mimeType: inferredMime,
+    bytes: Uint8Array.from(buffer),
+  };
+
+  if (description) {
+    attachment.description = description;
+  }
+  if (includeBase64) {
+    attachment.base64Data = buffer.toString('base64');
+  }
+
+  return attachment;
 }

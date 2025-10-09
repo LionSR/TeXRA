@@ -16,6 +16,8 @@ import type {
   ResponseInputContent,
   ResponseInputMessageContentList,
   ResponseInputFile,
+  ResponseInputImage,
+  ResponseInputText,
   ResponseStreamEvent,
   ResponseOutputText,
 } from 'openai/resources/responses/responses';
@@ -46,7 +48,8 @@ import { MediaEntry } from '@agent/utils/mediaTypes';
 import { calculateTokenPrice } from '@agent/utils/priceUtils';
 import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
-import type { ToolDefinition } from '@model';
+import type { ModelConfig, ToolDefinition } from '@model';
+import type { ToolFileAttachment } from '@tools/result';
 import { cleanFileContent } from '@replacement/engine';
 import { K_SLICE, getConfig } from '@utils/config';
 import { sleep } from '@utils/helpers';
@@ -65,6 +68,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   OpenAIAPIResponseUsage,
   ResponseFunctionToolCallItem
 > {
+  constructor(config: ModelConfig) {
+    super(config);
+    this.capabilities.supportsToolFileOutputs = true;
+    this.capabilities.supportsInlineToolImages = true;
+  }
+
   protected override backgroundModeSupported = true;
   private static readonly BACKGROUND_POLL_INTERVAL_MS = 15000;
   private static readonly BACKGROUND_RETRIEVE_MAX_RETRIES = 3;
@@ -1222,10 +1231,106 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
             ),
     };
 
+    const attachments: ToolFileAttachment[] = Array.isArray(
+      (result as { files?: unknown }).files,
+    )
+      ? ((result as { files: ToolFileAttachment[] })
+          .files as ToolFileAttachment[])
+      : [];
+
+    const sanitizedResult: Record<string, unknown> = { ...result };
+    if (attachments.length > 0) {
+      (sanitizedResult as { files?: unknown }).files = attachments.map(
+        ({ base64Data, bytes, ...rest }) => rest,
+      );
+    }
+    if ('base64Image' in sanitizedResult) {
+      delete (sanitizedResult as { base64Image?: unknown }).base64Image;
+    }
+
+    const supportsAttachments = this.capabilities.supportsToolFileOutputs;
+    const supportsInlineImages = this.capabilities.supportsInlineToolImages;
+
+    const primaryText =
+      typeof result.output === 'string' && result.output.trim().length > 0
+        ? result.output
+        : typeof result.summary === 'string'
+          ? result.summary
+          : undefined;
+    const summaryPayload = JSON.stringify(sanitizedResult, null, 2);
+    const combinedText = primaryText
+      ? `${primaryText}\n\n${summaryPayload}`
+      : summaryPayload;
+
+    let outputPayload:
+      | string
+      | Array<ResponseInputText | ResponseInputImage | ResponseInputFile>;
+
+    if (supportsAttachments && attachments.length > 0) {
+      const parts: Array<
+        ResponseInputText | ResponseInputImage | ResponseInputFile
+      > = [];
+
+      parts.push({ type: 'input_text', text: combinedText });
+
+      for (const attachment of attachments) {
+        const mimeType = attachment.mimeType ?? 'application/octet-stream';
+        const base64Payload =
+          attachment.base64Data ??
+          (attachment.bytes
+            ? Buffer.from(attachment.bytes).toString('base64')
+            : undefined);
+        if (!base64Payload) {
+          continue;
+        }
+
+        const filename =
+          typeof attachment.path === 'string' && attachment.path.length > 0
+            ? (attachment.path.split('/').pop() ?? 'attachment')
+            : 'attachment';
+
+        if (supportsInlineImages && mimeType.startsWith('image/')) {
+          parts.push({
+            type: 'input_image',
+            detail: 'auto',
+            image_url: `data:${mimeType};base64,${base64Payload}`,
+          });
+          continue;
+        }
+
+        parts.push({
+          type: 'input_file',
+          filename,
+          file_data: base64Payload,
+        });
+      }
+
+      outputPayload = parts;
+    } else {
+      if (attachments.length > 0 && !supportsAttachments) {
+        const attachmentSummary = attachments
+          .map((file) => {
+            const path =
+              typeof file.path === 'string' && file.path.length > 0
+                ? file.path
+                : 'attachment';
+            const type =
+              typeof file.mimeType === 'string' && file.mimeType.length > 0
+                ? file.mimeType
+                : 'application/octet-stream';
+            return `- ${path} (${type})`;
+          })
+          .join('\n');
+        (sanitizedResult as Record<string, unknown>).attachmentSummary =
+          `Attachments available:\n${attachmentSummary}\nUse the read_file tool to inspect them.`;
+      }
+      outputPayload = combinedText;
+    }
+
     const resultMsg: ResponseInputItem.FunctionCallOutput = {
       type: 'function_call_output',
       call_id: id,
-      output: JSON.stringify(result),
+      output: outputPayload,
     };
 
     messages.push(callMsg, resultMsg);

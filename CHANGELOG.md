@@ -8,6 +8,8 @@ All notable changes to this project will be documented in this file.
 
 - Add OpenAI GPT-5 Pro (`gpt5pro`) to the model catalog with updated pricing and documentation.
 - Add interactive prompt to select latexdiff math markup granularity before each run.
+- Expose new `extract_figures` and `extract_tikz_figures` tools so agents can request figure assets and compiled TikZ PDFs as structured attachments.
+- Deliver tool-result attachments to OpenAI Responses and Anthropic APIs while providing readable fallbacks for chat-completion providers without native file support.
 
 ## [0.33.9] - 2025-10-03
 

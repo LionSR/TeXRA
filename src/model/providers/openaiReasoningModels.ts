@@ -16,6 +16,8 @@ const OPENAI_REASONING_DEFAULT_CAPABILITIES: ModelCapabilities = {
   supportsIntermDevMsgs: true,
   reasoningEffort: ReasoningEffort.HIGH,
   supportsReasoningEffort: true,
+  supportsToolFileOutputs: true,
+  supportsInlineToolImages: true,
 };
 
 export const OPENAI_REASONING_MODELS: Record<string, ModelConfig> = {
