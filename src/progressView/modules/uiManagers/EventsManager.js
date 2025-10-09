@@ -186,14 +186,23 @@ export class EventsManager {
       if (!(e.target instanceof Element)) {
         return;
       }
-      const copyButton = e.target.closest('.model-response-copy');
+      const copyButton = e.target.closest(
+        '.model-response-copy, .special-content-copy',
+      );
       if (!copyButton) {
         return;
       }
 
-      const contentElem = copyButton
-        .closest('.model-response-line')
-        ?.querySelector('.model-response-content');
+      let contentElem = null;
+      if (copyButton.classList.contains('model-response-copy')) {
+        contentElem = copyButton
+          .closest('.model-response-line')
+          ?.querySelector('.model-response-content');
+      } else {
+        contentElem = copyButton
+          .closest('.special-details')
+          ?.querySelector('.special-content');
+      }
       if (!contentElem) {
         return;
       }
@@ -208,7 +217,9 @@ export class EventsManager {
         defaultTitle:
           copyButton.dataset.defaultTitle ||
           copyButton.getAttribute('title') ||
-          'Copy model output',
+          (copyButton.classList.contains('model-response-copy')
+            ? 'Copy model output'
+            : 'Copy content'),
         successTitle: copyButton.dataset.successTitle || 'Copied!',
       });
     });
