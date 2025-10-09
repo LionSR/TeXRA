@@ -15,6 +15,19 @@ export type ErrorDiagnostics =
   | DiagnosticsPayload // For diagnostics payloads returned by tools
   | unknown; // For other types of diagnostics
 
+export interface ToolFileAttachment {
+  /** Workspace-relative or descriptive path for the attachment */
+  path: string;
+  /** MIME type for the attachment payload */
+  mimeType: string;
+  /** Optional human readable description */
+  description?: string;
+  /** Base64 encoded payload when inline transport is supported */
+  base64Data?: string;
+  /** Raw bytes for providers that require binary uploads */
+  bytes?: Uint8Array;
+}
+
 export interface ToolResult {
   output?: string;
   summary?: string;
@@ -23,6 +36,7 @@ export interface ToolResult {
   system?: string;
   isError?: boolean;
   diagnostics?: ErrorDiagnostics; // Additional error details like validation issues
+  files?: ToolFileAttachment[];
 }
 
 export function toolResult(result: ToolResult): ToolResult {
