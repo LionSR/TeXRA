@@ -38,4 +38,9 @@ export interface IAgent {
    * Report how the agent identifies its session for logging and UI purposes.
    */
   getSessionMetadata(): AgentSessionMetadata;
+
+  /**
+   * Return the most recent run group identifier for logging fallbacks.
+   */
+  getLastRunGroupId(): string | undefined;
 }
