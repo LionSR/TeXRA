@@ -173,16 +173,58 @@ function getAgentName(
 }
 
 /**
- * Create and configure an agent instance from the provided payload.
+ * Parameters for creating and configuring an agent instance.
  */
 interface PrepareAgentInstanceParams {
+  /** Name of the agent to instantiate (without _multiple suffix) */
   agentName: string;
+  /** Partial agent configuration to merge with defaults */
   configPayload: Partial<AgentConfig>;
+  /** VS Code extension context for resource access */
   context: vscode.ExtensionContext;
+  /** Optional execution ID for tracking and logging */
   executionId?: ExecutionId;
+  /** Optional agent class to use instead of automatic selection based on agent type */
   agentClassOverride?: AgentConstructor;
 }
 
+/**
+ * Create and configure an agent instance from the provided configuration.
+ *
+ * This helper centralizes agent instantiation logic including:
+ * - Model validation and configuration
+ * - Agent path resolution with _multiple variant fallback
+ * - Settings and prompt loading
+ * - Agent class selection and construction
+ *
+ * The function handles the _multiple variant resolution automatically:
+ * - When useMultipleOutputs is true, it first tries to load the _multiple variant
+ * - If the _multiple variant doesn't exist, it falls back to the base agent
+ * - The returned agent config always contains the original agent name
+ *
+ * @template T - The expected agent type (defaults to IAgent)
+ * @param params - Configuration parameters for agent creation
+ * @returns Promise resolving to the constructed agent instance and its type
+ * @throws Error if model is not found in MODEL_CONFIGS
+ * @throws Error if agent YAML file cannot be located (after fallback attempts)
+ *
+ * @example
+ * // Create a standard agent
+ * const { agent, agentType } = await prepareAgentInstance({
+ *   agentName: 'my-agent',
+ *   configPayload: { model: 'gpt-4', inputFile: 'input.tex' },
+ *   context,
+ * });
+ *
+ * @example
+ * // Create a merge agent with class override
+ * const { agent, agentType } = await prepareAgentInstance<MergeAgent>({
+ *   agentName: 'merge-agent',
+ *   configPayload: { model: 'claude-3-5-sonnet-20241022', inputFile: 'input.tex' },
+ *   context,
+ *   agentClassOverride: MergeAgent,
+ * });
+ */
 export async function prepareAgentInstance<T extends IAgent = IAgent>(
   params: PrepareAgentInstanceParams,
 ): Promise<{ agent: T; agentType: AgentType }> {
