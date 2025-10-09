@@ -23,6 +23,10 @@ import {
 } from '../core/ResponseUsage';
 import { ToolState } from '../core/ToolState';
 import { ModelHandler } from './ModelHandler';
+import {
+  describeAttachments,
+  extractToolAttachments,
+} from './utils/toolAttachmentUtils';
 import { toOpenAITools } from './toolConversion';
 import {
   normalizeOpenAIMessageContent,
@@ -36,7 +40,6 @@ import { calculateTokenPrice } from '@agent/utils/priceUtils';
 import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import type { ModelConfig, ToolDefinition } from '@model';
-import type { ToolFileAttachment } from '@tools/result';
 import { cleanFileContent } from '@replacement/engine';
 import { K_SLICE, MESSAGE_PREVIEW_LENGTH } from '@utils/config';
 
@@ -55,12 +58,6 @@ export class ModelHandlerOpenAI extends ModelHandler<
   ChatCompletionMessageToolCall | ChatCompletionMessage.FunctionCall,
   OpenAI
 > {
-  constructor(config: ModelConfig) {
-    super(config);
-    this.capabilities.supportsToolFileOutputs = false;
-    this.capabilities.supportsInlineToolImages = false;
-  }
-
   /**
    * Creates a new OpenAI client using the stored credentials.
    * Handles API key retrieval, base URL resolution, and logging.
@@ -1228,14 +1225,14 @@ export class ModelHandlerOpenAI extends ModelHandler<
     return null;
   }
 
-  createToolUseFollowUpMessages(
+  async createToolUseFollowUpMessages(
     id: string,
     name: string,
     call: ChatCompletionMessageToolCall | ChatCompletionMessage.FunctionCall,
     result: Record<string, unknown>,
     _toolState?: ToolState,
     text?: string,
-  ): ChatCompletionMessageParam[] {
+  ): Promise<ChatCompletionMessageParam[]> {
     const toolCall = this.normalizeToolCall(id, name, call);
     const callMsg: ChatCompletionAssistantMessageParam = {
       role: 'assistant',
@@ -1244,37 +1241,12 @@ export class ModelHandlerOpenAI extends ModelHandler<
     if (text) {
       callMsg.content = [{ type: 'text', text }];
     }
-    const attachments: ToolFileAttachment[] = Array.isArray(
-      (result as { files?: unknown }).files,
-    )
-      ? ((result as { files: ToolFileAttachment[] })
-          .files as ToolFileAttachment[])
-      : [];
-
-    const sanitizedResult: Record<string, unknown> = { ...result };
+    const { attachments, sanitizedResult } = extractToolAttachments(result);
     if (attachments.length > 0) {
-      const sanitizedAttachments = attachments.map(
-        ({ base64Data, bytes, ...rest }) => rest,
-      );
-      (sanitizedResult as { files?: unknown }).files = sanitizedAttachments;
-      const attachmentSummary = attachments
-        .map((file) => {
-          const path =
-            typeof file.path === 'string' && file.path.length > 0
-              ? file.path
-              : 'attachment';
-          const type =
-            typeof file.mimeType === 'string' && file.mimeType.length > 0
-              ? file.mimeType
-              : 'application/octet-stream';
-          return `- ${path} (${type})`;
-        })
-        .join('\n');
       (sanitizedResult as Record<string, unknown>).attachmentSummary =
-        `Attachments available:\n${attachmentSummary}\nUse the read_file tool to download them.`;
-    }
-    if ('base64Image' in sanitizedResult) {
-      delete (sanitizedResult as { base64Image?: unknown }).base64Image;
+        `Attachments available:\n${describeAttachments(attachments).join(
+          '\n',
+        )}\nUse the read_file tool to download them.`;
     }
 
     const resultMsg: ChatCompletionToolMessageParam = {

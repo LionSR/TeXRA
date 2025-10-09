@@ -12,7 +12,7 @@ import { WorkspaceFS } from '@utils/files';
 suite('ExtractLatexFiguresTool', () => {
   const originalExtract = figureModule.extractFigurePathsFromLatex;
   const originalExists = WorkspaceFS.exists;
-  const originalReadBytes = WorkspaceFS.readFileBytesSync;
+  const originalReadBytes = WorkspaceFS.readFileBytes;
 
   teardown(() => {
     (
@@ -21,8 +21,8 @@ suite('ExtractLatexFiguresTool', () => {
     (WorkspaceFS as unknown as { exists: typeof originalExists }).exists =
       originalExists;
     (
-      WorkspaceFS as unknown as { readFileBytesSync: typeof originalReadBytes }
-    ).readFileBytesSync = originalReadBytes;
+      WorkspaceFS as unknown as { readFileBytes: typeof originalReadBytes }
+    ).readFileBytes = originalReadBytes;
   });
 
   test('attaches discovered figure files', async () => {
@@ -31,8 +31,8 @@ suite('ExtractLatexFiguresTool', () => {
         return path === 'main.tex' || path === 'figures/plot.pdf';
       };
     (
-      WorkspaceFS as unknown as { readFileBytesSync: typeof originalReadBytes }
-    ).readFileBytesSync = () => Buffer.from('pdf');
+      WorkspaceFS as unknown as { readFileBytes: typeof originalReadBytes }
+    ).readFileBytes = async () => Buffer.from('pdf');
     (
       figureModule as {
         extractFigurePathsFromLatex: typeof originalExtract;

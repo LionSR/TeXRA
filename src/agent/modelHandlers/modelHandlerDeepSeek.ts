@@ -8,6 +8,7 @@ import type {
   ChatCompletionToolMessageParam,
   ChatCompletionMessageToolCall,
   ChatCompletionMessage,
+  ChatCompletionMessageParam,
 } from 'openai/resources/chat/completions';
 
 // Local imports - agent
@@ -18,7 +19,10 @@ import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 
 // Local imports - utilities
 import type { ToolDefinition } from '@model';
-import type { ToolFileAttachment } from '@tools/result';
+import {
+  describeAttachments,
+  extractToolAttachments,
+} from './utils/toolAttachmentUtils';
 import { K_SLICE } from '@utils/config';
 
 // TODO: prompt_cache_hit_tokens can also be used here to correct the price and response usage computation in the base class (just overwrite the computePrice and computeResponseUsage methods with a revalues responseUsage.prompt_tokens_details?.cached_tokens and then call the super methods)
@@ -136,14 +140,15 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI {
     return null;
   }
 
-  createToolUseFollowUpMessages(
+  async createToolUseFollowUpMessages(
     id: string,
     name: string,
     call: ChatCompletionMessageToolCall | ChatCompletionMessage.FunctionCall,
     result: Record<string, unknown>,
     _toolState?: ToolState,
     text?: string,
-  ): [ChatCompletionAssistantMessageParam, ChatCompletionToolMessageParam] {
+    _client?: OpenAI,
+  ): Promise<ChatCompletionMessageParam[]> {
     const toolCall = this.normalizeToolCall(id, name, call);
     const callMsg: ChatCompletionAssistantMessageParam = {
       role: 'assistant',
@@ -152,36 +157,12 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI {
     if (text) {
       callMsg.content = text;
     }
-    const attachments: ToolFileAttachment[] = Array.isArray(
-      (result as { files?: unknown }).files,
-    )
-      ? ((result as { files: ToolFileAttachment[] })
-          .files as ToolFileAttachment[])
-      : [];
-    const sanitizedResult: Record<string, unknown> = { ...result };
+    const { attachments, sanitizedResult } = extractToolAttachments(result);
     if (attachments.length > 0) {
-      const sanitizedAttachments = attachments.map(
-        ({ base64Data, bytes, ...rest }) => rest,
-      );
-      (sanitizedResult as { files?: unknown }).files = sanitizedAttachments;
-      const attachmentSummary = attachments
-        .map((file) => {
-          const path =
-            typeof file.path === 'string' && file.path.length > 0
-              ? file.path
-              : 'attachment';
-          const type =
-            typeof file.mimeType === 'string' && file.mimeType.length > 0
-              ? file.mimeType
-              : 'application/octet-stream';
-          return `- ${path} (${type})`;
-        })
-        .join('\n');
       (sanitizedResult as Record<string, unknown>).attachmentSummary =
-        `Attachments available:\n${attachmentSummary}\nUse the read_file tool to download them.`;
-    }
-    if ('base64Image' in sanitizedResult) {
-      delete (sanitizedResult as { base64Image?: unknown }).base64Image;
+        `Attachments available:\n${describeAttachments(attachments).join(
+          '\n',
+        )}\nUse the read_file tool to download them.`;
     }
     const resultMsg: ChatCompletionToolMessageParam = {
       role: 'tool',
