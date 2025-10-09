@@ -6,17 +6,11 @@ import type { WebviewUpdater } from '../managers';
 import type { ProgressViewState } from '../state/ProgressViewState';
 
 // Local imports - events
-import type {
-  ProgressEvent,
-  ProgressEventPayloads,
-} from '@eventBus/ProgressEventBus';
+import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
+import { createErrorBoundary } from './errorHandling';
+import type { ProgressEventBusLike } from './types';
 
-interface ProgressEventBusLike {
-  on<K extends ProgressEvent>(
-    event: K,
-    listener: (payload: ProgressEventPayloads[K]) => void,
-  ): () => void;
-}
+import type { AgentLogger } from '@logger/AgentLogger';
 
 export interface UsageEventsModule {
   register(
@@ -26,7 +20,15 @@ export interface UsageEventsModule {
   ): vscode.Disposable[];
 }
 
-export function createUsageEvents(): UsageEventsModule {
+interface UsageEventsShared {
+  logger: AgentLogger;
+}
+
+export function createUsageEvents(
+  shared: UsageEventsShared,
+): UsageEventsModule {
+  const withErrorBoundary = createErrorBoundary(shared.logger, 'UsageEvents');
+
   return {
     register(
       bus: ProgressEventBusLike,
@@ -36,20 +38,24 @@ export function createUsageEvents(): UsageEventsModule {
       const updateGroupUsage = bus.on(
         'updateGroupUsage',
         ({ stream, groupId, usage }) => {
-          const group = state.taskGroups.getGroup(stream, groupId);
-          if (group) {
-            state.taskGroups.updateGroup(stream, groupId, { usage });
-          }
+          withErrorBoundary('failed to handle updateGroupUsage', () => {
+            const group = state.taskGroups.getGroup(stream, groupId);
+            if (group) {
+              state.taskGroups.updateGroup(stream, groupId, { usage });
+            }
+          });
         },
       );
 
       const updateStreamUsage = bus.on(
         'updateStreamUsage',
         ({ stream, usage }) => {
-          state.usageStats.updateStreamUsage(stream, usage);
-          if (state.activeStream === stream && updater.isAvailable()) {
-            updater.updateUsage(usage);
-          }
+          withErrorBoundary('failed to handle updateStreamUsage', () => {
+            state.usageStats.updateStreamUsage(stream, usage);
+            if (state.activeStream === stream && updater.isAvailable()) {
+              updater.updateUsage(usage);
+            }
+          });
         },
       );
 

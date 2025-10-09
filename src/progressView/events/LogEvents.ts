@@ -6,10 +6,9 @@ import type { WebviewUpdater } from '../managers';
 import type { ProgressViewState } from '../state/ProgressViewState';
 
 // Local imports - events
-import type {
-  ProgressEvent,
-  ProgressEventPayloads,
-} from '@eventBus/ProgressEventBus';
+import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
+import { createErrorBoundary } from './errorHandling';
+import type { ProgressEventBusLike } from './types';
 
 // Local imports - logger
 import { parseLegacyLogData } from '@logger/logUtils';
@@ -17,13 +16,6 @@ import type { LogMessageData, LogMessageUpdate } from '@logger/LogTypes';
 import { getConfig } from '@utils/config';
 
 import type { AgentLogger } from '@logger/AgentLogger';
-
-interface ProgressEventBusLike {
-  on<K extends ProgressEvent>(
-    event: K,
-    listener: (payload: ProgressEventPayloads[K]) => void,
-  ): () => void;
-}
 
 interface LogEventsShared {
   logger: AgentLogger;
@@ -38,37 +30,15 @@ export interface LogEventsModule {
 }
 
 export function createLogEvents(shared: LogEventsShared): LogEventsModule {
-  const logHandlerError = (context: string, error: unknown): void => {
-    const details =
-      error instanceof Error
-        ? { message: error.message, stack: error.stack, error }
-        : { error };
-
-    shared.logger.error(
-      `[LogEvents] ${context}`,
-      undefined,
-      undefined,
-      details,
-    );
-  };
-
-  const withErrorBoundary = (context: string, fn: () => void): void => {
-    try {
-      fn();
-    } catch (error) {
-      logHandlerError(context, error);
-    }
-  };
+  const withErrorBoundary = createErrorBoundary(shared.logger, 'LogEvents');
 
   const safelyParseLegacyLogData = (
     data: LogMessageData,
     isUpdate = false,
   ): void => {
-    try {
+    withErrorBoundary('failed to parse legacy log data', () => {
       parseLegacyLogData(data, shared.logger, isUpdate);
-    } catch (error) {
-      logHandlerError('failed to parse legacy log data', error);
-    }
+    });
   };
 
   const handleAddLogMessage = (

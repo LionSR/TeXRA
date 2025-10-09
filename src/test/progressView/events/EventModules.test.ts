@@ -88,7 +88,9 @@ describe('Progress event modules', () => {
 
   it('registers output handlers and disposes them', () => {
     const bus = new FakeBus();
-    const module = createOutputEvents();
+    const module = createOutputEvents({
+      logger: loggerStub,
+    });
 
     const disposables = module.register(bus as any, stateStub, updaterStub);
     assert.deepStrictEqual(bus.events, [
@@ -105,7 +107,9 @@ describe('Progress event modules', () => {
 
   it('registers usage handlers and disposes them', () => {
     const bus = new FakeBus();
-    const module = createUsageEvents();
+    const module = createUsageEvents({
+      logger: loggerStub,
+    });
 
     const disposables = module.register(bus as any, stateStub, updaterStub);
     assert.deepStrictEqual(bus.events, [
@@ -182,9 +186,17 @@ describe('Progress event modules', () => {
 
     assert.deepStrictEqual(bus.emissions, [
       {
+        event: 'updateStreamStatus',
+        payload: {
+          stream: 'stream-1',
+          status: 'running',
+        },
+      },
+      {
         event: 'setActiveStream',
         payload: {
           stream: 'stream-1',
+          agentType: null,
           agentSessionKind: AgentSessionKind.Workflow,
         },
       },

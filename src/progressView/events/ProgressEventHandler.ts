@@ -60,8 +60,12 @@ export class ProgressEventHandler {
       updateLogContentForStream: (stream, options) =>
         this.updateLogContentForStream(stream, options),
     });
-    this.outputEvents = createOutputEvents();
-    this.usageEvents = createUsageEvents();
+    this.outputEvents = createOutputEvents({
+      logger: this.logger,
+    });
+    this.usageEvents = createUsageEvents({
+      logger: this.logger,
+    });
     this.logEvents = createLogEvents({
       logger: this.logger,
     });

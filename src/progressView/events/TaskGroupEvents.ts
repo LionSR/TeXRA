@@ -5,28 +5,18 @@ import * as vscode from 'vscode';
 import type { WebviewUpdater } from '../managers';
 import type { ProgressViewState } from '../state/ProgressViewState';
 
+import { STATUS } from '../modules/constants.js';
+
 // Local imports - agent
 import { AgentSessionKind } from '@agent/core/AgentDataclass';
 
 // Local imports - events
-import type {
-  ProgressEvent,
-  ProgressEventPayloads,
-} from '@eventBus/ProgressEventBus';
+import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
+import { createErrorBoundary } from './errorHandling';
+import type { ProgressEventBusLike } from './types';
 
 import type { AgentLogger } from '@logger/AgentLogger';
 import type { TaskGroup } from '@logger/LogTypes';
-
-interface ProgressEventBusLike {
-  on<K extends ProgressEvent>(
-    event: K,
-    listener: (payload: ProgressEventPayloads[K]) => void,
-  ): () => void;
-  emit<K extends ProgressEvent>(
-    event: K,
-    payload: ProgressEventPayloads[K],
-  ): void;
-}
 
 interface TaskGroupEventsShared {
   logger: AgentLogger;
@@ -43,27 +33,10 @@ export interface TaskGroupEventsModule {
 export function createTaskGroupEvents(
   shared: TaskGroupEventsShared,
 ): TaskGroupEventsModule {
-  const logHandlerError = (context: string, error: unknown): void => {
-    const details =
-      error instanceof Error
-        ? { message: error.message, stack: error.stack, error }
-        : { error };
-
-    shared.logger.error(
-      `[TaskGroupEvents] ${context}`,
-      undefined,
-      undefined,
-      details,
-    );
-  };
-
-  const withErrorBoundary = (context: string, fn: () => void): void => {
-    try {
-      fn();
-    } catch (error) {
-      logHandlerError(context, error);
-    }
-  };
+  const withErrorBoundary = createErrorBoundary(
+    shared.logger,
+    'TaskGroupEvents',
+  );
 
   const handleAddTaskGroup = (
     data: ProgressEventPayloads['addTaskGroup'],
@@ -82,10 +55,17 @@ export function createTaskGroupEvents(
         parentGroupId,
       } = data;
 
-      if (!state.streamTabs.has(stream)) {
+      const hasStream = state.streamTabs.has(stream);
+      if (!hasStream) {
         shared.logger.debug(`Creating stream from addTaskGroup: ${stream}`);
+        state.streamTabs.ensureStream(stream);
+        bus.emit('updateStreamStatus', {
+          stream,
+          status: STATUS.RUNNING,
+        });
         bus.emit('setActiveStream', {
           stream,
+          agentType: null,
           agentSessionKind: AgentSessionKind.Workflow,
         });
       }

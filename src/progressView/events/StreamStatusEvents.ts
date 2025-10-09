@@ -10,23 +10,21 @@ import type { StreamTabInfo } from '../types';
 import { STATUS } from '../modules/constants.js';
 
 // Local imports - agent
-import { AgentType, resolveAgentSessionMetadata } from '@agent/core/AgentDataclass';
+import {
+  AgentType,
+  resolveAgentSessionMetadata,
+} from '@agent/core/AgentDataclass';
 import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
 
 // Local imports - events
+import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
+import { createErrorBoundary } from './errorHandling';
 import type {
-  ProgressEventPayloads,
-  ProgressEvent,
-} from '@eventBus/ProgressEventBus';
-import type { StreamStatusType, StreamStatusOrReadyType } from './types';
+  ProgressEventBusLike,
+  StreamStatusType,
+  StreamStatusOrReadyType,
+} from './types';
 import type { AgentLogger } from '@logger/AgentLogger';
-
-interface ProgressEventBusLike {
-  on<K extends ProgressEvent>(
-    event: K,
-    listener: (payload: ProgressEventPayloads[K]) => void,
-  ): () => void;
-}
 
 export interface StreamStatusEventShared {
   logger: AgentLogger;
@@ -50,6 +48,11 @@ export interface StreamStatusEventModule {
 export function createStreamStatusEvents(
   shared: StreamStatusEventShared,
 ): StreamStatusEventModule {
+  const withErrorBoundary = createErrorBoundary(
+    shared.logger,
+    'StreamStatusEvents',
+  );
+
   const handleSetActiveStream = (
     payload: ProgressEventPayloads['setActiveStream'],
     state: ProgressViewState,
@@ -150,17 +153,23 @@ export function createStreamStatusEvents(
       return [
         new vscode.Disposable(
           bus.on('setActiveStream', (payload) =>
-            handleSetActiveStream(payload, state, updater),
+            withErrorBoundary('failed to handle setActiveStream', () =>
+              handleSetActiveStream(payload, state, updater),
+            ),
           ),
         ),
         new vscode.Disposable(
           bus.on('updateStreamStatus', (payload) =>
-            shared.setStreamStatus(payload.stream, payload.status),
+            withErrorBoundary('failed to handle updateStreamStatus', () =>
+              shared.setStreamStatus(payload.stream, payload.status),
+            ),
           ),
         ),
         new vscode.Disposable(
           bus.on('setTaskState', (payload) =>
-            handleSetTaskState(payload, state, updater),
+            withErrorBoundary('failed to handle setTaskState', () =>
+              handleSetTaskState(payload, state, updater),
+            ),
           ),
         ),
       ];
