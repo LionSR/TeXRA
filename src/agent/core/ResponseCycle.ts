@@ -166,7 +166,9 @@ export async function runResponseCycle<C = unknown>(
         logger.info(
           formattedResponse,
           taskGroupId,
-          MESSAGE_TYPES.MODEL_RESPONSE,
+          // Workflow agents should not surface final completions in the progress view,
+          // so mark the response as INTERNAL while still writing it to the output channel.
+          MESSAGE_TYPES.INTERNAL,
         );
       }
     }
@@ -281,6 +283,7 @@ export async function runResponseCycle<C = unknown>(
     logger.info(
       `Starting continuation #${stateRound.continuationCount}`,
       taskGroupId,
+      MESSAGE_TYPES.PROGRESS_STATUS,
     );
 
     if (
