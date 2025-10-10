@@ -24,9 +24,7 @@ export interface AgentHistoryItem {
   id: ExecutionId;
   timestamp: string;
   config: AgentConfig;
-  agentType?: AgentType;
-  agentSessionKind?: AgentCategory;
-  session?: AgentSessionDescriptor;
+  session: AgentSessionDescriptor;
 }
 
 /**
@@ -52,8 +50,6 @@ export class AgentHistoryManager {
       id: randomUUID(),
       timestamp: new Date().toISOString(),
       config: normalizedConfig,
-      agentType: session.agentType,
-      agentSessionKind: session.agentCategory,
       session,
     };
 
@@ -79,8 +75,14 @@ export class AgentHistoryManager {
    */
   public static async getHistory(): Promise<AgentHistoryItem[]> {
     const storageKey = this.getWorkspaceStorageKey();
-    const history = workspaceSM.get<AgentHistoryItem[]>(storageKey, []);
-    return history.map((item) => this.normalizeHistoryItem(item));
+    const history = workspaceSM.get<unknown[]>(storageKey, []);
+    return history.reduce<AgentHistoryItem[]>((acc, item) => {
+      const normalized = this.normalizeHistoryItem(item);
+      if (normalized) {
+        acc.push(normalized);
+      }
+      return acc;
+    }, []);
   }
 
   /**
@@ -91,28 +93,42 @@ export class AgentHistoryManager {
     await workspaceSM.update(storageKey, history);
   }
 
-  private static normalizeHistoryItem(
-    item: AgentHistoryItem,
-  ): AgentHistoryItem {
-    const session =
-      item.session ??
-      resolveAgentSessionDescriptor(
-        item.agentType ?? item.config.agentType,
-        item.agentSessionKind ?? item.config.session?.agentCategory,
-      );
+  private static normalizeHistoryItem(item: unknown): AgentHistoryItem | null {
+    const candidate = item as Partial<{
+      id: ExecutionId;
+      timestamp: string;
+      config: AgentConfig;
+      session?: AgentSessionDescriptor;
+      agentType?: AgentType;
+      agentSessionKind?: AgentCategory;
+    }>;
+
+    if (!candidate.id || !candidate.timestamp || !candidate.config) {
+      return null;
+    }
+
+    const baseSession = candidate.session ?? candidate.config.session;
+    const descriptor = baseSession
+      ? resolveAgentSessionDescriptor(
+          baseSession.agentType ?? candidate.config.agentType,
+          baseSession.agentCategory,
+        )
+      : resolveAgentSessionDescriptor(
+          candidate.agentType ?? candidate.config.agentType,
+          candidate.agentSessionKind ?? candidate.config.session?.agentCategory,
+        );
 
     const normalizedConfig: AgentConfig = {
-      ...item.config,
-      agentType: session.agentType,
-      session,
+      ...candidate.config,
+      agentType: descriptor.agentType,
+      session: descriptor,
     };
 
     return {
-      ...item,
+      id: candidate.id,
+      timestamp: candidate.timestamp,
       config: normalizedConfig,
-      agentType: session.agentType,
-      agentSessionKind: session.agentCategory,
-      session,
+      session: descriptor,
     };
   }
 
