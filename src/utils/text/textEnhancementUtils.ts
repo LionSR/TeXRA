@@ -2,8 +2,6 @@
 // (none needed)
 
 // Third-party imports
-import Anthropic from '@anthropic-ai/sdk';
-import type { MessageCreateParams } from '@anthropic-ai/sdk/resources/messages';
 import * as vscode from 'vscode';
 
 // Local imports - error utils
@@ -16,13 +14,16 @@ import * as logger from '@logger/logUtils';
 import xmlUtils from './xmlUtils';
 import { getConfig } from '../config';
 
-// Local imports - agent handlers
-import { ModelHandlerAnthropic } from '@agent/modelHandlers/modelHandlerAnthropic';
+// Local imports - agent runtime
+import { ModelFactory } from '@agent/runtime/ModelFactory';
+import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
 
 // Local imports - model configs
 import { MODEL_CONFIGS } from '@model/ModelRegistry';
 
 const CHANNEL = 'TextEnhancement';
+
+const DEFAULT_POLISH_MODEL = 'sonnet45';
 
 /**
  * Text Enhancement Utilities
@@ -160,35 +161,113 @@ ${text}`;
         responseText += chunk;
       }
     } else {
-      // Use the Anthropic SDK via model handler for proxy support
-      let anthropic: Anthropic;
-      try {
-        const handler = new ModelHandlerAnthropic(MODEL_CONFIGS['sonnet37']);
-        anthropic = await handler.getClient();
-      } catch {
+      const configuredModel = getConfig<string>(
+        'model.instructionPolishModel',
+        DEFAULT_POLISH_MODEL,
+      );
+      const modelName =
+        typeof configuredModel === 'string' && configuredModel.trim().length > 0
+          ? configuredModel.trim()
+          : DEFAULT_POLISH_MODEL;
+      const modelConfig = MODEL_CONFIGS[modelName];
+
+      if (!modelConfig) {
         return {
           success: false,
           text,
-          error: 'No Anthropic API key found. Please set your API key first.',
+          error: `Unsupported instruction polishing model "${modelName}". Update texra.model.instructionPolishModel to match a short name from your TeXRA model list.`,
         };
       }
-      const params: MessageCreateParams = {
-        model: 'claude-3-7-sonnet-20250219',
-        messages: [{ role: 'user', content: prompt }],
-        max_tokens: 4096,
-      };
-      const response = await anthropic.beta.messages.create(params);
 
-      if (
-        response.content &&
-        response.content.length > 0 &&
-        response.content[0].type === 'text'
-      ) {
-        responseText = response.content[0].text;
-      } else {
-        logger.warn(CHANNEL, 'Unexpected response format from API');
-        responseText = JSON.stringify(response.content);
+      let handler: ModelHandler;
+      try {
+        handler = ModelFactory.createHandler(modelConfig);
+      } catch (error) {
+        logger.error(
+          CHANNEL,
+          `Failed to create model handler: ${getSdkErrorMessage(error)}`,
+        );
+        return {
+          success: false,
+          text,
+          error: 'Unable to initialize the instruction polishing model. Please verify your model settings.',
+        };
       }
+
+      handler.setOutputStreaming(false);
+
+      let client: unknown;
+      try {
+        client = await handler.getClient();
+      } catch (error) {
+        logger.error(
+          CHANNEL,
+          `Failed to initialize model client: ${getSdkErrorMessage(error)}`,
+        );
+        return {
+          success: false,
+          text,
+          error: 'Unable to initialize the instruction polishing model. Please check your API key and network settings.',
+        };
+      }
+
+      let messages;
+      try {
+        messages = await handler.initializeMessages('', prompt);
+      } catch (error) {
+        logger.error(
+          CHANNEL,
+          `Failed to prepare messages for polishing: ${getSdkErrorMessage(error)}`,
+        );
+        return {
+          success: false,
+          text,
+          error: 'Unable to prepare the polishing request for the selected model.',
+        };
+      }
+
+      let response;
+      try {
+        response = await handler.createResponse(client, messages, 0);
+      } catch (error) {
+        logger.error(
+          CHANNEL,
+          `Failed to generate polishing response: ${getSdkErrorMessage(error)}`,
+        );
+        return {
+          success: false,
+          text,
+          error: 'The instruction polishing request failed. Please try again.',
+        };
+      }
+
+      let extractedText: string;
+      try {
+        const [modelText] = handler.extractResponse(response, '');
+        extractedText = modelText;
+      } catch (error) {
+        logger.error(
+          CHANNEL,
+          `Failed to parse polishing response: ${getSdkErrorMessage(error)}`,
+        );
+        return {
+          success: false,
+          text,
+          error: 'The instruction polishing response could not be parsed.',
+        };
+      }
+
+      if (typeof extractedText !== 'string' || extractedText.trim().length === 0) {
+        const warningMessage = 'Instruction polishing model returned no plain text.';
+        logger.warn(CHANNEL, warningMessage);
+        return {
+          success: false,
+          text,
+          error: warningMessage,
+        };
+      }
+
+      responseText = extractedText;
     }
 
     // Extract the corrected text using the utility function
