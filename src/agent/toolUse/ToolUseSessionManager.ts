@@ -60,7 +60,9 @@ const ToolUseSessionSnapshotSchema = z.strictObject({
   lastUpdated: z.number(),
 });
 
-type ToolUseSessionSnapshotParsed = z.infer<typeof ToolUseSessionSnapshotSchema>;
+type ToolUseSessionSnapshotParsed = z.infer<
+  typeof ToolUseSessionSnapshotSchema
+>;
 
 export type ToolUseSessionSnapshot = Omit<
   ToolUseSessionSnapshotParsed,
@@ -132,10 +134,15 @@ function normalizeSnapshot(
   }
 
   // Legacy path: derive descriptor and create new normalized object
-  const descriptor = snapshot.session
-    ?? resolveAgentSessionDescriptor(AgentType.ToolUse, snapshot.agentSessionKind);
+  const descriptor =
+    snapshot.session ??
+    resolveAgentSessionDescriptor(AgentType.ToolUse, snapshot.agentSessionKind);
 
-  const { agentSessionKind: _legacyKind, session: _legacySession, ...rest } = snapshot;
+  const {
+    agentSessionKind: _legacyKind,
+    session: _legacySession,
+    ...rest
+  } = snapshot;
 
   return {
     ...rest,

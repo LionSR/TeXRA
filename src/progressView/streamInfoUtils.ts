@@ -65,11 +65,13 @@ export function buildStreamInfos(
     const outputs = taskState?.agentConfig.outputFiles || [];
     const inputFile = taskState?.agentConfig.inputFile || '';
     const agentName = taskState?.agentConfig.agent || id.split('@')[0];
-    const sessionCategory = taskState?.session?.agentCategory ?? sessionKindHint;
+    const sessionCategory =
+      taskState?.session?.agentCategory ?? sessionKindHint;
     if (!sessionCategory || !matchesAgentFilter(sessionCategory, filter)) {
       return acc;
     }
-    const agentType = taskState?.session?.agentType ?? taskState?.agentConfig.agentType;
+    const agentType =
+      taskState?.session?.agentType ?? taskState?.agentConfig.agentType;
     const isToolAgent = sessionCategory === AgentCategory.ToolUse;
     const executionId = state.getExecutionId(id);
     const label = buildStreamLabel(agentName, inputFile, sessionCategory);

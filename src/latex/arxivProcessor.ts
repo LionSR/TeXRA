@@ -73,7 +73,10 @@ export class ArxivSourceProcessor {
         const match = /filename="?([^";]+)"?/i.exec(disposition);
         if (match) {
           // Place file in download directory using basename to prevent path traversal
-          destPath = path.join(path.dirname(destBasePath), path.basename(match[1]));
+          destPath = path.join(
+            path.dirname(destBasePath),
+            path.basename(match[1]),
+          );
         }
       } else {
         const contentType = response.headers['content-type'];
