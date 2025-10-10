@@ -14,6 +14,18 @@ All notable changes to this project will be documented in this file.
 ### Improvements
 
 - Simplified LaTeX figure tools to auto-manage attachment limits and leave encoding choices to provider handlers, reducing prompt bloat and memory pressure during tool calls.
+- Add one-click **Generate diff** controls in the Progress Board so you can launch round-by-round `latexdiff` comparisons without leaving the view.
+- Add copy buttons to Progress Board model responses and special log sections, plus native status styling that makes continuation updates easier to scan.
+
+### Bug Fixes
+
+- Keep agent error logs grouped with their most recent run so failures stay visible in the Progress Board timeline.
+- Turn off streaming automatically whenever background responses are enabled to avoid unstable background replies.
+- Stop launching agent runs when initialization fails, preventing follow-up crashes from uninitialized sessions.
+- Stabilize Progress Board event handling to prevent duplicate task groups, stale status badges, and other glitches while sessions stream updates.
+- Hide workflow-only model responses from the Progress Board so tool logs stay focused on user-visible activity.
+- Ensure progress compare actions run `latexdiff` before opening previous-round diffs and close conflicting panels when needed, keeping the VS Code diff view reliable.
+- Improve LaTeX fenced-block parsing and OpenAI response handling so inline math, whitespace, and multi-part summaries render without mangling formatting.
 
 ## [0.33.9] - 2025-10-03
 
