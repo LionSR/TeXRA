@@ -505,11 +505,11 @@ export async function executeAgentWithLogging<T extends IAgent>(
             `Executing ${agentName} with model ${config.model}`,
             mainTaskGroupId,
           );
-          const activeAgent = agent;
-          if (!activeAgent) {
-            throw new Error('Agent instance is not initialized.');
+          if (!agent) {
+            throw new Error('Agent instance was not initialized');
           }
-          await activeAgent.run();
+
+          await agent.run();
           // await checkExpectedOutputs(config.outputFiles, agent);
           // Mark the task as completed successfully
           logger.debug(`Task completed successfully`, mainTaskGroupId);
