@@ -3,8 +3,12 @@ import {
   CHECK_BOXES_AUTO_EXTRACT,
   CHECK_BOXES_TOOL_USE,
   CHECK_BOXES,
+  ELEMENT_IDS,
+  SESSION_TYPES,
+  SESSION_TYPE_INPUT,
+  AGENT_SELECT_IDS,
+  AGENT_SELECT_LIST,
 } from '../constants.js';
-import { ELEMENT_IDS } from '../constants.js';
 import { handleCheckboxChange } from '../fileHandlers.js';
 import { mainViewState } from '../mainViewState.js';
 import { BaseUIManager } from './BaseUIManager.js';
@@ -149,41 +153,59 @@ export class SettingsButtonManager extends BaseUIManager {
   }
 
   _setupDropdowns() {
-    // Show instruction on focus, before user makes selection
-    this.addListener('agent', 'focus', () => {
-      this.vscode.postMessage({
-        command: MAIN_VIEW_COMMANDS.SHOW_INSTRUCTION,
-        key: 'agentPicker',
-        text: 'Select which agent will handle your request.',
-      });
-    });
-
-    this.addListener('agent', 'change', (e) => {
-      const selectedAgent = e.target.value;
-      const selectedOption = e.target.options[e.target.selectedIndex];
-
-      // Hide agent config banner if a valid (non-disabled) agent is selected
-      if (
-        selectedOption &&
-        !selectedOption.classList.contains('disabled-option')
-      ) {
-        this.vscode.postMessage({
-          command: MAIN_VIEW_COMMANDS.HIDE_AGENT_CONFIG_BANNER,
+    const toggleContainer = safeGetElementById(ELEMENT_IDS.SESSION_TYPE_TOGGLE);
+    if (toggleContainer) {
+      const buttons = toggleContainer.querySelectorAll('[data-session-type]');
+      buttons.forEach((button) => {
+        this.addListener(button, 'click', () => {
+          if (!(button instanceof HTMLElement)) {
+            return;
+          }
+          const sessionType = button.dataset.sessionType;
+          if (!sessionType) {
+            return;
+          }
+          this.state.applySessionType(sessionType);
+          const selectId =
+            AGENT_SELECT_IDS[sessionType] ??
+            AGENT_SELECT_IDS[SESSION_TYPES.WORKFLOW];
+          const selectElement = safeGetElementById(selectId);
+          if (selectElement instanceof HTMLSelectElement) {
+            this._handleAgentSelection(selectElement);
+            selectElement.focus();
+          } else {
+            this.state.save();
+          }
         });
-      }
+      });
+    }
 
-      const reflectCheckbox = safeGetElementById('reflect');
-      if (reflectCheckbox) {
-        reflectCheckbox.checked = !selectedAgent.startsWith('correct');
-      }
-      this.vscode.postMessage({
-        command: MAIN_VIEW_COMMANDS.REQUEST_MEDIA_FILE,
+    AGENT_SELECT_LIST.forEach((id) => {
+      this.addListener(id, 'focus', (event) => {
+        const target = event.target;
+        if (
+          !(target instanceof HTMLSelectElement) ||
+          target.classList.contains('agent-select--hidden')
+        ) {
+          return;
+        }
+        this.vscode.postMessage({
+          command: MAIN_VIEW_COMMANDS.SHOW_INSTRUCTION,
+          key: 'agentPicker',
+          text: 'Select which agent will handle your request.',
+        });
       });
-      this.vscode.postMessage({
-        command: MAIN_VIEW_COMMANDS.REQUEST_DEFAULT_OUTPUT_FILES,
-        agent: selectedAgent,
+
+      this.addListener(id, 'change', (event) => {
+        const target = event.target;
+        if (
+          !(target instanceof HTMLSelectElement) ||
+          target.classList.contains('agent-select--hidden')
+        ) {
+          return;
+        }
+        this._handleAgentSelection(target);
       });
-      this.state.save();
     });
 
     // Show instruction on focus, before user makes selection
@@ -231,5 +253,45 @@ export class SettingsButtonManager extends BaseUIManager {
     this._setupSettingsButtons();
     this._setupDropdowns();
     this._setupDependencyBanner();
+  }
+
+  _handleAgentSelection(selectElement) {
+    if (!(selectElement instanceof HTMLSelectElement)) {
+      return;
+    }
+
+    const sessionType =
+      selectElement.dataset.sessionType || SESSION_TYPES.WORKFLOW;
+    this.state.applySessionType(sessionType, { skipSave: true });
+
+    const selectedAgent = selectElement.value;
+    const selectedOption = selectElement.options[selectElement.selectedIndex];
+
+    if (
+      selectedOption &&
+      !selectedOption.classList.contains('disabled-option')
+    ) {
+      this.vscode.postMessage({
+        command: MAIN_VIEW_COMMANDS.HIDE_AGENT_CONFIG_BANNER,
+      });
+    }
+
+    this.vscode.postMessage({
+      command: MAIN_VIEW_COMMANDS.REQUEST_MEDIA_FILE,
+    });
+
+    if (selectedAgent) {
+      this.vscode.postMessage({
+        command: MAIN_VIEW_COMMANDS.REQUEST_DEFAULT_OUTPUT_FILES,
+        agent: selectedAgent,
+      });
+    }
+
+    const sessionInput = safeGetElementById(SESSION_TYPE_INPUT);
+    if (sessionInput) {
+      sessionInput.value = sessionType;
+    }
+
+    this.state.save();
   }
 }

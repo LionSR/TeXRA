@@ -7,7 +7,6 @@ import { BaseWebviewProvider } from '@common/webview/BaseWebviewProvider';
 // Local imports - webview
 import { MainViewMessageHandler } from './webview/MainViewMessageHandler';
 import { MainViewContentProvider } from './webview/MainViewContentProvider';
-import { SecretManager } from '@frontend/secretManager';
 import { watchConfig, getConfig } from '@utils/config';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
 import { checkCoreDependencies } from '@utils/system/toolUtils';
@@ -160,19 +159,6 @@ export class MainViewProvider
 
     this.setupInitialState(webviewView);
 
-    // Check if any API keys are set and display banner if needed
-    const showReminders = getConfig<boolean>('ui.showApiKeyReminders', true);
-
-    if (showReminders) {
-      SecretManager.anyApiKeyExists().then((exists) => {
-        if (!exists) {
-          webviewView.webview.postMessage({
-            command: MAIN_VIEW_COMMANDS.SHOW_API_KEY_BANNER,
-          });
-        }
-      });
-    }
-
     // Check for missing core dependencies and display banner if needed
     const showDependencyReminders = getConfig<boolean>(
       'ui.showDependencyReminders',
@@ -204,35 +190,47 @@ export class MainViewProvider
     if (hasStateToRestore) {
       try {
         // Get the stored state
-        const stateJson = await vscode.commands.executeCommand(
+        const storedState = await vscode.commands.executeCommand(
           'getContext',
           'texra.stateToRestore',
         );
-        if (stateJson) {
-          const state = JSON.parse(stateJson as string);
 
+        let state: unknown = storedState;
+        if (typeof storedState === 'string') {
+          try {
+            state = JSON.parse(storedState);
+          } catch (parseError) {
+            console.warn(
+              'Failed to parse legacy state stored as JSON string:',
+              parseError,
+            );
+            state = undefined;
+          }
+        }
+
+        if (state && typeof state === 'object' && !Array.isArray(state)) {
           // Send the state to the webview
           webviewView.webview.postMessage({
             command: MAIN_VIEW_COMMANDS.STATE_RESTORE,
             state,
           });
 
-          // Clear the stored state
-          await vscode.commands.executeCommand(
-            'setContext',
-            'texra.hasStateToRestore',
-            false,
-          );
-          await vscode.commands.executeCommand(
-            'setContext',
-            'texra.stateToRestore',
-            '',
-          );
-
           console.log('Restored state from context');
         }
       } catch (error) {
         console.error('Error restoring state from context:', error);
+      } finally {
+        // Clear the stored state regardless of success to avoid loops
+        await vscode.commands.executeCommand(
+          'setContext',
+          'texra.hasStateToRestore',
+          false,
+        );
+        await vscode.commands.executeCommand(
+          'setContext',
+          'texra.stateToRestore',
+          undefined,
+        );
       }
     }
   }

@@ -16,10 +16,10 @@ Follow these steps to create a new custom agent:
 
 ### Step 1: Locate or Configure the Custom Agents Directory
 
-Custom agents reside in a specific directory.
+Custom agents reside in a dedicated directory that TeXRA prepares for you.
 
-1.  **Find Existing**: Look for the "Custom Agents" folder within the [Agent Explorer](./agent-explorer.md).
-2.  **Configure (Optional)**: If the folder doesn't exist or you want to use a different location, set the absolute path in VS Code Settings (`Ctrl+,`) under `texra.explorer.agentsDirectory`.
+1.  **Find the Default Folder**: TeXRA automatically seeds a `custom_agents` directory inside its global storage. Look for the "Custom Agents" section in the [Agent Explorer](./agent-explorer.md); it points to this location by default.
+2.  **Override (Optional)**: If you prefer to manage agents elsewhere, set an absolute path in VS Code Settings (`Ctrl+,`) under `texra.explorer.agentsDirectory`. TeXRA will ensure that directory exists and use it instead of the default.
 
 ### Automatic Creation
 
@@ -91,7 +91,7 @@ prompts:
     # Often includes guidance for thinking (<scratchpad>) and output structure (<documentTag>).
     [Define the initial task prompt, potentially including scratchpad guidance]
 
-  # userReflect: | # Optional: Only needed if you plan to use reflect=true
+  # userReflect: | # Optional: Add when you want automatic reflection rounds
   #   The prompt for the AI's second round (Round 1) asking it to critique and improve its Round 0 output.
   #   [Define the reflection prompt]
 ```
@@ -166,6 +166,8 @@ workspace utilities like `bash`, `read_file`, `write_file`, `edit_file`,
 `file_op`, `glob`, `grep`, and `ls` alongside domain-specific helpers such as
 `str_replace_editor`, `wolfram`,
 `web_fetch`, and `web_search`.
+
+> **Tip:** The `read_file` tool returns only the first 400 lines of a file to prevent massive responses from overwhelming the progress log. Provide an optional `range` object (for example, `{"start": 401, "end": 450}`) to page through a file beyond the first 400 lines. The tool enforces the same 400-line limit on each requested window, reports the specific line range that was returned, and notes when the requested end exceeds the file length so you know the response was clipped.
 
 For a minimal read-only configuration, see the built-in `ask` agent
 (`resources/tool_use_agents/ask.yaml`), which only grants `read_file`, `glob`,

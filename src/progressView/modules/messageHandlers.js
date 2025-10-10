@@ -62,12 +62,14 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   handleUpdateStreams(message) {
     state.activeStream = message.activeStream;
     state.agentFilter = message.agentFilter || 'all';
+    state.resetExecutionAvailability();
     message.streams.forEach((s) => {
       if (s.status) {
         state.streamStatuses.set(s.name, s.status);
       } else {
         state.streamStatuses.delete(s.name);
       }
+      state.setExecutionAvailability(s.name, Boolean(s.executionId));
     });
     dom.streamTabs.update(message.streams, message.activeStream);
 
@@ -100,6 +102,9 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     }
 
     dom.toolbar.render(sessionKind);
+
+    const hasExecution = state.getExecutionAvailability(message.activeStream);
+    dom.status.setExecutionAvailability(Boolean(hasExecution));
 
     // Update status based on whether there's an active stream
     if (!message.activeStream) {
@@ -230,6 +235,8 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   }
 
   handleUpdateStatus(message) {
+    const hasExecution = state.getExecutionAvailability(state.activeStream);
+    dom.status.setExecutionAvailability(Boolean(hasExecution));
     dom.status.update(message.status);
   }
 
@@ -253,6 +260,12 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     // State persisted server-side - no direct DOM updates needed
   }
 
+  /**
+   * @param {{
+   *   stream: string | null,
+   *   instruction: import('../types').InstructionUpdate | null
+   * }} message
+   */
   handleUpdateInstruction(message) {
     const activeStream = state.activeStream || '';
 
@@ -264,21 +277,21 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     }
 
     const payload = message.instruction;
-    const text = typeof payload === 'string' ? payload : (payload?.text ?? '');
+    const text = payload?.text ?? '';
 
-    if (!text || !text.trim()) {
+    if (!text.trim()) {
       dom.instructionPanel.hide();
       return;
     }
 
-    const metadata =
-      (payload && typeof payload === 'object' && payload.metadata) || {};
+    const metadata = payload?.metadata ?? {};
     dom.instructionPanel.show(text, metadata);
   }
 
   handleDeleteStream(message) {
     if (message.stream) {
       state.streamStatuses.delete(message.stream);
+      state.clearExecutionAvailability(message.stream);
       if (message.stream === state.activeStream) {
         const groupIds = [];
         const headers = Array.from(
@@ -295,6 +308,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
   handleDeleteAll() {
     state.toggleStates.clearAll();
+    state.resetExecutionAvailability();
     dom.instructionPanel.hide();
   }
 }

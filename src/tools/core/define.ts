@@ -1,17 +1,20 @@
-import { z } from 'zod';
-import { zodToJsonSchema } from 'zod-to-json-schema';
+import { toJSONSchema, type ZodType } from 'zod';
 import type { ToolDefinition } from '@model';
 import { BaseTool } from './base';
 
 export function defineTool<T>(def: {
   name: string;
   description: string;
-  schema: z.ZodSchema<T>;
+  schema: ZodType<T>;
 }) {
   const baseDefinition: ToolDefinition = {
     name: def.name,
     description: def.description,
-    parameters: zodToJsonSchema(def.schema),
+    parameters: toJSONSchema(def.schema, {
+      target: 'openapi-3.0',
+      unrepresentable: 'any',
+      io: 'input',
+    }) as Record<string, unknown>,
   };
 
   abstract class GeneratedTool extends BaseTool<T> {

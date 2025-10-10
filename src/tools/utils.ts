@@ -6,6 +6,7 @@ import { Minimatch } from 'minimatch';
 
 // Local imports - tools
 import { ToolError } from '@tools/result';
+import { toPosixPath } from '@tools/pathUtils';
 
 // Local imports - utils
 import { WorkspaceFS } from '@utils/files';
@@ -73,17 +74,6 @@ export function resolveWorkspaceRelativePath(
 }
 
 /**
- * Convert a workspace-relative path into a POSIX style string for display or
- * tool output. Keeps `.` as-is for the workspace root.
- */
-export function toPosixPath(relativePath: string): string {
-  if (!relativePath || relativePath === '.') {
-    return '.';
-  }
-  return relativePath.split(path.sep).join('/');
-}
-
-/**
  * Join a workspace-relative base path with a child segment and ensure the
  * result stays within the workspace root.
  */
@@ -109,6 +99,8 @@ export function createGlobMatcher(pattern: string): (value: string) => boolean {
 
   return (value: string) => matcher.match(value.replace(/\\/g, '/'));
 }
+
+export { toPosixPath } from '@tools/pathUtils';
 
 // Re-export gitignore utilities from standalone module
 export { getGitignoreMatcher, clearGitignoreCache } from './gitignore';

@@ -1,17 +1,19 @@
 // Standard library imports
-
-// Standard library imports
 import { randomUUID } from 'crypto';
 
 // Third-party imports
-// Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - history view
-
-// Local imports
+// Local imports - agent metadata
 import type { AgentConfig } from '@agent/core/AgentConfig';
+import {
+  AgentSessionKind,
+  AgentType,
+  resolveAgentSessionMetadata,
+} from '@agent/core/AgentDataclass';
 import type { ExecutionId } from '@agent/types/IdentifierTypes';
+
+// Local imports - workspace state
 import { workspaceSM } from '@common/state/stateManager';
 
 /**
@@ -21,6 +23,8 @@ export interface AgentHistoryItem {
   id: ExecutionId;
   timestamp: string;
   config: AgentConfig;
+  agentType?: AgentType;
+  agentSessionKind?: AgentSessionKind;
 }
 
 /**
@@ -34,10 +38,22 @@ export class AgentHistoryManager {
    * Add a new agent execution to history
    */
   public static async addToHistory(config: AgentConfig): Promise<string> {
+    const metadata = resolveAgentSessionMetadata(
+      config.agentType,
+      config.agentSessionKind,
+    );
+    const normalizedConfig: AgentConfig = {
+      ...config,
+      agentType: metadata.agentType,
+      agentSessionKind: metadata.agentSessionKind,
+    };
+
     const historyItem: AgentHistoryItem = {
       id: randomUUID(),
       timestamp: new Date().toISOString(),
-      config,
+      config: normalizedConfig,
+      agentType: metadata.agentType,
+      agentSessionKind: metadata.agentSessionKind,
     };
 
     // Get current workspace-specific history
@@ -62,7 +78,8 @@ export class AgentHistoryManager {
    */
   public static async getHistory(): Promise<AgentHistoryItem[]> {
     const storageKey = this.getWorkspaceStorageKey();
-    return workspaceSM.get<AgentHistoryItem[]>(storageKey, []);
+    const history = workspaceSM.get<AgentHistoryItem[]>(storageKey, []);
+    return history.map((item) => this.normalizeHistoryItem(item));
   }
 
   /**
@@ -71,6 +88,28 @@ export class AgentHistoryManager {
   private static async saveHistory(history: AgentHistoryItem[]): Promise<void> {
     const storageKey = this.getWorkspaceStorageKey();
     await workspaceSM.update(storageKey, history);
+  }
+
+  private static normalizeHistoryItem(
+    item: AgentHistoryItem,
+  ): AgentHistoryItem {
+    const metadata = resolveAgentSessionMetadata(
+      item.agentType ?? item.config.agentType,
+      item.agentSessionKind ?? item.config.agentSessionKind,
+    );
+
+    const normalizedConfig: AgentConfig = {
+      ...item.config,
+      agentType: metadata.agentType,
+      agentSessionKind: metadata.agentSessionKind,
+    };
+
+    return {
+      ...item,
+      config: normalizedConfig,
+      agentType: metadata.agentType,
+      agentSessionKind: metadata.agentSessionKind,
+    };
   }
 
   /**

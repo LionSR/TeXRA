@@ -38,12 +38,7 @@ export const CHECK_BOXES_AUTO_EXTRACT = [
 ];
 
 // Tool configuration checkboxes
-export const CHECK_BOXES_TOOL_USE = [
-  'attachTeXCount',
-  'attachDiagnostics',
-  'printInputPrompt',
-  'reflect',
-];
+export const CHECK_BOXES_TOOL_USE = ['attachTeXCount', 'attachDiagnostics'];
 
 // All checkboxes (combined)
 export const CHECK_BOXES = [
@@ -54,7 +49,9 @@ export const CHECK_BOXES = [
 // Form elements with values to save
 export const VALUE_ELEMENTS = [
   // parameters
-  'agent',
+  'sessionType',
+  'workflowAgent',
+  'toolUseAgent',
   'model',
   // files (single)
   ...SINGLE_FILE_ELEMENTS,
@@ -105,4 +102,21 @@ export const ELEMENT_IDS = {
   DEPENDENCY_BANNER: 'dependencyBanner',
   DEPENDENCY_RECHECK_BUTTON: 'dependencyRecheckButton',
   DEPENDENCY_DISMISS_BUTTON: 'dependencyDismissButton',
+  SESSION_TYPE_TOGGLE: 'sessionTypeToggle',
+  WORKFLOW_AGENT_SELECT: 'workflowAgent',
+  TOOL_USE_AGENT_SELECT: 'toolUseAgent',
 };
+
+export const SESSION_TYPES = {
+  WORKFLOW: 'workflow',
+  TOOL_USE: 'toolUse',
+};
+
+export const SESSION_TYPE_INPUT = 'sessionType';
+
+export const AGENT_SELECT_IDS = {
+  [SESSION_TYPES.WORKFLOW]: 'workflowAgent',
+  [SESSION_TYPES.TOOL_USE]: 'toolUseAgent',
+};
+
+export const AGENT_SELECT_LIST = Object.values(AGENT_SELECT_IDS);
