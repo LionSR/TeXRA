@@ -38,14 +38,13 @@ export class AgentHistoryManager {
    * Add a new agent execution to history
    */
   public static async addToHistory(config: AgentConfig): Promise<string> {
-    // Ensure config has session set (single source of truth)
-    const session =
-      config.session ?? resolveAgentSessionDescriptor(config.agentType);
+    // Trust that config already has session (internal data from runtime)
+    const session = config.session ?? resolveAgentSessionDescriptor(config.agentType);
 
     const historyItem: AgentHistoryItem = {
       id: randomUUID(),
       timestamp: new Date().toISOString(),
-      config: config.session ? config : { ...config, session },
+      config,
       session,
     };
 
@@ -104,7 +103,7 @@ export class AgentHistoryManager {
     }
 
     // Derive session from the most canonical source available
-    const descriptor =
+    const session =
       candidate.session ??
       candidate.config.session ??
       resolveAgentSessionDescriptor(
@@ -115,10 +114,8 @@ export class AgentHistoryManager {
     return {
       id: candidate.id,
       timestamp: candidate.timestamp,
-      config: candidate.config.session
-        ? candidate.config
-        : { ...candidate.config, session: descriptor },
-      session: descriptor,
+      config: candidate.config,
+      session,
     };
   }
 
