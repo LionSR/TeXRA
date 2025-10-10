@@ -72,14 +72,14 @@ suite('ArxivDownloadTool', () => {
     ).downloadSource = async (id, _progress, autoIndent) => {
       receivedId = id;
       receivedAutoIndent = autoIndent;
-      return '/workspace/project/PapersEx/sample';
+      return '/workspace/project/2401.12345v2';
     };
 
     (
       WorkspaceFS as unknown as {
         relativePath: typeof originalRelativePath;
       }
-    ).relativePath = () => 'PapersEx/sample';
+    ).relativePath = () => '2401.12345v2';
 
     (
       LsTool.prototype as unknown as {
@@ -87,7 +87,7 @@ suite('ArxivDownloadTool', () => {
       }
     ).call = async () =>
       toolResult({
-        summary: 'Listing for PapersEx/sample',
+        summary: 'Listing for 2401.12345v2',
         output: 'dir src\nfile main.tex',
       });
 
@@ -99,9 +99,9 @@ suite('ArxivDownloadTool', () => {
     assert.strictEqual(receivedAutoIndent, false);
     assert.strictEqual(
       result.summary,
-      'Downloaded arXiv source to PapersEx/sample',
+      'Downloaded arXiv source to 2401.12345v2',
     );
-    assert.ok(result.output?.includes('Listing for PapersEx/sample'));
+    assert.ok(result.output?.includes('Listing for 2401.12345v2'));
     assert.ok(result.output?.includes('file main.tex'));
   });
 });
