@@ -126,9 +126,14 @@ interface ResumingSessionState {
 function normalizeSnapshot(
   snapshot: ToolUseSessionSnapshotParsed,
 ): ToolUseSessionSnapshot {
+  // If already normalized (has session, no legacy fields), trust it
+  if (snapshot.session && !snapshot.agentSessionKind) {
+    return snapshot as ToolUseSessionSnapshot;
+  }
+
+  // Legacy path: derive descriptor and create new normalized object
   const descriptor = snapshot.session
-    ? snapshot.session
-    : resolveAgentSessionDescriptor(AgentType.ToolUse, snapshot.agentSessionKind);
+    ?? resolveAgentSessionDescriptor(AgentType.ToolUse, snapshot.agentSessionKind);
 
   const { agentSessionKind: _legacyKind, session: _legacySession, ...rest } = snapshot;
 
