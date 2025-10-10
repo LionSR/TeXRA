@@ -11,24 +11,148 @@ import { ToolResult, toolResult } from '@tools/result';
 // Local imports - utils
 import { WorkspaceFS } from '@utils/files';
 
-const ReadInputSchema = z
-  .object({
-    path: z.string(),
-  })
-  .strict();
+export const READ_FILE_MAX_LINES = 400;
+
+const ReadInputSchema = z.strictObject({
+  path: z.string(),
+  range: z
+    .strictObject({
+      start: z.number().int().min(1),
+      end: z.number().int().min(1).optional(),
+    })
+    .refine((value) => value.end === undefined || value.end >= value.start, {
+      message: 'range.end must be greater than or equal to range.start',
+      path: ['end'],
+    })
+    .optional(),
+});
 
 export type ReadInput = z.infer<typeof ReadInputSchema>;
 
+interface BuildSummaryParams {
+  path: string;
+  totalLines: number;
+  visibleCount: number;
+  actualStartLine: number | null;
+  actualEndLine: number | null;
+  requestedStartLine: number;
+  requestedEndLine: number;
+  truncated: boolean;
+  rangeProvided: boolean;
+  rangeEndExceeded: boolean;
+}
+
 export class ReadFileTool extends defineTool({
   name: 'read_file',
-  description: 'Read and return the contents of a workspace file.',
+  description:
+    'Read and return the contents of a workspace file. Optionally specify a line range to read specific sections.',
   schema: ReadInputSchema,
 }) {
   protected async execute(input: ReadInput): Promise<ToolResult> {
     const content = await WorkspaceFS.read(input.path);
-    return toolResult({
-      summary: `Read ${input.path}`,
-      output: content,
+    const lines = content.split(/\r?\n/);
+    if (lines.length > 0 && lines[lines.length - 1] === '') {
+      lines.pop();
+    }
+
+    const totalLines = lines.length;
+
+    const requestedStartLine = input.range?.start ?? 1;
+    const requestedEndLine =
+      input.range?.end ??
+      (input.range?.start
+        ? Math.min(requestedStartLine + READ_FILE_MAX_LINES - 1, totalLines)
+        : totalLines);
+
+    // Convert the requested 1-based range into zero-based indices and clamp them to the
+    // available file length so callers can safely request windows beyond the file bounds.
+    // If startIndex >= totalLines, slice will return empty array (which is correct behavior).
+    const startIndex = Math.min(requestedStartLine - 1, totalLines);
+    const endIndexExclusive = Math.min(
+      Math.max(requestedEndLine, requestedStartLine),
+      totalLines,
+    );
+
+    const selectedLines = lines.slice(startIndex, endIndexExclusive);
+    const truncated = selectedLines.length > READ_FILE_MAX_LINES;
+    const visibleLines = truncated
+      ? selectedLines.slice(0, READ_FILE_MAX_LINES)
+      : selectedLines;
+    const visibleCount = visibleLines.length;
+
+    const segments: string[] = [];
+    if (visibleLines.length > 0) {
+      segments.push(visibleLines.join('\n'));
+    }
+    if (truncated) {
+      segments.push(
+        `...(truncated, ${selectedLines.length - READ_FILE_MAX_LINES} more lines)`,
+      );
+    }
+
+    const actualStartLine = visibleCount > 0 ? startIndex + 1 : null;
+    const actualEndLine = visibleCount > 0 ? startIndex + visibleCount : null;
+
+    const summary = this.buildSummary({
+      path: input.path,
+      totalLines,
+      visibleCount,
+      actualStartLine,
+      actualEndLine,
+      requestedStartLine,
+      requestedEndLine,
+      truncated,
+      rangeProvided: Boolean(input.range),
+      rangeEndExceeded:
+        input.range?.end !== undefined && input.range.end > totalLines,
     });
+
+    return toolResult({
+      summary,
+      output: segments.join('\n'),
+    });
+  }
+
+  private buildSummary({
+    path,
+    totalLines,
+    visibleCount,
+    actualStartLine,
+    actualEndLine,
+    requestedStartLine,
+    requestedEndLine,
+    truncated,
+    rangeProvided,
+    rangeEndExceeded,
+  }: BuildSummaryParams): string {
+    if (visibleCount === 0) {
+      if (totalLines === 0) {
+        return `Read ${path} (file is empty)`;
+      }
+      return `Read ${path} (no lines in requested range)`;
+    }
+
+    const safeActualStartLine = actualStartLine ?? 1;
+    const safeActualEndLine =
+      actualEndLine ?? safeActualStartLine + visibleCount - 1;
+    const describeRange =
+      rangeProvided ||
+      truncated ||
+      safeActualStartLine !== 1 ||
+      safeActualEndLine !== totalLines;
+    const rangeLabel =
+      safeActualStartLine === safeActualEndLine
+        ? `line ${safeActualStartLine}`
+        : `lines ${safeActualStartLine}-${safeActualEndLine}`;
+
+    let summary = describeRange
+      ? `Read ${rangeLabel} of ${path}`
+      : `Read ${path}`;
+
+    if (rangeEndExceeded) {
+      summary += ` (requested end ${requestedEndLine} exceeds file length ${totalLines})`;
+    }
+
+    return summary;
   }
 }

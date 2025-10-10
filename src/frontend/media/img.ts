@@ -12,7 +12,7 @@ import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
 import { getConfig } from '@utils/config';
-import { WorkspaceFS, AbsoluteFS, getMimeType } from '@utils/files';
+import { AbsoluteFS, getMimeType, resolveFilePath } from '@utils/files';
 import { checkMultipleToolsInstalled } from '@utils/system';
 import { executeCommand } from '@utils/system/execUtils';
 
@@ -31,6 +31,52 @@ function getMaxImageDimension(): number {
 const TEMP_DIR = path.join(os.tmpdir(), 'texra-pdf-conversion');
 
 // ImageMagick configuration is now in toolUtils.ts
+
+/** Ensure the pdf2pic temporary directory exists. */
+function ensureTempDir(): void {
+  if (!AbsoluteFS.existsSync(TEMP_DIR)) {
+    AbsoluteFS.mkdirSync(TEMP_DIR, { recursive: true });
+  }
+}
+
+/** Try to resolve a file path and return the absolute path when it exists. */
+async function resolveFileIfExists(filePath: string): Promise<string | null> {
+  const absolutePath = resolveFilePath(filePath);
+  const exists = await AbsoluteFS.exists(absolutePath);
+
+  return exists ? absolutePath : null;
+}
+
+/** Resolve a file path and ensure it exists. */
+async function resolveExistingFile(
+  filePath: string,
+  resourceLabel: string = 'File',
+): Promise<string> {
+  const absolutePath = await resolveFileIfExists(filePath);
+
+  if (!absolutePath) {
+    throw new Error(`${resourceLabel} not found: ${filePath}`);
+  }
+
+  return absolutePath;
+}
+
+/** Load a PDF and return its page count. Expects an absolute path. */
+async function loadPdfPageCount(
+  absolutePath: string,
+  displayPath: string,
+): Promise<number> {
+  const pdfBytes = AbsoluteFS.readBytesSync(absolutePath);
+  const pdfDoc = await PDFDocument.load(pdfBytes, {
+    updateMetadata: false,
+    ignoreEncryption: true,
+  });
+
+  const pageCount = pdfDoc.getPageCount();
+
+  logger.debug(CHANNEL, `PDF page count for ${displayPath}: ${pageCount}`);
+  return pageCount;
+}
 
 /**
  * Clean up temporary files with a given base name pattern
@@ -81,14 +127,9 @@ async function selectImageTool(): Promise<{ tool: string; prefix: string[] }> {
 async function getImageDimensions(
   imagePath: string,
 ): Promise<{ width: number; height: number }> {
-  const { tool, prefix } = await selectImageTool();
-  let command: string[];
-  if (tool === 'magick') {
-    command = [...prefix, 'identify', '-format', '%w %h', imagePath];
-  } else {
-    command = [...prefix, 'identify', '-format', '%w %h', imagePath];
-  }
-  const result = await executeCommand(command, { channel: CHANNEL });
+  const { prefix } = await selectImageTool();
+  const identifyArgs = [...prefix, 'identify', '-format', '%w %h', imagePath];
+  const result = await executeCommand(identifyArgs, { channel: CHANNEL });
   if (!result.success || !result.stdout) {
     throw new Error(result.stderr || 'Failed to get image dimensions');
   }
@@ -122,26 +163,15 @@ async function resizeImageIfNeeded(imagePath: string): Promise<string> {
     `texra-resized-${crypto.randomUUID()}${ext}`,
   );
   const { tool, prefix } = await selectImageTool();
-  let command: string[];
-  if (tool === 'magick') {
-    command = [
-      ...prefix,
-      imagePath,
-      '-resize',
-      `${maxDimension}x${maxDimension}>`,
-      tempPath,
-    ];
-  } else {
-    command = [
-      ...prefix,
-      'convert',
-      imagePath,
-      '-resize',
-      `${maxDimension}x${maxDimension}>`,
-      tempPath,
-    ];
-  }
-  const result = await executeCommand(command, { channel: CHANNEL });
+  const convertArgs = [
+    ...prefix,
+    ...(tool === 'gm' ? ['convert'] : []),
+    imagePath,
+    '-resize',
+    `${maxDimension}x${maxDimension}>`,
+    tempPath,
+  ];
+  const result = await executeCommand(convertArgs, { channel: CHANNEL });
   if (!result.success) {
     throw new Error(result.stderr || 'Failed to resize image');
   }
@@ -161,17 +191,7 @@ export async function getBase64EncodedMedia(
   mediaPath: string,
 ): Promise<string> {
   try {
-    const isAbsolutePath = path.isAbsolute(mediaPath);
-    const absolutePath = isAbsolutePath
-      ? mediaPath
-      : WorkspaceFS.fullPath(mediaPath);
-
-    const fileExistsResult = await AbsoluteFS.exists(absolutePath);
-    if (!fileExistsResult) {
-      logger.error(CHANNEL, `Image file not found: ${mediaPath}`);
-      throw new Error(`Image file not found: ${mediaPath}`);
-    }
-
+    const absolutePath = await resolveExistingFile(mediaPath);
     const mimeType = getMimeType(absolutePath);
     let tempPath: string | null = null;
     let pathToRead = absolutePath;
@@ -191,6 +211,7 @@ export async function getBase64EncodedMedia(
         throw new Error(`File is empty: ${mediaPath}`);
       }
       const base64String = mediaBytes.toString('base64');
+      logger.debug(CHANNEL, `Successfully encoded image: ${mediaPath}`);
       return base64String;
     } finally {
       if (tempPath) {
@@ -205,8 +226,6 @@ export async function getBase64EncodedMedia(
         }
       }
     }
-
-    logger.debug(CHANNEL, `Successfully encoded image: ${mediaPath}`);
   } catch (err) {
     logger.error(
       CHANNEL,
@@ -223,31 +242,14 @@ export async function getBase64EncodedMedia(
  */
 export async function countPdfPages(pdfPath: string): Promise<number> {
   try {
-    // Check if this is an absolute path
-    const isAbsolutePath = path.isAbsolute(pdfPath);
+    const absolutePath = await resolveFileIfExists(pdfPath);
 
-    // Check if file exists
-    const fileExistsResult = isAbsolutePath
-      ? await AbsoluteFS.exists(pdfPath)
-      : await WorkspaceFS.exists(pdfPath);
-
-    if (!fileExistsResult) {
-      logger.error(CHANNEL, `PDF file not found: ${pdfPath}`);
+    if (!absolutePath) {
+      logger.debug(CHANNEL, `PDF file not found: ${pdfPath}`);
       return 0;
     }
 
-    // Read the PDF file using pdf-lib
-    const pdfBytes = isAbsolutePath
-      ? AbsoluteFS.readBytesSync(pdfPath)
-      : WorkspaceFS.readFileBytesSync(pdfPath);
-    const pdfDoc = await PDFDocument.load(pdfBytes, {
-      updateMetadata: false,
-      ignoreEncryption: true,
-    });
-    const pageCount = pdfDoc.getPageCount();
-
-    logger.debug(CHANNEL, `PDF page count for ${pdfPath}: ${pageCount}`);
-    return pageCount;
+    return await loadPdfPageCount(absolutePath, pdfPath);
   } catch (err) {
     logger.error(
       CHANNEL,
@@ -289,25 +291,10 @@ export async function singlePagePdf2Png(
       throw new Error('GraphicsMagick/ImageMagick is not installed.');
     }
 
-    // Check if this is an absolute path
-    const isAbsolutePath = path.isAbsolute(pdfPath);
+    const absolutePath = await resolveExistingFile(pdfPath, 'PDF file');
+    logger.debug(CHANNEL, `Full path to PDF: ${absolutePath}`);
 
-    // Verify file exists
-    const fileExistsResult = isAbsolutePath
-      ? await AbsoluteFS.exists(pdfPath)
-      : await WorkspaceFS.exists(pdfPath);
-
-    if (!fileExistsResult) {
-      throw new Error(`PDF file not found: ${pdfPath}`);
-    }
-
-    const fullPath = isAbsolutePath ? pdfPath : WorkspaceFS.fullPath(pdfPath);
-    logger.debug(CHANNEL, `Full path to PDF: ${fullPath}`);
-
-    // Ensure the temporary directory exists
-    if (!AbsoluteFS.existsSync(TEMP_DIR)) {
-      AbsoluteFS.mkdirSync(TEMP_DIR, { recursive: true });
-    }
+    ensureTempDir();
 
     const options = {
       density: quality,
@@ -320,7 +307,7 @@ export async function singlePagePdf2Png(
     };
     logger.debug(CHANNEL, `pdf2pic options: ${JSON.stringify(options)}`);
 
-    const convert = fromPath(fullPath, options);
+    const convert = fromPath(absolutePath, options);
     logger.debug(CHANNEL, `pdf2pic convert object created`);
 
     const result = await convert(pageNum);
@@ -418,20 +405,14 @@ export async function processPdf2Png(
   maxSize?: [number, number],
 ): Promise<string | string[] | null> {
   try {
-    // Check if this is an absolute path
-    const isAbsolutePath = path.isAbsolute(pdfPath);
+    const absolutePath = await resolveFileIfExists(pdfPath);
 
-    // Verify file exists
-    const fileExistsResult = isAbsolutePath
-      ? await AbsoluteFS.exists(pdfPath)
-      : await WorkspaceFS.exists(pdfPath);
-
-    if (!fileExistsResult) {
+    if (!absolutePath) {
       logger.debug(CHANNEL, `PDF file not found: ${pdfPath}`);
       return null;
     }
 
-    const pageCount = await countPdfPages(pdfPath);
+    const pageCount = await loadPdfPageCount(absolutePath, pdfPath);
     if (pageCount === 0) {
       return null;
     }

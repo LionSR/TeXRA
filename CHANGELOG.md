@@ -2,15 +2,72 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.33.8] [Unreleased]
+## [Unreleased]
 
-### Improvements
+### Features
 
+- Add OpenAI GPT-5 Pro (`gpt5pro`) to the model catalog with updated pricing and documentation.
+- Add interactive prompt to select latexdiff math markup granularity before each run.
+- Add one-click **Generate diff** controls in the Progress Board so you can launch round-by-round `latexdiff` comparisons without leaving the view.
+- Add copy buttons to Progress Board model responses and special log sections, plus native status styling that makes continuation updates easier to scan.
+
+### Bug Fixes
+
+- Keep agent error logs grouped with their most recent run so failures stay visible in the Progress Board timeline.
+- Turn off streaming automatically whenever background responses are enabled to avoid unstable background replies.
+- Stop launching agent runs when initialization fails, preventing follow-up crashes from uninitialized sessions.
+- Stabilize Progress Board event handling to prevent duplicate task groups, stale status badges, and other glitches while sessions stream updates.
+- Hide workflow-only model responses from the Progress Board so tool logs stay focused on user-visible activity.
+- Ensure progress compare actions run `latexdiff` before opening previous-round diffs and close conflicting panels when needed, keeping the VS Code diff view reliable.
+- Improve LaTeX fenced-block parsing and OpenAI response handling so inline math, whitespace, and multi-part summaries render without mangling formatting.
+
+## [0.33.9] - 2025-10-03
+
+### Features
+
+- Introduce new `apply_path` and `download_arxiv_source` tools so agents can apply patches and fetch arXiv sources without leaving TeXRA.
+- Default workflow and tool-use pickers to curated Correct and Chat presets, remember multi-output toggles, and automatically seed custom agent directories for new workspaces.
+- Add an **Open storage** button in the progress view with richer file refresh feedback so you can inspect run outputs and diffs immediately.
+- Add between-round `latexdiff` controls and Texcount mode selection to customize LaTeX comparison and word-count workflows.
+- Add Claude Sonnet 4.5 (thinking and regular) to the Anthropic catalog and default model list so the latest Claude release is immediately available in TeXRA.
+
+### Bug Fixes
+
+- Upload Anthropic PDF attachments to the Files API so requests reuse `file_id`s instead of resending large base64 payloads.
+- Ensure follow-up Anthropic requests keep the Files API beta header when referencing previously uploaded PDFs.
+- Sanitize Anthropic PDF filenames before uploading so nested paths with forbidden characters no longer trigger Files API errors.
+- Skip Anthropic token counting when requests already reference Files API assets and defer PDF uploads until after token usage is calculated to avoid countTokens errors.
+- Harden tool-use session resume so queued follow-ups, execution state, and multi-output agents restore reliably after reloads.
+- Respect `.gitignore` rules across `glob`, `grep`, and file listings to keep excluded paths out of workspace inspections.
+- Stabilize custom agent directory initialization and tool-use registry cleanup so default agents appear consistently.
+- Guard Google upload pipelines and diagnostics tooling to avoid sending derived media and to surface clearer errors when runs fail.
+
+## [0.33.8] - 2025-09-30
+
+### Features
+
+- Split the agent picker into workflow and tool-use sessions with a toggle so users can quickly see the agents that apply to their workflow.
 - Update Gemini 2.5 Flash preview entries to the September 2025 release.
+- Refresh Qwen-Max and Qwen Plus integrations with updated pricing, naming, and thinking support in the DashScope handler.
 
-### Improvements
+### Bug Fixes
 
-- Refresh Qwen-Max and Qwen Plus integrations with updated pricing, naming, and thinking support in the DashScope handler
+- Improve scratchpad markdown fallbacks by converting HTML with Turndown when Pandoc is unavailable, keeping formatting stable across environments.
+- Ensure prompt XML exports always resolve to absolute paths for both workspace files and execution-scoped runs to avoid downstream lookups failing.
+- Harden progress view state handling with validation on task groups, toggles, and stream statuses to prevent invalid data from corrupting summaries.
+- Restore main view configurations using the shared task-state helper so history entries hydrate without manual JSON juggling.
+- Cap `read_file` tool responses at the first 400 lines to keep large files from overwhelming tool-use transcripts.
+- Enable interleaved thinking by default for supported Claude tool-use agents so follow-up reasoning stays in sync with tool results.
+- Rebuild the agent selector footer with a compact session toggle and per-session dropdowns so the UI stays narrow and focused.
+- Populate the tool-use dropdown from the dedicated `texra.toolUseAgents` list and automatic discovery so the old include toggle is no longer needed.
+- Trim the default tool-use agent list to the conversational presets so specialized utilities stay opt-in per workspace.
+- Narrow the model selector width and streamline tool-use labelling so dropdowns stay tidy without superscript markers.
+
+### Bug Fixes
+
+- Migrate history view toggle state persistence from JSON strings to structured arrays so expansion settings reliably load across versions.
+- Clear queued restore context when the main view fails to initialize, preventing stale state from resurfacing on the next activation.
+- Guard the model select observer lifecycle and update queue so successive model option messages render reliably without leaking observers.
 
 ## [0.33.7] - 2025-09-22
 
@@ -153,7 +210,7 @@ All notable changes to this project will be documented in this file.
 - Allow disabling LaTeX formatting and silencing missing `latexindent` warnings
 - Added configurable `texra.maxImageDimension` setting to control the maximum image size threshold
 - Add "New" button in main view to reset all fields
-- Add `texra.includeToolUseAgents` setting to optionally show built-in tool-use agents in the agent dropdown
+- Add `texra.includeToolUseAgents` setting to optionally show built-in tool-use agents in the agent dropdown (deprecated in 0.33.8)
 - Prompt users to install LaTeX Workshop extension with "Never remind again" option for enhanced LaTeX features
 
 ### Bug Fixes

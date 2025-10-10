@@ -12,15 +12,27 @@ import {
   AgentTypeFilter,
   isAgentTypeFilter,
 } from '@agent/types/AgentStreamTypes';
-import {
-  AgentSessionKind,
-  deriveAgentSessionKind,
-} from '@agent/core/AgentDataclass';
-import type { TaskState } from '@logger/TaskState';
+import { isWorkflowTaskState, type WorkflowTaskState } from '@logger/TaskState';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
+// Local imports - storage
+import { ensureRunDir, getRunDir } from '@utils/files/taskRunStorage';
+// Local imports - commands
+import { safeExecuteCommand } from '@utils/system/commandUtils';
 
 // @ts-ignore - Import JavaScript module
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
+
+interface FileCommandMessage {
+  file: string;
+}
+
+interface BaseFileCommandMessage extends FileCommandMessage {
+  base?: string;
+}
+
+interface CompareMessage extends BaseFileCommandMessage {
+  prev?: string;
+}
 
 export class ProgressViewMessageHandler extends BaseViewMessageHandler {
   constructor(private readonly provider: ProgressViewProvider) {
@@ -69,6 +81,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
         this.handleRestoreState.bind(this),
       [PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP]:
         this.handleSendFollowUp.bind(this),
+      [PROGRESS_VIEW_COMMANDS.OPEN_TASK_STORAGE]:
+        this.handleOpenTaskStorage.bind(this),
 
       // File operations
       [PROGRESS_VIEW_COMMANDS.OPEN_FILE]: this.handleOpenFile.bind(this),
@@ -232,24 +246,80 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     });
   }
 
-  private async handleOpenFile(
+  private async handleOpenTaskStorage(
     message: any,
+    _webviewView: vscode.WebviewView,
+  ): Promise<void> {
+    const stream = message.stream as StreamTabId | undefined;
+    if (!stream) {
+      await vscode.window.showInformationMessage(
+        'No workspace storage folder is available for this run yet.',
+      );
+      return;
+    }
+
+    const executionId = this.provider.state.getExecutionId(stream);
+    if (!executionId) {
+      await vscode.window.showInformationMessage(
+        'No workspace storage folder is available for this run yet.',
+      );
+      return;
+    }
+
+    try {
+      await ensureRunDir(executionId);
+      const runDir = getRunDir(executionId);
+      await safeExecuteCommand('revealFileInOS', [vscode.Uri.file(runDir)]);
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      this.logger.error(
+        this.channel,
+        `Failed to open task storage for stream ${stream}, executionId ${executionId}: ${errorMessage}`,
+        error instanceof Error ? error : undefined,
+        undefined,
+        undefined,
+        {
+          stream,
+          executionId,
+        },
+      );
+      await vscode.window.showErrorMessage(
+        'Unable to open the workspace storage folder for this run.',
+      );
+    }
+  }
+
+  private async handleOpenFile(
+    message: FileCommandMessage,
     webviewView: vscode.WebviewView,
   ): Promise<void> {
     await vscode.commands.executeCommand('texra.openFile', message.file);
   }
 
   private async handleOpenFileCompile(
-    message: any,
+    message: FileCommandMessage,
     webviewView: vscode.WebviewView,
   ): Promise<void> {
     await vscode.commands.executeCommand('texra.openFileCompile', message.file);
   }
 
   private async handleCompareOriginal(
-    message: any,
+    message: BaseFileCommandMessage,
     webviewView: vscode.WebviewView,
   ): Promise<void> {
+    if (!message.base) {
+      this.logger.warn(
+        this.channel,
+        'Compare original requested without a base path.',
+        undefined,
+        undefined,
+        undefined,
+        { file: message.file },
+      );
+      return;
+    }
+
     await vscode.commands.executeCommand(
       'texra.compare',
       undefined,
@@ -259,21 +329,44 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
   }
 
   private async handleComparePrevious(
-    message: any,
+    message: CompareMessage,
     webviewView: vscode.WebviewView,
   ): Promise<void> {
+    const previousFile = message.prev || message.base;
+
+    if (previousFile) {
+      await vscode.commands.executeCommand(
+        'texra.latexdiff',
+        undefined,
+        previousFile,
+        message.file,
+      );
+    }
+
     await vscode.commands.executeCommand(
       'texra.compare',
       undefined,
-      message.prev,
+      previousFile,
       message.file,
     );
   }
 
   private async handleAcceptFile(
-    message: any,
+    message: BaseFileCommandMessage,
     webviewView: vscode.WebviewView,
   ): Promise<void> {
+    if (!message.base) {
+      this.logger.warn(
+        this.channel,
+        'Accept requested without a base path.',
+        undefined,
+        undefined,
+        undefined,
+        { file: message.file },
+      );
+      return;
+    }
+
     await vscode.commands.executeCommand(
       'texra.acceptEdited',
       undefined,
@@ -283,9 +376,21 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
   }
 
   private async handleMergeFile(
-    message: any,
+    message: BaseFileCommandMessage,
     webviewView: vscode.WebviewView,
   ): Promise<void> {
+    if (!message.base) {
+      this.logger.warn(
+        this.channel,
+        'Merge requested without a base path.',
+        undefined,
+        undefined,
+        undefined,
+        { file: message.file },
+      );
+      return;
+    }
+
     await vscode.commands.executeCommand(
       'texra.merge',
       undefined,
@@ -295,9 +400,21 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
   }
 
   private async handleLatexdiffFile(
-    message: any,
+    message: BaseFileCommandMessage,
     webviewView: vscode.WebviewView,
   ): Promise<void> {
+    if (!message.base) {
+      this.logger.warn(
+        this.channel,
+        'Latexdiff requested without a base path.',
+        undefined,
+        undefined,
+        undefined,
+        { file: message.file },
+      );
+      return;
+    }
+
     await vscode.commands.executeCommand(
       'texra.latexdiff',
       undefined,
@@ -315,7 +432,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
 
   private async handleFileOperation(
     stream: string,
-    taskState: TaskState,
+    taskState: WorkflowTaskState,
     command: 'texra.pack' | 'texra.clean',
   ): Promise<void> {
     const generated = this.provider.state.outputFiles.getFiles(stream);
@@ -348,31 +465,16 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
   }
 
   /**
-   * Guards toolbar actions from running when the task state is missing or belongs to a tool-use agent.
-   * @param taskState - The currently resolved task state for the active stream.
-   * @returns True when the caller should skip executing the toolbar action.
-   */
-  private shouldSkipToolbarAction(taskState: TaskState): boolean {
-    const sessionKind =
-      taskState.agentSessionKind ?? deriveAgentSessionKind(taskState.agentType);
-    return sessionKind === AgentSessionKind.ToolUse;
-  }
-
-  /**
    * Fetches a task state for a toolbar action, short-circuiting execution for tool-use agents.
    * @param stream - The stream identifier whose task state should be fetched.
    * @param action - The callback to execute when a valid workflow task state is available.
    */
   private async withToolbarTaskState(
     stream: string,
-    action: (taskState: TaskState) => Promise<void>,
+    action: (taskState: WorkflowTaskState) => Promise<void>,
   ): Promise<void> {
     const taskState = this.provider.state.getTaskState(stream);
-    if (!taskState) {
-      return;
-    }
-
-    if (this.shouldSkipToolbarAction(taskState)) {
+    if (!taskState || !isWorkflowTaskState(taskState)) {
       return;
     }
 

@@ -18,7 +18,7 @@ import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 
 // Local imports - utilities
 import type { ToolDefinition } from '@model';
-import { K_SLICE, MESSAGE_PREVIEW_LENGTH } from '@utils/config';
+import { K_SLICE } from '@utils/config';
 
 // TODO: prompt_cache_hit_tokens can also be used here to correct the price and response usage computation in the base class (just overwrite the computePrice and computeResponseUsage methods with a revalues responseUsage.prompt_tokens_details?.cached_tokens and then call the super methods)
 // DEEPSEEK RESPONSE USAGE FORMAT:
@@ -172,25 +172,14 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI {
     tools?: ToolDefinition[],
   ): Promise<any> {
     // Preprocess messages to merge consecutive messages and convert content to strings
-    const processedMessages = this.normalizeMessages(messages, {
-      mergeConsecutiveRoles: true,
-      convertContentToString: true,
-    });
-
-    if (processedMessages.length !== messages.length) {
-      this.logger.info(
-        `Preprocessed message array from ${messages.length} to ${processedMessages.length} messages for Deepseek model compatibility`,
-      );
-    }
-
-    // Log the first few characters of each processed message for debugging
-    processedMessages.forEach((msg, index) => {
-      const contentPreview =
-        typeof msg.content === 'string'
-          ? msg.content.substring(0, MESSAGE_PREVIEW_LENGTH)
-          : 'non-string content';
-      this.logger.debug(`Message ${index} (${msg.role}): ${contentPreview}...`);
-    });
+    const processedMessages = this.prepareNormalizedMessages(
+      messages,
+      {
+        mergeConsecutiveRoles: true,
+        convertContentToString: true,
+      },
+      'Deepseek',
+    );
 
     // Call the parent implementation with the processed messages
     return super.createResponse(

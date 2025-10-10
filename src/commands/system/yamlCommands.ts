@@ -7,6 +7,7 @@ import * as yaml from 'yaml';
 
 // Local imports - utilities
 import { loadYaml, loadAgentSettingAndPrompts } from '@agent/runtime/agentLoad';
+import { AgentDirectorySource } from '@agent/runtime/AgentPathTypes';
 import * as logger from '@logger/logUtils';
 import { getAgentPath } from '@agent/runtime/executeAgent';
 import { AgentType } from '@agent/core/AgentDataclass';
@@ -60,10 +61,7 @@ export async function handleTestAgentLoading(
 
     // Create base agent
     const baseYamlPath = path.join(testDir, 'base.yaml');
-    await GlobalStorageFS.write(
-      'test_agents/base.yaml',
-      JSON.stringify(testYaml),
-    );
+    await GlobalStorageFS.writeJson('test_agents/base.yaml', testYaml);
 
     // Create child agent that inherits from base
     const childYaml = {
@@ -78,10 +76,7 @@ export async function handleTestAgentLoading(
     };
 
     const childYamlPath = path.join(testDir, 'child.yaml');
-    await GlobalStorageFS.write(
-      'test_agents/child.yaml',
-      JSON.stringify(childYaml),
-    );
+    await GlobalStorageFS.writeJson('test_agents/child.yaml', childYaml);
 
     // Test loading base agent
     logger.info(CHANNEL, '\nTesting base agent loading:');
@@ -91,8 +86,13 @@ export async function handleTestAgentLoading(
       `Base YAML loaded: ${JSON.stringify(baseYaml, null, 2)}`,
     );
 
+    const testAgentPath = {
+      directory: testDir,
+      source: AgentDirectorySource.Custom,
+    } as const;
+
     const [baseSettings, basePrompts] = await loadAgentSettingAndPrompts(
-      testDir,
+      testAgentPath,
       'base',
     );
     logger.info(CHANNEL, 'Base agent settings loaded:');
@@ -109,7 +109,7 @@ export async function handleTestAgentLoading(
     );
 
     const [childSettings, childPrompts] = await loadAgentSettingAndPrompts(
-      testDir,
+      testAgentPath,
       'child',
     );
     logger.info(
@@ -164,7 +164,7 @@ export async function handleLoadSpecificAgent(
 
     // Use getAgentPath to find the agent's directory
     const agentPath = await getAgentPath(agentName, context);
-    logger.info(CHANNEL, `Loading from path: ${agentPath}`);
+    logger.info(CHANNEL, `Loading from path: ${agentPath.directory}`);
 
     // Load and display the agent configuration
     const [settings, prompts] = await loadAgentSettingAndPrompts(
@@ -179,7 +179,7 @@ export async function handleLoadSpecificAgent(
     logger.info(CHANNEL, JSON.stringify(prompts, null, 2));
 
     // If the agent inherits from another, show the inheritance chain
-    const agentFile = path.join(agentPath, `${agentName}.yaml`);
+    const agentFile = path.join(agentPath.directory, `${agentName}.yaml`);
     const config = (await loadYaml(agentFile)) as { inherits?: string };
     if (config?.inherits) {
       logger.info(

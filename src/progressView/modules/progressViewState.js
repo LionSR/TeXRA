@@ -115,7 +115,9 @@ class ToggleStates {
 
   clearAll() {
     this.states.clear();
-    this.saveCallback();
+    if (this.saveCallback) {
+      this.saveCallback();
+    }
   }
 
   /** Get all entries for serialization */
@@ -165,6 +167,38 @@ class StreamStatuses {
 }
 
 /**
+ * Tracks whether a stream has an execution directory available.
+ */
+class ExecutionAvailability {
+  constructor() {
+    this.availability = new Map();
+  }
+
+  set(stream, available) {
+    if (!stream) {
+      console.error('ExecutionAvailability.set: stream is required');
+      return;
+    }
+    this.availability.set(stream, Boolean(available));
+  }
+
+  get(stream) {
+    return this.availability.get(stream) ?? false;
+  }
+
+  delete(stream) {
+    if (!stream) {
+      return;
+    }
+    this.availability.delete(stream);
+  }
+
+  clear() {
+    this.availability.clear();
+  }
+}
+
+/**
  * Manages progress view state and handles persistence.
  */
 export class ProgressViewState {
@@ -178,26 +212,82 @@ export class ProgressViewState {
     this.taskGroups = new TaskGroups();
     this.toggleStates = new ToggleStates(() => this.save());
     this.streamStatuses = new StreamStatuses();
+    this.executionAvailability = new ExecutionAvailability();
+  }
+
+  setExecutionAvailability(stream, available) {
+    this.executionAvailability.set(stream, available);
+  }
+
+  getExecutionAvailability(stream) {
+    return this.executionAvailability.get(stream);
+  }
+
+  clearExecutionAvailability(stream) {
+    this.executionAvailability.delete(stream);
+  }
+
+  resetExecutionAvailability() {
+    this.executionAvailability.clear();
   }
 
   /** Load saved state from VS Code storage. */
   initialize() {
     const previous = this.stateManager.getState();
     if (previous.groupToggleStates) {
-      try {
-        const data = JSON.parse(previous.groupToggleStates);
-        this.toggleStates.load(data);
-      } catch (e) {
-        console.error('Failed to restore group toggle states:', e);
+      let data = previous.groupToggleStates;
+      if (!Array.isArray(data) && typeof data === 'string') {
+        try {
+          const parsed = JSON.parse(data);
+          if (Array.isArray(parsed)) {
+            data = parsed;
+          } else {
+            console.error(
+              'Failed to restore group toggle states: parsed data is not an array',
+            );
+            return;
+          }
+        } catch (error) {
+          console.error(
+            'Failed to restore group toggle states: could not parse legacy string data',
+            error,
+          );
+          return;
+        }
       }
+
+      if (!Array.isArray(data)) {
+        console.error(
+          'Failed to restore group toggle states: data is not an array',
+        );
+        return;
+      }
+
+      const hasValidEntries = data.every((entry) => {
+        if (!Array.isArray(entry) || entry.length !== 2) {
+          return false;
+        }
+        const [id, collapsed] = entry;
+        return typeof id === 'string' && typeof collapsed === 'boolean';
+      });
+
+      if (!hasValidEntries) {
+        console.error(
+          'Failed to restore group toggle states: invalid entry format',
+        );
+        return;
+      }
+
+      this.toggleStates.load(data);
     }
   }
 
   /** Persist the current group toggle states. */
   save() {
     try {
-      const serialized = JSON.stringify(this.toggleStates.entries());
-      this.stateManager.update({ groupToggleStates: serialized });
+      this.stateManager.update({
+        groupToggleStates: this.toggleStates.entries(),
+      });
     } catch (e) {
       console.error('Failed to save state:', e);
     }

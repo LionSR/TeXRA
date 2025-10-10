@@ -107,6 +107,7 @@ export const MAIN_VIEW_COMMANDS = {
   SET_CURRENT_FILE: 'setCurrentFile',
   SET_OPENED_FILES: 'setOpenedFiles',
   SET_BASE_FILE: 'setBaseFile',
+  SET_SELECTED_COMMIT: 'setSelectedCommit',
   SET_MODEL_OPTIONS: 'setModelOptions',
   SET_AGENT_OPTIONS: 'setAgentOptions',
 
@@ -184,6 +185,7 @@ export const PROGRESS_VIEW_COMMANDS = {
   FILTER_STREAMS: 'filterStreams',
   RESTORE_STATE: 'restoreState',
   SEND_FOLLOW_UP: 'sendFollowUp',
+  OPEN_TASK_STORAGE: 'openTaskStorage',
 
   // File operations
   OPEN_FILE: 'openFile',

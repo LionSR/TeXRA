@@ -5,6 +5,9 @@ import {
   ELEMENT_IDS,
   BASE_FILE,
   EDITED_FILE,
+  SESSION_TYPES,
+  SESSION_TYPE_INPUT,
+  AGENT_SELECT_IDS,
 } from '../constants.js';
 import { BaseUIManager } from './BaseUIManager.js';
 import {
@@ -23,6 +26,8 @@ export class ActionButtonManager extends BaseUIManager {
     this.fileList = fileList;
     this.state = state;
     this.instructionManager = instructionMgr;
+    this._sessionTypeInput = null;
+    this._agentSelectCache = new Map();
   }
 
   _getSingleFileData(fileTypes = ['input', 'reference', 'auxiliary', 'media']) {
@@ -68,7 +73,7 @@ export class ActionButtonManager extends BaseUIManager {
     this.addListener(ELEMENT_IDS.MAGIC_POLISH_BUTTON, 'click', () => {
       const instruction = safeGetElementById(ELEMENT_IDS.INSTRUCTION);
       if (instruction && instruction.value.trim()) {
-        const agent = safeGetElementValue('agent');
+        const { agent } = this._getActiveAgentSelection();
         const model = safeGetElementValue('model');
         const singleFiles = this._getSingleFileData();
         const multipleFilesData = this._getMultipleFileData(singleFiles);
@@ -87,17 +92,10 @@ export class ActionButtonManager extends BaseUIManager {
 
   _setupExecuteButtons() {
     this.addListener(ELEMENT_IDS.EXECUTE_BUTTON, 'click', () => {
-      const agent = safeGetElementValue('agent');
+      const { agent, sessionType } = this._getActiveAgentSelection();
       const model = safeGetElementValue('model');
       const instruction = safeGetElementValue(ELEMENT_IDS.INSTRUCTION);
-      const agentSelect = safeGetElementById('agent');
-      const selectedOption =
-        agentSelect &&
-        'options' in agentSelect &&
-        'selectedIndex' in agentSelect
-          ? agentSelect.options[agentSelect.selectedIndex]
-          : null;
-      const isToolUseAgent = selectedOption?.dataset?.toolUse === 'true';
+      const isToolUseAgent = sessionType === SESSION_TYPES.TOOL_USE;
       const singleFiles = this._getSingleFileData();
       const multipleFilesData = this._getMultipleFileData(singleFiles);
 
@@ -140,7 +138,7 @@ export class ActionButtonManager extends BaseUIManager {
     ].forEach(({ id, action }) => {
       this.addListener(id, 'click', () => {
         const { inputFile } = this._getSingleFileData(['input']);
-        const agent = safeGetElementValue('agent');
+        const { agent } = this._getActiveAgentSelection();
         const model = safeGetElementValue('model');
 
         const outputFiles = this.fileList.getSelected(
@@ -303,9 +301,50 @@ export class ActionButtonManager extends BaseUIManager {
   }
 
   setup() {
+    this._sessionTypeInput = null;
+    this._agentSelectCache.clear();
     this._setupInstructionButtons();
     this._setupExecuteButtons();
     this._setupLatexdiffButtons();
     this._setupCompareButtons();
+  }
+
+  _getSessionTypeInput() {
+    if (!this._sessionTypeInput) {
+      const element = safeGetElementById(SESSION_TYPE_INPUT);
+      this._sessionTypeInput =
+        element instanceof HTMLInputElement ? element : null;
+    }
+    return this._sessionTypeInput;
+  }
+
+  _getAgentSelect(sessionType) {
+    const selectId = AGENT_SELECT_IDS[sessionType];
+    if (!selectId) {
+      return null;
+    }
+
+    if (!this._agentSelectCache.has(selectId)) {
+      const element = safeGetElementById(selectId);
+      this._agentSelectCache.set(
+        selectId,
+        element instanceof HTMLSelectElement ? element : null,
+      );
+    }
+
+    return this._agentSelectCache.get(selectId) || null;
+  }
+
+  _getActiveAgentSelection() {
+    const sessionTypeInput = this._getSessionTypeInput();
+    const rawSessionType = sessionTypeInput?.value;
+    const sessionType = rawSessionType || SESSION_TYPES.WORKFLOW;
+    const selectElement = this._getAgentSelect(sessionType);
+    const agent = selectElement?.value ?? '';
+    return {
+      agent,
+      sessionType,
+      selectElement,
+    };
   }
 }

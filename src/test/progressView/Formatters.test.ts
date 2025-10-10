@@ -37,6 +37,41 @@ describe('LogEntryFormatter DOM', () => {
     assert.equal(el.querySelector('.message')?.textContent, 'hello');
   });
 
+  it('renders progress status entries with native styling', () => {
+    const dom = new JSDOM(`<!doctype html><html><body>
+      <template id="nativeStatusTemplate">
+        <div class="native-status-line" role="status">
+          <span class="native-status-time"></span>
+          <span class="native-status-text"></span>
+        </div>
+      </template>
+    </body></html>`);
+    global.document = dom.window.document as any;
+    global.window = dom.window as any;
+
+    const formatter = new LogEntryFormatter();
+    const timestamp = Date.now();
+
+    const el = formatter.format({
+      id: 'status-1',
+      text: '🟢 Starting continuation #1',
+      level: 'info',
+      timestamp,
+      groupId: null,
+      messageType: 'progressStatus',
+      verbose: false,
+      data: null,
+    } as any);
+
+    assert.ok(el instanceof dom.window.HTMLElement);
+    assert.equal(el?.classList.contains('native-status-line'), true);
+    assert.equal(
+      el?.querySelector('.native-status-text')?.textContent,
+      '🟢 Starting continuation #1',
+    );
+    assert.equal(el?.dataset.logId, 'status-1');
+  });
+
   it('renders tool use entries from structured data', () => {
     const dom = new JSDOM(`<!doctype html><html><body>
       <template id="toolUseTemplate">
@@ -46,7 +81,7 @@ describe('LogEntryFormatter DOM', () => {
             <i class="codicon codicon-wrench"></i>
             <span class="tool-use-title">Tool Use</span>
           </summary>
-          <div class="special-content"></div>
+          <div class="special-content log-entry-content"></div>
         </details>
       </template>
     </body></html>`);

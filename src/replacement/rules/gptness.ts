@@ -32,8 +32,8 @@ export const GPTNESS_REPLACEMENTS: ReplacementCategory = {
     showcasing: 'showing',
     'paradigm shift': 'big change',
     envisage: 'imagine',
-    parameterizing: 'parametrizing',
-    Normalizing: 'Normalizing',
+    // parameterizing: 'parametrizing',
+    Normalising: 'Normalizing',
     conditon: 'condition',
     necessitates: 'requires',
     Itô: 'Ito',
@@ -67,6 +67,9 @@ export const GPTNESS_REPLACEMENTS: ReplacementCategory = {
     surmise: 'guess',
     burgeon: 'grow',
     expound: 'explain',
+
+    // LaTeX packages:
+    ',amsth,': ',amsthm,',
 
     // Sophisticated/Formal GPT Expressions (user curated)
     'it is imperative to': 'we must',

@@ -9,7 +9,7 @@ The TeXRA extension includes a dedicated **Agent Explorer** view within the VS C
 The Agent Explorer is organized into two main sections:
 
 1.  **Built-in Agents**: This section displays the standard agents that come bundled with the TeXRA extension. These files (`.yaml`) define the core functionalities like `correct`, `polish`, `draw`, etc.
-2.  **Custom Agents**: This section displays agents that you have created or added yourself. This directory's location can be customized in the VS Code settings via `texra.explorer.agentsDirectory` and must be an absolute path. If this setting is not configured, or the directory doesn't exist, this section might not appear.
+2.  **Custom Agents**: This section displays agents that you have created or added yourself. When the `texra.explorer.agentsDirectory` setting is left blank, TeXRA seeds a `custom_agents` folder inside its global storage and shows it here automatically. You can override the location with an absolute path in VS Code settings if you want to manage the files elsewhere.
 
 ## Browsing and Viewing Agents
 

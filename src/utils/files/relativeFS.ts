@@ -71,6 +71,51 @@ export abstract class RelativeFS {
   }
 
   /**
+   * Serialize an object to JSON and persist it to disk.
+   */
+  public static async writeJson<T>(
+    relativePath: string,
+    value: T,
+  ): Promise<void> {
+    try {
+      const json = JSON.stringify(value, null, 2);
+      await this.write(relativePath, json);
+    } catch (error) {
+      logger.warn(
+        this.getChannel(),
+        `Failed to write JSON file ${relativePath}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Read a JSON file and deserialize it into a native object.
+   */
+  public static async readJson<T>(relativePath: string): Promise<T> {
+    try {
+      const raw = await this.read(relativePath);
+      return JSON.parse(raw) as T;
+    } catch (error) {
+      if (
+        error instanceof vscode.FileSystemError &&
+        error.code === 'FileNotFound'
+      ) {
+        throw error;
+      }
+      logger.warn(
+        this.getChannel(),
+        `Failed to read JSON file ${relativePath}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+      throw error;
+    }
+  }
+
+  /**
    * Delete a file or directory.
    */
   public static async delete(
