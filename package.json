@@ -422,9 +422,7 @@
             "items": {
               "type": "string"
             },
-            "default": [
-              "PapersEx"
-            ],
+            "default": [],
             "description": "Additional directories to ignore when listing input and edited files",
             "editPresentation": "multilineText",
             "order": 11
