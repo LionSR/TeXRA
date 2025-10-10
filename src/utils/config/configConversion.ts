@@ -9,10 +9,10 @@ import type { AgentConfig } from '@agent/core/AgentConfig';
 import { AgentConfigSchema } from '@agent/core/AgentConfig';
 import { TaskState, isWorkflowTaskState } from '@logger/TaskState';
 import {
-  AgentSessionKind,
+  AgentCategory,
   type AgentType,
-  type AgentSessionMetadata,
-  resolveAgentSessionMetadata,
+  type AgentSessionDescriptor,
+  resolveAgentSessionDescriptor,
 } from '@agent/core/AgentDataclass';
 
 import { FILE_TYPES, type FileType } from './constants';
@@ -40,6 +40,25 @@ function createActiveFilesFromArrays(
   return active;
 }
 
+function createDescriptorFromLegacy(
+  obj: Record<string, any>,
+): AgentSessionDescriptor | undefined {
+  const category = obj.agentSessionKind as AgentCategory | undefined;
+  if (!category) {
+    return undefined;
+  }
+
+  if (category !== AgentCategory.Workflow && category !== AgentCategory.ToolUse) {
+    return undefined;
+  }
+
+  const agentType = obj.agentType as AgentType | undefined;
+  return {
+    agentType,
+    agentCategory: category,
+  };
+}
+
 /**
  * Converts an AgentConfig object to a TaskState object
  *
@@ -48,49 +67,52 @@ function createActiveFilesFromArrays(
  */
 export function agentConfigToTaskState(
   config: AgentConfig,
-  metadata?: AgentSessionMetadata | AgentType,
+  session?: AgentSessionDescriptor | AgentType,
 ): TaskState {
-  const configMetadata = resolveAgentSessionMetadata(
-    config.agentType,
-    config.agentSessionKind,
-  );
+  const resolvedSession = (() => {
+    if (!session && config.session) {
+      return config.session;
+    }
 
-  const providedMetadata =
-    typeof metadata === 'object' && metadata !== null
-      ? resolveAgentSessionMetadata(
-          metadata.agentType,
-          metadata.agentSessionKind,
-        )
-      : metadata !== undefined
-        ? resolveAgentSessionMetadata(metadata)
-        : null;
+    if (typeof session === 'string') {
+      return resolveAgentSessionDescriptor(session);
+    }
 
-  const resolvedMetadata = providedMetadata
-    ? resolveAgentSessionMetadata(
-        providedMetadata.agentType ?? configMetadata.agentType,
-        providedMetadata.agentSessionKind ?? configMetadata.agentSessionKind,
-      )
-    : configMetadata;
+    if (session) {
+      return session;
+    }
+
+    return resolveAgentSessionDescriptor(config.agentType);
+  })();
+
+  const normalizedSession: AgentSessionDescriptor = {
+    agentType: resolvedSession.agentType ?? config.agentType,
+    agentCategory: resolvedSession.agentCategory,
+  };
 
   const normalizedConfig: AgentConfig = {
     ...config,
-    agentType: resolvedMetadata.agentType,
-    agentSessionKind: resolvedMetadata.agentSessionKind,
+    agentType: normalizedSession.agentType,
+    session: normalizedSession,
   };
 
-  if (resolvedMetadata.agentSessionKind === AgentSessionKind.ToolUse) {
+  if (normalizedSession.agentCategory === AgentCategory.ToolUse) {
     return {
       agentConfig: normalizedConfig,
-      agentType: resolvedMetadata.agentType,
-      agentSessionKind: AgentSessionKind.ToolUse,
+      session: {
+        agentType: normalizedSession.agentType,
+        agentCategory: AgentCategory.ToolUse,
+      },
       toolSessionState: {},
     };
   }
 
   return {
     agentConfig: normalizedConfig,
-    agentType: resolvedMetadata.agentType,
-    agentSessionKind: AgentSessionKind.Workflow,
+    session: {
+      agentType: normalizedSession.agentType,
+      agentCategory: AgentCategory.Workflow,
+    },
     activeFiles: createActiveFilesFromArrays(normalizedConfig),
   };
 }
@@ -105,12 +127,12 @@ export function agentConfigToTaskState(
 export function objectToTaskState(obj: Record<string, any>): TaskState {
   // Check if this is already in the new format with nested agentConfig
   if (obj.agentConfig && typeof obj.agentConfig === 'object') {
-    const agentType = obj.agentType as AgentType | undefined;
-    const sessionKind = normalizeSessionKind(obj.agentSessionKind);
-    const metadata = resolveAgentSessionMetadata(agentType, sessionKind);
+    const sessionDescriptor =
+      (obj.session as AgentSessionDescriptor | undefined) ??
+      createDescriptorFromLegacy(obj);
     const state = agentConfigToTaskState(
       AgentConfigSchema.parse(obj.agentConfig),
-      metadata,
+      sessionDescriptor,
     );
 
     if (isWorkflowTaskState(state)) {
@@ -196,10 +218,10 @@ export function objectToTaskState(obj: Record<string, any>): TaskState {
   // Parse only AgentConfig-compatible fields
   try {
     const normalized = AgentConfigSchema.parse(agentConfigData);
-    const agentType = obj.agentType as AgentType | undefined;
-    const sessionKind = normalizeSessionKind(obj.agentSessionKind);
-    const metadata = resolveAgentSessionMetadata(agentType, sessionKind);
-    const taskState = agentConfigToTaskState(normalized, metadata);
+    const sessionDescriptor =
+      (obj.session as AgentSessionDescriptor | undefined) ??
+      createDescriptorFromLegacy(obj);
+    const taskState = agentConfigToTaskState(normalized, sessionDescriptor);
 
     if (isWorkflowTaskState(taskState)) {
       if (activeFiles) {
@@ -215,8 +237,7 @@ export function objectToTaskState(obj: Record<string, any>): TaskState {
     console.error('Failed to parse task state, using defaults:', error);
     const defaultConfig = AgentConfigSchema.parse({});
     const agentType = obj.agentType as AgentType | undefined;
-    const metadata = resolveAgentSessionMetadata(agentType);
-    const taskState = agentConfigToTaskState(defaultConfig, metadata);
+    const taskState = agentConfigToTaskState(defaultConfig, agentType);
 
     if (isWorkflowTaskState(taskState) && activeFiles) {
       taskState.activeFiles = activeFiles;
@@ -233,12 +254,4 @@ export function objectToTaskState(obj: Record<string, any>): TaskState {
   }
 }
 
-function normalizeSessionKind(value: unknown): AgentSessionKind | undefined {
-  if (
-    value === AgentSessionKind.Workflow ||
-    value === AgentSessionKind.ToolUse
-  ) {
-    return value;
-  }
-  return undefined;
-}
+// normalizeSessionKind removed – canonical descriptor is now provided directly.

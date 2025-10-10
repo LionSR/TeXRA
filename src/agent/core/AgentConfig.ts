@@ -3,7 +3,11 @@ import { z } from 'zod';
 
 // Local imports - agent
 // Local imports - agent components
-import { AgentSessionKind, AgentType } from './AgentDataclass';
+import {
+  AgentCategory,
+  AgentType,
+  type AgentSessionDescriptor,
+} from './AgentDataclass';
 import { DEFAULT_TOOL_CONFIG, ToolConfigSchema } from './ToolConfig';
 
 /**
@@ -27,7 +31,12 @@ export const AgentConfigSchema = z
     useMultipleOutputs: z.boolean().prefault(false),
 
     agentType: z.enum(AgentType).optional(),
-    agentSessionKind: z.enum(AgentSessionKind).optional(),
+    session: z
+      .object({
+        agentType: z.enum(AgentType).optional(),
+        agentCategory: z.enum(AgentCategory),
+      })
+      .optional(),
 
     inputFile: z.string().prefault(''),
     inputFiles: z.array(z.string()).nullable().prefault(null),
@@ -48,4 +57,6 @@ export const AgentConfigSchema = z
       'Number of output files must not be greater than the number of input files.',
   });
 
-export type AgentConfig = z.infer<typeof AgentConfigSchema>;
+export type AgentConfig = z.infer<typeof AgentConfigSchema> & {
+  session?: AgentSessionDescriptor;
+};

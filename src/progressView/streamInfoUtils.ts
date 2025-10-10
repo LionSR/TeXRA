@@ -5,10 +5,7 @@ import * as path from 'path';
 import type { ProgressViewState } from './state/ProgressViewState';
 import type { AgentFilter, StreamTabInfo } from './types';
 // Local imports - agent types
-import {
-  AgentSessionKind,
-  resolveAgentSessionMetadata,
-} from '@agent/core/AgentDataclass';
+import { AgentCategory } from '@agent/core/AgentDataclass';
 
 const sortComparators = {
   time: (a: StreamTabInfo, b: StreamTabInfo) =>
@@ -21,16 +18,16 @@ const sortComparators = {
 } as const;
 
 function matchesAgentFilter(
-  sessionKind: AgentSessionKind,
+  sessionCategory: AgentCategory,
   filter: AgentFilter,
 ): boolean {
   switch (filter) {
     case 'all':
       return true;
     case 'toolUse':
-      return sessionKind === AgentSessionKind.ToolUse;
+      return sessionCategory === AgentCategory.ToolUse;
     case 'workflow':
-      return sessionKind === AgentSessionKind.Workflow;
+      return sessionCategory === AgentCategory.Workflow;
     default:
       return true;
   }
@@ -39,9 +36,9 @@ function matchesAgentFilter(
 function buildStreamLabel(
   agentName: string,
   inputFile: string,
-  sessionKind: AgentSessionKind,
+  sessionCategory: AgentCategory,
 ): string {
-  if (sessionKind === AgentSessionKind.ToolUse) {
+  if (sessionCategory === AgentCategory.ToolUse) {
     return agentName;
   }
 
@@ -68,27 +65,23 @@ export function buildStreamInfos(
     const outputs = taskState?.agentConfig.outputFiles || [];
     const inputFile = taskState?.agentConfig.inputFile || '';
     const agentName = taskState?.agentConfig.agent || id.split('@')[0];
-    const metadata = resolveAgentSessionMetadata(
-      taskState?.agentType,
-      taskState?.agentSessionKind ?? sessionKindHint,
-    );
-    const agentType = metadata.agentType ?? taskState?.agentType;
-    const agentSessionKind = metadata.agentSessionKind;
-    if (!matchesAgentFilter(agentSessionKind, filter)) {
+    const sessionCategory = taskState?.session.agentCategory ?? sessionKindHint;
+    if (!sessionCategory || !matchesAgentFilter(sessionCategory, filter)) {
       return acc;
     }
-    const isToolAgent = agentSessionKind === AgentSessionKind.ToolUse;
+    const agentType = taskState?.session.agentType ?? taskState?.agentConfig.agentType;
+    const isToolAgent = sessionCategory === AgentCategory.ToolUse;
     const executionId = state.getExecutionId(id);
-    const label = buildStreamLabel(agentName, inputFile, agentSessionKind);
+    const label = buildStreamLabel(agentName, inputFile, sessionCategory);
     acc.push({
       name: id,
       label,
       model: taskState?.agentConfig.model,
       agent: taskState?.agentConfig.agent,
       agentType,
-      agentSessionKind,
+      agentSessionKind: sessionCategory,
       uiTraits: {
-        sessionKind: agentSessionKind,
+        sessionKind: sessionCategory,
         isToolAgent,
       },
       hasMultipleOutputs: Array.isArray(outputs) && outputs.length > 1,
