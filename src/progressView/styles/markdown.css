@@ -5,14 +5,13 @@
   overflow: visible;
 }
 
-.model-response-content {
+/* Banner content for model responses - uses normal whitespace handling */
+.banner-content--model {
   padding: 0;
-  /* Model responses use normal whitespace handling */
   white-space: normal;
 }
 
-/* Preserve formatting for code blocks within model responses */
-.model-response-content pre {
+.banner-content--model pre {
   white-space: pre-wrap;
 }
 
@@ -36,7 +35,7 @@
 
 .markdown-content h1 {
   font-size: var(--font-size-lg);
-  border-bottom: var(--border-thin) solid var(--vscode-panel-border, #555);
+  border-bottom: var(--border-thin) solid var(--vscode-panel-border);
   padding-bottom: var(--spacing-small);
 }
 
@@ -45,12 +44,11 @@
   padding-left: var(--spacing-medium);
   margin-top: var(--spacing-large);
   margin-bottom: var(--spacing-small);
-  border-left: var(--border-thick) solid
-    var(--vscode-activityBarBadge-background, #007acc);
-  border-bottom: var(--border-thin) solid rgba(85, 85, 85, 0.3);
+  border-left: var(--border-thick) solid var(--vscode-activityBarBadge-background);
+  border-bottom: var(--border-thin) solid var(--vscode-panel-border);
   padding-bottom: var(--spacing-tiny);
   border-radius: var(--border-radius) 0 0 var(--border-radius);
-  color: var(--vscode-textLink-foreground, #3794ff);
+  color: var(--vscode-textLink-foreground);
 }
 
 .markdown-content h3 {
@@ -88,7 +86,7 @@
 }
 
 .markdown-content code {
-  background-color: var(--vscode-textPreformat-background, #0a0a0a);
+  background-color: var(--vscode-textCodeBlock-background);
   padding: var(--spacing-tiny) var(--spacing-small);
   border-radius: var(--border-radius);
   font-family: var(--font-family);
@@ -99,9 +97,8 @@
   padding: var(--spacing-medium) var(--spacing-large);
   margin: 0.5em 0;
   border-radius: var(--border-radius);
-  background-color: var(--vscode-textPreformat-background, #0a0a0a);
-  border-left: calc(var(--spacing-tiny)) solid
-    var(--vscode-activityBarBadge-background, #007acc);
+  background-color: var(--vscode-textCodeBlock-background);
+  border-left: var(--spacing-tiny) solid var(--vscode-activityBarBadge-background);
   overflow-x: auto;
 }
 
@@ -112,14 +109,14 @@
   line-height: 1.4;
 }
 
-/* Style for LaTeX references */
+/* LaTeX references use VS Code symbol keyword color */
 .markdown-content .latex-ref {
   font-family: var(--font-family);
-  color: var(--vscode-symbolIcon-keywordForeground, #569cd6);
+  color: var(--vscode-symbolIcon-keywordForeground);
 }
 
 .markdown-content a {
-  color: var(--vscode-textLink-activeForeground, #3794ff);
+  color: var(--vscode-textLink-foreground);
   text-decoration: none;
 }
 
@@ -128,11 +125,10 @@
 }
 
 .markdown-content blockquote {
-  border-left: var(--border-thick) solid
-    var(--vscode-activityBarBadge-background, #007acc);
+  border-left: var(--border-thick) solid var(--vscode-activityBarBadge-background);
   margin: var(--spacing-medium) 0;
   padding-left: var(--spacing-xlarge);
-  color: var(--vscode-descriptionForeground, #cccccc);
+  color: var(--vscode-descriptionForeground);
   font-style: italic;
 }
 
@@ -144,12 +140,12 @@
 
 .markdown-content table th,
 .markdown-content table td {
-  border: var(--border-thin) solid var(--vscode-panel-border, #555);
+  border: var(--border-thin) solid var(--vscode-panel-border);
   padding: var(--spacing-small) var(--spacing-large);
 }
 
 .markdown-content table th {
-  background-color: var(--vscode-editor-lineHighlightBackground, #2a2d2e);
+  background-color: var(--vscode-editor-lineHighlightBackground);
   text-align: left;
 }
 
@@ -157,9 +153,9 @@
   max-width: 100%;
 }
 
-/* Styling for different sections in scratchpad */
+/* Markdown text styling */
 .markdown-content strong {
-  color: var(--vscode-editor-foreground, #d4d4d4);
+  color: var(--vscode-editor-foreground);
   font-weight: 600;
 }
 
@@ -170,14 +166,14 @@
 .markdown-content hr {
   margin: 0.7em 0;
   height: var(--border-thin);
-  background-color: var(--vscode-editorWidget-border, #454545);
+  background-color: var(--vscode-editorWidget-border);
   border: none;
 }
 
-/* Special styling for reflection sections */
+/* Reflection sections use info color */
 .markdown-content em strong,
 .markdown-content strong em {
-  color: var(--vscode-editorInfo-foreground, #75beff);
+  color: var(--vscode-editorInfo-foreground);
 }
 
 /* Additional enhancements for scratchpad content */
@@ -197,10 +193,9 @@
   margin-bottom: 0;
 }
 
-/* Special handling for reflection patterns */
-.special-content--scratchpad p:has(strong:first-child) {
-  border-left: calc(var(--spacing-small) - 1px) solid
-    var(--vscode-notificationsInfoIcon-foreground, #75beff);
+/* Scratchpad reflection patterns */
+.banner-content--scratchpad p:has(strong:first-child) {
+  border-left: calc(var(--spacing-small) - 1px) solid var(--vscode-notificationsInfoIcon-foreground);
   padding-left: var(--spacing-medium);
 }
 
