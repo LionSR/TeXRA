@@ -9,6 +9,7 @@ import * as vscode from 'vscode';
 import {
   AgentCategory,
   AgentType,
+  resolveAgentSessionDescriptor,
   type AgentSessionDescriptor,
 } from '@agent/core/AgentDataclass';
 import { ToolState } from '@agent/core/ToolState';
@@ -52,7 +53,7 @@ const ToolUseSessionSnapshotSchema = z.strictObject({
   streamId: z.string(),
   agentName: z.string(),
   model: z.string(),
-  agentSessionKind: z.enum(AgentCategory),
+  agentSessionKind: z.enum(AgentCategory).optional(),
   session: SessionDescriptorSchema.optional(),
   messages: z.array(z.unknown()),
   toolState: ToolStateSnapshotSchema,
@@ -61,7 +62,10 @@ const ToolUseSessionSnapshotSchema = z.strictObject({
 
 type ToolUseSessionSnapshotParsed = z.infer<typeof ToolUseSessionSnapshotSchema>;
 
-export type ToolUseSessionSnapshot = ToolUseSessionSnapshotParsed & {
+export type ToolUseSessionSnapshot = Omit<
+  ToolUseSessionSnapshotParsed,
+  'agentSessionKind' | 'session'
+> & {
   session: Required<AgentSessionDescriptor>;
 };
 
@@ -122,15 +126,17 @@ interface ResumingSessionState {
 function normalizeSnapshot(
   snapshot: ToolUseSessionSnapshotParsed,
 ): ToolUseSessionSnapshot {
-  const agentCategory = snapshot.session?.agentCategory ?? snapshot.agentSessionKind;
-  const agentType = snapshot.session?.agentType ?? AgentType.ToolUse;
+  const descriptor = snapshot.session
+    ? snapshot.session
+    : resolveAgentSessionDescriptor(AgentType.ToolUse, snapshot.agentSessionKind);
+
+  const { agentSessionKind: _legacyKind, session: _legacySession, ...rest } = snapshot;
 
   return {
-    ...snapshot,
-    agentSessionKind: agentCategory,
+    ...rest,
     session: {
-      agentType,
-      agentCategory,
+      agentType: descriptor.agentType ?? AgentType.ToolUse,
+      agentCategory: descriptor.agentCategory,
     },
   };
 }
@@ -310,7 +316,6 @@ export class ToolUseSessionManager {
         streamId: payload.streamId,
         agentName: payload.agentName,
         model: payload.model,
-        agentSessionKind: normalizedSession.agentCategory,
         session: normalizedSession,
         messages: structuredClone(payload.messages),
         toolState: toToolStateSnapshot(payload.toolState),
