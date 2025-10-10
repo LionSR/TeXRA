@@ -48,6 +48,10 @@ import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
 import { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import type { ToolDefinition } from '@model';
+import {
+  describeAttachments,
+  extractToolAttachments,
+} from './utils/toolAttachmentUtils';
 import { cleanFileContent } from '@replacement/engine';
 import replacementEngine from '@replacement/engine';
 
@@ -981,14 +985,15 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     return null;
   }
 
-  createToolUseFollowUpMessages(
+  async createToolUseFollowUpMessages(
+    _client: GoogleGenAI | undefined,
     id: string,
     name: string,
     call: FunctionCall,
     result: Record<string, unknown>,
     _toolState?: ToolState,
     text?: string,
-  ): [Content, Content] {
+  ): Promise<Content[]> {
     // Handle both args and input fields for backward compatibility
     const args =
       call?.args && typeof call.args === 'object'
@@ -1008,10 +1013,17 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     }
 
     // Use the same ID for the result to maintain correlation
+    const { attachments, sanitizedResult } = extractToolAttachments(result);
+    if (attachments.length > 0) {
+      (sanitizedResult as Record<string, unknown>).attachmentSummary =
+        `Attachments available:\n${describeAttachments(attachments).join(
+          '\n',
+        )}\nUse the read_file tool to download them.`;
+    }
     const resultPart = createPartFromFunctionResponse(
       callId,
       functionName,
-      result,
+      sanitizedResult,
     );
     const callParts: Part[] = [];
     if (text) {

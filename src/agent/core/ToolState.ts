@@ -71,7 +71,11 @@ export class ToolState implements IToolState {
    * @param files Array of paths to new figure files
    */
   addMediaFiles(files: string[]): void {
-    this.mediaFiles.push(...files);
+    for (const file of files) {
+      if (!this.mediaFiles.includes(file)) {
+        this.mediaFiles.push(file);
+      }
+    }
   }
 
   /**

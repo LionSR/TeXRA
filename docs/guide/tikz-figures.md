@@ -102,6 +102,22 @@ You can also extract TikZ figures manually using VSCode commands:
 
 This will create standalone files for each TikZ figure in your document.
 
+### Agent Tool Calls
+
+Tool-use agents can invoke `extract_tikz_figures` to perform the same discovery and, optionally, compilation steps programmatically. Pass a payload such as:
+
+```json
+{
+  "name": "extract_tikz_figures",
+  "arguments": {
+    "texPath": "figures/diagrams.tex",
+    "compile": true
+  }
+}
+```
+
+When `compile` is `true`, the tool produces standalone PDFs (one per TikZ figure) and attaches them to the result so models like Anthropic Claude or the OpenAI Responses API can receive the binary output directly. Set `compile` to `false` if you only need a summary of labels or plan to modify the extracted TikZ code yourself.
+
 ## TikZ Compilation
 
 Once extracted, TikZ figures can be compiled into viewable images:

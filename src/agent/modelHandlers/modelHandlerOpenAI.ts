@@ -23,6 +23,10 @@ import {
 } from '../core/ResponseUsage';
 import { ToolState } from '../core/ToolState';
 import { ModelHandler } from './ModelHandler';
+import {
+  describeAttachments,
+  extractToolAttachments,
+} from './utils/toolAttachmentUtils';
 import { toOpenAITools } from './toolConversion';
 import {
   normalizeOpenAIMessageContent,
@@ -35,7 +39,7 @@ import { MediaEntry } from '@agent/utils/mediaTypes';
 import { calculateTokenPrice } from '@agent/utils/priceUtils';
 import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
-import type { ToolDefinition } from '@model';
+import type { ModelConfig, ToolDefinition } from '@model';
 import { cleanFileContent } from '@replacement/engine';
 import { K_SLICE, MESSAGE_PREVIEW_LENGTH } from '@utils/config';
 
@@ -1221,14 +1225,15 @@ export class ModelHandlerOpenAI extends ModelHandler<
     return null;
   }
 
-  createToolUseFollowUpMessages(
+  async createToolUseFollowUpMessages(
+    _client: OpenAI | undefined,
     id: string,
     name: string,
     call: ChatCompletionMessageToolCall | ChatCompletionMessage.FunctionCall,
     result: Record<string, unknown>,
     _toolState?: ToolState,
     text?: string,
-  ): ChatCompletionMessageParam[] {
+  ): Promise<ChatCompletionMessageParam[]> {
     const toolCall = this.normalizeToolCall(id, name, call);
     const callMsg: ChatCompletionAssistantMessageParam = {
       role: 'assistant',
@@ -1237,10 +1242,18 @@ export class ModelHandlerOpenAI extends ModelHandler<
     if (text) {
       callMsg.content = [{ type: 'text', text }];
     }
+    const { attachments, sanitizedResult } = extractToolAttachments(result);
+    if (attachments.length > 0) {
+      (sanitizedResult as Record<string, unknown>).attachmentSummary =
+        `Attachments available:\n${describeAttachments(attachments).join(
+          '\n',
+        )}\nUse the read_file tool to download them.`;
+    }
+
     const resultMsg: ChatCompletionToolMessageParam = {
       role: 'tool',
       tool_call_id: toolCall.id ?? id,
-      content: JSON.stringify(result),
+      content: JSON.stringify(sanitizedResult),
     };
     const messages: ChatCompletionMessageParam[] = [callMsg, resultMsg];
     return messages;
