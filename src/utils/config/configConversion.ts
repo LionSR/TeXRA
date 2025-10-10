@@ -48,7 +48,10 @@ function createDescriptorFromLegacy(
     return undefined;
   }
 
-  if (category !== AgentCategory.Workflow && category !== AgentCategory.ToolUse) {
+  if (
+    category !== AgentCategory.Workflow &&
+    category !== AgentCategory.ToolUse
+  ) {
     return undefined;
   }
 
@@ -74,7 +77,7 @@ export function agentConfigToTaskState(
     config.session ??
     (typeof session === 'string'
       ? resolveAgentSessionDescriptor(session)
-      : session ?? resolveAgentSessionDescriptor(config.agentType));
+      : (session ?? resolveAgentSessionDescriptor(config.agentType)));
 
   if (resolvedSession.agentCategory === AgentCategory.ToolUse) {
     return {

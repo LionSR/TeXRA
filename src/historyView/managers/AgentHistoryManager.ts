@@ -39,7 +39,8 @@ export class AgentHistoryManager {
    */
   public static async addToHistory(config: AgentConfig): Promise<string> {
     // Trust that config already has session (internal data from runtime)
-    const session = config.session ?? resolveAgentSessionDescriptor(config.agentType);
+    const session =
+      config.session ?? resolveAgentSessionDescriptor(config.agentType);
 
     const historyItem: AgentHistoryItem = {
       id: randomUUID(),

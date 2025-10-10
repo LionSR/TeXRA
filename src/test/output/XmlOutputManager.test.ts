@@ -5,7 +5,11 @@ import { strict as assert } from 'assert';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 
 // Local imports
-import { AgentSetting, AgentType, AgentCategory } from '@agent/core/AgentDataclass';
+import {
+  AgentSetting,
+  AgentType,
+  AgentCategory,
+} from '@agent/core/AgentDataclass';
 import { XmlOutputManager } from '@agent/output/XmlOutputManager';
 import { AgentLogger } from '@logger/AgentLogger';
 import { WorkspaceFS } from '@utils/files';

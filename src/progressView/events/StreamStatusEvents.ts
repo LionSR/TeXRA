@@ -68,7 +68,11 @@ export function createStreamStatusEvents(
 
     const currentFilter = state.agentTypeFilter;
     const targetCategory = session?.agentCategory;
-    if (targetCategory && currentFilter !== 'all' && currentFilter !== targetCategory) {
+    if (
+      targetCategory &&
+      currentFilter !== 'all' &&
+      currentFilter !== targetCategory
+    ) {
       state.agentTypeFilter = targetCategory;
     }
 

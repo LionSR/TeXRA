@@ -58,7 +58,10 @@ suite('ToolUseSessionManager snapshot compatibility', () => {
       streamId: 'stream-id',
       agentName: 'demo-agent',
       model: 'demo-model',
-      session: { agentType: AgentType.ToolUse, agentCategory: AgentCategory.ToolUse },
+      session: {
+        agentType: AgentType.ToolUse,
+        agentCategory: AgentCategory.ToolUse,
+      },
       messages: [] as ProviderMessage[],
       toolState,
     };
