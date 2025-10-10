@@ -372,4 +372,56 @@ describe('ResponseCycle background reasoning logs', () => {
     );
     assert.equal(thinkingLogs[0]?.message, 'first step\nsecond step');
   });
+
+  it('allows streaming when background responses are disabled', async () => {
+    configValues.clear();
+    configValues.set('model.useStreaming', true);
+    configValues.set('model.useStreamingOpenai', true);
+    configValues.set('model.useBackgroundResponses', false);
+    configValues.set('texra.model.useStreaming', true);
+    configValues.set('texra.model.useStreamingOpenai', true);
+    configValues.set('texra.model.useBackgroundResponses', false);
+
+    const loggerStub = {
+      channelId: 'test',
+      isAgentLogger: true,
+      debug() {},
+      info() {},
+      warn() {},
+      error() {},
+      fileList() {},
+      missingOutputs() {},
+      latexDiff() {},
+      statistics() {},
+      userMessage() {},
+      startGroup: async () => 'group',
+      endGroup() {},
+      getActiveGroupId: () => undefined,
+      setActiveGroupId() {},
+    } as unknown as AgentLogger;
+
+    const handlerConfig: ModelConfig = {
+      name: 'openai-response-test',
+      fullName: 'openai-response-test',
+      provider: ModelProvider.OPENAI,
+      maxOutputTokens: 4096,
+      inputPrice: 0,
+      outputPrice: 0,
+      contextWindow: 8192,
+      capabilities: {
+        ...DEFAULT_MODEL_CAPABILITIES,
+        supportsReasoning: true,
+      },
+      openRouterOnly: false,
+    };
+
+    const handler = new StubOpenAIResponsesHandler(handlerConfig);
+    handler.setLogger(loggerStub);
+
+    assert.equal(
+      handler.getStreamingConfig(),
+      true,
+      'Expected streaming to be enabled when background mode is disabled',
+    );
+  });
 });
