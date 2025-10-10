@@ -75,13 +75,13 @@ describe('LogEntryFormatter DOM', () => {
   it('renders tool use entries from structured data', () => {
     const dom = new JSDOM(`<!doctype html><html><body>
       <template id="toolUseTemplate">
-        <details class="special-details">
+        <details class="banner-details">
           <summary class="details-summary">
             <i class="toggle-icon"></i>
             <i class="codicon codicon-wrench"></i>
             <span class="tool-use-title">Tool Use</span>
           </summary>
-          <div class="special-content log-entry-content"></div>
+          <div class="banner-content log-entry-content"></div>
         </details>
       </template>
     </body></html>`);

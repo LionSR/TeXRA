@@ -8,7 +8,11 @@ import { FileOpTool } from './fileOp';
 import { GlobTool } from './glob';
 import { GrepTool } from './grep';
 import { LsTool } from './ls';
-import { ArxivDownloadTool } from './latex/ArxivDownloadTool';
+import {
+  ArxivDownloadTool,
+  ExtractLatexFiguresTool,
+  ExtractTikzFiguresTool,
+} from './latex';
 import { ReadFileTool } from './ReadTool';
 import { TextEditorTool } from './TextEditorTool';
 import { WriteFileTool } from './WriteTool';
@@ -30,6 +34,8 @@ export const DEFAULT_TOOL_REGISTRY: Record<string, BaseTool<any>> = {
   grep: new GrepTool(),
   ls: new LsTool(),
   download_arxiv_source: new ArxivDownloadTool(),
+  extract_figures: new ExtractLatexFiguresTool(),
+  extract_tikz_figures: new ExtractTikzFiguresTool(),
   wolfram: new WolframTool(),
   texcount: new TexcountTool(),
   web_fetch: new WebFetchTool(),
