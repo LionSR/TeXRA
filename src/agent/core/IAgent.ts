@@ -1,7 +1,7 @@
 // Local imports - agent
 import type { AgentConfig } from './AgentConfig';
 // Local imports - agent components
-import type { AgentSessionMetadata } from './AgentDataclass';
+import type { AgentSessionDescriptor } from './AgentDataclass';
 // Local imports - agent types
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 
@@ -37,7 +37,7 @@ export interface IAgent {
   /**
    * Report how the agent identifies its session for logging and UI purposes.
    */
-  getSessionMetadata(): AgentSessionMetadata;
+  getSessionMetadata(): AgentSessionDescriptor;
 
   /**
    * Return the most recent run group identifier for logging fallbacks.

@@ -7,7 +7,7 @@ import * as vscode from 'vscode';
 // Local imports - agent
 import type { BaseToolUseAgent } from '@agent/implementations/BaseToolUseAgent';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
-import { AgentSessionKind } from '@agent/core/AgentDataclass';
+import { AgentCategory, AgentType } from '@agent/core/AgentDataclass';
 import {
   registerToolUseAgent,
   clearToolUseAgents,
@@ -282,7 +282,8 @@ describe('followUpCommand', () => {
       streamId,
       agentName: 'demo-agent',
       model: 'demo-model',
-      agentSessionKind: AgentSessionKind.ToolUse,
+      agentSessionKind: AgentCategory.ToolUse,
+      session: { agentType: AgentType.ToolUse, agentCategory: AgentCategory.ToolUse },
       messages: [],
       toolState: {
         texcountStats: null,

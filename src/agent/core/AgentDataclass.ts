@@ -17,11 +17,11 @@ export enum AgentType {
 }
 
 /**
- * Canonical session groupings used throughout the extension UI.
+ * Canonical session categories used throughout the extension UI.
  * Workflow sessions represent traditional direct/CoT executions while
  * toolUse isolates interactive tool panels.
  */
-export enum AgentSessionKind {
+export enum AgentCategory {
   Workflow = 'workflow',
   ToolUse = 'toolUse',
 }
@@ -29,36 +29,36 @@ export enum AgentSessionKind {
 /**
  * Shared metadata describing how an agent session should be classified.
  */
-export interface AgentSessionMetadata {
+export interface AgentSessionDescriptor {
   /** Specific agent implementation type if known. */
   agentType?: AgentType;
   /** Canonical grouping used by the UI to filter sessions. */
-  agentSessionKind: AgentSessionKind;
+  agentCategory: AgentCategory;
 }
 
 /**
- * Derive the canonical {@link AgentSessionKind} from a specific agent type.
- * Defaults to {@link AgentSessionKind.Workflow} when the type is unknown.
+ * Derive the canonical {@link AgentCategory} from a specific agent type.
+ * Defaults to {@link AgentCategory.Workflow} when the type is unknown.
  */
-export function deriveAgentSessionKind(
+export function deriveAgentCategory(
   agentType?: AgentType | null,
-): AgentSessionKind {
+): AgentCategory {
   return agentType === AgentType.ToolUse
-    ? AgentSessionKind.ToolUse
-    : AgentSessionKind.Workflow;
+    ? AgentCategory.ToolUse
+    : AgentCategory.Workflow;
 }
 
 /**
  * Resolve canonical session metadata from optional hints.
  */
-export function resolveAgentSessionMetadata(
+export function resolveAgentSessionDescriptor(
   agentType?: AgentType | null,
-  sessionKindHint?: AgentSessionKind | null,
-): AgentSessionMetadata {
-  const agentSessionKind = sessionKindHint ?? deriveAgentSessionKind(agentType);
+  categoryHint?: AgentCategory | null,
+): AgentSessionDescriptor {
+  const agentCategory = categoryHint ?? deriveAgentCategory(agentType);
   return {
     agentType: agentType ?? undefined,
-    agentSessionKind,
+    agentCategory,
   };
 }
 
@@ -68,6 +68,7 @@ export function resolveAgentSessionMetadata(
  */
 export const AgentSettingBaseSchema = z.strictObject({
   agentType: z.enum(AgentType).prefault(AgentType.CoT),
+  agentCategory: z.enum(AgentCategory).prefault(AgentCategory.Workflow),
   documentTag: z
     .string()
     .min(1, 'documentTag cannot be empty')
@@ -114,11 +115,22 @@ export const AgentWorkflowSettingSchema = AgentSettingBaseSchema.extend({
         'Workflow agent settings cannot use the toolUse agent type. Use the tool-use schema instead.',
     });
   }
+  if (data.agentCategory === AgentCategory.ToolUse) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['agentCategory'],
+      message:
+        'Workflow agent settings must use the workflow category. Use the tool-use schema instead.',
+    });
+  }
 });
 
 /** Tool-use agents never expose workflow-specific flags. */
 export const AgentToolUseSettingSchema = AgentSettingBaseSchema.extend({
   agentType: z.literal(AgentType.ToolUse).prefault(AgentType.ToolUse),
+  agentCategory: z
+    .literal(AgentCategory.ToolUse)
+    .prefault(AgentCategory.ToolUse),
 });
 
 /**
@@ -132,6 +144,18 @@ export const AgentSettingSchema = z.union([
 export type AgentWorkflowSetting = z.infer<typeof AgentWorkflowSettingSchema>;
 export type AgentToolUseSetting = z.infer<typeof AgentToolUseSettingSchema>;
 export type AgentSetting = z.infer<typeof AgentSettingSchema>;
+
+/**
+ * Return the canonical session descriptor for a fully-materialized agent setting.
+ */
+export function getAgentSessionDescriptor(
+  setting: AgentSetting,
+): Required<AgentSessionDescriptor> {
+  return {
+    agentType: setting.agentType,
+    agentCategory: setting.agentCategory,
+  };
+}
 
 /** Narrow an {@link AgentSetting} to the workflow variant. */
 export function requireWorkflowSetting(
