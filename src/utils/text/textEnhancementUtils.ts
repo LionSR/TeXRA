@@ -16,13 +16,14 @@ import { getConfig } from '../config';
 
 // Local imports - agent runtime
 import { ModelFactory } from '@agent/runtime/ModelFactory';
+import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
 
 // Local imports - model configs
 import { MODEL_CONFIGS } from '@model/ModelRegistry';
 
 const CHANNEL = 'TextEnhancement';
 
-const DEFAULT_POLISH_MODEL = 'sonnet37';
+const DEFAULT_POLISH_MODEL = 'sonnet45';
 
 /**
  * Text Enhancement Utilities
@@ -178,7 +179,7 @@ ${text}`;
         };
       }
 
-      let handler: ReturnType<typeof ModelFactory.createHandler>;
+      let handler: ModelHandler;
       try {
         handler = ModelFactory.createHandler(modelConfig);
       } catch (error) {

@@ -66,7 +66,7 @@ Configure how TeXRA connects to AI model providers:
 "texra.model.useStreamingOpenAIReasoning": false,
 "texra.model.useOpenAIResponsesAPI": true,
 "texra.model.gpt5ReasoningSummary": false,
-"texra.model.instructionPolishModel": "sonnet37"
+"texra.model.instructionPolishModel": "sonnet45"
 ```
 
 - `useOpenRouter`: Access models through OpenRouter instead of direct APIs
