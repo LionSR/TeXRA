@@ -150,7 +150,11 @@ describe('polishTextWithAI', () => {
 
     const result = await polishTextWithAI('draft instructions');
 
-    assert.equal(result.success, true, 'should succeed when stub handler resolves');
+    assert.equal(
+      result.success,
+      true,
+      'should succeed when stub handler resolves',
+    );
     assert.equal(
       result.text,
       'Polished instruction',
@@ -183,7 +187,11 @@ describe('polishTextWithAI', () => {
 
     const result = await polishTextWithAI('draft instructions');
 
-    assert.equal(result.success, false, 'should fail when the model short name is unknown');
+    assert.equal(
+      result.success,
+      false,
+      'should fail when the model short name is unknown',
+    );
     assert.ok(result.error?.includes('unknown-model'));
   });
 });

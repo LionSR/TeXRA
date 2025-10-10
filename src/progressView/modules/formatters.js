@@ -701,7 +701,10 @@ export class LogEntryFormatter {
       timestampElem.classList.add('timestamp');
       timestampElem.title = fullTimestamp;
       timestampElem.textContent = verbose ? `[${timeDisplay}]` : '';
-      summaryElem.insertBefore(timestampElem, summaryElem.querySelector('.banner-content-copy'));
+      summaryElem.insertBefore(
+        timestampElem,
+        summaryElem.querySelector('.banner-content-copy'),
+      );
     }
 
     if (contentElem) {
