@@ -91,6 +91,17 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     super(config);
   }
 
+  public override getStreamingConfig(): boolean {
+    const useBackgroundResponses = getConfig<boolean>(
+      'model.useBackgroundResponses',
+      false,
+    );
+    if (useBackgroundResponses) {
+      return false;
+    }
+    return super.getStreamingConfig();
+  }
+
   protected override backgroundModeSupported = true;
   private static readonly BACKGROUND_POLL_INTERVAL_MS = 15000;
   private static readonly BACKGROUND_RETRIEVE_MAX_RETRIES = 3;
