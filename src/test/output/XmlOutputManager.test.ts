@@ -5,7 +5,7 @@ import { strict as assert } from 'assert';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 
 // Local imports
-import { AgentSetting, AgentType } from '@agent/core/AgentDataclass';
+import { AgentSetting, AgentType, AgentCategory } from '@agent/core/AgentDataclass';
 import { XmlOutputManager } from '@agent/output/XmlOutputManager';
 import { AgentLogger } from '@logger/AgentLogger';
 import { WorkspaceFS } from '@utils/files';
@@ -13,6 +13,7 @@ import { WorkspaceFS } from '@utils/files';
 describe('XmlOutputManager markdown fallback', () => {
   const setting: AgentSetting = {
     agentType: AgentType.CoT,
+    agentCategory: AgentCategory.Workflow,
     documentTag: 'latex_document',
     temperature: 0,
     isRewrite: true,

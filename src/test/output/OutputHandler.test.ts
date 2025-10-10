@@ -3,7 +3,7 @@ import { strict as assert } from 'assert';
 
 // Local imports - test
 import type { AgentConfig } from '@agent/core/AgentConfig';
-import { AgentSetting, AgentType } from '@agent/core/AgentDataclass';
+import { AgentSetting, AgentType, AgentCategory } from '@agent/core/AgentDataclass';
 import { OutputHandler } from '@agent/output';
 
 // Local imports
@@ -42,6 +42,7 @@ class MockOutputHandler extends OutputHandler {
 describe('OutputHandler.finalizeRound', () => {
   const setting: AgentSetting = {
     agentType: AgentType.CoT,
+    agentCategory: AgentCategory.Workflow,
     documentTag: 'document',
     temperature: 0,
     isRewrite: true,
