@@ -1226,6 +1226,7 @@ export class ModelHandlerOpenAI extends ModelHandler<
   }
 
   async createToolUseFollowUpMessages(
+    _client: OpenAI | undefined,
     id: string,
     name: string,
     call: ChatCompletionMessageToolCall | ChatCompletionMessage.FunctionCall,

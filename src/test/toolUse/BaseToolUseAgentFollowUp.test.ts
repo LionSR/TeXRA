@@ -105,13 +105,13 @@ class DummyHandler extends ModelHandler<
     return null;
   }
   async createToolUseFollowUpMessages(
+    _client: DummyClient | undefined,
     _id: string,
     _name: string,
     _call: unknown,
     _result: Record<string, unknown>,
     _toolState?: ToolState,
     _text?: string,
-    _client?: DummyClient,
   ): Promise<ProviderMessage[]> {
     return [];
   }

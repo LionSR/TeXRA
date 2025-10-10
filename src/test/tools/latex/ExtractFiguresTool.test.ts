@@ -42,7 +42,6 @@ suite('ExtractLatexFiguresTool', () => {
     const tool = new ExtractLatexFiguresTool();
     const result = await tool.call({
       texPath: 'main.tex',
-      includeBase64: true,
     });
 
     assert.strictEqual(result.summary, 'Found 1 figure file in main.tex.');
@@ -52,7 +51,8 @@ suite('ExtractLatexFiguresTool', () => {
     assert.strictEqual(result.files?.length, 1);
     assert.strictEqual(result.files?.[0].mimeType, 'application/pdf');
     assert.strictEqual(result.files?.[0].path, 'figures/plot.pdf');
-    assert.ok(result.files?.[0].base64Data);
+    assert.ok(result.files?.[0].bytes);
+    assert.strictEqual(result.files?.[0].base64Data, undefined);
   });
 
   test('returns graceful message when figures are absent', async () => {
