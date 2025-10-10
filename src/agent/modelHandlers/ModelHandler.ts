@@ -960,13 +960,13 @@ export abstract class ModelHandler<
    * Build a provider-specific follow-up message containing a tool result.
    */
   abstract createToolUseFollowUpMessages(
+    client: C | undefined,
     id: string,
     name: string,
     call: T,
     result: Record<string, unknown>,
     toolState?: ToolState,
     text?: string,
-    client?: C,
   ): Promise<M[]>;
 
   /**

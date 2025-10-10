@@ -141,13 +141,13 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI {
   }
 
   async createToolUseFollowUpMessages(
+    _client: OpenAI | undefined,
     id: string,
     name: string,
     call: ChatCompletionMessageToolCall | ChatCompletionMessage.FunctionCall,
     result: Record<string, unknown>,
     _toolState?: ToolState,
     text?: string,
-    _client?: OpenAI,
   ): Promise<ChatCompletionMessageParam[]> {
     const toolCall = this.normalizeToolCall(id, name, call);
     const callMsg: ChatCompletionAssistantMessageParam = {

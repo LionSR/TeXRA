@@ -321,13 +321,13 @@ export async function runToolUseCycle<C = unknown>(
     }
 
     const followUpMsgs = await modelHandler.createToolUseFollowUpMessages(
+      client,
       id,
       name,
       parsed,
       resultObj,
       toolState,
       text,
-      client,
     );
     messages.push(...followUpMsgs);
 

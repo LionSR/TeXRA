@@ -48,7 +48,6 @@ suite('ExtractTikzFiguresTool', () => {
     const tool = new ExtractTikzFiguresTool();
     const result = await tool.call({
       texPath: 'slides.tex',
-      includeBase64: true,
     });
 
     assert.ok(result.summary?.includes('Found 1 TikZ figure'));
@@ -58,7 +57,8 @@ suite('ExtractTikzFiguresTool', () => {
     assert.strictEqual(result.files?.length, 1);
     assert.strictEqual(result.files?.[0].mimeType, 'application/pdf');
     assert.strictEqual(result.files?.[0].path, 'build/slides/fig_a.pdf');
-    assert.ok(result.files?.[0].base64Data);
+    assert.ok(result.files?.[0].bytes);
+    assert.strictEqual(result.files?.[0].base64Data, undefined);
   });
 
   test('omits attachments when compilation disabled', async () => {

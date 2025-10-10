@@ -25,17 +25,6 @@ const ExtractTikzInputSchema = z.strictObject({
     .boolean()
     .describe('Compile extracted TikZ pictures into standalone PDFs.')
     .optional(),
-  includeBase64: z
-    .boolean()
-    .describe('Include base64 payloads for compiled attachments.')
-    .optional(),
-  maxFiles: z
-    .number()
-    .int()
-    .positive()
-    .max(30)
-    .describe('Maximum number of compiled TikZ figures to attach.')
-    .optional(),
 });
 
 export type ExtractTikzInput = z.infer<typeof ExtractTikzInputSchema>;
@@ -48,12 +37,7 @@ export class ExtractTikzFiguresTool extends defineTool({
     'Discover TikZ figures inside a LaTeX document and optionally compile them into standalone PDFs.',
   schema: ExtractTikzInputSchema,
 }) {
-  protected async execute({
-    texPath,
-    compile = true,
-    includeBase64,
-    maxFiles,
-  }: ExtractTikzInput) {
+  protected async execute({ texPath, compile = true }: ExtractTikzInput) {
     const { resolved, display } = resolveAndFormat(texPath);
 
     if (!(await WorkspaceFS.exists(resolved.relative))) {
@@ -88,21 +72,17 @@ export class ExtractTikzFiguresTool extends defineTool({
     if (compile) {
       const compiledPaths = await tikzPictureManager.compile(resolved.relative);
       if (compiledPaths.length > 0) {
-        const limit = Math.min(
-          compiledPaths.length,
-          maxFiles ?? DEFAULT_TIKZ_MAX_FILES,
-        );
+        const limit = Math.min(compiledPaths.length, DEFAULT_TIKZ_MAX_FILES);
         const limited = compiledPaths.slice(0, limit);
-        attachments = [];
-        for (const pdfPath of limited) {
-          const attachment = await buildFileAttachment({
-            filePath: pdfPath,
-            includeBase64: includeBase64 ?? false,
-            description: `Standalone TikZ figure derived from ${display}`,
-            mimeType: 'application/pdf',
-          });
-          attachments.push(attachment);
-        }
+        attachments = await Promise.all(
+          limited.map((pdfPath) =>
+            buildFileAttachment({
+              filePath: pdfPath,
+              description: `Standalone TikZ figure derived from ${display}`,
+              mimeType: 'application/pdf',
+            }),
+          ),
+        );
         summaryParts.push(
           `Compiled ${limited.length} standalone PDF${
             limited.length === 1 ? '' : 's'
@@ -116,9 +96,7 @@ export class ExtractTikzFiguresTool extends defineTool({
         );
         if (compiledPaths.length > limit) {
           summaryParts.push(
-            `Limited attachments to ${limit} file${limit === 1 ? '' : 's'} (requested max: ${
-              maxFiles ?? DEFAULT_TIKZ_MAX_FILES
-            }).`,
+            `Limited attachments to ${limit} file${limit === 1 ? '' : 's'}.`,
           );
         }
       } else {
