@@ -71,6 +71,7 @@ import { calculateTokenPrice } from '@agent/utils/priceUtils';
 import {
   describeAttachments,
   extractToolAttachments,
+  loadAttachmentBuffer,
 } from './utils/toolAttachmentUtils';
 
 // Local imports - error utils
@@ -543,20 +544,16 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
       let buffer: Buffer | undefined;
       try {
-        if (attachment.bytes) {
-          buffer = Buffer.from(attachment.bytes);
-        } else if (attachment.base64Data) {
-          buffer = Buffer.from(attachment.base64Data, 'base64');
-        } else if (attachment.path) {
-          const fileBuffer = await WorkspaceFS.readFileBytes(attachment.path);
-          buffer = Buffer.from(fileBuffer);
-        }
+        buffer = await loadAttachmentBuffer(attachment);
+      } catch (err) {
+        this.logger.warn(
+          `Unable to read attachment ${attachment.path ?? 'attachment'}: ${getSdkErrorMessage(err)}`,
+        );
+        unsupported.push(attachment);
+        continue;
+      }
 
-        if (!buffer) {
-          unsupported.push(attachment);
-          continue;
-        }
-
+      try {
         const filename = this.sanitizeFilename(
           attachment.path ??
             (isPdf
@@ -1457,13 +1454,13 @@ export class ModelHandlerAnthropic extends ModelHandler<
   }
 
   async createToolUseFollowUpMessages(
+    client: Anthropic | undefined,
     id: string,
     name: string,
     call: ToolUseBlock,
     result: Record<string, unknown>,
     toolState?: ToolState,
     text?: string,
-    client?: Anthropic,
   ): Promise<MessageParam[]> {
     const content: ContentBlockParam[] = [];
     if (

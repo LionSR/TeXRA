@@ -185,17 +185,22 @@ export async function buildFileAttachment({
 
   const inferredMime =
     mimeType ?? getMimeType(resolved.relative) ?? 'application/octet-stream';
+
+  const base64Payload = includeBase64 ? buffer.toString('base64') : undefined;
+  const bytes = Uint8Array.from(buffer);
+  buffer.fill(0);
+
   const attachment: ToolFileAttachment = {
     path: display,
     mimeType: inferredMime,
-    bytes: Uint8Array.from(buffer),
+    bytes,
   };
 
   if (description) {
     attachment.description = description;
   }
-  if (includeBase64) {
-    attachment.base64Data = buffer.toString('base64');
+  if (base64Payload) {
+    attachment.base64Data = base64Payload;
   }
 
   return attachment;

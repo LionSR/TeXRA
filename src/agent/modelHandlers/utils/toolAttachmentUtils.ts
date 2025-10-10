@@ -1,6 +1,9 @@
 // Local imports - tools
 import type { ToolFileAttachment, ToolResult } from '@tools/result';
 
+// Local imports - utils
+import { WorkspaceFS } from '@utils/files';
+
 export interface ExtractedToolAttachments {
   attachments: ToolFileAttachment[];
   sanitizedResult: Record<string, unknown>;
@@ -73,4 +76,22 @@ export function sanitizeToolResultForLog(
   }
 
   return sanitized;
+}
+
+export async function loadAttachmentBuffer(
+  attachment: ToolFileAttachment,
+): Promise<Buffer> {
+  if (attachment.bytes && attachment.bytes.length > 0) {
+    return Buffer.from(attachment.bytes);
+  }
+
+  if (attachment.base64Data && attachment.base64Data.length > 0) {
+    return Buffer.from(attachment.base64Data, 'base64');
+  }
+
+  if (attachment.path && attachment.path.length > 0) {
+    return WorkspaceFS.readFileBytes(attachment.path);
+  }
+
+  throw new Error('Attachment did not include bytes, base64 data, or a path.');
 }

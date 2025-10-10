@@ -21,17 +21,6 @@ const ExtractFiguresInputSchema = z.strictObject({
     .string()
     .min(1, 'texPath is required.')
     .describe('Path to the primary LaTeX file to inspect.'),
-  includeBase64: z
-    .boolean()
-    .describe('Include base64 data for each attachment.')
-    .optional(),
-  maxFiles: z
-    .number()
-    .int()
-    .positive()
-    .max(50)
-    .describe('Maximum number of figure files to attach.')
-    .optional(),
 });
 
 export type ExtractFiguresInput = z.infer<typeof ExtractFiguresInputSchema>;
@@ -44,11 +33,7 @@ export class ExtractLatexFiguresTool extends defineTool({
     'Resolve and list figure assets referenced by a LaTeX document, returning attachments when available.',
   schema: ExtractFiguresInputSchema,
 }) {
-  protected async execute({
-    texPath,
-    includeBase64,
-    maxFiles,
-  }: ExtractFiguresInput) {
+  protected async execute({ texPath }: ExtractFiguresInput) {
     const { resolved, display } = resolveAndFormat(texPath);
 
     if (!(await WorkspaceFS.exists(resolved.relative))) {
@@ -66,18 +51,17 @@ export class ExtractLatexFiguresTool extends defineTool({
       });
     }
 
-    const limit = Math.min(uniqueFigures.length, maxFiles ?? DEFAULT_MAX_FILES);
+    const limit = Math.min(uniqueFigures.length, DEFAULT_MAX_FILES);
     const limitedFigures = uniqueFigures.slice(0, limit);
 
-    const attachments = [];
-    for (const figurePath of limitedFigures) {
-      const attachment = await buildFileAttachment({
-        filePath: figurePath,
-        includeBase64: includeBase64 ?? false,
-        description: `Figure referenced by ${display}`,
-      });
-      attachments.push(attachment);
-    }
+    const attachments = await Promise.all(
+      limitedFigures.map((figurePath) =>
+        buildFileAttachment({
+          filePath: figurePath,
+          description: `Figure referenced by ${display}`,
+        }),
+      ),
+    );
 
     const formattedList = limitedFigures.map((path) => {
       const { display: figureDisplay } = resolveAndFormat(path);
@@ -96,9 +80,7 @@ export class ExtractLatexFiguresTool extends defineTool({
     });
 
     if (uniqueFigures.length > limit) {
-      result.system = `Limited attachments to ${limit} files (requested max: ${
-        maxFiles ?? DEFAULT_MAX_FILES
-      }).`;
+      result.system = `Limited attachments to ${limit} files.`;
     }
 
     return result;
