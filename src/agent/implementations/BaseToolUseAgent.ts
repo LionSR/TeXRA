@@ -73,7 +73,10 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
   }
 
   public override getSessionMetadata() {
-    return resolveAgentSessionDescriptor(AgentType.ToolUse, AgentCategory.ToolUse);
+    return resolveAgentSessionDescriptor(
+      AgentType.ToolUse,
+      AgentCategory.ToolUse,
+    );
   }
 
   private getTools(): ToolDefinition[] {
