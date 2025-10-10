@@ -520,7 +520,7 @@ export async function executeAgentWithLogging<T extends IAgent>(
           });
 
           const generated = Object.values(
-            (activeAgent as any).outputHandler?.outputFiles || {},
+            (agent as any).outputHandler?.outputFiles || {},
           )
             .flat()
             .filter(
