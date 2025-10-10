@@ -72,7 +72,7 @@ export class ArxivSourceProcessor {
       if (disposition) {
         const match = /filename="?([^";]+)"?/i.exec(disposition);
         if (match) {
-          destPath = destBasePath + '_' + match[1];
+          destPath = path.join(path.dirname(destBasePath), match[1]);
         }
       } else {
         const contentType = response.headers['content-type'];
@@ -171,7 +171,12 @@ export class ArxivSourceProcessor {
     }
 
     const paperDirFull = WorkspaceFS.fullPath(paperDirRelative);
-    const downloadBasePath = path.join(paperDirFull, 'download');
+    const downloadDirRelative = path.join(paperDirRelative, 'download');
+    if (!(await WorkspaceFS.exists(downloadDirRelative))) {
+      await WorkspaceFS.createDir(downloadDirRelative);
+    }
+    const downloadDirFull = path.join(paperDirFull, 'download');
+    const downloadBasePath = path.join(downloadDirFull, 'source');
 
     if (progressCallback) {
       progressCallback(`Downloading arXiv source for ${id}...`, 20);
