@@ -15,12 +15,14 @@
   position: relative;
 }
 
-.log-line,
-.model-response-line {
+.log-line {
   line-height: 1.4;
   margin: 0;
   padding: calc(var(--spacing-tiny) / 2) 0;
   display: block;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  word-break: break-all;
 }
 
 .log-entry-content {
@@ -28,30 +30,15 @@
   overflow: visible;
 }
 
-.log-line {
-  white-space: pre-wrap;
-  word-wrap: break-word;
-  word-break: break-all;
-}
-
-.model-response-line {
-  white-space: normal;
-}
-
-.model-response-copy,
+/* Banner copy button styling */
 .banner-content-copy {
   min-width: 0;
   padding: 0 var(--spacing-tiny);
   opacity: 0;
-  transition:
-    opacity 0.2s ease,
-    color 0.2s ease;
+  transition: opacity 0.2s ease;
+  margin-left: auto;
 }
 
-.model-response-line:hover .model-response-copy,
-.model-response-line:focus-within .model-response-copy,
-.model-response-copy:focus-visible,
-.model-response-copy.copy-success,
 .details-summary:hover .banner-content-copy,
 .banner-details:focus-within .banner-content-copy,
 .banner-content-copy:focus-visible,
@@ -59,17 +46,8 @@
   opacity: 1;
 }
 
-.model-response-copy.copy-success,
 .banner-content-copy.copy-success {
-  color: var(--vscode-testing-iconPassed, #2ea043);
-}
-
-.model-response-content {
-  margin-top: var(--spacing-tiny);
-}
-
-.details-summary .banner-content-copy {
-  margin-left: auto;
+  color: var(--vscode-testing-iconPassed);
 }
 
 /* Timestamp color */
@@ -294,11 +272,10 @@
   flex-wrap: nowrap;
 }
 
-/* Remove custom button styling to use common.css styles instead */
+/* File action buttons use common.css vscode-button styling */
 .file-actions .vscode-button {
-  /* Keep only essential positioning */
-  margin-right: 0; /* Override the default margin-right from common.css */
-  margin-left: var(--spacing-tiny); /* Small gap between buttons */
+  margin-right: 0;
+  margin-left: var(--spacing-tiny);
 }
 
 .round-group {
