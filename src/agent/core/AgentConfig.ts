@@ -22,6 +22,15 @@ export const validateOutputFiles = (cfg: Record<string, any>): boolean => {
   return true;
 };
 
+/**
+ * Session descriptor schema for AgentConfig.
+ * The session field is the canonical source of truth for agent classification.
+ */
+const SessionDescriptorSchema = z.object({
+  agentType: z.enum(AgentType).optional(),
+  agentCategory: z.enum(AgentCategory),
+});
+
 /** Zod schema for validating AgentConfig objects */
 export const AgentConfigSchema = z
   .object({
@@ -30,13 +39,10 @@ export const AgentConfigSchema = z
     instruction: z.string().prefault(''),
     useMultipleOutputs: z.boolean().prefault(false),
 
+    // Legacy field for backward compatibility - prefer session.agentType
     agentType: z.enum(AgentType).optional(),
-    session: z
-      .object({
-        agentType: z.enum(AgentType).optional(),
-        agentCategory: z.enum(AgentCategory),
-      })
-      .optional(),
+    // Canonical session descriptor - single source of truth
+    session: SessionDescriptorSchema.optional(),
 
     inputFile: z.string().prefault(''),
     inputFiles: z.array(z.string()).nullable().prefault(null),
@@ -57,6 +63,4 @@ export const AgentConfigSchema = z
       'Number of output files must not be greater than the number of input files.',
   });
 
-export type AgentConfig = z.infer<typeof AgentConfigSchema> & {
-  session?: AgentSessionDescriptor;
-};
+export type AgentConfig = z.infer<typeof AgentConfigSchema>;
