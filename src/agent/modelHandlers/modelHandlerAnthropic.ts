@@ -42,6 +42,8 @@ interface UploadedAnthropicAttachment {
   attachment: ToolFileAttachment;
   fileId: string;
   blockType: 'image' | 'document';
+  base64Data?: string;
+  mediaType?: string;
 }
 
 // Local imports - agent
@@ -561,6 +563,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
               : `image.${normalized.split('/').pop() ?? 'png'}`),
         );
 
+        const base64Data = buffer.toString('base64');
         const uploadedFile = await client.beta.files.upload({
           file: await toFile(buffer, filename, { type: mimeType }),
           betas: [FILES_API_BETA],
@@ -570,6 +573,8 @@ export class ModelHandlerAnthropic extends ModelHandler<
           attachment,
           fileId: uploadedFile.id,
           blockType: isPdf ? 'document' : 'image',
+          base64Data,
+          mediaType: normalized,
         });
       } catch (err) {
         this.logger.error(
@@ -1529,20 +1534,45 @@ export class ModelHandlerAnthropic extends ModelHandler<
     const unsupportedNotes: string[] = [];
 
     for (const uploaded of uploadedAttachments) {
-      if (uploaded.blockType === 'image' && supportsInlineImages) {
-        toolResultContent.push({
-          type: 'image',
-          source: { type: 'file', file_id: uploaded.fileId },
-        } as unknown as ImageBlockParam);
+      if (uploaded.blockType === 'image') {
+        if (supportsInlineImages && uploaded.base64Data) {
+          const mediaType =
+            (uploaded.mediaType as BetaBase64ImageSource['media_type']) ??
+            'image/png';
+          toolResultContent.push({
+            type: 'image',
+            source: {
+              type: 'base64',
+              media_type: mediaType,
+              data: uploaded.base64Data,
+            },
+          } as ImageBlockParam);
+        } else {
+          unsupportedNotes.push(
+            `${uploaded.attachment.path ?? 'attachment'} (${uploaded.attachment.mimeType})`,
+          );
+        }
         continue;
       }
 
       if (uploaded.blockType === 'document') {
-        toolResultContent.push({
-          type: 'document',
-          source: { type: 'file', file_id: uploaded.fileId },
-          title: basename(uploaded.attachment.path ?? 'attachment.pdf'),
-        } as unknown as DocumentBlockParam);
+        if (uploaded.base64Data) {
+          const pdfMediaType =
+            (uploaded.mediaType as 'application/pdf') ?? 'application/pdf';
+          toolResultContent.push({
+            type: 'document',
+            source: {
+              type: 'base64',
+              media_type: pdfMediaType,
+              data: uploaded.base64Data,
+            },
+            title: basename(uploaded.attachment.path ?? 'attachment.pdf'),
+          } as DocumentBlockParam);
+        } else {
+          unsupportedNotes.push(
+            `${uploaded.attachment.path ?? 'attachment'} (${uploaded.attachment.mimeType})`,
+          );
+        }
         continue;
       }
 
