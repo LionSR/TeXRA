@@ -686,7 +686,7 @@ export class LogEntryFormatter {
       iconClass: 'codicon-sparkle',
       labelText: 'Model response',
       copyTitle: 'Copy model output',
-      contentClass: 'model-response-content',
+      contentClass: 'banner-content--model',
       open: true,
     });
 
@@ -694,20 +694,14 @@ export class LogEntryFormatter {
       return null;
     }
 
-    const { element, contentElem, copyButton, summaryElem } = bannerEntry;
-    element.classList.add('model-response-line');
-
-    if (copyButton) {
-      copyButton.classList.add('model-response-copy');
-    }
+    const { element, contentElem, summaryElem } = bannerEntry;
 
     if (summaryElem) {
       const timestampElem = document.createElement('span');
       timestampElem.classList.add('timestamp');
       timestampElem.title = fullTimestamp;
       timestampElem.textContent = verbose ? `[${timeDisplay}]` : '';
-      // Insert timestamp before the copy button (or at end if no copy button)
-      summaryElem.insertBefore(timestampElem, copyButton);
+      summaryElem.insertBefore(timestampElem, summaryElem.querySelector('.banner-content-copy'));
     }
 
     if (contentElem) {
@@ -780,13 +774,6 @@ export class LogEntryFormatter {
 
     const contentElem = element.querySelector('.banner-content');
     if (contentElem && contentClass) {
-      // Remove all known banner content classes before adding the new one
-      contentElem.classList.remove(
-        'banner-content--thinking',
-        'banner-content--scratchpad',
-        'banner-content--model',
-        'model-response-content',
-      );
       contentElem.classList.add(contentClass);
     }
 
