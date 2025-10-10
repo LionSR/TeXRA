@@ -3,7 +3,6 @@ import * as vscode from 'vscode';
 
 // Local imports - agent commands
 import { executeCommand } from '@commands/agent/executeCommand';
-import { resolveAgentSessionMetadata } from '@agent/core/AgentDataclass';
 import { showLoggedErrorMessage } from '@common/errors/errorHandlingUtils';
 
 // Local imports - history view
@@ -89,11 +88,10 @@ export class HistoryViewMessageHandler extends BaseViewMessageHandler<
       const historyItem =
         await AgentHistoryManager.getHistoryItemById(historyId);
       if (historyItem) {
-        const metadata = resolveAgentSessionMetadata(
-          historyItem.agentType,
-          historyItem.agentSessionKind,
+        const taskState = agentConfigToTaskState(
+          historyItem.config,
+          historyItem.session,
         );
-        const taskState = agentConfigToTaskState(historyItem.config, metadata);
         await vscode.commands.executeCommand('texra.restoreState', taskState);
       } else {
         await vscode.window.showErrorMessage('History item not found');

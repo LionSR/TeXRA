@@ -6,7 +6,7 @@ import * as vscode from 'vscode';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 
 // Local imports - agent
-import { AgentSessionKind, AgentType } from '@agent/core/AgentDataclass';
+import { AgentCategory, AgentType, type AgentSessionDescriptor } from '@agent/core/AgentDataclass';
 import { ToolConfig } from '@agent/core/ToolConfig';
 
 // Local imports - utils
@@ -61,20 +61,20 @@ export class ExecutionManager {
     }
 
     return this.composeAgentConfig(message, {
-      agentSessionKind: AgentSessionKind.Workflow,
+      agentCategory: AgentCategory.Workflow,
     });
   }
 
   private buildToolUseCommandPayload(message: any): AgentConfig {
     return this.composeAgentConfig(message, {
       agentType: AgentType.ToolUse,
-      agentSessionKind: AgentSessionKind.ToolUse,
+      agentCategory: AgentCategory.ToolUse,
     });
   }
 
   private composeAgentConfig(
     message: any,
-    metadata: { agentType?: AgentType; agentSessionKind: AgentSessionKind },
+    session: AgentSessionDescriptor,
   ): AgentConfig {
     const toolConfig: ToolConfig = {
       autoExtractFigure: message.autoExtractFigure,
@@ -120,8 +120,8 @@ export class ExecutionManager {
       outputFiles,
       editedFile: null,
       toolConfig,
-      agentType: metadata.agentType,
-      agentSessionKind: metadata.agentSessionKind,
+      agentType: session.agentType,
+      session,
     };
   }
 

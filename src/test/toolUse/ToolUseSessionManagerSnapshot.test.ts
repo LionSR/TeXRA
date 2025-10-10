@@ -5,14 +5,11 @@ import { promises as fs } from 'fs';
 
 import * as vscode from 'vscode';
 
-import { AgentSessionKind } from '@agent/core/AgentDataclass';
+import { AgentCategory, AgentType } from '@agent/core/AgentDataclass';
 import { ToolState } from '@agent/core/ToolState';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { ExecutionId } from '@agent/types/IdentifierTypes';
-import {
-  ToolUseSessionManager,
-  type ToolUseSessionSnapshot,
-} from '@agent/toolUse/ToolUseSessionManager';
+import { ToolUseSessionManager } from '@agent/toolUse/ToolUseSessionManager';
 import StorageFS from '@utils/files/storageFS';
 
 const STORAGE_DIR = path.join(os.tmpdir(), 'texra-tooluse-snapshot-tests');
@@ -61,20 +58,20 @@ suite('ToolUseSessionManager snapshot compatibility', () => {
       streamId: 'stream-id',
       agentName: 'demo-agent',
       model: 'demo-model',
-      agentSessionKind: AgentSessionKind.ToolUse,
+      session: { agentType: AgentType.ToolUse, agentCategory: AgentCategory.ToolUse },
       messages: [] as ProviderMessage[],
       toolState,
     };
   }
 
-  function buildSnapshot(executionId: ExecutionId): ToolUseSessionSnapshot {
+  function buildLegacySnapshot(executionId: ExecutionId) {
     return {
       version: 1,
       executionId,
       streamId: 'stream-id',
       agentName: 'demo-agent',
       model: 'demo-model',
-      agentSessionKind: AgentSessionKind.ToolUse,
+      agentSessionKind: AgentCategory.ToolUse,
       messages: [],
       toolState: {
         texcountStats: null,
@@ -102,7 +99,7 @@ suite('ToolUseSessionManager snapshot compatibility', () => {
 
   test('loadSnapshot reads snapshots saved before helper migration', async () => {
     const executionId = 'legacy-snapshot' as ExecutionId;
-    const snapshot = buildSnapshot(executionId);
+    const snapshot = buildLegacySnapshot(executionId);
 
     await StorageFS.ensureDir('toolUseSessions');
     await StorageFS.write(
@@ -118,7 +115,7 @@ suite('ToolUseSessionManager snapshot compatibility', () => {
 
   test('loadSnapshot falls back to raw JSON parsing when helper fails', async () => {
     const executionId = 'fallback-snapshot' as ExecutionId;
-    const snapshot = buildSnapshot(executionId);
+    const snapshot = buildLegacySnapshot(executionId);
 
     await StorageFS.ensureDir('toolUseSessions');
     await StorageFS.write(
