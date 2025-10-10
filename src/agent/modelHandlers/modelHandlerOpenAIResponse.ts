@@ -44,6 +44,7 @@ import { OPENAI_CHAT_FINISH } from './types/StopReasonTypes';
 import {
   describeAttachments,
   extractToolAttachments,
+  loadAttachmentBuffer,
 } from './utils/toolAttachmentUtils';
 
 // Local imports - utilities
@@ -1219,13 +1220,13 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   }
 
   async createToolUseFollowUpMessages(
+    client: OpenAI | undefined,
     id: string,
     name: string,
     call: ResponseFunctionToolCallItem,
     result: Record<string, unknown>,
     _toolState?: ToolState,
     text?: string,
-    client?: OpenAI,
   ): Promise<ResponseInputItem[]> {
     const messages: ResponseInputItem[] = [];
     if (text) {
@@ -1336,24 +1337,15 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     for (const attachment of attachments) {
       let buffer: Buffer | undefined;
       try {
-        if (attachment.bytes) {
-          buffer = Buffer.from(attachment.bytes);
-        } else if (attachment.base64Data) {
-          buffer = Buffer.from(attachment.base64Data, 'base64');
-        } else if (attachment.path) {
-          try {
-            const fileBuffer = await WorkspaceFS.readFileBytes(attachment.path);
-            buffer = Buffer.from(fileBuffer);
-          } catch (err) {
-            this.logger.warn(
-              `Unable to read attachment ${attachment.path}: ${getSdkErrorMessage(err)}`,
-            );
-            continue;
-          }
-        } else {
-          continue;
-        }
+        buffer = await loadAttachmentBuffer(attachment);
+      } catch (err) {
+        this.logger.warn(
+          `Unable to read attachment ${attachment.path ?? 'attachment'}: ${getSdkErrorMessage(err)}`,
+        );
+        continue;
+      }
 
+      try {
         const filename =
           typeof attachment.path === 'string' && attachment.path.length > 0
             ? (attachment.path.split('/').pop() ?? 'attachment')

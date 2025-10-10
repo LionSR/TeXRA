@@ -58,13 +58,11 @@ When you are running a tool-use agent outside the UI controls, you can explicitl
 
 - `extract_figures` – scans a LaTeX file for `\includegraphics` and related commands. It returns a newline-delimited list of referenced files and attaches each existing asset. Options:
   - `texPath` (required): workspace path to the primary `.tex` file.
-  - `includeBase64` (optional): when `true`, embeds a base64 payload in each attachment. Disable this when using providers that only need file paths.
-  - `maxFiles` (optional, default 20): limits the number of attachments to avoid token bloat.
+  - Attachments are automatically capped to the first 20 figures to avoid overwhelming downstream providers.
 - `extract_tikz_figures` – extracts `tikzpicture` environments and, by default, compiles each one into a standalone PDF attachment. Options:
   - `texPath` (required): workspace path to the source `.tex` file.
   - `compile` (default `true`): set to `false` to skip compilation and just receive a summary of discovered figures.
-  - `includeBase64` (optional): include base64 payloads for compiled PDFs.
-  - `maxFiles` (optional, default 12): cap the number of compiled figures returned.
+  - Attachments are limited to the first 12 compiled PDFs to keep responses lightweight.
 
 Example tool call payload for `extract_figures`:
 
@@ -72,9 +70,7 @@ Example tool call payload for `extract_figures`:
 {
   "name": "extract_figures",
   "arguments": {
-    "texPath": "paper/main.tex",
-    "includeBase64": false,
-    "maxFiles": 10
+    "texPath": "paper/main.tex"
   }
 }
 ```
