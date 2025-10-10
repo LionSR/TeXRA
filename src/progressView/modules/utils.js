@@ -91,7 +91,7 @@ function defaultChildTimestamp(child) {
   if (
     child.classList.contains('log-line') ||
     child.classList.contains('model-response-line') ||
-    child.classList.contains('special-details') ||
+    child.classList.contains('banner-details') ||
     child.classList.contains('native-status-line')
   ) {
     const fullTs = child.dataset.fullTimestamp;
