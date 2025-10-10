@@ -67,12 +67,12 @@ export class ArxivSourceProcessor {
         throw new Error(`Failed to download: HTTP ${response.status}`);
       }
 
-      // Determine filename from headers
+      // Extract filename from Content-Disposition header if available
       const disposition = response.headers['content-disposition'];
       if (disposition) {
         const match = /filename="?([^";]+)"?/i.exec(disposition);
         if (match) {
-          // Keep file in the same directory as destBasePath
+          // Place file in download directory using basename to prevent path traversal
           destPath = path.join(path.dirname(destBasePath), path.basename(match[1]));
         }
       } else {
@@ -165,17 +165,16 @@ export class ArxivSourceProcessor {
       throw new Error('No workspace folder is open');
     }
 
+    // Create project directory for the arXiv paper (sanitize ID to avoid path issues)
     const sanitizedId = id.replace(/\//g, '_');
     const paperDirRelative = sanitizedId;
-    if (!(await WorkspaceFS.exists(paperDirRelative))) {
-      await WorkspaceFS.createDir(paperDirRelative);
-    }
+    await WorkspaceFS.ensureDir(paperDirRelative);
 
+    // Create temporary download subdirectory for staging the archive
     const paperDirFull = WorkspaceFS.fullPath(paperDirRelative);
     const downloadDirRelative = path.join(paperDirRelative, 'download');
-    if (!(await WorkspaceFS.exists(downloadDirRelative))) {
-      await WorkspaceFS.createDir(downloadDirRelative);
-    }
+    await WorkspaceFS.ensureDir(downloadDirRelative);
+
     const downloadDirFull = path.join(paperDirFull, 'download');
     const downloadBasePath = path.join(downloadDirFull, 'source');
 
@@ -215,25 +214,26 @@ export class ArxivSourceProcessor {
         progressCallback('Cleaning up...', 80);
       }
 
-      // Delete the archive and then the download directory
+      // Remove the downloaded archive file
       await AbsoluteFS.delete(downloadedPath);
+      // Remove the temporary download directory (files are now in paper root)
       try {
         await AbsoluteFS.delete(downloadDirFull);
       } catch {
-        // Ignore errors if directory is not empty or doesn't exist
+        // Ignore cleanup errors (directory may not be empty or may not exist)
       }
     } else {
-      // For non-archive files, move to paper root and clean up download directory
+      // For non-archive files, rename to main.tex and move to paper root
       const downloadedRel = WorkspaceFS.relativePath(downloadedPath);
       const targetRel = path.join(paperDirRelative, 'main.tex');
       if (path.basename(downloadedPath) !== 'main.tex') {
         await WorkspaceFS.rename(downloadedRel, targetRel);
       }
-      // Clean up the download directory
+      // Remove the temporary download directory (file is now in paper root)
       try {
         await AbsoluteFS.delete(downloadDirFull);
       } catch {
-        // Ignore errors if directory is not empty or doesn't exist
+        // Ignore cleanup errors (directory may not be empty or may not exist)
       }
     }
 
