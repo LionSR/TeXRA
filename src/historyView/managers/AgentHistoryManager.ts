@@ -7,9 +7,10 @@ import * as vscode from 'vscode';
 // Local imports - agent metadata
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import {
-  AgentSessionKind,
+  AgentCategory,
   AgentType,
-  resolveAgentSessionMetadata,
+  type AgentSessionDescriptor,
+  resolveAgentSessionDescriptor,
 } from '@agent/core/AgentDataclass';
 import type { ExecutionId } from '@agent/types/IdentifierTypes';
 
@@ -24,7 +25,8 @@ export interface AgentHistoryItem {
   timestamp: string;
   config: AgentConfig;
   agentType?: AgentType;
-  agentSessionKind?: AgentSessionKind;
+  agentSessionKind?: AgentCategory;
+  session?: AgentSessionDescriptor;
 }
 
 /**
@@ -38,22 +40,21 @@ export class AgentHistoryManager {
    * Add a new agent execution to history
    */
   public static async addToHistory(config: AgentConfig): Promise<string> {
-    const metadata = resolveAgentSessionMetadata(
-      config.agentType,
-      config.agentSessionKind,
-    );
+    const session =
+      config.session ?? resolveAgentSessionDescriptor(config.agentType);
     const normalizedConfig: AgentConfig = {
       ...config,
-      agentType: metadata.agentType,
-      agentSessionKind: metadata.agentSessionKind,
+      agentType: session.agentType,
+      session,
     };
 
     const historyItem: AgentHistoryItem = {
       id: randomUUID(),
       timestamp: new Date().toISOString(),
       config: normalizedConfig,
-      agentType: metadata.agentType,
-      agentSessionKind: metadata.agentSessionKind,
+      agentType: session.agentType,
+      agentSessionKind: session.agentCategory,
+      session,
     };
 
     // Get current workspace-specific history
@@ -93,22 +94,25 @@ export class AgentHistoryManager {
   private static normalizeHistoryItem(
     item: AgentHistoryItem,
   ): AgentHistoryItem {
-    const metadata = resolveAgentSessionMetadata(
-      item.agentType ?? item.config.agentType,
-      item.agentSessionKind ?? item.config.agentSessionKind,
-    );
+    const session =
+      item.session ??
+      resolveAgentSessionDescriptor(
+        item.agentType ?? item.config.agentType,
+        item.agentSessionKind ?? item.config.session?.agentCategory,
+      );
 
     const normalizedConfig: AgentConfig = {
       ...item.config,
-      agentType: metadata.agentType,
-      agentSessionKind: metadata.agentSessionKind,
+      agentType: session.agentType,
+      session,
     };
 
     return {
       ...item,
       config: normalizedConfig,
-      agentType: metadata.agentType,
-      agentSessionKind: metadata.agentSessionKind,
+      agentType: session.agentType,
+      agentSessionKind: session.agentCategory,
+      session,
     };
   }
 
