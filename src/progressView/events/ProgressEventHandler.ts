@@ -222,7 +222,10 @@ export class ProgressEventHandler {
     this.state.setSessionKindHint(stream, AgentSessionKind.Workflow);
 
     const currentFilter = this.state.agentTypeFilter;
-    if (currentFilter !== 'all' && currentFilter !== AgentSessionKind.Workflow) {
+    if (
+      currentFilter !== 'all' &&
+      currentFilter !== AgentSessionKind.Workflow
+    ) {
       this.state.agentTypeFilter = AgentSessionKind.Workflow;
     }
 
