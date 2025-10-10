@@ -702,14 +702,12 @@ export class LogEntryFormatter {
     }
 
     if (summaryElem) {
-      let timestampElem = summaryElem.querySelector('.timestamp');
-      if (!timestampElem) {
-        timestampElem = document.createElement('span');
-        timestampElem.classList.add('timestamp');
-        summaryElem.insertBefore(timestampElem, copyButton ?? null);
-      }
+      const timestampElem = document.createElement('span');
+      timestampElem.classList.add('timestamp');
       timestampElem.title = fullTimestamp;
       timestampElem.textContent = verbose ? `[${timeDisplay}]` : '';
+      // Insert timestamp before the copy button (or at end if no copy button)
+      summaryElem.insertBefore(timestampElem, copyButton);
     }
 
     if (contentElem) {
@@ -782,6 +780,7 @@ export class LogEntryFormatter {
 
     const contentElem = element.querySelector('.banner-content');
     if (contentElem && contentClass) {
+      // Remove all known banner content classes before adding the new one
       contentElem.classList.remove(
         'banner-content--thinking',
         'banner-content--scratchpad',
