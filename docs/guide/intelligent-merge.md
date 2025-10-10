@@ -30,7 +30,7 @@ TeXRA will then invoke the specialized `merge` agent:
 
 When you click the Merge button (prepare for some AI wizardry):
 
-1.  TeXRA sends the content of both the Base File and the Edited File to a selected AI model (defaults can be configured in settings, `sonnet37` is often a good choice).
+1.  TeXRA sends the content of both the Base File and the Edited File to a selected AI model (defaults can be configured in settings, `sonnet45` is often a good choice).
 2.  The model is instructed to intelligently synthesize a new, complete document that preserves the structure and unchanged content of the Base File while incorporating the modifications present in the Edited File.
 3.  TeXRA saves this synthesized result.
 
@@ -40,7 +40,7 @@ The merge process generates a new file, typically named following the pattern:
 
 `basename_agent_rX_full_model.tex`
 
-(e.g., `paper_polish_r0_full_sonnet37.tex`)
+(e.g., `paper_polish_r0_full_sonnet45.tex`)
 
 This `_full_` file contains the complete document content, incorporating the changes from the agent's output.
 

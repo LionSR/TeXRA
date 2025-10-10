@@ -1,9 +1,5 @@
 // Third-party imports
 import { countTokens } from 'gpt-tokenizer';
-// Standard library imports
-// (none needed)
-
-// Third-party imports
 import OpenAI from 'openai';
 import {
   ChatCompletionContentPart,
@@ -15,8 +11,6 @@ import {
   ChatCompletionMessageFunctionToolCall,
   ChatCompletionMessageCustomToolCall,
 } from 'openai/resources/chat/completions';
-
-// Local imports - agent
 
 // Local imports - agent components
 import type { AgentConfig } from '../core/AgentConfig';
@@ -36,15 +30,16 @@ import {
 } from './openAIMessageUtils';
 import type { ProviderStopReason } from './types/StopReasonTypes';
 import { OPENAI_CHAT_FINISH } from './types/StopReasonTypes';
+import { createContinuationMessage } from '@agent/utils/continuationMessage';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import { calculateTokenPrice } from '@agent/utils/priceUtils';
 import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import type { ToolDefinition } from '@model';
 import { cleanFileContent } from '@replacement/engine';
-import { K_SLICE } from '@utils/config';
+import { K_SLICE, MESSAGE_PREVIEW_LENGTH } from '@utils/config';
 
-// Local imports - utilities
+// Local imports - filesystem utilities
 import { WorkspaceFS } from '@utils/files';
 import { objectToLogString } from '@utils/text/stringUtils';
 import xmlUtils from '@utils/text/xmlUtils';
@@ -440,6 +435,36 @@ export class ModelHandlerOpenAI extends ModelHandler<
     return normalizeOpenAIMessageContent(messages, options);
   }
 
+  /**
+   * Normalizes messages and logs diagnostics about any changes.
+   * @param messages Original message array passed to the handler.
+   * @param options Normalization options passed to the OpenAI utilities.
+   * @param providerLabel Label used to identify the provider in logs.
+   */
+  protected prepareNormalizedMessages<T extends ChatCompletionMessageParam>(
+    messages: T[],
+    options?: NormalizeOpenAIMessageContentOptions,
+    providerLabel: string = this.config.provider,
+  ): T[] {
+    const normalizedMessages = this.normalizeMessages(messages, options);
+
+    if (normalizedMessages.length !== messages.length) {
+      this.logger.info(
+        `Preprocessed message array from ${messages.length} to ${normalizedMessages.length} messages for ${providerLabel} model compatibility`,
+      );
+    }
+
+    normalizedMessages.forEach((msg, index) => {
+      const contentPreview =
+        typeof msg.content === 'string'
+          ? msg.content.substring(0, MESSAGE_PREVIEW_LENGTH)
+          : 'non-string content';
+      this.logger.debug(`Message ${index} (${msg.role}): ${contentPreview}...`);
+    });
+
+    return normalizedMessages;
+  }
+
   /** Initializes message array with system prompt and user content. */
   async initializeMessages(
     userPrefix: string,
@@ -766,12 +791,10 @@ export class ModelHandlerOpenAI extends ModelHandler<
   ): void {
     // Create continuation message with last K tokens
     const prefillTokens = toolState.lastResponse.slice(-K_SLICE);
-    const userMessageContinuation =
-      `Your response got cut off, because you only have limited response space. ` +
-      `Continue responding exactly from where you left off until the very end, ` +
-      `marked by ${agentSetting.endTag}. ` +
-      'Avoid repeat yourself and avoid starting over. ' +
-      `Start your response at the next token after: "${prefillTokens}"`;
+    const userMessageContinuation = createContinuationMessage(
+      agentSetting.endTag,
+      prefillTokens,
+    );
 
     // Add continuation message
     this.logger.debug(

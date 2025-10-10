@@ -1,17 +1,14 @@
 // Standard library imports
-// Third-party imports
 import { randomUUID } from 'crypto';
 
-// Local imports - progress view
-
-// Local imports
+// Local imports - persistence
 import { PersistentMapManager } from '../persistence/PersistentMapManager';
 import { StatePersistenceManager } from '../persistence/StatePersistenceManager';
+
+// Local imports - shared state and logging
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import { WorkspaceStateKey } from '@common/state/stateManager';
 import { AgentLogger } from '@logger/AgentLogger';
-
-// Types
 import { LogMessageData } from '@logger/LogTypes';
 import { parseLegacyLogData } from '@logger/logUtils';
 

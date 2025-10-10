@@ -13,7 +13,6 @@ import {
   InternalServerError as AnthropicInternalServerError,
   APIUserAbortError as AnthropicUserAbortError,
 } from '@anthropic-ai/sdk';
-// Third-party imports
 import {
   APIConnectionError as OpenAIConnectionError,
   APIConnectionTimeoutError as OpenAIConnectionTimeoutError,
@@ -29,9 +28,7 @@ import {
   APIUserAbortError as OpenAIUserAbortError,
 } from 'openai';
 
-// Local imports - common
-
-// Local imports
+// Local imports - configuration
 import { getConfig } from '@utils/config';
 
 // Google GenAI errors are still not exported as of v1.5.1 of the SDK,

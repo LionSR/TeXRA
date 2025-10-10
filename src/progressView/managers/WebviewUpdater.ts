@@ -1,16 +1,15 @@
 // Third-party imports
-// Third-party imports
 import * as vscode from 'vscode';
 
 // Local imports - progress view
 
-// @ts-ignore - Import JavaScript module
-import { COMMANDS } from '../modules/constants.js';
+import { COMMANDS, STATUS } from '../modules/constants.js';
 
 // Local imports
 import { ProgressViewState } from '../state/ProgressViewState';
 import { buildStreamInfos } from '../streamInfoUtils';
 import type { InstructionUpdate, StreamTabInfo } from '../types';
+import type { OutputFileInfo } from '@agent/output/types';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import type { AgentTypeFilter } from '@agent/types/AgentStreamTypes';
 
@@ -21,7 +20,7 @@ import { LogMessageData } from '@logger/LogTypes';
 import type { TaskState } from '@logger/TaskState';
 
 // Type aliases for status values
-type StatusType = 'running' | 'error' | 'stopped' | 'ready' | 'waiting';
+type StatusType = (typeof STATUS)[keyof typeof STATUS];
 
 /**
  * Manages webview updates for the progress view.
@@ -136,7 +135,10 @@ export class WebviewUpdater {
   /**
    * Update output files for a stream
    */
-  updateFiles(stream: StreamTabId, files: { [key: number]: any[] }): void {
+  updateFiles(
+    stream: StreamTabId,
+    files: { [key: number]: OutputFileInfo[] },
+  ): void {
     const webview = this.getWebview();
     if (!webview) return;
 

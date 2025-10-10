@@ -1,10 +1,10 @@
-// Local imports - agent
-
 // Local imports - agent components
 import type { AgentConfig } from './AgentConfig';
 import type { AgentSetting, AgentPrompt } from './AgentDataclass';
 import { AgentStateRound, AgentStateGlobal } from './AgentState';
 import { ToolState } from './ToolState';
+
+// Local imports - agent utilities
 import type { IModelHandler } from '@agent/modelHandlers';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { ExecutionId } from '@agent/types/IdentifierTypes';
@@ -13,14 +13,10 @@ import { messageToSkeleton } from '@agent/utils/messageSkeletonUtils';
 import { getSystemPromptWithRules } from '@agent/utils/promptHelpers';
 import { checkForMassiveRepetition } from '@agent/utils/text/repetitionUtils';
 
-// Local imports - latex utils
+// Local imports - latex utilities
 import { bestConnectionMethod } from '@latex';
-// Standard library imports
 
-// Third-party imports
-// (none needed)
-
-// Local imports - log
+// Local imports - logging
 import { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import replacementEngine from '@replacement/engine';
@@ -28,7 +24,7 @@ import replacementEngine from '@replacement/engine';
 // Shared constants
 import { K_SLICE, REPETITION_DETECTION_THRESHOLD } from '@utils/config';
 
-// Local imports - utilities
+// Local imports - filesystem utilities
 import { WorkspaceFS } from '@utils/files';
 import { getRunDir, TASK_RUNS_DIR } from '@utils/files/taskRunStorage';
 import xmlUtils from '@utils/text/xmlUtils';
@@ -170,7 +166,9 @@ export async function runResponseCycle<C = unknown>(
         logger.info(
           formattedResponse,
           taskGroupId,
-          MESSAGE_TYPES.MODEL_RESPONSE,
+          // Workflow agents should not surface final completions in the progress view,
+          // so mark the response as INTERNAL while still writing it to the output channel.
+          MESSAGE_TYPES.INTERNAL,
         );
       }
     }
@@ -285,6 +283,7 @@ export async function runResponseCycle<C = unknown>(
     logger.info(
       `Starting continuation #${stateRound.continuationCount}`,
       taskGroupId,
+      MESSAGE_TYPES.PROGRESS_STATUS,
     );
 
     if (

@@ -112,6 +112,14 @@ export function createFileHandlers(ctx) {
     postHandle();
   }
 
+  function handleSetSelectedCommit(message) {
+    fileSelect.handleSetSelectedCommit({
+      commitHash: message.commitHash,
+      commitLabel: message.commitLabel,
+    });
+    postHandle();
+  }
+
   function handleSetOpenedFiles(message) {
     if (message.fileType) {
       const fileType = message.fileType.replace('Files', '');
@@ -161,6 +169,7 @@ export function createFileHandlers(ctx) {
   handlers[MAIN_VIEW_COMMANDS.ADD_MEDIA_FILE] = handleAddMediaFile;
   handlers[MAIN_VIEW_COMMANDS.SET_RECENT_COMMITS] = handleSetRecentCommits;
   handlers[MAIN_VIEW_COMMANDS.SET_CURRENT_FILE] = handleSetCurrentFile;
+  handlers[MAIN_VIEW_COMMANDS.SET_SELECTED_COMMIT] = handleSetSelectedCommit;
   handlers[MAIN_VIEW_COMMANDS.SET_OPENED_FILES] = handleSetOpenedFiles;
   handlers[MAIN_VIEW_COMMANDS.SET_BASE_FILE] = handleSetBaseFile;
 

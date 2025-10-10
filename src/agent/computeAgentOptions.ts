@@ -1,46 +1,50 @@
 // Third-party imports
-import { glob } from 'glob';
 import * as vscode from 'vscode';
 
 // Local imports - agent utilities
 import {
-  createAgentOptionTag,
-  getAgentOptionMetadata,
+  buildAgentOptionsPayload,
+  DEFAULT_TOOL_USE_AGENT,
+  DEFAULT_WORKFLOW_AGENT,
   type AgentDirectoryMap,
+  type AgentOptionsPayload,
 } from '@agent/utils/agentOptionMetadata';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { getConfig } from '@utils/config';
 
+export type { AgentOptionsPayload };
+
 /**
- * Get all available agents including tool-use agents if enabled.
+ * Collect configured workflow agents alongside configured tool-use agents and defaults.
  */
+export interface AgentNameBuckets {
+  allAgents: string[];
+  toolUseAgents: string[];
+  defaultWorkflowAgent: string;
+}
+
 export async function getAllAgents(
   context: vscode.ExtensionContext,
-): Promise<string[]> {
-  const agents = getConfig<string[]>('agents', []);
-  const includeToolUse = getConfig<boolean>('includeToolUseAgents', false);
+): Promise<AgentNameBuckets> {
+  const configuredWorkflowAgents = getConfig<string[]>('agents', []);
+  const configuredToolUseAgents = getConfig<string[]>('toolUseAgents', []);
 
-  if (!includeToolUse) {
-    return agents;
-  }
+  const hasConfiguredWorkflowAgents = configuredWorkflowAgents.length > 0;
+  const workflowAgents = hasConfiguredWorkflowAgents
+    ? Array.from(new Set(configuredWorkflowAgents))
+    : [DEFAULT_WORKFLOW_AGENT];
+  const toolUseAgents = Array.from(
+    new Set([DEFAULT_TOOL_USE_AGENT, ...configuredToolUseAgents]),
+  );
+  const allAgents = Array.from(new Set([...workflowAgents, ...toolUseAgents]));
 
-  // Get tool-use agents
-  const toolUseDir = await agentDirectories.builtInToolUse(context);
-  try {
-    const toolUseFiles = await glob('**/*.yaml', {
-      cwd: toolUseDir,
-      dot: false,
-      nodir: true,
-      absolute: false,
-    });
-    const toolUseAgents = toolUseFiles.map((f) =>
-      f.replace(/\.yaml$/, '').replace(/.*\//, ''),
-    );
-    return Array.from(new Set([...agents, ...toolUseAgents]));
-  } catch {
-    // If tool-use directory doesn't exist or can't be read, just use base agents
-    return agents;
-  }
+  const defaultWorkflowAgent = configuredWorkflowAgents.includes(
+    DEFAULT_WORKFLOW_AGENT,
+  )
+    ? DEFAULT_WORKFLOW_AGENT
+    : (workflowAgents[0] ?? DEFAULT_WORKFLOW_AGENT);
+
+  return { allAgents, toolUseAgents, defaultWorkflowAgent };
 }
 
 /**
@@ -50,7 +54,7 @@ async function getAgentDirectories(
   context: vscode.ExtensionContext,
 ): Promise<AgentDirectoryMap> {
   return {
-    custom: await agentDirectories.custom(),
+    custom: await agentDirectories.custom(context),
     builtIn: await agentDirectories.builtIn(context),
     builtInToolUse: await agentDirectories.builtInToolUse(context),
   };
@@ -59,19 +63,18 @@ async function getAgentDirectories(
 /**
  * Compute agent <option> tags for the agent dropdown.
  * Agents missing a YAML definition are marked as disabled and cannot be selected.
- * A codicon indicator is added via data-multiple when a corresponding
- * `_multiple.yaml` file exists.
+ * A codicon indicator is added via data-multiple when either the agent declares
+ * `isMultipleOutput: true` or a sibling `_multiple.yaml` definition exists.
  */
 export async function computeAgentOptions(
   context: vscode.ExtensionContext,
-): Promise<string> {
-  const allAgents = await getAllAgents(context);
+): Promise<AgentOptionsPayload> {
+  const { allAgents, toolUseAgents, defaultWorkflowAgent } =
+    await getAllAgents(context);
   const dirs = await getAgentDirectories(context);
 
-  const optionTags = allAgents.map((agent) => {
-    const metadata = getAgentOptionMetadata(agent, dirs);
-    return createAgentOptionTag(agent, metadata);
+  return buildAgentOptionsPayload(allAgents, dirs, toolUseAgents, {
+    workflowAgent: defaultWorkflowAgent,
+    toolUseAgent: DEFAULT_TOOL_USE_AGENT,
   });
-
-  return optionTags.join('\n');
 }

@@ -62,6 +62,14 @@ export class DirectAgent extends BaseReflectionAgent {
           outputProcessGroupId,
         );
 
+        // I do not think DirectAgent should ever use scratchpad;
+        if (this.useScratchpad) {
+          await this.outputHandler.xmlManager.ensureCorrectXmlStructure(
+            outputFile,
+            this.agentSetting.documentTag,
+          );
+        }
+
         // Process output files using the output handler
         await this.outputHandler.processOutputFiles(
           outputFile,
@@ -89,6 +97,7 @@ export class DirectAgent extends BaseReflectionAgent {
       );
 
       // Only end the processing group if we created it
+      // Maybe this kind of setup is more graceful to do a withGroup kind of function?
       if (!processGroupId) {
         this.logger.endGroup(outputProcessGroupId, 'stopped');
       }

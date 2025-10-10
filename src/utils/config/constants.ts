@@ -23,8 +23,7 @@ export const AUTO_EXTRACT_FIELDS = [
 ] as const;
 export const TOOL_CONFIG_FIELDS = [
   'attachTeXCount',
-  'printInputPrompt',
-  'reflect',
+  'attachDiagnostics',
 ] as const;
 
 // Length for preview slices of tool output and responses

@@ -1,8 +1,11 @@
-// Local imports - agent
-
 // Local imports - agent components
 import type { AgentConfig } from '../core/AgentConfig';
-import { AgentPrompt, AgentSetting } from '../core/AgentDataclass';
+import {
+  AgentPrompt,
+  AgentSetting,
+  AgentSessionMetadata,
+  resolveAgentSessionMetadata,
+} from '../core/AgentDataclass';
 import { AgentStateGlobal } from '../core/AgentState';
 import { IAgent } from '../core/IAgent';
 import type { IModelHandler } from '../modelHandlers';
@@ -10,8 +13,9 @@ import { UsageMonitor } from '../utils/UsageMonitor';
 import { buildUserVars } from '../utils/userVars';
 import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
 
-// Local imports - log
+// Local imports - logging
 import { AgentLogger } from '@logger/AgentLogger';
+import { MESSAGE_TYPES } from '@logger/messageTypes';
 import { getStreamTabId as buildStreamTabId } from '@/logger/streamUtils';
 
 // Local imports - utilities
@@ -30,6 +34,7 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
   protected logger: AgentLogger;
   protected usageMonitor: UsageMonitor;
   protected runGroupId?: string;
+  private lastRunGroupId?: string;
   protected userVars: Record<string, any> = {};
   protected client: C | null = null;
   protected isInterrupted = false;
@@ -40,6 +45,13 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
 
   public get config(): AgentConfig {
     return this.agentConfig;
+  }
+
+  public getSessionMetadata(): AgentSessionMetadata {
+    return resolveAgentSessionMetadata(
+      this.agentConfig.agentType ?? this.agentSetting.agentType,
+      this.agentConfig.agentSessionKind,
+    );
   }
 
   constructor(
@@ -82,13 +94,14 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
   }
 
   /** Compute the stream tab identifier for this agent execution. */
-  protected getStreamTabId(): StreamTabId {
+  public getStreamTabId(): StreamTabId {
+    const metadata = this.getSessionMetadata();
     return buildStreamTabId(
       this.agentConfig.agent,
       this.agentConfig.model,
       this.agentConfig.inputFile,
       {
-        agentType: this.agentSetting.agentType,
+        agentType: metadata.agentType,
         executionId: this.executionId,
         useMultipleOutputs: this.agentConfig.useMultipleOutputs,
       },
@@ -132,7 +145,7 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
       );
 
       this.userVars = await this.getUserVars();
-      BaseAgent.runningAgents.set(this.getStreamTabId(), this);
+      this.registerRunningAgent(this.getStreamTabId());
 
       if (createGroup && initGroupId) {
         this.logger.endGroup(initGroupId, 'stopped');
@@ -159,7 +172,11 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
   /** Check if the agent should stop due to user interruption. */
   protected checkInterruption(): boolean {
     if (this.isInterrupted) {
-      this.logger.info('Stopping due to user interruption');
+      this.logger.info(
+        'Stopping due to user interruption',
+        undefined,
+        MESSAGE_TYPES.PROGRESS_STATUS,
+      );
       return true;
     }
     return false;
@@ -217,6 +234,7 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
       undefined,
       parentGroupId,
     );
+    this.lastRunGroupId = this.runGroupId;
     return this.runGroupId;
   }
 
@@ -226,9 +244,17 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
    */
   protected endRunGroup(status: 'stopped' | 'error' = 'stopped'): void {
     if (this.runGroupId) {
+      this.lastRunGroupId = this.runGroupId;
       this.logger.endGroup(this.runGroupId, status);
       this.runGroupId = undefined;
     }
+  }
+
+  /**
+   * Retrieve the most recently used run group identifier.
+   */
+  public getLastRunGroupId(): string | undefined {
+    return this.lastRunGroupId;
   }
 
   public static getRunningAgent(
@@ -239,6 +265,14 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
 
   protected cleanup(): void {
     const streamTabId = this.getStreamTabId();
+    this.unregisterRunningAgent(streamTabId);
+  }
+
+  protected registerRunningAgent(streamTabId: StreamTabId): void {
+    BaseAgent.runningAgents.set(streamTabId, this);
+  }
+
+  protected unregisterRunningAgent(streamTabId: StreamTabId): void {
     BaseAgent.runningAgents.delete(streamTabId);
   }
 

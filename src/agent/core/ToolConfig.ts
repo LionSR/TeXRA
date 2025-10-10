@@ -1,6 +1,14 @@
 // Third-party imports
 import { z } from 'zod';
 
+export const DEFAULT_TOOL_CONFIG = {
+  autoExtractFigure: false,
+  autoExtractTikzFigure: false,
+  attachTeXCount: false,
+  attachDiagnostics: false,
+  autoCompileInputPdf: false,
+} as const;
+
 /**
  * Zod schema for validating ToolConfig objects.
  * Defaults are defined at the property level and the schema itself
@@ -12,15 +20,20 @@ import { z } from 'zod';
  */
 export const ToolConfigSchema = z
   .object({
-    reflect: z.boolean().default(false),
-    autoExtractFigure: z.boolean().default(false),
-    autoExtractTikzFigure: z.boolean().default(false),
-    attachTeXCount: z.boolean().default(false),
-    attachDiagnostics: z.boolean().default(false),
-    printInputPrompt: z.boolean().default(false),
-    autoCompileInputPdf: z.boolean().default(false),
+    autoExtractFigure: z
+      .boolean()
+      .prefault(DEFAULT_TOOL_CONFIG.autoExtractFigure),
+    autoExtractTikzFigure: z
+      .boolean()
+      .prefault(DEFAULT_TOOL_CONFIG.autoExtractTikzFigure),
+    attachTeXCount: z.boolean().prefault(DEFAULT_TOOL_CONFIG.attachTeXCount),
+    attachDiagnostics: z
+      .boolean()
+      .prefault(DEFAULT_TOOL_CONFIG.attachDiagnostics),
+    autoCompileInputPdf: z
+      .boolean()
+      .prefault(DEFAULT_TOOL_CONFIG.autoCompileInputPdf),
   })
-  .strip()
-  .default({});
+  .prefault(DEFAULT_TOOL_CONFIG);
 
 export type ToolConfig = z.infer<typeof ToolConfigSchema>;
