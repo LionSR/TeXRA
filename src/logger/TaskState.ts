@@ -1,21 +1,22 @@
 // Local imports
 import type { AgentConfig } from '@agent/core/AgentConfig';
-import { AgentSessionKind } from '@agent/core/AgentDataclass';
-import type { AgentType } from '@agent/core/AgentDataclass';
+import {
+  AgentCategory,
+  type AgentSessionDescriptor,
+} from '@agent/core/AgentDataclass';
 import type { FileType } from '@utils/config';
 
 /** Shared properties for all task state variants. */
 interface BaseTaskState {
   agentConfig: AgentConfig;
-  agentType?: AgentType;
-  agentSessionKind: AgentSessionKind;
+  session: AgentSessionDescriptor;
 }
 
 /**
  * Workflow task state stores file visibility information for toolbar actions.
  */
 export interface WorkflowTaskState extends BaseTaskState {
-  agentSessionKind: AgentSessionKind.Workflow;
+  session: AgentSessionDescriptor & { agentCategory: AgentCategory.Workflow };
   activeFiles: Record<FileType, boolean>;
 }
 
@@ -27,7 +28,7 @@ export interface ToolSessionState {
 }
 
 export interface ToolUseTaskState extends BaseTaskState {
-  agentSessionKind: AgentSessionKind.ToolUse;
+  session: AgentSessionDescriptor & { agentCategory: AgentCategory.ToolUse };
   toolSessionState?: ToolSessionState;
 }
 
@@ -36,11 +37,11 @@ export type TaskState = WorkflowTaskState | ToolUseTaskState;
 export function isWorkflowTaskState(
   taskState: TaskState,
 ): taskState is WorkflowTaskState {
-  return taskState.agentSessionKind === AgentSessionKind.Workflow;
+  return taskState.session.agentCategory === AgentCategory.Workflow;
 }
 
 export function isToolUseTaskState(
   taskState: TaskState,
 ): taskState is ToolUseTaskState {
-  return taskState.agentSessionKind === AgentSessionKind.ToolUse;
+  return taskState.session.agentCategory === AgentCategory.ToolUse;
 }

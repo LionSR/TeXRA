@@ -7,6 +7,7 @@ import {
   AgentSetting,
   AgentPrompt,
   AgentType,
+  AgentCategory,
 } from '@agent/core/AgentDataclass';
 import { BaseToolUseAgent } from '@agent/implementations/BaseToolUseAgent';
 import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
@@ -124,6 +125,7 @@ describe('BaseToolUseAgent follow-up loop', () => {
     const handler = new DummyHandler();
     const setting: AgentSetting = {
       agentType: AgentType.ToolUse,
+      agentCategory: AgentCategory.ToolUse,
       documentTag: 'doc',
       temperature: 0,
       endTag: '</doc>',

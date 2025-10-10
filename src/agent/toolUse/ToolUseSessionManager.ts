@@ -6,7 +6,12 @@ import { z } from 'zod';
 import * as vscode from 'vscode';
 
 // Local imports - agent
-import { AgentSessionKind } from '@agent/core/AgentDataclass';
+import {
+  AgentCategory,
+  AgentType,
+  resolveAgentSessionDescriptor,
+  type AgentSessionDescriptor,
+} from '@agent/core/AgentDataclass';
 import { ToolState } from '@agent/core/ToolState';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
@@ -37,28 +42,39 @@ const ToolStateSnapshotSchema = z.object({
   thinkingAdded: z.boolean(),
 });
 
+const SessionDescriptorSchema = z.strictObject({
+  agentType: z.enum(AgentType).optional(),
+  agentCategory: z.enum(AgentCategory),
+});
+
 const ToolUseSessionSnapshotSchema = z.strictObject({
   version: z.literal(SNAPSHOT_VERSION),
   executionId: z.string(),
   streamId: z.string(),
   agentName: z.string(),
   model: z.string(),
-  agentSessionKind: z.enum(AgentSessionKind),
+  agentSessionKind: z.enum(AgentCategory).optional(),
+  session: SessionDescriptorSchema.optional(),
   messages: z.array(z.unknown()),
   toolState: ToolStateSnapshotSchema,
   lastUpdated: z.number(),
 });
 
-export type ToolUseSessionSnapshot = z.infer<
-  typeof ToolUseSessionSnapshotSchema
->;
+type ToolUseSessionSnapshotParsed = z.infer<typeof ToolUseSessionSnapshotSchema>;
+
+export type ToolUseSessionSnapshot = Omit<
+  ToolUseSessionSnapshotParsed,
+  'agentSessionKind' | 'session'
+> & {
+  session: Required<AgentSessionDescriptor>;
+};
 
 interface SavePayload {
   executionId: ExecutionId;
   streamId: StreamTabId;
   agentName: string;
   model: string;
-  agentSessionKind: AgentSessionKind;
+  session: AgentSessionDescriptor;
   messages: ProviderMessage[];
   toolState: ToolState;
 }
@@ -105,6 +121,29 @@ function getSnapshotPath(executionId: ExecutionId): string {
 
 interface ResumingSessionState {
   queuedFollowUps: string[];
+}
+
+function normalizeSnapshot(
+  snapshot: ToolUseSessionSnapshotParsed,
+): ToolUseSessionSnapshot {
+  // If already normalized (has session, no legacy fields), trust it
+  if (snapshot.session && !snapshot.agentSessionKind) {
+    return snapshot as ToolUseSessionSnapshot;
+  }
+
+  // Legacy path: derive descriptor and create new normalized object
+  const descriptor = snapshot.session
+    ?? resolveAgentSessionDescriptor(AgentType.ToolUse, snapshot.agentSessionKind);
+
+  const { agentSessionKind: _legacyKind, session: _legacySession, ...rest } = snapshot;
+
+  return {
+    ...rest,
+    session: {
+      agentType: descriptor.agentType ?? AgentType.ToolUse,
+      agentCategory: descriptor.agentCategory,
+    },
+  };
 }
 
 export class ToolUseSessionManager {
@@ -271,13 +310,17 @@ export class ToolUseSessionManager {
     }
 
     try {
+      // Store only what's necessary - session is the canonical descriptor
       const snapshot: ToolUseSessionSnapshot = {
         version: SNAPSHOT_VERSION,
         executionId: payload.executionId,
         streamId: payload.streamId,
         agentName: payload.agentName,
         model: payload.model,
-        agentSessionKind: payload.agentSessionKind,
+        session: {
+          agentType: payload.session.agentType ?? AgentType.ToolUse,
+          agentCategory: payload.session.agentCategory,
+        },
         messages: structuredClone(payload.messages),
         toolState: toToolStateSnapshot(payload.toolState),
         lastUpdated: Date.now(),
@@ -311,7 +354,8 @@ export class ToolUseSessionManager {
       );
       const normalized =
         typeof stored === 'string' ? JSON.parse(stored) : stored;
-      return ToolUseSessionSnapshotSchema.parse(normalized);
+      const parsed = ToolUseSessionSnapshotSchema.parse(normalized);
+      return normalizeSnapshot(parsed);
     } catch (error) {
       if (
         error instanceof vscode.FileSystemError &&
@@ -327,7 +371,8 @@ export class ToolUseSessionManager {
           typeof fallbackParsed === 'string'
             ? JSON.parse(fallbackParsed)
             : fallbackParsed;
-        return ToolUseSessionSnapshotSchema.parse(normalized);
+        const parsed = ToolUseSessionSnapshotSchema.parse(normalized);
+        return normalizeSnapshot(parsed);
       } catch (fallbackError) {
         if (
           fallbackError instanceof vscode.FileSystemError &&

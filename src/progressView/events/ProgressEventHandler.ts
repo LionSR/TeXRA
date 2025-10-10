@@ -12,7 +12,7 @@ import { buildStreamInfos } from '../streamInfoUtils';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 
 // Local imports - agent
-import { AgentSessionKind } from '@agent/core/AgentDataclass';
+import { AgentCategory } from '@agent/core/AgentDataclass';
 
 // Types
 import { bus } from '@eventBus/ProgressEventBus';
@@ -219,14 +219,11 @@ export class ProgressEventHandler {
       this.setStreamStatus(stream, STATUS.RUNNING);
     }
 
-    this.state.setSessionKindHint(stream, AgentSessionKind.Workflow);
+    this.state.setSessionKindHint(stream, AgentCategory.Workflow);
 
     const currentFilter = this.state.agentTypeFilter;
-    if (
-      currentFilter !== 'all' &&
-      currentFilter !== AgentSessionKind.Workflow
-    ) {
-      this.state.agentTypeFilter = AgentSessionKind.Workflow;
+    if (currentFilter !== 'all' && currentFilter !== AgentCategory.Workflow) {
+      this.state.agentTypeFilter = AgentCategory.Workflow;
     }
 
     this.state.activeStream = stream;

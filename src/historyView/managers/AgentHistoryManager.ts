@@ -7,9 +7,10 @@ import * as vscode from 'vscode';
 // Local imports - agent metadata
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import {
-  AgentSessionKind,
+  AgentCategory,
   AgentType,
-  resolveAgentSessionMetadata,
+  type AgentSessionDescriptor,
+  resolveAgentSessionDescriptor,
 } from '@agent/core/AgentDataclass';
 import type { ExecutionId } from '@agent/types/IdentifierTypes';
 
@@ -23,8 +24,7 @@ export interface AgentHistoryItem {
   id: ExecutionId;
   timestamp: string;
   config: AgentConfig;
-  agentType?: AgentType;
-  agentSessionKind?: AgentSessionKind;
+  session: AgentSessionDescriptor;
 }
 
 /**
@@ -38,22 +38,14 @@ export class AgentHistoryManager {
    * Add a new agent execution to history
    */
   public static async addToHistory(config: AgentConfig): Promise<string> {
-    const metadata = resolveAgentSessionMetadata(
-      config.agentType,
-      config.agentSessionKind,
-    );
-    const normalizedConfig: AgentConfig = {
-      ...config,
-      agentType: metadata.agentType,
-      agentSessionKind: metadata.agentSessionKind,
-    };
+    // Trust that config already has session (internal data from runtime)
+    const session = config.session ?? resolveAgentSessionDescriptor(config.agentType);
 
     const historyItem: AgentHistoryItem = {
       id: randomUUID(),
       timestamp: new Date().toISOString(),
-      config: normalizedConfig,
-      agentType: metadata.agentType,
-      agentSessionKind: metadata.agentSessionKind,
+      config,
+      session,
     };
 
     // Get current workspace-specific history
@@ -78,8 +70,14 @@ export class AgentHistoryManager {
    */
   public static async getHistory(): Promise<AgentHistoryItem[]> {
     const storageKey = this.getWorkspaceStorageKey();
-    const history = workspaceSM.get<AgentHistoryItem[]>(storageKey, []);
-    return history.map((item) => this.normalizeHistoryItem(item));
+    const history = workspaceSM.get<unknown[]>(storageKey, []);
+    return history.reduce<AgentHistoryItem[]>((acc, item) => {
+      const normalized = this.normalizeHistoryItem(item);
+      if (normalized) {
+        acc.push(normalized);
+      }
+      return acc;
+    }, []);
   }
 
   /**
@@ -90,25 +88,34 @@ export class AgentHistoryManager {
     await workspaceSM.update(storageKey, history);
   }
 
-  private static normalizeHistoryItem(
-    item: AgentHistoryItem,
-  ): AgentHistoryItem {
-    const metadata = resolveAgentSessionMetadata(
-      item.agentType ?? item.config.agentType,
-      item.agentSessionKind ?? item.config.agentSessionKind,
-    );
+  private static normalizeHistoryItem(item: unknown): AgentHistoryItem | null {
+    const candidate = item as Partial<{
+      id: ExecutionId;
+      timestamp: string;
+      config: AgentConfig;
+      session?: AgentSessionDescriptor;
+      agentType?: AgentType;
+      agentSessionKind?: AgentCategory;
+    }>;
 
-    const normalizedConfig: AgentConfig = {
-      ...item.config,
-      agentType: metadata.agentType,
-      agentSessionKind: metadata.agentSessionKind,
-    };
+    if (!candidate.id || !candidate.timestamp || !candidate.config) {
+      return null;
+    }
+
+    // Derive session from the most canonical source available
+    const session =
+      candidate.session ??
+      candidate.config.session ??
+      resolveAgentSessionDescriptor(
+        candidate.agentType ?? candidate.config.agentType,
+        candidate.agentSessionKind,
+      );
 
     return {
-      ...item,
-      config: normalizedConfig,
-      agentType: metadata.agentType,
-      agentSessionKind: metadata.agentSessionKind,
+      id: candidate.id,
+      timestamp: candidate.timestamp,
+      config: candidate.config,
+      session,
     };
   }
 
