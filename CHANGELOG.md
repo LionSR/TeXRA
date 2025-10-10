@@ -2,14 +2,6 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
-
-### Features
-
-### Improvements
-
-### Bug Fixes
-
 ## [0.33.10] - 2025-10-10
 
 ### Features
