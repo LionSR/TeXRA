@@ -52,6 +52,31 @@ When enabled, TeXRA parses the input `.tex` file(s) before agent execution:
 
 This ensures the agent receives all relevant visual context automatically.
 
+## Figure Extraction Tools for Agents
+
+When you are running a tool-use agent outside the UI controls, you can explicitly request figure assets via two dedicated tools:
+
+- `extract_figures` – scans a LaTeX file for `\includegraphics` and related commands. It returns a newline-delimited list of referenced files and attaches each existing asset. Options:
+  - `texPath` (required): workspace path to the primary `.tex` file.
+  - Attachments are automatically capped to the first 20 figures to avoid overwhelming downstream providers.
+- `extract_tikz_figures` – extracts `tikzpicture` environments and, by default, compiles each one into a standalone PDF attachment. Options:
+  - `texPath` (required): workspace path to the source `.tex` file.
+  - `compile` (default `true`): set to `false` to skip compilation and just receive a summary of discovered figures.
+  - Attachments are limited to the first 12 compiled PDFs to keep responses lightweight.
+
+Example tool call payload for `extract_figures`:
+
+```json
+{
+  "name": "extract_figures",
+  "arguments": {
+    "texPath": "paper/main.tex"
+  }
+}
+```
+
+The tool response includes a `summary`, formatted output listing each figure, and (when files are found) structured attachments that downstream model handlers pass to OpenAI Responses and Anthropic APIs as native file/image results. Providers without file-output support receive a textual summary with workspace paths so the agent can fetch the assets using `read_file`.
+
 ## Manually Selecting Figures
 
 When you provide media files (manually or via auto-extract):

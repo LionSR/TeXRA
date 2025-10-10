@@ -146,13 +146,13 @@ export class EventsManager {
       cursor: 'col-resize',
     });
 
-    // Handle special-details and file-list-details toggle events
+    // Handle banner-details and file-list-details toggle events
     document.addEventListener(
       'toggle',
       (e) => {
         if (
           e.target &&
-          (e.target.classList.contains('special-details') ||
+          (e.target.classList.contains('banner-details') ||
             e.target.classList.contains('file-list-details') ||
             e.target.classList.contains('latexdiff-details') ||
             e.target.classList.contains('statistics-details'))
@@ -181,28 +181,19 @@ export class EventsManager {
       }
     });
 
-    // Handle copy actions for model responses
+    // Handle copy actions for banner content
     document.addEventListener('click', async (e) => {
       if (!(e.target instanceof Element)) {
         return;
       }
-      const copyButton = e.target.closest(
-        '.model-response-copy, .special-content-copy',
-      );
+      const copyButton = e.target.closest('.banner-content-copy');
       if (!copyButton) {
         return;
       }
 
-      let contentElem = null;
-      if (copyButton.classList.contains('model-response-copy')) {
-        contentElem = copyButton
-          .closest('.model-response-line')
-          ?.querySelector('.model-response-content');
-      } else {
-        contentElem = copyButton
-          .closest('.special-details')
-          ?.querySelector('.special-content');
-      }
+      const contentElem = copyButton
+        .closest('.banner-details')
+        ?.querySelector('.banner-content');
       if (!contentElem) {
         return;
       }
@@ -217,9 +208,7 @@ export class EventsManager {
         defaultTitle:
           copyButton.dataset.defaultTitle ||
           copyButton.getAttribute('title') ||
-          (copyButton.classList.contains('model-response-copy')
-            ? 'Copy model output'
-            : 'Copy content'),
+          'Copy content',
         successTitle: copyButton.dataset.successTitle || 'Copied!',
       });
     });
