@@ -282,7 +282,6 @@ describe('followUpCommand', () => {
       streamId,
       agentName: 'demo-agent',
       model: 'demo-model',
-      agentSessionKind: AgentCategory.ToolUse,
       session: { agentType: AgentType.ToolUse, agentCategory: AgentCategory.ToolUse },
       messages: [],
       toolState: {

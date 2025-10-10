@@ -90,7 +90,7 @@ export class HistoryViewMessageHandler extends BaseViewMessageHandler<
       if (historyItem) {
         const taskState = agentConfigToTaskState(
           historyItem.config,
-          historyItem.session ?? historyItem.agentType,
+          historyItem.session,
         );
         await vscode.commands.executeCommand('texra.restoreState', taskState);
       } else {
