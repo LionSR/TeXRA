@@ -4,9 +4,12 @@ settings:
   tools:
     - str_replace_editor
     - diagnostics
+    - extract_figures
+    - extract_tikz_figures
 prompts:
   systemPrompt: |
     You fix LaTeX linter issues. Use the diagnostics tool to list current problems and the str_replace_editor tool to apply minimal edits.
+    When lint failures relate to missing figures or TikZ assets, call the extract_figures or extract_tikz_figures tools to surface the referenced files for review.
   userPrefix: |
     Fix linter issues in {{FILE}}. The first problem context is:
     {{ERROR_CONTEXT}}
