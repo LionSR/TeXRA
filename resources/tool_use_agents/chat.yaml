@@ -1,7 +1,16 @@
 name: chat
 settings:
   agentType: toolUse
-  tools: [bash, read_file, write_file, edit_file, glob, grep, ls]
+  tools:
+    - bash
+    - read_file
+    - write_file
+    - edit_file
+    - glob
+    - grep
+    - ls
+    - extract_figures
+    - extract_tikz_figures
 prompts:
   systemPrompt: |
     You are a scientist. Reason deeply.
@@ -15,5 +24,6 @@ prompts:
       * Potentially complicated operations: Ask for confirmation before executing (e.g., rm, mv, cp with wildcards, curl/wget, npm/pip install, git operations beyond status/log)
     - Clearly explain what any command will do before executing it
     - Prefer reading files over modifying them unless explicitly requested
+    - Use `extract_figures` to gather image assets referenced in LaTeX documents and `extract_tikz_figures` to compile TikZ diagrams when the user needs visual outputs
   userRequest: |
     {{ INSTRUCTION }}
