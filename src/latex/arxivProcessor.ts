@@ -164,25 +164,24 @@ export class ArxivSourceProcessor {
       throw new Error('No workspace folder is open');
     }
 
-    const papersExDir = 'PapersEx';
-    if (!(await WorkspaceFS.exists(papersExDir))) {
-      await WorkspaceFS.createDir(papersExDir);
-    }
-
-    const paperDirRelative = path.join(papersExDir, id.replace(/\//g, '_'));
+    const sanitizedId = id.replace(/\//g, '_');
+    const paperDirRelative = sanitizedId;
     if (!(await WorkspaceFS.exists(paperDirRelative))) {
       await WorkspaceFS.createDir(paperDirRelative);
     }
 
     const paperDirFull = WorkspaceFS.fullPath(paperDirRelative);
-    const basePath = path.join(paperDirFull, id.replace(/\//g, '_'));
+    const downloadBasePath = path.join(paperDirFull, 'download');
 
     if (progressCallback) {
       progressCallback(`Downloading arXiv source for ${id}...`, 20);
     }
 
     const downloadUrl = `https://arxiv.org/src/${id}`;
-    const downloadedPath = await this.downloadFile(downloadUrl, basePath);
+    const downloadedPath = await this.downloadFile(
+      downloadUrl,
+      downloadBasePath,
+    );
 
     const isArchive =
       downloadedPath.endsWith('.tar') ||
