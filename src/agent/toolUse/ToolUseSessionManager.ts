@@ -305,18 +305,17 @@ export class ToolUseSessionManager {
     }
 
     try {
-      const normalizedSession = {
-        agentType: payload.session.agentType ?? AgentType.ToolUse,
-        agentCategory: payload.session.agentCategory,
-      } as Required<AgentSessionDescriptor>;
-
+      // Store only what's necessary - session is the canonical descriptor
       const snapshot: ToolUseSessionSnapshot = {
         version: SNAPSHOT_VERSION,
         executionId: payload.executionId,
         streamId: payload.streamId,
         agentName: payload.agentName,
         model: payload.model,
-        session: normalizedSession,
+        session: {
+          agentType: payload.session.agentType ?? AgentType.ToolUse,
+          agentCategory: payload.session.agentCategory,
+        },
         messages: structuredClone(payload.messages),
         toolState: toToolStateSnapshot(payload.toolState),
         lastUpdated: Date.now(),
