@@ -426,7 +426,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     signal?: AbortSignal,
     tools?: ToolDefinition[],
   ): Promise<Response> {
-    const useStreaming = this.getStreamingConfig();
+    const streamingToggleEnabled = this.getStreamingConfig();
     const backgroundToggleEnabled = getConfig<boolean>(
       'model.useBackgroundResponses',
       false,
@@ -438,6 +438,13 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     }
     const useBackgroundResponses =
       this.backgroundModeSupported && backgroundToggleEnabled;
+    const useStreaming = streamingToggleEnabled && !useBackgroundResponses;
+
+    if (streamingToggleEnabled && useBackgroundResponses) {
+      this.logger.debug(
+        'Background mode enabled; skipping streaming to avoid unstable behavior.',
+      );
+    }
     const newMessages = messages.slice(this.sentMessages);
 
     await this.uploadInlineInputFiles(client, newMessages);
@@ -555,7 +562,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         this.logger.info(
           `Running OpenAI Responses in background mode for response ${response.id}; polling every 15s. Completion may take longer than usual.`,
           undefined,
-          MESSAGE_TYPES.DEFAULT,
+          MESSAGE_TYPES.PROGRESS_STATUS,
           {
             responseId: response.id,
             pollIntervalMs:
