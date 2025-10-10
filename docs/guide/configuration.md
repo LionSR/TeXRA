@@ -65,7 +65,8 @@ Configure how TeXRA connects to AI model providers:
 "texra.model.useStreamingAnthropicReasoning": false,
 "texra.model.useStreamingOpenAIReasoning": false,
 "texra.model.useOpenAIResponsesAPI": true,
-"texra.model.gpt5ReasoningSummary": false
+"texra.model.gpt5ReasoningSummary": false,
+"texra.model.instructionPolishModel": "sonnet37"
 ```
 
 - `useOpenRouter`: Access models through OpenRouter instead of direct APIs
@@ -78,6 +79,7 @@ Configure how TeXRA connects to AI model providers:
 - `useStreamingOpenAIReasoning`: Enable streaming specifically for OpenAI reasoning models
 - `useOpenAIResponsesAPI`: Use OpenAI's Responses API instead of Chat Completions when available
 - `gpt5ReasoningSummary`: Request reasoning summaries from GPT-5 models (requires verified account and user tier)
+- `instructionPolishModel`: Short name of the model TeXRA uses to polish instruction text when Copilot is disabled. Values match the identifiers listed in [Models](./models.md).
 - `useCopilot`: Use the Copilot language model through VS Code's Language Model API for instruction polishing and text connection
 
 | Provider         | Proxy path                  | Supported |

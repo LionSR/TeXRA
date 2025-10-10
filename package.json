@@ -229,6 +229,12 @@
             "description": "Attach the `context-1m-2025-08-07` beta header for Claude Sonnet 4 requests to enable the 1M-token context window (usage capped at 200 K by extension).",
             "scope": "resource"
           },
+          "texra.model.instructionPolishModel": {
+            "type": "string",
+            "default": "sonnet37",
+            "description": "Short name of the model used to polish instruction text when Copilot is disabled.",
+            "scope": "resource"
+          },
           "texra.model.useCopilot": {
             "type": "boolean",
             "default": false,
