@@ -21,6 +21,20 @@ function isObjectRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
+function withSessionCategory<T extends AgentCategory>(
+  descriptor: AgentSessionDescriptor,
+  category: T,
+): AgentSessionDescriptor & { agentCategory: T } {
+  if (descriptor.agentCategory === category) {
+    return descriptor as AgentSessionDescriptor & { agentCategory: T };
+  }
+
+  return {
+    ...descriptor,
+    agentCategory: category,
+  } as AgentSessionDescriptor & { agentCategory: T };
+}
+
 function createActiveFilesFromArrays(
   src: Record<string, any>,
 ): Record<FileType, boolean> {
@@ -82,14 +96,14 @@ export function agentConfigToTaskState(
   if (resolvedSession.agentCategory === AgentCategory.ToolUse) {
     return {
       agentConfig: config,
-      session: resolvedSession,
+      session: withSessionCategory(resolvedSession, AgentCategory.ToolUse),
       toolSessionState: {},
     };
   }
 
   return {
     agentConfig: config,
-    session: resolvedSession,
+    session: withSessionCategory(resolvedSession, AgentCategory.Workflow),
     activeFiles: createActiveFilesFromArrays(config),
   };
 }
