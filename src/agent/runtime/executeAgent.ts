@@ -12,7 +12,8 @@ import {
   AgentSetting,
   AgentPrompt,
   AgentType,
-  resolveAgentSessionMetadata,
+  resolveAgentSessionDescriptor,
+  getAgentSessionDescriptor,
 } from '@agent/core/AgentDataclass';
 import { IAgent } from '@agent/core/IAgent';
 import {
@@ -261,9 +262,18 @@ export async function prepareAgentInstance<T extends IAgent = IAgent>(
     { preferMultiple: fullConfig.useMultipleOutputs },
   );
 
+  const agentSetting = ensureAgentTypeForSource(
+    loadedAgentSetting,
+    agentPathInfo.source,
+  );
+
+  const sessionDescriptor = getAgentSessionDescriptor(agentSetting);
+
   const agentConfig: AgentConfig = {
     ...fullConfig,
     agent: originalAgentName,
+    agentType: sessionDescriptor.agentType,
+    session: sessionDescriptor,
   };
 
   const modelName = agentConfig.model;
@@ -292,11 +302,6 @@ export async function prepareAgentInstance<T extends IAgent = IAgent>(
   };
 
   const modelHandler = ModelFactory.createHandler(modelConfig);
-
-  const agentSetting = ensureAgentTypeForSource(
-    loadedAgentSetting,
-    agentPathInfo.source,
-  );
 
   const AgentClass = (agentClassOverride ??
     getAgentClass(agentSetting)) as AgentConstructor;
@@ -344,10 +349,12 @@ export async function executeAgentWithLogging<T extends IAgent>(
 
     // Get the full stream tab ID
     const config = agent.config;
-    const metadata = resolveAgentSessionMetadata(
-      config.agentType ?? agentType ?? sessionMetadata.agentType,
-      config.agentSessionKind ?? sessionMetadata.agentSessionKind,
-    );
+    const metadata =
+      config.session ??
+      resolveAgentSessionDescriptor(
+        config.agentType ?? agentType ?? sessionMetadata.agentType,
+        sessionMetadata.agentCategory,
+      );
 
     streamTabId = agent.getStreamTabId();
 
@@ -404,8 +411,7 @@ export async function executeAgentWithLogging<T extends IAgent>(
               // Switch to this stream and set its status to running
               bus.emit('setActiveStream', {
                 stream: activeStreamId,
-                agentType: metadata.agentType ?? null,
-                agentSessionKind: metadata.agentSessionKind ?? null,
+                session: metadata,
               });
               bus.emit('updateStreamStatus', {
                 stream: activeStreamId,
@@ -499,7 +505,11 @@ export async function executeAgentWithLogging<T extends IAgent>(
             `Executing ${agentName} with model ${config.model}`,
             mainTaskGroupId,
           );
-          await agent.run();
+          const activeAgent = agent;
+          if (!activeAgent) {
+            throw new Error('Agent instance is not initialized.');
+          }
+          await activeAgent.run();
           // await checkExpectedOutputs(config.outputFiles, agent);
           // Mark the task as completed successfully
           logger.debug(`Task completed successfully`, mainTaskGroupId);
@@ -510,7 +520,7 @@ export async function executeAgentWithLogging<T extends IAgent>(
           });
 
           const generated = Object.values(
-            (agent as any).outputHandler?.outputFiles || {},
+            (activeAgent as any).outputHandler?.outputFiles || {},
           )
             .flat()
             .filter(

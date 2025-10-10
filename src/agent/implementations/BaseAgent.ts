@@ -3,8 +3,8 @@ import type { AgentConfig } from '../core/AgentConfig';
 import {
   AgentPrompt,
   AgentSetting,
-  AgentSessionMetadata,
-  resolveAgentSessionMetadata,
+  type AgentSessionDescriptor,
+  resolveAgentSessionDescriptor,
 } from '../core/AgentDataclass';
 import { AgentStateGlobal } from '../core/AgentState';
 import { IAgent } from '../core/IAgent';
@@ -47,10 +47,13 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
     return this.agentConfig;
   }
 
-  public getSessionMetadata(): AgentSessionMetadata {
-    return resolveAgentSessionMetadata(
+  public getSessionMetadata(): AgentSessionDescriptor {
+    if (this.agentConfig.session) {
+      return this.agentConfig.session;
+    }
+
+    return resolveAgentSessionDescriptor(
       this.agentConfig.agentType ?? this.agentSetting.agentType,
-      this.agentConfig.agentSessionKind,
     );
   }
 
