@@ -10,10 +10,6 @@ import type { StreamTabInfo } from '../types';
 import { STATUS } from '../modules/constants.js';
 
 // Local imports - agent
-import {
-  AgentType,
-  resolveAgentSessionMetadata,
-} from '@agent/core/AgentDataclass';
 import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
 
 // Local imports - events
@@ -58,7 +54,7 @@ export function createStreamStatusEvents(
     state: ProgressViewState,
     updater: WebviewUpdater,
   ): void => {
-    const { stream, agentType, agentSessionKind } = payload;
+    const { stream, session } = payload;
 
     if (!stream) {
       return;
@@ -66,15 +62,14 @@ export function createStreamStatusEvents(
 
     state.streamTabs.ensureStream(stream);
 
-    const metadata = resolveAgentSessionMetadata(agentType, agentSessionKind);
-    state.setSessionKindHint(stream, metadata.agentSessionKind);
+    if (session) {
+      state.setSessionKindHint(stream, session.agentCategory);
+    }
 
     const currentFilter = state.agentTypeFilter;
-    if (
-      currentFilter !== 'all' &&
-      currentFilter !== metadata.agentSessionKind
-    ) {
-      state.agentTypeFilter = metadata.agentSessionKind;
+    const targetCategory = session?.agentCategory;
+    if (targetCategory && currentFilter !== 'all' && currentFilter !== targetCategory) {
+      state.agentTypeFilter = targetCategory;
     }
 
     state.activeStream = stream;
@@ -106,10 +101,7 @@ export function createStreamStatusEvents(
         `Received setTaskState for ${streamTabId} but no state was stored`,
       );
     } else {
-      const sessionKind = resolveAgentSessionMetadata(
-        normalizedState.agentType,
-        normalizedState.agentSessionKind,
-      ).agentSessionKind;
+      const sessionKind = normalizedState.session.agentCategory;
       const currentFilter = state.agentTypeFilter;
       const activeStream = state.activeStream;
 

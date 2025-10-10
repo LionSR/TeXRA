@@ -9,6 +9,7 @@ import {
   AgentSetting,
   AgentType,
   AgentPrompt,
+  AgentCategory,
 } from '@agent/core/AgentDataclass';
 import { ToolState } from '@agent/core/ToolState';
 import { runToolUseCycle } from '@agent/core/ToolUseCycle';
@@ -98,6 +99,7 @@ describe('runToolUseCycle DeepSeek', () => {
     const toolRegistry = { echo: new EchoTool() };
     const setting: AgentSetting = {
       agentType: AgentType.ToolUse,
+      agentCategory: AgentCategory.ToolUse,
       documentTag: 'doc',
       temperature: 0,
       endTag: '</doc>',

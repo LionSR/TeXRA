@@ -2,7 +2,7 @@
 import { EventEmitter } from 'events';
 
 // Local imports - agent
-import type { AgentSessionKind, AgentType } from '@agent/core/AgentDataclass';
+import type { AgentSessionDescriptor } from '@agent/core/AgentDataclass';
 import type { OutputFileInfo } from '@agent/output/types';
 import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
 import type { TokenUsageStats } from '@agent/types/UsageTypes';
@@ -46,8 +46,7 @@ interface UpdateTaskGroupPayload {
 
 interface SetActiveStreamPayload {
   stream: StreamTabId | null;
-  agentType?: AgentType | null;
-  agentSessionKind?: AgentSessionKind | null;
+  session?: AgentSessionDescriptor | null;
 }
 
 interface SetTaskStatePayload {

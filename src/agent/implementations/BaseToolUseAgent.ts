@@ -2,10 +2,10 @@
 import type { AgentConfig } from '../core/AgentConfig';
 import {
   AgentPrompt,
-  AgentSessionKind,
   AgentSetting,
   AgentType,
-  resolveAgentSessionMetadata,
+  AgentCategory,
+  resolveAgentSessionDescriptor,
 } from '../core/AgentDataclass';
 import { ToolState } from '../core/ToolState';
 import { runToolUseCycle } from '../core/ToolUseCycle';
@@ -73,10 +73,7 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
   }
 
   public override getSessionMetadata() {
-    return resolveAgentSessionMetadata(
-      AgentType.ToolUse,
-      AgentSessionKind.ToolUse,
-    );
+    return resolveAgentSessionDescriptor(AgentType.ToolUse, AgentCategory.ToolUse);
   }
 
   private getTools(): ToolDefinition[] {
@@ -266,7 +263,7 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
             streamId: stream,
             agentName: this.agentConfig.agent,
             model: this.agentConfig.model,
-            agentSessionKind: AgentSessionKind.ToolUse,
+            session: this.getSessionMetadata(),
             messages: this.messages,
             toolState: state,
           });
