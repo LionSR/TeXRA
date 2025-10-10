@@ -48,6 +48,7 @@
     color 0.2s ease;
 }
 
+.model-response-line:hover .model-response-copy,
 .model-response-line:focus-within .model-response-copy,
 .model-response-copy:focus-visible,
 .model-response-copy.copy-success,
