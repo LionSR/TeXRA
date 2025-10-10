@@ -16,6 +16,8 @@ import type {
   ResponseInputContent,
   ResponseInputMessageContentList,
   ResponseInputFile,
+  ResponseInputImage,
+  ResponseInputText,
   ResponseStreamEvent,
   ResponseOutputText,
 } from 'openai/resources/responses/responses';
@@ -39,6 +41,11 @@ import { ModelHandler } from './ModelHandler';
 import { toOpenAIResponseTools } from './toolConversion';
 import type { ProviderStopReason } from './types/StopReasonTypes';
 import { OPENAI_CHAT_FINISH } from './types/StopReasonTypes';
+import {
+  describeAttachments,
+  extractToolAttachments,
+  loadAttachmentBuffer,
+} from './utils/toolAttachmentUtils';
 
 // Local imports - utilities
 import { createContinuationMessage } from '@agent/utils/continuationMessage';
@@ -46,12 +53,19 @@ import { MediaEntry } from '@agent/utils/mediaTypes';
 import { calculateTokenPrice } from '@agent/utils/priceUtils';
 import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
-import type { ToolDefinition } from '@model';
+import type { ModelConfig, ToolDefinition } from '@model';
+import type { ToolFileAttachment } from '@tools/result';
 import { cleanFileContent } from '@replacement/engine';
 import { K_SLICE, getConfig } from '@utils/config';
 import { sleep } from '@utils/helpers';
 import { WorkspaceFS } from '@utils/files';
 import xmlUtils from '@utils/text/xmlUtils';
+
+interface UploadedOpenAIResponseAttachment {
+  attachment: ToolFileAttachment;
+  fileId: string;
+  isImage: boolean;
+}
 
 /**
  * Handler for OpenAI's Responses API. This implementation works directly with
@@ -65,6 +79,18 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   OpenAIAPIResponseUsage,
   ResponseFunctionToolCallItem
 > {
+  protected override get supportsToolFileOutputs(): boolean {
+    return true;
+  }
+
+  protected override get supportsInlineToolImages(): boolean {
+    return true;
+  }
+
+  constructor(config: ModelConfig) {
+    super(config);
+  }
+
   protected override backgroundModeSupported = true;
   private static readonly BACKGROUND_POLL_INTERVAL_MS = 15000;
   private static readonly BACKGROUND_RETRIEVE_MAX_RETRIES = 3;
@@ -1200,14 +1226,15 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     return call ? JSON.stringify(call, null, 2) : null;
   }
 
-  createToolUseFollowUpMessages(
+  async createToolUseFollowUpMessages(
+    client: OpenAI | undefined,
     id: string,
     name: string,
     call: ResponseFunctionToolCallItem,
     result: Record<string, unknown>,
     _toolState?: ToolState,
     text?: string,
-  ): ResponseInputItem[] {
+  ): Promise<ResponseInputItem[]> {
     const messages: ResponseInputItem[] = [];
     if (text) {
       messages.push(this.createAssistantMessage(text));
@@ -1229,14 +1256,135 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
             ),
     };
 
+    const { attachments, sanitizedResult } = extractToolAttachments(result);
+    const supportsAttachments = this.supportsToolFileOutputs;
+    const supportsInlineImages = this.supportsInlineToolImages;
+
+    let uploadedAttachments: UploadedOpenAIResponseAttachment[] = [];
+    if (supportsAttachments && attachments.length > 0 && client) {
+      uploadedAttachments = await this.uploadToolAttachments(
+        client,
+        attachments,
+      );
+      if (uploadedAttachments.length > 0) {
+        (sanitizedResult as { files?: unknown }).files =
+          uploadedAttachments.map(({ attachment, fileId }) => ({
+            path: attachment.path,
+            mimeType: attachment.mimeType,
+            description: attachment.description,
+            fileId,
+          }));
+      }
+    }
+
+    if (
+      attachments.length > 0 &&
+      (!supportsAttachments || !client || uploadedAttachments.length === 0)
+    ) {
+      (sanitizedResult as Record<string, unknown>).attachmentSummary =
+        `Attachments available:\n${describeAttachments(attachments).join(
+          '\n',
+        )}\nUse the read_file tool to inspect them.`;
+    }
+
+    const primaryText =
+      typeof result.output === 'string' && result.output.trim().length > 0
+        ? result.output
+        : typeof result.summary === 'string'
+          ? result.summary
+          : undefined;
+    const summaryPayload = JSON.stringify(sanitizedResult, null, 2);
+    const combinedText = primaryText
+      ? `${primaryText}\n\n${summaryPayload}`
+      : summaryPayload;
+
+    let outputPayload:
+      | string
+      | Array<ResponseInputText | ResponseInputImage | ResponseInputFile>;
+
+    if (uploadedAttachments.length > 0) {
+      const parts: Array<
+        ResponseInputText | ResponseInputImage | ResponseInputFile
+      > = [{ type: 'input_text', text: combinedText }];
+
+      for (const uploaded of uploadedAttachments) {
+        if (supportsInlineImages && uploaded.isImage) {
+          parts.push({
+            type: 'input_image',
+            detail: 'auto',
+            file_id: uploaded.fileId,
+          });
+          continue;
+        }
+
+        parts.push({ type: 'input_file', file_id: uploaded.fileId });
+      }
+
+      outputPayload = parts;
+    } else {
+      outputPayload = combinedText;
+    }
+
     const resultMsg: ResponseInputItem.FunctionCallOutput = {
       type: 'function_call_output',
       call_id: id,
-      output: JSON.stringify(result),
+      output: outputPayload,
     };
 
     messages.push(callMsg, resultMsg);
     return messages;
+  }
+
+  private async uploadToolAttachments(
+    client: OpenAI,
+    attachments: ToolFileAttachment[],
+  ): Promise<UploadedOpenAIResponseAttachment[]> {
+    const uploaded: UploadedOpenAIResponseAttachment[] = [];
+
+    for (const attachment of attachments) {
+      let buffer: Buffer | undefined;
+      try {
+        buffer = await loadAttachmentBuffer(attachment);
+      } catch (err) {
+        this.logger.warn(
+          `Unable to read attachment ${attachment.path ?? 'attachment'}: ${getSdkErrorMessage(err)}`,
+        );
+        continue;
+      }
+
+      try {
+        const filename =
+          typeof attachment.path === 'string' && attachment.path.length > 0
+            ? (attachment.path.split('/').pop() ?? 'attachment')
+            : 'attachment';
+        const mimeType = attachment.mimeType ?? 'application/octet-stream';
+
+        const uploadedFile = await client.files.create({
+          file: await toFile(buffer, filename, { type: mimeType }),
+          purpose: 'assistants',
+        });
+
+        uploaded.push({
+          attachment,
+          fileId: uploadedFile.id,
+          isImage: mimeType.startsWith('image/'),
+        });
+      } catch (err) {
+        this.logger.error(
+          `Failed to upload attachment ${attachment.path ?? 'attachment'}: ${getSdkErrorMessage(err)}`,
+          undefined,
+          undefined,
+          err,
+        );
+      } finally {
+        if (buffer) {
+          buffer.fill(0);
+          buffer = undefined;
+        }
+      }
+    }
+
+    return uploaded;
   }
 
   async createUserFollowUpMessages(

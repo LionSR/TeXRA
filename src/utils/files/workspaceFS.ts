@@ -97,6 +97,19 @@ export class WorkspaceFS extends RelativeFS {
     );
   }
 
+  public static async readFileBytes(filePath: string): Promise<Buffer> {
+    try {
+      const fullPath = this.fullPath(filePath);
+      return await AbsoluteFS.readBytes(fullPath);
+    } catch (err) {
+      logger.error(
+        CHANNEL,
+        `Error reading file bytes: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      throw err;
+    }
+  }
+
   public static readFileBytesSync(filePath: string): Buffer {
     try {
       const fullPath = this.fullPath(filePath);

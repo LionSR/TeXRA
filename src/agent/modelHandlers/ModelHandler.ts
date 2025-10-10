@@ -57,6 +57,20 @@ const DEFAULT_OUTPUT_TOKEN_LIMIT_FACTOR = 2.5;
 // Default proxy domain
 const DEFAULT_PROXY_DOMAIN = 'proxy.texra.ai';
 
+function cloneCapabilities(capabilities: ModelCapabilities): ModelCapabilities {
+  const globalStructuredClone = (
+    globalThis as {
+      structuredClone?: <T>(value: T) => T;
+    }
+  ).structuredClone;
+
+  if (typeof globalStructuredClone === 'function') {
+    return globalStructuredClone(capabilities);
+  }
+
+  return JSON.parse(JSON.stringify(capabilities)) as ModelCapabilities;
+}
+
 /** Flags for token-based stop conditions. */
 interface TokenFlags {
   continuationLimit: boolean;
@@ -92,6 +106,14 @@ export abstract class ModelHandler<
   protected outputStreaming = false;
   protected backgroundModeSupported = false;
 
+  protected get supportsToolFileOutputs(): boolean {
+    return false;
+  }
+
+  protected get supportsInlineToolImages(): boolean {
+    return false;
+  }
+
   constructor(config: ModelConfig) {
     this.config = {
       ...config,
@@ -103,7 +125,7 @@ export abstract class ModelHandler<
         autoCompileInputPdf: false,
       },
     };
-    this.capabilities = config.capabilities;
+    this.capabilities = cloneCapabilities(config.capabilities);
     this.continueLimit = DEFAULT_CONTINUE_LIMIT;
     this.inputTokenLimit = DEFAULT_INPUT_TOKEN_LIMIT;
     this.maxOutputTokensFactor = DEFAULT_OUTPUT_TOKEN_LIMIT_FACTOR;
@@ -952,13 +974,14 @@ export abstract class ModelHandler<
    * Build a provider-specific follow-up message containing a tool result.
    */
   abstract createToolUseFollowUpMessages(
+    client: C | undefined,
     id: string,
     name: string,
     call: T,
     result: Record<string, unknown>,
     toolState?: ToolState,
     text?: string,
-  ): M[];
+  ): Promise<M[]>;
 
   /**
    * Append a simple text follow-up from the user.
