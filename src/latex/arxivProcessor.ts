@@ -72,7 +72,8 @@ export class ArxivSourceProcessor {
       if (disposition) {
         const match = /filename="?([^";]+)"?/i.exec(disposition);
         if (match) {
-          destPath = path.join(path.dirname(destBasePath), match[1]);
+          // Keep file in the same directory as destBasePath
+          destPath = path.join(path.dirname(destBasePath), path.basename(match[1]));
         }
       } else {
         const contentType = response.headers['content-type'];
@@ -214,12 +215,25 @@ export class ArxivSourceProcessor {
         progressCallback('Cleaning up...', 80);
       }
 
+      // Delete the archive and then the download directory
       await AbsoluteFS.delete(downloadedPath);
+      try {
+        await AbsoluteFS.delete(downloadDirFull);
+      } catch {
+        // Ignore errors if directory is not empty or doesn't exist
+      }
     } else {
+      // For non-archive files, move to paper root and clean up download directory
       const downloadedRel = WorkspaceFS.relativePath(downloadedPath);
       const targetRel = path.join(paperDirRelative, 'main.tex');
       if (path.basename(downloadedPath) !== 'main.tex') {
         await WorkspaceFS.rename(downloadedRel, targetRel);
+      }
+      // Clean up the download directory
+      try {
+        await AbsoluteFS.delete(downloadDirFull);
+      } catch {
+        // Ignore errors if directory is not empty or doesn't exist
       }
     }
 
