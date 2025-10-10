@@ -6,26 +6,36 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
-- Add OpenAI GPT-5 Pro (`gpt5pro`) to the model catalog with updated pricing and documentation.
-- Add interactive prompt to select latexdiff math markup granularity before each run.
-- Expose new `extract_figures` and `extract_tikz_figures` tools so agents can request figure assets and compiled TikZ PDFs as structured attachments.
-- Deliver tool-result attachments to OpenAI Responses and Anthropic APIs while providing readable fallbacks for chat-completion providers without native file support.
-
 ### Improvements
-
-- Simplified LaTeX figure tools to auto-manage attachment limits and leave encoding choices to provider handlers, reducing prompt bloat and memory pressure during tool calls.
-- Add one-click **Generate diff** controls in the Progress Board so you can launch round-by-round `latexdiff` comparisons without leaving the view.
-- Add copy buttons to Progress Board model responses and special log sections, plus native status styling that makes continuation updates easier to scan.
 
 ### Bug Fixes
 
-- Keep agent error logs grouped with their most recent run so failures stay visible in the Progress Board timeline.
-- Turn off streaming automatically whenever background responses are enabled to avoid unstable background replies.
-- Stop launching agent runs when initialization fails, preventing follow-up crashes from uninitialized sessions.
-- Stabilize Progress Board event handling to prevent duplicate task groups, stale status badges, and other glitches while sessions stream updates.
-- Hide workflow-only model responses from the Progress Board so tool logs stay focused on user-visible activity.
-- Ensure progress compare actions run `latexdiff` before opening previous-round diffs and close conflicting panels when needed, keeping the VS Code diff view reliable.
-- Improve LaTeX fenced-block parsing and OpenAI response handling so inline math, whitespace, and multi-part summaries render without mangling formatting.
+## [0.33.10] - 2025-10-10
+
+### Features
+
+- Add OpenAI GPT-5 Pro (`gpt5pro`) to the model catalog with updated pricing and documentation.
+- Prompt for latexdiff math markup before each run so you can pick the right level of equation detail on demand.
+- Introduce new `extract_figures` and `extract_tikz_figures` tools so agents can return referenced images and compiled TikZ PDFs as structured attachments.
+- Expand the `read_file` tool with ranged reads, letting agents request only the lines they need from large files.
+
+### Improvements
+
+- Streamline LaTeX figure tooling by auto-managing attachment limits, deferring uploads to provider handlers, and keeping prompts lightweight during tool calls.
+- Add one-click **Generate diff** controls and auto-select the relevant comparison commit so you can review outdated files without hunting for hashes.
+- Refresh the Progress Board with copy buttons, native status styling, and a cleaner layout that keeps model responses, special details, and status logs easy to scan.
+- Update the Progress Board empty state with quick links to create a sample project, fetch an arXiv source, or open the user guide.
+- Poll OpenAI background responses while gating progress updates, ensuring long-running background runs advance reliably without stray streaming updates.
+
+### Bug Fixes
+
+- Preserve run-group identifiers so agent error logs stay attached to the latest run in the Progress Board timeline.
+- Disable streaming automatically whenever background responses are enabled and mark their updates as status messages to keep background replies stable.
+- Stop launching agent runs when initialization fails and harden progress event handling to avoid duplicate task groups and stale badges.
+- Hide workflow-only model responses from the Progress Board and ensure compare actions run `latexdiff` before opening diffs, keeping the VS Code compare view reliable.
+- Improve LaTeX fenced-block parsing—including inline math and `aligned` environments—so generated summaries retain spacing and formatting.
+- Default to the first available workflow agent when none is configured, restoring the expected agent selection in new workspaces.
+- Keep arXiv downloads inside their staging folder, move `main.tex` files into place, and clean up the temporary directory after processing.
 
 ## [0.33.9] - 2025-10-03
 
