@@ -23,9 +23,11 @@ export class Placeholder {
       this._element.className = 'log-placeholder';
       const sampleLink =
         '<a href="command:texra.createSampleProject">create a sample project</a>';
+      const arxivLink =
+        '<a href="command:texra.downloadArXivSource">download an arXiv source</a>';
       const guideArgs = encodeURIComponent(JSON.stringify(['quick-start']));
       const guideLink = `<a href="command:texra.openDoc?${guideArgs}">user guide</a>`;
-      this._element.innerHTML = `No runs yet—use TeXRA commands to start. Try ${sampleLink} or read the ${guideLink}.`;
+      this._element.innerHTML = `No runs yet—use TeXRA commands to start. Try ${sampleLink}, ${arxivLink}, or read the ${guideLink}.`;
     }
 
     container.innerHTML = '';
