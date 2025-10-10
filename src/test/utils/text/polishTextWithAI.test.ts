@@ -60,11 +60,22 @@ describe('polishTextWithAI', () => {
       return [{ role: 'user', content }];
     }
 
-    async createResponse(): Promise<string> {
+    async createResponse(
+      _client: Record<string, never>,
+      _messages: Array<{ role: string; content: string }>,
+      _temperature: number,
+      _systemPrompt?: string,
+      _endTag?: string,
+      _signal?: unknown,
+      _tools?: unknown,
+    ): Promise<string> {
       return '<corrected_text>Polished instruction</corrected_text>';
     }
 
-    extractResponse(response: string): [string, undefined, 'stop'] {
+    extractResponse(
+      response: string,
+      _endTag: string,
+    ): [string, undefined, 'stop'] {
       return [response, undefined, 'stop'];
     }
   }
