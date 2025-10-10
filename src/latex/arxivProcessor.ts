@@ -67,12 +67,13 @@ export class ArxivSourceProcessor {
         throw new Error(`Failed to download: HTTP ${response.status}`);
       }
 
-      // Determine filename from headers
+      // Extract filename from Content-Disposition header if available
       const disposition = response.headers['content-disposition'];
       if (disposition) {
         const match = /filename="?([^";]+)"?/i.exec(disposition);
         if (match) {
-          destPath = path.join(path.dirname(destBasePath), match[1]);
+          // Place file in download directory using basename to prevent path traversal
+          destPath = path.join(path.dirname(destBasePath), path.basename(match[1]));
         }
       } else {
         const contentType = response.headers['content-type'];
@@ -164,25 +165,28 @@ export class ArxivSourceProcessor {
       throw new Error('No workspace folder is open');
     }
 
-    const papersExDir = 'PapersEx';
-    if (!(await WorkspaceFS.exists(papersExDir))) {
-      await WorkspaceFS.createDir(papersExDir);
-    }
+    // Create project directory for the arXiv paper (sanitize ID to avoid path issues)
+    const sanitizedId = id.replace(/\//g, '_');
+    const paperDirRelative = sanitizedId;
+    await WorkspaceFS.ensureDir(paperDirRelative);
 
-    const paperDirRelative = path.join(papersExDir, id.replace(/\//g, '_'));
-    if (!(await WorkspaceFS.exists(paperDirRelative))) {
-      await WorkspaceFS.createDir(paperDirRelative);
-    }
-
+    // Create temporary download subdirectory for staging the archive
     const paperDirFull = WorkspaceFS.fullPath(paperDirRelative);
-    const basePath = path.join(paperDirFull, id.replace(/\//g, '_'));
+    const downloadDirRelative = path.join(paperDirRelative, 'download');
+    await WorkspaceFS.ensureDir(downloadDirRelative);
+
+    const downloadDirFull = path.join(paperDirFull, 'download');
+    const downloadBasePath = path.join(downloadDirFull, 'source');
 
     if (progressCallback) {
       progressCallback(`Downloading arXiv source for ${id}...`, 20);
     }
 
     const downloadUrl = `https://arxiv.org/src/${id}`;
-    const downloadedPath = await this.downloadFile(downloadUrl, basePath);
+    const downloadedPath = await this.downloadFile(
+      downloadUrl,
+      downloadBasePath,
+    );
 
     const isArchive =
       downloadedPath.endsWith('.tar') ||
@@ -210,12 +214,33 @@ export class ArxivSourceProcessor {
         progressCallback('Cleaning up...', 80);
       }
 
+      // Remove the downloaded archive file
       await AbsoluteFS.delete(downloadedPath);
+      // Remove the temporary download directory (files are now in paper root)
+      try {
+        await AbsoluteFS.delete(downloadDirFull, { recursive: true });
+      } catch (err) {
+        logger.debug(
+          this.channel,
+          `Could not remove download directory: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
     } else {
+      // For non-archive files, rename to main.tex and move to paper root
       const downloadedRel = WorkspaceFS.relativePath(downloadedPath);
       const targetRel = path.join(paperDirRelative, 'main.tex');
-      if (path.basename(downloadedPath) !== 'main.tex') {
+      // Always move the file to paper root, even if already named main.tex
+      if (downloadedRel !== targetRel) {
         await WorkspaceFS.rename(downloadedRel, targetRel);
+      }
+      // Remove the temporary download directory (file is now in paper root)
+      try {
+        await AbsoluteFS.delete(downloadDirFull, { recursive: true });
+      } catch (err) {
+        logger.debug(
+          this.channel,
+          `Could not remove download directory: ${err instanceof Error ? err.message : String(err)}`,
+        );
       }
     }
 
