@@ -105,6 +105,7 @@ export abstract class ModelHandler<
   protected logger: AgentLogger;
   protected outputStreaming = false;
   protected backgroundModeSupported = false;
+  protected progressViewEnabled = true;
 
   protected get supportsToolFileOutputs(): boolean {
     return false;
@@ -155,6 +156,13 @@ export abstract class ModelHandler<
   }
 
   /**
+   * Enables or disables Progress view updates.
+   */
+  public setProgressViewEnabled(enabled: boolean): void {
+    this.progressViewEnabled = enabled;
+  }
+
+  /**
    * Creates a log stream for progressive updates to the Progress view.
    *
    * @param type Message type for the stream.
@@ -171,6 +179,10 @@ export abstract class ModelHandler<
       append: (text: string) => {
         if (!text) return;
         buffer += text;
+
+        if (!this.progressViewEnabled) {
+          return;
+        }
 
         // Use addLogMessage for the first update, updateLogMessage for subsequent ones
         if (isFirstUpdate) {
@@ -201,6 +213,11 @@ export abstract class ModelHandler<
       finalize: (finalText?: string) => {
         if (typeof finalText === 'string') {
           buffer = finalText;
+        }
+
+        if (!this.progressViewEnabled) {
+          this.logger.debug(`Final ${type} length: ${buffer.length}`, groupId);
+          return buffer;
         }
 
         // If we never appended anything, create the initial entry
