@@ -212,10 +212,7 @@ ${text}`;
 
       let messages;
       try {
-        messages = await handler.initializeMessages(
-          'Please polish the following instruction text:',
-          prompt,
-        );
+        messages = await handler.initializeMessages('', prompt);
       } catch (error) {
         logger.error(
           CHANNEL,

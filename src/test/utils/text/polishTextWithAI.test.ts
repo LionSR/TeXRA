@@ -56,7 +56,8 @@ describe('polishTextWithAI', () => {
     ): Promise<Array<{ role: string; content: string }>> {
       this.prefix = prefix;
       this.request = request;
-      return [{ role: 'user', content: `${prefix}\n${request}` }];
+      const content = prefix ? `${prefix}\n${request}` : request;
+      return [{ role: 'user', content }];
     }
 
     async createResponse(): Promise<string> {
@@ -153,8 +154,8 @@ describe('polishTextWithAI', () => {
     assert.ok(lastHandler, 'expected the handler to be captured');
     assert.equal(
       lastHandler?.prefix,
-      'Please polish the following instruction text:',
-      'should apply the shared polishing prefix',
+      '',
+      'should not apply a redundant polishing prefix',
     );
     assert.ok(
       lastHandler?.request?.includes('draft instructions'),
