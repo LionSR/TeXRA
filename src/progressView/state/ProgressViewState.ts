@@ -15,10 +15,7 @@ import { AgentLogger } from '@logger/AgentLogger';
 import type { AgentFilter } from '../types';
 // Local imports - agent types
 import { isAgentTypeFilter } from '@agent/types/AgentStreamTypes';
-import {
-  AgentSessionKind,
-  resolveAgentSessionMetadata,
-} from '@agent/core/AgentDataclass';
+import { AgentCategory } from '@agent/core/AgentDataclass';
 
 // Types
 import {
@@ -57,7 +54,7 @@ export class ProgressViewState {
    * tab as workflow vs. tool-use. Once canonical metadata is stored the entry
    * is cleared, so there is no need to persist these hints across sessions.
    */
-  private _sessionKindHints: Map<StreamTabId, AgentSessionKind> = new Map();
+  private _sessionCategoryHints: Map<StreamTabId, AgentCategory> = new Map();
   private readonly toolUseTaskStates: ToolUseTaskStateManager;
   private readonly persistence: StatePersistenceManager;
   private readonly logger: AgentLogger;
@@ -127,28 +124,24 @@ export class ProgressViewState {
   // Session kind hint management (non-persistent)
   setSessionKindHint(
     streamTabId: StreamTabId,
-    sessionKind: AgentSessionKind,
+    sessionCategory: AgentCategory,
   ): void {
-    this._sessionKindHints.set(streamTabId, sessionKind);
+    this._sessionCategoryHints.set(streamTabId, sessionCategory);
   }
 
-  getSessionKindHint(streamTabId: StreamTabId): AgentSessionKind | undefined {
-    return this._sessionKindHints.get(streamTabId);
+  getSessionKindHint(streamTabId: StreamTabId): AgentCategory | undefined {
+    return this._sessionCategoryHints.get(streamTabId);
   }
 
   clearSessionKindHint(streamTabId: StreamTabId): void {
-    this._sessionKindHints.delete(streamTabId);
+    this._sessionCategoryHints.delete(streamTabId);
   }
 
   // Task state management
   setTaskState(streamTabId: StreamTabId, taskState: TaskState): void {
-    const metadata = resolveAgentSessionMetadata(
-      taskState.agentType,
-      taskState.agentSessionKind,
-    );
     const normalizedState = agentConfigToTaskState(
       taskState.agentConfig,
-      metadata,
+      taskState.session,
     );
 
     if (
@@ -262,7 +255,7 @@ export class ProgressViewState {
     this.workflowTaskStates.clear();
     this.toolUseTaskStates.clear();
     this._executionIds.clear();
-    this._sessionKindHints.clear();
+    this._sessionCategoryHints.clear();
     this._activeStream = '';
     this.saveActiveStream();
     this.saveTaskStates();
