@@ -2,6 +2,7 @@ name: polish_multiple
 inherits: polish
 settings:
   agentType: CoT
+  isMultipleOutput: true
   documentTag: latex_documents
   endTag: </latex_documents>
   outputExt: tex

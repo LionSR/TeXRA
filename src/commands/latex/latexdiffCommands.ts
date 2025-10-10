@@ -8,11 +8,18 @@ import * as vscode from 'vscode';
 import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
+import { getConfig } from '@utils/config';
 import { WorkspaceFS } from '@utils/files';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 
 // Local imports - latex utils
 import { LaTeXdiffService } from '@latex/latexdiff';
+import {
+  DEFAULT_MATH_MARKUP,
+  MATH_MARKUP_OPTIONS,
+  describeMathMarkupOption,
+  type MathMarkupOption,
+} from '@latex/latexdiff/mathMarkup';
 import { checkToolInstalled } from '@utils/system';
 
 // Local imports - housekeeping
@@ -37,6 +44,36 @@ const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);
 
 const service = new LaTeXdiffService(CHANNEL);
+
+/**
+ * Prompts the user to select a math markup granularity for latexdiff operations.
+ * @returns The selected math markup option, or undefined if the user cancels.
+ */
+async function promptForMathMarkup(): Promise<MathMarkupOption | undefined> {
+  const configuredMode = getConfig<string>(
+    'latexdiff.mathMarkup',
+    DEFAULT_MATH_MARKUP,
+  );
+  const items: (vscode.QuickPickItem & { value: MathMarkupOption })[] =
+    MATH_MARKUP_OPTIONS.map((mode) => ({
+      label: mode,
+      description: describeMathMarkupOption(mode),
+      picked: mode === configuredMode,
+      value: mode,
+    }));
+  const prioritizedItems = [
+    ...items.filter((item) => item.value === configuredMode),
+    ...items.filter((item) => item.value !== configuredMode),
+  ];
+
+  const selection = await vscode.window.showQuickPick(prioritizedItems, {
+    title: 'Latexdiff math markup',
+    placeHolder: 'Select math markup granularity for this diff run',
+    ignoreFocusOut: true,
+  });
+
+  return selection?.value;
+}
 
 // Removed showLatexdiffError wrapper - using showLoggedMessageWithDocs directly
 
@@ -95,8 +132,24 @@ async function handleLatexdiff(
       return;
     }
 
+    const mathMarkup = await promptForMathMarkup();
+    if (!mathMarkup) {
+      logger.debug(CHANNEL, 'Math markup selection cancelled by user');
+      return;
+    }
+    logger.info(
+      CHANNEL,
+      `Running latexdiff with math markup mode: ${mathMarkup}`,
+    );
+
     // Get the result from LaTeXdiffService
-    const result = await service.runDiff(fileToUse, editedFile, '_diff', false);
+    const result = await service.runDiff(
+      fileToUse,
+      editedFile,
+      '_diff',
+      false,
+      mathMarkup,
+    );
 
     if (!result.success || !result.diffFileName) {
       throw new Error(result.message || 'Failed to generate diff file');
@@ -133,8 +186,18 @@ async function handleLatexdiffvc(
       return;
     }
 
+    const mathMarkup = await promptForMathMarkup();
+    if (!mathMarkup) {
+      logger.debug(CHANNEL, 'Math markup selection cancelled by user');
+      return;
+    }
+    logger.info(
+      CHANNEL,
+      `Running latexdiff-vc with math markup mode: ${mathMarkup}`,
+    );
+
     // Get the result from LaTeXdiffService
-    const result = await service.runDiffVc(fileToUse, commitHash);
+    const result = await service.runDiffVc(fileToUse, commitHash, mathMarkup);
 
     if (!result.success || !result.diffFileName) {
       throw new Error(result.message || 'Failed to generate diff file');
@@ -271,6 +334,25 @@ async function handleRunLatexdiff(config: any) {
       return;
     }
 
+    const mathMarkup = await promptForMathMarkup();
+    if (!mathMarkup) {
+      logger.debug(CHANNEL, 'Math markup selection cancelled by user');
+      return;
+    }
+    logger.info(
+      CHANNEL,
+      `Running latexdiff with math markup mode: ${mathMarkup}`,
+    );
+
+    const generateBetweenRoundDiffs = getConfig<boolean>(
+      'latexdiff.generateBetweenRoundDiffs',
+      false,
+    );
+    logger.debug(
+      CHANNEL,
+      `Between-round diffs enabled: ${generateBetweenRoundDiffs}`,
+    );
+
     // Get the agent name chunk for filename matching
     const agentNameChunk = getAgentFirstNameChunk(agent);
     logger.debug(CHANNEL, `Using agent name chunk: ${agentNameChunk}`);
@@ -375,13 +457,13 @@ async function handleRunLatexdiff(config: any) {
         let completedOperations = 0;
 
         // Count operations for better progress reporting
-        for (const [input, roundOutputs] of inputToOutputsMap.entries()) {
+        for (const [, roundOutputs] of inputToOutputsMap.entries()) {
           // 1. Count round-based diffs (original vs output)
           totalOperations += roundOutputs.size;
 
           // 2. Count between-rounds diffs
           const rounds = Array.from(roundOutputs.keys()).sort((a, b) => a - b);
-          if (rounds.length > 1) {
+          if (generateBetweenRoundDiffs && rounds.length > 1) {
             totalOperations += rounds.length - 1;
           }
         }
@@ -427,6 +509,7 @@ async function handleRunLatexdiff(config: any) {
               inputFile,
               outputFile,
               round,
+              mathMarkup,
             );
 
             results.push({
@@ -445,7 +528,7 @@ async function handleRunLatexdiff(config: any) {
           }
 
           // 2. Perform between-rounds diffs if there are multiple rounds
-          if (rounds.length > 1) {
+          if (generateBetweenRoundDiffs && rounds.length > 1) {
             for (let i = 0; i < rounds.length - 1; i++) {
               const currentRound = rounds[i];
               const nextRound = rounds[i + 1];
@@ -462,6 +545,7 @@ async function handleRunLatexdiff(config: any) {
               const result = await service.runDiffBetweenRounds(
                 currentFile,
                 nextFile,
+                mathMarkup,
               );
 
               results.push({
@@ -485,14 +569,17 @@ async function handleRunLatexdiff(config: any) {
         const successCount = results.filter((r) => r.success).length;
 
         if (successCount === 0) {
-          await showLoggedMessage(CHANNEL, 'All LaTeX diff operations failed');
+          await showLoggedMessage(
+            CHANNEL,
+            `All LaTeX diff operations failed (math markup: "${mathMarkup}")`,
+          );
         } else if (successCount < totalOperations) {
           vscode.window.showWarningMessage(
-            `${successCount} of ${totalOperations} LaTeX diff operations completed successfully`,
+            `${successCount} of ${totalOperations} LaTeX diff operations completed successfully (math markup: "${mathMarkup}")`,
           );
         } else {
           vscode.window.showInformationMessage(
-            'All LaTeX diffs completed successfully',
+            `All LaTeX diffs completed successfully (math markup: "${mathMarkup}")`,
           );
         }
 

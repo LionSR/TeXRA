@@ -1,5 +1,8 @@
 // Local imports - agent
-import type { AgentPrompt, AgentSetting } from '@agent/core/AgentDataclass';
+import type {
+  AgentPrompt,
+  AgentWorkflowSetting,
+} from '@agent/core/AgentDataclass';
 
 // Local imports - log
 import type { AgentLogger } from '@logger/AgentLogger';
@@ -27,7 +30,7 @@ import { renderPrompt } from './promptUtils';
 export class PromptBuilder {
   constructor(
     private readonly agentPrompt: AgentPrompt,
-    private readonly agentSetting: AgentSetting,
+    private readonly agentSetting: AgentWorkflowSetting,
     private readonly userVars: Record<string, any>,
     private readonly logger?: AgentLogger,
   ) {}

@@ -5,9 +5,6 @@ import * as path from 'path';
 import { glob } from 'glob';
 import * as vscode from 'vscode';
 
-// Local imports - agent
-import { getStreamTabId } from '@/logger/streamUtils';
-
 // Local imports - agent components
 import { AgentConfigSchema } from '@agent/core/AgentConfig';
 import type { AgentConfig } from '@agent/core/AgentConfig';
@@ -15,6 +12,7 @@ import {
   AgentSetting,
   AgentPrompt,
   AgentType,
+  resolveAgentSessionMetadata,
 } from '@agent/core/AgentDataclass';
 import { IAgent } from '@agent/core/IAgent';
 import {
@@ -23,16 +21,24 @@ import {
   MergeAgent,
   BaseToolUseAgent,
 } from '@agent/implementations';
-import { loadAgentSettingAndPrompts } from '@agent/runtime/agentLoad';
+import {
+  loadAgentSettingAndPrompts,
+  ensureAgentTypeForSource,
+} from '@agent/runtime/agentLoad';
 import { ModelFactory } from '@agent/runtime/ModelFactory';
 import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
 import { bus } from '@eventBus/ProgressEventBus';
+import {
+  AgentDirectorySource,
+  type AgentPathResolution,
+} from './AgentPathTypes';
 
 // Local imports - utilities
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { AgentLogger } from '@logger/AgentLogger';
+import { withLogGroup } from '@logger/logGroupUtils';
 import { MODEL_CONFIGS } from '@model/ModelRegistry';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import { agentConfigToTaskState } from '@utils/config';
@@ -41,6 +47,25 @@ import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
 
 const CHANNEL = 'executeAgent';
 const logger = new AgentLogger(CHANNEL);
+
+type AgentDirectoryCandidate = {
+  dir: string;
+  source: AgentDirectorySource;
+};
+
+async function findAgentYaml(
+  agentName: string,
+  searchDir: string,
+): Promise<string | undefined> {
+  const matches = await glob(`**/${agentName}.yaml`, {
+    cwd: searchDir,
+    dot: false,
+    nodir: true,
+    absolute: false,
+  });
+
+  return matches[0];
+}
 
 /**
  * Constructor signature for any agent implementation.
@@ -62,62 +87,53 @@ type AgentConstructor = {
 export async function getAgentPath(
   agentName: string,
   context: vscode.ExtensionContext,
-): Promise<string> {
+): Promise<AgentPathResolution> {
   try {
-    // First check custom agents directory
-    const customDir = await agentDirectories.custom();
-    if (customDir) {
-      const customMatches = await glob(`**/${agentName}.yaml`, {
-        cwd: customDir,
-        dot: false,
-        nodir: true,
-        absolute: false,
-      });
+    const [customDir, builtInDir, builtInToolUseDir] = await Promise.all([
+      agentDirectories.custom(context),
+      agentDirectories.builtIn(context),
+      agentDirectories.builtInToolUse(context),
+    ]);
 
-      if (customMatches.length > 0) {
-        return path.join(customDir, path.dirname(customMatches[0]));
+    const candidateDirectories = [
+      customDir && { dir: customDir, source: AgentDirectorySource.Custom },
+      builtInDir && { dir: builtInDir, source: AgentDirectorySource.BuiltIn },
+      builtInToolUseDir && {
+        dir: builtInToolUseDir,
+        source: AgentDirectorySource.BuiltInToolUse,
+      },
+    ].filter((candidate): candidate is AgentDirectoryCandidate =>
+      Boolean(candidate),
+    );
+
+    for (const candidate of candidateDirectories) {
+      const match = await findAgentYaml(agentName, candidate.dir);
+      if (match) {
+        return {
+          directory: path.join(candidate.dir, path.dirname(match)),
+          source: candidate.source,
+        };
       }
     }
 
-    // If not found in custom directory, check built-in directory
-    const builtInDir = await agentDirectories.builtIn(context);
-    const builtInMatches = await glob(`**/${agentName}.yaml`, {
-      cwd: builtInDir,
-      dot: false,
-      nodir: true,
-      absolute: false,
-    });
-
-    // Also check the built-in tool-use directory for agents
-    const builtInToolUseDir = await agentDirectories.builtInToolUse(context);
-    const toolUseMatches = await glob(`**/${agentName}.yaml`, {
-      cwd: builtInToolUseDir,
-      dot: false,
-      nodir: true,
-      absolute: false,
-    });
-
-    const allMatches = [...builtInMatches, ...toolUseMatches];
-
-    if (allMatches.length === 0) {
-      const view = await vscode.commands.executeCommand<vscode.WebviewView>(
-        'texra.getWebviewView',
-      );
-      const customDir = await agentDirectories.custom();
-      view?.webview.postMessage({
-        command: MAIN_VIEW_COMMANDS.SHOW_AGENT_CONFIG_BANNER,
-        agentName,
-        customDirSet: !!customDir,
-      });
-      const errorMsg = `Could not find yaml file for agent: ${agentName}`;
-      throw new Error(errorMsg);
+    if (candidateDirectories.length === 0) {
+      throw new Error('No agent directories available for lookup');
     }
 
-    // Return the directory containing the yaml file
-    if (builtInMatches.length > 0) {
-      return path.join(builtInDir, path.dirname(builtInMatches[0]));
-    }
-    return path.join(builtInToolUseDir, path.dirname(toolUseMatches[0]));
+    const customDirSet = candidateDirectories.some(
+      (candidate) => candidate.source === AgentDirectorySource.Custom,
+    );
+
+    const view = await vscode.commands.executeCommand<vscode.WebviewView>(
+      'texra.getWebviewView',
+    );
+    view?.webview.postMessage({
+      command: MAIN_VIEW_COMMANDS.SHOW_AGENT_CONFIG_BANNER,
+      agentName,
+      customDirSet,
+    });
+    const errorMsg = `Could not find yaml file for agent: ${agentName}`;
+    throw new Error(errorMsg);
   } catch (err) {
     const errorMsg = `Error finding agent path: ${err instanceof Error ? err.message : String(err)}`;
     // Don't show error notification for missing YAML files - we handle it with banner
@@ -157,6 +173,147 @@ function getAgentName(
 }
 
 /**
+ * Parameters for creating and configuring an agent instance.
+ */
+interface PrepareAgentInstanceParams {
+  /** Name of the agent to instantiate (without _multiple suffix) */
+  agentName: string;
+  /** Partial agent configuration to merge with defaults */
+  configPayload: Partial<AgentConfig>;
+  /** VS Code extension context for resource access */
+  context: vscode.ExtensionContext;
+  /** Optional execution ID for tracking and logging */
+  executionId?: ExecutionId;
+  /** Optional agent class to use instead of automatic selection based on agent type */
+  agentClassOverride?: AgentConstructor;
+}
+
+/**
+ * Create and configure an agent instance from the provided configuration.
+ *
+ * This helper centralizes agent instantiation logic including:
+ * - Model validation and configuration
+ * - Agent path resolution with _multiple variant fallback
+ * - Settings and prompt loading
+ * - Agent class selection and construction
+ *
+ * The function handles the _multiple variant resolution automatically:
+ * - When useMultipleOutputs is true, it first tries to load the _multiple variant
+ * - If the _multiple variant doesn't exist, it falls back to the base agent
+ * - The returned agent config always contains the original agent name
+ *
+ * @template T - The expected agent type (defaults to IAgent)
+ * @param params - Configuration parameters for agent creation
+ * @returns Promise resolving to the constructed agent instance and its type
+ * @throws Error if model is not found in MODEL_CONFIGS
+ * @throws Error if agent YAML file cannot be located (after fallback attempts)
+ *
+ * @example
+ * // Create a standard agent
+ * const { agent, agentType } = await prepareAgentInstance({
+ *   agentName: 'my-agent',
+ *   configPayload: { model: 'gpt-4', inputFile: 'input.tex' },
+ *   context,
+ * });
+ *
+ * @example
+ * // Create a merge agent with class override
+ * const { agent, agentType } = await prepareAgentInstance<MergeAgent>({
+ *   agentName: 'merge-agent',
+ *   configPayload: { model: 'claude-3-5-sonnet-20241022', inputFile: 'input.tex' },
+ *   context,
+ *   agentClassOverride: MergeAgent,
+ * });
+ */
+export async function prepareAgentInstance<T extends IAgent = IAgent>(
+  params: PrepareAgentInstanceParams,
+): Promise<{ agent: T; agentType: AgentType }> {
+  const { agentName, configPayload, context, executionId, agentClassOverride } =
+    params;
+
+  const configInput: Partial<AgentConfig> = {
+    agent: agentName,
+    ...configPayload,
+  };
+
+  const fullConfig = AgentConfigSchema.parse(configInput);
+  const originalAgentName = fullConfig.agent;
+  let resolvedAgentName = getAgentName(
+    originalAgentName,
+    fullConfig.useMultipleOutputs,
+  );
+
+  let agentPathInfo: AgentPathResolution;
+  try {
+    agentPathInfo = await getAgentPath(resolvedAgentName, context);
+  } catch (err) {
+    if (resolvedAgentName !== originalAgentName) {
+      resolvedAgentName = originalAgentName;
+      agentPathInfo = await getAgentPath(originalAgentName, context);
+    } else {
+      throw err;
+    }
+  }
+
+  const [loadedAgentSetting, agentPrompt] = await loadAgentSettingAndPrompts(
+    agentPathInfo,
+    resolvedAgentName,
+    { preferMultiple: fullConfig.useMultipleOutputs },
+  );
+
+  const agentConfig: AgentConfig = {
+    ...fullConfig,
+    agent: originalAgentName,
+  };
+
+  const modelName = agentConfig.model;
+
+  if (!(modelName in MODEL_CONFIGS)) {
+    const openDocs = 'Model Documentation';
+    await showInstructionWithSuppress(
+      'modelNotRecognized',
+      `Model "${modelName}" is not recognized. Review the documentation for supported models.`,
+      [
+        {
+          title: openDocs,
+          callback: () =>
+            vscode.commands.executeCommand('texra.openDoc', 'models'),
+        },
+      ],
+      false,
+    );
+    throw new Error(`Model ${modelName} not found in MODEL_CONFIGS`);
+  }
+
+  const baseModelConfig = MODEL_CONFIGS[modelName];
+  const modelConfig = {
+    ...baseModelConfig,
+    toolConfig: agentConfig.toolConfig,
+  };
+
+  const modelHandler = ModelFactory.createHandler(modelConfig);
+
+  const agentSetting = ensureAgentTypeForSource(
+    loadedAgentSetting,
+    agentPathInfo.source,
+  );
+
+  const AgentClass = (agentClassOverride ??
+    getAgentClass(agentSetting)) as AgentConstructor;
+
+  const agent = new AgentClass(
+    modelHandler,
+    agentConfig,
+    agentSetting,
+    agentPrompt,
+    agentPathInfo.directory,
+    executionId,
+  );
+
+  return { agent: agent as T, agentType: agentSetting.agentType };
+}
+
+/**
  * Common function to execute any agent with proper logging and status handling
  */
 interface ExecuteAgentOptions {
@@ -173,9 +330,13 @@ export async function executeAgentWithLogging<T extends IAgent>(
   const isResume = options?.resume ?? false;
   let streamTabId: StreamTabId | undefined;
   let agentStreamLogger: AgentLogger | undefined;
+  let agent: T | undefined;
   try {
     // Create agent instance and extract its declared type
-    const { agent, agentType } = await createAgentFn();
+    const created = await createAgentFn();
+    agent = created.agent;
+    const { agentType } = created;
+    const sessionMetadata = agent.getSessionMetadata();
 
     if (executionId) {
       await ensureRunDir(executionId);
@@ -183,136 +344,153 @@ export async function executeAgentWithLogging<T extends IAgent>(
 
     // Get the full stream tab ID
     const config = agent.config;
-    streamTabId = getStreamTabId(config.agent, config.model, config.inputFile, {
-      agentType,
-      executionId,
-      useMultipleOutputs: config.useMultipleOutputs,
-    });
+    const metadata = resolveAgentSessionMetadata(
+      config.agentType ?? agentType ?? sessionMetadata.agentType,
+      config.agentSessionKind ?? sessionMetadata.agentSessionKind,
+    );
+
+    streamTabId = agent.getStreamTabId();
 
     if (!streamTabId) {
       throw new Error('Failed to resolve stream tab ID for agent execution');
     }
 
-    agentStreamLogger = new AgentLogger(streamTabId, true);
+    const activeStreamId: StreamTabId = streamTabId;
+
+    agentStreamLogger = new AgentLogger(activeStreamId, true);
 
     // Check if this stream is already running
     const provider = ProgressViewProvider.getInstance();
-    const currentStatus = provider?.eventHandler.getStreamStatus(streamTabId);
+    const currentStatus =
+      provider?.eventHandler.getStreamStatus(activeStreamId);
     if (!isResume && currentStatus === 'running') {
-      const errorMsg = `Task "${streamTabId}" is already running. Please wait for it to complete or stop it first.`;
+      const errorMsg = `Task "${activeStreamId}" is already running. Please wait for it to complete or stop it first.`;
       throw new Error(errorMsg);
     }
 
-    // Create a main task group for the entire execution
-    const mainTaskGroupId = isResume
-      ? undefined
-      : await logger.startGroup(`Task: ${agentName}@${config.model}`);
+    await withLogGroup(
+      logger,
+      `Task: ${agentName}@${config.model}`,
+      async (mainTaskGroupId) => {
+        try {
+          await withLogGroup(
+            logger,
+            `Task Details`,
+            async (taskDetailsGroupId) => {
+              if (!isResume && taskDetailsGroupId) {
+                logger.info(
+                  `Starting task execution for ${activeStreamId}`,
+                  taskDetailsGroupId,
+                );
+                logger.info(
+                  `Input file: ${config.inputFile}`,
+                  taskDetailsGroupId,
+                );
+              }
 
-    try {
-      // Create a log group for execution details as a sub-group
-      const taskDetailsGroupId = isResume
-        ? undefined
-        : await logger.startGroup(`Task Details`, undefined, mainTaskGroupId);
+              logger.debug(
+                `Creating stream with ID: ${activeStreamId}`,
+                taskDetailsGroupId,
+              );
+              logger.debug(
+                `Agent name: ${agentName}, Model: ${config.model}, Input file: ${config.inputFile}`,
+                taskDetailsGroupId,
+              );
+              logger.debug(
+                `Config has output files: ${!!config.outputFiles}, Number of output files: ${config.outputFiles?.length || 0}, useMultipleOutputs: ${config.useMultipleOutputs}`,
+                taskDetailsGroupId,
+              );
 
-      if (!isResume && taskDetailsGroupId) {
-        logger.info(
-          `Starting task execution for ${streamTabId}`,
-          taskDetailsGroupId,
-        );
-        logger.info(`Input file: ${config.inputFile}`, taskDetailsGroupId);
-      }
-
-      try {
-        logger.debug(
-          `Creating stream with ID: ${streamTabId}`,
-          taskDetailsGroupId,
-        );
-        logger.debug(
-          `Agent name: ${agentName}, Model: ${config.model}, Input file: ${config.inputFile}`,
-          taskDetailsGroupId,
-        );
-        logger.debug(
-          `Config has output files: ${!!config.outputFiles}, Number of output files: ${config.outputFiles?.length || 0}, useMultipleOutputs: ${config.useMultipleOutputs}`,
-          taskDetailsGroupId,
-        );
-
-        // Switch to this stream and set its status to running
-        const resolvedAgentType =
-          agentType ??
-          (agent instanceof BaseToolUseAgent
-            ? AgentType.ToolUse
-            : AgentType.CoT);
-        bus.emit('setActiveStream', {
-          stream: streamTabId,
-          agentType: resolvedAgentType,
-        });
-        bus.emit('updateStreamStatus', {
-          stream: streamTabId,
-          status: 'running',
-        });
-
-        if (!isResume) {
-          const viewVisible = provider?.isViewVisible() ?? false;
-          if (!viewVisible) {
-            await vscode.commands.executeCommand('texra.showProgressView');
-          }
-
-          if (!provider?.isViewVisible()) {
-            const inputFileName = path.basename(config.inputFile);
-            const outputInfo = config.useMultipleOutputs
-              ? config.outputFiles?.length
-                ? `to ${
-                    config.outputFiles.length > 1
-                      ? `${config.outputFiles.length} files`
-                      : path.basename(config.outputFiles[0])
-                  }`
-                : 'for multiple outputs'
-              : config.outputFiles?.length
-                ? `to ${path.basename(config.outputFiles[0])}`
-                : '';
-
-            vscode.window
-              .showInformationMessage(
-                `TeXRA Agent Started: "${agentName}" is processing ${inputFileName} with ${config.model} ${outputInfo}. View in ProgressBoard for progress.`,
-                {
-                  modal: false,
-                  detail:
-                    'TeXRA agents run in the background and their progress can be tracked in the ProgressBoard.',
-                },
-                'Show ProgressBoard',
-              )
-              .then((selection) => {
-                if (selection === 'Show ProgressBoard') {
-                  vscode.commands.executeCommand('texra.showProgressView');
-                }
+              // Switch to this stream and set its status to running
+              bus.emit('setActiveStream', {
+                stream: activeStreamId,
+                agentType: metadata.agentType ?? null,
+                agentSessionKind: metadata.agentSessionKind ?? null,
               });
-          }
+              bus.emit('updateStreamStatus', {
+                stream: activeStreamId,
+                status: 'running',
+              });
 
-          // Store taskState
-          logger.debug(
-            `Storing taskState for stream: ${streamTabId}`,
-            taskDetailsGroupId,
+              if (!isResume) {
+                const viewVisible = provider?.isViewVisible() ?? false;
+                if (!viewVisible) {
+                  await vscode.commands.executeCommand(
+                    'texra.showProgressView',
+                  );
+                }
+
+                if (!provider?.isViewVisible()) {
+                  const inputFileName = config.inputFile
+                    ? path.basename(config.inputFile)
+                    : 'selected input';
+                  const outputInfo = (() => {
+                    if (config.useMultipleOutputs) {
+                      const outputs = config.outputFiles ?? [];
+                      if (outputs.length > 1) {
+                        return `to ${outputs.length} files`;
+                      }
+                      const [firstOutput] = outputs;
+                      return firstOutput
+                        ? `to ${path.basename(firstOutput)}`
+                        : 'for multiple outputs';
+                    }
+
+                    const [singleOutput] = config.outputFiles ?? [];
+                    return singleOutput
+                      ? `to ${path.basename(singleOutput)}`
+                      : '';
+                  })();
+
+                  vscode.window
+                    .showInformationMessage(
+                      `TeXRA Agent Started: "${agentName}" is processing ${inputFileName} with ${config.model} ${outputInfo}. View in ProgressBoard for progress.`,
+                      {
+                        modal: false,
+                        detail:
+                          'TeXRA agents run in the background and their progress can be tracked in the ProgressBoard.',
+                      },
+                      'Show ProgressBoard',
+                    )
+                    .then((selection) => {
+                      if (selection === 'Show ProgressBoard') {
+                        vscode.commands.executeCommand(
+                          'texra.showProgressView',
+                        );
+                      }
+                    });
+                }
+
+                // Store taskState
+                logger.debug(
+                  `Storing taskState for stream: ${activeStreamId}`,
+                  taskDetailsGroupId,
+                );
+                logger.debug(
+                  `Config for taskState: ${JSON.stringify(config)}`,
+                  taskDetailsGroupId,
+                );
+
+                // Convert AgentConfig to TaskState using utility function
+                bus.emit('setTaskState', {
+                  streamTabId: activeStreamId,
+                  executionId,
+                  taskState: agentConfigToTaskState(config, metadata),
+                });
+                logger.debug(
+                  `Task state stored for stream: ${activeStreamId}`,
+                  mainTaskGroupId,
+                );
+              }
+            },
+            { parentGroupId: mainTaskGroupId, skip: isResume },
           );
-          logger.debug(
-            `Config for taskState: ${JSON.stringify(config)}`,
-            taskDetailsGroupId,
-          );
-
-          // End the task details group
-          if (taskDetailsGroupId) {
-            logger.endGroup(taskDetailsGroupId, 'stopped');
-          }
-
-          // Convert AgentConfig to TaskState using utility function
-          bus.emit('setTaskState', {
-            streamTabId: streamTabId,
-            executionId,
-            taskState: agentConfigToTaskState(config, agentType),
-          });
-          logger.debug(
-            `Task state stored for stream: ${streamTabId}`,
+        } catch (err) {
+          logger.error(
+            `Task initialization failed: ${err instanceof Error ? err.message : String(err)}`,
             mainTaskGroupId,
           );
+          throw err;
         }
 
         try {
@@ -321,24 +499,28 @@ export async function executeAgentWithLogging<T extends IAgent>(
             `Executing ${agentName} with model ${config.model}`,
             mainTaskGroupId,
           );
+          if (!agent) {
+            throw new Error('Agent instance was not initialized');
+          }
+
           await agent.run();
           // await checkExpectedOutputs(config.outputFiles, agent);
           // Mark the task as completed successfully
           logger.debug(`Task completed successfully`, mainTaskGroupId);
-          if (mainTaskGroupId) {
-            logger.endGroup(mainTaskGroupId, 'stopped');
-          }
           // Update status to stopped on successful completion
           bus.emit('updateStreamStatus', {
-            stream: streamTabId,
+            stream: activeStreamId,
             status: 'stopped',
           });
 
-          const generated: string[] = Object.values(
+          const generated = Object.values(
             (agent as any).outputHandler?.outputFiles || {},
           )
             .flat()
-            .filter(Boolean) as string[];
+            .filter(
+              (file): file is string =>
+                typeof file === 'string' && file.trim().length > 0,
+            );
           for (const out of generated) {
             await openBuildDisplayIfTex(out, { preserveFocus: true });
           }
@@ -348,39 +530,16 @@ export async function executeAgentWithLogging<T extends IAgent>(
             `Task failed: ${err instanceof Error ? err.message : String(err)}`,
             mainTaskGroupId,
           );
-          if (mainTaskGroupId) {
-            logger.endGroup(mainTaskGroupId, 'error');
-          }
           // Update status to error if agent run fails
           bus.emit('updateStreamStatus', {
-            stream: streamTabId,
+            stream: activeStreamId,
             status: 'error',
           });
           throw err;
         }
-      } catch (err) {
-        // End the details group if it's still active
-        if (taskDetailsGroupId) {
-          logger.endGroup(taskDetailsGroupId, 'error');
-        }
-
-        // End the main group with error status if any initialization error occurs
-        logger.error(
-          `Task initialization failed: ${err instanceof Error ? err.message : String(err)}`,
-          mainTaskGroupId,
-        );
-        if (mainTaskGroupId) {
-          logger.endGroup(mainTaskGroupId, 'error');
-        }
-        throw err;
-      }
-    } catch (err) {
-      // Ensure the main group is ended even if there was an error in nested groups
-      if (mainTaskGroupId) {
-        logger.endGroup(mainTaskGroupId, 'error');
-      }
-      throw err;
-    }
+      },
+      { skip: isResume },
+    );
   } catch (err) {
     const errorMsg = `Error executing agent ${agentName}: ${err instanceof Error ? err.message : String(err)}`;
 
@@ -417,9 +576,10 @@ export async function executeAgentWithLogging<T extends IAgent>(
         agentStreamLogger = new AgentLogger(streamTabId, true);
       }
       if (agentStreamLogger) {
-        const activeGroupId = agentStreamLogger.getActiveGroupId();
-        if (activeGroupId) {
-          agentStreamLogger.error(errorMsg, activeGroupId);
+        const fallbackGroupId =
+          agentStreamLogger.getActiveGroupId() ?? agent?.getLastRunGroupId();
+        if (fallbackGroupId) {
+          agentStreamLogger.error(errorMsg, fallbackGroupId);
         } else {
           const agentErrorGroupId = await agentStreamLogger.startGroup(
             `Error: ${agentName}`,
@@ -457,66 +617,25 @@ export async function executeAgent(
   await executeAgentWithLogging(
     agentName,
     async () => {
-      // Create full agent config
-      const fullConfig = AgentConfigSchema.parse(agentConfig);
+      const { agent, agentType } = await prepareAgentInstance({
+        agentName: requestedAgentName,
+        configPayload: agentConfig,
+        context,
+        executionId,
+      });
 
+      const { outputFiles, useMultipleOutputs } = agent.config;
       if (
-        Array.isArray(fullConfig.outputFiles) &&
-        fullConfig.outputFiles.length > 1 &&
-        !fullConfig.useMultipleOutputs
+        Array.isArray(outputFiles) &&
+        outputFiles.length > 1 &&
+        !useMultipleOutputs
       ) {
         logger.warn(
-          `Multiple output files provided (${fullConfig.outputFiles.length}) but useMultipleOutputs flag is disabled. Update the agent configuration to ensure consistent stream handling.`,
+          `Multiple output files provided (${outputFiles.length}) but useMultipleOutputs flag is disabled. Update the agent configuration to ensure consistent stream handling.`,
         );
       }
 
-      // Get model configuration
-      const modelName = fullConfig.model;
-      if (!(modelName in MODEL_CONFIGS)) {
-        const openDocs = 'Model Documentation';
-        await showInstructionWithSuppress(
-          'modelNotRecognized',
-          `Model "${modelName}" is not recognized. Review the documentation for supported models.`,
-          [
-            {
-              title: openDocs,
-              callback: () =>
-                vscode.commands.executeCommand('texra.openDoc', 'models'),
-            },
-          ],
-          false,
-        );
-        throw new Error(`Model ${modelName} not found in MODEL_CONFIGS`);
-      }
-
-      const modelConfig = MODEL_CONFIGS[modelName];
-      // Only set toolConfig reference - no need to override openRouterOnly
-      modelConfig.toolConfig = fullConfig.toolConfig;
-
-      // Create model handler
-      const modelHandler = ModelFactory.createHandler(modelConfig);
-
-      // Get agent path
-      const agentPath = await getAgentPath(fullConfig.agent, context);
-
-      // Load settings and prompts
-      const [agentSetting, agentPrompt] = await loadAgentSettingAndPrompts(
-        agentPath,
-        requestedAgentName,
-        { preferMultiple: fullConfig.useMultipleOutputs },
-      );
-
-      // Get appropriate agent class and create instance
-      const AgentClass = getAgentClass(agentSetting);
-      const agent = new AgentClass(
-        modelHandler,
-        fullConfig,
-        agentSetting,
-        agentPrompt,
-        agentPath,
-        executionId,
-      );
-      return { agent, agentType: agentSetting.agentType };
+      return { agent, agentType };
     },
     context,
     executionId,
@@ -538,45 +657,14 @@ export async function executeMergeAgent(
   await executeAgentWithLogging(
     agentName,
     async () => {
-      // Create agent config for merge operation
-      const agentConfig = AgentConfigSchema.parse({
-        agent: 'merge',
-        model,
-        inputFile,
-        editedFile,
+      const { agent, agentType } = await prepareAgentInstance<MergeAgent>({
+        agentName,
+        configPayload: { agent: agentName, model, inputFile, editedFile },
+        context,
+        agentClassOverride: MergeAgent,
       });
 
-      // Get model configuration
-      if (!(model in MODEL_CONFIGS)) {
-        const openDocs = 'Model Documentation';
-        const choice = await vscode.window.showErrorMessage(
-          `Model ${model} is not recognized.`,
-          openDocs,
-        );
-        if (choice === openDocs) {
-          vscode.commands.executeCommand('texra.openDoc', 'models');
-        }
-        throw new Error(`Model ${model} not found in MODEL_CONFIGS`);
-      }
-
-      const modelConfig = MODEL_CONFIGS[model];
-      const modelHandler = ModelFactory.createHandler(modelConfig);
-
-      // Get agent path and load settings/prompts
-      const agentPath = await getAgentPath('merge', context);
-      const [agentSetting, agentPrompt] = await loadAgentSettingAndPrompts(
-        agentPath,
-        'merge',
-      );
-
-      const agent = new MergeAgent(
-        modelHandler,
-        agentConfig,
-        agentSetting,
-        agentPrompt,
-        agentPath,
-      );
-      return { agent, agentType: agentSetting.agentType };
+      return { agent, agentType };
     },
     context,
     undefined,

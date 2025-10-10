@@ -46,9 +46,20 @@ export interface LogMessageData {
     | 'modelResponse'
     | 'toolUse'
     | 'userMessage'
+    | 'progressStatus'
     | 'internal';
   /** Whether verbose details should be displayed */
   verbose?: boolean;
   /** Optional structured data associated with the entry */
   data?: unknown;
+}
+
+export interface LogMessageUpdate
+  extends Partial<Omit<LogMessageData, 'id' | 'level' | 'timestamp'>> {
+  /** Identifier of the log entry being updated */
+  id: LogMessageId;
+  /** Optional severity updates for completeness */
+  level?: LogMessageData['level'];
+  /** Optional timestamp override */
+  timestamp?: number;
 }

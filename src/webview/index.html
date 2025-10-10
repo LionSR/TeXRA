@@ -398,10 +398,6 @@
                   style="display: none"
                 >
                   <label class="vscode-checkbox"
-                    ><input type="checkbox" id="reflect" />
-                    <i class="codicon codicon-refresh"></i> Reflect</label
-                  >
-                  <label class="vscode-checkbox"
                     ><input type="checkbox" id="attachTeXCount" />
                     <i class="codicon codicon-symbol-numeric"></i> Attach TeX
                     Count</label
@@ -410,11 +406,6 @@
                     ><input type="checkbox" id="attachDiagnostics" />
                     <i class="codicon codicon-tools"></i> Attach
                     Diagnostics</label
-                  >
-                  <label class="vscode-checkbox"
-                    ><input type="checkbox" id="printInputPrompt" />
-                    <i class="codicon codicon-file-code"></i> Print Input
-                    Prompt</label
                   >
                 </div>
               </div>
@@ -461,15 +452,62 @@
           ></textarea>
           <div class="instruction-controls">
             <div class="model-selection-footer">
-              <div class="select-group">
+              <div class="select-group agent-select-group">
                 <i
                   id="agentSettingsButton"
                   class="codicon codicon-sparkle clickable"
                   title="Agent settings"
                 ></i>
-                <select id="agent">
-                  ${agentOptions}
-                </select>
+                <div class="agent-select-controls">
+                  <input type="hidden" id="sessionType" value="workflow" />
+                  <div
+                    id="sessionTypeToggle"
+                    class="session-toggle"
+                    role="radiogroup"
+                    aria-label="Choose the session type"
+                  >
+                    <button
+                      type="button"
+                      class="session-toggle__option active"
+                      data-session-type="workflow"
+                      aria-pressed="true"
+                      title="Workflow agents automate document editing tasks"
+                    >
+                      Workflow
+                    </button>
+                    <button
+                      type="button"
+                      class="session-toggle__option"
+                      data-session-type="toolUse"
+                      aria-pressed="false"
+                      title="Tool-use agents execute commands and scripts"
+                    >
+                      Tool Use
+                    </button>
+                  </div>
+                  <div class="agent-select-dropdowns">
+                    <select
+                      id="workflowAgent"
+                      class="agent-select agent-select--active"
+                      data-session-type="workflow"
+                      aria-label="Workflow agent"
+                      title="Workflow agent"
+                    >
+                      ${workflowAgentOptions}
+                    </select>
+                    <select
+                      id="toolUseAgent"
+                      class="agent-select agent-select--hidden"
+                      data-session-type="toolUse"
+                      aria-label="Tool-use agent"
+                      title="Tool-use agent"
+                      tabindex="-1"
+                      aria-hidden="true"
+                    >
+                      ${toolUseAgentOptions}
+                    </select>
+                  </div>
+                </div>
               </div>
               <div class="select-group">
                 <i

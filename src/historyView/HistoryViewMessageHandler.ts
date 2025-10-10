@@ -1,20 +1,23 @@
 // Third-party imports
-// Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - history view
+// Local imports - agent commands
 import { executeCommand } from '@commands/agent/executeCommand';
+import { resolveAgentSessionMetadata } from '@agent/core/AgentDataclass';
 import { showLoggedErrorMessage } from '@common/errors/errorHandlingUtils';
 
-// Local imports - common
+// Local imports - history view
+import { AgentHistoryManager } from '@historyView/managers';
+
+// Local imports - webview messaging
 import {
   BaseViewMessageHandler,
   type MessageHandler,
 } from '@common/webview/BaseViewMessageHandler';
-
 // @ts-ignore - Import JavaScript module
 import { HISTORY_VIEW_COMMANDS } from '@common/webview/commands';
-import { AgentHistoryManager } from '@historyView/managers';
+
+// Local imports - configuration
 import { agentConfigToTaskState } from '@utils/config';
 
 export class HistoryViewMessageHandler extends BaseViewMessageHandler<
@@ -86,7 +89,11 @@ export class HistoryViewMessageHandler extends BaseViewMessageHandler<
       const historyItem =
         await AgentHistoryManager.getHistoryItemById(historyId);
       if (historyItem) {
-        const taskState = agentConfigToTaskState(historyItem.config);
+        const metadata = resolveAgentSessionMetadata(
+          historyItem.agentType,
+          historyItem.agentSessionKind,
+        );
+        const taskState = agentConfigToTaskState(historyItem.config, metadata);
         await vscode.commands.executeCommand('texra.restoreState', taskState);
       } else {
         await vscode.window.showErrorMessage('History item not found');
