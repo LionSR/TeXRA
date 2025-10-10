@@ -7,7 +7,7 @@
 // Local imports - models
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import { AgentConfigSchema } from '@agent/core/AgentConfig';
-import { TaskState, isWorkflowTaskState } from '@logger/TaskState';
+import { type TaskState, isWorkflowTaskState } from '@logger/TaskState';
 import {
   AgentCategory,
   type AgentType,
@@ -80,16 +80,29 @@ export function agentConfigToTaskState(
       : (session ?? resolveAgentSessionDescriptor(config.agentType)));
 
   if (resolvedSession.agentCategory === AgentCategory.ToolUse) {
+    const toolUseSession: AgentSessionDescriptor & {
+      agentCategory: AgentCategory.ToolUse;
+    } = {
+      ...resolvedSession,
+      agentCategory: AgentCategory.ToolUse,
+    };
     return {
       agentConfig: config,
-      session: resolvedSession,
+      session: toolUseSession,
       toolSessionState: {},
     };
   }
 
+  const workflowSession: AgentSessionDescriptor & {
+    agentCategory: AgentCategory.Workflow;
+  } = {
+    ...resolvedSession,
+    agentCategory: AgentCategory.Workflow,
+  };
+
   return {
     agentConfig: config,
-    session: resolvedSession,
+    session: workflowSession,
     activeFiles: createActiveFilesFromArrays(config),
   };
 }
