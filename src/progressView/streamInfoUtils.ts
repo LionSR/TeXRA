@@ -69,7 +69,7 @@ export function buildStreamInfos(
     if (!sessionCategory || !matchesAgentFilter(sessionCategory, filter)) {
       return acc;
     }
-    const agentType = taskState?.session.agentType ?? taskState?.agentConfig.agentType;
+    const agentType = taskState?.session?.agentType ?? taskState?.agentConfig.agentType;
     const isToolAgent = sessionCategory === AgentCategory.ToolUse;
     const executionId = state.getExecutionId(id);
     const label = buildStreamLabel(agentName, inputFile, sessionCategory);

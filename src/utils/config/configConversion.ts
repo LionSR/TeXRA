@@ -76,21 +76,18 @@ export function agentConfigToTaskState(
       ? resolveAgentSessionDescriptor(session)
       : session ?? resolveAgentSessionDescriptor(config.agentType));
 
-  // Ensure config has session - mutate only if needed to avoid unnecessary copying
-  const finalConfig = config.session ? config : { ...config, session: resolvedSession };
-
   if (resolvedSession.agentCategory === AgentCategory.ToolUse) {
     return {
-      agentConfig: finalConfig,
+      agentConfig: config,
       session: resolvedSession,
       toolSessionState: {},
     };
   }
 
   return {
-    agentConfig: finalConfig,
+    agentConfig: config,
     session: resolvedSession,
-    activeFiles: createActiveFilesFromArrays(finalConfig),
+    activeFiles: createActiveFilesFromArrays(config),
   };
 }
 
