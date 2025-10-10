@@ -215,6 +215,20 @@ The specific models available by default and their identifiers (`sonnet45`, `gpt
 ]
 ```
 
+### Instruction Polishing Model
+
+TeXRA also uses a dedicated setting for polishing instruction text before an agent run. Set
+`"texra.model.instructionPolishModel"` to any short name from the enum (same as `texra.models`) to pick the model that
+handles this formatting step when Copilot is disabled. The default is `sonnet45`.
+
+```json
+"texra.model.instructionPolishModel": "sonnet45"
+```
+
+This setting is independent from the dropdown list—use it to lock polishing to a stable model while you
+experiment with other agents. The setting accepts any model from the same enum as `texra.models`, ensuring
+you can only select valid models.
+
 ## Using OpenRouter
 
 To access models not directly integrated (like Llama or Qwen), find alternative pricing, or ensure access if a direct API key isn't available, you can use [OpenRouter](https://openrouter.ai/).
