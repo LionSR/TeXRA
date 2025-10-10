@@ -69,51 +69,28 @@ export function agentConfigToTaskState(
   config: AgentConfig,
   session?: AgentSessionDescriptor | AgentType,
 ): TaskState {
-  const resolvedSession = (() => {
-    if (!session && config.session) {
-      return config.session;
-    }
+  // Single source of truth: prefer config.session, then provided session, then derive
+  const resolvedSession =
+    config.session ??
+    (typeof session === 'string'
+      ? resolveAgentSessionDescriptor(session)
+      : session ?? resolveAgentSessionDescriptor(config.agentType));
 
-    if (typeof session === 'string') {
-      return resolveAgentSessionDescriptor(session);
-    }
+  // Ensure config has session - mutate only if needed to avoid unnecessary copying
+  const finalConfig = config.session ? config : { ...config, session: resolvedSession };
 
-    if (session) {
-      return session;
-    }
-
-    return resolveAgentSessionDescriptor(config.agentType);
-  })();
-
-  const normalizedSession: AgentSessionDescriptor = {
-    agentType: resolvedSession.agentType ?? config.agentType,
-    agentCategory: resolvedSession.agentCategory,
-  };
-
-  const normalizedConfig: AgentConfig = {
-    ...config,
-    agentType: normalizedSession.agentType,
-    session: normalizedSession,
-  };
-
-  if (normalizedSession.agentCategory === AgentCategory.ToolUse) {
+  if (resolvedSession.agentCategory === AgentCategory.ToolUse) {
     return {
-      agentConfig: normalizedConfig,
-      session: {
-        agentType: normalizedSession.agentType,
-        agentCategory: AgentCategory.ToolUse,
-      },
+      agentConfig: finalConfig,
+      session: resolvedSession,
       toolSessionState: {},
     };
   }
 
   return {
-    agentConfig: normalizedConfig,
-    session: {
-      agentType: normalizedSession.agentType,
-      agentCategory: AgentCategory.Workflow,
-    },
-    activeFiles: createActiveFilesFromArrays(normalizedConfig),
+    agentConfig: finalConfig,
+    session: resolvedSession,
+    activeFiles: createActiveFilesFromArrays(finalConfig),
   };
 }
 
