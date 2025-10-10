@@ -44,7 +44,8 @@
   padding-left: var(--spacing-medium);
   margin-top: var(--spacing-large);
   margin-bottom: var(--spacing-small);
-  border-left: var(--border-thick) solid var(--vscode-activityBarBadge-background);
+  border-left: var(--border-thick) solid
+    var(--vscode-activityBarBadge-background);
   border-bottom: var(--border-thin) solid var(--vscode-panel-border);
   padding-bottom: var(--spacing-tiny);
   border-radius: var(--border-radius) 0 0 var(--border-radius);
@@ -98,7 +99,8 @@
   margin: 0.5em 0;
   border-radius: var(--border-radius);
   background-color: var(--vscode-textCodeBlock-background);
-  border-left: var(--spacing-tiny) solid var(--vscode-activityBarBadge-background);
+  border-left: var(--spacing-tiny) solid
+    var(--vscode-activityBarBadge-background);
   overflow-x: auto;
 }
 
@@ -125,7 +127,8 @@
 }
 
 .markdown-content blockquote {
-  border-left: var(--border-thick) solid var(--vscode-activityBarBadge-background);
+  border-left: var(--border-thick) solid
+    var(--vscode-activityBarBadge-background);
   margin: var(--spacing-medium) 0;
   padding-left: var(--spacing-xlarge);
   color: var(--vscode-descriptionForeground);
@@ -195,7 +198,8 @@
 
 /* Scratchpad reflection patterns */
 .banner-content--scratchpad p:has(strong:first-child) {
-  border-left: calc(var(--spacing-small) - 1px) solid var(--vscode-notificationsInfoIcon-foreground);
+  border-left: calc(var(--spacing-small) - 1px) solid
+    var(--vscode-notificationsInfoIcon-foreground);
   padding-left: var(--spacing-medium);
 }
 

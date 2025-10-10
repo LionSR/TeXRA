@@ -190,7 +190,8 @@ ${text}`;
         return {
           success: false,
           text,
-          error: 'Unable to initialize the instruction polishing model. Please verify your model settings.',
+          error:
+            'Unable to initialize the instruction polishing model. Please verify your model settings.',
         };
       }
 
@@ -207,7 +208,8 @@ ${text}`;
         return {
           success: false,
           text,
-          error: 'Unable to initialize the instruction polishing model. Please check your API key and network settings.',
+          error:
+            'Unable to initialize the instruction polishing model. Please check your API key and network settings.',
         };
       }
 
@@ -222,7 +224,8 @@ ${text}`;
         return {
           success: false,
           text,
-          error: 'Unable to prepare the polishing request for the selected model.',
+          error:
+            'Unable to prepare the polishing request for the selected model.',
         };
       }
 
@@ -257,8 +260,12 @@ ${text}`;
         };
       }
 
-      if (typeof extractedText !== 'string' || extractedText.trim().length === 0) {
-        const warningMessage = 'Instruction polishing model returned no plain text.';
+      if (
+        typeof extractedText !== 'string' ||
+        extractedText.trim().length === 0
+      ) {
+        const warningMessage =
+          'Instruction polishing model returned no plain text.';
         logger.warn(CHANNEL, warningMessage);
         return {
           success: false,
