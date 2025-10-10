@@ -196,6 +196,7 @@ ${text}`;
       }
 
       handler.setOutputStreaming(false);
+      handler.setProgressViewEnabled(false);
 
       let client: unknown;
       try {
