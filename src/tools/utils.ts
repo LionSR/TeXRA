@@ -168,19 +168,27 @@ export async function buildFileAttachment({
     throw new ToolError(`Attachment not found: ${display}`);
   }
 
+  let stats: { size: number } | undefined;
+  try {
+    stats = await WorkspaceFS.stat(resolved.relative);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    throw new ToolError(`Failed to inspect attachment ${display}: ${message}`);
+  }
+
+  if (stats.size > maxBytes) {
+    const limitMb = (maxBytes / (1024 * 1024)).toFixed(1);
+    throw new ToolError(
+      `Attachment ${display} exceeds maximum size of ${limitMb} MiB.`,
+    );
+  }
+
   let buffer: Buffer;
   try {
     buffer = await WorkspaceFS.readFileBytes(resolved.relative);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     throw new ToolError(`Failed to read attachment ${display}: ${message}`);
-  }
-
-  if (buffer.length > maxBytes) {
-    const limitMb = (maxBytes / (1024 * 1024)).toFixed(1);
-    throw new ToolError(
-      `Attachment ${display} exceeds maximum size of ${limitMb} MiB.`,
-    );
   }
 
   const inferredMime =
