@@ -17,6 +17,8 @@ import { MESSAGE_TYPES } from '@logger/messageTypes';
 import type { ToolDefinition } from '@model';
 import { BaseTool } from '@tools/core/base';
 import { ToolResult, toolResult } from '@tools/result';
+import { sanitizeToolResultForLog } from '@agent/modelHandlers/utils/toolAttachmentUtils';
+import { WorkspaceFS } from '@utils/files';
 import xmlUtils from '@utils/text/xmlUtils';
 
 export interface ToolUseCycleOptions<C = unknown> {
@@ -178,10 +180,11 @@ export async function runToolUseCycle<C = unknown>(
       const errorMsg = `Malformed tool JSON: ${err instanceof Error ? err.message : String(err)}`;
 
       // Log the failed tool use attempt
+      const errorResult = toolResult({ error: errorMsg, isError: true });
       const toolUseLog = {
         tool: 'unknown',
         input: toolInfo,
-        output: toolResult({ error: errorMsg, isError: true }),
+        output: sanitizeToolResultForLog(errorResult),
       };
       logger.info('', groupId, MESSAGE_TYPES.TOOL_USE, toolUseLog);
       break;
@@ -194,10 +197,11 @@ export async function runToolUseCycle<C = unknown>(
       const errorMsg = `Tool JSON missing name: ${JSON.stringify(parsed)}`;
 
       // Log the failed tool use attempt with available info
+      const errorResult = toolResult({ error: errorMsg, isError: true });
       const toolUseLog = {
         tool: 'unknown',
         input: parsed,
-        output: toolResult({ error: errorMsg, isError: true }),
+        output: sanitizeToolResultForLog(errorResult),
       };
       logger.info('', groupId, MESSAGE_TYPES.TOOL_USE, toolUseLog);
       break;
@@ -273,7 +277,7 @@ export async function runToolUseCycle<C = unknown>(
     const toolUseLog = {
       tool: name,
       input: toolInput,
-      output: result,
+      output: sanitizeToolResultForLog(result),
     };
 
     logger.info('', groupId, MESSAGE_TYPES.TOOL_USE, toolUseLog);
@@ -289,8 +293,35 @@ export async function runToolUseCycle<C = unknown>(
     if (result.isError) resultObj.isError = true;
     if (result.diagnostics !== undefined)
       resultObj.diagnostics = result.diagnostics;
+    if (result.files !== undefined) resultObj.files = result.files;
 
-    const followUpMsgs = modelHandler.createToolUseFollowUpMessages(
+    if (result.files && result.files.length > 0 && toolState) {
+      const existing = toolState.mediaFiles;
+      const toAdd: string[] = [];
+      for (const attachment of result.files) {
+        const candidate = attachment.path;
+        if (typeof candidate !== 'string' || candidate.trim() === '') {
+          continue;
+        }
+        if (existing.includes(candidate) || toAdd.includes(candidate)) {
+          continue;
+        }
+        try {
+          const exists = await WorkspaceFS.exists(candidate);
+          if (exists) {
+            toAdd.push(candidate);
+          }
+        } catch {
+          // Ignore errors when checking existence; attachment metadata may still be useful
+        }
+      }
+      if (toAdd.length > 0) {
+        toolState.addMediaFiles(toAdd);
+      }
+    }
+
+    const followUpMsgs = await modelHandler.createToolUseFollowUpMessages(
+      client,
       id,
       name,
       parsed,
