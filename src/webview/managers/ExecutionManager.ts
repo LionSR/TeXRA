@@ -6,7 +6,11 @@ import * as vscode from 'vscode';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 
 // Local imports - agent
-import { AgentCategory, AgentType, type AgentSessionDescriptor } from '@agent/core/AgentDataclass';
+import {
+  AgentCategory,
+  AgentType,
+  type AgentSessionDescriptor,
+} from '@agent/core/AgentDataclass';
 import { ToolConfig } from '@agent/core/ToolConfig';
 
 // Local imports - utils

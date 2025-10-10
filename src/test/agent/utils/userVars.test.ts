@@ -3,7 +3,11 @@ import { strict as assert } from 'assert';
 
 // Local imports - agent components
 import type { AgentConfig } from '@agent/core/AgentConfig';
-import { AgentSetting, AgentType, AgentCategory } from '@agent/core/AgentDataclass';
+import {
+  AgentSetting,
+  AgentType,
+  AgentCategory,
+} from '@agent/core/AgentDataclass';
 import type { AgentPrompt } from '@agent/core/AgentDataclass';
 import { getToolFlags } from '@agent/utils/userVars';
 import * as configModule from '@utils/config';
