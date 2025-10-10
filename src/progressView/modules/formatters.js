@@ -5,7 +5,7 @@ import markdownItKatex from '@vscode/markdown-it-katex';
  *
  * WHITESPACE HANDLING NOTE:
  * This module uses a hybrid approach for HTML generation:
- * - String-based HTML for format() and _formatModelResponse() to maintain precise whitespace control
+ * - String-based HTML for format() to maintain precise whitespace control
  * - Template-based HTML for other methods where whitespace is less critical
  *
  * This is necessary because Prettier reformats HTML templates, introducing line breaks
@@ -211,19 +211,13 @@ export class LogEntryFormatter {
       thinking: (text, id, groupId, timestamp) =>
         this._safeFormat(
           () =>
-            this._formatSpecialContent(
-              text,
-              'Thinking',
-              id,
-              groupId,
-              timestamp,
-            ),
+            this._formatBannerContent(text, 'Thinking', id, groupId, timestamp),
           'thinking',
         ),
       scratchpad: (text, id, groupId, timestamp) =>
         this._safeFormat(
           () =>
-            this._formatSpecialContent(
+            this._formatBannerContent(
               text,
               'Scratchpad',
               id,
@@ -279,7 +273,7 @@ export class LogEntryFormatter {
    * Safely execute a formatting function with error handling
    * @private
    * @param {Function} formatter - The formatting function to execute
-   * @param {string} errorContext - Context for error message (e.g., 'special content', 'tool use')
+   * @param {string} errorContext - Context for error message (e.g., 'banner content', 'tool use')
    * @returns {*} Result of formatter or null if error
    */
   _safeFormat(formatter, errorContext) {
@@ -292,7 +286,7 @@ export class LogEntryFormatter {
   }
 
   /**
-   * Format a log entry with Markdown rendering for special content
+   * Format a log entry with Markdown rendering for banner content
    * @param {Object} logMessage - The log message to format
    * @returns {HTMLElement} DOM element for the log message
    *
@@ -311,7 +305,7 @@ export class LogEntryFormatter {
     const date = new Date(timestamp);
     const { fullTimestamp, timeDisplay } = this._formatTimestamp(date);
 
-    // Check if we have a special formatter for this message type
+    // Check if we have a custom formatter for this message type
     const formatters = this._getFormatters();
     const formatter = formatters[messageType];
 
@@ -379,7 +373,7 @@ export class LogEntryFormatter {
     return wrapper.firstElementChild;
   }
 
-  _formatSpecialContent(content, contentType, logId, groupId, timestamp) {
+  _formatBannerContent(content, contentType, logId, groupId, timestamp) {
     if (!content || !content.trim()) return null;
     const decodedContent = decodeHtml(content);
     if (!decodedContent.trim()) {
@@ -387,55 +381,28 @@ export class LogEntryFormatter {
     }
 
     const parsedMarkdown = this._processMarkdownContent(decodedContent, false);
-    const element = createFromTemplate('specialDetailsTemplate');
-    if (!element) return null;
-
     const isThinking = contentType.includes('Thinking');
-    const labelText = isThinking ? 'Thinking' : 'Scratchpad';
-    const icon = isThinking ? 'codicon-lightbulb' : 'codicon-pencil';
-    const contentClass = isThinking
-      ? 'special-content--thinking'
-      : 'special-content--scratchpad';
+    const bannerEntry = this._createBannerEntry({
+      logId,
+      groupId,
+      timestamp,
+      iconClass: isThinking ? 'codicon-lightbulb' : 'codicon-pencil',
+      labelText: isThinking ? 'Thinking' : 'Scratchpad',
+      copyTitle: isThinking ? 'Copy thinking' : 'Copy scratchpad',
+      contentClass: isThinking
+        ? 'banner-content--thinking'
+        : 'banner-content--scratchpad',
+      open: false,
+    });
 
-    // Add necessary attributes for proper group placement (but not log-line class which affects whitespace)
-    if (logId) element.dataset.logId = logId;
-    if (groupId) element.dataset.groupId = groupId;
-    if (timestamp) element.dataset.fullTimestamp = timestamp;
-
-    // Default to collapsed state - will be expanded in handleAppendLog if it's live
-    // This ensures historical loads stay collapsed
-
-    const toggleIcon = element.querySelector('.toggle-icon');
-    // Use right chevron for collapsed state by default
-    if (toggleIcon) toggleIcon.className = `${CHEVRON_RIGHT_CLASS} toggle-icon`;
-
-    const iconElem = element.querySelector('.icon');
-    if (iconElem) iconElem.classList.add(icon);
-
-    const labelElem = element.querySelector('.label');
-    if (labelElem) labelElem.textContent = labelText;
-
-    const copyButton = element.querySelector('.special-content-copy');
-    if (copyButton) {
-      const defaultTitle = `Copy ${labelText.toLowerCase()}`;
-      copyButton.dataset.defaultTitle = defaultTitle;
-      copyButton.dataset.successTitle = 'Copied!';
-      copyButton.setAttribute('title', defaultTitle);
-      copyButton.setAttribute('aria-label', defaultTitle);
+    if (!bannerEntry || !bannerEntry.contentElem) {
+      return bannerEntry ? bannerEntry.element : null;
     }
 
-    const contentElem = element.querySelector('.special-content');
-    if (contentElem) {
-      contentElem.classList.remove(
-        'special-content--thinking',
-        'special-content--scratchpad',
-      );
-      contentElem.classList.add(contentClass);
-      contentElem.dataset.rawContent = decodedContent;
-      contentElem.innerHTML = parsedMarkdown;
-    }
+    bannerEntry.contentElem.dataset.rawContent = decodedContent;
+    bannerEntry.contentElem.innerHTML = parsedMarkdown;
 
-    return element;
+    return bannerEntry.element;
   }
 
   _formatToolUse(content, structuredData, logId, groupId, timestamp) {
@@ -454,7 +421,7 @@ export class LogEntryFormatter {
     if (iconElem) iconElem.className = 'codicon codicon-wrench';
     element.classList.remove('tool-use-error');
 
-    const contentElem = element.querySelector('.special-content');
+    const contentElem = element.querySelector('.banner-content');
     if (!contentElem) {
       return element;
     }
@@ -709,23 +676,42 @@ export class LogEntryFormatter {
       return null;
     }
 
-    const element = createFromTemplate('modelResponseTemplate');
-    if (!element) return null;
-
     const date = new Date(timestamp);
     const { fullTimestamp, timeDisplay } = this._formatTimestamp(date);
 
-    element.dataset.logId = id;
-    element.dataset.fullTimestamp = fullTimestamp;
-    if (groupId) element.dataset.groupId = groupId;
+    const bannerEntry = this._createBannerEntry({
+      logId: id,
+      groupId,
+      timestamp: fullTimestamp,
+      iconClass: 'codicon-sparkle',
+      labelText: 'Model response',
+      copyTitle: 'Copy model output',
+      contentClass: 'model-response-content',
+      open: true,
+    });
 
-    const ts = element.querySelector('.timestamp');
-    if (ts) {
-      ts.title = fullTimestamp;
-      if (verbose) ts.textContent = `[${timeDisplay}]`;
+    if (!bannerEntry) {
+      return null;
     }
 
-    const contentElem = element.querySelector('.model-response-content');
+    const { element, contentElem, copyButton, summaryElem } = bannerEntry;
+    element.classList.add('model-response-line');
+
+    if (copyButton) {
+      copyButton.classList.add('model-response-copy');
+    }
+
+    if (summaryElem) {
+      let timestampElem = summaryElem.querySelector('.timestamp');
+      if (!timestampElem) {
+        timestampElem = document.createElement('span');
+        timestampElem.classList.add('timestamp');
+        summaryElem.insertBefore(timestampElem, copyButton ?? null);
+      }
+      timestampElem.title = fullTimestamp;
+      timestampElem.textContent = verbose ? `[${timeDisplay}]` : '';
+    }
+
     if (contentElem) {
       contentElem.classList.add(`message-${level}`);
       contentElem.dataset.rawContent = decodedContent;
@@ -736,6 +722,81 @@ export class LogEntryFormatter {
     }
 
     return element;
+  }
+
+  _createBannerEntry({
+    logId,
+    groupId,
+    timestamp,
+    iconClass,
+    labelText,
+    copyTitle,
+    contentClass,
+    open = false,
+    templateId = 'bannerDetailsTemplate',
+  }) {
+    const element = createFromTemplate(templateId);
+    if (!element) return null;
+
+    if (open) {
+      element.setAttribute('open', '');
+    } else {
+      element.removeAttribute('open');
+    }
+
+    if (logId) element.dataset.logId = logId;
+    if (groupId) element.dataset.groupId = groupId;
+    if (timestamp) element.dataset.fullTimestamp = timestamp;
+
+    const toggleIcon = element.querySelector('.toggle-icon');
+    if (toggleIcon) {
+      toggleIcon.className = `${open ? CHEVRON_DOWN_CLASS : CHEVRON_RIGHT_CLASS} toggle-icon`;
+    }
+
+    const iconElem = element.querySelector('.icon');
+    if (iconElem) {
+      iconElem.className = 'codicon icon';
+      if (iconClass) {
+        iconElem.classList.add(iconClass);
+        iconElem.hidden = false;
+      } else {
+        iconElem.hidden = true;
+      }
+    }
+
+    const labelElem = element.querySelector('.label');
+    if (labelElem) {
+      labelElem.textContent = labelText ?? '';
+    }
+
+    const copyButton = element.querySelector('.banner-content-copy');
+    if (copyButton) {
+      const defaultTitle =
+        copyTitle ||
+        (labelText ? `Copy ${labelText.toLowerCase()}` : 'Copy content');
+      copyButton.dataset.defaultTitle = defaultTitle;
+      copyButton.dataset.successTitle = 'Copied!';
+      copyButton.setAttribute('title', defaultTitle);
+      copyButton.setAttribute('aria-label', defaultTitle);
+    }
+
+    const contentElem = element.querySelector('.banner-content');
+    if (contentElem && contentClass) {
+      contentElem.classList.remove(
+        'banner-content--thinking',
+        'banner-content--scratchpad',
+        'banner-content--model',
+        'model-response-content',
+      );
+      contentElem.classList.add(contentClass);
+    }
+
+    return {
+      element,
+      contentElem,
+      copyButton,
+      summaryElem: element.querySelector('.details-summary'),
+    };
   }
 
   _formatFileList(content, data, logId) {

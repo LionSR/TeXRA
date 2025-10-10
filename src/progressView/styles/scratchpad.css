@@ -3,8 +3,8 @@
  * Markdown and content formatting for scratchpad entries
  */
 
-/* Special block container - minimalist style */
-.special-details {
+/* Banner block container - minimalist style */
+.banner-details {
   margin: var(--spacing-small) 0;
 }
 
