@@ -38,15 +38,8 @@
   white-space: normal;
 }
 
-.model-response-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  column-gap: var(--spacing-small);
-}
-
 .model-response-copy,
-.special-content-copy {
+.banner-content-copy {
   min-width: 0;
   padding: 0 var(--spacing-tiny);
   opacity: 0;
@@ -55,24 +48,27 @@
     color 0.2s ease;
 }
 
-.model-response-header:hover .model-response-copy,
 .model-response-line:focus-within .model-response-copy,
 .model-response-copy:focus-visible,
 .model-response-copy.copy-success,
-.details-summary:hover .special-content-copy,
-.special-details:focus-within .special-content-copy,
-.special-content-copy:focus-visible,
-.special-content-copy.copy-success {
+.details-summary:hover .banner-content-copy,
+.banner-details:focus-within .banner-content-copy,
+.banner-content-copy:focus-visible,
+.banner-content-copy.copy-success {
   opacity: 1;
 }
 
 .model-response-copy.copy-success,
-.special-content-copy.copy-success {
+.banner-content-copy.copy-success {
   color: var(--vscode-testing-iconPassed, #2ea043);
 }
 
 .model-response-content {
   margin-top: var(--spacing-tiny);
+}
+
+.details-summary .banner-content-copy {
+  margin-left: auto;
 }
 
 /* Timestamp color */

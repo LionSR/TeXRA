@@ -146,13 +146,13 @@ export class EventsManager {
       cursor: 'col-resize',
     });
 
-    // Handle special-details and file-list-details toggle events
+    // Handle banner-details and file-list-details toggle events
     document.addEventListener(
       'toggle',
       (e) => {
         if (
           e.target &&
-          (e.target.classList.contains('special-details') ||
+          (e.target.classList.contains('banner-details') ||
             e.target.classList.contains('file-list-details') ||
             e.target.classList.contains('latexdiff-details') ||
             e.target.classList.contains('statistics-details'))
@@ -187,7 +187,7 @@ export class EventsManager {
         return;
       }
       const copyButton = e.target.closest(
-        '.model-response-copy, .special-content-copy',
+        '.model-response-copy, .banner-content-copy',
       );
       if (!copyButton) {
         return;
@@ -200,8 +200,8 @@ export class EventsManager {
           ?.querySelector('.model-response-content');
       } else {
         contentElem = copyButton
-          .closest('.special-details')
-          ?.querySelector('.special-content');
+          .closest('.banner-details')
+          ?.querySelector('.banner-content');
       }
       if (!contentElem) {
         return;

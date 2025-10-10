@@ -197,8 +197,8 @@
   margin-bottom: 0;
 }
 
-/* Special handling for reflection patterns */
-.special-content--scratchpad p:has(strong:first-child) {
+/* Banner handling for reflection patterns */
+.banner-content--scratchpad p:has(strong:first-child) {
   border-left: calc(var(--spacing-small) - 1px) solid
     var(--vscode-notificationsInfoIcon-foreground, #75beff);
   padding-left: var(--spacing-medium);
