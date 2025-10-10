@@ -72,7 +72,7 @@ export class ArxivSourceProcessor {
       if (disposition) {
         const match = /filename="?([^";]+)"?/i.exec(disposition);
         if (match) {
-          destPath = path.join(path.dirname(destBasePath), match[1]);
+          destPath = destBasePath + '_' + match[1];
         }
       } else {
         const contentType = response.headers['content-type'];
