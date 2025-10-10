@@ -196,13 +196,13 @@ export interface IModelHandler<
    * @returns Tuple of [call message, result message]
    */
   createToolUseFollowUpMessages(
+    client: C | undefined,
     id: string,
     name: string,
     call: T,
     result: Record<string, unknown>,
     toolState?: ToolState,
     text?: string,
-    client?: C,
   ): Promise<M[]>;
 
   /**

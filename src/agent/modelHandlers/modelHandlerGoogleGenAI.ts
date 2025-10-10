@@ -986,13 +986,13 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
   }
 
   async createToolUseFollowUpMessages(
+    _client: GoogleGenAI | undefined,
     id: string,
     name: string,
     call: FunctionCall,
     result: Record<string, unknown>,
     _toolState?: ToolState,
     text?: string,
-    _client?: GoogleGenAI,
   ): Promise<Content[]> {
     // Handle both args and input fields for backward compatibility
     const args =

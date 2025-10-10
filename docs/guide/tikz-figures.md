@@ -111,9 +111,7 @@ Tool-use agents can invoke `extract_tikz_figures` to perform the same discovery 
   "name": "extract_tikz_figures",
   "arguments": {
     "texPath": "figures/diagrams.tex",
-    "compile": true,
-    "includeBase64": false,
-    "maxFiles": 8
+    "compile": true
   }
 }
 ```
