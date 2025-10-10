@@ -13,6 +13,7 @@ import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import { bus } from '@eventBus/ProgressEventBus';
 import { ModelProvider, DEFAULT_MODEL_CAPABILITIES } from '@model/ModelConfig';
+import { ToolState } from '@agent/core/ToolState';
 
 type DummyClient = Record<string, never>;
 
@@ -103,7 +104,15 @@ class DummyHandler extends ModelHandler<
   extractToolUse() {
     return null;
   }
-  createToolUseFollowUpMessages(): ProviderMessage[] {
+  async createToolUseFollowUpMessages(
+    _client: DummyClient | undefined,
+    _id: string,
+    _name: string,
+    _call: unknown,
+    _result: Record<string, unknown>,
+    _toolState?: ToolState,
+    _text?: string,
+  ): Promise<ProviderMessage[]> {
     return [];
   }
 }
