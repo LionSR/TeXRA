@@ -22,7 +22,7 @@ The ProgressBoard interface is split into two main sections (usually side-by-sid
 
 This section lists all the agent execution streams from your current VS Code session.
 
-- **Switching Streams**: Click on a stream name (e.g., `polish@sonnet37: paper.tex`) to view its specific logs and status in the Content Area.
+- **Switching Streams**: Click on a stream name (e.g., `polish@sonnet45: paper.tex`) to view its specific logs and status in the Content Area.
 - **Delete All**: The <i class="codicon codicon-trash"></i> **Delete All** button at the bottom permanently removes all streams and their logs from the ProgressBoard view for the current session.
 - **Metadata**: Tabs display the model and when the stream was last active on a second line. Icons indicate the agent type and if multiple output files were generated.
 - **Sorting**: Use the buttons below the tab list to order streams by time, input file, or agent name. The chosen order is saved for the workspace.

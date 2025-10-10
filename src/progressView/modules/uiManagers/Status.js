@@ -13,7 +13,11 @@ export class Status {
       [STATUS.RUNNING]: {
         className: 'running',
         label: 'Running',
-        enable: [ELEMENT_IDS.STOP_STREAM_BTN, ELEMENT_IDS.RESTORE_STATE_BTN],
+        enable: [
+          ELEMENT_IDS.STOP_STREAM_BTN,
+          ELEMENT_IDS.RESTORE_STATE_BTN,
+          ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
+        ],
       },
       [STATUS.ERROR]: {
         className: 'error',
@@ -25,6 +29,7 @@ export class Status {
           ELEMENT_IDS.RESTORE_STATE_BTN,
           ELEMENT_IDS.DIFF_STREAM_BTN,
           ELEMENT_IDS.ERASE_STREAM_BTN,
+          ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
         ],
       },
       [STATUS.STOPPED]: {
@@ -37,12 +42,17 @@ export class Status {
           ELEMENT_IDS.RESTORE_STATE_BTN,
           ELEMENT_IDS.DIFF_STREAM_BTN,
           ELEMENT_IDS.ERASE_STREAM_BTN,
+          ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
         ],
       },
       [STATUS.READY]: {
         className: 'ready',
         label: 'Ready',
-        enable: [ELEMENT_IDS.RESTORE_STATE_BTN, ELEMENT_IDS.ERASE_STREAM_BTN],
+        enable: [
+          ELEMENT_IDS.RESTORE_STATE_BTN,
+          ELEMENT_IDS.ERASE_STREAM_BTN,
+          ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
+        ],
       },
       [STATUS.WAITING]: {
         className: 'waiting',
@@ -51,12 +61,32 @@ export class Status {
           ELEMENT_IDS.STOP_STREAM_BTN,
           ELEMENT_IDS.RESTORE_STATE_BTN,
           ELEMENT_IDS.ERASE_STREAM_BTN,
+          ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
         ],
       },
     };
 
     this.BUTTON_IDS = ALL_TOOLBAR_BUTTON_IDS;
     this._buttonElements = null; // Cache for button elements
+    this._executionAvailable = false;
+  }
+
+  setExecutionAvailability(hasExecution) {
+    this._executionAvailable = Boolean(hasExecution);
+    this._applyExecutionAvailability();
+  }
+
+  _applyExecutionAvailability() {
+    const button = document.getElementById(ELEMENT_IDS.OPEN_TASK_STORAGE_BTN);
+    if (!button) {
+      return;
+    }
+    const isAvailable = this._executionAvailable;
+    button.classList.toggle('toolbar-button--hidden', !isAvailable);
+    button.setAttribute('aria-hidden', isAvailable ? 'false' : 'true');
+    if (!isAvailable) {
+      setElementsDisabled([button], true);
+    }
   }
 
   /**
@@ -64,6 +94,7 @@ export class Status {
    * @param {string} status - The status to set
    */
   update(status) {
+    this._applyExecutionAvailability();
     const statusIndicator = document.getElementById(
       ELEMENT_IDS.STATUS_INDICATOR,
     );
@@ -116,7 +147,13 @@ export class Status {
           if (!el) {
             return false;
           }
-          return el.dataset.hiddenByAgent !== 'true';
+          if (
+            el.id === ELEMENT_IDS.OPEN_TASK_STORAGE_BTN &&
+            !this._executionAvailable
+          ) {
+            return false;
+          }
+          return true;
         });
       if (elementsToEnable.length > 0) {
         setElementsDisabled(elementsToEnable, false);

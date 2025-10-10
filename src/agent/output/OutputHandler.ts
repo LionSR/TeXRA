@@ -13,7 +13,12 @@ import { XmlOutputManager } from './XmlOutputManager';
 
 // Local imports - agent components
 import type { AgentConfig } from '@agent/core/AgentConfig';
-import { AgentSetting, AgentType } from '@agent/core/AgentDataclass';
+import {
+  AgentSetting,
+  AgentType,
+  AgentWorkflowSetting,
+  requireWorkflowSetting,
+} from '@agent/core/AgentDataclass';
 import { AgentStateGlobal, AgentStateRound } from '@agent/core/AgentState';
 import { getOutputFileName } from '@agent/utils/outputFileUtils';
 import { bus } from '@eventBus/ProgressEventBus';
@@ -35,7 +40,7 @@ import { getEffectiveBaseFile } from '@utils/files/baseFileUtils';
 
 /** Handles output file processing and validation for agent responses. */
 export class OutputHandler implements IOutputHandler {
-  public agentSetting: AgentSetting;
+  public agentSetting: AgentWorkflowSetting;
   public agentConfig: AgentConfig;
   public logId: number;
   public outputFiles: { [key: number]: string[] };
@@ -55,7 +60,7 @@ export class OutputHandler implements IOutputHandler {
     baseFiles: string[] = [],
     logger?: AgentLogger,
   ) {
-    this.agentSetting = agentSetting;
+    this.agentSetting = requireWorkflowSetting(agentSetting);
     this.agentConfig = agentConfig;
     this.logId = logId;
     this.outputFiles = {};
@@ -390,7 +395,16 @@ export class OutputHandler implements IOutputHandler {
           source: outputFile,
           path: outputFile,
         };
-        if (this.agentSetting.agentType === AgentType.CoT) {
+        const hasScratchpadPrefill =
+          this.agentSetting.prefills?.some((prefill) =>
+            /<scratchpad\s*>/i.test(prefill),
+          ) ?? false;
+        const shouldProcessXml =
+          this.agentSetting.agentType === AgentType.CoT ||
+          (this.agentSetting.agentType === AgentType.Direct &&
+            hasScratchpadPrefill);
+
+        if (shouldProcessXml) {
           processed = await this.xmlManager.processSingleXmlOutput(outputFile);
         }
 

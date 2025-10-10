@@ -48,14 +48,59 @@ export const MATH_OPERATORS = [
   'liminf',
 ];
 
+const escapeRegExp = (value: string): string =>
+  value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+export const FENCED_LATEX_ENVIRONMENTS = [
+  'align',
+  'align*',
+  'aligned',
+  'aligned*',
+  'alignat',
+  'alignat*',
+  'gather',
+  'gather*',
+  'multline',
+  'multline*',
+  'equation',
+  'equation*',
+  'cases',
+  'cases*',
+  'split',
+  'pmatrix',
+  'bmatrix',
+  'vmatrix',
+  'matrix',
+  'smallmatrix',
+];
+
+export const FENCED_LATEX_ENVIRONMENT_PATTERN =
+  FENCED_LATEX_ENVIRONMENTS.map(escapeRegExp).join('|');
+
+const LINE_BREAK_PATTERN = String.raw`\r?\n`;
+
+// Multiline and inline bodies are parsed with distinct patterns so the intent of
+// each branch stays readable. Both patterns capture the same groups:
+// 1. Leading break (if present)
+// 2. Block indentation
+// 3. LaTeX environment name
+// 4. Multiline body content (empty for inline matches)
+// 5. Inline body content (empty for multiline matches)
+export const FENCED_LATEX_BLOCK_PATTERN_MULTILINE = String.raw`(^|${LINE_BREAK_PATTERN})([ \t]*):::\s*(${FENCED_LATEX_ENVIRONMENT_PATTERN})[^\S\r\n]*(?:${LINE_BREAK_PATTERN}([\s\S]*?))?${LINE_BREAK_PATTERN}[ \t]*():::(?=${LINE_BREAK_PATTERN}|$)`;
+
+export const FENCED_LATEX_BLOCK_PATTERN_INLINE = String.raw`(^|${LINE_BREAK_PATTERN})([ \t]*):::\s*(${FENCED_LATEX_ENVIRONMENT_PATTERN})[^\S\r\n]*()([^\r\n]*)[ \t]*:::(?=${LINE_BREAK_PATTERN}|$)`;
+
+export const FENCED_LATEX_BLOCK_PATTERNS = [
+  FENCED_LATEX_BLOCK_PATTERN_MULTILINE,
+  FENCED_LATEX_BLOCK_PATTERN_INLINE,
+];
+
 // Union of common LaTeX environments used across rules
 // prettier-ignore
-export const LATEX_ENVIRONMENTS = [
+const BASE_LATEX_ENVIRONMENTS = [
   'figure',
   'figure*',
   'tikzpicture',
-  'align',
-  'equation',
   'itemize',
   'enumerate',
   'tabular',
@@ -86,19 +131,16 @@ export const LATEX_ENVIRONMENTS = [
   'axis',
   'scope',
   'response',
-  'align*',
-  'aligned',
   'overpic',
   'overpic*',
-  'aligned*',
-  'alignat',
-  'alignat*',
-  'gather',
-  'gather*',
   'section',
   'subsection',
   'referee',
   'letter',
   'array',
-  'equation*',
+];
+
+export const LATEX_ENVIRONMENTS = [
+  ...BASE_LATEX_ENVIRONMENTS,
+  ...FENCED_LATEX_ENVIRONMENTS,
 ];

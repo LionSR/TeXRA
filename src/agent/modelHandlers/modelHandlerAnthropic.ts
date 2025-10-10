@@ -1,8 +1,9 @@
 // Standard library imports
-// (none needed)
+import { Buffer } from 'node:buffer';
+import { basename } from 'node:path';
 
 // Third-party imports
-import { Anthropic } from '@anthropic-ai/sdk';
+import { Anthropic, toFile } from '@anthropic-ai/sdk';
 import type {
   BetaBase64ImageSource,
   BetaImageBlockParam,
@@ -41,7 +42,11 @@ import { ANTHROPIC_STOP } from './types/StopReasonTypes';
 
 // Local imports - agent components
 import type { AgentConfig } from '@agent/core/AgentConfig';
-import { AgentSetting, hasEndTag } from '@agent/core/AgentDataclass';
+import {
+  AgentSetting,
+  hasEndTag,
+  requireWorkflowSetting,
+} from '@agent/core/AgentDataclass';
 import { AgentStateRound } from '@agent/core/AgentState';
 import {
   AnthropicAPIResponseUsage,
@@ -50,6 +55,7 @@ import {
 } from '@agent/core/ResponseUsage';
 import { ToolState } from '@agent/core/ToolState';
 import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
+import { createContinuationMessage } from '@agent/utils/continuationMessage';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import { calculateTokenPrice } from '@agent/utils/priceUtils';
 
@@ -79,7 +85,12 @@ type BetaMessageCountTokensParams = MessageCountTokensParams & {
 };
 
 const CONTEXT_1M_BETA: AnthropicBeta = 'context-1m-2025-08-07';
+const FILES_API_BETA: AnthropicBeta = 'files-api-2025-04-14';
 const SONNET_37_OUTPUT_BETA: AnthropicBeta = 'output-128k-2025-02-19';
+const INTERLEAVED_THINKING_BETA: AnthropicBeta =
+  'interleaved-thinking-2025-05-14';
+
+const ANTHROPIC_1M_CONTEXT_WINDOW = 1_000_000;
 
 export class ModelHandlerAnthropic extends ModelHandler<
   MessageParam,
@@ -113,6 +124,17 @@ export class ModelHandlerAnthropic extends ModelHandler<
       'model.useAnthropic1MBeta',
       false,
     );
+    const isAnthropic1MBetaEligibleModel =
+      this.config.fullName === 'claude-sonnet-4-20250514' ||
+      this.config.fullName === 'claude-sonnet-4-5';
+    const isAnthropic1MBetaActive =
+      useAnthropic1MBeta && isAnthropic1MBetaEligibleModel;
+    const effectiveContextWindow = isAnthropic1MBetaActive
+      ? ANTHROPIC_1M_CONTEXT_WINDOW
+      : this.config.contextWindow;
+
+    const documentAnalysis = this.analyzeDocumentSources(messages);
+    let hasFileReference = documentAnalysis.hasFileSource;
 
     // Prepare options for the API call
     const options: BetaMessageCreateParams = {
@@ -127,6 +149,13 @@ export class ModelHandlerAnthropic extends ModelHandler<
     if (tools && tools.length > 0) {
       options.tools = toAnthropicTools(tools);
       (options as MessageCreateParams).tool_choice = { type: 'auto' };
+
+      if (this.config.capabilities.supportsInterleavedThinking) {
+        const existingBetas = options.betas ?? [];
+        if (!existingBetas.includes(INTERLEAVED_THINKING_BETA)) {
+          options.betas = [...existingBetas, INTERLEAVED_THINKING_BETA];
+        }
+      }
     }
 
     // Enable thinking for any models that support reasoning
@@ -152,6 +181,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       // Remove temperature for Claude 4 models when thinking is enabled as per Anthropic docs
       if (
         this.config.fullName.includes('claude-opus-4') ||
+        this.config.fullName.includes('claude-sonnet-4-5') ||
         this.config.fullName.includes('claude-sonnet-4') ||
         this.config.fullName.includes('claude-3-7-sonnet')
       ) {
@@ -170,72 +200,96 @@ export class ModelHandlerAnthropic extends ModelHandler<
       // The thinking configuration is now handled above for all reasoning models
     }
 
-    // Opt-in beta for 1M context window on Claude Sonnet 4
-    if (
-      useAnthropic1MBeta &&
-      this.config.fullName === 'claude-sonnet-4-20250514'
-    ) {
+    // Opt-in beta for 1M context window on Claude Sonnet 4 family
+    if (isAnthropic1MBetaActive) {
       options.betas = [...(options.betas ?? []), CONTEXT_1M_BETA];
     }
 
     if (this.capabilities.supportsTokenCounting) {
-      const countTokensParams: BetaMessageCountTokensParams = {
-        model: this.config.fullName,
-        system: systemPrompt,
-        messages,
-      };
+      if (documentAnalysis.hasFileSource) {
+        this.logger.debug(
+          'Skipping token counting because Anthropic countTokens does not support file-based document sources.',
+        );
+      } else {
+        const countTokensParams: BetaMessageCountTokensParams = {
+          model: this.config.fullName,
+          system: systemPrompt,
+          messages,
+        };
 
-      // If thinking is enabled, we need to pass it to countTokens as well
-      // to ensure consistency with the actual message creation.
-      // Without this, the API returns an error when messages contain thinking blocks.
-      if (options.thinking) {
-        countTokensParams.thinking = options.thinking;
-      }
+        // If thinking is enabled, we need to pass it to countTokens as well
+        // to ensure consistency with the actual message creation.
+        // Without this, the API returns an error when messages contain thinking blocks.
+        if (options.thinking) {
+          countTokensParams.thinking = options.thinking;
+        }
 
-      // Strip betas that only apply to message creation (e.g., output length)
-      // while keeping context headers needed for accurate token counting.
-      const countTokenBetas = options.betas?.filter(
-        (beta) => beta === CONTEXT_1M_BETA,
-      );
-      if (countTokenBetas && countTokenBetas.length > 0) {
-        countTokensParams.betas = countTokenBetas;
-      }
+        // Strip betas that only apply to message creation (e.g., output length)
+        // while keeping context headers needed for accurate token counting.
+        const countTokenBetas = options.betas?.filter(
+          (beta) => beta === CONTEXT_1M_BETA,
+        );
+        if (countTokenBetas && countTokenBetas.length > 0) {
+          countTokensParams.betas = countTokenBetas;
+        }
 
-      const responseTokenCount =
-        await client.beta.messages.countTokens(countTokensParams);
-      const { input_tokens: inputTokens } = responseTokenCount;
-      this.logger.debug(`Token count of message: ${inputTokens}`);
-      if (inputTokens > this.config.contextWindow) {
-        const errMsg = `Token count of message exceeds context window: ${inputTokens} > ${this.config.contextWindow}`;
-        this.logger.error(errMsg);
-        throw new Error(errMsg);
-      }
-      if (this.config.contextWindow - inputTokens < options.max_tokens) {
-        const warnMsg = `Token count of message plus max tokens exceeds context window: ${inputTokens} + ${options.max_tokens} > ${this.config.contextWindow}. Reducing max tokens to ${this.config.contextWindow - inputTokens}.`;
-        this.logger.warn(warnMsg);
-        options.max_tokens = this.config.contextWindow - inputTokens - 10;
-
-        if (
-          this.capabilities.supportsReasoning &&
-          options.thinking &&
-          options.thinking.type === 'enabled'
-        ) {
-          const adjustedBudget = Math.max(
-            1,
-            Math.min(
-              options.thinking.budget_tokens,
-              Math.floor(options.max_tokens * 0.5),
-            ),
+        const responseTokenCount =
+          await client.beta.messages.countTokens(countTokensParams);
+        const { input_tokens: inputTokens } = responseTokenCount;
+        this.logger.debug(`Token count of message: ${inputTokens}`);
+        if (inputTokens > effectiveContextWindow) {
+          const errMsg = `Token count of message exceeds context window: ${inputTokens} > ${effectiveContextWindow}`;
+          this.logger.error(errMsg);
+          throw new Error(errMsg);
+        }
+        if (effectiveContextWindow - inputTokens < options.max_tokens) {
+          const reducedMaxTokens = Math.max(
+            0,
+            effectiveContextWindow - inputTokens - 10,
           );
-          if (adjustedBudget !== options.thinking.budget_tokens) {
-            this.logger.debug(
-              `Adjusted thinking budget to ${adjustedBudget} due to reduced max_tokens`,
+          const warnMsg = `Token count of message plus max tokens exceeds context window: ${inputTokens} + ${options.max_tokens} > ${effectiveContextWindow}. Reducing max tokens to ${reducedMaxTokens}.`;
+          this.logger.warn(warnMsg);
+          options.max_tokens = reducedMaxTokens;
+
+          if (
+            this.capabilities.supportsReasoning &&
+            options.thinking &&
+            options.thinking.type === 'enabled'
+          ) {
+            const adjustedBudget = Math.max(
+              1,
+              Math.min(
+                options.thinking.budget_tokens,
+                Math.floor(options.max_tokens * 0.5),
+              ),
             );
-            options.thinking.budget_tokens = adjustedBudget;
+            if (adjustedBudget !== options.thinking.budget_tokens) {
+              this.logger.debug(
+                `Adjusted thinking budget to ${adjustedBudget} due to reduced max_tokens`,
+              );
+              options.thinking.budget_tokens = adjustedBudget;
+            }
           }
         }
+        // in the future we log this in firstInputTokens of the AgentStateGlobal
       }
-      // in the future we log this in firstInputTokens of the AgentStateGlobal
+    }
+
+    if (documentAnalysis.hasBase64Pdf) {
+      const uploadResult = await this.replaceDocumentDataWithUploads(
+        client,
+        messages,
+      );
+      if (uploadResult.hasFileReference) {
+        hasFileReference = true;
+      }
+    }
+
+    if (hasFileReference) {
+      const existingBetas = options.betas ?? [];
+      if (!existingBetas.includes(FILES_API_BETA)) {
+        options.betas = [...existingBetas, FILES_API_BETA];
+      }
     }
 
     // this.logger.debug(
@@ -314,6 +368,151 @@ export class ModelHandlerAnthropic extends ModelHandler<
     return response;
   }
 
+  private async replaceDocumentDataWithUploads(
+    client: Anthropic,
+    messages: MessageParam[],
+  ): Promise<{ uploaded: boolean; hasFileReference: boolean }> {
+    if (!this.capabilities.supportsNativePdf) {
+      return { uploaded: false, hasFileReference: false };
+    }
+
+    let uploaded = false;
+    let hasFileReference = false;
+
+    for (const message of messages) {
+      const contentBlocks = message.content;
+      if (!Array.isArray(contentBlocks)) {
+        continue;
+      }
+
+      for (const block of contentBlocks) {
+        if (block.type !== 'document') {
+          continue;
+        }
+
+        const source = block.source;
+        if (!source) {
+          continue;
+        }
+
+        if ('file_id' in (source as { file_id?: string })) {
+          hasFileReference = true;
+          continue;
+        }
+
+        if (source.type !== 'base64') {
+          continue;
+        }
+
+        const mediaType = source.media_type;
+        if (mediaType !== 'application/pdf') {
+          continue;
+        }
+
+        const base64Data = source.data;
+        if (!base64Data) {
+          continue;
+        }
+
+        const filename =
+          (block.title ?? 'document.pdf').trim() || 'document.pdf';
+        const sanitizedFilename = this.sanitizeFilename(filename);
+        let buffer: Buffer | undefined;
+        let uploadedSource: BetaRequestDocumentBlock['source'] | undefined;
+
+        try {
+          buffer = Buffer.from(base64Data, 'base64');
+          const uploadedFile = await client.beta.files.upload({
+            file: await toFile(buffer, sanitizedFilename, { type: mediaType }),
+            betas: [FILES_API_BETA],
+          });
+
+          uploadedSource = {
+            type: 'file',
+            file_id: uploadedFile.id,
+          } as BetaRequestDocumentBlock['source'];
+        } catch (err) {
+          this.logger.error(
+            `Failed to upload document ${filename}: ${getSdkErrorMessage(err)}`,
+            undefined,
+            undefined,
+            err,
+          );
+          throw err;
+        } finally {
+          if (buffer) {
+            buffer.fill(0);
+            buffer = undefined;
+          }
+        }
+
+        if (uploadedSource) {
+          delete (source as { data?: string }).data;
+          (block as BetaRequestDocumentBlock).source = uploadedSource;
+          uploaded = true;
+          hasFileReference = true;
+        }
+      }
+    }
+
+    return { uploaded, hasFileReference };
+  }
+
+  private analyzeDocumentSources(messages: MessageParam[]): {
+    hasFileSource: boolean;
+    hasBase64Pdf: boolean;
+  } {
+    let hasFileSource = false;
+    let hasBase64Pdf = false;
+
+    for (const message of messages) {
+      const contentBlocks = message.content;
+      if (!Array.isArray(contentBlocks)) {
+        continue;
+      }
+
+      for (const block of contentBlocks) {
+        if (block.type !== 'document') {
+          continue;
+        }
+
+        const source = block.source;
+        if (!source) {
+          continue;
+        }
+
+        if ('file_id' in (source as { file_id?: string })) {
+          hasFileSource = true;
+        } else if (source.type === 'base64') {
+          if (source.media_type === 'application/pdf' && source.data) {
+            hasBase64Pdf = true;
+          }
+        }
+
+        if (hasFileSource && hasBase64Pdf) {
+          return { hasFileSource: true, hasBase64Pdf: true };
+        }
+      }
+    }
+
+    return { hasFileSource, hasBase64Pdf };
+  }
+
+  private sanitizeFilename(filename: string): string {
+    const baseName = basename(filename) || filename;
+    const trimmed = baseName.trim();
+    const withoutControlChars = Array.from(trimmed, (char) =>
+      char.charCodeAt(0) < 32 ? '_' : char,
+    ).join('');
+    const withoutForbidden = withoutControlChars.replace(/[:<>"|?*\\/]/g, '_');
+    const sanitized = withoutForbidden || 'document.pdf';
+    // Removing directory information avoids Anthropic rejecting names that contain
+    // slashes, but it also means the model loses subdirectory context when
+    // generating citations for assets or pictures that originally lived in nested
+    // folders.
+    return sanitized.slice(0, 255);
+  }
+
   /** Initializes the message array for Anthropic chat models with user prefix, request, and optional media. */
   async initializeMessages(
     userPrefix: string,
@@ -342,17 +541,10 @@ export class ModelHandlerAnthropic extends ModelHandler<
       });
     }
 
-    // Add media if provided (Anthropic currently only supports images)
+    // Add media if provided (images and native PDFs)
     if (mediaFiles && this.config.capabilities.supportsVision) {
       const formattedMediaContent = await this.createMediaMessage(mediaFiles);
-      // Filter out any non-image content just in case, although createMediaContent should handle this
-      userMessageContent.push(
-        ...formattedMediaContent.filter(
-          (c) =>
-            c.type === 'image' ||
-            (c.type === 'text' && c.text?.startsWith('Image:')),
-        ),
-      );
+      userMessageContent.push(...formattedMediaContent);
     }
 
     // Add user request with optional caching
@@ -400,7 +592,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     // Create content list for the new round message
     const roundContent: ContentBlockParam[] = [];
 
-    // Add media if provided (Anthropic currently only supports images)
+    // Add media if provided (images and native PDFs)
     if (
       mediaFiles &&
       mediaFiles.length > 0 &&
@@ -408,14 +600,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     ) {
       try {
         const formattedMediaContent = await this.createMediaMessage(mediaFiles);
-        // Filter out any non-image content
-        roundContent.push(
-          ...formattedMediaContent.filter(
-            (c) =>
-              c.type === 'image' ||
-              (c.type === 'text' && c.text?.startsWith('Image:')),
-          ),
-        );
+        roundContent.push(...formattedMediaContent);
       } catch (err) {
         this.logger.error(
           `Error processing media files for follow-up round: ${getSdkErrorMessage(err)}`,
@@ -526,6 +711,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
               media_type: 'application/pdf',
               data: media.data,
             },
+            title: media.file_name,
           } satisfies BetaRequestDocumentBlock;
           return [descriptionBlock, documentBlock];
         }
@@ -643,12 +829,10 @@ export class ModelHandlerAnthropic extends ModelHandler<
   ): void {
     // Create continuation message with last K tokens
     const prefillTokens = toolState.lastResponse.slice(-K_SLICE);
-    const userMessageContinuation =
-      `Your response got cut off, because you only have limited response space. ` +
-      `Continue responding exactly from where you left off until the very end, ` +
-      `marked by ${agentSetting.endTag}. ` +
-      'Avoid repeat yourself and avoid starting over. ' +
-      `Start your response at the next token after: "${prefillTokens}"`;
+    const userMessageContinuation = createContinuationMessage(
+      agentSetting.endTag,
+      prefillTokens,
+    );
 
     // Add continuation message
     this.logger.debug(
@@ -672,6 +856,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     prefill: string,
     groupId?: string,
   ): Promise<[boolean, MessageParam[]]> {
+    const workflowSetting = requireWorkflowSetting(agentSetting);
     let endTurn = false;
 
     if (!(await WorkspaceFS.existsAndNonTrivial(outputFile))) {
@@ -682,7 +867,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
           prefill === '<scratchpad>' // this is not so neat
         ) {
           await WorkspaceFS.write(outputFile, prefill);
-        } else if (agentSetting.outputExt === 'xml') {
+        } else if (workflowSetting.outputExt === 'xml') {
           await WorkspaceFS.write(outputFile, prefill + '\n');
         }
         messages.push({

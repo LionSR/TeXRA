@@ -68,7 +68,7 @@ For complex documents with multiple input files, use the "Multiple" dropdown to 
 
 1. In the dropdown menus at the bottom of the instruction box, select:
    - **Agent**: `polish` (for improving writing)
-   - **Model**: `sonnet37` (Claude 3.7 Sonnet) or another available model
+   - **Model**: `sonnet45` (Claude Sonnet 4.5) or another available model
 
 ::: tip Onboarding Prompt
 When you first open the agent or model dropdown, a tooltip explains its role.
@@ -94,10 +94,14 @@ Be specific about what you want! Vague instructions are like asking a genie for 
 ### Step 5: Configure Tools
 
 1. Click on the "Tool Config" dropdown
-2. Enable "Reflect" to allow the AI to review and improve its own work
-3. (Optional) Enable other tools as needed:
+2. (Optional) Enable helpers for this run:
    - "Attach TeX Count" to include document statistics
-   - "Print Input Prompt" to save the generated prompt for reference (which you can also feed to ChatGPT or Claude to process with your subscription)
+   - "Attach Diagnostics" to include LaTeX compilation logs and other troubleshooting details
+   - Reflection rounds are controlled by the selected agent—most writing agents already include a follow-up critique pass
+
+::: tip Save Prompts for Later
+Enable the `texra.debug.saveInputPrompt` setting if you want TeXRA to store the generated prompt alongside other debug artifacts.
+:::
 
 ![Tool Configuration](/images/tool-config.png)
 
@@ -232,19 +236,19 @@ Here are some common tasks you can try with TeXRA:
 ### Fixing Grammar and Typos
 
 - **Agent**: `correct`
-- **Model**: `gemini25p`, `gpt41`, or `gpt5`
+- **Model**: `gemini25p`, `gpt41`, `gpt5`, or `gpt5pro`
 - **Instruction**: "Fix grammatical errors and typos without changing the content or technical terminology."
 
 ### Converting a Paper to Slides
 
 - **Agent**: `paper2slide`
-- **Model**: `sonnet37T` or `gpt5`
+- **Model**: `sonnet45T`, `gpt5`, or `gpt5pro`
 - **Instruction**: "Convert this paper into presentation slides using the beamer template. Create approximately 12-15 slides highlighting the key points, methodology, and results."
 
 ### Improving Writing Style
 
 - **Agent**: `polish`
-- **Model**: `opus41` or `sonnet37T`
+- **Model**: `opus41` or `sonnet45T`
 - **Instruction**: "Improve the writing style to make it more engaging and clear. Enhance the flow between paragraphs while preserving all technical content."
 
 ## Understanding the Output
@@ -258,8 +262,8 @@ When TeXRA completes a task, it produces:
 Output files are saved in the same directory as your input file with a naming pattern:
 `original_filename_agent_r0_model.extension`
 
-For example, if your input file is `paper.tex` and you used the `polish` agent with `sonnet37` model, the output file would be named:
-`paper_polish_r0_sonnet37.tex`
+For example, if your input file is `paper.tex` and you used the `polish` agent with `sonnet45` model, the output file would be named:
+`paper_polish_r0_sonnet45.tex`
 
 ## Next Steps
 

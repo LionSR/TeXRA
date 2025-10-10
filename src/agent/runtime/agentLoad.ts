@@ -5,32 +5,31 @@ import * as path from 'path';
 import deepmerge from 'deepmerge';
 import * as vscode from 'vscode';
 import * as yaml from 'yaml';
-import { z } from 'zod';
 
 // Local imports - agent components
 import {
   AgentSetting,
   AgentPrompt,
-  AgentSettingSchema,
   AgentPromptSchema,
   AgentDefinitionSchema,
+  AgentType,
+  parseAgentSetting,
 } from '@agent/core/AgentDataclass';
 
 // Local imports - utils
 import * as logger from '@logger/logUtils';
 import type { ToolDefinition } from '@model';
 import { AbsoluteFS } from '@utils/files';
+import type { AgentPathResolution } from './AgentPathTypes';
+import { AgentDirectorySource } from './AgentPathTypes';
 
 const CHANNEL = 'agentLoad';
 logger.initialize(CHANNEL);
 
-/** Zod schema for the validated portion of an agent definition */
-export const ValidAgentDefinitionSchema = AgentDefinitionSchema.pick({
-  name: true,
-  settings: true,
-});
-
-export type ValidAgentDefinition = z.infer<typeof ValidAgentDefinitionSchema>;
+export interface ValidAgentDefinition {
+  name: string;
+  settings: AgentSetting;
+}
 
 /** Loads and parses a YAML file from an absolute path. */
 export async function loadYaml(absolutePath: string): Promise<object> {
@@ -73,8 +72,21 @@ interface LoadAgentOptions {
   preferMultiple?: boolean;
 }
 
+export function ensureAgentTypeForSource<T extends { agentType?: AgentType }>(
+  settings: T,
+  source: AgentDirectorySource,
+): T {
+  if (
+    source === AgentDirectorySource.BuiltInToolUse &&
+    settings.agentType === undefined
+  ) {
+    settings.agentType = AgentType.ToolUse;
+  }
+  return settings;
+}
+
 async function resolveAgentDefinition(
-  agentPath: string,
+  agentDirectory: string,
   agentNameFromFile: string,
   options?: LoadAgentOptions,
 ): Promise<{ filePath: string; resolvedName: string }> {
@@ -97,7 +109,7 @@ async function resolveAgentDefinition(
     }
     seenCandidates.add(candidate);
 
-    const candidatePath = path.join(agentPath, `${candidate}.yaml`);
+    const candidatePath = path.join(agentDirectory, `${candidate}.yaml`);
     if (await AbsoluteFS.exists(candidatePath)) {
       if (
         preferMultiple &&
@@ -113,7 +125,7 @@ async function resolveAgentDefinition(
     }
   }
 
-  const fallbackPath = path.join(agentPath, `${agentNameFromFile}.yaml`);
+  const fallbackPath = path.join(agentDirectory, `${agentNameFromFile}.yaml`);
   if (preferMultiple && !agentNameFromFile.endsWith('_multiple')) {
     logger.warn(
       CHANNEL,
@@ -124,13 +136,13 @@ async function resolveAgentDefinition(
 }
 
 export async function loadAgentSettingAndPrompts(
-  agentPath: string,
+  agentPath: AgentPathResolution,
   agentNameFromFile: string,
   options?: LoadAgentOptions,
 ): Promise<[AgentSetting, AgentPrompt]> {
   try {
     const { filePath: agentFile, resolvedName } = await resolveAgentDefinition(
-      agentPath,
+      agentPath.directory,
       agentNameFromFile,
       options,
     );
@@ -179,6 +191,8 @@ export async function loadAgentSettingAndPrompts(
       });
     }
 
+    ensureAgentTypeForSource(settings, agentPath.source);
+
     // Resolve tool names to definitions
     if (Array.isArray(settings.tools)) {
       const { DEFAULT_TOOL_REGISTRY } = await import('@tools/registry');
@@ -199,7 +213,7 @@ export async function loadAgentSettingAndPrompts(
     }
 
     // Apply defaults and validate the final settings and prompts
-    const validatedSettings = AgentSettingSchema.parse(settings);
+    const validatedSettings = parseAgentSetting(settings);
     const validatedPrompts = AgentPromptSchema.parse(prompts);
     settings = validatedSettings;
     prompts = validatedPrompts;
@@ -245,7 +259,7 @@ export async function isValidAgentYaml(
       return null;
     }
 
-    const settingsBlock = AgentSettingSchema.parse(data.settings);
+    const settingsBlock = parseAgentSetting(data.settings);
     AgentPromptSchema.parse(data.prompts);
     const rootName = data.name;
 
@@ -257,11 +271,10 @@ export async function isValidAgentYaml(
       return null;
     }
 
-    // return structure validated by ValidAgentDefinitionSchema
-    return ValidAgentDefinitionSchema.parse({
+    return {
       name: rootName,
       settings: settingsBlock,
-    });
+    } satisfies ValidAgentDefinition;
   } catch (err) {
     logger.debug(
       CHANNEL,

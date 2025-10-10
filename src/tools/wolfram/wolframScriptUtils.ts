@@ -1,10 +1,7 @@
 // Third-party imports
-// Standard library imports
 import * as vscode from 'vscode';
 
-// Local imports - tools
-
-// Local imports
+// Local imports - system utilities
 import { executeCommand, checkToolInstalled } from '@utils/system';
 
 // Wolfram configuration is now in toolUtils.ts

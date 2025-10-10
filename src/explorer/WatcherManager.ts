@@ -46,7 +46,7 @@ export class WatcherManager {
       const builtInToolUsePath = await agentDirectories.builtInToolUse(
         this.context,
       );
-      const customAgentsPath = await agentDirectories.custom();
+      const customAgentsPath = await agentDirectories.custom(this.context);
 
       const pathsToWatch = [builtInAgentsPath, builtInToolUsePath];
       if (customAgentsPath) {
