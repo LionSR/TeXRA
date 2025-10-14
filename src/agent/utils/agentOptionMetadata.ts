@@ -13,10 +13,17 @@ import {
 // Local imports - filesystem
 import { AbsoluteFS } from '@utils/files';
 
+export interface RemoteAgentOption {
+  displayName: string;
+  isToolUse: boolean;
+  isMultipleOutput: boolean;
+}
+
 export interface AgentDirectoryMap {
   custom?: string;
   builtIn?: string;
   builtInToolUse?: string;
+  remote?: Record<string, RemoteAgentOption>;
 }
 
 export interface AgentOptionMetadata {
@@ -24,6 +31,8 @@ export interface AgentOptionMetadata {
   hasMultipleSibling: boolean;
   isMultipleOutput: boolean;
   isToolUse: boolean;
+  isRemote?: boolean;
+  label?: string;
 }
 
 export interface AgentOptionsPayload {
@@ -39,7 +48,7 @@ export interface AgentOptionDefaults {
 export const DEFAULT_WORKFLOW_AGENT = 'correct';
 export const DEFAULT_TOOL_USE_AGENT = 'chat';
 
-const DIRECTORY_KEYS: (keyof AgentDirectoryMap)[] = [
+const DIRECTORY_KEYS: Array<'custom' | 'builtIn' | 'builtInToolUse'> = [
   'custom',
   'builtIn',
   'builtInToolUse',
@@ -114,6 +123,18 @@ export function getAgentOptionMetadata(
   agentName: string,
   directories: AgentDirectoryMap,
 ): AgentOptionMetadata {
+  const remoteEntry = directories.remote?.[agentName];
+  if (remoteEntry) {
+    return {
+      hasDefinition: true,
+      hasMultipleSibling: remoteEntry.isMultipleOutput,
+      isMultipleOutput: remoteEntry.isMultipleOutput,
+      isToolUse: remoteEntry.isToolUse,
+      isRemote: true,
+      label: remoteEntry.displayName || agentName,
+    };
+  }
+
   const definitionPath = findAgentYaml(agentName, directories);
   const multiplePath = findAgentYaml(agentName, directories, MULTIPLE_SUFFIX);
   const definition = readAgentDefinition(definitionPath);
@@ -130,9 +151,12 @@ function decorateLabel(
   agentName: string,
   metadata: AgentOptionMetadata,
 ): string {
-  let label = agentName;
+  let label = metadata.label ?? agentName;
   if (metadata.hasMultipleSibling || metadata.isMultipleOutput) {
     label += ' ∶∶';
+  }
+  if (metadata.isRemote) {
+    label += ' (Remote)';
   }
   return label;
 }
@@ -148,7 +172,7 @@ export function createAgentOptionTag(
 ): string {
   const attributes = [
     `value="${encodeHtml(agentName)}"`,
-    `data-label="${encodeHtml(agentName)}"`,
+    `data-label="${encodeHtml(metadata.label ?? agentName)}"`,
   ];
 
   if (!metadata.hasDefinition) {
@@ -159,6 +183,9 @@ export function createAgentOptionTag(
   }
   if (metadata.isToolUse) {
     attributes.push('data-tool-use="true"');
+  }
+  if (metadata.isRemote) {
+    attributes.push('data-remote="true"');
   }
   if (options.isSelected) {
     attributes.push('selected');

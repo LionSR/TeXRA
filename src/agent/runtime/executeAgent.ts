@@ -45,6 +45,8 @@ import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import { agentConfigToTaskState } from '@utils/config';
 import { ensureRunDir } from '@utils/files/taskRunStorage';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
+import { RemoteAgent } from '@agent/remote/RemoteAgent';
+import { remoteAgentRegistry } from '@frontend/agents/RemoteAgentRegistry';
 
 const CHANNEL = 'executeAgent';
 const logger = new AgentLogger(CHANNEL);
@@ -239,6 +241,20 @@ export async function prepareAgentInstance<T extends IAgent = IAgent>(
 
   const fullConfig = AgentConfigSchema.parse(configInput);
   const originalAgentName = fullConfig.agent;
+
+  const remoteDescriptor = remoteAgentRegistry.get(originalAgentName);
+  if (remoteDescriptor) {
+    const remoteAgent = new RemoteAgent(
+      remoteDescriptor,
+      fullConfig,
+      executionId,
+    );
+    const remoteType = remoteDescriptor.isToolUse
+      ? AgentType.ToolUse
+      : AgentType.Direct;
+    return { agent: remoteAgent as unknown as T, agentType: remoteType };
+  }
+
   let resolvedAgentName = getAgentName(
     originalAgentName,
     fullConfig.useMultipleOutputs,

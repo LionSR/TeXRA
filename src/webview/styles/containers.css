@@ -71,7 +71,8 @@
 
 .api-key-banner .actions,
 .agent-config-banner .actions,
-.dependency-banner .actions {
+.dependency-banner .actions,
+.auth-banner .actions {
   display: flex;
   gap: var(--spacing-small);
 }
@@ -89,7 +90,8 @@
 /* Banners */
 .api-key-banner,
 .agent-config-banner,
-.dependency-banner {
+.dependency-banner,
+.auth-banner {
   background-color: var(--vscode-inputValidation-warningBackground);
   color: var(--vscode-inputValidation-warningForeground);
   border: 1px solid var(--vscode-inputValidation-warningBorder);

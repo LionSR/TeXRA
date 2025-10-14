@@ -8,8 +8,10 @@ import {
   DEFAULT_WORKFLOW_AGENT,
   type AgentDirectoryMap,
   type AgentOptionsPayload,
+  type RemoteAgentOption,
 } from '@agent/utils/agentOptionMetadata';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
+import { remoteAgentRegistry } from '@frontend/agents/RemoteAgentRegistry';
 import { getConfig } from '@utils/config';
 
 export type { AgentOptionsPayload };
@@ -52,11 +54,13 @@ export async function getAllAgents(
  */
 async function getAgentDirectories(
   context: vscode.ExtensionContext,
+  remoteAgents: Record<string, RemoteAgentOption>,
 ): Promise<AgentDirectoryMap> {
   return {
     custom: await agentDirectories.custom(context),
     builtIn: await agentDirectories.builtIn(context),
     builtInToolUse: await agentDirectories.builtInToolUse(context),
+    remote: remoteAgents,
   };
 }
 
@@ -69,11 +73,34 @@ async function getAgentDirectories(
 export async function computeAgentOptions(
   context: vscode.ExtensionContext,
 ): Promise<AgentOptionsPayload> {
+  const remoteAgents = remoteAgentRegistry.list();
+  const remoteOptions: Record<string, RemoteAgentOption> = {};
+  for (const agent of remoteAgents) {
+    remoteOptions[agent.name] = {
+      displayName: agent.displayName || agent.name,
+      isToolUse: agent.isToolUse,
+      isMultipleOutput: agent.isMultipleOutput,
+    };
+  }
+
   const { allAgents, toolUseAgents, defaultWorkflowAgent } =
     await getAllAgents(context);
-  const dirs = await getAgentDirectories(context);
 
-  return buildAgentOptionsPayload(allAgents, dirs, toolUseAgents, {
+  const combinedAgents = Array.from(
+    new Set([...allAgents, ...remoteAgents.map((agent) => agent.name)]),
+  );
+  const combinedToolUseAgents = Array.from(
+    new Set([
+      ...toolUseAgents,
+      ...remoteAgents
+        .filter((agent) => agent.isToolUse)
+        .map((agent) => agent.name),
+    ]),
+  );
+
+  const dirs = await getAgentDirectories(context, remoteOptions);
+
+  return buildAgentOptionsPayload(combinedAgents, dirs, combinedToolUseAgents, {
     workflowAgent: defaultWorkflowAgent,
     toolUseAgent: DEFAULT_TOOL_USE_AGENT,
   });

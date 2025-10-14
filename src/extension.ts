@@ -19,6 +19,8 @@ import { FileLister } from '@frontend/files/fileLister';
 import { bus } from '@eventBus/ProgressEventBus';
 import { ToolUseSessionManager } from '@agent/toolUse/ToolUseSessionManager';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
+import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
+import { computeAgentOptions } from '@agent/computeAgentOptions';
 
 // Local imports - components
 import { ProgressViewProvider } from './progressView/ProgressViewProvider';
@@ -27,10 +29,20 @@ import { ExplorerOperations } from './explorer/ExplorerOperations';
 import { ExplorerCommands } from './explorer/ExplorerCommands';
 import { WatcherManager } from './explorer/WatcherManager';
 import { registerCommands } from './commands';
+import { registerAuthCommands } from '@commands/auth/authCommands';
+import {
+  AuthController,
+  type AuthStatePayload,
+} from '@frontend/auth/AuthController';
 
 let statusBarItem: vscode.StatusBarItem | undefined;
 let apiKeyStatusBarItem: vscode.StatusBarItem | undefined;
 let disposeStatusListener: (() => void) | undefined;
+let authStatusBarItem: vscode.StatusBarItem | undefined;
+let proxyStatusBarItem: vscode.StatusBarItem | undefined;
+let authStateSubscription: vscode.Disposable | undefined;
+let authControllerInstance: AuthController | undefined;
+let latestAuthState: AuthStatePayload | undefined;
 
 function promptToOpenFolder(message: string): void {
   const openAction = 'Open Folder';
@@ -58,6 +70,11 @@ async function refreshApiKeyStatus() {
     return;
   }
 
+  if (latestAuthState?.proxyEnabled) {
+    apiKeyStatusBarItem.hide();
+    return;
+  }
+
   const exists = await SecretManager.anyApiKeyExists();
   if (!exists) {
     apiKeyStatusBarItem.text = '$(warning) TeXRA: API Key Required';
@@ -65,6 +82,97 @@ async function refreshApiKeyStatus() {
     apiKeyStatusBarItem.show();
   } else {
     apiKeyStatusBarItem.hide();
+  }
+}
+
+function updateAuthStatusBar(state?: AuthStatePayload) {
+  if (!authStatusBarItem || !proxyStatusBarItem) {
+    return;
+  }
+
+  if (!state?.signedIn) {
+    authStatusBarItem.text = '$(account) TeXRA: Sign In';
+    authStatusBarItem.command = 'texra.auth.signIn';
+    authStatusBarItem.tooltip =
+      'Sign in to unlock TeXRA remote agents and proxy access.';
+    authStatusBarItem.show();
+
+    proxyStatusBarItem.text = '$(cloud-off) TeXRA: Proxy Locked';
+    proxyStatusBarItem.command = 'texra.auth.signIn';
+    proxyStatusBarItem.tooltip =
+      'Proxy routing requires a TeXRA account with proxy access.';
+    proxyStatusBarItem.show();
+    return;
+  }
+
+  authStatusBarItem.text = '$(account) TeXRA: Account Ready';
+  authStatusBarItem.command = 'texra.auth.signOut';
+  authStatusBarItem.tooltip = 'Sign out of your TeXRA account.';
+  authStatusBarItem.show();
+
+  if (state.proxyEnabled) {
+    proxyStatusBarItem.text = '$(cloud-upload) TeXRA: Proxy Ready';
+    proxyStatusBarItem.command = 'texra.auth.refreshSession';
+    const expiresAt = state.proxyExpiresAt
+      ? new Date(state.proxyExpiresAt).toLocaleString()
+      : undefined;
+    proxyStatusBarItem.tooltip = expiresAt
+      ? `Proxy session active. Expires ${expiresAt}.`
+      : 'Proxy session active.';
+    proxyStatusBarItem.show();
+  } else {
+    proxyStatusBarItem.text = '$(cloud-off) TeXRA: Proxy Requires Login';
+    proxyStatusBarItem.command = 'texra.auth.signIn';
+    proxyStatusBarItem.tooltip =
+      'Your account is signed in but proxy access is unavailable. Contact support if this is unexpected.';
+    proxyStatusBarItem.show();
+  }
+}
+
+async function syncAuthBanner(state?: AuthStatePayload) {
+  try {
+    const view = await vscode.commands.executeCommand<vscode.WebviewView>(
+      'texra.getWebviewView',
+    );
+    if (!view) {
+      return;
+    }
+
+    await view.webview.postMessage({
+      command: MAIN_VIEW_COMMANDS.SHOW_AUTH_BANNER,
+      signedIn: state?.signedIn ?? false,
+      proxyEnabled: state?.proxyEnabled ?? false,
+      message: state?.signedIn
+        ? state?.proxyEnabled
+          ? 'Connected to TeXRA. Proxy routing is ready.'
+          : 'Signed in. Proxy access pending or unavailable.'
+        : undefined,
+    });
+
+    if (state?.proxyEnabled) {
+      await view.webview.postMessage({
+        command: MAIN_VIEW_COMMANDS.HIDE_API_KEY_BANNER,
+      });
+    }
+  } catch (err) {
+    console.error('Failed to synchronize auth banner', err);
+  }
+}
+
+async function refreshAgentDropdown(
+  context: vscode.ExtensionContext,
+): Promise<void> {
+  try {
+    const agentOptions = await computeAgentOptions(context);
+    const view = await vscode.commands.executeCommand<vscode.WebviewView>(
+      'texra.getWebviewView',
+    );
+    view?.webview.postMessage({
+      command: MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
+      options: agentOptions,
+    });
+  } catch (err) {
+    console.error('Failed to refresh agent options', err);
   }
 }
 
@@ -94,6 +202,22 @@ export async function activate(context: vscode.ExtensionContext) {
   await StorageFS.ensureDir(TASK_RUNS_DIR);
   initializeStateManagers(context);
   FileLister.initialize(context);
+
+  authControllerInstance = new AuthController(context);
+  await authControllerInstance.initialize();
+  registerAuthCommands(context, authControllerInstance);
+  latestAuthState = authControllerInstance.getState();
+  authStateSubscription = authControllerInstance.onDidChangeState((state) => {
+    latestAuthState = state;
+    updateAuthStatusBar(state);
+    refreshApiKeyStatus().catch(console.error);
+    syncAuthBanner(state).catch(console.error);
+    refreshAgentDropdown(context).catch(console.error);
+  });
+  context.subscriptions.push(
+    { dispose: () => authStateSubscription?.dispose() },
+    { dispose: () => authControllerInstance?.dispose() },
+  );
 
   // Create the log view provider
   const progressViewProvider = new ProgressViewProvider(context);
@@ -136,6 +260,16 @@ export async function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(apiKeyStatusBarItem);
   // Non-blocking refresh to avoid delaying extension activation
   refreshApiKeyStatus().catch(console.error);
+
+  authStatusBarItem = vscode.window.createStatusBarItem(
+    vscode.StatusBarAlignment.Left,
+  );
+  proxyStatusBarItem = vscode.window.createStatusBarItem(
+    vscode.StatusBarAlignment.Left,
+  );
+  context.subscriptions.push(authStatusBarItem, proxyStatusBarItem);
+  updateAuthStatusBar(latestAuthState);
+  syncAuthBanner(latestAuthState).catch(console.error);
 
   const runningStreams = new Set<string>();
   const NON_RUNNING_STATUSES = ['stopped', 'error', 'cancelled', 'waiting'];

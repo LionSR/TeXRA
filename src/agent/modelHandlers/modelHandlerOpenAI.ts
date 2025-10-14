@@ -69,8 +69,13 @@ export class ModelHandlerOpenAI extends ModelHandler<
     const apiKey = await this.getApiKey();
     const baseURL = this.getBaseUrl();
     this.logger.debug(`Using ${providerName} API key. Base URL: ${baseURL}`);
+    const defaultHeaders = this.getProxyAuthHeaders();
     // there is a time out parameter that can be set; default is 10 minutes
-    return new OpenAI({ apiKey, baseURL });
+    return new OpenAI({
+      apiKey,
+      baseURL: baseURL ?? undefined,
+      ...(defaultHeaders ? { defaultHeaders } : {}),
+    });
   }
 
   /** Returns OpenAI client with configured API key. */

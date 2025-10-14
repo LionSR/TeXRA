@@ -82,21 +82,43 @@ Configure how TeXRA connects to AI model providers:
 - `gpt5ReasoningSummary`: Request reasoning summaries from GPT-5 family models, including GPT-5 Pro (requires verified account and user tier)
 - `useCopilot`: Use the Copilot language model through VS Code's Language Model API for instruction polishing and text connection
 
-| Provider         | Proxy path                  | Supported |
-| ---------------- | --------------------------- | --------- |
-| OpenAI           | `openai/v1`                 | ✅ Yes    |
-| Anthropic        | `anthropic/v1`              | ✅ Yes    |
-| Gemini (Google)  | `generativelanguage/v1beta` | ✅ Yes    |
-| xAI              | `xai`                       | ✅ Yes    |
-| OpenRouter       | `openrouter`                | ✅ Yes    |
-| Groq             | `groq/openai/v1`            | ✅ Yes    |
-| Perplexity       | `pplx`                      | ✅ Yes    |
-| Mistral          | `mistral`                   | ✅ Yes    |
-| DeepSeek         | N/A                         | ❌ No     |
-| Moonshot (Kimi)  | N/A                         | ❌ No     |
-| DashScope (Qwen) | N/A                         | ❌ No     |
+| Provider         | Proxy path           | Supported |
+| ---------------- | -------------------- | --------- |
+| OpenAI           | `openai/v1`          | ✅ Yes    |
+| Anthropic        | `anthropic`          | ✅ Yes    |
+| Gemini (Google)  | `generativelanguage` | ✅ Yes    |
+| xAI              | `xai`                | ✅ Yes    |
+| OpenRouter       | `openrouter`         | ✅ Yes    |
+| DeepSeek         | N/A                  | ❌ No     |
+| Moonshot (Kimi)  | N/A                  | ❌ No     |
+| DashScope (Qwen) | N/A                  | ❌ No     |
 
 **Note:** Only the providers marked with ✅ are supported by the proxy. Other providers will use their direct API endpoints even when proxy is enabled.
+
+### Authentication and Proxy Access
+
+TeXRA can authenticate against Supabase to unlock managed proxy routing and
+remote agents. The following settings control that behaviour:
+
+```json
+"texra.auth.supabaseUrl": "https://YOUR-PROJECT.supabase.co",
+"texra.auth.supabaseAnonKey": "public-anon-key",
+"texra.auth.remoteAgentFunction": "execute-remote-agent"
+```
+
+- `supabaseUrl` and `supabaseAnonKey` seed the Supabase client used by the
+  extension host. Values can be supplied through VS Code settings or `.env`.
+- `remoteAgentFunction` defines the Supabase Edge Function responsible for
+  executing remote agents. The default matches the reference implementation in
+  `server/supabase/functions/execute-remote-agent`.
+- `texra.auth.proxySessionExpiresAt` exposes a read-only status string showing
+  when the current proxy session will expire.
+
+When you sign in via **TeXRA: Sign In**, the extension stores session tokens in
+VS Code's secret storage. If the account is entitled to proxy access, API calls
+are routed through the managed proxy without requiring provider-specific API
+keys. The status bar updates to reflect account and proxy state, and the main
+view displays a banner summarising access.
 
 ### Audio Settings
 

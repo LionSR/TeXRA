@@ -17,6 +17,14 @@ import type {
 import { bus } from '@eventBus/ProgressEventBus';
 // Local imports - log
 import { AgentLogger } from '@logger/AgentLogger';
+import {
+  ensureSupabaseClient,
+  getCurrentSession,
+  getProxySession,
+} from '@common/auth/supabaseClient';
+
+const USAGE_FUNCTION_NAME =
+  process.env.SUPABASE_USAGE_FUNCTION ?? 'log-proxy-usage';
 
 /**
  * Handles recording usage statistics to the log and progress view.
@@ -132,10 +140,12 @@ export class UsageMonitor {
           : 0
         : undefined;
 
+      const normalizedCost = Number(cost.toFixed(3));
+
       const baseStats: TokenUsageStats = {
         inputTokens: stateGlobal.totalInputTokens,
         outputTokens: stateGlobal.totalOutputTokens,
-        cost: Number(cost.toFixed(3)),
+        cost: normalizedCost,
       };
 
       const payload: ExtendedTokenUsageStats = {
@@ -157,8 +167,47 @@ export class UsageMonitor {
       };
 
       this.logger.statistics(payload, statsGroupId);
+
+      if (getProxySession()?.token) {
+        void this.forwardUsageToSupabase(payload, normalizedCost);
+      }
     } catch (error) {
       this.logger.error(`Error printing statistics: ${error}`, statsGroupId);
+    }
+  }
+
+  private async forwardUsageToSupabase(
+    usage: ExtendedTokenUsageStats,
+    cost: number,
+  ): Promise<void> {
+    try {
+      const proxySession = getProxySession();
+      if (!proxySession?.token) {
+        return;
+      }
+
+      const client = await ensureSupabaseClient();
+      const session = getCurrentSession();
+      if (!client || !session) {
+        return;
+      }
+
+      await client.functions.invoke(USAGE_FUNCTION_NAME, {
+        body: {
+          provider: this.modelHandler.config.provider,
+          model: this.modelHandler.config.fullName,
+          cost,
+          usage,
+          proxySessionId: proxySession.sessionId,
+        },
+        headers: {
+          Authorization: `Bearer ${session.accessToken}`,
+        },
+      });
+    } catch (err) {
+      this.logger.warn(
+        `Failed to record proxy usage: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
   }
 }

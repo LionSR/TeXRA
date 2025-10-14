@@ -81,6 +81,10 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
         bannerManager.showBanner(ELEMENT_IDS.AGENT_CONFIG_BANNER, m),
       [MAIN_VIEW_COMMANDS.HIDE_AGENT_CONFIG_BANNER]: () =>
         bannerManager.hideBanner(ELEMENT_IDS.AGENT_CONFIG_BANNER),
+      [MAIN_VIEW_COMMANDS.SHOW_AUTH_BANNER]: (m) =>
+        bannerManager.showBanner(ELEMENT_IDS.AUTH_BANNER, m),
+      [MAIN_VIEW_COMMANDS.HIDE_AUTH_BANNER]: () =>
+        bannerManager.hideBanner(ELEMENT_IDS.AUTH_BANNER),
       [MAIN_VIEW_COMMANDS.SHOW_DEPENDENCY_BANNER]: (m) =>
         webviewEventBus.dispatchEvent(
           new CustomEvent('showDependencyBanner', { detail: m }),
@@ -191,7 +195,8 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
   }
 
   _decorateAgentOption(opt) {
-    const { label, isMultiple, isToolUse } = this._readAgentOptionMetadata(opt);
+    const { label, isMultiple, isToolUse, isRemote } =
+      this._readAgentOptionMetadata(opt);
 
     const hints = [];
     let displayLabel = label;
@@ -206,6 +211,13 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
 
     if (isToolUse) {
       hints.push('Uses tools for actions.');
+    }
+
+    if (isRemote) {
+      hints.push('Executes remotely via secure TeXRA services.');
+      opt.dataset.remote = 'true';
+    } else {
+      opt.dataset.remote = 'false';
     }
 
     opt.textContent = displayLabel;
@@ -240,6 +252,7 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       label,
       isMultiple: opt.dataset.multiple === 'true',
       isToolUse: opt.dataset.toolUse === 'true',
+      isRemote: opt.dataset.remote === 'true',
     };
   }
 

@@ -42,6 +42,7 @@ import {
   ModelCapabilities,
 } from '@model/ModelConfig';
 import { getConfig } from '@utils/config';
+import { getEntitlements, getProxySession } from '@common/auth/supabaseClient';
 
 // Local imports - utilities
 import { WorkspaceFS, AbsoluteFS, getMimeType } from '@utils/files';
@@ -270,6 +271,10 @@ export abstract class ModelHandler<
    * @throws Error if required API key is missing from environment
    */
   public async getApiKey(): Promise<string> {
+    const proxySession = getProxySession();
+    if (proxySession?.token) {
+      return proxySession.token;
+    }
     // Use OpenRouter if model requires it or if explicitly configured
     const useOpenRouter =
       this.config.openRouterOnly ||
@@ -320,6 +325,11 @@ export abstract class ModelHandler<
     }
 
     if (useImprovedConnection) {
+      const proxySession = getProxySession();
+      const proxyBaseUrl = getEntitlements()?.proxy.baseUrl;
+      if (proxySession?.token && proxyBaseUrl) {
+        return proxyBaseUrl;
+      }
       // Normalize proxy domain
       improvedConnectionDomain = normalizeUrl(improvedConnectionDomain);
 
@@ -388,6 +398,23 @@ export abstract class ModelHandler<
       [ModelProvider.OTHERS]: null,
     };
     return BASE_URLS[this.config.provider];
+  }
+
+  protected getProxyAuthHeaders(): Record<string, string> | undefined {
+    const proxySession = getProxySession();
+    if (!proxySession?.token) {
+      return undefined;
+    }
+
+    const headers: Record<string, string> = {
+      'X-TeXRA-Proxy-Session': proxySession.token,
+    };
+
+    if (proxySession.sessionId) {
+      headers['X-TeXRA-Proxy-Session-Id'] = proxySession.sessionId;
+    }
+
+    return headers;
   }
 
   /** Checks if the model uses an OpenAI-compatible API format. */

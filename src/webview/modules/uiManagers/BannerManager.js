@@ -29,6 +29,9 @@ export class BannerManager extends BaseUIManager {
       case ELEMENT_IDS.DEPENDENCY_BANNER:
         this._setupDependencyBanner(element, config);
         break;
+      case ELEMENT_IDS.AUTH_BANNER:
+        this._setupAuthBanner(element, config);
+        break;
       default:
         break;
     }
@@ -198,6 +201,41 @@ export class BannerManager extends BaseUIManager {
     item.appendChild(nameSpan);
     item.appendChild(button);
     container.appendChild(item);
+  }
+
+  _setupAuthBanner(element, config) {
+    const textSpan = element.querySelector('span');
+    const signInButton = element.querySelector('#authSignInButton');
+    const manageButton = element.querySelector('#authManageAccessButton');
+
+    if (!(textSpan && signInButton && manageButton)) {
+      console.warn('[BannerManager] Auth banner missing required elements');
+      return;
+    }
+
+    const signedIn = Boolean(config?.signedIn);
+    const proxyEnabled = Boolean(config?.proxyEnabled);
+    const defaultMessage = signedIn
+      ? proxyEnabled
+        ? 'Connected to TeXRA. Proxy routing is ready.'
+        : 'Signed in. Proxy access pending or unavailable.'
+      : 'Sign in to unlock TeXRA remote agents and proxy routing.';
+
+    textSpan.textContent = config?.message || defaultMessage;
+
+    signInButton.textContent = signedIn ? 'Sign Out' : 'Sign In';
+    signInButton.dataset.icon = signedIn ? 'sign-out' : 'account';
+
+    if (signedIn) {
+      manageButton.style.display = 'inline-flex';
+      manageButton.textContent = 'Manage Access';
+      manageButton.dataset.icon = 'gear';
+    } else {
+      manageButton.style.display = 'none';
+    }
+
+    element.dataset.authState = signedIn ? 'signed-in' : 'signed-out';
+    element.dataset.proxyEnabled = proxyEnabled ? 'true' : 'false';
   }
 }
 

@@ -118,6 +118,14 @@ class MainViewDomHandler extends BaseDomHandler {
       }
     });
 
+    this.addListener(ELEMENT_IDS.AUTH_SIGN_IN_BUTTON, 'click', () => {
+      vscode.postMessage({ command: MAIN_VIEW_COMMANDS.OPEN_AUTH_SIGN_IN });
+    });
+
+    this.addListener(ELEMENT_IDS.AUTH_MANAGE_BUTTON, 'click', () => {
+      vscode.postMessage({ command: MAIN_VIEW_COMMANDS.OPEN_AUTH_MANAGE });
+    });
+
     this.addListener(ELEMENT_IDS.AGENT_CONFIG_EDIT_BUTTON, 'click', () => {
       vscode.postMessage({
         command: MAIN_VIEW_COMMANDS.OPEN_AGENT_SETTINGS,

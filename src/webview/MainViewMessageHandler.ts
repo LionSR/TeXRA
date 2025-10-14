@@ -198,11 +198,27 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
           ),
         );
       },
+      [MAIN_VIEW_COMMANDS.OPEN_AUTH_SIGN_IN]: async () => {
+        await safeExecuteCommand('texra.auth.signIn');
+      },
+      [MAIN_VIEW_COMMANDS.OPEN_AUTH_MANAGE]: async () => {
+        await vscode.env.openExternal(
+          vscode.Uri.parse('https://texra.ai/guide/remote-agents'),
+        );
+      },
       [MAIN_VIEW_COMMANDS.SHOW_API_KEY_BANNER]: async (m, w) => {
         /* Banner handled client-side */
         w.webview.postMessage(m);
       },
       [MAIN_VIEW_COMMANDS.HIDE_API_KEY_BANNER]: async (m, w) => {
+        /* Banner handled client-side */
+        w.webview.postMessage(m);
+      },
+      [MAIN_VIEW_COMMANDS.SHOW_AUTH_BANNER]: async (m, w) => {
+        /* Banner handled client-side */
+        w.webview.postMessage(m);
+      },
+      [MAIN_VIEW_COMMANDS.HIDE_AUTH_BANNER]: async (m, w) => {
         /* Banner handled client-side */
         w.webview.postMessage(m);
       },
