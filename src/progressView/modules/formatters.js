@@ -48,14 +48,23 @@ export const TaskGroupLevel = {
   ROOT: {
     name: 'root',
     formatTime: (date) => {
-      const datePart = date.toLocaleDateString('en-CA');
-      const timePart = date.toLocaleTimeString('en-US', {
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        hour12: false,
-      });
-      return `${datePart} ${timePart}`;
+      try {
+        const datePart = new Intl.DateTimeFormat(undefined, {
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+        }).format(date);
+        const timePart = new Intl.DateTimeFormat(undefined, {
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+        }).format(date);
+        return `${datePart} ${timePart}`;
+      } catch (error) {
+        const isoTimestamp = date.toISOString();
+        const timePart = isoTimestamp.split('T')[1]?.split('.')[0] ?? isoTimestamp;
+        return `${isoTimestamp.split('T')[0]} ${timePart}`;
+      }
     },
     showTitle: false,
     headerOrder: 'time-first', // time → bullet → usage
@@ -63,13 +72,17 @@ export const TaskGroupLevel = {
   },
   NESTED: {
     name: 'nested',
-    formatTime: (date) =>
-      date.toLocaleTimeString('en-US', {
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        hour12: false,
-      }),
+    formatTime: (date) => {
+      try {
+        return new Intl.DateTimeFormat(undefined, {
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+        }).format(date);
+      } catch (error) {
+        return date.toISOString().split('T')[1]?.split('.')[0] ?? date.toISOString();
+      }
+    },
     showTitle: true,
     headerOrder: 'usage-first', // usage → bullet → time
     cssClass: null,
