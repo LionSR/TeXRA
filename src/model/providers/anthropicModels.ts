@@ -153,7 +153,7 @@ export const ANTHROPIC_MODELS: Record<string, ModelConfig> = {
       supportsNativeWebSearch: true,
       supportsNativeCodeExecution: true,
       supportsAssistantPrefill: true,
-      supportsReasoning: false,
+      supportsReasoning: true,
     } satisfies ModelCapabilities,
     openRouterOnly: false,
   },
