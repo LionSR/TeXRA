@@ -2,11 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.34.1] - 2025-10-15
+## [0.34.0] - 2025-10-15
 
 ### Features
 
-- Add Claude Haiku 4.5 (`haiku45`) to the Anthropic model catalog with pricing and capability metadata, and document the option in the model guide.
+- Add Claude Haiku 4.5 (`haiku45`) to the Anthropic model catalog with pricing, reasoning capability metadata, and documentation in the model guide.
 
 ## [0.33.10] - 2025-10-10
 
