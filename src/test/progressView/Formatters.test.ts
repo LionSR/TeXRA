@@ -12,6 +12,32 @@ import { JSDOM } from 'jsdom';
 import { LogEntryFormatter } from '../../progressView/modules/formatters.js';
 
 describe('LogEntryFormatter DOM', () => {
+  const originalDateTimeFormat = Intl.DateTimeFormat;
+
+  function mockDateTimeFormat(
+    _locales?: Intl.LocalesArgument,
+    options?: Intl.DateTimeFormatOptions,
+  ) {
+    const prefix = options && (options.year || options.dateStyle)
+      ? 'tooltip'
+      : 'time';
+    return {
+      format(date: Date) {
+        return `${prefix}-${date.getTime()}`;
+      },
+    };
+  }
+
+  beforeEach(() => {
+    (Intl as any).DateTimeFormat = mockDateTimeFormat as any;
+  });
+
+  afterEach(() => {
+    (Intl as any).DateTimeFormat = originalDateTimeFormat;
+    delete (global as any).document;
+    delete (global as any).window;
+  });
+
   it('creates basic log line element', () => {
     const dom = new JSDOM(`<!doctype html><html><body>
       <template id="logLineTemplate">
@@ -22,11 +48,12 @@ describe('LogEntryFormatter DOM', () => {
     global.window = dom.window as any;
 
     const formatter = new LogEntryFormatter();
+    const timestamp = Date.UTC(2023, 0, 2, 3, 4, 5);
     const el = formatter.format({
       id: '1',
       text: 'hello',
       level: 'info',
-      timestamp: Date.now(),
+      timestamp,
       groupId: null,
       messageType: 'info',
       verbose: false,
@@ -35,6 +62,14 @@ describe('LogEntryFormatter DOM', () => {
 
     assert.ok(el instanceof dom.window.HTMLElement);
     assert.equal(el.querySelector('.message')?.textContent, 'hello');
+    assert.equal(
+      el?.dataset.fullTimestamp,
+      new Date(timestamp).toISOString(),
+    );
+    assert.equal(
+      el?.querySelector('.timestamp')?.getAttribute('title'),
+      `tooltip-${timestamp}`,
+    );
   });
 
   it('renders progress status entries with native styling', () => {
@@ -50,7 +85,7 @@ describe('LogEntryFormatter DOM', () => {
     global.window = dom.window as any;
 
     const formatter = new LogEntryFormatter();
-    const timestamp = Date.now();
+    const timestamp = Date.UTC(2023, 6, 4, 12, 0, 0);
 
     const el = formatter.format({
       id: 'status-1',
@@ -70,6 +105,14 @@ describe('LogEntryFormatter DOM', () => {
       '🟢 Starting continuation #1',
     );
     assert.equal(el?.dataset.logId, 'status-1');
+    assert.equal(
+      el?.querySelector('.native-status-time')?.textContent,
+      `time-${timestamp}`,
+    );
+    assert.equal(
+      el?.querySelector('.native-status-time')?.getAttribute('title'),
+      `tooltip-${timestamp}`,
+    );
   });
 
   it('renders tool use entries from structured data', () => {
