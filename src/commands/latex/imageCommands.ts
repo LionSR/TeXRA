@@ -5,7 +5,8 @@ import * as vscode from 'vscode';
 import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
-import { selectFile } from '@utils/dialogs';
+import * as dialogUtils from '@utils/dialogs';
+import { WorkspaceFS } from '@utils/files';
 import {
   countPdfPages,
   getBase64EncodedMedia,
@@ -15,6 +16,38 @@ import {
 
 const CHANNEL = 'TestCommands';
 logger.initialize(CHANNEL);
+
+interface PdfSelectionResult {
+  relativePath: string;
+  absolutePath: string;
+}
+
+/**
+ * Prompts the user to select a PDF file within the current workspace.
+ * Returns both the workspace-relative and absolute paths for downstream
+ * consumers. Returns null when the workspace is unavailable or the user
+ * cancels the dialog.
+ */
+export async function selectPdfFileFromWorkspace(): Promise<PdfSelectionResult | null> {
+  if (!WorkspaceFS.getPath()) {
+    vscode.window.showErrorMessage('No workspace folder open');
+    return null;
+  }
+
+  const relativePath = await dialogUtils.selectFile({
+    openLabel: 'Select PDF file',
+    filters: {
+      'PDF files': ['pdf'],
+    },
+  });
+
+  if (!relativePath) {
+    return null;
+  }
+
+  const absolutePath = WorkspaceFS.fullPath(relativePath);
+  return { relativePath, absolutePath };
+}
 
 export function registerImageCommands(context: vscode.ExtensionContext) {
   context.subscriptions.push(
@@ -36,20 +69,17 @@ export function registerImageCommands(context: vscode.ExtensionContext) {
 
 async function handleCountPdfPages(): Promise<void> {
   try {
-    const selectedFile = await selectFile({
-      openLabel: 'Select PDF file',
-      filters: {
-        'PDF files': ['pdf'],
-      },
-    });
-
-    if (!selectedFile) {
+    const selection = await selectPdfFileFromWorkspace();
+    if (!selection) {
       return;
     }
 
-    logger.debug(CHANNEL, `Processing PDF file: ${selectedFile}`);
+    logger.debug(
+      CHANNEL,
+      `Processing PDF file: ${selection.relativePath} (resolved: ${selection.absolutePath})`,
+    );
 
-    const pageCount = await countPdfPages(selectedFile);
+    const pageCount = await countPdfPages(selection.relativePath);
     if (pageCount > 0) {
       vscode.window.showInformationMessage(`The PDF has ${pageCount} pages`);
     } else {
@@ -66,7 +96,7 @@ async function handleCountPdfPages(): Promise<void> {
 
 async function handleEncodeImageToBase64(): Promise<string | undefined> {
   try {
-    const selectedFile = await selectFile({
+    const selectedFile = await dialogUtils.selectFile({
       openLabel: 'Select file',
       filters: {
         'Image files': ['png', 'jpg', 'jpeg', 'gif', 'heic', 'heif', 'webp'],
@@ -104,18 +134,15 @@ async function handleConvertPdfToImages(): Promise<
   string[] | string | undefined
 > {
   try {
-    const selectedFile = await selectFile({
-      openLabel: 'Select PDF file',
-      filters: {
-        'PDF files': ['pdf'],
-      },
-    });
-
-    if (!selectedFile) {
+    const selection = await selectPdfFileFromWorkspace();
+    if (!selection) {
       return undefined;
     }
 
-    logger.debug(CHANNEL, `Processing PDF file: ${selectedFile}`);
+    logger.debug(
+      CHANNEL,
+      `Processing PDF file: ${selection.relativePath} (resolved: ${selection.absolutePath})`,
+    );
 
     // Get quality from user
     const quality = await vscode.window.showInputBox({
@@ -146,7 +173,7 @@ async function handleConvertPdfToImages(): Promise<
     });
 
     const result = await processPdf2Png(
-      selectedFile,
+      selection.relativePath,
       maxPages ? parseInt(maxPages) : undefined,
       parseInt(quality),
     );
@@ -172,18 +199,15 @@ async function handleConvertPdfToImages(): Promise<
 
 async function handleTestPdfToImage(): Promise<string | undefined> {
   try {
-    const selectedFile = await selectFile({
-      openLabel: 'Select PDF file',
-      filters: {
-        'PDF files': ['pdf'],
-      },
-    });
-
-    if (!selectedFile) {
+    const selection = await selectPdfFileFromWorkspace();
+    if (!selection) {
       return undefined;
     }
 
-    logger.debug(CHANNEL, `Testing PDF to PNG conversion for: ${selectedFile}`);
+    logger.debug(
+      CHANNEL,
+      `Testing PDF to PNG conversion for: ${selection.relativePath} (resolved: ${selection.absolutePath})`,
+    );
 
     // Get page number from user
     const pageNum = await vscode.window.showInputBox({
@@ -201,7 +225,7 @@ async function handleTestPdfToImage(): Promise<string | undefined> {
 
     // Convert single page
     const base64String = await singlePagePdf2Png(
-      selectedFile,
+      selection.relativePath,
       parseInt(pageNum),
       300,
       [1024, 1024],
@@ -215,7 +239,7 @@ async function handleTestPdfToImage(): Promise<string | undefined> {
     );
 
     vscode.window.showInformationMessage(
-      `Successfully converted page ${pageNum} of ${selectedFile} to PNG`,
+      `Successfully converted page ${pageNum} of ${selection.relativePath} to PNG`,
     );
 
     return base64String;
