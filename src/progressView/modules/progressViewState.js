@@ -1,6 +1,11 @@
+// Third-party imports
+import { z } from 'zod';
+
 // Local imports - progress view
 // Local imports - state management helper
 import { WebviewStateManager } from '@common/webviewState.js';
+
+const groupToggleStatesSchema = z.array(z.tuple([z.string(), z.boolean()]));
 
 /**
  * Manages task groups in the progress view.
@@ -129,6 +134,10 @@ class ToggleStates {
   load(data) {
     this.states = new Map(data);
   }
+
+  toMap() {
+    return this.states;
+  }
 }
 
 /**
@@ -234,59 +243,28 @@ export class ProgressViewState {
   /** Load saved state from VS Code storage. */
   initialize() {
     const previous = this.stateManager.getState();
-    if (previous.groupToggleStates) {
-      let data = previous.groupToggleStates;
-      if (!Array.isArray(data) && typeof data === 'string') {
-        try {
-          const parsed = JSON.parse(data);
-          if (Array.isArray(parsed)) {
-            data = parsed;
-          } else {
-            console.error(
-              'Failed to restore group toggle states: parsed data is not an array',
-            );
-            return;
-          }
-        } catch (error) {
-          console.error(
-            'Failed to restore group toggle states: could not parse legacy string data',
-            error,
-          );
-          return;
-        }
-      }
+    const rawStates = previous?.groupToggleStates;
 
-      if (!Array.isArray(data)) {
-        console.error(
-          'Failed to restore group toggle states: data is not an array',
-        );
-        return;
-      }
-
-      const hasValidEntries = data.every((entry) => {
-        if (!Array.isArray(entry) || entry.length !== 2) {
-          return false;
-        }
-        const [id, collapsed] = entry;
-        return typeof id === 'string' && typeof collapsed === 'boolean';
-      });
-
-      if (!hasValidEntries) {
-        console.error(
-          'Failed to restore group toggle states: invalid entry format',
-        );
-        return;
-      }
-
-      this.toggleStates.load(data);
+    if (!rawStates) {
+      return;
     }
+
+    const parsed = groupToggleStatesSchema.safeParse(rawStates);
+
+    if (!parsed.success) {
+      return;
+    }
+
+    const map = new Map(parsed.data);
+    this.toggleStates.load(map);
   }
 
   /** Persist the current group toggle states. */
   save() {
     try {
+      const map = this.toggleStates.toMap();
       this.stateManager.update({
-        groupToggleStates: this.toggleStates.entries(),
+        groupToggleStates: Array.from(map.entries()),
       });
     } catch (e) {
       console.error('Failed to save state:', e);
