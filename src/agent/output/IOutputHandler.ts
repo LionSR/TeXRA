@@ -1,6 +1,6 @@
 // Local imports - agent
 // Local imports - types
-import { NamedOutputFile, OutputFileInfo } from './types';
+import { NamedOutputFile, OutputFileInfo, RoundFileMapping } from './types';
 import { XmlOutputManager } from './XmlOutputManager';
 
 /** Interface describing OutputHandler behavior used by agents. */
@@ -38,6 +38,9 @@ export interface IOutputHandler {
 
   /** Gather mapping and diff stats for output files of a round. */
   gatherOutputFileInfo(currRound: number): Promise<OutputFileInfo[]>;
+
+  /** Retrieve the cached mapping metadata for a round. */
+  getRoundMapping(currRound: number): RoundFileMapping;
 
   /** Validate expected output files for the given round. */
   validateExpectedOutputs(

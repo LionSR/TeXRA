@@ -8,7 +8,11 @@ import * as vscode from 'vscode';
 import { DiffStatsManager } from './DiffStatsManager';
 import type { IOutputHandler } from './IOutputHandler';
 import { LatexDiffManager } from './LatexDiffManager';
-import type { NamedOutputFile, OutputFileInfo } from './types';
+import type {
+  NamedOutputFile,
+  OutputFileInfo,
+  RoundFileMapping,
+} from './types';
 import { XmlOutputManager } from './XmlOutputManager';
 
 // Local imports - agent components
@@ -45,6 +49,7 @@ export class OutputHandler implements IOutputHandler {
   public logId: number;
   public outputFiles: { [key: number]: string[] };
   public outputMappings: { [key: number]: NamedOutputFile[] };
+  private roundMappings: { [key: number]: RoundFileMapping };
   public baseFiles: string[];
   public processGroupId?: string;
   protected logger: AgentLogger;
@@ -65,6 +70,7 @@ export class OutputHandler implements IOutputHandler {
     this.logId = logId;
     this.outputFiles = {};
     this.outputMappings = {};
+    this.roundMappings = {};
     this.baseFiles = baseFiles;
     this.logger = logger || new AgentLogger('OutputHandler');
     this.channel = this.logger.channelId;
@@ -190,7 +196,12 @@ export class OutputHandler implements IOutputHandler {
     groupId?: string,
   ): Promise<void> {
     this.ensureRound(currRound);
-    await this.diffManager.handleLatexdiffofOutput(currRound, groupId);
+    const mapping = this.getRoundMapping(currRound);
+    await this.diffManager.handleLatexdiffofOutput(
+      currRound,
+      mapping,
+      groupId,
+    );
   }
 
   /**
@@ -200,29 +211,19 @@ export class OutputHandler implements IOutputHandler {
     currRound: number,
   ): Promise<OutputFileInfo[]> {
     const roundOutputs = this.ensureRound(currRound);
-    const baseMap = createFileMapping(this.baseFiles, roundOutputs, 'contains');
-    const prevMap =
-      currRound > 0
-        ? createFileMapping(
-            this.ensureRound(currRound - 1),
-            roundOutputs,
-            'basename',
-            true,
-          )
-        : new Map<string, string>();
-    const originMap = new Map(
-      (this.outputMappings[currRound] || []).map((p) => [p.path, p.source]),
-    );
+    const mapping = this.getRoundMapping(currRound);
 
     const infos: OutputFileInfo[] = [];
     for (const file of roundOutputs) {
       const baseFile =
-        Array.from(baseMap.entries()).find(([, out]) => out === file)?.[0] ||
-        null;
+        Array.from(mapping.baseToOutput.entries()).find(
+          ([, out]) => out === file,
+        )?.[0] || null;
       const prevFile =
-        Array.from(prevMap.entries()).find(([, out]) => out === file)?.[0] ||
-        null;
-      const originalFile = originMap.get(file) || null;
+        Array.from(mapping.prevToOutput.entries()).find(
+          ([, out]) => out === file,
+        )?.[0] || null;
+      const originalFile = mapping.originByOutput.get(file) || null;
       const diffBase = getEffectiveBaseFile(baseFile, originalFile, file);
       const stats = await this.diffStatsManager.computeDiffStats(
         diffBase,
@@ -237,6 +238,47 @@ export class OutputHandler implements IOutputHandler {
       });
     }
     return infos;
+  }
+
+  /**
+   * Retrieve the cached mapping metadata for a round, computing it if needed.
+   */
+  public getRoundMapping(currRound: number): RoundFileMapping {
+    const existing = this.roundMappings[currRound];
+    if (existing) {
+      return existing;
+    }
+
+    const roundOutputs = this.ensureRound(currRound);
+    const baseToOutput = createFileMapping(
+      this.baseFiles,
+      roundOutputs,
+      'contains',
+    );
+    const prevToOutput =
+      currRound > 0
+        ? createFileMapping(
+            this.ensureRound(currRound - 1),
+            roundOutputs,
+            'basename',
+            true,
+          )
+        : new Map<string, string>();
+    const originByOutput = new Map(
+      (this.outputMappings[currRound] || []).map((p) => [p.path, p.source]),
+    );
+
+    const mapping: RoundFileMapping = {
+      baseToOutput,
+      prevToOutput,
+      originByOutput,
+    };
+    this.roundMappings[currRound] = mapping;
+    return mapping;
+  }
+
+  private invalidateRoundMapping(round: number): void {
+    delete this.roundMappings[round];
   }
 
   public async validateExpectedOutputs(
@@ -373,6 +415,8 @@ export class OutputHandler implements IOutputHandler {
 
           this.outputFiles[currRound] = processedFiles;
           this.outputMappings[currRound] = processedPairs;
+          this.invalidateRoundMapping(currRound);
+          this.invalidateRoundMapping(currRound + 1);
 
           if (this.baseFiles && this.baseFiles.length > 0) {
             await replaceInputCommands(
@@ -388,6 +432,8 @@ export class OutputHandler implements IOutputHandler {
           );
           this.outputFiles[currRound] = [];
           this.outputMappings[currRound] = [];
+          this.invalidateRoundMapping(currRound);
+          this.invalidateRoundMapping(currRound + 1);
         }
       } catch (err) {
         this.logger.debug(
@@ -397,6 +443,8 @@ export class OutputHandler implements IOutputHandler {
         );
         this.outputFiles[currRound] = [];
         this.outputMappings[currRound] = [];
+        this.invalidateRoundMapping(currRound);
+        this.invalidateRoundMapping(currRound + 1);
       }
     } else {
       // Single output file case
@@ -432,6 +480,8 @@ export class OutputHandler implements IOutputHandler {
 
           this.outputFiles[currRound] = [processed.path];
           this.outputMappings[currRound] = [processed];
+          this.invalidateRoundMapping(currRound);
+          this.invalidateRoundMapping(currRound + 1);
         } else {
           this.logger.debug(
             `No processed file was generated from ${outputFile}`,
@@ -439,6 +489,8 @@ export class OutputHandler implements IOutputHandler {
           );
           this.outputFiles[currRound] = [];
           this.outputMappings[currRound] = [];
+          this.invalidateRoundMapping(currRound);
+          this.invalidateRoundMapping(currRound + 1);
         }
       } catch (err) {
         this.logger.debug(
@@ -458,6 +510,8 @@ export class OutputHandler implements IOutputHandler {
         });
         this.outputFiles[currRound] = [];
         this.outputMappings[currRound] = [];
+        this.invalidateRoundMapping(currRound);
+        this.invalidateRoundMapping(currRound + 1);
       }
     }
   }
