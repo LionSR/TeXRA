@@ -35,6 +35,8 @@ Known for strong instruction following and context handling.
 | `sonnet37T` | `sonnet37` with explicit reasoning steps    | $$$           | Medium         | Good for math, complex logic    |
 | `sonnet37`  | Strong all-rounder, good context            | $$$           | Medium         |                                 |
 | `sonnet35`  | Good balance of quality/cost (older Sonnet) | $$$           | Medium         |                                 |
+| `haiku45T`  | Fast Claude 4.5 with explicit reasoning     | $$            | Fast           | Claude 4.5 Haiku with thinking  |
+| `haiku45`   | Fast Claude 4.5 responses                   | $$            | Fast           | Claude 4.5 Haiku                |
 
 #### Sonnet 4 / 4.5 1M Context (Beta)
 
