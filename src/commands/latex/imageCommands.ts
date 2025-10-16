@@ -1,6 +1,9 @@
 // Third-party imports
 import * as vscode from 'vscode';
 
+// Local imports - errors
+import { showLoggedErrorMessage } from '@common/errors/errorHandlingUtils';
+
 // Local imports - log
 import * as logger from '@logger/logUtils';
 
@@ -56,11 +59,11 @@ async function handleCountPdfPages(): Promise<void> {
       vscode.window.showErrorMessage('Could not count pages in the PDF');
     }
   } catch (err) {
-    logger.error(
+    await showLoggedErrorMessage(
       CHANNEL,
-      `Error in countPdfPages command: ${err instanceof Error ? err.message : String(err)}`,
+      'countPdfPages command failed',
+      err,
     );
-    vscode.window.showErrorMessage('Error counting PDF pages');
   }
 }
 
@@ -91,11 +94,11 @@ async function handleEncodeImageToBase64(): Promise<string | undefined> {
 
     return base64String;
   } catch (err) {
-    logger.error(
+    await showLoggedErrorMessage(
       CHANNEL,
-      `Error in encodeImageToBase64 command: ${err instanceof Error ? err.message : String(err)}`,
+      'encodeImageToBase64 command failed',
+      err,
     );
-    vscode.window.showErrorMessage('Error encoding image to base64');
     return undefined;
   }
 }
@@ -161,11 +164,11 @@ async function handleConvertPdfToImages(): Promise<
       return undefined;
     }
   } catch (err) {
-    logger.error(
+    await showLoggedErrorMessage(
       CHANNEL,
-      `Error in convertPdfToImages command: ${err instanceof Error ? err.message : String(err)}`,
+      'convertPdfToImages command failed',
+      err,
     );
-    vscode.window.showErrorMessage('Error converting PDF to images');
     return undefined;
   }
 }
@@ -220,29 +223,28 @@ async function handleTestPdfToImage(): Promise<string | undefined> {
 
     return base64String;
   } catch (err) {
-    if (err instanceof Error) {
-      logger.error(CHANNEL, `Error in testPdfToImage command: ${err.message}`);
-      logger.error(CHANNEL, `Error stack: ${err.stack}`); // Print stack trace
-    } else {
-      logger.error(CHANNEL, `Error in testPdfToImage command: ${String(err)}`);
-    }
+    await showLoggedErrorMessage(
+      CHANNEL,
+      'testPdfToImage command failed',
+      err,
+    );
 
-    // Show a more detailed error message if it's about missing dependencies
     if (
       err instanceof Error &&
       err.message.includes('GraphicsMagick/ImageMagick is not installed')
     ) {
-      vscode.window
-        .showErrorMessage(err.message, 'More Info')
+      void vscode.window
+        .showInformationMessage(
+          'GraphicsMagick/ImageMagick is required for PDF conversion. Open the download page?',
+          'Open Download Page',
+        )
         .then((selection) => {
-          if (selection === 'More Info') {
-            vscode.env.openExternal(
+          if (selection === 'Open Download Page') {
+            void vscode.env.openExternal(
               vscode.Uri.parse('http://www.graphicsmagick.org/download.html'),
             );
           }
         });
-    } else {
-      vscode.window.showErrorMessage('Error converting PDF to PNG');
     }
     return undefined;
   }
