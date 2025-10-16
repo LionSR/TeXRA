@@ -8,15 +8,31 @@ import { strict as assert } from 'assert';
 import { JSDOM } from 'jsdom';
 
 // Local imports - webview
-// @ts-ignore: Webview modules are authored in JavaScript without type declarations.
 import {
   MULTIPLE_SELECTIONS,
   CHECK_BOXES,
   ELEMENT_IDS,
 } from '../../webview/modules/constants.js';
-// Helper module is authored in JavaScript as well.
-// @ts-ignore: collectCurrentContext is defined in a JavaScript module without typings.
 import { collectCurrentContext } from '../../webview/modules/state/currentContext.js';
+
+type MultipleSelections = {
+  [key: string]: string[] | boolean;
+  inputFiles: string[];
+  inputFilesActive: boolean;
+  referenceFiles: string[];
+  referenceFilesActive: boolean;
+  outputFiles: string[];
+  outputFilesActive: boolean;
+};
+
+type WebviewContext = {
+  agent: string;
+  sessionType: 'workflow' | 'toolUse';
+  isToolUseAgent: boolean;
+  singleFileSelections: Record<string, string>;
+  multipleFileSelections: MultipleSelections;
+  checkboxValues: Record<string, boolean>;
+};
 
 function createSelect(id: string, value: string) {
   const select = document.createElement('select');
@@ -122,7 +138,7 @@ describe('collectCurrentContext', () => {
   it('aggregates workflow context including filtered single selections', () => {
     bootstrapDom('workflow');
 
-    const context = collectCurrentContext();
+    const context = collectCurrentContext() as WebviewContext;
 
     assert.equal(context.sessionType, 'workflow');
     assert.equal(context.agent, 'workflowAgentValue');
@@ -153,7 +169,7 @@ describe('collectCurrentContext', () => {
   it('uses tool-use agent selection and respects inactive lists', () => {
     bootstrapDom('toolUse');
 
-    const context = collectCurrentContext();
+    const context = collectCurrentContext() as WebviewContext;
 
     assert.equal(context.sessionType, 'toolUse');
     assert.equal(context.agent, 'toolUseAgentValue');
