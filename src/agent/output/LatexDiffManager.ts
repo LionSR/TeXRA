@@ -7,10 +7,9 @@ import { LaTeXdiffService, LaTeXdiffResult } from '@latex/latexdiff';
 import { compileLatex2Pdf } from '@latex/texTools';
 import { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
-import { createFileMapping } from '@utils/files';
 import { getConfig } from '@utils/config';
 import { checkToolInstalled } from '@utils/system';
-import { objectToLogString } from '@utils/text/stringUtils';
+import type { RoundOutputMapping } from './types';
 
 export class LatexDiffManager {
   private readonly latexdiffService: LaTeXdiffService;
@@ -54,6 +53,7 @@ export class LatexDiffManager {
 
   async handleLatexdiffofOutput(
     currRound: number,
+    mapping: RoundOutputMapping,
     groupId?: string,
   ): Promise<void> {
     const diffProcessGroupId = groupId ?? this.logger.getActiveGroupId();
@@ -93,16 +93,42 @@ export class LatexDiffManager {
         diffProcessGroupId,
       );
 
-      const baseToOutputMap = createFileMapping(
-        this.baseFiles,
-        outputFiles,
-        'contains',
-      );
+      const processDiffPair = async (
+        baseFile: string,
+        revisedFile: string,
+        runner: () => Promise<LaTeXdiffResult>,
+        operation: 'round-diff' | 'between-rounds-diff',
+      ): Promise<void> => {
+        const result = await runner();
+        this.logLatexdiffResult(result, operation, diffProcessGroupId);
+        aggregated.push({
+          base: baseFile,
+          revised: revisedFile,
+          output: result.diffFileName
+            ? path.join(path.dirname(baseFile), result.diffFileName)
+            : '',
+          status: result.success ? 'success' : 'error',
+          message: result.success ? undefined : result.message,
+        });
+        if (result.success && result.diffFileName) {
+          const diffPath = path.join(
+            path.dirname(baseFile),
+            result.diffFileName,
+          );
+          const buildDir = path.join(path.dirname(diffPath), 'build');
+          await compileLatex2Pdf(
+            diffPath,
+            this.channel,
+            buildDir,
+            true, // prefer latexmk when available
+          );
+        }
+      };
+
+      const basePairs = Array.from(mapping.baseToOutput.entries());
 
       this.logger.debug(
-        `Matched base files to output files: ${Array.from(
-          baseToOutputMap.entries(),
-        )
+        `Matched base files to output files: ${basePairs
           .map(
             ([base, output]) =>
               `${path.basename(base)} -> ${path.basename(output)}`,
@@ -116,35 +142,18 @@ export class LatexDiffManager {
           'Running round-based latexdiff operations',
           diffProcessGroupId,
         );
-        for (const [baseFile, outputFile] of baseToOutputMap.entries()) {
-          const result = await this.latexdiffService.runDiffForRound(
+        for (const [baseFile, outputFile] of basePairs) {
+          await processDiffPair(
             baseFile,
             outputFile,
-            currRound,
+            () =>
+              this.latexdiffService.runDiffForRound(
+                baseFile,
+                outputFile,
+                currRound,
+              ),
+            'round-diff',
           );
-          this.logLatexdiffResult(result, 'round-diff', diffProcessGroupId);
-          aggregated.push({
-            base: baseFile,
-            revised: outputFile,
-            output: result.diffFileName
-              ? path.join(path.dirname(baseFile), result.diffFileName)
-              : '',
-            status: result.success ? 'success' : 'error',
-            message: result.success ? undefined : result.message,
-          });
-          if (result.success && result.diffFileName) {
-            const diffPath = path.join(
-              path.dirname(baseFile),
-              result.diffFileName,
-            );
-            const buildDir = path.join(path.dirname(diffPath), 'build');
-            await compileLatex2Pdf(
-              diffPath,
-              this.channel,
-              buildDir,
-              true, // prefer latexmk when available
-            );
-          }
         }
       }
 
@@ -153,18 +162,10 @@ export class LatexDiffManager {
           'Running between-rounds latexdiff operations',
           diffProcessGroupId,
         );
-        const prevOutputFiles = this.outputFiles[currRound - 1] || [];
-        const prevToCurrentMap = createFileMapping(
-          prevOutputFiles,
-          outputFiles,
-          'basename',
-          true,
-        );
+        const prevPairs = Array.from(mapping.prevToCurrent.entries());
 
         this.logger.debug(
-          `Matched previous round files to current round files: ${Array.from(
-            prevToCurrentMap.entries(),
-          )
+          `Matched previous round files to current round files: ${prevPairs
             .map(
               ([prev, curr]) =>
                 `${path.basename(prev)} -> ${path.basename(curr)}`,
@@ -173,41 +174,17 @@ export class LatexDiffManager {
           diffProcessGroupId,
         );
 
-        for (const [
-          prevOutputFile,
-          currOutputFile,
-        ] of prevToCurrentMap.entries()) {
-          const result = await this.latexdiffService.runDiffBetweenRounds(
+        for (const [prevOutputFile, currOutputFile] of prevPairs) {
+          await processDiffPair(
             prevOutputFile,
             currOutputFile,
-          );
-          this.logLatexdiffResult(
-            result,
+            () =>
+              this.latexdiffService.runDiffBetweenRounds(
+                prevOutputFile,
+                currOutputFile,
+              ),
             'between-rounds-diff',
-            diffProcessGroupId,
           );
-          aggregated.push({
-            base: prevOutputFile,
-            revised: currOutputFile,
-            output: result.diffFileName
-              ? path.join(path.dirname(prevOutputFile), result.diffFileName)
-              : '',
-            status: result.success ? 'success' : 'error',
-            message: result.success ? undefined : result.message,
-          });
-          if (result.success && result.diffFileName) {
-            const diffPath = path.join(
-              path.dirname(prevOutputFile),
-              result.diffFileName,
-            );
-            const buildDir = path.join(path.dirname(diffPath), 'build');
-            await compileLatex2Pdf(
-              diffPath,
-              this.channel,
-              buildDir,
-              true, // prefer latexmk when available
-            );
-          }
         }
       } else if (!generateBetweenRoundDiffs) {
         this.logger.debug(

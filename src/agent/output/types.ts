@@ -12,3 +12,9 @@ export interface OutputFileInfo extends DiffStats {
   prev?: string | null;
   original?: string | null;
 }
+
+export interface RoundOutputMapping {
+  baseToOutput: Map<string, string>;
+  prevToCurrent: Map<string, string>;
+  outputToOrigin: Map<string, string>;
+}
