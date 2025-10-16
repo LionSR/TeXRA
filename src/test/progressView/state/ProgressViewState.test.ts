@@ -107,4 +107,33 @@ describe('ProgressViewState.clearOutputState', () => {
     assert.equal(didUpdate, false);
     assert.deepStrictEqual(persistence.saved, []);
   });
+
+  it('avoids persisting when outputFiles is undefined', () => {
+    const persistence = new FakePersistence();
+    const state = new ProgressViewState(
+      persistence as unknown as StatePersistenceManager,
+    );
+
+    const config = AgentConfigSchema.parse({
+      model: 'test-model',
+      agent: 'test-agent',
+      instruction: 'Test instruction',
+      session: {
+        agentCategory: AgentCategory.Workflow,
+        agentType: AgentType.Direct,
+      },
+      inputFile: 'main.tex',
+      outputFiles: undefined,
+    });
+
+    const workflowState = agentConfigToTaskState(config, config.session);
+    const streamId = 'stream-3';
+    state.setTaskState(streamId, workflowState);
+
+    persistence.saved.length = 0;
+
+    const didUpdate = state.clearOutputState(streamId);
+    assert.equal(didUpdate, false);
+    assert.deepStrictEqual(persistence.saved, []);
+  });
 });
