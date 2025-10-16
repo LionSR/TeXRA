@@ -139,6 +139,43 @@ export const ANTHROPIC_MODELS: Record<string, ModelConfig> = {
     } satisfies ModelCapabilities,
     openRouterOnly: false,
   },
+  haiku45T: {
+    name: 'haiku45T',
+    fullName: 'claude-haiku-4-5-20251001',
+    openrouterFullName: 'anthropic/claude-haiku-4.5:thinking',
+    provider: ModelProvider.ANTHROPIC,
+    maxOutputTokens: 64000, // Official Claude Haiku 4.5 limit - streaming recommended for large outputs
+    contextWindow: 200000,
+    inputPrice: 1.0,
+    outputPrice: 5.0,
+    capabilities: {
+      ...ANTHROPIC_DEFAULT_CAPABILITIES,
+      supportsNativeWebSearch: true,
+      supportsNativeCodeExecution: true,
+      supportsAssistantPrefill: false,
+      supportsReasoning: true,
+      supportsInterleavedThinking: true,
+    } satisfies ModelCapabilities,
+    openRouterOnly: false,
+  },
+  haiku45: {
+    name: 'haiku45',
+    fullName: 'claude-haiku-4-5-20251001',
+    openrouterFullName: 'anthropic/claude-haiku-4.5',
+    provider: ModelProvider.ANTHROPIC,
+    maxOutputTokens: 64000, // Official Claude Haiku 4.5 limit - streaming recommended for large outputs
+    contextWindow: 200000,
+    inputPrice: 1.0,
+    outputPrice: 5.0,
+    capabilities: {
+      ...ANTHROPIC_DEFAULT_CAPABILITIES,
+      supportsNativeWebSearch: true,
+      supportsNativeCodeExecution: true,
+      supportsAssistantPrefill: true,
+      supportsReasoning: false,
+    } satisfies ModelCapabilities,
+    openRouterOnly: false,
+  },
   sonnet4T: {
     name: 'sonnet4T',
     fullName: 'claude-sonnet-4-20250514',
