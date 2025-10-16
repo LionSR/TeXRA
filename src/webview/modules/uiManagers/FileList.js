@@ -14,6 +14,7 @@ export class FileList {
   constructor(saveFn = () => {}) {
     this._saveFn = saveFn;
     this._removeCallbacks = new Map();
+    this._batchMode = false;
   }
 
   /** Set the callback used to persist state */
@@ -30,6 +31,13 @@ export class FileList {
       this._removeCallbacks.set(containerId, callback);
     } else {
       this._removeCallbacks.delete(containerId);
+    }
+  }
+
+  /** Save state unless in batch mode */
+  _save() {
+    if (!this._batchMode) {
+      this._saveFn();
     }
   }
   /**
@@ -68,10 +76,10 @@ export class FileList {
         }
 
         if (container.children.length === 0) {
-          this.empty(containerId, `toggle${capitalize(containerId)}`);
+          this.empty(containerId, `toggle${capitalize(containerId)}`, false);
+        } else {
+          this._save();
         }
-
-        this._saveFn();
       });
     }
     container.appendChild(fileElement);
@@ -87,7 +95,10 @@ export class FileList {
     const newFiles = files.filter((f) => !existing.includes(f));
 
     if (newFiles.length > 0) {
+      this._batchMode = true;
       newFiles.forEach((file) => this.add(listId, file));
+      this._batchMode = false;
+
       listDiv.style.display = 'block';
       setChevronIcon(toggleIcon, true);
 
@@ -96,7 +107,7 @@ export class FileList {
         container.style.display = 'block';
       }
     }
-    this._saveFn();
+    this._save();
   }
 
   /** Return an array of selected file paths */
@@ -120,11 +131,11 @@ export class FileList {
     if (!container) return;
     const isVisible = container.style.display !== 'none';
     this.setVisibility(containerId, toggleId, !isVisible);
-    this._saveFn();
+    this._save();
   }
 
   /** Empty all files from a container and hide it */
-  empty(containerId, toggleId) {
+  empty(containerId, toggleId, shouldSave = true) {
     const listDiv = safeGetElementById(containerId);
     const container = safeGetElementById(`${containerId}Container`);
     if (!listDiv || !container) return;
@@ -135,7 +146,9 @@ export class FileList {
     if (toggleIconDiv) {
       setChevronIcon(toggleIconDiv, false);
     }
-    this._saveFn();
+    if (shouldSave) {
+      this._save();
+    }
   }
 
   /** Hide empty lists from the provided id array */
