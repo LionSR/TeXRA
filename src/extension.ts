@@ -198,16 +198,15 @@ export async function activate(context: vscode.ExtensionContext) {
 
   const welcomeKey = 'texra.welcomeShown';
   if (!context.globalState.get<boolean>(welcomeKey)) {
+    void vscode.commands.executeCommand('texra.openGettingStarted');
     void showInstructionWithSuppress(
       'welcome',
-      'Welcome to TeXRA! Run "TeXRA: Create Sample Project" to add a draft.tex example, set your API keys, choose an agent and model, then write instructions and execute.',
+      'Welcome to TeXRA! The new "Run your first TeXRA workflow" walkthrough will guide you through seeding the sample project, configuring API keys, staging files, enabling automatic figure/TikZ extraction, and executing your first run.',
       [
         {
-          title: 'Open Guide',
+          title: 'Open Walkthrough',
           callback: async () => {
-            await vscode.env.openExternal(
-              vscode.Uri.parse('https://texra.ai/guide/'),
-            );
+            await vscode.commands.executeCommand('texra.openGettingStarted');
           },
         },
         {

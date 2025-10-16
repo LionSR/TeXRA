@@ -50,6 +50,14 @@ export function registerSampleProjectCommands(
         void vscode.window.showInformationMessage(
           'Created TeXRA sample project.',
         );
+
+        const readmeRelativePath = path.join(destFolder, 'README.md');
+        if (await WorkspaceFS.exists(readmeRelativePath)) {
+          const document = await vscode.workspace.openTextDocument(
+            vscode.Uri.file(WorkspaceFS.fullPath(readmeRelativePath)),
+          );
+          await vscode.window.showTextDocument(document, { preview: false });
+        }
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         logger.error(CHANNEL, `Failed to create sample project: ${message}`);
