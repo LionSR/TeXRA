@@ -14,6 +14,15 @@ export interface IOutputHandler {
   /** XML manager for parsing and splitting outputs. */
   xmlManager: XmlOutputManager;
 
+  /** Ensure storage for a round and return its outputs. */
+  ensureRound(round: number): string[];
+
+  /** Retrieve the outputs for a round, creating storage if needed. */
+  getRoundOutputs(round: number): string[];
+
+  /** Determine whether a round has generated outputs. */
+  hasRoundOutputs(round: number): boolean;
+
   /** Indent a single LaTeX file for readability. */
   indentLatexFile(filePath: string): Promise<void>;
 
