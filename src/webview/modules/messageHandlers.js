@@ -40,10 +40,26 @@ import { BaseWebviewMessageHandler } from '@common/BaseWebviewMessageHandler.js'
 
 /**
  * Waits for a DOM element matching the provided selector.
- * @param {string} selector
+ *
+ * Uses a MutationObserver to watch for DOM changes until the element appears.
+ * If the element already exists, returns immediately. Supports optional timeout.
+ *
+ * @param {string} selector - CSS selector to match the desired element
+ * @param {Object} [options] - Optional configuration
+ * @param {number} [options.timeout] - Maximum time to wait in milliseconds (default: no timeout)
  * @returns {{ promise: Promise<Element | null>, dispose: () => void }}
+ *          Returns an object with:
+ *          - promise: Resolves with the element or null if disposed/timeout
+ *          - dispose: Function to cancel the wait and clean up resources
+ *
+ * @example
+ * const { promise, dispose } = waitForElement('#model', { timeout: 5000 });
+ * const element = await promise;
+ * if (element) {
+ *   // Use the element
+ * }
  */
-function waitForElement(selector) {
+function waitForElement(selector, options = {}) {
   const existing = document.querySelector(selector);
   if (existing) {
     return {
@@ -54,13 +70,33 @@ function waitForElement(selector) {
 
   let observer = null;
   let resolver = null;
+  let timeoutId = null;
 
   const promise = new Promise((resolve) => {
     resolver = resolve;
+
+    // Set up optional timeout
+    if (options.timeout && options.timeout > 0) {
+      timeoutId = setTimeout(() => {
+        if (observer) {
+          observer.disconnect();
+          observer = null;
+        }
+        if (resolver) {
+          resolver = null;
+          resolve(null);
+        }
+      }, options.timeout);
+    }
+
     observer = new MutationObserver(() => {
       const element = document.querySelector(selector);
       if (!element) {
         return;
+      }
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
       }
       if (observer) {
         observer.disconnect();
@@ -77,6 +113,10 @@ function waitForElement(selector) {
   });
 
   const dispose = () => {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+      timeoutId = null;
+    }
     if (observer) {
       observer.disconnect();
       observer = null;
@@ -135,6 +175,20 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
         ),
       [MAIN_VIEW_COMMANDS.HIDE_DEPENDENCY_BANNER]: () =>
         webviewEventBus.dispatchEvent(new CustomEvent('hideDependencyBanner')),
+      /**
+       * Handles SET_MODEL_OPTIONS command to update the model dropdown.
+       *
+       * Waits for the #model select element to appear in the DOM before applying options.
+       * Uses a disposer pattern to handle race conditions when multiple SET_MODEL_OPTIONS
+       * messages arrive before the element is ready.
+       *
+       * Disposer pattern explained:
+       * - Store a reference to the current disposer function in this._disposeModelWaiter
+       * - If a new wait starts before the old one finishes, dispose the old waiter
+       * - Use identity checks (disposeHandle === this._disposeModelWaiter) to detect
+       *   if this waiter was superseded by a newer one during the await
+       * - This prevents stale waiters from applying outdated model options
+       */
       [MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS]: async (m) => {
         // Validate that options are provided
         if (!m.options) {
@@ -145,17 +199,26 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
         let select = document.getElementById('model');
         if (!(select instanceof HTMLSelectElement)) {
           const waitHandle = waitForElement('#model');
+
+          // Cancel any previous waiter to prevent race conditions
           if (this._disposeModelWaiter) {
             this._disposeModelWaiter();
           }
+
+          // Create a disposer that cleans up this specific waiter
           const disposeHandle = () => {
             waitHandle.dispose();
+            // Only clear _disposeModelWaiter if this is still the active waiter
             if (this._disposeModelWaiter === disposeHandle) {
               this._disposeModelWaiter = null;
             }
           };
           this._disposeModelWaiter = disposeHandle;
+
           select = await waitHandle.promise;
+
+          // Check if this waiter is still active after the await
+          // If not, a newer waiter has taken over, so we should abort
           if (this._disposeModelWaiter === disposeHandle) {
             this._disposeModelWaiter = null;
           }
