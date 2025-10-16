@@ -258,6 +258,22 @@ export class OutputHandler implements IOutputHandler {
     this.invalidateRoundMapping(round + 1);
   }
 
+  /**
+   * Set output files and mappings for a round, invalidating the cache.
+   * @param round The round number
+   * @param files The output file paths
+   * @param mappings The named output file mappings
+   */
+  private setRoundOutputs(
+    round: number,
+    files: string[],
+    mappings: NamedOutputFile[],
+  ): void {
+    this.outputFiles[round] = files;
+    this.outputMappings[round] = mappings;
+    this.invalidateMappingsFromRound(round);
+  }
+
   public async validateExpectedOutputs(
     outputFile: string,
     currRound: number,
@@ -390,9 +406,7 @@ export class OutputHandler implements IOutputHandler {
             activeGroupId,
           );
 
-          this.outputFiles[currRound] = processedFiles;
-          this.outputMappings[currRound] = processedPairs;
-          this.invalidateMappingsFromRound(currRound);
+          this.setRoundOutputs(currRound, processedFiles, processedPairs);
 
           if (this.baseFiles && this.baseFiles.length > 0) {
             await replaceInputCommands(
@@ -406,9 +420,7 @@ export class OutputHandler implements IOutputHandler {
             `No processed files were generated from ${outputFile}`,
             activeGroupId,
           );
-          this.outputFiles[currRound] = [];
-          this.outputMappings[currRound] = [];
-          this.invalidateMappingsFromRound(currRound);
+          this.setRoundOutputs(currRound, [], []);
         }
       } catch (err) {
         this.logger.debug(
@@ -416,9 +428,7 @@ export class OutputHandler implements IOutputHandler {
           activeGroupId,
           MESSAGE_TYPES.INTERNAL,
         );
-        this.outputFiles[currRound] = [];
-        this.outputMappings[currRound] = [];
-        this.invalidateMappingsFromRound(currRound);
+        this.setRoundOutputs(currRound, [], []);
       }
     } else {
       // Single output file case
@@ -452,17 +462,13 @@ export class OutputHandler implements IOutputHandler {
             activeGroupId,
           );
 
-          this.outputFiles[currRound] = [processed.path];
-          this.outputMappings[currRound] = [processed];
-          this.invalidateMappingsFromRound(currRound);
+          this.setRoundOutputs(currRound, [processed.path], [processed]);
         } else {
           this.logger.debug(
             `No processed file was generated from ${outputFile}`,
             activeGroupId,
           );
-          this.outputFiles[currRound] = [];
-          this.outputMappings[currRound] = [];
-          this.invalidateMappingsFromRound(currRound);
+          this.setRoundOutputs(currRound, [], []);
         }
       } catch (err) {
         this.logger.debug(
@@ -480,9 +486,7 @@ export class OutputHandler implements IOutputHandler {
           stream: this.channel,
           filesByRound: { [currRound]: [] },
         });
-        this.outputFiles[currRound] = [];
-        this.outputMappings[currRound] = [];
-        this.invalidateMappingsFromRound(currRound);
+        this.setRoundOutputs(currRound, [], []);
       }
     }
   }
