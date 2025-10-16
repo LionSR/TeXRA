@@ -12,7 +12,7 @@ import {
 } from '@frontend/latex/linter';
 import {
   getActiveEditorWithGuards,
-  type ActiveFileGuardFailureReason,
+  logGuardFailure,
 } from '@utils/editor/activeFileGuards';
 
 // Local imports - core
@@ -38,7 +38,7 @@ export async function handleShowLinterMessages(): Promise<void> {
     });
 
     if (guardResult.status !== 'ok') {
-      logGuardFailure('show linter messages', guardResult.status);
+      logGuardFailure(CHANNEL, 'show linter messages', guardResult.status, 'LaTeX');
       return;
     }
 
@@ -92,7 +92,7 @@ export async function handleCountLinterMessages(): Promise<void> {
     });
 
     if (guardResult.status !== 'ok') {
-      logGuardFailure('count linter messages', guardResult.status);
+      logGuardFailure(CHANNEL, 'count linter messages', guardResult.status, 'LaTeX');
       return;
     }
 
@@ -140,7 +140,7 @@ export async function handleFixLinterIssues(
     });
 
     if (guardResult.status !== 'ok') {
-      logGuardFailure('fix linter issues', guardResult.status);
+      logGuardFailure(CHANNEL, 'fix linter issues', guardResult.status, 'LaTeX');
       return;
     }
 
@@ -178,29 +178,6 @@ export async function handleFixLinterIssues(
     vscode.window.showErrorMessage(
       `Error fixing linter issues: ${String(err)}`,
     );
-  }
-}
-
-function logGuardFailure(
-  action: string,
-  reason: ActiveFileGuardFailureReason,
-): void {
-  switch (reason) {
-    case 'noEditor':
-      logger.warn(CHANNEL, `Cannot ${action}: no active editor found.`);
-      break;
-    case 'unsupportedExtension':
-      logger.warn(
-        CHANNEL,
-        `Cannot ${action}: active document is not a LaTeX file.`,
-      );
-      break;
-    case 'saveFailed':
-      logger.error(
-        CHANNEL,
-        `Cannot ${action}: failed to save LaTeX document before running command.`,
-      );
-      break;
   }
 }
 

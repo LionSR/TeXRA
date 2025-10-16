@@ -15,7 +15,7 @@ import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { GlobalStorageFS, StorageFS } from '@utils/files';
 import {
   getActiveEditorWithGuards,
-  type ActiveFileGuardFailureReason,
+  logGuardFailure,
 } from '@utils/editor/activeFileGuards';
 
 const CHANNEL = 'TestCommands';
@@ -215,7 +215,7 @@ export async function handleParseYaml(
     });
 
     if (guardResult.status !== 'ok') {
-      logGuardFailure('parse YAML', guardResult.status);
+      logGuardFailure(CHANNEL, 'parse YAML', guardResult.status, 'YAML');
       return;
     }
 
@@ -252,29 +252,6 @@ export async function handleParseYaml(
       `Error in parseYaml command: ${err instanceof Error ? err.message : String(err)}`,
     );
     vscode.window.showErrorMessage('Error parsing YAML');
-  }
-}
-
-function logGuardFailure(
-  action: string,
-  reason: ActiveFileGuardFailureReason,
-): void {
-  switch (reason) {
-    case 'noEditor':
-      logger.warn(CHANNEL, `Cannot ${action}: no active editor found.`);
-      break;
-    case 'unsupportedExtension':
-      logger.warn(
-        CHANNEL,
-        `Cannot ${action}: active document is not a YAML file.`,
-      );
-      break;
-    case 'saveFailed':
-      logger.error(
-        CHANNEL,
-        `Cannot ${action}: failed to save YAML document before running command.`,
-      );
-      break;
   }
 }
 
