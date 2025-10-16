@@ -27,6 +27,7 @@ import {
   describeAttachments,
   extractToolAttachments,
 } from './utils/toolAttachmentUtils';
+import { appendTextContent } from './utils/messageContentUtils';
 import { toOpenAITools } from './toolConversion';
 import {
   normalizeOpenAIMessageContent,
@@ -495,67 +496,44 @@ export class ModelHandlerOpenAI extends ModelHandler<
       }
     }
 
-    // Create content list for the user message
     const userMessageContent: ChatCompletionContentPart[] = [
       { type: 'text', text: userPrefix },
     ];
 
-    // Add media if provided
     if (
       mediaFiles &&
       (this.config.capabilities.supportsVision ||
         this.config.capabilities.supportsNativeAudio)
     ) {
-      // createMediaMessage returns an array of objects formatted by createMediaContent
       const formattedMediaContent = await this.createMediaMessage(mediaFiles);
       userMessageContent.push(...formattedMediaContent);
     }
 
-    // Append the formatted content to the correct message
-    let lastRole = messages.length > 0 ? messages.at(-1).role : null;
-    if (lastRole === 'system' || messages.length === 0) {
-      messages.push({ role: 'user', content: userMessageContent });
-    } else if (lastRole === 'user') {
-      messages.at(-1).content.push(...userMessageContent);
-    } else {
-      // Fallback: Should not happen with current logic but good to handle
-      messages.push({ role: 'user', content: userMessageContent });
+    const lastMessageBeforeUser = messages.at(-1);
+    if (
+      lastMessageBeforeUser &&
+      lastMessageBeforeUser.role !== 'system' &&
+      lastMessageBeforeUser.role !== 'user'
+    ) {
       this.logger.warn(
         'Unexpected message structure, adding new user message.',
       );
     }
 
-    // Add final user request
+    appendTextContent(messages, 'user', userMessageContent);
+
     const requestRole = this.config.capabilities.supportsIntermDevMsgs
       ? 'system'
       : 'user';
-    lastRole = messages.length > 0 ? messages.at(-1)?.role : null;
 
-    if (requestRole === 'system') {
-      messages.push({
-        role: requestRole,
-        content: [{ type: 'text', text: userRequest }],
-      });
-    } else if (requestRole === 'user' && lastRole === 'user') {
-      const lastMessage = messages.at(-1);
-      if (lastMessage && Array.isArray(lastMessage.content)) {
-        lastMessage.content.push({
-          type: 'text',
-          text: userRequest,
-        });
-      } else if (lastMessage && typeof lastMessage.content === 'string') {
-        // Convert string content to array format
-        lastMessage.content = [
-          { type: 'text', text: lastMessage.content },
-          { type: 'text', text: userRequest },
-        ];
-      }
-    } else {
-      messages.push({
-        role: requestRole,
-        content: [{ type: 'text', text: userRequest }],
-      });
-    }
+    appendTextContent(
+      messages,
+      requestRole,
+      [{ type: 'text', text: userRequest }],
+      requestRole === 'system'
+        ? { alwaysCreateNewMessage: true }
+        : undefined,
+    );
 
     return messages;
   }
@@ -596,7 +574,9 @@ export class ModelHandlerOpenAI extends ModelHandler<
     }
     roundContent.push({ type: 'text', text: userMessage });
 
-    messages.push({ role, content: roundContent });
+    appendTextContent(messages, role, roundContent, {
+      alwaysCreateNewMessage: true,
+    });
     return messages;
   }
 
@@ -829,16 +809,17 @@ export class ModelHandlerOpenAI extends ModelHandler<
     if (!(await WorkspaceFS.existsAndNonTrivial(outputFile))) {
       const PseudoPrefillMsgContentString = `Organize your response with xml tags. Start your response with:\n${prefill}`;
       const lastMessage = messages.at(-1);
-      if (lastMessage && Array.isArray(lastMessage.content)) {
-        lastMessage.content.push({
-          type: 'text',
-          text: PseudoPrefillMsgContentString,
-        });
-      } else if (lastMessage && typeof lastMessage.content === 'string') {
-        lastMessage.content = [
-          { type: 'text', text: lastMessage.content },
+      if (lastMessage) {
+        appendTextContent(messages, lastMessage.role, [
           { type: 'text', text: PseudoPrefillMsgContentString },
-        ];
+        ]);
+      } else {
+        appendTextContent(
+          messages,
+          'user',
+          [{ type: 'text', text: PseudoPrefillMsgContentString }],
+          { alwaysCreateNewMessage: true },
+        );
       }
       this.logger.debug(
         `Added pseudo prefill message to messages:\n${PseudoPrefillMsgContentString}`,
@@ -862,32 +843,23 @@ export class ModelHandlerOpenAI extends ModelHandler<
     // Write file content to output file
     await WorkspaceFS.write(outputFile, fileContent);
 
-    messages.push({
-      role: 'assistant',
-      content: [
-        {
-          type: 'text',
-          text: fileContent,
-        },
-      ],
-    });
+    appendTextContent(
+      messages,
+      'assistant',
+      [{ type: 'text', text: fileContent }],
+      { alwaysCreateNewMessage: true },
+    );
 
     const lastMessage = messages.at(-1);
     if (hasEndTag(agentSetting, fileContent)) {
       this.logger.debug('End tag detected - skipping continuation');
-      if (lastMessage && Array.isArray(lastMessage.content)) {
-        // this is suspicious, because the two conflicts!!!
-        const lastPart = lastMessage.content[lastMessage.content.length - 1];
-        if (lastPart && 'text' in lastPart) {
-          lastPart.text = fileContent;
-        }
-      } else if (lastMessage) {
-        lastMessage.content = [
-          {
-            type: 'text',
-            text: fileContent,
-          },
-        ];
+      if (lastMessage) {
+        appendTextContent(
+          messages,
+          lastMessage.role,
+          [fileContent],
+          { replaceExistingText: true },
+        );
       }
       endTurn = true;
       return [endTurn, messages];
@@ -1003,31 +975,29 @@ export class ModelHandlerOpenAI extends ModelHandler<
 
     const lastMessage = messages.at(-1);
 
-    if (lastMessage.role === 'assistant') {
-      if (Array.isArray(lastMessage.content)) {
-        const newMessage = {
-          type: 'text',
-          text: bestConnector + newResponse,
-        };
-        lastMessage.content.push(newMessage);
-      } else {
-        lastMessage.content = [
-          {
-            type: 'text',
-            text: toolState.accumulatedOutput,
-          },
-        ];
-      }
-    } else if (lastMessage.role === 'user' || lastMessage.role === 'system') {
+    if (lastMessage?.role === 'assistant') {
+      const hasStringContent = typeof lastMessage.content === 'string';
+
+      appendTextContent(
+        messages,
+        'assistant',
+        hasStringContent
+          ? [toolState.accumulatedOutput]
+          : [{ type: 'text', text: `${bestConnector}${newResponse}` }],
+        hasStringContent ? { replaceExistingText: true } : undefined,
+      );
+      return;
+    }
+
+    if (lastMessage?.role === 'user' || lastMessage?.role === 'system') {
       this.logger.debug(
         ' Last message is a user or system message - unexpected format',
       );
-      // Add a new assistant message
-      messages.push({
-        role: 'assistant',
-        content: [{ type: 'text', text: bestConnector + newResponse }],
-      });
     }
+
+    appendTextContent(messages, 'assistant', [
+      { type: 'text', text: `${bestConnector}${newResponse}` },
+    ]);
   }
 
   /** Updates message content for models without prefill support. */
@@ -1063,40 +1033,39 @@ export class ModelHandlerOpenAI extends ModelHandler<
       // Then the last message is a user message
       // So the second last message must be an assistant message
       if (secondLastMessage && secondLastMessage.role === 'assistant') {
-        // we get gradually get rid if this kind of isArray conditioning since now we are consistently using the content array
-        // but why do the following two differ?
-        if (Array.isArray(secondLastMessage.content)) {
-          secondLastMessage.content.push({
-            type: 'text',
-            text: bestConnector + newResponse,
-          } as any);
-        } else {
+        const hasArrayContent = Array.isArray(secondLastMessage.content);
+        if (!hasArrayContent) {
           this.logger.error('Second last message content is not a list');
-          secondLastMessage.content = [
-            {
-              type: 'text',
-              text: toolState.accumulatedOutput,
-            },
-          ];
         }
 
-        // Remove the user continuation prompt to keep the conversation clean
         if (messages.at(-1)?.role === 'user') {
           messages.pop();
         } else {
           this.logger.error(
             'Last message is not a user message - unexpected format',
           );
+          return;
         }
+
+        appendTextContent(
+          messages,
+          'assistant',
+          hasArrayContent
+            ? [{ type: 'text', text: `${bestConnector}${newResponse}` }]
+            : [toolState.accumulatedOutput],
+          hasArrayContent ? undefined : { replaceExistingText: true },
+        );
       }
     } else {
       this.logger.debug(
         'Last message is a request message rather than a ask to continue after cut off',
       );
-      messages.push({
-        role: 'assistant',
-        content: [{ type: 'text', text: toolState.accumulatedOutput }],
-      });
+      appendTextContent(
+        messages,
+        'assistant',
+        [{ type: 'text', text: toolState.accumulatedOutput }],
+        { alwaysCreateNewMessage: true },
+      );
     }
   }
 
