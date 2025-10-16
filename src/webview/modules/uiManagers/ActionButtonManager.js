@@ -1,20 +1,8 @@
 // Local imports - webview
-import {
-  CHECK_BOXES,
-  MULTIPLE_SELECTIONS,
-  ELEMENT_IDS,
-  BASE_FILE,
-  EDITED_FILE,
-  SESSION_TYPES,
-  SESSION_TYPE_INPUT,
-  AGENT_SELECT_IDS,
-} from '../constants.js';
+import { ELEMENT_IDS, BASE_FILE, EDITED_FILE } from '../constants.js';
 import { BaseUIManager } from './BaseUIManager.js';
-import {
-  safeGetElementById,
-  safeGetElementValue,
-  safeGetElementChecked,
-} from '@common/domUtils.js';
+import { collectCurrentContext } from '../state/currentContext.js';
+import { safeGetElementById, safeGetElementValue } from '@common/domUtils.js';
 import { capitalize } from '@common/stringUtils.js';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
 import { vscode } from '@common/webviewContext.js';
@@ -26,38 +14,6 @@ export class ActionButtonManager extends BaseUIManager {
     this.fileList = fileList;
     this.state = state;
     this.instructionManager = instructionMgr;
-    this._sessionTypeInput = null;
-    this._agentSelectCache = new Map();
-  }
-
-  _getSingleFileData(fileTypes = ['input', 'reference', 'auxiliary', 'media']) {
-    const data = {};
-    fileTypes.forEach((type) => {
-      data[`${type}File`] = safeGetElementValue(`${type}File`);
-    });
-    return data;
-  }
-
-  _getMultipleFileData(singleFiles = {}) {
-    const multipleFilesData = {};
-    MULTIPLE_SELECTIONS.forEach((id) => {
-      const container = safeGetElementById(`${id}Container`);
-      const isActive = container?.style.display !== 'none';
-      multipleFilesData[`${id}Active`] = isActive;
-
-      const singleFileKey = id.replace('Files', 'File');
-      const singleFile = singleFiles[singleFileKey];
-
-      const filesDiv = safeGetElementById(id);
-      const files =
-        isActive && filesDiv ? this.fileList.getSelected(filesDiv) : [];
-
-      multipleFilesData[id] =
-        id !== ELEMENT_IDS.OUTPUT_FILES && singleFile
-          ? files.filter((file) => file !== singleFile)
-          : files;
-    });
-    return multipleFilesData;
   }
 
   _setupInstructionButtons() {
@@ -73,18 +29,17 @@ export class ActionButtonManager extends BaseUIManager {
     this.addListener(ELEMENT_IDS.MAGIC_POLISH_BUTTON, 'click', () => {
       const instruction = safeGetElementById(ELEMENT_IDS.INSTRUCTION);
       if (instruction && instruction.value.trim()) {
-        const { agent } = this._getActiveAgentSelection();
+        const { agent, singleFileSelections, multipleFileSelections } =
+          collectCurrentContext({ fileList: this.fileList });
         const model = safeGetElementValue('model');
-        const singleFiles = this._getSingleFileData();
-        const multipleFilesData = this._getMultipleFileData(singleFiles);
 
         this.vscode.postMessage({
           command: MAIN_VIEW_COMMANDS.POLISH_INSTRUCTION_TEXT,
           text: instruction.value,
           agent,
           model,
-          ...singleFiles,
-          ...multipleFilesData,
+          ...singleFileSelections,
+          ...multipleFileSelections,
         });
       }
     });
@@ -92,17 +47,15 @@ export class ActionButtonManager extends BaseUIManager {
 
   _setupExecuteButtons() {
     this.addListener(ELEMENT_IDS.EXECUTE_BUTTON, 'click', () => {
-      const { agent, sessionType } = this._getActiveAgentSelection();
+      const {
+        agent,
+        isToolUseAgent,
+        singleFileSelections,
+        multipleFileSelections,
+        checkboxValues,
+      } = collectCurrentContext({ fileList: this.fileList });
       const model = safeGetElementValue('model');
       const instruction = safeGetElementValue(ELEMENT_IDS.INSTRUCTION);
-      const isToolUseAgent = sessionType === SESSION_TYPES.TOOL_USE;
-      const singleFiles = this._getSingleFileData();
-      const multipleFilesData = this._getMultipleFileData(singleFiles);
-
-      const checkboxValues = {};
-      CHECK_BOXES.forEach((id) => {
-        checkboxValues[id] = safeGetElementChecked(id);
-      });
 
       this.vscode.postMessage({
         command: MAIN_VIEW_COMMANDS.EXECUTE,
@@ -110,14 +63,18 @@ export class ActionButtonManager extends BaseUIManager {
         model,
         instruction,
         isToolUseAgent,
-        ...singleFiles,
-        ...multipleFilesData,
+        ...singleFileSelections,
+        ...multipleFileSelections,
         ...checkboxValues,
       });
     });
 
     this.addListener(ELEMENT_IDS.MERGE_BUTTON, 'click', () => {
-      const { inputFile } = this._getSingleFileData(['input']);
+      const { singleFileSelections } = collectCurrentContext({
+        fileList: this.fileList,
+        singleFileTypes: ['input'],
+      });
+      const { inputFile } = singleFileSelections;
       const editedFile = safeGetElementValue(EDITED_FILE);
 
       this.vscode.postMessage({
@@ -137,20 +94,18 @@ export class ActionButtonManager extends BaseUIManager {
       { id: ELEMENT_IDS.CLEAN_BUTTON, action: 'clean' },
     ].forEach(({ id, action }) => {
       this.addListener(id, 'click', () => {
-        const { inputFile } = this._getSingleFileData(['input']);
-        const { agent } = this._getActiveAgentSelection();
+        const { agent, singleFileSelections, multipleFileSelections } =
+          collectCurrentContext({
+            fileList: this.fileList,
+            singleFileTypes: ['input'],
+          });
+        const { inputFile } = singleFileSelections;
         const model = safeGetElementValue('model');
-
-        const outputFiles = this.fileList.getSelected(
-          safeGetElementById(ELEMENT_IDS.OUTPUT_FILES),
-        );
-        const container = safeGetElementById(
-          ELEMENT_IDS.OUTPUT_FILES_CONTAINER,
-        );
-        const useMultiple =
-          container &&
-          container.style.display !== 'none' &&
-          outputFiles.length > 0;
+        const outputFiles =
+          multipleFileSelections[ELEMENT_IDS.OUTPUT_FILES] ?? [];
+        const outputFilesActive =
+          multipleFileSelections[`${ELEMENT_IDS.OUTPUT_FILES}Active`] ?? false;
+        const useMultiple = outputFilesActive && outputFiles.length > 0;
 
         if (useMultiple) {
           const multipleCommand =
@@ -200,7 +155,11 @@ export class ActionButtonManager extends BaseUIManager {
 
   _setupLatexdiffButtons() {
     this.addListener(ELEMENT_IDS.LATEXDIFF_BUTTON, 'click', () => {
-      const { inputFile } = this._getSingleFileData(['input']);
+      const { singleFileSelections } = collectCurrentContext({
+        fileList: this.fileList,
+        singleFileTypes: ['input'],
+      });
+      const { inputFile } = singleFileSelections;
       const baseFile = safeGetElementValue(BASE_FILE);
       const editedFile = safeGetElementValue(EDITED_FILE);
 
@@ -218,7 +177,11 @@ export class ActionButtonManager extends BaseUIManager {
     });
 
     this.addListener(ELEMENT_IDS.LATEXDIFF_VC_BUTTON, 'click', () => {
-      const { inputFile } = this._getSingleFileData(['input']);
+      const { singleFileSelections } = collectCurrentContext({
+        fileList: this.fileList,
+        singleFileTypes: ['input'],
+      });
+      const { inputFile } = singleFileSelections;
       const baseFile = safeGetElementValue(BASE_FILE);
       const commitHash = safeGetElementValue(ELEMENT_IDS.COMMIT_SELECT);
 
@@ -240,7 +203,11 @@ export class ActionButtonManager extends BaseUIManager {
       { id: ELEMENT_IDS.CLEAN_LATEXDIFF_VC_BUTTON, action: 'clean' },
     ].forEach(({ id, action }) => {
       this.addListener(id, 'click', () => {
-        const { inputFile } = this._getSingleFileData(['input']);
+        const { singleFileSelections } = collectCurrentContext({
+          fileList: this.fileList,
+          singleFileTypes: ['input'],
+        });
+        const { inputFile } = singleFileSelections;
         const baseFile = safeGetElementValue(BASE_FILE);
         const commitHash = safeGetElementValue(ELEMENT_IDS.COMMIT_SELECT);
 
@@ -301,50 +268,9 @@ export class ActionButtonManager extends BaseUIManager {
   }
 
   setup() {
-    this._sessionTypeInput = null;
-    this._agentSelectCache.clear();
     this._setupInstructionButtons();
     this._setupExecuteButtons();
     this._setupLatexdiffButtons();
     this._setupCompareButtons();
-  }
-
-  _getSessionTypeInput() {
-    if (!this._sessionTypeInput) {
-      const element = safeGetElementById(SESSION_TYPE_INPUT);
-      this._sessionTypeInput =
-        element instanceof HTMLInputElement ? element : null;
-    }
-    return this._sessionTypeInput;
-  }
-
-  _getAgentSelect(sessionType) {
-    const selectId = AGENT_SELECT_IDS[sessionType];
-    if (!selectId) {
-      return null;
-    }
-
-    if (!this._agentSelectCache.has(selectId)) {
-      const element = safeGetElementById(selectId);
-      this._agentSelectCache.set(
-        selectId,
-        element instanceof HTMLSelectElement ? element : null,
-      );
-    }
-
-    return this._agentSelectCache.get(selectId) || null;
-  }
-
-  _getActiveAgentSelection() {
-    const sessionTypeInput = this._getSessionTypeInput();
-    const rawSessionType = sessionTypeInput?.value;
-    const sessionType = rawSessionType || SESSION_TYPES.WORKFLOW;
-    const selectElement = this._getAgentSelect(sessionType);
-    const agent = selectElement?.value ?? '';
-    return {
-      agent,
-      sessionType,
-      selectElement,
-    };
   }
 }
