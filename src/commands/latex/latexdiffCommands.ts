@@ -45,11 +45,27 @@ logger.initialize(CHANNEL);
 
 const service = new LaTeXdiffService(CHANNEL);
 
+type LatexdiffTool = 'latexdiff' | 'latexdiff-vc';
+
+/**
+ * Ensures the required latexdiff tool is installed before running a command.
+ * @param tool The tool name to verify.
+ * @returns True when the tool is available, false otherwise.
+ */
+async function ensureLatexdiffToolInstalled(tool: LatexdiffTool): Promise<boolean> {
+  if (await checkToolInstalled(tool)) {
+    return true;
+  }
+
+  logger.warn(CHANNEL, `${tool} is not installed; command will not run.`);
+  return false;
+}
+
 /**
  * Prompts the user to select a math markup granularity for latexdiff operations.
  * @returns The selected math markup option, or undefined if the user cancels.
  */
-async function promptForMathMarkup(): Promise<MathMarkupOption | undefined> {
+async function promptForLatexdiffMathMarkup(): Promise<MathMarkupOption | undefined> {
   const configuredMode = getConfig<string>(
     'latexdiff.mathMarkup',
     DEFAULT_MATH_MARKUP,
@@ -73,6 +89,33 @@ async function promptForMathMarkup(): Promise<MathMarkupOption | undefined> {
   });
 
   return selection?.value;
+}
+
+/**
+ * Opens a generated latexdiff result in the LaTeX build preview after verifying it exists.
+ * @param basePath The base file (or directory) used when generating the diff.
+ * @param diffFileName The generated diff file name returned by the service.
+ * @returns True when the diff file exists and is opened successfully.
+ */
+async function openLatexdiffResult(
+  basePath: string,
+  diffFileName: string,
+): Promise<string | undefined> {
+  const baseDirectory = path.extname(basePath)
+    ? path.dirname(basePath)
+    : basePath;
+  const diffFilePath = path.join(baseDirectory, diffFileName);
+
+  if (!(await WorkspaceFS.exists(diffFilePath))) {
+    await showLoggedMessage(
+      CHANNEL,
+      `Diff file could not be found. Expected path: ${diffFilePath}`,
+    );
+    return undefined;
+  }
+
+  await openBuildDisplayIfTex(diffFilePath, { preserveFocus: true });
+  return diffFilePath;
 }
 
 // Removed showLatexdiffError wrapper - using showLoggedMessageWithDocs directly
@@ -127,12 +170,11 @@ async function handleLatexdiff(
 
   const fileToUse = baseFile || inputFile;
   try {
-    // Check if latexdiff is installed
-    if (!(await checkToolInstalled('latexdiff'))) {
+    if (!(await ensureLatexdiffToolInstalled('latexdiff'))) {
       return;
     }
 
-    const mathMarkup = await promptForMathMarkup();
+    const mathMarkup = await promptForLatexdiffMathMarkup();
     if (!mathMarkup) {
       logger.debug(CHANNEL, 'Math markup selection cancelled by user');
       return;
@@ -155,20 +197,7 @@ async function handleLatexdiff(
       throw new Error(result.message || 'Failed to generate diff file');
     }
 
-    // Verify the file exists using fileExists utility
-    const filePathRelative = path.join(
-      path.dirname(fileToUse),
-      result.diffFileName,
-    );
-    if (!(await WorkspaceFS.exists(filePathRelative))) {
-      await showLoggedMessage(
-        CHANNEL,
-        `Diff file could not be found. Expected path: ${filePathRelative}`,
-      );
-      return;
-    }
-
-    await openBuildDisplayIfTex(filePathRelative, { preserveFocus: true });
+    await openLatexdiffResult(fileToUse, result.diffFileName);
   } catch (err) {
     await showLoggedErrorMessage(CHANNEL, 'Error creating LaTeX diff', err);
   }
@@ -181,12 +210,11 @@ async function handleLatexdiffvc(
 ) {
   const fileToUse = baseFile || inputFile;
   try {
-    // Check if latexdiff-vc is installed
-    if (!(await checkToolInstalled('latexdiff-vc'))) {
+    if (!(await ensureLatexdiffToolInstalled('latexdiff-vc'))) {
       return;
     }
 
-    const mathMarkup = await promptForMathMarkup();
+    const mathMarkup = await promptForLatexdiffMathMarkup();
     if (!mathMarkup) {
       logger.debug(CHANNEL, 'Math markup selection cancelled by user');
       return;
@@ -203,20 +231,7 @@ async function handleLatexdiffvc(
       throw new Error(result.message || 'Failed to generate diff file');
     }
 
-    // Verify the file exists using fileExists utility
-    const filePathRelative = path.join(
-      path.dirname(fileToUse),
-      result.diffFileName,
-    );
-    if (!(await WorkspaceFS.exists(filePathRelative))) {
-      await showLoggedMessage(
-        CHANNEL,
-        `Diff file could not be found. Expected path: ${filePathRelative}`,
-      );
-      return;
-    }
-
-    await openBuildDisplayIfTex(filePathRelative, { preserveFocus: true });
+    await openLatexdiffResult(fileToUse, result.diffFileName);
   } catch (err) {
     await showLoggedErrorMessage(CHANNEL, 'Error creating LaTeX diff', err);
   }
@@ -229,8 +244,7 @@ async function handlePackLatexdiffvc(
   clean: boolean,
 ) {
   try {
-    // Check if latexdiff-vc is installed
-    if (!(await checkToolInstalled('latexdiff-vc'))) {
+    if (!(await ensureLatexdiffToolInstalled('latexdiff-vc'))) {
       return;
     }
 
@@ -251,8 +265,7 @@ async function handlePackLatexdiffvcMultiple(
   clean: boolean,
 ) {
   try {
-    // Check if latexdiff-vc is installed
-    if (!(await checkToolInstalled('latexdiff-vc'))) {
+    if (!(await ensureLatexdiffToolInstalled('latexdiff-vc'))) {
       return;
     }
 
@@ -273,8 +286,7 @@ async function handleCleanLatexdiffvc(
   commitHash: string,
 ) {
   try {
-    // Check if latexdiff-vc is installed
-    if (!(await checkToolInstalled('latexdiff-vc'))) {
+    if (!(await ensureLatexdiffToolInstalled('latexdiff-vc'))) {
       return;
     }
 
@@ -294,8 +306,7 @@ async function handleCleanLatexdiffvcMultiple(
   commitHash: string,
 ) {
   try {
-    // Check if latexdiff-vc is installed
-    if (!(await checkToolInstalled('latexdiff-vc'))) {
+    if (!(await ensureLatexdiffToolInstalled('latexdiff-vc'))) {
       return;
     }
 
@@ -318,8 +329,7 @@ async function handleRunLatexdiff(config: any) {
       `Command called with config: ${JSON.stringify(config)}`,
     );
 
-    // Check if latexdiff is installed
-    if (!(await checkToolInstalled('latexdiff'))) {
+    if (!(await ensureLatexdiffToolInstalled('latexdiff'))) {
       return;
     }
 
@@ -334,7 +344,7 @@ async function handleRunLatexdiff(config: any) {
       return;
     }
 
-    const mathMarkup = await promptForMathMarkup();
+    const mathMarkup = await promptForLatexdiffMathMarkup();
     if (!mathMarkup) {
       logger.debug(CHANNEL, 'Math markup selection cancelled by user');
       return;
@@ -482,7 +492,8 @@ async function handleRunLatexdiff(config: any) {
         const results: Array<{
           success: boolean;
           message?: string;
-          diffFile?: string;
+          basePath?: string;
+          diffFileName?: string;
         }> = [];
 
         // Process each input file and its outputs
@@ -515,9 +526,8 @@ async function handleRunLatexdiff(config: any) {
             results.push({
               success: result.success,
               message: result.message,
-              diffFile: result.diffFileName
-                ? path.join(path.dirname(inputFile), result.diffFileName)
-                : undefined,
+              basePath: inputFile,
+              diffFileName: result.diffFileName,
             });
 
             completedOperations++;
@@ -551,9 +561,8 @@ async function handleRunLatexdiff(config: any) {
               results.push({
                 success: result.success,
                 message: result.message,
-                diffFile: result.diffFileName
-                  ? path.join(path.dirname(currentFile), result.diffFileName)
-                  : undefined,
+                basePath: currentFile,
+                diffFileName: result.diffFileName,
               });
 
               completedOperations++;
@@ -585,14 +594,17 @@ async function handleRunLatexdiff(config: any) {
 
         // Log detailed results
         for (const result of results) {
-          if (result.success && result.diffFile) {
-            logger.debug(
-              CHANNEL,
-              `Successfully generated diff: ${result.diffFile}`,
+          if (result.success && result.basePath && result.diffFileName) {
+            const diffFilePath = await openLatexdiffResult(
+              result.basePath,
+              result.diffFileName,
             );
-            await openBuildDisplayIfTex(result.diffFile, {
-              preserveFocus: true,
-            });
+            if (diffFilePath) {
+              logger.debug(
+                CHANNEL,
+                `Successfully generated diff: ${diffFilePath}`,
+              );
+            }
           } else {
             logger.warn(CHANNEL, `Failed to generate diff: ${result.message}`);
           }
@@ -612,4 +624,10 @@ export const latexdiffCommands = {
   handleCleanLatexdiffvc,
   handleCleanLatexdiffvcMultiple,
   handleRunLatexdiff,
+};
+
+export const latexdiffHelpers = {
+  ensureLatexdiffToolInstalled,
+  promptForLatexdiffMathMarkup,
+  openLatexdiffResult,
 };
