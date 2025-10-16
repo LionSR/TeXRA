@@ -582,9 +582,11 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
         }
 
         if (filesArray.length > 0 && multipleFiles) {
+          fileList._batchMode = true;
           filesArray.forEach((file) => {
             fileList.add(multipleFilesId, file);
           });
+          fileList._batchMode = false;
         }
       }
     }
