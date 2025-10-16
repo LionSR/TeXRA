@@ -41,6 +41,24 @@ export const EMOJI_BY_LEVEL = {
   debug: '🔍',
 };
 
+// DateTimeFormat options for consistent timestamp formatting
+const DATETIME_FORMAT_OPTIONS = {
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+  hour12: false,
+};
+
+const TIME_FORMAT_OPTIONS = {
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+  hour12: false,
+};
+
 /**
  * Represents different task group hierarchy levels with associated behaviors
  */
@@ -48,14 +66,13 @@ export const TaskGroupLevel = {
   ROOT: {
     name: 'root',
     formatTime: (date) => {
-      const datePart = date.toLocaleDateString('en-CA');
-      const timePart = date.toLocaleTimeString('en-US', {
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        hour12: false,
-      });
-      return `${datePart} ${timePart}`;
+      try {
+        return new Intl.DateTimeFormat(undefined, DATETIME_FORMAT_OPTIONS).format(date);
+      } catch (error) {
+        const isoTimestamp = date.toISOString();
+        const timePart = isoTimestamp.split('T')[1]?.split('.')[0] ?? isoTimestamp;
+        return `${isoTimestamp.split('T')[0]} ${timePart}`;
+      }
     },
     showTitle: false,
     headerOrder: 'time-first', // time → bullet → usage
@@ -63,13 +80,13 @@ export const TaskGroupLevel = {
   },
   NESTED: {
     name: 'nested',
-    formatTime: (date) =>
-      date.toLocaleTimeString('en-US', {
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        hour12: false,
-      }),
+    formatTime: (date) => {
+      try {
+        return new Intl.DateTimeFormat(undefined, TIME_FORMAT_OPTIONS).format(date);
+      } catch (error) {
+        return date.toISOString().split('T')[1]?.split('.')[0] ?? date.toISOString();
+      }
+    },
     showTitle: true,
     headerOrder: 'usage-first', // usage → bullet → time
     cssClass: null,
@@ -138,13 +155,25 @@ export class LogEntryFormatter {
    * @returns {{fullTimestamp: string, timeDisplay: string}} Formatted timestamps
    */
   _formatTimestamp(date) {
-    const fullTimestamp = date.toISOString();
-    const timeDisplay = date
-      .toISOString()
-      .split('T')[1]
-      .replace('Z', '')
-      .split('.')[0];
-    return { fullTimestamp, timeDisplay };
+    const isoTimestamp = date.toISOString();
+
+    try {
+      const timeDisplay = new Intl.DateTimeFormat(undefined, TIME_FORMAT_OPTIONS).format(date);
+      const tooltipTimestamp = new Intl.DateTimeFormat(undefined, DATETIME_FORMAT_OPTIONS).format(date);
+
+      return {
+        fullTimestamp: isoTimestamp,
+        timeDisplay,
+        tooltipTimestamp,
+      };
+    } catch (error) {
+      const timeDisplay = isoTimestamp.split('T')[1]?.split('.')[0] ?? isoTimestamp;
+      return {
+        fullTimestamp: isoTimestamp,
+        timeDisplay,
+        tooltipTimestamp: isoTimestamp,
+      };
+    }
   }
 
   /**
@@ -303,7 +332,8 @@ export class LogEntryFormatter {
 
     const emoji = EMOJI_BY_LEVEL[level] || '•';
     const date = new Date(timestamp);
-    const { fullTimestamp, timeDisplay } = this._formatTimestamp(date);
+    const { fullTimestamp, timeDisplay, tooltipTimestamp } =
+      this._formatTimestamp(date);
 
     // Check if we have a custom formatter for this message type
     const formatters = this._getFormatters();
@@ -360,7 +390,7 @@ export class LogEntryFormatter {
 
     const htmlMessage =
       prefix +
-      `<span class="timestamp" title="${fullTimestamp}">${emoji}${
+      `<span class="timestamp" title="${tooltipTimestamp}">${emoji}${
         verbose ? ` [${timeDisplay}]` : ''
       }</span> ` +
       levelMarkup +
@@ -677,7 +707,8 @@ export class LogEntryFormatter {
     }
 
     const date = new Date(timestamp);
-    const { fullTimestamp, timeDisplay } = this._formatTimestamp(date);
+    const { fullTimestamp, timeDisplay, tooltipTimestamp } =
+      this._formatTimestamp(date);
 
     const bannerEntry = this._createBannerEntry({
       logId: id,
@@ -699,7 +730,7 @@ export class LogEntryFormatter {
     if (summaryElem) {
       const timestampElem = document.createElement('span');
       timestampElem.classList.add('timestamp');
-      timestampElem.title = fullTimestamp;
+      timestampElem.title = tooltipTimestamp;
       timestampElem.textContent = verbose ? `[${timeDisplay}]` : '';
       summaryElem.insertBefore(
         timestampElem,
@@ -1103,7 +1134,8 @@ export class LogEntryFormatter {
     if (!element) return null;
 
     const date = new Date(timestamp ?? Date.now());
-    const { fullTimestamp, timeDisplay } = this._formatTimestamp(date);
+    const { fullTimestamp, timeDisplay, tooltipTimestamp } =
+      this._formatTimestamp(date);
 
     element.dataset.fullTimestamp = fullTimestamp;
     if (logId) {
@@ -1113,7 +1145,7 @@ export class LogEntryFormatter {
     const timeElem = element.querySelector('.native-status-time');
     if (timeElem) {
       timeElem.textContent = timeDisplay;
-      timeElem.title = fullTimestamp;
+      timeElem.title = tooltipTimestamp;
     }
 
     const textElem = element.querySelector('.native-status-text');
@@ -1131,12 +1163,13 @@ export class LogEntryFormatter {
     if (!element) return null;
 
     const date = new Date(timestamp);
-    const { fullTimestamp, timeDisplay } = this._formatTimestamp(date);
+    const { fullTimestamp, timeDisplay, tooltipTimestamp } =
+      this._formatTimestamp(date);
 
     const timestampElem = element.querySelector('.user-message-timestamp');
     if (timestampElem) {
       timestampElem.textContent = timeDisplay;
-      timestampElem.title = fullTimestamp;
+      timestampElem.title = tooltipTimestamp;
     }
 
     const contentElem = element.querySelector('.user-message-content');
