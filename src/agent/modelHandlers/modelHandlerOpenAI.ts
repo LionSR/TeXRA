@@ -981,9 +981,14 @@ export class ModelHandlerOpenAI extends ModelHandler<
       appendTextContent(
         messages,
         'assistant',
-        hasStringContent
-          ? [toolState.accumulatedOutput]
-          : [{ type: 'text', text: `${bestConnector}${newResponse}` }],
+        [
+          {
+            type: 'text',
+            text: hasStringContent
+              ? toolState.accumulatedOutput
+              : `${bestConnector}${newResponse}`,
+          },
+        ],
         hasStringContent ? { replaceExistingText: true } : undefined,
       );
       return;
@@ -1019,8 +1024,14 @@ export class ModelHandlerOpenAI extends ModelHandler<
       !lastMessage ||
       (lastMessage.role !== 'user' && lastMessage.role !== 'system')
     ) {
-      this.logger.error(
-        'Last message is not a user or system message - unexpected format',
+      this.logger.warn(
+        'Last message is not a user or system message - unexpected format, appending assistant message anyway',
+      );
+      appendTextContent(
+        messages,
+        'assistant',
+        [{ type: 'text', text: toolState.accumulatedOutput }],
+        { alwaysCreateNewMessage: true },
       );
       return;
     }
