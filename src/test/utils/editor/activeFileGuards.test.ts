@@ -19,9 +19,7 @@ import * as messageUtils from '@frontend/ui/messageUtils';
 
 suite('Active File Guards', () => {
   let originalActiveTextEditor: vscode.TextEditor | undefined;
-  let originalWorkspaceFolders:
-    | readonly vscode.WorkspaceFolder[]
-    | undefined;
+  let originalWorkspaceFolders: readonly vscode.WorkspaceFolder[] | undefined;
   let originalShowWarningMessage: typeof messageUtils.showWarningMessage;
   let originalShowErrorMessage: typeof messageUtils.showErrorMessage;
 
@@ -94,7 +92,10 @@ suite('Active File Guards', () => {
     });
 
     assert.strictEqual(result.status, 'ok');
-    const successResult = result as Extract<ActiveFileGuardResult, { status: 'ok' }>;
+    const successResult = result as Extract<
+      ActiveFileGuardResult,
+      { status: 'ok' }
+    >;
     assert.strictEqual(successResult.relativePath, 'main.tex');
     assert.strictEqual(mockEditor.document.save.callCount, 1);
     assert.deepStrictEqual(errorMessages, []);

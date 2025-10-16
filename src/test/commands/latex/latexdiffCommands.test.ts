@@ -37,32 +37,39 @@ suite('Latexdiff command helpers', () => {
   const originalShowLoggedMessage = errorHandlingModule.showLoggedMessage;
 
   teardown(() => {
-    (systemModule as { checkToolInstalled: CheckToolInstalled }).checkToolInstalled =
-      originalCheckToolInstalled;
+    (
+      systemModule as { checkToolInstalled: CheckToolInstalled }
+    ).checkToolInstalled = originalCheckToolInstalled;
     (configModule as { getConfig: GetConfig }).getConfig = originalGetConfig;
-    (vscode.window as { showQuickPick: typeof originalShowQuickPick }).showQuickPick =
-      originalShowQuickPick;
-    (WorkspaceFS as { exists: WorkspaceExists }).exists = originalWorkspaceExists;
-    (openBuildModule as { openBuildDisplayIfTex: OpenBuildDisplayIfTex }).openBuildDisplayIfTex =
-      originalOpenBuildDisplayIfTex;
-    (errorHandlingModule as { showLoggedMessage: ShowLoggedMessage }).showLoggedMessage =
-      originalShowLoggedMessage;
+    (
+      vscode.window as { showQuickPick: typeof originalShowQuickPick }
+    ).showQuickPick = originalShowQuickPick;
+    (WorkspaceFS as { exists: WorkspaceExists }).exists =
+      originalWorkspaceExists;
+    (
+      openBuildModule as { openBuildDisplayIfTex: OpenBuildDisplayIfTex }
+    ).openBuildDisplayIfTex = originalOpenBuildDisplayIfTex;
+    (
+      errorHandlingModule as { showLoggedMessage: ShowLoggedMessage }
+    ).showLoggedMessage = originalShowLoggedMessage;
   });
 
   test('ensureLatexdiffToolInstalled returns boolean status from tool check', async () => {
     const calls: string[] = [];
-    (systemModule as { checkToolInstalled: CheckToolInstalled }).checkToolInstalled =
-      async (toolOrConfig, _showError) => {
-        const normalized =
-          typeof toolOrConfig === 'string'
-            ? toolOrConfig
-            : Array.isArray(toolOrConfig.command)
-              ? toolOrConfig.command[0]
-              : toolOrConfig.command ?? 'unknown';
-        const toolName = typeof normalized === 'string' ? normalized : String(normalized);
-        calls.push(toolName);
-        return toolName === 'latexdiff';
-      };
+    (
+      systemModule as { checkToolInstalled: CheckToolInstalled }
+    ).checkToolInstalled = async (toolOrConfig, _showError) => {
+      const normalized =
+        typeof toolOrConfig === 'string'
+          ? toolOrConfig
+          : Array.isArray(toolOrConfig.command)
+            ? toolOrConfig.command[0]
+            : (toolOrConfig.command ?? 'unknown');
+      const toolName =
+        typeof normalized === 'string' ? normalized : String(normalized);
+      calls.push(toolName);
+      return toolName === 'latexdiff';
+    };
 
     const available = await ensureLatexdiffToolInstalled('latexdiff');
     const missing = await ensureLatexdiffToolInstalled('latexdiff-vc');
@@ -81,8 +88,9 @@ suite('Latexdiff command helpers', () => {
       receivedItems = items as Array<vscode.QuickPickItem & { value: string }>;
       return Promise.resolve(receivedItems[1] as vscode.QuickPickItem);
     }) as unknown as typeof originalShowQuickPick;
-    (vscode.window as { showQuickPick: typeof originalShowQuickPick }).showQuickPick =
-      stubQuickPick;
+    (
+      vscode.window as { showQuickPick: typeof originalShowQuickPick }
+    ).showQuickPick = stubQuickPick;
 
     const selection = await promptForLatexdiffMathMarkup();
 
@@ -100,12 +108,16 @@ suite('Latexdiff command helpers', () => {
     };
 
     let openedPath: string | undefined;
-    (openBuildModule as { openBuildDisplayIfTex: OpenBuildDisplayIfTex }).openBuildDisplayIfTex =
-      async (filePath) => {
-        openedPath = filePath;
-      };
+    (
+      openBuildModule as { openBuildDisplayIfTex: OpenBuildDisplayIfTex }
+    ).openBuildDisplayIfTex = async (filePath) => {
+      openedPath = filePath;
+    };
 
-    const diffPath = await openLatexdiffResult('chapters/ch1.tex', 'ch1_diff.tex');
+    const diffPath = await openLatexdiffResult(
+      'chapters/ch1.tex',
+      'ch1_diff.tex',
+    );
 
     assert.strictEqual(diffPath, 'chapters/ch1_diff.tex');
     assert.deepStrictEqual(existsCalls, ['chapters/ch1_diff.tex']);
@@ -119,14 +131,21 @@ suite('Latexdiff command helpers', () => {
       return true;
     };
 
-    (openBuildModule as { openBuildDisplayIfTex: OpenBuildDisplayIfTex }).openBuildDisplayIfTex =
-      async () => {
-        /* no-op for test */
-      };
+    (
+      openBuildModule as { openBuildDisplayIfTex: OpenBuildDisplayIfTex }
+    ).openBuildDisplayIfTex = async () => {
+      /* no-op for test */
+    };
 
-    const diffPath = await openLatexdiffResult('chapters', 'rounds/ch2_diff.tex');
+    const diffPath = await openLatexdiffResult(
+      'chapters',
+      'rounds/ch2_diff.tex',
+    );
 
-    assert.strictEqual(checkedPath, path.join('chapters', 'rounds/ch2_diff.tex'));
+    assert.strictEqual(
+      checkedPath,
+      path.join('chapters', 'rounds/ch2_diff.tex'),
+    );
     assert.strictEqual(diffPath, path.join('chapters', 'rounds/ch2_diff.tex'));
   });
 
@@ -134,11 +153,12 @@ suite('Latexdiff command helpers', () => {
     (WorkspaceFS as { exists: WorkspaceExists }).exists = async () => false;
 
     let message: string | undefined;
-    (errorHandlingModule as { showLoggedMessage: ShowLoggedMessage }).showLoggedMessage =
-      async (_channel, content: string) => {
-        message = content;
-        return content;
-      };
+    (
+      errorHandlingModule as { showLoggedMessage: ShowLoggedMessage }
+    ).showLoggedMessage = async (_channel, content: string) => {
+      message = content;
+      return content;
+    };
 
     const diffPath = await openLatexdiffResult('main.tex', 'missing_diff.tex');
 
