@@ -219,7 +219,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       }
     }
 
-    return this.outputHandler.getRoundOutputs(currRound);
+    return this.outputHandler.outputFiles[currRound] || [];
   }
 
   /**
@@ -453,8 +453,8 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
         );
       } else {
         // Handle single output file from previous round
-        const outputFiles = this.outputHandler.getRoundOutputs(currRound - 1);
-        if (outputFiles && outputFiles.length > 0) {
+        const outputFiles = this.outputHandler.outputFiles[currRound - 1] || [];
+        if (outputFiles.length > 0) {
           await this._handleToolStateForOutput(
             [outputFiles[0]],
             currRound,

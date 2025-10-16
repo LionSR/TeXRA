@@ -94,7 +94,7 @@ describe('OutputHandler round helpers', () => {
     assert.strictEqual(roundOutputs.length, 0);
 
     roundOutputs.push('out.tex');
-    const retrieved = handler.getRoundOutputs(2);
+    const retrieved = handler.ensureRound(2);
 
     assert.strictEqual(retrieved, roundOutputs);
     assert.deepEqual(retrieved, ['out.tex']);
@@ -111,23 +111,23 @@ describe('OutputHandler round helpers', () => {
     assert.strictEqual(handler.hasRoundOutputs(3), false);
   });
 
-  it('getRoundOutputs returns empty array for uninitialized rounds', () => {
+  it('ensureRound creates storage for uninitialized rounds', () => {
     const handler = new MockOutputHandler(baseSetting, baseConfig);
-    const outputs = handler.getRoundOutputs(5);
+    const outputs = handler.ensureRound(5);
 
     assert.ok(Array.isArray(outputs));
     assert.strictEqual(outputs.length, 0);
 
-    // Verify that getRoundOutputs did NOT create storage (read-only behavior)
-    assert.strictEqual(handler.outputFiles[5], undefined);
-    assert.strictEqual(handler.outputMappings[5], undefined);
+    // Verify that ensureRound created storage
+    assert.ok(Array.isArray(handler.outputFiles[5]));
+    assert.ok(Array.isArray(handler.outputMappings[5]));
   });
 
-  it('getRoundOutputs returns existing outputs without modifying state', () => {
+  it('ensureRound returns existing outputs when called multiple times', () => {
     const handler = new MockOutputHandler(baseSetting, baseConfig);
     handler.ensureRound(2).push('existing.tex');
 
-    const outputs = handler.getRoundOutputs(2);
+    const outputs = handler.ensureRound(2);
 
     assert.ok(Array.isArray(outputs));
     assert.strictEqual(outputs.length, 1);
