@@ -13,11 +13,24 @@ import { createFromTemplate } from '@common/templateUtils.js';
 export class FileList {
   constructor(saveFn = () => {}) {
     this._saveFn = saveFn;
+    this._removeCallbacks = new Map();
   }
 
   /** Set the callback used to persist state */
   setSaveFn(saveFn) {
     this._saveFn = typeof saveFn === 'function' ? saveFn : () => {};
+  }
+
+  /** Register a callback fired when entries are removed from a list */
+  setRemoveCallback(containerId, callback) {
+    if (!containerId) {
+      return;
+    }
+    if (typeof callback === 'function') {
+      this._removeCallbacks.set(containerId, callback);
+    } else {
+      this._removeCallbacks.delete(containerId);
+    }
   }
   /**
    * Add a file entry to a list container
@@ -47,9 +60,17 @@ export class FileList {
         if (container.contains(fileElement)) {
           container.removeChild(fileElement);
         }
+
+        const remaining = this.getSelected(container);
+        const removeCallback = this._removeCallbacks.get(containerId);
+        if (removeCallback) {
+          removeCallback(remaining);
+        }
+
         if (container.children.length === 0) {
           this.empty(containerId, `toggle${capitalize(containerId)}`);
         }
+
         this._saveFn();
       });
     }
