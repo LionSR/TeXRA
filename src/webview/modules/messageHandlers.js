@@ -39,6 +39,59 @@ import { vscode } from '@common/webviewContext.js';
 import { BaseWebviewMessageHandler } from '@common/BaseWebviewMessageHandler.js';
 
 /**
+ * Waits for a DOM element matching the provided selector.
+ * @param {string} selector
+ * @returns {{ promise: Promise<Element | null>, dispose: () => void }}
+ */
+function waitForElement(selector) {
+  const existing = document.querySelector(selector);
+  if (existing) {
+    return {
+      promise: Promise.resolve(existing),
+      dispose: () => {},
+    };
+  }
+
+  let observer = null;
+  let resolver = null;
+
+  const promise = new Promise((resolve) => {
+    resolver = resolve;
+    observer = new MutationObserver(() => {
+      const element = document.querySelector(selector);
+      if (!element) {
+        return;
+      }
+      if (observer) {
+        observer.disconnect();
+        observer = null;
+      }
+      resolver = null;
+      resolve(element);
+    });
+
+    observer.observe(document.documentElement, {
+      childList: true,
+      subtree: true,
+    });
+  });
+
+  const dispose = () => {
+    if (observer) {
+      observer.disconnect();
+      observer = null;
+    }
+    if (resolver) {
+      const resolve = resolver;
+      resolver = null;
+      resolve(null);
+    }
+  };
+
+  return { promise, dispose };
+}
+
+/**
  * Handles messages from the extension and syncs the webview state.
  */
 export class MainViewMessageHandler extends BaseWebviewMessageHandler {
@@ -52,12 +105,7 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     // Track file list event handlers for cleanup
     this._fileListHandlers = {};
     // Track pending model option updates until the select element is ready
-    this._latestModelOptions = null;
-    this._modelFlushScheduled = false;
-    this._isModelFlushRunning = false;
-    this._modelSelectPromise = null;
-    this._modelSelectResolver = null;
-    this._modelSelectObserver = null;
+    this._disposeModelWaiter = null;
     this._isDisposed = false;
 
     const ctx = {
@@ -87,22 +135,41 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
         ),
       [MAIN_VIEW_COMMANDS.HIDE_DEPENDENCY_BANNER]: () =>
         webviewEventBus.dispatchEvent(new CustomEvent('hideDependencyBanner')),
-      [MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS]: (m) => {
+      [MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS]: async (m) => {
         // Validate that options are provided
         if (!m.options) {
           console.warn('SET_MODEL_OPTIONS: No options provided');
           return;
         }
 
-        const select = document.getElementById('model');
-        if (select) {
-          this._latestModelOptions = null;
-          this._applyModelOptions(select, m.options);
+        let select = document.getElementById('model');
+        if (!(select instanceof HTMLSelectElement)) {
+          const waitHandle = waitForElement('#model');
+          if (this._disposeModelWaiter) {
+            this._disposeModelWaiter();
+          }
+          const disposeHandle = () => {
+            waitHandle.dispose();
+            if (this._disposeModelWaiter === disposeHandle) {
+              this._disposeModelWaiter = null;
+            }
+          };
+          this._disposeModelWaiter = disposeHandle;
+          select = await waitHandle.promise;
+          if (this._disposeModelWaiter === disposeHandle) {
+            this._disposeModelWaiter = null;
+          }
+        }
+
+        if (this._isDisposed) {
           return;
         }
 
-        this._latestModelOptions = m.options;
-        this._enqueueModelOptionsFlush();
+        if (!(select instanceof HTMLSelectElement)) {
+          console.warn('SET_MODEL_OPTIONS: Model select element not found');
+          return;
+        }
+        this._applyModelOptions(select, m.options);
       },
       [MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS]: (m) => {
         const optionsPayload = m.options ?? {};
@@ -267,119 +334,14 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     return { sessionType, select, value };
   }
 
-  _enqueueModelOptionsFlush() {
-    if (this._isDisposed) {
-      return;
-    }
-
-    if (this._modelFlushScheduled) {
-      return;
-    }
-
-    this._modelFlushScheduled = true;
-    Promise.resolve().then(() => this._drainModelOptions());
-  }
-
-  async _drainModelOptions() {
-    if (this._isDisposed) {
-      this._modelFlushScheduled = false;
-      return;
-    }
-
-    if (this._isModelFlushRunning) {
-      return;
-    }
-
-    this._isModelFlushRunning = true;
-
-    try {
-      while (!this._isDisposed && this._latestModelOptions) {
-        const select = await this._waitForModelSelect();
-        if (!select || this._isDisposed) {
-          break;
-        }
-
-        const html = this._latestModelOptions;
-        if (!html) {
-          break;
-        }
-
-        this._latestModelOptions = null;
-        this._applyModelOptions(select, html);
-      }
-    } catch (error) {
-      console.error('SET_MODEL_OPTIONS: Failed to apply options', error);
-    } finally {
-      this._isModelFlushRunning = false;
-      this._modelFlushScheduled = false;
-    }
-
-    if (!this._isDisposed && this._latestModelOptions) {
-      this._enqueueModelOptionsFlush();
-    }
-  }
-
-  _waitForModelSelect() {
-    if (this._isDisposed) {
-      return Promise.resolve(null);
-    }
-
-    const existing = document.getElementById('model');
-    if (existing) {
-      return Promise.resolve(existing);
-    }
-
-    if (this._modelSelectPromise) {
-      return this._modelSelectPromise;
-    }
-
-    this._modelSelectPromise = new Promise((resolve) => {
-      this._modelSelectResolver = resolve;
-      const observer = new MutationObserver(() => {
-        const select = document.getElementById('model');
-        if (select) {
-          this._resolveModelSelectWaiter(select);
-        }
-      });
-      observer.observe(document.documentElement, {
-        childList: true,
-        subtree: true,
-      });
-      this._modelSelectObserver = observer;
-    });
-
-    return this._modelSelectPromise;
-  }
-
-  _resolveModelSelectWaiter(result) {
-    this._disposeModelSelectObserver();
-
-    if (this._modelSelectResolver) {
-      const resolver = this._modelSelectResolver;
-      this._modelSelectResolver = null;
-      this._modelSelectPromise = null;
-      resolver(result);
-    } else {
-      this._modelSelectPromise = null;
-      this._modelSelectResolver = null;
-    }
-  }
-
-  _disposeModelSelectObserver() {
-    if (this._modelSelectObserver) {
-      this._modelSelectObserver.disconnect();
-      this._modelSelectObserver = null;
-    }
-  }
-
   /** Register handlers and optionally request initial data. */
   setup(options = {}) {
     const { requestData = true } = options;
     this._isDisposed = false;
-    this._latestModelOptions = null;
-    this._modelFlushScheduled = false;
-    this._isModelFlushRunning = false;
-    this._resolveModelSelectWaiter(null);
+    if (this._disposeModelWaiter) {
+      this._disposeModelWaiter();
+      this._disposeModelWaiter = null;
+    }
     super.setup();
     if (requestData) {
       this._initializeDataRequests();
@@ -388,11 +350,10 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
 
   cleanup() {
     this._isDisposed = true;
-    this._latestModelOptions = null;
-    this._modelFlushScheduled = false;
-    this._isModelFlushRunning = false;
-    this._disposeModelSelectObserver();
-    this._resolveModelSelectWaiter(null);
+    if (this._disposeModelWaiter) {
+      this._disposeModelWaiter();
+      this._disposeModelWaiter = null;
+    }
 
     super.cleanup();
     Object.values(this._fileListHandlers).forEach(({ container, handler }) => {
