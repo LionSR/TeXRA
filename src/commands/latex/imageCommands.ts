@@ -6,7 +6,6 @@ import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
 import * as dialogUtils from '@utils/dialogs';
-import { WorkspaceFS } from '@utils/files';
 import {
   countPdfPages,
   getBase64EncodedMedia,
@@ -16,38 +15,6 @@ import {
 
 const CHANNEL = 'TestCommands';
 logger.initialize(CHANNEL);
-
-interface PdfSelectionResult {
-  relativePath: string;
-  absolutePath: string;
-}
-
-/**
- * Prompts the user to select a PDF file within the current workspace.
- * Returns both the workspace-relative and absolute paths for downstream
- * consumers. Returns null when the workspace is unavailable or the user
- * cancels the dialog.
- */
-export async function selectPdfFileFromWorkspace(): Promise<PdfSelectionResult | null> {
-  if (!WorkspaceFS.getPath()) {
-    vscode.window.showErrorMessage('No workspace folder open');
-    return null;
-  }
-
-  const relativePath = await dialogUtils.selectFile({
-    openLabel: 'Select PDF file',
-    filters: {
-      'PDF files': ['pdf'],
-    },
-  });
-
-  if (!relativePath) {
-    return null;
-  }
-
-  const absolutePath = WorkspaceFS.fullPath(relativePath);
-  return { relativePath, absolutePath };
-}
 
 export function registerImageCommands(context: vscode.ExtensionContext) {
   context.subscriptions.push(
@@ -69,7 +36,12 @@ export function registerImageCommands(context: vscode.ExtensionContext) {
 
 async function handleCountPdfPages(): Promise<void> {
   try {
-    const selection = await selectPdfFileFromWorkspace();
+    const selection = await dialogUtils.selectFileFromWorkspace({
+      openLabel: 'Select PDF file',
+      filters: {
+        'PDF files': ['pdf'],
+      },
+    });
     if (!selection) {
       return;
     }
@@ -96,7 +68,7 @@ async function handleCountPdfPages(): Promise<void> {
 
 async function handleEncodeImageToBase64(): Promise<string | undefined> {
   try {
-    const selectedFile = await dialogUtils.selectFile({
+    const selection = await dialogUtils.selectFileFromWorkspace({
       openLabel: 'Select file',
       filters: {
         'Image files': ['png', 'jpg', 'jpeg', 'gif', 'heic', 'heif', 'webp'],
@@ -104,13 +76,16 @@ async function handleEncodeImageToBase64(): Promise<string | undefined> {
       },
     });
 
-    if (!selectedFile) {
+    if (!selection) {
       return undefined;
     }
 
-    logger.debug(CHANNEL, `Processing image file: ${selectedFile}`);
+    logger.debug(
+      CHANNEL,
+      `Processing image file: ${selection.relativePath} (resolved: ${selection.absolutePath})`,
+    );
 
-    const base64String = await getBase64EncodedMedia(selectedFile);
+    const base64String = await getBase64EncodedMedia(selection.relativePath);
 
     // Also show a truncated version in the debug log for quick verification
     const truncatedString = base64String.substring(0, 100) + '...';
@@ -134,7 +109,12 @@ async function handleConvertPdfToImages(): Promise<
   string[] | string | undefined
 > {
   try {
-    const selection = await selectPdfFileFromWorkspace();
+    const selection = await dialogUtils.selectFileFromWorkspace({
+      openLabel: 'Select PDF file',
+      filters: {
+        'PDF files': ['pdf'],
+      },
+    });
     if (!selection) {
       return undefined;
     }
@@ -199,7 +179,12 @@ async function handleConvertPdfToImages(): Promise<
 
 async function handleTestPdfToImage(): Promise<string | undefined> {
   try {
-    const selection = await selectPdfFileFromWorkspace();
+    const selection = await dialogUtils.selectFileFromWorkspace({
+      openLabel: 'Select PDF file',
+      filters: {
+        'PDF files': ['pdf'],
+      },
+    });
     if (!selection) {
       return undefined;
     }
