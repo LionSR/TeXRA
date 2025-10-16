@@ -49,17 +49,14 @@ export const TaskGroupLevel = {
     name: 'root',
     formatTime: (date) => {
       try {
-        const datePart = new Intl.DateTimeFormat(undefined, {
+        return new Intl.DateTimeFormat(undefined, {
           year: 'numeric',
           month: '2-digit',
           day: '2-digit',
-        }).format(date);
-        const timePart = new Intl.DateTimeFormat(undefined, {
           hour: '2-digit',
           minute: '2-digit',
           second: '2-digit',
         }).format(date);
-        return `${datePart} ${timePart}`;
       } catch (error) {
         const isoTimestamp = date.toISOString();
         const timePart = isoTimestamp.split('T')[1]?.split('.')[0] ?? isoTimestamp;
