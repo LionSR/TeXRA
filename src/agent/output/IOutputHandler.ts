@@ -26,9 +26,6 @@ export interface IOutputHandler {
   /** Indent multiple LaTeX files for readability. */
   indentLatexFiles(filePaths: string[]): Promise<void>;
 
-  /** Run latexdiff comparisons for the current round. */
-  handleLatexdiffofOutput(currRound: number, groupId?: string): Promise<void>;
-
   /** Process output files from XML or direct input. */
   processOutputFiles(
     outputFile: string,

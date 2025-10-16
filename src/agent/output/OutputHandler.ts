@@ -55,7 +55,7 @@ export class OutputHandler implements IOutputHandler {
   protected logger: AgentLogger;
   protected channel: string;
   public readonly xmlManager: XmlOutputManager;
-  private diffManager: LatexDiffManager;
+  public readonly diffManager: LatexDiffManager;
   private diffStatsManager: DiffStatsManager;
 
   constructor(
@@ -175,34 +175,6 @@ export class OutputHandler implements IOutputHandler {
     }
   }
 
-  /**
-   * Helper method to log latexdiff results with appropriate level
-   * @param result The result of a latexdiff operation
-   * @param operation Description of the operation being performed
-   * @param groupId The group ID for logging context
-   */
-
-  /**
-   * Runs all latexdiff comparisons for the current round.
-   * This is the ONLY place where latexdiff operations should be performed.
-   *
-   * Generates two types of diffs:
-   * 1. Round diffs: Between original input and current output (when in rewrite mode)
-   * 2. Between-rounds diffs: Comparing previous round to current round (when applicable)
-   *
-   */
-  public async handleLatexdiffofOutput(
-    currRound: number,
-    groupId?: string,
-  ): Promise<void> {
-    this.ensureRound(currRound);
-    const mapping = this.getRoundMapping(currRound);
-    await this.diffManager.handleLatexdiffofOutput(
-      currRound,
-      mapping,
-      groupId,
-    );
-  }
 
   /**
    * Gather mapping and diff statistics for output files of a round.
@@ -279,6 +251,11 @@ export class OutputHandler implements IOutputHandler {
 
   private invalidateRoundMapping(round: number): void {
     delete this.roundMappings[round];
+  }
+
+  private invalidateMappingsFromRound(round: number): void {
+    this.invalidateRoundMapping(round);
+    this.invalidateRoundMapping(round + 1);
   }
 
   public async validateExpectedOutputs(
@@ -415,8 +392,7 @@ export class OutputHandler implements IOutputHandler {
 
           this.outputFiles[currRound] = processedFiles;
           this.outputMappings[currRound] = processedPairs;
-          this.invalidateRoundMapping(currRound);
-          this.invalidateRoundMapping(currRound + 1);
+          this.invalidateMappingsFromRound(currRound);
 
           if (this.baseFiles && this.baseFiles.length > 0) {
             await replaceInputCommands(
@@ -432,8 +408,7 @@ export class OutputHandler implements IOutputHandler {
           );
           this.outputFiles[currRound] = [];
           this.outputMappings[currRound] = [];
-          this.invalidateRoundMapping(currRound);
-          this.invalidateRoundMapping(currRound + 1);
+          this.invalidateMappingsFromRound(currRound);
         }
       } catch (err) {
         this.logger.debug(
@@ -443,8 +418,7 @@ export class OutputHandler implements IOutputHandler {
         );
         this.outputFiles[currRound] = [];
         this.outputMappings[currRound] = [];
-        this.invalidateRoundMapping(currRound);
-        this.invalidateRoundMapping(currRound + 1);
+        this.invalidateMappingsFromRound(currRound);
       }
     } else {
       // Single output file case
@@ -480,8 +454,7 @@ export class OutputHandler implements IOutputHandler {
 
           this.outputFiles[currRound] = [processed.path];
           this.outputMappings[currRound] = [processed];
-          this.invalidateRoundMapping(currRound);
-          this.invalidateRoundMapping(currRound + 1);
+          this.invalidateMappingsFromRound(currRound);
         } else {
           this.logger.debug(
             `No processed file was generated from ${outputFile}`,
@@ -489,8 +462,7 @@ export class OutputHandler implements IOutputHandler {
           );
           this.outputFiles[currRound] = [];
           this.outputMappings[currRound] = [];
-          this.invalidateRoundMapping(currRound);
-          this.invalidateRoundMapping(currRound + 1);
+          this.invalidateMappingsFromRound(currRound);
         }
       } catch (err) {
         this.logger.debug(
@@ -510,8 +482,7 @@ export class OutputHandler implements IOutputHandler {
         });
         this.outputFiles[currRound] = [];
         this.outputMappings[currRound] = [];
-        this.invalidateRoundMapping(currRound);
-        this.invalidateRoundMapping(currRound + 1);
+        this.invalidateMappingsFromRound(currRound);
       }
     }
   }
