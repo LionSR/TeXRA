@@ -34,6 +34,7 @@ import { registerOpenFileCommands } from '@commands/files/openFileCommands';
 import { registerSettingsCommands } from '@commands/system/settingsCommands';
 import { registerMainViewCommands } from '@commands/system/mainViewCommands';
 import { registerSampleProjectCommands } from '@commands/system/sampleProjectCommands';
+import { registerWalkthroughCommands } from '@commands/system/walkthroughCommands';
 
 import * as logger from '@logger/logUtils';
 
@@ -79,6 +80,7 @@ export function registerCommands(context: vscode.ExtensionContext) {
     mainView: registerMainViewCommands(context),
     settings: registerSettingsCommands(context),
     sampleProject: registerSampleProjectCommands(context),
+    walkthrough: registerWalkthroughCommands(context),
   };
 
   // Register webview provider
