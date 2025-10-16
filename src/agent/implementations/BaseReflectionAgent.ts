@@ -200,11 +200,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     await this.trackRoundUsage(stateGlobal, processGroupId);
 
     // If this is the end of a turn, handle latexdiff operations as a separate step
-    if (
-      endTurn &&
-      this.outputHandler.outputFiles[currRound] &&
-      this.outputHandler.outputFiles[currRound].length > 0
-    ) {
+    if (endTurn && this.outputHandler.hasRoundOutputs(currRound)) {
       const existingBase = await Promise.all(
         this.baseFiles.map(async (f) => await WorkspaceFS.exists(f)),
       );
@@ -223,7 +219,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       }
     }
 
-    return this.outputHandler.outputFiles[currRound] || [];
+    return this.outputHandler.ensureRound(currRound);
   }
 
   /**
@@ -457,8 +453,8 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
         );
       } else {
         // Handle single output file from previous round
-        const outputFiles = this.outputHandler.outputFiles[currRound - 1];
-        if (outputFiles && outputFiles.length > 0) {
+        const outputFiles = this.outputHandler.ensureRound(currRound - 1);
+        if (outputFiles.length > 0) {
           await this._handleToolStateForOutput(
             [outputFiles[0]],
             currRound,
