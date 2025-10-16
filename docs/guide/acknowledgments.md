@@ -23,6 +23,7 @@ TeXRA's design draws inspiration from several key concepts in AI and software de
 - **Chain-of-Thought (CoT) Reasoning [2]:** For complex agents, TeXRA employs techniques inspired by Chain-of-Thought prompting, encouraging models to "think step-by-step" (often visible in the `<scratchpad>` sections of logs) before producing a final output.
 - **Reflection & Action [3, 4]:** The automatic reflection passes, combined with the agent's ability to act (edit text, use tools), draw inspiration from frameworks like ReAct and Reflexion, allowing iterative refinement based on self-critique or environmental feedback.
 - **Structured Prompting (YAML + Jinja):** The use of YAML for structure and Jinja for templating within prompts allows for complex logic, dynamic content injection, and better maintainability, drawing inspiration from approaches seen in libraries like [Prompt Poet](https://github.com/character-ai/prompt-poet). The support for inheritance and modularity allows for a more flexible and reusable prompt design.
+- **Scientific discovery workflows [5]:** TeXRA's focus on reproducible, domain-aware assistance aligns with emerging work on language agents that support theoretical and computational physics research.
 
 We believe combining these concepts provides a robust and adaptable platform for AI-powered academic writing assistance.
 
@@ -35,3 +36,5 @@ We believe combining these concepts provides a robust and adaptable platform for
 [3] Yao, S., Zhao, J., Yu, D., Du, N., Shafran, I., Narasimhan, K., & Cao, Y. (2023). ReAct: Synergizing Reasoning and Acting in Language Models. _International Conference on Learning Representations (ICLR)_.
 
 [4] Shinn, N., Cassano, F., Gopinath, A., Narasimhan, K., & Yao, S. (2023). Reflexion: Language Agents with Verbal Reinforcement Learning. In _Advances in Neural Information Processing Systems 36 (NeurIPS 2023)_.
+
+[5] Lu, S., Jin, Z., Zhang, T. J., Kos, P., Cirac, J. I., & Schölkopf, B. (2025). Can Theoretical Physics Research Benefit from Language Agents? _arXiv preprint arXiv:2506.06214_.
