@@ -110,6 +110,32 @@ describe('OutputHandler round helpers', () => {
     assert.strictEqual(handler.hasRoundOutputs(1), true);
     assert.strictEqual(handler.hasRoundOutputs(3), false);
   });
+
+  it('getRoundOutputs returns empty array for uninitialized rounds', () => {
+    const handler = new MockOutputHandler(baseSetting, baseConfig);
+    const outputs = handler.getRoundOutputs(5);
+
+    assert.ok(Array.isArray(outputs));
+    assert.strictEqual(outputs.length, 0);
+
+    // Verify that getRoundOutputs did NOT create storage (read-only behavior)
+    assert.strictEqual(handler.outputFiles[5], undefined);
+    assert.strictEqual(handler.outputMappings[5], undefined);
+  });
+
+  it('getRoundOutputs returns existing outputs without modifying state', () => {
+    const handler = new MockOutputHandler(baseSetting, baseConfig);
+    handler.ensureRound(2).push('existing.tex');
+
+    const outputs = handler.getRoundOutputs(2);
+
+    assert.ok(Array.isArray(outputs));
+    assert.strictEqual(outputs.length, 1);
+    assert.strictEqual(outputs[0], 'existing.tex');
+
+    // Verify reference equality (returns the actual array, not a copy)
+    assert.strictEqual(outputs, handler.outputFiles[2]);
+  });
 });
 
 describe('OutputHandler.finalizeRound', () => {

@@ -100,12 +100,12 @@ export class OutputHandler implements IOutputHandler {
   }
 
   /**
-   * Retrieve the list of outputs for a round, initializing it if needed.
+   * Retrieve the list of outputs for a round without side effects.
    * @param round The round index to read.
-   * @returns The list of outputs associated with the round.
+   * @returns The list of outputs associated with the round, or an empty array if none exist.
    */
   public getRoundOutputs(round: number): string[] {
-    return this.ensureRound(round);
+    return this.outputFiles[round] ?? [];
   }
 
   /**
