@@ -17,7 +17,7 @@ export interface IOutputHandler {
   /** Ensure storage for a round and return its outputs. */
   ensureRound(round: number): string[];
 
-  /** Retrieve the outputs for a round, creating storage if needed. */
+  /** Retrieve the outputs for a round without side effects. Returns empty array if round not initialized. */
   getRoundOutputs(round: number): string[];
 
   /** Determine whether a round has generated outputs. */
