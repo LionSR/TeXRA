@@ -219,7 +219,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       }
     }
 
-    return this.outputHandler.outputFiles[currRound] || [];
+    return this.outputHandler.ensureRound(currRound);
   }
 
   /**
@@ -453,7 +453,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
         );
       } else {
         // Handle single output file from previous round
-        const outputFiles = this.outputHandler.outputFiles[currRound - 1] || [];
+        const outputFiles = this.outputHandler.ensureRound(currRound - 1);
         if (outputFiles.length > 0) {
           await this._handleToolStateForOutput(
             [outputFiles[0]],
