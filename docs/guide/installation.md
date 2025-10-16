@@ -25,8 +25,15 @@ The easiest way to install TeXRA is directly from an extension marketplace:
 
 TeXRA is available on both the official VS Code Marketplace and the Open VSX Registry:
 
-<a href="https://marketplace.visualstudio.com/items?itemName=texra-ai.texra" target="_blank" style="display: inline-block; background-color: #007ACC; color: white; padding: 8px 12px; text-decoration: none; border-radius: 4px; font-weight: bold; margin: 10px 5px 10px 0;">View on VS Code Marketplace</a>
+<a href="vscode:extension/texra-ai.texra" target="_blank" style="display: inline-block; background-color: #007ACC; color: white; padding: 8px 12px; text-decoration: none; border-radius: 4px; font-weight: bold; margin: 10px 5px 10px 0;">Open in VS Code</a>
 <a href="https://open-vsx.org/extension/texra-ai/texra" target="_blank" style="display: inline-block; background-color: #4D5D99; color: white; padding: 8px 12px; text-decoration: none; border-radius: 4px; font-weight: bold; margin: 10px 0 10px 5px;">View on Open VSX</a>
+
+You can also install TeXRA directly in your preferred editor using protocol-based links:
+
+- [Open in VS Code](vscode:extension/texra-ai.texra)
+- [Open in VS Code Insiders](vscode-insiders:extension/texra-ai.texra)
+- [Open in Cursor](cursor:extension/texra-ai.texra)
+- [Open in Windsurf](windsurf:extension/texra-ai.texra)
 
 ### From VSIX File
 
