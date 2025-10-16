@@ -4,14 +4,11 @@ import { strict as assert } from 'assert';
 // Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - commands
-import { selectPdfFileFromWorkspace } from '@commands/latex/imageCommands';
-
 // Local imports - utilities
 import * as dialogUtils from '@utils/dialogs';
 import { WorkspaceFS } from '@utils/files';
 
-describe('imageCommands.selectPdfFileFromWorkspace', () => {
+describe('dialogs.selectFileFromWorkspace', () => {
   type DialogUtilsMutable = {
     selectFile: typeof dialogUtils.selectFile;
   };
@@ -64,7 +61,10 @@ describe('imageCommands.selectPdfFileFromWorkspace', () => {
       return null;
     };
 
-    const result = await selectPdfFileFromWorkspace();
+    const result = await dialogUtils.selectFileFromWorkspace({
+      openLabel: 'Select file',
+      filters: { 'PDF files': ['pdf'] },
+    });
 
     assert.strictEqual(result, null);
     assert.strictEqual(selectFileCalls, 1);
@@ -77,9 +77,12 @@ describe('imageCommands.selectPdfFileFromWorkspace', () => {
       return 'docs/sample.pdf';
     };
 
-    const result = await selectPdfFileFromWorkspace();
+    const result = await dialogUtils.selectFileFromWorkspace({
+      openLabel: 'Select file',
+      filters: { 'PDF files': ['pdf'] },
+    });
 
-    assert.ok(result);
+    assert.ok(result, 'Expected result to be defined');
     assert.strictEqual(result?.relativePath, 'docs/sample.pdf');
     assert.strictEqual(result?.absolutePath, '/mock/workspace/docs/sample.pdf');
     assert.strictEqual(selectFileCalls, 1);
@@ -89,7 +92,10 @@ describe('imageCommands.selectPdfFileFromWorkspace', () => {
   it('returns null and shows an error when no workspace is open', async () => {
     workspaceFs.getPath = () => undefined;
 
-    const result = await selectPdfFileFromWorkspace();
+    const result = await dialogUtils.selectFileFromWorkspace({
+      openLabel: 'Select file',
+      filters: { 'PDF files': ['pdf'] },
+    });
 
     assert.strictEqual(result, null);
     assert.strictEqual(selectFileCalls, 0);
