@@ -1,4 +1,3 @@
-// @ts-nocheck
 /* eslint-env mocha */
 
 // Standard library imports
@@ -9,15 +8,14 @@ import { strict as assert } from 'assert';
 import { JSDOM } from 'jsdom';
 
 // Local imports - webview
-// Webview modules are authored in JavaScript without type declarations.
-// @ts-ignore
+// @ts-ignore: Webview modules are authored in JavaScript without type declarations.
 import {
   MULTIPLE_SELECTIONS,
   CHECK_BOXES,
   ELEMENT_IDS,
 } from '../../webview/modules/constants.js';
 // Helper module is authored in JavaScript as well.
-// @ts-ignore
+// @ts-ignore: collectCurrentContext is defined in a JavaScript module without typings.
 import { collectCurrentContext } from '../../webview/modules/state/currentContext.js';
 
 function createSelect(id: string, value: string) {
