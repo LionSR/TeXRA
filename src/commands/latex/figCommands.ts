@@ -49,7 +49,12 @@ async function handleExtractFigurePaths(): Promise<void> {
     });
 
     if (guardResult.status !== 'ok') {
-      logGuardFailure(CHANNEL, 'extract figure paths', guardResult.status, 'LaTeX');
+      logGuardFailure(
+        CHANNEL,
+        'extract figure paths',
+        guardResult.status,
+        'LaTeX',
+      );
       return;
     }
 
@@ -92,7 +97,12 @@ async function handleExtractTikzFigures(): Promise<void> {
     });
 
     if (guardResult.status !== 'ok') {
-      logGuardFailure(CHANNEL, 'extract TikZ figures', guardResult.status, 'LaTeX');
+      logGuardFailure(
+        CHANNEL,
+        'extract TikZ figures',
+        guardResult.status,
+        'LaTeX',
+      );
       return;
     }
 
@@ -148,7 +158,12 @@ async function handleCompileTikzFigures(): Promise<void> {
     });
 
     if (guardResult.status !== 'ok') {
-      logGuardFailure(CHANNEL, 'compile TikZ figures', guardResult.status, 'LaTeX');
+      logGuardFailure(
+        CHANNEL,
+        'compile TikZ figures',
+        guardResult.status,
+        'LaTeX',
+      );
       return;
     }
 
