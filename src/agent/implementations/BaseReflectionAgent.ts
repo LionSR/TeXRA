@@ -183,7 +183,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
    * Processes output files for current round.
    * This method orchestrates the overall output processing flow with clear separation of concerns:
    * 1. Usage tracking via trackRoundUsage
-   * 2. LaTeX diff operations via handleLatexdiffofOutput (only when endTurn is true)
+   * 2. LaTeX diff operations via diffManager.handleLatexdiffofOutput (only when endTurn is true)
    *
    * The actual file processing is handled separately in processOutputFiles.
    *
@@ -207,8 +207,10 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
 
       if (existingBase.some((e) => e)) {
         // Pass the process group ID to maintain proper nesting in the log hierarchy
-        await this.outputHandler.handleLatexdiffofOutput(
+        const mapping = this.outputHandler.getRoundMapping(currRound);
+        await this.outputHandler.diffManager.handleLatexdiffofOutput(
           currRound,
+          mapping,
           processGroupId,
         );
       } else {
