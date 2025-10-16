@@ -21,13 +21,13 @@ export class Placeholder {
       this._element = document.createElement('div');
       this._element.id = ELEMENT_IDS.LOG_PLACEHOLDER;
       this._element.className = 'log-placeholder';
+      const walkthroughLink =
+        '<a href="command:texra.openGettingStarted">open the getting started walkthrough</a>';
       const sampleLink =
         '<a href="command:texra.createSampleProject">create a sample project</a>';
       const arxivLink =
         '<a href="command:texra.downloadArXivSource">download an arXiv source</a>';
-      const guideArgs = encodeURIComponent(JSON.stringify(['quick-start']));
-      const guideLink = `<a href="command:texra.openDoc?${guideArgs}">user guide</a>`;
-      this._element.innerHTML = `No runs yet—use TeXRA commands to start. Try ${sampleLink}, ${arxivLink}, or read the ${guideLink}.`;
+      this._element.innerHTML = `No runs yet—use TeXRA commands to start. Try ${walkthroughLink}, ${sampleLink}, or ${arxivLink}.`;
     }
 
     container.innerHTML = '';

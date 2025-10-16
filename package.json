@@ -18,7 +18,8 @@
     "Data Science"
   ],
   "activationEvents": [
-    "onColorTheme"
+    "onColorTheme",
+    "onCommand:texra.openGettingStarted"
   ],
   "main": "./dist/extension.js",
   "contributes": {
@@ -880,6 +881,12 @@
         "category": "TeXRA"
       },
       {
+        "command": "texra.openGettingStarted",
+        "title": "Open Getting Started Walkthrough",
+        "category": "TeXRA",
+        "icon": "$(mortar-board)"
+      },
+      {
         "command": "texra.cleanOutput",
         "title": "Clean All LLM Output Files",
         "category": "TeXRA",
@@ -1150,6 +1157,93 @@
         "title": "Show Tasks",
         "category": "TeXRA",
         "icon": "$(eye)"
+      }
+    ],
+    "walkthroughs": [
+      {
+        "id": "texra.gettingStarted",
+        "title": "Run your first TeXRA workflow",
+        "description": "Complete this checklist to configure TeXRA, run your first agent, and review results without leaving VS Code.",
+        "steps": [
+          {
+            "id": "texra.gettingStarted.sampleWorkspace",
+            "title": "Seed the sample workspace",
+            "description": "Start with the bundled workspace so you can experiment safely.\n[Create the sample project](command:texra.createSampleProject) and review the README that opens for links back to this checklist.",
+            "media": {
+              "markdown": "resources/walkthroughs/getting-started.md"
+            },
+            "completionEvents": [
+              "onCommand:texra.createSampleProject"
+            ]
+          },
+          {
+            "id": "texra.gettingStarted.apiKeys",
+            "title": "Connect your API keys",
+            "description": "Register your Anthropic, OpenAI, Google, or other provider keys before running agents.\n[Set API keys](command:texra.setApiKey) and keep the defaults unless you need workspace-specific overrides.",
+            "media": {
+              "image": "resources/walkthroughs/media/api-key-setup.png",
+              "altText": "Screenshot of the API key configuration view"
+            },
+            "completionEvents": [
+              "onCommand:texra.setApiKey"
+            ]
+          },
+          {
+            "id": "texra.gettingStarted.stageFiles",
+            "title": "Stage your files",
+            "description": "Use the Input, Reference, Auxiliary, and Media pickers to tell TeXRA what to read.\n[Open the TeXRA main view](command:texra.mainView.focus) and choose whether you want a single output or multiple outputs for parallel drafts.",
+            "media": {
+              "image": "resources/walkthroughs/media/file-selection.png",
+              "altText": "Screenshot of the file selection interface"
+            },
+            "completionEvents": [
+              "onCommand:texra.mainView.focus"
+            ]
+          },
+          {
+            "id": "texra.gettingStarted.agentModel",
+            "title": "Choose an agent and model",
+            "description": "Match your task to the right persona—`correct` for structural fixes, `polish` for copy edits, or `draw` for diagrams—and pair it with a model tier that balances quality and speed.",
+            "media": {
+              "image": "resources/walkthroughs/media/agent-model-selection.png",
+              "altText": "Screenshot of the agent and model selection UI"
+            }
+          },
+          {
+            "id": "texra.gettingStarted.autoExtract",
+            "title": "Enable automatic figure extraction",
+            "description": "Toggle **Auto-extract figures** and **Auto-extract TikZ blocks** before you run so TeXRA gathers assets for you. You can also try the standalone commands: [Extract figure paths](command:texra.extractFigurePaths) or [Extract TikZ figures](command:texra.extractTikzFigures).",
+            "media": {
+              "image": "resources/walkthroughs/media/auto-extract-options.png",
+              "altText": "Screenshot showing auto-extraction options"
+            },
+            "completionEvents": [
+              "onCommand:texra.extractFigurePaths",
+              "onCommand:texra.extractTikzFigures"
+            ]
+          },
+          {
+            "id": "texra.gettingStarted.progress",
+            "title": "Execute and watch progress",
+            "description": "Kick off your run and watch logs, tool calls, and outputs stream into the ProgressBoard.\n[Execute the agent](command:texra.execute) and keep an eye on [Show Tasks](command:texra.showProgressView) for status updates.",
+            "media": {
+              "image": "resources/walkthroughs/media/texra-progressboard.png",
+              "altText": "Screenshot of the ProgressBoard view"
+            },
+            "completionEvents": [
+              "onCommand:texra.execute"
+            ]
+          },
+          {
+            "id": "texra.gettingStarted.review",
+            "title": "Review and diff outputs",
+            "description": "Open the generated files, compare them against your sources, and accept or iterate. Use VS Code's diff view to see every change before you commit.",
+            "media": {
+              "image": "resources/walkthroughs/media/vscode-compare.png",
+              "altText": "Screenshot of the VS Code diff view"
+            }
+          }
+        ]
       }
     ],
     "viewsContainers": {
