@@ -11,7 +11,7 @@ import { executeAgent } from '@agent/runtime/executeAgent';
 // Local imports - utils
 import {
   getActiveEditorWithGuards,
-  type ActiveFileGuardFailureReason,
+  logGuardFailure,
 } from '@utils/editor/activeFileGuards';
 
 const CHANNEL = 'XmlCommands';
@@ -30,7 +30,7 @@ export async function handleParseXml(): Promise<void> {
     });
 
     if (guardResult.status !== 'ok') {
-      logGuardFailure('parse XML', guardResult.status);
+      logGuardFailure(CHANNEL, 'parse XML', guardResult.status, 'XML');
       return;
     }
 
@@ -88,7 +88,7 @@ export async function handleValidateAndFixXml(
     });
 
     if (guardResult.status !== 'ok') {
-      logGuardFailure('validate XML', guardResult.status);
+      logGuardFailure(CHANNEL, 'validate XML', guardResult.status, 'XML');
       return;
     }
 
@@ -110,29 +110,6 @@ export async function handleValidateAndFixXml(
       `Error in validateAndFixXml command: ${err instanceof Error ? err.message : String(err)}`,
     );
     vscode.window.showErrorMessage(`Error validating XML: ${String(err)}`);
-  }
-}
-
-function logGuardFailure(
-  action: string,
-  reason: ActiveFileGuardFailureReason,
-): void {
-  switch (reason) {
-    case 'noEditor':
-      logger.warn(CHANNEL, `Cannot ${action}: no active editor found.`);
-      break;
-    case 'unsupportedExtension':
-      logger.warn(
-        CHANNEL,
-        `Cannot ${action}: active document is not an XML file.`,
-      );
-      break;
-    case 'saveFailed':
-      logger.error(
-        CHANNEL,
-        `Cannot ${action}: failed to save XML document before running command.`,
-      );
-      break;
   }
 }
 

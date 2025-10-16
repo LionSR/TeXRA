@@ -10,7 +10,7 @@ import { sleep } from '@utils/helpers';
 import replacementEngine from '@replacement/engine';
 import {
   getActiveEditorWithGuards,
-  type ActiveFileGuardFailureReason,
+  logGuardFailure,
 } from '@utils/editor/activeFileGuards';
 
 // Local imports - latex utils
@@ -48,7 +48,7 @@ async function handleApplyReplacements(): Promise<void> {
     });
 
     if (guardResult.status !== 'ok') {
-      logGuardFailure('apply replacements', guardResult.status);
+      logGuardFailure(CHANNEL, 'apply replacements', guardResult.status, 'LaTeX');
       return;
     }
 
@@ -90,7 +90,7 @@ async function handleIndentCurrentTeX(): Promise<void> {
     });
 
     if (guardResult.status !== 'ok') {
-      logGuardFailure('indent LaTeX document', guardResult.status);
+      logGuardFailure(CHANNEL, 'indent LaTeX document', guardResult.status, 'LaTeX');
       return;
     }
 
@@ -114,47 +114,19 @@ async function handleIndentCurrentTeX(): Promise<void> {
   }
 }
 
-function logGuardFailure(
-  action: string,
-  reason: ActiveFileGuardFailureReason,
-): void {
-  switch (reason) {
-    case 'noEditor':
-      logger.warn(CHANNEL, `Cannot ${action}: no active editor found.`);
-      break;
-    case 'unsupportedExtension':
-      logger.warn(
-        CHANNEL,
-        `Cannot ${action}: active document is not a LaTeX file.`,
-      );
-      break;
-    case 'saveFailed':
-      logger.error(
-        CHANNEL,
-        `Cannot ${action}: failed to save LaTeX document before running command.`,
-      );
-      break;
-  }
-}
-
 async function handleGetTeXCount(): Promise<void> {
   try {
-    // Get active editor
-    const editor = vscode.window.activeTextEditor;
-    if (!editor) {
-      vscode.window.showWarningMessage('Please open a LaTeX file first');
+    const guardResult = await getActiveEditorWithGuards({
+      allowedExtensions: ['.tex'],
+      resourceName: 'LaTeX',
+    });
+
+    if (guardResult.status !== 'ok') {
+      logGuardFailure(CHANNEL, 'get TeX count', guardResult.status, 'LaTeX');
       return;
     }
 
-    // Check if it's a LaTeX file
-    if (!editor.document.fileName.toLowerCase().endsWith('.tex')) {
-      vscode.window.showWarningMessage(
-        'This command only works with LaTeX files',
-      );
-      return;
-    }
-
-    const filePath = WorkspaceFS.relativePath(editor.document.fileName);
+    const { relativePath: filePath } = guardResult;
     logger.debug(CHANNEL, `Getting tex count for: ${filePath}`);
 
     // Ask if user wants to merge included files
