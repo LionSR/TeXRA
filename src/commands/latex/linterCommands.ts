@@ -10,7 +10,10 @@ import {
   getSeverityString,
   countDiagnosticsBySeverity,
 } from '@frontend/latex/linter';
-import { WorkspaceFS } from '@utils/files';
+import {
+  getActiveEditorWithGuards,
+  type ActiveFileGuardFailureReason,
+} from '@utils/editor/activeFileGuards';
 
 // Local imports - core
 import { executeAgent } from '@agent/runtime/executeAgent';
@@ -29,17 +32,17 @@ export const linterCommands = {
  */
 export async function handleShowLinterMessages(): Promise<void> {
   try {
-    // Get active editor
-    const editor = vscode.window.activeTextEditor;
-    if (!editor) {
-      logger.warn(CHANNEL, 'No active editor found');
-      vscode.window.showWarningMessage('Please open a file first');
+    const guardResult = await getActiveEditorWithGuards({
+      allowedExtensions: ['.tex'],
+      resourceName: 'LaTeX',
+    });
+
+    if (guardResult.status !== 'ok') {
+      logGuardFailure('show linter messages', guardResult.status);
       return;
     }
 
-    // Convert absolute file path to workspace-relative path
-    const absolutePath = editor.document.fileName;
-    const relativePath = WorkspaceFS.relativePath(absolutePath);
+    const { relativePath } = guardResult;
     logger.debug(CHANNEL, `Getting linter messages for ${relativePath}`);
 
     // Get linter messages
@@ -83,17 +86,17 @@ export async function handleShowLinterMessages(): Promise<void> {
  */
 export async function handleCountLinterMessages(): Promise<void> {
   try {
-    // Get active editor
-    const editor = vscode.window.activeTextEditor;
-    if (!editor) {
-      logger.warn(CHANNEL, 'No active editor found');
-      vscode.window.showWarningMessage('Please open a file first');
+    const guardResult = await getActiveEditorWithGuards({
+      allowedExtensions: ['.tex'],
+      resourceName: 'LaTeX',
+    });
+
+    if (guardResult.status !== 'ok') {
+      logGuardFailure('count linter messages', guardResult.status);
       return;
     }
 
-    // Convert absolute file path to workspace-relative path
-    const absolutePath = editor.document.fileName;
-    const relativePath = WorkspaceFS.relativePath(absolutePath);
+    const { relativePath } = guardResult;
     logger.debug(CHANNEL, `Counting linter messages for ${relativePath}`);
 
     // Get linter messages - now uses the async version to ensure build is triggered
@@ -130,22 +133,18 @@ export async function handleFixLinterIssues(
   context: vscode.ExtensionContext,
 ): Promise<void> {
   try {
-    // Get active editor
-    const editor = vscode.window.activeTextEditor;
-    if (!editor) {
-      logger.warn(CHANNEL, 'No active editor found');
-      vscode.window.showWarningMessage('Please open a file first');
+    const guardResult = await getActiveEditorWithGuards({
+      allowedExtensions: ['.tex'],
+      resourceName: 'LaTeX',
+      saveDocument: true,
+    });
+
+    if (guardResult.status !== 'ok') {
+      logGuardFailure('fix linter issues', guardResult.status);
       return;
     }
 
-    // Save any unsaved changes before attempting to fix
-    if (editor.document.isDirty) {
-      await editor.document.save();
-    }
-
-    // Convert absolute file path to workspace-relative path
-    const absolutePath = editor.document.fileName;
-    const relativePath = WorkspaceFS.relativePath(absolutePath);
+    const { relativePath } = guardResult;
     logger.debug(CHANNEL, `Fixing linter issues for ${relativePath}`);
 
     // Check if there are any linter issues
@@ -179,6 +178,29 @@ export async function handleFixLinterIssues(
     vscode.window.showErrorMessage(
       `Error fixing linter issues: ${String(err)}`,
     );
+  }
+}
+
+function logGuardFailure(
+  action: string,
+  reason: ActiveFileGuardFailureReason,
+): void {
+  switch (reason) {
+    case 'noEditor':
+      logger.warn(CHANNEL, `Cannot ${action}: no active editor found.`);
+      break;
+    case 'unsupportedExtension':
+      logger.warn(
+        CHANNEL,
+        `Cannot ${action}: active document is not a LaTeX file.`,
+      );
+      break;
+    case 'saveFailed':
+      logger.error(
+        CHANNEL,
+        `Cannot ${action}: failed to save LaTeX document before running command.`,
+      );
+      break;
   }
 }
 
