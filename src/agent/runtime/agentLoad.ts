@@ -31,6 +31,41 @@ export interface ValidAgentDefinition {
   settings: AgentSetting;
 }
 
+export interface AgentYamlValidationResult extends ValidAgentDefinition {
+  prompts: AgentPrompt;
+}
+
+/**
+ * Parses a YAML string or already-parsed object and validates that it
+ * represents a full agent definition. Returns the validated name, settings,
+ * and prompts so callers can reuse consistent schema checks across string and
+ * file based workflows.
+ */
+export function validateAgentYamlContent(
+  content: string | object,
+): AgentYamlValidationResult {
+  const raw = typeof content === 'string' ? yaml.parse(content) : content;
+  const data = AgentDefinitionSchema.parse(raw);
+
+  if (!data.settings || !data.prompts) {
+    throw new Error('missing settings or prompts block');
+  }
+
+  const settingsBlock = parseAgentSetting(data.settings);
+  const promptsBlock = AgentPromptSchema.parse(data.prompts);
+  const rootName = typeof data.name === 'string' ? data.name.trim() : '';
+
+  if (!rootName) {
+    throw new Error('name is empty');
+  }
+
+  return {
+    name: rootName,
+    settings: settingsBlock,
+    prompts: promptsBlock,
+  } satisfies AgentYamlValidationResult;
+}
+
 /** Loads and parses a YAML file from an absolute path. */
 export async function loadYaml(absolutePath: string): Promise<object> {
   try {
@@ -249,31 +284,11 @@ export async function isValidAgentYaml(
 ): Promise<ValidAgentDefinition | null> {
   try {
     const rawData = await loadYaml(filePath);
-    const data = AgentDefinitionSchema.parse(rawData);
-
-    if (!data.settings || !data.prompts) {
-      logger.debug(
-        CHANNEL,
-        `isValidAgentYaml check failed for ${filePath}: missing settings or prompts block`,
-      );
-      return null;
-    }
-
-    const settingsBlock = parseAgentSetting(data.settings);
-    AgentPromptSchema.parse(data.prompts);
-    const rootName = data.name;
-
-    if (rootName === '') {
-      logger.debug(
-        CHANNEL,
-        `isValidAgentYaml check failed for ${filePath}: name is empty`,
-      );
-      return null;
-    }
+    const { name, settings } = validateAgentYamlContent(rawData);
 
     return {
-      name: rootName,
-      settings: settingsBlock,
+      name,
+      settings,
     } satisfies ValidAgentDefinition;
   } catch (err) {
     logger.debug(
