@@ -140,9 +140,9 @@ export class ProgressViewState {
   /**
    * Reset workflow output metadata for the provided stream.
    *
-   * This keeps the state update logic centralized so commands and
-   * progress events remain consistent. Returns `true` when a stored
-   * workflow task was updated and persisted.
+   * Clears outputFiles, useMultipleOutputs, and the output flag.
+   * Returns true when state was modified and persisted, false when
+   * already cleared or not a workflow task.
    */
   clearOutputState(streamTabId: StreamTabId): boolean {
     const taskState = this.getTaskState(streamTabId);
@@ -151,7 +151,7 @@ export class ProgressViewState {
     }
 
     const hasPersistedOutputs =
-      !Array.isArray(taskState.agentConfig.outputFiles) ||
+      Array.isArray(taskState.agentConfig.outputFiles) &&
       taskState.agentConfig.outputFiles.length > 0;
     const usesMultipleOutputs = taskState.agentConfig.useMultipleOutputs;
     const outputFlagEnabled = taskState.activeFiles.output;
