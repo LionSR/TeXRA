@@ -14,18 +14,15 @@ export class LatexdiffManager {
     this.state = state;
   }
 
-  /** Initialize the LaTeX diffs section based on stored state */
-  initializeLatexdiffsSection() {
+  /** Hydrate the LaTeX diffs section based on persisted state */
+  hydrate(persistedState = this.state.get()) {
     const container = safeGetElementById(LATEXDIFF_CONTENT_ID);
     const toggleIcon = safeGetElementById(TOGGLE_LATEXDIFFS_ID);
+    if (!container || !toggleIcon) return;
 
-    if (container && toggleIcon) {
-      const state = this.state.get();
-      const shouldShow = state && state.latexdiffsVisible;
-
-      container.style.display = shouldShow ? 'block' : 'none';
-      setChevronIcon(toggleIcon, shouldShow);
-    }
+    const shouldShow = Boolean(persistedState?.latexdiffsVisible);
+    container.style.display = shouldShow ? 'block' : 'none';
+    setChevronIcon(toggleIcon, shouldShow);
   }
 
   /** Toggle the LaTeX diffs section */
@@ -44,3 +41,4 @@ export class LatexdiffManager {
 }
 
 export const latexdiffManager = new LatexdiffManager(mainViewState);
+mainViewState.registerLatexdiffManager(latexdiffManager);

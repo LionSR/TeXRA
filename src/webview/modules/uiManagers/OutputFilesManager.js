@@ -3,7 +3,7 @@ import { INPUT_FILE, ELEMENT_IDS } from '../constants.js';
 import { mainViewState } from '../mainViewState.js';
 import { fileList } from './FileList.js';
 import { fileSelect } from './FileSelect.js';
-import { safeGetElementById, setChevronIcon } from '@common/domUtils.js';
+import { safeGetElementById } from '@common/domUtils.js';
 
 const INPUT_FILE_ID = INPUT_FILE;
 const OUTPUT_FILES_ID = ELEMENT_IDS.OUTPUT_FILES;
@@ -20,54 +20,73 @@ export class OutputFilesManager {
     this.fileSelect = select;
   }
 
-  /** Initialize the output files list with the input file */
-  initializeOutputFiles() {
-    const state = this.state.get();
+  /** Hydrate the output files list and container from persisted state */
+  hydrate(persistedState = this.state.get() ?? {}, options = {}) {
+    const { fallbackToAgentDefaults = true, visible } = options;
+
     const inputFileDiv = safeGetElementById(INPUT_FILE_ID);
     const outputFilesDiv = safeGetElementById(OUTPUT_FILES_ID);
     if (!outputFilesDiv) return;
 
-    outputFilesDiv.innerHTML = '';
     const inputFile = inputFileDiv?.value;
+    const stateOutputs = Array.isArray(persistedState.outputFiles)
+      ? persistedState.outputFiles.filter(Boolean)
+      : [];
 
-    if (inputFile) {
-      if (state.outputFiles && state.outputFiles.length > 0) {
-        state.outputFiles.forEach((file) => {
-          this.fileList.add(OUTPUT_FILES_ID, file);
-        });
-      } else if (
-        this.fileSelect.getAgentDefaultOutputFiles().length > 0 &&
-        (!state.outputFiles || state.outputFiles.length === 0)
-      ) {
-        this.fileSelect.getAgentDefaultOutputFiles().forEach((file) => {
-          this.fileList.add(OUTPUT_FILES_ID, file);
+    const derivedOutputs = [...stateOutputs];
+
+    if (derivedOutputs.length === 0 && fallbackToAgentDefaults && inputFile) {
+      const agentDefaults = this.fileSelect.getAgentDefaultOutputFiles();
+      if (agentDefaults.length > 0) {
+        agentDefaults.forEach((file) => {
+          if (!derivedOutputs.includes(file)) {
+            derivedOutputs.push(file);
+          }
         });
       } else {
-        this.fileList.add(OUTPUT_FILES_ID, inputFileDiv?.value);
-        if (state.inputFiles && state.inputFiles.length > 0) {
-          state.inputFiles.forEach((file) => {
-            if (file !== inputFile) {
-              this.fileList.add(OUTPUT_FILES_ID, file);
-            }
-          });
-        }
+        derivedOutputs.push(inputFile);
+        const additionalInputs = Array.isArray(persistedState.inputFiles)
+          ? persistedState.inputFiles
+          : [];
+        additionalInputs.forEach((file) => {
+          if (file && file !== inputFile && !derivedOutputs.includes(file)) {
+            derivedOutputs.push(file);
+          }
+        });
       }
     }
 
-    const openedFiles = this.state.get()?.openedFiles ?? [];
+    const openedFiles = Array.isArray(persistedState.openedFiles)
+      ? persistedState.openedFiles
+      : [];
     openedFiles.forEach((file) => {
-      this.fileList.add(OUTPUT_FILES_ID, file);
+      if (file && !derivedOutputs.includes(file)) {
+        derivedOutputs.push(file);
+      }
     });
 
-    if (outputFilesDiv.children.length === 0) {
-      const placeholder = document.createElement('div');
-      placeholder.className = 'file-list-placeholder';
-      placeholder.textContent =
-        'No extra outputs selected. Click "Add" to choose files.';
-      outputFilesDiv.appendChild(placeholder);
-    }
+    const visibility =
+      typeof visible === 'boolean'
+        ? visible
+        : Boolean(
+            persistedState.outputFilesActive ??
+              persistedState.outputFilesVisible,
+          );
 
-    this.state.save();
+    this.fileList.hydrate(OUTPUT_FILES_ID, {
+      files: derivedOutputs,
+      visible: visibility,
+      placeholder: 'No extra outputs selected. Click "Add" to choose files.',
+    });
+
+    const listDiv = safeGetElementById(OUTPUT_FILES_ID);
+    if (listDiv) {
+      const resolvedOutputs = this.fileList.getSelected(listDiv);
+      this.state.update({
+        outputFiles: resolvedOutputs,
+        outputFilesActive: visibility,
+      });
+    }
   }
 
   /** Toggle visibility of the output files container */
@@ -78,24 +97,10 @@ export class OutputFilesManager {
     const containerVisible = container.style.display !== 'none';
 
     if (!containerVisible) {
-      this.initializeOutputFiles();
+      this.hydrate(this.state.get(), { fallbackToAgentDefaults: true });
     }
 
     this.fileList.toggle(OUTPUT_FILES_ID, TOGGLE_OUTPUT_FILES_ID);
-  }
-
-  /** Initialize the output files container based on state */
-  initializeOutputContainer() {
-    const container = safeGetElementById(OUTPUT_FILES_CONTAINER_ID);
-    const toggleIcon = safeGetElementById(TOGGLE_OUTPUT_FILES_ID);
-
-    if (container && toggleIcon) {
-      const state = this.state.get();
-      const shouldShow = state && state.outputFilesActive;
-
-      container.style.display = shouldShow ? 'block' : 'none';
-      setChevronIcon(toggleIcon, shouldShow);
-    }
   }
 }
 
@@ -104,3 +109,4 @@ export const outputFilesManager = new OutputFilesManager(
   fileList,
   fileSelect,
 );
+mainViewState.registerOutputFilesManager(outputFilesManager);

@@ -138,6 +138,11 @@ class MainViewDomHandler extends BaseDomHandler {
         command: MAIN_VIEW_COMMANDS.OPEN_AGENT_DOCS,
       });
     });
+
+    latexdiffManager.hydrate(mainViewState.get());
+    outputFilesManager.hydrate(mainViewState.get(), {
+      fallbackToAgentDefaults: true,
+    });
   }
 
   cleanupUI() {

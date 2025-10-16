@@ -18,9 +18,7 @@ import {
   safeGetElementChecked,
   safeSetElementValue,
   safeSetElementChecked,
-  setChevronIcon,
 } from '@common/domUtils.js';
-import { capitalize } from '@common/stringUtils.js';
 import { CHEVRON_DOWN_CLASS } from '@common/iconConstants.js';
 import { WebviewStateManager } from '@common/webviewState.js';
 
@@ -46,6 +44,8 @@ function getSelectDefaultValue(selectId, fallback) {
 export class MainViewState {
   constructor() {
     this.stateManager = new WebviewStateManager();
+    this._latexdiffManager = null;
+    this._outputFilesManager = null;
   }
 
   get() {
@@ -58,6 +58,14 @@ export class MainViewState {
 
   update(partial) {
     this.stateManager.update(partial);
+  }
+
+  registerLatexdiffManager(manager) {
+    this._latexdiffManager = manager;
+  }
+
+  registerOutputFilesManager(manager) {
+    this._outputFilesManager = manager;
   }
 
   /** Initialize UI with default state */
@@ -77,22 +85,14 @@ export class MainViewState {
     }
 
     MULTIPLE_SELECTIONS.forEach((id) => {
-      const toggleId = `toggle${capitalize(id)}`;
-      fileList.setVisibility(id, toggleId, false);
-      const listDiv = safeGetElementById(id);
-      if (listDiv) {
-        listDiv.innerHTML = '';
-      }
+      fileList.hydrate(id, { files: [], visible: false });
     });
 
-    const latexdiffsContent = safeGetElementById(
-      ELEMENT_IDS.LATEXDIFFS_CONTENT,
+    this._latexdiffManager?.hydrate({ latexdiffsVisible: false });
+    this._outputFilesManager?.hydrate(
+      { outputFiles: [], outputFilesActive: false, inputFiles: [] },
+      { visible: false, fallbackToAgentDefaults: false },
     );
-    const toggleLatexdiffs = safeGetElementById(ELEMENT_IDS.TOGGLE_LATEXDIFFS);
-    if (latexdiffsContent && toggleLatexdiffs) {
-      latexdiffsContent.style.display = 'none';
-      setChevronIcon(toggleLatexdiffs, false);
-    }
 
     this.save();
   }
@@ -176,42 +176,18 @@ export class MainViewState {
       }
 
       MULTIPLE_SELECTIONS.forEach((id) => {
-        const toggleId = `toggle${capitalize(id)}`;
-        const selectDiv = safeGetElementById(id);
-        if (!selectDiv) {
-          console.warn(`Element with id '${id}' not found`);
-          return;
-        }
-        selectDiv.innerHTML = '';
-
-        const filesArray = previousState[id] ?? [];
-        const isVisible = previousState[`${id}Visible`];
-
-        if (filesArray && filesArray.length > 0) {
-          filesArray.forEach((file) => {
-            fileList.add(id, file);
-          });
-          fileList.setVisibility(
-            id,
-            toggleId,
-            isVisible !== undefined ? isVisible : true,
-          );
-        } else {
-          fileList.setVisibility(id, toggleId, false);
-        }
+        const filesArray = Array.isArray(previousState[id])
+          ? previousState[id]
+          : [];
+        const visible =
+          previousState[`${id}Active`] ??
+          previousState[`${id}Visible`] ??
+          (filesArray.length > 0 ? true : false);
+        fileList.hydrate(id, { files: filesArray, visible });
       });
 
-      const latexdiffsContent = safeGetElementById(
-        ELEMENT_IDS.LATEXDIFFS_CONTENT,
-      );
-      const toggleLatexdiffs = safeGetElementById(
-        ELEMENT_IDS.TOGGLE_LATEXDIFFS,
-      );
-      if (latexdiffsContent && toggleLatexdiffs) {
-        const visible = previousState.latexdiffsVisible ?? false;
-        latexdiffsContent.style.display = visible ? 'block' : 'none';
-        setChevronIcon(toggleLatexdiffs, visible);
-      }
+      this._latexdiffManager?.hydrate(previousState);
+      this._outputFilesManager?.hydrate(previousState);
 
       this.applySessionType(
         normalizedValues.sessionType ?? defaults.sessionType,
@@ -222,6 +198,10 @@ export class MainViewState {
     }
 
     fileList.hideEmpty(MULTIPLE_SELECTIONS);
+
+    if (previousState) {
+      this.save();
+    }
   }
 
   /** Persist current UI state */
@@ -247,8 +227,9 @@ export class MainViewState {
       const elementDiv = safeGetElementById(id);
       if (!elementDiv) return;
       const containerDiv = safeGetElementById(`${id}Container`);
-      state[`${id}Visible`] =
-        containerDiv && containerDiv.style.display === 'block';
+      const isVisible = containerDiv && containerDiv.style.display === 'block';
+      state[`${id}Visible`] = isVisible;
+      state[`${id}Active`] = isVisible;
       state[id] = fileList.getSelected(elementDiv);
     });
 

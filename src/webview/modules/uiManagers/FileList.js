@@ -15,6 +15,35 @@ export class FileList {
     this._saveFn = saveFn;
   }
 
+  /**
+   * Hydrate a list container with the provided files and visibility state.
+   * @param {string} containerId - The list element ID
+   * @param {object} options - Hydration options
+   * @param {string[]} options.files - Files to render inside the list
+   * @param {boolean} [options.visible] - Optional visibility override
+   * @param {string} [options.placeholder] - Placeholder text when list is empty
+   */
+  hydrate(containerId, { files = [], visible, placeholder } = {}) {
+    const listDiv = safeGetElementById(containerId);
+    if (!listDiv) return;
+
+    listDiv.innerHTML = '';
+
+    if (Array.isArray(files) && files.length > 0) {
+      files.forEach((file) => this.add(containerId, file));
+    } else if (placeholder) {
+      const placeholderEl = document.createElement('div');
+      placeholderEl.className = 'file-list-placeholder';
+      placeholderEl.textContent = placeholder;
+      listDiv.appendChild(placeholderEl);
+    }
+
+    if (typeof visible === 'boolean') {
+      const toggleId = `toggle${capitalize(containerId)}`;
+      this.setVisibility(containerId, toggleId, visible);
+    }
+  }
+
   /** Set the callback used to persist state */
   setSaveFn(saveFn) {
     this._saveFn = typeof saveFn === 'function' ? saveFn : () => {};
