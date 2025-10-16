@@ -47,11 +47,7 @@ const formatExtensionList = (extensions: string[]): string =>
 export async function getActiveEditorWithGuards(
   options: ActiveFileGuardOptions,
 ): Promise<ActiveFileGuardResult> {
-  const {
-    allowedExtensions,
-    resourceName,
-    saveDocument = false,
-  } = options;
+  const { allowedExtensions, resourceName, saveDocument = false } = options;
 
   const editor = vscode.window.activeTextEditor;
   if (!editor) {

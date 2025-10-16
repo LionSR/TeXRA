@@ -38,7 +38,12 @@ export async function handleShowLinterMessages(): Promise<void> {
     });
 
     if (guardResult.status !== 'ok') {
-      logGuardFailure(CHANNEL, 'show linter messages', guardResult.status, 'LaTeX');
+      logGuardFailure(
+        CHANNEL,
+        'show linter messages',
+        guardResult.status,
+        'LaTeX',
+      );
       return;
     }
 
@@ -92,7 +97,12 @@ export async function handleCountLinterMessages(): Promise<void> {
     });
 
     if (guardResult.status !== 'ok') {
-      logGuardFailure(CHANNEL, 'count linter messages', guardResult.status, 'LaTeX');
+      logGuardFailure(
+        CHANNEL,
+        'count linter messages',
+        guardResult.status,
+        'LaTeX',
+      );
       return;
     }
 
@@ -140,7 +150,12 @@ export async function handleFixLinterIssues(
     });
 
     if (guardResult.status !== 'ok') {
-      logGuardFailure(CHANNEL, 'fix linter issues', guardResult.status, 'LaTeX');
+      logGuardFailure(
+        CHANNEL,
+        'fix linter issues',
+        guardResult.status,
+        'LaTeX',
+      );
       return;
     }
 
