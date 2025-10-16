@@ -121,6 +121,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     if (message.stream === state.activeStream) {
       logContent.innerHTML = '';
       state.taskGroups.clear();
+      dom.taskGroups.clear();
       if (message.groups && message.groups.length > 0) {
         const parentGroups = message.groups.filter((g) => !g.parentGroupId);
         const childGroups = message.groups.filter((g) => g.parentGroupId);
@@ -163,6 +164,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       groupIds.push(el.id.replace('group-header-', ''));
     }
     state.taskGroups.clear();
+    dom.taskGroups.clear();
     state.toggleStates.clear(groupIds);
 
     this._updatePlaceholderVisibility();
