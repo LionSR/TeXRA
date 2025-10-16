@@ -8,14 +8,15 @@ import * as logger from '@logger/logUtils';
 import { WorkspaceFS } from '@utils/files';
 import { sleep } from '@utils/helpers';
 import replacementEngine from '@replacement/engine';
+import {
+  getActiveEditorWithGuards,
+  type ActiveFileGuardFailureReason,
+} from '@utils/editor/activeFileGuards';
 
 // Local imports - latex utils
 import { runLatexFormatter } from '@latex/texFormatter';
 import { getTeXCount, type TexcountMode } from '@latex/texcount';
 import { showLoggedErrorMessage } from '@common/errors/errorHandlingUtils';
-
-// Local imports - commands
-import { fileSelectionCommands } from '../files/fileSelectionCommands';
 
 // Local imports - housekeeping
 import { runIndentTeX } from '@housekeeping';
@@ -40,17 +41,18 @@ export function registerLatexCommands(context: vscode.ExtensionContext) {
 
 async function handleApplyReplacements(): Promise<void> {
   try {
-    // Get active editor
-    const editor = vscode.window.activeTextEditor;
-    if (!editor) {
-      vscode.window.showWarningMessage('No active text editor found');
+    const guardResult = await getActiveEditorWithGuards({
+      allowedExtensions: ['.tex'],
+      resourceName: 'LaTeX',
+      saveDocument: true,
+    });
+
+    if (guardResult.status !== 'ok') {
+      logGuardFailure('apply replacements', guardResult.status);
       return;
     }
-    if (editor?.document.isDirty) {
-      await editor.document.save();
-    }
 
-    // Get document content
+    const { editor } = guardResult;
     const document = editor.document;
     const text = document.getText();
 
@@ -81,26 +83,20 @@ async function handleApplyReplacements(): Promise<void> {
 
 async function handleIndentCurrentTeX(): Promise<void> {
   try {
-    const relativePath = await fileSelectionCommands.getCurrentFile();
-    if (!relativePath) {
-      vscode.window.showWarningMessage('No active text editor found');
+    const guardResult = await getActiveEditorWithGuards({
+      allowedExtensions: ['.tex'],
+      resourceName: 'LaTeX',
+      saveDocument: true,
+    });
+
+    if (guardResult.status !== 'ok') {
+      logGuardFailure('indent LaTeX document', guardResult.status);
       return;
     }
 
-    if (!relativePath.endsWith('.tex')) {
-      vscode.window.showWarningMessage(
-        'Active file is not a LaTeX document (.tex)',
-      );
-      return;
-    }
+    const { relativePath } = guardResult;
 
     logger.debug(CHANNEL, `Indenting LaTeX file: ${relativePath}`);
-
-    // Save any unsaved changes
-    const editor = vscode.window.activeTextEditor;
-    if (editor?.document.isDirty) {
-      await editor.document.save();
-    }
 
     // Run the indent operation with relative path
     const success = await runLatexFormatter(relativePath);
@@ -115,6 +111,29 @@ async function handleIndentCurrentTeX(): Promise<void> {
     }
   } catch (err) {
     await showLoggedErrorMessage(CHANNEL, 'Error in indentTeX command', err);
+  }
+}
+
+function logGuardFailure(
+  action: string,
+  reason: ActiveFileGuardFailureReason,
+): void {
+  switch (reason) {
+    case 'noEditor':
+      logger.warn(CHANNEL, `Cannot ${action}: no active editor found.`);
+      break;
+    case 'unsupportedExtension':
+      logger.warn(
+        CHANNEL,
+        `Cannot ${action}: active document is not a LaTeX file.`,
+      );
+      break;
+    case 'saveFailed':
+      logger.error(
+        CHANNEL,
+        `Cannot ${action}: failed to save LaTeX document before running command.`,
+      );
+      break;
   }
 }
 
