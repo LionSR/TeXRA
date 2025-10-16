@@ -11,9 +11,83 @@ import * as logger from '@logger/logUtils';
 import { WorkspaceFS } from '@utils/files';
 import { registerDiffRefresh } from '@frontend/ui/diffView';
 import { DIFF_REGISTRATION_DELAY_MS } from '@utils/config';
+import { showLoggedErrorMessage } from '@common/errors/errorHandlingUtils';
 
 const CHANNEL = 'CompareCommands';
 logger.initialize(CHANNEL);
+
+type CompareValidationErrorCode =
+  | 'MISSING_SELECTION'
+  | 'BASE_FILE_NOT_FOUND'
+  | 'EDITED_FILE_NOT_FOUND';
+
+export class CompareCommandValidationError extends Error {
+  constructor(
+    public readonly code: CompareValidationErrorCode,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'CompareCommandValidationError';
+  }
+}
+
+interface DiffValidationResult {
+  baseRelativePath: string;
+  editedRelativePath: string;
+  baseUri: vscode.Uri;
+  editedUri: vscode.Uri;
+  baseFileName: string;
+  editedFileName: string;
+}
+
+const VALIDATION_ERROR_PREFIX = 'Unable to prepare files for diff';
+
+export async function validateDiffFiles(
+  inputFile: string,
+  baseFile: string,
+  editedFile: string,
+): Promise<DiffValidationResult> {
+  const baseRelativePath = baseFile || inputFile;
+
+  if (!baseRelativePath || !editedFile) {
+    const error = new CompareCommandValidationError(
+      'MISSING_SELECTION',
+      'Both base file and edited file must be selected.',
+    );
+    await showLoggedErrorMessage(CHANNEL, VALIDATION_ERROR_PREFIX, error);
+    throw error;
+  }
+
+  if (!(await WorkspaceFS.exists(baseRelativePath))) {
+    const error = new CompareCommandValidationError(
+      'BASE_FILE_NOT_FOUND',
+      `Base file not found: ${baseRelativePath}`,
+    );
+    await showLoggedErrorMessage(CHANNEL, VALIDATION_ERROR_PREFIX, error);
+    throw error;
+  }
+
+  if (!(await WorkspaceFS.exists(editedFile))) {
+    const error = new CompareCommandValidationError(
+      'EDITED_FILE_NOT_FOUND',
+      `Edited file not found: ${editedFile}`,
+    );
+    await showLoggedErrorMessage(CHANNEL, VALIDATION_ERROR_PREFIX, error);
+    throw error;
+  }
+
+  const normalizedBasePath = path.normalize(baseRelativePath);
+  const normalizedEditedPath = path.normalize(editedFile);
+
+  return {
+    baseRelativePath: normalizedBasePath,
+    editedRelativePath: normalizedEditedPath,
+    baseUri: vscode.Uri.file(WorkspaceFS.fullPath(normalizedBasePath)),
+    editedUri: vscode.Uri.file(WorkspaceFS.fullPath(normalizedEditedPath)),
+    baseFileName: path.basename(normalizedBasePath),
+    editedFileName: path.basename(normalizedEditedPath),
+  };
+}
 
 /**
  * Register comparison related commands
@@ -34,32 +108,9 @@ async function handleCompare(
   editedFile: string,
 ) {
   try {
-    const fileToUse = baseFile || inputFile;
-    if (!fileToUse || !editedFile) {
-      vscode.window.showErrorMessage(
-        'Both base file and edited file must be selected for comparison',
-      );
-      return;
-    }
+    const { baseUri, editedUri, baseFileName, editedFileName } =
+      await validateDiffFiles(inputFile, baseFile, editedFile);
 
-    // Create URIs for both files
-    const baseUri = vscode.Uri.file(WorkspaceFS.fullPath(fileToUse));
-    const editedUri = vscode.Uri.file(WorkspaceFS.fullPath(editedFile));
-
-    // Verify both files exist
-    if (!(await WorkspaceFS.exists(fileToUse))) {
-      vscode.window.showErrorMessage(`Base file not found: ${fileToUse}`);
-      return;
-    }
-
-    if (!(await WorkspaceFS.exists(editedFile))) {
-      vscode.window.showErrorMessage(`Edited file not found: ${editedFile}`);
-      return;
-    }
-
-    // Create title for the diff editor
-    const baseFileName = path.basename(fileToUse);
-    const editedFileName = path.basename(editedFile);
     const title = `Compare: ${editedFileName} ↔ ${baseFileName}`;
     // const title = `Compare: ${baseFileName} ↔ ${editedFileName}`;
 
@@ -106,13 +157,10 @@ async function handleCompare(
       `Opened diff comparison between ${baseFileName} and ${editedFileName}`,
     );
   } catch (err) {
-    vscode.window.showErrorMessage(
-      `Error comparing files: ${err instanceof Error ? err.message : String(err)}`,
-    );
-    logger.error(
-      CHANNEL,
-      `Error in handleCompare: ${err instanceof Error ? err.message : String(err)}`,
-    );
+    if (err instanceof CompareCommandValidationError) {
+      return;
+    }
+    await showLoggedErrorMessage(CHANNEL, 'Error comparing files', err);
   }
 }
 
@@ -125,31 +173,15 @@ async function handleAcceptEdited(
   editedFile: string,
 ) {
   try {
-    const fileToUse = baseFile || inputFile;
-    if (!fileToUse || !editedFile) {
-      vscode.window.showErrorMessage(
-        'Both base file and edited file must be selected to accept changes',
-      );
-      return;
-    }
-
-    // Verify both files exist
-    if (!(await WorkspaceFS.exists(fileToUse))) {
-      vscode.window.showErrorMessage(`Base file not found: ${fileToUse}`);
-      return;
-    }
-
-    if (!(await WorkspaceFS.exists(editedFile))) {
-      vscode.window.showErrorMessage(`Edited file not found: ${editedFile}`);
-      return;
-    }
+    const {
+      baseRelativePath,
+      editedRelativePath,
+      baseFileName,
+      editedFileName,
+    } = await validateDiffFiles(inputFile, baseFile, editedFile);
 
     // Read content from edited file using workspace utilities
-    const editedContent = await WorkspaceFS.read(editedFile);
-
-    // Confirm with user
-    const baseFileName = path.basename(fileToUse);
-    const editedFileName = path.basename(editedFile);
+    const editedContent = await WorkspaceFS.read(editedRelativePath);
 
     const answer = await vscode.window.showWarningMessage(
       `This will overwrite '${baseFileName}' with content from '${editedFileName}'. Are you sure?`,
@@ -163,7 +195,7 @@ async function handleAcceptEdited(
     }
 
     // Write content to base file using workspace utilities
-    await WorkspaceFS.write(fileToUse, editedContent);
+    await WorkspaceFS.write(baseRelativePath, editedContent);
 
     vscode.window.showInformationMessage(
       `Successfully replaced '${baseFileName}' with content from '${editedFileName}'`,
@@ -174,13 +206,10 @@ async function handleAcceptEdited(
       `Copied content from ${editedFileName} to ${baseFileName}`,
     );
   } catch (err) {
-    vscode.window.showErrorMessage(
-      `Error accepting changes: ${err instanceof Error ? err.message : String(err)}`,
-    );
-    logger.error(
-      CHANNEL,
-      `Error in handleAcceptEdited: ${err instanceof Error ? err.message : String(err)}`,
-    );
+    if (err instanceof CompareCommandValidationError) {
+      return;
+    }
+    await showLoggedErrorMessage(CHANNEL, 'Error accepting changes', err);
   }
 }
 
