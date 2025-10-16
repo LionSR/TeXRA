@@ -146,8 +146,8 @@ export const ANTHROPIC_MODELS: Record<string, ModelConfig> = {
     provider: ModelProvider.ANTHROPIC,
     maxOutputTokens: 64000, // Official Claude Haiku 4.5 limit - streaming recommended for large outputs
     contextWindow: 200000,
-    inputPrice: 0.8,
-    outputPrice: 4.0,
+    inputPrice: 1.0,
+    outputPrice: 5.0,
     capabilities: {
       ...ANTHROPIC_DEFAULT_CAPABILITIES,
       supportsNativeWebSearch: true,
@@ -165,14 +165,14 @@ export const ANTHROPIC_MODELS: Record<string, ModelConfig> = {
     provider: ModelProvider.ANTHROPIC,
     maxOutputTokens: 64000, // Official Claude Haiku 4.5 limit - streaming recommended for large outputs
     contextWindow: 200000,
-    inputPrice: 0.8,
-    outputPrice: 4.0,
+    inputPrice: 1.0,
+    outputPrice: 5.0,
     capabilities: {
       ...ANTHROPIC_DEFAULT_CAPABILITIES,
       supportsNativeWebSearch: true,
       supportsNativeCodeExecution: true,
       supportsAssistantPrefill: true,
-      supportsReasoning: true,
+      supportsReasoning: false,
     } satisfies ModelCapabilities,
     openRouterOnly: false,
   },
