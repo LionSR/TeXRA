@@ -9,7 +9,10 @@ import * as logger from '@logger/logUtils';
 import { executeAgent } from '@agent/runtime/executeAgent';
 
 // Local imports - utils
-import { WorkspaceFS } from '@utils/files';
+import {
+  getActiveEditorWithGuards,
+  type ActiveFileGuardFailureReason,
+} from '@utils/editor/activeFileGuards';
 
 const CHANNEL = 'XmlCommands';
 logger.initialize(CHANNEL);
@@ -21,26 +24,17 @@ export const xmlCommands = {
 
 export async function handleParseXml(): Promise<void> {
   try {
-    // Get active editor
-    const editor = vscode.window.activeTextEditor;
-    if (!editor) {
-      logger.warn(CHANNEL, 'No active editor found');
-      vscode.window.showWarningMessage('Please open an XML file first');
+    const guardResult = await getActiveEditorWithGuards({
+      allowedExtensions: ['.xml'],
+      resourceName: 'XML',
+    });
+
+    if (guardResult.status !== 'ok') {
+      logGuardFailure('parse XML', guardResult.status);
       return;
     }
 
-    // Check if it's an XML file
-    if (!editor.document.fileName.toLowerCase().endsWith('.xml')) {
-      logger.warn(
-        CHANNEL,
-        `File ${editor.document.fileName} is not an XML file`,
-      );
-      vscode.window.showWarningMessage(
-        'This command only works with XML files',
-      );
-      return;
-    }
-
+    const { editor } = guardResult;
     const content = editor.document.getText();
     logger.debug(
       CHANNEL,
@@ -87,28 +81,18 @@ export async function handleValidateAndFixXml(
   context: vscode.ExtensionContext,
 ): Promise<void> {
   try {
-    // Get active editor
-    const editor = vscode.window.activeTextEditor;
-    if (!editor) {
-      vscode.window.showWarningMessage('Please open an XML file first');
+    const guardResult = await getActiveEditorWithGuards({
+      allowedExtensions: ['.xml'],
+      resourceName: 'XML',
+      saveDocument: true,
+    });
+
+    if (guardResult.status !== 'ok') {
+      logGuardFailure('validate XML', guardResult.status);
       return;
     }
 
-    // Check if it's an XML file
-    if (!editor.document.fileName.toLowerCase().endsWith('.xml')) {
-      logger.warn(
-        CHANNEL,
-        `File ${editor.document.fileName} is not an XML file`,
-      );
-      vscode.window.showWarningMessage(
-        'This command only works with XML files',
-      );
-      return;
-    }
-
-    await editor.document.save();
-
-    const filePath = WorkspaceFS.relativePath(editor.document.fileName);
+    const { relativePath: filePath } = guardResult;
 
     logger.info(CHANNEL, `Starting XML validation for ${filePath}`);
 
@@ -126,6 +110,29 @@ export async function handleValidateAndFixXml(
       `Error in validateAndFixXml command: ${err instanceof Error ? err.message : String(err)}`,
     );
     vscode.window.showErrorMessage(`Error validating XML: ${String(err)}`);
+  }
+}
+
+function logGuardFailure(
+  action: string,
+  reason: ActiveFileGuardFailureReason,
+): void {
+  switch (reason) {
+    case 'noEditor':
+      logger.warn(CHANNEL, `Cannot ${action}: no active editor found.`);
+      break;
+    case 'unsupportedExtension':
+      logger.warn(
+        CHANNEL,
+        `Cannot ${action}: active document is not an XML file.`,
+      );
+      break;
+    case 'saveFailed':
+      logger.error(
+        CHANNEL,
+        `Cannot ${action}: failed to save XML document before running command.`,
+      );
+      break;
   }
 }
 

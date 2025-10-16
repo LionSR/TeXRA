@@ -9,6 +9,10 @@ import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
 import { WorkspaceFS } from '@utils/files';
+import {
+  getActiveEditorWithGuards,
+  type ActiveFileGuardFailureReason,
+} from '@utils/editor/activeFileGuards';
 
 // Local imports - latex utils
 import { extractFigurePathsFromLatex } from '@latex/extractFigure';
@@ -36,22 +40,17 @@ export function registerFigureCommands(context: vscode.ExtensionContext) {
 
 async function handleExtractFigurePaths(): Promise<void> {
   try {
-    // Get active editor
-    const editor = vscode.window.activeTextEditor;
-    if (!editor) {
-      vscode.window.showWarningMessage('Please open a LaTeX file first');
+    const guardResult = await getActiveEditorWithGuards({
+      allowedExtensions: ['.tex'],
+      resourceName: 'LaTeX',
+    });
+
+    if (guardResult.status !== 'ok') {
+      logGuardFailure('extract figure paths', guardResult.status);
       return;
     }
 
-    // Check if it's a LaTeX file
-    if (!editor.document.fileName.toLowerCase().endsWith('.tex')) {
-      vscode.window.showWarningMessage(
-        'This command only works with LaTeX files',
-      );
-      return;
-    }
-
-    const filePath = WorkspaceFS.relativePath(editor.document.fileName);
+    const { relativePath: filePath } = guardResult;
     logger.debug(CHANNEL, `Processing LaTeX file: ${filePath}`);
 
     // Extract figure paths
@@ -84,22 +83,17 @@ async function handleExtractFigurePaths(): Promise<void> {
 
 async function handleExtractTikzFigures(): Promise<void> {
   try {
-    // Get active editor
-    const editor = vscode.window.activeTextEditor;
-    if (!editor) {
-      vscode.window.showWarningMessage('Please open a LaTeX file first');
+    const guardResult = await getActiveEditorWithGuards({
+      allowedExtensions: ['.tex'],
+      resourceName: 'LaTeX',
+    });
+
+    if (guardResult.status !== 'ok') {
+      logGuardFailure('extract TikZ figures', guardResult.status);
       return;
     }
 
-    // Check if it's a LaTeX file
-    if (!editor.document.fileName.toLowerCase().endsWith('.tex')) {
-      vscode.window.showWarningMessage(
-        'This command only works with LaTeX files',
-      );
-      return;
-    }
-
-    const filePath = WorkspaceFS.relativePath(editor.document.fileName);
+    const { relativePath: filePath } = guardResult;
     logger.debug(
       CHANNEL,
       `Processing LaTeX file for TikZ figures: ${filePath}`,
@@ -145,22 +139,17 @@ async function handleExtractTikzFigures(): Promise<void> {
 
 async function handleCompileTikzFigures(): Promise<void> {
   try {
-    // Get active editor
-    const editor = vscode.window.activeTextEditor;
-    if (!editor) {
-      vscode.window.showWarningMessage('Please open a LaTeX file first');
+    const guardResult = await getActiveEditorWithGuards({
+      allowedExtensions: ['.tex'],
+      resourceName: 'LaTeX',
+    });
+
+    if (guardResult.status !== 'ok') {
+      logGuardFailure('compile TikZ figures', guardResult.status);
       return;
     }
 
-    // Check if it's a LaTeX file
-    if (!editor.document.fileName.toLowerCase().endsWith('.tex')) {
-      vscode.window.showWarningMessage(
-        'This command only works with LaTeX files',
-      );
-      return;
-    }
-
-    const filePath = WorkspaceFS.relativePath(editor.document.fileName);
+    const { relativePath: filePath } = guardResult;
     logger.debug(
       CHANNEL,
       `Processing LaTeX file for TikZ compilation: ${filePath}`,
@@ -219,6 +208,29 @@ async function handleCompileTikzFigures(): Promise<void> {
       `Error in compileTikzFigures command: ${err instanceof Error ? err.message : String(err)}`,
     );
     vscode.window.showErrorMessage('Error compiling TikZ figures');
+  }
+}
+
+function logGuardFailure(
+  action: string,
+  reason: ActiveFileGuardFailureReason,
+): void {
+  switch (reason) {
+    case 'noEditor':
+      logger.warn(CHANNEL, `Cannot ${action}: no active editor found.`);
+      break;
+    case 'unsupportedExtension':
+      logger.warn(
+        CHANNEL,
+        `Cannot ${action}: active document is not a LaTeX file.`,
+      );
+      break;
+    case 'saveFailed':
+      logger.error(
+        CHANNEL,
+        `Cannot ${action}: failed to save LaTeX document before running command.`,
+      );
+      break;
   }
 }
 
