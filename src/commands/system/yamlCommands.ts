@@ -13,6 +13,10 @@ import { getAgentPath } from '@agent/runtime/executeAgent';
 import { AgentType } from '@agent/core/AgentDataclass';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { GlobalStorageFS, StorageFS } from '@utils/files';
+import {
+  getActiveEditorWithGuards,
+  type ActiveFileGuardFailureReason,
+} from '@utils/editor/activeFileGuards';
 
 const CHANNEL = 'TestCommands';
 logger.initialize(CHANNEL);
@@ -205,29 +209,17 @@ export async function handleParseYaml(
   context: vscode.ExtensionContext,
 ): Promise<void> {
   try {
-    // Get active editor
-    const editor = vscode.window.activeTextEditor;
-    if (!editor) {
-      logger.warn(CHANNEL, 'No active editor found');
-      vscode.window.showWarningMessage('Please open a YAML file first');
+    const guardResult = await getActiveEditorWithGuards({
+      allowedExtensions: ['.yaml', '.yml'],
+      resourceName: 'YAML',
+    });
+
+    if (guardResult.status !== 'ok') {
+      logGuardFailure('parse YAML', guardResult.status);
       return;
     }
 
-    // Check if it's a YAML file
-    if (
-      !editor.document.fileName.toLowerCase().endsWith('.yaml') &&
-      !editor.document.fileName.toLowerCase().endsWith('.yml')
-    ) {
-      logger.warn(
-        CHANNEL,
-        `File ${editor.document.fileName} is not a YAML file`,
-      );
-      vscode.window.showWarningMessage(
-        'This command only works with YAML files',
-      );
-      return;
-    }
-
+    const { editor } = guardResult;
     const content = editor.document.getText();
     logger.debug(
       CHANNEL,
@@ -260,6 +252,29 @@ export async function handleParseYaml(
       `Error in parseYaml command: ${err instanceof Error ? err.message : String(err)}`,
     );
     vscode.window.showErrorMessage('Error parsing YAML');
+  }
+}
+
+function logGuardFailure(
+  action: string,
+  reason: ActiveFileGuardFailureReason,
+): void {
+  switch (reason) {
+    case 'noEditor':
+      logger.warn(CHANNEL, `Cannot ${action}: no active editor found.`);
+      break;
+    case 'unsupportedExtension':
+      logger.warn(
+        CHANNEL,
+        `Cannot ${action}: active document is not a YAML file.`,
+      );
+      break;
+    case 'saveFailed':
+      logger.error(
+        CHANNEL,
+        `Cannot ${action}: failed to save YAML document before running command.`,
+      );
+      break;
   }
 }
 
