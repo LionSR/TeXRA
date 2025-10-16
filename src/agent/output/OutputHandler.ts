@@ -100,15 +100,6 @@ export class OutputHandler implements IOutputHandler {
   }
 
   /**
-   * Retrieve the list of outputs for a round without side effects.
-   * @param round The round index to read.
-   * @returns The list of outputs associated with the round, or an empty array if none exist.
-   */
-  public getRoundOutputs(round: number): string[] {
-    return this.outputFiles[round] ?? [];
-  }
-
-  /**
    * Check if a round has any generated outputs.
    * @param round The round index to inspect.
    * @returns True when the round has at least one output.
@@ -208,12 +199,12 @@ export class OutputHandler implements IOutputHandler {
   public async gatherOutputFileInfo(
     currRound: number,
   ): Promise<OutputFileInfo[]> {
-    const roundOutputs = this.getRoundOutputs(currRound);
+    const roundOutputs = this.ensureRound(currRound);
     const baseMap = createFileMapping(this.baseFiles, roundOutputs, 'contains');
     const prevMap =
       currRound > 0
         ? createFileMapping(
-            this.outputFiles[currRound - 1] || [],
+            this.ensureRound(currRound - 1),
             roundOutputs,
             'basename',
             true,
