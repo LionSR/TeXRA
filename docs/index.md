@@ -13,7 +13,7 @@ hero:
       link: /guide/
     - theme: alt
       text: Install from Marketplace
-      link: https://marketplace.visualstudio.com/items?itemName=texra-ai.texra
+      link: vscode:extension/texra-ai.texra
     - theme: alt
       text: Try it on Web
       link: /launch
