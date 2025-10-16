@@ -11,6 +11,8 @@ TeXRA integrates powerful AI capabilities directly into your writing workflow. H
 - Create or enhance technical figures
 - Transform papers into different formats (lecture notes, slides, posters)
 
+> 💡 **Tip:** Inside VS Code you can open the **Run your first TeXRA workflow** walkthrough from the Get Started page (or by running `TeXRA: Open Getting Started Walkthrough`). It mirrors this guide step-by-step and links directly to the relevant commands.
+
 ## Set Up API Keys
 
 Before you can use TeXRA's AI features, you need to provide API keys for the services you intend to use (like Anthropic, OpenAI, Google, etc.). TeXRA stores these keys securely using VS Code's secret storage.
