@@ -52,7 +52,9 @@ type LatexdiffTool = 'latexdiff' | 'latexdiff-vc';
  * @param tool The tool name to verify.
  * @returns True when the tool is available, false otherwise.
  */
-async function ensureLatexdiffToolInstalled(tool: LatexdiffTool): Promise<boolean> {
+async function ensureLatexdiffToolInstalled(
+  tool: LatexdiffTool,
+): Promise<boolean> {
   if (await checkToolInstalled(tool)) {
     return true;
   }
@@ -65,7 +67,9 @@ async function ensureLatexdiffToolInstalled(tool: LatexdiffTool): Promise<boolea
  * Prompts the user to select a math markup granularity for latexdiff operations.
  * @returns The selected math markup option, or undefined if the user cancels.
  */
-async function promptForLatexdiffMathMarkup(): Promise<MathMarkupOption | undefined> {
+async function promptForLatexdiffMathMarkup(): Promise<
+  MathMarkupOption | undefined
+> {
   const configuredMode = getConfig<string>(
     'latexdiff.mathMarkup',
     DEFAULT_MATH_MARKUP,

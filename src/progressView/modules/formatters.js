@@ -67,10 +67,14 @@ export const TaskGroupLevel = {
     name: 'root',
     formatTime: (date) => {
       try {
-        return new Intl.DateTimeFormat(undefined, DATETIME_FORMAT_OPTIONS).format(date);
+        return new Intl.DateTimeFormat(
+          undefined,
+          DATETIME_FORMAT_OPTIONS,
+        ).format(date);
       } catch (error) {
         const isoTimestamp = date.toISOString();
-        const timePart = isoTimestamp.split('T')[1]?.split('.')[0] ?? isoTimestamp;
+        const timePart =
+          isoTimestamp.split('T')[1]?.split('.')[0] ?? isoTimestamp;
         return `${isoTimestamp.split('T')[0]} ${timePart}`;
       }
     },
@@ -82,9 +86,13 @@ export const TaskGroupLevel = {
     name: 'nested',
     formatTime: (date) => {
       try {
-        return new Intl.DateTimeFormat(undefined, TIME_FORMAT_OPTIONS).format(date);
+        return new Intl.DateTimeFormat(undefined, TIME_FORMAT_OPTIONS).format(
+          date,
+        );
       } catch (error) {
-        return date.toISOString().split('T')[1]?.split('.')[0] ?? date.toISOString();
+        return (
+          date.toISOString().split('T')[1]?.split('.')[0] ?? date.toISOString()
+        );
       }
     },
     showTitle: true,
@@ -158,8 +166,14 @@ export class LogEntryFormatter {
     const isoTimestamp = date.toISOString();
 
     try {
-      const timeDisplay = new Intl.DateTimeFormat(undefined, TIME_FORMAT_OPTIONS).format(date);
-      const tooltipTimestamp = new Intl.DateTimeFormat(undefined, DATETIME_FORMAT_OPTIONS).format(date);
+      const timeDisplay = new Intl.DateTimeFormat(
+        undefined,
+        TIME_FORMAT_OPTIONS,
+      ).format(date);
+      const tooltipTimestamp = new Intl.DateTimeFormat(
+        undefined,
+        DATETIME_FORMAT_OPTIONS,
+      ).format(date);
 
       return {
         fullTimestamp: isoTimestamp,
@@ -167,7 +181,8 @@ export class LogEntryFormatter {
         tooltipTimestamp,
       };
     } catch (error) {
-      const timeDisplay = isoTimestamp.split('T')[1]?.split('.')[0] ?? isoTimestamp;
+      const timeDisplay =
+        isoTimestamp.split('T')[1]?.split('.')[0] ?? isoTimestamp;
       return {
         fullTimestamp: isoTimestamp,
         timeDisplay,

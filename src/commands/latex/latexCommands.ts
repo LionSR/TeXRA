@@ -48,7 +48,12 @@ async function handleApplyReplacements(): Promise<void> {
     });
 
     if (guardResult.status !== 'ok') {
-      logGuardFailure(CHANNEL, 'apply replacements', guardResult.status, 'LaTeX');
+      logGuardFailure(
+        CHANNEL,
+        'apply replacements',
+        guardResult.status,
+        'LaTeX',
+      );
       return;
     }
 
@@ -90,7 +95,12 @@ async function handleIndentCurrentTeX(): Promise<void> {
     });
 
     if (guardResult.status !== 'ok') {
-      logGuardFailure(CHANNEL, 'indent LaTeX document', guardResult.status, 'LaTeX');
+      logGuardFailure(
+        CHANNEL,
+        'indent LaTeX document',
+        guardResult.status,
+        'LaTeX',
+      );
       return;
     }
 
