@@ -8,6 +8,9 @@ import {
   showWarningMessage,
 } from '@frontend/ui/messageUtils';
 
+// Local imports - log
+import * as logger from '@logger/logUtils';
+
 export type ActiveFileGuardFailureReason =
   | 'noEditor'
   | 'unsupportedExtension'
@@ -96,4 +99,42 @@ export async function getActiveEditorWithGuards(
     editor,
     relativePath,
   };
+}
+
+/**
+ * Log guard failure with standardized messages.
+ * @param channel - Logger channel name
+ * @param action - Description of the action being performed (e.g., "parse XML", "indent LaTeX document")
+ * @param reason - Reason for guard failure
+ * @param resourceType - Optional resource type (e.g., "LaTeX", "XML", "YAML") for unsupported extension messages
+ */
+export function logGuardFailure(
+  channel: string,
+  action: string,
+  reason: ActiveFileGuardFailureReason,
+  resourceType?: string,
+): void {
+  switch (reason) {
+    case 'noEditor':
+      logger.warn(channel, `Cannot ${action}: no active editor found.`);
+      break;
+    case 'unsupportedExtension': {
+      const typeDescription = resourceType
+        ? ` ${resourceType} file`
+        : ' file with the expected extension';
+      logger.warn(
+        channel,
+        `Cannot ${action}: active document is not a${typeDescription}.`,
+      );
+      break;
+    }
+    case 'saveFailed': {
+      const typeDescription = resourceType ? ` ${resourceType}` : '';
+      logger.error(
+        channel,
+        `Cannot ${action}: failed to save${typeDescription} document before running command.`,
+      );
+      break;
+    }
+  }
 }

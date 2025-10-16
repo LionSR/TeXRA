@@ -11,7 +11,7 @@ import * as logger from '@logger/logUtils';
 import { WorkspaceFS } from '@utils/files';
 import {
   getActiveEditorWithGuards,
-  type ActiveFileGuardFailureReason,
+  logGuardFailure,
 } from '@utils/editor/activeFileGuards';
 
 // Local imports - latex utils
@@ -46,7 +46,7 @@ async function handleExtractFigurePaths(): Promise<void> {
     });
 
     if (guardResult.status !== 'ok') {
-      logGuardFailure('extract figure paths', guardResult.status);
+      logGuardFailure(CHANNEL, 'extract figure paths', guardResult.status, 'LaTeX');
       return;
     }
 
@@ -89,7 +89,7 @@ async function handleExtractTikzFigures(): Promise<void> {
     });
 
     if (guardResult.status !== 'ok') {
-      logGuardFailure('extract TikZ figures', guardResult.status);
+      logGuardFailure(CHANNEL, 'extract TikZ figures', guardResult.status, 'LaTeX');
       return;
     }
 
@@ -145,7 +145,7 @@ async function handleCompileTikzFigures(): Promise<void> {
     });
 
     if (guardResult.status !== 'ok') {
-      logGuardFailure('compile TikZ figures', guardResult.status);
+      logGuardFailure(CHANNEL, 'compile TikZ figures', guardResult.status, 'LaTeX');
       return;
     }
 
@@ -208,29 +208,6 @@ async function handleCompileTikzFigures(): Promise<void> {
       `Error in compileTikzFigures command: ${err instanceof Error ? err.message : String(err)}`,
     );
     vscode.window.showErrorMessage('Error compiling TikZ figures');
-  }
-}
-
-function logGuardFailure(
-  action: string,
-  reason: ActiveFileGuardFailureReason,
-): void {
-  switch (reason) {
-    case 'noEditor':
-      logger.warn(CHANNEL, `Cannot ${action}: no active editor found.`);
-      break;
-    case 'unsupportedExtension':
-      logger.warn(
-        CHANNEL,
-        `Cannot ${action}: active document is not a LaTeX file.`,
-      );
-      break;
-    case 'saveFailed':
-      logger.error(
-        CHANNEL,
-        `Cannot ${action}: failed to save LaTeX document before running command.`,
-      );
-      break;
   }
 }
 
