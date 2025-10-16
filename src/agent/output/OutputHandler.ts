@@ -84,13 +84,38 @@ export class OutputHandler implements IOutputHandler {
     this.diffStatsManager = new DiffStatsManager();
   }
 
-  private ensureRound(round: number): void {
+  /**
+   * Ensure that storage exists for a round and return its output list.
+   * @param round The round index to initialize.
+   * @returns The mutable list of outputs for the round.
+   */
+  public ensureRound(round: number): string[] {
     if (!this.outputFiles[round]) {
       this.outputFiles[round] = [];
     }
     if (!this.outputMappings[round]) {
       this.outputMappings[round] = [];
     }
+    return this.outputFiles[round];
+  }
+
+  /**
+   * Retrieve the list of outputs for a round, initializing it if needed.
+   * @param round The round index to read.
+   * @returns The list of outputs associated with the round.
+   */
+  public getRoundOutputs(round: number): string[] {
+    return this.ensureRound(round);
+  }
+
+  /**
+   * Check if a round has any generated outputs.
+   * @param round The round index to inspect.
+   * @returns True when the round has at least one output.
+   */
+  public hasRoundOutputs(round: number): boolean {
+    const outputs = this.outputFiles[round];
+    return Array.isArray(outputs) && outputs.length > 0;
   }
 
   /**
@@ -183,8 +208,7 @@ export class OutputHandler implements IOutputHandler {
   public async gatherOutputFileInfo(
     currRound: number,
   ): Promise<OutputFileInfo[]> {
-    this.ensureRound(currRound);
-    const roundOutputs = this.outputFiles[currRound];
+    const roundOutputs = this.getRoundOutputs(currRound);
     const baseMap = createFileMapping(this.baseFiles, roundOutputs, 'contains');
     const prevMap =
       currRound > 0
