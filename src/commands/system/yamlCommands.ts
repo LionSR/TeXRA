@@ -13,6 +13,10 @@ import { getAgentPath } from '@agent/runtime/executeAgent';
 import { AgentType } from '@agent/core/AgentDataclass';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { GlobalStorageFS, StorageFS } from '@utils/files';
+import {
+  getActiveEditorWithGuards,
+  logGuardFailure,
+} from '@utils/editor/activeFileGuards';
 
 const CHANNEL = 'TestCommands';
 logger.initialize(CHANNEL);
@@ -205,29 +209,17 @@ export async function handleParseYaml(
   context: vscode.ExtensionContext,
 ): Promise<void> {
   try {
-    // Get active editor
-    const editor = vscode.window.activeTextEditor;
-    if (!editor) {
-      logger.warn(CHANNEL, 'No active editor found');
-      vscode.window.showWarningMessage('Please open a YAML file first');
+    const guardResult = await getActiveEditorWithGuards({
+      allowedExtensions: ['.yaml', '.yml'],
+      resourceName: 'YAML',
+    });
+
+    if (guardResult.status !== 'ok') {
+      logGuardFailure(CHANNEL, 'parse YAML', guardResult.status, 'YAML');
       return;
     }
 
-    // Check if it's a YAML file
-    if (
-      !editor.document.fileName.toLowerCase().endsWith('.yaml') &&
-      !editor.document.fileName.toLowerCase().endsWith('.yml')
-    ) {
-      logger.warn(
-        CHANNEL,
-        `File ${editor.document.fileName} is not a YAML file`,
-      );
-      vscode.window.showWarningMessage(
-        'This command only works with YAML files',
-      );
-      return;
-    }
-
+    const { editor } = guardResult;
     const content = editor.document.getText();
     logger.debug(
       CHANNEL,
