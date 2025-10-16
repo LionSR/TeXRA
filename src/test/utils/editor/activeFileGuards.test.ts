@@ -10,29 +10,36 @@ import {
   type ActiveFileGuardResult,
 } from '@utils/editor/activeFileGuards';
 
+// Mock messageUtils before importing it
+let warningMessages: string[] = [];
+let errorMessages: string[] = [];
+
+// Import and mock messageUtils
+import * as messageUtils from '@frontend/ui/messageUtils';
+
 suite('Active File Guards', () => {
   let originalActiveTextEditor: vscode.TextEditor | undefined;
   let originalWorkspaceFolders:
     | readonly vscode.WorkspaceFolder[]
     | undefined;
-  let warningMessages: string[];
-  let errorMessages: string[];
-
-  const originalShowWarningMessage = vscode.window.showWarningMessage;
-  const originalShowErrorMessage = vscode.window.showErrorMessage;
+  let originalShowWarningMessage: typeof messageUtils.showWarningMessage;
+  let originalShowErrorMessage: typeof messageUtils.showErrorMessage;
 
   beforeEach(() => {
     originalActiveTextEditor = vscode.window.activeTextEditor;
     originalWorkspaceFolders = vscode.workspace.workspaceFolders;
+    originalShowWarningMessage = messageUtils.showWarningMessage;
+    originalShowErrorMessage = messageUtils.showErrorMessage;
     warningMessages = [];
     errorMessages = [];
 
-    (vscode.window as any).showWarningMessage = (message: string) => {
+    // Mock the messageUtils exports
+    (messageUtils as any).showWarningMessage = (message: string) => {
       warningMessages.push(message);
       return Promise.resolve(undefined);
     };
 
-    (vscode.window as any).showErrorMessage = (message: string) => {
+    (messageUtils as any).showErrorMessage = (message: string) => {
       errorMessages.push(message);
       return Promise.resolve(undefined);
     };
@@ -47,8 +54,8 @@ suite('Active File Guards', () => {
   afterEach(() => {
     (vscode.window as any).activeTextEditor = originalActiveTextEditor;
     (vscode.workspace as any).workspaceFolders = originalWorkspaceFolders;
-    (vscode.window as any).showWarningMessage = originalShowWarningMessage;
-    (vscode.window as any).showErrorMessage = originalShowErrorMessage;
+    (messageUtils as any).showWarningMessage = originalShowWarningMessage;
+    (messageUtils as any).showErrorMessage = originalShowErrorMessage;
   });
 
   test('returns noEditor when there is no active editor', async () => {
