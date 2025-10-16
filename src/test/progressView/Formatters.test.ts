@@ -18,6 +18,11 @@ describe('LogEntryFormatter DOM', () => {
     _locales?: Intl.LocalesArgument,
     options?: Intl.DateTimeFormatOptions,
   ) {
+    // Verify that hour12: false is set for all time formats
+    if (options && (options.hour !== undefined)) {
+      assert.equal(options.hour12, false, 'hour12 should be false for consistent 24-hour format');
+    }
+
     const prefix = options && (options.year || options.dateStyle)
       ? 'tooltip'
       : 'time';

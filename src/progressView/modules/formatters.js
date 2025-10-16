@@ -41,6 +41,24 @@ export const EMOJI_BY_LEVEL = {
   debug: '🔍',
 };
 
+// DateTimeFormat options for consistent timestamp formatting
+const DATETIME_FORMAT_OPTIONS = {
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+  hour12: false,
+};
+
+const TIME_FORMAT_OPTIONS = {
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+  hour12: false,
+};
+
 /**
  * Represents different task group hierarchy levels with associated behaviors
  */
@@ -49,14 +67,7 @@ export const TaskGroupLevel = {
     name: 'root',
     formatTime: (date) => {
       try {
-        return new Intl.DateTimeFormat(undefined, {
-          year: 'numeric',
-          month: '2-digit',
-          day: '2-digit',
-          hour: '2-digit',
-          minute: '2-digit',
-          second: '2-digit',
-        }).format(date);
+        return new Intl.DateTimeFormat(undefined, DATETIME_FORMAT_OPTIONS).format(date);
       } catch (error) {
         const isoTimestamp = date.toISOString();
         const timePart = isoTimestamp.split('T')[1]?.split('.')[0] ?? isoTimestamp;
@@ -71,11 +82,7 @@ export const TaskGroupLevel = {
     name: 'nested',
     formatTime: (date) => {
       try {
-        return new Intl.DateTimeFormat(undefined, {
-          hour: '2-digit',
-          minute: '2-digit',
-          second: '2-digit',
-        }).format(date);
+        return new Intl.DateTimeFormat(undefined, TIME_FORMAT_OPTIONS).format(date);
       } catch (error) {
         return date.toISOString().split('T')[1]?.split('.')[0] ?? date.toISOString();
       }
@@ -151,20 +158,8 @@ export class LogEntryFormatter {
     const isoTimestamp = date.toISOString();
 
     try {
-      const timeDisplay = new Intl.DateTimeFormat(undefined, {
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-      }).format(date);
-
-      const tooltipTimestamp = new Intl.DateTimeFormat(undefined, {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-      }).format(date);
+      const timeDisplay = new Intl.DateTimeFormat(undefined, TIME_FORMAT_OPTIONS).format(date);
+      const tooltipTimestamp = new Intl.DateTimeFormat(undefined, DATETIME_FORMAT_OPTIONS).format(date);
 
       return {
         fullTimestamp: isoTimestamp,
