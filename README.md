@@ -3,9 +3,9 @@
 [![VS Code Marketplace](https://img.shields.io/visual-studio-marketplace/v/texra-ai.texra)](https://marketplace.visualstudio.com/items?itemName=texra-ai.texra)
 [![License](https://img.shields.io/badge/license-Proprietary-blue)](LICENSE)
 
-TeXRA brings large language models to your academic writing workflow. The
-extension embeds AI-powered agents directly in VS Code so you can draft,
-revise, and manage LaTeX projects without leaving your editor.
+TeXRA brings large language models to rigorous scientific workflows. The
+extension embeds research-grade agents directly in VS Code so you can draft,
+review, and manage LaTeX projects without leaving your editor.
 
 See [texra.ai](https://texra.ai) or the
 [full documentation](https://texra.ai/guide/) for tutorials and a web-based
@@ -13,22 +13,17 @@ launch page.
 
 ## Why TeXRA
 
-- **AI agents for every task** – polish prose, fix LaTeX, draw TikZ, convert
-  papers to slides, perform OCR, or chat with interactive tool-use agents that
-  can run code. Follow up directly in the progress view.
-- **Transparent streaming** – watch model reasoning stream separately from
-  final responses for Claude, DeepSeek, o1, and more.
-- **Progress view** – detailed logs, clickable references, syntax-highlighted
-  code, re-run buttons, and status-bar updates. Helpful empty states guide new
-  users, and a sample project command provides a ready-made example.
-- **LaTeX-first workflow** – automatic figure extraction, PDF and image
-  conversion, indentation, word counts, diffing, and multi-file selection. The
-  extension detects TeX tools on all platforms and integrates with Overleaf and
-  LaTeX Workshop.
-- **Broad model support** – OpenAI (GPT‑5 family, GPT‑OSS), Anthropic (Claude
-  Opus 4.1 and Sonnet), Google Gemini, DeepSeek, Moonshot (Kimi K2), DashScope
-  (Qwen), GitHub Copilot, and more. Optional OpenRouter routing keeps API keys
-  flexible.
+- **Reliable scientific workflow** – orchestrate literature review, drafting,
+  and revision with reproducible agent runs, structured logs, and built-in
+  verification tools like `latexdiff` and `texcount`.
+- **Specialized research agents** – deploy focused agents for correcting
+  LaTeX, polishing prose, generating figures, and document transformation—without
+  losing control over references and context.
+- **Transparent reasoning loops** – inspect live reasoning, replay sessions,
+  and compare outputs across models to build trust in the generated work.
+- **Model flexibility with guardrails** – connect to OpenAI, Anthropic,
+  DeepSeek, Gemini, Moonshot, Qwen, and custom endpoints while keeping
+  API routing and cost monitoring under your control.
 
 ## Quick Start
 
