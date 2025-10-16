@@ -4,6 +4,9 @@ import * as path from 'path';
 // Third-party imports
 import * as vscode from 'vscode';
 
+// Local imports - errors
+import { showLoggedErrorMessage } from '@common/errors/errorHandlingUtils';
+
 // Local imports - log
 import * as logger from '@logger/logUtils';
 
@@ -74,11 +77,11 @@ async function handleExtractFigurePaths(): Promise<void> {
       );
     }
   } catch (err) {
-    logger.error(
+    await showLoggedErrorMessage(
       CHANNEL,
-      `Error in extractFigurePaths command: ${err instanceof Error ? err.message : String(err)}`,
+      'extractFigurePaths command failed',
+      err,
     );
-    vscode.window.showErrorMessage('Error extracting figure paths');
   }
 }
 
@@ -135,11 +138,11 @@ async function handleExtractTikzFigures(): Promise<void> {
       );
     }
   } catch (err) {
-    logger.error(
+    await showLoggedErrorMessage(
       CHANNEL,
-      `Error in extractTikzFigures command: ${err instanceof Error ? err.message : String(err)}`,
+      'extractTikzFigures command failed',
+      err,
     );
-    vscode.window.showErrorMessage('Error extracting TikZ figures');
   }
 }
 
@@ -214,11 +217,11 @@ async function handleCompileTikzFigures(): Promise<void> {
       },
     );
   } catch (err) {
-    logger.error(
+    await showLoggedErrorMessage(
       CHANNEL,
-      `Error in compileTikzFigures command: ${err instanceof Error ? err.message : String(err)}`,
+      'compileTikzFigures command failed',
+      err,
     );
-    vscode.window.showErrorMessage('Error compiling TikZ figures');
   }
 }
 
