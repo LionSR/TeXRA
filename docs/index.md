@@ -12,15 +12,137 @@ hero:
       text: Get Started
       link: /guide/
     - theme: alt
-      text: Install from Marketplace
-      link: https://marketplace.visualstudio.com/items?itemName=texra-ai.texra
-    - theme: alt
       text: Try it on Web
       link: /launch
     - theme: alt
       text: View on GitHub
       link: https://github.com/texra-ai/texra-issues
 ---
+
+<div class="hero-install-dropdown" data-hero-install>
+  <button class="hero-install-trigger" id="hero-install-trigger" type="button">
+    Install Extension
+    <span class="hero-install-caret" aria-hidden="true"></span>
+  </button>
+  <div class="hero-install-menu" aria-labelledby="hero-install-trigger" role="menu">
+    <a class="hero-install-link" href="vscode:extension/texra-ai.texra" role="menuitem">
+      Open in VS Code
+    </a>
+    <a class="hero-install-link" href="vscode-insiders:extension/texra-ai.texra" role="menuitem">
+      Open in VS Code Insiders
+    </a>
+    <a class="hero-install-link" href="cursor:extension/texra-ai.texra" role="menuitem">
+      Open in Cursor
+    </a>
+    <a class="hero-install-link" href="windsurf:extension/texra-ai.texra" role="menuitem">
+      Open in Windsurf
+    </a>
+    <a
+      class="hero-install-link hero-install-link--marketplace"
+      href="https://marketplace.visualstudio.com/items?itemName=texra-ai.texra"
+      role="menuitem"
+    >
+      View Marketplace Listing
+    </a>
+  </div>
+</div>
+
+<script setup lang="ts">
+import { onMounted, onBeforeUnmount } from 'vue';
+
+let dropdownEl: HTMLElement | null = null;
+let triggerEl: HTMLButtonElement | null = null;
+let menuLinks: NodeListOf<HTMLAnchorElement> | undefined;
+
+const toggleOpenClass = () => {
+  if (!dropdownEl) {
+    return;
+  }
+
+  dropdownEl.classList.toggle('is-open');
+  triggerEl?.setAttribute(
+    'aria-expanded',
+    dropdownEl.classList.contains('is-open') ? 'true' : 'false',
+  );
+};
+
+const closeDropdown = () => {
+  if (!dropdownEl) {
+    return;
+  }
+
+  dropdownEl.classList.remove('is-open');
+  triggerEl?.setAttribute('aria-expanded', 'false');
+};
+
+const handleTriggerClick = (event: MouseEvent) => {
+  event.preventDefault();
+  toggleOpenClass();
+};
+
+const handleDocumentClick = (event: MouseEvent) => {
+  if (!dropdownEl) {
+    return;
+  }
+
+  if (dropdownEl.contains(event.target as Node)) {
+    return;
+  }
+
+  closeDropdown();
+};
+
+const handleKeydown = (event: KeyboardEvent) => {
+  if (event.key === 'Escape') {
+    closeDropdown();
+  }
+};
+
+const handleLinkClick = () => {
+  closeDropdown();
+};
+
+onMounted(() => {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  dropdownEl = document.querySelector('[data-hero-install]');
+  triggerEl = dropdownEl?.querySelector<HTMLButtonElement>('.hero-install-trigger') ?? null;
+  const menuEl = dropdownEl?.querySelector<HTMLDivElement>('.hero-install-menu') ?? null;
+  menuLinks = dropdownEl?.querySelectorAll<HTMLAnchorElement>('.hero-install-link') ?? undefined;
+
+  const heroActions = document.querySelector('.VPHero .actions');
+
+  if (dropdownEl && heroActions) {
+    const insertPosition = heroActions.children[1] ?? null;
+    heroActions.insertBefore(dropdownEl, insertPosition);
+    dropdownEl.classList.add('is-ready');
+  }
+
+  if (triggerEl) {
+    triggerEl.setAttribute('aria-haspopup', 'true');
+    triggerEl.setAttribute('aria-expanded', 'false');
+    triggerEl.addEventListener('click', handleTriggerClick);
+  }
+
+  if (menuEl) {
+    menuEl.setAttribute('role', 'menu');
+  }
+
+  menuLinks?.forEach((link) => link.addEventListener('click', handleLinkClick));
+
+  document.addEventListener('click', handleDocumentClick);
+  document.addEventListener('keydown', handleKeydown);
+});
+
+onBeforeUnmount(() => {
+  triggerEl?.removeEventListener('click', handleTriggerClick);
+  menuLinks?.forEach((link) => link.removeEventListener('click', handleLinkClick));
+  document.removeEventListener('click', handleDocumentClick);
+  document.removeEventListener('keydown', handleKeydown);
+});
+</script>
 
 <div class="workflow-container">
   <div class="workflow-steps">
@@ -343,6 +465,124 @@ If you run into a bug, drop us a line at [contact@texra.ai](mailto:contact@texra
   }
   .step-image {
     max-width: 220px;
+  }
+}
+
+.hero-install-dropdown {
+  position: relative;
+  display: none;
+  flex-shrink: 0;
+}
+
+.hero-install-dropdown.is-ready {
+  display: inline-flex;
+}
+
+.hero-install-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1.4rem;
+  border-radius: 999px;
+  border: 1px solid var(--vp-button-alt-border, var(--vp-c-divider));
+  background-color: var(--vp-button-alt-bg, rgba(255, 255, 255, 0.05));
+  color: var(--vp-button-alt-text, var(--vp-c-text-1));
+  font-weight: 600;
+  font-size: 1rem;
+  line-height: 1.2;
+  cursor: pointer;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease,
+    box-shadow 0.2s ease;
+  box-shadow: var(--vp-shadow-1, 0 1px 2px rgba(15, 23, 42, 0.08));
+}
+
+.hero-install-trigger:hover,
+.hero-install-dropdown.is-open .hero-install-trigger {
+  background-color: var(--vp-button-alt-hover-bg, var(--vp-c-bg-soft));
+  border-color: var(--vp-button-alt-hover-border, var(--vp-c-brand));
+  color: var(--vp-button-alt-hover-text, var(--vp-c-brand));
+  box-shadow: var(--vp-shadow-2, 0 4px 12px rgba(15, 23, 42, 0.12));
+}
+
+.hero-install-trigger:focus-visible {
+  outline: 2px solid var(--vp-c-brand);
+  outline-offset: 2px;
+}
+
+.hero-install-caret {
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(45deg);
+  transition: transform 0.2s ease;
+  margin-top: -0.1rem;
+}
+
+.hero-install-dropdown.is-open .hero-install-caret {
+  transform: rotate(225deg);
+  margin-top: 0.1rem;
+}
+
+.hero-install-menu {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  right: 0;
+  min-width: 16rem;
+  padding: 0.5rem;
+  display: none;
+  flex-direction: column;
+  gap: 0.25rem;
+  border-radius: 0.75rem;
+  border: 1px solid var(--vp-c-divider);
+  background-color: var(--vp-c-bg);
+  box-shadow: var(--vp-shadow-3, 0 18px 40px rgba(15, 23, 42, 0.18));
+  z-index: 30;
+}
+
+.hero-install-dropdown.is-open .hero-install-menu {
+  display: flex;
+}
+
+.hero-install-link {
+  display: flex;
+  align-items: center;
+  padding: 0.55rem 0.75rem;
+  border-radius: 0.5rem;
+  color: var(--vp-c-text-1);
+  font-weight: 500;
+  text-decoration: none;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.hero-install-link:hover,
+.hero-install-link:focus-visible {
+  background-color: var(--vp-c-bg-soft);
+  color: var(--vp-c-brand);
+}
+
+.hero-install-link--marketplace {
+  margin-top: 0.25rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--vp-c-divider);
+}
+
+@media (max-width: 640px) {
+  .hero-install-dropdown {
+    width: 100%;
+  }
+
+  .hero-install-trigger {
+    width: 100%;
+  }
+
+  .hero-install-menu {
+    position: static;
+    width: 100%;
+    margin-top: 0.5rem;
+    box-shadow: var(--vp-shadow-1, 0 1px 2px rgba(15, 23, 42, 0.08));
   }
 }
 </style>
