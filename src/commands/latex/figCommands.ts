@@ -12,6 +12,10 @@ import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
 import { WorkspaceFS } from '@utils/files';
+import {
+  getActiveEditorWithGuards,
+  logGuardFailure,
+} from '@utils/editor/activeFileGuards';
 
 // Local imports - latex utils
 import { extractFigurePathsFromLatex } from '@latex/extractFigure';
@@ -39,22 +43,17 @@ export function registerFigureCommands(context: vscode.ExtensionContext) {
 
 async function handleExtractFigurePaths(): Promise<void> {
   try {
-    // Get active editor
-    const editor = vscode.window.activeTextEditor;
-    if (!editor) {
-      vscode.window.showWarningMessage('Please open a LaTeX file first');
+    const guardResult = await getActiveEditorWithGuards({
+      allowedExtensions: ['.tex'],
+      resourceName: 'LaTeX',
+    });
+
+    if (guardResult.status !== 'ok') {
+      logGuardFailure(CHANNEL, 'extract figure paths', guardResult.status, 'LaTeX');
       return;
     }
 
-    // Check if it's a LaTeX file
-    if (!editor.document.fileName.toLowerCase().endsWith('.tex')) {
-      vscode.window.showWarningMessage(
-        'This command only works with LaTeX files',
-      );
-      return;
-    }
-
-    const filePath = WorkspaceFS.relativePath(editor.document.fileName);
+    const { relativePath: filePath } = guardResult;
     logger.debug(CHANNEL, `Processing LaTeX file: ${filePath}`);
 
     // Extract figure paths
@@ -87,22 +86,17 @@ async function handleExtractFigurePaths(): Promise<void> {
 
 async function handleExtractTikzFigures(): Promise<void> {
   try {
-    // Get active editor
-    const editor = vscode.window.activeTextEditor;
-    if (!editor) {
-      vscode.window.showWarningMessage('Please open a LaTeX file first');
+    const guardResult = await getActiveEditorWithGuards({
+      allowedExtensions: ['.tex'],
+      resourceName: 'LaTeX',
+    });
+
+    if (guardResult.status !== 'ok') {
+      logGuardFailure(CHANNEL, 'extract TikZ figures', guardResult.status, 'LaTeX');
       return;
     }
 
-    // Check if it's a LaTeX file
-    if (!editor.document.fileName.toLowerCase().endsWith('.tex')) {
-      vscode.window.showWarningMessage(
-        'This command only works with LaTeX files',
-      );
-      return;
-    }
-
-    const filePath = WorkspaceFS.relativePath(editor.document.fileName);
+    const { relativePath: filePath } = guardResult;
     logger.debug(
       CHANNEL,
       `Processing LaTeX file for TikZ figures: ${filePath}`,
@@ -148,22 +142,17 @@ async function handleExtractTikzFigures(): Promise<void> {
 
 async function handleCompileTikzFigures(): Promise<void> {
   try {
-    // Get active editor
-    const editor = vscode.window.activeTextEditor;
-    if (!editor) {
-      vscode.window.showWarningMessage('Please open a LaTeX file first');
+    const guardResult = await getActiveEditorWithGuards({
+      allowedExtensions: ['.tex'],
+      resourceName: 'LaTeX',
+    });
+
+    if (guardResult.status !== 'ok') {
+      logGuardFailure(CHANNEL, 'compile TikZ figures', guardResult.status, 'LaTeX');
       return;
     }
 
-    // Check if it's a LaTeX file
-    if (!editor.document.fileName.toLowerCase().endsWith('.tex')) {
-      vscode.window.showWarningMessage(
-        'This command only works with LaTeX files',
-      );
-      return;
-    }
-
-    const filePath = WorkspaceFS.relativePath(editor.document.fileName);
+    const { relativePath: filePath } = guardResult;
     logger.debug(
       CHANNEL,
       `Processing LaTeX file for TikZ compilation: ${filePath}`,
