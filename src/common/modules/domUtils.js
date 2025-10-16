@@ -123,3 +123,96 @@ export function setChevronIconHorizontal(element, expanded) {
     collapsedClass: CHEVRON_RIGHT_CLASS,
   });
 }
+
+/**
+ * Waits for a DOM element matching the provided selector.
+ *
+ * Uses a MutationObserver to watch for DOM changes until the element appears.
+ * If the element already exists, returns immediately. Supports optional timeout.
+ *
+ * @param {string} selector - CSS selector to match the desired element
+ * @param {Object} [options] - Optional configuration
+ * @param {number} [options.timeout] - Maximum time to wait in milliseconds (default: no timeout)
+ * @returns {{ promise: Promise<Element | null>, dispose: () => void }}
+ *          Returns an object with:
+ *          - promise: Resolves with the element or null if disposed/timeout
+ *          - dispose: Function to cancel the wait and clean up resources
+ *
+ * @example
+ * const { promise, dispose } = waitForElement('#model', { timeout: 5000 });
+ * const element = await promise;
+ * if (element) {
+ *   // Use the element
+ * }
+ */
+export function waitForElement(selector, options = {}) {
+  const existing = document.querySelector(selector);
+  if (existing) {
+    return {
+      promise: Promise.resolve(existing),
+      dispose: () => {},
+    };
+  }
+
+  let observer = null;
+  let resolver = null;
+  let timeoutId = null;
+
+  const promise = new Promise((resolve) => {
+    resolver = resolve;
+
+    // Set up optional timeout
+    if (options.timeout && options.timeout > 0) {
+      timeoutId = setTimeout(() => {
+        if (observer) {
+          observer.disconnect();
+          observer = null;
+        }
+        if (resolver) {
+          resolver = null;
+          resolve(null);
+        }
+      }, options.timeout);
+    }
+
+    observer = new MutationObserver(() => {
+      const element = document.querySelector(selector);
+      if (!element) {
+        return;
+      }
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
+      if (observer) {
+        observer.disconnect();
+        observer = null;
+      }
+      resolver = null;
+      resolve(element);
+    });
+
+    observer.observe(document.documentElement, {
+      childList: true,
+      subtree: true,
+    });
+  });
+
+  const dispose = () => {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+      timeoutId = null;
+    }
+    if (observer) {
+      observer.disconnect();
+      observer = null;
+    }
+    if (resolver) {
+      const resolve = resolver;
+      resolver = null;
+      resolve(null);
+    }
+  };
+
+  return { promise, dispose };
+}
