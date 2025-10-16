@@ -53,8 +53,7 @@ export class DirectAgent extends BaseReflectionAgent {
       }
 
       // Initialize output files array if needed
-      this.outputHandler.outputFiles[currRound] =
-        this.outputHandler.outputFiles[currRound] || [];
+      this.outputHandler.ensureRound(currRound);
 
       if (endTurn) {
         this.logger.debug(
