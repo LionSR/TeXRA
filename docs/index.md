@@ -37,7 +37,7 @@ hero:
       <div class="step-number">2</div>
       <div class="step-content">
         <h3>Choose Agent/Model</h3>
-        <p>Select a specialized agent (correct, polish)</p>
+        <p>Select a specialized agent and model</p>
         <div class="step-icon">🤖</div>
       </div>
     </div>
@@ -71,7 +71,7 @@ hero:
 AI scientists need more than a chat window. TeXRA keeps research grounded in reproducible workflows and transparent reasoning:
 
 - **Reliable scientific loops** – capture every run with logs, diffs, and audit trails so collaborators can verify changes.
-- **Specialized agent roster** – summon correction, analysis, derivation, and validation agents tuned for LaTeX-heavy projects.
+- **Specialized agent roster** – summon correction, polishing, figure generation, and document transformation agents tuned for LaTeX-heavy projects.
 - **Integrated verification tools** – trigger `latexdiff`, `texcount`, compilation checks, and custom scripts directly from the agent run.
 - **Context you control** – work across multi-file projects, reference libraries, and datasets without losing track of provenance.
 
