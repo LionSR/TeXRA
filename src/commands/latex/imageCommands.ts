@@ -61,11 +61,7 @@ async function handleCountPdfPages(): Promise<void> {
       vscode.window.showErrorMessage('Could not count pages in the PDF');
     }
   } catch (err) {
-    await showLoggedErrorMessage(
-      CHANNEL,
-      'countPdfPages command failed',
-      err,
-    );
+    await showLoggedErrorMessage(CHANNEL, 'countPdfPages command failed', err);
   }
 }
 
@@ -232,11 +228,7 @@ async function handleTestPdfToImage(): Promise<string | undefined> {
 
     return base64String;
   } catch (err) {
-    await showLoggedErrorMessage(
-      CHANNEL,
-      'testPdfToImage command failed',
-      err,
-    );
+    await showLoggedErrorMessage(CHANNEL, 'testPdfToImage command failed', err);
 
     if (
       err instanceof Error &&

@@ -19,13 +19,16 @@ describe('LogEntryFormatter DOM', () => {
     options?: Intl.DateTimeFormatOptions,
   ) {
     // Verify that hour12: false is set for all time formats
-    if (options && (options.hour !== undefined)) {
-      assert.equal(options.hour12, false, 'hour12 should be false for consistent 24-hour format');
+    if (options && options.hour !== undefined) {
+      assert.equal(
+        options.hour12,
+        false,
+        'hour12 should be false for consistent 24-hour format',
+      );
     }
 
-    const prefix = options && (options.year || options.dateStyle)
-      ? 'tooltip'
-      : 'time';
+    const prefix =
+      options && (options.year || options.dateStyle) ? 'tooltip' : 'time';
     return {
       format(date: Date) {
         return `${prefix}-${date.getTime()}`;
@@ -67,10 +70,7 @@ describe('LogEntryFormatter DOM', () => {
 
     assert.ok(el instanceof dom.window.HTMLElement);
     assert.equal(el.querySelector('.message')?.textContent, 'hello');
-    assert.equal(
-      el?.dataset.fullTimestamp,
-      new Date(timestamp).toISOString(),
-    );
+    assert.equal(el?.dataset.fullTimestamp, new Date(timestamp).toISOString());
     assert.equal(
       el?.querySelector('.timestamp')?.getAttribute('title'),
       `tooltip-${timestamp}`,
