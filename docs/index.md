@@ -2,8 +2,8 @@
 layout: home
 hero:
   name: TeXRA
-  text: Your Intelligent Academic Research Assistant
-  tagline: AI assistance to help with your academic research in VS Code
+  text: Reliable AI Workflows for Scientific Discovery
+  tagline: Agentic research assistant for AI scientists, physicists, and research engineers
   image:
     src: /logo-1024x1024.svg
     alt: TeXRA Logo
@@ -68,12 +68,12 @@ hero:
 
 ## Why TeXRA?
 
-Standard LLM interfaces struggle with the nuances of academic work – complex formatting, precise terminology, large documents, and multi-step reasoning. TeXRA overcomes these limitations by integrating AI deeply into your workflow with:
+AI scientists need more than a chat window. TeXRA keeps research grounded in reproducible workflows and transparent reasoning:
 
-- **Agentic Design**: Specialized agents tackle specific tasks like correcting, polishing, drawing, and transforming documents.
-- **Reflection & Tool Use**: Agents can critique their own work and leverage external tools (like `latexdiff`, `texcount`) for enhanced accuracy and observability.
-- **Context Awareness**: Seamlessly handles multi-file projects and references, giving you control over the context provided to the LLM (up to its limits).
-- **Transparency & Control**: Uses a structured, customizable agent system – not a black box.
+- **Reliable scientific loops** – capture every run with logs, diffs, and audit trails so collaborators can verify changes.
+- **Specialized agent roster** – summon correction, analysis, derivation, and validation agents tuned for LaTeX-heavy projects.
+- **Integrated verification tools** – trigger `latexdiff`, `texcount`, compilation checks, and custom scripts directly from the agent run.
+- **Context you control** – work across multi-file projects, reference libraries, and datasets without losing track of provenance.
 
 ## Key Capabilities
 
