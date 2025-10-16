@@ -16,10 +16,9 @@ launch page.
 - **Reliable scientific workflow** – orchestrate literature review, drafting,
   and revision with reproducible agent runs, structured logs, and built-in
   verification tools like `latexdiff` and `texcount`.
-- **Specialized research agents** – deploy focused agents for polishing
-  arguments, fixing LaTeX, deriving intermediate results, cross-checking
-  symbolic calculations, or running code—without losing control over
-  references and context.
+- **Specialized research agents** – deploy focused agents for correcting
+  LaTeX, polishing prose, generating figures, and document transformation—without
+  losing control over references and context.
 - **Transparent reasoning loops** – inspect live reasoning, replay sessions,
   and compare outputs across models to build trust in the generated work.
 - **Model flexibility with guardrails** – connect to OpenAI, Anthropic,
