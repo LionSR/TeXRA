@@ -99,7 +99,8 @@ export async function activate(context: vscode.ExtensionContext) {
   const progressViewProvider = new ProgressViewProvider(context);
   await progressViewProvider.initialize();
 
-  const toolUsePersistenceEnabled = ToolUseSessionManager.isPersistenceEnabled();
+  const toolUsePersistenceEnabled =
+    ToolUseSessionManager.isPersistenceEnabled();
   if (toolUsePersistenceEnabled) {
     await ToolUseSessionManager.migrateLegacySnapshots();
   }
