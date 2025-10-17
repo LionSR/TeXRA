@@ -192,11 +192,25 @@ export function hasEndTag(
 }
 
 /** Zod schema for AgentPrompt validation */
-export const AgentPromptSchema = z.strictObject({
-  systemPrompt: z.string().prefault(''),
-  userPrefix: z.string().prefault(''),
-  userRequest: z.union([z.string(), z.array(z.string())]).prefault(''),
-});
+export const AgentPromptSchema = z
+  .strictObject({
+    systemPrompt: z.string().prefault(''),
+    userPrefix: z.string().prefault(''),
+    userRequest: z.union([z.string(), z.array(z.string())]).prefault(''),
+  })
+  .passthrough()
+  .superRefine((data, ctx) => {
+    // Check for legacy userReflect field
+    if ('userReflect' in data) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['userReflect'],
+        message:
+          'The "userReflect" field is no longer supported. Please migrate to array-based "userRequest" format. ' +
+          'See documentation: https://github.com/LionSR/TeXRA/blob/main/docs/guide/custom-agents.md#reflection-tips',
+      });
+    }
+  });
 
 export type AgentPrompt = z.infer<typeof AgentPromptSchema>;
 
