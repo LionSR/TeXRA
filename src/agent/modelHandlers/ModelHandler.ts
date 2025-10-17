@@ -676,7 +676,9 @@ export abstract class ModelHandler<
       fileSize = stats.size;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      this.logger.error(`Unable to read file info for ${mediaFile}: ${message}`);
+      this.logger.error(
+        `Unable to read file info for ${mediaFile}: ${message}`,
+      );
       return { result: { path: mediaFile, ok: false } };
     }
 
