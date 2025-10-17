@@ -8,7 +8,7 @@ export interface NormalizedAgentPrompts {
 
 function toArray(value: string | string[] | undefined): string[] {
   if (Array.isArray(value)) {
-    return value.map((entry) => entry ?? '');
+    return value;
   }
 
   if (typeof value === 'string') {
@@ -18,41 +18,18 @@ function toArray(value: string | string[] | undefined): string[] {
   return [];
 }
 
-function isNonEmptyTemplate(value: string | undefined): value is string {
-  return typeof value === 'string' && value.trim().length > 0;
-}
-
 export function normalizeAgentPrompts(
   prompt: Pick<AgentPrompt, 'userRequest' | 'userReflect'>,
 ): NormalizedAgentPrompts {
   const requestEntries = toArray(prompt.userRequest);
 
-  let initialRequest = '';
-  let reflectionStartIndex = 0;
-
-  for (let index = 0; index < requestEntries.length; index += 1) {
-    const candidate = requestEntries[index];
-    if (isNonEmptyTemplate(candidate)) {
-      initialRequest = candidate;
-      reflectionStartIndex = index + 1;
-      break;
-    }
-  }
-
-  if (!initialRequest && requestEntries.length > 0) {
-    // All entries were empty strings; treat the first one as the initial request.
-    initialRequest = requestEntries[0] ?? '';
-    reflectionStartIndex = Math.min(1, requestEntries.length);
-  }
-
-  const reflectionsFromRequest = requestEntries
-    .slice(reflectionStartIndex)
-    .filter(isNonEmptyTemplate);
+  const initialRequest = requestEntries[0] ?? '';
+  const reflectionsFromRequest = requestEntries.slice(1);
 
   const reflections =
     reflectionsFromRequest.length > 0
       ? reflectionsFromRequest
-      : toArray(prompt.userReflect).filter(isNonEmptyTemplate);
+      : toArray(prompt.userReflect);
 
   return {
     initialRequest,
