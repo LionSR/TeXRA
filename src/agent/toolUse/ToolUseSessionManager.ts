@@ -125,7 +125,6 @@ interface ResumingSessionState {
   queuedFollowUps: string[];
 }
 
-
 function normalizeSnapshot(
   snapshot: ToolUseSessionSnapshotParsed,
 ): ToolUseSessionSnapshot {
@@ -370,9 +369,8 @@ export class ToolUseSessionManager {
     const snapshotPath = getSnapshotPath(executionId);
 
     try {
-      const stored = await StorageFS.readJson<ToolUseSessionSnapshot>(
-        snapshotPath,
-      );
+      const stored =
+        await StorageFS.readJson<ToolUseSessionSnapshot>(snapshotPath);
       const parsed = ToolUseSessionSnapshotSchema.safeParse(stored);
       if (!parsed.success) {
         logger.warn(
