@@ -196,7 +196,12 @@ export const AgentPromptSchema = z
   .strictObject({
     systemPrompt: z.string().prefault(''),
     userPrefix: z.string().prefault(''),
-    userRequest: z.union([z.string(), z.array(z.string())]).prefault(''),
+    userRequest: z
+      .union([
+        z.string().min(1, 'userRequest cannot be empty'),
+        z.array(z.string().min(1, 'userRequest entries cannot be empty')),
+      ])
+      .prefault(''),
   })
   .passthrough()
   .superRefine((data, ctx) => {
