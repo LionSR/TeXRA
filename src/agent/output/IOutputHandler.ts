@@ -1,7 +1,9 @@
 // Local imports - agent
+import { LatexDiffManager } from './LatexDiffManager';
+import { XmlOutputManager } from './XmlOutputManager';
+
 // Local imports - types
 import { NamedOutputFile, OutputFileInfo, RoundFileMapping } from './types';
-import { XmlOutputManager } from './XmlOutputManager';
 
 /** Interface describing OutputHandler behavior used by agents. */
 export interface IOutputHandler {
@@ -13,6 +15,9 @@ export interface IOutputHandler {
 
   /** XML manager for parsing and splitting outputs. */
   xmlManager: XmlOutputManager;
+
+  /** Manager responsible for orchestrating latexdiff operations. */
+  readonly diffManager: LatexDiffManager;
 
   /** Ensure storage for a round and return its outputs. */
   ensureRound(round: number): string[];
