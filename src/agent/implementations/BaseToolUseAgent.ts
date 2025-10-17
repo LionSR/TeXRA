@@ -168,12 +168,16 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
         shouldSkipCycle = true;
         this.resumeSnapshot = null;
       } else {
+        const initialUserRequest = Array.isArray(this.agentPrompt.userRequest)
+          ? (this.agentPrompt.userRequest[0] ?? '')
+          : (this.agentPrompt.userRequest ?? '');
+
         const [systemPrompt, userRequest, userPrefix] = await Promise.all([
           getSystemPromptWithRules(
             `${this.agentPrompt.systemPrompt}\n${TOOL_USE_INSTRUCTIONS}`,
             this.userVars,
           ),
-          renderPrompt(this.agentPrompt.userRequest, this.userVars),
+          renderPrompt(initialUserRequest, this.userVars),
           renderPrompt(this.agentPrompt.userPrefix, this.userVars),
         ]);
 
