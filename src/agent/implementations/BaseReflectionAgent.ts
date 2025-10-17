@@ -468,9 +468,8 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
 
       // Prepare round message
       const promptBuilder = this.getPromptBuilder();
-      const userRequestReflect =
-        await promptBuilder.buildReflectPrompt(currRound);
-      let userMessage = userRequestReflect ? `${userRequestReflect}\n` : '';
+      const userRequest = await promptBuilder.buildUserRequest(currRound);
+      let userMessage = userRequest ? `${userRequest}\n` : '';
       if (toolState.texcountStats) {
         userMessage = `${toolState.texcountStats}${userMessage}`;
       }

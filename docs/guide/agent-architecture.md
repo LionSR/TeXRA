@@ -66,7 +66,7 @@ TeXRA constructs the conversation by merging your agent's `systemPrompt`, the co
 Internally, TeXRA now assembles these prompt segments through the `PromptBuilder` helper. The builder collects the agent's templates and rendered variables once and exposes focused methods:
 
 - `buildInitialPrompts()` returns the trio of system, prefix, and request messages used for round 0.
-- `buildReflectPrompt(round)` renders the appropriate reflection template from later `userRequest` entries for a given round.
+- `buildUserRequest(round)` renders the appropriate request template for the supplied round, falling back to the first reflection template when later rounds are undefined.
 - `getPrefill(round)` provides the prefill seed that is streamed to the assistant before each model turn.
 
 Agents that inherit from `BaseReflectionAgent` can override the protected `getPromptBuilder()` hook to supply a subclassed builder. This makes it easy to add new phases (e.g., a planning stage) or to customize how prefills are computed without rewriting the round-processing logic. When you introduce a specialised agent, create a derived `PromptBuilder` that extends the base implementation, override or add the necessary methods, and return it from your agent's `getPromptBuilder()` override so the lifecycle automatically uses your custom prompts.

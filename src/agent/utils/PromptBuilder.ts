@@ -28,7 +28,7 @@ import {
  * ```ts
  * const builder = new PromptBuilder(prompt, setting, vars, logger);
  * const initial = await builder.buildInitialPrompts();
- * const firstReflect = await builder.buildReflectPrompt(1);
+ * const firstRoundRequest = await builder.buildUserRequest(1);
  * const prefill = await builder.buildPrefill(0);
  * ```
  */
@@ -50,11 +50,9 @@ export class PromptBuilder {
     userPrefix: string;
     userRequest: string;
   }> {
-    const { initialRequest } = this.getNormalizedPrompts();
-
     const [systemPrompt, userRequest, userPrefix] = await Promise.all([
       getSystemPromptWithRules(this.agentPrompt.systemPrompt, this.userVars),
-      renderPrompt(initialRequest, this.userVars),
+      this.buildUserRequest(0),
       renderPrompt(this.agentPrompt.userPrefix, this.userVars),
     ]);
 
@@ -62,45 +60,26 @@ export class PromptBuilder {
   }
 
   /**
-   * Render the reflection prompt for the supplied round.
+   * Render the user request for the supplied round.
    *
-   * @param currRound 1-indexed reflection round number (round 1 selects the first template)
-   * @remarks Falls back to the first reflection template when a later round is undefined.
+   * @param currRound Zero-based round number (round 0 selects the initial template)
+   * @remarks Reflection rounds (1+) fall back to the first reflection template when a later
+   *          round is undefined.
    */
-  public async buildReflectPrompt(currRound: number): Promise<string> {
+  public async buildUserRequest(currRound: number): Promise<string> {
     const groupId = this.logger?.getActiveGroupId();
-    const normalizedRound = Math.max(1, currRound);
+    const template = this.getRoundTemplate(currRound);
 
-    let reflectTemplate: string | undefined;
-
-    const reflectionTemplates = this.getReflectionTemplates();
-    if (reflectionTemplates.length > 0) {
-      const index = normalizedRound - 1;
-      reflectTemplate = reflectionTemplates[index];
-
-      if (reflectTemplate === undefined) {
-        const fallback = reflectionTemplates[0];
-
-        if (fallback) {
-          this.logger?.debug(
-            `No reflection prompt configured for round ${currRound}. Falling back to first template.`,
-            groupId,
-          );
-        }
-
-        reflectTemplate = fallback;
-      }
-    }
-
-    if (!reflectTemplate) {
-      this.logger?.warn(
-        `No reflection prompt configured for round ${currRound}. Returning empty prompt.`,
-        groupId,
-      );
+    if (!template) {
+      const message =
+        currRound === 0
+          ? 'No initial user request configured. Returning empty prompt.'
+          : `No reflection prompt configured for round ${currRound}. Returning empty prompt.`;
+      this.logger?.warn(message, groupId);
       return '';
     }
 
-    return renderPrompt(reflectTemplate, this.userVars);
+    return renderPrompt(template, this.userVars);
   }
 
   /**
@@ -129,9 +108,35 @@ export class PromptBuilder {
     return prefills[0] ?? '';
   }
 
-  private getReflectionTemplates(): string[] {
-    const { reflectionPrompts } = this.getNormalizedPrompts();
-    return reflectionPrompts;
+  private getRoundTemplate(currRound: number): string | undefined {
+    const normalizedRound = Math.max(0, currRound);
+    const groupId = this.logger?.getActiveGroupId();
+    const { initialRequest, reflectionPrompts } = this.getNormalizedPrompts();
+
+    if (normalizedRound === 0) {
+      return initialRequest;
+    }
+
+    if (reflectionPrompts.length === 0) {
+      return undefined;
+    }
+
+    const reflectionIndex = normalizedRound - 1;
+    const template = reflectionPrompts[reflectionIndex];
+
+    if (template !== undefined) {
+      return template;
+    }
+
+    const fallback = reflectionPrompts[0];
+    if (fallback) {
+      this.logger?.debug(
+        `No reflection prompt configured for round ${currRound}. Falling back to first template.`,
+        groupId,
+      );
+    }
+
+    return fallback;
   }
 
   private getNormalizedPrompts(): NormalizedAgentPrompts {
