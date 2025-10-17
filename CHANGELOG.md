@@ -262,7 +262,6 @@ All notable changes to this project will be documented in this file.
 
 - Enable model streaming & response APIs by default:
   - `texra.model.useOpenAIResponsesAPI` now defaults to `true` (was `false`)
-  - `texra.model.useNativeGoogleSDK` now defaults to `true` (was `false`)
 
 ## [0.32.7] - 2025-08-08
 
