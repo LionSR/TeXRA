@@ -1,4 +1,8 @@
+// Local imports - agent
+import type { AgentPrompt } from '@agent/core/AgentDataclass';
+
 // Local imports - utilities
+import { normalizeAgentPrompts } from './promptNormalization';
 
 /**
  * Calculate the total number of conversation rounds.
@@ -19,20 +23,12 @@ export function calculateTotalRounds(
   userReflect: string | string[] | undefined,
 ): number {
   const rounds = configuredRounds ?? 2;
-  const reflectionCandidates: string[] = [];
+  const { reflectionPrompts } = normalizeAgentPrompts({
+    userRequest,
+    userReflect,
+  } as Pick<AgentPrompt, 'userRequest' | 'userReflect'>);
 
-  if (Array.isArray(userRequest) && userRequest.length > 1) {
-    reflectionCandidates.push(...userRequest.slice(1));
-  } else if (Array.isArray(userReflect)) {
-    reflectionCandidates.push(...userReflect);
-  } else if (typeof userReflect === 'string' && userReflect.trim().length > 0) {
-    reflectionCandidates.push(userReflect);
-  }
-
-  const nonEmptyReflectionCount = reflectionCandidates.filter(
-    (template) => template && template.trim().length > 0,
-  ).length;
   const reflectRounds =
-    nonEmptyReflectionCount > 0 ? nonEmptyReflectionCount + 1 : 0;
+    reflectionPrompts.length > 0 ? reflectionPrompts.length + 1 : 0;
   return Math.max(rounds, reflectRounds);
 }
