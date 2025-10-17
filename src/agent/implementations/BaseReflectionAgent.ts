@@ -145,6 +145,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
   protected getNumberOfRounds(): number {
     return calculateTotalRounds(
       this.agentSetting.rounds,
+      this.agentPrompt.userRequest,
       this.agentPrompt.userReflect,
     );
   }

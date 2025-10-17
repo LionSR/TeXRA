@@ -95,4 +95,26 @@ describe('getToolFlags', () => {
       (configModule as any).getConfig = originalGetConfig;
     }
   });
+
+  it('derives round count from additional userRequest entries', () => {
+    const prompt: AgentPrompt = {
+      ...basePrompt,
+      userRequest: ['round0', 'reflect1', 'reflect2'],
+    };
+    const setting: AgentSetting = { ...baseSetting, rounds: 1 };
+
+    const flags = getToolFlags(baseConfig, setting, prompt);
+    assert.equal(flags.ROUNDS, 3);
+  });
+
+  it('falls back to legacy userReflect prompts', () => {
+    const prompt: AgentPrompt = {
+      ...basePrompt,
+      userReflect: ['reflect1', 'reflect2'],
+    };
+    const setting: AgentSetting = { ...baseSetting, rounds: 1 };
+
+    const flags = getToolFlags(baseConfig, setting, prompt);
+    assert.equal(flags.ROUNDS, 3);
+  });
 });

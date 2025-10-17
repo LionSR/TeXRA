@@ -54,8 +54,7 @@ export async function handleTestAgentLoading(
       prompts: {
         systemPrompt: 'Test system prompt',
         userPrefix: 'Test prefix',
-        userRequest: 'Test request',
-        userReflect: 'Test reflect',
+        userRequest: ['Test request', 'Test reflect'],
       },
     };
 
