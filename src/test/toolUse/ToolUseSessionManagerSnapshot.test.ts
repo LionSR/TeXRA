@@ -100,52 +100,34 @@ suite('ToolUseSessionManager snapshot compatibility', () => {
     assert.strictEqual(loaded?.toolState.lastResponse, 'response');
   });
 
-  test('loadSnapshot reads snapshots saved before helper migration', async () => {
+  test('migrateLegacySnapshots rewrites stringified snapshots before load', async () => {
     const executionId = 'legacy-snapshot' as ExecutionId;
     const snapshot = buildLegacySnapshot(executionId);
 
     await StorageFS.ensureDir('toolUseSessions');
     await StorageFS.write(
       path.join('toolUseSessions', `${executionId}.json`),
-      JSON.stringify(snapshot, null, 2),
+      JSON.stringify(JSON.stringify(snapshot)),
     );
 
+    await ToolUseSessionManager.migrateLegacySnapshots();
     const loaded = await ToolUseSessionManager.loadSnapshot(executionId);
 
-    assert.ok(loaded, 'expected legacy snapshot to load');
+    assert.ok(loaded, 'expected legacy snapshot to load after migration');
     assert.strictEqual(loaded?.executionId, executionId);
   });
 
-  test('loadSnapshot falls back to raw JSON parsing when helper fails', async () => {
-    const executionId = 'fallback-snapshot' as ExecutionId;
-    const snapshot = buildLegacySnapshot(executionId);
+  test('loadSnapshot returns null when snapshot fails validation', async () => {
+    const executionId = 'invalid-snapshot' as ExecutionId;
 
     await StorageFS.ensureDir('toolUseSessions');
     await StorageFS.write(
       path.join('toolUseSessions', `${executionId}.json`),
-      JSON.stringify(snapshot, null, 2),
+      JSON.stringify({ version: 1 }),
     );
 
-    const originalReadJson = StorageFS.readJson;
+    const loaded = await ToolUseSessionManager.loadSnapshot(executionId);
 
-    (
-      StorageFS as typeof StorageFS & {
-        readJson: typeof StorageFS.readJson;
-      }
-    ).readJson = async () => {
-      throw new SyntaxError('forced failure');
-    };
-
-    try {
-      const loaded = await ToolUseSessionManager.loadSnapshot(executionId);
-      assert.ok(loaded, 'expected fallback parsing to succeed');
-      assert.strictEqual(loaded?.executionId, executionId);
-    } finally {
-      (
-        StorageFS as typeof StorageFS & {
-          readJson: typeof StorageFS.readJson;
-        }
-      ).readJson = originalReadJson;
-    }
+    assert.strictEqual(loaded, null, 'expected invalid snapshot to be ignored');
   });
 });
