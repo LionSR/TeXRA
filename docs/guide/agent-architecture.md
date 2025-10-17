@@ -17,7 +17,7 @@ These `.yaml` files have two main parts (and thankfully, YAML is usually less pr
 2.  **`prompts`**: Contain text templates that TeXRA fills with your specific context (input files, instructions) to guide the LLM at different stages:
     - `systemPrompt`: Sets the overall role and high-level instructions for the LLM.
     - `userPrefix`: Provides the main context, including your input file(s) (available via e.g., `{{ INPUT_CONTENT }}`) and the specific instruction you typed in the UI (available via `{{ INSTRUCTION }}`).
-    - `userRequest`: Asks the LLM to perform the initial task (Round 0). Often instructs the LLM to think within `<scratchpad>` tags and then output the main content wrapped within the XML tags defined by `settings.documentTag` (e.g., `<document>...</document>`). You can also provide an **array** here: the first non-empty entry becomes the round 0 request, and any additional non-empty entries drive automatic reflection rounds (Round 1+) without needing a separate `userReflect` field. When a run consumes more rounds than you specify, the first reflection template is reused, and legacy `userReflect` prompts still act as a fallback when the array omits them.
+    - `userRequest`: Asks the LLM to perform the initial task (Round 0). Often instructs the LLM to think within `<scratchpad>` tags and then output the main content wrapped within the XML tags defined by `settings.documentTag` (e.g., `<document>...</document>`). You can also provide an **array** here: the first entry becomes the round 0 request, and any additional entries drive automatic reflection rounds (Round 1+). When a run consumes more rounds than entries you specify, the first reflection template is reused.
 
 \_(Prompts use Jinja2 templating. For a detailed list of available variables like `{{ INPUT_CONTENT }}` and how to use them, see the [Custom Agents](./custom-agents.md) guide.)\*
 
@@ -66,7 +66,7 @@ TeXRA constructs the conversation by merging your agent's `systemPrompt`, the co
 Internally, TeXRA now assembles these prompt segments through the `PromptBuilder` helper. The builder collects the agent's templates and rendered variables once and exposes focused methods:
 
 - `buildInitialPrompts()` returns the trio of system, prefix, and request messages used for round 0.
-- `buildReflectPrompt(round)` renders the appropriate reflection template (either from later `userRequest` entries or the legacy `userReflect` field) for a given round.
+- `buildReflectPrompt(round)` renders the appropriate reflection template from later `userRequest` entries for a given round.
 - `getPrefill(round)` provides the prefill seed that is streamed to the assistant before each model turn.
 
 Agents that inherit from `BaseReflectionAgent` can override the protected `getPromptBuilder()` hook to supply a subclassed builder. This makes it easy to add new phases (e.g., a planning stage) or to customize how prefills are computed without rewriting the round-processing logic. When you introduce a specialised agent, create a derived `PromptBuilder` that extends the base implementation, override or add the necessary methods, and return it from your agent's `getPromptBuilder()` override so the lifecycle automatically uses your custom prompts.
@@ -75,7 +75,7 @@ Agents that inherit from `BaseReflectionAgent` can override the protected `getPr
 
 When an agent definition includes multiple `userRequest` entries (or increases `settings.rounds`), TeXRA automatically performs additional passes after Round 0 completes:
 
-1.  **Reflection Prompt:** It renders the appropriate reflection template—using the subsequent `userRequest` entries or a legacy `userReflect` field—to ask the LLM to critique and improve its own Round 0 output (which is included in the conversation history).
+1.  **Reflection Prompt:** It renders the appropriate reflection template from subsequent `userRequest` entries to ask the LLM to critique and improve its own Round 0 output (which is included in the conversation history).
 2.  **LLM Interaction (Round 1):** The LLM generates a revised response.
 3.  **Processing:** TeXRA saves this refined output to a separate file (e.g., `filename_agent_r1_model.ext`).
 

@@ -33,7 +33,6 @@ describe('PromptBuilder', () => {
       systemPrompt: 'system',
       userPrefix: 'prefix',
       userRequest: ['initial {{ value }}', 'reflect {{ value }}'],
-      userReflect: '',
     } as AgentPrompt;
 
     const builder = new PromptBuilder(prompt, baseSetting, { value: 'test' });
@@ -47,22 +46,18 @@ describe('PromptBuilder', () => {
     assert.equal(fallback, 'reflect test');
   });
 
-  it('falls back to legacy userReflect prompts', async () => {
+  it('handles single string userRequest without reflections', async () => {
     const prompt: AgentPrompt = {
       systemPrompt: '',
       userPrefix: '',
       userRequest: 'initial only',
-      userReflect: ['reflect one', 'reflect two'],
     } as AgentPrompt;
 
     const builder = new PromptBuilder(prompt, baseSetting, {});
-    const reflectOne = await builder.buildReflectPrompt(1);
-    assert.equal(reflectOne, 'reflect one');
+    const initial = await builder.buildInitialPrompts();
+    assert.equal(initial.userRequest, 'initial only');
 
-    const reflectTwo = await builder.buildReflectPrompt(2);
-    assert.equal(reflectTwo, 'reflect two');
-
-    const fallback = await builder.buildReflectPrompt(3);
-    assert.equal(fallback, 'reflect one');
+    const reflectPrompt = await builder.buildReflectPrompt(1);
+    assert.equal(reflectPrompt, '');
   });
 });

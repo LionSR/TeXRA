@@ -328,7 +328,6 @@ export function getToolFlags(
     flags.ROUNDS = calculateTotalRounds(
       'rounds' in agentSetting ? agentSetting.rounds : undefined,
       agentPrompt.userRequest,
-      agentPrompt.userReflect,
     );
   }
 

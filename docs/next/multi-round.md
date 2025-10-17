@@ -7,7 +7,7 @@ This document outlines initial considerations for extending `BaseReflectionAgent
 - **Configuration**
   - A `rounds` field now exists in `AgentSetting` allowing a workflow to specify how many sequential steps to perform (defaults to `2`).
   - The value is exposed to prompt templates via the `ROUNDS` user variable.
-  - Prompts may need to supply multiple `userRequest` entries (or reuse a legacy `userReflect` template) for each additional round.
+  - Prompts may need to supply multiple `userRequest` entries for each additional round.
 
 - **State Management**
   - The agent already tracks `AgentStateRound` and `AgentStateGlobal` which are not tied to a fixed number of rounds. These classes should work for arbitrary counts as long as arrays are sized dynamically.
