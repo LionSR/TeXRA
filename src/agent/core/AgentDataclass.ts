@@ -196,7 +196,6 @@ export const AgentPromptSchema = z.strictObject({
   systemPrompt: z.string().prefault(''),
   userPrefix: z.string().prefault(''),
   userRequest: z.union([z.string(), z.array(z.string())]).prefault(''),
-  userReflect: z.union([z.string(), z.array(z.string())]).prefault(''),
 });
 
 export type AgentPrompt = z.infer<typeof AgentPromptSchema>;

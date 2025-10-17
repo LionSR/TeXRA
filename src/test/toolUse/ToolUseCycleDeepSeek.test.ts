@@ -113,7 +113,6 @@ describe('runToolUseCycle DeepSeek', () => {
       systemPrompt: '',
       userPrefix: '',
       userRequest: '',
-      userReflect: '',
     };
     const toolState = new ToolState();
     const options: ToolUseCycleOptions<OpenAI> = {
