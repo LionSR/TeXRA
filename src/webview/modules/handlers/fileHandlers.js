@@ -19,10 +19,9 @@ import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
  * @param {Function} ctx.postHandle
  * @param {Function} ctx.getElement
  * @param {Function} ctx.setToggleIcon
- * @param {Function} ctx.setupFileListHandler
  */
 export function createFileHandlers(ctx) {
-  const { postHandle, getElement, setToggleIcon, setupFileListHandler } = ctx;
+  const { postHandle, getElement, setToggleIcon } = ctx;
   const createSetFileHandler = (fileType, domId) => (message) => {
     fileSelect.update(domId, message.files);
     postHandle();
@@ -35,10 +34,6 @@ export function createFileHandlers(ctx) {
 
   const createSetFilesHandler = (fileType, listId, toggleId) => (message) => {
     fileList.update(listId, toggleId, message.files);
-    const listEl = getElement(listId);
-    if (listEl) {
-      setupFileListHandler(fileType, listEl);
-    }
     postHandle();
   };
 
@@ -80,10 +75,6 @@ export function createFileHandlers(ctx) {
       ...existingFiles,
       message.file,
     ]);
-    if (listDiv) {
-      setupFileListHandler('media', listDiv);
-    }
-
     const container = getElement('mediaFilesContainer');
     if (container && container.style.display === 'none') {
       container.style.display = 'block';

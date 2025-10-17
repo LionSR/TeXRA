@@ -24,7 +24,6 @@ import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
 import type { TokenUsageStats } from '@agent/types/UsageTypes';
 import { AgentLogger } from '@logger/AgentLogger';
 import { LogMessageData } from '@logger/LogTypes';
-import { TaskState, isWorkflowTaskState } from '@logger/TaskState';
 
 // Type aliases for status values
 type StreamStatusType =
@@ -229,16 +228,10 @@ export class ProgressViewProvider
    * Clear task output (legacy compatibility)
    */
   public clearTaskOutput(streamTabId: StreamTabId): void {
-    const taskState = this.state.getTaskState(streamTabId);
-    if (!taskState || !isWorkflowTaskState(taskState)) {
-      return;
+    const didUpdate = this.state.clearOutputState(streamTabId);
+    if (didUpdate) {
+      this.updateWebview();
     }
-
-    // Only clear output-related fields, preserve other task state data
-    taskState.agentConfig.outputFiles = [];
-    taskState.agentConfig.useMultipleOutputs = false;
-    taskState.activeFiles.output = false;
-    this.state.setTaskState(streamTabId, taskState);
   }
 
   /**
