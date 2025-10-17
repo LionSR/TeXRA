@@ -1,5 +1,6 @@
 // Standard library imports
 import { strict as assert } from 'assert';
+import * as path from 'path';
 
 // Local imports - test
 import type { AgentConfig } from '@agent/core/AgentConfig';
@@ -135,6 +136,42 @@ describe('OutputHandler round helpers', () => {
 
     // Verify reference equality (returns the actual array, not a copy)
     assert.strictEqual(outputs, handler.outputFiles[2]);
+  });
+});
+
+describe('OutputHandler.getRoundMapping', () => {
+  it('caches computed mappings until invalidated', () => {
+    const handler = new OutputHandler(
+      baseSetting,
+      baseConfig,
+      0,
+      [path.join('workspace', 'chapter.tex')],
+      new AgentLogger('TestOutputHandlerMapping'),
+    );
+
+    handler.outputFiles[0] = [path.join('workspace', 'chapter_r0.tex')];
+    handler.outputMappings[0] = [
+      {
+        source: path.join('workspace', 'chapter_r0.tex'),
+        path: path.join('workspace', 'chapter_r0.tex'),
+      },
+    ];
+
+    const first = handler.getRoundMapping(0);
+    const second = handler.getRoundMapping(0);
+
+    assert.strictEqual(second, first, 'expected mapping to be cached');
+
+    handler.outputFiles[0].push(path.join('workspace', 'chapter_appendix_r0.tex'));
+    (handler as any).invalidateRoundMapping(0);
+
+    const third = handler.getRoundMapping(0);
+
+    assert.notStrictEqual(
+      third,
+      first,
+      'expected mapping to refresh after invalidation',
+    );
   });
 });
 
