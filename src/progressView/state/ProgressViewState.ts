@@ -137,6 +137,46 @@ export class ProgressViewState {
     this._sessionCategoryHints.delete(streamTabId);
   }
 
+  /**
+   * Reset workflow output metadata for the provided stream.
+   *
+   * Clears outputFiles, useMultipleOutputs, and the output flag.
+   * Returns true when state was modified and persisted, false when
+   * already cleared or not a workflow task.
+   */
+  clearOutputState(streamTabId: StreamTabId): boolean {
+    const taskState = this.getTaskState(streamTabId);
+    if (!taskState || !isWorkflowTaskState(taskState)) {
+      return false;
+    }
+
+    const hasPersistedOutputs =
+      Array.isArray(taskState.agentConfig.outputFiles) &&
+      taskState.agentConfig.outputFiles.length > 0;
+    const usesMultipleOutputs = taskState.agentConfig.useMultipleOutputs;
+    const outputFlagEnabled = taskState.activeFiles.output;
+
+    if (!hasPersistedOutputs && !usesMultipleOutputs && !outputFlagEnabled) {
+      return false;
+    }
+
+    const updatedState = {
+      ...taskState,
+      agentConfig: {
+        ...taskState.agentConfig,
+        outputFiles: [],
+        useMultipleOutputs: false,
+      },
+      activeFiles: {
+        ...taskState.activeFiles,
+        output: false,
+      },
+    };
+
+    this.setTaskState(streamTabId, updatedState);
+    return true;
+  }
+
   // Task state management
   setTaskState(streamTabId: StreamTabId, taskState: TaskState): void {
     const normalizedState = agentConfigToTaskState(
