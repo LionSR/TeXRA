@@ -8,7 +8,7 @@ import {
 } from '../ModelConfig';
 
 // Common capabilities for Google models
-// Continuation: ModelHandlerGoogle inspects Google's FinishReason stop signals.
+// Continuation: ModelHandlerGoogleGenAI inspects Google's FinishReason stop signals.
 // When MAX_TOKENS triggers without emitting the closing tag we enqueue a follow-up
 // request so tuning changes should preserve the native stop reasons returned by the API.
 const GOOGLE_DEFAULT_CAPABILITIES: ModelCapabilities = {
