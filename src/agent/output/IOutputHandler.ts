@@ -1,7 +1,9 @@
 // Local imports - agent
-// Local imports - types
-import { NamedOutputFile, OutputFileInfo } from './types';
+import { LatexDiffManager } from './LatexDiffManager';
 import { XmlOutputManager } from './XmlOutputManager';
+
+// Local imports - types
+import { NamedOutputFile, OutputFileInfo, RoundFileMapping } from './types';
 
 /** Interface describing OutputHandler behavior used by agents. */
 export interface IOutputHandler {
@@ -13,6 +15,9 @@ export interface IOutputHandler {
 
   /** XML manager for parsing and splitting outputs. */
   xmlManager: XmlOutputManager;
+
+  /** Manager responsible for orchestrating latexdiff operations. */
+  readonly diffManager: LatexDiffManager;
 
   /** Ensure storage for a round and return its outputs. */
   ensureRound(round: number): string[];
@@ -26,9 +31,6 @@ export interface IOutputHandler {
   /** Indent multiple LaTeX files for readability. */
   indentLatexFiles(filePaths: string[]): Promise<void>;
 
-  /** Run latexdiff comparisons for the current round. */
-  handleLatexdiffofOutput(currRound: number, groupId?: string): Promise<void>;
-
   /** Process output files from XML or direct input. */
   processOutputFiles(
     outputFile: string,
@@ -38,6 +40,9 @@ export interface IOutputHandler {
 
   /** Gather mapping and diff stats for output files of a round. */
   gatherOutputFileInfo(currRound: number): Promise<OutputFileInfo[]>;
+
+  /** Retrieve the cached mapping metadata for a round. */
+  getRoundMapping(currRound: number): RoundFileMapping;
 
   /** Validate expected output files for the given round. */
   validateExpectedOutputs(
