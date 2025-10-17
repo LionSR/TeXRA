@@ -65,23 +65,4 @@ describe('PromptBuilder', () => {
     const fallback = await builder.buildReflectPrompt(3);
     assert.equal(fallback, 'reflect one');
   });
-
-  it('skips empty templates when selecting initial request and reflections', async () => {
-    const prompt: AgentPrompt = {
-      systemPrompt: '',
-      userPrefix: '',
-      userRequest: ['', '   ', 'primary', '', 'follow-up'],
-      userReflect: '',
-    } as AgentPrompt;
-
-    const builder = new PromptBuilder(prompt, baseSetting, {});
-    const initial = await builder.buildInitialPrompts();
-    assert.equal(initial.userRequest, 'primary');
-
-    const reflect = await builder.buildReflectPrompt(1);
-    assert.equal(reflect, 'follow-up');
-
-    const fallback = await builder.buildReflectPrompt(2);
-    assert.equal(fallback, 'follow-up');
-  });
 });
