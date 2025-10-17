@@ -10,14 +10,19 @@ import type { AgentLogger } from '@logger/AgentLogger';
 // Local imports - utilities
 import { getSystemPromptWithRules } from './promptHelpers';
 import { renderPrompt } from './promptUtils';
+import {
+  NormalizedAgentPrompts,
+  normalizeAgentPrompts,
+} from './promptNormalization';
 
 /**
  * Centralises prompt construction logic for reflection-capable agents.
  *
  * @remarks
  * The builder renders all prompts lazily so callers can defer work until the
- * relevant conversation stage. Reflection rounds are 1-indexed while process
- * rounds begin at 0.
+ * relevant conversation stage. Reflection rounds pass a 1-indexed counter so
+ * round 1 maps to the first reflection template, while process rounds use a
+ * zero-based index.
  *
  * @example
  * ```ts
@@ -28,6 +33,8 @@ import { renderPrompt } from './promptUtils';
  * ```
  */
 export class PromptBuilder {
+  private normalizedPrompts?: NormalizedAgentPrompts;
+
   constructor(
     private readonly agentPrompt: AgentPrompt,
     private readonly agentSetting: AgentWorkflowSetting,
@@ -43,13 +50,11 @@ export class PromptBuilder {
     userPrefix: string;
     userRequest: string;
   }> {
-    const initialUserRequest = Array.isArray(this.agentPrompt.userRequest)
-      ? (this.agentPrompt.userRequest[0] ?? '')
-      : (this.agentPrompt.userRequest ?? '');
+    const { initialRequest } = this.getNormalizedPrompts();
 
     const [systemPrompt, userRequest, userPrefix] = await Promise.all([
       getSystemPromptWithRules(this.agentPrompt.systemPrompt, this.userVars),
-      renderPrompt(initialUserRequest, this.userVars),
+      renderPrompt(initialRequest, this.userVars),
       renderPrompt(this.agentPrompt.userPrefix, this.userVars),
     ]);
 
@@ -59,7 +64,7 @@ export class PromptBuilder {
   /**
    * Render the reflection prompt for the supplied round.
    *
-   * @param currRound The reflection round (1-indexed for reflection rounds)
+   * @param currRound 1-indexed reflection round number (round 1 selects the first template)
    * @remarks Falls back to the first reflection template when a later round is undefined.
    */
   public async buildReflectPrompt(currRound: number): Promise<string> {
@@ -101,7 +106,7 @@ export class PromptBuilder {
   /**
    * Return the prefill value that should seed the assistant response.
    *
-   * @param currRound The current round number (0-based for process, 1+ for reflection)
+   * @param currRound Zero-based conversation round index (0 for process rounds, 1+ for reflections)
    * @remarks Reuses the first configured prefill when subsequent rounds omit a value.
    */
   public async buildPrefill(currRound: number): Promise<string> {
@@ -125,21 +130,16 @@ export class PromptBuilder {
   }
 
   private getReflectionTemplates(): string[] {
-    const { userRequest, userReflect } = this.agentPrompt;
+    const { reflectionPrompts } = this.getNormalizedPrompts();
+    return reflectionPrompts;
+  }
 
-    if (Array.isArray(userRequest) && userRequest.length > 1) {
-      return userRequest.slice(1);
+  private getNormalizedPrompts(): NormalizedAgentPrompts {
+    if (!this.normalizedPrompts) {
+      this.normalizedPrompts = normalizeAgentPrompts(this.agentPrompt);
     }
 
-    if (Array.isArray(userReflect)) {
-      return userReflect;
-    }
-
-    if (typeof userReflect === 'string' && userReflect.trim().length > 0) {
-      return [userReflect];
-    }
-
-    return [];
+    return this.normalizedPrompts;
   }
 }
 
