@@ -117,4 +117,15 @@ describe('getToolFlags', () => {
     const flags = getToolFlags(baseConfig, setting, prompt);
     assert.equal(flags.ROUNDS, 3);
   });
+
+  it('ignores empty templates while preserving later reflections', () => {
+    const prompt: AgentPrompt = {
+      ...basePrompt,
+      userRequest: ['round0', '', 'reflect2'],
+    };
+    const setting: AgentSetting = { ...baseSetting, rounds: 1 };
+
+    const flags = getToolFlags(baseConfig, setting, prompt);
+    assert.equal(flags.ROUNDS, 2);
+  });
 });
