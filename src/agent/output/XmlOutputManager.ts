@@ -155,30 +155,17 @@ export class XmlOutputManager {
     const tagsToWrap = [documentTag, thinkingTag];
     outputContent = xmlUtils.addCdataToTags(outputContent, tagsToWrap);
 
+    // First, try to extract named document matching input file (prioritized)
+    const namedDocumentContent = this.extractDocumentbyRegex(
+      outputContent,
+      documentTag,
+    );
+    if (namedDocumentContent) {
+      await WorkspaceFS.write(texFile, namedDocumentContent);
+      return texFile;
+    }
+
     try {
-      const filename = path.basename(this.agentConfig.inputFile);
-      const namedDocuments = xmlUtils.extractMultipleTextFromTag(
-        outputContent,
-        documentTag,
-      );
-      const matchingDocument = namedDocuments.find((doc) => {
-        const documentName = doc.name?.trim();
-        if (!documentName) {
-          return false;
-        }
-        return path.basename(documentName) === filename;
-      });
-
-      if (matchingDocument?.content) {
-        this.logger.info(
-          `Recovered ${documentTag} from named document ${filename}`,
-          undefined,
-          MESSAGE_TYPES.INTERNAL,
-        );
-        await WorkspaceFS.write(texFile, matchingDocument.content);
-        return texFile;
-      }
-
       const parser = new XMLParser({
         ignoreAttributes: false,
         parseTagValue: true,
@@ -197,36 +184,10 @@ export class XmlOutputManager {
         await WorkspaceFS.write(texFile, latexDocument);
         return texFile;
       }
-      this.logger.debug(
-        `No ${documentTag} found in parsed XML, attempting fallback extraction...`,
-        undefined,
-        MESSAGE_TYPES.INTERNAL,
-      );
-      const fallbackContent = this.extractDocumentbyRegex(
-        outputContent,
-        documentTag,
-      );
-      if (fallbackContent) {
-        await WorkspaceFS.write(texFile, fallbackContent);
-        return texFile;
-      }
       throw new Error(
         `Failed to extract <${documentTag}> from ${path.basename(outputFile)}`,
       );
     } catch (err) {
-      this.logger.debug(
-        `Failed to parse XML content: ${err instanceof Error ? err.message : String(err)}, attempting fallback extraction...`,
-        undefined,
-        MESSAGE_TYPES.INTERNAL,
-      );
-      const fallbackContent = this.extractDocumentbyRegex(
-        outputContent,
-        documentTag,
-      );
-      if (fallbackContent) {
-        await WorkspaceFS.write(texFile, fallbackContent);
-        return texFile;
-      }
       throw err;
     }
   }
