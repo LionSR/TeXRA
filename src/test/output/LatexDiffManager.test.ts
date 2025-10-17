@@ -72,7 +72,13 @@ describe('LatexDiffManager mapping reuse', () => {
   it('uses shared base mapping for round diffs', async () => {
     const logger = createLogger();
     const baseFiles = [path.join('workspace', 'chapter.tex')];
-    const handler = new OutputHandler(baseSetting, baseConfig, 0, baseFiles, logger);
+    const handler = new OutputHandler(
+      baseSetting,
+      baseConfig,
+      0,
+      baseFiles,
+      logger,
+    );
 
     handler.outputFiles[0] = [path.join('workspace', 'chapter_r0.tex')];
     handler.outputMappings[0] = [
@@ -84,11 +90,13 @@ describe('LatexDiffManager mapping reuse', () => {
 
     const mapping = handler.getRoundMapping(0);
 
-    const roundPairs: Array<{ base: string; revised: string; round: number }> = [];
+    const roundPairs: Array<{ base: string; revised: string; round: number }> =
+      [];
     const aggregated: unknown[][] = [];
 
     const testLogger = createLogger();
-    (testLogger as any).latexDiff = (entries: unknown[]) => aggregated.push(entries);
+    (testLogger as any).latexDiff = (entries: unknown[]) =>
+      aggregated.push(entries);
 
     const manager = new LatexDiffManager(
       handler.agentSetting,
@@ -127,7 +135,13 @@ describe('LatexDiffManager mapping reuse', () => {
   it('uses shared previous mapping for between-round diffs', async () => {
     const logger = createLogger();
     const baseFiles = [path.join('workspace', 'paper.tex')];
-    const handler = new OutputHandler(baseSetting, baseConfig, 0, baseFiles, logger);
+    const handler = new OutputHandler(
+      baseSetting,
+      baseConfig,
+      0,
+      baseFiles,
+      logger,
+    );
 
     handler.outputFiles[0] = [path.join('workspace', 'paper_r0.tex')];
     handler.outputMappings[0] = [
@@ -146,7 +160,8 @@ describe('LatexDiffManager mapping reuse', () => {
 
     const mapping = handler.getRoundMapping(1);
 
-    const roundPairs: Array<{ base: string; revised: string; round: number }> = [];
+    const roundPairs: Array<{ base: string; revised: string; round: number }> =
+      [];
     const betweenPairs: Array<{ previous: string; current: string }> = [];
 
     const testLogger = createLogger();
@@ -161,9 +176,9 @@ describe('LatexDiffManager mapping reuse', () => {
         checkToolInstalled: async () => true,
         compileLatex2Pdf: async () => true,
         getConfig: <T>(key: string, defaultValue?: T) =>
-          (key === 'latexdiff.generateBetweenRoundDiffs'
+          key === 'latexdiff.generateBetweenRoundDiffs'
             ? (true as T)
-            : (defaultValue as T)),
+            : (defaultValue as T),
       },
     );
 

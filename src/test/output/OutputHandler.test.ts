@@ -162,7 +162,9 @@ describe('OutputHandler.getRoundMapping', () => {
 
     assert.strictEqual(second, first, 'expected mapping to be cached');
 
-    handler.outputFiles[0].push(path.join('workspace', 'chapter_appendix_r0.tex'));
+    handler.outputFiles[0].push(
+      path.join('workspace', 'chapter_appendix_r0.tex'),
+    );
     (handler as any).invalidateRoundMapping(0);
 
     const third = handler.getRoundMapping(0);
