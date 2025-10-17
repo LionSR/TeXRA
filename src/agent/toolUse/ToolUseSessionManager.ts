@@ -125,6 +125,7 @@ interface ResumingSessionState {
   queuedFollowUps: string[];
 }
 
+
 function normalizeSnapshot(
   snapshot: ToolUseSessionSnapshotParsed,
 ): ToolUseSessionSnapshot {
@@ -162,6 +163,8 @@ export class ToolUseSessionManager {
     StreamTabId,
     ResumingSessionState
   >();
+  private static migrationPromise: Promise<void> | null = null;
+  private static migrationCompleted = false;
 
   /**
    * Determines whether the provided stream is currently marked as resuming.
@@ -333,7 +336,18 @@ export class ToolUseSessionManager {
         lastUpdated: Date.now(),
       };
 
-      await StorageFS.writeJson(getSnapshotPath(payload.executionId), snapshot);
+      const validationResult = ToolUseSessionSnapshotSchema.safeParse(snapshot);
+      if (!validationResult.success) {
+        logger.warn(
+          `Snapshot validation failed before save: ${validationResult.error.message}`,
+        );
+        return;
+      }
+
+      await StorageFS.writeJson(
+        getSnapshotPath(payload.executionId),
+        validationResult.data,
+      );
     } catch (error) {
       logger.warn(
         `Failed to save tool-use session snapshot: ${error instanceof Error ? error.message : String(error)}`,
@@ -356,13 +370,17 @@ export class ToolUseSessionManager {
     const snapshotPath = getSnapshotPath(executionId);
 
     try {
-      const stored = await StorageFS.readJson<ToolUseSessionSnapshot | string>(
+      const stored = await StorageFS.readJson<ToolUseSessionSnapshot>(
         snapshotPath,
       );
-      const normalized =
-        typeof stored === 'string' ? JSON.parse(stored) : stored;
-      const parsed = ToolUseSessionSnapshotSchema.parse(normalized);
-      return normalizeSnapshot(parsed);
+      const parsed = ToolUseSessionSnapshotSchema.safeParse(stored);
+      if (!parsed.success) {
+        logger.warn(
+          `Failed to parse tool-use session snapshot ${executionId}: ${parsed.error.message}`,
+        );
+        return null;
+      }
+      return normalizeSnapshot(parsed.data);
     } catch (error) {
       if (
         error instanceof vscode.FileSystemError &&
@@ -370,36 +388,12 @@ export class ToolUseSessionManager {
       ) {
         return null;
       }
-
-      try {
-        const raw = await StorageFS.read(snapshotPath);
-        const fallbackParsed = JSON.parse(raw);
-        const normalized =
-          typeof fallbackParsed === 'string'
-            ? JSON.parse(fallbackParsed)
-            : fallbackParsed;
-        const parsed = ToolUseSessionSnapshotSchema.parse(normalized);
-        return normalizeSnapshot(parsed);
-      } catch (fallbackError) {
-        if (
-          fallbackError instanceof vscode.FileSystemError &&
-          fallbackError.code === 'FileNotFound'
-        ) {
-          return null;
-        }
-
-        const originalMessage =
-          error instanceof Error ? error.message : String(error);
-        const fallbackMessage =
-          fallbackError instanceof Error
-            ? fallbackError.message
-            : String(fallbackError);
-
-        logger.warn(
-          `Failed to load tool-use session snapshot: original=${originalMessage}; fallback=${fallbackMessage}`,
-        );
-        return null;
-      }
+      logger.warn(
+        `Failed to load tool-use session snapshot ${executionId}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+      return null;
     }
   }
 
@@ -503,5 +497,80 @@ export class ToolUseSessionManager {
         `Failed to delete all snapshots: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
+  }
+
+  public static async migrateLegacySnapshots(): Promise<void> {
+    if (this.migrationCompleted) {
+      return;
+    }
+
+    if (!this.migrationPromise) {
+      this.migrationPromise = (async () => {
+        try {
+          if (!(await ensureStorageDir())) {
+            return;
+          }
+
+          const entries = await StorageFS.readDir(STORAGE_DIR).catch(
+            (error) => {
+              logger.debug(
+                `Unable to enumerate tool-use snapshots for migration: ${
+                  error instanceof Error ? error.message : String(error)
+                }`,
+              );
+              return null;
+            },
+          );
+
+          if (!entries) {
+            return;
+          }
+
+          for (const [name, type] of entries) {
+            if (type !== vscode.FileType.File || !name.endsWith('.json')) {
+              continue;
+            }
+
+            const relativePath = path.join(STORAGE_DIR, name);
+
+            try {
+              const stored = await StorageFS.readJson<unknown>(relativePath);
+              if (typeof stored !== 'string') {
+                continue;
+              }
+
+              const normalized = JSON.parse(stored);
+              const parsed = ToolUseSessionSnapshotSchema.safeParse(normalized);
+
+              if (!parsed.success) {
+                logger.debug(
+                  `Skipping migration for ${name}: validation failed (${parsed.error.message})`,
+                );
+                continue;
+              }
+
+              await StorageFS.writeJson(relativePath, parsed.data);
+              logger.debug(`Migrated legacy snapshot ${name}`);
+            } catch (error) {
+              logger.debug(
+                `Skipping migration for ${name}: ${
+                  error instanceof Error ? error.message : String(error)
+                }`,
+              );
+            }
+          }
+        } catch (error) {
+          logger.debug(
+            `Legacy snapshot migration failed: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+          );
+        } finally {
+          this.migrationCompleted = true;
+        }
+      })();
+    }
+
+    await this.migrationPromise;
   }
 }
