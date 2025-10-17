@@ -175,7 +175,6 @@ export class OutputHandler implements IOutputHandler {
     }
   }
 
-
   /**
    * Gather mapping and diff statistics for output files of a round.
    */
