@@ -127,6 +127,16 @@ export const EQUATION_REPLACEMENTS: ReplacementCategory = {
 
     // Note: latexdiff compatibility fixes moved to dedicated LATEXDIFF_REPLACEMENTS category
 
+    // Ensure modulo operators use LaTeX's dedicated commands instead of font macros
+    const moduloOperators = ['mod', 'bmod', 'pmod'];
+    moduloOperators.forEach((operator) => {
+      patterns[`\\mathrm{${operator}}`] = `\\${operator}`;
+      patterns[`\\text{${operator}}`] = `\\${operator}`;
+      patterns[`\\textrm{${operator}}`] = `\\${operator}`;
+      patterns[`\\mbox{${operator}}`] = `\\${operator}`;
+      patterns[`{\\rm ${operator}}`] = `\\${operator}`;
+    });
+
     // Additional specific Greek letter fixes
     patterns['\\\\\\rho'] = '\\rho';
     patterns['\\\\\\delta'] = '\\delta';
