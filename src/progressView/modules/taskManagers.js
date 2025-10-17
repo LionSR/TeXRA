@@ -4,6 +4,7 @@ import { TaskGroupHeaderFormatter, LogEntryFormatter } from './formatters.js';
 // Local imports
 import { progressViewState } from './progressViewState.js';
 import { insertChronologically } from './utils.js';
+import { createFromTemplate } from '@common/templateUtils.js';
 
 /**
  * Manages task group DOM operations.
@@ -12,6 +13,7 @@ export class TaskGroupManager {
   constructor() {
     this.headerFormatter = new TaskGroupHeaderFormatter();
     this.previousActiveGroupId = null;
+    this.groupElements = new Map();
   }
 
   /**
@@ -19,65 +21,61 @@ export class TaskGroupManager {
    * @param {Object} group - Group data
    */
   add(group) {
-    // Check if this specific group (by ID) already exists in the DOM
-    // This prevents duplicate groups from race conditions between UPDATE_LOGS and ADD_TASK_GROUP
-    const existingGroup = document.getElementById(`group-${group.id}`);
+    const existingGroup = this.groupElements.get(group.id);
     if (existingGroup) {
-      // Verify the group also exists in memory state
       if (!progressViewState.taskGroups.get(group.id)) {
         console.warn(
           `Group ${group.id} exists in DOM but not in state - removing from DOM`,
         );
         existingGroup.remove();
-        // Continue with normal add flow to recreate it
+        this.groupElements.delete(group.id);
       } else {
-        // Group already exists in both DOM and state
-        // Update the state with new group data
         progressViewState.taskGroups.set(group.id, group);
-        // For now, just update status/endTime in DOM to prevent duplicates
-        // TODO: Implement full property update to handle name/startTime/parentGroupId changes
         this.update(group.id, group.status, group.endTime);
         return;
       }
     }
 
-    // Group doesn't exist in DOM (either new or was cleaned up above)
-    // Add to state
-    progressViewState.taskGroups.set(group.id, group);
-
-    // Create the details container that will manage toggle state
-    const detailsElem = document.createElement('details');
-    detailsElem.className = 'log-group';
+    const detailsElem = createFromTemplate('groupDetailsTemplate');
+    if (!detailsElem) {
+      console.error('TaskGroupManager.add: groupDetailsTemplate not found');
+      return;
+    }
     detailsElem.id = `group-${group.id}`;
 
-    // Create the header element as a <summary>
     const headerElement = this.headerFormatter.create(group);
+    if (!headerElement) {
+      console.error('TaskGroupManager.add: failed to create group header');
+      return;
+    }
 
-    // Create a container for the group's messages
-    const groupContainer = document.createElement('div');
-    groupContainer.className = 'log-group-content';
+    const groupContainer = detailsElem.querySelector('.log-group-content');
+    if (!groupContainer) {
+      console.error('TaskGroupManager.add: missing group content container');
+      return;
+    }
     groupContainer.id = `group-content-${group.id}`;
 
-    // Check if we have a saved collapsed state for this group
+    progressViewState.taskGroups.set(group.id, group);
+
     const isCollapsed = progressViewState.toggleStates.get(group.id);
     detailsElem.open = isCollapsed !== true;
 
-    detailsElem.appendChild(headerElement);
-    detailsElem.appendChild(groupContainer);
+    detailsElem.prepend(headerElement);
 
-    // Add toggle state tracking
     detailsElem.addEventListener('toggle', () => {
       progressViewState.toggleStates.set(group.id, !detailsElem.open);
     });
+
+    this.groupElements.set(group.id, detailsElem);
 
     // Insert the group at the right position in the parent
     const container = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
 
     if (group.parentGroupId) {
-      // Find the parent group and append to its content container
-      const parentGroupContent = document.getElementById(
-        `group-content-${group.parentGroupId}`,
-      );
+      const parentDetails = this.groupElements.get(group.parentGroupId);
+      const parentGroupContent =
+        parentDetails?.querySelector('.log-group-content');
       if (parentGroupContent) {
         insertChronologically(parentGroupContent, detailsElem, group.startTime);
         return;
@@ -109,8 +107,12 @@ export class TaskGroupManager {
       group.endTime = endTime;
     }
 
-    // Update the header in the UI if it exists
-    const header = document.getElementById(`group-header-${groupId}`);
+    const detailsElem = this.groupElements.get(groupId);
+    if (!detailsElem) {
+      return;
+    }
+
+    const header = detailsElem.querySelector('.log-group-header');
     if (header) {
       const level = this.headerFormatter._getGroupLevel(group);
       header.className = this.headerFormatter._getHeaderClass(group, level);
@@ -163,7 +165,7 @@ export class TaskGroupManager {
     }
 
     // Collapse this group
-    const detailsElem = document.getElementById(`group-${groupId}`);
+    const detailsElem = this.groupElements.get(groupId);
     if (detailsElem) {
       detailsElem.open = false;
       progressViewState.toggleStates.set(groupId, true);
@@ -184,9 +186,17 @@ export class TaskGroupManager {
     let latestGroup = null;
     let latestTime = 0;
 
-    for (const [id, group] of progressViewState.taskGroups.getAll()) {
-      const detailsElem = document.getElementById(`group-${id}`);
-      if (detailsElem && detailsElem.open && group.startTime > latestTime) {
+    for (const [id, detailsElem] of this.groupElements.entries()) {
+      if (!detailsElem || !detailsElem.open) {
+        continue;
+      }
+
+      const group = progressViewState.taskGroups.get(id);
+      if (!group) {
+        continue;
+      }
+
+      if (group.startTime > latestTime) {
         latestGroup = id;
         latestTime = group.startTime;
       }
@@ -234,6 +244,14 @@ export class TaskGroupManager {
     } catch (err) {
       // Ignore errors (e.g. autoplay restrictions)
     }
+  }
+
+  /**
+   * Clear cached group references.
+   */
+  clear() {
+    this.groupElements.clear();
+    this.previousActiveGroupId = null;
   }
 }
 

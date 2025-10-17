@@ -13,8 +13,6 @@ import type { OutputFileInfo } from '@agent/output/types';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import { createErrorBoundary } from './errorHandling';
 import type { ProgressEventBusLike } from './types';
-import { isWorkflowTaskState } from '@logger/TaskState';
-
 import type { AgentLogger } from '@logger/AgentLogger';
 
 export interface OutputEventsModule {
@@ -113,15 +111,7 @@ const registerClearTaskOutput = (
   return new vscode.Disposable(
     bus.on('clearTaskOutput', (streamTabId: StreamTabId) => {
       withErrorBoundary('failed to handle clearTaskOutput', () => {
-        const taskState = state.getTaskState(streamTabId);
-        if (!taskState || !isWorkflowTaskState(taskState)) {
-          return;
-        }
-
-        taskState.agentConfig.outputFiles = [];
-        taskState.agentConfig.useMultipleOutputs = false;
-        taskState.activeFiles.output = false;
-        state.setTaskState(streamTabId, taskState);
+        state.clearOutputState(streamTabId);
       });
     }),
   );
