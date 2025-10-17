@@ -19,20 +19,15 @@ function toArray(value: string | string[] | undefined): string[] {
 }
 
 export function normalizeAgentPrompts(
-  prompt: Pick<AgentPrompt, 'userRequest' | 'userReflect'>,
+  prompt: Pick<AgentPrompt, 'userRequest'>,
 ): NormalizedAgentPrompts {
   const requestEntries = toArray(prompt.userRequest);
 
   const initialRequest = requestEntries[0] ?? '';
-  const reflectionsFromRequest = requestEntries.slice(1);
-
-  const reflections =
-    reflectionsFromRequest.length > 0
-      ? reflectionsFromRequest
-      : toArray(prompt.userReflect);
+  const reflectionPrompts = requestEntries.slice(1);
 
   return {
     initialRequest,
-    reflectionPrompts: reflections,
+    reflectionPrompts,
   };
 }
