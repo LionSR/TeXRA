@@ -39,10 +39,10 @@ describe('PromptBuilder', () => {
     const initial = await builder.buildInitialPrompts();
     assert.equal(initial.userRequest, 'initial test');
 
-    const reflect = await builder.buildReflectPrompt(1);
+    const reflect = await builder.buildUserRequest(1);
     assert.equal(reflect, 'reflect test');
 
-    const fallback = await builder.buildReflectPrompt(3);
+    const fallback = await builder.buildUserRequest(3);
     assert.equal(fallback, 'reflect test');
   });
 
@@ -57,7 +57,7 @@ describe('PromptBuilder', () => {
     const initial = await builder.buildInitialPrompts();
     assert.equal(initial.userRequest, 'initial only');
 
-    const reflectPrompt = await builder.buildReflectPrompt(1);
+    const reflectPrompt = await builder.buildUserRequest(1);
     assert.equal(reflectPrompt, '');
   });
 });
