@@ -24,13 +24,13 @@ import { mainViewState } from './mainViewState.js';
 // Local imports - UI managers
 import { fileSelect } from './uiManagers/FileSelect.js';
 import { bannerManager } from './uiManagers/BannerManager.js';
+import { fileList } from './uiManagers/FileList.js';
 import {
   safeSetElementValue,
   safeGetElementById,
   setChevronIcon,
 } from '@common/domUtils.js';
 import { capitalize, uncapitalize } from '@common/stringUtils.js';
-import { createFromTemplate } from '@common/templateUtils.js';
 
 // Import standardized commands
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
@@ -49,8 +49,6 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     // Cached DOM elements
     this._instructionEl = null;
     this._elementCache = new Map();
-    // Track file list event handlers for cleanup
-    this._fileListHandlers = {};
     // Track pending model option updates until the select element is ready
     this._latestModelOptions = null;
     this._modelFlushScheduled = false;
@@ -64,8 +62,9 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       postHandle: this._postHandle.bind(this),
       getElement: this._getElement.bind(this),
       setToggleIcon: this._setToggleIcon.bind(this),
-      setupFileListHandler: this._setupFileListHandler.bind(this),
     };
+
+    this._registerFileListCallbacks();
 
     this._handlers = {
       ...createThemeHandlers({ postHandle: ctx.postHandle }),
@@ -395,10 +394,6 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     this._resolveModelSelectWaiter(null);
 
     super.cleanup();
-    Object.values(this._fileListHandlers).forEach(({ container, handler }) => {
-      container.removeEventListener('click', handler);
-    });
-    this._fileListHandlers = {};
     this._instructionEl = null;
     this._elementCache.clear();
   }
@@ -409,61 +404,27 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     setChevronIcon(element, isVisible);
   }
 
-  _createFileItem(file) {
-    const element = createFromTemplate('fileListEntryTemplate', {
-      text: { '.file-name': file },
-      dataset: { '': { path: file } },
-    });
-    if (element) return element;
-
-    const fileItem = document.createElement('div');
-    fileItem.className = 'file-item';
-    fileItem.dataset.path = file;
-
-    const nameSpan = document.createElement('span');
-    nameSpan.className = 'file-name';
-    nameSpan.textContent = file;
-    fileItem.appendChild(nameSpan);
-
-    const removeButton = document.createElement('span');
-    removeButton.className = 'remove-button';
-    removeButton.textContent = '-';
-    fileItem.appendChild(removeButton);
-
-    return fileItem;
-  }
-
-  _setupFileListHandler(fileType, container) {
-    if (!container || this._fileListHandlers[fileType]) return;
-    const handler = (e) => {
-      if (
-        e.target instanceof HTMLElement &&
-        e.target.classList.contains('remove-button')
-      ) {
-        e.stopPropagation();
-        const item = e.target.closest('.file-item');
-        if (item) {
-          item.remove();
-          const updated = Array.from(
-            container.querySelectorAll('.file-item'),
-          ).map((el) => el.dataset.path);
-          const updateCommands = {
-            input: MAIN_VIEW_COMMANDS.UPDATE_INPUT_FILES,
-            reference: MAIN_VIEW_COMMANDS.UPDATE_REFERENCE_FILES,
-            auxiliary: MAIN_VIEW_COMMANDS.UPDATE_AUXILIARY_FILES,
-            media: MAIN_VIEW_COMMANDS.UPDATE_MEDIA_FILES,
-            output: MAIN_VIEW_COMMANDS.UPDATE_OUTPUT_FILES,
-          };
-          vscode.postMessage({
-            command: updateCommands[fileType],
-            files: updated,
-          });
-          mainViewState.update({ [`${fileType}Files`]: updated });
-        }
-      }
+  _registerFileListCallbacks() {
+    const updateCommands = {
+      input: MAIN_VIEW_COMMANDS.UPDATE_INPUT_FILES,
+      reference: MAIN_VIEW_COMMANDS.UPDATE_REFERENCE_FILES,
+      auxiliary: MAIN_VIEW_COMMANDS.UPDATE_AUXILIARY_FILES,
+      media: MAIN_VIEW_COMMANDS.UPDATE_MEDIA_FILES,
+      output: MAIN_VIEW_COMMANDS.UPDATE_OUTPUT_FILES,
     };
-    container.addEventListener('click', handler);
-    this._fileListHandlers[fileType] = { container, handler };
+
+    FILE_TYPES.forEach((fileType) => {
+      const listId =
+        fileType === 'output' ? ELEMENT_IDS.OUTPUT_FILES : `${fileType}Files`;
+
+      fileList.setRemoveCallback(listId, (files) => {
+        const command = updateCommands[fileType];
+        if (command) {
+          vscode.postMessage({ command, files });
+        }
+        mainViewState.update({ [`${fileType}Files`]: files });
+      });
+    });
   }
 
   _getElement(id) {
@@ -616,12 +577,16 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
         const toggleElement = this._getElement(toggleId);
         this._setToggleIcon(toggleElement, isVisible);
 
-        if (filesArray.length > 0 && multipleFiles) {
+        if (multipleFiles) {
           multipleFiles.innerHTML = '';
+        }
+
+        if (filesArray.length > 0 && multipleFiles) {
+          fileList._batchMode = true;
           filesArray.forEach((file) => {
-            multipleFiles.appendChild(this._createFileItem(file));
+            fileList.add(multipleFilesId, file);
           });
-          this._setupFileListHandler(fileType, multipleFiles);
+          fileList._batchMode = false;
         }
       }
     }

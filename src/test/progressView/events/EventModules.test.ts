@@ -104,6 +104,39 @@ describe('Progress event modules', () => {
     assert.deepStrictEqual(bus.disposed, bus.events);
   });
 
+  it('delegates clearTaskOutput to ProgressViewState.clearOutputState', () => {
+    const bus = new FakeBus();
+    const module = createOutputEvents({
+      logger: loggerStub,
+    });
+
+    const calls: string[] = [];
+    const state = {
+      outputFiles: {
+        addFiles: () => {},
+        getFiles: () => undefined,
+        updateMissingOutputs: () => {},
+        getMissingOutputs: () => undefined,
+        clearMissingOutputs: () => {},
+        clearFiles: () => {},
+      },
+      clearOutputState: (stream: string) => {
+        calls.push(stream);
+      },
+      activeStream: '',
+    } as unknown as ProgressViewState;
+    const updater = {
+      isAvailable: () => false,
+      updateFiles: () => {},
+      updateMissingOutputs: () => {},
+    } as unknown as WebviewUpdater;
+
+    module.register(bus as any, state, updater);
+    bus.trigger('clearTaskOutput', 'stream-42');
+
+    assert.deepStrictEqual(calls, ['stream-42']);
+  });
+
   it('registers usage handlers and disposes them', () => {
     const bus = new FakeBus();
     const module = createUsageEvents({
