@@ -34,7 +34,6 @@ const basePrompt: AgentPrompt = {
   systemPrompt: '',
   userPrefix: '',
   userRequest: '',
-  userReflect: '',
 };
 
 const baseConfig: AgentConfig = {
@@ -107,18 +106,7 @@ describe('getToolFlags', () => {
     assert.equal(flags.ROUNDS, 3);
   });
 
-  it('falls back to legacy userReflect prompts', () => {
-    const prompt: AgentPrompt = {
-      ...basePrompt,
-      userReflect: ['reflect1', 'reflect2'],
-    };
-    const setting: AgentSetting = { ...baseSetting, rounds: 1 };
-
-    const flags = getToolFlags(baseConfig, setting, prompt);
-    assert.equal(flags.ROUNDS, 3);
-  });
-
-  it('ignores empty templates while preserving later reflections', () => {
+  it('uses all entries in userRequest array including empty strings', () => {
     const prompt: AgentPrompt = {
       ...basePrompt,
       userRequest: ['round0', '', 'reflect2'],
@@ -126,6 +114,7 @@ describe('getToolFlags', () => {
     const setting: AgentSetting = { ...baseSetting, rounds: 1 };
 
     const flags = getToolFlags(baseConfig, setting, prompt);
-    assert.equal(flags.ROUNDS, 2);
+    // initial + 2 reflections (including empty) = 3 rounds total
+    assert.equal(flags.ROUNDS, 3);
   });
 });
