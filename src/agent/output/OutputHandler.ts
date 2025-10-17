@@ -8,7 +8,11 @@ import * as vscode from 'vscode';
 import { DiffStatsManager } from './DiffStatsManager';
 import type { IOutputHandler } from './IOutputHandler';
 import { LatexDiffManager } from './LatexDiffManager';
-import type { NamedOutputFile, OutputFileInfo } from './types';
+import type {
+  NamedOutputFile,
+  OutputFileInfo,
+  RoundFileMapping,
+} from './types';
 import { XmlOutputManager } from './XmlOutputManager';
 
 // Local imports - agent components
@@ -45,12 +49,13 @@ export class OutputHandler implements IOutputHandler {
   public logId: number;
   public outputFiles: { [key: number]: string[] };
   public outputMappings: { [key: number]: NamedOutputFile[] };
+  private roundMappings: { [key: number]: RoundFileMapping };
   public baseFiles: string[];
   public processGroupId?: string;
   protected logger: AgentLogger;
   protected channel: string;
   public readonly xmlManager: XmlOutputManager;
-  private diffManager: LatexDiffManager;
+  public readonly diffManager: LatexDiffManager;
   private diffStatsManager: DiffStatsManager;
 
   constructor(
@@ -65,6 +70,7 @@ export class OutputHandler implements IOutputHandler {
     this.logId = logId;
     this.outputFiles = {};
     this.outputMappings = {};
+    this.roundMappings = {};
     this.baseFiles = baseFiles;
     this.logger = logger || new AgentLogger('OutputHandler');
     this.channel = this.logger.channelId;
@@ -169,29 +175,6 @@ export class OutputHandler implements IOutputHandler {
     }
   }
 
-  /**
-   * Helper method to log latexdiff results with appropriate level
-   * @param result The result of a latexdiff operation
-   * @param operation Description of the operation being performed
-   * @param groupId The group ID for logging context
-   */
-
-  /**
-   * Runs all latexdiff comparisons for the current round.
-   * This is the ONLY place where latexdiff operations should be performed.
-   *
-   * Generates two types of diffs:
-   * 1. Round diffs: Between original input and current output (when in rewrite mode)
-   * 2. Between-rounds diffs: Comparing previous round to current round (when applicable)
-   *
-   */
-  public async handleLatexdiffofOutput(
-    currRound: number,
-    groupId?: string,
-  ): Promise<void> {
-    this.ensureRound(currRound);
-    await this.diffManager.handleLatexdiffofOutput(currRound, groupId);
-  }
 
   /**
    * Gather mapping and diff statistics for output files of a round.
@@ -200,29 +183,19 @@ export class OutputHandler implements IOutputHandler {
     currRound: number,
   ): Promise<OutputFileInfo[]> {
     const roundOutputs = this.ensureRound(currRound);
-    const baseMap = createFileMapping(this.baseFiles, roundOutputs, 'contains');
-    const prevMap =
-      currRound > 0
-        ? createFileMapping(
-            this.ensureRound(currRound - 1),
-            roundOutputs,
-            'basename',
-            true,
-          )
-        : new Map<string, string>();
-    const originMap = new Map(
-      (this.outputMappings[currRound] || []).map((p) => [p.path, p.source]),
-    );
+    const mapping = this.getRoundMapping(currRound);
 
     const infos: OutputFileInfo[] = [];
     for (const file of roundOutputs) {
       const baseFile =
-        Array.from(baseMap.entries()).find(([, out]) => out === file)?.[0] ||
-        null;
+        Array.from(mapping.baseToOutput.entries()).find(
+          ([, out]) => out === file,
+        )?.[0] || null;
       const prevFile =
-        Array.from(prevMap.entries()).find(([, out]) => out === file)?.[0] ||
-        null;
-      const originalFile = originMap.get(file) || null;
+        Array.from(mapping.prevToOutput.entries()).find(
+          ([, out]) => out === file,
+        )?.[0] || null;
+      const originalFile = mapping.originByOutput.get(file) || null;
       const diffBase = getEffectiveBaseFile(baseFile, originalFile, file);
       const stats = await this.diffStatsManager.computeDiffStats(
         diffBase,
@@ -237,6 +210,68 @@ export class OutputHandler implements IOutputHandler {
       });
     }
     return infos;
+  }
+
+  /**
+   * Retrieve the cached mapping metadata for a round, computing it if needed.
+   */
+  public getRoundMapping(currRound: number): RoundFileMapping {
+    const existing = this.roundMappings[currRound];
+    if (existing) {
+      return existing;
+    }
+
+    const roundOutputs = this.ensureRound(currRound);
+    const baseToOutput = createFileMapping(
+      this.baseFiles,
+      roundOutputs,
+      'contains',
+    );
+    const prevToOutput =
+      currRound > 0
+        ? createFileMapping(
+            this.ensureRound(currRound - 1),
+            roundOutputs,
+            'basename',
+            true,
+          )
+        : new Map<string, string>();
+    const originByOutput = new Map(
+      (this.outputMappings[currRound] || []).map((p) => [p.path, p.source]),
+    );
+
+    const mapping: RoundFileMapping = {
+      baseToOutput,
+      prevToOutput,
+      originByOutput,
+    };
+    this.roundMappings[currRound] = mapping;
+    return mapping;
+  }
+
+  private invalidateRoundMapping(round: number): void {
+    delete this.roundMappings[round];
+  }
+
+  private invalidateMappingsFromRound(round: number): void {
+    this.invalidateRoundMapping(round);
+    this.invalidateRoundMapping(round + 1);
+  }
+
+  /**
+   * Set output files and mappings for a round, invalidating the cache.
+   * @param round The round number
+   * @param files The output file paths
+   * @param mappings The named output file mappings
+   */
+  private setRoundOutputs(
+    round: number,
+    files: string[],
+    mappings: NamedOutputFile[],
+  ): void {
+    this.outputFiles[round] = files;
+    this.outputMappings[round] = mappings;
+    this.invalidateMappingsFromRound(round);
   }
 
   public async validateExpectedOutputs(
@@ -371,8 +406,7 @@ export class OutputHandler implements IOutputHandler {
             activeGroupId,
           );
 
-          this.outputFiles[currRound] = processedFiles;
-          this.outputMappings[currRound] = processedPairs;
+          this.setRoundOutputs(currRound, processedFiles, processedPairs);
 
           if (this.baseFiles && this.baseFiles.length > 0) {
             await replaceInputCommands(
@@ -386,8 +420,7 @@ export class OutputHandler implements IOutputHandler {
             `No processed files were generated from ${outputFile}`,
             activeGroupId,
           );
-          this.outputFiles[currRound] = [];
-          this.outputMappings[currRound] = [];
+          this.setRoundOutputs(currRound, [], []);
         }
       } catch (err) {
         this.logger.debug(
@@ -395,8 +428,7 @@ export class OutputHandler implements IOutputHandler {
           activeGroupId,
           MESSAGE_TYPES.INTERNAL,
         );
-        this.outputFiles[currRound] = [];
-        this.outputMappings[currRound] = [];
+        this.setRoundOutputs(currRound, [], []);
       }
     } else {
       // Single output file case
@@ -430,15 +462,13 @@ export class OutputHandler implements IOutputHandler {
             activeGroupId,
           );
 
-          this.outputFiles[currRound] = [processed.path];
-          this.outputMappings[currRound] = [processed];
+          this.setRoundOutputs(currRound, [processed.path], [processed]);
         } else {
           this.logger.debug(
             `No processed file was generated from ${outputFile}`,
             activeGroupId,
           );
-          this.outputFiles[currRound] = [];
-          this.outputMappings[currRound] = [];
+          this.setRoundOutputs(currRound, [], []);
         }
       } catch (err) {
         this.logger.debug(
@@ -456,8 +486,7 @@ export class OutputHandler implements IOutputHandler {
           stream: this.channel,
           filesByRound: { [currRound]: [] },
         });
-        this.outputFiles[currRound] = [];
-        this.outputMappings[currRound] = [];
+        this.setRoundOutputs(currRound, [], []);
       }
     }
   }
