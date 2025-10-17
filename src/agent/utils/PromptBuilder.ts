@@ -43,9 +43,13 @@ export class PromptBuilder {
     userPrefix: string;
     userRequest: string;
   }> {
+    const initialUserRequest = Array.isArray(this.agentPrompt.userRequest)
+      ? (this.agentPrompt.userRequest[0] ?? '')
+      : (this.agentPrompt.userRequest ?? '');
+
     const [systemPrompt, userRequest, userPrefix] = await Promise.all([
       getSystemPromptWithRules(this.agentPrompt.systemPrompt, this.userVars),
-      renderPrompt(this.agentPrompt.userRequest, this.userVars),
+      renderPrompt(initialUserRequest, this.userVars),
       renderPrompt(this.agentPrompt.userPrefix, this.userVars),
     ]);
 
@@ -60,17 +64,17 @@ export class PromptBuilder {
    */
   public async buildReflectPrompt(currRound: number): Promise<string> {
     const groupId = this.logger?.getActiveGroupId();
-    const { userReflect } = this.agentPrompt;
     const normalizedRound = Math.max(1, currRound);
 
     let reflectTemplate: string | undefined;
 
-    if (Array.isArray(userReflect)) {
+    const reflectionTemplates = this.getReflectionTemplates();
+    if (reflectionTemplates.length > 0) {
       const index = normalizedRound - 1;
-      reflectTemplate = userReflect[index];
+      reflectTemplate = reflectionTemplates[index];
 
       if (reflectTemplate === undefined) {
-        const fallback = userReflect[0];
+        const fallback = reflectionTemplates[0];
 
         if (fallback) {
           this.logger?.debug(
@@ -81,8 +85,6 @@ export class PromptBuilder {
 
         reflectTemplate = fallback;
       }
-    } else {
-      reflectTemplate = userReflect;
     }
 
     if (!reflectTemplate) {
@@ -120,6 +122,24 @@ export class PromptBuilder {
     );
 
     return prefills[0] ?? '';
+  }
+
+  private getReflectionTemplates(): string[] {
+    const { userRequest, userReflect } = this.agentPrompt;
+
+    if (Array.isArray(userRequest) && userRequest.length > 1) {
+      return userRequest.slice(1);
+    }
+
+    if (Array.isArray(userReflect)) {
+      return userReflect;
+    }
+
+    if (typeof userReflect === 'string' && userReflect.trim().length > 0) {
+      return [userReflect];
+    }
+
+    return [];
   }
 }
 
