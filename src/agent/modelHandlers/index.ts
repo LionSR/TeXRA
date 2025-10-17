@@ -6,7 +6,6 @@ export type { IModelHandler } from './types/IModelHandler';
 
 // Specific model handler implementations
 export { ModelHandlerAnthropic } from './modelHandlerAnthropic';
-export { ModelHandlerGoogle } from './modelHandlerGoogle';
 export { ModelHandlerGoogleGenAI } from './modelHandlerGoogleGenAI';
 export { ModelHandlerDeepSeek } from './modelHandlerDeepSeek';
 export { ModelHandlerXAI } from './modelHandlerXAI';

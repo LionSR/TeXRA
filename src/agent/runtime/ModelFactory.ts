@@ -2,7 +2,6 @@
 import {
   ModelHandler,
   ModelHandlerAnthropic,
-  ModelHandlerGoogle,
   ModelHandlerGoogleGenAI,
   ModelHandlerDeepSeek,
   ModelHandlerXAI,
@@ -54,19 +53,6 @@ export class ModelFactory {
       return new ModelHandlerOpenRouter(config);
     }
 
-    // Check for native Google SDK usage *before* the general provider map
-    const useNativeGoogleSDK = getConfig<boolean>(
-      'model.useNativeGoogleSDK',
-      false,
-    );
-    if (config.provider === ModelProvider.GOOGLE && useNativeGoogleSDK) {
-      logger.debug(
-        CHANNEL,
-        'Using Native Google GenAI SDK Handler (ModelHandlerGoogleGenAI)',
-      );
-      return new ModelHandlerGoogleGenAI(config);
-    }
-
     // Check for OpenAI Responses API usage
     const useOpenAIResponsesAPI = getConfig<boolean>(
       'model.useOpenAIResponsesAPI',
@@ -90,7 +76,7 @@ export class ModelFactory {
     >([
       [ModelProvider.ANTHROPIC, ModelHandlerAnthropic],
       [ModelProvider.OPENAI, ModelHandlerOpenAI],
-      [ModelProvider.GOOGLE, ModelHandlerGoogle],
+      [ModelProvider.GOOGLE, ModelHandlerGoogleGenAI],
       [ModelProvider.DEEPSEEK, ModelHandlerDeepSeek],
       [ModelProvider.XAI, ModelHandlerXAI],
       [ModelProvider.MOONSHOT, ModelHandlerKimi],
