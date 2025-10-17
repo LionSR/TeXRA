@@ -156,6 +156,29 @@ export class XmlOutputManager {
     outputContent = xmlUtils.addCdataToTags(outputContent, tagsToWrap);
 
     try {
+      const filename = path.basename(this.agentConfig.inputFile);
+      const namedDocuments = xmlUtils.extractMultipleTextFromTag(
+        outputContent,
+        documentTag,
+      );
+      const matchingDocument = namedDocuments.find((doc) => {
+        const documentName = doc.name?.trim();
+        if (!documentName) {
+          return false;
+        }
+        return path.basename(documentName) === filename;
+      });
+
+      if (matchingDocument?.content) {
+        this.logger.info(
+          `Recovered ${documentTag} from named document ${filename}`,
+          undefined,
+          MESSAGE_TYPES.INTERNAL,
+        );
+        await WorkspaceFS.write(texFile, matchingDocument.content);
+        return texFile;
+      }
+
       const parser = new XMLParser({
         ignoreAttributes: false,
         parseTagValue: true,
