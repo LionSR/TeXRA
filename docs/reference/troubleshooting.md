@@ -251,7 +251,7 @@ Even the best research assistants (human or AI) have off days. This guide helps 
    - Specify what should and shouldn't be changed
 
 2. **Leverage reflection rounds**:
-   - Use agents that define follow-up `userReflect` prompts or add them via a custom agent
+   - Use agents that include follow-up entries in `userRequest` (or add them via a custom agent)
    - TeXRA automatically runs these additional rounds when they exist, often improving output quality
 
 3. **Use better models**:
