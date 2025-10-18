@@ -32,9 +32,14 @@ const INSTRUCTION_TOGGLE_CHAR_THRESHOLD = 600;
  * @param text - The instruction text to analyze
  * @returns Metadata object with showToggle hint, or undefined if no metadata needed
  */
-export function computeInstructionMetadata(text: string): { showToggle: true } | undefined {
+export function computeInstructionMetadata(
+  text: string,
+): { showToggle: true } | undefined {
   const lineCount = text.split(/\r?\n/).length;
-  if (lineCount > INSTRUCTION_TOGGLE_LINE_THRESHOLD || text.length > INSTRUCTION_TOGGLE_CHAR_THRESHOLD) {
+  if (
+    lineCount > INSTRUCTION_TOGGLE_LINE_THRESHOLD ||
+    text.length > INSTRUCTION_TOGGLE_CHAR_THRESHOLD
+  ) {
     return { showToggle: true };
   }
   return undefined;

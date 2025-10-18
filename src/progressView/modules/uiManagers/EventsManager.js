@@ -67,10 +67,11 @@ export class EventsManager {
 
         // For ERASE_STREAM, include the selected session if there are multiple sessions
         if (command === COMMANDS.ERASE_STREAM) {
-          const selectedGroupId = progressViewState.getSelectedGroup(activeStream);
+          const selectedGroupId =
+            progressViewState.getSelectedGroup(activeStream);
           const allGroups = progressViewState.taskGroups.getAll(activeStream);
           const rootGroups = Array.from(allGroups.values()).filter(
-            (group) => group && !group.parentGroupId
+            (group) => group && !group.parentGroupId,
           );
 
           // Only include sessionId if there are multiple sessions

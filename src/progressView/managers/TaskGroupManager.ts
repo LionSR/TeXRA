@@ -121,9 +121,7 @@ export class TaskGroupManager extends PersistentMapManager<
       this.save();
       this.logger.debug(`Deleted group ${groupId} from stream ${stream}`);
     } else {
-      this.logger.warn(
-        `Group ${groupId} not found in stream ${stream}`,
-      );
+      this.logger.warn(`Group ${groupId} not found in stream ${stream}`);
     }
   }
 

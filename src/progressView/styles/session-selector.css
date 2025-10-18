@@ -1,14 +1,12 @@
 /**
  * Session Selector styles for ProgressView
  *
+ * Minimalist VS Code-native dropdown for session selection.
  * Follows BEM notation for structural elements (session-selector__dropdown)
  * and common state pattern for visibility (is-hidden).
  */
 
 .session-selector {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
   margin: 0 0 0.5rem;
 }
 
@@ -16,24 +14,22 @@
   display: none;
 }
 
-.session-selector__label {
-  font-size: 0.85rem;
-  color: var(--vscode-descriptionForeground);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+.session-selector__dropdown {
+  width: 100%;
+  padding: 0.3rem 0.5rem;
+  font-size: 0.9rem;
+  background-color: var(--vscode-dropdown-background);
+  color: var(--vscode-dropdown-foreground);
+  border: 1px solid var(--vscode-dropdown-border);
+  border-radius: 2px;
+  cursor: pointer;
 }
 
-.session-selector__dropdown {
-  flex: 1 1 auto;
-  min-width: 0;
-  padding: 0.25rem 0.5rem;
-  background-color: var(--vscode-editor-background);
-  color: var(--vscode-editor-foreground);
-  border: 1px solid var(--vscode-editorWidget-border);
-  border-radius: 2px;
+.session-selector__dropdown:hover {
+  background-color: var(--vscode-dropdown-background);
 }
 
 .session-selector__dropdown:focus {
   outline: 1px solid var(--vscode-focusBorder);
-  outline-offset: 1px;
+  outline-offset: -1px;
 }

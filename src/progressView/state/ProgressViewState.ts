@@ -304,12 +304,11 @@ export class ProgressViewState {
     if (messages) {
       // Filter out messages belonging to this session (groupId) and its children
       const filtered = messages.filter(
-        msg => !msg.groupId || !allGroupIds.has(msg.groupId)
+        (msg) => !msg.groupId || !allGroupIds.has(msg.groupId),
       );
       // Only update if we actually removed messages
       if (filtered.length !== messages.length) {
-        this._streamTabs.items.set(stream, filtered);
-        this._streamTabs.save();
+        this._streamTabs.add(stream, filtered);
       }
     }
 
@@ -321,11 +320,11 @@ export class ProgressViewState {
     const latestGroup = this.getLatestTaskGroupId(stream);
     if (latestGroup === groupId) {
       const remainingGroups = this._taskGroups.getGroupsForStream(stream);
-      const rootGroups = remainingGroups.filter(g => !g.parentGroupId);
+      const rootGroups = remainingGroups.filter((g) => !g.parentGroupId);
       if (rootGroups.length > 0) {
         // Set to the most recent root group
         const mostRecent = rootGroups.reduce((latest, current) =>
-          (current.startTime || 0) > (latest.startTime || 0) ? current : latest
+          (current.startTime || 0) > (latest.startTime || 0) ? current : latest,
         );
         this.setLatestTaskGroupId(stream, mostRecent.id);
       } else {
@@ -337,7 +336,10 @@ export class ProgressViewState {
   /**
    * Collect the group ID and all its descendant group IDs recursively
    */
-  private _collectGroupAndChildren(stream: StreamTabId, groupId: string): Set<string> {
+  private _collectGroupAndChildren(
+    stream: StreamTabId,
+    groupId: string,
+  ): Set<string> {
     const result = new Set<string>();
     result.add(groupId);
 
