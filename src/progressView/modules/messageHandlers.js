@@ -41,27 +41,33 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     }
   }
 
-  _getCurrentGroups() {
-    return Array.from(state.taskGroups.getAll().values());
+  _getCurrentGroups(stream = state.activeStream) {
+    if (!stream) {
+      return [];
+    }
+    return Array.from(state.taskGroups.getAll(stream).values());
   }
 
-  _syncSessionSelector(groups, preferredGroupId) {
+  _syncSessionSelector(groups, preferredGroupId, stream = state.activeStream) {
     const selectedId = dom.sessionSelector.update(groups, preferredGroupId);
-    const activeStream = state.activeStream;
-    if (activeStream) {
-      state.setSelectedGroup(activeStream, selectedId || null);
+    if (stream) {
+      state.setSelectedGroup(stream, selectedId || null);
+      dom.taskGroups.setRootGroupVisibility(stream, selectedId);
     }
-    dom.taskGroups.setRootGroupVisibility(selectedId);
     return selectedId;
   }
 
-  _applyInstructionForSelection(groupId, instructionPayload) {
+  _applyInstructionForSelection(
+    groupId,
+    instructionPayload,
+    stream = state.activeStream,
+  ) {
     if (!groupId) {
       dom.instructionPanel.hide();
       return;
     }
 
-    const group = state.taskGroups.get(groupId);
+    const group = stream ? state.taskGroups.get(stream, groupId) : null;
     const text = instructionPayload?.text || group?.instruction?.text || '';
 
     if (!text.trim()) {
@@ -83,8 +89,8 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
     const selectedId = groupId || dom.sessionSelector.getValue();
     state.setSelectedGroup(activeStream, selectedId || null);
-    dom.taskGroups.setRootGroupVisibility(selectedId);
-    this._applyInstructionForSelection(selectedId);
+    dom.taskGroups.setRootGroupVisibility(activeStream, selectedId);
+    this._applyInstructionForSelection(selectedId, undefined, activeStream);
   }
 
   _createHandlers() {
@@ -156,7 +162,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     dom.status.setExecutionAvailability(Boolean(hasExecution));
 
     const activeSelection = state.getSelectedGroup(message.activeStream);
-    state.currentGroupId = activeSelection;
+    state.setCurrentGroup(message.activeStream, activeSelection || null);
 
     // Update status based on whether there's an active stream
     if (!message.activeStream) {
@@ -173,7 +179,8 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
     if (message.stream === state.activeStream) {
       logContent.innerHTML = '';
-      state.taskGroups.clear();
+      state.taskGroups.clear(message.stream);
+      state.setCurrentGroup(message.stream, null);
       dom.taskGroups.clear();
       if (message.groups && message.groups.length > 0) {
         const parentGroups = message.groups.filter((g) => !g.parentGroupId);
@@ -185,14 +192,19 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
           .sort((a, b) => a.startTime - b.startTime)
           .forEach((g) => dom.taskGroups.add(g));
       }
-      const groups = this._getCurrentGroups();
+      const groups = this._getCurrentGroups(message.stream);
       const preferredGroupId =
         message.taskGroupId || state.getSelectedGroup(message.stream);
       const selectedGroupId = this._syncSessionSelector(
         groups,
         preferredGroupId,
+        message.stream,
       );
-      this._applyInstructionForSelection(selectedGroupId);
+      this._applyInstructionForSelection(
+        selectedGroupId,
+        undefined,
+        message.stream,
+      );
       const sortedMessages = [...message.messages].sort(
         (a, b) => a.timestamp - b.timestamp,
       );
@@ -224,7 +236,9 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     for (const el of headers) {
       groupIds.push(el.id.replace('group-header-', ''));
     }
-    state.taskGroups.clear();
+    const activeStream = state.activeStream;
+    state.taskGroups.clear(activeStream);
+    state.setCurrentGroup(activeStream, null);
     dom.taskGroups.clear();
     state.toggleStates.clear(groupIds);
 
@@ -292,7 +306,12 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
   handleUpdateTaskGroup(message) {
     if (message.stream === state.activeStream) {
-      state.taskGroups.update(message.groupId, message.status, message.endTime);
+      state.taskGroups.update(
+        message.stream,
+        message.groupId,
+        message.status,
+        message.endTime,
+      );
       dom.taskGroups.update(message.groupId, message.status, message.endTime);
     }
   }
@@ -342,13 +361,15 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     if (Array.isArray(message.groups)) {
       message.groups.forEach((group) => {
         if (group?.id) {
-          state.taskGroups.set(group.id, group);
+          state.taskGroups.set(message.stream, group.id, group);
         }
       });
     }
 
-    if (message.taskGroupId) {
-      const existing = state.taskGroups.get(message.taskGroupId);
+    let instructionGroupId = message.taskGroupId || null;
+
+    if (instructionGroupId) {
+      const existing = state.taskGroups.get(message.stream, instructionGroupId);
       if (existing) {
         const updated = { ...existing };
         if (message.instruction) {
@@ -360,24 +381,42 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
         } else {
           updated.instruction = undefined;
         }
-        state.taskGroups.set(message.taskGroupId, updated);
+        state.taskGroups.set(message.stream, instructionGroupId, updated);
+      }
+    } else if (message.instruction) {
+      const fallbackGroupId = state.taskGroups.getLatestRootGroupId(
+        message.stream,
+      );
+      if (fallbackGroupId) {
+        instructionGroupId = fallbackGroupId;
+        const existing =
+          state.taskGroups.get(message.stream, fallbackGroupId) || {};
+        const updated = { ...existing };
+        updated.instruction = {
+          ...(existing.instruction || {}),
+          text: message.instruction.text,
+          metadata: message.instruction.metadata,
+        };
+        state.taskGroups.set(message.stream, fallbackGroupId, updated);
       }
     }
 
-    const groups = this._getCurrentGroups();
+    const groups = this._getCurrentGroups(message.stream);
     const preferredGroupId =
-      message.taskGroupId || state.getSelectedGroup(activeStream);
-    const selectedGroupId = this._syncSessionSelector(groups, preferredGroupId);
+      instructionGroupId || state.getSelectedGroup(activeStream);
+    const selectedGroupId = this._syncSessionSelector(
+      groups,
+      preferredGroupId,
+      message.stream,
+    );
 
-    if (
-      message.taskGroupId &&
-      message.instruction &&
-      selectedGroupId === message.taskGroupId
-    ) {
-      this._applyInstructionForSelection(selectedGroupId, message.instruction);
-    } else {
-      this._applyInstructionForSelection(selectedGroupId);
-    }
+    const shouldApplyInstruction =
+      !!message.instruction && selectedGroupId === instructionGroupId;
+    this._applyInstructionForSelection(
+      selectedGroupId,
+      shouldApplyInstruction ? message.instruction : undefined,
+      message.stream,
+    );
   }
 
   handleDeleteStream(message) {
@@ -395,6 +434,8 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
         }
         state.toggleStates.clear(groupIds);
         dom.instructionPanel.hide();
+        state.taskGroups.clear(message.stream);
+        state.setCurrentGroup(message.stream, null);
       }
     }
   }
@@ -403,7 +444,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     state.toggleStates.clearAll();
     state.resetExecutionAvailability();
     state.selectedGroups.clear();
-    state.currentGroupId = null;
+    state.currentGroupIds.clear();
     dom.instructionPanel.hide();
     dom.sessionSelector.update([], null);
   }

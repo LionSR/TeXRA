@@ -87,8 +87,9 @@ export class TaskGroupManager {
 
     // For top-level groups, update current group and collapse the previous active group
     if (!group.parentGroupId) {
-      if (!progressViewState.currentGroupId) {
-        progressViewState.currentGroupId = group.id;
+      const activeStream = progressViewState.activeStream;
+      if (!progressViewState.getCurrentGroup(activeStream)) {
+        progressViewState.setCurrentGroup(activeStream, group.id);
       }
       this.collapsePreviousActiveGroup();
     }
@@ -153,12 +154,12 @@ export class TaskGroupManager {
     }
   }
 
-  setRootGroupVisibility(selectedGroupId) {
+  setRootGroupVisibility(stream, selectedGroupId) {
     for (const [id, element] of this.groupElements.entries()) {
       if (!element) {
         continue;
       }
-      const group = progressViewState.taskGroups.get(id);
+      const group = progressViewState.taskGroups.get(stream, id);
       if (!group || group.parentGroupId) {
         continue;
       }
@@ -174,7 +175,10 @@ export class TaskGroupManager {
    */
   collapseGroupAndChildren(groupId) {
     // Find all child groups
-    for (const [childId, group] of progressViewState.taskGroups.getAll()) {
+    const activeStream = progressViewState.activeStream;
+    for (const [childId, group] of progressViewState.taskGroups
+      .getAll(activeStream)
+      .entries()) {
       if (group.parentGroupId === groupId) {
         this.collapseGroupAndChildren(childId);
       }
@@ -195,7 +199,7 @@ export class TaskGroupManager {
    */
   findCurrentActiveGroup() {
     const current = progressViewState.taskGroups.get(
-      progressViewState.currentGroupId,
+      progressViewState.getCurrentGroup(progressViewState.activeStream),
     );
     if (current) return current.id;
 

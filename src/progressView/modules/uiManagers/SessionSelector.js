@@ -14,23 +14,54 @@ function sortRootGroups(groups) {
     .sort((a, b) => (a.startTime || 0) - (b.startTime || 0));
 }
 
-function formatGroupLabel(group) {
-  const baseLabel = group?.name || 'Session';
-  const timestamp = typeof group?.startTime === 'number' ? group.startTime : 0;
+const STATUS_OVERRIDES = new Map(
+  Object.entries({
+    succeeded: 'Completed',
+    success: 'Completed',
+    completed: 'Completed',
+    failed: 'Failed',
+    error: 'Error',
+    cancelled: 'Canceled',
+    canceled: 'Canceled',
+  }),
+);
 
-  if (!timestamp) {
-    return baseLabel;
+function formatStatus(status) {
+  if (!status) {
+    return '';
+  }
+  const lower = String(status).toLowerCase();
+  if (STATUS_OVERRIDES.has(lower)) {
+    return STATUS_OVERRIDES.get(lower);
+  }
+  const normalized = lower.replace(/[_-]+/g, ' ');
+  return normalized.replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function formatGroupLabel(group) {
+  const timestamp = typeof group?.startTime === 'number' ? group.startTime : 0;
+  const statusLabel = formatStatus(group?.status);
+
+  const parts = [];
+  if (timestamp) {
+    const formatter = new Intl.DateTimeFormat(undefined, {
+      year: 'numeric',
+      month: 'short',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+    parts.push(formatter.format(new Date(timestamp)));
+  }
+  if (statusLabel) {
+    parts.push(statusLabel);
   }
 
-  const formatter = new Intl.DateTimeFormat(undefined, {
-    year: 'numeric',
-    month: 'short',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  if (parts.length === 0) {
+    return 'Session';
+  }
 
-  return `${baseLabel} • ${formatter.format(new Date(timestamp))}`;
+  return parts.join(' • ');
 }
 
 export class SessionSelector {
@@ -99,7 +130,7 @@ export class SessionSelector {
         nextValue = String(selectedId);
       } else if (
         previousValue &&
-        rootGroups.some((g) => g.id === previousValue)
+        rootGroups.some((g) => String(g.id) === String(previousValue))
       ) {
         nextValue = previousValue;
       } else {

@@ -58,6 +58,7 @@ describe('Session selector integration', () => {
     handler = new ProgressViewMessageHandler();
     progressViewState.taskGroups.clear();
     progressViewState.selectedGroups.clear();
+    progressViewState.currentGroupIds.clear();
     progressViewState.activeStream = 'stream-1';
     progressViewDomHandler.taskGroups.clear();
   });
@@ -65,6 +66,7 @@ describe('Session selector integration', () => {
   afterEach(() => {
     progressViewState.taskGroups.clear();
     progressViewState.selectedGroups.clear();
+    progressViewState.currentGroupIds.clear();
     progressViewState.activeStream = '';
     progressViewDomHandler.taskGroups.clear();
     if (progressViewDomHandler.instructionPanel?.cleanup) {
@@ -102,10 +104,81 @@ describe('Session selector integration', () => {
       'sessionSelector',
     ) as HTMLSelectElement;
     assert.equal(selector?.value, 'group-2');
+    const optionLabels = Array.from(selector.options).map(
+      (opt) => opt.textContent,
+    );
+    assert.ok(
+      optionLabels.every((label) => label && !label.includes('Run:')),
+      'session labels should omit run prefixes',
+    );
 
     selector.value = 'group-1';
     selector.dispatchEvent(new global.window.Event('change'));
 
     assert.equal(progressViewState.getSelectedGroup('stream-1'), 'group-1');
+  });
+
+  it('keeps instructions isolated per stream even with reused group ids', () => {
+    handler.handleUpdateLogs({
+      command: 'updateLogContent',
+      stream: 'stream-1',
+      messages: [],
+      groups: [
+        {
+          id: 'group-1',
+          name: 'First run',
+          startTime: 1,
+          status: 'running',
+        },
+      ],
+      taskGroupId: 'group-1',
+    } as any);
+
+    handler.handleUpdateInstruction({
+      command: 'updateInstruction',
+      stream: 'stream-1',
+      taskGroupId: 'group-1',
+      instruction: { text: 'First instruction' },
+    } as any);
+
+    const streamOneGroup = progressViewState.taskGroups.get(
+      'stream-1',
+      'group-1',
+    );
+    assert.equal(streamOneGroup?.instruction?.text, 'First instruction');
+
+    progressViewState.activeStream = 'stream-2';
+    handler.handleUpdateLogs({
+      command: 'updateLogContent',
+      stream: 'stream-2',
+      messages: [],
+      groups: [
+        {
+          id: 'group-1',
+          name: 'Second run',
+          startTime: 2,
+          status: 'running',
+        },
+      ],
+      taskGroupId: 'group-1',
+    } as any);
+
+    handler.handleUpdateInstruction({
+      command: 'updateInstruction',
+      stream: 'stream-2',
+      taskGroupId: 'group-1',
+      instruction: { text: 'Second instruction' },
+    } as any);
+
+    const streamTwoGroup = progressViewState.taskGroups.get(
+      'stream-2',
+      'group-1',
+    );
+    assert.equal(streamTwoGroup?.instruction?.text, 'Second instruction');
+    const streamOneGroupAfter = progressViewState.taskGroups.get(
+      'stream-1',
+      'group-1',
+    );
+    assert.equal(streamOneGroupAfter?.instruction?.text, 'First instruction');
   });
 });

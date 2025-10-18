@@ -6,20 +6,64 @@ import { WebviewStateManager } from '@common/webviewState.js';
  * Manages task groups in the progress view.
  */
 class TaskGroups {
-  constructor() {
-    this.groups = new Map();
-    this._cachedTotals = null;
+  constructor(getActiveStream) {
+    this._groupsByStream = new Map();
+    this._getActiveStream = getActiveStream;
   }
 
-  get(id) {
+  _resolveStream(stream) {
+    const resolved =
+      stream ||
+      (typeof this._getActiveStream === 'function'
+        ? this._getActiveStream()
+        : undefined);
+    if (!resolved) {
+      console.error('TaskGroups: stream id is required');
+      return null;
+    }
+    return resolved;
+  }
+
+  _getStreamMap(stream, { create = true } = {}) {
+    const resolved = this._resolveStream(stream);
+    if (!resolved) {
+      return null;
+    }
+
+    if (!this._groupsByStream.has(resolved)) {
+      if (!create) {
+        return null;
+      }
+      this._groupsByStream.set(resolved, new Map());
+    }
+
+    return this._groupsByStream.get(resolved) || null;
+  }
+
+  get(streamOrId, maybeId) {
+    let stream = streamOrId;
+    let id = maybeId;
+    if (maybeId === undefined) {
+      id = streamOrId;
+      stream = undefined;
+    }
     if (!id) {
       console.error('TaskGroups.get: id is required');
       return null;
     }
-    return this.groups.get(id);
+    const map = this._getStreamMap(stream, { create: false });
+    return map ? map.get(id) || null : null;
   }
 
-  set(id, group) {
+  set(streamOrId, maybeId, maybeGroup) {
+    let stream = streamOrId;
+    let id = maybeId;
+    let group = maybeGroup;
+    if (maybeGroup === undefined && typeof maybeId === 'object') {
+      group = maybeId;
+      id = streamOrId;
+      stream = undefined;
+    }
     if (!id) {
       console.error('TaskGroups.set: id is required');
       return;
@@ -28,33 +72,68 @@ class TaskGroups {
       console.error('TaskGroups.set: group must be an object');
       return;
     }
-    this.groups.set(id, group);
-    this._cachedTotals = null; // Invalidate cache
+    const map = this._getStreamMap(stream, { create: true });
+    if (map) {
+      map.set(id, group);
+    }
   }
 
-  getAll() {
-    return this.groups;
+  getAll(stream) {
+    const map = this._getStreamMap(stream, { create: false });
+    return map ? new Map(map) : new Map();
   }
 
-  clear() {
-    this.groups.clear();
-    this._cachedTotals = null; // Invalidate cache
+  getStreamGroups(stream) {
+    const map = this._getStreamMap(stream, { create: false });
+    return map ? map : new Map();
+  }
+
+  clear(stream) {
+    if (stream !== undefined && stream !== null) {
+      const resolved = this._resolveStream(stream);
+      if (resolved) {
+        this._groupsByStream.delete(resolved);
+      }
+      return;
+    }
+    this._groupsByStream.clear();
   }
 
   /**
    * Update an existing log group with new status or end time.
+   * @param {string} streamId - Stream identifier for the group
    * @param {string} groupId - ID of the group to update
    * @param {string} status - New status
    * @param {number} [endTime] - Optional end time
    */
-  update(groupId, status, endTime) {
+  update(streamOrGroupId, maybeGroupId, status, endTime) {
+    let streamId = streamOrGroupId;
+    let groupId = maybeGroupId;
+    if (
+      typeof maybeGroupId === 'string' ||
+      typeof maybeGroupId === 'number' ||
+      maybeGroupId === null
+    ) {
+      // stream provided explicitly - nothing to do
+    } else {
+      endTime = status;
+      status = maybeGroupId;
+      groupId = streamOrGroupId;
+      streamId = undefined;
+    }
     if (!groupId) {
       console.error('TaskGroups.update: groupId is required');
       return;
     }
-    const group = this.groups.get(groupId);
+    const map = this._getStreamMap(streamId, { create: false });
+    if (!map) {
+      return;
+    }
+    const group = map.get(groupId);
     if (!group) {
-      console.error(`TaskGroups.update: group not found for id ${groupId}`);
+      console.error(
+        `TaskGroups.update: group not found for id ${groupId} in stream ${streamId}`,
+      );
       return;
     }
 
@@ -65,8 +144,31 @@ class TaskGroups {
       group.endTime = endTime;
     }
 
-    this.groups.set(groupId, group);
-    this._cachedTotals = null; // Invalidate cache
+    map.set(groupId, group);
+  }
+
+  getLatestRootGroupId(streamId) {
+    const map = this._getStreamMap(streamId, { create: false });
+    if (!map) {
+      return null;
+    }
+    let latest = null;
+    for (const group of map.values()) {
+      if (group && !group.parentGroupId) {
+        if (!latest) {
+          latest = group;
+          continue;
+        }
+        const groupTime =
+          typeof group.startTime === 'number' ? group.startTime : 0;
+        const latestTime =
+          typeof latest.startTime === 'number' ? latest.startTime : 0;
+        if (groupTime >= latestTime) {
+          latest = group;
+        }
+      }
+    }
+    return latest?.id || null;
   }
 }
 
@@ -206,11 +308,11 @@ export class ProgressViewState {
     this.stateManager = new WebviewStateManager();
     this.activeStream = '';
     this.agentFilter = 'all';
-    this.currentGroupId = null;
+    this.currentGroupIds = new Map();
     this.selectedGroups = new Map();
 
     // Initialize managers
-    this.taskGroups = new TaskGroups();
+    this.taskGroups = new TaskGroups(() => this.activeStream);
     this.toggleStates = new ToggleStates(() => this.save());
     this.streamStatuses = new StreamStatuses();
     this.executionAvailability = new ExecutionAvailability();
@@ -222,12 +324,10 @@ export class ProgressViewState {
     }
     if (groupId) {
       this.selectedGroups.set(stream, groupId);
-      this.currentGroupId = groupId;
+      this.currentGroupIds.set(stream, groupId);
     } else {
       this.selectedGroups.delete(stream);
-      if (this.activeStream === stream) {
-        this.currentGroupId = null;
-      }
+      this.currentGroupIds.delete(stream);
     }
   }
 
@@ -236,6 +336,24 @@ export class ProgressViewState {
       return null;
     }
     return this.selectedGroups.get(stream) || null;
+  }
+
+  setCurrentGroup(stream, groupId) {
+    if (!stream) {
+      return;
+    }
+    if (groupId) {
+      this.currentGroupIds.set(stream, groupId);
+    } else {
+      this.currentGroupIds.delete(stream);
+    }
+  }
+
+  getCurrentGroup(stream) {
+    if (!stream) {
+      return null;
+    }
+    return this.currentGroupIds.get(stream) || null;
   }
 
   setExecutionAvailability(stream, available) {
