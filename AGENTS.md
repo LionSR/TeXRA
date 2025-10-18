@@ -54,6 +54,14 @@ When updating CHANGELOG.md:
 - Keep generated code tight: trim redundant helpers, repeated type checks, or defensive guards that do not serve a demonstrated scenario.
 - Prefer improving existing structures incrementally instead of rewriting modules unless there is a clear, documented benefit.
 
+### Refactoring for simplicity
+
+When refactoring, aim for code that looks like it was designed correctly from the start:
+
+- **Prefer native methods over normalization helpers**: Use `Array.isArray()`, optional chaining, and built-in JavaScript methods instead of writing custom normalization functions.
+- **Handle legacy formats at entry points**: Use Zod schemas or load-time transformations to convert old formats to current ones, then delete legacy fields immediately. The rest of the codebase should only work with the current format.
+- **Remove all traces of old design**: After refactoring, there should be no leftover wrapper functions, intermediate variables, or "compatibility" abstractions in core logic. Extract helpers only when the same logic truly appears in multiple places.
+
 ### Patterns across the codebase
 
 **Configuration, storage, and workspace files**

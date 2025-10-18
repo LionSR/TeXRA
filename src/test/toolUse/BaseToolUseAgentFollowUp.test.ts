@@ -139,7 +139,6 @@ describe('BaseToolUseAgent follow-up loop', () => {
       systemPrompt: '',
       userPrefix: '',
       userRequest: '',
-      userReflect: '',
     };
     const config: AgentConfig = {
       model: 'dummy',

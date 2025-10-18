@@ -72,60 +72,60 @@ prompts:
     </instruction>
     {% endif %}
 
-  userRequest: |
-    Based on the research paper provided, please create a detailed, mathematically rich LaTeX Beamer poster for a scientific audience in A5 format. In the scratchpad below, outline the key points and structure you plan to include in the poster.
+  userRequest:
+    - |
+      Based on the research paper provided, please create a detailed, mathematically rich LaTeX Beamer poster for a scientific audience in A5 format. In the scratchpad below, outline the key points and structure you plan to include in the poster.
 
-    <scratchpad>
-    \begin{enumerate}
-        \item Title, author information, and abstract
-        \item Introduction and motivation
-        \item Theoretical Framework
-        \item Methods and experimental setup
-        \item Key Results and data analysis
-        \item Discussion of findings
-        \item Conclusions and future work
-        \item References
-    \end{enumerate}
-    </scratchpad>
+      <scratchpad>
+      \begin{enumerate}
+          \item Title, author information, and abstract
+          \item Introduction and motivation
+          \item Theoretical Framework
+          \item Methods and experimental setup
+          \item Key Results and data analysis
+          \item Discussion of findings
+          \item Conclusions and future work
+          \item References
+      \end{enumerate}
+      </scratchpad>
 
-    Then, please create the LaTeX Beamer poster, incorporating the key points outlined in the scratchpad. The poster should be professional, mathematically detailed, and effectively highlight the main aspects of the research paper. Use the following format:
+      Then, please create the LaTeX Beamer poster, incorporating the key points outlined in the scratchpad. The poster should be professional, mathematically detailed, and effectively highlight the main aspects of the research paper. Use the following format:
 
-    <beamer_poster>
-    {{ TEMPLATE_POSTER_CONTENT }}
-    </beamer_poster>
+      <beamer_poster>
+      {{ TEMPLATE_POSTER_CONTENT }}
+      </beamer_poster>
+    - |
+      Please review your draft LaTeX Beamer poster critically, focusing on the following points:
+      <scratchpad>
+      <reflection>
+      1. Mathematical Depth: Have you included sufficient mathematical detail, including key equations, derivations, and explanations?
+      2. Content Coverage: Have you effectively summarized the key points of the research paper, including theoretical framework and methodology?
+      3. Structure and Layout: Is the poster well-structured with clear sections? Ensure there's a logical flow between sections and that the layout is visually appealing for A5 format.
+      4. Visual Representations: Have you included appropriate figures, tables, or diagrams to illustrate key concepts and results?
+      5. Balance: Is there a good balance between textual explanations, mathematical content, and visual elements?
+      6. Conciseness vs Detail: Despite the increased detail, is the content presented concisely and effectively for a poster format?
+      7. Physics Terminology: Is the use of notation and terminology consistent and appropriate for the target audience?
+      8. Mathematical Rigor: Are equations and mathematical concepts presented clearly and accurately? Ensure they are properly formatted using LaTeX commands.
+      9. Readability: Despite the increased content, is the text size appropriate for A5 format? Ensure all content is easily readable.
+      10. Color Usage: Have you effectively used the provided color scheme to enhance readability and visual appeal, especially for mathematical content?
+      11. References: Have you included necessary citations in a compact format using biblatex?
+      </reflection>
 
-  userReflect: |
-    Please review your draft LaTeX Beamer poster critically, focusing on the following points:
-    <scratchpad>
-    <reflection>
-    1. Mathematical Depth: Have you included sufficient mathematical detail, including key equations, derivations, and explanations?
-    2. Content Coverage: Have you effectively summarized the key points of the research paper, including theoretical framework and methodology?
-    3. Structure and Layout: Is the poster well-structured with clear sections? Ensure there's a logical flow between sections and that the layout is visually appealing for A5 format.
-    4. Visual Representations: Have you included appropriate figures, tables, or diagrams to illustrate key concepts and results?
-    5. Balance: Is there a good balance between textual explanations, mathematical content, and visual elements?
-    6. Conciseness vs Detail: Despite the increased detail, is the content presented concisely and effectively for a poster format?
-    7. Physics Terminology: Is the use of notation and terminology consistent and appropriate for the target audience?
-    8. Mathematical Rigor: Are equations and mathematical concepts presented clearly and accurately? Ensure they are properly formatted using LaTeX commands.
-    9. Readability: Despite the increased content, is the text size appropriate for A5 format? Ensure all content is easily readable.
-    10. Color Usage: Have you effectively used the provided color scheme to enhance readability and visual appeal, especially for mathematical content?
-    11. References: Have you included necessary citations in a compact format using biblatex?
-    </reflection>
+      <improvements>
 
-    <improvements>
+      1. [Specific Improvement 1]
+          - Rationale: [Brief explanation]
+          - Implementation: [Concrete steps]
+      2. [Specific Improvement 2]
+          - Rationale: [Brief explanation]
+          - Implementation: [Concrete steps]
+      3. [Specific Improvement 3]
+          - Rationale: [Brief explanation]
+          - Implementation: [Concrete steps]
 
-    1. [Specific Improvement 1]
-        - Rationale: [Brief explanation]
-        - Implementation: [Concrete steps]
-    2. [Specific Improvement 2]
-        - Rationale: [Brief explanation]
-        - Implementation: [Concrete steps]
-    3. [Specific Improvement 3]
-        - Rationale: [Brief explanation]
-        - Implementation: [Concrete steps]
+      </improvements>
+      </scratchpad>
 
-    </improvements>
-    </scratchpad>
+      Based on this reflection, please revise the LaTeX Beamer poster to enhance its mathematical content, overall structure, and visual quality. Ensure that the poster effectively communicates the key aspects of the research paper to a scientific audience in an A5 format, balancing detailed mathematical content with visual appeal. Output the new version based on the previous version you just wrote.
 
-    Based on this reflection, please revise the LaTeX Beamer poster to enhance its mathematical content, overall structure, and visual quality. Ensure that the poster effectively communicates the key aspects of the research paper to a scientific audience in an A5 format, balancing detailed mathematical content with visual appeal. Output the new version based on the previous version you just wrote.
-
-    Output your revised poster within the <beamer_poster> tags. Include
+      Output your revised poster within the <beamer_poster> tags. Include
