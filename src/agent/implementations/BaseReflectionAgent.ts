@@ -86,13 +86,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     this.agentSetting = workflowSetting;
 
     // Initialize basic attributes
-    const requestArray = Array.isArray(agentPrompt.userRequest)
-      ? agentPrompt.userRequest
-      : [agentPrompt.userRequest];
-    const numRounds = Math.max(
-      workflowSetting.rounds ?? 2,
-      requestArray.length,
-    );
+    const numRounds = this.getTotalRounds();
     this.outputFile = new Array(numRounds);
     this.outputFiles = {};
     for (let i = 0; i < numRounds; i++) {
@@ -137,6 +131,17 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     }
 
     return this.promptBuilder;
+  }
+
+  /**
+   * Calculates the total number of rounds to execute.
+   * Returns the maximum of configured rounds and userRequest array length.
+   */
+  private getTotalRounds(): number {
+    const requestArray = Array.isArray(this.agentPrompt.userRequest)
+      ? this.agentPrompt.userRequest
+      : [this.agentPrompt.userRequest];
+    return Math.max(this.agentSetting.rounds ?? 2, requestArray.length);
   }
 
   /**
@@ -526,13 +531,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       let messages: any[] = [];
       let continueRounds = true;
 
-      const requestArray = Array.isArray(this.agentPrompt.userRequest)
-        ? this.agentPrompt.userRequest
-        : [this.agentPrompt.userRequest];
-      const totalRounds = Math.max(
-        this.agentSetting.rounds ?? 2,
-        requestArray.length,
-      );
+      const totalRounds = this.getTotalRounds();
       for (let currRound = 0; currRound < totalRounds; currRound++) {
         if (this.isInterrupted) {
           break;
