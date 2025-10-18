@@ -195,12 +195,7 @@ export function hasEndTag(
 export const AgentPromptSchema = z.object({
   systemPrompt: z.string().prefault(''),
   userPrefix: z.string().prefault(''),
-  userRequest: z
-    .union([
-      z.string().min(1, 'userRequest cannot be empty'),
-      z.array(z.string().min(1, 'userRequest entries cannot be empty')),
-    ])
-    .prefault(''),
+  userRequest: z.union([z.string(), z.array(z.string())]).prefault(''),
 });
 
 export type AgentPrompt = z.infer<typeof AgentPromptSchema>;
