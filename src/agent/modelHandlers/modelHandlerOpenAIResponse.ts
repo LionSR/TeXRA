@@ -1212,7 +1212,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       return null;
     }
 
-    const thoughtContent = summaryParts.map((part) => part.text).join('\n');
+    const thoughtContent = summaryParts.map((part) => part.text).join('\n\n'); // to make the thinking markdown rendering more readable
 
     if (toolState && !toolState.thinkingAdded) {
       toolState.thinkingBlocks = summaryParts.map((part) => ({
