@@ -7,6 +7,12 @@ import { WorkspaceStateKey } from '@common/state/stateManager';
 import { AgentLogger } from '@logger/AgentLogger';
 import { WorkspaceFS } from '@utils/files';
 
+// Local imports - state helpers
+import {
+  MIGRATION_PLACEHOLDER_ID,
+  SESSION_PLACEHOLDER_IDS,
+} from '../state/sessionPlaceholders';
+
 // Types
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import type { OutputFileInfo } from '@agent/output/types';
@@ -76,9 +82,22 @@ export class OutputFilesManager extends PersistentMapManager<
     groupId?: string,
   ): { [key: number]: OutputFileInfo[] } | undefined {
     const streamData = this.get(stream);
-    if (!streamData) return undefined;
-    if (!groupId) return undefined;
-    return streamData[groupId];
+    if (!streamData) {
+      return undefined;
+    }
+
+    if (groupId) {
+      return streamData[groupId];
+    }
+
+    for (const placeholder of SESSION_PLACEHOLDER_IDS) {
+      const placeholderData = streamData[placeholder];
+      if (placeholderData) {
+        return placeholderData;
+      }
+    }
+
+    return undefined;
   }
 
   /** Get all sessions' files for a stream */
@@ -94,9 +113,22 @@ export class OutputFilesManager extends PersistentMapManager<
     groupId?: string,
   ): { [key: number]: string[] } | undefined {
     const streamMissing = this._missingOutputs.get(stream);
-    if (!streamMissing) return undefined;
-    if (!groupId) return undefined;
-    return streamMissing[groupId];
+    if (!streamMissing) {
+      return undefined;
+    }
+
+    if (groupId) {
+      return streamMissing[groupId];
+    }
+
+    for (const placeholder of SESSION_PLACEHOLDER_IDS) {
+      const placeholderData = streamMissing[placeholder];
+      if (placeholderData) {
+        return placeholderData;
+      }
+    }
+
+    return undefined;
   }
 
   /** Clear output files for a specific session */
@@ -206,7 +238,8 @@ export class OutputFilesManager extends PersistentMapManager<
       for (const [stream, data] of Object.entries(saved)) {
         // Check if this is old format (rounds directly) or new format (groupId -> rounds)
         const firstKey = Object.keys(data)[0];
-        const isOldFormat = firstKey && !isNaN(Number(firstKey));
+        const firstValue = firstKey ? (data as any)[firstKey] : undefined;
+        const isOldFormat = Array.isArray(firstValue);
 
         if (isOldFormat) {
           // Old format: migrate to latest session
@@ -220,7 +253,7 @@ export class OutputFilesManager extends PersistentMapManager<
             ]),
           );
           // Will be attributed to latest session by parent logic
-          processed.set(stream, { __MIGRATION__: roundMap });
+          processed.set(stream, { [MIGRATION_PLACEHOLDER_ID]: roundMap });
         } else {
           // New format: already has groupIds
           const groupMap: { [groupId: string]: { [key: number]: string[] } } =
@@ -293,7 +326,7 @@ export class OutputFilesManager extends PersistentMapManager<
       }
 
       // Return with migration marker - will be resolved by ProgressViewState
-      return { __MIGRATION__: roundMap };
+      return { [MIGRATION_PLACEHOLDER_ID]: roundMap };
     } else {
       // New format: { [groupId: string]: { [round: number]: OutputFileInfo[] } }
       const sessions = obj as {
@@ -336,5 +369,84 @@ export class OutputFilesManager extends PersistentMapManager<
 
       return result;
     }
+  }
+
+  /**
+   * Merge session-specific data from a placeholder group into the target session.
+   * Returns true when data was migrated.
+   */
+  mergeSessionData(
+    stream: StreamTabId,
+    sourceGroupId: string,
+    targetGroupId: string,
+  ): boolean {
+    if (
+      !sourceGroupId ||
+      !targetGroupId ||
+      sourceGroupId === targetGroupId
+    ) {
+      return false;
+    }
+
+    const streamData = this.get(stream);
+    const source = streamData?.[sourceGroupId];
+    const target = streamData?.[targetGroupId] || {};
+
+    const hasFileData = Boolean(source && Object.keys(source).length > 0);
+
+    if (streamData && source) {
+      const merged: { [key: number]: OutputFileInfo[] } = { ...target };
+      for (const [round, infos] of Object.entries(source)) {
+        const roundNum = Number(round);
+        const existing = merged[roundNum] ?? [];
+        merged[roundNum] = [...existing, ...infos];
+      }
+      streamData[targetGroupId] = merged;
+      delete streamData[sourceGroupId];
+      this.add(stream, streamData);
+    }
+
+    const streamMissing = this._missingOutputs.get(stream);
+    const sourceMissing = streamMissing?.[sourceGroupId];
+    if (streamMissing && sourceMissing) {
+      const targetMissing = streamMissing[targetGroupId] || {};
+      const mergedMissing: { [key: number]: string[] } = { ...targetMissing };
+      for (const [round, files] of Object.entries(sourceMissing)) {
+        const roundNum = Number(round);
+        const existing = mergedMissing[roundNum] ?? [];
+        const unique = new Set([...existing, ...files]);
+        mergedMissing[roundNum] = Array.from(unique);
+      }
+      streamMissing[targetGroupId] = mergedMissing;
+      delete streamMissing[sourceGroupId];
+      this.saveMissingOutputs();
+    }
+
+    // Remove empty placeholder entries if they had no data
+    if (streamData && streamData[sourceGroupId]) {
+      delete streamData[sourceGroupId];
+      this.add(stream, streamData);
+    }
+    if (streamMissing && streamMissing[sourceGroupId]) {
+      delete streamMissing[sourceGroupId];
+      this.saveMissingOutputs();
+    }
+
+    return hasFileData || Boolean(sourceMissing);
+  }
+
+  /**
+   * Convenience helper to migrate all known placeholder sessions to a target.
+   */
+  migratePlaceholders(
+    stream: StreamTabId,
+    targetGroupId: string,
+  ): boolean {
+    let migrated = false;
+    for (const placeholder of SESSION_PLACEHOLDER_IDS) {
+      migrated =
+        this.mergeSessionData(stream, placeholder, targetGroupId) || migrated;
+    }
+    return migrated;
   }
 }

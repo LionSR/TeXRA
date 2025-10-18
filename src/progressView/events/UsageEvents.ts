@@ -52,10 +52,11 @@ export function createUsageEvents(
         ({ stream, groupId, usage }) => {
           withErrorBoundary('failed to handle updateStreamUsage', () => {
             state.usageStats.updateSessionUsage(stream, groupId, usage);
-            // Update webview with session-specific usage if this is the active stream
             if (state.activeStream === stream && updater.isAvailable()) {
-              const latestGroupId = state.getLatestTaskGroupId(stream);
-              if (latestGroupId === groupId) {
+              const selectedGroupId =
+                state.getSelectedTaskGroupId(stream) ||
+                state.getLatestTaskGroupId(stream);
+              if (selectedGroupId === groupId) {
                 updater.updateUsage(usage);
               }
             }

@@ -18,6 +18,9 @@ import type { TaskGroup } from '@logger/LogTypes';
 import { isAgentTypeFilter } from '@agent/types/AgentStreamTypes';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 
+// Local imports - session helpers
+import { isPlaceholderSessionId } from './sessionPlaceholders';
+
 // Types
 import {
   TaskState,
@@ -48,6 +51,8 @@ export class ProgressViewState {
   private readonly workflowTaskStates: WorkflowTaskStateManager;
   private _executionIds: Map<StreamTabId, ExecutionId> = new Map();
   private readonly latestTaskGroupIds: Map<StreamTabId, TaskGroup['id']> =
+    new Map();
+  private readonly selectedTaskGroupIds: Map<StreamTabId, TaskGroup['id']> =
     new Map();
   /**
    * Ephemeral session-kind hints keyed by stream ID.
@@ -256,6 +261,11 @@ export class ProgressViewState {
     streamTabId: StreamTabId,
     groupId: TaskGroup['id'],
   ): void {
+    if (!groupId) {
+      return;
+    }
+
+    this.migratePlaceholderSessions(streamTabId, groupId);
     this.latestTaskGroupIds.set(streamTabId, groupId);
   }
 
@@ -265,6 +275,49 @@ export class ProgressViewState {
 
   clearLatestTaskGroupId(streamTabId: StreamTabId): void {
     this.latestTaskGroupIds.delete(streamTabId);
+  }
+
+  setSelectedTaskGroupId(
+    streamTabId: StreamTabId,
+    groupId: TaskGroup['id'] | undefined,
+  ): void {
+    if (!streamTabId) {
+      return;
+    }
+
+    if (groupId) {
+      this.selectedTaskGroupIds.set(streamTabId, groupId);
+    } else {
+      this.selectedTaskGroupIds.delete(streamTabId);
+    }
+  }
+
+  getSelectedTaskGroupId(
+    streamTabId: StreamTabId,
+  ): TaskGroup['id'] | undefined {
+    return this.selectedTaskGroupIds.get(streamTabId);
+  }
+
+  clearSelectedTaskGroupId(streamTabId: StreamTabId): void {
+    this.selectedTaskGroupIds.delete(streamTabId);
+  }
+
+  private migratePlaceholderSessions(
+    stream: StreamTabId,
+    groupId: string,
+  ): void {
+    if (!stream || isPlaceholderSessionId(groupId)) {
+      return;
+    }
+
+    const migratedFiles = this._outputFiles.migratePlaceholders(stream, groupId);
+    const migratedUsage = this._usageStats.migratePlaceholders(stream, groupId);
+
+    if (migratedFiles || migratedUsage) {
+      this.logger.debug(
+        `Migrated placeholder session data for stream ${stream} -> ${groupId}`,
+      );
+    }
   }
 
   // Stream cleanup operations
@@ -277,6 +330,7 @@ export class ProgressViewState {
     this.toolUseTaskStates.delete(stream);
     this._executionIds.delete(stream);
     this.clearLatestTaskGroupId(stream);
+    this.clearSelectedTaskGroupId(stream);
     this.clearSessionKindHint(stream);
     this.cleanupToolUseAgentRegistry();
 
@@ -328,8 +382,22 @@ export class ProgressViewState {
           (current.startTime || 0) > (latest.startTime || 0) ? current : latest,
         );
         this.setLatestTaskGroupId(stream, mostRecent.id);
+        if (this.getSelectedTaskGroupId(stream) === groupId) {
+          this.setSelectedTaskGroupId(stream, mostRecent.id);
+        }
       } else {
         this.clearLatestTaskGroupId(stream);
+        if (this.getSelectedTaskGroupId(stream) === groupId) {
+          this.clearSelectedTaskGroupId(stream);
+        }
+      }
+    } else if (this.getSelectedTaskGroupId(stream) === groupId) {
+      // If selection targeted the deleted session but latest differs, fall back to latest
+      const fallback = this.getLatestTaskGroupId(stream);
+      if (fallback) {
+        this.setSelectedTaskGroupId(stream, fallback);
+      } else {
+        this.clearSelectedTaskGroupId(stream);
       }
     }
   }
@@ -381,6 +449,7 @@ export class ProgressViewState {
     this.workflowTaskStates.clear();
     this.toolUseTaskStates.clear();
     this._executionIds.clear();
+    this.selectedTaskGroupIds.clear();
     this._sessionCategoryHints.clear();
     this._activeStream = '';
     this.saveActiveStream();

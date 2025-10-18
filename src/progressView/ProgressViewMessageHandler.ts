@@ -144,53 +144,31 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
 
     this.logger.debug(`Switching to session ${sessionId} in stream ${stream}`);
 
-    // Update files for the selected session
-    let files =
-      this.provider.state.outputFiles.getFiles(stream, sessionId) || {};
+    const migratedFiles = this.provider.state.outputFiles.migratePlaceholders(
+      stream,
+      sessionId,
+    );
+    const migratedUsage = this.provider.state.usageStats.migratePlaceholders(
+      stream,
+      sessionId,
+    );
 
-    // One-time migration: move files from __MIGRATION__ or __DEFAULT__ to actual session
-    if (Object.keys(files).length === 0) {
-      const allSessionFiles =
-        this.provider.state.outputFiles.getAllSessionFiles(stream);
-      if (allSessionFiles) {
-        const migrationFiles = allSessionFiles['__MIGRATION__'];
-        const defaultFiles = allSessionFiles['__DEFAULT__'];
-
-        if (migrationFiles && Object.keys(migrationFiles).length > 0) {
-          this.logger.info(
-            `Migrating files from __MIGRATION__ to session ${sessionId}`,
-          );
-          // Move files to the actual session
-          this.provider.state.outputFiles.addFiles(
-            stream,
-            sessionId,
-            migrationFiles,
-          );
-          // Delete the migration placeholder
-          this.provider.state.outputFiles.clearSessionFiles(
-            stream,
-            '__MIGRATION__',
-          );
-          files = migrationFiles;
-        } else if (defaultFiles && Object.keys(defaultFiles).length > 0) {
-          this.logger.info(
-            `Migrating files from __DEFAULT__ to session ${sessionId}`,
-          );
-          // Move files to the actual session
-          this.provider.state.outputFiles.addFiles(
-            stream,
-            sessionId,
-            defaultFiles,
-          );
-          // Delete the default placeholder
-          this.provider.state.outputFiles.clearSessionFiles(
-            stream,
-            '__DEFAULT__',
-          );
-          files = defaultFiles;
-        }
-      }
+    if (migratedFiles) {
+      this.logger.info(
+        `Migrated files from placeholder sessions to ${sessionId} in stream ${stream}`,
+      );
     }
+    if (migratedUsage) {
+      this.logger.info(
+        `Migrated usage from placeholder sessions to ${sessionId} in stream ${stream}`,
+      );
+    }
+
+    this.provider.state.setSelectedTaskGroupId(stream, sessionId);
+
+    // Update files for the selected session
+    const files =
+      this.provider.state.outputFiles.getFiles(stream, sessionId) || {};
 
     this.logger.debug(
       `Files for session ${sessionId}: ${Object.keys(files).length} rounds`,
@@ -204,53 +182,10 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     this.provider.webviewUpdater.updateMissingOutputs(stream, missing);
 
     // Update usage for the selected session
-    let usage = this.provider.state.usageStats.getSessionUsage(
+    const usage = this.provider.state.usageStats.getSessionUsage(
       stream,
       sessionId,
     );
-
-    // One-time migration: move usage from __MIGRATION__ or __DEFAULT__ to actual session
-    if (!usage) {
-      const allSessionUsage = this.provider.state.usageStats.get(stream);
-      if (allSessionUsage) {
-        const migrationUsage = allSessionUsage['__MIGRATION__'];
-        const defaultUsage = allSessionUsage['__DEFAULT__'];
-
-        if (migrationUsage) {
-          this.logger.info(
-            `Migrating usage from __MIGRATION__ to session ${sessionId}`,
-          );
-          // Move usage to the actual session
-          this.provider.state.usageStats.updateSessionUsage(
-            stream,
-            sessionId,
-            migrationUsage,
-          );
-          // Delete the migration placeholder
-          this.provider.state.usageStats.deleteSessionUsage(
-            stream,
-            '__MIGRATION__',
-          );
-          usage = migrationUsage;
-        } else if (defaultUsage) {
-          this.logger.info(
-            `Migrating usage from __DEFAULT__ to session ${sessionId}`,
-          );
-          // Move usage to the actual session
-          this.provider.state.usageStats.updateSessionUsage(
-            stream,
-            sessionId,
-            defaultUsage,
-          );
-          // Delete the default placeholder
-          this.provider.state.usageStats.deleteSessionUsage(
-            stream,
-            '__DEFAULT__',
-          );
-          usage = defaultUsage;
-        }
-      }
-    }
 
     this.logger.debug(
       `Usage for session ${sessionId}: ${usage ? `${usage.inputTokens}/${usage.outputTokens}` : 'none'}`,

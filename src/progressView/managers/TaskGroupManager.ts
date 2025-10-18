@@ -33,7 +33,12 @@ export class TaskGroupManager extends PersistentMapManager<
     }
 
     const streamGroups = this.get(stream)!;
-    streamGroups.set(groupId, { ...group });
+    const existing = streamGroups.get(groupId);
+    const merged: TaskGroup = {
+      ...group,
+      instruction: group.instruction ?? existing?.instruction,
+    };
+    streamGroups.set(groupId, merged);
     this.save();
   }
 
@@ -53,16 +58,24 @@ export class TaskGroupManager extends PersistentMapManager<
       return;
     }
 
-    const group = streamGroups.get(groupId);
+    let group = streamGroups.get(groupId);
     if (!group) {
       this.logger.warn(
-        `Cannot update group ${groupId}: group not found in stream ${stream}`,
+        `Group ${groupId} not found in stream ${stream}, creating placeholder`,
       );
-      return;
+      group = {
+        id: groupId,
+        name: updates.name ?? groupId,
+        startTime: updates.startTime ?? Date.now(),
+        status: updates.status ?? 'running',
+        parentGroupId: updates.parentGroupId,
+        usage: updates.usage,
+        instruction: updates.instruction,
+      };
+    } else {
+      Object.assign(group, updates);
     }
 
-    // Apply updates
-    Object.assign(group, updates);
     streamGroups.set(groupId, group);
     this.save();
   }
@@ -79,7 +92,8 @@ export class TaskGroupManager extends PersistentMapManager<
    * Get all groups for a stream
    */
   getStreamGroups(stream: StreamTabId): Map<string, TaskGroup> {
-    return this.get(stream) || new Map();
+    const streamGroups = this.get(stream);
+    return streamGroups ? new Map(streamGroups) : new Map();
   }
 
   /**

@@ -9,6 +9,12 @@ import type { TokenUsageStats } from '@agent/types/UsageTypes';
 import { WorkspaceStateKey } from '@common/state/stateManager';
 import { AgentLogger } from '@logger/AgentLogger';
 
+// Local imports - state helpers
+import {
+  SESSION_PLACEHOLDER_IDS,
+  MIGRATION_PLACEHOLDER_ID,
+} from '../state/sessionPlaceholders';
+
 /**
  * Manages usage statistics collection with persistence.
  * Handles tracking and updating token usage and costs for different sessions within streams.
@@ -198,7 +204,7 @@ export class UsageStatsManager extends PersistentMapManager<
         outputTokens: obj.outputTokens || 0,
         cost: obj.cost || 0,
       };
-      return { __MIGRATION__: usage };
+      return { [MIGRATION_PLACEHOLDER_ID]: usage };
     }
 
     // New format: validate and normalize each session's usage
@@ -213,5 +219,54 @@ export class UsageStatsManager extends PersistentMapManager<
     }
 
     return result;
+  }
+
+  /**
+   * Merge usage statistics stored under a placeholder session into the target session.
+   * Returns true when usage was migrated.
+   */
+  mergeSessionUsage(
+    stream: StreamTabId,
+    sourceGroupId: string,
+    targetGroupId: string,
+  ): boolean {
+    if (
+      !sourceGroupId ||
+      !targetGroupId ||
+      sourceGroupId === targetGroupId
+    ) {
+      return false;
+    }
+
+    const streamData = this.get(stream);
+    const source = streamData?.[sourceGroupId];
+    if (!streamData || !source) {
+      return false;
+    }
+
+    const target = streamData[targetGroupId] || {
+      inputTokens: 0,
+      outputTokens: 0,
+      cost: 0,
+    };
+
+    streamData[targetGroupId] = {
+      inputTokens: (target.inputTokens || 0) + (source.inputTokens || 0),
+      outputTokens: (target.outputTokens || 0) + (source.outputTokens || 0),
+      cost: (target.cost || 0) + (source.cost || 0),
+    };
+
+    delete streamData[sourceGroupId];
+    this.add(stream, streamData);
+    return true;
+  }
+
+  migratePlaceholders(stream: StreamTabId, targetGroupId: string): boolean {
+    let migrated = false;
+    for (const placeholder of SESSION_PLACEHOLDER_IDS) {
+      migrated =
+        this.mergeSessionUsage(stream, placeholder, targetGroupId) || migrated;
+    }
+    return migrated;
   }
 }

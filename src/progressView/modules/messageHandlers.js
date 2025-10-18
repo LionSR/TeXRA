@@ -1,3 +1,5 @@
+/* global vscode */
+
 // Local imports - progress view
 import { COMMANDS, STATUS, ELEMENT_IDS } from './constants.js';
 import { progressViewDomHandler, LogEntryFormatter } from './domHandlers.js';
@@ -181,7 +183,11 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     const latestGroupId = activeStreamInfo
       ? state.taskGroups.getLatestRootGroupId(message.activeStream)
       : null;
-    const hasExecution = Boolean(latestGroupId);
+    const executionId =
+      activeStreamInfo?.executionId ??
+      activeStreamInfo?.session?.executionId ??
+      null;
+    const hasExecution = Boolean(executionId || latestGroupId);
     dom.status.setExecutionAvailability(hasExecution);
 
     const activeSelection = state.getSelectedGroup(message.activeStream);
@@ -421,20 +427,19 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     let instructionGroupId = message.taskGroupId || null;
 
     if (instructionGroupId) {
-      const existing = state.taskGroups.get(message.stream, instructionGroupId);
-      if (existing) {
-        const updated = { ...existing };
-        if (message.instruction) {
-          updated.instruction = {
-            ...(existing.instruction || {}),
-            text: message.instruction.text,
-            metadata: message.instruction.metadata,
-          };
-        } else {
-          updated.instruction = undefined;
-        }
-        state.taskGroups.set(message.stream, instructionGroupId, updated);
+      const existing =
+        state.taskGroups.get(message.stream, instructionGroupId) ||
+        { id: instructionGroupId };
+      const updated = { ...existing };
+      if (message.instruction) {
+        updated.instruction = {
+          text: message.instruction.text,
+          metadata: message.instruction.metadata,
+        };
+      } else {
+        updated.instruction = undefined;
       }
+      state.taskGroups.set(message.stream, instructionGroupId, updated);
     } else if (message.instruction) {
       const fallbackGroupId = state.taskGroups.getLatestRootGroupId(
         message.stream,
@@ -442,10 +447,10 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       if (fallbackGroupId) {
         instructionGroupId = fallbackGroupId;
         const existing =
-          state.taskGroups.get(message.stream, fallbackGroupId) || {};
+          state.taskGroups.get(message.stream, fallbackGroupId) ||
+          { id: fallbackGroupId };
         const updated = { ...existing };
         updated.instruction = {
-          ...(existing.instruction || {}),
           text: message.instruction.text,
           metadata: message.instruction.metadata,
         };

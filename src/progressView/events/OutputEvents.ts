@@ -14,6 +14,7 @@ import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import { createErrorBoundary } from './errorHandling';
 import type { ProgressEventBusLike } from './types';
 import type { AgentLogger } from '@logger/AgentLogger';
+import { DEFAULT_PLACEHOLDER_ID } from '../state/sessionPlaceholders';
 
 export interface OutputEventsModule {
   register(
@@ -63,12 +64,10 @@ const registerOutputFileListeners = (
       // Get the latest task group for this stream to attribute files
       let latestGroupId = state.getLatestTaskGroupId(stream);
       if (!latestGroupId) {
-        // No session yet - store under __DEFAULT__ session to prevent data loss
-        // This can happen if output files arrive before task group events
         shared.logger.warn(
           'Received output files before session was created, storing under __DEFAULT__ session',
         );
-        latestGroupId = '__DEFAULT__';
+        latestGroupId = DEFAULT_PLACEHOLDER_ID;
       }
       state.outputFiles.addFiles(stream, latestGroupId, filesByRound);
       const files = state.outputFiles.getFiles(stream, latestGroupId);
@@ -86,11 +85,10 @@ const registerOutputFileListeners = (
       withErrorBoundary('failed to handle updateMissingOutputs', () => {
         let latestGroupId = state.getLatestTaskGroupId(stream);
         if (!latestGroupId) {
-          // No session yet - store under __DEFAULT__ session to prevent data loss
           shared.logger.warn(
             'Received missing outputs before session was created, storing under __DEFAULT__ session',
           );
-          latestGroupId = '__DEFAULT__';
+          latestGroupId = DEFAULT_PLACEHOLDER_ID;
         }
         state.outputFiles.updateMissingOutputs(
           stream,
