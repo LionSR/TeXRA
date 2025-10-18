@@ -53,7 +53,7 @@ npm run watch-tests
 The core of TeXRA is its agent architecture located in `src/agent/`:
 
 - **Core interfaces** define agent behavior and state management
-- **Implementations** provide different reasoning strategies (Direct, Chain-of-Thought, Merge, Reflection)
+- **Implementations** provide different reasoning strategies (Direct, Chain-of-Thought, Merge, Workflow)
 - **Model handlers** abstract different AI provider APIs (Anthropic, OpenAI, Google, etc.)
 - Agents are configured via YAML files in `resources/agents/`
 

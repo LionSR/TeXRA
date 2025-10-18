@@ -13,7 +13,6 @@ import type { ToolUseCycleOptions } from '../core/ToolUseCycle';
 import type { IModelHandler } from '../modelHandlers';
 import type { ProviderMessage } from '../modelHandlers/types/ProviderMessage';
 import { getSystemPromptWithRules } from '../utils/promptHelpers';
-import { normalizeAgentPrompts } from '../utils/promptNormalization';
 import { renderPrompt } from '../utils/promptUtils';
 import { TOOL_USE_INSTRUCTIONS } from '../utils/toolUsePrompt';
 // Base class for tool-use agents
@@ -169,7 +168,9 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
         shouldSkipCycle = true;
         this.resumeSnapshot = null;
       } else {
-        const { initialRequest } = normalizeAgentPrompts(this.agentPrompt);
+        const initialRequest = Array.isArray(this.agentPrompt.userRequest)
+          ? (this.agentPrompt.userRequest[0] ?? '')
+          : this.agentPrompt.userRequest;
 
         const [systemPrompt, userRequest, userPrefix] = await Promise.all([
           getSystemPromptWithRules(

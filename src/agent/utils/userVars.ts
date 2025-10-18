@@ -10,7 +10,6 @@ import {
   getXmlFormatFromFiles,
   getListOfFiles,
 } from '@agent/utils/promptUtils';
-import { calculateTotalRounds } from '@agent/utils/roundUtils';
 import { setVarFromFile } from '@frontend/files/vars';
 
 // Local imports
@@ -325,10 +324,12 @@ export function getToolFlags(
 
   // Only compute ROUNDS for workflow agents, not tool-use agents
   if (agentSetting.agentType !== AgentType.ToolUse) {
-    flags.ROUNDS = calculateTotalRounds(
-      'rounds' in agentSetting ? agentSetting.rounds : undefined,
-      agentPrompt.userRequest,
-    );
+    const requestArray = Array.isArray(agentPrompt.userRequest)
+      ? agentPrompt.userRequest
+      : [agentPrompt.userRequest];
+    const configuredRounds =
+      'rounds' in agentSetting ? agentSetting.rounds : undefined;
+    flags.ROUNDS = Math.max(configuredRounds ?? 2, requestArray.length);
   }
 
   return flags;
