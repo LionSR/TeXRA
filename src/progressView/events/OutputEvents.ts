@@ -59,8 +59,14 @@ const registerOutputFileListeners = (
 ): vscode.Disposable[] => {
   const addFiles = bus.on('addOutputFiles', ({ stream, filesByRound }) => {
     withErrorBoundary('failed to handle addOutputFiles', () => {
-      state.outputFiles.addFiles(stream, filesByRound);
-      const files = state.outputFiles.getFiles(stream);
+      // Get the latest task group for this stream to attribute files
+      const latestGroupId = state.getLatestTaskGroupId(stream);
+      if (!latestGroupId) {
+        // No session yet, files will be stored when session is created
+        return;
+      }
+      state.outputFiles.addFiles(stream, latestGroupId, filesByRound);
+      const files = state.outputFiles.getFiles(stream, latestGroupId);
       const updates: { files?: FilesByRound<OutputFileInfo> } = {};
       if (files !== undefined) {
         updates.files = files;
@@ -73,8 +79,12 @@ const registerOutputFileListeners = (
     'updateMissingOutputs',
     ({ stream, filesByRound }) => {
       withErrorBoundary('failed to handle updateMissingOutputs', () => {
-        state.outputFiles.updateMissingOutputs(stream, filesByRound);
-        const missing = state.outputFiles.getMissingOutputs(stream);
+        const latestGroupId = state.getLatestTaskGroupId(stream);
+        if (!latestGroupId) {
+          return;
+        }
+        state.outputFiles.updateMissingOutputs(stream, latestGroupId, filesByRound);
+        const missing = state.outputFiles.getMissingOutputs(stream, latestGroupId);
         const updates: { missing?: FilesByRound<string> } = {};
         if (missing !== undefined) {
           updates.missing = missing;

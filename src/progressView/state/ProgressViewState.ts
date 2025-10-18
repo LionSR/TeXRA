@@ -312,9 +312,11 @@ export class ProgressViewState {
       }
     }
 
-    // NOTE: outputFiles and usageStats are not currently filtered per-session
-    // because they don't have groupId associations. This matches the behavior
-    // where these are stream-level resources that persist across sessions.
+    // Clean up session-specific output files
+    this._outputFiles.clearSessionFiles(stream, groupId);
+    this._outputFiles.clearSessionMissingOutputs(stream, groupId);
+
+    // TODO: Clean up session-specific usage stats once they become session-aware
 
     // If this was the latest group, update to the most recent remaining group
     const latestGroup = this.getLatestTaskGroupId(stream);
