@@ -166,6 +166,7 @@ export const PROGRESS_VIEW_COMMANDS = {
   // Task Groups
   ADD_TASK_GROUP: 'addTaskGroup',
   UPDATE_TASK_GROUP: 'updateTaskGroup',
+  SELECT_SESSION: 'selectSession',
 
   // Status and files
   UPDATE_STATUS: 'updateStatus',

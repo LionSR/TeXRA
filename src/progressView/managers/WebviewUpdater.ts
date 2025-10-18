@@ -299,16 +299,23 @@ export class WebviewUpdater {
       );
       this.updateLogContent(activeStream, messages, groups);
 
-      // Update files for active stream
-      const files = state.outputFiles.getFiles(activeStream) || {};
+      // Update files for active stream's latest session
+      const latestGroupId = state.getLatestTaskGroupId(activeStream);
+      const files = latestGroupId
+        ? state.outputFiles.getFiles(activeStream, latestGroupId) || {}
+        : {};
       this.updateFiles(activeStream, files);
 
-      // Update missing outputs for active stream
-      const missing = state.outputFiles.getMissingOutputs(activeStream) || {};
+      // Update missing outputs for active stream's latest session
+      const missing = latestGroupId
+        ? state.outputFiles.getMissingOutputs(activeStream, latestGroupId) || {}
+        : {};
       this.updateMissingOutputs(activeStream, missing);
 
-      // Update usage for active stream
-      const usage = state.usageStats.getStreamUsage(activeStream);
+      // Update usage for active stream's latest session (not total across all sessions)
+      const usage = latestGroupId
+        ? state.usageStats.getSessionUsage(activeStream, latestGroupId)
+        : undefined;
       this.updateUsage(usage);
 
       const taskState = state.getTaskState(activeStream);

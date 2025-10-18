@@ -11,11 +11,11 @@ import { AgentLogger } from '@logger/AgentLogger';
 
 /**
  * Manages usage statistics collection with persistence.
- * Handles tracking and updating token usage and costs for different streams.
+ * Handles tracking and updating token usage and costs for different sessions within streams.
  */
 export class UsageStatsManager extends PersistentMapManager<
   StreamTabId,
-  TokenUsageStats
+  { [groupId: string]: TokenUsageStats }
 > {
   private readonly logger: AgentLogger;
 
@@ -25,36 +25,86 @@ export class UsageStatsManager extends PersistentMapManager<
   }
 
   /**
-   * Update usage statistics for a stream
+   * Update usage statistics for a specific session within a stream
    */
-  updateStreamUsage(stream: StreamTabId, usage: TokenUsageStats): void {
-    this.add(stream, { ...usage });
+  updateSessionUsage(
+    stream: StreamTabId,
+    groupId: string,
+    usage: TokenUsageStats,
+  ): void {
+    const existing = this.get(stream) || {};
+    existing[groupId] = { ...usage };
+    this.add(stream, existing);
   }
 
   /**
-   * Add usage to existing stream statistics
+   * Add usage to existing session statistics
    */
-  addToStreamUsage(stream: StreamTabId, usage: TokenUsageStats): void {
-    const existing = this.get(stream) || {
+  addToSessionUsage(
+    stream: StreamTabId,
+    groupId: string,
+    usage: TokenUsageStats,
+  ): void {
+    const streamData = this.get(stream) || {};
+    const existing = streamData[groupId] || {
       inputTokens: 0,
       outputTokens: 0,
       cost: 0,
     };
 
-    const updated: TokenUsageStats = {
+    streamData[groupId] = {
       inputTokens: existing.inputTokens + (usage.inputTokens || 0),
       outputTokens: existing.outputTokens + (usage.outputTokens || 0),
       cost: existing.cost + (usage.cost || 0),
     };
 
-    this.add(stream, updated);
+    this.add(stream, streamData);
   }
 
   /**
-   * Get usage statistics for a stream
+   * Get usage statistics for a specific session
+   */
+  getSessionUsage(
+    stream: StreamTabId,
+    groupId: string,
+  ): TokenUsageStats | undefined {
+    const streamData = this.get(stream);
+    return streamData?.[groupId];
+  }
+
+  /**
+   * Get total usage statistics for a stream (sum of all sessions)
    */
   getStreamUsage(stream: StreamTabId): TokenUsageStats | undefined {
-    return this.get(stream);
+    const streamData = this.get(stream);
+    if (!streamData) {
+      return undefined;
+    }
+
+    const total: TokenUsageStats = {
+      inputTokens: 0,
+      outputTokens: 0,
+      cost: 0,
+    };
+
+    for (const sessionUsage of Object.values(streamData)) {
+      total.inputTokens += sessionUsage.inputTokens || 0;
+      total.outputTokens += sessionUsage.outputTokens || 0;
+      total.cost += sessionUsage.cost || 0;
+    }
+
+    return total;
+  }
+
+  /**
+   * Delete usage statistics for a specific session
+   */
+  deleteSessionUsage(stream: StreamTabId, groupId: string): void {
+    const streamData = this.get(stream);
+    if (streamData && streamData[groupId]) {
+      delete streamData[groupId];
+      this.add(stream, streamData);
+    }
   }
 
   /**
@@ -74,12 +124,14 @@ export class UsageStatsManager extends PersistentMapManager<
   /**
    * Set all usage statistics (used during loading)
    */
-  setAll(stats: Map<StreamTabId, TokenUsageStats>): void {
+  setAll(
+    stats: Map<StreamTabId, { [groupId: string]: TokenUsageStats }>,
+  ): void {
     super.setAll(stats);
   }
 
   /**
-   * Calculate total usage across all streams
+   * Calculate total usage across all streams and sessions
    */
   getTotalUsage(): TokenUsageStats {
     const total: TokenUsageStats = {
@@ -88,10 +140,12 @@ export class UsageStatsManager extends PersistentMapManager<
       cost: 0,
     };
 
-    for (const usage of this.items.values()) {
-      total.inputTokens += usage.inputTokens || 0;
-      total.outputTokens += usage.outputTokens || 0;
-      total.cost += usage.cost || 0;
+    for (const streamData of this.items.values()) {
+      for (const usage of Object.values(streamData)) {
+        total.inputTokens += usage.inputTokens || 0;
+        total.outputTokens += usage.outputTokens || 0;
+        total.cost += usage.cost || 0;
+      }
     }
 
     return total;
@@ -123,20 +177,41 @@ export class UsageStatsManager extends PersistentMapManager<
     }
   }
 
-  /** Normalize loaded usage records */
+  /** Normalize loaded usage records with migration support */
   protected override async deserialize(
     data: unknown,
     _key: StreamTabId,
-  ): Promise<TokenUsageStats> {
-    const usage = (data as TokenUsageStats) || {
-      inputTokens: 0,
-      outputTokens: 0,
-      cost: 0,
-    };
-    return {
-      inputTokens: usage.inputTokens || 0,
-      outputTokens: usage.outputTokens || 0,
-      cost: usage.cost || 0,
-    };
+  ): Promise<{ [groupId: string]: TokenUsageStats }> {
+    if (!data || typeof data !== 'object') {
+      return {};
+    }
+
+    const obj = data as any;
+
+    // Check if this is old format (direct TokenUsageStats) or new format (grouped by sessionId)
+    // Old format has inputTokens/outputTokens/cost at top level
+    // New format has these inside groupId objects
+    if ('inputTokens' in obj || 'outputTokens' in obj || 'cost' in obj) {
+      // Old format: migrate to __MIGRATION__ session
+      const usage: TokenUsageStats = {
+        inputTokens: obj.inputTokens || 0,
+        outputTokens: obj.outputTokens || 0,
+        cost: obj.cost || 0,
+      };
+      return { __MIGRATION__: usage };
+    }
+
+    // New format: validate and normalize each session's usage
+    const result: { [groupId: string]: TokenUsageStats } = {};
+    for (const [groupId, sessionData] of Object.entries(obj)) {
+      const usage = (sessionData as any) || {};
+      result[groupId] = {
+        inputTokens: usage.inputTokens || 0,
+        outputTokens: usage.outputTokens || 0,
+        cost: usage.cost || 0,
+      };
+    }
+
+    return result;
   }
 }

@@ -91,6 +91,15 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     state.setSelectedGroup(activeStream, selectedId || null);
     dom.taskGroups.setRootGroupVisibility(activeStream, selectedId);
     this._applyInstructionForSelection(selectedId, undefined, activeStream);
+
+    // Notify extension to update files/usage for the selected session
+    if (selectedId) {
+      vscode.postMessage({
+        command: COMMANDS.SELECT_SESSION,
+        stream: activeStream,
+        sessionId: selectedId,
+      });
+    }
   }
 
   _createHandlers() {
@@ -158,8 +167,12 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
     dom.toolbar.render(sessionKind);
 
-    // Derive execution availability from message data
-    const hasExecution = Boolean(message.executionId);
+    // Derive execution availability from whether there are any sessions (task groups)
+    // Check if the active stream has any root task groups
+    const latestGroupId = activeStreamInfo
+      ? state.taskGroups.getLatestRootGroupId(message.activeStream)
+      : null;
+    const hasExecution = Boolean(latestGroupId);
     dom.status.setExecutionAvailability(hasExecution);
 
     const activeSelection = state.getSelectedGroup(message.activeStream);

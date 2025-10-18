@@ -131,7 +131,9 @@ export class UsageGroup {
   computeAggregatedUsage(parentId) {
     const activeStream = progressViewState.activeStream;
     const totals = { inputTokens: 0, outputTokens: 0, cost: 0 };
-    for (const group of progressViewState.taskGroups.getStreamGroups(activeStream).values()) {
+    for (const group of progressViewState.taskGroups
+      .getStreamGroups(activeStream)
+      .values()) {
       if (group.parentGroupId === parentId) {
         if (group.usage) {
           totals.inputTokens += group.usage.inputTokens || 0;

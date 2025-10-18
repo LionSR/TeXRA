@@ -49,11 +49,15 @@ export function createUsageEvents(
 
       const updateStreamUsage = bus.on(
         'updateStreamUsage',
-        ({ stream, usage }) => {
+        ({ stream, groupId, usage }) => {
           withErrorBoundary('failed to handle updateStreamUsage', () => {
-            state.usageStats.updateStreamUsage(stream, usage);
+            state.usageStats.updateSessionUsage(stream, groupId, usage);
+            // Update webview with session-specific usage if this is the active stream
             if (state.activeStream === stream && updater.isAvailable()) {
-              updater.updateUsage(usage);
+              const latestGroupId = state.getLatestTaskGroupId(stream);
+              if (latestGroupId === groupId) {
+                updater.updateUsage(usage);
+              }
             }
           });
         },

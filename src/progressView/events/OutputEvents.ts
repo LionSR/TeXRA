@@ -55,15 +55,20 @@ const registerOutputFileListeners = (
   bus: ProgressEventBusLike,
   state: ProgressViewState,
   updater: WebviewUpdater,
+  shared: OutputEventsShared,
   withErrorBoundary: ReturnType<typeof createErrorBoundary>,
 ): vscode.Disposable[] => {
   const addFiles = bus.on('addOutputFiles', ({ stream, filesByRound }) => {
     withErrorBoundary('failed to handle addOutputFiles', () => {
       // Get the latest task group for this stream to attribute files
-      const latestGroupId = state.getLatestTaskGroupId(stream);
+      let latestGroupId = state.getLatestTaskGroupId(stream);
       if (!latestGroupId) {
-        // No session yet, files will be stored when session is created
-        return;
+        // No session yet - store under __DEFAULT__ session to prevent data loss
+        // This can happen if output files arrive before task group events
+        shared.logger.warn(
+          'Received output files before session was created, storing under __DEFAULT__ session',
+        );
+        latestGroupId = '__DEFAULT__';
       }
       state.outputFiles.addFiles(stream, latestGroupId, filesByRound);
       const files = state.outputFiles.getFiles(stream, latestGroupId);
@@ -79,12 +84,23 @@ const registerOutputFileListeners = (
     'updateMissingOutputs',
     ({ stream, filesByRound }) => {
       withErrorBoundary('failed to handle updateMissingOutputs', () => {
-        const latestGroupId = state.getLatestTaskGroupId(stream);
+        let latestGroupId = state.getLatestTaskGroupId(stream);
         if (!latestGroupId) {
-          return;
+          // No session yet - store under __DEFAULT__ session to prevent data loss
+          shared.logger.warn(
+            'Received missing outputs before session was created, storing under __DEFAULT__ session',
+          );
+          latestGroupId = '__DEFAULT__';
         }
-        state.outputFiles.updateMissingOutputs(stream, latestGroupId, filesByRound);
-        const missing = state.outputFiles.getMissingOutputs(stream, latestGroupId);
+        state.outputFiles.updateMissingOutputs(
+          stream,
+          latestGroupId,
+          filesByRound,
+        );
+        const missing = state.outputFiles.getMissingOutputs(
+          stream,
+          latestGroupId,
+        );
         const updates: { missing?: FilesByRound<string> } = {};
         if (missing !== undefined) {
           updates.missing = missing;
@@ -142,6 +158,7 @@ export function createOutputEvents(
         bus,
         state,
         updater,
+        shared,
         withErrorBoundary,
       );
       disposables.push(registerClearTaskOutput(bus, state, withErrorBoundary));

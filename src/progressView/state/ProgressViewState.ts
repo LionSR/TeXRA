@@ -312,11 +312,10 @@ export class ProgressViewState {
       }
     }
 
-    // Clean up session-specific output files
+    // Clean up session-specific output files and usage stats
     this._outputFiles.clearSessionFiles(stream, groupId);
     this._outputFiles.clearSessionMissingOutputs(stream, groupId);
-
-    // TODO: Clean up session-specific usage stats once they become session-aware
+    this._usageStats.deleteSessionUsage(stream, groupId);
 
     // If this was the latest group, update to the most recent remaining group
     const latestGroup = this.getLatestTaskGroupId(stream);

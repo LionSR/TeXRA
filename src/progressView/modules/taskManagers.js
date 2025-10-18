@@ -207,7 +207,10 @@ export class TaskGroupManager {
   findCurrentActiveGroup() {
     const activeStream = progressViewState.activeStream;
     const currentGroupId = progressViewState.getCurrentGroup(activeStream);
-    const current = progressViewState.taskGroups.get(activeStream, currentGroupId);
+    const current = progressViewState.taskGroups.get(
+      activeStream,
+      currentGroupId,
+    );
     if (current) return current.id;
 
     let latestGroup = null;

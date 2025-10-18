@@ -68,6 +68,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
       [PROGRESS_VIEW_COMMANDS.ERASE_STREAM]: this.handleEraseStream.bind(this),
       [PROGRESS_VIEW_COMMANDS.DELETE_ALL]: this.handleDeleteAll.bind(this),
       [PROGRESS_VIEW_COMMANDS.STOP_STREAM]: this.handleStopStream.bind(this),
+      [PROGRESS_VIEW_COMMANDS.SELECT_SESSION]:
+        this.handleSelectSession.bind(this),
 
       // Actions
       [PROGRESS_VIEW_COMMANDS.RUN_AGAIN]: this.handleRunAgain.bind(this),
@@ -118,6 +120,36 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     webviewView: vscode.WebviewView,
   ): Promise<void> {
     this.provider.setActiveStream(message.stream);
+  }
+
+  private async handleSelectSession(
+    message: any,
+    webviewView: vscode.WebviewView,
+  ): Promise<void> {
+    const stream = message.stream as StreamTabId;
+    const sessionId = message.sessionId as string;
+
+    if (!stream || !sessionId) {
+      return;
+    }
+
+    // Update files for the selected session
+    const files =
+      this.provider.state.outputFiles.getFiles(stream, sessionId) || {};
+    this.provider.webviewUpdater.updateFiles(stream, files);
+
+    // Update missing outputs for the selected session
+    const missing =
+      this.provider.state.outputFiles.getMissingOutputs(stream, sessionId) ||
+      {};
+    this.provider.webviewUpdater.updateMissingOutputs(stream, missing);
+
+    // Update usage for the selected session
+    const usage = this.provider.state.usageStats.getSessionUsage(
+      stream,
+      sessionId,
+    );
+    this.provider.webviewUpdater.updateUsage(usage);
   }
 
   private async handleDeleteStream(
@@ -441,17 +473,21 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     taskState: WorkflowTaskState,
     command: 'texra.pack' | 'texra.clean',
   ): Promise<void> {
-    const generated = this.provider.state.outputFiles.getFiles(stream);
+    // Get files from all sessions for this stream
+    const streamData = this.provider.state.outputFiles.get(stream);
     const allFiles = new Set<string>(taskState.agentConfig.outputFiles || []);
-    if (generated) {
-      Object.values(generated).forEach((infos: any) =>
-        infos.forEach((info: any) => {
-          allFiles.add(info.path);
-          if (info.original) {
-            allFiles.add(info.original);
-          }
-        }),
-      );
+    if (streamData) {
+      // Iterate through all sessions
+      for (const sessionFiles of Object.values(streamData)) {
+        Object.values(sessionFiles).forEach((infos: any) =>
+          infos.forEach((info: any) => {
+            allFiles.add(info.path);
+            if (info.original) {
+              allFiles.add(info.original);
+            }
+          }),
+        );
+      }
     }
 
     const outputFilesArray = Array.from(allFiles);

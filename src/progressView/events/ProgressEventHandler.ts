@@ -152,16 +152,22 @@ export class ProgressEventHandler {
     const taskGroupId = this.state.getLatestTaskGroupId(stream);
     this.webviewUpdater.updateLogContent(stream, messages, groups, taskGroupId);
 
-    // Send output files for current stream
-    const files = this.state.outputFiles.getFiles(stream) || {};
+    // Send output files for current session (latest task group)
+    const files = taskGroupId
+      ? this.state.outputFiles.getFiles(stream, taskGroupId) || {}
+      : {};
     this.webviewUpdater.updateFiles(stream, files);
 
-    // Send missing outputs for current stream
-    const missing = this.state.outputFiles.getMissingOutputs(stream) || {};
+    // Send missing outputs for current session
+    const missing = taskGroupId
+      ? this.state.outputFiles.getMissingOutputs(stream, taskGroupId) || {}
+      : {};
     this.webviewUpdater.updateMissingOutputs(stream, missing);
 
-    // Send usage for current stream
-    const usage = this.state.usageStats.getStreamUsage(stream);
+    // Send usage for current session (not total across all sessions)
+    const usage = taskGroupId
+      ? this.state.usageStats.getSessionUsage(stream, taskGroupId)
+      : undefined;
     this.webviewUpdater.updateUsage(usage);
 
     // Update status for current stream - default to STOPPED when stream exists but no status is set
