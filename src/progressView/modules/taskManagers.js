@@ -43,6 +43,11 @@ export class TaskGroupManager {
     }
     detailsElem.id = `group-${group.id}`;
 
+    // Add top-level class to root groups for styling
+    if (!group.parentGroupId) {
+      detailsElem.classList.add('top-level');
+    }
+
     const headerElement = this.headerFormatter.create(group);
     if (!headerElement) {
       console.error('TaskGroupManager.add: failed to create group header');

@@ -23,10 +23,9 @@
   border-left: var(--border-medium) solid var(--vscode-panel-border);
 }
 
-/* Minimal styling for top-level task headers */
+/* Hide top-level task headers - we show sessions via selector instead */
 .log-group-header.top-level {
-  border-left: var(--border-thin) solid var(--vscode-panel-border);
-  border-right: var(--border-thin) solid var(--vscode-panel-border);
+  display: none;
 }
 
 .log-group-header.running {
@@ -45,6 +44,21 @@
   padding-left: var(--spacing-small);
   border-left: var(--border-thin) dashed
     var(--vscode-editorGroupHeader-tabsBorder);
+}
+
+/* Remove padding/border for top-level group content since header is hidden */
+.log-group.top-level > .log-group-content {
+  padding-left: 0;
+  border-left: none;
+}
+
+/* Adjust nested group styles when inside a top-level group */
+.log-group.top-level > .log-group-content > .log-group {
+  margin-left: 0;
+}
+
+.log-group.top-level > .log-group-content > .log-group .log-group-header {
+  margin-left: 0;
 }
 
 .group-status-icon {

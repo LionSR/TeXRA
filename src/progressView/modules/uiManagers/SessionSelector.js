@@ -38,6 +38,22 @@ function formatStatus(status) {
   return normalized.replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
+function formatDuration(durationMs) {
+  if (durationMs < 0) return '0s';
+  if (durationMs < 1000) return '<1s';
+
+  const seconds = Math.floor(durationMs / 1000) % 60;
+  const minutes = Math.floor(durationMs / (1000 * 60));
+
+  if (minutes === 0) {
+    return `${seconds}s`;
+  } else if (seconds === 0) {
+    return `${minutes}m`;
+  } else {
+    return `${minutes}m ${seconds}s`;
+  }
+}
+
 function formatGroupLabel(group) {
   const timestamp = typeof group?.startTime === 'number' ? group.startTime : 0;
   const statusLabel = formatStatus(group?.status);
@@ -55,6 +71,12 @@ function formatGroupLabel(group) {
   }
   if (statusLabel) {
     parts.push(statusLabel);
+  }
+
+  // Add duration if available
+  if (group?.endTime && group?.startTime) {
+    const durationMs = group.endTime - group.startTime;
+    parts.push(formatDuration(durationMs));
   }
 
   if (parts.length === 0) {
