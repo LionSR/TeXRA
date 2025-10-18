@@ -112,11 +112,20 @@ export class SessionSelector {
   }
 
   _handleChange(event) {
+    console.log('[SessionSelector] Change event fired:', {
+      value: event?.target?.value,
+      hasHandler: !!this._changeHandler,
+    });
     if (!this._changeHandler) {
+      console.warn('[SessionSelector] No change handler registered');
       return;
     }
     try {
       const value = event?.target?.value || '';
+      console.log(
+        '[SessionSelector] Calling change handler with value:',
+        value,
+      );
       this._changeHandler(value);
     } catch (error) {
       console.error('SessionSelector: Error in change handler:', error);
