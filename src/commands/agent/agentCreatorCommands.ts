@@ -84,9 +84,12 @@ prompts:
     </instruction>
     {% endif %}
 
-  userRequest: |
-    Brainstorm your plan in <scratchpad> with bullet points.
-    Then output the revised \LaTeX wrapped in <latex_document> tags.
+  userRequest:
+    - |
+        Brainstorm your plan in <scratchpad> with bullet points.
+        Then output the revised \LaTeX wrapped in <latex_document> tags.
+    - |
+        Reflect on your previous revision and describe the most impactful follow-up edits in <scratchpad> before producing the updated <latex_document> output.
 `;
 
 const MULTI_TEMPLATE = `# --- Agent Inheritance (Optional) ---
@@ -156,10 +159,13 @@ prompts:
     </instruction>
     {% endif %}
 
-  userRequest: |
-    Brainstorm your plan in <scratchpad> with bullet points.
-    Then wrap each output in <latex_documents> with <document name="..."> blocks
-    following the order in OUTPUT_FILES_ORDER.
+  userRequest:
+    - |
+        Brainstorm your plan in <scratchpad> with bullet points.
+        Then wrap each output in <latex_documents> with <document name="..."> blocks
+        following the order in OUTPUT_FILES_ORDER.
+    - |
+        Review the draft outputs and note targeted refinements for each document in <scratchpad>. Apply the improvements and emit the updated <latex_documents> content in the same order.
 `;
 
 function validateAgentYamlString(content: string): string | null {
@@ -236,7 +242,7 @@ async function handleCreateAgentWithAI(context: vscode.ExtensionContext) {
       const basePrompt =
         `You are an expert on the TeXRA codebase, a VS Code extension that runs YAML-defined AI agents.\n` +
         `Generate a YAML definition for an agent named "${agentName}". The YAML must follow this layout:` +
-        `\nname: ${agentName}\n# inherits: base\nsettings:\n  ...\nprompts:\n  systemPrompt: |\n    ...\n  userPrefix: |\n    ...\n  userRequest: |\n    ...\n` +
+        `\nname: ${agentName}\n# inherits: base\nsettings:\n  ...\nprompts:\n  systemPrompt: |\n    ...\n  userPrefix: |\n    ...\n  userRequest:\n    - |\n      ...\n    - |\n      [Optional reflection prompt]\n` +
         `For reference, built-in agents start like:\nname: polish\nsettings:\n  documentTag: latex_document\n  endTag: </latex_document>\n  outputExt: tex\n` +
         `Mention variables INPUT_CONTENT, ALL_INPUTS, OUTPUT_FILES_ORDER, REFERENCE_CONTENT, AUXILIARY_CONTENT and ADDITIONAL_INPUTS when relevant.\n` +
         `Goal: ${description}. Respond only with the YAML wrapped in <yaml> tags.`;
