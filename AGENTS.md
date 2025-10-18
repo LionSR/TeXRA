@@ -54,6 +54,17 @@ When updating CHANGELOG.md:
 - Keep generated code tight: trim redundant helpers, repeated type checks, or defensive guards that do not serve a demonstrated scenario.
 - Prefer improving existing structures incrementally instead of rewriting modules unless there is a clear, documented benefit.
 
+### Refactoring for simplicity
+
+When refactoring existing code, apply these principles to reduce complexity:
+
+- **Eliminate abstraction layers that don't add value**: If a helper function is just a thin wrapper or only normalizes data without adding meaningful logic, inline it and operate on data directly. Example: removing `normalizeAgentPrompts()` in favor of direct array operations.
+- **Stop distinguishing between concepts when the distinction isn't needed**: If your code treats two things differently but they're fundamentally the same, unify them. Example: treating "initial request" and "reflection prompts" as just a simple array of prompts.
+- **Use direct data structure operations over intermediate transformations**: Prefer `array[index]` over `normalize(data).getItem(index)` when the normalization is trivial.
+- **Handle backward compatibility at entry points, not throughout the codebase**: Normalize legacy formats early (e.g., in load/parse functions), then delete the legacy fields. The rest of your codebase should only see the current format.
+- **Extract helpers only when logic is truly duplicated**: If the same calculation appears in multiple places, extract it to a method. But don't extract prematurely "for cleanliness" - wait until the duplication actually appears.
+- **Validate edge cases properly**: When normalizing data types (e.g., string to array), handle empty values correctly. `''` should normalize to `[]`, not `['']`.
+
 ### Patterns across the codebase
 
 **Configuration, storage, and workspace files**
