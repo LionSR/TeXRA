@@ -41,8 +41,11 @@ prompts:
   userPrefix: |
     [Provide context using variables like {{ INPUT_CONTENT }}]
 
-  userRequest: |
-    [Define the initial task prompt]
+  userRequest:
+    - |
+        [Define the initial task prompt]
+    - |
+        [Optional reflection prompt — remove this item if you only need one round]
 `;
 
 const CHANNEL = 'Webview';
