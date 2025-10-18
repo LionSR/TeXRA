@@ -16,7 +16,7 @@ import type { AgentTypeFilter } from '@agent/types/AgentStreamTypes';
 // Types
 import type { TokenUsageStats } from '@agent/types/UsageTypes';
 import { AgentLogger } from '@logger/AgentLogger';
-import { LogMessageData } from '@logger/LogTypes';
+import { LogMessageData, TaskGroup } from '@logger/LogTypes';
 import type { TaskState } from '@logger/TaskState';
 
 // Type aliases for status values
@@ -91,7 +91,8 @@ export class WebviewUpdater {
   updateLogContent(
     stream: StreamTabId,
     messages: LogMessageData[],
-    groups?: any[],
+    groups: TaskGroup[] = [],
+    taskGroupId?: string,
   ): void {
     const webview = this.getWebview();
     if (!webview) return;
@@ -100,7 +101,8 @@ export class WebviewUpdater {
       command: COMMANDS.UPDATE_LOGS,
       stream,
       messages,
-      groups: groups || [],
+      groups,
+      taskGroupId,
     });
   }
 
@@ -182,7 +184,12 @@ export class WebviewUpdater {
   /**
    * Update instruction panel content
    */
-  updateInstruction(stream: StreamTabId, instruction: InstructionUpdate): void {
+  updateInstruction(
+    stream: StreamTabId | '',
+    instruction: InstructionUpdate | null,
+    groups: TaskGroup[],
+    taskGroupId?: string,
+  ): void {
     const webview = this.getWebview();
     if (!webview) return;
 
@@ -190,21 +197,20 @@ export class WebviewUpdater {
       command: COMMANDS.UPDATE_INSTRUCTION,
       stream,
       instruction,
+      groups,
+      taskGroupId,
     });
   }
 
   /**
    * Clear instruction panel content
    */
-  clearInstruction(stream: StreamTabId | ''): void {
-    const webview = this.getWebview();
-    if (!webview) return;
-
-    webview.postMessage({
-      command: COMMANDS.UPDATE_INSTRUCTION,
-      stream,
-      instruction: null,
-    });
+  clearInstruction(
+    stream: StreamTabId | '',
+    groups: TaskGroup[] = [],
+    taskGroupId?: string,
+  ): void {
+    this.updateInstruction(stream, null, groups, taskGroupId);
   }
 
   /**
@@ -292,7 +298,8 @@ export class WebviewUpdater {
       const groups = Array.from(
         state.taskGroups.getStreamGroups(activeStream).values(),
       );
-      this.updateLogContent(activeStream, messages, groups);
+      const taskGroupId = state.getLatestTaskGroup(activeStream);
+      this.updateLogContent(activeStream, messages, groups, taskGroupId);
 
       // Update files for active stream
       const files = state.outputFiles.getFiles(activeStream) || {};
@@ -310,9 +317,14 @@ export class WebviewUpdater {
       const instructionUpdate =
         WebviewUpdater.createInstructionUpdate(taskState);
       if (instructionUpdate) {
-        this.updateInstruction(activeStream, instructionUpdate);
+        this.updateInstruction(
+          activeStream,
+          instructionUpdate,
+          groups,
+          taskGroupId,
+        );
       } else {
-        this.clearInstruction(activeStream);
+        this.clearInstruction(activeStream, groups, taskGroupId);
       }
     } else {
       // Clear content when no active stream

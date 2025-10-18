@@ -14,6 +14,7 @@ export class TaskGroupManager {
     this.headerFormatter = new TaskGroupHeaderFormatter();
     this.previousActiveGroupId = null;
     this.groupElements = new Map();
+    this.activeRootGroupId = null;
   }
 
   /**
@@ -90,6 +91,8 @@ export class TaskGroupManager {
       progressViewState.currentGroupId = group.id;
       this.collapsePreviousActiveGroup();
     }
+
+    this._applyRootVisibility(detailsElem, group);
   }
 
   /**
@@ -224,6 +227,32 @@ export class TaskGroupManager {
     this.previousActiveGroupId = currentId;
   }
 
+  setActiveRootGroup(groupId) {
+    this.activeRootGroupId = groupId || null;
+
+    for (const [id, element] of this.groupElements.entries()) {
+      if (!element) {
+        continue;
+      }
+      const group = progressViewState.taskGroups.get(id);
+      if (!group || group.parentGroupId) {
+        continue;
+      }
+      this._applyRootVisibility(element, group);
+    }
+  }
+
+  _applyRootVisibility(element, group) {
+    if (!group || group.parentGroupId) {
+      return;
+    }
+
+    const shouldShow =
+      !this.activeRootGroupId || this.activeRootGroupId === group.id;
+    element.classList.toggle('is-hidden', !shouldShow);
+    element.setAttribute('aria-hidden', shouldShow ? 'false' : 'true');
+  }
+
   /**
    * Play a short beep using the Web Audio API.
    * @private
@@ -252,6 +281,7 @@ export class TaskGroupManager {
   clear() {
     this.groupElements.clear();
     this.previousActiveGroupId = null;
+    this.activeRootGroupId = null;
   }
 }
 

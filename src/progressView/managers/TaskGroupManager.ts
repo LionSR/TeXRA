@@ -125,7 +125,22 @@ export class TaskGroupManager extends PersistentMapManager<
     value: Map<string, TaskGroup>,
     _key: StreamTabId,
   ): unknown {
-    return Object.fromEntries(value.entries());
+    return Object.fromEntries(
+      Array.from(value.entries(), ([id, group]) => {
+        const serialized: TaskGroup = {
+          ...group,
+          instruction: group.instruction
+            ? {
+                text: group.instruction.text,
+                metadata: group.instruction.metadata
+                  ? { ...group.instruction.metadata }
+                  : undefined,
+              }
+            : undefined,
+        };
+        return [id, serialized];
+      }),
+    );
   }
 
   /** Normalize loaded groups */
@@ -147,6 +162,17 @@ export class TaskGroupManager extends PersistentMapManager<
             ? typeof group.endTime === 'string'
               ? new Date(group.endTime).getTime()
               : group.endTime
+            : undefined,
+        instruction:
+          group.instruction && typeof group.instruction.text === 'string'
+            ? {
+                text: group.instruction.text,
+                metadata:
+                  group.instruction.metadata &&
+                  typeof group.instruction.metadata === 'object'
+                    ? { ...group.instruction.metadata }
+                    : undefined,
+              }
             : undefined,
       };
       map.set(id, normalized);

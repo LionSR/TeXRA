@@ -2,7 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports - progress view
-import type { WebviewUpdater } from '../managers';
+import { WebviewUpdater } from '../managers';
 import { buildStreamInfos } from '../streamInfoUtils';
 import type { ProgressViewState } from '../state/ProgressViewState';
 import type { StreamTabInfo } from '../types';
@@ -93,7 +93,26 @@ export function createStreamStatusEvents(
     state: ProgressViewState,
     updater: WebviewUpdater,
   ): void => {
-    const { streamTabId, executionId, taskState } = data;
+    const { streamTabId, executionId, taskState, taskGroupId } = data;
+
+    if (taskGroupId) {
+      state.setLatestTaskGroup(streamTabId, taskGroupId);
+    }
+
+    const instructionUpdate = WebviewUpdater.createInstructionUpdate(taskState);
+    const targetGroupId = taskGroupId ?? state.getLatestTaskGroup(streamTabId);
+    if (targetGroupId) {
+      const group = state.taskGroups.getGroup(streamTabId, targetGroupId);
+      if (group) {
+        state.taskGroups.updateGroup(streamTabId, targetGroupId, {
+          instruction: instructionUpdate,
+        });
+      } else {
+        shared.logger.debug(
+          `No task group ${targetGroupId} found for stream ${streamTabId} when attaching instruction`,
+        );
+      }
+    }
 
     state.setTaskState(streamTabId, taskState);
     state.clearSessionKindHint(streamTabId);

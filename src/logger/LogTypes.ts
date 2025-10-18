@@ -6,6 +6,16 @@
 import type { TokenUsageStats } from '@agent/types/UsageTypes';
 import type { TaskGroupId, LogMessageId } from './types/EntityTypes';
 
+export interface TaskGroupInstructionMetadata {
+  showToggle?: boolean;
+  expanded?: boolean;
+}
+
+export interface TaskGroupInstruction {
+  text: string;
+  metadata?: TaskGroupInstructionMetadata;
+}
+
 export interface TaskGroup {
   /** Unique identifier for the group */
   id: TaskGroupId;
@@ -21,6 +31,8 @@ export interface TaskGroup {
   parentGroupId?: TaskGroupId;
   /** Optional usage stats attached to the group */
   usage?: TokenUsageStats;
+  /** Optional instruction metadata captured for the group */
+  instruction?: TaskGroupInstruction;
 }
 
 export interface LogMessageData {

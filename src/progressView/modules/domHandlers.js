@@ -9,6 +9,7 @@ import { Status } from './uiManagers/Status.js';
 import { StreamTabs } from './uiManagers/StreamTabs.js';
 import { Placeholder } from './uiManagers/Placeholder.js';
 import { InstructionPanel } from './uiManagers/InstructionPanel.js';
+import { SessionSelector } from './uiManagers/SessionSelector.js';
 import { Toolbar } from './uiManagers/Toolbar.js';
 import { UsageSummary, UsageGroup } from './usageManagers.js';
 import { BaseDomHandler } from '@common/BaseDomHandler.js';
@@ -31,6 +32,7 @@ class ProgressViewDomHandler extends BaseDomHandler {
       events: new EventsManager(),
       placeholder: new Placeholder(),
       instructionPanel: new InstructionPanel(),
+      sessionSelector: new SessionSelector(),
     });
   }
 }

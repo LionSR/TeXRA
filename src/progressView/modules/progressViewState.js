@@ -213,6 +213,7 @@ export class ProgressViewState {
     this.toggleStates = new ToggleStates(() => this.save());
     this.streamStatuses = new StreamStatuses();
     this.executionAvailability = new ExecutionAvailability();
+    this.selectedRootGroups = new Map();
   }
 
   setExecutionAvailability(stream, available) {
@@ -229,6 +230,37 @@ export class ProgressViewState {
 
   resetExecutionAvailability() {
     this.executionAvailability.clear();
+  }
+
+  setSelectedRootGroup(stream, groupId) {
+    if (!stream) {
+      return;
+    }
+
+    if (!groupId) {
+      this.selectedRootGroups.delete(stream);
+      return;
+    }
+
+    this.selectedRootGroups.set(stream, groupId);
+  }
+
+  getSelectedRootGroup(stream) {
+    if (!stream) {
+      return null;
+    }
+    return this.selectedRootGroups.get(stream) ?? null;
+  }
+
+  clearSelectedRootGroup(stream) {
+    if (!stream) {
+      return;
+    }
+    this.selectedRootGroups.delete(stream);
+  }
+
+  clearAllSelectedRootGroups() {
+    this.selectedRootGroups.clear();
   }
 
   /** Load saved state from VS Code storage. */

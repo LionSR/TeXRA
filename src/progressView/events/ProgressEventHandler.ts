@@ -111,17 +111,26 @@ export class ProgressEventHandler {
     }
 
     if (!stream) {
-      this.webviewUpdater.clearInstruction('');
+      this.webviewUpdater.clearInstruction('', []);
       return;
     }
 
     const taskState = this.state.getTaskState(stream);
     const instructionUpdate = WebviewUpdater.createInstructionUpdate(taskState);
+    const groups = Array.from(
+      this.state.taskGroups.getStreamGroups(stream).values(),
+    );
+    const taskGroupId = this.state.getLatestTaskGroup(stream);
 
     if (instructionUpdate) {
-      this.webviewUpdater.updateInstruction(stream, instructionUpdate);
+      this.webviewUpdater.updateInstruction(
+        stream,
+        instructionUpdate,
+        groups,
+        taskGroupId,
+      );
     } else {
-      this.webviewUpdater.clearInstruction(stream);
+      this.webviewUpdater.clearInstruction(stream, groups, taskGroupId);
     }
   }
 
@@ -140,7 +149,8 @@ export class ProgressEventHandler {
     const groups = Array.from(
       this.state.taskGroups.getStreamGroups(stream).values(),
     );
-    this.webviewUpdater.updateLogContent(stream, messages, groups);
+    const taskGroupId = this.state.getLatestTaskGroup(stream);
+    this.webviewUpdater.updateLogContent(stream, messages, groups, taskGroupId);
 
     // Send output files for current stream
     const files = this.state.outputFiles.getFiles(stream) || {};

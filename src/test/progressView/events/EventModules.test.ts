@@ -224,4 +224,73 @@ describe('Progress event modules', () => {
     assert.deepStrictEqual(initialized, ['stream-1']);
     assert.deepStrictEqual(bus.emissions, []);
   });
+
+  it('attaches instruction metadata to task groups on setTaskState', () => {
+    const bus = new FakeBus();
+    const updates: any[] = [];
+    let latestGroup: string | undefined;
+    let storedTaskState: any;
+    let agentFilter = 'all';
+
+    const module = createStreamStatusEvents({
+      logger: loggerStub,
+      streamStatus: new Map(),
+      setStreamStatus: () => {},
+      sendInstructionUpdate: () => {},
+      updateLogContentForStream: () => {},
+    });
+
+    const state = {
+      setTaskState: (_stream: string, taskState: any) => {
+        storedTaskState = taskState;
+      },
+      clearSessionKindHint: () => {},
+      getTaskState: () => storedTaskState,
+      get agentTypeFilter() {
+        return agentFilter;
+      },
+      set agentTypeFilter(value: string) {
+        agentFilter = value;
+      },
+      activeStream: 'stream-1',
+      setExecutionId: () => {},
+      taskGroups: {
+        getGroup: () => ({ id: 'group-1' }),
+        updateGroup: (
+          _stream: string,
+          _groupId: string,
+          payload: Record<string, unknown>,
+        ) => {
+          updates.push(payload);
+        },
+      },
+      setLatestTaskGroup: (_stream: string, groupId?: string) => {
+        latestGroup = groupId;
+      },
+      getLatestTaskGroup: () => undefined,
+    } as unknown as ProgressViewState;
+
+    const updater = {
+      isAvailable: () => false,
+    } as unknown as WebviewUpdater;
+
+    module.register(bus as any, state, updater);
+
+    const payload = {
+      streamTabId: 'stream-1',
+      taskGroupId: 'group-1',
+      taskState: {
+        agentConfig: { instruction: '  Example instruction  ' },
+        session: { agentCategory: 'workflow' },
+      },
+    } as ProgressEventPayloads['setTaskState'];
+
+    bus.trigger('setTaskState', payload);
+
+    assert.equal(latestGroup, 'group-1');
+    assert.equal(updates.length, 1);
+    assert.deepStrictEqual(updates[0].instruction, {
+      text: 'Example instruction',
+    });
+  });
 });

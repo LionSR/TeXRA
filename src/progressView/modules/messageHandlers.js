@@ -19,6 +19,9 @@ const dom = progressViewDomHandler;
 export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   constructor() {
     super();
+    dom.sessionSelector.setChangeHandler((groupId) =>
+      this._handleSessionChange(groupId),
+    );
     this._entryFormatter = new LogEntryFormatter();
     this._handlers = {
       ...createThemeHandlers(),
@@ -109,6 +112,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     // Update status based on whether there's an active stream
     if (!message.activeStream) {
       dom.status.update(STATUS.READY);
+      dom.sessionSelector.hide();
       dom.instructionPanel.hide();
     } else {
       const streamStatus = state.streamStatuses.get(message.activeStream);
@@ -119,12 +123,20 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   handleUpdateLogs(message) {
     const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
     if (message.stream === state.activeStream) {
+      const groups = Array.isArray(message.groups) ? message.groups : [];
+      const selectedGroupId = this._resolveSelectedGroup(
+        message.stream,
+        groups,
+        message.taskGroupId,
+      );
+
+      state.setSelectedRootGroup(message.stream, selectedGroupId);
       logContent.innerHTML = '';
       state.taskGroups.clear();
       dom.taskGroups.clear();
-      if (message.groups && message.groups.length > 0) {
-        const parentGroups = message.groups.filter((g) => !g.parentGroupId);
-        const childGroups = message.groups.filter((g) => g.parentGroupId);
+      if (groups.length > 0) {
+        const parentGroups = groups.filter((g) => !g.parentGroupId);
+        const childGroups = groups.filter((g) => g.parentGroupId);
         parentGroups
           .sort((a, b) => a.startTime - b.startTime)
           .forEach((g) => dom.taskGroups.add(g));
@@ -132,6 +144,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
           .sort((a, b) => a.startTime - b.startTime)
           .forEach((g) => dom.taskGroups.add(g));
       }
+      dom.taskGroups.setActiveRootGroup(selectedGroupId);
       const sortedMessages = [...message.messages].sort(
         (a, b) => a.timestamp - b.timestamp,
       );
@@ -150,6 +163,12 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
       // Recalculate cumulative usage after loading groups
       dom.usageSummary.update();
+
+      dom.sessionSelector.update(groups, selectedGroupId);
+      if (selectedGroupId) {
+        dom.sessionSelector.setSelection(selectedGroupId);
+      }
+      this._renderInstructionForGroup(message.stream, selectedGroupId);
     }
 
     this._updatePlaceholderVisibility();
@@ -166,6 +185,9 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     state.taskGroups.clear();
     dom.taskGroups.clear();
     state.toggleStates.clear(groupIds);
+    state.clearSelectedRootGroup(state.activeStream);
+    dom.sessionSelector.hide();
+    dom.instructionPanel.hide();
 
     this._updatePlaceholderVisibility();
   }
@@ -262,6 +284,96 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     // State persisted server-side - no direct DOM updates needed
   }
 
+  _mergeGroups(groups) {
+    if (!Array.isArray(groups)) {
+      return;
+    }
+
+    for (const group of groups) {
+      if (!group?.id) {
+        continue;
+      }
+
+      const existing = state.taskGroups.get(group.id);
+      const merged = existing
+        ? { ...existing, ...group, id: group.id }
+        : { ...group };
+      state.taskGroups.set(group.id, merged);
+    }
+  }
+
+  _getRootGroups(groups) {
+    if (!Array.isArray(groups)) {
+      return [];
+    }
+
+    return groups
+      .filter((group) => group && !group.parentGroupId)
+      .slice()
+      .sort((a, b) => a.startTime - b.startTime);
+  }
+
+  _resolveSelectedGroup(stream, groups, preferredId) {
+    const allGroups = Array.isArray(groups) ? groups : [];
+
+    if (
+      preferredId &&
+      allGroups.some((group) => group?.id && group.id === preferredId)
+    ) {
+      return preferredId;
+    }
+
+    const stored = state.getSelectedRootGroup(stream);
+    if (stored && allGroups.some((group) => group?.id === stored)) {
+      return stored;
+    }
+
+    const rootGroups = this._getRootGroups(allGroups);
+    if (rootGroups.length === 0) {
+      return null;
+    }
+
+    return rootGroups[rootGroups.length - 1].id || null;
+  }
+
+  _renderInstructionForGroup(stream, groupId) {
+    if (!stream) {
+      dom.instructionPanel.hide();
+      return;
+    }
+
+    const targetGroupId = groupId || state.getSelectedRootGroup(stream);
+    if (!targetGroupId) {
+      dom.instructionPanel.hide();
+      return;
+    }
+
+    const group = state.taskGroups.get(targetGroupId);
+    const instruction = group?.instruction;
+    const text = instruction?.text ?? '';
+
+    if (!text.trim()) {
+      dom.instructionPanel.hide();
+      return;
+    }
+
+    dom.instructionPanel.show(text, instruction?.metadata ?? {});
+  }
+
+  _handleSessionChange(groupId) {
+    const stream = state.activeStream || '';
+    if (!stream) {
+      dom.sessionSelector.hide();
+      dom.instructionPanel.hide();
+      return;
+    }
+
+    const normalized = groupId || null;
+    state.setSelectedRootGroup(stream, normalized);
+    dom.taskGroups.setActiveRootGroup(normalized);
+    this._renderInstructionForGroup(stream, normalized);
+  }
+
   /**
    * @param {{
    *   stream: string | null,
@@ -273,10 +385,31 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
     if (message.stream !== activeStream) {
       if (!activeStream && !message.stream) {
+        dom.sessionSelector.hide();
         dom.instructionPanel.hide();
       }
       return;
     }
+
+    const groups = Array.isArray(message.groups) ? message.groups : [];
+    if (groups.length > 0) {
+      this._mergeGroups(groups);
+      const selectedGroupId = this._resolveSelectedGroup(
+        activeStream,
+        groups,
+        message.taskGroupId,
+      );
+      state.setSelectedRootGroup(activeStream, selectedGroupId);
+      dom.sessionSelector.update(groups, selectedGroupId);
+      if (selectedGroupId) {
+        dom.sessionSelector.setSelection(selectedGroupId);
+      }
+      dom.taskGroups.setActiveRootGroup(selectedGroupId);
+      this._renderInstructionForGroup(activeStream, selectedGroupId);
+      return;
+    }
+
+    dom.sessionSelector.hide();
 
     const payload = message.instruction;
     const text = payload?.text ?? '';
@@ -294,6 +427,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     if (message.stream) {
       state.streamStatuses.delete(message.stream);
       state.clearExecutionAvailability(message.stream);
+      state.clearSelectedRootGroup(message.stream);
       if (message.stream === state.activeStream) {
         const groupIds = [];
         const headers = Array.from(
@@ -303,6 +437,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
           groupIds.push(el.id.replace('group-header-', ''));
         }
         state.toggleStates.clear(groupIds);
+        dom.sessionSelector.hide();
         dom.instructionPanel.hide();
       }
     }
@@ -311,6 +446,8 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   handleDeleteAll() {
     state.toggleStates.clearAll();
     state.resetExecutionAvailability();
+    state.clearAllSelectedRootGroups();
+    dom.sessionSelector.hide();
     dom.instructionPanel.hide();
   }
 }
