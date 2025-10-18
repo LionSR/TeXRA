@@ -300,6 +300,23 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     if (message.stream === state.activeStream) {
       const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
       dom.taskGroups.add(message.group);
+
+      // If this is a new root group (session), switch to it automatically
+      const isRootGroup = !message.group.parentGroupId;
+      if (isRootGroup) {
+        const groups = this._getCurrentGroups(message.stream);
+        const selectedGroupId = this._syncSessionSelector(
+          groups,
+          message.group.id,
+          message.stream,
+        );
+        this._applyInstructionForSelection(
+          selectedGroupId,
+          undefined,
+          message.stream,
+        );
+      }
+
       logContent.scrollTop = logContent.scrollHeight;
     }
   }
