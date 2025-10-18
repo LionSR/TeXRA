@@ -116,8 +116,12 @@ export class SessionSelector {
     if (!this._changeHandler) {
       return;
     }
-    const value = event?.target?.value || '';
-    this._changeHandler(value);
+    try {
+      const value = event?.target?.value || '';
+      this._changeHandler(value);
+    } catch (error) {
+      console.error('SessionSelector: Error in change handler:', error);
+    }
   }
 
   setOnChange(handler) {

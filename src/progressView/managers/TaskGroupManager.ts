@@ -83,6 +83,51 @@ export class TaskGroupManager extends PersistentMapManager<
   }
 
   /**
+   * Get all groups for a stream as an array
+   */
+  getGroupsForStream(stream: StreamTabId): TaskGroup[] {
+    const streamGroups = this.get(stream);
+    return streamGroups ? Array.from(streamGroups.values()) : [];
+  }
+
+  /**
+   * Delete a specific group from a stream
+   */
+  deleteGroup(stream: StreamTabId, groupId: string): void {
+    const streamGroups = this.get(stream);
+    if (!streamGroups) {
+      this.logger.warn(
+        `Cannot delete group ${groupId}: stream ${stream} not found`,
+      );
+      return;
+    }
+
+    // First, find and delete all child groups recursively
+    const deleteChildren = (parentId: string) => {
+      const children = Array.from(streamGroups.values()).filter(
+        (g) => g.parentGroupId === parentId,
+      );
+      children.forEach((child) => {
+        deleteChildren(child.id);
+        streamGroups.delete(child.id);
+      });
+    };
+
+    deleteChildren(groupId);
+
+    // Then delete the group itself
+    const deleted = streamGroups.delete(groupId);
+    if (deleted) {
+      this.save();
+      this.logger.debug(`Deleted group ${groupId} from stream ${stream}`);
+    } else {
+      this.logger.warn(
+        `Group ${groupId} not found in stream ${stream}`,
+      );
+    }
+  }
+
+  /**
    * Check if a stream has groups
    */
   hasStream(stream: StreamTabId): boolean {

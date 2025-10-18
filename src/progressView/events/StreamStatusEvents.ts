@@ -22,9 +22,13 @@ import type {
 } from './types';
 import type { AgentLogger } from '@logger/AgentLogger';
 
+// Thresholds for determining when to show instruction toggle
+const INSTRUCTION_TOGGLE_LINE_THRESHOLD = 6;
+const INSTRUCTION_TOGGLE_CHAR_THRESHOLD = 600;
+
 function computeInstructionMetadata(text: string) {
   const lineCount = text.split(/\r?\n/).length;
-  if (lineCount > 6 || text.length > 600) {
+  if (lineCount > INSTRUCTION_TOGGLE_LINE_THRESHOLD || text.length > INSTRUCTION_TOGGLE_CHAR_THRESHOLD) {
     return { showToggle: true };
   }
   return undefined;

@@ -325,10 +325,11 @@ export class ProgressViewState {
     if (!stream) {
       return;
     }
-    if (groupId) {
+    if (groupId !== null && groupId !== undefined) {
       this.selectedGroups.set(stream, groupId);
       this.currentGroupIds.set(stream, groupId);
     } else {
+      // Actually delete from Maps instead of setting to null
       this.selectedGroups.delete(stream);
       this.currentGroupIds.delete(stream);
     }

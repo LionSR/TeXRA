@@ -134,10 +134,16 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     message: any,
     webviewView: vscode.WebviewView,
   ): Promise<void> {
-    // Delete persisted session data when erasing stream
-    await this.deleteSessionSnapshot(message.stream);
-    this.provider.state.eraseStreamContent(message.stream);
-    this.provider.updateWebview();
+    // If a sessionId is provided and it's not the only session, delete just that session
+    if (message.sessionId) {
+      this.provider.state.deleteTaskGroup(message.stream, message.sessionId);
+      this.provider.updateWebview();
+    } else {
+      // Delete persisted session data when erasing entire stream
+      await this.deleteSessionSnapshot(message.stream);
+      this.provider.state.eraseStreamContent(message.stream);
+      this.provider.updateWebview();
+    }
   }
 
   private async handleDeleteAll(

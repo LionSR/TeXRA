@@ -291,6 +291,27 @@ export class ProgressViewState {
     this.saveExecutionIds();
   }
 
+  // Delete a specific task group (session) within a stream
+  deleteTaskGroup(stream: StreamTabId, groupId: string): void {
+    this._taskGroups.deleteGroup(stream, groupId);
+
+    // If this was the latest group, update to the most recent remaining group
+    const latestGroup = this.getLatestTaskGroupId(stream);
+    if (latestGroup === groupId) {
+      const remainingGroups = this._taskGroups.getGroupsForStream(stream);
+      const rootGroups = remainingGroups.filter(g => !g.parentGroupId);
+      if (rootGroups.length > 0) {
+        // Set to the most recent root group
+        const mostRecent = rootGroups.reduce((latest, current) =>
+          (current.startTime || 0) > (latest.startTime || 0) ? current : latest
+        );
+        this.setLatestTaskGroupId(stream, mostRecent.id);
+      } else {
+        this.clearLatestTaskGroupId(stream);
+      }
+    }
+  }
+
   // Stream content erasure (clear content but keep the stream tab and re-run capability)
   eraseStreamContent(stream: StreamTabId): void {
     // Clear visual content but keep the stream tab
