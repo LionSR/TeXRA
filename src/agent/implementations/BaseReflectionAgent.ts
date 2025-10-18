@@ -16,7 +16,6 @@ import { OutputHandler, NamedOutputFile, IOutputHandler } from '@agent/output';
 import type { ExecutionId } from '@agent/types/IdentifierTypes';
 import { PromptBuilder } from '@agent/utils/PromptBuilder';
 import { writePromptToXml } from '@agent/utils/promptUtils';
-import { calculateTotalRounds } from '@agent/utils/roundUtils';
 import { bus } from '@eventBus/ProgressEventBus';
 
 // Local imports - latex utilities
@@ -48,7 +47,7 @@ export interface RoundOutputOptions {
 }
 
 /**
- * Abstract base class for agents that support multi-turn reflection and refinement.
+ * Abstract base class for agents that support multi-turn reflection.
  * Provides core functionality for processing inputs, managing state, and handling outputs
  * across multiple conversation rounds.
  */
@@ -87,7 +86,13 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     this.agentSetting = workflowSetting;
 
     // Initialize basic attributes
-    const numRounds = this.getNumberOfRounds();
+    const requestArray = Array.isArray(agentPrompt.userRequest)
+      ? agentPrompt.userRequest
+      : [agentPrompt.userRequest];
+    const numRounds = Math.max(
+      workflowSetting.rounds ?? 2,
+      requestArray.length,
+    );
     this.outputFile = new Array(numRounds);
     this.outputFiles = {};
     for (let i = 0; i < numRounds; i++) {
@@ -138,16 +143,6 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
    * Generates output file path for specified conversation round.
    */
   protected abstract getOutputFile(currRound: number): string;
-
-  /**
-   * Returns the configured number of conversation rounds.
-   */
-  protected getNumberOfRounds(): number {
-    return calculateTotalRounds(
-      this.agentSetting.rounds,
-      this.agentPrompt.userRequest,
-    );
-  }
 
   /**
    * Processes completion of conversation round.
@@ -531,7 +526,13 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       let messages: any[] = [];
       let continueRounds = true;
 
-      const totalRounds = this.getNumberOfRounds();
+      const requestArray = Array.isArray(this.agentPrompt.userRequest)
+        ? this.agentPrompt.userRequest
+        : [this.agentPrompt.userRequest];
+      const totalRounds = Math.max(
+        this.agentSetting.rounds ?? 2,
+        requestArray.length,
+      );
       for (let currRound = 0; currRound < totalRounds; currRound++) {
         if (this.isInterrupted) {
           break;
