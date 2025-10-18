@@ -10,7 +10,6 @@ function sortRootGroups(groups) {
   }
   return groups
     .filter((group) => group && !group.parentGroupId)
-    .slice()
     .sort((a, b) => (a.startTime || 0) - (b.startTime || 0));
 }
 
