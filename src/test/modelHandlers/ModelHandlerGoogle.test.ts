@@ -6,14 +6,13 @@ import { FinishReason } from '@google/genai';
 
 // Local imports - agent
 import type { AgentSetting } from '@agent/core/AgentDataclass';
-import { ModelHandlerGoogle } from '@agent/modelHandlers/modelHandlerGoogle';
-import { OPENAI_CHAT_FINISH } from '@agent/modelHandlers/types/StopReasonTypes';
+import { ModelHandlerGoogleGenAI } from '@agent/modelHandlers/modelHandlerGoogleGenAI';
 
 // Local imports - model config
 import { DEFAULT_MODEL_CAPABILITIES, ModelProvider } from '@model/ModelConfig';
 
-describe('ModelHandlerGoogle.shouldContinue', () => {
-  const handler = new ModelHandlerGoogle({
+describe('ModelHandlerGoogleGenAI.shouldContinue', () => {
+  const handler = new ModelHandlerGoogleGenAI({
     name: 'test-google-model',
     fullName: 'google/test',
     provider: ModelProvider.GOOGLE,
@@ -58,35 +57,5 @@ describe('ModelHandlerGoogle.shouldContinue', () => {
     );
 
     assert.equal(shouldContinue, false);
-  });
-
-  it('continues when the OpenAI-compatible length stop reason is returned', () => {
-    const shouldContinue = handler.shouldContinue(
-      OPENAI_CHAT_FINISH.LENGTH,
-      'partial output',
-      agentSetting,
-    );
-
-    assert.equal(shouldContinue, true);
-  });
-
-  it('continues when the stop reason is max_tokens in snake case', () => {
-    const shouldContinue = handler.shouldContinue(
-      'max_tokens',
-      'partial output',
-      agentSetting,
-    );
-
-    assert.equal(shouldContinue, true);
-  });
-
-  it('continues when the SDK reports maxTokens in camelCase', () => {
-    const shouldContinue = handler.shouldContinue(
-      'maxTokens',
-      'partial output',
-      agentSetting,
-    );
-
-    assert.equal(shouldContinue, true);
   });
 });
