@@ -12,12 +12,14 @@ class TaskGroups {
   }
 
   _resolveStream(stream) {
+    // Use explicit undefined check to allow empty string as valid stream ID
     const resolved =
-      stream ||
-      (typeof this._getActiveStream === 'function'
-        ? this._getActiveStream()
-        : undefined);
-    if (!resolved) {
+      stream !== undefined && stream !== null
+        ? stream
+        : typeof this._getActiveStream === 'function'
+          ? this._getActiveStream()
+          : undefined;
+    if (resolved === undefined || resolved === null) {
       console.error('TaskGroups: stream id is required');
       return null;
     }
@@ -26,7 +28,7 @@ class TaskGroups {
 
   _getStreamMap(stream, { create = true } = {}) {
     const resolved = this._resolveStream(stream);
-    if (!resolved) {
+    if (resolved === null) {
       return null;
     }
 
@@ -87,13 +89,13 @@ class TaskGroups {
 
   getStreamGroups(stream) {
     const map = this._getStreamMap(stream, { create: false });
-    return map ? map : new Map();
+    return map ? new Map(map) : new Map();
   }
 
   clear(stream) {
     if (stream !== undefined && stream !== null) {
       const resolved = this._resolveStream(stream);
-      if (resolved) {
+      if (resolved !== null) {
         this._groupsByStream.delete(resolved);
       }
       return;
@@ -311,7 +313,19 @@ export class ProgressViewState {
     this.stateManager = new WebviewStateManager();
     this.activeStream = '';
     this.agentFilter = 'all';
+
+    /**
+     * Tracks the currently active group for instruction display and UI state.
+     * May differ from selectedGroups during transitions or programmatic updates.
+     * @type {Map<string, string>}
+     */
     this.currentGroupIds = new Map();
+
+    /**
+     * Tracks the user's explicit selection in the session selector dropdown.
+     * This represents the user's choice and drives the visible session.
+     * @type {Map<string, string>}
+     */
     this.selectedGroups = new Map();
 
     // Initialize managers

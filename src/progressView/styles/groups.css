@@ -28,7 +28,7 @@
 }
 
 /* Hide top-level task headers - we show sessions via selector instead */
-.log-group-header.top-level {
+.log-group .log-group-header.top-level {
   display: none;
 }
 
