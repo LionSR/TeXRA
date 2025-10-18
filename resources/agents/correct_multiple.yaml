@@ -93,38 +93,36 @@ prompts:
       Now that you have made initial improvements to the papers, please reflect on your changes and consider any additional improvements that could further enhance the quality of the papers while staying focused on the original instruction.
 
       <scratchpad>
-      \begin{reflection}
-          \subsection{Summary of Previous Changes}
-          \begin{enumerate}
-              \item [Summary of major changes made to each paper]
-              \item [Evaluation of the effectiveness of these changes]
-              \item [Identification of any areas that may need further improvement]
-          \end{enumerate}
+      % Summary of Previous Changes
+      \begin{enumerate}
+          \item [Summary of major changes made to each paper]
+          \item [Evaluation of the effectiveness of these changes]
+          \item [Identification of any areas that may need further improvement]
+      \end{enumerate}
 
-          \subsection{Additional Improvements}
-          \begin{enumerate}
-              \item [Additional improvement 1]
-              \begin{itemize}
-                  \item Affected documents: [List of documents]
-                  \item Rationale: [Brief explanation]
-                  \item Implementation: [Concrete steps]
-              \end{itemize}
-              
-              \item [Additional improvement 2]
-              \begin{itemize}
-                  \item Affected documents: [List of documents]
-                  \item Rationale: [Brief explanation]
-                  \item Implementation: [Concrete steps]
-              \end{itemize}
-              
-              \item [Additional improvement 3]
-              \begin{itemize}
-                  \item Affected documents: [List of documents]
-                  \item Rationale: [Brief explanation]
-                  \item Implementation: [Concrete steps]
-              \end{itemize}
-          \end{enumerate}
-      \end{reflection}
+      % Additional Improvements
+      \begin{enumerate}
+          \item [Additional improvement 1]
+          \begin{itemize}
+              \item Affected documents: [List of documents]
+              \item Rationale: [Brief explanation]
+              \item Implementation: [Concrete steps]
+          \end{itemize}
+          
+          \item [Additional improvement 2]
+          \begin{itemize}
+              \item Affected documents: [List of documents]
+              \item Rationale: [Brief explanation]
+              \item Implementation: [Concrete steps]
+          \end{itemize}
+          
+          \item [Additional improvement 3]
+          \begin{itemize}
+              \item Affected documents: [List of documents]
+              \item Rationale: [Brief explanation]
+              \item Implementation: [Concrete steps]
+          \end{itemize}
+      \end{enumerate}
       ...
       </scratchpad>
 
