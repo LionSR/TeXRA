@@ -20,8 +20,13 @@ export function registerMergeCommands(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand(
       'texra.merge',
-      (inputFile: string, baseFile: string, editedFile: string) =>
-        handleMerge(context, inputFile, baseFile, editedFile),
+      (
+        inputFile: string,
+        baseFile: string,
+        editedFile: string,
+        executionId?: string,
+      ) =>
+        handleMerge(context, inputFile, baseFile, editedFile, executionId),
     ),
   );
 }
@@ -34,6 +39,7 @@ async function handleMerge(
   inputFile: string,
   baseFile: string,
   editedFile: string,
+  executionId?: string,
 ) {
   if (!editedFile || (!baseFile && !inputFile)) {
     await showLoggedMessageWithDocs(
@@ -49,7 +55,7 @@ async function handleMerge(
   const fileToUse = baseFile || inputFile;
 
   try {
-    await executeMergeAgent(model, fileToUse, editedFile, context);
+    await executeMergeAgent(model, fileToUse, editedFile, context, executionId);
   } catch (err) {
     // Log the error before re-throwing
     await showLoggedErrorMessage(

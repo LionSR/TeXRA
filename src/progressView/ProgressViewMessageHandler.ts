@@ -24,6 +24,7 @@ import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 
 interface FileCommandMessage {
   file: string;
+  stream?: string;
 }
 
 interface BaseFileCommandMessage extends FileCommandMessage {
@@ -429,11 +430,17 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
       return;
     }
 
+    // Get executionId from the current stream to continue in the same session
+    const executionId = message.stream
+      ? this.provider.state.getExecutionId(message.stream)
+      : undefined;
+
     await vscode.commands.executeCommand(
       'texra.merge',
       undefined,
       message.base,
       message.file,
+      executionId,
     );
   }
 

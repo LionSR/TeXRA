@@ -652,12 +652,14 @@ export async function executeAgent(
 
 /**
  * Run merge agent to handle file merging operations.
+ * If executionId is provided, the merge will continue in the same session.
  */
 export async function executeMergeAgent(
   model: string,
   inputFile: string,
   editedFile: string,
   context: vscode.ExtensionContext,
+  executionId?: string,
 ): Promise<void> {
   const agentName = 'merge';
 
@@ -674,6 +676,6 @@ export async function executeMergeAgent(
       return { agent, agentType };
     },
     context,
-    undefined,
+    executionId,
   );
 }

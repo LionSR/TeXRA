@@ -98,6 +98,11 @@ export class EventsManager {
           if (element.dataset.file) data.file = element.dataset.file;
           if (element.dataset.base) data.base = element.dataset.base;
           if (element.dataset.prev) data.prev = element.dataset.prev;
+          // Include the active stream so merge/latexdiff can continue in the same session
+          const activeStream = progressViewState.activeStream;
+          if (activeStream) {
+            data.stream = activeStream;
+          }
           vscode.postMessage(data);
         }
       },
