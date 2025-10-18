@@ -110,10 +110,11 @@ export class UsageGroup {
     if (costEl) costEl.textContent = cost.toFixed(3);
 
     // Persist usage on the group state so the summary can be computed
-    const group = progressViewState.taskGroups.get(groupId);
+    const activeStream = progressViewState.activeStream;
+    const group = progressViewState.taskGroups.get(activeStream, groupId);
     if (group) {
       group.usage = { inputTokens, outputTokens, cost };
-      progressViewState.taskGroups.set(groupId, group);
+      progressViewState.taskGroups.set(activeStream, groupId, group);
     }
     if (!skipPropagate) {
       this.propagateUsageToParents(groupId);
@@ -128,8 +129,9 @@ export class UsageGroup {
    * @private
    */
   computeAggregatedUsage(parentId) {
+    const activeStream = progressViewState.activeStream;
     const totals = { inputTokens: 0, outputTokens: 0, cost: 0 };
-    for (const group of progressViewState.taskGroups.getAll().values()) {
+    for (const group of progressViewState.taskGroups.getStreamGroups(activeStream).values()) {
       if (group.parentGroupId === parentId) {
         if (group.usage) {
           totals.inputTokens += group.usage.inputTokens || 0;
@@ -150,7 +152,8 @@ export class UsageGroup {
    * @private
    */
   propagateUsageToParents(groupId) {
-    const group = progressViewState.taskGroups.get(groupId);
+    const activeStream = progressViewState.activeStream;
+    const group = progressViewState.taskGroups.get(activeStream, groupId);
     if (!group) return;
 
     // If this group has a parent, update the parent with aggregated usage

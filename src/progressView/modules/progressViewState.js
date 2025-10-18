@@ -42,14 +42,13 @@ class TaskGroups {
     return this._groupsByStream.get(resolved) || null;
   }
 
-  get(streamOrId, maybeId) {
-    let stream = streamOrId;
-    let id = maybeId;
-    // If only one argument provided, treat it as id (old signature)
-    if (arguments.length === 1) {
-      id = streamOrId;
-      stream = undefined;
-    }
+  /**
+   * Get a task group by stream and ID
+   * @param {string} stream - Stream identifier
+   * @param {string} id - Group ID
+   * @returns {Object|null} - Group object or null
+   */
+  get(stream, id) {
     if (!id) {
       console.error('TaskGroups.get: id is required');
       return null;
@@ -58,16 +57,13 @@ class TaskGroups {
     return map ? map.get(id) || null : null;
   }
 
-  set(streamOrId, maybeId, maybeGroup) {
-    let stream = streamOrId;
-    let id = maybeId;
-    let group = maybeGroup;
-    // If only two arguments provided, treat as (id, group) - old signature
-    if (arguments.length === 2) {
-      group = maybeId;
-      id = streamOrId;
-      stream = undefined;
-    }
+  /**
+   * Set a task group for a stream
+   * @param {string} stream - Stream identifier
+   * @param {string} id - Group ID
+   * @param {Object} group - Group object
+   */
+  set(stream, id, group) {
     if (!id) {
       console.error('TaskGroups.set: id is required');
       return;
@@ -104,28 +100,13 @@ class TaskGroups {
   }
 
   /**
-   * Update an existing log group with new status or end time.
-   * Supports two signatures:
-   * - update(streamId, groupId, status, endTime) - new signature with stream
-   * - update(groupId, status, endTime) - old signature without stream
-   * @param {string} streamId - Stream identifier for the group (or groupId if 3 args)
-   * @param {string} groupId - ID of the group to update (or status if 3 args)
-   * @param {string} status - New status (or endTime if 3 args)
+   * Update an existing log group with new status or end time
+   * @param {string} streamId - Stream identifier for the group
+   * @param {string} groupId - ID of the group to update
+   * @param {string} status - New status
    * @param {number} [endTime] - Optional end time
    */
-  update(streamOrGroupId, maybeGroupId, status, endTime) {
-    let streamId = streamOrGroupId;
-    let groupId = maybeGroupId;
-    // Use argument count to distinguish between signatures
-    if (arguments.length === 3 || arguments.length === 2) {
-      // Old signature: update(groupId, status, endTime)
-      endTime = status;
-      status = maybeGroupId;
-      groupId = streamOrGroupId;
-      streamId = undefined;
-    }
-    // Otherwise: new signature update(streamId, groupId, status, endTime)
-
+  update(streamId, groupId, status, endTime) {
     if (!groupId) {
       console.error('TaskGroups.update: groupId is required');
       return;

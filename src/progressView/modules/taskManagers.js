@@ -21,16 +21,17 @@ export class TaskGroupManager {
    * @param {Object} group - Group data
    */
   add(group) {
+    const activeStream = progressViewState.activeStream;
     const existingGroup = this.groupElements.get(group.id);
     if (existingGroup) {
-      if (!progressViewState.taskGroups.get(group.id)) {
+      if (!progressViewState.taskGroups.get(activeStream, group.id)) {
         console.warn(
           `Group ${group.id} exists in DOM but not in state - removing from DOM`,
         );
         existingGroup.remove();
         this.groupElements.delete(group.id);
       } else {
-        progressViewState.taskGroups.set(group.id, group);
+        progressViewState.taskGroups.set(activeStream, group.id, group);
         this.update(group.id, group.status, group.endTime);
         return;
       }
@@ -61,7 +62,7 @@ export class TaskGroupManager {
     }
     groupContainer.id = `group-content-${group.id}`;
 
-    progressViewState.taskGroups.set(group.id, group);
+    progressViewState.taskGroups.set(activeStream, group.id, group);
 
     const isCollapsed = progressViewState.toggleStates.get(group.id);
     detailsElem.open = isCollapsed !== true;
@@ -107,7 +108,8 @@ export class TaskGroupManager {
    * @param {string} endTime - End time (optional)
    */
   update(groupId, status, endTime) {
-    const group = progressViewState.taskGroups.get(groupId);
+    const activeStream = progressViewState.activeStream;
+    const group = progressViewState.taskGroups.get(activeStream, groupId);
     if (!group) return;
 
     group.status = status;
@@ -203,9 +205,9 @@ export class TaskGroupManager {
    * @returns {string|null} - ID of the current active group or null
    */
   findCurrentActiveGroup() {
-    const current = progressViewState.taskGroups.get(
-      progressViewState.getCurrentGroup(progressViewState.activeStream),
-    );
+    const activeStream = progressViewState.activeStream;
+    const currentGroupId = progressViewState.getCurrentGroup(activeStream);
+    const current = progressViewState.taskGroups.get(activeStream, currentGroupId);
     if (current) return current.id;
 
     let latestGroup = null;
@@ -216,7 +218,7 @@ export class TaskGroupManager {
         continue;
       }
 
-      const group = progressViewState.taskGroups.get(id);
+      const group = progressViewState.taskGroups.get(activeStream, id);
       if (!group) {
         continue;
       }
