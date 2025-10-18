@@ -1,5 +1,6 @@
 // Standard library imports
 import { strict as assert } from 'assert';
+import * as path from 'path';
 
 // Local imports - test
 import type { AgentConfig } from '@agent/core/AgentConfig';
@@ -146,5 +147,47 @@ describe('XmlOutputManager markdown fallback', () => {
 
     await WorkspaceFS.delete(outputXml);
     await WorkspaceFS.delete(texPath);
+  });
+
+  it('emits tex beside workspace input when xml stored in run directory', async () => {
+    const logger = new AgentLogger('TestXmlOutput');
+    const nestedConfig: AgentConfig = {
+      ...config,
+      inputFile: path.join('chapters', 'input.tex'),
+    };
+    const manager = new XmlOutputManager(setting, nestedConfig, logger);
+
+    const executionId = 'exec-absolute';
+    const xmlRelative = path.join(
+      'taskRuns',
+      executionId,
+      'scratchpad_output.xml',
+    );
+    const absoluteXml = path.resolve(xmlRelative);
+
+    await WorkspaceFS.ensureDir('chapters');
+    await WorkspaceFS.ensureDir(path.join('taskRuns', executionId));
+
+    const xmlContent =
+      '<latex_document><![CDATA[\\begin{document}absolute\\end{document}]]></latex_document>';
+
+    await WorkspaceFS.write(absoluteXml, xmlContent);
+
+    const texPath = await manager.splitScratchpadOutputXml(
+      absoluteXml,
+      setting.documentTag,
+    );
+
+    assert.strictEqual(texPath, path.join('chapters', 'scratchpad_output.tex'));
+    const written = await WorkspaceFS.read(texPath);
+    assert.ok(written.includes('absolute'));
+    assert.ok(await WorkspaceFS.exists(absoluteXml));
+
+    await WorkspaceFS.delete(texPath);
+    await WorkspaceFS.delete(absoluteXml);
+    await WorkspaceFS.delete(path.join('taskRuns', executionId), {
+      recursive: true,
+    });
+    await WorkspaceFS.delete('chapters', { recursive: true });
   });
 });

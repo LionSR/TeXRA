@@ -1,7 +1,13 @@
+// Node.js built-in modules
+import * as path from 'path';
+
 // Local imports - agent components
 import { AgentStateRound, AgentStateGlobal } from '../core/AgentState';
 import { BaseReflectionAgent, RoundOutputOptions } from './BaseReflectionAgent';
 import { getOutputFileName } from '@agent/output';
+
+// Local imports - filesystem
+import { getRunDir, isValidExecutionId } from '@utils/files/taskRunStorage';
 
 /**
  * Chain of Thought (CoT) agent implementation that extends BaseReflectionAgent.
@@ -18,7 +24,7 @@ export class CoTAgent extends BaseReflectionAgent {
     const fileExtension = this.useScratchpad
       ? 'xml'
       : this.agentSetting.outputExt;
-    return getOutputFileName(
+    const outputFileName = getOutputFileName(
       baseOutputFile,
       this.agentConfig.agent,
       this.modelHandler.config.name,
@@ -26,6 +32,13 @@ export class CoTAgent extends BaseReflectionAgent {
       currRound,
       this.agentConfig.editedFile || undefined,
     );
+
+    if (this.useScratchpad && isValidExecutionId(this.executionId)) {
+      const baseName = path.basename(outputFileName);
+      return path.join(getRunDir(this.executionId), baseName);
+    }
+
+    return outputFileName;
   }
 
   /**

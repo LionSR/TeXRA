@@ -148,8 +148,9 @@ export class XmlOutputManager {
     documentTag: string,
     thinkingTag: string = 'scratchpad',
   ): Promise<string> {
-    const { dir, name } = path.parse(outputFile);
-    const texFile = path.join(dir, `${name}.tex`);
+    const { name } = path.parse(outputFile);
+    const workspaceDir = path.parse(this.agentConfig.inputFile).dir;
+    const texFile = path.join(workspaceDir, `${name}.tex`);
 
     let outputContent = await WorkspaceFS.read(outputFile);
     const tagsToWrap = [documentTag, thinkingTag];
