@@ -104,9 +104,11 @@ describe('XmlOutputManager markdown fallback', () => {
     const logger = new AgentLogger('TestXmlOutput');
     const manager = new XmlOutputManager(setting, config, logger);
     const outputXml = 'both_tags.xml';
-    const xmlContent =
-      '<latex_document><![CDATA[\\begin{document}wrong\\end{document}]]></latex_document>' +
-      '<document name="input.tex"><![CDATA[\\begin{document}right\\end{document}]]></document><';
+    const xmlContent = `<?xml version="1.0"?>
+<latex_document>
+  <![CDATA[\\begin{document}wrong\\end{document}]]>
+  <document name="input.tex"><![CDATA[\\begin{document}right\\end{document}]]></document>
+</latex_document>`;
 
     await WorkspaceFS.write(outputXml, xmlContent);
 

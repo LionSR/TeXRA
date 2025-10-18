@@ -7,10 +7,23 @@ import { LaTeXdiffService, LaTeXdiffResult } from '@latex/latexdiff';
 import { compileLatex2Pdf } from '@latex/texTools';
 import { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
-import { createFileMapping } from '@utils/files';
 import { getConfig } from '@utils/config';
 import { checkToolInstalled } from '@utils/system';
-import { objectToLogString } from '@utils/text/stringUtils';
+
+// Local imports - types
+import type { RoundFileMapping } from './types';
+
+interface LatexDiffDependencies {
+  checkToolInstalled: typeof checkToolInstalled;
+  compileLatex2Pdf: typeof compileLatex2Pdf;
+  getConfig: typeof getConfig;
+}
+
+const defaultLatexDiffDependencies: LatexDiffDependencies = {
+  checkToolInstalled,
+  compileLatex2Pdf,
+  getConfig,
+};
 
 export class LatexDiffManager {
   private readonly latexdiffService: LaTeXdiffService;
@@ -21,6 +34,7 @@ export class LatexDiffManager {
     private readonly baseFiles: string[],
     private readonly logger: AgentLogger,
     private readonly channel: string,
+    private readonly dependencies: LatexDiffDependencies = defaultLatexDiffDependencies,
   ) {
     this.latexdiffService = new LaTeXdiffService(channel);
   }
@@ -54,10 +68,11 @@ export class LatexDiffManager {
 
   async handleLatexdiffofOutput(
     currRound: number,
+    mapping: RoundFileMapping,
     groupId?: string,
   ): Promise<void> {
     const diffProcessGroupId = groupId ?? this.logger.getActiveGroupId();
-    const generateBetweenRoundDiffs = getConfig<boolean>(
+    const generateBetweenRoundDiffs = this.dependencies.getConfig<boolean>(
       'latexdiff.generateBetweenRoundDiffs',
       false,
     );
@@ -70,7 +85,7 @@ export class LatexDiffManager {
     }> = [];
 
     try {
-      if (!(await checkToolInstalled('latexdiff'))) {
+      if (!(await this.dependencies.checkToolInstalled('latexdiff'))) {
         this.logger.warn(
           'Skipping latexdiff operations - latexdiff not installed',
           diffProcessGroupId,
@@ -93,30 +108,30 @@ export class LatexDiffManager {
         diffProcessGroupId,
       );
 
-      const baseToOutputMap = createFileMapping(
-        this.baseFiles,
-        outputFiles,
-        'contains',
-      );
-
-      this.logger.debug(
-        `Matched base files to output files: ${Array.from(
-          baseToOutputMap.entries(),
-        )
-          .map(
-            ([base, output]) =>
-              `${path.basename(base)} -> ${path.basename(output)}`,
-          )
-          .join(', ')}`,
-        diffProcessGroupId,
-      );
+      const basePairs = Array.from(mapping.baseToOutput.entries());
+      if (basePairs.length > 0) {
+        this.logger.debug(
+          `Matched base files to output files: ${basePairs
+            .map(
+              ([base, output]) =>
+                `${path.basename(base)} -> ${path.basename(output)}`,
+            )
+            .join(', ')}`,
+          diffProcessGroupId,
+        );
+      } else if (this.baseFiles.length > 0) {
+        this.logger.debug(
+          'No base file mappings found for current round outputs',
+          diffProcessGroupId,
+        );
+      }
 
       if (this.agentSetting.isRewrite) {
         this.logger.debug(
           'Running round-based latexdiff operations',
           diffProcessGroupId,
         );
-        for (const [baseFile, outputFile] of baseToOutputMap.entries()) {
+        for (const [baseFile, outputFile] of basePairs) {
           const result = await this.latexdiffService.runDiffForRound(
             baseFile,
             outputFile,
@@ -138,7 +153,7 @@ export class LatexDiffManager {
               result.diffFileName,
             );
             const buildDir = path.join(path.dirname(diffPath), 'build');
-            await compileLatex2Pdf(
+            await this.dependencies.compileLatex2Pdf(
               diffPath,
               this.channel,
               buildDir,
@@ -153,30 +168,26 @@ export class LatexDiffManager {
           'Running between-rounds latexdiff operations',
           diffProcessGroupId,
         );
-        const prevOutputFiles = this.outputFiles[currRound - 1] || [];
-        const prevToCurrentMap = createFileMapping(
-          prevOutputFiles,
-          outputFiles,
-          'basename',
-          true,
-        );
+        const prevPairs = Array.from(mapping.prevToOutput.entries());
 
-        this.logger.debug(
-          `Matched previous round files to current round files: ${Array.from(
-            prevToCurrentMap.entries(),
-          )
-            .map(
-              ([prev, curr]) =>
-                `${path.basename(prev)} -> ${path.basename(curr)}`,
-            )
-            .join(', ')}`,
-          diffProcessGroupId,
-        );
+        if (prevPairs.length > 0) {
+          this.logger.debug(
+            `Matched previous round files to current round files: ${prevPairs
+              .map(
+                ([prev, curr]) =>
+                  `${path.basename(prev)} -> ${path.basename(curr)}`,
+              )
+              .join(', ')}`,
+            diffProcessGroupId,
+          );
+        } else {
+          this.logger.debug(
+            'No previous round mappings found for current round outputs',
+            diffProcessGroupId,
+          );
+        }
 
-        for (const [
-          prevOutputFile,
-          currOutputFile,
-        ] of prevToCurrentMap.entries()) {
+        for (const [prevOutputFile, currOutputFile] of prevPairs) {
           const result = await this.latexdiffService.runDiffBetweenRounds(
             prevOutputFile,
             currOutputFile,
@@ -201,7 +212,7 @@ export class LatexDiffManager {
               result.diffFileName,
             );
             const buildDir = path.join(path.dirname(diffPath), 'build');
-            await compileLatex2Pdf(
+            await this.dependencies.compileLatex2Pdf(
               diffPath,
               this.channel,
               buildDir,

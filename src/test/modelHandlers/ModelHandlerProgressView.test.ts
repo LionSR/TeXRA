@@ -2,7 +2,7 @@
 import { strict as assert } from 'assert';
 
 // Local imports - agent
-import { ModelHandlerGoogle } from '@agent/modelHandlers/modelHandlerGoogle';
+import { ModelHandlerGoogleGenAI } from '@agent/modelHandlers/modelHandlerGoogleGenAI';
 
 // Local imports - event bus
 import { bus } from '@eventBus/ProgressEventBus';
@@ -13,7 +13,7 @@ import { AgentLogger } from '@logger/AgentLogger';
 // Local imports - model config
 import { DEFAULT_MODEL_CAPABILITIES, ModelProvider } from '@model/ModelConfig';
 
-class TestModelHandlerGoogle extends ModelHandlerGoogle {
+class TestModelHandlerGoogleGenAI extends ModelHandlerGoogleGenAI {
   public createThinkingStreamPublic(groupId?: string) {
     return this.createThinkingStream(groupId);
   }
@@ -32,14 +32,14 @@ describe('ModelHandler progress view flag', () => {
     openRouterOnly: false,
   };
 
-  let handler: TestModelHandlerGoogle;
+  let handler: TestModelHandlerGoogleGenAI;
   let disposeAdd: () => void;
   let disposeUpdate: () => void;
   let addEvents: unknown[];
   let updateEvents: unknown[];
 
   beforeEach(() => {
-    handler = new TestModelHandlerGoogle(handlerConfig);
+    handler = new TestModelHandlerGoogleGenAI(handlerConfig);
     handler.setLogger(new AgentLogger('ProgressViewTest'));
 
     // Flush any buffered events from other tests
